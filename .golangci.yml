@@ -1,0 +1,25 @@
+# golangci-lint v2 configuration for sh
+version: "2"
+
+run:
+  timeout: 10m
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  enable:
+  - errcheck
+  - govet
+  - ineffassign
+  - staticcheck
+  - unused
+  - misspell
+
+formatters:
+  enable:
+  - gofumpt
+  - goimports
+  settings:
+    goimports:
+      local-prefixes:
+      - github.com/blairham/sh

@@ -1,0 +1,43 @@
+# Behavioural specs
+
+This directory is **the wall** described in `CLEANROOM.md`. Everything
+here is written from the POSIX specification, from vendor manuals, or
+from observed behaviour of real shell binaries. Nothing here is derived
+from reading another implementation's source.
+
+Code is written from this directory. If the spec is inadequate, extend
+the spec — do not go read an implementation.
+
+## What a spec entry must contain
+
+1. **The construct**, stated as grammar or as a named behaviour.
+2. **The core answer** — what this implementation does by default.
+3. **The measured behaviour of each reference shell**, where they differ.
+4. **A citation**: a POSIX section, a manual section, or an oracle run
+   that produced the observation.
+5. **Which semantics-vector field governs it**, if any.
+
+A spec entry with no citation is a guess and does not belong here.
+
+## Layout
+
+    oracle.md         how behaviour is learned from real binaries
+    shell-matrix.md   which constructs exist in which shells (measured)
+    semantics.md      where shells disagree on identical syntax (measured)
+    core.md           the boundary: what the core language contains
+
+## The two kinds of difference
+
+This distinction drives the whole architecture and is worth internalising
+before writing any spec entry:
+
+- **Grammar differences are additive.** A construct either parses in a
+  dialect or it does not. `[[ ]]` exists in bash/ksh/zsh and not in
+  dash. These are modelled as a *variant set* on the parser.
+- **Semantic differences are conflicts.** The same syntax means
+  different things — unquoted `$var` splits into fields in bash and does
+  not in zsh. There is no subset relationship here, only a switch. These
+  are modelled as *named fields on the semantics vector*.
+
+Never model a conflict as a grammar difference, and never resolve a
+conflict with an inline conditional. See `semantics.md`.

@@ -8,7 +8,12 @@ on:
 
 permissions:
   actions: write
-  contents: read
+  # write, not read: the action stores signatures on a branch of this
+  # repository, so it has to create and update `cla-signatures`. With read it
+  # fails with "Resource not accessible by integration" and then reports the
+  # committer as unsigned, which blocks every pull request including the
+  # owner's.
+  contents: write
   pull-requests: write
   statuses: write
 

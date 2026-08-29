@@ -59,11 +59,25 @@ var Panel = []Shell{
 		Why:    "the dominant scripting target",
 	},
 	{
+		// Deliberately the same binary as the bash entry, not /bin/sh.
+		// /bin/sh is bash on macOS and dash on Debian, so pointing here made
+		// the column mean different things on different machines; and even
+		// where it was bash it was a different build, which conflated the
+		// version with the invocation. Same binary, two columns, one variable.
 		Name:       "bash-as-sh",
-		Lookup:     []string{"/bin/sh", "/usr/bin/sh"},
+		Lookup:     []string{"/opt/homebrew/bin/bash", "/usr/local/bin/bash", "/bin/bash", "/usr/bin/bash"},
 		Argv0:      "sh",
 		MustReport: "bash",
-		Why:        "argv[0] changes the language: bash 3.2 loses process substitution as sh",
+		Why:        "argv[0] alone changes the language: the same bash loses constructs when called sh",
+	},
+	{
+		// macOS still ships bash 3.2 (2007, the last GPLv2 release), and it
+		// is the oldest build anything has to run on. Absent on Linux, which
+		// the run reports rather than hides.
+		Name:       "bash32",
+		Lookup:     []string{"/bin/bash"},
+		MustReport: "version 3.",
+		Why:        "the oldest bash that matters: what macOS ships, and what rejects ${x^^}",
 	},
 	{
 		Name:   "ksh93",

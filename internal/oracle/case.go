@@ -255,4 +255,103 @@ var Corpus = []Case{
 		Snippet: "readonly r=1\nr=2\necho survived",
 		Why:     "must be a plain assignment in a script: adding a redirect makes it a command and reverses the answer",
 	},
+	// --- tokenization -----------------------------------------------------
+	{
+		ID: "token/spans-within-a-word", Category: "tokenization",
+		Snippet: `set -- a"b c"d; printf "[%s]" "$@"; echo " n=$#"`,
+		Why:     "one word carrying quoted and unquoted spans; the case expansion.md's per-span requirement rests on",
+	},
+	{
+		ID: "token/dquote-backslash-escapes-quote", Category: "tokenization",
+		Snippet: `printf "[%s]" "a\"b"`,
+		Why:     `inside double quotes backslash escapes " — one of only four characters it acts on`,
+	},
+	{
+		ID: "token/dquote-backslash-literal-before-n", Category: "tokenization",
+		Snippet: `printf "[%s]" "a\nb"`,
+		Why:     "the rule C intuition gets wrong: \\n inside double quotes is backslash-then-n, not a newline",
+	},
+	{
+		ID: "token/dquote-backslash-literal-before-other", Category: "tokenization",
+		Snippet: `printf "[%s]" "a\qb"`,
+		Why:     "confirms the previous case is a general rule rather than something special about n",
+	},
+	{
+		ID: "token/squote-protects-backslash", Category: "tokenization",
+		Snippet: `printf '[%s]' 'a$HOME'`,
+		Why:     "single quotes protect everything; no escape exists inside them",
+	},
+	{
+		ID: "token/backslash-escapes-dollar", Category: "tokenization",
+		Snippet: `printf "[%s]" a\$HOME`,
+		Why:     "an unquoted backslash protects the single following character",
+	},
+	{
+		ID: "token/operator-delimits-without-space", Category: "tokenization",
+		Snippet: `echo a>b; printf "[%s]" "$(cat b)"`,
+		Why:     "a>b is three tokens; a lexer that splits on whitespace is wrong before it starts",
+	},
+	{
+		ID: "token/io-number-is-not-a-word", Category: "tokenization",
+		Snippet: `echo 1>b; printf "[%s]" "$(cat b)"`,
+		Why:     "a digit immediately before a redirect is a file descriptor, so echo gets no argument",
+	},
+	{
+		ID: "token/io-number-needs-adjacency", Category: "tokenization",
+		Snippet: `echo 1 >b; printf "[%s]" "$(cat b)"`,
+		Why:     "one space and the same digit is an argument instead; the pair is the whole rule",
+	},
+	{
+		ID: "token/longest-match-append", Category: "tokenization",
+		Snippet: `echo x>b; echo y>>b; printf "[%s]" "$(tr '\n' ',' < b)"`,
+		Why:     ">> is one operator, not two; longest match decides",
+	},
+	{
+		ID: "token/comment-needs-word-boundary", Category: "tokenization",
+		Snippet: `echo a#b`,
+		Why:     "# mid-word is an ordinary character",
+	},
+	{
+		ID: "token/comment-at-word-boundary", Category: "tokenization",
+		Snippet: `echo a #b`,
+		Why:     "and starts a comment where a word could begin",
+	},
+	{
+		ID: "token/reserved-word-is-positional", Category: "tokenization",
+		Snippet: `echo if then done`,
+		Why:     "keywords are keywords only where a command name is expected; the lexer cannot classify them alone",
+	},
+	{
+		ID: "token/line-continuation-joins-a-word", Category: "tokenization",
+		Snippet: "printf \"[%s]\" ab\\\ncd",
+		Why:     "backslash-newline is removed before tokens form, so it can split a word anywhere",
+	},
+	{
+		ID: "token/heredoc-unquoted-delimiter-expands", Category: "tokenization",
+		Snippet: "x=VAL; cat <<EOF\n[$x]\nEOF",
+		Why:     "an unquoted delimiter means the body is expanded",
+	},
+	{
+		ID: "token/heredoc-quoted-delimiter-literal", Category: "tokenization",
+		Snippet: "x=VAL; cat <<\"EOF\"\n[$x]\nEOF",
+		Why:     "quoting anywhere in the delimiter makes the whole body literal; the quoting must survive onto the token",
+	},
+	{
+		ID: "token/heredoc-backslash-delimiter-literal", Category: "tokenization",
+		Snippet: "x=VAL; cat <<\\EOF\n[$x]\nEOF",
+		Why:     "and a backslash counts as quoting the delimiter, same as quotes",
+	},
+	{
+		ID: "token/ampersand-redirect-means-two-things", Category: "tokenization",
+		Snippet: `echo hi &>b; wait; printf "[%s]" "$(cat b)"`,
+		// `wait` rather than a sleep: where &> is not an operator this really
+		// does background a command, and timing its output would be a race
+		// recorded into the golden file.
+		Why: "the dangerous case: &> redirects both streams in bash and zsh, and is `&` then `>` in dash and ksh93 — no error, different meaning",
+	},
+	{
+		ID: "token/clobber-override", Category: "tokenization",
+		Snippet: `set -C; echo one>b; echo two>|b; printf "[%s]" "$(cat b)"`,
+		Why:     ">| overrides noclobber with the same meaning everywhere, unlike &>",
+	},
 }

@@ -13,6 +13,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | --- | --- | --- | --- | --- |
 | unquoted `$var` field-splits | yes | yes | yes | **no** |
 | globs the *result* of an expansion | yes | yes | yes | **no** |
+| `&>` is one redirection operator | **no** | yes | **no** | yes |
 | array index base | *n/a* | 0 | 0 | **1** |
 | `echo` expands backslashes | **yes** | no | no | **yes** |
 | glob with no match | passes pattern | passes pattern | passes pattern | **error** |
@@ -26,6 +27,7 @@ Probes, for reproduction:
 
     unquoted split   x="a b"; set -- $x; echo $#      → 2 2 2 1
     glob expansion   cd /; x="et*"; set -- $x         → etc etc etc et*
+    &> operator      echo hi &>b; cat b               → hi+empty, [hi], hi+empty, [hi]
     array base       a=(x y); echo "${a[1]}"          → -  y y x
     echo backslash   echo 'a\tb'                      → expanded, literal, literal, expanded
     glob no match    echo /zzz_no_such*               → pattern, pattern, pattern, "no match" error
@@ -46,6 +48,7 @@ Group the shells by which side of each axis they fall on:
 
     unquoted split       {zsh}
     globs expansions     {zsh}
+    `&>` unsupported     {dash, ksh93}
     array base           {zsh}
     echo backslash       {dash, zsh}
     glob no match        {zsh}
@@ -55,13 +58,14 @@ Group the shells by which side of each axis they fall on:
     readonly continues   {bash}
     shift survives       {bash, zsh}
 
-Six distinct groupings across ten axes: `{zsh}`, `{dash,zsh}`,
-`{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`.
+Seven distinct groupings across eleven axes: `{zsh}`, `{dash,zsh}`,
+`{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`, `{dash,ksh93}`.
 
 **No ordering of these shells explains the data.** dash sides with zsh on
 `echo` and against it on splitting. bash sides with zsh on `shift` and
-against it on everything else. ksh93 sides with zsh on pipelines and is
-alone on `local`.
+against it on everything else. ksh93 sides with zsh on pipelines, is
+alone on `local`, and pairs with dash on `&>` — a grouping no other axis
+produces.
 
 A "sh → bash → zsh" ladder is therefore not merely a simplification, it
 is **contradicted by measurement**. Dialect is a point in a
@@ -72,6 +76,18 @@ This is the central architectural claim of this repository, and it is
 the one thing that cannot be retrofitted cheaply. Every axis above is a
 named field, set by a preset, read at the one place the behaviour
 happens.
+
+## Not every difference announces itself
+
+`&>` is the axis worth singling out, because it is the only one measured
+so far where the divergent shells **do not fail**. dash and ksh93 have no
+such operator, so `echo hi &>b` tokenizes as `echo hi &` — a background
+command — followed by `>b`, which truncates the file. The command runs,
+its output goes elsewhere, and the file is emptied, with no diagnostic.
+
+An axis whose wrong answer is an error is self-limiting. An axis whose
+wrong answer is a different working program is not, and it is the case a
+dialect system exists to get right. See `grammar/tokenization.md`.
 
 ## A measured non-conflict, recorded so it is not over-generalised
 

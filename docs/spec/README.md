@@ -27,6 +27,7 @@ A spec entry with no citation is a guess and does not belong here.
     semantics.md      where shells disagree on identical syntax (measured)
     core.md           the boundary: what the core language contains
     grammar/          per-construct specs
+      tokenization.md   input to tokens, and where quoting is recorded
       expansion.md      the expansion pipeline and its ordering
       word-splitting.md field splitting and IFS
 

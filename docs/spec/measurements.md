@@ -11,21 +11,22 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | --- | --- |
 | `dash` | unknown |
 | `bash` | GNU bash, version 5.3.15(1)-release (aarch64-apple-darwin25.4.0) |
-| `bash-as-sh` | GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25) |
+| `bash-as-sh` | GNU bash, version 5.3.15(1)-release (aarch64-apple-darwin25.4.0) |
+| `bash32` | GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25) |
 | `ksh93` | Version AJM 93u+ 2012-08-01 |
 | `zsh` | zsh 5.9.2 (aarch64-apple-darwin25.4.0) |
 
 ## field splitting
 
-| case | dash | bash | bash-as-sh | ksh93 | zsh |
-| --- | --- | --- | --- | --- | --- |
-| `split/unquoted-param` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a b]` |
-| `split/quoted-param` | `[a b]` | `[a b]` | `[a b]` | `[a b]` | `[a b]` |
-| `split/cmdsub-unquoted` | `n=2` | `n=2` | `n=2` | `n=2` | `n=2` |
-| `split/param-braced` | `n=2` | `n=2` | `n=2` | `n=2` | `n=1` |
-| `split/empty-value` | `n=0` | `n=0` | `n=0` | `n=0` | `n=0` |
-| `split/empty-value-quoted` | `n=1` | `n=1` | `n=1` | `n=1` | `n=1` |
-| `split/unset-value` | `n=0` | `n=0` | `n=0` | `n=0` | `n=0` |
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `split/unquoted-param` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a b]` |
+| `split/quoted-param` | `[a b]` | `[a b]` | `[a b]` | `[a b]` | `[a b]` | `[a b]` |
+| `split/cmdsub-unquoted` | `n=2` | `n=2` | `n=2` | `n=2` | `n=2` | `n=2` |
+| `split/param-braced` | `n=2` | `n=2` | `n=2` | `n=2` | `n=2` | `n=1` |
+| `split/empty-value` | `n=0` | `n=0` | `n=0` | `n=0` | `n=0` | `n=0` |
+| `split/empty-value-quoted` | `n=1` | `n=1` | `n=1` | `n=1` | `n=1` | `n=1` |
+| `split/unset-value` | `n=0` | `n=0` | `n=0` | `n=0` | `n=0` | `n=0` |
 
 - `split/unquoted-param` — the base case: an unquoted parameter expansion is split
   ```sh
@@ -58,19 +59,19 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 
 ## IFS
 
-| case | dash | bash | bash-as-sh | ksh93 | zsh |
-| --- | --- | --- | --- | --- | --- |
-| `ifs/default-runs-collapse` | `[a][b][c]` | `[a][b][c]` | `[a][b][c]` | `[a][b][c]` | `[a b   c]` |
-| `ifs/default-edges-stripped` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[  a  b  ]` |
-| `ifs/nonws-separates` | `[a][b][c]` | `[a][b][c]` | `[a][b][c]` | `[a][b][c]` | `[a:b:c]` |
-| `ifs/nonws-adjacent-empty-field` | `[a][][b]` | `[a][][b]` | `[a][][b]` | `[a][][b]` | `[a::b]` |
-| `ifs/nonws-leading` | `[][a]` | `[][a]` | `[][a]` | `[][a]` | `[:a]` |
-| `ifs/nonws-trailing` | `[a]` | `[a]` | `[a]` | `[a]` | `[a:]` |
-| `ifs/nonws-only-delimiters` | `n=2` | `n=2` | `n=2` | `n=2` | `n=1` |
-| `ifs/mixed-ws-around-nonws` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a : b]` |
-| `ifs/mixed-adjacent-nonws` | `[a][][b]` | `[a][][b]` | `[a][][b]` | `[a][][b]` | `[a::b]` |
-| `ifs/empty-disables-splitting` | `[a b]` | `[a b]` | `[a b]` | `[a b]` | `[a b]` |
-| `ifs/unset-is-default` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a b]` |
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `ifs/default-runs-collapse` | `[a][b][c]` | `[a][b][c]` | `[a][b][c]` | `[a][b][c]` | `[a][b][c]` | `[a b   c]` |
+| `ifs/default-edges-stripped` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[  a  b  ]` |
+| `ifs/nonws-separates` | `[a][b][c]` | `[a][b][c]` | `[a][b][c]` | `[a][b][c]` | `[a][b][c]` | `[a:b:c]` |
+| `ifs/nonws-adjacent-empty-field` | `[a][][b]` | `[a][][b]` | `[a][][b]` | `[a][][b]` | `[a][][b]` | `[a::b]` |
+| `ifs/nonws-leading` | `[][a]` | `[][a]` | `[][a]` | `[][a]` | `[][a]` | `[:a]` |
+| `ifs/nonws-trailing` | `[a]` | `[a]` | `[a]` | `[a]` | `[a]` | `[a:]` |
+| `ifs/nonws-only-delimiters` | `n=2` | `n=2` | `n=2` | `n=2` | `n=2` | `n=1` |
+| `ifs/mixed-ws-around-nonws` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a : b]` |
+| `ifs/mixed-adjacent-nonws` | `[a][][b]` | `[a][][b]` | `[a][][b]` | `[a][][b]` | `[a][][b]` | `[a::b]` |
+| `ifs/empty-disables-splitting` | `[a b]` | `[a b]` | `[a b]` | `[a b]` | `[a b]` | `[a b]` |
+| `ifs/unset-is-default` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a b]` |
 
 - `ifs/default-runs-collapse` — a run of IFS whitespace is one delimiter
   ```sh
@@ -119,13 +120,13 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 
 ## special parameters
 
-| case | dash | bash | bash-as-sh | ksh93 | zsh |
-| --- | --- | --- | --- | --- | --- |
-| `params/at-quoted-keeps-fields` | `[a b][c]` | `[a b][c]` | `[a b][c]` | `[a b][c]` | `[a b][c]` |
-| `params/star-quoted-joins` | `[a b]` | `[a b]` | `[a b]` | `[a b]` | `[a b]` |
-| `params/star-joins-with-ifs` | `[a:b]` | `[a:b]` | `[a:b]` | `[a:b]` | `[a:b]` |
-| `params/at-empty-is-zero-fields` | `n=0` | `n=0` | `n=0` | `n=0` | `n=0` |
-| `params/star-empty-is-one-field` | `n=1` | `n=1` | `n=1` | `n=1` | `n=1` |
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `params/at-quoted-keeps-fields` | `[a b][c]` | `[a b][c]` | `[a b][c]` | `[a b][c]` | `[a b][c]` | `[a b][c]` |
+| `params/star-quoted-joins` | `[a b]` | `[a b]` | `[a b]` | `[a b]` | `[a b]` | `[a b]` |
+| `params/star-joins-with-ifs` | `[a:b]` | `[a:b]` | `[a:b]` | `[a:b]` | `[a:b]` | `[a:b]` |
+| `params/at-empty-is-zero-fields` | `n=0` | `n=0` | `n=0` | `n=0` | `n=0` | `n=0` |
+| `params/star-empty-is-one-field` | `n=1` | `n=1` | `n=1` | `n=1` | `n=1` | `n=1` |
 
 - `params/at-quoted-keeps-fields` — "$@" is one field per parameter, each keeping its spaces
   ```sh
@@ -150,20 +151,20 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 
 ## expansion
 
-| case | dash | bash | bash-as-sh | ksh93 | zsh |
-| --- | --- | --- | --- | --- | --- |
-| `expand/results-not-rescanned-quote` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` |
-| `expand/results-not-rescanned-dollar` | `$HOME` | `$HOME` | `$HOME` | `$HOME` | `$HOME` |
-| `expand/results-not-rescanned-semicolon` | `[a;b]` | `[a;b]` | `[a;b]` | `[a;b]` | `[a;b]` |
-| `expand/glob-applies-to-expansion` | `[etc]` | `[etc]` | `[etc]` | `[etc]` | `[et*]` |
-| `expand/glob-not-applied-when-quoted` | `[et*]` | `[et*]` | `[et*]` | `[et*]` | `[et*]` |
-| `expand/glob-literal-pattern` | `[etc]` | `[etc]` | `[etc]` | `[etc]` | `[etc]` |
-| `expand/glob-no-match` | `/zzz_no_such*` | `/zzz_no_such*` | `/zzz_no_such*` | `/zzz_no_such*` | `<shell>:1: no matches found: /zzz_no_such*` *(status 1)* |
-| `expand/brace` | `{1..3}` | `1 2 3` | `1 2 3` | `1 2 3` | `1 2 3` |
-| `expand/brace-before-param` | `{1,2}` | `1 2` | `1 2` | `1 2` | `1 2` |
-| `expand/tilde-unquoted` | `abs` | `abs` | `abs` | `abs` | `abs` |
-| `expand/tilde-quoted` | `literal` | `literal` | `literal` | `literal` | `literal` |
-| `expand/tilde-in-assignment` | `abs` | `abs` | `abs` | `abs` | `abs` |
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `expand/results-not-rescanned-quote` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` |
+| `expand/results-not-rescanned-dollar` | `$HOME` | `$HOME` | `$HOME` | `$HOME` | `$HOME` | `$HOME` |
+| `expand/results-not-rescanned-semicolon` | `[a;b]` | `[a;b]` | `[a;b]` | `[a;b]` | `[a;b]` | `[a;b]` |
+| `expand/glob-applies-to-expansion` | `[etc]` | `[etc]` | `[etc]` | `[etc]` | `[etc]` | `[et*]` |
+| `expand/glob-not-applied-when-quoted` | `[et*]` | `[et*]` | `[et*]` | `[et*]` | `[et*]` | `[et*]` |
+| `expand/glob-literal-pattern` | `[etc]` | `[etc]` | `[etc]` | `[etc]` | `[etc]` | `[etc]` |
+| `expand/glob-no-match` | `/zzz_no_such*` | `/zzz_no_such*` | `/zzz_no_such*` | `/zzz_no_such*` | `/zzz_no_such*` | `<shell>:1: no matches found: /zzz_no_such*` *(status 1)* |
+| `expand/brace` | `{1..3}` | `1 2 3` | `1 2 3` | `1 2 3` | `1 2 3` | `1 2 3` |
+| `expand/brace-before-param` | `{1,2}` | `1 2` | `1 2` | `1 2` | `1 2` | `1 2` |
+| `expand/tilde-unquoted` | `abs` | `abs` | `abs` | `abs` | `abs` | `abs` |
+| `expand/tilde-quoted` | `literal` | `literal` | `literal` | `literal` | `literal` | `literal` |
+| `expand/tilde-in-assignment` | `abs` | `abs` | `abs` | `abs` | `abs` | `abs` |
 
 - `expand/results-not-rescanned-quote` — a quote in expanded text is a literal quote
   ```sh
@@ -216,15 +217,15 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 
 ## semantics axes
 
-| case | dash | bash | bash-as-sh | ksh93 | zsh |
-| --- | --- | --- | --- | --- | --- |
-| `axis/array-base` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `y` | `y` | `y` | `x` |
-| `axis/echo-backslash` | `expanded` | `literal` | `expanded` | `literal` | `expanded` |
-| `axis/pipeline-last-element` | `[]` | `[]` | `[]` | `[x]` | `[x]` |
-| `axis/dollar-zero-in-function` | `<shell>` | `<shell>` | `sh` | `<shell>` | `f` |
-| `axis/local-builtin` | `1` | `1` | `1` | `<shell>: local: not found` | `1` |
-| `axis/shift-past-end` | `<shell>: 1: shift: can't shift that many` *(status 2)* | `survived` | `survived` | `<shell>: shift: 5: bad number` *(status 1)* | `<shell>:shift:1: shift count must be <= $#~survived` |
-| `axis/readonly-reassign` | `<script>: 2: r: is read only` *(status 2)* | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: readonly variable` *(status 1)* | `<script>: line 2: r: is read only` *(status 1)* | `<script>:2: read-only variable: r` *(status 1)* |
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `axis/array-base` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `y` | `y` | `y` | `y` | `x` |
+| `axis/echo-backslash` | `expanded` | `literal` | `literal` | `literal` | `literal` | `expanded` |
+| `axis/pipeline-last-element` | `[]` | `[]` | `[]` | `[]` | `[x]` | `[x]` |
+| `axis/dollar-zero-in-function` | `<shell>` | `<shell>` | `sh` | `<shell>` | `<shell>` | `f` |
+| `axis/local-builtin` | `1` | `1` | `1` | `1` | `<shell>: local: not found` | `1` |
+| `axis/shift-past-end` | `<shell>: 1: shift: can't shift that many` *(status 2)* | `survived` | `sh: line 1: shift: 5: shift count out of range~survived` | `survived` | `<shell>: shift: 5: bad number` *(status 1)* | `<shell>:shift:1: shift count must be <= $#~survived` |
+| `axis/readonly-reassign` | `<script>: 2: r: is read only` *(status 2)* | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: is read only` *(status 1)* | `<script>:2: read-only variable: r` *(status 1)* |
 
 - `axis/array-base` — zsh indexes arrays from 1; dash has no arrays at all
   ```sh
@@ -255,4 +256,112 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   readonly r=1
   r=2
   echo survived
+  ```
+
+## tokenization
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `token/spans-within-a-word` | `[ab cd] n=1` | `[ab cd] n=1` | `[ab cd] n=1` | `[ab cd] n=1` | `[ab cd] n=1` | `[ab cd] n=1` |
+| `token/dquote-backslash-escapes-quote` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` |
+| `token/dquote-backslash-literal-before-n` | `[a\nb]` | `[a\nb]` | `[a\nb]` | `[a\nb]` | `[a\nb]` | `[a\nb]` |
+| `token/dquote-backslash-literal-before-other` | `[a\qb]` | `[a\qb]` | `[a\qb]` | `[a\qb]` | `[a\qb]` | `[a\qb]` |
+| `token/squote-protects-backslash` | `[a$HOME]` | `[a$HOME]` | `[a$HOME]` | `[a$HOME]` | `[a$HOME]` | `[a$HOME]` |
+| `token/backslash-escapes-dollar` | `[a$HOME]` | `[a$HOME]` | `[a$HOME]` | `[a$HOME]` | `[a$HOME]` | `[a$HOME]` |
+| `token/operator-delimits-without-space` | `[a]` | `[a]` | `[a]` | `[a]` | `[a]` | `[a]` |
+| `token/io-number-is-not-a-word` | `[]` | `[]` | `[]` | `[]` | `[]` | `[]` |
+| `token/io-number-needs-adjacency` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` |
+| `token/longest-match-append` | `[x,y,]` | `[x,y,]` | `[x,y,]` | `[x,y,]` | `[x,y,]` | `[x,y,]` |
+| `token/comment-needs-word-boundary` | `a#b` | `a#b` | `a#b` | `a#b` | `a#b` | `a#b` |
+| `token/comment-at-word-boundary` | `a` | `a` | `a` | `a` | `a` | `a` |
+| `token/reserved-word-is-positional` | `if then done` | `if then done` | `if then done` | `if then done` | `if then done` | `if then done` |
+| `token/line-continuation-joins-a-word` | `[abcd]` | `[abcd]` | `[abcd]` | `[abcd]` | `[abcd]` | `[abcd]` |
+| `token/heredoc-unquoted-delimiter-expands` | `[VAL]` | `[VAL]` | `[VAL]` | `[VAL]` | `[VAL]` | `[VAL]` |
+| `token/heredoc-quoted-delimiter-literal` | `[$x]` | `[$x]` | `[$x]` | `[$x]` | `[$x]` | `[$x]` |
+| `token/heredoc-backslash-delimiter-literal` | `[$x]` | `[$x]` | `[$x]` | `[$x]` | `[$x]` | `[$x]` |
+| `token/ampersand-redirect-means-two-things` | `hi~[]` | `[hi]` | `[hi]` | `[hi]` | `hi~[]` | `[hi]` |
+| `token/clobber-override` | `[two]` | `[two]` | `[two]` | `[two]` | `[two]` | `[two]` |
+
+- `token/spans-within-a-word` — one word carrying quoted and unquoted spans; the case expansion.md's per-span requirement rests on
+  ```sh
+  set -- a"b c"d; printf "[%s]" "$@"; echo " n=$#"
+  ```
+- `token/dquote-backslash-escapes-quote` — inside double quotes backslash escapes " — one of only four characters it acts on
+  ```sh
+  printf "[%s]" "a\"b"
+  ```
+- `token/dquote-backslash-literal-before-n` — the rule C intuition gets wrong: \n inside double quotes is backslash-then-n, not a newline
+  ```sh
+  printf "[%s]" "a\nb"
+  ```
+- `token/dquote-backslash-literal-before-other` — confirms the previous case is a general rule rather than something special about n
+  ```sh
+  printf "[%s]" "a\qb"
+  ```
+- `token/squote-protects-backslash` — single quotes protect everything; no escape exists inside them
+  ```sh
+  printf '[%s]' 'a$HOME'
+  ```
+- `token/backslash-escapes-dollar` — an unquoted backslash protects the single following character
+  ```sh
+  printf "[%s]" a\$HOME
+  ```
+- `token/operator-delimits-without-space` — a>b is three tokens; a lexer that splits on whitespace is wrong before it starts
+  ```sh
+  echo a>b; printf "[%s]" "$(cat b)"
+  ```
+- `token/io-number-is-not-a-word` — a digit immediately before a redirect is a file descriptor, so echo gets no argument
+  ```sh
+  echo 1>b; printf "[%s]" "$(cat b)"
+  ```
+- `token/io-number-needs-adjacency` — one space and the same digit is an argument instead; the pair is the whole rule
+  ```sh
+  echo 1 >b; printf "[%s]" "$(cat b)"
+  ```
+- `token/longest-match-append` — >> is one operator, not two; longest match decides
+  ```sh
+  echo x>b; echo y>>b; printf "[%s]" "$(tr '\n' ',' < b)"
+  ```
+- `token/comment-needs-word-boundary` — # mid-word is an ordinary character
+  ```sh
+  echo a#b
+  ```
+- `token/comment-at-word-boundary` — and starts a comment where a word could begin
+  ```sh
+  echo a #b
+  ```
+- `token/reserved-word-is-positional` — keywords are keywords only where a command name is expected; the lexer cannot classify them alone
+  ```sh
+  echo if then done
+  ```
+- `token/line-continuation-joins-a-word` — backslash-newline is removed before tokens form, so it can split a word anywhere
+  ```sh
+  printf "[%s]" ab\
+  cd
+  ```
+- `token/heredoc-unquoted-delimiter-expands` — an unquoted delimiter means the body is expanded
+  ```sh
+  x=VAL; cat <<EOF
+  [$x]
+  EOF
+  ```
+- `token/heredoc-quoted-delimiter-literal` — quoting anywhere in the delimiter makes the whole body literal; the quoting must survive onto the token
+  ```sh
+  x=VAL; cat <<"EOF"
+  [$x]
+  EOF
+  ```
+- `token/heredoc-backslash-delimiter-literal` — and a backslash counts as quoting the delimiter, same as quotes
+  ```sh
+  x=VAL; cat <<\EOF
+  [$x]
+  EOF
+  ```
+- `token/ampersand-redirect-means-two-things` — the dangerous case: &> redirects both streams in bash and zsh, and is `&` then `>` in dash and ksh93 — no error, different meaning
+  ```sh
+  echo hi &>b; wait; printf "[%s]" "$(cat b)"
+  ```
+- `token/clobber-override` — >| overrides noclobber with the same meaning everywhere, unlike &>
+  ```sh
+  set -C; echo one>b; echo two>|b; printf "[%s]" "$(cat b)"
   ```

@@ -12,12 +12,14 @@ re-run rather than trusted.
 
 ## Entries
 
+    tokenization.md    input to tokens, and where quoting is recorded
     expansion.md       the expansion pipeline and its ordering
     word-splitting.md  field splitting and IFS
 
 ## Reading order
 
-`expansion.md` first: it establishes the pipeline, and word splitting is
-one stage within it. The single most important fact in both documents is
+`tokenization.md` first: it produces the words everything else consumes,
+and it is where quoting is recorded. Then `expansion.md`, which
+establishes the pipeline, and word splitting is one stage within it. The single most important fact in both documents is
 that the stages are **ordered**, and that most surprising shell behaviour
 is a consequence of that order rather than of any individual stage.

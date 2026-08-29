@@ -118,6 +118,17 @@ must be **up to date** with `main` first:
 Merges are **squash only** — linear history is enforced, and force pushes
 and branch deletion are blocked. Commits must be signed.
 
+**Build, test and lint only do work when Go changed.** A pull request
+touching only `docs/` runs them as no-ops. Pre-commit always runs in full,
+because what it checks — whitespace, YAML, secrets, licence headers —
+applies to every file.
+
+The gating is inside the jobs, not a `paths:` filter on the workflow, and
+that is not a style choice: **a required check that never runs reports as
+pending forever, not as passed**, so a paths-filtered required check makes
+a docs-only pull request permanently unmergeable. The jobs always run and
+report; only the expensive steps are skipped.
+
 **Checks run on pull requests, not on pushes to `main`.** Because a branch
 has to be up to date before merging, a squash merge lands the tree that
 was already tested, so re-running deterministic checks afterwards tests

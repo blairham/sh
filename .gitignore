@@ -2,3 +2,9 @@
 *.test
 *.out
 .DS_Store
+
+# Scratch targets from redirection probes. The oracle runs cases in its own
+# temp directory, but hand-run exploration in the repo root leaves these
+# behind, and `git add -A` once swept two of them into a commit.
+/b
+/f

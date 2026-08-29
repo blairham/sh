@@ -1,0 +1,1160 @@
+{
+  "shells": [
+    {
+      "name": "dash",
+      "version": "unknown"
+    },
+    {
+      "name": "bash",
+      "version": "GNU bash, version 5.3.15(1)-release (aarch64-apple-darwin25.4.0)"
+    },
+    {
+      "name": "bash-as-sh",
+      "version": "GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25)"
+    },
+    {
+      "name": "ksh93",
+      "version": "Version AJM 93u+ 2012-08-01"
+    },
+    {
+      "name": "zsh",
+      "version": "zsh 5.9.2 (aarch64-apple-darwin25.4.0)"
+    }
+  ],
+  "results": {
+    "axis/array-base": {
+      "bash": {
+        "Output": "y",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "y",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "y",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "x",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/dollar-zero-in-function": {
+      "bash": {
+        "Output": "\u003cshell\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "f",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/echo-backslash": {
+      "bash": {
+        "Output": "literal",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "expanded",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "expanded",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "literal",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "expanded",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/local-builtin": {
+      "bash": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: local: not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/pipeline-last-element": {
+      "bash": {
+        "Output": "[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[x]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[x]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/readonly-reassign": {
+      "bash": {
+        "Output": "\u003cscript\u003e: line 2: r: readonly variable~survived",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cscript\u003e: line 2: r: readonly variable",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cscript\u003e: 2: r: is read only",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cscript\u003e: line 2: r: is read only",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cscript\u003e:2: read-only variable: r",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "axis/shift-past-end": {
+      "bash": {
+        "Output": "survived",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "survived",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: shift: can't shift that many",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: shift: 5: bad number",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:shift:1: shift count must be \u003c= $#~survived",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/brace": {
+      "bash": {
+        "Output": "1 2 3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1 2 3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "{1..3}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1 2 3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1 2 3",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/brace-before-param": {
+      "bash": {
+        "Output": "1 2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1 2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "{1,2}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1 2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1 2",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/glob-applies-to-expansion": {
+      "bash": {
+        "Output": "[etc]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[etc]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[etc]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[etc]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[et*]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/glob-literal-pattern": {
+      "bash": {
+        "Output": "[etc]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[etc]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[etc]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[etc]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[etc]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/glob-no-match": {
+      "bash": {
+        "Output": "/zzz_no_such*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "/zzz_no_such*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "/zzz_no_such*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "/zzz_no_such*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: no matches found: /zzz_no_such*",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "expand/glob-not-applied-when-quoted": {
+      "bash": {
+        "Output": "[et*]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[et*]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[et*]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[et*]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[et*]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/results-not-rescanned-dollar": {
+      "bash": {
+        "Output": "$HOME",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "$HOME",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "$HOME",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "$HOME",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "$HOME",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/results-not-rescanned-quote": {
+      "bash": {
+        "Output": "[a\"b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a\"b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a\"b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a\"b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a\"b]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/results-not-rescanned-semicolon": {
+      "bash": {
+        "Output": "[a;b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a;b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a;b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a;b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a;b]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/tilde-in-assignment": {
+      "bash": {
+        "Output": "abs",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "abs",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "abs",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "abs",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "abs",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/tilde-quoted": {
+      "bash": {
+        "Output": "literal",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "literal",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "literal",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "literal",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "literal",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/tilde-unquoted": {
+      "bash": {
+        "Output": "abs",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "abs",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "abs",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "abs",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "abs",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "ifs/default-edges-stripped": {
+      "bash": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[  a  b  ]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "ifs/default-runs-collapse": {
+      "bash": {
+        "Output": "[a][b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a][b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a][b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a][b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a b   c]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "ifs/empty-disables-splitting": {
+      "bash": {
+        "Output": "[a b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a b]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "ifs/mixed-adjacent-nonws": {
+      "bash": {
+        "Output": "[a][][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a][][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a][][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a][][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a::b]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "ifs/mixed-ws-around-nonws": {
+      "bash": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a : b]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "ifs/nonws-adjacent-empty-field": {
+      "bash": {
+        "Output": "[a][][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a][][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a][][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a][][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a::b]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "ifs/nonws-leading": {
+      "bash": {
+        "Output": "[][a]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[][a]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[][a]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[][a]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[:a]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "ifs/nonws-only-delimiters": {
+      "bash": {
+        "Output": "n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "n=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "ifs/nonws-separates": {
+      "bash": {
+        "Output": "[a][b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a][b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a][b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a][b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a:b:c]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "ifs/nonws-trailing": {
+      "bash": {
+        "Output": "[a]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a:]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "ifs/unset-is-default": {
+      "bash": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a b]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "params/at-empty-is-zero-fields": {
+      "bash": {
+        "Output": "n=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "n=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "n=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "n=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "n=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "params/at-quoted-keeps-fields": {
+      "bash": {
+        "Output": "[a b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a b][c]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "params/star-empty-is-one-field": {
+      "bash": {
+        "Output": "n=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "n=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "n=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "n=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "n=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "params/star-joins-with-ifs": {
+      "bash": {
+        "Output": "[a:b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a:b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a:b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a:b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a:b]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "params/star-quoted-joins": {
+      "bash": {
+        "Output": "[a b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a b]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "split/cmdsub-unquoted": {
+      "bash": {
+        "Output": "n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "n=2",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "split/empty-value": {
+      "bash": {
+        "Output": "n=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "n=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "n=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "n=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "n=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "split/empty-value-quoted": {
+      "bash": {
+        "Output": "n=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "n=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "n=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "n=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "n=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "split/param-braced": {
+      "bash": {
+        "Output": "n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "n=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "split/quoted-param": {
+      "bash": {
+        "Output": "[a b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a b]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "split/unquoted-param": {
+      "bash": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a b]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "split/unset-value": {
+      "bash": {
+        "Output": "n=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "n=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "n=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "n=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "n=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    }
+  }
+}

@@ -45,6 +45,33 @@ Rules that keep the facts honest:
 - **Prefer a script file to `-c`** where the construct interacts with
   how input is read, and say which was used.
 
+## The harness
+
+`internal/oracle` implements this, and `cmd/oracle` drives it:
+
+    make oracle         # re-measure, rewrite measurements.md and the golden record
+    make oracle-check   # fail if the panel no longer behaves as recorded
+
+The corpus is checked-in Go data, one entry per behaviour a spec entry
+asserts. Each carries a `Why` explaining what it pins down — without
+that, a case that changes later gets "fixed" by updating the golden
+record, which is how a regression becomes a feature.
+
+`make oracle-check` runs in `make check` and in CI. Drift is deliberately
+**not** described as a failure of the code: a shell was upgraded, or a
+case was edited, and the recorded behaviour is no longer what the panel
+does. The response is to work out which, update the affected spec
+entries, and re-record.
+
+The run environment is fixed — an empty `PATH` of system directories,
+`HOME` pointed at a scratch directory, `LC_ALL=C`, no stdin — because a
+record that depends on whose machine produced it is not evidence. Shell
+and script paths are normalized out of diagnostics for the same reason.
+
+A shell that is absent is reported, not fatal, and its column is omitted
+rather than blanked: a table from three shells is a weaker claim than the
+same table from five, and the generated file says which it was.
+
 ## Third-party suites
 
 bash's own `tests/` directory is a useful denominator and is **GPLv3**.

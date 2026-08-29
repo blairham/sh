@@ -100,7 +100,10 @@ tree, which is precisely the case worth defending against.
   maintained year range is churn.
 - Generated files (`// Code generated ... DO NOT EDIT.`) are exempt.
 - Markdown and config carry no header; the root `LICENSE` covers them.
-- `scripts/check-headers.sh` enforces this, in CI and pre-commit.
+- Enforced by the `check-license-headers` hook from
+  [blairham/pre-commit-hooks](https://github.com/blairham/pre-commit-hooks),
+  pinned in `.pre-commit-config.yaml` and run in CI by the same config —
+  one pinned version, not a copy of a script per repo.
 
 ## Testing
 

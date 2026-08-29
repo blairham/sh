@@ -12,11 +12,8 @@ repos:
     rev: v8.30.0
     hooks:
       - id: gitleaks
-  - repo: local
+  - repo: https://github.com/blairham/pre-commit-hooks
+    rev: v0.2.0
     hooks:
-      - id: spdx-headers
-        name: SPDX headers on Go files
-        entry: scripts/check-headers.sh
-        language: script
-        pass_filenames: false
-        files: '\.go$'
+      - id: check-license-headers
+        args: [--license, Apache-2.0]

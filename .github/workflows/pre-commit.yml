@@ -1,0 +1,23 @@
+name: Pre-commit
+on:
+  pull_request:
+  push:
+    branches:
+    - main
+jobs:
+  pre-commit:
+    name: Pre-commit
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v6
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+        check-latest: true # setup-go's manifest lags fresh Go patch releases; resolve via go.dev
+    - name: Run pre-commit hooks
+      # check-license-headers is a golang-language hook, so pre-commit builds
+      # it here; the version it runs is the `rev` pinned in
+      # .pre-commit-config.yaml, which stays the single source of truth.
+      uses: blairham/go-pre-commit@v4.6.6

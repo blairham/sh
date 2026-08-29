@@ -135,7 +135,7 @@ was already tested, so re-running deterministic checks afterwards tests
 nothing new.
 
 The exception is `main-canary.yml`, which runs the tests once on
-`ubuntu-latest` after a merge. Determinism is the whole argument above,
+`ubuntu-latest` after a merge, and only when the merge touched Go. Determinism is the whole argument above,
 and races are not deterministic: a test can pass on a branch and fail on
 `main` with the same tree. That has happened before and only a post-merge
 run caught it, so one cheap job stays rather than the full matrix.

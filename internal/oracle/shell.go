@@ -35,6 +35,13 @@ type Shell struct {
 
 	// Why records what this panel member is here to represent.
 	Why string
+
+	// MustReport, when set, is a substring the shell's version string has to
+	// contain for this entry to be believed. /bin/sh is bash on macOS and
+	// dash on Debian, so the bash-as-sh entry silently recorded dash on a
+	// Linux runner until this existed — a mislabelled column is worse than a
+	// missing one, because nothing looks wrong.
+	MustReport string
 }
 
 // Panel is the reference set. Membership is a deliberate claim: dash stands in
@@ -52,10 +59,11 @@ var Panel = []Shell{
 		Why:    "the dominant scripting target",
 	},
 	{
-		Name:   "bash-as-sh",
-		Lookup: []string{"/bin/sh", "/usr/bin/sh"},
-		Argv0:  "sh",
-		Why:    "argv[0] changes the language: bash 3.2 loses process substitution as sh",
+		Name:       "bash-as-sh",
+		Lookup:     []string{"/bin/sh", "/usr/bin/sh"},
+		Argv0:      "sh",
+		MustReport: "bash",
+		Why:        "argv[0] changes the language: bash 3.2 loses process substitution as sh",
 	},
 	{
 		Name:   "ksh93",
@@ -91,7 +99,13 @@ func Resolve(ctx context.Context) (found []Found, missing []string) {
 			missing = append(missing, s.Name)
 			continue
 		}
-		found = append(found, Found{Shell: s, Path: path, Version: version(ctx, path)})
+		v := version(ctx, path)
+		if s.MustReport != "" && !strings.Contains(strings.ToLower(v), s.MustReport) {
+			// The path exists but is not the shell this entry names.
+			missing = append(missing, s.Name)
+			continue
+		}
+		found = append(found, Found{Shell: s, Path: path, Version: v})
 	}
 	return found, missing
 }

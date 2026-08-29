@@ -56,7 +56,7 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Output": "\u003cshell\u003e",
+        "Output": "sh",
         "Status": 0,
         "TimedOut": false
       },

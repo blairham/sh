@@ -153,3 +153,38 @@ func TestMarkdownEndsWithExactlyOneNewline(t *testing.T) {
 		t.Errorf("want exactly one trailing newline, got %q", got[max(0, len(got)-12):])
 	}
 }
+
+func TestNormalizeDoesNotEatShellNameInsideWords(t *testing.T) {
+	// dash's basename is "sh", and replacing it anywhere turned
+	// "can't shift that many" into "can't <shell>ift that many".
+	sh := Found{Shell: Shell{Name: "bash-as-sh"}, Path: "/bin/sh"}
+	got := normalize("sh: 1: shift: can't shift that many\n", sh, "/tmp/d")
+	want := "<shell>: 1: shift: can't shift that many"
+	if got != want {
+		t.Errorf("normalize = %q, want %q", got, want)
+	}
+}
+
+func TestResolveRejectsAPathThatIsNotTheShellItNames(t *testing.T) {
+	// /bin/sh is bash on macOS and dash on Debian. A column labelled
+	// bash-as-sh that actually ran dash is worse than a missing column,
+	// because nothing about it looks wrong.
+	var entry Shell
+	for _, s := range Panel {
+		if s.Name == "bash-as-sh" {
+			entry = s
+		}
+	}
+	if entry.MustReport == "" {
+		t.Fatal("the bash-as-sh panel entry must assert what it expects to find")
+	}
+
+	found, missing := Resolve(context.Background())
+	for _, f := range found {
+		if f.MustReport != "" && !strings.Contains(strings.ToLower(f.Version), f.MustReport) {
+			t.Errorf("%s resolved to %s reporting %q, which does not contain %q",
+				f.Name, f.Path, f.Version, f.MustReport)
+		}
+	}
+	_ = missing
+}

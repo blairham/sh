@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -112,12 +113,21 @@ func normalize(s string, sh Found, dir string) string {
 		dir+"/case.sh", "<script>",
 		dir, "<tmp>",
 		sh.Path, "<shell>",
-		filepath.Base(sh.Path), "<shell>",
 	)
 	s = rep.Replace(s)
+	// A shell names itself by basename at the start of a diagnostic. Replacing
+	// that basename anywhere would corrupt ordinary words — with sh, "can't
+	// shift that many" became "can't <shell>ift that many" — so it is anchored
+	// to the start of a line and required to be followed by a colon.
+	s = diagPrefix(filepath.Base(sh.Path)).ReplaceAllString(s, "<shell>:")
 	s = strings.TrimRight(s, "\n")
 	// Newlines are shown as ~ so a result stays one table cell. Real output
 	// containing ~ is rare enough that the ambiguity has not bitten; if it
 	// does, this is the place to escape it.
 	return strings.ReplaceAll(s, "\n", "~")
+}
+
+// diagPrefix matches a shell naming itself at the start of a diagnostic.
+func diagPrefix(base string) *regexp.Regexp {
+	return regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(base) + `:`)
 }

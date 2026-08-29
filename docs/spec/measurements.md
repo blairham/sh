@@ -221,7 +221,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `axis/array-base` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `y` | `y` | `y` | `x` |
 | `axis/echo-backslash` | `expanded` | `literal` | `expanded` | `literal` | `expanded` |
 | `axis/pipeline-last-element` | `[]` | `[]` | `[]` | `[x]` | `[x]` |
-| `axis/dollar-zero-in-function` | `<shell>` | `<shell>` | `<shell>` | `<shell>` | `f` |
+| `axis/dollar-zero-in-function` | `<shell>` | `<shell>` | `sh` | `<shell>` | `f` |
 | `axis/local-builtin` | `1` | `1` | `1` | `<shell>: local: not found` | `1` |
 | `axis/shift-past-end` | `<shell>: 1: shift: can't shift that many` *(status 2)* | `survived` | `survived` | `<shell>: shift: 5: bad number` *(status 1)* | `<shell>:shift:1: shift count must be <= $#~survived` |
 | `axis/readonly-reassign` | `<script>: 2: r: is read only` *(status 2)* | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: readonly variable` *(status 1)* | `<script>: line 2: r: is read only` *(status 1)* | `<script>:2: read-only variable: r` *(status 1)* |

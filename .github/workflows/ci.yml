@@ -1,16 +1,41 @@
 name: CI
+
 on:
   pull_request:
-  push:
-    branches:
-    - main
 
 permissions:
   contents: read
 
+# Gating is done inside the jobs rather than with a `paths:` filter on the
+# workflow, and the difference matters: a required check that never runs is
+# reported as *pending forever*, not as passed, so a paths-filtered required
+# check makes a docs-only pull request unmergeable. The jobs therefore always
+# run and report; only the expensive steps are skipped.
 jobs:
+  changes:
+    name: Detect changed files
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - id: filter
+      name: Did anything Go change?
+      run: |
+        base="origin/${{ github.base_ref }}"
+        if git diff --name-only "$base"...HEAD | grep -qE '(\.go|^go\.mod|^go\.sum)$'; then
+          echo "go=true" >> "$GITHUB_OUTPUT"
+          echo "Go files changed — building and testing."
+        else
+          echo "go=false" >> "$GITHUB_OUTPUT"
+          echo "No Go files changed — build, test and lint will be skipped."
+        fi
+
   test:
     name: Build, vet and test
+    needs: changes
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -18,42 +43,54 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
     - uses: actions/checkout@v6
+      if: needs.changes.outputs.go == 'true'
     - uses: actions/setup-go@v6
+      if: needs.changes.outputs.go == 'true'
       with:
         go-version-file: go.mod
         check-latest: true
     - run: go build ./...
+      if: needs.changes.outputs.go == 'true'
     - run: go vet ./...
+      if: needs.changes.outputs.go == 'true'
     - run: go test -race ./...
+      if: needs.changes.outputs.go == 'true'
 
   lint:
     name: Lint
+    needs: changes
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
+      if: needs.changes.outputs.go == 'true'
     - uses: actions/setup-go@v6
+      if: needs.changes.outputs.go == 'true'
       with:
         go-version-file: go.mod
         check-latest: true
     - run: go tool golangci-lint run
+      if: needs.changes.outputs.go == 'true'
 
   oracle:
     name: Oracle (report only)
+    needs: changes
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
+      if: needs.changes.outputs.go == 'true'
     - uses: actions/setup-go@v6
+      if: needs.changes.outputs.go == 'true'
       with:
         go-version-file: go.mod
         check-latest: true
     - name: Install as much of the panel as this runner can host
+      if: needs.changes.outputs.go == 'true'
       run: sudo apt-get update -qq && sudo apt-get install -y -qq dash ksh zsh
     - name: Report drift without failing on it
-      # The golden record is generated on one machine, and the panel is not
-      # the same on another: a Linux runner has different builds of these
-      # shells than a laptop, and some cases legitimately differ between
-      # them. Until the record is per-platform, this reports rather than
-      # gates — a check that is red for a legitimate reason teaches people
-      # to ignore it. `make oracle-check` is the gate locally, where the
-      # panel matches the one that produced the record.
+      if: needs.changes.outputs.go == 'true'
+      # The golden record is generated on one machine and a runner does not
+      # have the same builds of the same shells, so some differences here are
+      # legitimate. A check that is red for a legitimate reason is one people
+      # learn to ignore. `make oracle-check` is the gate locally, where the
+      # panel matches the record.
       run: go run ./cmd/oracle -check || true

@@ -24,6 +24,10 @@ ksh93 (`/bin/ksh`), zsh 5.9.2. macOS arm64, 2026-08-29.
 | `function f {}` | **no** | yes | yes | yes | yes |
 | `<<<` herestring | **no** | yes | yes | yes | yes |
 | `<(...)` process subst. | **no** | *see note* | yes | yes | yes |
+| `function f { }` | **no** | yes | yes | yes | yes |
+| `function f() { }` | **no** | yes | yes | **no** | yes |
+| `case` `;&` fallthrough | **no** | **no** | yes | yes | yes |
+| `case` `;;&` continue | **no** | **no** | yes | **no** | **no** |
 
 **Note on process substitution.** bash 3.2 *has* it, and loses it when
 invoked as `sh`:

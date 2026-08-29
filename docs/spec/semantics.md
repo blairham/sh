@@ -14,6 +14,8 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | unquoted `$var` field-splits | yes | yes | yes | **no** |
 | globs the *result* of an expansion | yes | yes | yes | **no** |
 | `&>` is one redirection operator | **no** | yes | *build* | yes |
+| assignment prefix persists on a special builtin | **yes** | no | **yes** | no |
+| brace group needs a terminator before `}` | yes | yes | yes | **no** |
 | array index base | *n/a* | 0 | 0 | **1** |
 | `echo` expands backslashes | **yes** | no | no | **yes** |
 | glob with no match | passes pattern | passes pattern | passes pattern | **error** |
@@ -49,6 +51,8 @@ Group the shells by which side of each axis they fall on:
     unquoted split       {zsh}
     globs expansions     {zsh}
     `&>` unsupported     {dash, ksh93≤93u+}  — {dash} alone on ksh93u+m
+    prefix persists      {dash, ksh93}
+    brace needs `;`      {zsh}
     array base           {zsh}
     echo backslash       {dash, zsh}
     glob no match        {zsh}
@@ -58,7 +62,7 @@ Group the shells by which side of each axis they fall on:
     readonly continues   {bash}
     shift survives       {bash, zsh}
 
-Seven distinct groupings across eleven axes: `{zsh}`, `{dash,zsh}`,
+Seven distinct groupings across thirteen axes: `{zsh}`, `{dash,zsh}`,
 `{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`, and — depending on which
 ksh is installed — `{dash,ksh93}` or `{dash}`. Both of those last two are
 groupings no other axis produces, so the count holds either way.

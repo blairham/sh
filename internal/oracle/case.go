@@ -354,4 +354,120 @@ var Corpus = []Case{
 		Snippet: `set -C; echo one>b; echo two>|b; printf "[%s]" "$(cat b)"`,
 		Why:     ">| overrides noclobber with the same meaning everywhere, unlike &>",
 	},
+	// --- the command language ---------------------------------------------
+	{
+		ID: "cmd/andor-equal-precedence", Category: "command language",
+		Snippet: `true || echo A && echo B`,
+		Why:     "the discriminating case: C's precedence would short-circuit and print nothing; the shell prints B",
+	},
+	{
+		ID: "cmd/andor-left-to-right-success", Category: "command language",
+		Snippet: `true && echo A || echo B`,
+		Why:     "left to right: A runs and succeeds, so || is skipped",
+	},
+	{
+		ID: "cmd/andor-left-to-right-failure", Category: "command language",
+		Snippet: `false && echo A || echo B`,
+		Why:     "and the failing && hands off to ||",
+	},
+	{
+		ID: "cmd/bang-negates-the-pipeline", Category: "command language",
+		Snippet: `! true | false; echo "st=$?"`,
+		Why:     "the pipeline's status is false's, so ! yields 0; binding ! to true alone would give 1",
+	},
+	{
+		ID: "cmd/pipeline-status-is-last", Category: "command language",
+		Snippet: `false | true; echo "st=$?"`,
+		Why:     "a pipeline reports its last command, not its first failure",
+	},
+	{
+		ID: "cmd/pipeline-status-is-last-failing", Category: "command language",
+		Snippet: `true | false; echo "st=$?"`,
+		Why:     "the other direction, so the previous case cannot pass by accident",
+	},
+	{
+		ID: "cmd/redirect-before-command-name", Category: "command language",
+		Snippet: `>b echo hi; printf "[%s]" "$(cat b)"`,
+		Why:     "a redirection may precede the command name",
+	},
+	{
+		ID: "cmd/redirect-between-arguments", Category: "command language",
+		Snippet: `echo one >b two; printf "[%s]" "$(cat b)"`,
+		Why:     "and may sit between arguments; a parser treating redirections as a suffix is wrong",
+	},
+	{
+		ID: "cmd/assignment-prefix-is-transient", Category: "command language",
+		Snippet: `x=1; x=2 true; echo "[$x]"`,
+		Why:     "an assignment prefix applies to that command's environment only",
+	},
+	{
+		ID: "cmd/assignment-prefix-special-builtin", Category: "command language",
+		Snippet: `x=1; x=2 export y=3; echo "[$x]"`,
+		Why:     "except before a special builtin, where POSIX says it persists — dash and ksh93 comply, bash and zsh do not",
+	},
+	{
+		ID: "cmd/subshell-isolates-state", Category: "command language",
+		Snippet: `x=1; (x=2); echo "[$x]"`,
+		Why:     "( ) runs in a subshell, so assignments do not escape",
+	},
+	{
+		ID: "cmd/brace-group-shares-state", Category: "command language",
+		Snippet: `x=1; { x=2; }; echo "[$x]"`,
+		Why:     "{ } runs in the current shell, which is the whole difference between them",
+	},
+	{
+		ID: "cmd/brace-group-needs-terminator", Category: "command language",
+		Snippet: `{ echo a }`,
+		Why:     "{ } is made of reserved words and needs a terminator before the brace — except in zsh",
+	},
+	{
+		ID: "cmd/subshell-needs-no-terminator", Category: "command language",
+		Snippet: `(echo a)`,
+		Why:     "( ) is made of operators, so it needs neither blanks nor a terminator",
+	},
+	{
+		ID: "cmd/compound-takes-redirection", Category: "command language",
+		Snippet: `{ echo a; echo b; } >f; printf "[%s]" "$(tr '\n' ',' <f)"`,
+		Why:     "a redirection on a compound command applies to everything inside it",
+	},
+	{
+		ID: "cmd/loop-takes-redirection", Category: "command language",
+		Snippet: `for i in 1 2; do echo $i; done >f; printf "[%s]" "$(tr '\n' ',' <f)"`,
+		Why:     "so every compound AST node needs a redirection list, not just simple commands",
+	},
+	{
+		ID: "cmd/loop-status-when-body-never-runs", Category: "command language",
+		Snippet: `while false; do :; done; echo "st=$?"`,
+		Why:     "zero iterations exits 0; \"status of the last command\" is the obvious wrong answer when there was none",
+	},
+	{
+		ID: "cmd/for-status-empty-list", Category: "command language",
+		Snippet: `for i in; do echo x; done; echo "st=$?"`,
+		Why:     "same rule for an empty for list",
+	},
+	{
+		ID: "cmd/case-fallthrough", Category: "command language",
+		Snippet: `case a in a) echo one;& b) echo two;; esac`,
+		Why:     ";& falls through to the next body; core, but absent from dash",
+	},
+	{
+		ID: "cmd/case-continue-matching", Category: "command language",
+		Snippet: `case a in a) echo one;;& a) echo two;; esac`,
+		Why:     ";;& keeps testing later patterns and is bash-only — lumping it with ;& would put a bash construct in the core",
+	},
+	{
+		ID: "cmd/function-posix-form", Category: "command language",
+		Snippet: `f() { echo posix; }; f`,
+		Why:     "the universal definition form",
+	},
+	{
+		ID: "cmd/function-keyword-form", Category: "command language",
+		Snippet: `function f { echo kw; }; f`,
+		Why:     "the ksh keyword form: core, absent from dash",
+	},
+	{
+		ID: "cmd/function-keyword-and-parens", Category: "command language",
+		Snippet: `function f() { echo both; }; f`,
+		Why:     "the hybrid is rejected by ksh93, where the keyword originated, so it is not core",
+	},
 }

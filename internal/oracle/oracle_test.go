@@ -188,3 +188,14 @@ func TestResolveRejectsAPathThatIsNotTheShellItNames(t *testing.T) {
 	}
 	_ = missing
 }
+
+func TestNormalizeUsesTheNameTheShellWasInvokedUnder(t *testing.T) {
+	// bash invoked as sh reports "sh:" in diagnostics, not "bash:", so
+	// normalizing only the binary's basename leaves the machine-specific
+	// name in the record.
+	sh := Found{Shell: Shell{Name: "bash-as-sh", Argv0: "sh"}, Path: "/opt/homebrew/bin/bash"}
+	got := normalize("sh: -c: line 1: syntax error\n", sh, "/tmp/d")
+	if !strings.HasPrefix(got, "<shell>:") {
+		t.Errorf("argv0 name not normalized: %q", got)
+	}
+}

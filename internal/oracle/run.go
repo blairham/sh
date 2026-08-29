@@ -120,6 +120,11 @@ func normalize(s string, sh Found, dir string) string {
 	// shift that many" became "can't <shell>ift that many" — so it is anchored
 	// to the start of a line and required to be followed by a colon.
 	s = diagPrefix(filepath.Base(sh.Path)).ReplaceAllString(s, "<shell>:")
+	// A shell invoked under another name reports *that* name, not its
+	// binary's — bash-as-sh says "sh:", which the line above cannot match.
+	if sh.Argv0 != "" {
+		s = diagPrefix(sh.Argv0).ReplaceAllString(s, "<shell>:")
+	}
 	s = strings.TrimRight(s, "\n")
 	// Newlines are shown as ~ so a result stays one table cell. Real output
 	// containing ~ is rare enough that the ambiguity has not bitten; if it

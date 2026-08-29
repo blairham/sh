@@ -13,6 +13,7 @@ re-run rather than trusted.
 ## Entries
 
     tokenization.md    input to tokens, and where quoting is recorded
+    commands.md        tokens to commands: precedence and structure
     expansion.md       the expansion pipeline and its ordering
     word-splitting.md  field splitting and IFS
 

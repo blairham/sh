@@ -12,3 +12,11 @@ repos:
     rev: v8.30.0
     hooks:
       - id: gitleaks
+  - repo: local
+    hooks:
+      - id: spdx-headers
+        name: SPDX headers on Go files
+        entry: scripts/check-headers.sh
+        language: script
+        pass_filenames: false
+        files: '\.go$'

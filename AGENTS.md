@@ -77,6 +77,31 @@ slow for every commit. When in doubt run `make check` *and* `make lint`.
   redirect via `t.TempDir()` + `t.Setenv`.
 - **Commits carry no AI-attribution trailers.**
 
+## Licensing and file headers
+
+The project is **Apache-2.0** (`LICENSE`, `NOTICE`). Contributions
+require a signed CLA — see `CONTRIBUTING.md`.
+
+**Every `.go` file starts with two lines, before the package clause:**
+
+    // SPDX-FileCopyrightText: 2026 Blair Hamilton
+    // SPDX-License-Identifier: Apache-2.0
+
+Short-form SPDX, not the Apache appendix boilerplate — the appendix is
+recommended rather than required, and the short form is what scanners
+and the REUSE spec read.
+
+This is not ceremony. A root `LICENSE` does not travel with a file that
+is copied out of the repository; the header does. Per-file headers are
+the reason attribution survives wholesale vendoring into somebody else's
+tree, which is precisely the case worth defending against.
+
+- Year is `2026` and stays there. Copyright runs from creation; a
+  maintained year range is churn.
+- Generated files (`// Code generated ... DO NOT EDIT.`) are exempt.
+- Markdown and config carry no header; the root `LICENSE` covers them.
+- `scripts/check-headers.sh` enforces this, in CI and pre-commit.
+
 ## Testing
 
 Compatibility is proven by **differential testing against real shell

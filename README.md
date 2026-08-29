@@ -45,4 +45,8 @@ spec. `CLEANROOM.md` is the binding rule set.
 
 ## Licence
 
-MIT.
+Apache-2.0. See `LICENSE` and `NOTICE`.
+
+Contributions require a signed CLA — see `CONTRIBUTING.md` and `CLA.md`.
+The CLA exists so the project retains the option to offer different
+terms later; you keep your copyright.

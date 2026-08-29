@@ -125,6 +125,9 @@ that than the binary itself.
   observations*, never to source files.
 - No file in this repository carries another project's copyright header,
   because no file in this repository derives from another project.
-- `LICENSE` is MIT and stands alone. There is no `LICENSE-THIRD-PARTY`
-  for the substrate, and if one ever becomes necessary the rule above
-  has been broken.
+- `LICENSE` is Apache-2.0 and stands alone, and `NOTICE` says the tree
+  contains no third-party code. If a third-party notice ever becomes
+  necessary, the rule above has been broken.
+- Every source file carries its own SPDX header. A root `LICENSE` does
+  not travel with a file someone copies out; the header does, which is
+  what keeps attribution attached to the work.

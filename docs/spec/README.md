@@ -25,6 +25,9 @@ A spec entry with no citation is a guess and does not belong here.
     shell-matrix.md   which constructs exist in which shells (measured)
     semantics.md      where shells disagree on identical syntax (measured)
     core.md           the boundary: what the core language contains
+    grammar/          per-construct specs
+      expansion.md      the expansion pipeline and its ordering
+      word-splitting.md field splitting and IFS
 
 ## The two kinds of difference
 

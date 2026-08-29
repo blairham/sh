@@ -12,6 +12,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | axis | dash | bash 5.3 | ksh93 | zsh |
 | --- | --- | --- | --- | --- |
 | unquoted `$var` field-splits | yes | yes | yes | **no** |
+| globs the *result* of an expansion | yes | yes | yes | **no** |
 | array index base | *n/a* | 0 | 0 | **1** |
 | `echo` expands backslashes | **yes** | no | no | **yes** |
 | glob with no match | passes pattern | passes pattern | passes pattern | **error** |
@@ -24,6 +25,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 Probes, for reproduction:
 
     unquoted split   x="a b"; set -- $x; echo $#      → 2 2 2 1
+    glob expansion   cd /; x="et*"; set -- $x         → etc etc etc et*
     array base       a=(x y); echo "${a[1]}"          → -  y y x
     echo backslash   echo 'a\tb'                      → expanded, literal, literal, expanded
     glob no match    echo /zzz_no_such*               → pattern, pattern, pattern, "no match" error
@@ -43,6 +45,7 @@ producing this table.
 Group the shells by which side of each axis they fall on:
 
     unquoted split       {zsh}
+    globs expansions     {zsh}
     array base           {zsh}
     echo backslash       {dash, zsh}
     glob no match        {zsh}
@@ -52,7 +55,7 @@ Group the shells by which side of each axis they fall on:
     readonly continues   {bash}
     shift survives       {bash, zsh}
 
-Six distinct groupings across nine axes: `{zsh}`, `{dash,zsh}`,
+Six distinct groupings across ten axes: `{zsh}`, `{dash,zsh}`,
 `{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`.
 
 **No ordering of these shells explains the data.** dash sides with zsh on
@@ -69,6 +72,19 @@ This is the central architectural claim of this repository, and it is
 the one thing that cannot be retrofitted cheaply. Every axis above is a
 named field, set by a preset, read at the one place the behaviour
 happens.
+
+## A measured non-conflict, recorded so it is not over-generalised
+
+**zsh splits an unquoted command substitution**, exactly like the other
+three, even though it does not split a parameter expansion:
+
+    x='a b'; set -- $x;              echo $#   → 2 2 2 **1**
+    set -- $(printf 'a b');          echo $#   → 2 2 2 **2**
+
+"zsh does not word-split" is the usual summary and it is too broad. The
+splitting axis covers parameter expansion only, and modelling it as one
+switch over the whole of field splitting gives the wrong answer for
+`$(...)`. See `grammar/word-splitting.md`.
 
 ## Rules for adding an axis
 

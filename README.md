@@ -42,6 +42,7 @@ spec. `CLEANROOM.md` is the binding rule set.
       shell-matrix.md         measured: which constructs exist where
       semantics.md            measured: where shells conflict
       core.md                 the core language boundary
+      grammar/                per-construct specs
 
 ## Licence
 

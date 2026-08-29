@@ -1,0 +1,59 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches:
+    - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build, vet and test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+        check-latest: true
+    - run: go build ./...
+    - run: go vet ./...
+    - run: go test -race ./...
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+        check-latest: true
+    - run: go tool golangci-lint run
+
+  oracle:
+    name: Oracle (report only)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+        check-latest: true
+    - name: Install as much of the panel as this runner can host
+      run: sudo apt-get update -qq && sudo apt-get install -y -qq dash ksh zsh
+    - name: Report drift without failing on it
+      # The golden record is generated on one machine, and the panel is not
+      # the same on another: a Linux runner has different builds of these
+      # shells than a laptop, and some cases legitimately differ between
+      # them. Until the record is per-platform, this reports rather than
+      # gates — a check that is red for a legitimate reason teaches people
+      # to ignore it. `make oracle-check` is the gate locally, where the
+      # panel matches the one that produced the record.
+      run: go run ./cmd/oracle -check || true

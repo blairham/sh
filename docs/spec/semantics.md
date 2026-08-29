@@ -13,7 +13,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | --- | --- | --- | --- | --- |
 | unquoted `$var` field-splits | yes | yes | yes | **no** |
 | globs the *result* of an expansion | yes | yes | yes | **no** |
-| `&>` is one redirection operator | **no** | yes | **no** | yes |
+| `&>` is one redirection operator | **no** | yes | *build* | yes |
 | array index base | *n/a* | 0 | 0 | **1** |
 | `echo` expands backslashes | **yes** | no | no | **yes** |
 | glob with no match | passes pattern | passes pattern | passes pattern | **error** |
@@ -48,7 +48,7 @@ Group the shells by which side of each axis they fall on:
 
     unquoted split       {zsh}
     globs expansions     {zsh}
-    `&>` unsupported     {dash, ksh93}
+    `&>` unsupported     {dash, ksh93≤93u+}  — {dash} alone on ksh93u+m
     array base           {zsh}
     echo backslash       {dash, zsh}
     glob no match        {zsh}
@@ -59,7 +59,15 @@ Group the shells by which side of each axis they fall on:
     shift survives       {bash, zsh}
 
 Seven distinct groupings across eleven axes: `{zsh}`, `{dash,zsh}`,
-`{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`, `{dash,ksh93}`.
+`{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`, and — depending on which
+ksh is installed — `{dash,ksh93}` or `{dash}`. Both of those last two are
+groupings no other axis produces, so the count holds either way.
+
+That last row is worth its own note: **a panel member is not one thing.**
+ksh93 AJM 93u+ (2012, macOS) and ksh93u+m 1.0.8 (2024, Debian) disagree
+about `&>`, twelve years apart under the same name. An axis keyed on a
+shell's *name* is therefore not implementable; it has to be keyed on a
+configured value, which is what a semantics vector is.
 
 **No ordering of these shells explains the data.** dash sides with zsh on
 `echo` and against it on splitting. bash sides with zsh on `shift` and

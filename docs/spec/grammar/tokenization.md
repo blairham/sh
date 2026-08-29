@@ -138,9 +138,21 @@ accepted by all six shells and **means different things**:
 | `echo hi &>b` then `cat b` | `hi` then empty | `[hi]` | `hi` then empty | `[hi]` |
 
 In bash and zsh, `&>` is one operator redirecting both streams. In dash
-and ksh93 there is no such operator, so the same text tokenizes as `echo
-hi &` — a **background command** — followed by `>b`, a redirection with no
-command that truncates the file.
+there is no such operator, so the same text tokenizes as `echo hi &` — a
+**background command** — followed by `>b`, a redirection with no command
+that truncates the file.
+
+**ksh93 is on both sides of this, depending on build.** AJM 93u+ from
+2012, which macOS ships, has no `&>` and backgrounds the command.
+ksh93u+m 1.0.8 from 2024, which Debian ships, treats it as the operator
+and agrees with bash. The harness found this by running the corpus on a
+Linux runner after the spec had already been written from a laptop; it is
+the second claim a cross-platform run has corrected, and the reason
+`../oracle.md` insists a build is part of every claim.
+
+So "ksh supports `&>`" is not a fact about ksh, and an implementation
+that keys this axis on a shell name rather than on a configured value
+will be wrong for half its users.
 
 Nothing errors. The command runs, the output goes somewhere else, and the
 file is emptied. This is the failure mode a compatibility layer exists to

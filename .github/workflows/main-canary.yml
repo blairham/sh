@@ -1,0 +1,40 @@
+name: Main canary
+
+# The one thing that still runs after a merge, and the reason it exists is
+# recorded rather than assumed.
+#
+# Branch protection requires PR branches to be up to date before merging, so
+# for a squash merge the tree that lands on main is the tree that was tested.
+# That makes re-running lint and pre-commit here genuinely redundant: they are
+# deterministic, and the input has not changed.
+#
+# Races are not deterministic. A test can pass on a branch and fail on main
+# with the same tree, and it has: a Windows cleanup race in an earlier project
+# was green on the branch of the pull request it first appeared after, and only
+# a post-merge run caught it. So one cheap job stays — tests, one platform —
+# rather than the full matrix, which is the compromise between "nothing runs
+# after merge" and "everything runs twice".
+on:
+  push:
+    branches:
+    - main
+
+permissions:
+  contents: read
+
+concurrency:
+  # Only the newest main matters; a queue of superseded runs teaches nobody.
+  group: main-canary
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Post-merge tests
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+        check-latest: true
+    - run: go test -race ./...

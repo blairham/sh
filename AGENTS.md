@@ -105,6 +105,36 @@ tree, which is precisely the case worth defending against.
   pinned in `.pre-commit-config.yaml` and run in CI by the same config —
   one pinned version, not a copy of a script per repo.
 
+## CI and merging
+
+`main` is protected. All of these must pass before a merge, and branches
+must be **up to date** with `main` first:
+
+    Build, vet and test (ubuntu-latest)
+    Build, vet and test (macos-latest)
+    Lint
+    Pre-commit
+
+Merges are **squash only** — linear history is enforced, and force pushes
+and branch deletion are blocked. Commits must be signed.
+
+**Checks run on pull requests, not on pushes to `main`.** Because a branch
+has to be up to date before merging, a squash merge lands the tree that
+was already tested, so re-running deterministic checks afterwards tests
+nothing new.
+
+The exception is `main-canary.yml`, which runs the tests once on
+`ubuntu-latest` after a merge. Determinism is the whole argument above,
+and races are not deterministic: a test can pass on a branch and fail on
+`main` with the same tree. That has happened before and only a post-merge
+run caught it, so one cheap job stays rather than the full matrix.
+
+`make oracle-check` runs in CI in **report-only** mode: the golden record
+is generated on one machine and a runner does not have the same builds of
+the same shells, so some differences are legitimate. A check that is red
+for a legitimate reason is one people learn to ignore. `make check` is the
+gate locally, where the panel matches the record.
+
 ## Testing
 
 Compatibility is proven by **differential testing against real shell

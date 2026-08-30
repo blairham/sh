@@ -29,6 +29,7 @@ A spec entry with no citation is a guess and does not belong here.
     grammar/          per-construct specs
       tokenization.md   input to tokens, and where quoting is recorded
       commands.md       tokens to commands: precedence and structure
+      substitutions.md  where $( ), ${ }, $(( )) and ` ` end
       expansion.md      the expansion pipeline and its ordering
       word-splitting.md field splitting and IFS
 

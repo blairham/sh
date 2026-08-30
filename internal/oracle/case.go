@@ -470,4 +470,35 @@ var Corpus = []Case{
 		Snippet: `function f() { echo both; }; f`,
 		Why:     "the hybrid is rejected by ksh93, where the keyword originated, so it is not core",
 	},
+	// --- substitutions ------------------------------------------------------
+	{
+		ID: "subst/does-not-end-the-word", Category: "substitutions",
+		Snippet: `set -- $(printf a)b; printf "[%s]" "$@"; echo " n=$#"`,
+		Why:     "a substitution is part of a word, not a word of its own",
+	},
+	{
+		ID: "subst/result-is-split-and-text-attaches", Category: "substitutions",
+		Snippet: `set -- x$(printf "a b")y; printf "[%s]" "$@"; echo " n=$#"`,
+		Why:     "the result is field-split and the literal text either side attaches to the first and last fields",
+	},
+	{
+		ID: "subst/paren-in-quotes-does-not-close", Category: "substitutions",
+		Snippet: `echo "[$(echo ")" )]"`,
+		Why:     "the rule that decides the implementation: counting parens truncates the substitution and silently changes the program",
+	},
+	{
+		ID: "subst/nesting", Category: "substitutions",
+		Snippet: `echo "[$(echo "$(echo deep)")]"`,
+		Why:     "nesting works because the scan tracks quoting, not because of a separate rule",
+	},
+	{
+		ID: "subst/arith-vs-subshell", Category: "substitutions",
+		Snippet: `echo "[$((1+2))] [$( (echo sub) )]"`,
+		Why:     "$(( starts arithmetic, so a substitution beginning with a subshell needs the space — the only disambiguation available",
+	},
+	{
+		ID: "subst/backticks-nest-with-escaping", Category: "substitutions",
+		Snippet: "echo \"[`echo \\`echo deep\\``]\"",
+		Why:     "the older form nests only with backslash escaping, which is why $( ) exists",
+	},
 }

@@ -486,3 +486,39 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   function f() { echo both; }; f
   ```
+
+## substitutions
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `subst/does-not-end-the-word` | `[ab] n=1` | `[ab] n=1` | `[ab] n=1` | `[ab] n=1` | `[ab] n=1` | `[ab] n=1` |
+| `subst/result-is-split-and-text-attaches` | `[xa][by] n=2` | `[xa][by] n=2` | `[xa][by] n=2` | `[xa][by] n=2` | `[xa][by] n=2` | `[xa][by] n=2` |
+| `subst/paren-in-quotes-does-not-close` | `[)]` | `[)]` | `[)]` | `[)]` | `[)]` | `[)]` |
+| `subst/nesting` | `[deep]` | `[deep]` | `[deep]` | `[deep]` | `[deep]` | `[deep]` |
+| `subst/arith-vs-subshell` | `[3] [sub]` | `[3] [sub]` | `[3] [sub]` | `[3] [sub]` | `[3] [sub]` | `[3] [sub]` |
+| `subst/backticks-nest-with-escaping` | `[deep]` | `[deep]` | `[deep]` | `[deep]` | `[deep]` | `[deep]` |
+
+- `subst/does-not-end-the-word` — a substitution is part of a word, not a word of its own
+  ```sh
+  set -- $(printf a)b; printf "[%s]" "$@"; echo " n=$#"
+  ```
+- `subst/result-is-split-and-text-attaches` — the result is field-split and the literal text either side attaches to the first and last fields
+  ```sh
+  set -- x$(printf "a b")y; printf "[%s]" "$@"; echo " n=$#"
+  ```
+- `subst/paren-in-quotes-does-not-close` — the rule that decides the implementation: counting parens truncates the substitution and silently changes the program
+  ```sh
+  echo "[$(echo ")" )]"
+  ```
+- `subst/nesting` — nesting works because the scan tracks quoting, not because of a separate rule
+  ```sh
+  echo "[$(echo "$(echo deep)")]"
+  ```
+- `subst/arith-vs-subshell` — $(( starts arithmetic, so a substitution beginning with a subshell needs the space — the only disambiguation available
+  ```sh
+  echo "[$((1+2))] [$( (echo sub) )]"
+  ```
+- `subst/backticks-nest-with-escaping` — the older form nests only with backslash escaping, which is why $( ) exists
+  ```sh
+  echo "[`echo \`echo deep\``]"
+  ```

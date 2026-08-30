@@ -127,16 +127,39 @@ func detail(t syntax.Token) string {
 	}
 	parts := make([]string, 0, len(t.Spans))
 	for _, s := range t.Spans {
-		switch s.Quoting {
-		case syntax.SingleQuoted:
-			parts = append(parts, "single("+s.Value+")")
-		case syntax.DoubleQuoted:
-			parts = append(parts, "double("+s.Value+")")
-		case syntax.DollarSingleQuoted:
-			parts = append(parts, "dollar-single("+s.Value+")")
-		default:
-			parts = append(parts, "plain("+s.Value+")")
-		}
+		parts = append(parts, spanLabel(s)+"("+s.Value+")")
 	}
 	return strings.Join(parts, " + ")
+}
+
+// spanLabel names a span by what it is and, where it matters, by the quoting
+// it sits in. A substitution shown as "plain" would read as literal text,
+// which is the opposite of what this tool is for.
+func spanLabel(s syntax.Span) string {
+	switch s.Kind {
+	case syntax.CommandSubst:
+		return quotePrefix(s) + "cmd-subst"
+	case syntax.ArithSubst:
+		return quotePrefix(s) + "arith"
+	case syntax.ParamExp:
+		return quotePrefix(s) + "param"
+	}
+	switch s.Quoting {
+	case syntax.SingleQuoted:
+		return "single"
+	case syntax.DoubleQuoted:
+		return "double"
+	case syntax.DollarSingleQuoted:
+		return "dollar-single"
+	}
+	return "plain"
+}
+
+// quotePrefix marks a substitution that sits inside double quotes, because
+// that is what decides whether its result is field-split afterwards.
+func quotePrefix(s syntax.Span) string {
+	if s.Quoting == syntax.DoubleQuoted {
+		return "quoted-"
+	}
+	return ""
 }

@@ -164,7 +164,7 @@ func (l *Lexer) tryIONumber() (Token, bool) {
 		Pos:   start,
 		End:   l.pos(),
 		Text:  digits,
-		Spans: []Span{{Value: digits, Quoting: Unquoted, Pos: start}},
+		Spans: []Span{{Kind: Literal, Value: digits, Quoting: Unquoted, Pos: start}},
 	}, true
 }
 
@@ -232,7 +232,7 @@ func (l *Lexer) scanWord(start Pos) Token {
 
 	flush := func() {
 		if lit.Len() > 0 {
-			spans = append(spans, Span{Value: lit.String(), Quoting: Unquoted, Pos: litPos})
+			spans = append(spans, Span{Kind: Literal, Value: lit.String(), Quoting: Unquoted, Pos: litPos})
 			lit.Reset()
 		}
 	}
@@ -268,15 +268,33 @@ func (l *Lexer) scanWord(start Pos) Token {
 
 		case c == '"':
 			flush()
-			if s, ok := l.scanDouble(); ok {
-				spans = append(spans, s)
-			}
+			spans = append(spans, l.scanDouble()...)
 
 		case c == '$' && l.peekAt(1) == '\'' && l.dialect.DollarSingleQuote:
 			flush()
 			if s, ok := l.scanDollarSingle(); ok {
 				spans = append(spans, s)
 			}
+
+		case c == '$' && l.peekAt(1) == '(' && l.peekAt(2) == '(':
+			// `$((` is arithmetic. A command substitution whose first
+			// construct is a subshell has to be written `$( (`, which is the
+			// only disambiguation available and is decided here: by the time
+			// the parser sees tokens the choice has been made.
+			flush()
+			spans = append(spans, l.scanParens(ArithSubst, Unquoted))
+
+		case c == '$' && l.peekAt(1) == '(':
+			flush()
+			spans = append(spans, l.scanParens(CommandSubst, Unquoted))
+
+		case c == '$' && l.peekAt(1) == '{':
+			flush()
+			spans = append(spans, l.scanBraces(Unquoted))
+
+		case c == '`':
+			flush()
+			spans = append(spans, l.scanBackticks(Unquoted))
 
 		default:
 			if lit.Len() == 0 {
@@ -309,11 +327,11 @@ func (l *Lexer) scanSingle() (Span, bool) {
 		if l.eof() {
 			l.incomplete = true
 			l.fail(open, "unterminated single quote")
-			return Span{Value: b.String(), Quoting: SingleQuoted, Pos: open}, true
+			return Span{Kind: Literal, Value: b.String(), Quoting: SingleQuoted, Pos: open}, true
 		}
 		if l.peek() == '\'' {
 			l.advance()
-			return Span{Value: b.String(), Quoting: SingleQuoted, Pos: open}, true
+			return Span{Kind: Literal, Value: b.String(), Quoting: SingleQuoted, Pos: open}, true
 		}
 		b.WriteByte(l.advance())
 	}
@@ -324,28 +342,73 @@ func (l *Lexer) scanSingle() (Span, bool) {
 // backslash-then-n and not a newline — the rule C intuition gets wrong.
 const dquoteEscapes = "$`\"\\"
 
-func (l *Lexer) scanDouble() (Span, bool) {
+func (l *Lexer) scanDouble() []Span {
 	open := l.pos()
 	l.advance() // "
+
+	var out []Span
 	var b strings.Builder
+	litPos := l.pos()
+	flush := func() {
+		if b.Len() > 0 {
+			out = append(out, Span{Kind: Literal, Value: b.String(), Quoting: DoubleQuoted, Pos: litPos})
+			b.Reset()
+		}
+	}
+
 	for {
 		if l.eof() {
 			l.incomplete = true
 			l.fail(open, "unterminated double quote")
-			return Span{Value: b.String(), Quoting: DoubleQuoted, Pos: open}, true
+			flush()
+			return out
 		}
 		c := l.peek()
 		switch {
 		case c == '"':
 			l.advance()
-			return Span{Value: b.String(), Quoting: DoubleQuoted, Pos: open}, true
+			flush()
+			if len(out) == 0 {
+				// An empty "" still produced a span: it is an empty field,
+				// not the absence of one.
+				out = append(out, Span{Kind: Literal, Quoting: DoubleQuoted, Pos: open})
+			}
+			return out
+
+		// Substitutions happen inside double quotes — "$(cmd)" is how most
+		// scripts spell a substitution — so they are spans of their own here
+		// too. The quoting is carried on them because it decides whether the
+		// result is split afterwards, which is the only thing it changes.
+		case c == '$' && l.peekAt(1) == '(' && l.peekAt(2) == '(':
+			flush()
+			out = append(out, l.scanParens(ArithSubst, DoubleQuoted))
+			litPos = l.pos()
+		case c == '$' && l.peekAt(1) == '(':
+			flush()
+			out = append(out, l.scanParens(CommandSubst, DoubleQuoted))
+			litPos = l.pos()
+		case c == '$' && l.peekAt(1) == '{':
+			flush()
+			out = append(out, l.scanBraces(DoubleQuoted))
+			litPos = l.pos()
+		case c == '`':
+			flush()
+			out = append(out, l.scanBackticks(DoubleQuoted))
+			litPos = l.pos()
+
 		case c == '\\' && l.peekAt(1) == '\n':
 			l.advance()
 			l.advance()
 		case c == '\\' && strings.IndexByte(dquoteEscapes, l.peekAt(1)) >= 0:
 			l.advance()
+			if b.Len() == 0 {
+				litPos = l.pos()
+			}
 			b.WriteByte(l.advance())
 		default:
+			if b.Len() == 0 {
+				litPos = l.pos()
+			}
 			b.WriteByte(l.advance())
 		}
 	}
@@ -366,13 +429,13 @@ func (l *Lexer) scanDollarSingle() (Span, bool) {
 		if l.eof() {
 			l.incomplete = true
 			l.fail(open, "unterminated $' quote")
-			return Span{Value: b.String(), Quoting: DollarSingleQuoted, Pos: open}, true
+			return Span{Kind: Literal, Value: b.String(), Quoting: DollarSingleQuoted, Pos: open}, true
 		}
 		c := l.peek()
 		switch {
 		case c == '\'':
 			l.advance()
-			return Span{Value: b.String(), Quoting: DollarSingleQuoted, Pos: open}, true
+			return Span{Kind: Literal, Value: b.String(), Quoting: DollarSingleQuoted, Pos: open}, true
 		case c == '\\' && !l.eofAt(1):
 			// A backslash consumes the next character whatever it is, so an
 			// escaped quote does not end the span. Both bytes are kept.
@@ -395,6 +458,179 @@ func (l *Lexer) Tokens() []Token {
 		out = append(out, t)
 		if t.Kind == EOF || l.err != nil {
 			return out
+		}
+	}
+}
+
+// scanParens reads $( … ) or $(( … )).
+//
+// The closing delimiter is not found by counting parens. A `)` inside quotes
+// does not close the substitution — `$(echo ")" )` yields `)` in every shell
+// in the panel — so the scan tracks quoting as it goes, using the same rules
+// as the rest of the lexer. Counting alone truncates the substitution and
+// silently changes the program.
+func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
+	open := l.pos()
+	l.advance() // $
+	l.advance() // (
+	depth := 1
+	if kind == ArithSubst {
+		l.advance() // the second (
+		depth = 2
+	}
+
+	start := l.off
+	for depth > 0 {
+		if l.eof() {
+			l.incomplete = true
+			l.fail(open, "unterminated %s", kind)
+			break
+		}
+		switch c := l.peek(); c {
+		case '\'':
+			l.skipQuoted('\'', false)
+		case '"':
+			l.skipQuoted('"', true)
+		case '`':
+			l.skipBackticks()
+		case '\\':
+			l.advance()
+			if !l.eof() {
+				l.advance()
+			}
+		case '(':
+			depth++
+			l.advance()
+		case ')':
+			depth--
+			l.advance()
+		default:
+			l.advance()
+		}
+	}
+
+	// Trim the closing delimiters the loop consumed.
+	end := l.off
+	for n := 1; n <= closers(kind) && end > start && l.src[end-1] == ')'; n++ {
+		end--
+	}
+	return Span{Kind: kind, Value: l.src[start:end], Quoting: q, Pos: open}
+}
+
+func closers(k SpanKind) int {
+	if k == ArithSubst {
+		return 2
+	}
+	return 1
+}
+
+// scanBraces reads ${ … }. Same rule as scanParens: a `}` inside quotes does
+// not close it. What the operators inside mean is a separate specification;
+// this only finds the end.
+func (l *Lexer) scanBraces(q Quoting) Span {
+	open := l.pos()
+	l.advance() // $
+	l.advance() // {
+	start := l.off
+	depth := 1
+	for depth > 0 {
+		if l.eof() {
+			l.incomplete = true
+			l.fail(open, "unterminated parameter expansion")
+			break
+		}
+		switch c := l.peek(); c {
+		case '\'':
+			l.skipQuoted('\'', false)
+		case '"':
+			l.skipQuoted('"', true)
+		case '\\':
+			l.advance()
+			if !l.eof() {
+				l.advance()
+			}
+		case '{':
+			depth++
+			l.advance()
+		case '}':
+			depth--
+			l.advance()
+		default:
+			l.advance()
+		}
+	}
+	end := l.off
+	if end > start && l.src[end-1] == '}' {
+		end--
+	}
+	return Span{Kind: ParamExp, Value: l.src[start:end], Quoting: q, Pos: open}
+}
+
+// scanBackticks reads ` … `, the older command substitution. It nests only
+// with backslash escaping, which is why $( ) exists and why this form is
+// supported but never recommended.
+func (l *Lexer) scanBackticks(q Quoting) Span {
+	open := l.pos()
+	l.advance() // `
+	start := l.off
+	for {
+		if l.eof() {
+			l.incomplete = true
+			l.fail(open, "unterminated backquote substitution")
+			return Span{Kind: CommandSubst, Value: l.src[start:l.off], Quoting: q, Pos: open}
+		}
+		switch l.peek() {
+		case '\\':
+			l.advance()
+			if !l.eof() {
+				l.advance()
+			}
+		case '`':
+			end := l.off
+			l.advance()
+			return Span{Kind: CommandSubst, Value: l.src[start:end], Quoting: q, Pos: open}
+		default:
+			l.advance()
+		}
+	}
+}
+
+// skipQuoted consumes a quoted run while scanning inside a substitution. It
+// does not build a span: the inner text is kept verbatim and re-lexed later by
+// whoever parses the substitution.
+func (l *Lexer) skipQuoted(quote byte, escapes bool) {
+	l.advance() // opening quote
+	for !l.eof() {
+		c := l.peek()
+		if c == quote {
+			l.advance()
+			return
+		}
+		if escapes && c == '\\' {
+			l.advance()
+			if !l.eof() {
+				l.advance()
+			}
+			continue
+		}
+		l.advance()
+	}
+}
+
+func (l *Lexer) skipBackticks() {
+	l.advance()
+	for !l.eof() {
+		switch l.peek() {
+		case '\\':
+			l.advance()
+			if !l.eof() {
+				l.advance()
+			}
+		case '`':
+			l.advance()
+			return
+		default:
+			l.advance()
 		}
 	}
 }

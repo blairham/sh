@@ -123,6 +123,36 @@ const (
 	DollarSingleQuoted
 )
 
+// SpanKind says what a span is, as distinct from how it was quoted. A
+// substitution inside double quotes is still a substitution, and the quoting
+// only decides whether its result is split afterwards.
+type SpanKind uint8
+
+const (
+	// Literal text.
+	Literal SpanKind = iota
+	// CommandSubst is $(...) or `...`. Value is the inner source, unparsed:
+	// what is inside is a program, and parsing it is the parser's job.
+	CommandSubst
+	// ArithSubst is $((...)). Value is the inner expression, unparsed.
+	ArithSubst
+	// ParamExp is ${...}. Value is the inner text, unparsed — the operator
+	// set inside is a separate specification.
+	ParamExp
+)
+
+func (k SpanKind) String() string {
+	switch k {
+	case CommandSubst:
+		return "command substitution"
+	case ArithSubst:
+		return "arithmetic substitution"
+	case ParamExp:
+		return "parameter expansion"
+	}
+	return "literal"
+}
+
 // Span is a run of a word written with uniform quoting.
 //
 // A word is a sequence of these rather than a string, because quoting is
@@ -131,13 +161,17 @@ const (
 // stages act only on the unquoted spans, so a lexer that flattened this would
 // make field splitting and globbing unimplementable.
 type Span struct {
-	// Value is the span's text with its own quote characters removed, but
-	// with no expansion performed and no escapes resolved. Quote removal
-	// proper happens at the end of expansion, not here.
+	// Kind says whether this is literal text or a substitution.
+	Kind SpanKind
+	// Value is the span's text with its own delimiters removed — quotes for a
+	// literal, `$(` and `)` for a substitution — and with no expansion
+	// performed and no escapes resolved. Quote removal proper happens at the
+	// end of expansion, not here.
 	Value string
-	// Quoting is how this span was written.
+	// Quoting is the quoting this span sits in. For a substitution it decides
+	// only whether the result is split afterwards, not what the span is.
 	Quoting Quoting
-	// Pos is where the span starts, including its opening quote.
+	// Pos is where the span starts, including its opening delimiter.
 	Pos Pos
 }
 

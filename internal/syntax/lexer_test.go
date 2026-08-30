@@ -29,6 +29,23 @@ func render(toks []Token) string {
 				if j > 0 {
 					b.WriteByte('|')
 				}
+				if s.Kind != Literal {
+					// Substitutions render as kind{inner}, with a leading "
+					// when they sit inside double quotes, because the quoting
+					// decides whether the result is split.
+					if s.Quoting == DoubleQuoted {
+						b.WriteByte('"')
+					}
+					switch s.Kind {
+					case CommandSubst:
+						b.WriteString("cmd{" + s.Value + "}")
+					case ArithSubst:
+						b.WriteString("arith{" + s.Value + "}")
+					case ParamExp:
+						b.WriteString("param{" + s.Value + "}")
+					}
+					continue
+				}
 				switch s.Quoting {
 				case SingleQuoted:
 					b.WriteString("'" + s.Value + "'")
@@ -290,4 +307,76 @@ func FuzzLexerNeverPanics(f *testing.F) {
 			last = tk.Pos
 		}
 	})
+}
+
+func TestSubstitutionsDoNotEndTheWord(t *testing.T) {
+	// $(printf a)b is one word. A lexer that emitted the substitution as its
+	// own token could not reconstruct that, and the paren operator used to
+	// win here — `echo $(cat b)` lexed as word($) ( word(cat) word(b) ).
+	tests := []struct{ src, want string }{
+		{`$(printf a)b`, `word(cmd{printf a}|b)`},
+		{`x$(printf a)y`, `word(x|cmd{printf a}|y)`},
+		{`echo $(cat b)`, `word(echo) word(cmd{cat b})`},
+		{"echo `cat b`", `word(echo) word(cmd{cat b})`},
+		{`echo ${x:-y}`, `word(echo) word(param{x:-y})`},
+		{`echo $((1+2))`, `word(echo) word(arith{1+2})`},
+	}
+	for _, tc := range tests {
+		if got := lex(t, tc.src, Core()); got != tc.want {
+			t.Errorf("%s: got %s, want %s", tc.src, got, tc.want)
+		}
+	}
+}
+
+func TestClosingDelimiterIsNotFoundByCounting(t *testing.T) {
+	// The rule that decides the implementation: a ) inside quotes does not
+	// close the substitution. Counting parens truncates it and silently
+	// changes the program.
+	tests := []struct{ name, src, want string }{
+		{"paren inside double quotes", `$(echo ")" )`, `word(cmd{echo ")" })`},
+		{"paren inside a quoted word", `$(echo "a)b")`, `word(cmd{echo "a)b"})`},
+		{"paren inside single quotes", `$(echo ')' )`, `word(cmd{echo ')' })`},
+		{"escaped paren", `$(echo \) )`, `word(cmd{echo \) })`},
+		{"nesting", `$(echo $(echo deep))`, `word(cmd{echo $(echo deep)})`},
+		{"subshell needs the space", `$( (echo sub) )`, `word(cmd{ (echo sub) })`},
+		{"arithmetic with inner parens", `$(( (1+2)*3 ))`, `word(arith{ (1+2)*3 })`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := lex(t, tc.src, Core()); got != tc.want {
+				t.Errorf("got %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSubstitutionsInsideDoubleQuotes(t *testing.T) {
+	// "$(cmd)" is how most scripts spell a substitution, so a double-quoted
+	// section yields several spans rather than one literal.
+	tests := []struct{ src, want string }{
+		{`"$(cat b)"`, `word("cmd{cat b})`},
+		{`"[$(cat b)]"`, `word("["|"cmd{cat b}|"]")`},
+		{`"$(echo ")" )"`, `word("cmd{echo ")" })`},
+		{`"${x}"`, `word("param{x})`},
+		{`"$((1+2))"`, `word("arith{1+2})`},
+	}
+	for _, tc := range tests {
+		if got := lex(t, tc.src, Core()); got != tc.want {
+			t.Errorf("%s: got %s, want %s", tc.src, got, tc.want)
+		}
+	}
+	// Single quotes protect everything, so a substitution inside them is text.
+	if got, want := lex(t, `'$(cat b)'`, Core()), `word('$(cat b)')`; got != want {
+		t.Errorf("single-quoted: got %s, want %s", got, want)
+	}
+}
+
+func TestUnterminatedSubstitutionsAreIncomplete(t *testing.T) {
+	for _, src := range []string{`$(echo`, `${x`, "`echo", `$((1+2`} {
+		l := NewLexer(src, Core())
+		l.Tokens()
+		if !l.Incomplete() {
+			t.Errorf("%q: want Incomplete", src)
+		}
+	}
 }

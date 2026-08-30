@@ -25,7 +25,8 @@ func (r *Runner) expandWord(w *syntax.Word) []string {
 	}
 	// Brace expansion comes first and can turn one word into several, so it
 	// wraps the rest rather than being a stage inside it.
-	if words := braceExpand(w); len(words) > 1 {
+	if words := braceExpand(w); len(words) > 1 &&
+		r.ask(r.sem().BraceExpansion, "brace expansion") {
 		var out []string
 		for _, bw := range words {
 			out = append(out, r.expandOneWord(bw)...)
@@ -322,10 +323,10 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 
 	case syntax.ParamTrimPrefix, syntax.ParamTrimPrefixLong,
 		syntax.ParamTrimSuffix, syntax.ParamTrimSuffixLong:
-		return trim(value, r.patternOf(e.Arg), e.Op)
+		return r.trimWith(value, r.patternOf(e.Arg), e.Op)
 
 	case syntax.ParamReplace:
-		return replace(value, r.patternOf(e.Arg), r.joinWord(e.Arg2), e)
+		return r.replaceWith(value, r.patternOf(e.Arg), r.joinWord(e.Arg2), e)
 
 	case syntax.ParamSubstring:
 		return substring(value, r.numOf(e.Arg), e.Arg2, r)
@@ -356,7 +357,17 @@ func (r *Runner) numOf(w *syntax.Word) int {
 // Doubling the operator is what selects the longer match; there is no
 // greediness syntax inside the pattern, so the search order is the whole
 // implementation. A pattern that does not match removes nothing.
-func trim(value, pattern string, op syntax.ParamOp) string {
+// trimWith and replaceWith resolve the caret axis for the pattern before
+// handing it to the matcher, which has no Runner and should not need one.
+func (r *Runner) trimWith(value, pattern string, op syntax.ParamOp) string {
+	return trim(value, pattern, op, r.caretNegates(pattern))
+}
+
+func (r *Runner) replaceWith(value, pattern, with string, e *syntax.ParamExpr) string {
+	return replace(value, pattern, with, e, r.caretNegates(pattern))
+}
+
+func trim(value, pattern string, op syntax.ParamOp, caret bool) string {
 	prefix := op == syntax.ParamTrimPrefix || op == syntax.ParamTrimPrefixLong
 	longest := op == syntax.ParamTrimPrefixLong || op == syntax.ParamTrimSuffixLong
 
@@ -374,12 +385,12 @@ func trim(value, pattern string, op syntax.ParamOp) string {
 	}
 	for _, i := range idx {
 		if prefix {
-			if matchPattern(pattern, value[:i]) {
+			if matchPattern(pattern, value[:i], caret) {
 				return value[i:]
 			}
 			continue
 		}
-		if matchPattern(pattern, value[i:]) {
+		if matchPattern(pattern, value[i:], caret) {
 			return value[:i]
 		}
 	}
@@ -389,18 +400,18 @@ func trim(value, pattern string, op syntax.ParamOp) string {
 // replace substitutes a matching span, once or everywhere.
 //
 // The anchored forms match only at one end, which is what `/#` and `/%` mean.
-func replace(value, pattern, with string, e *syntax.ParamExpr) string {
+func replace(value, pattern, with string, e *syntax.ParamExpr, caret bool) string {
 	switch e.Anchor {
 	case '#':
 		for i := len(value); i >= 0; i-- {
-			if matchPattern(pattern, value[:i]) {
+			if matchPattern(pattern, value[:i], caret) {
 				return with + value[i:]
 			}
 		}
 		return value
 	case '%':
 		for i := 0; i <= len(value); i++ {
-			if matchPattern(pattern, value[i:]) {
+			if matchPattern(pattern, value[i:], caret) {
 				return value[:i] + with
 			}
 		}
@@ -413,12 +424,12 @@ func replace(value, pattern, with string, e *syntax.ParamExpr) string {
 		// everywhere else rather than matching empty and looping.
 		end := -1
 		for j := len(value); j >= i; j-- {
-			if matchPattern(pattern, value[i:j]) {
+			if matchPattern(pattern, value[i:j], caret) {
 				end = j
 				break
 			}
 		}
-		if end < 0 || end == i && pattern != "" && !matchPattern(pattern, "") {
+		if end < 0 || end == i && pattern != "" && !matchPattern(pattern, "", caret) {
 			if i < len(value) {
 				b.WriteByte(value[i])
 			}

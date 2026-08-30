@@ -135,7 +135,7 @@ func (r *Runner) glob(field string) []string {
 		}
 		var next []string
 		for _, dir := range dirs {
-			next = append(next, matchIn(dir, part)...)
+			next = append(next, matchIn(dir, part, r.caretNegates(part))...)
 		}
 		if len(next) == 0 {
 			r.globMissed = true
@@ -176,7 +176,7 @@ func (r *Runner) glob(field string) []string {
 }
 
 // matchIn lists the entries of dir matching one pattern component.
-func matchIn(dir, pattern string) []string {
+func matchIn(dir, pattern string, caret bool) []string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
@@ -192,7 +192,7 @@ func matchIn(dir, pattern string) []string {
 		if strings.HasPrefix(name, ".") && !hidden {
 			continue
 		}
-		if matchPattern(pattern, name) {
+		if matchPattern(pattern, name, caret) {
 			out = append(out, filepath.Join(dir, name))
 		}
 	}

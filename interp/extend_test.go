@@ -52,7 +52,13 @@ func newDialect(t *testing.T, out *bytes.Buffer) *interp.Runner {
 		if len(args) == 0 {
 			return 0
 		}
-		if err := os.Chdir(args[0]); err != nil {
+		// Setting r.Dir is the whole of it. Calling os.Chdir as well —
+		// which this used to do — moves the *process*, which is what the
+		// core's own cd documents as the thing not to do: it would move
+		// every Runner in the program, including ones another package owns.
+		// It also broke an unrelated test once the temp directory it had
+		// moved into was cleaned up and the process had no cwd left.
+		if fi, err := os.Stat(args[0]); err != nil || !fi.IsDir() {
 			return 1
 		}
 		r.Dir = args[0]

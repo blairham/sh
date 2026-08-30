@@ -86,6 +86,16 @@ type Semantics struct {
 	// it is one hundred. The quietest divergence measured — nothing warns,
 	// both are plausible numbers, and file modes are written this way.
 	ArithLeadingZeroIsOctal Answer
+	// ArithErrorStatusIsOne is *only* about the number. Whether the failure
+	// is fatal is not an axis: all four shells abandon the script, so the
+	// core implements that outright.
+	//
+	// ArithErrorStatusIsOne exits 1 when an arithmetic expansion fails —
+	// a division by zero, or a malformed number. True in bash, ksh93 and
+	// zsh; dash alone exits 2. A silent axis: scripts that branch on `$?`
+	// rather than on truthiness read the failure correctly under one group
+	// and misread it under the other, and nothing warns either way.
+	ArithErrorStatusIsOne Answer
 	// ArithFloat evaluates floating point. True in ksh93 and zsh, where POSIX
 	// says integers only.
 	ArithFloat Answer
@@ -152,13 +162,17 @@ func PosixSemantics() Semantics {
 		EchoInterpretsEscapes:                    No,
 		LengthOfSpecialIsCount:                   Yes,
 		ArithLeadingZeroIsOctal:                  Yes,
-		ArithFloat:                               No,
-		RegexQuotingMakesLiteral:                 No,
-		LastPipelineElementInCurrentShell:        No,
-		ShiftPastEndFatal:                        Yes,
-		ReadonlyReassignmentFatal:                Yes,
-		ArrayBaseIsZero:                          Yes,
-		DollarZeroInFunctionIsFunctionName:       No,
+		// dash is the panel's POSIX-faithful member and the only one
+		// exiting 2, so the POSIX preset follows it. The standard itself
+		// requires only "greater than zero", which decides nothing.
+		ArithErrorStatusIsOne:              No,
+		ArithFloat:                         No,
+		RegexQuotingMakesLiteral:           No,
+		LastPipelineElementInCurrentShell:  No,
+		ShiftPastEndFatal:                  Yes,
+		ReadonlyReassignmentFatal:          Yes,
+		ArrayBaseIsZero:                    Yes,
+		DollarZeroInFunctionIsFunctionName: No,
 	}
 }
 
@@ -185,6 +199,7 @@ func CoreSemantics() Semantics {
 func BashSemantics() Semantics {
 	s := PosixSemantics()
 	s.AssignmentPrefixPersistsOnSpecialBuiltin = No
+	s.ArithErrorStatusIsOne = Yes
 	s.ReadonlyReassignmentFatal = No
 	s.ShiftPastEndFatal = No
 	s.RegexQuotingMakesLiteral = Yes

@@ -133,7 +133,7 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 	if e.Index != nil && e.Op == syntax.ParamNone && !e.Length {
 		if elems, ok := r.arraySubscript(e); ok {
 			if s.Quoting != syntax.Unquoted {
-				return elems, true
+				return escapeAll(elems), true
 			}
 			ifs, set := r.ifs()
 			var out []string
@@ -147,13 +147,19 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 		return nil, false
 	}
 	if s.Quoting != syntax.Unquoted {
-		return r.Params, true
+		// Escaped for the same reason every other quoted expansion is: the
+		// fields go on to pathname expansion, and a `*` in a *value* is not
+		// a pattern. Returning them raw made `set -- "$x"` glob.
+		return escapeAll(r.Params), true
 	}
 	// Unquoted, each parameter is then split like any other expansion.
 	ifs, set := r.ifs()
 	var out []string
 	for _, p := range r.Params {
 		out = append(out, splitFields(p, ifs, set)...)
+	}
+	if !r.ask(r.sem().GlobExpansionResults, "globbing the result of an expansion") {
+		out = escapeAll(out)
 	}
 	return out, true
 }
@@ -262,6 +268,17 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		value, set = r.getVar(e.Name)
 	}
 
+	if e.Indirect {
+		// `${!x}` reads x, then reads *that* as a name. Only the bash
+		// dialect parses it — ksh93 spells the same thing and means the
+		// name itself — so the grammar has already refused everywhere this
+		// meaning would be wrong, and there is nothing left to guess.
+		if !set || value == "" {
+			return ""
+		}
+		value, set = r.getVar(value)
+	}
+
 	if e.Length {
 		// `${#@}` is the number of parameters, not the length of anything —
 		// so the length question is answered once, here, and specialParam
@@ -310,6 +327,11 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 
 	case syntax.ParamSubstring:
 		return substring(value, r.numOf(e.Arg), e.Arg2, r)
+
+	case syntax.ParamUpper:
+		return strings.ToUpper(value)
+	case syntax.ParamLower:
+		return strings.ToLower(value)
 	}
 	// Anything else is left empty rather than guessed at.
 	return ""
@@ -686,4 +708,14 @@ func (r *Runner) expandTilde(w *syntax.Word) {
 		return
 	}
 	s.Value = home + tail
+}
+
+// escapeAll marks every field's metacharacters as literal, for the fields
+// that reach pathname expansion without having gone through expandSpan.
+func escapeAll(in []string) []string {
+	out := make([]string, len(in))
+	for i, s := range in {
+		out[i] = globEscape(s)
+	}
+	return out
 }

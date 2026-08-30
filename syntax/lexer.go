@@ -622,7 +622,7 @@ func (l *Lexer) scanBackticks(q Quoting) Span {
 		if l.eof() {
 			l.incomplete = true
 			l.fail(open, "unterminated backquote substitution")
-			return Span{Kind: CommandSubst, Value: l.src[start:l.off], Quoting: q, Pos: open}
+			return Span{Kind: CommandSubst, Value: unescapeBackquoted(l.src[start:l.off]), Quoting: q, Pos: open}
 		}
 		switch l.peek() {
 		case '\\':
@@ -633,11 +633,38 @@ func (l *Lexer) scanBackticks(q Quoting) Span {
 		case '`':
 			end := l.off
 			l.advance()
-			return Span{Kind: CommandSubst, Value: l.src[start:end], Quoting: q, Pos: open}
+			return Span{Kind: CommandSubst, Value: unescapeBackquoted(l.src[start:end]), Quoting: q, Pos: open}
 		default:
 			l.advance()
 		}
 	}
+}
+
+// unescapeBackquoted removes the one layer of backslashes the older
+// substitution form requires, so the value handed on is the command text.
+//
+// This belongs to the lexer rather than to whoever evaluates the span,
+// because it is part of *recognising* the construct: POSIX gives the
+// backslash its literal meaning inside backquotes except before `$`, a
+// backquote, or another backslash. Doing it here is also what makes nesting
+// work at all — the inner `\“ becomes a plain backquote, and re-lexing the
+// result finds the nested substitution that `$( )` would have made obvious.
+func unescapeBackquoted(s string) string {
+	if !strings.ContainsRune(s, '\\') {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) {
+			switch s[i+1] {
+			case '$', '`', '\\':
+				i++
+			}
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
 }
 
 // skipQuoted consumes a quoted run while scanning inside a substitution. It

@@ -90,6 +90,17 @@ type Runner struct {
 	// bg is set on the runner *inside* a background job, so the process it
 	// starts can be recorded against the job.
 	bg *Job
+	// scopes is the stack `local` unwinds. Shell scoping is dynamic, so
+	// there is one set of variables and this records what to put back.
+	scopes []*scope
+	// redirErr records that a redirection failed to open. The command must
+	// not run: a redirect that could not be applied would otherwise send its
+	// output to the terminal, which is the loudest possible wrong answer.
+	redirErr bool
+	// noclobber is `set -C`: a plain `>` will not truncate an existing file.
+	noclobber bool
+	// readonly names refuse assignment.
+	readonly map[string]bool
 	// funcs holds defined functions.
 	funcs map[string]*syntax.FuncDecl
 	// depth bounds function recursion, because a shell script can recurse
@@ -131,6 +142,9 @@ func (r *Runner) withRedirs(ctx context.Context, rs []*syntax.Redirect, body fun
 	}()
 	if err != nil {
 		return err
+	}
+	if r.redirErr {
+		return nil
 	}
 	return body()
 }
@@ -185,6 +199,9 @@ func (r *Runner) Run(ctx context.Context, f *syntax.File) (int, error) {
 	for _, st := range f.Stmts {
 		if err := r.stmt(ctx, st); err != nil {
 			return r.status, err
+		}
+		if r.ctl == controlExit {
+			break
 		}
 	}
 	return r.status, nil
@@ -276,8 +293,25 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	// A command whose expansion failed, or depended on an axis no dialect
 	// answered, does not run. Reporting and then running anyway would be the
 	// silent wrong answer this whole structure exists to avoid.
-	if r.unspecified || r.expandErr {
+	if r.unspecified {
 		r.status = 2
+		return nil
+	}
+	if r.expandErr {
+		// A failed arithmetic expansion is fatal to the script in every
+		// shell measured — dash, bash, ksh93 and zsh all abandon the rest of
+		// the list rather than run the next command. That much the core can
+		// decide, and running on was the silent wrong answer: the corpus case
+		// added for the status axis is what caught it.
+		//
+		// *Which* non-zero status it carries is the axis: dash exits 2 and
+		// the other three exit 1, so that part is asked rather than assumed.
+		if r.ask(r.sem().ArithErrorStatusIsOne, "the exit status of an arithmetic error") {
+			r.status = 1
+		} else {
+			r.status = 2
+		}
+		r.ctl = controlExit
 		return nil
 	}
 
@@ -302,6 +336,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	}
 	if closers == nil && len(c.Redirs) > 0 && r.status == 126 {
 		// The gate refused an open; the status is already set.
+		return nil
+	}
+	if r.redirErr {
+		// The open failed — noclobber, a missing directory, a permission.
+		// The status is already set and the command does not run.
 		return nil
 	}
 
@@ -430,7 +469,23 @@ func (r *Runner) environ() []string {
 	return out
 }
 
+// scope records the variables a function made local, and what they were.
+type scope struct {
+	saved   map[string]string
+	existed map[string]bool
+}
+
 func (r *Runner) setVar(name, value string) {
+	if r.readonly[name] {
+		r.errf("sh: %s: readonly variable\n", name)
+		// Fatal everywhere but bash, measured with a plain assignment in a
+		// script — which is the contaminated-probe case oracle.md records.
+		if r.ask(r.sem().ReadonlyReassignmentFatal, "a readonly reassignment being fatal") {
+			r.ctl = controlExit
+		}
+		r.status = 1
+		return
+	}
 	if r.Vars == nil {
 		r.Vars = map[string]string{}
 	}

@@ -266,6 +266,11 @@ var Corpus = []Case{
 		Snippet: "readonly r=1\nr=2\necho survived",
 		Why:     "must be a plain assignment in a script: adding a redirect makes it a command and reverses the answer",
 	},
+	{
+		ID: "axis/arith-error-status", Category: "semantics axes",
+		Snippet: `echo $((1/0)); echo "st=$?"`,
+		Why:     "dash exits 2 where bash, ksh93 and zsh exit 1; found by a test disagreeing with the conformance run, not by the sweep",
+	},
 	// --- tokenization -----------------------------------------------------
 	{
 		ID: "token/spans-within-a-word", Category: "tokenization",

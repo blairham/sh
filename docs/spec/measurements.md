@@ -226,6 +226,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `axis/local-builtin` | `1` | `1` | `1` | `1` | `<shell>: local: not found` | `1` |
 | `axis/shift-past-end` | `<shell>: 1: shift: can't shift that many` *(status 2)* | `survived` | `<shell>: line 1: shift: 5: shift count out of range~survived` | `survived` | `<shell>: shift: 5: bad number` *(status 1)* | `<shell>:shift:1: shift count must be <= $#~survived` |
 | `axis/readonly-reassign` | `<script>: 2: r: is read only` *(status 2)* | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: is read only` *(status 1)* | `<script>:2: read-only variable: r` *(status 1)* |
+| `axis/arith-error-status` | `<shell>: 1: arithmetic expression: division by zero: "1/0"` *(status 2)* | `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 1)* | `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 127)* | `<shell>: 1/0: division by 0 (error token is "0")` *(status 1)* | `<shell>: 1/0: divide by zero` *(status 1)* | `<shell>:1: division by zero` *(status 1)* |
 
 - `axis/array-base` — zsh indexes arrays from 1; dash has no arrays at all
   ```sh
@@ -256,6 +257,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   readonly r=1
   r=2
   echo survived
+  ```
+- `axis/arith-error-status` — dash exits 2 where bash, ksh93 and zsh exit 1; found by a test disagreeing with the conformance run, not by the sweep
+  ```sh
+  echo $((1/0)); echo "st=$?"
   ```
 
 ## tokenization

@@ -53,10 +53,17 @@ refuses what every real shell accepts is a core nobody can write against.
     docs/spec/        the wall: behavioural specs, in our own words
       oracle.md       how behaviour is learned from real binaries
       shell-matrix.md the measured feature matrix that set the core
-    syntax/           lexer, grammar, AST  (public API)
+    internal/syntax/  lexer, grammar, AST — promoted when consumed
 
-Packages are public. This is a library others are meant to depend on,
-not an internal detail of one shell.
+**Packages start under `internal/` and are promoted, not published early.**
+The intent is a library others depend on, and that is exactly why the API
+is not exported before something has used it: `internal/` to public is a
+rename costing nothing while there are no consumers, and public to
+`internal/` is impossible once there is one. You can always loosen.
+
+A package is promoted when its types have been exercised by the thing
+that consumes them — `syntax` when the parser is built on it, not when
+the lexer compiles — and never merely because it looks finished.
 
 ## Make targets
 

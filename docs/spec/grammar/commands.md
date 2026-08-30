@@ -156,3 +156,84 @@ which is where the keyword originated, so it is not core.
 
 A function body is a **compound command**, so it can be any of them, not
 only a brace group, and it can carry its own redirections.
+
+## Compound command productions
+
+The shapes, in the notation of POSIX XCU §2.10. `list` is a sequence of
+and-or lists separated by `;`, `&` or newline; `sep` is any one of those.
+
+    subshell    :  '(' list ')'
+    group       :  '{' list sep '}'
+    if          :  'if' list sep 'then' list sep
+                   { 'elif' list sep 'then' list sep }
+                   [ 'else' list sep ]
+                   'fi'
+    while       :  'while' list sep 'do' list sep 'done'
+    until       :  'until' list sep 'do' list sep 'done'
+    for         :  'for' name [ [ 'in' word* ] sep ] 'do' list sep 'done'
+    case        :  'case' word 'in' { case-item } 'esac'
+    case-item   :  [ '(' ] pattern { '|' pattern } ')' [ list ] terminator
+    terminator  :  ';;' | ';&' | ';;&'
+
+Four things there are measured rather than transcribed, because each is
+somewhere an implementation guesses wrong.
+
+**A terminator is required before `then` and `do`.** All four shells
+reject `if true then echo x; fi` and `while false do echo x; done`. The
+keyword does not delimit the condition; the `;` or newline does. That is
+why the productions above have `sep` and not merely whitespace.
+
+**The condition is a list, and its *last* command decides.** Not a single
+command, and not "any command failed":
+
+    if false; true; then echo yes; else echo no; fi   →  yes
+    if true; false; then echo yes; else echo no; fi   →  no
+
+**`for` may omit its word list, and omitting it is not the same as an
+empty one.** With the list absent the loop iterates over the positional
+parameters; with `in` present and nothing after it, over nothing:
+
+    set -- x y; for i; do ...; done       →  x, y
+    set -- x y; for i in; do ...; done    →  no iterations
+
+So the AST needs to distinguish "no list" from "empty list", which a
+`[]string` field cannot do.
+
+**A `case` pattern may carry a leading `(`.** `case x in (x) …` is
+accepted everywhere, and patterns alternate with `|`. A body may be empty,
+and a `case` matching nothing exits 0.
+
+## `[[ … ]]` and `(( … ))`
+
+Both are core — every panel shell but dash has them — and both change what
+the lexer is doing, which is why they are specified here rather than left
+to the parser.
+
+**Inside `[[ … ]]`, `<` and `>` are comparison operators, not
+redirections.** This is the load-bearing fact:
+
+| probe | dash | bash | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `[[ a < b ]] && echo less` | `cannot open b` | `less` | `less` | `less` |
+
+In dash, which has no `[[`, the same text is a command named `[[` with a
+**redirection** — so it tries to open the file `b`. Nothing errors about
+the construct; the program simply does something else, which is the `&>`
+failure mode again and the second measured instance of it.
+
+`(( … ))` behaves the same way in dash, where it is two nested subshells
+running `1+1` as a command name.
+
+`[[` is a **reserved word, not an operator**, so it needs surrounding
+blanks: every shell reports `[[a: not found` for `[[a == a]]`. The same is
+true of `]]`. Contrast `((`, which is punctuation.
+
+`(( expr ))` evaluates the expression and exits **0 when it is non-zero**,
+which is the reverse of the usual convention and is unanimous:
+
+    (( 1+1 )); echo $?   →  0
+    (( 0 ));   echo $?   →  1
+
+Vector fields: `DoubleBracket` and `ArithCommand`, both default true, both
+false for `posix`. As with `&>`, turning them off does not make the text
+invalid — it makes it mean something else.

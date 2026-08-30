@@ -986,6 +986,166 @@
         "TimedOut": false
       }
     },
+    "cond/arith-command-comparison": {
+      "bash": {
+        "Output": "gt",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "gt",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "gt",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: 2: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "gt",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "gt",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/arith-command-status-inverted": {
+      "bash": {
+        "Output": "nonzero=0~zero=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "nonzero=0~zero=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "nonzero=0~zero=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: 1+1: not found~nonzero=127~\u003cshell\u003e: 1: 0: not found~zero=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "nonzero=0~zero=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "nonzero=0~zero=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/double-bracket-andand": {
+      "bash": {
+        "Output": "andand",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "andand",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "andand",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "andand",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "andand",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/double-bracket-less-is-comparison": {
+      "bash": {
+        "Output": "less",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "less",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "less",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: cannot open b: No such file~notless",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "less",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "less",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/double-bracket-needs-blanks": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: [[a: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: [[a: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: [[a: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[a: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: [[a: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: = not found",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "expand/brace": {
       "bash": {
         "Output": "1 2 3",
@@ -1879,6 +2039,358 @@
       "zsh": {
         "Output": "[a b]",
         "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "shape/case-empty-body-and-no-match": {
+      "bash": {
+        "Output": "empty=0~nomatch=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "empty=0~nomatch=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "empty=0~nomatch=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "empty=0~nomatch=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "empty=0~nomatch=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "empty=0~nomatch=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "shape/case-leading-paren": {
+      "bash": {
+        "Output": "paren",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "paren",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "paren",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "paren",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "paren",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "paren",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "shape/case-pattern-alternatives": {
+      "bash": {
+        "Output": "alt",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "alt",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "alt",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "alt",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "alt",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "alt",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "shape/condition-is-a-list-last-fails": {
+      "bash": {
+        "Output": "no",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "no",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "no",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "no",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "no",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "no",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "shape/condition-is-a-list-last-wins": {
+      "bash": {
+        "Output": "yes",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "yes",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "yes",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "yes",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "yes",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "yes",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "shape/elif-chain": {
+      "bash": {
+        "Output": "b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "b",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "shape/for-empty-list-is-no-iterations": {
+      "bash": {
+        "Output": "(none)",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "(none)",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "(none)",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "(none)",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "(none)",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "(none)",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "shape/for-newline-separator": {
+      "bash": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a][b]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "shape/for-omitted-list-is-positional": {
+      "bash": {
+        "Output": "[x][y]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[x][y]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[x][y]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[x][y]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[x][y]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[x][y]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "shape/terminator-required-before-do": {
+      "bash": {
+        "Output": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `done'~\u003cshell\u003e: -c: line 1: `while false do echo x; done'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `done'~\u003cshell\u003e: -c: line 1: `while false do echo x; done'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `done'~\u003cshell\u003e: -c: line 0: `while false do echo x; done'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"done\" unexpected (expecting \"do\")",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: syntax error at line 1: `done' unexpected",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: parse error near `done'",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "shape/terminator-required-before-then": {
+      "bash": {
+        "Output": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `fi'~\u003cshell\u003e: -c: line 1: `if true then echo x; fi'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `fi'~\u003cshell\u003e: -c: line 1: `if true then echo x; fi'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `fi'~\u003cshell\u003e: -c: line 0: `if true then echo x; fi'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"fi\" unexpected (expecting \"then\")",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: syntax error at line 1: `fi' unexpected",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: parse error near `fi'",
+        "Status": 1,
         "TimedOut": false
       }
     },

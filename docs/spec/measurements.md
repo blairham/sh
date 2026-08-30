@@ -522,3 +522,96 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   echo "[`echo \`echo deep\``]"
   ```
+
+## compound shapes
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `shape/terminator-required-before-then` | `<shell>: 1: Syntax error: "fi" unexpected (expecting "then")` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `fi'~<shell>: -c: line 1: `if true then echo x; fi'` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `fi'~<shell>: -c: line 1: `if true then echo x; fi'` *(status 2)* | `<shell>: -c: line 0: syntax error near unexpected token `fi'~<shell>: -c: line 0: `if true then echo x; fi'` *(status 2)* | `<shell>: syntax error at line 1: `fi' unexpected` *(status 3)* | `<shell>:1: parse error near `fi'` *(status 1)* |
+| `shape/terminator-required-before-do` | `<shell>: 1: Syntax error: "done" unexpected (expecting "do")` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `done'~<shell>: -c: line 1: `while false do echo x; done'` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `done'~<shell>: -c: line 1: `while false do echo x; done'` *(status 2)* | `<shell>: -c: line 0: syntax error near unexpected token `done'~<shell>: -c: line 0: `while false do echo x; done'` *(status 2)* | `<shell>: syntax error at line 1: `done' unexpected` *(status 3)* | `<shell>:1: parse error near `done'` *(status 1)* |
+| `shape/condition-is-a-list-last-wins` | `yes` | `yes` | `yes` | `yes` | `yes` | `yes` |
+| `shape/condition-is-a-list-last-fails` | `no` | `no` | `no` | `no` | `no` | `no` |
+| `shape/elif-chain` | `b` | `b` | `b` | `b` | `b` | `b` |
+| `shape/for-omitted-list-is-positional` | `[x][y]` | `[x][y]` | `[x][y]` | `[x][y]` | `[x][y]` | `[x][y]` |
+| `shape/for-empty-list-is-no-iterations` | `(none)` | `(none)` | `(none)` | `(none)` | `(none)` | `(none)` |
+| `shape/for-newline-separator` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` | `[a][b]` |
+| `shape/case-leading-paren` | `paren` | `paren` | `paren` | `paren` | `paren` | `paren` |
+| `shape/case-pattern-alternatives` | `alt` | `alt` | `alt` | `alt` | `alt` | `alt` |
+| `shape/case-empty-body-and-no-match` | `empty=0~nomatch=0` | `empty=0~nomatch=0` | `empty=0~nomatch=0` | `empty=0~nomatch=0` | `empty=0~nomatch=0` | `empty=0~nomatch=0` |
+
+- `shape/terminator-required-before-then` — the keyword does not delimit the condition; a ; or newline does, so the production needs a separator
+  ```sh
+  if true then echo x; fi
+  ```
+- `shape/terminator-required-before-do` — the same rule for loops, so it is a property of the grammar rather than of `if`
+  ```sh
+  while false do echo x; done
+  ```
+- `shape/condition-is-a-list-last-wins` — the condition is a list judged by its last command, not a single command
+  ```sh
+  if false; true; then echo yes; else echo no; fi
+  ```
+- `shape/condition-is-a-list-last-fails` — the other direction, so the previous case cannot pass by accident
+  ```sh
+  if true; false; then echo yes; else echo no; fi
+  ```
+- `shape/elif-chain` — elif is a chain rather than a nested if in the surface syntax
+  ```sh
+  if false; then echo a; elif true; then echo b; else echo c; fi
+  ```
+- `shape/for-omitted-list-is-positional` — omitting the word list iterates the positional parameters
+  ```sh
+  set -- x y; for i; do printf "[%s]" "$i"; done
+  ```
+- `shape/for-empty-list-is-no-iterations` — which is not the same as an empty list — so the AST must distinguish absent from empty
+  ```sh
+  set -- x y; for i in; do printf "[%s]" "$i"; done; echo "(none)"
+  ```
+- `shape/for-newline-separator` — a newline is a separator wherever ; is
+  ```sh
+  for i in a b
+  do printf "[%s]" "$i"; done
+  ```
+- `shape/case-leading-paren` — a case pattern may carry a leading open paren
+  ```sh
+  case x in (x) echo paren;; esac
+  ```
+- `shape/case-pattern-alternatives` — patterns alternate with |
+  ```sh
+  case x in a|x) echo alt;; esac
+  ```
+- `shape/case-empty-body-and-no-match` — an empty body is legal and a case matching nothing exits 0
+  ```sh
+  case x in x) ;; esac; echo "empty=$?"; case x in y) echo no;; esac; echo "nomatch=$?"
+  ```
+
+## [[ ]] and (( ))
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `cond/double-bracket-less-is-comparison` | `<shell>: 1: cannot open b: No such file~notless` | `less` | `less` | `less` | `less` | `less` |
+| `cond/double-bracket-needs-blanks` | `<shell>: 1: [[a: not found` *(status 127)* | `<shell>: line 1: [[a: command not found` *(status 127)* | `<shell>: line 1: [[a: command not found` *(status 127)* | `<shell>: [[a: command not found` *(status 127)* | `<shell>: [[a: not found` *(status 127)* | `<shell>:1: = not found` *(status 1)* |
+| `cond/double-bracket-andand` | `<shell>: 1: [[: not found` *(status 127)* | `andand` | `andand` | `andand` | `andand` | `andand` |
+| `cond/arith-command-status-inverted` | `<shell>: 1: 1+1: not found~nonzero=127~<shell>: 1: 0: not found~zero=127` | `nonzero=0~zero=1` | `nonzero=0~zero=1` | `nonzero=0~zero=1` | `nonzero=0~zero=1` | `nonzero=0~zero=1` |
+| `cond/arith-command-comparison` | `<shell>: 1: 2: not found` *(status 127)* | `gt` | `gt` | `gt` | `gt` | `gt` |
+
+- `cond/double-bracket-less-is-comparison` — inside [[ ]] the < is a comparison; in dash, which has no [[, the same text is a command with a redirection that opens a file
+  ```sh
+  if [[ a < b ]]; then echo less; else echo notless; fi
+  ```
+- `cond/double-bracket-needs-blanks` — [[ is a reserved word rather than an operator, so it must be delimited by blanks
+  ```sh
+  [[a == a]]
+  ```
+- `cond/double-bracket-andand` — && inside [[ ]] joins conditions rather than commands
+  ```sh
+  [[ a == a && b == b ]] && echo andand
+  ```
+- `cond/arith-command-status-inverted` — (( expr )) exits 0 when the expression is non-zero, the reverse of the usual convention
+  ```sh
+  (( 1+1 )); echo "nonzero=$?"; (( 0 )); echo "zero=$?"
+  ```
+- `cond/arith-command-comparison` — > inside (( )) is a comparison; in dash the whole thing is nested subshells running a command
+  ```sh
+  (( 2 > 1 )) && echo gt
+  ```

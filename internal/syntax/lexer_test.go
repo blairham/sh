@@ -53,6 +53,8 @@ func render(toks []Token) string {
 					b.WriteString(`"` + s.Value + `"`)
 				case DollarSingleQuoted:
 					b.WriteString("$'" + s.Value + "'")
+				case BackslashQuoted:
+					b.WriteString(`\` + s.Value)
 				default:
 					b.WriteString(s.Value)
 				}
@@ -121,8 +123,10 @@ func TestQuoting(t *testing.T) {
 			`'a\b'`, `word('a\b')`,
 		},
 		{
+			// The escaped character is its own span, because the protection
+			// has to survive: a field that forgot it would glob.
 			"an unquoted backslash protects one character",
-			`a\$HOME`, `word(a$HOME)`,
+			`a\$HOME`, `word(a|\$|HOME)`,
 		},
 		{
 			"adjacent quoting concatenates into one word",

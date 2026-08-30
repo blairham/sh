@@ -67,7 +67,18 @@ func (r *Runner) expandWord(w *syntax.Word) []string {
 	if len(fields) == 1 && fields[0] == "" && !any {
 		return nil
 	}
-	return fields
+
+	// Pathname expansion is the last stage, and it acts on whole fields: a
+	// pattern that matches nothing is passed through unchanged.
+	out := make([]string, 0, len(fields))
+	for _, f := range fields {
+		if matches := r.glob(f); len(matches) > 0 {
+			out = append(out, matches...)
+			continue
+		}
+		out = append(out, globUnescape(f))
+	}
+	return out
 }
 
 // expandWordNoSplit expands a word without field splitting, for the contexts
@@ -87,7 +98,7 @@ func (r *Runner) expandWordNoSplit(w *syntax.Word) []string {
 		text, _ := r.expandSpan(s)
 		b.WriteString(text)
 	}
-	return []string{b.String()}
+	return []string{globUnescape(b.String())}
 }
 
 // expandAt handles `$@`, the only expansion that produces several fields by
@@ -121,12 +132,25 @@ func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
 	unquoted := s.Quoting == syntax.Unquoted
 	switch s.Kind {
 	case syntax.Literal:
-		// Literal text is never split, however it was written.
-		return s.Value, false
+		// Literal text is never split, however it was written. Its
+		// metacharacters stay live only when it was unquoted; quoting is
+		// what decides whether text is a pattern at all.
+		if unquoted {
+			return s.Value, false
+		}
+		return globEscape(s.Value), false
 	case syntax.ParamExp:
-		return r.expandParam(s.Param), unquoted
+		v := r.expandParam(s.Param)
+		if !unquoted {
+			return globEscape(v), false
+		}
+		return v, true
 	case syntax.CommandSubst:
-		return r.commandSubst(r.ctx, s.Value), unquoted
+		v := r.commandSubst(r.ctx, s.Value)
+		if !unquoted {
+			return globEscape(v), false
+		}
+		return v, true
 	case syntax.ArithSubst:
 		v, err := r.evalArith(s.Arith)
 		if err != nil {
@@ -134,7 +158,10 @@ func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
 			r.status = 1
 			return "", false
 		}
-		return itoa(v), unquoted
+		if !unquoted {
+			return globEscape(itoa(v)), false
+		}
+		return itoa(v), true
 	}
 	return "", false
 }
@@ -183,9 +210,151 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 			return ""
 		}
 		return r.joinWord(e.Arg)
+
+	case syntax.ParamTrimPrefix, syntax.ParamTrimPrefixLong,
+		syntax.ParamTrimSuffix, syntax.ParamTrimSuffixLong:
+		return trim(value, r.patternOf(e.Arg), e.Op)
+
+	case syntax.ParamReplace:
+		return replace(value, r.patternOf(e.Arg), r.joinWord(e.Arg2), e)
+
+	case syntax.ParamSubstring:
+		return substring(value, r.numOf(e.Arg), e.Arg2, r)
 	}
 	// Anything else is left empty rather than guessed at.
 	return ""
+}
+
+// numOf evaluates a word as a number, for a substring's offset and length.
+func (r *Runner) numOf(w *syntax.Word) int {
+	if w == nil {
+		return 0
+	}
+	n, err := r.parseNum(strings.TrimSpace(r.joinWord(w)))
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+// trim removes a matching prefix or suffix.
+//
+// Doubling the operator is what selects the longer match; there is no
+// greediness syntax inside the pattern, so the search order is the whole
+// implementation. A pattern that does not match removes nothing.
+func trim(value, pattern string, op syntax.ParamOp) string {
+	prefix := op == syntax.ParamTrimPrefix || op == syntax.ParamTrimPrefixLong
+	longest := op == syntax.ParamTrimPrefixLong || op == syntax.ParamTrimSuffixLong
+
+	// Candidate split points, ordered so the first match found is the one
+	// wanted: shortest first for the single operators, longest first for the
+	// doubled ones.
+	idx := make([]int, 0, len(value)+1)
+	for i := 0; i <= len(value); i++ {
+		idx = append(idx, i)
+	}
+	if (prefix && longest) || (!prefix && !longest) {
+		for l, r := 0, len(idx)-1; l < r; l, r = l+1, r-1 {
+			idx[l], idx[r] = idx[r], idx[l]
+		}
+	}
+	for _, i := range idx {
+		if prefix {
+			if matchPattern(pattern, value[:i]) {
+				return value[i:]
+			}
+			continue
+		}
+		if matchPattern(pattern, value[i:]) {
+			return value[:i]
+		}
+	}
+	return value
+}
+
+// replace substitutes a matching span, once or everywhere.
+//
+// The anchored forms match only at one end, which is what `/#` and `/%` mean.
+func replace(value, pattern, with string, e *syntax.ParamExpr) string {
+	switch e.Anchor {
+	case '#':
+		for i := len(value); i >= 0; i-- {
+			if matchPattern(pattern, value[:i]) {
+				return with + value[i:]
+			}
+		}
+		return value
+	case '%':
+		for i := 0; i <= len(value); i++ {
+			if matchPattern(pattern, value[i:]) {
+				return value[:i] + with
+			}
+		}
+		return value
+	}
+
+	var b strings.Builder
+	for i := 0; i <= len(value); {
+		// The longest match at this position, so `*` behaves as it does
+		// everywhere else rather than matching empty and looping.
+		end := -1
+		for j := len(value); j >= i; j-- {
+			if matchPattern(pattern, value[i:j]) {
+				end = j
+				break
+			}
+		}
+		if end < 0 || end == i && pattern != "" && !matchPattern(pattern, "") {
+			if i < len(value) {
+				b.WriteByte(value[i])
+			}
+			i++
+			continue
+		}
+		b.WriteString(with)
+		if !e.All {
+			b.WriteString(value[end:])
+			return b.String()
+		}
+		if end == i {
+			// An empty match must still make progress.
+			if i < len(value) {
+				b.WriteByte(value[i])
+			}
+			i++
+			continue
+		}
+		i = end
+	}
+	return b.String()
+}
+
+// substring takes a slice of the value.
+func substring(value string, off int, lenWord *syntax.Word, r *Runner) string {
+	if off < 0 {
+		off += len(value)
+	}
+	if off < 0 {
+		off = 0
+	}
+	if off > len(value) {
+		return ""
+	}
+	if lenWord == nil {
+		return value[off:]
+	}
+	n := r.numOf(lenWord)
+	if n < 0 {
+		// A negative length is an offset from the end.
+		n = len(value) + n - off
+	}
+	if n < 0 {
+		n = 0
+	}
+	if off+n > len(value) {
+		n = len(value) - off
+	}
+	return value[off : off+n]
 }
 
 func (r *Runner) joinWord(w *syntax.Word) string {

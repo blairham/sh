@@ -14,7 +14,7 @@ import (
 // state, and a child process cannot. That is also why the gate does not see
 // them — nothing leaves this process — while it does see every external
 // command and every file opened for a redirection.
-var builtins = map[string]func(*Runner, context.Context, []string) int{
+var builtins = map[string]Builtin{
 	":":        biTrue,
 	"true":     biTrue,
 	"false":    biFalse,

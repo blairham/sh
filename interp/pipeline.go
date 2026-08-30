@@ -9,7 +9,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/blairham/sh/internal/syntax"
+	"github.com/blairham/sh/syntax"
 )
 
 // lockedWriter serialises writes from concurrently running pipeline elements.

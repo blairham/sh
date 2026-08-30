@@ -53,19 +53,31 @@ refuses what every real shell accepts is a core nobody can write against.
     docs/spec/        the wall: behavioural specs, in our own words
       oracle.md       how behaviour is learned from real binaries
       shell-matrix.md the measured feature matrix that set the core
-    internal/syntax/  lexer, grammar, AST — promoted when consumed
+    syntax/           lexer, grammar, AST — public
+    interp/           execution, the semantics vector, the extension points
     cmd/sh            will be the shell; today it dumps tokens
     cmd/oracle        records what real shells do
 
-**Packages start under `internal/` and are promoted, not published early.**
-The intent is a library others depend on, and that is exactly why the API
-is not exported before something has used it: `internal/` to public is a
-rename costing nothing while there are no consumers, and public to
-`internal/` is impossible once there is one. You can always loosen.
+**Packages start under `internal/` and are promoted once something has
+consumed them.** `syntax` and `interp` are public now: the parser was built
+on the first and the interpreter on both, which is the criterion. The oracle
+stays internal because it is test infrastructure rather than product.
 
-A package is promoted when its types have been exercised by the thing
-that consumes them — `syntax` when the parser is built on it, not when
-the lexer compiles — and never merely because it looks finished.
+This is a library others import and extend — a dialect is built *on* the
+core, not forked from it — and there are exactly three ways to do that:
+
+1. **Choose the axes.** `interp.Semantics` and `syntax.Dialect` are values.
+   "Which shell am I" is data, not a branch in the code.
+2. **Register a builtin.** Only for what shell cannot express: `cd` must
+   change the runner's directory, `read` must set a variable in the calling
+   shell. Reach for Go when shell genuinely cannot say the thing.
+3. **Source a prelude.** Everything else. Functions shadow builtins and
+   external commands alike, so a dialect can define, replace or wrap
+   anything the core provides without touching it — portably, testably, and
+   without any way to break the substrate.
+
+`interp/extend_test.go` builds a miniature dialect with all three, as a
+working example rather than as prose.
 
 ## Make targets
 

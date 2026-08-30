@@ -8,7 +8,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/blairham/sh/internal/syntax"
+	"github.com/blairham/sh/syntax"
 )
 
 // commandSubst runs the text of a `$( … )` and returns what it wrote.

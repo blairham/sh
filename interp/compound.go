@@ -7,7 +7,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/blairham/sh/internal/syntax"
+	"github.com/blairham/sh/syntax"
 )
 
 // control is how break, continue and return leave a construct without

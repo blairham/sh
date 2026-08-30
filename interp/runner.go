@@ -12,7 +12,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/blairham/sh/internal/syntax"
+	"github.com/blairham/sh/syntax"
 )
 
 // Runner executes a syntax tree.
@@ -73,6 +73,9 @@ type Runner struct {
 	// globMissed records that a pattern matched nothing, so the no-match
 	// axis can report it once the whole field is known.
 	globMissed bool
+	// custom holds builtins registered by a shell built on this package. A
+	// nil value is an explicit removal.
+	custom map[string]Builtin
 	// funcs holds defined functions.
 	funcs map[string]*syntax.FuncDecl
 	// depth bounds function recursion, because a shell script can recurse
@@ -291,7 +294,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 
 	// A builtin runs in this shell, which is the whole reason it is one:
 	// `set` and `shift` change state a child process could not.
-	if fn, ok := builtins[argv[0]]; ok {
+	if fn, ok := r.lookupBuiltin(argv[0]); ok {
 		// An assignment prefixed to a *special* builtin persists, which is
 		// the POSIX rule dash and ksh93 follow and bash and zsh do not.
 		// Following POSIX here; the divergence is a dialect question the

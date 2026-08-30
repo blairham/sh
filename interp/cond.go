@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/blairham/sh/internal/syntax"
+	"github.com/blairham/sh/syntax"
 )
 
 // testClause evaluates `[[ … ]]`. It exits 0 when the condition holds.

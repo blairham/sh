@@ -6,7 +6,7 @@ package interp
 import (
 	"strings"
 
-	"github.com/blairham/sh/internal/syntax"
+	"github.com/blairham/sh/syntax"
 )
 
 // expandWord turns one word into zero or more fields.
@@ -201,14 +201,21 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	if e == nil {
 		return ""
 	}
-	// The special parameters are not variables and are answered first.
-	if v, ok := r.specialParam(e); ok {
-		return v
+	// A special parameter supplies a *value*; it does not skip the operators.
+	// Returning here was a bug: `${1##*/}` left its argument untouched,
+	// because the positional parameter answered and the trim never ran.
+	value, set := r.specialParam(e)
+	if !set {
+		value, set = r.getVar(e.Name)
 	}
 
-	value, set := r.getVar(e.Name)
-
 	if e.Length {
+		// `${#@}` is the number of parameters, not the length of anything —
+		// so the length question is answered once, here, and specialParam
+		// supplies only the value.
+		if e.Name == "@" || e.Name == "*" {
+			return itoa(r.specialLength())
+		}
 		return itoa(len(value))
 	}
 
@@ -476,6 +483,9 @@ func itoa(n int) string {
 }
 
 // specialParam answers the parameters that are not variables.
+// specialParam supplies the value of a parameter that is not a variable. The
+// caller applies the operators, exactly as it does for a variable — the two
+// differ in where the value comes from and in nothing else.
 func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 	switch e.Name {
 	case "#":
@@ -490,9 +500,6 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 		}
 		return r.Name, true
 	case "*":
-		if e.Length {
-			return itoa(r.specialLength()), true
-		}
 		// `$*` joins with the *first character* of IFS, not with a space.
 		sep := " "
 		if v, set := r.ifs(); set {
@@ -504,9 +511,6 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 		}
 		return strings.Join(r.Params, sep), true
 	case "@":
-		if e.Length {
-			return itoa(r.specialLength()), true
-		}
 		// Reached only where expandAt declined — inside another expansion's
 		// operand, say — where joining is the sensible answer.
 		return strings.Join(r.Params, " "), true

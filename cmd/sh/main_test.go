@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/internal/syntax"
+	"github.com/blairham/sh/syntax"
 )
 
 func TestPickDialect(t *testing.T) {

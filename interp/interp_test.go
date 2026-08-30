@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/internal/syntax"
+	"github.com/blairham/sh/syntax"
 )
 
 func run(t *testing.T, src string, setup func(*Runner)) (out string, status int) {

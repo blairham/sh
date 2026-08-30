@@ -27,8 +27,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/blairham/sh/internal/interp"
-	"github.com/blairham/sh/internal/syntax"
+	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 const (
@@ -478,7 +478,7 @@ func run(src string, d syntax.Dialect, sem interp.Semantics) int {
 		return 2
 	}
 
-	r := &interp.Runner{Dialect: &d, Semantics: &sem}
+	r := &interp.Runner{Dialect: &d, Semantics: &sem, Name: "sh"}
 	status, err := r.Run(context.Background(), f)
 	if err != nil {
 		// Refused rather than silently doing nothing: a shell that quietly

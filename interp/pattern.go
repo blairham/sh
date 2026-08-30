@@ -6,7 +6,7 @@ package interp
 import (
 	"strings"
 
-	"github.com/blairham/sh/internal/syntax"
+	"github.com/blairham/sh/syntax"
 )
 
 // patternOf renders a word as a pattern, escaping the parts that were quoted.

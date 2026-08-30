@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/internal/oracle"
-	"github.com/blairham/sh/internal/syntax"
+	"github.com/blairham/sh/syntax"
 )
 
 // The oracle corpus is real shell that real shells ran. Long before an

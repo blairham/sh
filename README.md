@@ -32,6 +32,24 @@ from POSIX, from vendor manuals, and from running real shell binaries as
 oracles; it is written down in `docs/spec/`; code is written from the
 spec. `CLEANROOM.md` is the binding rule set.
 
+## Using it
+
+The core is a library. A dialect extends it rather than forking it:
+
+```go
+sem := interp.BashSemantics()      // choose the axes — they are values
+dial := syntax.Bash()
+r := &interp.Runner{Semantics: &sem, Dialect: &dial}
+
+r.Register("cd", cd)               // only what shell cannot express
+
+prelude, _ := syntax.Parse(`basename() { printf '%s\n' "${1##*/}"; }`, dial)
+r.Run(ctx, prelude)                // everything else
+```
+
+Functions shadow builtins and external commands alike, so most of a dialect
+needs no Go at all.
+
 ## Layout
 
     CLEANROOM.md              the rules that keep this independent

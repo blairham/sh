@@ -15,14 +15,50 @@ import (
 // them — nothing leaves this process — while it does see every external
 // command and every file opened for a redirection.
 var builtins = map[string]func(*Runner, context.Context, []string) int{
-	":":      biTrue,
-	"true":   biTrue,
-	"false":  biFalse,
-	"set":    biSet,
-	"unset":  biUnset,
-	"export": biExport,
-	"shift":  biShift,
-	"echo":   biEcho,
+	":":        biTrue,
+	"true":     biTrue,
+	"false":    biFalse,
+	"set":      biSet,
+	"unset":    biUnset,
+	"export":   biExport,
+	"shift":    biShift,
+	"echo":     biEcho,
+	"break":    biBreak,
+	"continue": biContinue,
+	"return":   biReturn,
+}
+
+// biBreak and biContinue transfer control out of a loop. They are recorded on
+// the runner rather than returned as errors, because leaving a loop is
+// ordinary control flow and modelling it as a failure would make every caller
+// check for something that is not one.
+func biBreak(r *Runner, _ context.Context, args []string) int {
+	r.ctl, r.ctlDepth = controlBreak, loopDepth(args)
+	return 0
+}
+
+func biContinue(r *Runner, _ context.Context, args []string) int {
+	r.ctl, r.ctlDepth = controlContinue, loopDepth(args)
+	return 0
+}
+
+func biReturn(r *Runner, _ context.Context, args []string) int {
+	r.ctl = controlReturn
+	if len(args) > 0 {
+		if n, ok := atoi(args[0]); ok {
+			return n
+		}
+	}
+	return r.status
+}
+
+func loopDepth(args []string) int {
+	if len(args) > 0 {
+		if n, ok := atoi(args[0]); ok && n > 0 {
+			return n
+		}
+	}
+	return 1
 }
 
 // specialBuiltins are the ones POSIX marks special. Two consequences follow

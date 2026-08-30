@@ -1,0 +1,241 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+package interp
+
+import (
+	"context"
+	"strings"
+
+	"github.com/blairham/sh/internal/syntax"
+)
+
+// control is how break, continue and return leave a construct without
+// unwinding the whole interpreter. They are not errors: a `break` that reaches
+// the top is a misuse, but a `break` inside a loop is ordinary control flow,
+// and modelling it as an error would make every caller check for something
+// that is not a failure.
+type control uint8
+
+const (
+	controlNone control = iota
+	controlBreak
+	controlContinue
+	controlReturn
+)
+
+// runList executes a list of statements, stopping early if one of them
+// transferred control.
+func (r *Runner) runList(ctx context.Context, list []*syntax.Stmt) error {
+	for _, st := range list {
+		if err := r.stmt(ctx, st); err != nil {
+			return err
+		}
+		if r.ctl != controlNone {
+			return nil
+		}
+	}
+	return nil
+}
+
+func (r *Runner) group(ctx context.Context, c *syntax.Group) error {
+	// A brace group runs in *this* shell, so its assignments escape. That is
+	// the whole difference between it and a subshell.
+	return r.withRedirs(ctx, c.Redirs, func() error { return r.runList(ctx, c.List) })
+}
+
+func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
+	// A subshell gets a copy of the state, so nothing it does escapes. This
+	// is a copy rather than a forked process, which is honest for everything
+	// the corpus asks and would not be for a background job or a trap; those
+	// are not here yet.
+	return r.withRedirs(ctx, c.Redirs, func() error {
+		sub := r.clone()
+		err := sub.runList(ctx, c.List)
+		r.status = sub.status
+		return err
+	})
+}
+
+func (r *Runner) ifClause(ctx context.Context, c *syntax.IfClause) error {
+	return r.withRedirs(ctx, c.Redirs, func() error {
+		// The condition is a *list* judged by its last command, which is why
+		// this runs the whole thing and then looks at the status.
+		if err := r.runList(ctx, c.Cond); err != nil {
+			return err
+		}
+		if r.status == 0 {
+			return r.runList(ctx, c.Then)
+		}
+		for _, e := range c.Elifs {
+			if err := r.runList(ctx, e.Cond); err != nil {
+				return err
+			}
+			if r.status == 0 {
+				return r.runList(ctx, e.Then)
+			}
+		}
+		if c.HasElse {
+			return r.runList(ctx, c.Else)
+		}
+		// No branch ran, so the `if` itself succeeded.
+		r.status = 0
+		return nil
+	})
+}
+
+func (r *Runner) loop(ctx context.Context, c *syntax.LoopClause) error {
+	return r.withRedirs(ctx, c.Redirs, func() error {
+		// Zero iterations exits 0, which is why the status is set before the
+		// loop rather than left as whatever the condition produced.
+		r.status = 0
+		for {
+			if err := r.runList(ctx, c.Cond); err != nil {
+				return err
+			}
+			done := r.status == 0
+			if c.Until {
+				done = !done
+			}
+			if !done {
+				r.status = 0
+				return nil
+			}
+			if err := r.runList(ctx, c.Body); err != nil {
+				return err
+			}
+			if stop := r.loopControl(); stop {
+				return nil
+			}
+		}
+	})
+}
+
+func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
+	return r.withRedirs(ctx, c.Redirs, func() error {
+		// An absent word list iterates the positional parameters; an empty
+		// one iterates nothing. HasItems is what tells them apart, and a nil
+		// slice could not.
+		var items []string
+		if c.HasItems {
+			for _, w := range c.Items {
+				items = append(items, r.expandWord(w)...)
+			}
+		} else {
+			items = r.Params
+		}
+
+		r.status = 0
+		for _, it := range items {
+			r.setVar(c.Name, it)
+			if err := r.runList(ctx, c.Body); err != nil {
+				return err
+			}
+			if stop := r.loopControl(); stop {
+				return nil
+			}
+		}
+		return nil
+	})
+}
+
+// loopControl consumes a break or continue aimed at this loop, reporting
+// whether the loop should stop.
+func (r *Runner) loopControl() bool {
+	switch r.ctl {
+	case controlBreak:
+		r.ctl = controlNone
+		if r.ctlDepth > 1 {
+			// An outer loop is the target, so the break carries on outwards.
+			r.ctlDepth--
+			r.ctl = controlBreak
+			return true
+		}
+		return true
+	case controlContinue:
+		r.ctl = controlNone
+		if r.ctlDepth > 1 {
+			r.ctlDepth--
+			r.ctl = controlContinue
+			return true
+		}
+		return false
+	case controlReturn:
+		return true
+	}
+	return false
+}
+
+func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
+	return r.withRedirs(ctx, c.Redirs, func() error {
+		subject := strings.Join(r.expandWord(c.Word), " ")
+		// A case matching nothing exits 0.
+		r.status = 0
+
+		for i, item := range c.Items {
+			if !r.caseItemMatches(item, subject) {
+				continue
+			}
+			if err := r.runList(ctx, item.Body); err != nil {
+				return err
+			}
+			switch item.Term {
+			case syntax.TokSemiAmp:
+				// Fall through to the next body without testing its pattern.
+				if i+1 < len(c.Items) {
+					if err := r.runList(ctx, c.Items[i+1].Body); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		}
+		return nil
+	})
+}
+
+func (r *Runner) caseItemMatches(item *syntax.CaseItem, subject string) bool {
+	for _, p := range item.Patterns {
+		// A pattern is a word: unquoted it is a pattern, quoted a literal,
+		// and only the spans still know which.
+		if matchPattern(r.patternOf(p), subject) {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
+	if r.funcs == nil {
+		r.funcs = map[string]*syntax.FuncDecl{}
+	}
+	r.funcs[c.Name] = c
+	r.status = 0
+	return nil
+}
+
+// callFunc runs a function body with the arguments as its positional
+// parameters.
+//
+// The parameters are saved and restored rather than copied into a new runner,
+// because a function shares the shell's variables — the scoping is dynamic,
+// and `local` is what carves out an exception. `local` is not here yet.
+func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []string) error {
+	if r.depth >= maxDepth {
+		r.errf("sh: %s: too deeply nested\n", fn.Name)
+		r.status = 1
+		return nil
+	}
+	saved, savedName := r.Params, r.Name
+	r.Params, r.Name = args, fn.Name
+	r.depth++
+
+	err := r.command(ctx, fn.Body)
+
+	r.depth--
+	r.Params, r.Name = saved, savedName
+	if r.ctl == controlReturn {
+		r.ctl = controlNone
+	}
+	return err
+}

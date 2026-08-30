@@ -50,6 +50,49 @@ type Runner struct {
 
 	// status is the exit status of the last command run.
 	status int
+	// ctl carries break, continue and return out of a construct. They are
+	// control flow rather than errors, so they are not returned as ones.
+	ctl      control
+	ctlDepth int
+	// funcs holds defined functions.
+	funcs map[string]*syntax.FuncDecl
+	// depth bounds function recursion, because a shell script can recurse
+	// and a stack overflow is not a diagnostic anyone can act on.
+	depth int
+}
+
+// maxDepth bounds nested function calls.
+const maxDepth = 256
+
+// clone copies the state for a subshell, so nothing it does escapes.
+func (r *Runner) clone() *Runner {
+	c := *r
+	c.Vars = make(map[string]string, len(r.Vars))
+	for k, v := range r.Vars {
+		c.Vars[k] = v
+	}
+	c.exported = make(map[string]bool, len(r.exported))
+	for k, v := range r.exported {
+		c.exported[k] = v
+	}
+	c.Params = append([]string(nil), r.Params...)
+	return &c
+}
+
+// withRedirs applies a compound command's redirections around its body. Every
+// compound node carries its own list because a redirection on one applies to
+// everything inside it.
+func (r *Runner) withRedirs(ctx context.Context, rs []*syntax.Redirect, body func() error) error {
+	closers, err := r.applyRedirs(ctx, rs)
+	defer func() {
+		for _, c := range closers {
+			_ = c.Close()
+		}
+	}()
+	if err != nil {
+		return err
+	}
+	return body()
 }
 
 // ExitStatus reports the status of the last command.
@@ -134,10 +177,11 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 }
 
 func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
-	if len(p.Cmds) != 1 {
-		return r.unsupported("pipelines")
-	}
-	if err := r.command(ctx, p.Cmds[0]); err != nil {
+	if len(p.Cmds) == 1 {
+		if err := r.command(ctx, p.Cmds[0]); err != nil {
+			return err
+		}
+	} else if err := r.runPipeline(ctx, p); err != nil {
 		return err
 	}
 	if p.Negated {
@@ -152,11 +196,25 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 }
 
 func (r *Runner) command(ctx context.Context, c syntax.Command) error {
-	sc, ok := c.(*syntax.SimpleCmd)
-	if !ok {
-		return r.unsupported(fmt.Sprintf("%T", c))
+	switch x := c.(type) {
+	case *syntax.SimpleCmd:
+		return r.simple(ctx, x)
+	case *syntax.Group:
+		return r.group(ctx, x)
+	case *syntax.Subshell:
+		return r.subshell(ctx, x)
+	case *syntax.IfClause:
+		return r.ifClause(ctx, x)
+	case *syntax.LoopClause:
+		return r.loop(ctx, x)
+	case *syntax.ForClause:
+		return r.forClause(ctx, x)
+	case *syntax.CaseClause:
+		return r.caseClause(ctx, x)
+	case *syntax.FuncDecl:
+		return r.funcDecl(x)
 	}
-	return r.simple(ctx, sc)
+	return r.unsupported(fmt.Sprintf("%T", c))
 }
 
 // unsupported refuses rather than silently doing nothing.
@@ -192,6 +250,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	if closers == nil && len(c.Redirs) > 0 && r.status == 126 {
 		// The gate refused an open; the status is already set.
 		return nil
+	}
+
+	// A function shadows a builtin and an external command alike.
+	if fn, ok := r.funcs[argv[0]]; ok {
+		return r.callFunc(ctx, fn, argv[1:])
 	}
 
 	// A builtin runs in this shell, which is the whole reason it is one:

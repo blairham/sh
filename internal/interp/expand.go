@@ -31,6 +31,21 @@ func (r *Runner) expandWord(w *syntax.Word) []string {
 	any := false
 
 	for _, s := range w.Spans {
+		// `$@` is the one expansion that yields more than one field on its
+		// own, so it cannot go through expandSpan, which returns a string.
+		// The first parameter joins onto whatever precedes it and the last
+		// stays open for whatever follows — which is why `x$@y` attaches its
+		// literal text to the first and last fields rather than becoming
+		// words of its own.
+		if parts, ok := r.expandAt(s); ok {
+			if len(parts) == 0 {
+				continue
+			}
+			any = true
+			fields[len(fields)-1] += parts[0]
+			fields = append(fields, parts[1:]...)
+			continue
+		}
 		text, split := r.expandSpan(s)
 		if !split {
 			fields[len(fields)-1] += text
@@ -55,6 +70,30 @@ func (r *Runner) expandWord(w *syntax.Word) []string {
 	return fields
 }
 
+// expandAt handles `$@`, the only expansion that produces several fields by
+// itself. Quoted, it is one field per parameter, each keeping its own spaces;
+// with no parameters it is *zero* fields, which is why `set -- "$@"` is safe
+// on an empty list and `set -- "$*"` is not.
+func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
+	if s.Kind != syntax.ParamExp || s.Param == nil {
+		return nil, false
+	}
+	e := s.Param
+	if e.Name != "@" || e.Op != syntax.ParamNone || e.Length {
+		return nil, false
+	}
+	if s.Quoting != syntax.Unquoted {
+		return r.Params, true
+	}
+	// Unquoted, each parameter is then split like any other expansion.
+	ifs, set := r.ifs()
+	var out []string
+	for _, p := range r.Params {
+		out = append(out, splitFields(p, ifs, set)...)
+	}
+	return out, true
+}
+
 // expandSpan expands one span, reporting whether its result is subject to
 // field splitting. Only unquoted expansions are; literal text never is,
 // however it was written.
@@ -76,6 +115,11 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	if e == nil {
 		return ""
 	}
+	// The special parameters are not variables and are answered first.
+	if v, ok := r.specialParam(e); ok {
+		return v
+	}
+
 	value, set := r.getVar(e.Name)
 
 	if e.Length {
@@ -201,4 +245,47 @@ func itoa(n int) string {
 		n /= 10
 	}
 	return string(b[i:])
+}
+
+// specialParam answers the parameters that are not variables.
+func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
+	switch e.Name {
+	case "#":
+		return itoa(len(r.Params)), true
+	case "?":
+		return itoa(r.status), true
+	case "0":
+		return r.Name, true
+	case "*":
+		if e.Length {
+			// docs/spec/grammar/parameter-expansion.md: `${#*}` is the count
+			// everywhere but dash, which gives the length of the joined
+			// string. The count is the majority and the POSIX reading.
+			return itoa(len(r.Params)), true
+		}
+		// `$*` joins with the *first character* of IFS, not with a space.
+		sep := " "
+		if v, set := r.ifs(); set {
+			if v == "" {
+				sep = ""
+			} else {
+				sep = v[:1]
+			}
+		}
+		return strings.Join(r.Params, sep), true
+	case "@":
+		if e.Length {
+			return itoa(len(r.Params)), true
+		}
+		// Reached only where expandAt declined — inside another expansion's
+		// operand, say — where joining is the sensible answer.
+		return strings.Join(r.Params, " "), true
+	}
+	if n, ok := atoi(e.Name); ok && n >= 1 {
+		if n <= len(r.Params) {
+			return r.Params[n-1], true
+		}
+		return "", true
+	}
+	return "", false
 }

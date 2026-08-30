@@ -26,6 +26,14 @@ import (
 type Runner struct {
 	// Vars holds shell variables. A nil map is initialised on first use.
 	Vars map[string]string
+	// Params holds the positional parameters, $1 first. `$0` is not one of
+	// them and is kept separate, because `shift` moves these and never
+	// touches that.
+	Params []string
+	// Name is `$0`.
+	Name string
+	// exported names go into a command's environment; the rest do not.
+	exported map[string]bool
 	// Dir is the working directory; empty means the process's own.
 	Dir string
 	// Env is the environment passed to commands. Nil means the process's own.
@@ -186,6 +194,23 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		return nil
 	}
 
+	// A builtin runs in this shell, which is the whole reason it is one:
+	// `set` and `shift` change state a child process could not.
+	if fn, ok := builtins[argv[0]]; ok {
+		// An assignment prefixed to a *special* builtin persists, which is
+		// the POSIX rule dash and ksh93 follow and bash and zsh do not.
+		// Following POSIX here; the divergence is a dialect question the
+		// interpreter does not yet carry.
+		for _, a := range c.Assigns {
+			v := strings.Join(r.expandWord(a.Value), " ")
+			if specialBuiltins[argv[0]] {
+				r.setVar(a.Name, v)
+			}
+		}
+		r.status = fn(r, ctx, argv[1:])
+		return nil
+	}
+
 	// An assignment prefix applies to this command's environment only.
 	env := r.environ()
 	for _, a := range c.Assigns {
@@ -245,7 +270,11 @@ func (r *Runner) environ() []string {
 	out := make([]string, len(base), len(base)+len(r.Vars))
 	copy(out, base)
 	for k, v := range r.Vars {
-		out = append(out, k+"="+v)
+		// Only exported names reach a command's environment; the rest are
+		// the shell's own.
+		if r.exported[k] {
+			out = append(out, k+"="+v)
+		}
 	}
 	return out
 }

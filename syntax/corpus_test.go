@@ -6,6 +6,8 @@ package syntax_test
 import (
 	"testing"
 
+	"github.com/blairham/sh/dialect/bash"
+
 	"github.com/blairham/sh/internal/oracle"
 	"github.com/blairham/sh/syntax"
 )
@@ -20,7 +22,7 @@ import (
 func TestCorpusLexes(t *testing.T) {
 	for _, c := range oracle.Corpus {
 		t.Run(c.ID, func(t *testing.T) {
-			l := syntax.NewLexer(c.Snippet, syntax.Bash())
+			l := syntax.NewLexer(c.Snippet, bash.Dialect())
 			toks := l.Tokens()
 
 			if err := l.Err(); err != nil {
@@ -53,7 +55,7 @@ func TestCorpusLexes(t *testing.T) {
 func TestCorpusParses(t *testing.T) {
 	for _, c := range oracle.Corpus {
 		t.Run(c.ID, func(t *testing.T) {
-			p := syntax.NewParser(c.Snippet, syntax.Bash())
+			p := syntax.NewParser(c.Snippet, bash.Dialect())
 			f := p.Parse()
 
 			// Cases the reference shells reject must be rejected here too.

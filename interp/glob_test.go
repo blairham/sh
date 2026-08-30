@@ -1,12 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-package interp
+package interp_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	. "github.com/blairham/sh/interp"
 )
 
 func TestParameterTrimming(t *testing.T) {

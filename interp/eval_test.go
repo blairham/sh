@@ -1,11 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-package interp
+package interp_test
 
 import (
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/dialect/bash"
+	"github.com/blairham/sh/dialect/dash"
+	"github.com/blairham/sh/dialect/zsh"
+	. "github.com/blairham/sh/interp"
 )
 
 func TestArithmetic(t *testing.T) {
@@ -168,27 +173,27 @@ func TestSemanticsAxesHaveTwoSides(t *testing.T) {
 		{
 			"a leading zero means octal",
 			`echo $((0100))`,
-			BashSemantics(), "64\n", ZshSemantics(), "100\n",
+			bash.Semantics(), "64\n", zsh.Semantics(), "100\n",
 		},
 		{
 			"echo interprets escapes",
 			`echo 'a\tb'`,
-			BashSemantics(), "a\\tb\n", ZshSemantics(), "a\tb\n",
+			bash.Semantics(), "a\\tb\n", zsh.Semantics(), "a\tb\n",
 		},
 		{
 			"${#@} is the count",
 			`set -- p q r; echo ${#@}`,
-			BashSemantics(), "3\n", DashSemantics(), "5\n",
+			bash.Semantics(), "3\n", dash.Semantics(), "5\n",
 		},
 		{
 			"an unquoted expansion is split",
 			`x="a b"; printf "[%s]" $x`,
-			BashSemantics(), "[a][b]", ZshSemantics(), "[a b]",
+			bash.Semantics(), "[a][b]", zsh.Semantics(), "[a b]",
 		},
 		{
 			"quoting a regex makes it a literal",
 			`[[ abc =~ "^a.c$" ]] && echo m || echo no`,
-			BashSemantics(), "no\n", ZshSemantics(), "m\n",
+			bash.Semantics(), "no\n", zsh.Semantics(), "m\n",
 		},
 	}
 	for _, tc := range tests {
@@ -293,7 +298,7 @@ func TestArithmeticErrorsFailTheCommand(t *testing.T) {
 			sem  Semantics
 			want int
 		}{
-			{"bash", BashSemantics(), 1},
+			{"bash", bash.Semantics(), 1},
 			{"posix", PosixSemantics(), 2},
 		} {
 			out, st := run(t, src, withSem(tc.sem))

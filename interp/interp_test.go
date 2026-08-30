@@ -1,13 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-package interp
+package interp_test
 
 import (
 	"bytes"
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/dialect/bash"
+	. "github.com/blairham/sh/interp"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -23,7 +26,7 @@ func run(t *testing.T, src string, setup func(*Runner)) (out string, status int)
 	// *behaviour* has to name a dialect, because the default is the strict
 	// core and the core refuses anything the shells disagree about — which
 	// is exactly what these tests are full of.
-	bash := BashSemantics()
+	bash := bash.Semantics()
 	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &bash}
 	if setup != nil {
 		setup(r)
@@ -284,7 +287,7 @@ func TestAssignmentPrefixIsAnAxisWithTwoSides(t *testing.T) {
 	if got, _ := run(t, src, func(r *Runner) { r.Semantics = &posix }); got != "[1]" {
 		t.Errorf("under posix the assignment should persist, got %q", got)
 	}
-	bash := BashSemantics()
+	bash := bash.Semantics()
 	if got, _ := run(t, src, func(r *Runner) { r.Semantics = &bash }); got != "[]" {
 		t.Errorf("under bash it should not, got %q", got)
 	}

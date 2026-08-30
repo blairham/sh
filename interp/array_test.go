@@ -1,9 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-package interp
+package interp_test
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/blairham/sh/dialect/bash"
+	"github.com/blairham/sh/dialect/zsh"
+	. "github.com/blairham/sh/interp"
+)
 
 func TestArrays(t *testing.T) {
 	tests := []struct{ name, src, want string }{
@@ -45,11 +51,11 @@ func TestArrayBaseIsAnAxis(t *testing.T) {
 	// bash and ksh93 count from 0, zsh from 1 — measured, and the reason a
 	// subscript cannot be used as a slice offset without asking.
 	src := `a=(p q r); printf "%s" "${a[1]}"`
-	bash := BashSemantics()
+	bash := bash.Semantics()
 	if got, _ := run(t, src, func(r *Runner) { r.Semantics = &bash }); got != "q" {
 		t.Errorf("zero-based gave %q, want q", got)
 	}
-	zsh := ZshSemantics()
+	zsh := zsh.Semantics()
 	if got, _ := run(t, src, func(r *Runner) { r.Semantics = &zsh }); got != "p" {
 		t.Errorf("one-based gave %q, want p", got)
 	}

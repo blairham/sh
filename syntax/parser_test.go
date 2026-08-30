@@ -364,7 +364,7 @@ func TestParserNeverPanics(t *testing.T) {
 					t.Errorf("panic on %q: %v", src, r)
 				}
 			}()
-			for _, d := range []Dialect{Core(), POSIX(), Bash()} {
+			for _, d := range []Dialect{Core(), POSIX(), everyFlag()} {
 				NewParser(src, d).Parse()
 			}
 		}()

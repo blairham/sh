@@ -63,56 +63,29 @@ func TestArrayLiteralIsADialectQuestion(t *testing.T) {
 	mustFail(t, `a= (echo x)`, Core(), "a space does not make it a subshell")
 }
 
-// TestHybridFunctionFormIsItsOwnFlag pins the distinction the comment on
-// FunctionKeyword described before anything enforced it, which let the ksh
-// dialect run a definition ksh93 calls a syntax error.
-func TestHybridFunctionFormIsItsOwnFlag(t *testing.T) {
+// TestFunctionFormsAreSeparateFlags is the flag-level half of what the dialect
+// packages assert per shell: the keyword and the hybrid are independent, so a
+// dialect can have one without the other.
+func TestFunctionFormsAreSeparateFlags(t *testing.T) {
 	const kw, hybrid = `function f { echo x; }`, `function f() { echo x; }`
-	for _, tc := range []struct {
-		name        string
-		d           Dialect
-		wantKeyword bool
-		wantParens  bool
-	}{
-		{"core", Core(), true, false},
-		{"bash", Bash(), true, true},
-		{"zsh", Zsh(), true, true},
-		{"ksh", Ksh(), true, false},
-		{"posix", POSIX(), false, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if tc.wantKeyword {
-				mustParse(t, kw, tc.d, "keyword form")
-			} else {
-				mustFail(t, kw, tc.d, "keyword form")
-			}
-			if tc.wantParens {
-				mustParse(t, hybrid, tc.d, "hybrid form")
-			} else {
-				mustFail(t, hybrid, tc.d, "hybrid form")
-			}
-		})
-	}
+	keywordOnly := Core()
+	both := Core()
+	both.FunctionKeywordParens = true
+
+	mustParse(t, kw, keywordOnly, "keyword alone")
+	mustFail(t, hybrid, keywordOnly, "keyword alone")
+	mustParse(t, kw, both, "keyword and parens")
+	mustParse(t, hybrid, both, "keyword and parens")
+	mustFail(t, kw, POSIX(), "neither")
+	mustFail(t, hybrid, POSIX(), "neither")
 }
 
-// TestIndirectionParsesWhereTheShellsAcceptIt is the grammar half of the
-// three-way divergence; the semantics half is asserted in the interp package.
-func TestIndirectionParsesWhereTheShellsAcceptIt(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		d    Dialect
-		want bool
-	}{
-		{"bash", Bash(), true},
-		{"ksh", Ksh(), true},
-		{"zsh", Zsh(), false},
-		{"posix", POSIX(), false},
-		{"core", Core(), false},
-	} {
-		if tc.want {
-			mustParse(t, `echo ${!x}`, tc.d, tc.name)
-		} else {
-			mustFail(t, `echo ${!x}`, tc.d, tc.name)
-		}
-	}
+// TestIndirectionIsAFlag likewise. Whether `${!x}` then means the name is a
+// semantics question and belongs to the interpreter, not here.
+func TestIndirectionIsAFlag(t *testing.T) {
+	on := Core()
+	on.ParamIndirection = true
+	mustParse(t, `echo ${!x}`, on, "flag on")
+	mustFail(t, `echo ${!x}`, Core(), "flag off")
+	mustFail(t, `echo ${!x}`, POSIX(), "flag off")
 }

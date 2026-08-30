@@ -1,12 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-package interp
+package interp_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/blairham/sh/dialect/bash"
+	"github.com/blairham/sh/dialect/dash"
+	"github.com/blairham/sh/dialect/ksh"
+	"github.com/blairham/sh/dialect/zsh"
+	. "github.com/blairham/sh/interp"
 )
 
 // These three were found in the *wording* bucket of the conformance run:
@@ -39,11 +45,11 @@ func TestBraceExpansionIsADialectQuestion(t *testing.T) {
 		sem  Semantics
 		want string
 	}{
-		{"bash", BashSemantics(), "1 2 3\n"},
-		{"ksh93", KshSemantics(), "1 2 3\n"},
-		{"zsh", ZshSemantics(), "1 2 3\n"},
+		{"bash", bash.Semantics(), "1 2 3\n"},
+		{"ksh93", ksh.Semantics(), "1 2 3\n"},
+		{"zsh", zsh.Semantics(), "1 2 3\n"},
 		// dash has no brace expansion, so the word is a literal.
-		{"dash", DashSemantics(), "{1..3}\n"},
+		{"dash", dash.Semantics(), "{1..3}\n"},
 	} {
 		if got, _ := run(t, `echo {1..3}`, withSem(tc.sem)); got != tc.want {
 			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
@@ -61,19 +67,19 @@ func TestBracketCaretIsADialectQuestion(t *testing.T) {
 		sem  Semantics
 		want string
 	}{
-		{"bash", BashSemantics(), "caret\n"},
-		{"zsh", ZshSemantics(), "caret\n"},
+		{"bash", bash.Semantics(), "caret\n"},
+		{"zsh", zsh.Semantics(), "caret\n"},
 		// dash reads `^` as an ordinary member, so `[^abc]` matches a caret
 		// and `d` falls through. Both answers are matches, on different
 		// inputs, with nothing to warn on.
-		{"dash", DashSemantics(), "no-caret\n"},
+		{"dash", dash.Semantics(), "no-caret\n"},
 	} {
 		if got, _ := run(t, src, withSem(tc.sem)); got != tc.want {
 			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
 		}
 	}
 	// `!` is the portable negation and needs no answer from anyone.
-	for _, sem := range []Semantics{DashSemantics(), BashSemantics(), CoreSemantics()} {
+	for _, sem := range []Semantics{dash.Semantics(), bash.Semantics(), CoreSemantics()} {
 		if got, _ := run(t, `case d in [!abc]) echo neg;; *) echo no;; esac`, withSem(sem)); got != "neg\n" {
 			t.Errorf("[!abc] should negate everywhere, got %q", got)
 		}

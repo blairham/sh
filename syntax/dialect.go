@@ -162,28 +162,3 @@ func Core() Dialect {
 // deliberately narrower than any shell anyone actually runs, which makes it
 // the right setting for a portability check and the wrong one for a runtime.
 func POSIX() Dialect { return Dialect{} }
-
-// Zsh is Core plus the hybrid function form, which ksh93 alone rejects.
-func Zsh() Dialect {
-	d := Core()
-	d.FunctionKeywordParens = true
-	return d
-}
-
-// Ksh is Core plus `${!x}`, which ksh93 parses and reads as the name itself.
-// The meaning is the interpreter's; this only says it is not a syntax error.
-func Ksh() Dialect {
-	d := Core()
-	d.ParamIndirection = true
-	return d
-}
-
-// Bash is Core plus what only bash has.
-func Bash() Dialect {
-	d := Core()
-	d.FunctionKeywordParens = true
-	d.CaseContinue = true
-	d.ParamCaseChange = true
-	d.ParamIndirection = true
-	return d
-}

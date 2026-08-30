@@ -10,6 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/blairham/sh/dialect/bash"
+	"github.com/blairham/sh/dialect/zsh"
+
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -36,8 +39,8 @@ func newDialect(t *testing.T, out *bytes.Buffer) *interp.Runner {
 
 	// 1. Choose the axes. This is the whole of "which shell am I", and it is
 	//    a value rather than a fork of the code.
-	sem := interp.BashSemantics()
-	dial := syntax.Bash()
+	sem := bash.Semantics()
+	dial := bash.Dialect()
 	r := &interp.Runner{
 		Stdout: out, Stderr: out,
 		Semantics: &sem, Dialect: &dial, Name: "mysh",
@@ -49,7 +52,13 @@ func newDialect(t *testing.T, out *bytes.Buffer) *interp.Runner {
 		if len(args) == 0 {
 			return 0
 		}
-		if err := os.Chdir(args[0]); err != nil {
+		// Setting r.Dir is the whole of it. Calling os.Chdir as well —
+		// which this used to do — moves the *process*, which is what the
+		// core's own cd documents as the thing not to do: it would move
+		// every Runner in the program, including ones another package owns.
+		// It also broke an unrelated test once the temp directory it had
+		// moved into was cleaned up and the process had no cwd left.
+		if fi, err := os.Stat(args[0]); err != nil || !fi.IsDir() {
 			return 1
 		}
 		r.Dir = args[0]
@@ -70,7 +79,7 @@ func newDialect(t *testing.T, out *bytes.Buffer) *interp.Runner {
 func runDialect(t *testing.T, r *interp.Runner, out *bytes.Buffer, src string) string {
 	t.Helper()
 	out.Reset()
-	f, err := syntax.Parse(src, syntax.Bash())
+	f, err := syntax.Parse(src, bash.Dialect())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
 	}
@@ -144,8 +153,8 @@ func TestTheAxesAreValuesNotForks(t *testing.T) {
 		sem  interp.Semantics
 		want string
 	}{
-		{"bash", interp.BashSemantics(), "64\n"},
-		{"zsh", interp.ZshSemantics(), "100\n"},
+		{"bash", bash.Semantics(), "64\n"},
+		{"zsh", zsh.Semantics(), "100\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var out bytes.Buffer

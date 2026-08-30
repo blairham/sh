@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-package interp
+package interp_test
 
 import (
 	"bytes"
@@ -10,6 +10,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/dialect/bash"
+	"github.com/blairham/sh/dialect/ksh"
+	"github.com/blairham/sh/dialect/zsh"
+	. "github.com/blairham/sh/interp"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -28,12 +33,12 @@ func TestFatalErrorsAbandonTheScript(t *testing.T) {
 		{
 			"readonly reassignment",
 			`readonly r=1; r=2; echo after`,
-			PosixSemantics(), 2, BashSemantics(),
+			PosixSemantics(), 2, bash.Semantics(),
 		},
 		{
 			"shift past the end",
 			`shift 5; echo after`,
-			KshSemantics(), 1, BashSemantics(),
+			ksh.Semantics(), 1, bash.Semantics(),
 		},
 		{
 			"arithmetic error",
@@ -73,7 +78,7 @@ func TestFatalStatusIsOneAxis(t *testing.T) {
 		if _, st := run(t, src, withSem(PosixSemantics())); st != 2 {
 			t.Errorf("%s under posix: status = %d, want 2", src, st)
 		}
-		if _, st := run(t, src, withSem(KshSemantics())); st != 1 {
+		if _, st := run(t, src, withSem(ksh.Semantics())); st != 1 {
 			t.Errorf("%s under ksh93: status = %d, want 1", src, st)
 		}
 	}
@@ -82,7 +87,7 @@ func TestFatalStatusIsOneAxis(t *testing.T) {
 func TestUnmatchedGlobIsFatalOnlyWhereTheDialectSaysSo(t *testing.T) {
 	// zsh alone. Reporting the error and then passing the pattern through
 	// was the bug: the diagnostic appeared and the command ran anyway.
-	out, st := run(t, `echo /zzz_no_such_dir_*; echo after`, withSem(ZshSemantics()))
+	out, st := run(t, `echo /zzz_no_such_dir_*; echo after`, withSem(zsh.Semantics()))
 	if strings.Contains(out, "after") {
 		t.Errorf("zsh: the script continued: %q", out)
 	}
@@ -96,7 +101,7 @@ func TestUnmatchedGlobIsFatalOnlyWhereTheDialectSaysSo(t *testing.T) {
 	if st != 1 {
 		t.Errorf("zsh: status = %d, want 1", st)
 	}
-	out, st = run(t, `echo /zzz_no_such_dir_*`, withSem(BashSemantics()))
+	out, st = run(t, `echo /zzz_no_such_dir_*`, withSem(bash.Semantics()))
 	if !strings.Contains(out, "/zzz_no_such_dir_*") {
 		t.Errorf("bash: the pattern should pass through, got %q", out)
 	}
@@ -110,11 +115,11 @@ func TestUnterminatedBracketIsNotAGlob(t *testing.T) {
 	// "no matches found: [" on every use of `test`, which went unnoticed
 	// until an unmatched pattern became fatal and the builtin stopped
 	// running. All four shells agree a lone `[` is literal.
-	out, st := run(t, `[ a = a ] && echo yes`, withSem(ZshSemantics()))
+	out, st := run(t, `[ a = a ] && echo yes`, withSem(zsh.Semantics()))
 	if out != "yes\n" || st != 0 {
 		t.Errorf("got %q status %d, want %q status 0", out, st, "yes\n")
 	}
-	if got, _ := run(t, `echo [`, withSem(BashSemantics())); got != "[\n" {
+	if got, _ := run(t, `echo [`, withSem(bash.Semantics())); got != "[\n" {
 		t.Errorf("echo [: got %q", got)
 	}
 	// A closed bracket is still a pattern.
@@ -123,7 +128,7 @@ func TestUnterminatedBracketIsNotAGlob(t *testing.T) {
 		t.Fatal(err)
 	}
 	src := `cd ` + dir + `; echo [a]`
-	if got, _ := run(t, src, withSem(BashSemantics())); got != "a\n" {
+	if got, _ := run(t, src, withSem(bash.Semantics())); got != "a\n" {
 		t.Errorf("[a] should have matched the file, got %q", got)
 	}
 }
@@ -131,24 +136,24 @@ func TestUnterminatedBracketIsNotAGlob(t *testing.T) {
 func TestArithmeticAxesAreAsked(t *testing.T) {
 	// A name-shaped value: re-evaluated in bash and zsh, an error in dash
 	// and ksh93.
-	if got, _ := run(t, `x=abc; echo $((x+1))`, withSem(BashSemantics())); got != "1\n" {
+	if got, _ := run(t, `x=abc; echo $((x+1))`, withSem(bash.Semantics())); got != "1\n" {
 		t.Errorf("bash: got %q, want %q", got, "1\n")
 	}
 	if _, st := run(t, `x=abc; echo $((x+1))`, withSem(PosixSemantics())); st == 0 {
 		t.Error("posix: a name-shaped value should be an error")
 	}
 	// An invalid octal digit: an error in dash and bash, decimal in ksh93.
-	if _, st := run(t, `echo $((08))`, withSem(BashSemantics())); st == 0 {
+	if _, st := run(t, `echo $((08))`, withSem(bash.Semantics())); st == 0 {
 		t.Error("bash: 08 should be an error")
 	}
-	if got, _ := run(t, `echo $((08))`, withSem(KshSemantics())); got != "8\n" {
+	if got, _ := run(t, `echo $((08))`, withSem(ksh.Semantics())); got != "8\n" {
 		t.Errorf("ksh93: got %q, want %q", got, "8\n")
 	}
 	// ksh93 is octal *and* tolerant — the reason one bool could not say it.
-	if got, _ := run(t, `echo $((0100))`, withSem(KshSemantics())); got != "64\n" {
+	if got, _ := run(t, `echo $((0100))`, withSem(ksh.Semantics())); got != "64\n" {
 		t.Errorf("ksh93 0100: got %q, want %q", got, "64\n")
 	}
-	if got, _ := run(t, `echo $((0100))`, withSem(ZshSemantics())); got != "100\n" {
+	if got, _ := run(t, `echo $((0100))`, withSem(zsh.Semantics())); got != "100\n" {
 		t.Errorf("zsh 0100: got %q, want %q", got, "100\n")
 	}
 }
@@ -166,12 +171,12 @@ func TestCoreRefusesTheNewAxes(t *testing.T) {
 // Together they express three answers with two binary questions.
 func TestIndirectionMeaningIsAnAxis(t *testing.T) {
 	const src = `x=y; y=V; printf "[%s]" "${!x}"`
-	f, err := syntax.Parse(src, syntax.Ksh())
+	f, err := syntax.Parse(src, ksh.Dialect())
 	if err != nil {
 		t.Fatalf("ksh should parse ${!x}: %v", err)
 	}
 	var buf bytes.Buffer
-	sem := KshSemantics()
+	sem := ksh.Semantics()
 	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem}
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-package interp
+package interp_test
 
 import (
 	"bytes"
@@ -11,6 +11,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/blairham/sh/dialect/bash"
+	"github.com/blairham/sh/dialect/zsh"
+	. "github.com/blairham/sh/interp"
+
 	"github.com/blairham/sh/syntax"
 )
 
@@ -19,12 +23,12 @@ import (
 // alone has — `;;&` here — needs the dialect naming both halves.
 func runBash(t *testing.T, src string) (string, int) {
 	t.Helper()
-	f, err := syntax.Parse(src, syntax.Bash())
+	f, err := syntax.Parse(src, bash.Dialect())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
 	}
 	var buf bytes.Buffer
-	sem := BashSemantics()
+	sem := bash.Semantics()
 	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem}
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
@@ -132,7 +136,7 @@ func TestCaseChangeOperators(t *testing.T) {
 func TestArithmeticErrorAbandonsTheScript(t *testing.T) {
 	// Fatality is not an axis: dash, bash, ksh93 and zsh all stop. Only the
 	// status differs, and that is asserted in eval_test.go.
-	for _, sem := range []Semantics{BashSemantics(), PosixSemantics(), ZshSemantics()} {
+	for _, sem := range []Semantics{bash.Semantics(), PosixSemantics(), zsh.Semantics()} {
 		out, _ := run(t, `echo $((1/0)); echo reached`, withSem(sem))
 		if strings.Contains(out, "reached") {
 			t.Errorf("the script continued past a fatal expansion: %q", out)

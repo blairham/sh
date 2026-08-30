@@ -47,20 +47,6 @@ func (d Diagnostics) SyntaxError() int {
 // PosixDiagnostics is dash's, which is also the substrate's own.
 func PosixDiagnostics() Diagnostics { return Diagnostics{SyntaxErrorStatus: 2} }
 
-// DashDiagnostics is dash's.
-func DashDiagnostics() Diagnostics { return PosixDiagnostics() }
-
-// BashDiagnostics is bash's, and agrees with dash on the only axis measured
-// so far — which is worth stating, because every other vector in this package
-// has them disagreeing somewhere.
-func BashDiagnostics() Diagnostics { return Diagnostics{SyntaxErrorStatus: 2} }
-
-// KshDiagnostics is ksh93's, the only 3 in the panel.
-func KshDiagnostics() Diagnostics { return Diagnostics{SyntaxErrorStatus: 3} }
-
-// ZshDiagnostics is zsh's.
-func ZshDiagnostics() Diagnostics { return Diagnostics{SyntaxErrorStatus: 1} }
-
 // CoreDiagnostics is the substrate's own. Unlike [CoreSemantics] it refuses
 // nothing: a status is not a claim about another shell.
 func CoreDiagnostics() Diagnostics { return Diagnostics{} }

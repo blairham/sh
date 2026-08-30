@@ -26,6 +26,10 @@ import (
 type Runner struct {
 	// Vars holds shell variables. A nil map is initialised on first use.
 	Vars map[string]string
+	// Arrays holds indexed array variables, which are a different kind of
+	// thing from Vars rather than a formatting of one: an element can hold a
+	// space without becoming two.
+	Arrays map[string][]string
 	// Params holds the positional parameters, $1 first. `$0` is not one of
 	// them and is kept separate, because `shift` moves these and never
 	// touches that.
@@ -100,6 +104,10 @@ func (r *Runner) clone() *Runner {
 	c.exported = make(map[string]bool, len(r.exported))
 	for k, v := range r.exported {
 		c.exported[k] = v
+	}
+	c.Arrays = make(map[string][]string, len(r.Arrays))
+	for k, v := range r.Arrays {
+		c.Arrays[k] = append([]string(nil), v...)
 	}
 	c.Params = append([]string(nil), r.Params...)
 	return &c
@@ -271,7 +279,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// Assignments with no command name persist, which is the difference
 		// between `x=1` and `x=1 cmd`.
 		for _, a := range c.Assigns {
-			r.setVar(a.Name, strings.Join(r.expandWord(a.Value), " "))
+			r.assign(a)
 		}
 		r.status = 0
 		return nil
@@ -409,4 +417,31 @@ func (r *Runner) getVar(name string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// assign performs one assignment, which is three different things wearing the
+// same syntax: a scalar, a whole array, or one element of one.
+func (r *Runner) assign(a *syntax.Assign) {
+	switch {
+	case a.IsArray:
+		var elems []string
+		for _, w := range a.Elems {
+			// Each element is a word, so `a=(1 $x 3)` expands and splits
+			// like any other — which is how an array is built from a
+			// command's output.
+			elems = append(elems, r.expandWord(w)...)
+		}
+		r.setArray(a.Name, elems)
+	case a.Index != nil:
+		idx, err := r.parseNum(strings.TrimSpace(r.joinWord(a.Index)))
+		if err != nil {
+			r.errf("sh: %s: bad array subscript\n", a.Name)
+			return
+		}
+		r.setArrayElem(a.Name, idx, strings.Join(r.expandWord(a.Value), " "))
+	default:
+		r.setVar(a.Name, strings.Join(r.expandWord(a.Value), " "))
+		// A scalar assignment replaces any array of the same name.
+		delete(r.Arrays, a.Name)
+	}
 }

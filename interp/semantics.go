@@ -109,6 +109,11 @@ type Semantics struct {
 	// records.
 	ReadonlyReassignmentFatal Answer
 
+	// ArrayBaseIsZero indexes arrays from 0. True in bash and ksh93, false in
+	// zsh, which counts from 1. dash has no arrays at all, which is why the
+	// axis is absent rather than false there.
+	ArrayBaseIsZero Answer
+
 	// DollarZeroInFunctionIsFunctionName makes `$0` inside a function the
 	// function's name. True only in zsh.
 	DollarZeroInFunctionIsFunctionName Answer
@@ -152,6 +157,7 @@ func PosixSemantics() Semantics {
 		LastPipelineElementInCurrentShell:        No,
 		ShiftPastEndFatal:                        Yes,
 		ReadonlyReassignmentFatal:                Yes,
+		ArrayBaseIsZero:                          Yes,
 		DollarZeroInFunctionIsFunctionName:       No,
 	}
 }
@@ -198,6 +204,7 @@ func ZshSemantics() Semantics {
 	s.RegexQuotingMakesLiteral = No
 	s.LastPipelineElementInCurrentShell = Yes
 	s.DollarZeroInFunctionIsFunctionName = Yes
+	s.ArrayBaseIsZero = No
 	return s
 }
 

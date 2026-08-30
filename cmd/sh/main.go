@@ -67,8 +67,17 @@ func main() {
 		}
 	case *command != "":
 		os.Exit(run(*command, d, sem))
+	case len(flag.Args()) > 0:
+		// A bare argument is a script to run, which is how a shell is
+		// normally invoked and how the corpus runs the cases that depend on
+		// being read from a file rather than from -c.
+		b, err := os.ReadFile(flag.Args()[0])
+		if err != nil {
+			fail(err)
+		}
+		os.Exit(run(string(b), d, sem))
 	default:
-		fail(fmt.Errorf("nothing to do: pass -tokens or -parse with a script, or -f file"))
+		fail(fmt.Errorf("nothing to do: pass a script, -c, -tokens or -parse"))
 	}
 }
 

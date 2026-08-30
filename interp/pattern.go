@@ -25,7 +25,13 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 		if s.Kind == syntax.ParamExp {
 			text = r.expandParam(s.Param)
 		}
-		if s.Quoting == syntax.Unquoted && s.Kind == syntax.Literal {
+		// Unquoted literal text is a pattern, and so is the *result* of an
+		// unquoted expansion where the dialect says so — the same axis that
+		// decides whether `x="et*"; echo $x` globs, reaching into `[[ ]]`.
+		// Escaping it unconditionally made `p="a*"; [[ abc == $p ]]` fail.
+		if s.Quoting == syntax.Unquoted &&
+			(s.Kind == syntax.Literal ||
+				r.ask(r.sem().GlobExpansionResults, "globbing the result of an expansion")) {
 			b.WriteString(text)
 			continue
 		}

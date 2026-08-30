@@ -22,6 +22,11 @@ const (
 	controlBreak
 	controlContinue
 	controlReturn
+	// controlExit is a fatal error: the shell abandons the script. Nothing
+	// consumes it — not loopControl, not the function-call site — so it
+	// unwinds past every construct to Run, which is exactly what "fatal"
+	// means and what break, continue and return each deliberately are not.
+	controlExit
 )
 
 // runList executes a list of statements, stopping early if one of them
@@ -187,6 +192,21 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 						return err
 					}
 				}
+			case syntax.TokDSemiAmp:
+				// Keep testing the *later* patterns, which is the narrower
+				// thing `;;&` means and the reason it is a separate operator
+				// rather than a spelling of `;&`.
+				for _, later := range c.Items[i+1:] {
+					if !r.caseItemMatches(later, subject) {
+						continue
+					}
+					if err := r.runList(ctx, later.Body); err != nil {
+						return err
+					}
+					if later.Term != syntax.TokDSemiAmp {
+						break
+					}
+				}
 			}
 			return nil
 		}
@@ -229,10 +249,23 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 	saved, savedIn := r.Params, r.inFunc
 	r.Params, r.inFunc = args, fn.Name
 	r.depth++
+	// A scope the function's locals unwind into.
+	sc := &scope{saved: map[string]string{}, existed: map[string]bool{}}
+	r.scopes = append(r.scopes, sc)
 
 	err := r.command(ctx, fn.Body)
 
 	r.depth--
+	// Put back what `local` displaced, in whatever order it was declared:
+	// the values are keyed by name, so order does not matter.
+	for name, old := range sc.saved {
+		if sc.existed[name] {
+			r.Vars[name] = old
+		} else {
+			delete(r.Vars, name)
+		}
+	}
+	r.scopes = r.scopes[:len(r.scopes)-1]
 	r.Params, r.inFunc = saved, savedIn
 	if r.ctl == controlReturn {
 		r.ctl = controlNone

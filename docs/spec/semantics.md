@@ -19,6 +19,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | `${#@}` is the count of parameters | **no** | yes | yes | yes |
 | `[^abc]` negates | **no** | yes | yes | yes |
 | a leading zero means octal | yes | yes | yes | **no** |
+| arithmetic error exits | **2** | 1 | 1 | 1 |
 | arithmetic does floating point | no | no | **yes** | **yes** |
 | quoting a `=~` regex makes it literal | *n/a* | **yes** | no | no |
 | array index base | *n/a* | 0 | 0 | **1** |
@@ -37,6 +38,7 @@ Probes, for reproduction:
     same axis, again p="a*"; [[ abc == $p ]]          → n/a match match no-match
     &> operator      echo hi &>b; cat b               → hi+empty, [hi], hi+empty, [hi]
     array base       a=(x y); echo "${a[1]}"          → -  y y x
+    arith error      echo $((1/0)); echo $?            → 2 1 1 1, and $? never prints
     echo backslash   echo 'a\tb'                      → expanded, literal, literal, expanded
     glob no match    echo /zzz_no_such*               → pattern, pattern, pattern, "no match" error
     pipeline last    echo x | read v; echo "[$v]"     → [] [] [x] [x]
@@ -61,6 +63,7 @@ Group the shells by which side of each axis they fall on:
     `${#@}` is a count   {dash}
     `[^…]` negates       {dash}
     leading zero octal   {zsh}
+    arith error status   {dash}
     arithmetic floats    {ksh93, zsh}
     quoted regex literal {bash}
     brace needs `;`      {zsh}
@@ -73,10 +76,24 @@ Group the shells by which side of each axis they fall on:
     readonly continues   {bash}
     shift survives       {bash, zsh}
 
-Eight distinct groupings across eighteen axes: `{zsh}`, `{dash,zsh}`,
+Eight distinct groupings across nineteen axes: `{zsh}`, `{dash,zsh}`,
 `{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`, `{dash,ksh93}` and
 `{dash}` — the last of which `${#@}` now produces on its own, where
 previously it appeared only as the modern-ksh reading of the `&>` axis.
+
+The nineteenth axis, the exit status of an arithmetic error, was found by
+a *test* rather than by the panel sweep: the interpreter had hardcoded 2,
+the conformance run against bash disagreed, and changing the constant to
+bash's 1 would have written one shell's policy into the core. It joins
+`{dash}`, adding no grouping.
+
+Its probe then found something the axis does not cover. All four shells
+**abandon the rest of the script**: none of them reach the `echo $?`, so
+the second command in that probe never runs anywhere. Fatality is
+therefore *core* behaviour that the substrate can simply implement, and
+only the status is contested — the useful reminder being that a probe
+written to measure one axis reported on two, and the universal half was
+the half the interpreter had wrong.
 
 That last row is worth its own note: **a panel member is not one thing.**
 ksh93 AJM 93u+ (2012, macOS) and ksh93u+m 1.0.8 (2024, Debian) disagree

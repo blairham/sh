@@ -278,21 +278,35 @@ func TestCoreAgreesWithTheShellsWhereTheyAgree(t *testing.T) {
 }
 
 func TestArithmeticErrorsFailTheCommand(t *testing.T) {
-	// `echo $((1/0))` fails in every shell in the panel rather than echoing
-	// an empty string. Reporting the error and then running the command was
-	// the silent wrong answer — the diagnostic went to stderr and the exit
-	// status said everything had gone fine.
+	// `echo $((1/0))` fails rather than echoing an empty string. Reporting
+	// the error and then running the command was the silent wrong answer —
+	// the diagnostic went to stderr and the exit status said everything had
+	// gone fine.
+	//
+	// *Which* non-zero status is an axis, not a constant: bash, ksh93 and
+	// zsh exit 1 and dash exits 2. Asserting one number would have written
+	// one shell's policy into the core, so both sides are asserted here and
+	// the core is asserted to refuse.
 	for _, src := range []string{`echo $((1/0))`, `echo $((08))`, `echo $((1%0))`} {
-		out, st := run(t, src, nil)
-		if st != 2 {
-			t.Errorf("%s: status = %d, want 2", src, st)
+		for _, tc := range []struct {
+			name string
+			sem  Semantics
+			want int
+		}{
+			{"bash", BashSemantics(), 1},
+			{"posix", PosixSemantics(), 2},
+		} {
+			out, st := run(t, src, withSem(tc.sem))
+			if st != tc.want {
+				t.Errorf("%s under %s: status = %d, want %d", src, tc.name, st, tc.want)
+			}
+			if strings.Contains(out, "\n\n") || out == "\n" {
+				t.Errorf("%s under %s: the command ran anyway, got %q", src, tc.name, out)
+			}
 		}
-		if strings.Contains(out, "\n\n") || out == "\n" {
-			t.Errorf("%s: the command ran anyway, got %q", src, out)
+		// The core has no answer and must say so rather than pick.
+		if _, st := run(t, src, withSem(CoreSemantics())); st != 2 {
+			t.Errorf("%s under the core: status = %d, want a refusal", src, st)
 		}
-	}
-	// And a working expression is unaffected.
-	if out, st := run(t, `echo $((1/1))`, nil); out != "1\n" || st != 0 {
-		t.Errorf("got %q status %d", out, st)
 	}
 }

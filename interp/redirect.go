@@ -25,6 +25,7 @@ import (
 // here-strings and here-document bodies are not here yet; the parser produces
 // them and this refuses them rather than ignoring them.
 func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.Closer, error) {
+	r.redirErr = false
 	if len(rs) == 0 {
 		return nil, nil
 	}
@@ -59,6 +60,13 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.C
 		switch rd.Op {
 		case syntax.TokGreat, syntax.TokClobber:
 			flags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+			if r.noclobber && rd.Op == syntax.TokGreat {
+				// Under `set -C` a plain `>` refuses to truncate a file that
+				// already exists. `>|` is the documented override, and is
+				// the one operator on this list that means the same thing in
+				// every shell measured.
+				flags |= os.O_EXCL
+			}
 		case syntax.TokDGreat:
 			flags = os.O_WRONLY | os.O_CREATE | os.O_APPEND
 		case syntax.TokLess:
@@ -91,6 +99,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.C
 			r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 			r.errf("sh: cannot open %s: %v\n", name, err)
 			r.status = 1
+			r.redirErr = true
 			return closers, nil
 		}
 		closers = append(closers, f)

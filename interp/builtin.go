@@ -31,6 +31,8 @@ var builtins = map[string]Builtin{
 	"pwd":      biPwd,
 	"read":     biRead,
 	"wait":     biWait,
+	"local":    biLocal,
+	"readonly": biReadonly,
 	"break":    biBreak,
 	"continue": biContinue,
 	"return":   biReturn,
@@ -94,11 +96,36 @@ func biSet(r *Runner, _ context.Context, args []string) int {
 		r.errf("sh: set: listing variables is not implemented yet\n")
 		return 2
 	}
-	if args[0] != "--" {
-		r.errf("sh: set: only `set --` is implemented so far, not %q\n", args[0])
-		return 2
+	// Options come before `--`, and each is a letter that may be turned on
+	// with `-` or off with `+`. Only the ones with implemented behaviour are
+	// accepted; the rest are refused rather than silently ignored, which
+	// would let a script believe it had asked for something.
+	i := 0
+	for ; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			i++
+			break
+		}
+		if len(a) < 2 || (a[0] != '-' && a[0] != '+') {
+			break
+		}
+		on := a[0] == '-'
+		for _, opt := range a[1:] {
+			switch opt {
+			case 'C':
+				r.noclobber = on
+			default:
+				r.errf("sh: set: -%c is not implemented\n", opt)
+				return 2
+			}
+		}
 	}
-	r.Params = append([]string(nil), args[1:]...)
+	// `set -C` alone sets an option and leaves the parameters alone; only an
+	// explicit `--`, or operands after the options, replaces them.
+	if i == 0 || (i <= len(args) && args[min(i-1, len(args)-1)] == "--") || i < len(args) {
+		r.Params = append([]string(nil), args[i:]...)
+	}
 	return 0
 }
 
@@ -330,4 +357,48 @@ func (r *Runner) readLine(raw bool) (string, error) {
 		}
 		b.WriteByte(c)
 	}
+}
+
+// biLocal makes variables local to the running function.
+//
+// Shell scoping is *dynamic*, not lexical: a local is visible to everything
+// the function calls, and stops existing when the function returns. That is
+// why this saves the outer value on a stack rather than creating a new
+// environment — there is only ever one set of variables, and `local` says
+// which of them to put back.
+func biLocal(r *Runner, _ context.Context, args []string) int {
+	if len(r.scopes) == 0 {
+		r.errf("sh: local: can only be used in a function\n")
+		return 1
+	}
+	sc := r.scopes[len(r.scopes)-1]
+	for _, a := range args {
+		name, value, hasValue := strings.Cut(a, "=")
+		if _, seen := sc.saved[name]; !seen {
+			old, existed := r.Vars[name]
+			sc.saved[name] = old
+			sc.existed[name] = existed
+		}
+		if hasValue {
+			r.setVar(name, value)
+		} else {
+			r.setVar(name, "")
+		}
+	}
+	return 0
+}
+
+// biReadonly marks variables immutable.
+func biReadonly(r *Runner, _ context.Context, args []string) int {
+	if r.readonly == nil {
+		r.readonly = map[string]bool{}
+	}
+	for _, a := range args {
+		name, value, hasValue := strings.Cut(a, "=")
+		if hasValue {
+			r.setVar(name, value)
+		}
+		r.readonly[name] = true
+	}
+	return 0
 }

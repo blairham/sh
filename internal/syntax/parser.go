@@ -22,7 +22,18 @@ type Parser struct {
 
 	err        error
 	incomplete bool
+
+	// depth bounds nesting while parsing operands, which are themselves
+	// words and may hold further expansions. Pathological input is the
+	// normal case on the keystroke path, so this is a bound rather than a
+	// trust.
+	depth int
 }
+
+// maxParamDepth is how far `${x:-${y:-…}}` may nest before the parser stops.
+// Deep enough that no real script reaches it, shallow enough that no input
+// can exhaust the stack.
+const maxParamDepth = 64
 
 // NewParser returns a parser over src.
 func NewParser(src string, d Dialect) *Parser {
@@ -254,16 +265,30 @@ func (p *Parser) word() *Word {
 	if p.tok.Kind != TokWord {
 		return nil
 	}
-	w := &Word{Spans: p.tok.Spans, Start: p.tok.Pos, Stop: p.tok.End}
+	w := p.newWord(p.tok.Spans, p.tok.Pos, p.tok.End)
 	p.next()
 	return w
+}
+
+// newWord builds a word and parses the expansions inside it. Every word in
+// the tree goes through here, so no path can produce one with an unparsed
+// ${ } in it.
+func (p *Parser) newWord(spans []Span, start, stop Pos) *Word {
+	out := make([]Span, len(spans))
+	copy(out, spans)
+	for i := range out {
+		if out[i].Kind == ParamExp && out[i].Param == nil {
+			out[i].Param = p.parseParamExp(out[i].Value, out[i].Pos)
+		}
+	}
+	return &Word{Spans: out, Start: start, Stop: stop}
 }
 
 // parseRedirect reads an optional IO number, an operator and its target.
 func (p *Parser) parseRedirect() *Redirect {
 	r := &Redirect{}
 	if p.at(TokIONumber) {
-		r.N = &Word{Spans: p.tok.Spans, Start: p.tok.Pos, Stop: p.tok.End}
+		r.N = p.newWord(p.tok.Spans, p.tok.Pos, p.tok.End)
 		p.next()
 	}
 	if !p.tok.Kind.IsRedirect() {
@@ -280,7 +305,7 @@ func (p *Parser) parseRedirect() *Redirect {
 	// where the body is read — and the queue has to be set before that
 	// happens. Registering after p.word() looks equivalent and silently
 	// collects nothing.
-	r.Word = &Word{Spans: p.tok.Spans, Start: p.tok.Pos, Stop: p.tok.End}
+	r.Word = p.newWord(p.tok.Spans, p.tok.Pos, p.tok.End)
 	if r.Op.IsHeredoc() {
 		// Any quoting *anywhere* in the delimiter makes the whole body
 		// literal, and a backslash counts. Both are detected the same way:
@@ -381,7 +406,7 @@ func (p *Parser) parseAssign(name string) *Assign {
 	spans = append(spans, p.tok.Spans[1:]...)
 	a.Stop = p.tok.End
 	if len(spans) > 0 {
-		a.Value = &Word{Spans: spans, Start: p.tok.Pos, Stop: p.tok.End}
+		a.Value = p.newWord(spans, p.tok.Pos, p.tok.End)
 	}
 	p.next()
 	return a

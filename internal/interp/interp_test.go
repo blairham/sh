@@ -118,11 +118,14 @@ func TestCommandNotFoundIs127(t *testing.T) {
 func TestGateRefusesAndTheShellCarriesOn(t *testing.T) {
 	// A denied command is a command that failed, not a broken shell, so the
 	// status is set and execution continues.
+	// External commands, deliberately: `true` and `echo` are builtins and do
+	// not leave the process, so the gate does not see them — which is what
+	// TestBuiltinsAreNotGated asserts from the other side.
 	var seen []Action
-	out, st := run(t, `true; echo after`, func(r *Runner) {
+	out, st := run(t, `/usr/bin/false; /bin/echo after`, func(r *Runner) {
 		r.Gate = GateFunc(func(_ context.Context, a Action) Decision {
 			seen = append(seen, a)
-			if strings.HasSuffix(a.Path, "true") {
+			if strings.HasSuffix(a.Path, "false") {
 				return Deny
 			}
 			return Allow
@@ -164,7 +167,7 @@ func TestGateSeesRedirectionsToo(t *testing.T) {
 
 func TestEventsDescribeWhatHappened(t *testing.T) {
 	var kinds []EventKind
-	_, _ = run(t, `true`, func(r *Runner) {
+	_, _ = run(t, `/usr/bin/true`, func(r *Runner) {
 		r.Events = SinkFunc(func(_ context.Context, e Event) { kinds = append(kinds, e.Kind) })
 	})
 	if len(kinds) != 2 || kinds[0] != EventCommandStart || kinds[1] != EventCommandEnd {
@@ -179,5 +182,80 @@ func TestUnsupportedIsRefusedNotSkipped(t *testing.T) {
 		if st != -1 || !strings.Contains(out, "not implemented yet") {
 			t.Errorf("%s: got %q status %d, want an explicit refusal", src, out, st)
 		}
+	}
+}
+
+func TestPositionalParameters(t *testing.T) {
+	// The rows docs/spec/grammar/word-splitting.md measured for `"$@"` and
+	// `"$*"`, which are the only place quoting produces *more* than one field.
+	tests := []struct{ name, src, want string }{
+		{"at keeps one field per parameter", `set -- p q r; printf "[%s]" "$@"`, `[p][q][r]`},
+		{"at keeps spaces within a parameter", `set -- "a b" c; printf "[%s]" "$@"`, `[a b][c]`},
+		{"star joins into one field", `set -- p q r; printf "[%s]" "$*"`, `[p q r]`},
+		{"star joins with IFS's first character", `set -- a b; IFS=:; printf "[%s]" "$*"`, `[a:b]`},
+		{"count", `set -- p q r; echo $#`, "3\n"},
+		{"a numbered parameter", `set -- p q r; echo $2`, "q\n"},
+		{"past the end is empty", `set -- p; echo "[$5]"`, "[]\n"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, _ := run(t, tc.src, nil)
+			if got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestAtIsZeroFieldsAndStarIsOne(t *testing.T) {
+	// Why `set -- "$@"` is safe on an empty list and `set -- "$*"` is not.
+	if got, _ := run(t, `set --; set -- "$@"; echo $#`, nil); got != "0\n" {
+		t.Errorf(`"$@" with no parameters gave %q, want 0`, got)
+	}
+	if got, _ := run(t, `set --; set -- "$*"; echo $#`, nil); got != "1\n" {
+		t.Errorf(`"$*" with no parameters gave %q, want 1 empty field`, got)
+	}
+}
+
+func TestBuiltinsRunInThisShell(t *testing.T) {
+	// The reason they are builtins: a child process could not do this.
+	if got, _ := run(t, `set -- a b; shift; printf "[%s]" "$@"`, nil); got != "[b]" {
+		t.Errorf("shift gave %q", got)
+	}
+	if got, _ := run(t, `x=1; unset x; printf "[%s]" "${x-gone}"`, nil); got != "[gone]" {
+		t.Errorf("unset gave %q", got)
+	}
+	if _, st := run(t, `:`, nil); st != 0 {
+		t.Errorf(": exited %d", st)
+	}
+}
+
+func TestBuiltinsAreNotGated(t *testing.T) {
+	// The gate covers what leaves the process. A builtin does not, so gating
+	// it would be reporting an action that never happened.
+	var seen int
+	_, _ = run(t, `set -- a; shift; :`, func(r *Runner) {
+		r.Gate = GateFunc(func(context.Context, Action) Decision { seen++; return Allow })
+	})
+	if seen != 0 {
+		t.Errorf("the gate saw %d actions for builtins alone, want 0", seen)
+	}
+}
+
+func TestAssignmentPrefixPersistsOnlyOnASpecialBuiltin(t *testing.T) {
+	// POSIX's rule, which dash and ksh93 follow and bash and zsh do not.
+	// `shift` is special; a variable set before it stays set.
+	if got, _ := run(t, `set -- a b; x=1 shift; printf "[%s]" "$x"`, nil); got != "[1]" {
+		t.Errorf("an assignment before a special builtin should persist, got %q", got)
+	}
+}
+
+func TestOnlyExportedVariablesReachTheEnvironment(t *testing.T) {
+	out, _ := run(t, `x=private; export y=shared; env`, nil)
+	if strings.Contains(out, "x=private") {
+		t.Error("an unexported shell variable reached the environment")
+	}
+	if !strings.Contains(out, "y=shared") {
+		t.Error("an exported variable did not reach the environment")
 	}
 }

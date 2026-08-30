@@ -128,6 +128,50 @@ The delimiter's quoting must survive onto the heredoc token, because the
 body is read later. obi got this wrong twice by rewriting the parse tree
 instead — see `../../lessons-from-obi.md`.
 
+### Where the body is
+
+**Not after the operator — after the next newline.** The rest of the line
+is ordinary input and is read first:
+
+    cat <<EOF; echo after     →  one, then after
+    one
+    EOF
+
+So the body is collected when the newline is reached, not when the
+operator is seen. That is the whole reason this needs cooperation between
+the lexer and the parser: the parser has the delimiter, and the lexer is
+what reaches the newline.
+
+The body ends at a line **exactly equal** to the delimiter. `EOFX` does
+not end an `EOF` heredoc, and neither does a line with trailing spaces.
+
+**Several heredocs on one line are collected in operator order**:
+
+    cat <<A <<B
+    first
+    A
+    second
+    B
+
+`A`'s body is the lines up to `A`, then `B`'s. What the *command* then
+does with two redirections of the same descriptor is the interpreter's
+problem — and the panel diverges there, dash, bash and ksh93 printing
+`second` while zsh prints both — but the collection order is unanimous.
+
+### `<<-` strips tabs, and only tabs
+
+    cat <<-EOF        cat <<-EOF
+    <tab>tabbed           spaced          ← four spaces
+    <tab>EOF              EOF
+    →  tabbed         →  runs to end of input
+
+Leading **tabs** are stripped from the body lines and from the delimiter
+line. Spaces are not, so an indented-with-spaces delimiter never matches
+and the heredoc swallows the rest of the input. bash warns about that
+(`here-document delimited by end-of-file`); dash, ksh93 and zsh take it
+silently. Reaching the end of input without the delimiter is therefore
+**unfinished input**, not a syntax error.
+
 ## `&>` is the dangerous one
 
 Not every dialect difference is a construct that fails to parse. `&>` is

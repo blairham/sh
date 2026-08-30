@@ -68,6 +68,13 @@ func (r *Runner) glob(field string) []string {
 	if !hasUnescapedMeta(field) {
 		return nil
 	}
+	defer func() {
+		if r.globMissed && r.sem().GlobNoMatchIsError {
+			r.errf("sh: no matches found: %s\n", globUnescape(field))
+			r.status = 1
+		}
+		r.globMissed = false
+	}()
 	parts := strings.Split(field, "/")
 
 	// An absolute pattern starts at the root; a relative one at the working
@@ -87,6 +94,7 @@ func (r *Runner) glob(field string) []string {
 			next = append(next, matchIn(dir, part)...)
 		}
 		if len(next) == 0 {
+			r.globMissed = true
 			return nil
 		}
 		sort.Strings(next)
@@ -101,6 +109,7 @@ func (r *Runner) glob(field string) []string {
 			}
 			dirs = kept
 			if len(dirs) == 0 {
+				r.globMissed = true
 				return nil
 			}
 		}

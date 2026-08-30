@@ -246,11 +246,19 @@ func TestBuiltinsAreNotGated(t *testing.T) {
 	}
 }
 
-func TestAssignmentPrefixPersistsOnlyOnASpecialBuiltin(t *testing.T) {
-	// POSIX's rule, which dash and ksh93 follow and bash and zsh do not.
-	// `shift` is special; a variable set before it stays set.
-	if got, _ := run(t, `set -- a b; x=1 shift; printf "[%s]" "$x"`, nil); got != "[1]" {
-		t.Errorf("an assignment before a special builtin should persist, got %q", got)
+func TestAssignmentPrefixIsAnAxisWithTwoSides(t *testing.T) {
+	// POSIX keeps an assignment prefixed to a special builtin; dash and
+	// ksh93 comply and bash and zsh do not. An axis is only pinned by
+	// testing both of its positions — asserting one is asserting a default.
+	src := `set -- a b; x=1 shift; printf "[%s]" "$x"`
+
+	posix := PosixSemantics()
+	if got, _ := run(t, src, func(r *Runner) { r.Semantics = &posix }); got != "[1]" {
+		t.Errorf("under posix the assignment should persist, got %q", got)
+	}
+	bash := BashSemantics()
+	if got, _ := run(t, src, func(r *Runner) { r.Semantics = &bash }); got != "[]" {
+		t.Errorf("under bash it should not, got %q", got)
 	}
 }
 

@@ -226,14 +226,14 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 		r.status = 1
 		return nil
 	}
-	saved, savedName := r.Params, r.Name
-	r.Params, r.Name = args, fn.Name
+	saved, savedIn := r.Params, r.inFunc
+	r.Params, r.inFunc = args, fn.Name
 	r.depth++
 
 	err := r.command(ctx, fn.Body)
 
 	r.depth--
-	r.Params, r.Name = saved, savedName
+	r.Params, r.inFunc = saved, savedIn
 	if r.ctl == controlReturn {
 		r.ctl = controlNone
 	}

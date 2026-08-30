@@ -1,7 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-// Command sh will be the shell. It is not one yet.
+// Command sh drives the substrate.
+//
+// It is not the product. This repository is the core — a parser and an
+// interpreter other programs embed — and the shell people run, with its own
+// choice of dialect and its own interactive surface, is a separate thing
+// built on top. What is here exists to exercise the library, to make its
+// behaviour inspectable, and to be a column in the conformance harness.
 //
 // What exists today is the lexer, so this exposes that and refuses everything
 // else rather than pretending. It is a development tool that will grow into
@@ -36,11 +42,11 @@ func main() {
 		parse   = flag.Bool("parse", false, "print the syntax tree and exit")
 		command = flag.String("c", "", "run the given command (not implemented)")
 		file    = flag.String("f", "", "read from this file instead of an argument")
-		dialect = flag.String("dialect", "core", "core, posix or bash")
+		dialect = flag.String("dialect", "core", "core, posix, bash, zsh, ksh or dash")
 	)
 	flag.Parse()
 
-	d, err := pickDialect(*dialect)
+	d, sem, err := pickDialect(*dialect)
 	if err != nil {
 		fail(err)
 	}
@@ -60,7 +66,7 @@ func main() {
 			fail(err)
 		}
 	case *command != "":
-		os.Exit(run(*command, d))
+		os.Exit(run(*command, d, sem))
 	default:
 		fail(fmt.Errorf("nothing to do: pass -tokens or -parse with a script, or -f file"))
 	}
@@ -71,16 +77,31 @@ func fail(err error) {
 	os.Exit(exitFailure)
 }
 
-func pickDialect(name string) (syntax.Dialect, error) {
+// pickDialect resolves a name to a grammar and a semantics.
+//
+// They are chosen together because they answer different questions about the
+// same shell: which constructs it accepts, and what it means by them. Only
+// `core` names a grammar with no shell behind it — there is no core
+// *semantics*, because semantic differences are conflicts and an intersection
+// of conflicting answers does not exist. It is paired with bash's, which is
+// what a script was almost certainly written against.
+func pickDialect(name string) (syntax.Dialect, interp.Semantics, error) {
 	switch name {
 	case "core":
-		return syntax.Core(), nil
+		return syntax.Core(), interp.BashSemantics(), nil
 	case "posix":
-		return syntax.POSIX(), nil
+		return syntax.POSIX(), interp.PosixSemantics(), nil
 	case "bash":
-		return syntax.Bash(), nil
+		return syntax.Bash(), interp.BashSemantics(), nil
+	case "zsh":
+		return syntax.Core(), interp.ZshSemantics(), nil
+	case "ksh":
+		return syntax.Core(), interp.KshSemantics(), nil
+	case "dash":
+		return syntax.POSIX(), interp.DashSemantics(), nil
 	}
-	return syntax.Dialect{}, fmt.Errorf("unknown dialect %q: want core, posix or bash", name)
+	return syntax.Dialect{}, interp.Semantics{},
+		fmt.Errorf("unknown dialect %q: want core, posix, bash, zsh, ksh or dash", name)
 }
 
 func source(file string, args []string) (string, error) {
@@ -442,7 +463,7 @@ func condString(c syntax.CondExpr) string {
 }
 
 // run parses and executes a command, returning the status to exit with.
-func run(src string, d syntax.Dialect) int {
+func run(src string, d syntax.Dialect, sem interp.Semantics) int {
 	p := syntax.NewParser(src, d)
 	f := p.Parse()
 	if err := p.Err(); err != nil {
@@ -452,7 +473,7 @@ func run(src string, d syntax.Dialect) int {
 		return 2
 	}
 
-	r := &interp.Runner{}
+	r := &interp.Runner{Dialect: &d, Semantics: &sem}
 	status, err := r.Run(context.Background(), f)
 	if err != nil {
 		// Refused rather than silently doing nothing: a shell that quietly

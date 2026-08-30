@@ -50,10 +50,20 @@ type Dialect struct {
 	// different program.
 	ArithCommand bool
 
-	// FunctionKeyword enables `function name { ... }`. Absent from dash. The
-	// hybrid `function name() { ... }` is accepted where this is on, and is
-	// not core because ksh93 — where the keyword originated — rejects it.
+	// FunctionKeyword enables `function name { ... }`. Absent from dash,
+	// present in bash, ksh93 and zsh.
 	FunctionKeyword bool
+
+	// FunctionKeywordParens enables the hybrid `function name() { ... }`.
+	// bash and zsh accept it; ksh93 — where the keyword originated — rejects
+	// it, so it is not core.
+	//
+	// It is a second flag rather than part of FunctionKeyword because the
+	// two forms are accepted by different sets of shells, and a flag that
+	// answers for both cannot be given a value for ksh93. The distinction
+	// was documented on FunctionKeyword before anything enforced it, which
+	// is how ksh93 came to accept a form it rejects.
+	FunctionKeywordParens bool
 
 	// ParamSubstitution enables `${x/pat/rep}` and its anchored forms.
 	// Absent from dash.
@@ -68,10 +78,17 @@ type Dialect struct {
 	// the core.
 	ParamCaseChange bool
 
-	// ParamIndirection enables `${!x}`. bash alone means indirection by it.
-	// ksh93 accepts it and means something else without erring, which is why
-	// a dialect without this must *refuse* the construct rather than guess:
-	// picking either meaning would be wrong for half the panel.
+	// ParamIndirection enables `${!x}` to *parse*. bash and ksh93 accept it;
+	// dash and zsh reject it outright.
+	//
+	// What it then means is not this file's question, and separating the two
+	// is what finally made the construct expressible. It is the panel's
+	// clearest three-way divergence — bash indirects, ksh93 yields the name,
+	// dash and zsh error — and a single flag could not carry three answers.
+	// Split into "does it parse" here and "what does it mean" in the
+	// semantics vector, each half is binary. That is the grammar/semantics
+	// split doing the work it was introduced for, on the case that motivated
+	// it.
 	ParamIndirection bool
 
 	// ArithIncDec enables `++` and `--`. Not POSIX; dash rejects them.
@@ -96,6 +113,11 @@ type Dialect struct {
 	// ArithFloat enables floating point, which ksh93 and zsh have and POSIX
 	// does not.
 	ArithFloat bool
+
+	// ArrayLiteral enables `a=(x y)`. Absent from dash, where the `(` is a
+	// syntax error rather than a different construct — so unlike `&>`, this
+	// one is safe to be wrong about loudly.
+	ArrayLiteral bool
 
 	// DoubleBracket enables `[[ ... ]]`.
 	//
@@ -125,6 +147,7 @@ func Core() Dialect {
 		ArithCommand:      true,
 		DoubleBracket:     true,
 		FunctionKeyword:   true,
+		ArrayLiteral:      true,
 		ParamSubstitution: true,
 		ParamSubstring:    true,
 
@@ -140,9 +163,25 @@ func Core() Dialect {
 // the right setting for a portability check and the wrong one for a runtime.
 func POSIX() Dialect { return Dialect{} }
 
+// Zsh is Core plus the hybrid function form, which ksh93 alone rejects.
+func Zsh() Dialect {
+	d := Core()
+	d.FunctionKeywordParens = true
+	return d
+}
+
+// Ksh is Core plus `${!x}`, which ksh93 parses and reads as the name itself.
+// The meaning is the interpreter's; this only says it is not a syntax error.
+func Ksh() Dialect {
+	d := Core()
+	d.ParamIndirection = true
+	return d
+}
+
 // Bash is Core plus what only bash has.
 func Bash() Dialect {
 	d := Core()
+	d.FunctionKeywordParens = true
 	d.CaseContinue = true
 	d.ParamCaseChange = true
 	d.ParamIndirection = true

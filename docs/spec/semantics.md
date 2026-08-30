@@ -22,6 +22,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | a fatal error exits | **2** | 1 | 1 | 1 |
 | a name-shaped value is re-evaluated | **no** | yes | **no** | yes |
 | an invalid octal digit is an error | yes | yes | **no** | *n/a* |
+| `${!x}` is the name, not the value | *n/a* | no | **yes** | *n/a* |
 | arithmetic does floating point | no | no | **yes** | **yes** |
 | quoting a `=~` regex makes it literal | *n/a* | **yes** | no | no |
 | array index base | *n/a* | 0 | 0 | **1** |
@@ -66,6 +67,7 @@ Group the shells by which side of each axis they fall on:
     `[^…]` negates       {dash}
     leading zero octal   {zsh}
     fatal error status   {dash}
+    `${!x}` is the name  {ksh93}
     name value recurses  {dash, ksh93}
     bad octal digit      {ksh93}
     arithmetic floats    {ksh93, zsh}
@@ -80,7 +82,7 @@ Group the shells by which side of each axis they fall on:
     readonly continues   {bash}
     shift survives       {bash, zsh}
 
-Eight distinct groupings across twenty-one axes: `{zsh}`, `{dash,zsh}`,
+Eight distinct groupings across twenty-two axes: `{zsh}`, `{dash,zsh}`,
 `{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`, `{dash,ksh93}` and
 `{dash}` — the last of which `${#@}` now produces on its own, where
 previously it appeared only as the modern-ksh reading of the `&>` axis.
@@ -174,10 +176,23 @@ With `x=y` and `y=V`:
     zsh    →  error
     ksh93  →  x      neither, and not an error
 
-Three answers rather than two. The vector can express it — a field is not
-required to be a bool — but the framing "which side is each shell on"
-cannot, and every earlier axis happened to be binary. Recorded here so the
-table is not mistaken for the shape of the problem.
+Three answers rather than two, and the framing "which side is each shell
+on" cannot hold them.
+
+It is now expressed, and the way it was expressed is the argument for the
+whole grammar/semantics split rather than a workaround for one construct.
+The three answers are not three answers to one question. They are two
+answers to two questions:
+
+    does `${!x}` parse?        bash yes, ksh93 yes, dash no, zsh no
+    does it yield the name?    ksh93 yes, bash no
+
+The first is grammar and additive — a construct parses or it does not —
+so it is `Dialect.ParamIndirection`. The second is semantics and a
+conflict, so it is `IndirectionYieldsName`. Each half is binary. Nothing
+needed a third state; what was needed was noticing that one field was
+being asked two questions, which is the same fault as
+`ArithLeadingZeroIsOctal` and was found the same way.
 
 It is also the third measured instance of a divergence that does not
 announce itself, after `&>` and `[[ ]]`. A fourth was in
@@ -188,8 +203,8 @@ and is now in the table above as `ArithNameValueRecurses`; it sat in the
 interpreter as a comment saying "following the two that agree" until
 something made it fail out loud.
 
-`${!x}` is not the only non-binary axis. An **unterminated bracket
-expression** is a second, and it is load-bearing rather than exotic,
+An **unterminated bracket expression** is the one genuinely non-binary
+question left, and it is load-bearing rather than exotic,
 because `[` is the name of the test builtin:
 
     case "[" in [) echo hit;; *) echo miss;; esac
@@ -206,9 +221,14 @@ recorded in the corpus as `pat/unterminated-bracket` and is not yet
 answered, because answering it needs the non-binary shape this section
 describes rather than another bool.
 
-Two non-binary axes out of twenty-three measured questions is no longer a
-single exception, which is the argument for changing `Answer` before a
-third arrives.
+A second candidate has since appeared and it is not a yes-or-no at all:
+**the exit status of a syntax error** is 2 in dash and bash, 3 in ksh93
+and 1 in zsh. That is a value, not a side, and it is what every remaining
+behavioural mismatch against ksh93 and three of five against zsh come
+down to. It belongs with the diagnostic text rather than here — a shell
+that owns its wording owns its status — so it is the first thing the
+diagnostics seam has to carry, and the reason that seam cannot be
+cosmetic.
 
 The most dangerous of them all is in that document too, and it is binary,
 so it is in the table above: **a leading zero means octal everywhere but

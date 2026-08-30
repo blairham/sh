@@ -120,6 +120,15 @@ type Semantics struct {
 	//
 	// zsh never reaches this: nothing there made the zero octal.
 	ArithInvalidOctalDigitIsError Answer
+	// IndirectionYieldsName makes `${!x}` the *name* rather than the value it
+	// names: with `x=y`, ksh93 gives `x` and bash gives the value of `y`.
+	//
+	// Only reachable where the grammar parses `${!x}` at all, which is bash
+	// and ksh93 — dash and zsh reject it. That is the point: a three-way
+	// divergence became a grammar flag plus a binary axis, and neither half
+	// needed a third state. `semantics.md` records `${!x}` as the axis the
+	// binary table could not express; this is the shape that expresses it.
+	IndirectionYieldsName Answer
 	// ArithFloat evaluates floating point. True in ksh93 and zsh, where POSIX
 	// says integers only.
 	ArithFloat Answer
@@ -227,6 +236,7 @@ func BashSemantics() Semantics {
 	s.AssignmentPrefixPersistsOnSpecialBuiltin = No
 	s.FatalErrorStatusIsOne = Yes
 	s.ArithNameValueRecurses = Yes
+	s.IndirectionYieldsName = No
 	s.ReadonlyReassignmentFatal = No
 	s.ShiftPastEndFatal = No
 	s.RegexQuotingMakesLiteral = Yes
@@ -261,6 +271,7 @@ func KshSemantics() Semantics {
 	s.ArithFloat = Yes
 	s.FatalErrorStatusIsOne = Yes
 	s.ArithInvalidOctalDigitIsError = No
+	s.IndirectionYieldsName = Yes
 	s.LastPipelineElementInCurrentShell = Yes
 	return s
 }

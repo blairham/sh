@@ -4,10 +4,14 @@
 package interp
 
 import (
+	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // TestFatalErrorsAbandonTheScript covers the three unrelated failures that
@@ -154,5 +158,29 @@ func TestCoreRefusesTheNewAxes(t *testing.T) {
 		if _, st := run(t, src, withSem(CoreSemantics())); st != 2 {
 			t.Errorf("%s under the core: status = %d, want a refusal", src, st)
 		}
+	}
+}
+
+// TestIndirectionMeaningIsAnAxis is the semantics half of the three-way
+// `${!x}` divergence; the grammar half is asserted in the syntax package.
+// Together they express three answers with two binary questions.
+func TestIndirectionMeaningIsAnAxis(t *testing.T) {
+	const src = `x=y; y=V; printf "[%s]" "${!x}"`
+	f, err := syntax.Parse(src, syntax.Ksh())
+	if err != nil {
+		t.Fatalf("ksh should parse ${!x}: %v", err)
+	}
+	var buf bytes.Buffer
+	sem := KshSemantics()
+	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem}
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	if buf.String() != "[x]" {
+		t.Errorf("ksh93 yields the name: got %q, want %q", buf.String(), "[x]")
+	}
+	// bash reads through it, which is the whole disagreement.
+	if got, _ := runBash(t, src); got != "[V]" {
+		t.Errorf("bash indirects: got %q, want %q", got, "[V]")
 	}
 }

@@ -243,7 +243,19 @@ func printNode(n syntax.Node, depth int) {
 	case *syntax.SimpleCmd:
 		fmt.Printf("%s%-8s command\n", pad, x.Pos())
 		for _, a := range x.Assigns {
-			fmt.Printf("%s  %-8s assign %s=%s\n", pad, a.Pos(), a.Name, a.Value.Literal())
+			switch {
+			case a.IsArray:
+				var els []string
+				for _, e := range a.Elems {
+					els = append(els, e.Literal())
+				}
+				fmt.Printf("%s  %-8s assign %s=(%s)\n", pad, a.Pos(), a.Name, strings.Join(els, " "))
+			case a.Index != nil:
+				fmt.Printf("%s  %-8s assign %s[%s]=%s\n", pad, a.Pos(), a.Name,
+					a.Index.Literal(), a.Value.Literal())
+			default:
+				fmt.Printf("%s  %-8s assign %s=%s\n", pad, a.Pos(), a.Name, a.Value.Literal())
+			}
 		}
 		for _, w := range x.Args {
 			fmt.Printf("%s  %-8s word %s\n", pad, w.Pos(), w.Literal())

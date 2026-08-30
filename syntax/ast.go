@@ -141,6 +141,13 @@ func (w *Word) Literal() string {
 type Assign struct {
 	Name  string
 	Value *Word // nil for a bare `name=`
+	// Elems is `name=( … )`, and IsArray distinguishes an empty array from a
+	// bare `name=` — `a=()` and `a=` are different states, exactly as an
+	// absent `for` list differs from an empty one.
+	Elems   []*Word
+	IsArray bool
+	// Index is the subscript of `name[i]=value`, nil otherwise.
+	Index *Word
 	Start Pos
 	Stop  Pos
 }

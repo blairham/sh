@@ -337,6 +337,13 @@ func isAssign(t Token) (string, bool) {
 		return "", false
 	}
 	name := head[:eq]
+	// `name[i]=` is an assignment too; the subscript is unpacked later.
+	if i := strings.IndexByte(name, '['); i >= 0 && strings.HasSuffix(name, "]") {
+		if !isName(name[:i]) {
+			return "", false
+		}
+		return name, true
+	}
 	if !isName(name) {
 		return "", false
 	}
@@ -401,6 +408,15 @@ func (p *Parser) parseSimple() Command {
 
 func (p *Parser) parseAssign(name string) *Assign {
 	a := &Assign{Name: name, Start: p.tok.Pos}
+	// `name[i]=value`: the subscript is part of the name half, which the
+	// assignment scan already left in place.
+	if i := strings.IndexByte(name, '['); i >= 0 && strings.HasSuffix(name, "]") {
+		a.Name = name[:i]
+		a.Index = &Word{
+			Spans: []Span{{Kind: Literal, Value: name[i+1 : len(name)-1], Pos: p.tok.Pos}},
+			Start: p.tok.Pos, Stop: p.tok.End,
+		}
+	}
 	head := p.tok.Spans[0].Value
 	rest := head[strings.IndexByte(head, '=')+1:]
 
@@ -414,12 +430,37 @@ func (p *Parser) parseAssign(name string) *Assign {
 		a.Value = p.newWord(spans, p.tok.Pos, p.tok.End)
 	}
 	p.next()
+
+	// `a=(1 2)` is an array. The parenthesis has to be adjacent: with a space
+	// it is an assignment followed by a subshell, which is what `a= (echo x)`
+	// means and is why this is not simply "a paren follows".
+	if a.Value == nil && p.at(TokLeftParen) && p.tok.Pos.Offset == a.Stop.Offset {
+		a.IsArray = true
+		p.next()
+		p.skipNewlines()
+		for p.tok.Kind == TokWord && p.err == nil {
+			a.Elems = append(a.Elems, p.word())
+			p.skipNewlines()
+		}
+		if !p.at(TokRightParen) {
+			p.fail("expected ) to close an array assignment")
+			return a
+		}
+		a.Stop = p.tok.End
+		p.next()
+	}
 	return a
 }
 
 // looksLikeFuncDef reports whether the current word begins `name()`.
 func (p *Parser) looksLikeFuncDef() bool {
 	if p.tok.IsQuoted() || len(p.tok.Spans) != 1 || p.tok.Spans[0].Kind != Literal {
+		return false
+	}
+	// A function name is a name, so it cannot contain `=`. Without this,
+	// `a=()` — an empty array — was read as a definition of a function
+	// called `a=`, because a parenthesis pair follows either way.
+	if !isName(p.tok.Literal()) {
 		return false
 	}
 	return p.lex.peekIsFuncParens()

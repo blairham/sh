@@ -128,6 +128,21 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 		return nil, false
 	}
 	e := s.Param
+	// `${a[@]}` is one field per element for the same reason `"$@"` is one
+	// per parameter: joining them would lose an element containing a space.
+	if e.Index != nil && e.Op == syntax.ParamNone && !e.Length {
+		if elems, ok := r.arraySubscript(e); ok {
+			if s.Quoting != syntax.Unquoted {
+				return elems, true
+			}
+			ifs, set := r.ifs()
+			var out []string
+			for _, el := range elems {
+				out = append(out, splitFields(el, ifs, set)...)
+			}
+			return out, true
+		}
+	}
 	if e.Name != "@" || e.Op != syntax.ParamNone || e.Length {
 		return nil, false
 	}
@@ -221,6 +236,24 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	if e == nil {
 		return ""
 	}
+	// An array subscript supplies a value too, and the operators apply to it
+	// exactly as they do to a variable.
+	if e.Index != nil {
+		if elems, ok := r.arraySubscript(e); ok {
+			if e.Length {
+				// `${#a[@]}` is the number of elements; `${#a[0]}` is the
+				// length of one. The subscript decides which question was
+				// asked, which is why this is here rather than below.
+				idx := strings.TrimSpace(r.joinWord(e.Index))
+				if idx == "@" || idx == "*" {
+					return itoa(len(elems))
+				}
+				return itoa(len(strings.Join(elems, "")))
+			}
+			return strings.Join(elems, " ")
+		}
+	}
+
 	// A special parameter supplies a *value*; it does not skip the operators.
 	// Returning here was a bug: `${1##*/}` left its argument untouched,
 	// because the positional parameter answered and the trim never ran.

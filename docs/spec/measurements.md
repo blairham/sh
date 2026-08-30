@@ -701,3 +701,69 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   a=(p q r); printf "[%s]" "${a[1]}" "${#a[@]}"
   ```
+
+## pattern matching
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `pat/star-matches-dot-in-case` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` |
+| `pat/star-skips-leading-dot-in-glob` | `[vis]` | `[vis]` | `[vis]` | `[vis]` | `[vis]` | `[vis]` |
+| `pat/star-matches-slash-in-case` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` |
+| `pat/star-stops-at-slash-in-glob` | `[*f]` | `[*f]` | `[*f]` | `[*f]` | `[*f]` | `<shell>:1: no matches found: *f` *(status 1)* |
+| `pat/only-a-leading-period-is-special` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` |
+| `pat/bracket-set-and-range` | `set range` | `set range` | `set range` | `set range` | `set range` | `set range` |
+| `pat/bracket-bang-negates-everywhere` | `negated` | `negated` | `negated` | `negated` | `negated` | `negated` |
+| `pat/bracket-caret-is-an-extension` | `no-caret` | `caret` | `caret` | `caret` | `caret` | `caret` |
+| `pat/character-class` | `class` | `class` | `class` | `class` | `class` | `class` |
+| `pat/escaped-metacharacter-is-literal` | `escaped no` | `escaped no` | `escaped no` | `escaped no` | `escaped no` | `escaped no` |
+| `pat/quoting-decides-pattern-or-literal` | `pattern literal-no` | `pattern literal-no` | `pattern literal-no` | `pattern literal-no` | `pattern literal-no` | `pattern literal-no` |
+| `pat/extended-patterns-are-not-core` | `<shell>: 1: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case abc in @(abc\|xyz)) echo at;; esac'` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case abc in @(abc\|xyz)) echo at;; esac'` *(status 2)* | `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `case abc in @(abc\|xyz)) echo at;; esac'` *(status 2)* | `at` | *(no output, status 0)* |
+
+- `pat/star-matches-dot-in-case` — in case there is no filesystem, so nothing restricts the star
+  ```sh
+  case .hidden in *) echo star-matches-dot;; esac
+  ```
+- `pat/star-skips-leading-dot-in-glob` — the same pattern in pathname expansion skips a leading period — the restriction belongs to the context, not to the pattern
+  ```sh
+  touch .hidden vis; printf "[%s]" *
+  ```
+- `pat/star-matches-slash-in-case` — and nothing stops it crossing a slash either, because there are no components
+  ```sh
+  case a/b in a*b) echo star-matches-slash;; esac
+  ```
+- `pat/star-stops-at-slash-in-glob` — in pathname expansion it cannot cross a directory boundary; an unmatched pattern is passed through, except in zsh
+  ```sh
+  mkdir s; touch s/f; printf "[%s]" *f
+  ```
+- `pat/only-a-leading-period-is-special` — only a leading period, so a star matches one in the middle of a name
+  ```sh
+  touch a.b; printf "[%s]" *.b
+  ```
+- `pat/bracket-set-and-range` — the two universal bracket forms
+  ```sh
+  case b in [abc]) printf set;; esac; case c in [a-z]) printf " range";; esac
+  ```
+- `pat/bracket-bang-negates-everywhere` — ! is the portable negation
+  ```sh
+  case d in [!abc]) echo negated;; esac
+  ```
+- `pat/bracket-caret-is-an-extension` — ^ negates everywhere but dash, where it is an ordinary character — so the pattern still matches, just not what was meant
+  ```sh
+  case d in [^abc]) echo caret;; *) echo no-caret;; esac
+  ```
+- `pat/character-class` — POSIX character classes are universal
+  ```sh
+  case 5 in [[:digit:]]) echo class;; esac
+  ```
+- `pat/escaped-metacharacter-is-literal` — an escaped star matches a literal star and nothing else
+  ```sh
+  case "a*b" in a\*b) printf escaped;; esac; case axb in a\*b) printf " matched";; *) printf " no";; esac
+  ```
+- `pat/quoting-decides-pattern-or-literal` — per-span quoting reaches all the way into matching, so a pattern is a word rather than a string
+  ```sh
+  p="a*b"; case "a*b" in $p) printf pattern;; esac; case axb in "$p") printf " literal-matched";; *) printf " literal-no";; esac
+  ```
+- `pat/extended-patterns-are-not-core` — ksh93 alone accepts them as written; dash and bash report a syntax error and zsh parses but does not match — three behaviours, so not core
+  ```sh
+  case abc in @(abc|xyz)) echo at;; esac
+  ```

@@ -30,10 +30,15 @@ type Case struct {
 	// behaviour depends on how input is read, and say why.
 	Script bool
 
-	// SyntaxError marks a case the reference shells *reject*. The corpus
-	// records rejections as well as successes — a rule is only pinned by
-	// showing both sides of it — so a consumer checking that every snippet
-	// parses has to know which ones must not.
+	// SyntaxError marks a case that does not parse **under the bash
+	// dialect**, which is the one the parser's conformance test uses. The
+	// corpus records rejections as well as successes, because a rule is only
+	// pinned by showing both sides of it.
+	//
+	// Bash rather than "the shells" because rejection is not always
+	// unanimous: `@(abc|xyz)` is a syntax error in dash and bash, accepted by
+	// ksh93, and parsed-but-unmatched by zsh. Naming the dialect makes the
+	// flag answerable; naming the panel would not.
 	SyntaxError bool
 }
 
@@ -670,5 +675,66 @@ var Corpus = []Case{
 		ID: "param/array-element-inherits-the-base", Category: "parameter expansion",
 		Snippet: `a=(p q r); printf "[%s]" "${a[1]}" "${#a[@]}"`,
 		Why:     "array subscripting inherits the 0-versus-1 base axis",
+	},
+	// --- pattern matching -----------------------------------------------------
+	{
+		ID: "pat/star-matches-dot-in-case", Category: "pattern matching",
+		Snippet: `case .hidden in *) echo star-matches-dot;; esac`,
+		Why:     "in case there is no filesystem, so nothing restricts the star",
+	},
+	{
+		ID: "pat/star-skips-leading-dot-in-glob", Category: "pattern matching",
+		Snippet: `touch .hidden vis; printf "[%s]" *`,
+		Why:     "the same pattern in pathname expansion skips a leading period — the restriction belongs to the context, not to the pattern",
+	},
+	{
+		ID: "pat/star-matches-slash-in-case", Category: "pattern matching",
+		Snippet: `case a/b in a*b) echo star-matches-slash;; esac`,
+		Why:     "and nothing stops it crossing a slash either, because there are no components",
+	},
+	{
+		ID: "pat/star-stops-at-slash-in-glob", Category: "pattern matching",
+		Snippet: `mkdir s; touch s/f; printf "[%s]" *f`,
+		Why:     "in pathname expansion it cannot cross a directory boundary; an unmatched pattern is passed through, except in zsh",
+	},
+	{
+		ID: "pat/only-a-leading-period-is-special", Category: "pattern matching",
+		Snippet: `touch a.b; printf "[%s]" *.b`,
+		Why:     "only a leading period, so a star matches one in the middle of a name",
+	},
+	{
+		ID: "pat/bracket-set-and-range", Category: "pattern matching",
+		Snippet: `case b in [abc]) printf set;; esac; case c in [a-z]) printf " range";; esac`,
+		Why:     "the two universal bracket forms",
+	},
+	{
+		ID: "pat/bracket-bang-negates-everywhere", Category: "pattern matching",
+		Snippet: `case d in [!abc]) echo negated;; esac`,
+		Why:     "! is the portable negation",
+	},
+	{
+		ID: "pat/bracket-caret-is-an-extension", Category: "pattern matching",
+		Snippet: `case d in [^abc]) echo caret;; *) echo no-caret;; esac`,
+		Why:     "^ negates everywhere but dash, where it is an ordinary character — so the pattern still matches, just not what was meant",
+	},
+	{
+		ID: "pat/character-class", Category: "pattern matching",
+		Snippet: `case 5 in [[:digit:]]) echo class;; esac`,
+		Why:     "POSIX character classes are universal",
+	},
+	{
+		ID: "pat/escaped-metacharacter-is-literal", Category: "pattern matching",
+		Snippet: `case "a*b" in a\*b) printf escaped;; esac; case axb in a\*b) printf " matched";; *) printf " no";; esac`,
+		Why:     "an escaped star matches a literal star and nothing else",
+	},
+	{
+		ID: "pat/quoting-decides-pattern-or-literal", Category: "pattern matching",
+		Snippet: `p="a*b"; case "a*b" in $p) printf pattern;; esac; case axb in "$p") printf " literal-matched";; *) printf " literal-no";; esac`,
+		Why:     "per-span quoting reaches all the way into matching, so a pattern is a word rather than a string",
+	},
+	{
+		ID: "pat/extended-patterns-are-not-core", SyntaxError: true, Category: "pattern matching",
+		Snippet: `case abc in @(abc|xyz)) echo at;; esac`,
+		Why:     "ksh93 alone accepts them as written; dash and bash report a syntax error and zsh parses but does not match — three behaviours, so not core",
 	},
 }

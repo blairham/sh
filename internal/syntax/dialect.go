@@ -1,0 +1,71 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+package syntax
+
+// Dialect says which constructs the lexer accepts.
+//
+// Fields are named for the construct rather than for the shell that wants it,
+// which docs/spec/semantics.md requires and which the measurements insist on:
+// ksh93 accepts `&>` or does not depending on which build is installed, twelve
+// years apart under the same name, so a field called `Ksh` could not be given
+// a value. A field called [Dialect.AmpersandRedirect] can.
+//
+// Grammar differences are additive — a construct either parses or it does not
+// — which is why this is a set of flags. Semantic differences, where the same
+// syntax means different things, are not additive and do not belong here; they
+// are the interpreter's problem and get their own vector.
+type Dialect struct {
+	// AmpersandRedirect enables `&>` and `&>>`, which redirect both streams.
+	//
+	// This is the one to be careful with. Where it is off, `echo hi &>b` is
+	// not an error: it is `echo hi &` — a background command — followed by
+	// `>b`, which truncates the file. The command runs, its output goes
+	// elsewhere, and nothing is reported. Accepting the union of dialects
+	// here would silently pick one meaning for text that legitimately has
+	// two.
+	AmpersandRedirect bool
+
+	// CaseFallthrough enables `;&`, which runs the next case body. Absent
+	// from dash, and from bash before 4.0 — so it cannot be reached through
+	// macOS's /bin/sh.
+	CaseFallthrough bool
+
+	// CaseContinue enables `;;&`, which keeps testing later patterns. bash
+	// only: ksh93 and zsh both reject it, so it is not core.
+	CaseContinue bool
+
+	// DollarSingleQuote enables `$'...'`, where backslash escapes are
+	// interpreted. Absent from dash.
+	DollarSingleQuote bool
+
+	// Herestring enables `<<<`. Absent from dash.
+	Herestring bool
+}
+
+// Core is the common denominator of real shells: what dash, bash, ksh93 and
+// zsh agree on, minus dash, whose absence is the decision recorded in
+// docs/spec/core.md.
+//
+// CaseContinue is off because it is bash-only. Everything else here is
+// something every non-dash shell in the reference panel accepts.
+func Core() Dialect {
+	return Dialect{
+		AmpersandRedirect: true,
+		CaseFallthrough:   true,
+		DollarSingleQuote: true,
+		Herestring:        true,
+	}
+}
+
+// POSIX is the specification's shell language and nothing else. It is
+// deliberately narrower than any shell anyone actually runs, which makes it
+// the right setting for a portability check and the wrong one for a runtime.
+func POSIX() Dialect { return Dialect{} }
+
+// Bash is Core plus what only bash has.
+func Bash() Dialect {
+	d := Core()
+	d.CaseContinue = true
+	return d
+}

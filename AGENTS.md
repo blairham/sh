@@ -115,8 +115,18 @@ must be **up to date** with `main` first:
     Lint
     Pre-commit
 
-Merges are **squash only** — linear history is enforced, and force pushes
-and branch deletion are blocked. Commits must be signed.
+Merges are **squash only** — linear history is enforced, and the merge and
+rebase buttons are turned off so the UI cannot offer what protection would
+reject. Force pushes and deletion of `main` are blocked, and commits must
+be signed.
+
+**Head branches are deleted automatically on merge**, so `--delete-branch`
+is belt-and-braces rather than the thing that does the work. Remove the
+sibling worktree when the pull request opens, not when it merges; the
+branch will be gone by then either way.
+
+Auto-merge is enabled, so a pull request can be queued to land the moment
+its required checks go green.
 
 **Build, test and lint only do work when Go changed.** A pull request
 touching only `docs/` runs them as no-ops. Pre-commit always runs in full,

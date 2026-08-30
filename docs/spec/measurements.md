@@ -615,3 +615,89 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   (( 2 > 1 )) && echo gt
   ```
+
+## parameter expansion
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `param/colon-extends-the-test-unset` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` |
+| `param/colon-extends-the-test-empty` | `[D][]` | `[D][]` | `[D][]` | `[D][]` | `[D][]` | `[D][]` |
+| `param/plus-is-the-mirror` | `[][][A][][A][A]` | `[][][A][][A][A]` | `[][][A][][A][A]` | `[][][A][][A][A]` | `[][][A][][A][A]` | `[][][A][][A][A]` |
+| `param/assign-has-a-side-effect` | `[V][V]` | `[V][V]` | `[V][V]` | `[V][V]` | `[V][V]` | `[V][V]` |
+| `param/word-is-itself-expanded` | `[DEF][sub]` | `[DEF][sub]` | `[DEF][sub]` | `[DEF][sub]` | `[DEF][sub]` | `[DEF][sub]` |
+| `param/prefix-shortest-and-longest` | `[b.c][c]` | `[b.c][c]` | `[b.c][c]` | `[b.c][c]` | `[b.c][c]` | `[b.c][c]` |
+| `param/suffix-shortest-and-longest` | `[a.b][a]` | `[a.b][a]` | `[a.b][a]` | `[a.b][a]` | `[a.b][a]` | `[a.b][a]` |
+| `param/pattern-is-a-glob` | `[bc][bc][abc]` | `[bc][bc][abc]` | `[bc][bc][abc]` | `[bc][bc][abc]` | `[bc][bc][abc]` | `[bc][bc][abc]` |
+| `param/length-of-a-value` | `[4]` | `[4]` | `[4]` | `[4]` | `[4]` | `[4]` |
+| `param/length-of-special-diverges` | `[5][5]` | `[3][3]` | `[3][3]` | `[3][3]` | `[3][3]` | `[3][3]` |
+| `param/substitution` | `<shell>: 1: Bad substitution` *(status 2)* | `[a+b-c][a+b+c]` | `[a+b-c][a+b+c]` | `[a+b-c][a+b+c]` | `[a+b-c][a+b+c]` | `[a+b-c][a+b+c]` |
+| `param/substitution-anchored` | `<shell>: 1: Bad substitution` *(status 2)* | `[X-b][a-Y]` | `[X-b][a-Y]` | `[X-b][a-Y]` | `[X-b][a-Y]` | `[X-b][a-Y]` |
+| `param/substring` | `<shell>: 1: Bad substitution` *(status 2)* | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` |
+| `param/case-change-is-bash-only` | `<shell>: 1: Bad substitution` *(status 2)* | `[ABC][abc]` | `[ABC][abc]` | `<shell>: ${x^^}: bad substitution` *(status 1)* | `<shell>: syntax error at line 1: `^' unexpected` *(status 3)* | `<shell>:1: bad substitution` *(status 1)* |
+| `param/indirection-diverges-four-ways` | `<shell>: 1: Bad substitution` *(status 2)* | `[V]` | `[V]` | `[V]` | `[x]` | `<shell>:1: bad substitution` *(status 1)* |
+| `param/array-element-inherits-the-base` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[q][3]` | `[q][3]` | `[q][3]` | `[q][3]` | `[p][3]` |
+
+- `param/colon-extends-the-test-unset` — with the variable unset both forms fire, so this row alone proves nothing — it is the pair with the next case that does
+  ```sh
+  unset u; printf "[%s]" "${u:-D}" "${u-D}"
+  ```
+- `param/colon-extends-the-test-empty` — the colon is the whole difference: it extends the test from unset to unset-or-empty
+  ```sh
+  e=; printf "[%s]" "${e:-D}" "${e-D}"
+  ```
+- `param/plus-is-the-mirror` — + fires when the test does not, and the colon shifts it the same way
+  ```sh
+  unset u; e=; s=S; printf "[%s]" "${u:+A}" "${e:+A}" "${s:+A}" "${u+A}" "${e+A}" "${s+A}"
+  ```
+- `param/assign-has-a-side-effect` — := leaves the variable set afterwards — the only expansion here with a side effect
+  ```sh
+  unset u; printf "[%s]" "${u:=V}"; printf "[%s]" "$u"
+  ```
+- `param/word-is-itself-expanded` — the word is a word, not a literal, so the AST cannot store it as a string
+  ```sh
+  unset u; d=DEF; printf "[%s]" "${u:-$d}" "${u:-$(echo sub)}"
+  ```
+- `param/prefix-shortest-and-longest` — doubling the operator selects the longer match; there is no greediness syntax in the pattern
+  ```sh
+  p=a.b.c; printf "[%s]" "${p#*.}" "${p##*.}"
+  ```
+- `param/suffix-shortest-and-longest` — the same rule from the other end
+  ```sh
+  p=a.b.c; printf "[%s]" "${p%.*}" "${p%%.*}"
+  ```
+- `param/pattern-is-a-glob` — patterns are globs rather than regular expressions, and one that does not match removes nothing
+  ```sh
+  p=abc; printf "[%s]" "${p#[ab]}" "${p#?}" "${p#x}"
+  ```
+- `param/length-of-a-value` — the length of the value
+  ```sh
+  x=abcd; printf "[%s]" "${#x}"
+  ```
+- `param/length-of-special-diverges` — dash gives the length of the joined string where the others give the count — the first axis where dash stands alone, and silent because both answers are plausible numbers
+  ```sh
+  set -- p q r; printf "[%s]" "${#@}" "${#*}"
+  ```
+- `param/substitution` — replace first versus replace every; absent from dash
+  ```sh
+  x=a-b-c; printf "[%s]" "${x/-/+}" "${x//-/+}"
+  ```
+- `param/substitution-anchored` — anchored to the start and the end of the value
+  ```sh
+  x=a-b; printf "[%s]" "${x/#a/X}" "${x/%b/Y}"
+  ```
+- `param/substring` — offset with and without a length; absent from dash
+  ```sh
+  x=abcdef; printf "[%s]" "${x:1:3}" "${x:2}"
+  ```
+- `param/case-change-is-bash-only` — bash alone: ksh93 reports a syntax error and zsh a bad substitution, so it belongs to the bash dialect rather than the core
+  ```sh
+  x=aBc; printf "[%s]" "${x^^}" "${x,,}"
+  ```
+- `param/indirection-diverges-four-ways` — bash indirects, dash and zsh reject, and ksh93 yields x — not an error there, a different meaning, which is the &> failure mode inside an expansion
+  ```sh
+  x=y; y=V; printf "[%s]" "${!x}"
+  ```
+- `param/array-element-inherits-the-base` — array subscripting inherits the 0-versus-1 base axis
+  ```sh
+  a=(p q r); printf "[%s]" "${a[1]}" "${#a[@]}"
+  ```

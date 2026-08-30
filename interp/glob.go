@@ -46,7 +46,49 @@ func hasUnescapedMeta(s string) bool {
 			i++
 			continue
 		}
-		if strings.IndexByte("*?[", s[i]) >= 0 {
+		if s[i] == '[' {
+			// An unterminated bracket expression is not a pattern: `[` on
+			// its own is a literal in every shell in the panel, which is
+			// what makes `[ a = a ]` run the test builtin rather than being
+			// globbed. Treating it as a metacharacter reported "no matches
+			// found: [" on every use of `test`; the report was ignored until
+			// an unmatched pattern became fatal, and then the builtin
+			// stopped running at all.
+			//
+			// zsh alone goes further and rejects `[a` as a bad pattern where
+			// the others take it literally. That divergence is recorded in
+			// the corpus rather than guessed at here.
+			if closesBracket(s, i) {
+				return true
+			}
+			continue
+		}
+		if s[i] == '*' || s[i] == '?' {
+			return true
+		}
+	}
+	return false
+}
+
+// closesBracket reports whether the bracket expression opened at i is closed.
+//
+// A `!` or `^` directly after the bracket negates, and a `]` directly after
+// that is a literal member rather than the terminator — so `[]]` is a
+// one-member class and `[]` is not a class at all.
+func closesBracket(s string, i int) bool {
+	j := i + 1
+	if j < len(s) && (s[j] == '!' || s[j] == '^') {
+		j++
+	}
+	if j < len(s) && s[j] == ']' {
+		j++
+	}
+	for ; j < len(s); j++ {
+		if s[j] == '\\' {
+			j++
+			continue
+		}
+		if s[j] == ']' {
 			return true
 		}
 	}
@@ -70,8 +112,10 @@ func (r *Runner) glob(field string) []string {
 	}
 	defer func() {
 		if r.globMissed && r.ask(r.sem().GlobNoMatchIsError, "an unmatched pattern being an error") {
-			r.errf("sh: no matches found: %s\n", globUnescape(field))
-			r.status = 1
+			// An error, which in zsh means the command does not run and the
+			// script stops. Reporting it and then passing the pattern
+			// through was the same report-then-continue bug as the others.
+			r.fatal("sh: no matches found: %s\n", globUnescape(field))
 		}
 		r.globMissed = false
 	}()

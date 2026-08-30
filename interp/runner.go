@@ -304,14 +304,17 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// decide, and running on was the silent wrong answer: the corpus case
 		// added for the status axis is what caught it.
 		//
-		// *Which* non-zero status it carries is the axis: dash exits 2 and
-		// the other three exit 1, so that part is asked rather than assumed.
-		if r.ask(r.sem().ArithErrorStatusIsOne, "the exit status of an arithmetic error") {
-			r.status = 1
-		} else {
-			r.status = 2
-		}
-		r.ctl = controlExit
+		// *Which* non-zero status it carries is the axis, asked inside
+		// fatalQuiet. The diagnostic was already written by whoever failed,
+		// so this adds none.
+		r.fatalQuiet()
+		return nil
+	}
+	if r.ctl == controlExit {
+		// An expansion raised a fatal error of its own — an unmatched
+		// pattern, where the dialect calls that an error rather than passing
+		// it through. The command does not run, and nothing below may
+		// overwrite the status it set.
 		return nil
 	}
 
@@ -320,6 +323,12 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// between `x=1` and `x=1 cmd`.
 		for _, a := range c.Assigns {
 			r.assign(a)
+		}
+		if r.ctl == controlExit {
+			// A readonly reassignment is fatal in three of the four shells.
+			// Zeroing the status here is what made it look survivable: the
+			// script stopped, and then reported success for having done so.
+			return nil
 		}
 		r.status = 0
 		return nil
@@ -475,14 +484,37 @@ type scope struct {
 	existed map[string]bool
 }
 
+// fatal reports an error that abandons the script.
+//
+// Every fatal error goes through here so the three things that make one are
+// decided in a single place: the diagnostic, the status — which is an axis,
+// dash saying 2 where the others say 1 — and the unwinding. Setting the
+// status and forgetting the unwinding is the bug this replaces, and it had
+// been written independently at three sites.
+// fatalQuiet is fatal for a failure that has already reported itself.
+func (r *Runner) fatalQuiet() {
+	if r.ask(r.sem().FatalErrorStatusIsOne, "the exit status of a fatal error") {
+		r.status = 1
+	} else {
+		r.status = 2
+	}
+	r.ctl = controlExit
+}
+
+func (r *Runner) fatal(format string, args ...any) {
+	r.errf(format, args...)
+	r.fatalQuiet()
+}
+
 func (r *Runner) setVar(name, value string) {
 	if r.readonly[name] {
-		r.errf("sh: %s: readonly variable\n", name)
 		// Fatal everywhere but bash, measured with a plain assignment in a
 		// script — which is the contaminated-probe case oracle.md records.
 		if r.ask(r.sem().ReadonlyReassignmentFatal, "a readonly reassignment being fatal") {
-			r.ctl = controlExit
+			r.fatal("sh: %s: readonly variable\n", name)
+			return
 		}
+		r.errf("sh: %s: readonly variable\n", name)
 		r.status = 1
 		return
 	}

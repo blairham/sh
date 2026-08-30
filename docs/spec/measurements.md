@@ -714,6 +714,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `pat/star-matches-dot-in-case` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` | `star-matches-dot` |
 | `pat/star-skips-leading-dot-in-glob` | `[vis]` | `[vis]` | `[vis]` | `[vis]` | `[vis]` | `[vis]` |
 | `pat/star-matches-slash-in-case` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` | `star-matches-slash` |
+| `pat/unterminated-bracket` | `miss` | `hit` | `hit` | `hit` | `hit` | `<shell>:1: bad pattern: [` |
+| `pat/unterminated-bracket-globs` | `[~[a` | `[~[a` | `[~[a` | `[~[a` | `[~[a` | `[~<shell>:1: bad pattern: [a` *(status 1)* |
 | `pat/star-stops-at-slash-in-glob` | `[*f]` | `[*f]` | `[*f]` | `[*f]` | `[*f]` | `<shell>:1: no matches found: *f` *(status 1)* |
 | `pat/only-a-leading-period-is-special` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` |
 | `pat/bracket-set-and-range` | `set range` | `set range` | `set range` | `set range` | `set range` | `set range` |
@@ -735,6 +737,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `pat/star-matches-slash-in-case` — and nothing stops it crossing a slash either, because there are no components
   ```sh
   case a/b in a*b) echo star-matches-slash;; esac
+  ```
+- `pat/unterminated-bracket` — a bare `[` is the test builtin's name, so this is load-bearing: bash and ksh93 take it literally and hit, dash matches nothing, zsh calls it a bad pattern
+  ```sh
+  case "[" in [) echo hit;; *) echo miss;; esac
+  ```
+- `pat/unterminated-bracket-globs` — the same question against the filesystem, where all four agree a lone `[` is literal and only zsh rejects `[a`
+  ```sh
+  echo [ ; echo [a
   ```
 - `pat/star-stops-at-slash-in-glob` — in pathname expansion it cannot cross a directory boundary; an unmatched pattern is passed through, except in zsh
   ```sh

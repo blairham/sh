@@ -19,7 +19,9 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | `${#@}` is the count of parameters | **no** | yes | yes | yes |
 | `[^abc]` negates | **no** | yes | yes | yes |
 | a leading zero means octal | yes | yes | yes | **no** |
-| arithmetic error exits | **2** | 1 | 1 | 1 |
+| a fatal error exits | **2** | 1 | 1 | 1 |
+| a name-shaped value is re-evaluated | **no** | yes | **no** | yes |
+| an invalid octal digit is an error | yes | yes | **no** | *n/a* |
 | arithmetic does floating point | no | no | **yes** | **yes** |
 | quoting a `=~` regex makes it literal | *n/a* | **yes** | no | no |
 | array index base | *n/a* | 0 | 0 | **1** |
@@ -63,7 +65,9 @@ Group the shells by which side of each axis they fall on:
     `${#@}` is a count   {dash}
     `[^…]` negates       {dash}
     leading zero octal   {zsh}
-    arith error status   {dash}
+    fatal error status   {dash}
+    name value recurses  {dash, ksh93}
+    bad octal digit      {ksh93}
     arithmetic floats    {ksh93, zsh}
     quoted regex literal {bash}
     brace needs `;`      {zsh}
@@ -76,12 +80,16 @@ Group the shells by which side of each axis they fall on:
     readonly continues   {bash}
     shift survives       {bash, zsh}
 
-Eight distinct groupings across nineteen axes: `{zsh}`, `{dash,zsh}`,
+Eight distinct groupings across twenty-one axes: `{zsh}`, `{dash,zsh}`,
 `{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`, `{dash,ksh93}` and
 `{dash}` — the last of which `${#@}` now produces on its own, where
 previously it appeared only as the modern-ksh reading of the `&>` axis.
 
-The nineteenth axis, the exit status of an arithmetic error, was found by
+Neither new axis adds a grouping: the name-value one lands on
+`{dash, ksh93}` and the octal-digit one on `{ksh93}`, both already
+present. Twenty-one axes, still eight groupings.
+
+The nineteenth axis, the exit status of a fatal error, was found by
 a *test* rather than by the panel sweep: the interpreter had hardcoded 2,
 the conformance run against bash disagreed, and changing the constant to
 bash's 1 would have written one shell's policy into the core. It joins
@@ -94,6 +102,21 @@ therefore *core* behaviour that the substrate can simply implement, and
 only the status is contested — the useful reminder being that a probe
 written to measure one axis reported on two, and the universal half was
 the half the interpreter had wrong.
+
+It was then measured a second time and generalised. A readonly
+reassignment and a `shift` past the end are unrelated to arithmetic and
+to each other, and every shell gives all three failures the *same*
+status — dash 2, the rest 1. The split belongs to the shell, not to the
+error, so the axis is `FatalErrorStatusIsOne` rather than three
+per-error axes. *Which* errors are fatal stays per-error, and there the
+shells genuinely disagree: bash survives a readonly reassignment,
+bash and zsh survive a long `shift`.
+
+The twentieth and twenty-first axes were both already known and both
+recorded as comments in the interpreter rather than as measurements.
+`x=abc; echo $((x+1))` is 1 in bash and zsh, which re-evaluate a
+name-shaped value, and an error in dash and ksh93; the code said "following
+the two that agree", which is the written form of a guess.
 
 That last row is worth its own note: **a panel member is not one thing.**
 ksh93 AJM 93u+ (2012, macOS) and ksh93u+m 1.0.8 (2024, Debian) disagree
@@ -157,10 +180,35 @@ cannot, and every earlier axis happened to be binary. Recorded here so the
 table is not mistaken for the shape of the problem.
 
 It is also the third measured instance of a divergence that does not
-announce itself, after `&>` and `[[ ]]`. A fourth is in
+announce itself, after `&>` and `[[ ]]`. A fourth was in
 `grammar/arithmetic.md`: `x=abc; $((x+1))` errors in dash and in ksh93 —
 for different reasons — and yields 1 in bash and zsh, which re-evaluate
-the value as an expression and reach an unset name.
+the value as an expression and reach an unset name. That one is binary
+and is now in the table above as `ArithNameValueRecurses`; it sat in the
+interpreter as a comment saying "following the two that agree" until
+something made it fail out loud.
+
+`${!x}` is not the only non-binary axis. An **unterminated bracket
+expression** is a second, and it is load-bearing rather than exotic,
+because `[` is the name of the test builtin:
+
+    case "[" in [) echo hit;; *) echo miss;; esac
+
+    bash   →  hit           a literal `[`
+    ksh93  →  hit           a literal `[`
+    dash   →  miss          a class that matches nothing
+    zsh    →  error         "bad pattern: ["
+
+Three answers again. Against the *filesystem* the panel agrees a lone `[`
+is literal — which is what lets `[ a = a ]` run at all — and only zsh
+rejects `[a`. The core implements the agreed half; the `case` half is
+recorded in the corpus as `pat/unterminated-bracket` and is not yet
+answered, because answering it needs the non-binary shape this section
+describes rather than another bool.
+
+Two non-binary axes out of twenty-three measured questions is no longer a
+single exception, which is the argument for changing `Answer` before a
+third arrives.
 
 The most dangerous of them all is in that document too, and it is binary,
 so it is in the table above: **a leading zero means octal everywhere but

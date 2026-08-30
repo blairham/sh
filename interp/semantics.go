@@ -86,16 +86,40 @@ type Semantics struct {
 	// it is one hundred. The quietest divergence measured — nothing warns,
 	// both are plausible numbers, and file modes are written this way.
 	ArithLeadingZeroIsOctal Answer
-	// ArithErrorStatusIsOne is *only* about the number. Whether the failure
-	// is fatal is not an axis: all four shells abandon the script, so the
-	// core implements that outright.
+	// FatalErrorStatusIsOne is the status a fatal shell error carries.
+	// True in bash, ksh93 and zsh; dash alone exits 2.
 	//
-	// ArithErrorStatusIsOne exits 1 when an arithmetic expansion fails —
-	// a division by zero, or a malformed number. True in bash, ksh93 and
-	// zsh; dash alone exits 2. A silent axis: scripts that branch on `$?`
-	// rather than on truthiness read the failure correctly under one group
-	// and misread it under the other, and nothing warns either way.
-	ArithErrorStatusIsOne Answer
+	// It began as an arithmetic-only axis and was generalised on evidence:
+	// a failed arithmetic expansion, a readonly reassignment and a `shift`
+	// past the end are three unrelated errors, and every shell gives all
+	// three the same status. The split is a property of the shell, not of
+	// the error, so it is one axis rather than three.
+	//
+	// *Which* errors are fatal is a separate question and stays per-error —
+	// ReadonlyReassignmentFatal and ShiftPastEndFatal answer it, and the
+	// shells genuinely disagree there. A silent axis either way: scripts
+	// that branch on `$?` rather than on truthiness read the failure
+	// correctly under one group and misread it under the other.
+	FatalErrorStatusIsOne Answer
+	// ArithNameValueRecurses re-evaluates a name-shaped value as an
+	// expression: with `x=abc`, `$((x+1))` is 1 in bash and zsh, because
+	// `abc` is looked up in turn and is unset. dash and ksh93 error instead.
+	// The interpreter followed the two that agree and said so in a comment,
+	// which is the shape of a guess rather than a measurement.
+	ArithNameValueRecurses Answer
+	// ArithInvalidOctalDigitIsError rejects `08` once a leading zero has
+	// been read as octal. True in dash and bash; ksh93 falls back to decimal
+	// and yields 8.
+	//
+	// This is the second axis the vector could not express with one field.
+	// `ArithLeadingZeroIsOctal` was doing two jobs: `0100` is 64 in dash,
+	// bash and ksh93 and 100 in zsh, so ksh93 *is* octal — but it is octal
+	// and tolerant, and one boolean cannot say that. The `${!x}` note in
+	// semantics.md records the same failure mode; this is it happening a
+	// second time, which makes it a limit of the model rather than a quirk.
+	//
+	// zsh never reaches this: nothing there made the zero octal.
+	ArithInvalidOctalDigitIsError Answer
 	// ArithFloat evaluates floating point. True in ksh93 and zsh, where POSIX
 	// says integers only.
 	ArithFloat Answer
@@ -165,7 +189,9 @@ func PosixSemantics() Semantics {
 		// dash is the panel's POSIX-faithful member and the only one
 		// exiting 2, so the POSIX preset follows it. The standard itself
 		// requires only "greater than zero", which decides nothing.
-		ArithErrorStatusIsOne:              No,
+		FatalErrorStatusIsOne:              No,
+		ArithNameValueRecurses:             No,
+		ArithInvalidOctalDigitIsError:      Yes,
 		ArithFloat:                         No,
 		RegexQuotingMakesLiteral:           No,
 		LastPipelineElementInCurrentShell:  No,
@@ -199,7 +225,8 @@ func CoreSemantics() Semantics {
 func BashSemantics() Semantics {
 	s := PosixSemantics()
 	s.AssignmentPrefixPersistsOnSpecialBuiltin = No
-	s.ArithErrorStatusIsOne = Yes
+	s.FatalErrorStatusIsOne = Yes
+	s.ArithNameValueRecurses = Yes
 	s.ReadonlyReassignmentFatal = No
 	s.ShiftPastEndFatal = No
 	s.RegexQuotingMakesLiteral = Yes
@@ -219,6 +246,11 @@ func ZshSemantics() Semantics {
 	s.RegexQuotingMakesLiteral = No
 	s.LastPipelineElementInCurrentShell = Yes
 	s.DollarZeroInFunctionIsFunctionName = Yes
+	// Reset, not inherited: this preset derives from bash's, and bash is the
+	// only shell in the panel that survives a readonly reassignment. Taking
+	// the default here contradicted the measured table for as long as
+	// nothing exercised it.
+	s.ReadonlyReassignmentFatal = Yes
 	s.ArrayBaseIsZero = No
 	return s
 }
@@ -227,6 +259,8 @@ func ZshSemantics() Semantics {
 func KshSemantics() Semantics {
 	s := PosixSemantics()
 	s.ArithFloat = Yes
+	s.FatalErrorStatusIsOne = Yes
+	s.ArithInvalidOctalDigitIsError = No
 	s.LastPipelineElementInCurrentShell = Yes
 	return s
 }

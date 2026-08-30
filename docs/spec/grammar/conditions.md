@@ -92,7 +92,24 @@ Vector field: `RegexQuotingMakesLiteral` (default true, matching bash).
     ( … )                           grouping
 
 `&&` and `||` inside `[[ ]]` join *conditions*, not commands, and `( )`
-groups conditions rather than starting a subshell. That is another
+groups conditions rather than starting a subshell.
+
+**And they do not have the precedence they have outside it.** Measured:
+
+    [[ -n a || -n b && -z x ]]   →  true
+
+`-z x` is false, so a true result requires `-n a || (-n b && -z x)` —
+`&&` binding tighter, as in C. Equal precedence with left association
+would give `((-n a || -n b) && -z x)`, which is false.
+
+The command language is the other way, and `commands.md` measures it
+there: `true || true && false` exits 1, which needs
+`(true || true) && false`.
+
+So the same two operators have different precedence on either side of a
+`[[`. That is the sharpest reason the parser needs its own production for
+the inside rather than reusing the one for and-or lists — reuse would be
+correct-looking and wrong. That is another
 consequence of it being parsed rather than executed, and it is why the
 parser needs its own production for the inside rather than reusing the
 one for lists.

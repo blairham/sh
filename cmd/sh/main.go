@@ -277,6 +277,9 @@ func printNode(n syntax.Node, depth int) {
 			printList(it.Body, depth+2)
 		}
 		printRedirs(x.Redirs, pad, depth)
+	case *syntax.TestClause:
+		fmt.Printf("%s%-8s test %s\n", pad, x.Pos(), condString(x.Expr))
+		printRedirs(x.Redirs, pad, depth)
 	case *syntax.ArithCmdClause:
 		fmt.Printf("%s%-8s arithmetic %s\n", pad, x.Pos(), arithString(x.Parsed))
 		printRedirs(x.Redirs, pad, depth)
@@ -406,6 +409,34 @@ func arithString(e syntax.ArithExpr) string {
 		return "(" + arithString(x.Cond) + " ? " + arithString(x.Then) + " : " + arithString(x.Else) + ")"
 	case *syntax.ArithAssign:
 		return "(" + x.Name + " " + x.Op + " " + arithString(x.Value) + ")"
+	}
+	return "?"
+}
+
+// condString renders a condition fully parenthesised, so the precedence is
+// visible — and inside [[ ]] it is not the precedence the same operators have
+// outside, which is exactly the thing worth being able to see.
+func condString(c syntax.CondExpr) string {
+	switch x := c.(type) {
+	case nil:
+		return "(empty)"
+	case *syntax.CondUnary:
+		return "(" + x.Op + " " + x.X.Literal() + ")"
+	case *syntax.CondBinary:
+		rhs := x.Y.Literal()
+		if !x.Y.IsQuoted() && (x.Op == "==" || x.Op == "=" || x.Op == "!=") {
+			rhs += " [pattern]"
+		}
+		if !x.Y.IsQuoted() && x.Op == "=~" {
+			rhs += " [regex]"
+		}
+		return "(" + x.X.Literal() + " " + x.Op + " " + rhs + ")"
+	case *syntax.CondLogic:
+		return "(" + condString(x.X) + " " + x.Op + " " + condString(x.Y) + ")"
+	case *syntax.CondNot:
+		return "(! " + condString(x.X) + ")"
+	case *syntax.CondGroup:
+		return "[" + condString(x.X) + "]"
 	}
 	return "?"
 }

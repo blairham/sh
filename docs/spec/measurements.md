@@ -872,6 +872,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `cond/regex-match` | `<shell>: 1: [[: not found~no-regex` | `regex` | `regex` | `regex` | `regex` | `regex` |
 | `cond/quoted-regex-diverges` | `<shell>: 1: [[: not found~literal` | `literal` | `literal` | `literal` | `still-regex` | `still-regex` |
 | `cond/logical-and-grouping` | `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `grouped` | `grouped` | `grouped` | `grouped` | `grouped` |
+| `cond/andand-binds-tighter-than-oror` | `<shell>: 1: [[: not found~<shell>: 1: -n: not found~false` | `true` | `true` | `true` | `true` | `true` |
+| `cond/command-language-is-the-other-way` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
 
 - `cond/no-field-splitting-inside` — [[ ]] is parsed rather than executed, so the words never become arguments and are never split
   ```sh
@@ -908,4 +910,12 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `cond/logical-and-grouping` — && and || join conditions and ( ) groups them rather than starting a subshell, so the parser needs its own production for the inside
   ```sh
   [[ ( -n x || -n y ) && ! -z z ]] && echo grouped
+  ```
+- `cond/andand-binds-tighter-than-oror` — inside [[ ]] && binds tighter, as in C; outside it the two share one level, so the same operators have different precedence on either side of the bracket
+  ```sh
+  [[ -n a || -n b && -z x ]] && echo true || echo false
+  ```
+- `cond/command-language-is-the-other-way` — the contrast that makes the previous case a finding rather than a curiosity
+  ```sh
+  true || true && false; echo "st=$?"
   ```

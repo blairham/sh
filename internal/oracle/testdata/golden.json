@@ -1530,6 +1530,38 @@
         "TimedOut": false
       }
     },
+    "cond/andand-binds-tighter-than-oror": {
+      "bash": {
+        "Output": "true",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "true",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "true",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: -n: not found~false",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "true",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "true",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "cond/arith-command-comparison": {
       "bash": {
         "Output": "gt",
@@ -1590,6 +1622,38 @@
       },
       "zsh": {
         "Output": "nonzero=0~zero=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/command-language-is-the-other-way": {
+      "bash": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=1",
         "Status": 0,
         "TimedOut": false
       }

@@ -869,4 +869,14 @@ var Corpus = []Case{
 		Snippet: `[[ ( -n x || -n y ) && ! -z z ]] && echo grouped`,
 		Why:     "&& and || join conditions and ( ) groups them rather than starting a subshell, so the parser needs its own production for the inside",
 	},
+	{
+		ID: "cond/andand-binds-tighter-than-oror", Category: "conditions",
+		Snippet: `[[ -n a || -n b && -z x ]] && echo true || echo false`,
+		Why:     "inside [[ ]] && binds tighter, as in C; outside it the two share one level, so the same operators have different precedence on either side of the bracket",
+	},
+	{
+		ID: "cond/command-language-is-the-other-way", Category: "conditions",
+		Snippet: `true || true && false; echo "st=$?"`,
+		Why:     "the contrast that makes the previous case a finding rather than a curiosity",
+	},
 }

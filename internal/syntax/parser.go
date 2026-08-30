@@ -235,6 +235,8 @@ func (p *Parser) parseCommand() Command {
 		return p.withRedirs(p.parseFor())
 	case p.atWord("case"):
 		return p.withRedirs(p.parseCase())
+	case p.atWord("[[") && p.dialect.DoubleBracket:
+		return p.withRedirs(p.parseTestClause())
 	case p.atWord("function") && p.dialect.FunctionKeyword:
 		return p.parseFuncKeyword()
 	}

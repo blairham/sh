@@ -54,6 +54,8 @@ refuses what every real shell accepts is a core nobody can write against.
       oracle.md       how behaviour is learned from real binaries
       shell-matrix.md the measured feature matrix that set the core
     internal/syntax/  lexer, grammar, AST — promoted when consumed
+    cmd/sh            will be the shell; today it dumps tokens
+    cmd/oracle        records what real shells do
 
 **Packages start under `internal/` and are promoted, not published early.**
 The intent is a library others depend on, and that is exactly why the API

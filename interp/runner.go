@@ -46,6 +46,10 @@ type Runner struct {
 	// parsed with. Nil means the core, not the zero value: the zero Dialect
 	// is posix and would refuse constructs the outer parse had accepted.
 	Dialect *syntax.Dialect
+
+	// Diagnostics is how failure is reported and which status it carries.
+	// Nil means the substrate's own.
+	Diagnostics *Diagnostics
 	// Semantics is where the shells disagree about what identical syntax
 	// means, as distinct from which syntax they accept. Nil means bash's.
 	Semantics *Semantics

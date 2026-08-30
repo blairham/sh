@@ -46,7 +46,7 @@ func main() {
 	)
 	flag.Parse()
 
-	d, sem, err := pickDialect(*dialect)
+	d, sem, dg, err := pickDialect(*dialect)
 	if err != nil {
 		fail(err)
 	}
@@ -66,7 +66,7 @@ func main() {
 			fail(err)
 		}
 	case *command != "":
-		os.Exit(run(*command, d, sem))
+		os.Exit(run(*command, d, sem, dg))
 	case len(flag.Args()) > 0:
 		// A bare argument is a script to run, which is how a shell is
 		// normally invoked and how the corpus runs the cases that depend on
@@ -75,7 +75,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		os.Exit(run(string(b), d, sem))
+		os.Exit(run(string(b), d, sem, dg))
 	default:
 		fail(fmt.Errorf("nothing to do: pass a script, -c, -tokens or -parse"))
 	}
@@ -96,25 +96,25 @@ func fail(err error) {
 // shares. A script that runs under it depends on nothing the panel disagrees
 // about, which is a useful thing to be able to check and a poor way to run a
 // shell — the same split docs/spec/core.md drew for strict POSIX.
-func pickDialect(name string) (syntax.Dialect, interp.Semantics, error) {
+func pickDialect(name string) (syntax.Dialect, interp.Semantics, interp.Diagnostics, error) {
 	switch name {
 	case "core":
 		// Strict: what every shell agrees on is done, and anything they
 		// disagree about is refused rather than silently given one shell's
 		// answer. A portability check rather than a runtime.
-		return syntax.Core(), interp.CoreSemantics(), nil
+		return syntax.Core(), interp.CoreSemantics(), interp.CoreDiagnostics(), nil
 	case "posix":
-		return syntax.POSIX(), interp.PosixSemantics(), nil
+		return syntax.POSIX(), interp.PosixSemantics(), interp.PosixDiagnostics(), nil
 	case "bash":
-		return syntax.Bash(), interp.BashSemantics(), nil
+		return syntax.Bash(), interp.BashSemantics(), interp.BashDiagnostics(), nil
 	case "zsh":
-		return syntax.Zsh(), interp.ZshSemantics(), nil
+		return syntax.Zsh(), interp.ZshSemantics(), interp.ZshDiagnostics(), nil
 	case "ksh":
-		return syntax.Ksh(), interp.KshSemantics(), nil
+		return syntax.Ksh(), interp.KshSemantics(), interp.KshDiagnostics(), nil
 	case "dash":
-		return syntax.POSIX(), interp.DashSemantics(), nil
+		return syntax.POSIX(), interp.DashSemantics(), interp.DashDiagnostics(), nil
 	}
-	return syntax.Dialect{}, interp.Semantics{},
+	return syntax.Dialect{}, interp.Semantics{}, interp.Diagnostics{},
 		fmt.Errorf("unknown dialect %q: want core, posix, bash, zsh, ksh or dash", name)
 }
 
@@ -489,17 +489,19 @@ func condString(c syntax.CondExpr) string {
 }
 
 // run parses and executes a command, returning the status to exit with.
-func run(src string, d syntax.Dialect, sem interp.Semantics) int {
+func run(src string, d syntax.Dialect, sem interp.Semantics, dg interp.Diagnostics) int {
 	p := syntax.NewParser(src, d)
 	f := p.Parse()
 	if err := p.Err(); err != nil {
-		// A syntax error is 2 in every shell in the panel, and an unfinished
-		// script is a syntax error rather than a prompt when it came from -c.
+		// An unfinished script is a syntax error rather than a prompt when
+		// it came from -c. *Which* status it carries is the dialect's: the
+		// comment that used to stand here said 2 in every shell in the
+		// panel, and that is true of half of them — ksh93 exits 3 and zsh 1.
 		fmt.Fprintln(os.Stderr, "sh:", err)
-		return 2
+		return dg.SyntaxError()
 	}
 
-	r := &interp.Runner{Dialect: &d, Semantics: &sem, Name: "sh"}
+	r := &interp.Runner{Dialect: &d, Semantics: &sem, Diagnostics: &dg, Name: "sh"}
 	status, err := r.Run(context.Background(), f)
 	if err != nil {
 		// Refused rather than silently doing nothing: a shell that quietly

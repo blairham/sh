@@ -274,6 +274,36 @@ splitting axis covers parameter expansion only, and modelling it as one
 switch over the whole of field splitting gives the wrong answer for
 `$(...)`. See `grammar/word-splitting.md`.
 
+## A third vector
+
+Some differences are neither a construct that parses nor a behaviour with
+two sides. They are *values*: what a shell prints when it refuses, and
+which number it exits with. `Diagnostics` holds those.
+
+The first member is the exit status of a syntax error, measured across
+eight distinct ones — a stray `}`, `echo (`, an unterminated `if`,
+`case`, `for` — and stable within each shell:
+
+    dash 2    bash 2    ksh93 3    zsh 1
+
+It had been hardcoded to 2, under a comment reading "a syntax error is 2
+in every shell in the panel". That is true of half of them.
+
+`Diagnostics` differs from this file's vector in one deliberate way: its
+zero value means *the substrate's own*, not *unset*. A semantics axis
+with no answer is refused, because answering it would claim some shell's
+behaviour. A status makes no such claim — the process must exit with some
+number, and refusing is not one of the options. `sh` is itself a shell,
+so where no dialect is chosen it answers for itself, with 2.
+
+The seam reaches both places a script is parsed. A command substitution
+re-parses at expansion time, and a parse error there is fatal in all four
+shells; this used to report it and carry on, which is the same shape as
+the redirect, arithmetic and glob failures recorded above. Our status
+there is the dialect's; bash's own is 127 rather than its usual 2,
+because bash parses the whole input at once and never reaches expansion,
+which is an architectural difference rather than an axis.
+
 ## Rules for adding an axis
 
 1. **It must be measured**, with the probe recorded here. An axis added

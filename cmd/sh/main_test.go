@@ -11,23 +11,44 @@ import (
 )
 
 func TestPickDialect(t *testing.T) {
-	// A name resolves to a grammar *and* a semantics, because they answer
-	// different questions about the same shell.
+	// A name resolves to a grammar, a semantics *and* a diagnostics,
+	// because they answer different questions about the same shell.
 	for _, name := range []string{"core", "posix", "bash", "zsh", "ksh", "dash"} {
-		if _, _, err := pickDialect(name); err != nil {
+		if _, _, _, err := pickDialect(name); err != nil {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
-	if _, _, err := pickDialect("nosuchshell"); err == nil {
+	if _, _, _, err := pickDialect("nosuchshell"); err == nil {
 		t.Error("an unknown dialect must be refused rather than defaulted")
 	}
 
-	// The pairings differ where the shells do, which is the point of having
-	// two axes rather than one name.
-	_, bash, _ := pickDialect("bash")
-	_, zsh, _ := pickDialect("zsh")
-	if bash.ArithLeadingZeroIsOctal == zsh.ArithLeadingZeroIsOctal {
+	// The three vectors differ independently, which is the point of having
+	// three rather than one name. bash and zsh disagree on a semantics axis
+	// and on a diagnostic; bash and dash agree on the diagnostic and
+	// disagree on semantics.
+	_, bashSem, bashDiag, _ := pickDialect("bash")
+	_, zshSem, zshDiag, _ := pickDialect("zsh")
+	_, dashSem, dashDiag, _ := pickDialect("dash")
+	_, _, kshDiag, _ := pickDialect("ksh")
+	if bashSem.ArithLeadingZeroIsOctal == zshSem.ArithLeadingZeroIsOctal {
 		t.Error("bash and zsh should disagree about whether a leading zero is octal")
+	}
+	if bashSem.EchoInterpretsEscapes == dashSem.EchoInterpretsEscapes {
+		t.Error("bash and dash should disagree about echo and backslashes")
+	}
+	for _, tc := range []struct {
+		name string
+		got  int
+		want int
+	}{
+		{"dash", dashDiag.SyntaxError(), 2},
+		{"bash", bashDiag.SyntaxError(), 2},
+		{"ksh93", kshDiag.SyntaxError(), 3},
+		{"zsh", zshDiag.SyntaxError(), 1},
+	} {
+		if tc.got != tc.want {
+			t.Errorf("%s syntax-error status = %d, want %d", tc.name, tc.got, tc.want)
+		}
 	}
 }
 

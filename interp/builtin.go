@@ -30,6 +30,7 @@ var builtins = map[string]Builtin{
 	"cd":       biCd,
 	"pwd":      biPwd,
 	"read":     biRead,
+	"wait":     biWait,
 	"break":    biBreak,
 	"continue": biContinue,
 	"return":   biReturn,

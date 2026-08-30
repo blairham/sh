@@ -31,8 +31,21 @@ func main() {
 		check  = flag.Bool("check", false, "compare against the golden record instead of rewriting it")
 		golden = flag.String("golden", "internal/oracle/testdata/golden.json", "path to the golden record")
 		doc    = flag.String("doc", "docs/spec/measurements.md", "path to the generated measurements")
+		bin    = flag.String("bin", "", "grade this binary against the panel instead of recording it")
+		ref    = flag.String("against", "bash", "which panel shell to grade against")
+		vrb    = flag.Bool("v", false, "list the cases that do not match")
 	)
 	flag.Parse()
+
+	if *bin != "" {
+		rep, err := oracle.RunConformance(context.Background(), *bin, *ref, oracle.Corpus)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "oracle:", err)
+			os.Exit(exitFailure)
+		}
+		fmt.Print(rep.Summary(*vrb))
+		return
+	}
 
 	if err := run(*check, *golden, *doc); err != nil {
 		fmt.Fprintln(os.Stderr, "oracle:", err)

@@ -323,6 +323,10 @@ func (l *Lexer) scanWord(start Pos) Token {
 			flush()
 			spans = append(spans, l.scanBraces(Unquoted))
 
+		case c == '$' && isBareParam(l.peekAt(1)):
+			flush()
+			spans = append(spans, l.scanBareParam(Unquoted))
+
 		case c == '`':
 			flush()
 			spans = append(spans, l.scanBackticks(Unquoted))
@@ -421,6 +425,10 @@ func (l *Lexer) scanDouble() []Span {
 		case c == '$' && l.peekAt(1) == '{':
 			flush()
 			out = append(out, l.scanBraces(DoubleQuoted))
+			litPos = l.pos()
+		case c == '$' && isBareParam(l.peekAt(1)):
+			flush()
+			out = append(out, l.scanBareParam(DoubleQuoted))
 			litPos = l.pos()
 		case c == '`':
 			flush()
@@ -809,4 +817,44 @@ func (l *Lexer) heredocLine(strip bool) (line, content string) {
 		content = strings.TrimLeft(content, "\t")
 	}
 	return line, content
+}
+
+// bareParamSpecials are the one-character parameters that may follow a `$`
+// without braces.
+const bareParamSpecials = "@*#?-$!"
+
+// isBareParam reports whether c can begin a `$name` expansion written without
+// braces. `$x` and `${x}` mean the same thing, and the short form is by far
+// the commoner one, so the lexer has to produce the same span for both.
+func isBareParam(c byte) bool {
+	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+		(c >= '0' && c <= '9') || strings.IndexByte(bareParamSpecials, c) >= 0
+}
+
+// scanBareParam reads `$name`, `$1` or `$?` and friends.
+//
+// A digit is a *single* positional parameter here: `$12` is `$1` followed by
+// the character 2, which is why the multi-digit form needs braces. A special
+// character is likewise exactly one.
+func (l *Lexer) scanBareParam(q Quoting) Span {
+	open := l.pos()
+	l.advance() // $
+	begin := l.off
+	switch c := l.peek(); {
+	case c >= '0' && c <= '9':
+		l.advance()
+	case strings.IndexByte(bareParamSpecials, c) >= 0:
+		l.advance()
+	default:
+		for !l.eof() {
+			c := l.peek()
+			ok := c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+				(c >= '0' && c <= '9' && l.off > begin)
+			if !ok {
+				break
+			}
+			l.advance()
+		}
+	}
+	return Span{Kind: ParamExp, Value: l.src[begin:l.off], Quoting: q, Pos: open}
 }

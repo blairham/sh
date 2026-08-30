@@ -501,4 +501,87 @@ var Corpus = []Case{
 		Snippet: "echo \"[`echo \\`echo deep\\``]\"",
 		Why:     "the older form nests only with backslash escaping, which is why $( ) exists",
 	},
+	// --- compound command shapes ---------------------------------------------
+	{
+		ID: "shape/terminator-required-before-then", Category: "compound shapes",
+		Snippet: `if true then echo x; fi`,
+		Why:     "the keyword does not delimit the condition; a ; or newline does, so the production needs a separator",
+	},
+	{
+		ID: "shape/terminator-required-before-do", Category: "compound shapes",
+		Snippet: `while false do echo x; done`,
+		Why:     "the same rule for loops, so it is a property of the grammar rather than of `if`",
+	},
+	{
+		ID: "shape/condition-is-a-list-last-wins", Category: "compound shapes",
+		Snippet: `if false; true; then echo yes; else echo no; fi`,
+		Why:     "the condition is a list judged by its last command, not a single command",
+	},
+	{
+		ID: "shape/condition-is-a-list-last-fails", Category: "compound shapes",
+		Snippet: `if true; false; then echo yes; else echo no; fi`,
+		Why:     "the other direction, so the previous case cannot pass by accident",
+	},
+	{
+		ID: "shape/elif-chain", Category: "compound shapes",
+		Snippet: `if false; then echo a; elif true; then echo b; else echo c; fi`,
+		Why:     "elif is a chain rather than a nested if in the surface syntax",
+	},
+	{
+		ID: "shape/for-omitted-list-is-positional", Category: "compound shapes",
+		Snippet: `set -- x y; for i; do printf "[%s]" "$i"; done`,
+		Why:     "omitting the word list iterates the positional parameters",
+	},
+	{
+		ID: "shape/for-empty-list-is-no-iterations", Category: "compound shapes",
+		Snippet: `set -- x y; for i in; do printf "[%s]" "$i"; done; echo "(none)"`,
+		Why:     "which is not the same as an empty list — so the AST must distinguish absent from empty",
+	},
+	{
+		ID: "shape/for-newline-separator", Category: "compound shapes",
+		Snippet: "for i in a b\ndo printf \"[%s]\" \"$i\"; done",
+		Why:     "a newline is a separator wherever ; is",
+	},
+	{
+		ID: "shape/case-leading-paren", Category: "compound shapes",
+		Snippet: `case x in (x) echo paren;; esac`,
+		Why:     "a case pattern may carry a leading open paren",
+	},
+	{
+		ID: "shape/case-pattern-alternatives", Category: "compound shapes",
+		Snippet: `case x in a|x) echo alt;; esac`,
+		Why:     "patterns alternate with |",
+	},
+	{
+		ID: "shape/case-empty-body-and-no-match", Category: "compound shapes",
+		Snippet: `case x in x) ;; esac; echo "empty=$?"; case x in y) echo no;; esac; echo "nomatch=$?"`,
+		Why:     "an empty body is legal and a case matching nothing exits 0",
+	},
+
+	// --- [[ ]] and (( )) ------------------------------------------------------
+	{
+		ID: "cond/double-bracket-less-is-comparison", Category: "[[ ]] and (( ))",
+		Snippet: `if [[ a < b ]]; then echo less; else echo notless; fi`,
+		Why:     "inside [[ ]] the < is a comparison; in dash, which has no [[, the same text is a command with a redirection that opens a file",
+	},
+	{
+		ID: "cond/double-bracket-needs-blanks", Category: "[[ ]] and (( ))",
+		Snippet: `[[a == a]]`,
+		Why:     "[[ is a reserved word rather than an operator, so it must be delimited by blanks",
+	},
+	{
+		ID: "cond/double-bracket-andand", Category: "[[ ]] and (( ))",
+		Snippet: `[[ a == a && b == b ]] && echo andand`,
+		Why:     "&& inside [[ ]] joins conditions rather than commands",
+	},
+	{
+		ID: "cond/arith-command-status-inverted", Category: "[[ ]] and (( ))",
+		Snippet: `(( 1+1 )); echo "nonzero=$?"; (( 0 )); echo "zero=$?"`,
+		Why:     "(( expr )) exits 0 when the expression is non-zero, the reverse of the usual convention",
+	},
+	{
+		ID: "cond/arith-command-comparison", Category: "[[ ]] and (( ))",
+		Snippet: `(( 2 > 1 )) && echo gt`,
+		Why:     "> inside (( )) is a comparison; in dash the whole thing is nested subshells running a command",
+	},
 }

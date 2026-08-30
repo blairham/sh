@@ -141,16 +141,10 @@ func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
 		return globEscape(s.Value), false
 	case syntax.ParamExp:
 		v := r.expandParam(s.Param)
-		if !unquoted {
-			return globEscape(v), false
-		}
-		return v, true
+		return r.expansionResult(v, unquoted, r.sem().SplitParamExpansion)
 	case syntax.CommandSubst:
 		v := r.commandSubst(r.ctx, s.Value)
-		if !unquoted {
-			return globEscape(v), false
-		}
-		return v, true
+		return r.expansionResult(v, unquoted, r.sem().SplitCommandSubstitution)
 	case syntax.ArithSubst:
 		v, err := r.evalArith(s.Arith)
 		if err != nil {
@@ -158,12 +152,28 @@ func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
 			r.status = 1
 			return "", false
 		}
-		if !unquoted {
-			return globEscape(itoa(v)), false
-		}
-		return itoa(v), true
+		return r.expansionResult(itoa(v), unquoted, r.sem().SplitParamExpansion)
 	}
 	return "", false
+}
+
+// expansionResult applies the two axes that govern what happens to the result
+// of an expansion: whether it is field-split, and whether its metacharacters
+// stay live for pathname expansion.
+//
+// Quoted, neither applies — that is universal. Unquoted, both are dialect
+// questions, and zsh answers no to both while everything else answers yes.
+func (r *Runner) expansionResult(v string, unquoted, split bool) (string, bool) {
+	if !unquoted {
+		return globEscape(v), false
+	}
+	if !r.sem().GlobExpansionResults {
+		// zsh does not treat the result of an expansion as a pattern. The
+		// same rule decides `[[ abc == $p ]]`, which is one behaviour
+		// observed twice rather than two quirks.
+		v = globEscape(v)
+	}
+	return v, split
 }
 
 // expandParam handles the forms this slice implements.
@@ -453,13 +463,15 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 	case "?":
 		return itoa(r.status), true
 	case "0":
+		// zsh reports the *function's* name inside a function where every
+		// other shell reports the shell's.
+		if r.inFunc != "" && r.sem().DollarZeroInFunctionIsFunctionName {
+			return r.inFunc, true
+		}
 		return r.Name, true
 	case "*":
 		if e.Length {
-			// docs/spec/grammar/parameter-expansion.md: `${#*}` is the count
-			// everywhere but dash, which gives the length of the joined
-			// string. The count is the majority and the POSIX reading.
-			return itoa(len(r.Params)), true
+			return itoa(r.specialLength()), true
 		}
 		// `$*` joins with the *first character* of IFS, not with a space.
 		sep := " "
@@ -473,7 +485,7 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 		return strings.Join(r.Params, sep), true
 	case "@":
 		if e.Length {
-			return itoa(len(r.Params)), true
+			return itoa(r.specialLength()), true
 		}
 		// Reached only where expandAt declined — inside another expansion's
 		// operand, say — where joining is the sensible answer.
@@ -486,4 +498,75 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 		return "", true
 	}
 	return "", false
+}
+
+// specialLength answers `${#@}` and `${#*}`.
+//
+// dash gives the length of the joined string where everything else gives the
+// count. Both are plausible numbers and neither errors, which is what makes
+// it worth a switch rather than a majority verdict.
+func (r *Runner) specialLength() int {
+	if r.sem().LengthOfSpecialIsCount {
+		return len(r.Params)
+	}
+	return len(strings.Join(r.Params, " "))
+}
+
+// expandRawText expands text the lexer kept raw — a here-document body — by
+// lexing it and expanding the spans that come back.
+//
+// Newlines are preserved, because the text is input to a command rather than
+// a word: lexing alone would drop them as token separators.
+func (r *Runner) expandRawText(text string) string {
+	var b strings.Builder
+	for i, line := range strings.Split(text, "\n") {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		l := syntax.NewLexer(line, r.dialect())
+		var spans []syntax.Span
+		last := 0
+		for {
+			tk := l.Next()
+			if tk.Kind == syntax.TokEOF {
+				break
+			}
+			// Blanks between tokens are content here, not separators.
+			if tk.Pos.Offset > last {
+				spans = append(spans, syntax.Span{Kind: syntax.Literal, Value: line[last:tk.Pos.Offset]})
+			}
+			last = tk.End.Offset
+			if tk.Kind == syntax.TokWord {
+				w := r.parseSpans(tk.Spans)
+				spans = append(spans, w...)
+				continue
+			}
+			spans = append(spans, syntax.Span{Kind: syntax.Literal, Value: tk.Text})
+		}
+		if last < len(line) {
+			spans = append(spans, syntax.Span{Kind: syntax.Literal, Value: line[last:]})
+		}
+		for _, s := range spans {
+			text, _ := r.expandSpan(s)
+			b.WriteString(globUnescape(text))
+		}
+	}
+	return b.String()
+}
+
+// parseSpans fills in the parsed form of any expansion the lexer left raw,
+// which the parser normally does when it builds a word.
+func (r *Runner) parseSpans(spans []syntax.Span) []syntax.Span {
+	out := make([]syntax.Span, len(spans))
+	copy(out, spans)
+	p := syntax.NewParser("", r.dialect())
+	for i := range out {
+		switch {
+		case out[i].Kind == syntax.ParamExp && out[i].Param == nil:
+			out[i].Param = p.ParseParamExpFor(out[i].Value, out[i].Pos)
+		case out[i].Kind == syntax.ArithSubst && out[i].Arith == nil:
+			out[i].Arith = p.ParseArithFor(out[i].Value, out[i].Pos)
+		}
+	}
+	return out
 }

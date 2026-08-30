@@ -289,9 +289,9 @@ func (r *Runner) parseNum(s string) (int, error) {
 	return int(n), nil
 }
 
-// octalLeadingZero is the dialect answer. Defaulting to true is the majority
-// and the POSIX reading; zsh is the outlier.
-func (r *Runner) octalLeadingZero() bool { return true }
+// octalLeadingZero is the dialect answer, and the quietest divergence
+// measured: `0100` is sixty-four everywhere but zsh, where it is one hundred.
+func (r *Runner) octalLeadingZero() bool { return r.sem().ArithLeadingZeroIsOctal }
 
 // arithCmd runs `(( expr ))` as a command.
 //

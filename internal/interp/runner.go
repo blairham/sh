@@ -42,6 +42,9 @@ type Runner struct {
 	// parsed with. Nil means the core, not the zero value: the zero Dialect
 	// is posix and would refuse constructs the outer parse had accepted.
 	Dialect *syntax.Dialect
+	// Semantics is where the shells disagree about what identical syntax
+	// means, as distinct from which syntax they accept. Nil means bash's.
+	Semantics *Semantics
 
 	Stdin          io.Reader
 	Stdout, Stderr io.Writer
@@ -62,6 +65,11 @@ type Runner struct {
 	// command substitution runs commands, and threading a context through
 	// every expander signature to reach one place would be worse.
 	ctx context.Context
+	// inFunc is the name of the function being run, for `$0`.
+	inFunc string
+	// globMissed records that a pattern matched nothing, so the no-match
+	// axis can report it once the whole field is known.
+	globMissed bool
 	// funcs holds defined functions.
 	funcs map[string]*syntax.FuncDecl
 	// depth bounds function recursion, because a shell script can recurse
@@ -279,7 +287,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// interpreter does not yet carry.
 		for _, a := range c.Assigns {
 			v := strings.Join(r.expandWord(a.Value), " ")
-			if specialBuiltins[argv[0]] {
+			// POSIX keeps an assignment prefixed to a special builtin;
+			// dash and ksh93 comply, bash and zsh do not.
+			if specialBuiltins[argv[0]] && r.sem().AssignmentPrefixPersistsOnSpecialBuiltin {
 				r.setVar(a.Name, v)
 			}
 		}

@@ -138,7 +138,9 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		// string; ksh93 and zsh keep it a regex. Following bash, which
 		// docs/spec/semantics.md records as the axis default.
 		pat := r.condOperand(x.Y)
-		if x.Y.IsQuoted() {
+		// bash treats a quoted right operand as a literal string; ksh93 and
+		// zsh keep it a regex, so quoting one is unportable either way.
+		if x.Y.IsQuoted() && r.sem().RegexQuotingMakesLiteral {
 			pat = regexp.QuoteMeta(pat)
 		}
 		re, err := regexp.Compile(pat)

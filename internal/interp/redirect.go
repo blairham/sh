@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/blairham/sh/internal/syntax"
 )
@@ -45,6 +46,15 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.C
 		}
 		name := joinFields(r.expandWord(rd.Word))
 
+		// A here-document and a here-string are input the shell already
+		// holds, so there is no file to open and nothing for the gate to
+		// see — the bytes never leave this process on their way in.
+		if rd.Op.IsHeredoc() || rd.Op == syntax.TokTLess {
+			body := r.heredocBody(rd)
+			r.Stdin = strings.NewReader(body)
+			continue
+		}
+
 		var flags int
 		switch rd.Op {
 		case syntax.TokGreat, syntax.TokClobber:
@@ -53,6 +63,13 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.C
 			flags = os.O_WRONLY | os.O_CREATE | os.O_APPEND
 		case syntax.TokLess:
 			flags = os.O_RDONLY
+		case syntax.TokAmpGreat, syntax.TokAmpDGreat:
+			// Both streams to one file.
+			flags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+			if rd.Op == syntax.TokAmpDGreat {
+				flags = os.O_WRONLY | os.O_CREATE | os.O_APPEND
+			}
+			fd = -1
 		default:
 			return closers, fmt.Errorf("not implemented yet: the %s redirection", rd.Op)
 		}
@@ -79,6 +96,8 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.C
 		closers = append(closers, f)
 
 		switch fd {
+		case -1:
+			r.Stdout, r.Stderr = f, f
 		case 0:
 			r.Stdin = f
 		case 2:
@@ -116,4 +135,31 @@ func atoi(s string) (int, bool) {
 		n = n*10 + int(s[i]-'0')
 	}
 	return n, true
+}
+
+// heredocBody produces the text a here-document or here-string feeds in.
+//
+// The delimiter's quoting decides whether the body is expanded, which is a
+// property of how the delimiter was *written* and is why the lexer had to
+// record it rather than resolve it. A quoted delimiter makes the whole body
+// literal; an unquoted one leaves it subject to expansion.
+func (r *Runner) heredocBody(rd *syntax.Redirect) string {
+	if rd.Op == syntax.TokTLess {
+		// A here-string is one line, and its word is expanded like any other.
+		return strings.Join(r.expandWordNoSplit(rd.Word), "") + "\n"
+	}
+	if rd.Heredoc == nil {
+		return ""
+	}
+	body := rd.Heredoc.Literal()
+	if rd.Heredoc.Spans[0].Quoting != syntax.Unquoted {
+		return body
+	}
+	// The lexer kept the body raw, so its expansions have to be found now.
+	// Passing it through as one literal span looks equivalent and silently
+	// expands nothing, which is the mistake this comment exists to prevent.
+	//
+	// Expanded but never split or globbed: a here-document is one blob of
+	// input, not a list of fields.
+	return r.expandRawText(body)
 }

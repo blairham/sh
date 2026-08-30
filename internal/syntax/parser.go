@@ -636,3 +636,15 @@ func (p *Parser) parseCase() Command {
 	p.expectWord("esac")
 	return c
 }
+
+// ParseParamExpFor parses the inside of a `${ }` that was captured outside the
+// normal word path — a here-document body, which is read as raw text and
+// expanded only when the command runs.
+func (p *Parser) ParseParamExpFor(src string, at Pos) *ParamExpr {
+	return p.parseParamExp(src, at)
+}
+
+// ParseArithFor is ParseParamExpFor for `$(( ))`.
+func (p *Parser) ParseArithFor(src string, at Pos) ArithExpr {
+	return p.parseArith(src, at)
+}

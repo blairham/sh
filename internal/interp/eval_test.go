@@ -149,3 +149,71 @@ func TestCommandSubstitution(t *testing.T) {
 		t.Errorf("a substitution leaked state, got %q", got)
 	}
 }
+
+func withSem(s Semantics) func(*Runner) { return func(r *Runner) { r.Semantics = &s } }
+
+func TestSemanticsAxesHaveTwoSides(t *testing.T) {
+	// Each row is an axis, run under two dialects that disagree about it.
+	// Asserting only one side asserts a default rather than a behaviour.
+	tests := []struct {
+		axis, src string
+		a         Semantics
+		wantA     string
+		b         Semantics
+		wantB     string
+	}{
+		{
+			"a leading zero means octal",
+			`echo $((0100))`,
+			BashSemantics(), "64\n", ZshSemantics(), "100\n",
+		},
+		{
+			"echo interprets escapes",
+			`echo 'a\tb'`,
+			BashSemantics(), "a\\tb\n", ZshSemantics(), "a\tb\n",
+		},
+		{
+			"${#@} is the count",
+			`set -- p q r; echo ${#@}`,
+			BashSemantics(), "3\n", DashSemantics(), "5\n",
+		},
+		{
+			"an unquoted expansion is split",
+			`x="a b"; printf "[%s]" $x`,
+			BashSemantics(), "[a][b]", ZshSemantics(), "[a b]",
+		},
+		{
+			"quoting a regex makes it a literal",
+			`[[ abc =~ "^a.c$" ]] && echo m || echo no`,
+			BashSemantics(), "no\n", ZshSemantics(), "m\n",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.axis, func(t *testing.T) {
+			if got, _ := run(t, tc.src, withSem(tc.a)); got != tc.wantA {
+				t.Errorf("first side: got %q, want %q", got, tc.wantA)
+			}
+			if got, _ := run(t, tc.src, withSem(tc.b)); got != tc.wantB {
+				t.Errorf("other side: got %q, want %q", got, tc.wantB)
+			}
+		})
+	}
+}
+
+func TestHeredocBodies(t *testing.T) {
+	// The delimiter's quoting decides whether the body is expanded, which is
+	// a property of how it was *written* — the reason the lexer recorded it
+	// rather than resolving it.
+	expanded := "x=VAL\ncat <<EOF\n[$x]\nEOF\n"
+	if got, _ := run(t, expanded, nil); got != "[VAL]\n" {
+		t.Errorf("an unquoted delimiter should expand the body, got %q", got)
+	}
+	literal := "x=VAL\ncat <<'EOF'\n[$x]\nEOF\n"
+	if got, _ := run(t, literal, nil); got != "[$x]\n" {
+		t.Errorf("a quoted delimiter should not, got %q", got)
+	}
+	// A here-string is one line and its word is expanded like any other.
+	if got, _ := run(t, `x=v; cat <<< "[$x]"`, nil); got != "[v]\n" {
+		t.Errorf("here-string gave %q", got)
+	}
+}

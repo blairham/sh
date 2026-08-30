@@ -11,13 +11,23 @@ import (
 )
 
 func TestPickDialect(t *testing.T) {
-	for _, name := range []string{"core", "posix", "bash"} {
-		if _, err := pickDialect(name); err != nil {
+	// A name resolves to a grammar *and* a semantics, because they answer
+	// different questions about the same shell.
+	for _, name := range []string{"core", "posix", "bash", "zsh", "ksh", "dash"} {
+		if _, _, err := pickDialect(name); err != nil {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
-	if _, err := pickDialect("ksh"); err == nil {
+	if _, _, err := pickDialect("nosuchshell"); err == nil {
 		t.Error("an unknown dialect must be refused rather than defaulted")
+	}
+
+	// The pairings differ where the shells do, which is the point of having
+	// two axes rather than one name.
+	_, bash, _ := pickDialect("bash")
+	_, zsh, _ := pickDialect("zsh")
+	if bash.ArithLeadingZeroIsOctal == zsh.ArithLeadingZeroIsOctal {
+		t.Error("bash and zsh should disagree about whether a leading zero is octal")
 	}
 }
 

@@ -17,6 +17,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | assignment prefix persists on a special builtin | **yes** | no | **yes** | no |
 | brace group needs a terminator before `}` | yes | yes | yes | **no** |
 | `${#@}` is the count of parameters | **no** | yes | yes | yes |
+| `[^abc]` negates | **no** | yes | yes | yes |
 | array index base | *n/a* | 0 | 0 | **1** |
 | `echo` expands backslashes | **yes** | no | no | **yes** |
 | glob with no match | passes pattern | passes pattern | passes pattern | **error** |
@@ -54,6 +55,7 @@ Group the shells by which side of each axis they fall on:
     `&>` unsupported     {dash, ksh93≤93u+}  — {dash} alone on ksh93u+m
     prefix persists      {dash, ksh93}
     `${#@}` is a count   {dash}
+    `[^…]` negates       {dash}
     brace needs `;`      {zsh}
     array base           {zsh}
     echo backslash       {dash, zsh}
@@ -64,7 +66,7 @@ Group the shells by which side of each axis they fall on:
     readonly continues   {bash}
     shift survives       {bash, zsh}
 
-Eight distinct groupings across fourteen axes: `{zsh}`, `{dash,zsh}`,
+Eight distinct groupings across fifteen axes: `{zsh}`, `{dash,zsh}`,
 `{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`, `{dash,ksh93}` and
 `{dash}` — the last of which `${#@}` now produces on its own, where
 previously it appeared only as the modern-ksh reading of the `&>` axis.

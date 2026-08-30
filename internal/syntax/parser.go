@@ -272,10 +272,26 @@ func (p *Parser) parseRedirect() *Redirect {
 	}
 	r.Op, r.OpPos = p.tok.Kind, p.tok.Pos
 	p.next()
-	if r.Word = p.word(); r.Word == nil {
+	if p.tok.Kind != TokWord {
 		p.fail("expected a target after %s", r.Op)
 		return nil
 	}
+	// Built without advancing, because advancing is what reaches the newline
+	// where the body is read — and the queue has to be set before that
+	// happens. Registering after p.word() looks equivalent and silently
+	// collects nothing.
+	r.Word = &Word{Spans: p.tok.Spans, Start: p.tok.Pos, Stop: p.tok.End}
+	if r.Op.IsHeredoc() {
+		// Any quoting *anywhere* in the delimiter makes the whole body
+		// literal, and a backslash counts. Both are detected the same way:
+		// if removing quotes changed the text, it was quoted. `\EOF` and
+		// `"EOF"` both differ from their literal; a bare `EOF` does not.
+		quoted := p.tok.Text != p.tok.Literal()
+		// The body starts after the next newline, which the lexer reaches;
+		// the delimiter is here, which the parser has. Hence the handoff.
+		p.lex.queueHeredoc(r, quoted)
+	}
+	p.next()
 	return r
 }
 

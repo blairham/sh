@@ -388,3 +388,95 @@ func FuzzParserNeverPanics(f *testing.F) {
 		_ = dump(file)
 	})
 }
+
+func heredocs(t *testing.T, src string) []*Redirect {
+	t.Helper()
+	f, err := Parse(src, Core())
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	sc, ok := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*SimpleCmd)
+	if !ok {
+		t.Fatalf("want a simple command in %q", src)
+	}
+	return sc.Redirs
+}
+
+func TestHeredocBodyStartsAfterTheNextNewline(t *testing.T) {
+	// Not after the operator: the rest of the line is ordinary input and is
+	// read first. This is why collecting the body needs the lexer and the
+	// parser to cooperate — the parser has the delimiter, the lexer reaches
+	// the newline.
+	rs := heredocs(t, "cat <<EOF; echo after\none\nEOF\n")
+	if len(rs) != 1 {
+		t.Fatalf("want 1 redirect, got %d", len(rs))
+	}
+	if got := rs[0].Heredoc.Literal(); got != "one\n" {
+		t.Errorf("body = %q, want %q", got, "one\n")
+	}
+}
+
+func TestHeredocEndsOnAnExactDelimiterLine(t *testing.T) {
+	rs := heredocs(t, "cat <<EOF\nEOFX\nEOF\n")
+	if got := rs[0].Heredoc.Literal(); got != "EOFX\n" {
+		t.Errorf("body = %q: EOFX must not end an EOF heredoc", got)
+	}
+}
+
+func TestHeredocDashStripsTabsOnly(t *testing.T) {
+	rs := heredocs(t, "cat <<-EOF\n\ttabbed\n\tEOF\n")
+	if got := rs[0].Heredoc.Literal(); got != "tabbed\n" {
+		t.Errorf("body = %q, want tabs stripped", got)
+	}
+	// Spaces are not stripped, so a space-indented delimiter never matches and
+	// the heredoc runs to the end of input — unfinished, not wrong.
+	p := NewParser("cat <<-EOF\n    spaced\n    EOF\n", Core())
+	p.Parse()
+	if p.Err() == nil {
+		t.Fatal("want an error when the delimiter never matches")
+	}
+	if !p.Incomplete() {
+		t.Errorf("want Incomplete, got %v", p.Err())
+	}
+}
+
+func TestSeveralHeredocsAreCollectedInOperatorOrder(t *testing.T) {
+	rs := heredocs(t, "cat <<A <<B\nfirst\nA\nsecond\nB\n")
+	if len(rs) != 2 {
+		t.Fatalf("want 2 redirects, got %d", len(rs))
+	}
+	if got := rs[0].Heredoc.Literal(); got != "first\n" {
+		t.Errorf("first body = %q", got)
+	}
+	if got := rs[1].Heredoc.Literal(); got != "second\n" {
+		t.Errorf("second body = %q", got)
+	}
+}
+
+func TestHeredocDelimiterQuotingReachesTheBody(t *testing.T) {
+	// Any quoting anywhere in the delimiter makes the whole body literal. The
+	// body is kept raw either way; the flag is what tells expansion whether to
+	// re-read it.
+	for _, src := range []string{
+		"cat <<\"EOF\"\n$x\nEOF\n",
+		"cat <<'EOF'\n$x\nEOF\n",
+		"cat <<\\EOF\n$x\nEOF\n",
+	} {
+		rs := heredocs(t, src)
+		if q := rs[0].Heredoc.Spans[0].Quoting; q == Unquoted {
+			t.Errorf("%q: body marked unquoted, but the delimiter was quoted", src)
+		}
+	}
+	rs := heredocs(t, "cat <<EOF\n$x\nEOF\n")
+	if q := rs[0].Heredoc.Spans[0].Quoting; q != Unquoted {
+		t.Errorf("unquoted delimiter should leave the body expandable, got %v", q)
+	}
+}
+
+func TestHeredocUnterminatedIsIncomplete(t *testing.T) {
+	p := NewParser("cat <<EOF\nbody\n", Core())
+	p.Parse()
+	if !p.Incomplete() {
+		t.Error("want Incomplete when the delimiter never arrives")
+	}
+}

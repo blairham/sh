@@ -27,6 +27,27 @@ type Lexer struct {
 
 	err        error
 	incomplete bool
+
+	// pending holds here-documents whose bodies have not been read yet.
+	//
+	// A body starts after the *next newline*, not after the operator — the
+	// rest of the line is ordinary input — so the parser registers the
+	// redirection when it sees the delimiter and the lexer fills the body in
+	// when it reaches the newline. Several on one line are collected in
+	// operator order.
+	pending       []*Redirect
+	pendingQuoted []bool
+}
+
+// queueHeredoc registers a redirection whose body is still to be read. The
+// parser calls it; the lexer fills r.Heredoc at the next newline.
+//
+// quoted comes from the parser because it is a property of how the delimiter
+// was *written*, which only the raw token still knows: `\EOF` produces the
+// same spans as `EOF`, and both make the body literal.
+func (l *Lexer) queueHeredoc(r *Redirect, quoted bool) {
+	l.pending = append(l.pending, r)
+	l.pendingQuoted = append(l.pendingQuoted, quoted)
 }
 
 // NewLexer returns a Lexer over src.
@@ -92,6 +113,8 @@ func (l *Lexer) Next() Token {
 
 	if l.peek() == '\n' {
 		l.advance()
+		// The newline is where any pending here-document bodies begin.
+		l.readHeredocs()
 		return Token{Kind: TokNewline, Pos: start, End: l.pos(), Text: "\n"}
 	}
 
@@ -719,4 +742,71 @@ func (l *Lexer) peekIsFuncParens() bool {
 		i++
 	}
 	return i < len(l.src) && l.src[i] == ')'
+}
+
+// readHeredocs consumes the bodies of every here-document queued on the line
+// just ended, in the order their operators appeared.
+func (l *Lexer) readHeredocs() {
+	queued, quoted := l.pending, l.pendingQuoted
+	l.pending, l.pendingQuoted = nil, nil
+	for i, r := range queued {
+		l.readOneHeredoc(r, quoted[i])
+	}
+}
+
+func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
+	strip := r.Op == TokDLessDash
+	delim := r.Word.Literal()
+	start := l.pos()
+	var body strings.Builder
+	for {
+		if l.eof() {
+			// Reaching the end without the delimiter is unfinished input
+			// rather than a syntax error: bash warns and carries on, and the
+			// others take it silently.
+			l.incomplete = true
+			l.fail(start, "here-document delimited by end of input, wanted %q", delim)
+			break
+		}
+		line, done := l.heredocLine(strip)
+		if done == delim {
+			break
+		}
+		body.WriteString(line)
+	}
+
+	q := Unquoted
+	if quoted {
+		q = SingleQuoted
+	}
+	// The body is kept raw. An unquoted body is subject to expansion, which
+	// re-reads it later — the same treatment $( ) and ${ } get, and for the
+	// same reason: what is inside is not this stage's to interpret.
+	r.Heredoc = &Word{
+		Spans: []Span{{Kind: Literal, Value: body.String(), Quoting: q, Pos: start}},
+		Start: start,
+		Stop:  l.pos(),
+	}
+}
+
+// heredocLine reads one line. It returns the line including its newline, and
+// separately the line's content with tabs stripped when the operator asked for
+// it, so the caller can compare that against the delimiter.
+func (l *Lexer) heredocLine(strip bool) (line, content string) {
+	begin := l.off
+	for !l.eof() && l.peek() != '\n' {
+		l.advance()
+	}
+	content = l.src[begin:l.off]
+	if !l.eof() {
+		l.advance() // the newline
+	}
+	line = l.src[begin:l.off]
+	if strip {
+		// Tabs only. Spaces are not stripped, which is why a delimiter
+		// indented with spaces never matches.
+		line = strings.TrimLeft(line, "\t")
+		content = strings.TrimLeft(content, "\t")
+	}
+	return line, content
 }

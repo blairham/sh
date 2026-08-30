@@ -309,6 +309,15 @@ func printRedirs(rs []*syntax.Redirect, pad string, depth int) {
 			n = r.N.Literal()
 		}
 		fmt.Printf("%s  %-8s redirect %s%s %s\n", pad, r.Pos(), n, r.Op, r.Word.Literal())
+		if r.Heredoc != nil {
+			kind := "expanded"
+			if r.Heredoc.Spans[0].Quoting != syntax.Unquoted {
+				kind = "literal"
+			}
+			for _, line := range strings.Split(strings.TrimRight(r.Heredoc.Literal(), "\n"), "\n") {
+				fmt.Printf("%s    %-8s heredoc(%s) %s\n", pad, "", kind, line)
+			}
+		}
 	}
 	_ = depth
 }

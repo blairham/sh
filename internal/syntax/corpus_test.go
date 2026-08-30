@@ -50,22 +50,8 @@ func TestCorpusLexes(t *testing.T) {
 // Every corpus snippet is a complete program that real shells ran, so each
 // must parse. This is the parser's version of TestCorpusLexes and the same
 // argument: the corpus checking the implementation rather than the panel.
-//
-// Here-documents are excluded for now, and named rather than filtered by a
-// pattern, because their bodies are read from the lines after the command
-// and the parser does not do that yet. Listing them keeps the exclusion
-// visible instead of quietly shrinking the denominator.
-var noHeredocYet = map[string]bool{
-	"token/heredoc-unquoted-delimiter-expands":  true,
-	"token/heredoc-quoted-delimiter-literal":    true,
-	"token/heredoc-backslash-delimiter-literal": true,
-}
-
 func TestCorpusParses(t *testing.T) {
 	for _, c := range oracle.Corpus {
-		if noHeredocYet[c.ID] {
-			continue
-		}
 		t.Run(c.ID, func(t *testing.T) {
 			p := syntax.NewParser(c.Snippet, syntax.Bash())
 			f := p.Parse()

@@ -24,8 +24,18 @@ func (r *Runner) commandSubst(ctx context.Context, src string) string {
 	p := syntax.NewParser(src, r.dialect())
 	f := p.Parse()
 	if err := p.Err(); err != nil {
+		// A substitution re-parses, so the syntax-error status is the
+		// dialect's here too — not only in whatever first read the script.
+		//
+		// And it is fatal: dash, bash, ksh93 and zsh all abandon the script
+		// rather than continue with an empty substitution. They detect it
+		// when they parse the whole input; this parses the body at expansion
+		// time, so the same outcome has to be produced deliberately. Without
+		// it the diagnostic appeared and the next command ran regardless,
+		// which is the shape this package keeps finding.
 		r.errf("sh: %v\n", err)
-		r.status = 2
+		r.status = r.diag().SyntaxError()
+		r.ctl = controlExit
 		return ""
 	}
 

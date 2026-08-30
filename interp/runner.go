@@ -67,6 +67,10 @@ type Runner struct {
 	ctx context.Context
 	// inFunc is the name of the function being run, for `$0`.
 	inFunc string
+	// expandErr records that an expansion failed — a division by zero, a
+	// number that is not one. The command does not run, which is what every
+	// shell in the panel does and what the exit status has to say.
+	expandErr bool
 	// unspecified records that a script depended on an axis no dialect had
 	// answered, so a caller can tell that from an ordinary failure.
 	unspecified bool
@@ -250,15 +254,15 @@ func (r *Runner) unsupported(what string) error {
 }
 
 func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
-	r.unspecified = false
+	r.unspecified, r.expandErr = false, false
 	var argv []string
 	for _, w := range c.Args {
 		argv = append(argv, r.expandWord(w)...)
 	}
-	// A command whose expansion depended on an axis no dialect answered does
-	// not run. Reporting and then running anyway would be the silent wrong
-	// answer this whole structure exists to avoid.
-	if r.unspecified {
+	// A command whose expansion failed, or depended on an axis no dialect
+	// answered, does not run. Reporting and then running anyway would be the
+	// silent wrong answer this whole structure exists to avoid.
+	if r.unspecified || r.expandErr {
 		r.status = 2
 		return nil
 	}

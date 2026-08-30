@@ -227,9 +227,12 @@ func (r *Runner) arithValueOf(name string, depth int) (int, error) {
 		return n, nil
 	}
 	if isNameLike(value) {
+		// bash and zsh re-evaluate a name-shaped value as an expression;
+		// dash and ksh93 error. Following the two that agree.
 		return r.arithValueOf(strings.TrimSpace(value), depth+1)
 	}
-	return 0, nil
+	// Not a number and not a name: an error rather than a silent zero.
+	return 0, arithError{"invalid number: " + strings.TrimSpace(value)}
 }
 
 func isNameLike(s string) bool {

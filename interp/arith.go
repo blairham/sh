@@ -226,9 +226,7 @@ func (r *Runner) arithValueOf(name string, depth int) (int, error) {
 	if n, err := r.parseNum(strings.TrimSpace(value)); err == nil {
 		return n, nil
 	}
-	if isNameLike(value) {
-		// bash and zsh re-evaluate a name-shaped value as an expression;
-		// dash and ksh93 error. Following the two that agree.
+	if isNameLike(value) && r.ask(r.sem().ArithNameValueRecurses, "re-evaluating a name-shaped value") {
 		return r.arithValueOf(strings.TrimSpace(value), depth+1)
 	}
 	// Not a number and not a name: an error rather than a silent zero.
@@ -280,6 +278,12 @@ func (r *Runner) parseNum(s string) (int, error) {
 		n, err = strconv.ParseInt(s[2:], 16, 64)
 	case len(s) > 1 && s[0] == '0' && !strings.ContainsAny(s, "xX#") && r.octalLeadingZero():
 		n, err = strconv.ParseInt(s[1:], 8, 64)
+		if err != nil && !r.ask(r.sem().ArithInvalidOctalDigitIsError, "an invalid octal digit being an error") {
+			// ksh93 is octal *and* tolerant: `08` is 8 there, not a
+			// failure. Asked only once the octal read has actually failed,
+			// so a dialect that never sees a bad digit is never questioned.
+			n, err = strconv.ParseInt(s, 10, 64)
+		}
 	default:
 		n, err = strconv.ParseInt(s, 10, 64)
 	}

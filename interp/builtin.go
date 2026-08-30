@@ -177,8 +177,10 @@ func biShift(r *Runner, _ context.Context, args []string) int {
 	if n > len(r.Params) {
 		// Fatal in dash and ksh93, survivable in bash and zsh.
 		if r.ask(r.sem().ShiftPastEndFatal, "shift past the end being fatal") {
-			r.errf("sh: shift: can't shift that many\n")
-			r.ctl = controlReturn
+			// controlReturn only unwound a function, so at the top level the
+			// script carried on past an error the shell calls fatal.
+			r.fatal("sh: shift: can't shift that many\n")
+			return r.status
 		}
 		return 1
 	}

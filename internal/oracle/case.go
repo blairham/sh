@@ -698,6 +698,16 @@ var Corpus = []Case{
 		Why:     "and nothing stops it crossing a slash either, because there are no components",
 	},
 	{
+		ID: "pat/unterminated-bracket", Category: "pattern matching",
+		Snippet: `case "[" in [) echo hit;; *) echo miss;; esac`,
+		Why:     "a bare `[` is the test builtin's name, so this is load-bearing: bash and ksh93 take it literally and hit, dash matches nothing, zsh calls it a bad pattern",
+	},
+	{
+		ID: "pat/unterminated-bracket-globs", Category: "pattern matching",
+		Snippet: `echo [ ; echo [a`,
+		Why:     "the same question against the filesystem, where all four agree a lone `[` is literal and only zsh rejects `[a`",
+	},
+	{
 		ID: "pat/star-stops-at-slash-in-glob", Category: "pattern matching",
 		Snippet: `mkdir s; touch s/f; printf "[%s]" *f`,
 		Why:     "in pathname expansion it cannot cross a directory boundary; an unmatched pattern is passed through, except in zsh",

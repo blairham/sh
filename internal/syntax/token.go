@@ -128,6 +128,11 @@ const (
 	// Dollar-single quotes, $'...', where backslash escapes are interpreted.
 	// Absent from dash.
 	DollarSingleQuoted
+	// BackslashQuoted is a single character protected by an unquoted
+	// backslash. It is its own value rather than folded into the literal
+	// text around it, because the protection has to survive: `\*` and `'*'`
+	// behave identically, and a field that forgot the backslash would glob.
+	BackslashQuoted
 )
 
 // SpanKind says what a span is, as distinct from how it was quoted. A

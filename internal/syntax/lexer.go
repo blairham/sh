@@ -279,6 +279,7 @@ func (l *Lexer) scanWord(start Pos) Token {
 			l.advance()
 
 		case c == '\\':
+			escPos := l.pos()
 			l.advance()
 			if l.eof() {
 				// A trailing backslash is unfinished rather than wrong.
@@ -286,10 +287,15 @@ func (l *Lexer) scanWord(start Pos) Token {
 				l.fail(l.pos(), "input ends after a backslash")
 				break
 			}
-			if lit.Len() == 0 {
-				litPos = l.pos()
-			}
-			lit.WriteByte(l.advance())
+			// Its own span: the protection must outlive the lexer, because a
+			// later stage decides whether the character is a metacharacter.
+			flush()
+			spans = append(spans, Span{
+				Kind:    Literal,
+				Value:   string(l.advance()),
+				Quoting: BackslashQuoted,
+				Pos:     escPos,
+			})
 
 		case c == '\'':
 			flush()

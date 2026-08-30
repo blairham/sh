@@ -276,3 +276,23 @@ func TestCoreAgreesWithTheShellsWhereTheyAgree(t *testing.T) {
 		t.Errorf("${#@} is the count in every core shell, got %q", got)
 	}
 }
+
+func TestArithmeticErrorsFailTheCommand(t *testing.T) {
+	// `echo $((1/0))` fails in every shell in the panel rather than echoing
+	// an empty string. Reporting the error and then running the command was
+	// the silent wrong answer — the diagnostic went to stderr and the exit
+	// status said everything had gone fine.
+	for _, src := range []string{`echo $((1/0))`, `echo $((08))`, `echo $((1%0))`} {
+		out, st := run(t, src, nil)
+		if st != 2 {
+			t.Errorf("%s: status = %d, want 2", src, st)
+		}
+		if strings.Contains(out, "\n\n") || out == "\n" {
+			t.Errorf("%s: the command ran anyway, got %q", src, out)
+		}
+	}
+	// And a working expression is unaffected.
+	if out, st := run(t, `echo $((1/1))`, nil); out != "1\n" || st != 0 {
+		t.Errorf("got %q status %d", out, st)
+	}
+}

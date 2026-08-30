@@ -33,12 +33,18 @@ type Match struct {
 
 // Report is the outcome of a conformance run.
 type Report struct {
-	Against  string
-	Matches  []Match
-	Passed   int
-	Total    int
-	Missing  []string
-	NotBuilt bool
+	Against string
+	Matches []Match
+	Passed  int
+	// SameStatus counts cases that agree about what *happened* — the same
+	// exit status — while disagreeing about the words. Diagnostics are not
+	// specified by anything and no two shells word them alike, so an
+	// exact-output score understates behavioural agreement and this says by
+	// how much.
+	SameStatus int
+	Total      int
+	Missing    []string
+	NotBuilt   bool
 }
 
 // RunConformance runs every case through the binary at path and compares it
@@ -88,8 +94,11 @@ func RunConformance(ctx context.Context, path, against string, args []string, ca
 		ok := want.Output == got.Output && want.Status == got.Status
 		rep.Matches = append(rep.Matches, Match{CaseID: c.ID, Want: want, Got: got, OK: ok})
 		rep.Total++
-		if ok {
+		switch {
+		case ok:
 			rep.Passed++
+		case want.Status == got.Status:
+			rep.SameStatus++
 		}
 	}
 	sort.Slice(rep.Matches, func(i, j int) bool { return rep.Matches[i].CaseID < rep.Matches[j].CaseID })
@@ -110,6 +119,11 @@ func (r *Report) Summary(verbose bool) string {
 		pct = 100 * float64(r.Passed) / float64(r.Total)
 	}
 	fmt.Fprintf(&b, "conformance against %s: %d/%d (%.0f%%)\n", r.Against, r.Passed, r.Total, pct)
+	if r.SameStatus > 0 {
+		behav := 100 * float64(r.Passed+r.SameStatus) / float64(r.Total)
+		fmt.Fprintf(&b, "  plus %d agreeing on the exit status but not the wording — %.0f%% behavioural\n",
+			r.SameStatus, behav)
+	}
 	if len(r.Missing) > 0 {
 		fmt.Fprintf(&b, "panel members absent here: %s\n", strings.Join(r.Missing, ", "))
 	}

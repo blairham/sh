@@ -149,7 +149,9 @@ func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
 		v, err := r.evalArith(s.Arith)
 		if err != nil {
 			r.errf("sh: %v\n", err)
-			r.status = 1
+			// The command must not run: `echo $((1/0))` fails in every shell
+			// in the panel rather than echoing an empty string.
+			r.expandErr = true
 			return "", false
 		}
 		return r.expansionResult(itoa(v), unquoted, r.sem().SplitParamExpansion, "splitting an unquoted arithmetic expansion")

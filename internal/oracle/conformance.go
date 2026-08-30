@@ -47,7 +47,7 @@ type Report struct {
 // Cases the reference shells reject are skipped: what an implementation does
 // with input that is not valid shell is a separate question from whether it
 // agrees about input that is.
-func RunConformance(ctx context.Context, path, against string, cases []Case) (*Report, error) {
+func RunConformance(ctx context.Context, path, against string, args []string, cases []Case) (*Report, error) {
 	if path == "" {
 		return &Report{NotBuilt: true}, nil
 	}
@@ -69,10 +69,10 @@ func RunConformance(ctx context.Context, path, against string, cases []Case) (*R
 	ours := Found{
 		Shell: Shell{
 			Name: "ours",
-			// Told which shell to be. It defaults to a strict core that
-			// refuses what the panel disagrees about, so a grade against
-			// bash has to ask for bash.
-			Args: []string{"-dialect", against},
+			// Whatever flags the binary needs to be the shell it is being
+			// graded against. The core driver takes -dialect; a dialect
+			// binary already is one and takes nothing.
+			Args: args,
 			Why:  "the implementation under test",
 		},
 		Path: path,

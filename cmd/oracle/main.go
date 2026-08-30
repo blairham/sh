@@ -16,6 +16,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/blairham/sh/internal/oracle"
 )
@@ -34,11 +35,12 @@ func main() {
 		bin    = flag.String("bin", "", "grade this binary against the panel instead of recording it")
 		ref    = flag.String("against", "bash", "which panel shell to grade against")
 		vrb    = flag.Bool("v", false, "list the cases that do not match")
+		bargs  = flag.String("binargs", "", "space-separated flags the binary needs, before -c")
 	)
 	flag.Parse()
 
 	if *bin != "" {
-		rep, err := oracle.RunConformance(context.Background(), *bin, *ref, oracle.Corpus)
+		rep, err := oracle.RunConformance(context.Background(), *bin, *ref, strings.Fields(*bargs), oracle.Corpus)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "oracle:", err)
 			os.Exit(exitFailure)

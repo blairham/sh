@@ -1,4 +1,4 @@
-.PHONY: all build test test-cover fmt vet lint tidy clean check oracle oracle-check conformance
+.PHONY: all build test test-cover fmt vet lint tidy clean check oracle oracle-check conformance conformance-dialects
 
 all: build
 
@@ -35,6 +35,12 @@ oracle: ## Regenerate docs/spec/measurements.md and the golden record from a liv
 oracle-check: ## Fail if the reference shells no longer behave as recorded
 	go run ./cmd/oracle -check
 
-conformance: ## Grade our own sh against the panel over the whole corpus
+conformance: ## Grade the core driver against bash over the whole corpus
 	@go build -o $${TMPDIR:-/tmp}/sh-under-test ./cmd/sh
-	@go run ./cmd/oracle -bin $${TMPDIR:-/tmp}/sh-under-test $(ARGS)
+	@go run ./cmd/oracle -bin $${TMPDIR:-/tmp}/sh-under-test -binargs "-dialect bash" $(ARGS)
+
+conformance-dialects: ## Grade each dialect binary against the shell it claims to be
+	@go build -o $${TMPDIR:-/tmp}/our-bash ./cmd/bash
+	@go build -o $${TMPDIR:-/tmp}/our-zsh ./cmd/zsh
+	@go run ./cmd/oracle -bin $${TMPDIR:-/tmp}/our-bash -against bash $(ARGS)
+	@go run ./cmd/oracle -bin $${TMPDIR:-/tmp}/our-zsh -against zsh $(ARGS)

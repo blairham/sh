@@ -29,6 +29,12 @@ type Case struct {
 	// Script runs the snippet from a file instead of -c. Set it only when the
 	// behaviour depends on how input is read, and say why.
 	Script bool
+
+	// SyntaxError marks a case the reference shells *reject*. The corpus
+	// records rejections as well as successes — a rule is only pinned by
+	// showing both sides of it — so a consumer checking that every snippet
+	// parses has to know which ones must not.
+	SyntaxError bool
 }
 
 // Corpus is the checked-in set. Every table in docs/spec should be derivable
@@ -416,7 +422,7 @@ var Corpus = []Case{
 		Why:     "{ } runs in the current shell, which is the whole difference between them",
 	},
 	{
-		ID: "cmd/brace-group-needs-terminator", Category: "command language",
+		ID: "cmd/brace-group-needs-terminator", SyntaxError: true, Category: "command language",
 		Snippet: `{ echo a }`,
 		Why:     "{ } is made of reserved words and needs a terminator before the brace — except in zsh",
 	},
@@ -503,12 +509,12 @@ var Corpus = []Case{
 	},
 	// --- compound command shapes ---------------------------------------------
 	{
-		ID: "shape/terminator-required-before-then", Category: "compound shapes",
+		ID: "shape/terminator-required-before-then", SyntaxError: true, Category: "compound shapes",
 		Snippet: `if true then echo x; fi`,
 		Why:     "the keyword does not delimit the condition; a ; or newline does, so the production needs a separator",
 	},
 	{
-		ID: "shape/terminator-required-before-do", Category: "compound shapes",
+		ID: "shape/terminator-required-before-do", SyntaxError: true, Category: "compound shapes",
 		Snippet: `while false do echo x; done`,
 		Why:     "the same rule for loops, so it is a property of the grammar rather than of `if`",
 	},

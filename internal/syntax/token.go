@@ -12,65 +12,65 @@ type Kind uint8
 
 //go:generate stringer -type=Kind
 const (
-	// EOF is returned once the input is exhausted, repeatedly.
-	EOF Kind = iota
+	// TokEOF is returned once the input is exhausted, repeatedly.
+	TokEOF Kind = iota
 
-	// Word is a word, possibly built from differently quoted spans. Its
+	// TokWord is a word, possibly built from differently quoted spans. Its
 	// Spans field is what carries the quoting; see [Token].
-	Word
+	TokWord
 
-	// IONumber is a run of digits immediately followed by a redirection
+	// TokIONumber is a run of digits immediately followed by a redirection
 	// operator, which makes it a file descriptor rather than an argument.
 	// `echo 1>b` writes an empty file and `echo 1 >b` writes "1"; one space
 	// changes what the digit is.
-	IONumber
+	TokIONumber
 
-	// Newline is significant: it terminates a command like `;` does, and it
+	// TokNewline is significant: it terminates a command like `;` does, and it
 	// is where a pending here-document's body begins.
-	Newline
+	TokNewline
 
-	// ArithCmd is `(( expr ))` used as a command. Its Text is the expression,
+	// TokArithCmd is `(( expr ))` used as a command. Its Text is the expression,
 	// scanned raw: what is inside is an arithmetic expression rather than a
 	// command list, so tokenizing it as commands would lose it.
-	ArithCmd
+	TokArithCmd
 
 	// Control operators.
-	Amp        // &
-	AndAnd     // &&
-	Pipe       // |
-	OrOr       // ||
-	Semi       // ;
-	DSemi      // ;;
-	SemiAmp    // ;&   fall through to the next case body
-	DSemiAmp   // ;;&  keep testing later case patterns
-	LeftParen  // (
-	RightParen // )
+	TokAmp        // &
+	TokAndAnd     // &&
+	TokPipe       // |
+	TokOrOr       // ||
+	TokSemi       // ;
+	TokDSemi      // ;;
+	TokSemiAmp    // ;&   fall through to the next case body
+	TokDSemiAmp   // ;;&  keep testing later case patterns
+	TokLeftParen  // (
+	TokRightParen // )
 
 	// Redirection operators.
-	Less      // <
-	Great     // >
-	DGreat    // >>
-	LessAmp   // <&
-	GreatAmp  // >&
-	LessGreat // <>
-	Clobber   // >|
-	DLess     // <<
-	DLessDash // <<-
-	TLess     // <<<  herestring
-	AmpGreat  // &>   both streams
-	AmpDGreat // &>>  both streams, appending
+	TokLess      // <
+	TokGreat     // >
+	TokDGreat    // >>
+	TokLessAmp   // <&
+	TokGreatAmp  // >&
+	TokLessGreat // <>
+	TokClobber   // >|
+	TokDLess     // <<
+	TokDLessDash // <<-
+	TokTLess     // <<<  herestring
+	TokAmpGreat  // &>   both streams
+	TokAmpDGreat // &>>  both streams, appending
 )
 
 // text is the source spelling of each operator, and the table the lexer
 // matches against. Longest match wins, which is why callers must not assume
 // this is ordered by anything but Kind.
 var text = map[Kind]string{
-	Amp: "&", AndAnd: "&&", Pipe: "|", OrOr: "||",
-	Semi: ";", DSemi: ";;", SemiAmp: ";&", DSemiAmp: ";;&",
-	LeftParen: "(", RightParen: ")",
-	Less: "<", Great: ">", DGreat: ">>", LessAmp: "<&", GreatAmp: ">&",
-	LessGreat: "<>", Clobber: ">|", DLess: "<<", DLessDash: "<<-",
-	TLess: "<<<", AmpGreat: "&>", AmpDGreat: "&>>",
+	TokAmp: "&", TokAndAnd: "&&", TokPipe: "|", TokOrOr: "||",
+	TokSemi: ";", TokDSemi: ";;", TokSemiAmp: ";&", TokDSemiAmp: ";;&",
+	TokLeftParen: "(", TokRightParen: ")",
+	TokLess: "<", TokGreat: ">", TokDGreat: ">>", TokLessAmp: "<&", TokGreatAmp: ">&",
+	TokLessGreat: "<>", TokClobber: ">|", TokDLess: "<<", TokDLessDash: "<<-",
+	TokTLess: "<<<", TokAmpGreat: "&>", TokAmpDGreat: "&>>",
 }
 
 // String returns the operator's spelling, or a name for the non-operators.
@@ -79,15 +79,15 @@ func (k Kind) String() string {
 		return s
 	}
 	switch k {
-	case EOF:
+	case TokEOF:
 		return "end of input"
-	case Word:
+	case TokWord:
 		return "word"
-	case IONumber:
+	case TokIONumber:
 		return "IO number"
-	case Newline:
+	case TokNewline:
 		return "newline"
-	case ArithCmd:
+	case TokArithCmd:
 		return "arithmetic command"
 	}
 	return "unknown token"
@@ -99,8 +99,8 @@ func (k Kind) String() string {
 // finds them rather than expecting a suffix.
 func (k Kind) IsRedirect() bool {
 	switch k {
-	case Less, Great, DGreat, LessAmp, GreatAmp, LessGreat, Clobber,
-		DLess, DLessDash, TLess, AmpGreat, AmpDGreat:
+	case TokLess, TokGreat, TokDGreat, TokLessAmp, TokGreatAmp, TokLessGreat, TokClobber,
+		TokDLess, TokDLessDash, TokTLess, TokAmpGreat, TokAmpDGreat:
 		return true
 	}
 	return false
@@ -108,7 +108,7 @@ func (k Kind) IsRedirect() bool {
 
 // IsHeredoc reports whether k begins a here-document, whose body is read from
 // the lines after the current one rather than from the token stream.
-func (k Kind) IsHeredoc() bool { return k == DLess || k == DLessDash }
+func (k Kind) IsHeredoc() bool { return k == TokDLess || k == TokDLessDash }
 
 // Quoting says how a span of a word was written, which decides what happens
 // to it later: only unquoted spans of an expansion result are subject to
@@ -193,7 +193,7 @@ type Token struct {
 	// measures.
 	Text string
 
-	// Spans is set for [Word] tokens and is empty otherwise.
+	// Spans is set for [TokWord] tokens and is empty otherwise.
 	Spans []Span
 }
 

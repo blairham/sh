@@ -78,21 +78,21 @@ func (l *Lexer) fail(p Pos, format string, args ...any) {
 	}
 }
 
-// isBlank reports whether c separates tokens. Newline does not: it is a token.
+// isBlank reports whether c separates tokens. TokNewline does not: it is a token.
 func isBlank(c byte) bool { return c == ' ' || c == '\t' }
 
-// Next returns the next token. At the end of input it returns EOF forever.
+// Next returns the next token. At the end of input it returns TokEOF forever.
 func (l *Lexer) Next() Token {
 	l.skipBlanksAndComments()
 	start := l.pos()
 
 	if l.eof() {
-		return Token{Kind: EOF, Pos: start, End: start}
+		return Token{Kind: TokEOF, Pos: start, End: start}
 	}
 
 	if l.peek() == '\n' {
 		l.advance()
-		return Token{Kind: Newline, Pos: start, End: l.pos(), Text: "\n"}
+		return Token{Kind: TokNewline, Pos: start, End: l.pos(), Text: "\n"}
 	}
 
 	// An IO number is digits *immediately* followed by a redirection. The
@@ -168,7 +168,7 @@ func (l *Lexer) tryIONumber() (Token, bool) {
 		l.advance()
 	}
 	return Token{
-		Kind:  IONumber,
+		Kind:  TokIONumber,
 		Pos:   start,
 		End:   l.pos(),
 		Text:  digits,
@@ -179,22 +179,22 @@ func (l *Lexer) tryIONumber() (Token, bool) {
 // operators, longest first. Longest match wins, so the order is the algorithm
 // and not merely tidiness: `>>` must be found before `>`.
 var operators = []Kind{
-	DSemiAmp, TLess, AmpDGreat, DLessDash, // 3 bytes
-	AndAnd, OrOr, DSemi, SemiAmp, DGreat, LessAmp, GreatAmp,
-	LessGreat, Clobber, DLess, AmpGreat, // 2 bytes
-	Amp, Pipe, Semi, LeftParen, RightParen, Less, Great, // 1 byte
+	TokDSemiAmp, TokTLess, TokAmpDGreat, TokDLessDash, // 3 bytes
+	TokAndAnd, TokOrOr, TokDSemi, TokSemiAmp, TokDGreat, TokLessAmp, TokGreatAmp,
+	TokLessGreat, TokClobber, TokDLess, TokAmpGreat, // 2 bytes
+	TokAmp, TokPipe, TokSemi, TokLeftParen, TokRightParen, TokLess, TokGreat, // 1 byte
 }
 
 // enabled reports whether the dialect has this operator at all.
 func (l *Lexer) enabled(k Kind) bool {
 	switch k {
-	case AmpGreat, AmpDGreat:
+	case TokAmpGreat, TokAmpDGreat:
 		return l.dialect.AmpersandRedirect
-	case SemiAmp:
+	case TokSemiAmp:
 		return l.dialect.CaseFallthrough
-	case DSemiAmp:
+	case TokDSemiAmp:
 		return l.dialect.CaseContinue
-	case TLess:
+	case TokTLess:
 		return l.dialect.Herestring
 	}
 	return true
@@ -317,7 +317,7 @@ func (l *Lexer) scanWord(start Pos) Token {
 	flush()
 
 	return Token{
-		Kind:  Word,
+		Kind:  TokWord,
 		Pos:   start,
 		End:   l.pos(),
 		Text:  l.src[start.Offset:l.off],
@@ -458,13 +458,13 @@ func (l *Lexer) scanDollarSingle() (Span, bool) {
 func (l *Lexer) eofAt(n int) bool { return l.off+n >= len(l.src) }
 
 // Tokens reads the whole input. It is a convenience for tests and for callers
-// that are not streaming; it stops at EOF or at the first error.
+// that are not streaming; it stops at TokEOF or at the first error.
 func (l *Lexer) Tokens() []Token {
 	var out []Token
 	for {
 		t := l.Next()
 		out = append(out, t)
-		if t.Kind == EOF || l.err != nil {
+		if t.Kind == TokEOF || l.err != nil {
 			return out
 		}
 	}
@@ -692,10 +692,31 @@ func (l *Lexer) scanArithCommand(start Pos) Token {
 	}
 	expr := l.src[exprStart:end]
 	return Token{
-		Kind:  ArithCmd,
+		Kind:  TokArithCmd,
 		Pos:   start,
 		End:   l.pos(),
 		Text:  expr,
 		Spans: []Span{{Kind: ArithSubst, Value: expr, Quoting: Unquoted, Pos: start}},
 	}
+}
+
+// peekIsFuncParens reports whether `()` follows the current position with only
+// blanks between, which is how a POSIX function definition announces itself.
+//
+// The parser needs this because `name` and `name()` are indistinguishable
+// until the paren: a word at command position is a command name right up to
+// the point where it is a function being defined.
+func (l *Lexer) peekIsFuncParens() bool {
+	i := l.off
+	for i < len(l.src) && isBlank(l.src[i]) {
+		i++
+	}
+	if i >= len(l.src) || l.src[i] != '(' {
+		return false
+	}
+	i++
+	for i < len(l.src) && isBlank(l.src[i]) {
+		i++
+	}
+	return i < len(l.src) && l.src[i] == ')'
 }

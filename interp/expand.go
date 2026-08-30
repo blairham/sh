@@ -269,10 +269,12 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	}
 
 	if e.Indirect {
-		// `${!x}` reads x, then reads *that* as a name. Only the bash
-		// dialect parses it — ksh93 spells the same thing and means the
-		// name itself — so the grammar has already refused everywhere this
-		// meaning would be wrong, and there is nothing left to guess.
+		// `${!x}` reads x, then reads *that* as a name — in bash. ksh93
+		// parses the same text and yields the name itself, so the grammar
+		// having accepted it is not enough to know what it means.
+		if r.ask(r.sem().IndirectionYieldsName, "${!x} yielding the name") {
+			return e.Name
+		}
 		if !set || value == "" {
 			return ""
 		}

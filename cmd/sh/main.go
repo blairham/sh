@@ -108,9 +108,9 @@ func pickDialect(name string) (syntax.Dialect, interp.Semantics, error) {
 	case "bash":
 		return syntax.Bash(), interp.BashSemantics(), nil
 	case "zsh":
-		return syntax.Core(), interp.ZshSemantics(), nil
+		return syntax.Zsh(), interp.ZshSemantics(), nil
 	case "ksh":
-		return syntax.Core(), interp.KshSemantics(), nil
+		return syntax.Ksh(), interp.KshSemantics(), nil
 	case "dash":
 		return syntax.POSIX(), interp.DashSemantics(), nil
 	}

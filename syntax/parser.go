@@ -83,6 +83,15 @@ func (p *Parser) atStopWord() bool {
 	return p.tok.Kind == TokWord && !p.tok.IsQuoted() && stopWords[p.tok.Literal()]
 }
 
+// tokenText names the current token the way a diagnostic should: the word
+// itself when there is one, and the operator's spelling otherwise.
+func (p *Parser) tokenText() string {
+	if p.tok.Kind == TokWord {
+		return `"` + p.tok.Literal() + `"`
+	}
+	return `"` + p.tok.Kind.String() + `"`
+}
+
 func (p *Parser) fail(format string, args ...any) {
 	if p.err != nil {
 		return
@@ -112,6 +121,16 @@ func (p *Parser) Parse() *File {
 	for !p.at(TokEOF) && p.err == nil {
 		st := p.parseStmt()
 		if st == nil {
+			if p.err == nil && !p.at(TokEOF) {
+				// Nothing here can begin a command: a stop word with no
+				// construct open, most often. Every shell in the panel calls
+				// that a syntax error — `}` alone is one in all four — where
+				// this used to stop quietly and silently truncate the rest of
+				// the script. `function f { ...; }` in a dialect without the
+				// keyword is the case that found it: the `}` ended parsing,
+				// and the commands after it never ran.
+				p.fail("%s unexpected", p.tokenText())
+			}
 			break
 		}
 		f.Stmts = append(f.Stmts, st)
@@ -394,6 +413,16 @@ func (p *Parser) parseSimple() Command {
 			}
 			seenArg = true
 			c.Args = append(c.Args, p.word())
+		case p.at(TokLeftParen) && (seenArg || len(c.Assigns) > 0 || len(c.Redirs) > 0):
+			// A `(` in command position opens a subshell; one *after* a word
+			// opens nothing. All four shells call it a syntax error, so this
+			// is core rather than a dialect question. It is what makes
+			// `function f() { … }` an error where the keyword is absent, and
+			// `[[ ( -n x ) ]]` an error where `[[` is not a construct — both
+			// of which used to run as ordinary commands with surprising
+			// arguments.
+			p.fail("%s unexpected", p.tokenText())
+			return c
 		default:
 			c.Stop = p.tok.Pos
 			if len(c.Assigns) == 0 && len(c.Args) == 0 && len(c.Redirs) == 0 {
@@ -431,10 +460,17 @@ func (p *Parser) parseAssign(name string) *Assign {
 	}
 	p.next()
 
-	// `a=(1 2)` is an array. The parenthesis has to be adjacent: with a space
-	// it is an assignment followed by a subshell, which is what `a= (echo x)`
-	// means and is why this is not simply "a paren follows".
+	// `a=(1 2)` is an array, and the parenthesis has to be adjacent. With a
+	// space it is not a subshell — measured, against the comment that used
+	// to stand here: `a= (echo x)` is a syntax error in dash, bash and zsh,
+	// and only ksh93 accepts it. The adjacency check still matters, because
+	// it decides *which* error, and the non-adjacent form now falls through
+	// to the paren-after-a-word rule in parseSimple.
 	if a.Value == nil && p.at(TokLeftParen) && p.tok.Pos.Offset == a.Stop.Offset {
+		if !p.dialect.ArrayLiteral {
+			p.fail("%s unexpected", p.tokenText())
+			return a
+		}
 		a.IsArray = true
 		p.next()
 		p.skipNewlines()
@@ -491,9 +527,14 @@ func (p *Parser) parseFuncKeyword() Command {
 	}
 	fn.Name = p.tok.Literal()
 	p.next()
-	// The hybrid `function f() {}` is accepted where the dialect has the
-	// keyword; ksh93 rejects it, which is why it is not core.
 	if p.at(TokLeftParen) {
+		// The hybrid `function f() {}`: bash and zsh take it, ksh93 rejects
+		// it. Accepting it everywhere the keyword exists meant the ksh
+		// dialect ran a definition ksh93 calls a syntax error.
+		if !p.dialect.FunctionKeywordParens {
+			p.fail("%s unexpected", p.tokenText())
+			return fn
+		}
 		p.next()
 		if p.at(TokRightParen) {
 			p.next()

@@ -737,4 +737,90 @@ var Corpus = []Case{
 		Snippet: `case abc in @(abc|xyz)) echo at;; esac`,
 		Why:     "ksh93 alone accepts them as written; dash and bash report a syntax error and zsh parses but does not match — three behaviours, so not core",
 	},
+	// --- arithmetic -----------------------------------------------------------
+	{
+		ID: "arith/bare-name-is-a-variable", Category: "arithmetic",
+		Snippet: `x=5; printf "[%s]" "$((x+1))" "$(($x+1))"`,
+		Why:     "a bare name inside arithmetic is a variable reference, which is why the contents cannot be lexed as ordinary words",
+	},
+	{
+		ID: "arith/unset-is-zero", Category: "arithmetic",
+		Snippet: `unset u; printf "[%s]" "$((u+1))"`,
+		Why:     "an unset variable is 0 rather than an error",
+	},
+	{
+		ID: "arith/precedence-follows-c", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$((1+2*3))" "$(((1+2)*3))" "$((2*3%4))"`,
+		Why:     "POSIX defers the operator set and precedence to ISO C",
+	},
+	{
+		ID: "arith/division-truncates", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$((3/2))"`,
+		Why:     "integer division, which is the baseline the float divergence departs from",
+	},
+	{
+		ID: "arith/float-is-a-dialect-axis", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$((1.5))"`,
+		Why:     "ksh93 and zsh evaluate floating point where POSIX says integers only, so neither promising integers nor accepting floats is right everywhere",
+	},
+	{
+		ID: "arith/leading-zero-octal", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$((010))" "$((0100))"`,
+		Why:     "zsh does not read a leading zero as octal — a plausible number, silently different, in code that looks portable, and file modes are written this way",
+	},
+	{
+		ID: "arith/invalid-octal-digit", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$((08))"`,
+		Why:     "the same split from the other side: an error where octal is read, a decimal digit where it is not",
+	},
+	{
+		ID: "arith/explicit-base", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$((2#101))" "$((0x10))"`,
+		Why:     "hex is universal; the base#number form is absent from dash",
+	},
+	{
+		ID: "arith/comparison-yields-one-or-zero", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$((1<2))" "$((2<1))" "$((1==1))"`,
+		Why:     "comparisons yield 1 or 0",
+	},
+	{
+		ID: "arith/logical-yields-one-not-an-operand", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$((2 && 3))" "$((0 || 5))"`,
+		Why:     "a logical operator yields 1 or 0 rather than one of its operands, unlike some languages",
+	},
+	{
+		ID: "arith/short-circuit-is-observable", Category: "arithmetic",
+		Snippet: `x=0; printf "[%s]" "$((0 && (x=9)))" "$x"`,
+		Why:     "assignment is an operator here, so evaluation order is part of the specification rather than an implementation detail",
+	},
+	{
+		ID: "arith/assignment-escapes", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$((x=5))"; printf "[%s]" "$x"`,
+		Why:     "an assignment inside an expression is a side effect that outlives it, like ${x:=5}",
+	},
+	{
+		ID: "arith/ternary", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$((1?2:3))" "$((0?2:3))"`,
+		Why:     "the conditional operator",
+	},
+	{
+		ID: "arith/increment-absent-from-dash", Category: "arithmetic",
+		Snippet: `x=1; printf "[%s]" "$((x++))" "$x"`,
+		Why:     "++ is not POSIX and dash rejects it",
+	},
+	{
+		ID: "arith/comma-absent-from-dash", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$((1,2))"`,
+		Why:     "the sequence operator, likewise",
+	},
+	{
+		ID: "arith/division-by-zero-is-a-runtime-error", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$((1/0))"`,
+		Why:     "unanimous, and a runtime error rather than a syntax one — the expression parses",
+	},
+	{
+		ID: "arith/non-numeric-variable-diverges", Category: "arithmetic",
+		Snippet: `x=abc; printf "[%s]" "$((x+1))"`,
+		Why:     "three answers: dash and ksh93 error differently, while bash and zsh re-evaluate the value as an expression and reach 0",
+	},
 }

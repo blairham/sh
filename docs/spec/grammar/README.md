@@ -17,6 +17,7 @@ re-run rather than trusted.
     substitutions.md   where $( ), ${ }, $(( )) and ` ` end
     parameter-expansion.md  what the operators inside ${ } mean
     patterns.md        the matching language, shared by three consumers
+    arithmetic.md      what is inside $(( )) and (( ))
     expansion.md       the expansion pipeline and its ordering
     word-splitting.md  field splitting and IFS
 

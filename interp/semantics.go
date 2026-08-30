@@ -248,64 +248,6 @@ func CoreSemantics() Semantics {
 	}
 }
 
-// BashSemantics is bash's answers.
-func BashSemantics() Semantics {
-	s := PosixSemantics()
-	s.AssignmentPrefixPersistsOnSpecialBuiltin = No
-	s.FatalErrorStatusIsOne = Yes
-	s.ArithNameValueRecurses = Yes
-	s.IndirectionYieldsName = No
-	s.BraceExpansion = Yes
-	s.BracketCaretNegates = Yes
-	s.ReadonlyReassignmentFatal = No
-	s.ShiftPastEndFatal = No
-	s.RegexQuotingMakesLiteral = Yes
-	return s
-}
-
-// ZshSemantics is zsh's, and is the one that shows why this is a vector: it
-// differs from bash on seven axes and agrees with dash on one of them.
-func ZshSemantics() Semantics {
-	s := BashSemantics()
-	s.SplitParamExpansion = No
-	s.GlobExpansionResults = No
-	s.GlobNoMatchIsError = Yes
-	s.EchoInterpretsEscapes = Yes
-	s.ArithLeadingZeroIsOctal = No
-	s.ArithFloat = Yes
-	s.RegexQuotingMakesLiteral = No
-	s.LastPipelineElementInCurrentShell = Yes
-	s.DollarZeroInFunctionIsFunctionName = Yes
-	// Reset, not inherited: this preset derives from bash's, and bash is the
-	// only shell in the panel that survives a readonly reassignment. Taking
-	// the default here contradicted the measured table for as long as
-	// nothing exercised it.
-	s.ReadonlyReassignmentFatal = Yes
-	s.ArrayBaseIsZero = No
-	return s
-}
-
-// KshSemantics is ksh93's.
-func KshSemantics() Semantics {
-	s := PosixSemantics()
-	s.ArithFloat = Yes
-	s.FatalErrorStatusIsOne = Yes
-	s.ArithInvalidOctalDigitIsError = No
-	s.IndirectionYieldsName = Yes
-	s.BraceExpansion = Yes
-	s.BracketCaretNegates = Yes
-	s.LastPipelineElementInCurrentShell = Yes
-	return s
-}
-
-// DashSemantics is dash's.
-func DashSemantics() Semantics {
-	s := PosixSemantics()
-	s.EchoInterpretsEscapes = Yes
-	s.LengthOfSpecialIsCount = No
-	return s
-}
-
 // sem returns the runner's semantics, defaulting to the core.
 //
 // Defaulting to a *shell* would be the substrate answering a question that is

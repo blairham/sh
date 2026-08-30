@@ -27,6 +27,10 @@ import (
 	"os"
 	"strings"
 
+	"github.com/blairham/sh/dialect/bash"
+	"github.com/blairham/sh/dialect/dash"
+	"github.com/blairham/sh/dialect/ksh"
+	"github.com/blairham/sh/dialect/zsh"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -106,13 +110,13 @@ func pickDialect(name string) (syntax.Dialect, interp.Semantics, interp.Diagnost
 	case "posix":
 		return syntax.POSIX(), interp.PosixSemantics(), interp.PosixDiagnostics(), nil
 	case "bash":
-		return syntax.Bash(), interp.BashSemantics(), interp.BashDiagnostics(), nil
+		return bash.Dialect(), bash.Semantics(), bash.Diagnostics(), nil
 	case "zsh":
-		return syntax.Zsh(), interp.ZshSemantics(), interp.ZshDiagnostics(), nil
+		return zsh.Dialect(), zsh.Semantics(), zsh.Diagnostics(), nil
 	case "ksh":
-		return syntax.Ksh(), interp.KshSemantics(), interp.KshDiagnostics(), nil
+		return ksh.Dialect(), ksh.Semantics(), ksh.Diagnostics(), nil
 	case "dash":
-		return syntax.POSIX(), interp.DashSemantics(), interp.DashDiagnostics(), nil
+		return dash.Dialect(), dash.Semantics(), dash.Diagnostics(), nil
 	}
 	return syntax.Dialect{}, interp.Semantics{}, interp.Diagnostics{},
 		fmt.Errorf("unknown dialect %q: want core, posix, bash, zsh, ksh or dash", name)

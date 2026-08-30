@@ -155,7 +155,7 @@ func TestParamDialectRefusesRatherThanGuesses(t *testing.T) {
 		if _, err := Parse(src, Core()); err == nil {
 			t.Errorf("%s: core accepted a construct it does not have", src)
 		}
-		if _, err := Parse(src, Bash()); err != nil {
+		if _, err := Parse(src, everyFlag()); err != nil {
 			t.Errorf("%s: bash rejected it: %v", src, err)
 		}
 	}
@@ -167,11 +167,11 @@ func TestParamDialectRefusesRatherThanGuesses(t *testing.T) {
 	}
 }
 
-func TestParamCaseChangeParsesUnderBash(t *testing.T) {
-	if got, want := param(firstParam(t, `echo ${x^^}`, Bash())), `x ^^`; got != want {
+func TestParamCaseChangeParsesWhereTheFlagIsOn(t *testing.T) {
+	if got, want := param(firstParam(t, `echo ${x^^}`, everyFlag())), `x ^^`; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
-	if got, want := param(firstParam(t, `echo ${!x}`, Bash())), `!x`; got != want {
+	if got, want := param(firstParam(t, `echo ${!x}`, everyFlag())), `!x`; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
@@ -185,4 +185,16 @@ func TestParamNestingIsBounded(t *testing.T) {
 	if p.Err() == nil {
 		t.Log("deep nesting parsed without error, which is acceptable; the bound is the point")
 	}
+}
+
+// everyFlag is Core with the remaining opt-in flags on. A core test that wants
+// "the most permissive grammar" names the flags rather than a shell: which
+// shell sets which is the dialect packages' business.
+func everyFlag() Dialect {
+	d := Core()
+	d.CaseContinue = true
+	d.ParamCaseChange = true
+	d.ParamIndirection = true
+	d.FunctionKeywordParens = true
+	return d
 }

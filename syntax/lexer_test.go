@@ -234,7 +234,7 @@ func TestDialectGatesOtherConstructs(t *testing.T) {
 		{"herestring absent", `a<<<b`, POSIX(), `word(a) << < word(b)`},
 		{"case fallthrough in core", `a;&b`, Core(), `word(a) ;& word(b)`},
 		{"case fallthrough absent", `a;&b`, POSIX(), `word(a) ; & word(b)`},
-		{"case continue is bash only", `a;;&b`, Bash(), `word(a) ;;& word(b)`},
+		{"case continue where the flag is on", `a;;&b`, withCaseContinue(), `word(a) ;;& word(b)`},
 		{"case continue absent from core", `a;;&b`, Core(), `word(a) ;; & word(b)`},
 		{"dollar-single in core", `$'a\nb'`, Core(), `word($'a\nb')`},
 	}
@@ -291,7 +291,7 @@ func TestNeverPanics(t *testing.T) {
 					t.Errorf("panic on %q: %v", src, r)
 				}
 			}()
-			for _, d := range []Dialect{Core(), POSIX(), Bash()} {
+			for _, d := range []Dialect{Core(), POSIX(), withCaseContinue()} {
 				NewLexer(src, d).Tokens()
 			}
 		}()
@@ -451,4 +451,13 @@ func TestDoubleBracketIsLeftToTheParser(t *testing.T) {
 	if got, want := lex(t, `echo [[ a ]]`, Core()), `word(echo) word([[) word(a) word(]])`; got != want {
 		t.Errorf("echo case: got %s, want %s", got, want)
 	}
+}
+
+// withCaseContinue is Core plus the one flag under test. A core test names a
+// flag rather than a shell: which shells set it is the dialect packages'
+// business, and this file must not know they exist.
+func withCaseContinue() Dialect {
+	d := Core()
+	d.CaseContinue = true
+	return d
 }

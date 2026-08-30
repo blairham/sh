@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/blairham/sh/dialect/bash"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -46,10 +47,11 @@ func main() {
 
 func run(src string) int {
 	// The whole of "which shell am I", as data.
-	sem := interp.BashSemantics()
-	dial := syntax.Bash()
+	sem := bash.Semantics()
+	dial := bash.Dialect()
+	diag := bash.Diagnostics()
 
-	r := &interp.Runner{Semantics: &sem, Dialect: &dial, Name: "bash"}
+	r := &interp.Runner{Semantics: &sem, Dialect: &dial, Diagnostics: &diag, Name: "bash"}
 	registerPrimitives(r)
 
 	if code := source(r, prelude, dial); code != 0 {

@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/blairham/sh/dialect/zsh"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -46,10 +47,11 @@ func main() {
 
 func run(src string) int {
 	// The whole of "which shell am I", as data.
-	sem := interp.ZshSemantics()
-	dial := syntax.Bash()
+	sem := zsh.Semantics()
+	dial := zsh.Dialect()
+	diag := zsh.Diagnostics()
 
-	r := &interp.Runner{Semantics: &sem, Dialect: &dial, Name: "zsh"}
+	r := &interp.Runner{Semantics: &sem, Dialect: &dial, Diagnostics: &diag, Name: "zsh"}
 	registerPrimitives(r)
 
 	if code := source(r, prelude, dial); code != 0 {

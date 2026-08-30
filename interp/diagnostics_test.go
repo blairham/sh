@@ -1,12 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-package interp
+package interp_test
 
 import (
 	"bytes"
 	"context"
 	"testing"
+
+	"github.com/blairham/sh/dialect/bash"
+	"github.com/blairham/sh/dialect/dash"
+	"github.com/blairham/sh/dialect/ksh"
+	"github.com/blairham/sh/dialect/zsh"
+	. "github.com/blairham/sh/interp"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -20,10 +26,10 @@ func TestSyntaxErrorStatusIsADialectAnswer(t *testing.T) {
 		diag Diagnostics
 		want int
 	}{
-		{"dash", DashDiagnostics(), 2},
-		{"bash", BashDiagnostics(), 2},
-		{"ksh93", KshDiagnostics(), 3},
-		{"zsh", ZshDiagnostics(), 1},
+		{"dash", dash.Diagnostics(), 2},
+		{"bash", bash.Diagnostics(), 2},
+		{"ksh93", ksh.Diagnostics(), 3},
+		{"zsh", zsh.Diagnostics(), 1},
 		// The substrate answers for itself rather than refusing: a status is
 		// not a claim about another shell, and the process must exit with
 		// some number.
@@ -45,16 +51,16 @@ func TestCommandSubstitutionCarriesTheDialectStatus(t *testing.T) {
 		diag Diagnostics
 		want int
 	}{
-		{"ksh93", KshDiagnostics(), 3},
-		{"zsh", ZshDiagnostics(), 1},
-		{"bash", BashDiagnostics(), 2},
+		{"ksh93", ksh.Diagnostics(), 3},
+		{"zsh", zsh.Diagnostics(), 1},
+		{"bash", bash.Diagnostics(), 2},
 	} {
-		f, err := syntax.Parse("x=$(if true); echo after", syntax.Bash())
+		f, err := syntax.Parse("x=$(if true); echo after", bash.Dialect())
 		if err != nil {
 			t.Fatalf("the outer script must parse: %v", err)
 		}
 		var buf bytes.Buffer
-		sem := BashSemantics()
+		sem := bash.Semantics()
 		diag := tc.diag
 		r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag}
 		st, err := r.Run(context.Background(), f)

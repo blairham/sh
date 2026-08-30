@@ -1,13 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-package interp
+package interp_test
 
 import (
 	"strconv"
 	"strings"
 	"syscall"
 	"testing"
+
+	. "github.com/blairham/sh/interp"
 )
 
 func TestBackgroundJobsRunAndAreWaitedFor(t *testing.T) {
@@ -46,7 +48,7 @@ func TestBackgroundJobIsItsOwnProcessGroup(t *testing.T) {
 	// existed, on the grounds that a shell whose jobs are goroutines cannot
 	// deliver a signal to a job or hand it the terminal. This is that
 	// commitment, checked against the kernel rather than against the code.
-	if !hasProcessGroups {
+	if !HasProcessGroups {
 		t.Skip("process groups are not available on this platform")
 	}
 	got, _ := run(t, `/bin/sleep 1 & printf "%s" "$!"`, nil)

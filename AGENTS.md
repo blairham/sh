@@ -55,8 +55,32 @@ refuses what every real shell accepts is a core nobody can write against.
       shell-matrix.md the measured feature matrix that set the core
     syntax/           lexer, grammar, AST — public
     interp/           execution, the semantics vector, the extension points
-    cmd/sh            will be the shell; today it dumps tokens
+    dialect/bash/     one package per shell: Dialect, Semantics, Diagnostics
+    dialect/zsh/      …
+    dialect/ksh/      …
+    dialect/dash/     …
+    cmd/sh            the substrate's driver, with -dialect
+    cmd/bash cmd/zsh  dialect binaries, as proof the library goal holds
     cmd/oracle        records what real shells do
+
+**The core does not know its successors.** `syntax` and `interp` define the
+questions — a grammar flag, a semantics axis, a diagnostic value — and each
+shell answers them in `dialect/<shell>`. Nothing under `syntax/` or
+`interp/` imports a dialect package or names a shell, so adding fish adds a
+directory rather than editing the substrate; when a shell is split into its
+own repository, its directory is the whole of it.
+
+That rule reaches the tests. A test in `syntax` or `interp` names a *flag*
+or an axis and never a shell; a test that asserts what bash does lives in
+`dialect/bash`. The `interp` tests are an external `interp_test` package
+for the same reason — a dialect package imports `interp`, so an in-package
+test could not import a dialect without a cycle.
+
+No preset derives from another shell. Each starts from POSIX — the
+standard, which has no successors — and overrides only what was measured.
+Deriving zsh from bash once gave zsh bash's answer for whether a readonly
+reassignment is fatal, which is the opposite of zsh's own, and nothing
+caught it until something exercised it.
 
 **Packages start under `internal/` and are promoted once something has
 consumed them.** `syntax` and `interp` are public now: the parser was built
@@ -66,8 +90,9 @@ stays internal because it is test infrastructure rather than product.
 This is a library others import and extend — a dialect is built *on* the
 core, not forked from it — and there are exactly three ways to do that:
 
-1. **Choose the axes.** `interp.Semantics` and `syntax.Dialect` are values.
-   "Which shell am I" is data, not a branch in the code.
+1. **Choose the vectors.** `syntax.Dialect`, `interp.Semantics` and
+   `interp.Diagnostics` are values. "Which shell am I" is data, not a branch
+   in the code — see any package under `dialect/` for the whole of one.
 2. **Register a builtin.** Only for what shell cannot express: `cd` must
    change the runner's directory, `read` must set a variable in the calling
    shell. Reach for Go when shell genuinely cannot say the thing.

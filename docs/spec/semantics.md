@@ -20,6 +20,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | `[^abc]` negates | **no** | yes | yes | yes |
 | a leading zero means octal | yes | yes | yes | **no** |
 | arithmetic does floating point | no | no | **yes** | **yes** |
+| quoting a `=~` regex makes it literal | *n/a* | **yes** | no | no |
 | array index base | *n/a* | 0 | 0 | **1** |
 | `echo` expands backslashes | **yes** | no | no | **yes** |
 | glob with no match | passes pattern | passes pattern | passes pattern | **error** |
@@ -33,6 +34,7 @@ Probes, for reproduction:
 
     unquoted split   x="a b"; set -- $x; echo $#      → 2 2 2 1
     glob expansion   cd /; x="et*"; set -- $x         → etc etc etc et*
+    same axis, again p="a*"; [[ abc == $p ]]          → n/a match match no-match
     &> operator      echo hi &>b; cat b               → hi+empty, [hi], hi+empty, [hi]
     array base       a=(x y); echo "${a[1]}"          → -  y y x
     echo backslash   echo 'a\tb'                      → expanded, literal, literal, expanded
@@ -60,6 +62,7 @@ Group the shells by which side of each axis they fall on:
     `[^…]` negates       {dash}
     leading zero octal   {zsh}
     arithmetic floats    {ksh93, zsh}
+    quoted regex literal {bash}
     brace needs `;`      {zsh}
     array base           {zsh}
     echo backslash       {dash, zsh}
@@ -70,7 +73,7 @@ Group the shells by which side of each axis they fall on:
     readonly continues   {bash}
     shift survives       {bash, zsh}
 
-Eight distinct groupings across seventeen axes: `{zsh}`, `{dash,zsh}`,
+Eight distinct groupings across eighteen axes: `{zsh}`, `{dash,zsh}`,
 `{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`, `{dash,ksh93}` and
 `{dash}` — the last of which `${#@}` now produces on its own, where
 previously it appeared only as the modern-ksh reading of the `&>` axis.
@@ -108,6 +111,18 @@ its output goes elsewhere, and the file is emptied, with no diagnostic.
 An axis whose wrong answer is an error is self-limiting. An axis whose
 wrong answer is a different working program is not, and it is the case a
 dialect system exists to get right. See `grammar/tokenization.md`.
+
+## One axis, two places
+
+The glob-expansion row governs more than pathname expansion. The same
+zsh rule — do not treat the *result* of an expansion as a pattern — decides
+whether `p="a*"; [[ abc == $p ]]` matches, which it does in bash and ksh93
+and does not in zsh.
+
+That is worth stating because the obvious reading of the measurements is
+two separate quirks. It is one behaviour observed twice, and an
+implementation with two switches for it will eventually set them
+inconsistently.
 
 ## An axis that is not binary
 

@@ -823,4 +823,50 @@ var Corpus = []Case{
 		Snippet: `x=abc; printf "[%s]" "$((x+1))"`,
 		Why:     "three answers: dash and ksh93 error differently, while bash and zsh re-evaluate the value as an expression and reach 0",
 	},
+	// --- conditions -----------------------------------------------------------
+	{
+		ID: "cond/no-field-splitting-inside", Category: "conditions",
+		Snippet: `x="a b"; [[ $x == "a b" ]] && echo no-splitting`,
+		Why:     "[[ ]] is parsed rather than executed, so the words never become arguments and are never split",
+	},
+	{
+		ID: "cond/unset-needs-no-quoting", Category: "conditions",
+		Snippet: `unset u; [[ -z $u ]] && echo fine`,
+		Why:     "the case where the [ builtin needs its argument quoted and this does not",
+	},
+	{
+		ID: "cond/no-pathname-expansion-inside", Category: "conditions",
+		Snippet: `touch f1 f2; [[ * == "*" ]] && echo no-globbing || echo globbed`,
+		Why:     "and no pathname expansion either, for the same reason",
+	},
+	{
+		ID: "cond/rhs-is-a-pattern", Category: "conditions",
+		Snippet: `[[ abc == a* ]] && printf pattern; [[ abc == "a*" ]] && printf " quoted-matched" || printf " quoted-literal"`,
+		Why:     "unquoted the right operand is a pattern, quoted it is a literal — the same rule as case",
+	},
+	{
+		ID: "cond/pattern-through-a-variable-diverges", Category: "conditions",
+		Snippet: `p="a*"; [[ abc == $p ]] && echo var-is-pattern || echo var-is-literal`,
+		Why:     "zsh does not treat the result of an expansion as a pattern, which is the glob-expansion-results axis reaching into conditions rather than a second rule",
+	},
+	{
+		ID: "cond/numeric-versus-string-comparison", Category: "conditions",
+		Snippet: `[[ 10 -gt 9 ]] && printf numeric; [[ 10 > 9 ]] && printf " string-gt" || printf " string-lt"`,
+		Why:     "the sharpest trap in the construct: -gt compares numbers and > compares strings, so 10 sorts before 9",
+	},
+	{
+		ID: "cond/regex-match", Category: "conditions",
+		Snippet: `[[ abc =~ ^a.c$ ]] && echo regex || echo no-regex`,
+		Why:     "the one place in the shell where the pattern language is regular expressions rather than globs",
+	},
+	{
+		ID: "cond/quoted-regex-diverges", Category: "conditions",
+		Snippet: `[[ abc =~ "^a.c$" ]] && echo still-regex || echo literal`,
+		Why:     "bash treats a quoted right operand as a literal string where ksh93 and zsh keep it a regex, so quoting a regex is not portable in either direction",
+	},
+	{
+		ID: "cond/logical-and-grouping", Category: "conditions",
+		Snippet: `[[ ( -n x || -n y ) && ! -z z ]] && echo grouped`,
+		Why:     "&& and || join conditions and ( ) groups them rather than starting a subshell, so the parser needs its own production for the inside",
+	},
 }

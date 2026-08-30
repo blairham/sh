@@ -858,3 +858,54 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   x=abc; printf "[%s]" "$((x+1))"
   ```
+
+## conditions
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `cond/no-field-splitting-inside` | `<shell>: 1: [[: not found` *(status 127)* | `no-splitting` | `no-splitting` | `no-splitting` | `no-splitting` | `no-splitting` |
+| `cond/unset-needs-no-quoting` | `<shell>: 1: [[: not found` *(status 127)* | `fine` | `fine` | `fine` | `fine` | `fine` |
+| `cond/no-pathname-expansion-inside` | `<shell>: 1: [[: not found~globbed` | `no-globbing` | `no-globbing` | `no-globbing` | `no-globbing` | `no-globbing` |
+| `cond/rhs-is-a-pattern` | `<shell>: 1: [[: not found~<shell>: 1: [[: not found~ quoted-literal` | `pattern quoted-literal` | `pattern quoted-literal` | `pattern quoted-literal` | `pattern quoted-literal` | `pattern quoted-literal` |
+| `cond/pattern-through-a-variable-diverges` | `<shell>: 1: [[: not found~var-is-literal` | `var-is-pattern` | `var-is-pattern` | `var-is-pattern` | `var-is-pattern` | `var-is-literal` |
+| `cond/numeric-versus-string-comparison` | `<shell>: 1: [[: not found~<shell>: 1: [[: not found~ string-lt` | `numeric string-lt` | `numeric string-lt` | `numeric string-lt` | `numeric string-lt` | `numeric string-lt` |
+| `cond/regex-match` | `<shell>: 1: [[: not found~no-regex` | `regex` | `regex` | `regex` | `regex` | `regex` |
+| `cond/quoted-regex-diverges` | `<shell>: 1: [[: not found~literal` | `literal` | `literal` | `literal` | `still-regex` | `still-regex` |
+| `cond/logical-and-grouping` | `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `grouped` | `grouped` | `grouped` | `grouped` | `grouped` |
+
+- `cond/no-field-splitting-inside` — [[ ]] is parsed rather than executed, so the words never become arguments and are never split
+  ```sh
+  x="a b"; [[ $x == "a b" ]] && echo no-splitting
+  ```
+- `cond/unset-needs-no-quoting` — the case where the [ builtin needs its argument quoted and this does not
+  ```sh
+  unset u; [[ -z $u ]] && echo fine
+  ```
+- `cond/no-pathname-expansion-inside` — and no pathname expansion either, for the same reason
+  ```sh
+  touch f1 f2; [[ * == "*" ]] && echo no-globbing || echo globbed
+  ```
+- `cond/rhs-is-a-pattern` — unquoted the right operand is a pattern, quoted it is a literal — the same rule as case
+  ```sh
+  [[ abc == a* ]] && printf pattern; [[ abc == "a*" ]] && printf " quoted-matched" || printf " quoted-literal"
+  ```
+- `cond/pattern-through-a-variable-diverges` — zsh does not treat the result of an expansion as a pattern, which is the glob-expansion-results axis reaching into conditions rather than a second rule
+  ```sh
+  p="a*"; [[ abc == $p ]] && echo var-is-pattern || echo var-is-literal
+  ```
+- `cond/numeric-versus-string-comparison` — the sharpest trap in the construct: -gt compares numbers and > compares strings, so 10 sorts before 9
+  ```sh
+  [[ 10 -gt 9 ]] && printf numeric; [[ 10 > 9 ]] && printf " string-gt" || printf " string-lt"
+  ```
+- `cond/regex-match` — the one place in the shell where the pattern language is regular expressions rather than globs
+  ```sh
+  [[ abc =~ ^a.c$ ]] && echo regex || echo no-regex
+  ```
+- `cond/quoted-regex-diverges` — bash treats a quoted right operand as a literal string where ksh93 and zsh keep it a regex, so quoting a regex is not portable in either direction
+  ```sh
+  [[ abc =~ "^a.c$" ]] && echo still-regex || echo literal
+  ```
+- `cond/logical-and-grouping` — && and || join conditions and ( ) groups them rather than starting a subshell, so the parser needs its own production for the inside
+  ```sh
+  [[ ( -n x || -n y ) && ! -z z ]] && echo grouped
+  ```

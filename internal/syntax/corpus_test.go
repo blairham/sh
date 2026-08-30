@@ -29,8 +29,8 @@ func TestCorpusLexes(t *testing.T) {
 			if l.Incomplete() {
 				t.Fatalf("reported incomplete, but this snippet ran to completion in real shells\n  snippet: %s", c.Snippet)
 			}
-			if len(toks) == 0 || toks[len(toks)-1].Kind != syntax.EOF {
-				t.Fatalf("token stream did not end at EOF\n  snippet: %s", c.Snippet)
+			if len(toks) == 0 || toks[len(toks)-1].Kind != syntax.TokEOF {
+				t.Fatalf("token stream did not end at TokEOF\n  snippet: %s", c.Snippet)
 			}
 
 			// Every byte of the input has to be inside some token or between
@@ -42,6 +42,51 @@ func TestCorpusLexes(t *testing.T) {
 					t.Fatalf("positions went backwards at %v\n  snippet: %s", tk.Pos, c.Snippet)
 				}
 				last = tk.Pos
+			}
+		})
+	}
+}
+
+// Every corpus snippet is a complete program that real shells ran, so each
+// must parse. This is the parser's version of TestCorpusLexes and the same
+// argument: the corpus checking the implementation rather than the panel.
+//
+// Here-documents are excluded for now, and named rather than filtered by a
+// pattern, because their bodies are read from the lines after the command
+// and the parser does not do that yet. Listing them keeps the exclusion
+// visible instead of quietly shrinking the denominator.
+var noHeredocYet = map[string]bool{
+	"token/heredoc-unquoted-delimiter-expands":  true,
+	"token/heredoc-quoted-delimiter-literal":    true,
+	"token/heredoc-backslash-delimiter-literal": true,
+}
+
+func TestCorpusParses(t *testing.T) {
+	for _, c := range oracle.Corpus {
+		if noHeredocYet[c.ID] {
+			continue
+		}
+		t.Run(c.ID, func(t *testing.T) {
+			p := syntax.NewParser(c.Snippet, syntax.Bash())
+			f := p.Parse()
+
+			// Cases the reference shells reject must be rejected here too.
+			// Accepting them would be just as wrong as failing on the rest,
+			// and the corpus records both sides.
+			if c.SyntaxError {
+				if p.Err() == nil {
+					t.Fatalf("accepted a snippet the reference shells reject\n  snippet: %s", c.Snippet)
+				}
+				return
+			}
+			if err := p.Err(); err != nil {
+				t.Fatalf("did not parse: %v\n  snippet: %s", err, c.Snippet)
+			}
+			if p.Incomplete() {
+				t.Fatalf("reported incomplete, but this ran to completion in real shells\n  snippet: %s", c.Snippet)
+			}
+			if len(f.Stmts) == 0 {
+				t.Fatalf("parsed to no statements\n  snippet: %s", c.Snippet)
 			}
 		})
 	}

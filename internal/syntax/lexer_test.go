@@ -16,14 +16,14 @@ import (
 func render(toks []Token) string {
 	var b strings.Builder
 	for i, t := range toks {
-		if t.Kind == EOF {
+		if t.Kind == TokEOF {
 			break
 		}
 		if i > 0 {
 			b.WriteByte(' ')
 		}
 		switch t.Kind {
-		case Word:
+		case TokWord:
 			b.WriteString("word(")
 			for j, s := range t.Spans {
 				if j > 0 {
@@ -58,11 +58,11 @@ func render(toks []Token) string {
 				}
 			}
 			b.WriteByte(')')
-		case IONumber:
+		case TokIONumber:
 			b.WriteString("io(" + t.Text + ")")
-		case Newline:
+		case TokNewline:
 			b.WriteString("nl")
-		case ArithCmd:
+		case TokArithCmd:
 			b.WriteString("arith-cmd{" + t.Text + "}")
 		default:
 			b.WriteString(t.Kind.String())

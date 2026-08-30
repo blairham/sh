@@ -50,6 +50,11 @@ type Dialect struct {
 	// different program.
 	ArithCommand bool
 
+	// FunctionKeyword enables `function name { ... }`. Absent from dash. The
+	// hybrid `function name() { ... }` is accepted where this is on, and is
+	// not core because ksh93 — where the keyword originated — rejects it.
+	FunctionKeyword bool
+
 	// DoubleBracket enables `[[ ... ]]`.
 	//
 	// Consumed by the *parser*, not the lexer, and the reason is worth
@@ -77,6 +82,7 @@ func Core() Dialect {
 		Herestring:        true,
 		ArithCommand:      true,
 		DoubleBracket:     true,
+		FunctionKeyword:   true,
 	}
 }
 

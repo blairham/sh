@@ -18,6 +18,8 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | brace group needs a terminator before `}` | yes | yes | yes | **no** |
 | `${#@}` is the count of parameters | **no** | yes | yes | yes |
 | `[^abc]` negates | **no** | yes | yes | yes |
+| a leading zero means octal | yes | yes | yes | **no** |
+| arithmetic does floating point | no | no | **yes** | **yes** |
 | array index base | *n/a* | 0 | 0 | **1** |
 | `echo` expands backslashes | **yes** | no | no | **yes** |
 | glob with no match | passes pattern | passes pattern | passes pattern | **error** |
@@ -56,6 +58,8 @@ Group the shells by which side of each axis they fall on:
     prefix persists      {dash, ksh93}
     `${#@}` is a count   {dash}
     `[^…]` negates       {dash}
+    leading zero octal   {zsh}
+    arithmetic floats    {ksh93, zsh}
     brace needs `;`      {zsh}
     array base           {zsh}
     echo backslash       {dash, zsh}
@@ -66,7 +70,7 @@ Group the shells by which side of each axis they fall on:
     readonly continues   {bash}
     shift survives       {bash, zsh}
 
-Eight distinct groupings across fifteen axes: `{zsh}`, `{dash,zsh}`,
+Eight distinct groupings across seventeen axes: `{zsh}`, `{dash,zsh}`,
 `{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`, `{dash,ksh93}` and
 `{dash}` — the last of which `${#@}` now produces on its own, where
 previously it appeared only as the modern-ksh reading of the `&>` axis.
@@ -121,7 +125,16 @@ cannot, and every earlier axis happened to be binary. Recorded here so the
 table is not mistaken for the shape of the problem.
 
 It is also the third measured instance of a divergence that does not
-announce itself, after `&>` and `[[ ]]`.
+announce itself, after `&>` and `[[ ]]`. A fourth is in
+`grammar/arithmetic.md`: `x=abc; $((x+1))` errors in dash and in ksh93 —
+for different reasons — and yields 1 in bash and zsh, which re-evaluate
+the value as an expression and reach an unset name.
+
+The most dangerous of them all is in that document too, and it is binary,
+so it is in the table above: **a leading zero means octal everywhere but
+zsh**, where `$((0100))` is one hundred rather than sixty-four. Nothing
+warns, both answers are plausible numbers, and file modes are written that
+way.
 
 ## A measured non-conflict, recorded so it is not over-generalised
 

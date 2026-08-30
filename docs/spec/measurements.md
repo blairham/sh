@@ -767,3 +767,94 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   case abc in @(abc|xyz)) echo at;; esac
   ```
+
+## arithmetic
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `arith/bare-name-is-a-variable` | `[6][6]` | `[6][6]` | `[6][6]` | `[6][6]` | `[6][6]` | `[6][6]` |
+| `arith/unset-is-zero` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` |
+| `arith/precedence-follows-c` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` |
+| `arith/division-truncates` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` |
+| `arith/float-is-a-dialect-axis` | `<shell>: 1: arithmetic expression: expecting EOF: "1.5"` *(status 2)* | `<shell>: line 1: 1.5: arithmetic syntax error: invalid arithmetic operator (error token is ".5")` *(status 1)* | `<shell>: line 1: 1.5: arithmetic syntax error: invalid arithmetic operator (error token is ".5")` *(status 127)* | `<shell>: 1.5: syntax error: invalid arithmetic operator (error token is ".5")` *(status 1)* | `[1.5]` | `[1.5]` |
+| `arith/leading-zero-octal` | `[8][64]` | `[8][64]` | `[8][64]` | `[8][64]` | `[8][64]` | `[10][100]` |
+| `arith/invalid-octal-digit` | `<shell>: 1: arithmetic expression: expecting EOF: "08"` *(status 2)* | `<shell>: line 1: 08: value too great for base (error token is "08")` *(status 1)* | `<shell>: line 1: 08: value too great for base (error token is "08")` *(status 127)* | `<shell>: 08: value too great for base (error token is "08")` *(status 1)* | `[8]` | `[8]` |
+| `arith/explicit-base` | `<shell>: 1: arithmetic expression: expecting EOF: "2#101"` *(status 2)* | `[5][16]` | `[5][16]` | `[5][16]` | `[5][16]` | `[5][16]` |
+| `arith/comparison-yields-one-or-zero` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` |
+| `arith/logical-yields-one-not-an-operand` | `[1][1]` | `[1][1]` | `[1][1]` | `[1][1]` | `[1][1]` | `[1][1]` |
+| `arith/short-circuit-is-observable` | `[0][0]` | `[0][0]` | `[0][0]` | `[0][0]` | `[0][0]` | `[0][0]` |
+| `arith/assignment-escapes` | `[5][5]` | `[5][5]` | `[5][5]` | `[5][5]` | `[5][5]` | `[5][5]` |
+| `arith/ternary` | `[2][3]` | `[2][3]` | `[2][3]` | `[2][3]` | `[2][3]` | `[2][3]` |
+| `arith/increment-absent-from-dash` | `<shell>: 1: arithmetic expression: expecting primary: "x++"` *(status 2)* | `[1][2]` | `[1][2]` | `[1][2]` | `[1][2]` | `[1][2]` |
+| `arith/comma-absent-from-dash` | `<shell>: 1: arithmetic expression: expecting EOF: "1,2"` *(status 2)* | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` |
+| `arith/division-by-zero-is-a-runtime-error` | `<shell>: 1: arithmetic expression: division by zero: "1/0"` *(status 2)* | `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 1)* | `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 127)* | `<shell>: 1/0: division by 0 (error token is "0")` *(status 1)* | `<shell>: 1/0: divide by zero` *(status 1)* | `<shell>:1: division by zero` *(status 1)* |
+| `arith/non-numeric-variable-diverges` | `<shell>: 1: Illegal number: abc` *(status 2)* | `[1]` | `[1]` | `[1]` | `<shell>: abc: parameter not set` *(status 1)* | `[1]` |
+
+- `arith/bare-name-is-a-variable` — a bare name inside arithmetic is a variable reference, which is why the contents cannot be lexed as ordinary words
+  ```sh
+  x=5; printf "[%s]" "$((x+1))" "$(($x+1))"
+  ```
+- `arith/unset-is-zero` — an unset variable is 0 rather than an error
+  ```sh
+  unset u; printf "[%s]" "$((u+1))"
+  ```
+- `arith/precedence-follows-c` — POSIX defers the operator set and precedence to ISO C
+  ```sh
+  printf "[%s]" "$((1+2*3))" "$(((1+2)*3))" "$((2*3%4))"
+  ```
+- `arith/division-truncates` — integer division, which is the baseline the float divergence departs from
+  ```sh
+  printf "[%s]" "$((3/2))"
+  ```
+- `arith/float-is-a-dialect-axis` — ksh93 and zsh evaluate floating point where POSIX says integers only, so neither promising integers nor accepting floats is right everywhere
+  ```sh
+  printf "[%s]" "$((1.5))"
+  ```
+- `arith/leading-zero-octal` — zsh does not read a leading zero as octal — a plausible number, silently different, in code that looks portable, and file modes are written this way
+  ```sh
+  printf "[%s]" "$((010))" "$((0100))"
+  ```
+- `arith/invalid-octal-digit` — the same split from the other side: an error where octal is read, a decimal digit where it is not
+  ```sh
+  printf "[%s]" "$((08))"
+  ```
+- `arith/explicit-base` — hex is universal; the base#number form is absent from dash
+  ```sh
+  printf "[%s]" "$((2#101))" "$((0x10))"
+  ```
+- `arith/comparison-yields-one-or-zero` — comparisons yield 1 or 0
+  ```sh
+  printf "[%s]" "$((1<2))" "$((2<1))" "$((1==1))"
+  ```
+- `arith/logical-yields-one-not-an-operand` — a logical operator yields 1 or 0 rather than one of its operands, unlike some languages
+  ```sh
+  printf "[%s]" "$((2 && 3))" "$((0 || 5))"
+  ```
+- `arith/short-circuit-is-observable` — assignment is an operator here, so evaluation order is part of the specification rather than an implementation detail
+  ```sh
+  x=0; printf "[%s]" "$((0 && (x=9)))" "$x"
+  ```
+- `arith/assignment-escapes` — an assignment inside an expression is a side effect that outlives it, like ${x:=5}
+  ```sh
+  printf "[%s]" "$((x=5))"; printf "[%s]" "$x"
+  ```
+- `arith/ternary` — the conditional operator
+  ```sh
+  printf "[%s]" "$((1?2:3))" "$((0?2:3))"
+  ```
+- `arith/increment-absent-from-dash` — ++ is not POSIX and dash rejects it
+  ```sh
+  x=1; printf "[%s]" "$((x++))" "$x"
+  ```
+- `arith/comma-absent-from-dash` — the sequence operator, likewise
+  ```sh
+  printf "[%s]" "$((1,2))"
+  ```
+- `arith/division-by-zero-is-a-runtime-error` — unanimous, and a runtime error rather than a syntax one — the expression parses
+  ```sh
+  printf "[%s]" "$((1/0))"
+  ```
+- `arith/non-numeric-variable-diverges` — three answers: dash and ksh93 error differently, while bash and zsh re-evaluate the value as an expression and reach 0
+  ```sh
+  x=abc; printf "[%s]" "$((x+1))"
+  ```

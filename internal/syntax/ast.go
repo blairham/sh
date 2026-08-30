@@ -109,6 +109,21 @@ type Word struct {
 func (w *Word) Pos() Pos { return w.Start }
 func (w *Word) End() Pos { return w.Stop }
 
+// IsQuoted reports whether any span of the word was quoted. A word can be
+// partly quoted, so this is not "the word was written in quotes" — and for a
+// condition's right operand it is what separates a pattern from a literal.
+func (w *Word) IsQuoted() bool {
+	if w == nil {
+		return false
+	}
+	for _, s := range w.Spans {
+		if s.Quoting != Unquoted {
+			return true
+		}
+	}
+	return false
+}
+
 // Literal joins the spans, which is the word with its quote characters
 // removed and nothing else done. Meaningful only where no expansion applies.
 func (w *Word) Literal() string {

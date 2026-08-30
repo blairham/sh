@@ -33,6 +33,7 @@ A spec entry with no citation is a guess and does not belong here.
       parameter-expansion.md  what the operators inside ${ } mean
       patterns.md       the matching language, shared by three consumers
       arithmetic.md     what is inside $(( )) and (( ))
+      conditions.md     what the operators inside [[ ]] mean
       expansion.md      the expansion pipeline and its ordering
       word-splitting.md field splitting and IFS
 

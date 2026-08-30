@@ -1690,6 +1690,294 @@
         "TimedOut": false
       }
     },
+    "cond/logical-and-grouping": {
+      "bash": {
+        "Output": "grouped",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "grouped",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "grouped",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: word unexpected (expecting \")\")",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "grouped",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "grouped",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/no-field-splitting-inside": {
+      "bash": {
+        "Output": "no-splitting",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "no-splitting",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "no-splitting",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "no-splitting",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "no-splitting",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/no-pathname-expansion-inside": {
+      "bash": {
+        "Output": "no-globbing",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "no-globbing",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "no-globbing",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found~globbed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "no-globbing",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "no-globbing",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/numeric-versus-string-comparison": {
+      "bash": {
+        "Output": "numeric string-lt",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "numeric string-lt",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "numeric string-lt",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~ string-lt",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "numeric string-lt",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "numeric string-lt",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/pattern-through-a-variable-diverges": {
+      "bash": {
+        "Output": "var-is-pattern",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "var-is-pattern",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "var-is-pattern",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found~var-is-literal",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "var-is-pattern",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "var-is-literal",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/quoted-regex-diverges": {
+      "bash": {
+        "Output": "literal",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "literal",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "literal",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found~literal",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "still-regex",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "still-regex",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/regex-match": {
+      "bash": {
+        "Output": "regex",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "regex",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "regex",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found~no-regex",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "regex",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "regex",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/rhs-is-a-pattern": {
+      "bash": {
+        "Output": "pattern quoted-literal",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "pattern quoted-literal",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "pattern quoted-literal",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~ quoted-literal",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "pattern quoted-literal",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "pattern quoted-literal",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/unset-needs-no-quoting": {
+      "bash": {
+        "Output": "fine",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "fine",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "fine",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "fine",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "fine",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "expand/brace": {
       "bash": {
         "Output": "1 2 3",

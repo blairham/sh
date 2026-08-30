@@ -311,13 +311,15 @@ func (i *CaseItem) End() Pos { return i.TermPos }
 
 // ArithCmdClause is `(( expr ))` used as a command.
 //
-// Expr is unparsed. What is inside is an arithmetic expression whose operator
-// set is a separate specification, and inventing one here is what the
-// clean-room rules exist to prevent.
+// It exits 0 when the expression is non-zero, which is the reverse of the
+// usual convention and is unanimous across the panel.
 type ArithCmdClause struct {
-	Expr  string
-	Start Pos
-	Stop  Pos
+	// Expr is the source text, kept because it is what a diagnostic quotes.
+	Expr string
+	// Parsed is the expression tree.
+	Parsed ArithExpr
+	Start  Pos
+	Stop   Pos
 	redirs
 }
 

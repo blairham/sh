@@ -277,8 +277,11 @@ func (p *Parser) newWord(spans []Span, start, stop Pos) *Word {
 	out := make([]Span, len(spans))
 	copy(out, spans)
 	for i := range out {
-		if out[i].Kind == ParamExp && out[i].Param == nil {
+		switch {
+		case out[i].Kind == ParamExp && out[i].Param == nil:
 			out[i].Param = p.parseParamExp(out[i].Value, out[i].Pos)
+		case out[i].Kind == ArithSubst && out[i].Arith == nil:
+			out[i].Arith = p.parseArith(out[i].Value, out[i].Pos)
 		}
 	}
 	return &Word{Spans: out, Start: start, Stop: stop}
@@ -490,6 +493,7 @@ func (p *Parser) parseGroup() Command {
 
 func (p *Parser) parseArithCmd() Command {
 	c := &ArithCmdClause{Expr: p.tok.Text, Start: p.tok.Pos, Stop: p.tok.End}
+	c.Parsed = p.parseArith(p.tok.Text, p.tok.Pos)
 	p.next()
 	return c
 }

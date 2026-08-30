@@ -102,6 +102,14 @@ func (l *Lexer) Next() Token {
 		return tok
 	}
 
+	// `((` is an arithmetic command; `( (` is a subshell containing one. The
+	// distinction is purely textual, which is measured rather than assumed:
+	// `((echo nested))` is an arithmetic error in bash, ksh and zsh even with
+	// no space, so no knowledge of command position is needed here.
+	if l.dialect.ArithCommand && l.peek() == '(' && l.peekAt(1) == '(' {
+		return l.scanArithCommand(start)
+	}
+
 	if k, ok := l.matchOperator(); ok {
 		s := text[k]
 		for range s {
@@ -632,5 +640,62 @@ func (l *Lexer) skipBackticks() {
 		default:
 			l.advance()
 		}
+	}
+}
+
+// scanArithCommand reads `(( expr ))` used as a command.
+//
+// The expression is kept as raw text rather than tokenized, because what is
+// inside is an arithmetic expression and not a command list: `(( 2 > 1 ))`
+// compares, and lexing that `>` as a redirection would lose the program. The
+// operator set inside is a separate specification, so nothing here interprets
+// it.
+//
+// The closing `))` is found the same way substitutions find theirs — tracking
+// quoting and nesting rather than counting — so `(( (1+2)*3 ))` works.
+func (l *Lexer) scanArithCommand(start Pos) Token {
+	l.advance() // (
+	l.advance() // (
+	depth := 2
+	exprStart := l.off
+
+	for depth > 0 {
+		if l.eof() {
+			l.incomplete = true
+			l.fail(start, "unterminated arithmetic command")
+			break
+		}
+		switch l.peek() {
+		case '\'':
+			l.skipQuoted('\'', false)
+		case '"':
+			l.skipQuoted('"', true)
+		case '\\':
+			l.advance()
+			if !l.eof() {
+				l.advance()
+			}
+		case '(':
+			depth++
+			l.advance()
+		case ')':
+			depth--
+			l.advance()
+		default:
+			l.advance()
+		}
+	}
+
+	end := l.off
+	for n := 0; n < 2 && end > exprStart && l.src[end-1] == ')'; n++ {
+		end--
+	}
+	expr := l.src[exprStart:end]
+	return Token{
+		Kind:  ArithCmd,
+		Pos:   start,
+		End:   l.pos(),
+		Text:  expr,
+		Spans: []Span{{Kind: ArithSubst, Value: expr, Quoting: Unquoted, Pos: start}},
 	}
 }

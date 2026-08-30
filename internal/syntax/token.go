@@ -29,6 +29,11 @@ const (
 	// is where a pending here-document's body begins.
 	Newline
 
+	// ArithCmd is `(( expr ))` used as a command. Its Text is the expression,
+	// scanned raw: what is inside is an arithmetic expression rather than a
+	// command list, so tokenizing it as commands would lose it.
+	ArithCmd
+
 	// Control operators.
 	Amp        // &
 	AndAnd     // &&
@@ -82,6 +87,8 @@ func (k Kind) String() string {
 		return "IO number"
 	case Newline:
 		return "newline"
+	case ArithCmd:
+		return "arithmetic command"
 	}
 	return "unknown token"
 }

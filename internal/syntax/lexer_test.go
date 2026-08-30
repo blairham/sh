@@ -62,6 +62,8 @@ func render(toks []Token) string {
 			b.WriteString("io(" + t.Text + ")")
 		case Newline:
 			b.WriteString("nl")
+		case ArithCmd:
+			b.WriteString("arith-cmd{" + t.Text + "}")
 		default:
 			b.WriteString(t.Kind.String())
 		}
@@ -378,5 +380,71 @@ func TestUnterminatedSubstitutionsAreIncomplete(t *testing.T) {
 		if !l.Incomplete() {
 			t.Errorf("%q: want Incomplete", src)
 		}
+	}
+}
+
+func TestArithmeticCommand(t *testing.T) {
+	tests := []struct {
+		name, src string
+		d         Dialect
+		want      string
+	}{
+		{"basic", `(( 1+1 ))`, Core(), `arith-cmd{ 1+1 }`},
+		{
+			// The point of scanning raw: lexing this > as a redirection would
+			// lose the program.
+			"comparison stays inside", `(( 2 > 1 ))`, Core(), `arith-cmd{ 2 > 1 }`,
+		},
+		{"inner parens", `(( (1+2)*3 ))`, Core(), `arith-cmd{ (1+2)*3 }`},
+		{
+			// Measured: bash, ksh and zsh all treat this as arithmetic even
+			// with no space, so no command-position knowledge is needed.
+			"no space is still arithmetic", `((echo nested))`, Core(), `arith-cmd{echo nested}`,
+		},
+		{
+			// A space makes it a subshell containing a subshell. The
+			// distinction is purely textual.
+			"a space makes it subshells", `( (echo sub) )`, Core(),
+			`( ( word(echo) word(sub) ) )`,
+		},
+		{
+			// Where the dialect lacks it, the text still lexes and means
+			// something else — nested subshells running 1+1 as a command,
+			// which is what dash does.
+			"absent from posix", `(( 1+1 ))`, POSIX(), `( ( word(1+1) ) )`,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := lex(t, tc.src, tc.d); got != tc.want {
+				t.Errorf("got %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestArithmeticCommandUnterminatedIsIncomplete(t *testing.T) {
+	l := NewLexer(`(( 1+1`, Core())
+	l.Tokens()
+	if !l.Incomplete() {
+		t.Error("want Incomplete for an unterminated arithmetic command")
+	}
+}
+
+func TestDoubleBracketIsLeftToTheParser(t *testing.T) {
+	// `[[ ]]` deliberately gets no lexer mode. Inside it, < and > are
+	// comparisons rather than redirections, which sounds like a lexer
+	// concern — but `[[` is only special in command position (`echo [[ a ]]`
+	// prints `[[ a ]]`), and the lexer does not know where commands begin.
+	//
+	// Lexing < as an operator loses nothing: the parser knows it is inside
+	// `[[ ]]` and reinterprets the token. This test pins the contract between
+	// the two layers so a later "fix" in the lexer has to argue with it.
+	if got, want := lex(t, `[[ a < b ]]`, Core()), `word([[) word(a) < word(b) word(]])`; got != want {
+		t.Errorf("got %s, want %s", got, want)
+	}
+	// And the case a lexer mode would have broken.
+	if got, want := lex(t, `echo [[ a ]]`, Core()), `word(echo) word([[) word(a) word(]])`; got != want {
+		t.Errorf("echo case: got %s, want %s", got, want)
 	}
 }

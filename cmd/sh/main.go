@@ -117,11 +117,16 @@ func kindName(k syntax.Kind) string {
 		return "io-number"
 	case syntax.Newline:
 		return "newline"
+	case syntax.ArithCmd:
+		return "arith-cmd"
 	}
 	return "operator"
 }
 
 func detail(t syntax.Token) string {
+	if t.Kind == syntax.ArithCmd {
+		return "expr(" + t.Text + ")"
+	}
 	if t.Kind != syntax.Word {
 		return t.Kind.String()
 	}

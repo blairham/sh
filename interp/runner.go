@@ -84,6 +84,12 @@ type Runner struct {
 	// custom holds builtins registered by a shell built on this package. A
 	// nil value is an explicit removal.
 	custom map[string]Builtin
+	// jobs are the background commands started by this shell.
+	jobs    []*Job
+	lastJob *Job
+	// bg is set on the runner *inside* a background job, so the process it
+	// starts can be recorded against the job.
+	bg *Job
 	// funcs holds defined functions.
 	funcs map[string]*syntax.FuncDecl
 	// depth bounds function recursion, because a shell script can recurse
@@ -186,7 +192,7 @@ func (r *Runner) Run(ctx context.Context, f *syntax.File) (int, error) {
 
 func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
 	if st.Background {
-		return r.unsupported("background commands")
+		return r.background(ctx, st)
 	}
 	return r.expr(ctx, st.Expr)
 }
@@ -360,11 +366,35 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	r.emit(ctx, Event{Kind: EventCommandStart, Action: action})
 
 	cmd := exec.CommandContext(ctx, path, argv[1:]...)
+	if r.bg != nil {
+		// A background command runs in a process group of its own, which is
+		// what makes signalling and terminal ownership answerable at all.
+		setProcessGroup(cmd)
+	}
 	cmd.Dir = r.Dir
 	cmd.Env = env
 	cmd.Stdin = r.Stdin
 	cmd.Stdout = r.stdout()
 	cmd.Stderr = r.stderr()
+
+	if r.bg != nil {
+		// Started rather than run, so the pid can be recorded before it is
+		// waited for — `$!` has to be answerable immediately.
+		if err := cmd.Start(); err != nil {
+			r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
+			r.errf("sh: %s: %v\n", argv[0], err)
+			r.status = 126
+			return nil
+		}
+		r.bg.PID = cmd.Process.Pid
+		// The pid is final now, so anything waiting to read `$!` may proceed
+		// while this goroutine blocks on the process.
+		r.bg.markReady()
+		err := cmd.Wait()
+		r.status = exitStatus(err)
+		r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: r.status})
+		return nil
+	}
 
 	err := cmd.Run()
 	var ee *exec.ExitError
@@ -444,4 +474,16 @@ func (r *Runner) assign(a *syntax.Assign) {
 		// A scalar assignment replaces any array of the same name.
 		delete(r.Arrays, a.Name)
 	}
+}
+
+// exitStatus turns a wait error into a status.
+func exitStatus(err error) int {
+	if err == nil {
+		return 0
+	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		return ee.ExitCode()
+	}
+	return 126
 }

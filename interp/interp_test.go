@@ -180,16 +180,39 @@ func TestEventsDescribeWhatHappened(t *testing.T) {
 	}
 }
 
-func TestUnsupportedIsRefusedNotSkipped(t *testing.T) {
-	// A shell that quietly does nothing is worse than one that says it cannot.
-	// This list shrinks as slices land, and is meant to: it started with
-	// pipelines, subshells, groups and `if`, then `[[ ]]` and `(( ))`, and
-	// all of those run now. What is left needs job control, which
-	// docs/design.md commits to real process groups for.
-	for _, src := range []string{`sleep 0 &`} {
+func TestEveryConstructTheParserProducesCanRun(t *testing.T) {
+	// This began as a list of what was refused — pipelines, subshells,
+	// groups, `if`, then `[[ ]]` and `(( ))`, then background commands — and
+	// it shrank to nothing. Inverted, it is worth more than it was: every
+	// node the parser can produce must be executable, so a construct added to
+	// the grammar without an interpreter for it fails here rather than
+	// silently doing nothing at a prompt.
+	for _, src := range []string{
+		`:`,                              // simple command
+		`: | :`,                          // pipeline
+		`: && : || :`,                    // and-or
+		`( : )`,                          // subshell
+		`{ :; }`,                         // group
+		`if :; then :; fi`,               // if
+		`while false; do :; done`,        // while
+		`until :; do :; done`,            // until
+		`for i in a; do :; done`,         // for
+		`case x in x) :;; esac`,          // case
+		`f() { :; }; f`,                  // function
+		`[[ -n x ]]`,                     // test clause
+		`(( 1 ))`,                        // arithmetic command
+		`: &`,                            // background
+		`x=1`,                            // assignment
+		`a=(1 2)`,                        // array assignment
+		`: >/dev/null`,                   // redirection
+		`echo "$(:)" "${x:-y}" "$((1))"`, // the three substitutions
+	} {
 		out, st := run(t, src, nil)
-		if st != -1 || !strings.Contains(out, "not implemented yet") {
-			t.Errorf("%s: got %q status %d, want an explicit refusal", src, out, st)
+		if strings.Contains(out, "not implemented") {
+			t.Errorf("%s: %s", src, strings.TrimSpace(out))
+		}
+		if st == -1 {
+			t.Errorf("%s: refused as unsupported", src)
 		}
 	}
 }

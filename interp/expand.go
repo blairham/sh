@@ -545,6 +545,11 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 		return itoa(len(r.Params)), true
 	case "?":
 		return itoa(r.status), true
+	case "!":
+		if r.lastJob == nil {
+			return "", true
+		}
+		return itoa(r.lastJob.PID), true
 	case "0":
 		// zsh reports the *function's* name inside a function where every
 		// other shell reports the shell's.

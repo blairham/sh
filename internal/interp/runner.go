@@ -38,6 +38,10 @@ type Runner struct {
 	Dir string
 	// Env is the environment passed to commands. Nil means the process's own.
 	Env []string
+	// Dialect is what nested input — a command substitution, an `eval` — is
+	// parsed with. Nil means the core, not the zero value: the zero Dialect
+	// is posix and would refuse constructs the outer parse had accepted.
+	Dialect *syntax.Dialect
 
 	Stdin          io.Reader
 	Stdout, Stderr io.Writer
@@ -54,6 +58,10 @@ type Runner struct {
 	// control flow rather than errors, so they are not returned as ones.
 	ctl      control
 	ctlDepth int
+	// ctx is the context of the current Run, so expansion can reach it. A
+	// command substitution runs commands, and threading a context through
+	// every expander signature to reach one place would be worse.
+	ctx context.Context
 	// funcs holds defined functions.
 	funcs map[string]*syntax.FuncDecl
 	// depth bounds function recursion, because a shell script can recurse
@@ -141,6 +149,7 @@ func (r *Runner) allowed(ctx context.Context, a Action) bool {
 
 // Run executes a whole file, returning the last command's status.
 func (r *Runner) Run(ctx context.Context, f *syntax.File) (int, error) {
+	r.ctx = ctx
 	for _, st := range f.Stmts {
 		if err := r.stmt(ctx, st); err != nil {
 			return r.status, err
@@ -213,6 +222,10 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		return r.caseClause(ctx, x)
 	case *syntax.FuncDecl:
 		return r.funcDecl(x)
+	case *syntax.TestClause:
+		return r.testClause(ctx, x)
+	case *syntax.ArithCmdClause:
+		return r.arithCmd(ctx, x)
 	}
 	return r.unsupported(fmt.Sprintf("%T", c))
 }

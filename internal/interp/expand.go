@@ -70,6 +70,26 @@ func (r *Runner) expandWord(w *syntax.Word) []string {
 	return fields
 }
 
+// expandWordNoSplit expands a word without field splitting, for the contexts
+// that do not have it: inside `[[ ]]`, and a redirection target. It is a
+// separate entry point rather than a flag on the runner because the caller
+// knows which context it is in and the expander should not have to guess.
+func (r *Runner) expandWordNoSplit(w *syntax.Word) []string {
+	if w == nil {
+		return nil
+	}
+	var b strings.Builder
+	for _, s := range w.Spans {
+		if parts, ok := r.expandAt(s); ok {
+			b.WriteString(strings.Join(parts, " "))
+			continue
+		}
+		text, _ := r.expandSpan(s)
+		b.WriteString(text)
+	}
+	return []string{b.String()}
+}
+
 // expandAt handles `$@`, the only expansion that produces several fields by
 // itself. Quoted, it is one field per parameter, each keeping its own spaces;
 // with no parameters it is *zero* fields, which is why `set -- "$@"` is safe
@@ -98,15 +118,24 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 // field splitting. Only unquoted expansions are; literal text never is,
 // however it was written.
 func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
+	unquoted := s.Quoting == syntax.Unquoted
 	switch s.Kind {
-	case syntax.ParamExp:
-		return r.expandParam(s.Param), s.Quoting == syntax.Unquoted
 	case syntax.Literal:
+		// Literal text is never split, however it was written.
 		return s.Value, false
+	case syntax.ParamExp:
+		return r.expandParam(s.Param), unquoted
+	case syntax.CommandSubst:
+		return r.commandSubst(r.ctx, s.Value), unquoted
+	case syntax.ArithSubst:
+		v, err := r.evalArith(s.Arith)
+		if err != nil {
+			r.errf("sh: %v\n", err)
+			r.status = 1
+			return "", false
+		}
+		return itoa(v), unquoted
 	}
-	// Command and arithmetic substitution are not in this slice. They are
-	// left as empty rather than as their source text, so a caller sees a
-	// missing value rather than a plausible wrong one.
 	return "", false
 }
 

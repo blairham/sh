@@ -2106,6 +2106,198 @@
         "TimedOut": false
       }
     },
+    "subst/arith-vs-subshell": {
+      "bash": {
+        "Output": "[3] [sub]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[3] [sub]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[3] [sub]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[3] [sub]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[3] [sub]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[3] [sub]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "subst/backticks-nest-with-escaping": {
+      "bash": {
+        "Output": "[deep]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[deep]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[deep]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[deep]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[deep]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[deep]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "subst/does-not-end-the-word": {
+      "bash": {
+        "Output": "[ab] n=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[ab] n=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[ab] n=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[ab] n=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[ab] n=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[ab] n=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "subst/nesting": {
+      "bash": {
+        "Output": "[deep]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[deep]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[deep]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[deep]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[deep]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[deep]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "subst/paren-in-quotes-does-not-close": {
+      "bash": {
+        "Output": "[)]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[)]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[)]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[)]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[)]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[)]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "subst/result-is-split-and-text-attaches": {
+      "bash": {
+        "Output": "[xa][by] n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[xa][by] n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[xa][by] n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[xa][by] n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[xa][by] n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[xa][by] n=2",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "token/ampersand-redirect-means-two-things": {
       "bash": {
         "Output": "[hi]",

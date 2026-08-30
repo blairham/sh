@@ -42,3 +42,16 @@ func TestDumpTokensReportsUnfinishedInputDistinctly(t *testing.T) {
 		t.Errorf("error should say the input is unfinished, got %q", err)
 	}
 }
+
+func TestDetailDistinguishesSubstitutionsFromText(t *testing.T) {
+	// A substitution shown as "plain" reads as literal text, which is the
+	// opposite of what this tool is for.
+	toks := syntax.NewLexer(`"[$(echo hi)]"`, syntax.Core()).Tokens()
+	got := detail(toks[0])
+	if !strings.Contains(got, "quoted-cmd-subst(echo hi)") {
+		t.Errorf("detail = %q, want a quoted-cmd-subst span", got)
+	}
+	if strings.Contains(got, "plain(echo hi)") {
+		t.Errorf("detail = %q: a substitution must not render as literal text", got)
+	}
+}

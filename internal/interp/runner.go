@@ -67,6 +67,9 @@ type Runner struct {
 	ctx context.Context
 	// inFunc is the name of the function being run, for `$0`.
 	inFunc string
+	// unspecified records that a script depended on an axis no dialect had
+	// answered, so a caller can tell that from an ordinary failure.
+	unspecified bool
 	// globMissed records that a pattern matched nothing, so the no-match
 	// axis can report it once the whole field is known.
 	globMissed bool
@@ -244,9 +247,17 @@ func (r *Runner) unsupported(what string) error {
 }
 
 func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
+	r.unspecified = false
 	var argv []string
 	for _, w := range c.Args {
 		argv = append(argv, r.expandWord(w)...)
+	}
+	// A command whose expansion depended on an axis no dialect answered does
+	// not run. Reporting and then running anyway would be the silent wrong
+	// answer this whole structure exists to avoid.
+	if r.unspecified {
+		r.status = 2
+		return nil
 	}
 
 	if len(argv) == 0 {
@@ -289,11 +300,20 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			v := strings.Join(r.expandWord(a.Value), " ")
 			// POSIX keeps an assignment prefixed to a special builtin;
 			// dash and ksh93 comply, bash and zsh do not.
-			if specialBuiltins[argv[0]] && r.sem().AssignmentPrefixPersistsOnSpecialBuiltin {
+			if specialBuiltins[argv[0]] &&
+				r.ask(r.sem().AssignmentPrefixPersistsOnSpecialBuiltin, "an assignment before a special builtin persisting") {
 				r.setVar(a.Name, v)
 			}
 		}
-		r.status = fn(r, ctx, argv[1:])
+		st := fn(r, ctx, argv[1:])
+		// A builtin can consult an axis of its own — `echo` asks about
+		// backslash escapes — so the check is repeated after it runs as well
+		// as before, and its status is discarded when one went unanswered.
+		if r.unspecified {
+			r.status = 2
+			return nil
+		}
+		r.status = st
 		return nil
 	}
 

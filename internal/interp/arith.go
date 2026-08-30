@@ -275,7 +275,7 @@ func (r *Runner) parseNum(s string) (int, error) {
 		n, err = strconv.ParseInt(digits, b, 64)
 	case strings.HasPrefix(s, "0x"), strings.HasPrefix(s, "0X"):
 		n, err = strconv.ParseInt(s[2:], 16, 64)
-	case len(s) > 1 && s[0] == '0' && r.octalLeadingZero():
+	case len(s) > 1 && s[0] == '0' && !strings.ContainsAny(s, "xX#") && r.octalLeadingZero():
 		n, err = strconv.ParseInt(s[1:], 8, 64)
 	default:
 		n, err = strconv.ParseInt(s, 10, 64)
@@ -291,7 +291,9 @@ func (r *Runner) parseNum(s string) (int, error) {
 
 // octalLeadingZero is the dialect answer, and the quietest divergence
 // measured: `0100` is sixty-four everywhere but zsh, where it is one hundred.
-func (r *Runner) octalLeadingZero() bool { return r.sem().ArithLeadingZeroIsOctal }
+func (r *Runner) octalLeadingZero() bool {
+	return r.ask(r.sem().ArithLeadingZeroIsOctal, "a leading zero meaning octal")
+}
 
 // arithCmd runs `(( expr ))` as a command.
 //
@@ -299,7 +301,12 @@ func (r *Runner) octalLeadingZero() bool { return r.sem().ArithLeadingZeroIsOcta
 // usual convention and is unanimous across the panel.
 func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 	return r.withRedirs(ctx, c.Redirs, func() error {
+		r.unspecified = false
 		v, err := r.evalArith(c.Parsed)
+		if r.unspecified {
+			r.status = 2
+			return nil
+		}
 		if err != nil {
 			r.errf("sh: %v\n", err)
 			r.status = 1

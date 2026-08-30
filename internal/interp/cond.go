@@ -16,7 +16,12 @@ import (
 // testClause evaluates `[[ … ]]`. It exits 0 when the condition holds.
 func (r *Runner) testClause(ctx context.Context, c *syntax.TestClause) error {
 	return r.withRedirs(ctx, c.Redirs, func() error {
+		r.unspecified = false
 		ok, err := r.evalCond(c.Expr)
+		if r.unspecified {
+			r.status = 2
+			return nil
+		}
 		if err != nil {
 			r.errf("sh: %v\n", err)
 			r.status = 2
@@ -140,7 +145,7 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		pat := r.condOperand(x.Y)
 		// bash treats a quoted right operand as a literal string; ksh93 and
 		// zsh keep it a regex, so quoting one is unportable either way.
-		if x.Y.IsQuoted() && r.sem().RegexQuotingMakesLiteral {
+		if x.Y.IsQuoted() && r.ask(r.sem().RegexQuotingMakesLiteral, "quoting a =~ regex making it literal") {
 			pat = regexp.QuoteMeta(pat)
 		}
 		re, err := regexp.Compile(pat)

@@ -94,9 +94,10 @@ func command(ctx context.Context, sh Found, c Case, dir string) *exec.Cmd {
 		// oracle.md was found.
 		path := filepath.Join(dir, "case.sh")
 		_ = os.WriteFile(path, []byte(c.Snippet+"\n"), 0o600)
-		return exec.CommandContext(ctx, sh.Path, path)
+		return exec.CommandContext(ctx, sh.Path, append(append([]string(nil), sh.Args...), path)...)
 	}
-	cmd := exec.CommandContext(ctx, sh.Path, "-c", c.Snippet)
+	args := append(append([]string(nil), sh.Args...), "-c", c.Snippet)
+	cmd := exec.CommandContext(ctx, sh.Path, args...)
 	if sh.Argv0 != "" {
 		cmd.Args[0] = sh.Argv0
 	}

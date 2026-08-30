@@ -69,7 +69,7 @@ func (r *Runner) glob(field string) []string {
 		return nil
 	}
 	defer func() {
-		if r.globMissed && r.sem().GlobNoMatchIsError {
+		if r.globMissed && r.ask(r.sem().GlobNoMatchIsError, "an unmatched pattern being an error") {
 			r.errf("sh: no matches found: %s\n", globUnescape(field))
 			r.status = 1
 		}

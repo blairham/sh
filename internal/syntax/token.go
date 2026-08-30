@@ -182,6 +182,8 @@ type Span struct {
 	// lexer leaves it nil: finding the closing brace and understanding the
 	// operators are different jobs, and only the second needs a dialect.
 	Param *ParamExpr
+	// Arith is the parsed form of an ArithSubst span, for the same reason.
+	Arith ArithExpr
 	// Pos is where the span starts, including its opening delimiter.
 	Pos Pos
 }

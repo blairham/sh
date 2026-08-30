@@ -759,7 +759,7 @@ var Corpus = []Case{
 		Why:     "integer division, which is the baseline the float divergence departs from",
 	},
 	{
-		ID: "arith/float-is-a-dialect-axis", Category: "arithmetic",
+		ID: "arith/float-is-a-dialect-axis", SyntaxError: true, Category: "arithmetic",
 		Snippet: `printf "[%s]" "$((1.5))"`,
 		Why:     "ksh93 and zsh evaluate floating point where POSIX says integers only, so neither promising integers nor accepting floats is right everywhere",
 	},

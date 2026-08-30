@@ -74,6 +74,29 @@ type Dialect struct {
 	// picking either meaning would be wrong for half the panel.
 	ParamIndirection bool
 
+	// ArithIncDec enables `++` and `--`. Not POSIX; dash rejects them.
+	ArithIncDec bool
+
+	// ArithComma enables the sequence operator. Not POSIX; dash rejects it.
+	ArithComma bool
+
+	// ArithExplicitBase enables the `base#digits` form. Absent from dash.
+	ArithExplicitBase bool
+
+	// ArithLeadingZeroIsOctal decides whether `0100` is sixty-four or one
+	// hundred. It is true everywhere but zsh, and it is the quietest
+	// divergence measured: nothing warns, both answers are plausible
+	// numbers, and file modes are written with leading zeros.
+	//
+	// Nothing in the parser reads this — a literal is kept as written, so
+	// the tree does not bake in an answer — but the field belongs with the
+	// others, and evaluation needs it.
+	ArithLeadingZeroIsOctal bool
+
+	// ArithFloat enables floating point, which ksh93 and zsh have and POSIX
+	// does not.
+	ArithFloat bool
+
 	// DoubleBracket enables `[[ ... ]]`.
 	//
 	// Consumed by the *parser*, not the lexer, and the reason is worth
@@ -104,6 +127,11 @@ func Core() Dialect {
 		FunctionKeyword:   true,
 		ParamSubstitution: true,
 		ParamSubstring:    true,
+
+		ArithIncDec:             true,
+		ArithComma:              true,
+		ArithExplicitBase:       true,
+		ArithLeadingZeroIsOctal: true,
 	}
 }
 

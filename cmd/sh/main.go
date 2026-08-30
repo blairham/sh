@@ -278,7 +278,7 @@ func printNode(n syntax.Node, depth int) {
 		}
 		printRedirs(x.Redirs, pad, depth)
 	case *syntax.ArithCmdClause:
-		fmt.Printf("%s%-8s arithmetic %s\n", pad, x.Pos(), strings.TrimSpace(x.Expr))
+		fmt.Printf("%s%-8s arithmetic %s\n", pad, x.Pos(), arithString(x.Parsed))
 		printRedirs(x.Redirs, pad, depth)
 	case *syntax.FuncDecl:
 		kw := ""
@@ -328,6 +328,10 @@ func printRedirs(rs []*syntax.Redirect, pad string, depth int) {
 // understood.
 func printParams(w *syntax.Word, pad string) {
 	for _, s := range w.Spans {
+		if s.Kind == syntax.ArithSubst && s.Arith != nil {
+			fmt.Printf("%sarith %s\n", pad, arithString(s.Arith))
+			continue
+		}
 		if s.Kind != syntax.ParamExp || s.Param == nil {
 			continue
 		}
@@ -378,4 +382,30 @@ func wordShape(w *syntax.Word) string {
 		}
 	}
 	return strings.Join(parts, "")
+}
+
+// arithString renders an expression fully parenthesised, so precedence is
+// visible rather than implied. That is the point of parsing it at all: the
+// source text was already in Expr.
+func arithString(e syntax.ArithExpr) string {
+	switch x := e.(type) {
+	case nil:
+		return "(unparsed)"
+	case *syntax.ArithNum:
+		return x.Text
+	case *syntax.ArithVar:
+		return x.Name
+	case *syntax.ArithUnary:
+		if x.Postfix {
+			return "(" + arithString(x.X) + x.Op + ")"
+		}
+		return "(" + x.Op + arithString(x.X) + ")"
+	case *syntax.ArithBinary:
+		return "(" + arithString(x.X) + " " + x.Op + " " + arithString(x.Y) + ")"
+	case *syntax.ArithCond:
+		return "(" + arithString(x.Cond) + " ? " + arithString(x.Then) + " : " + arithString(x.Else) + ")"
+	case *syntax.ArithAssign:
+		return "(" + x.Name + " " + x.Op + " " + arithString(x.Value) + ")"
+	}
+	return "?"
 }

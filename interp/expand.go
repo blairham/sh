@@ -23,6 +23,24 @@ func (r *Runner) expandWord(w *syntax.Word) []string {
 	if w == nil {
 		return nil
 	}
+	// Brace expansion comes first and can turn one word into several, so it
+	// wraps the rest rather than being a stage inside it.
+	if words := braceExpand(w); len(words) > 1 {
+		var out []string
+		for _, bw := range words {
+			out = append(out, r.expandOneWord(bw)...)
+		}
+		return out
+	}
+	return r.expandOneWord(w)
+}
+
+// expandOneWord is the pipeline for a single word, after braces.
+func (r *Runner) expandOneWord(w *syntax.Word) []string {
+	if w == nil {
+		return nil
+	}
+	r.expandTilde(w)
 
 	// Fields are built up span by span. A span joins onto the field before it
 	// unless splitting started a new one, which is what makes x$(f)y attach
@@ -595,4 +613,39 @@ func (r *Runner) parseSpans(spans []syntax.Span) []syntax.Span {
 		}
 	}
 	return out
+}
+
+// expandTilde replaces a leading `~` with the home directory.
+//
+// Only unquoted, only at the start of a word, and only up to the first slash:
+// `echo ~` expands, `echo "~"` does not, and `echo a~` does not because the
+// tilde is not where a word begins.
+//
+// An assignment's value is also a tilde context, which is what makes
+// `PATH=~/bin` work — and it comes for free here, because the parser gives an
+// assignment's value its own word.
+func (r *Runner) expandTilde(w *syntax.Word) {
+	if len(w.Spans) == 0 {
+		return
+	}
+	s := &w.Spans[0]
+	if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted ||
+		!strings.HasPrefix(s.Value, "~") {
+		return
+	}
+	rest := s.Value[1:]
+	name, tail := rest, ""
+	if i := strings.IndexByte(rest, '/'); i >= 0 {
+		name, tail = rest[:i], rest[i:]
+	}
+	if name != "" {
+		// `~user` needs a user database this package does not carry, so it is
+		// left alone rather than guessed at.
+		return
+	}
+	home, ok := r.getVar("HOME")
+	if !ok {
+		return
+	}
+	s.Value = home + tail
 }

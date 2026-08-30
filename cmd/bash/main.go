@@ -18,7 +18,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
@@ -85,45 +84,11 @@ func source(r *interp.Runner, src string, d syntax.Dialect) int {
 	return 0
 }
 
-// registerPrimitives adds the commands shell cannot express, and only those.
-func registerPrimitives(r *interp.Runner) {
-	r.Register("cd", func(r *interp.Runner, _ context.Context, args []string) int {
-		dir := ""
-		if len(args) > 0 {
-			dir = args[0]
-		}
-		if dir == "" {
-			dir, _ = r.Vars["HOME"]
-			if dir == "" {
-				dir = os.Getenv("HOME")
-			}
-		}
-		old := r.Dir
-		if old == "" {
-			old, _ = os.Getwd()
-		}
-		if !strings.HasPrefix(dir, "/") && old != "" {
-			dir = old + "/" + dir
-		}
-		if err := os.Chdir(dir); err != nil {
-			fmt.Fprintln(os.Stderr, "bash: cd:", err)
-			return 1
-		}
-		// The runner's own directory, which no shell function could set.
-		r.Dir = dir
-		r.SetVar("OLDPWD", old)
-		r.SetVar("PWD", dir)
-		return 0
-	})
-
-	r.Register("pwd", func(r *interp.Runner, _ context.Context, _ []string) int {
-		dir := r.Dir
-		if dir == "" {
-			dir, _ = os.Getwd()
-		}
-		// The write error is discarded: a builtin whose output stream is
-		// closed has nowhere to report that, and the shell should carry on.
-		_, _ = fmt.Fprintln(r.Out(), dir)
-		return 0
-	})
-}
+// registerPrimitives adds the commands shell cannot express and the core does
+// not already provide.
+//
+// It is empty: cd, pwd and read were the examples, and they turned out to
+// belong in the core — each changes the runner's own state and every dialect
+// needs them. What remains for a dialect to register is whatever *it* has and
+// the common denominator does not.
+func registerPrimitives(r *interp.Runner) {}

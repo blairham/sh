@@ -5,6 +5,10 @@ package interp
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -23,6 +27,9 @@ var builtins = map[string]Builtin{
 	"export":   biExport,
 	"shift":    biShift,
 	"echo":     biEcho,
+	"cd":       biCd,
+	"pwd":      biPwd,
+	"read":     biRead,
 	"break":    biBreak,
 	"continue": biContinue,
 	"return":   biReturn,
@@ -203,4 +210,123 @@ func expandEchoEscapes(s string) string {
 		}
 	}
 	return b.String()
+}
+
+// biCd changes the shell's working directory.
+//
+// This is the definition of a core primitive: it changes the runner's own
+// state, every dialect needs it, and no shell function can say it. It lived
+// in cmd/bash while that binary was demonstrating Register, which was the
+// right place for a demonstration and the wrong one to leave it.
+func biCd(r *Runner, _ context.Context, args []string) int {
+	dir := ""
+	if len(args) > 0 {
+		dir = args[0]
+	}
+	switch dir {
+	case "":
+		dir, _ = r.getVar("HOME")
+		if dir == "" {
+			r.errf("sh: cd: HOME not set\n")
+			return 1
+		}
+	case "-":
+		// The previous directory, which is why cd records one.
+		dir, _ = r.getVar("OLDPWD")
+		if dir == "" {
+			r.errf("sh: cd: OLDPWD not set\n")
+			return 1
+		}
+	}
+
+	old := r.workDir()
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(old, dir)
+	}
+	info, err := os.Stat(dir)
+	if err != nil || !info.IsDir() {
+		r.errf("sh: cd: %s: no such directory\n", args[0])
+		return 1
+	}
+	// Only the runner's own directory moves. Calling os.Chdir would move the
+	// whole process, which is wrong for an embedded interpreter and would be
+	// shared by every Runner in it.
+	r.Dir = dir
+	r.setVar("OLDPWD", old)
+	r.setVar("PWD", dir)
+	return 0
+}
+
+func biPwd(r *Runner, _ context.Context, _ []string) int {
+	_, _ = fmt.Fprintln(r.stdout(), r.workDir())
+	return 0
+}
+
+// biRead reads a line into variables.
+//
+// Also a primitive by the same test: it has to set a variable in the *calling*
+// shell, which a child process cannot reach.
+//
+// Without -r a backslash escapes the character after it, including a newline,
+// which is why -r is what scripts should use and rarely do.
+func biRead(r *Runner, _ context.Context, args []string) int {
+	raw := false
+	for len(args) > 0 && strings.HasPrefix(args[0], "-") {
+		if args[0] == "-r" {
+			raw = true
+		}
+		args = args[1:]
+	}
+	if len(args) == 0 {
+		args = []string{"REPLY"}
+	}
+
+	line, err := r.readLine(raw)
+	if err != nil {
+		return 1
+	}
+
+	// The last variable takes the whole remainder, which is what makes
+	// `read a b` put "c d" in b for input "a c d".
+	ifs, set := r.ifs()
+	fields := splitFields(line, ifs, set)
+	for i, name := range args {
+		switch {
+		case i >= len(fields):
+			r.setVar(name, "")
+		case i == len(args)-1:
+			r.setVar(name, strings.Join(fields[i:], " "))
+		default:
+			r.setVar(name, fields[i])
+		}
+	}
+	return 0
+}
+
+// readLine reads one line, honouring a line continuation unless raw.
+func (r *Runner) readLine(raw bool) (string, error) {
+	var b strings.Builder
+	var ch [1]byte
+	in := r.In()
+	for {
+		n, err := in.Read(ch[:])
+		if n == 0 || err != nil {
+			if b.Len() > 0 {
+				return b.String(), nil
+			}
+			return "", io.EOF
+		}
+		c := ch[0]
+		if c == '\n' {
+			s := b.String()
+			// A trailing backslash continues onto the next line, unless -r.
+			if !raw && strings.HasSuffix(s, "\\") {
+				b.Reset()
+				b.WriteString(strings.TrimSuffix(s, "\\"))
+				continue
+			}
+			return s, nil
+		}
+		b.WriteByte(c)
+	}
 }

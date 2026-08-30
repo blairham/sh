@@ -23,6 +23,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | a name-shaped value is re-evaluated | **no** | yes | **no** | yes |
 | an invalid octal digit is an error | yes | yes | **no** | *n/a* |
 | `${!x}` is the name, not the value | *n/a* | no | **yes** | *n/a* |
+| brace expansion happens | **no** | yes | yes | yes |
 | arithmetic does floating point | no | no | **yes** | **yes** |
 | quoting a `=~` regex makes it literal | *n/a* | **yes** | no | no |
 | array index base | *n/a* | 0 | 0 | **1** |
@@ -65,6 +66,7 @@ Group the shells by which side of each axis they fall on:
     prefix persists      {dash, ksh93}
     `${#@}` is a count   {dash}
     `[^…]` negates       {dash}
+    brace expansion      {dash}
     leading zero octal   {zsh}
     fatal error status   {dash}
     `${!x}` is the name  {ksh93}
@@ -82,7 +84,7 @@ Group the shells by which side of each axis they fall on:
     readonly continues   {bash}
     shift survives       {bash, zsh}
 
-Eight distinct groupings across twenty-two axes: `{zsh}`, `{dash,zsh}`,
+Eight distinct groupings across twenty-three axes: `{zsh}`, `{dash,zsh}`,
 `{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`, `{dash,ksh93}` and
 `{dash}` — the last of which `${#@}` now produces on its own, where
 previously it appeared only as the modern-ksh reading of the `&>` axis.
@@ -165,6 +167,29 @@ That is worth stating because the obvious reading of the measurements is
 two separate quirks. It is one behaviour observed twice, and an
 implementation with two switches for it will eventually set them
 inconsistently.
+
+## A row in this table is not an implementation
+
+`[^abc]` negates was measured, written into the table above, and never
+wired: the matcher treated `^` as negation unconditionally, with a comment
+saying dash does not have it and that this was "accepted here because the
+core excludes dash". The row and the code disagreed, and the conformance
+run could not see it, because dash and the core give the same *exit
+status* for a `case` that takes a different branch.
+
+It was found by reading the wording bucket rather than the behavioural
+one. Three of the entries there were not diagnostics at all:
+
+    echo {1..3}                    dash prints it literally; we expanded it
+    case d in [^abc])              dash does not negate; we did
+    >b with no command             creates the file; we created nothing
+
+None of the three changes an exit status, so all three were counted as
+agreements by the behavioural score and as wording by everything else. A
+score that compares only statuses cannot see a construct that silently
+produces the wrong output, which is the failure mode this project exists
+to be honest about — so the wording bucket is worth reading, not just
+counting.
 
 ## An axis that is not binary
 

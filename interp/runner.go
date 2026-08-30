@@ -330,6 +330,23 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			// script stopped, and then reported success for having done so.
 			return nil
 		}
+		// `>b` with no command still opens the file, and truncates it if it
+		// exists. Returning early skipped that, so a redirection that was
+		// the whole command did nothing at all — which is how `echo hi &>b`
+		// in a dialect without `&>` came to leave no file behind, the exact
+		// silent case the AmpersandRedirect comment warns about.
+		if len(c.Redirs) > 0 {
+			closers, err := r.applyRedirs(ctx, c.Redirs)
+			for _, cl := range closers {
+				_ = cl.Close()
+			}
+			if err != nil {
+				return err
+			}
+			if r.redirErr {
+				return nil
+			}
+		}
 		r.status = 0
 		return nil
 	}

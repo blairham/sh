@@ -3,6 +3,8 @@
 
 package interp
 
+import "strings"
+
 // Answer is one axis's value, and it has three states rather than two.
 //
 // Unspecified is the point of the type. The vector contains *only* the places
@@ -129,6 +131,20 @@ type Semantics struct {
 	// needed a third state. `semantics.md` records `${!x}` as the axis the
 	// binary table could not express; this is the shape that expresses it.
 	IndirectionYieldsName Answer
+	// BraceExpansion expands `{a,b}` and `{1..3}`. Absent from dash, where
+	// the word is a literal.
+	//
+	// It lives here rather than in syntax.Dialect even though it is
+	// additive, because the token stream is identical either way: the
+	// parser produces the same word, and only expansion differs. It is also
+	// silent in the `&>` sense — `echo {1..3}` prints something either way,
+	// and nothing reports that one of them is not what was meant.
+	BraceExpansion Answer
+	// BracketCaretNegates reads `[^abc]` as a negated class. dash alone
+	// treats `^` as an ordinary character, so `[^abc]` matches a caret there
+	// and everything-but there elsewhere: the two answers are both matches,
+	// on different inputs, with nothing to warn on.
+	BracketCaretNegates Answer
 	// ArithFloat evaluates floating point. True in ksh93 and zsh, where POSIX
 	// says integers only.
 	ArithFloat Answer
@@ -200,6 +216,8 @@ func PosixSemantics() Semantics {
 		// requires only "greater than zero", which decides nothing.
 		FatalErrorStatusIsOne:              No,
 		ArithNameValueRecurses:             No,
+		BraceExpansion:                     No,
+		BracketCaretNegates:                No,
 		ArithInvalidOctalDigitIsError:      Yes,
 		ArithFloat:                         No,
 		RegexQuotingMakesLiteral:           No,
@@ -237,6 +255,8 @@ func BashSemantics() Semantics {
 	s.FatalErrorStatusIsOne = Yes
 	s.ArithNameValueRecurses = Yes
 	s.IndirectionYieldsName = No
+	s.BraceExpansion = Yes
+	s.BracketCaretNegates = Yes
 	s.ReadonlyReassignmentFatal = No
 	s.ShiftPastEndFatal = No
 	s.RegexQuotingMakesLiteral = Yes
@@ -272,6 +292,8 @@ func KshSemantics() Semantics {
 	s.FatalErrorStatusIsOne = Yes
 	s.ArithInvalidOctalDigitIsError = No
 	s.IndirectionYieldsName = Yes
+	s.BraceExpansion = Yes
+	s.BracketCaretNegates = Yes
 	s.LastPipelineElementInCurrentShell = Yes
 	return s
 }
@@ -306,6 +328,21 @@ func (r *Runner) sem() Semantics {
 // Callers consult an axis only when the input actually depends on it — `echo
 // hi` does not ask about escapes and `echo 'a\tb'` does — which is what keeps
 // the core usable rather than refusing everything.
+// caretNegates resolves the `[^…]` axis, and only for a pattern that actually
+// uses it — so a dialect is never questioned about syntax the pattern does not
+// contain, and `[abc]` needs no answer from anyone.
+func (r *Runner) caretNegates(pattern string) bool {
+	if !strings.Contains(pattern, "[^") {
+		return false
+	}
+	return r.ask(r.sem().BracketCaretNegates, "`^` negating a bracket class")
+}
+
+// matchPatternR is matchPattern with the caret axis resolved from the dialect.
+func (r *Runner) matchPatternR(pattern, s string) bool {
+	return matchPattern(pattern, s, r.caretNegates(pattern))
+}
+
 func (r *Runner) ask(a Answer, axis string) bool {
 	switch a {
 	case Yes:

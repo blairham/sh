@@ -176,9 +176,19 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 		subject := strings.Join(r.expandWord(c.Word), " ")
 		// A case matching nothing exits 0.
 		r.status = 0
+		r.unspecified = false
 
 		for i, item := range c.Items {
-			if !r.caseItemMatches(item, subject) {
+			matched := r.caseItemMatches(item, subject)
+			if r.unspecified {
+				// A pattern asked an axis no dialect answered. Falling
+				// through to the next item would run a body chosen by a
+				// guess, and reporting the refusal while running anyway is
+				// the failure this whole structure exists to avoid.
+				r.status = 2
+				return nil
+			}
+			if !matched {
 				continue
 			}
 			if err := r.runList(ctx, item.Body); err != nil {
@@ -218,7 +228,7 @@ func (r *Runner) caseItemMatches(item *syntax.CaseItem, subject string) bool {
 	for _, p := range item.Patterns {
 		// A pattern is a word: unquoted it is a pattern, quoted a literal,
 		// and only the spans still know which.
-		if matchPattern(r.patternOf(p), subject) {
+		if r.matchPatternR(r.patternOf(p), subject) {
 			return true
 		}
 	}

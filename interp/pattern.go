@@ -59,11 +59,11 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 // caller, because the same language is used by `case` and by parameter
 // expansion where there is no filesystem and no components. Putting them here
 // would be wrong in two places out of three.
-func matchPattern(pattern, s string) bool {
-	return matchHere(pattern, s)
+func matchPattern(pattern, s string, caret bool) bool {
+	return matchHere(pattern, s, caret)
 }
 
-func matchHere(p, s string) bool {
+func matchHere(p, s string, caret bool) bool {
 	for len(p) > 0 {
 		switch p[0] {
 		case '*':
@@ -77,7 +77,7 @@ func matchHere(p, s string) bool {
 				return true
 			}
 			for i := 0; i <= len(s); i++ {
-				if matchHere(p, s[i:]) {
+				if matchHere(p, s[i:], caret) {
 					return true
 				}
 			}
@@ -93,7 +93,7 @@ func matchHere(p, s string) bool {
 			if s == "" {
 				return false
 			}
-			rest, ok := matchBracket(p, s[0])
+			rest, ok := matchBracket(p, s[0], caret)
 			if !ok {
 				return false
 			}
@@ -121,13 +121,15 @@ func matchHere(p, s string) bool {
 
 // matchBracket consumes a bracket expression from p and reports whether c is
 // in it, returning what is left of the pattern.
-func matchBracket(p string, c byte) (rest string, ok bool) {
+func matchBracket(p string, c byte, caret bool) (rest string, ok bool) {
 	i := 1
 	negate := false
-	// `!` is the portable negation. `^` is an extension dash does not have,
-	// where it is an ordinary character — accepted here because the core
-	// excludes dash.
-	if i < len(p) && (p[i] == '!' || p[i] == '^') {
+	// `!` is the portable negation, everywhere. `^` is an extension dash
+	// does not have, where it is an ordinary character — so whether it
+	// negates is the caller's answer rather than this file's. Assuming it
+	// did made `[^abc]` match the complement under the dash dialect, where
+	// dash matches a literal caret.
+	if i < len(p) && (p[i] == '!' || (p[i] == '^' && caret)) {
 		negate = true
 		i++
 	}

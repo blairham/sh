@@ -80,15 +80,20 @@ func fail(err error) {
 // pickDialect resolves a name to a grammar and a semantics.
 //
 // They are chosen together because they answer different questions about the
-// same shell: which constructs it accepts, and what it means by them. Only
-// `core` names a grammar with no shell behind it — there is no core
-// *semantics*, because semantic differences are conflicts and an intersection
-// of conflicting answers does not exist. It is paired with bash's, which is
-// what a script was almost certainly written against.
+// same shell: which constructs it accepts, and what it means by them.
+//
+// `core` is built the same way on both sides. The grammar refuses constructs
+// not every shell has; the semantics refuses *behaviours* not every shell
+// shares. A script that runs under it depends on nothing the panel disagrees
+// about, which is a useful thing to be able to check and a poor way to run a
+// shell — the same split docs/spec/core.md drew for strict POSIX.
 func pickDialect(name string) (syntax.Dialect, interp.Semantics, error) {
 	switch name {
 	case "core":
-		return syntax.Core(), interp.BashSemantics(), nil
+		// Strict: what every shell agrees on is done, and anything they
+		// disagree about is refused rather than silently given one shell's
+		// answer. A portability check rather than a runtime.
+		return syntax.Core(), interp.CoreSemantics(), nil
 	case "posix":
 		return syntax.POSIX(), interp.PosixSemantics(), nil
 	case "bash":

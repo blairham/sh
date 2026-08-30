@@ -3,6 +3,32 @@
 
 package interp
 
+// Answer is one axis's value, and it has three states rather than two.
+//
+// Unspecified is the point of the type. The vector contains *only* the places
+// the shells disagree — everything they agree about never became an axis and
+// is simply the implementation — so leaving one unset is not an oversight, it
+// is saying "no shell has been chosen here". A script that depends on such an
+// axis is refused, naming it, rather than silently getting one shell's answer.
+type Answer uint8
+
+const (
+	// Unspecified refuses the behaviour rather than guessing at it.
+	Unspecified Answer = iota
+	Yes
+	No
+)
+
+func (a Answer) String() string {
+	switch a {
+	case Yes:
+		return "yes"
+	case No:
+		return "no"
+	}
+	return "unspecified"
+}
+
 // Semantics is where the shells disagree about what identical syntax *means*.
 //
 // This is the structure docs/spec/semantics.md argued for, and the argument
@@ -25,67 +51,67 @@ type Semantics struct {
 	// expansion. False in zsh, and narrower than "word splitting": zsh still
 	// splits an unquoted *command* substitution, so this is two fields and
 	// not one.
-	SplitParamExpansion bool
+	SplitParamExpansion Answer
 	// SplitCommandSubstitution field-splits an unquoted command
 	// substitution. True everywhere measured, including zsh.
-	SplitCommandSubstitution bool
+	SplitCommandSubstitution Answer
 
 	// GlobExpansionResults matches the *result* of an expansion against the
 	// filesystem. False in zsh, where only a pattern written literally in the
 	// source is expanded. The same rule decides whether `[[ abc == $p ]]`
 	// treats $p as a pattern, which is one behaviour observed twice rather
 	// than two quirks.
-	GlobExpansionResults bool
+	GlobExpansionResults Answer
 	// GlobNoMatchIsError makes a pattern matching nothing an error instead of
 	// passing it through. True only in zsh.
-	GlobNoMatchIsError bool
+	GlobNoMatchIsError Answer
 
 	// AssignmentPrefixPersistsOnSpecialBuiltin keeps `x=1 shift` set
 	// afterwards. POSIX requires it; dash and ksh93 comply and bash and zsh
 	// do not.
-	AssignmentPrefixPersistsOnSpecialBuiltin bool
+	AssignmentPrefixPersistsOnSpecialBuiltin Answer
 
 	// EchoInterpretsEscapes expands backslash escapes in `echo` without -e.
 	// True in dash and zsh, false in bash and ksh93 — a grouping no other
 	// axis produces.
-	EchoInterpretsEscapes bool
+	EchoInterpretsEscapes Answer
 
 	// LengthOfSpecialIsCount makes `${#@}` the number of positional
 	// parameters. False in dash, which gives the length of the joined
 	// string. The first axis measured where dash stands alone, and a silent
 	// one: both answers are plausible numbers.
-	LengthOfSpecialIsCount bool
+	LengthOfSpecialIsCount Answer
 
 	// ArithLeadingZeroIsOctal reads `0100` as sixty-four. False in zsh, where
 	// it is one hundred. The quietest divergence measured — nothing warns,
 	// both are plausible numbers, and file modes are written this way.
-	ArithLeadingZeroIsOctal bool
+	ArithLeadingZeroIsOctal Answer
 	// ArithFloat evaluates floating point. True in ksh93 and zsh, where POSIX
 	// says integers only.
-	ArithFloat bool
+	ArithFloat Answer
 
 	// RegexQuotingMakesLiteral treats a quoted right operand of `=~` as a
 	// literal string. True in bash alone; ksh93 and zsh keep it a regex, so
 	// quoting a regex is unportable in either direction.
-	RegexQuotingMakesLiteral bool
+	RegexQuotingMakesLiteral Answer
 
 	// LastPipelineElementInCurrentShell runs the last command of a pipeline
 	// in this shell, so `echo x | read v` sets v. True in ksh93 and zsh.
-	LastPipelineElementInCurrentShell bool
+	LastPipelineElementInCurrentShell Answer
 
 	// ShiftPastEndFatal ends a non-interactive shell when `shift` runs off
 	// the end. True in dash and ksh93.
-	ShiftPastEndFatal bool
+	ShiftPastEndFatal Answer
 	// ReadonlyReassignmentFatal ends the script when a readonly variable is
 	// assigned. True everywhere but bash, measured with a plain assignment in
 	// a script file — adding a redirect makes it a command and reverses the
 	// answer, which is the contaminated-probe trap docs/spec/oracle.md
 	// records.
-	ReadonlyReassignmentFatal bool
+	ReadonlyReassignmentFatal Answer
 
 	// DollarZeroInFunctionIsFunctionName makes `$0` inside a function the
 	// function's name. True only in zsh.
-	DollarZeroInFunctionIsFunctionName bool
+	DollarZeroInFunctionIsFunctionName Answer
 }
 
 // There is deliberately no CoreSemantics, and the absence is the sharpest
@@ -113,24 +139,49 @@ type Semantics struct {
 // wrong one for a runtime.
 func PosixSemantics() Semantics {
 	return Semantics{
-		SplitParamExpansion:                      true,
-		SplitCommandSubstitution:                 true,
-		GlobExpansionResults:                     true,
-		AssignmentPrefixPersistsOnSpecialBuiltin: true,
-		LengthOfSpecialIsCount:                   true,
-		ArithLeadingZeroIsOctal:                  true,
-		ShiftPastEndFatal:                        true,
-		ReadonlyReassignmentFatal:                true,
+		SplitParamExpansion:                      Yes,
+		SplitCommandSubstitution:                 Yes,
+		GlobExpansionResults:                     Yes,
+		GlobNoMatchIsError:                       No,
+		AssignmentPrefixPersistsOnSpecialBuiltin: Yes,
+		EchoInterpretsEscapes:                    No,
+		LengthOfSpecialIsCount:                   Yes,
+		ArithLeadingZeroIsOctal:                  Yes,
+		ArithFloat:                               No,
+		RegexQuotingMakesLiteral:                 No,
+		LastPipelineElementInCurrentShell:        No,
+		ShiftPastEndFatal:                        Yes,
+		ReadonlyReassignmentFatal:                Yes,
+		DollarZeroInFunctionIsFunctionName:       No,
+	}
+}
+
+// CoreSemantics fixes the axes every shell in the core panel agrees on and
+// leaves the rest unspecified.
+//
+// It is the counterpart of syntax.Core(), built the same way: that refuses
+// constructs not every shell has, and this refuses *behaviours* not every
+// shell shares. A script that runs under it depends on nothing the panel
+// disagrees about, which makes it a portability check rather than a runtime —
+// the same role docs/spec/core.md gave strict POSIX.
+//
+// Only two of the fourteen axes survive, and that is not a defect of the
+// panel. The axes exist because they diverge; everything shells agree about
+// never became one.
+func CoreSemantics() Semantics {
+	return Semantics{
+		SplitCommandSubstitution: Yes,
+		LengthOfSpecialIsCount:   Yes,
 	}
 }
 
 // BashSemantics is bash's answers.
 func BashSemantics() Semantics {
 	s := PosixSemantics()
-	s.AssignmentPrefixPersistsOnSpecialBuiltin = false
-	s.ReadonlyReassignmentFatal = false
-	s.ShiftPastEndFatal = false
-	s.RegexQuotingMakesLiteral = true
+	s.AssignmentPrefixPersistsOnSpecialBuiltin = No
+	s.ReadonlyReassignmentFatal = No
+	s.ShiftPastEndFatal = No
+	s.RegexQuotingMakesLiteral = Yes
 	return s
 }
 
@@ -138,44 +189,65 @@ func BashSemantics() Semantics {
 // differs from bash on seven axes and agrees with dash on one of them.
 func ZshSemantics() Semantics {
 	s := BashSemantics()
-	s.SplitParamExpansion = false
-	s.GlobExpansionResults = false
-	s.GlobNoMatchIsError = true
-	s.EchoInterpretsEscapes = true
-	s.ArithLeadingZeroIsOctal = false
-	s.ArithFloat = true
-	s.RegexQuotingMakesLiteral = false
-	s.LastPipelineElementInCurrentShell = true
-	s.DollarZeroInFunctionIsFunctionName = true
+	s.SplitParamExpansion = No
+	s.GlobExpansionResults = No
+	s.GlobNoMatchIsError = Yes
+	s.EchoInterpretsEscapes = Yes
+	s.ArithLeadingZeroIsOctal = No
+	s.ArithFloat = Yes
+	s.RegexQuotingMakesLiteral = No
+	s.LastPipelineElementInCurrentShell = Yes
+	s.DollarZeroInFunctionIsFunctionName = Yes
 	return s
 }
 
 // KshSemantics is ksh93's.
 func KshSemantics() Semantics {
 	s := PosixSemantics()
-	s.ArithFloat = true
-	s.LastPipelineElementInCurrentShell = true
+	s.ArithFloat = Yes
+	s.LastPipelineElementInCurrentShell = Yes
 	return s
 }
 
 // DashSemantics is dash's.
 func DashSemantics() Semantics {
 	s := PosixSemantics()
-	s.EchoInterpretsEscapes = true
-	s.LengthOfSpecialIsCount = false
+	s.EchoInterpretsEscapes = Yes
+	s.LengthOfSpecialIsCount = No
 	return s
 }
 
-// sem returns the runner's semantics.
+// sem returns the runner's semantics, defaulting to the core.
 //
-// The fallback is bash's, so the zero Runner is usable rather than
-// meaningless — the zero Semantics would answer "no" to every axis, which is
-// not any shell. It is a default in the Go sense and not a recommendation: a
-// shell built on this package is expected to set the field, and the choice is
-// its own.
+// Defaulting to a *shell* would be the substrate answering a question that is
+// not its to answer. Defaulting to the core answers it honestly: what every
+// shell agrees on is done, and anything else is refused until something above
+// chooses. A shell built on this package sets the field; that is its job.
 func (r *Runner) sem() Semantics {
 	if r.Semantics != nil {
 		return *r.Semantics
 	}
-	return BashSemantics()
+	return CoreSemantics()
+}
+
+// ask reads one axis.
+//
+// An unspecified axis is refused rather than guessed, and the refusal names
+// it, because "this script depends on something the shells disagree about"
+// is a useful thing to be told and a silent wrong answer is not.
+//
+// Callers consult an axis only when the input actually depends on it — `echo
+// hi` does not ask about escapes and `echo 'a\tb'` does — which is what keeps
+// the core usable rather than refusing everything.
+func (r *Runner) ask(a Answer, axis string) bool {
+	switch a {
+	case Yes:
+		return true
+	case No:
+		return false
+	}
+	r.errf("sh: %s: the shells disagree here and no dialect was chosen\n", axis)
+	r.status = 2
+	r.unspecified = true
+	return false
 }

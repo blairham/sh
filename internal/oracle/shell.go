@@ -33,6 +33,12 @@ type Shell struct {
 	// so the panel carries both and must be able to say which it ran.
 	Argv0 string
 
+	// Args are extra flags placed before -c. The implementation under test
+	// needs them: it defaults to a strict core that refuses anything the
+	// panel disagrees about, so grading it against bash means telling it to
+	// be bash rather than relying on a default to happen to match.
+	Args []string
+
 	// Why records what this panel member is here to represent.
 	Why string
 

@@ -141,7 +141,7 @@ func biShift(r *Runner, _ context.Context, args []string) int {
 	}
 	if n > len(r.Params) {
 		// Fatal in dash and ksh93, survivable in bash and zsh.
-		if r.sem().ShiftPastEndFatal {
+		if r.ask(r.sem().ShiftPastEndFatal, "shift past the end being fatal") {
 			r.errf("sh: shift: can't shift that many\n")
 			r.ctl = controlReturn
 		}
@@ -166,7 +166,9 @@ func biEcho(r *Runner, _ context.Context, args []string) int {
 	out := strings.Join(args, " ")
 	// dash and zsh expand backslash escapes without -e; bash and ksh93 do
 	// not. A grouping no other axis produces.
-	if r.sem().EchoInterpretsEscapes {
+	// Asked only when the text could differ either way, so `echo hi` needs no
+	// dialect and `echo 'a\tb'` does.
+	if strings.ContainsRune(out, '\\') && r.ask(r.sem().EchoInterpretsEscapes, "echo interpreting backslash escapes") {
 		out = expandEchoEscapes(out)
 	}
 	if newline {

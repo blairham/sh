@@ -3,7 +3,10 @@
 
 package interp
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestArithmetic(t *testing.T) {
 	tests := []struct{ name, src, want string }{
@@ -215,5 +218,61 @@ func TestHeredocBodies(t *testing.T) {
 	// A here-string is one line and its word is expanded like any other.
 	if got, _ := run(t, `x=v; cat <<< "[$x]"`, nil); got != "[v]\n" {
 		t.Errorf("here-string gave %q", got)
+	}
+}
+
+func TestCoreRefusesWhatTheShellsDisagreeAbout(t *testing.T) {
+	// The counterpart of syntax.Core(), built the same way: that refuses
+	// constructs not every shell has, this refuses behaviours not every shell
+	// shares. A script that runs under it depends on nothing contested.
+	core := CoreSemantics()
+	for _, tc := range []struct{ name, src, axis string }{
+		{"octal", `echo $((0100))`, "leading zero"},
+		{"splitting", `x="a b"; printf "[%s]" $x`, "splitting"},
+		{"quoted regex", `[[ a =~ "x" ]]`, "regex"},
+		{"echo escapes", `echo 'a\tb'`, "escapes"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := run(t, tc.src, withSem(core))
+			if st != 2 {
+				t.Errorf("status = %d, want 2 — the command must not run", st)
+			}
+			if !strings.Contains(out, "no dialect was chosen") {
+				t.Errorf("the refusal should say what is missing, got %q", out)
+			}
+			if !strings.Contains(out, tc.axis) {
+				t.Errorf("the refusal should name the axis, got %q", out)
+			}
+		})
+	}
+}
+
+func TestCoreOnlyRefusesWhenTheInputDependsOnAnAxis(t *testing.T) {
+	// What keeps the core usable rather than refusing everything: an axis is
+	// consulted only when the answer could change the result.
+	core := CoreSemantics()
+	for _, tc := range []struct{ src, want string }{
+		{`echo hi`, "hi\n"},                // no escapes, so no question about them
+		{`echo $((1+2))`, "3\n"},           // no leading zero
+		{`x=ab; printf "[%s]" $x`, "[ab]"}, // nothing to split on
+		{`printf "[%s]" "a b"`, "[a b]"},   // quoted, so splitting never arises
+	} {
+		out, st := run(t, tc.src, withSem(core))
+		if st != 0 || out != tc.want {
+			t.Errorf("%s: got %q status %d, want %q status 0", tc.src, out, st, tc.want)
+		}
+	}
+}
+
+func TestCoreAgreesWithTheShellsWhereTheyAgree(t *testing.T) {
+	// Only two axes survive into the core, and that is not a defect of the
+	// panel: the axes exist because they diverge, so everything the shells
+	// agree about never became one.
+	core := CoreSemantics()
+	if got, _ := run(t, `printf "[%s]" $(printf "a b")`, withSem(core)); got != "[a][b]" {
+		t.Errorf("an unquoted command substitution splits everywhere, got %q", got)
+	}
+	if got, _ := run(t, `set -- p q r; echo ${#@}`, withSem(core)); got != "3\n" {
+		t.Errorf("${#@} is the count in every core shell, got %q", got)
 	}
 }

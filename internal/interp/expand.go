@@ -141,10 +141,10 @@ func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
 		return globEscape(s.Value), false
 	case syntax.ParamExp:
 		v := r.expandParam(s.Param)
-		return r.expansionResult(v, unquoted, r.sem().SplitParamExpansion)
+		return r.expansionResult(v, unquoted, r.sem().SplitParamExpansion, "splitting an unquoted parameter expansion")
 	case syntax.CommandSubst:
 		v := r.commandSubst(r.ctx, s.Value)
-		return r.expansionResult(v, unquoted, r.sem().SplitCommandSubstitution)
+		return r.expansionResult(v, unquoted, r.sem().SplitCommandSubstitution, "splitting an unquoted command substitution")
 	case syntax.ArithSubst:
 		v, err := r.evalArith(s.Arith)
 		if err != nil {
@@ -152,7 +152,7 @@ func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
 			r.status = 1
 			return "", false
 		}
-		return r.expansionResult(itoa(v), unquoted, r.sem().SplitParamExpansion)
+		return r.expansionResult(itoa(v), unquoted, r.sem().SplitParamExpansion, "splitting an unquoted arithmetic expansion")
 	}
 	return "", false
 }
@@ -163,17 +163,37 @@ func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
 //
 // Quoted, neither applies — that is universal. Unquoted, both are dialect
 // questions, and zsh answers no to both while everything else answers yes.
-func (r *Runner) expansionResult(v string, unquoted, split bool) (string, bool) {
+func (r *Runner) expansionResult(v string, unquoted bool, split Answer, axis string) (string, bool) {
 	if !unquoted {
 		return globEscape(v), false
 	}
-	if !r.sem().GlobExpansionResults {
+	// Both axes are asked only when the value could actually differ: a result
+	// with no separator in it is not split either way, and one with no
+	// metacharacter is not a pattern either way.
+	doSplit := false
+	// Asked against the *actual* separators, not a guess at them: with
+	// IFS=: a value holding no space still splits, and hardcoding whitespace
+	// here silently stopped it.
+	if ifs, _ := r.ifs(); containsAnyOf(v, ifs) {
+		doSplit = r.ask(split, axis)
+	}
+	if hasUnescapedMeta(v) &&
+		!r.ask(r.sem().GlobExpansionResults, "globbing the result of an expansion") {
 		// zsh does not treat the result of an expansion as a pattern. The
 		// same rule decides `[[ abc == $p ]]`, which is one behaviour
 		// observed twice rather than two quirks.
 		v = globEscape(v)
 	}
-	return v, split
+	return v, doSplit
+}
+
+func containsAnyOf(s, chars string) bool {
+	for i := 0; i < len(s); i++ {
+		if strings.IndexByte(chars, s[i]) >= 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // expandParam handles the forms this slice implements.
@@ -465,7 +485,7 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 	case "0":
 		// zsh reports the *function's* name inside a function where every
 		// other shell reports the shell's.
-		if r.inFunc != "" && r.sem().DollarZeroInFunctionIsFunctionName {
+		if r.inFunc != "" && r.ask(r.sem().DollarZeroInFunctionIsFunctionName, "$0 inside a function") {
 			return r.inFunc, true
 		}
 		return r.Name, true
@@ -506,7 +526,7 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 // count. Both are plausible numbers and neither errors, which is what makes
 // it worth a switch rather than a majority verdict.
 func (r *Runner) specialLength() int {
-	if r.sem().LengthOfSpecialIsCount {
+	if r.ask(r.sem().LengthOfSpecialIsCount, "${#@} being the count of parameters") {
 		return len(r.Params)
 	}
 	return len(strings.Join(r.Params, " "))

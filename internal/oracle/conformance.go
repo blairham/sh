@@ -67,8 +67,15 @@ func RunConformance(ctx context.Context, path, against string, cases []Case) (*R
 	}
 
 	ours := Found{
-		Shell: Shell{Name: "ours", Why: "the implementation under test"},
-		Path:  path,
+		Shell: Shell{
+			Name: "ours",
+			// Told which shell to be. It defaults to a strict core that
+			// refuses what the panel disagrees about, so a grade against
+			// bash has to ask for bash.
+			Args: []string{"-dialect", against},
+			Why:  "the implementation under test",
+		},
+		Path: path,
 	}
 
 	rep := &Report{Against: against, Missing: missing}

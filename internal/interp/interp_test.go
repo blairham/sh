@@ -19,7 +19,12 @@ func run(t *testing.T, src string, setup func(*Runner)) (out string, status int)
 		t.Fatalf("parse %q: %v", src, err)
 	}
 	var buf bytes.Buffer
-	r := &Runner{Stdout: &buf, Stderr: &buf}
+	// Bash's answers unless a test says otherwise. A test asserting a
+	// *behaviour* has to name a dialect, because the default is the strict
+	// core and the core refuses anything the shells disagree about — which
+	// is exactly what these tests are full of.
+	bash := BashSemantics()
+	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &bash}
 	if setup != nil {
 		setup(r)
 	}

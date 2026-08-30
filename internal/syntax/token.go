@@ -178,6 +178,10 @@ type Span struct {
 	// Quoting is the quoting this span sits in. For a substitution it decides
 	// only whether the result is split afterwards, not what the span is.
 	Quoting Quoting
+	// Param is the parsed form of a ParamExp span, filled by the parser. The
+	// lexer leaves it nil: finding the closing brace and understanding the
+	// operators are different jobs, and only the second needs a dialect.
+	Param *ParamExpr
 	// Pos is where the span starts, including its opening delimiter.
 	Pos Pos
 }

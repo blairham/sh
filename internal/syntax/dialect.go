@@ -55,6 +55,25 @@ type Dialect struct {
 	// not core because ksh93 — where the keyword originated — rejects it.
 	FunctionKeyword bool
 
+	// ParamSubstitution enables `${x/pat/rep}` and its anchored forms.
+	// Absent from dash.
+	ParamSubstitution bool
+
+	// ParamSubstring enables `${x:off:len}`. Absent from dash.
+	ParamSubstring bool
+
+	// ParamCaseChange enables `${x^^}` and `${x,,}`. **bash alone**: ksh93
+	// reports a syntax error and zsh a bad substitution, so a construct one
+	// panel shell supports is not a common denominator and this is off for
+	// the core.
+	ParamCaseChange bool
+
+	// ParamIndirection enables `${!x}`. bash alone means indirection by it.
+	// ksh93 accepts it and means something else without erring, which is why
+	// a dialect without this must *refuse* the construct rather than guess:
+	// picking either meaning would be wrong for half the panel.
+	ParamIndirection bool
+
 	// DoubleBracket enables `[[ ... ]]`.
 	//
 	// Consumed by the *parser*, not the lexer, and the reason is worth
@@ -83,6 +102,8 @@ func Core() Dialect {
 		ArithCommand:      true,
 		DoubleBracket:     true,
 		FunctionKeyword:   true,
+		ParamSubstitution: true,
+		ParamSubstring:    true,
 	}
 }
 
@@ -95,5 +116,7 @@ func POSIX() Dialect { return Dialect{} }
 func Bash() Dialect {
 	d := Core()
 	d.CaseContinue = true
+	d.ParamCaseChange = true
+	d.ParamIndirection = true
 	return d
 }

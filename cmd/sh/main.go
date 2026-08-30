@@ -221,6 +221,7 @@ func printNode(n syntax.Node, depth int) {
 		}
 		for _, w := range x.Args {
 			fmt.Printf("%s  %-8s word %s\n", pad, w.Pos(), w.Literal())
+			printParams(w, pad+"    ")
 		}
 		printRedirs(x.Redirs, pad, depth)
 	case *syntax.Subshell:
@@ -320,4 +321,61 @@ func printRedirs(rs []*syntax.Redirect, pad string, depth int) {
 		}
 	}
 	_ = depth
+}
+
+// printParams shows the parsed form of any ${ } inside a word. A word's
+// Literal() flattens them, which is exactly what hides whether they were
+// understood.
+func printParams(w *syntax.Word, pad string) {
+	for _, s := range w.Spans {
+		if s.Kind != syntax.ParamExp || s.Param == nil {
+			continue
+		}
+		e := s.Param
+		desc := "param " + e.Name
+		if e.Length {
+			desc = "param length-of " + e.Name
+		}
+		if e.Indirect {
+			desc = "param indirect " + e.Name
+		}
+		if e.Index != nil {
+			desc += "[" + e.Index.Literal() + "]"
+		}
+		if e.Op != syntax.ParamNone {
+			colon := ""
+			if e.Colon {
+				colon = ": (empty counts as unset)"
+			}
+			desc += fmt.Sprintf("  op %q%s", e.Op.String(), colon)
+		}
+		fmt.Printf("%s%s\n", pad, desc)
+		if e.Arg != nil {
+			fmt.Printf("%s  arg %s\n", pad, wordShape(e.Arg))
+			printParams(e.Arg, pad+"    ")
+		}
+		if e.Arg2 != nil {
+			fmt.Printf("%s  arg2 %s\n", pad, wordShape(e.Arg2))
+		}
+	}
+}
+
+// wordShape renders a word so a substitution in it is not mistaken for
+// literal text. Literal() flattens them, which is what hides the difference
+// that matters: an operand is a word and is expanded.
+func wordShape(w *syntax.Word) string {
+	var parts []string
+	for _, s := range w.Spans {
+		switch s.Kind {
+		case syntax.CommandSubst:
+			parts = append(parts, "$("+s.Value+")")
+		case syntax.ArithSubst:
+			parts = append(parts, "$(("+s.Value+"))")
+		case syntax.ParamExp:
+			parts = append(parts, "${"+s.Value+"}")
+		default:
+			parts = append(parts, s.Value)
+		}
+	}
+	return strings.Join(parts, "")
 }

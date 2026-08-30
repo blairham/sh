@@ -237,3 +237,23 @@ which is the reverse of the usual convention and is unanimous:
 Vector fields: `DoubleBracket` and `ArithCommand`, both default true, both
 false for `posix`. As with `&>`, turning them off does not make the text
 invalid — it makes it mean something else.
+
+### Which layer handles which
+
+They look like the same problem and are not, so the split is recorded
+here rather than rediscovered.
+
+`(( … ))` is the **lexer's**. What is inside is an arithmetic expression,
+not a command list, so it is scanned as raw text: tokenizing `(( 2 > 1 ))`
+as commands would turn the comparison into a redirection and lose the
+program. Nothing about command position is needed, because the
+distinction is textual — measured, `((echo nested))` is arithmetic in
+bash, ksh93 and zsh even with no space, while `( (echo sub) )` is nested
+subshells.
+
+`[[ … ]]` is the **parser's**, despite `<` and `>` meaning something
+different inside it. `[[` is only special where a command may begin —
+`echo [[ a ]]` prints `[[ a ]]` — and the lexer does not know where
+commands begin. Lexing `<` as an operator loses nothing: the parser knows
+it is inside `[[ ]]` and reinterprets the token. A lexer mode keyed on
+seeing the word `[[` would break `echo`.

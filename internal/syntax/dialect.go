@@ -41,6 +41,26 @@ type Dialect struct {
 
 	// Herestring enables `<<<`. Absent from dash.
 	Herestring bool
+
+	// ArithCommand enables `(( expr ))` as a command. Consumed by the lexer,
+	// which scans the expression as raw text: what is inside is an arithmetic
+	// expression rather than a command list, so the token stream would lose
+	// it. Where this is off, `(( 1+1 ))` is two nested subshells running
+	// `1+1` as a command name, which is what dash does — not an error, a
+	// different program.
+	ArithCommand bool
+
+	// DoubleBracket enables `[[ ... ]]`.
+	//
+	// Consumed by the *parser*, not the lexer, and the reason is worth
+	// stating because the opposite is the obvious guess. Inside `[[ ]]` the
+	// `<` and `>` are comparisons rather than redirections, which sounds like
+	// a lexer mode — but `[[` is only special in command position (`echo [[ a
+	// ]]` prints `[[ a ]]`), and the lexer does not know where commands
+	// begin. Lexing `<` as an operator loses nothing: the parser knows it is
+	// inside `[[ ]]` and reinterprets the token. A lexer mode keyed on seeing
+	// the word `[[` would break `echo`.
+	DoubleBracket bool
 }
 
 // Core is the common denominator of real shells: what dash, bash, ksh93 and
@@ -55,6 +75,8 @@ func Core() Dialect {
 		CaseFallthrough:   true,
 		DollarSingleQuote: true,
 		Herestring:        true,
+		ArithCommand:      true,
+		DoubleBracket:     true,
 	}
 }
 

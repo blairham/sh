@@ -15,11 +15,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/blairham/sh/internal/interp"
 	"github.com/blairham/sh/internal/syntax"
 )
 
@@ -58,9 +60,7 @@ func main() {
 			fail(err)
 		}
 	case *command != "":
-		// Refused rather than silently doing nothing. Anything that ran this
-		// expecting a shell should find out immediately.
-		fail(fmt.Errorf("-c needs an interpreter, which does not exist yet; try -parse"))
+		os.Exit(run(*command, d))
 	default:
 		fail(fmt.Errorf("nothing to do: pass -tokens or -parse with a script, or -f file"))
 	}
@@ -439,4 +439,26 @@ func condString(c syntax.CondExpr) string {
 		return "[" + condString(x.X) + "]"
 	}
 	return "?"
+}
+
+// run parses and executes a command, returning the status to exit with.
+func run(src string, d syntax.Dialect) int {
+	p := syntax.NewParser(src, d)
+	f := p.Parse()
+	if err := p.Err(); err != nil {
+		// A syntax error is 2 in every shell in the panel, and an unfinished
+		// script is a syntax error rather than a prompt when it came from -c.
+		fmt.Fprintln(os.Stderr, "sh:", err)
+		return 2
+	}
+
+	r := &interp.Runner{}
+	status, err := r.Run(context.Background(), f)
+	if err != nil {
+		// Refused rather than silently doing nothing: a shell that quietly
+		// skips what it cannot do is worse than one that says so.
+		fmt.Fprintln(os.Stderr, "sh:", err)
+		return 2
+	}
+	return status
 }

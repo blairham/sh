@@ -159,6 +159,16 @@ and races are not deterministic: a test can pass on a branch and fail on
 `main` with the same tree. That has happened before and only a post-merge
 run caught it, so one cheap job stays rather than the full matrix.
 
+`make conformance` grades our own `sh` against a panel shell over the whole
+corpus. It is the point of having built the harness: the corpus already
+records what six real shells do, so pointing it at our binary turns every
+case into a conformance test with no new expectations to maintain. Add
+`ARGS=-v` to list what does not match — the passing set is a number and the
+failing set is the work.
+
+It is deliberately **not** a gate. The number is meant to be low and to
+climb; failing CI on it would only mean failing CI on unfinished work.
+
 `make oracle-check` runs in CI in **report-only** mode: the golden record
 is generated on one machine and a runner does not have the same builds of
 the same shells, so some differences are legitimate. A check that is red

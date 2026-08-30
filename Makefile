@@ -1,4 +1,4 @@
-.PHONY: all build test test-cover fmt vet lint tidy clean check oracle oracle-check
+.PHONY: all build test test-cover fmt vet lint tidy clean check oracle oracle-check conformance
 
 all: build
 
@@ -34,3 +34,7 @@ oracle: ## Regenerate docs/spec/measurements.md and the golden record from a liv
 
 oracle-check: ## Fail if the reference shells no longer behave as recorded
 	go run ./cmd/oracle -check
+
+conformance: ## Grade our own sh against the panel over the whole corpus
+	@go build -o $${TMPDIR:-/tmp}/sh-under-test ./cmd/sh
+	@go run ./cmd/oracle -bin $${TMPDIR:-/tmp}/sh-under-test $(ARGS)

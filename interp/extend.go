@@ -3,7 +3,11 @@
 
 package interp
 
-import "context"
+import (
+	"context"
+	"io"
+	"os"
+)
 
 // Builtin is a command the shell runs itself rather than executing.
 //
@@ -72,3 +76,31 @@ func (r *Runner) lookupBuiltin(name string) (Builtin, bool) {
 // that follow from that list: an assignment prefixed to one persists, and a
 // failure in one is fatal to a non-interactive shell.
 func IsSpecialBuiltin(name string) bool { return specialBuiltins[name] }
+
+// The accessors below are what a registered builtin needs, and they are here
+// because writing one found them missing.
+//
+// A builtin cannot use os.Stdout: inside a pipeline or under a redirection the
+// runner's streams point somewhere else, and a builtin that writes to the
+// process's own would escape both. It also cannot touch r.Vars directly and
+// expect a nil map to work.
+
+// Out is the stream a builtin should write its output to.
+func (r *Runner) Out() io.Writer { return r.stdout() }
+
+// Err is the stream a builtin should write diagnostics to.
+func (r *Runner) Err() io.Writer { return r.stderr() }
+
+// In is the stream a builtin should read from.
+func (r *Runner) In() io.Reader {
+	if r.Stdin == nil {
+		return os.Stdin
+	}
+	return r.Stdin
+}
+
+// SetVar sets a shell variable, creating the map if needed.
+func (r *Runner) SetVar(name, value string) { r.setVar(name, value) }
+
+// GetVar reads a shell variable, falling back to the environment.
+func (r *Runner) GetVar(name string) (string, bool) { return r.getVar(name) }

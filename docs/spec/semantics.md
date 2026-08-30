@@ -16,6 +16,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | `&>` is one redirection operator | **no** | yes | *build* | yes |
 | assignment prefix persists on a special builtin | **yes** | no | **yes** | no |
 | brace group needs a terminator before `}` | yes | yes | yes | **no** |
+| `${#@}` is the count of parameters | **no** | yes | yes | yes |
 | array index base | *n/a* | 0 | 0 | **1** |
 | `echo` expands backslashes | **yes** | no | no | **yes** |
 | glob with no match | passes pattern | passes pattern | passes pattern | **error** |
@@ -52,6 +53,7 @@ Group the shells by which side of each axis they fall on:
     globs expansions     {zsh}
     `&>` unsupported     {dash, ksh93≤93u+}  — {dash} alone on ksh93u+m
     prefix persists      {dash, ksh93}
+    `${#@}` is a count   {dash}
     brace needs `;`      {zsh}
     array base           {zsh}
     echo backslash       {dash, zsh}
@@ -62,10 +64,10 @@ Group the shells by which side of each axis they fall on:
     readonly continues   {bash}
     shift survives       {bash, zsh}
 
-Seven distinct groupings across thirteen axes: `{zsh}`, `{dash,zsh}`,
-`{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`, and — depending on which
-ksh is installed — `{dash,ksh93}` or `{dash}`. Both of those last two are
-groupings no other axis produces, so the count holds either way.
+Eight distinct groupings across fourteen axes: `{zsh}`, `{dash,zsh}`,
+`{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`, `{dash,ksh93}` and
+`{dash}` — the last of which `${#@}` now produces on its own, where
+previously it appeared only as the modern-ksh reading of the `&>` axis.
 
 That last row is worth its own note: **a panel member is not one thing.**
 ksh93 AJM 93u+ (2012, macOS) and ksh93u+m 1.0.8 (2024, Debian) disagree
@@ -100,6 +102,24 @@ its output goes elsewhere, and the file is emptied, with no diagnostic.
 An axis whose wrong answer is an error is self-limiting. An axis whose
 wrong answer is a different working program is not, and it is the case a
 dialect system exists to get right. See `grammar/tokenization.md`.
+
+## An axis that is not binary
+
+`${!x}` does not fit the table above, and forcing it in would misreport it.
+With `x=y` and `y=V`:
+
+    bash   →  V      indirection
+    dash   →  error
+    zsh    →  error
+    ksh93  →  x      neither, and not an error
+
+Three answers rather than two. The vector can express it — a field is not
+required to be a bool — but the framing "which side is each shell on"
+cannot, and every earlier axis happened to be binary. Recorded here so the
+table is not mistaken for the shape of the problem.
+
+It is also the third measured instance of a divergence that does not
+announce itself, after `&>` and `[[ ]]`.
 
 ## A measured non-conflict, recorded so it is not over-generalised
 

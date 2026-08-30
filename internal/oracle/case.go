@@ -590,4 +590,85 @@ var Corpus = []Case{
 		Snippet: `(( 2 > 1 )) && echo gt`,
 		Why:     "> inside (( )) is a comparison; in dash the whole thing is nested subshells running a command",
 	},
+	// --- parameter expansion --------------------------------------------------
+	{
+		ID: "param/colon-extends-the-test-unset", Category: "parameter expansion",
+		Snippet: `unset u; printf "[%s]" "${u:-D}" "${u-D}"`,
+		Why:     "with the variable unset both forms fire, so this row alone proves nothing — it is the pair with the next case that does",
+	},
+	{
+		ID: "param/colon-extends-the-test-empty", Category: "parameter expansion",
+		Snippet: `e=; printf "[%s]" "${e:-D}" "${e-D}"`,
+		Why:     "the colon is the whole difference: it extends the test from unset to unset-or-empty",
+	},
+	{
+		ID: "param/plus-is-the-mirror", Category: "parameter expansion",
+		Snippet: `unset u; e=; s=S; printf "[%s]" "${u:+A}" "${e:+A}" "${s:+A}" "${u+A}" "${e+A}" "${s+A}"`,
+		Why:     "+ fires when the test does not, and the colon shifts it the same way",
+	},
+	{
+		ID: "param/assign-has-a-side-effect", Category: "parameter expansion",
+		Snippet: `unset u; printf "[%s]" "${u:=V}"; printf "[%s]" "$u"`,
+		Why:     ":= leaves the variable set afterwards — the only expansion here with a side effect",
+	},
+	{
+		ID: "param/word-is-itself-expanded", Category: "parameter expansion",
+		Snippet: `unset u; d=DEF; printf "[%s]" "${u:-$d}" "${u:-$(echo sub)}"`,
+		Why:     "the word is a word, not a literal, so the AST cannot store it as a string",
+	},
+	{
+		ID: "param/prefix-shortest-and-longest", Category: "parameter expansion",
+		Snippet: `p=a.b.c; printf "[%s]" "${p#*.}" "${p##*.}"`,
+		Why:     "doubling the operator selects the longer match; there is no greediness syntax in the pattern",
+	},
+	{
+		ID: "param/suffix-shortest-and-longest", Category: "parameter expansion",
+		Snippet: `p=a.b.c; printf "[%s]" "${p%.*}" "${p%%.*}"`,
+		Why:     "the same rule from the other end",
+	},
+	{
+		ID: "param/pattern-is-a-glob", Category: "parameter expansion",
+		Snippet: `p=abc; printf "[%s]" "${p#[ab]}" "${p#?}" "${p#x}"`,
+		Why:     "patterns are globs rather than regular expressions, and one that does not match removes nothing",
+	},
+	{
+		ID: "param/length-of-a-value", Category: "parameter expansion",
+		Snippet: `x=abcd; printf "[%s]" "${#x}"`,
+		Why:     "the length of the value",
+	},
+	{
+		ID: "param/length-of-special-diverges", Category: "parameter expansion",
+		Snippet: `set -- p q r; printf "[%s]" "${#@}" "${#*}"`,
+		Why:     "dash gives the length of the joined string where the others give the count — the first axis where dash stands alone, and silent because both answers are plausible numbers",
+	},
+	{
+		ID: "param/substitution", Category: "parameter expansion",
+		Snippet: `x=a-b-c; printf "[%s]" "${x/-/+}" "${x//-/+}"`,
+		Why:     "replace first versus replace every; absent from dash",
+	},
+	{
+		ID: "param/substitution-anchored", Category: "parameter expansion",
+		Snippet: `x=a-b; printf "[%s]" "${x/#a/X}" "${x/%b/Y}"`,
+		Why:     "anchored to the start and the end of the value",
+	},
+	{
+		ID: "param/substring", Category: "parameter expansion",
+		Snippet: `x=abcdef; printf "[%s]" "${x:1:3}" "${x:2}"`,
+		Why:     "offset with and without a length; absent from dash",
+	},
+	{
+		ID: "param/case-change-is-bash-only", Category: "parameter expansion",
+		Snippet: `x=aBc; printf "[%s]" "${x^^}" "${x,,}"`,
+		Why:     "bash alone: ksh93 reports a syntax error and zsh a bad substitution, so it belongs to the bash dialect rather than the core",
+	},
+	{
+		ID: "param/indirection-diverges-four-ways", Category: "parameter expansion",
+		Snippet: `x=y; y=V; printf "[%s]" "${!x}"`,
+		Why:     "bash indirects, dash and zsh reject, and ksh93 yields x — not an error there, a different meaning, which is the &> failure mode inside an expansion",
+	},
+	{
+		ID: "param/array-element-inherits-the-base", Category: "parameter expansion",
+		Snippet: `a=(p q r); printf "[%s]" "${a[1]}" "${#a[@]}"`,
+		Why:     "array subscripting inherits the 0-versus-1 base axis",
+	},
 }

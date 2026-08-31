@@ -11,18 +11,14 @@ on:
     # second set of rules to hold in your head.
     types: [opened, reopened, synchronize, ready_for_review]
     # Nothing here fires for a push to a branch with no pull request open, so
-    # branch pushes cost nothing at all. `synchronize` is a push to a branch
-    # that *has* one, which is the feedback worth paying for — and even then
-    # every job stands down while the pull request is a draft.
+    # branch pushes cost nothing at all.
   push:
-    # A merge runs the tests again, and not pre-commit. Protection requires
-    # the branch to be up to date, so the tree that lands is the tree that was
-    # tested — which makes re-running the *deterministic* checks pointless, and
-    # pre-commit is entirely deterministic.
-    #
-    # Tests are not. A race can pass on a branch and fail on main with the same
-    # tree, and that is the one thing a post-merge run can tell you that the
-    # pull request could not.
+    # A merge runs the same full set a pull request runs — pre-commit, tests,
+    # oracle, no change detection. Protection makes the tree that lands the
+    # tree that was tested, so this is not about the merge; it is about
+    # whether main still works after everything that reached it, including
+    # merges that landed after this branch was last rebased and were never
+    # tested together. That is the only run that can catch it.
     branches: [main]
 
 permissions:
@@ -41,11 +37,6 @@ jobs:
   # and a secret committed to a draft is committed.
   pre-commit:
     name: Pre-commit
-    # Pull requests only. On a push to main these hooks have already run —
-    # on the pull request that produced the commit, as a required check — and
-    # the tree that landed is the tree they ran against, because protection
-    # requires the branch to be up to date first.
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
@@ -72,9 +63,7 @@ jobs:
   # expensive question, so this waits on pre-commit.
   changes:
     name: Detect changed files
-    # No `needs: pre-commit` for a push, where pre-commit does not run at all.
     needs: pre-commit
-    if: always() && (needs.pre-commit.result == 'success' || needs.pre-commit.result == 'skipped')
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.filter.outputs.code }}
@@ -89,10 +78,21 @@ jobs:
     - id: filter
       name: Is any of this code?
       env:
-        BASE: ${{ github.event.pull_request.base.sha }}
+        # A pull request diffs against its base; a push to main diffs against
+        # what main was before it. Either can be missing — a force push, a
+        # first commit — and the fallback below covers that.
+        BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
       run: |
         code=false
-        if ! git cat-file -e "$BASE" 2>/dev/null; then
+        if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+          # A merge runs everything. Not because the merge itself changed
+          # code — it may be pure prose — but because this is the first time
+          # this tree is tested *as main*, and the thing it is protecting
+          # against is an earlier merge that broke something nobody has run
+          # since. Narrowing that by diff would defeat the point of it.
+          echo "push to $GITHUB_REF_NAME — running everything"
+          code=true
+        elif ! git cat-file -e "$BASE" 2>/dev/null; then
           # No usable base commit — a force push, or a shallow fetch that did
           # not reach it. `git diff` would fail here and print nothing, and an
           # empty diff is indistinguishable from "only prose changed", so this

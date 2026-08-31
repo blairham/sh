@@ -67,15 +67,37 @@ type Diagnostics struct {
 	// ReadonlyVariable is an assignment to a readonly name. One verb: the
 	// name.
 	ReadonlyVariable string
-	// InvalidNumber is arithmetic text that is not a number. One verb: the
-	// text.
+	// InvalidNumber is the reason given when arithmetic text is not a
+	// number. No verbs: it is a reason, not a message — ArithError wraps it
+	// with the expression and the offending token.
 	InvalidNumber string
+	// DigitTooGreatForBase is the reason when a literal carries a digit its
+	// base does not allow, such as `08` read as octal. No verbs. It is not
+	// InvalidNumber because it is a different diagnosis, and bash words the
+	// two differently: `08` is "value too great for base" where a name-shaped
+	// operand is an arithmetic syntax error.
+	DigitTooGreatForBase string
+	// NumericArgument is a builtin given an argument that is not a number,
+	// such as `exit abc`. Two verbs, positional because the shells order them
+	// differently: %[1]s is the builtin's name and %[2]s the argument.
+	//
+	// Separate from InvalidNumber, which this was folded into and should not
+	// have been. They are two questions: dash answers this one "Illegal
+	// number: abc" and words the arithmetic failure by an entirely different
+	// route. One field cannot hold both without one dialect's answer to one
+	// question being read as its answer to the other.
+	NumericArgument string
 	// ShiftTooMany is `shift` past the end. One verb: the count, as a
 	// number — which a format is free to ignore, and dash's does.
 	ShiftTooMany string
-	// ArithError wraps a failed arithmetic expansion. Two verbs, and the
-	// shells order them differently, so both are positional: %[1]s is the
-	// expression as written and %[2]s the reason.
+	// ArithError wraps a failed arithmetic expansion. Three verbs, all
+	// positional because the shells order them differently and not every
+	// shell uses all three: %[1]s is the expression as written, %[2]s the
+	// reason, and %[3]s the token the failure is attributed to.
+	//
+	// Only bash names a token. The other three formats simply do not mention
+	// %[3]s, which costs nothing — an indexed format ignores arguments past
+	// the highest index it uses.
 	ArithError string
 	// DivisionByZero is the reason itself, which dash and ksh93 spell
 	// differently. No verbs.
@@ -86,6 +108,12 @@ type Diagnostics struct {
 	// UnboundVariable is an unset parameter under `set -u`. One verb: the
 	// name. bash calls it unbound where the other three call it not set.
 	UnboundVariable string
+	// UnboundPositional is the same failure for `$1` rather than `$NAME`.
+	// One verb: the number, without its `$`. Empty means "the same as
+	// UnboundVariable", which is true of three of the four — bash alone
+	// writes the `$` back, saying `$1: unbound variable` where it says
+	// `NOPE: unbound variable` for a name.
+	UnboundPositional string
 	// BadPattern is a pattern the dialect rejects. One verb: the pattern.
 	BadPattern string
 	// CannotOpen is a redirection that could not be opened. Two verbs: the
@@ -97,6 +125,12 @@ type Diagnostics struct {
 	// what happens — the same argument the wording formats make.
 	TraceStyle   TraceStyle
 	TraceQuoting TraceQuoting
+	// TraceForHeader is what a `for` loop prints at each iteration. Zero is
+	// TraceForNone, which is dash's and ksh93's answer and the substrate's
+	// own. `case` diverges the same way and is not reproduced: bash prints
+	// `case $v in` once, zsh prints `case v (pattern)` once per pattern it
+	// tries, and the corpus records the difference rather than claiming it.
+	TraceForHeader TraceForHeader
 
 	// Location is how the shell prefixes a diagnostic with where it
 	// happened. Measured, and all four differ:

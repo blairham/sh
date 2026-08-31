@@ -542,7 +542,7 @@ func singleQuote(s string) string {
 // status: bash exits 1 for a fatal error and 2 for this. A usage error is its
 // own thing, which is why it is written here rather than routed through fatal.
 func (r *Runner) badExitArg(arg string) int {
-	r.diagf("%s\n", Wording(r.diag().InvalidNumber, "invalid number: %s", arg))
+	r.diagf("%s\n", Wording(r.diag().NumericArgument, "%[1]s: invalid number: %[2]s", "exit", arg))
 	r.status = 2
 	r.ctl = controlExit
 	return r.status

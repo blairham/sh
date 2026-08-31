@@ -32,6 +32,7 @@ func Diagnostics() interp.Diagnostics {
 		BadSubstitution:   "Bad substitution",
 		ReadonlyVariable:  "%s: is read only",
 		InvalidNumber:     "Illegal number: %s",
+		NumericArgument:   "%[1]s: Illegal number: %[2]s",
 		ArithError:        "arithmetic expression: %[2]s: \"%[1]s\"",
 		CannotOpen:        "cannot open %s: %s",
 		ShiftTooMany:      "shift: can't shift that many",

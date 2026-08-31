@@ -51,6 +51,7 @@ func Diagnostics() interp.Diagnostics {
 		ReadonlyVariable:  "read-only variable: %s",
 		TraceQuoting:      interp.QuoteShell,
 		TraceStyle:        interp.TraceNameLine,
+		TraceForHeader:    interp.TraceForAssign,
 		SyntaxErrorStatus: 1,
 	}
 }

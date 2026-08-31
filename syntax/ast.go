@@ -295,8 +295,13 @@ type ForClause struct {
 	Items    []*Word
 	HasItems bool
 	Body     []*Stmt
-	Start    Pos
-	Stop     Pos
+	// Header is `for i in 1 2` as written, kept for the same reason
+	// ArithCmdClause keeps its expression: it is what a diagnostic quotes.
+	// bash prints it under `set -x` unexpanded — `for i in $x`, quotes and
+	// all — so nothing rebuilt from the tree would match it.
+	Header string
+	Start  Pos
+	Stop   Pos
 	redirs
 }
 
@@ -308,8 +313,10 @@ func (c *ForClause) commandNode() {}
 type CaseClause struct {
 	Word  *Word
 	Items []*CaseItem
-	Start Pos
-	Stop  Pos
+	// Header is `case $v in` as written. See ForClause.Header.
+	Header string
+	Start  Pos
+	Stop   Pos
 	redirs
 }
 

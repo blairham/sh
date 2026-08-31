@@ -34,6 +34,16 @@ func TestWordingFallsBackToTheSubstrate(t *testing.T) {
 	if got := Wording(`arithmetic expression: %[2]s: "%[1]s"`, "%[2]s", "1/0", "division by zero"); got != `arithmetic expression: division by zero: "1/0"` {
 		t.Errorf("positional: %q", got)
 	}
+	// Only bash names the token an arithmetic failure is blamed on, so every
+	// caller passes three arguments and three of the four formats use two.
+	// An indexed format ignores what it does not reach, which is what lets a
+	// dialect stay silent about a verb rather than having to accept it.
+	if got := Wording(`arithmetic expression: %[2]s: "%[1]s"`, "%[2]s", "1/0", "division by zero", "0"); got != `arithmetic expression: division by zero: "1/0"` {
+		t.Errorf("unused third verb: %q", got)
+	}
+	if got := Wording(`%[1]s: %[2]s (error token is "%[3]s")`, "%[2]s", "1/0", "division by 0", "0"); got != `1/0: division by 0 (error token is "0")` {
+		t.Errorf("third verb: %q", got)
+	}
 }
 
 func TestEachDialectWordsItsOwnFailures(t *testing.T) {

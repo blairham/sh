@@ -94,6 +94,11 @@ type Runner struct {
 	// command substitution runs commands, and threading a context through
 	// every expander signature to reach one place would be worse.
 	ctx context.Context
+	// inBuiltin is the builtin currently speaking, for the one dialect that
+	// names it in a diagnostic's location. Empty at every other moment, and
+	// deliberately cleared by `.` and `eval` while they run borrowed text:
+	// what a sourced script reports is the script's, not the builtin's.
+	inBuiltin string
 	// inFunc is the name of the function being run, for `$0`.
 	inFunc string
 	// expandErr records that an expansion failed — a division by zero, a
@@ -276,7 +281,19 @@ func (r *Runner) errf(format string, args ...any) {
 // and zsh each name the location differently, and one of them names it not at
 // all.
 func (r *Runner) diagf(format string, args ...any) {
-	r.errf("%s%s", r.diag().prefix(r.name(), r.line), fmt.Sprintf(format, args...))
+	msg := fmt.Sprintf(format, args...)
+	if r.inBuiltin != "" && r.diag().NamesBuiltinInLocation {
+		// The builtin's name belongs in exactly one place. Most dialects put it
+		// at the front of the message — `cd: /x: no such directory` — and this
+		// one puts it in the location instead, so a message that also opens with
+		// it would say it twice: `zsh:cd:1: cd: /x: …`.
+		//
+		// Stripping it here rather than at each of the sixteen sites that write
+		// one keeps the rule in a single place, and keeps those messages readable
+		// as the sentence every other dialect prints.
+		msg = strings.TrimPrefix(msg, r.inBuiltin+": ")
+	}
+	r.errf("%s%s", r.diag().prefix(r.name(), r.inBuiltin, r.line), msg)
 }
 
 // name is what the shell calls itself in a diagnostic.
@@ -662,7 +679,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 				r.setVar(a.Name, v)
 			}
 		}
+		// The builtin is on the record for the duration, so a dialect that
+		// names it in a diagnostic's location can. Saved and put back rather
+		// than cleared: a builtin can run another one.
+		outer := r.inBuiltin
+		r.inBuiltin = argv[0]
 		st := fn(r, ctx, argv[1:])
+		r.inBuiltin = outer
 		// A builtin can consult an axis of its own — `echo` asks about
 		// backslash escapes — so the check is repeated after it runs as well
 		// as before, and its status is discarded when one went unanswered.

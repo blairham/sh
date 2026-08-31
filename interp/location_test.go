@@ -79,7 +79,11 @@ func TestEveryDiagnosticGoesThroughTheDialect(t *testing.T) {
 		prefix string
 	}{
 		{"dash", dash.Diagnostics(), "mysh: 1: "},
-		{"zsh", zsh.Diagnostics(), "mysh:1: "},
+		// zsh names the builtin between its own name and the line, so a
+		// diagnostic from `shift` reads `mysh:shift:1:`. That is the shape
+		// the real shell prints, and this expectation was `mysh:1: ` until
+		// it was measured.
+		{"zsh", zsh.Diagnostics(), "mysh:shift:1: "},
 	} {
 		var buf bytes.Buffer
 		sem := dash.Semantics() // fatal shift, so there is a diagnostic

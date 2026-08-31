@@ -4,6 +4,9 @@
 package ksh_test
 
 import (
+	"bytes"
+	"context"
+	"strings"
 	"testing"
 
 	"github.com/blairham/sh/dialect/ksh"
@@ -72,5 +75,43 @@ func TestDerivesFromTheStandardNotFromASibling(t *testing.T) {
 	s := ksh.Semantics()
 	if s == posix {
 		t.Error("the preset overrides nothing, which cannot be right")
+	}
+}
+
+// TestApplyRemovesLocal is the one builtin the panel disagrees about. ksh93
+// reports it as a command that was not found, which is what removing it from
+// the substrate's table produces — asserted through what a script sees rather
+// than by inspecting the table, because that is what a script can tell.
+func TestApplyRemovesLocal(t *testing.T) {
+	const src = `f() { local v=in; }; f`
+	run := func(apply bool) (string, int) {
+		t.Helper()
+		f, err := syntax.Parse(src, ksh.Dialect())
+		if err != nil {
+			t.Fatal(err)
+		}
+		var buf bytes.Buffer
+		sem := ksh.Semantics()
+		diag := ksh.Diagnostics()
+		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag, Name: "ksh"}
+		if apply {
+			ksh.Apply(r)
+		}
+		st, err := r.Run(context.Background(), f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return buf.String(), st
+	}
+	// Without the dialect's adjustment the substrate provides local.
+	if out, st := run(false); st != 0 || out != "" {
+		t.Fatalf("the substrate should provide local: %q status %d", out, st)
+	}
+	out, st := run(true)
+	if !strings.Contains(out, "local: not found") {
+		t.Errorf("ksh93 has no local: got %q", out)
+	}
+	if st != 127 {
+		t.Errorf("status = %d, want 127", st)
 	}
 }

@@ -36,3 +36,13 @@ func Diagnostics() interp.Diagnostics {
 		SyntaxErrorStatus: 3,
 	}
 }
+
+// Apply removes `local`, which ksh93 does not have.
+//
+// Which builtins a shell provides is neither grammar nor a conflict of
+// meaning, so it is not a Dialect flag or a Semantics axis. It is what the
+// extension seam is for, and a dialect uses it exactly as anything else
+// built on the substrate would — the difference being that this one takes
+// something away. ksh93 is the only shell in the panel without `local`, and
+// reports it as a command that was not found.
+func Apply(r *interp.Runner) { r.Unregister("local") }

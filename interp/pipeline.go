@@ -39,12 +39,17 @@ func (l *lockedWriter) Write(p []byte) (int, error) {
 // through this process. That matters for more than speed: a program that asks
 // whether its output is a terminal, or that seeks, gets a truthful answer.
 //
-// Every element but the last runs on a copy of the shell's state. That is the
-// bash and dash answer — the last element runs in a subshell there too — and
-// it is deliberately *not* the ksh93 and zsh one, where the last element runs
-// in the current shell so `echo x | read v` sets v. docs/spec/semantics.md
-// records that as an axis; this takes the majority until the interpreter
-// carries a dialect.
+// Every element but the last runs on a copy of the shell's state. Whether the
+// *last* one does is the LastPipelineElementInCurrentShell axis: dash and bash
+// give it a subshell, ksh93 and zsh run it in the current shell so
+// `echo x | read v` sets v.
+//
+// The axis is asked only when the answer could be observed — when the last
+// element is a builtin, a function, or a brace group, all of which can touch
+// the shell. An external command cannot, so `echo x | cat` needs no answer
+// from anyone and the core does not refuse it. That is the same rule the
+// `[^…]` axis uses: ask about the construct in front of you, not about every
+// construct that shares a code path.
 func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline) error {
 	n := len(p.Cmds)
 	readers := make([]*os.File, n)
@@ -71,22 +76,54 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline) error {
 	statuses := make([]int, n)
 	errs := make([]error, n)
 
-	for i, cmd := range p.Cmds {
+	// Decided before anything starts, because asking from inside a goroutine
+	// would interleave the diagnostic with the pipeline's output.
+	inCurrent := r.lastElementIsObservable(p.Cmds[n-1]) &&
+		r.ask(r.sem().LastPipelineElementInCurrentShell, "the last pipeline element running in the current shell")
+	if r.unspecified {
+		// No dialect answered, so the pipeline does not run at all. Running
+		// it and reporting afterwards would pick a side and say it had not.
+		for i := range readers {
+			if readers[i] != nil {
+				_ = readers[i].Close()
+			}
+			if writers[i] != nil {
+				_ = writers[i].Close()
+			}
+		}
+		r.status = 2
+		return nil
+	}
+	last := n
+	if inCurrent {
+		last = n - 1
+	}
+
+	// The sub-runners are built here, on this goroutine, rather than inside
+	// each one. clone() reads the runner's fields, and the last element —
+	// when it runs in the current shell — writes them; doing both at once is
+	// a race the detector catches and a corrupted stream in production.
+	subs := make([]*Runner, last)
+	for i := 0; i < last; i++ {
+		sub := r.clone()
+		sub.Stderr = sharedErr
+		sub.Stdout = sharedOut
+		if readers[i] != nil {
+			sub.Stdin = readers[i]
+		}
+		if writers[i] != nil {
+			// A pipe end is this element's alone, so it needs no guard.
+			sub.Stdout = writers[i]
+		}
+		subs[i] = sub
+	}
+
+	for i, cmd := range p.Cmds[:last] {
 		wg.Add(1)
 		go func(i int, cmd syntax.Command) {
 			defer wg.Done()
-			sub := r.clone()
-			sub.Stderr = sharedErr
-			sub.Stdout = sharedOut
-			if readers[i] != nil {
-				sub.Stdin = readers[i]
-			}
-			if writers[i] != nil {
-				// A pipe end is this element's alone, so it needs no guard.
-				sub.Stdout = writers[i]
-			}
-			errs[i] = sub.command(ctx, cmd)
-			statuses[i] = sub.status
+			errs[i] = subs[i].command(ctx, cmd)
+			statuses[i] = subs[i].status
 
 			// Closing the write end is what tells the next element its input
 			// has finished. Without it the pipeline deadlocks, which is the
@@ -99,6 +136,22 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline) error {
 			}
 		}(i, cmd)
 	}
+	if inCurrent {
+		// The last element runs here, on the shell itself, so what it
+		// assigns survives the pipeline.
+		i := n - 1
+		savedIn, savedOut, savedErr := r.Stdin, r.Stdout, r.Stderr
+		if readers[i] != nil {
+			r.Stdin = readers[i]
+		}
+		r.Stdout, r.Stderr = sharedOut, sharedErr
+		errs[i] = r.command(ctx, p.Cmds[i])
+		statuses[i] = r.status
+		r.Stdin, r.Stdout, r.Stderr = savedIn, savedOut, savedErr
+		if readers[i] != nil {
+			_ = readers[i].Close()
+		}
+	}
 	wg.Wait()
 
 	for _, err := range errs {
@@ -109,4 +162,52 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline) error {
 	// A pipeline reports its *last* command, not its first failure.
 	r.status = statuses[n-1]
 	return nil
+}
+
+// lastElementIsObservable reports whether running a command in the current
+// shell rather than in a subshell could be seen from outside the pipeline.
+//
+// An external command has its own process either way, so the axis makes no
+// difference to it and nothing is asked. A builtin, a function or a brace
+// group can assign a variable or change the directory, and there the answer
+// shows.
+func (r *Runner) lastElementIsObservable(c syntax.Command) bool {
+	switch x := c.(type) {
+	case *syntax.SimpleCmd:
+		if len(x.Args) == 0 {
+			// Assignments with no command name, which persist by definition.
+			return len(x.Assigns) > 0
+		}
+		name := literalName(x.Args[0])
+		if name == "" {
+			// Not a plain literal, so it could expand to anything; assume it
+			// matters rather than quietly picking a side.
+			return true
+		}
+		if _, ok := r.funcs[name]; ok {
+			return true
+		}
+		_, isBuiltin := r.lookupBuiltin(name)
+		return isBuiltin
+	case *syntax.Subshell:
+		// Explicitly a subshell already, so the axis changes nothing.
+		return false
+	case nil:
+		return false
+	}
+	// A group, loop, conditional or case: all of them can assign.
+	return true
+}
+
+// literalName reports a word's text when it is a single unquoted literal, and
+// "" when it is anything an expansion could change.
+func literalName(w *syntax.Word) string {
+	if w == nil || len(w.Spans) != 1 {
+		return ""
+	}
+	s := w.Spans[0]
+	if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted {
+		return ""
+	}
+	return s.Value
 }

@@ -20,7 +20,8 @@ permissions:
 # run and report; only the expensive steps are skipped.
 jobs:
   # Pre-commit runs for every pull request, draft or not, and everything else
-  # waits on it. It is the only job that looks at *every* file rather than at
+  # waits on it. It is also where linting happens: `golangci-lint-full` covers
+  # the whole module, so there is no separate lint job to keep in step. It is the only job that looks at *every* file rather than at
   # Go: trailing whitespace, licence headers, secrets, the toolchain pin. None
   # of that is worth detecting changes for, and a secret committed to a draft
   # is committed.
@@ -45,13 +46,11 @@ jobs:
         path: ~/.cache/pre-commit
         key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
     - name: Run pre-commit hooks
-      # Not the golangci-lint ones. The Lint job runs the same tool over the
-      # whole repository rather than over the diff, and `golangci-lint run`
-      # reports formatter findings too, so both hooks are a strict subset of
-      # a job that already has to pass. Leaving them in took this job from
-      # thirty seconds to three minutes to prove something twice.
-      env:
-        SKIP: golangci-lint,golangci-lint-fmt
+      # Nothing is skipped. `golangci-lint-full` lints the whole module here,
+      # which is what a separate lint job used to do — badly, in the sense
+      # that it spent two minutes on setup to run something that takes under
+      # a second.
+      #
       # check-license-headers is a golang-language hook, so pre-commit builds
       # it here; the version it runs is the `rev` pinned in
       # .pre-commit-config.yaml, which stays the single source of truth.
@@ -105,21 +104,6 @@ jobs:
     - run: go build ./...
       if: needs.changes.outputs.go == 'true'
     - run: go test -race ./...
-      if: needs.changes.outputs.go == 'true'
-
-  lint:
-    name: Lint
-    needs: changes
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v6
-      if: needs.changes.outputs.go == 'true'
-    - uses: actions/setup-go@v6
-      if: needs.changes.outputs.go == 'true'
-      with:
-        go-version-file: go.mod
-        check-latest: true
-    - run: go tool golangci-lint run
       if: needs.changes.outputs.go == 'true'
 
   oracle:

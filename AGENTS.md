@@ -184,13 +184,22 @@ none of which is worth detecting changes for, and a secret committed to a
 draft is committed. A hook can be skipped and a contributor may never have
 installed one, which is why it runs here as well as there.
 
-Only once that passes is it worth asking the expensive question. `Detect
-changed files` gates build and test with `-race` on Linux and macOS, and
-the *whole-repo* lint — which is not the same run as the hook, because
-`--new-from-rev` cannot see whole-module linters like `unused`, and
-`unused` has caught dead code here that nothing else would have. Those
-three stand down for a **draft**: push freely, and marking it ready starts
-them.
+Linting happens there too, and only there. The hook is
+`golangci-lint-full`, which lints the whole module — not `golangci-lint`,
+which runs `--new-from-rev HEAD` and, in upstream's own words, cannot make
+linters like `unused` "work as expected". There is no separate lint job to
+keep in step, because a second whole-module run would find exactly what
+the first one did.
+
+It is worth knowing why that is affordable: a warm whole-module lint of
+this repository takes under a second. A lint job spends two minutes on
+`setup-go` and the module download to run something that fast, which is
+what made it look expensive and made splitting it seem necessary.
+
+Only once pre-commit passes is it worth asking the expensive question.
+`Detect changed files` gates build and test with `-race` on Linux and
+macOS. Those stand down for a **draft**: push freely, and marking it ready
+starts them.
 
 The hook environments are cached, and that is not an optimisation to skip.
 pre-commit builds an environment for a hook even when `SKIP` tells it not
@@ -209,7 +218,6 @@ must be **up to date** with `main` first:
 
     Build and test (ubuntu-latest)
     Build and test (macos-latest)
-    Lint
     Pre-commit
 
 Merges are **squash only** — linear history is enforced, and the merge and

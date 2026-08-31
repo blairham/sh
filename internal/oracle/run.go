@@ -121,10 +121,12 @@ func normalize(s string, sh Found, dir string) string {
 	// shift that many" became "can't <shell>ift that many" — so it is anchored
 	// to the start of a line and required to be followed by a colon.
 	s = diagPrefix(filepath.Base(sh.Path)).ReplaceAllString(s, "<shell>:")
+	s = tracePrefix(filepath.Base(sh.Path)).ReplaceAllString(s, "+<shell>:")
 	// A shell invoked under another name reports *that* name, not its
 	// binary's — bash-as-sh says "sh:", which the line above cannot match.
 	if sh.Argv0 != "" {
 		s = diagPrefix(sh.Argv0).ReplaceAllString(s, "<shell>:")
+		s = tracePrefix(sh.Argv0).ReplaceAllString(s, "+<shell>:")
 	}
 	s = strings.TrimRight(s, "\n")
 	// Newlines are shown as ~ so a result stays one table cell. Real output
@@ -134,6 +136,16 @@ func normalize(s string, sh Found, dir string) string {
 }
 
 // diagPrefix matches a shell naming itself at the start of a diagnostic.
+// tracePrefix matches a shell naming itself inside a `set -x` line, which is
+// the one place the name is not at the start.
+//
+// zsh writes `+zsh:1> echo a b`, so the line-anchored rule above cannot see
+// it — and without this the trace cases compared our path against zsh's name
+// and every one of them looked like a divergence.
+func tracePrefix(base string) *regexp.Regexp {
+	return regexp.MustCompile(`(?m)^\+` + regexp.QuoteMeta(base) + `:`)
+}
+
 func diagPrefix(base string) *regexp.Regexp {
 	return regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(base) + `:`)
 }

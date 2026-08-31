@@ -35,6 +35,8 @@ func Semantics() interp.Semantics {
 	s.UnterminatedBracket = interp.BracketLiteral
 	s.ExitArgument = interp.ExitArgLenient
 	s.UnsetPositionalIsAllowed = interp.Yes
+	s.TraceShowsItsOwnDisabling = interp.No
+	s.TraceAssignmentsSeparately = interp.Yes
 	return s
 }
 
@@ -42,6 +44,7 @@ func Semantics() interp.Semantics {
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
 		Location:          interp.LocationNone,
+		TraceQuoting:      interp.QuoteDollar,
 		ScriptLocation:    interp.LocationLineWord,
 		ReadonlyVariable:  "%s: is read only",
 		ShiftTooMany:      "shift: %d: bad number",

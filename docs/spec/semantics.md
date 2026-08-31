@@ -27,6 +27,8 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | an EXIT trap set in a function fires there | no | no | no | **yes** |
 | a signal handler sees the earlier `$?` | no | no | no | **yes** |
 | an unset positional survives `set -u` | no | no | **yes** | no |
+| `set +x` traces itself | yes | yes | **no** | yes |
+| each assignment gets its own trace line | no | **yes** | **yes** | no |
 | brace expansion happens | **no** | yes | yes | yes |
 | arithmetic does floating point | no | no | **yes** | **yes** |
 | quoting a `=~` regex makes it literal | *n/a* | **yes** | no | no |
@@ -74,6 +76,8 @@ Group the shells by which side of each axis they fall on:
     function EXIT trap   {zsh}
     handler sees $?      {zsh}
     unset positional -u  {ksh93}
+    set +x traces itself {ksh93}
+    assignment per line  {bash, ksh93}
     `=cmd` expands       {zsh}
     leading zero octal   {zsh}
     fatal error status   {dash}
@@ -92,7 +96,7 @@ Group the shells by which side of each axis they fall on:
     readonly continues   {bash}
     shift survives       {bash, zsh}
 
-Eight distinct groupings across twenty-eight axes: `{zsh}`, `{dash,zsh}`,
+Eight distinct groupings across thirty axes: `{zsh}`, `{dash,zsh}`,
 `{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`, `{dash,ksh93}` and
 `{dash}` — the last of which `${#@}` now produces on its own, where
 previously it appeared only as the modern-ksh reading of the `&>` axis.
@@ -175,6 +179,29 @@ That is worth stating because the obvious reading of the measurements is
 two separate quirks. It is one behaviour observed twice, and an
 implementation with two switches for it will eventually set them
 inconsistently.
+
+## One option, six divergences
+
+`set -x` produced more disagreement than any other single feature
+measured, and all of it is decoration. The structure is unanimous — every
+simple command to stderr, expanded, before it runs, and compound commands
+not traced — and then the four shells differ on the prefix, on whether an
+expanded field with a space in it is quoted, on which quoting a embedded
+quote gets, on whether `a=1 b=2` is one line or two, on whether `set +x`
+prints itself, and on whether a `for` header is printed at all.
+
+Four are implemented. Two are recorded and deliberately not: bash and zsh
+print a compound command's header once per iteration, and ksh93 prints
+pipeline elements last-first, which follows from its running the last one
+in the current shell. Both are visible only in a debugging aid, and
+reproducing them costs more than the fidelity is worth — which is a
+judgement, and is written here so it can be revisited rather than
+rediscovered.
+
+The count matters more than any one of them. An option nobody would call
+contentious carries six divergences, which is the strongest evidence yet
+for the claim this document opens with: dialect is not a ladder, and the
+disagreements are not where anyone expects them.
 
 ## Timing is not a divergence
 

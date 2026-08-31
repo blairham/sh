@@ -447,6 +447,26 @@ var Corpus = []Case{
 		Why:     "whether being killed counts as exiting: bash and ksh93 run the EXIT trap and dash and zsh do not, and all four report 130 without reaching the next command",
 	},
 	{
+		ID: "trap/bad-signal-name", Category: "traps and exit",
+		Snippet: `trap 'echo x' NOPE; echo "st=$?"`,
+		Why:     "status 1 in all four and four different sentences, one of which arrives with no shell name in front of it where the same shell prefixes every `kill` diagnostic it has",
+	},
+	{
+		ID: "trap/sig-prefix-diverges", Category: "traps and exit",
+		Snippet: `trap 'echo caught' SIGUSR1; echo "st=$?"`,
+		Why:     "dash reads no SIG-prefixed name: the prefix is simply not part of a signal's name there, so a script that traps SIGUSR1 traps nothing and says so, where the other three take it",
+	},
+	{
+		ID: "kill/sig-prefix-as-a-flag", Category: "kill",
+		Snippet: `kill -SIGCONT $$; echo "st=$?"`,
+		Why:     "the same refusal reached the other way, and dash names only the first character of what it could not read — it stopped there",
+	},
+	{
+		ID: "kill/sig-prefix-after-s", Category: "kill",
+		Snippet: `kill -s SIGCONT $$; echo "st=$?"`,
+		Why:     "and once more with the POSIX spelling, where dash calls the same word an invalid signal rather than an illegal option: one refusal, three wordings from the shell that refuses",
+	},
+	{
 		ID: "trap/signal-handler-runs-and-continues", Category: "traps and exit",
 		Script:  true,
 		Snippet: "trap 'echo caught' INT\nkill -INT $$\necho after\n",

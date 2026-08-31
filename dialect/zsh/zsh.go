@@ -52,6 +52,7 @@ func Semantics() interp.Semantics {
 	// is 2.
 	s.ExitTrapRunsOnSignalDeath = interp.No
 	s.KillListAcceptsName = interp.Yes
+	s.SIGPrefixAccepted = interp.Yes
 	s.KillStatus = interp.KillStatusFailureCount
 	return s
 }
@@ -86,10 +87,11 @@ func Diagnostics() interp.Diagnostics {
 		// The builtin's name comes from the location here, not the message.
 		// No "kill:" in front of any of these: zsh puts the builtin's name in
 		// the location instead, which NamesBuiltinInLocation already says.
+		TrapBadSignal:             "undefined signal: %[1]s",
 		KillNoSuchProcess:         "kill %[1]s failed: no such process",
 		KillNotPermitted:          "kill %[1]s failed: operation not permitted",
-		KillInvalidSignal:         "unknown signal: SIG%[1]s",
-		KillIllegalOption:         "unknown signal: SIG%[1]s",
+		KillInvalidSignal:         "unknown signal: %[3]s",
+		KillIllegalOption:         "unknown signal: %[3]s",
 		KillNotAPid:               "illegal pid: %[1]s",
 		KillMissingSignalArgument: "%[1]s: argument expected",
 		KillUsage:                 "not enough arguments",

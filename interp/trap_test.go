@@ -127,14 +127,86 @@ func TestTrapInAFunctionIsAnAxis(t *testing.T) {
 }
 
 func TestTrapRefusesSignalsItCannotCatch(t *testing.T) {
-	// KILL and STOP cannot be caught by anyone, so accepting them would be
-	// promising something the kernel will not allow.
-	for _, sig := range []string{"KILL", "STOP", "NOSUCHSIGNAL"} {
+	// KILL and STOP are real signals that nobody can catch, so accepting them
+	// would be promising something the kernel will not allow. Every shell in
+	// the panel takes `trap … KILL` and then never fires it; this refuses,
+	// which is a deliberate divergence and keeps its own wording rather than
+	// borrowing a dialect's complaint about a word that names nothing.
+	for _, sig := range []string{"KILL", "STOP"} {
 		out, st := run(t, `trap 'x' `+sig, withSem(bash.Semantics()))
 		if st == 0 || !strings.Contains(out, "not a signal this shell can catch") {
 			t.Errorf("%s: got %q/%d", sig, out, st)
 		}
 	}
+	// A word naming no signal at all is a different complaint, and one the
+	// dialect words. All four report 1 for it.
+	out, st := run(t, `trap 'x' NOSUCHSIGNAL`, withSem(bash.Semantics()))
+	if st != 1 || !strings.Contains(out, "NOSUCHSIGNAL") {
+		t.Errorf("a word that names nothing: got %q/%d, want 1", out, st)
+	}
+}
+
+// TestSIGPrefixIsAnAxis pins the name a signal can be given.
+//
+// dash reads no SIG-prefixed name anywhere, so the same script traps a signal
+// in three shells and reports a bad trap in the fourth.
+// TestTrapTakesEverySignalButTheTwoNobodyCanCatch pins the set.
+//
+// It was nine names for a while, which left `trap 'x' CONT` refused as
+// uncatchable in a shell where all four panel members catch it.
+func TestTrapTakesEverySignalButTheTwoNobodyCanCatch(t *testing.T) {
+	for _, sig := range []string{"CONT", "CHLD", "WINCH", "TSTP", "URG", "IO", "SYS", "TRAP", "XCPU", "USR1"} {
+		if out, st := run(t, `trap 'x' `+sig, withSem(bash.Semantics())); st != 0 || out != "" {
+			t.Errorf("%s: got %q/%d, want it taken quietly", sig, out, st)
+		}
+	}
+}
+
+func TestSIGPrefixIsAnAxis(t *testing.T) {
+	// The status is echoed rather than taken from the script: a bad trap is
+	// not fatal in any of the four, so the script carries on and its own exit
+	// status is the echo's.
+	const src = `trap 'echo caught' SIGUSR1; echo "st=$?"`
+	for _, tc := range []struct {
+		name string
+		sem  Semantics
+		want string
+	}{
+		{"accepted", bashSemWith(Yes), "st=0\n"},
+		{"refused", bashSemWith(No), "sh: trap: SIGUSR1: bad trap\nst=1\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := run(t, src, withSem(tc.sem))
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q/%d, want %q/0", out, st, tc.want)
+			}
+		})
+	}
+
+	// Unspecified is refused rather than guessed, and only where the prefix
+	// decides something: a bare name never asks, and neither does a word that
+	// names no signal with the prefix taken off.
+	sem := bashSemWith(Unspecified)
+	if _, _ = run(t, `trap 'x' SIGUSR1`, withSem(sem)); true {
+		out, _ := run(t, `trap 'x' SIGUSR1`, withSem(sem))
+		if !strings.Contains(out, "no dialect was chosen") {
+			t.Errorf("SIGUSR1: got %q, want a refusal naming the axis", out)
+		}
+	}
+	if out, st := run(t, `trap 'x' USR1; echo ok`, withSem(sem)); out != "ok\n" || st != 0 {
+		t.Errorf("a bare name: got %q/%d, want no question asked", out, st)
+	}
+	if out, _ := run(t, `trap 'x' SIGNOPE`, withSem(sem)); strings.Contains(out, "no dialect was chosen") {
+		t.Errorf("SIGNOPE: got %q, want a bad trap rather than a question", out)
+	}
+}
+
+// bashSemWith is bash's vector with one axis overridden, so the test names the
+// axis rather than a shell.
+func bashSemWith(a Answer) Semantics {
+	s := bash.Semantics()
+	s.SIGPrefixAccepted = a
+	return s
 }
 
 // Signal *delivery* is deliberately not tested in this process.

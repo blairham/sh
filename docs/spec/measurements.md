@@ -386,6 +386,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `kill/several-targets-disagreeing` | `<shell>: 1: kill: No such process~~st=1` | `<shell>: line 1: kill: (999999) - No such process~st=0` | `<shell>: line 1: kill: (999999) - No such process~st=1` | `<shell>: line 0: kill: (999999) - No such process~st=0` | `kill: 999999: no such process~st=1` | `<shell>:kill:1: kill 999999 failed: no such process~st=1` |
 | `kill/every-target-failing` | `<shell>: 1: kill: No such process~~<shell>: 1: kill: No such process~~st=1` | `<shell>: line 1: kill: (999998) - No such process~<shell>: line 1: kill: (999999) - No such process~st=1` | `<shell>: line 1: kill: (999998) - No such process~<shell>: line 1: kill: (999999) - No such process~st=1` | `<shell>: line 0: kill: (999998) - No such process~<shell>: line 0: kill: (999999) - No such process~st=1` | `kill: 999998: no such process~kill: 999999: no such process~st=1` | `<shell>:kill:1: kill 999998 failed: no such process~<shell>:kill:1: kill 999999 failed: no such process~st=2` |
 | `kill/signaling-a-process-that-is-not-ours` | `<shell>: 1: kill: Operation not permitted~~st=1` | `<shell>: line 1: kill: (1) - Operation not permitted~st=1` | `<shell>: line 1: kill: (1) - Operation not permitted~st=1` | `<shell>: line 0: kill: (1) - Operation not permitted~st=1` | `kill: 1: permission denied~st=1` | `<shell>:kill:1: kill 1 failed: operation not permitted~st=1` |
+| `kill/sig-prefix-as-a-flag` | `<shell>: 1: kill: Illegal option -S~st=2` | `st=0` | `<shell>: line 1: kill: SIGCONT: invalid signal specification~st=1` | `st=0` | `st=0` | `st=0` |
+| `kill/sig-prefix-after-s` | `<shell>: 1: kill: invalid signal number or name: SIGCONT~st=2` | `st=0` | `<shell>: line 1: kill: SIGCONT: invalid signal specification~st=1` | `st=0` | `st=0` | `st=0` |
 
 - `kill/probe-with-signal-zero` — signal 0 is not a signal: it asks whether the process is there, and every shell in the panel answers 0 for one that is
   ```sh
@@ -431,12 +433,22 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   kill -TERM 1; echo "st=$?"
   ```
+- `kill/sig-prefix-as-a-flag` — the same refusal reached the other way, and dash names only the first character of what it could not read — it stopped there
+  ```sh
+  kill -SIGCONT $$; echo "st=$?"
+  ```
+- `kill/sig-prefix-after-s` — and once more with the POSIX spelling, where dash calls the same word an invalid signal rather than an illegal option: one refusal, three wordings from the shell that refuses
+  ```sh
+  kill -s SIGCONT $$; echo "st=$?"
+  ```
 
 ## traps and exit
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
 | `kill/exit-trap-after-a-fatal-signal` | *(no output, status -1)* | `bye` *(status -1)* | `bye` *(status -1)* | `bye` *(status -1)* | `bye` *(status -1)* | *(no output, status -1)* |
+| `trap/bad-signal-name` | `trap: NOPE: bad trap~st=1` | `<shell>: line 1: trap: NOPE: invalid signal specification~st=1` | `<shell>: line 1: trap: NOPE: invalid signal specification~st=1` | `<shell>: line 0: trap: NOPE: invalid signal specification~st=1` | `<shell>: trap: NOPE: bad trap~st=1` | `<shell>:trap:1: undefined signal: NOPE~st=1` |
+| `trap/sig-prefix-diverges` | `trap: SIGUSR1: bad trap~st=1` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `trap/signal-handler-runs-and-continues` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
 | `trap/empty-handler-ignores` | `after` | `after` | `after` | `after` | `after` | `after` |
 | `trap/default-signal-terminates` | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* |
@@ -457,6 +469,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   trap 'echo bye' EXIT
   kill -INT $$
   echo after
+  ```
+- `trap/bad-signal-name` — status 1 in all four and four different sentences, one of which arrives with no shell name in front of it where the same shell prefixes every `kill` diagnostic it has
+  ```sh
+  trap 'echo x' NOPE; echo "st=$?"
+  ```
+- `trap/sig-prefix-diverges` — dash reads no SIG-prefixed name: the prefix is simply not part of a signal's name there, so a script that traps SIGUSR1 traps nothing and says so, where the other three take it
+  ```sh
+  trap 'echo caught' SIGUSR1; echo "st=$?"
   ```
 - `trap/signal-handler-runs-and-continues` — a caught signal runs its handler and the script carries on, which is the whole reason to catch one
   ```sh

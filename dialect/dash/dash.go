@@ -28,6 +28,7 @@ func Semantics() interp.Semantics {
 	s.DotWithNoOperandIsAnError = interp.No
 	s.ExitTrapRunsOnSignalDeath = interp.No
 	s.KillListAcceptsName = interp.No
+	s.SIGPrefixAccepted = interp.No
 	s.KillStatus = interp.KillStatusAnyFailure
 	return s
 }
@@ -63,10 +64,13 @@ func Diagnostics() interp.Diagnostics {
 		// dash names no pid at all, and prints a blank line after the one
 		// message it has for a target — measured rather than assumed, because
 		// an invisible trailing newline is exactly what a golden record is for.
-		KillNoSuchProcess:         "kill: No such process\n",
-		KillNotPermitted:          "kill: Operation not permitted\n",
-		KillInvalidSignal:         "kill: invalid signal number or name: %[1]s",
-		KillIllegalOption:         "kill: Illegal option -%[1]s",
+		TrapBadSignal:           "trap: %[1]s: bad trap",
+		TrapBadSignalUnprefixed: true,
+		KillNoSuchProcess:       "kill: No such process\n",
+		KillNotPermitted:        "kill: Operation not permitted\n",
+		KillInvalidSignal:       "kill: invalid signal number or name: %[1]s",
+		// The first character alone: dash stopped reading there.
+		KillIllegalOption:         "kill: Illegal option -%[2]s",
 		KillNotAPid:               "kill: Illegal number: %[1]s",
 		KillMissingSignalArgument: "kill: No arg for %[1]s option",
 		KillUsage: "kill: Usage: kill [-s sigspec | -signum | -sigspec] [pid | job]... or\n" +

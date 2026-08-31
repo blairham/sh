@@ -20,20 +20,23 @@ import (
 // So arrival is recorded here and delivery happens in stmt, which is the only
 // place that knows a command has finished.
 //
-// Only the signals a script can sensibly catch are offered. KILL and STOP
-// cannot be caught by anyone and are refused rather than accepted and quietly
-// ignored.
-var trappableSignals = map[string]syscall.Signal{
-	"HUP":  syscall.SIGHUP,
-	"INT":  syscall.SIGINT,
-	"QUIT": syscall.SIGQUIT,
-	"ABRT": syscall.SIGABRT,
-	"ALRM": syscall.SIGALRM,
-	"TERM": syscall.SIGTERM,
-	"USR1": syscall.SIGUSR1,
-	"USR2": syscall.SIGUSR2,
-	"PIPE": syscall.SIGPIPE,
-}
+// Every signal but the two nobody can catch is offered. KILL and STOP are
+// refused rather than accepted and quietly ignored, which is a deliberate
+// divergence: all four shells take `trap … KILL` and then never fire it.
+//
+// The set is derived rather than listed, because a list is what it was — nine
+// entries that left `trap 'x' CONT` refused as uncatchable in a shell where
+// all four panel members catch it.
+var trappableSignals = func() map[string]syscall.Signal {
+	m := make(map[string]syscall.Signal, len(knownSignals))
+	for _, k := range knownSignals {
+		if k.Sig == syscall.SIGKILL || k.Sig == syscall.SIGSTOP {
+			continue
+		}
+		m[k.Name] = k.Sig
+	}
+	return m
+}()
 
 // signalNumbers is the other spelling: `trap … 2` is `trap … INT`.
 var signalNumbers = map[string]string{
@@ -64,15 +67,45 @@ func (r *Runner) sigs() *signalState {
 	return r.signals
 }
 
+// signalWord is what a `trap` condition turned out to name, which is three
+// answers rather than two: a word can name a signal this shell will catch, a
+// real signal nobody can catch, or nothing at all. The middle one is a
+// different complaint from the last, and only the last is the dialect's to
+// word.
+type signalWord int
+
+const (
+	signalTrappable signalWord = iota
+	signalUncatchable
+	signalUnknown
+)
+
 // canonicalSignal reads a condition the way `trap` accepts it: a name with or
 // without the SIG prefix, in any case, or a number.
-func canonicalSignal(s string) (string, syscall.Signal, bool) {
-	up := strings.ToUpper(strings.TrimPrefix(strings.ToUpper(s), "SIG"))
+//
+// Whether the prefix is part of a name at all is a dialect's answer rather
+// than this function's — see Semantics.SIGPrefixAccepted — and it is asked
+// only where it decides something. A bare name never asks, and neither does
+// `SIGNOPE`, which names no signal with the prefix taken off either.
+func (r *Runner) canonicalSignal(s string) (string, syscall.Signal, signalWord) {
+	up := strings.ToUpper(s)
 	if name, ok := signalNumbers[s]; ok {
 		up = name
+	} else if trimmed, had := strings.CutPrefix(up, "SIG"); had && knownSignal(trimmed) {
+		if !r.ask(r.sem().SIGPrefixAccepted, "the SIG prefix on a signal name") {
+			// Not a name this dialect has, so it names nothing — which is
+			// what dash reports it as.
+			return "", 0, signalUnknown
+		}
+		up = trimmed
 	}
-	sig, ok := trappableSignals[up]
-	return up, sig, ok
+	if sig, ok := trappableSignals[up]; ok {
+		return up, sig, signalTrappable
+	}
+	if knownSignal(up) {
+		return up, 0, signalUncatchable
+	}
+	return up, 0, signalUnknown
 }
 
 // trapSignal records what to run when a signal arrives.

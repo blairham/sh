@@ -4,6 +4,8 @@
 package dash_test
 
 import (
+	"bytes"
+	"context"
 	"testing"
 
 	"github.com/blairham/sh/dialect/dash"
@@ -44,6 +46,45 @@ func TestGrammar(t *testing.T) {
 	}
 }
 
+// TestSignalNamesHaveNoSIGPrefix is dash's answer where it can be seen.
+//
+// The prefix is not part of a signal's name here, and dash says so in three
+// places with three wordings — including one that names only the first
+// character, because that is where it stopped reading.
+func TestSignalNamesHaveNoSIGPrefix(t *testing.T) {
+	for _, tc := range []struct {
+		src    string
+		errs   string
+		status int
+	}{
+		// No shell name in front of it: dash prints `trap`'s complaint bare
+		// where it prefixes every `kill` diagnostic it has.
+		{`trap 'echo x' SIGUSR1`, "trap: SIGUSR1: bad trap\n", 1},
+		{`trap 'echo x' USR1`, "", 0},
+		{`kill -SIGCONT $$`, "dash: 1: kill: Illegal option -S\n", 2},
+		{`kill -s SIGCONT $$`, "dash: 1: kill: invalid signal number or name: SIGCONT\n", 2},
+		{`kill -CONT $$`, "", 0},
+	} {
+		f, err := syntax.Parse(tc.src, dash.Dialect())
+		if err != nil {
+			t.Fatalf("parse %q: %v", tc.src, err)
+		}
+		var errs bytes.Buffer
+		sem, dg := dash.Semantics(), dash.Diagnostics()
+		r := &interp.Runner{Stderr: &errs, Semantics: &sem, Diagnostics: &dg, Name: "dash"}
+		st, err := r.Run(context.Background(), f)
+		if err != nil {
+			t.Fatalf("run %q: %v", tc.src, err)
+		}
+		if got := errs.String(); got != tc.errs {
+			t.Errorf("%s: stderr = %q, want %q", tc.src, got, tc.errs)
+		}
+		if st != tc.status {
+			t.Errorf("%s: status = %d, want %d", tc.src, st, tc.status)
+		}
+	}
+}
+
 func TestSemantics(t *testing.T) {
 	s := dash.Semantics()
 	for _, tc := range []struct {
@@ -56,6 +97,7 @@ func TestSemantics(t *testing.T) {
 		{"BraceExpansion", s.BraceExpansion, interp.No},
 		{"BracketCaretNegates", s.BracketCaretNegates, interp.No},
 		{"FatalErrorStatusIsOne", s.FatalErrorStatusIsOne, interp.No},
+		{"SIGPrefixAccepted", s.SIGPrefixAccepted, interp.No},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)

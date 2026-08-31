@@ -47,6 +47,7 @@ func Semantics() interp.Semantics {
 	// count failures one way or another.
 	s.ExitTrapRunsOnSignalDeath = interp.Yes
 	s.KillListAcceptsName = interp.Yes
+	s.SIGPrefixAccepted = interp.Yes
 	s.KillStatus = interp.KillStatusAnySuccess
 	return s
 }
@@ -88,6 +89,7 @@ func Diagnostics() interp.Diagnostics {
 		// `kill` puts the process in parentheses and the reason after a dash,
 		// which is the only wording in the panel a script could not confuse
 		// with a message about a signal name.
+		TrapBadSignal:             "trap: %[1]s: invalid signal specification",
 		KillNoSuchProcess:         "kill: (%[1]s) - No such process",
 		KillNotPermitted:          "kill: (%[1]s) - Operation not permitted",
 		KillInvalidSignal:         "kill: %[1]s: invalid signal specification",

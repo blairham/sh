@@ -114,6 +114,17 @@ var knownSignals = []signalEntry{
 	{"USR2", syscall.SIGUSR2, true},
 }
 
+// knownSignal reports whether a bare, uppercased name is one of the signals
+// this shell can send.
+func knownSignal(name string) bool {
+	for _, k := range knownSignals {
+		if k.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 func biKill(r *Runner, _ context.Context, args []string) int {
 	if len(args) == 0 {
 		return r.killReport(killUsage, "")
@@ -191,13 +202,17 @@ func (r *Runner) signalSpec(spec string, form killSpecForm) (string, syscall.Sig
 		}
 		return bad()
 	}
-	// The SIG prefix is accepted, which is three of the four. dash knows no
-	// SIG-prefixed name anywhere — `trap … SIGINT` is a bad trap to it just
-	// as `kill -SIGINT` is a bad option — so this is a divergence that is
-	// measured and deliberately not reproduced here: it belongs to `trap` as
-	// much as to `kill`, and an axis that answered it for one and not the
-	// other would be worse than the gap. docs/spec/measurements.md records it.
-	up := strings.TrimPrefix(strings.ToUpper(spec), "SIG")
+	up := strings.ToUpper(spec)
+	if trimmed, had := strings.CutPrefix(up, "SIG"); had && knownSignal(trimmed) {
+		// Whether the prefix is part of a name is the dialect's answer, the
+		// same one `trap` asks — dash reads `SIGCONT` as neither a signal nor
+		// an option and says so twice over. Asked only where it decides
+		// something: `SIGNOPE` names nothing either way.
+		if !r.ask(r.sem().SIGPrefixAccepted, "the SIG prefix on a signal name") {
+			return bad()
+		}
+		up = trimmed
+	}
 	for _, k := range knownSignals {
 		if k.Name == up {
 			return k.Name, k.Sig, nil
@@ -415,6 +430,21 @@ const (
 
 func (e *killError) Error() string { return e.fallback() }
 
+// verbs is what a wording may name: the operand as written, and its first
+// character alone. One dialect wants the second for an illegal option and
+// nothing else wants it at all.
+func (e *killError) verbs() []any {
+	first := e.operand
+	if r := []rune(first); len(r) > 0 {
+		first = string(r[0])
+	}
+	// Exactly one prefix, however many the operand arrived with: zsh names an
+	// unknown signal `SIGQ` for `Q` and `SIGNOPE` for `SIGNOPE`, so passing
+	// the operand as written to a format that adds one gave SIGSIGNOPE.
+	prefixed := "SIG" + strings.TrimPrefix(strings.ToUpper(e.operand), "SIG")
+	return []any{e.operand, first, prefixed}
+}
+
 func (e *killError) fallback() string {
 	switch e.kind {
 	case killMissingSignalArgument:
@@ -485,9 +515,9 @@ func (r *Runner) killFailed(err error) int {
 	if (ke.kind == killUsage && d.KillUsageUnprefixed) || (target && d.KillTargetUnprefixed) {
 		// One dialect prints these with no location and no shell name in
 		// front, which is not how it prints a complaint about an argument.
-		r.errf("%s\n", Wording(ke.format(d), ke.fallback(), ke.operand))
+		r.errf("%s\n", Wording(ke.format(d), ke.fallback(), ke.verbs()...))
 	} else {
-		r.diagf("%s\n", Wording(ke.format(d), ke.fallback(), ke.operand))
+		r.diagf("%s\n", Wording(ke.format(d), ke.fallback(), ke.verbs()...))
 	}
 	if (ke.kind == killInvalidSignal || ke.kind == killIllegalOption) && d.KillUnknownSignalHint != "" {
 		r.diagf("%s\n", d.KillUnknownSignalHint)

@@ -46,14 +46,9 @@ jobs:
         check-latest: true
         cache: true # go-mod-tidy-repo resolves the whole graph; an uncached run is slow and flaky # setup-go's manifest lags fresh Go patch releases; resolve via go.dev
     - name: Run pre-commit hooks
-      # `golangci-lint` is skipped, and only that one. Its `--new-from-rev HEAD`
-      # compares the working tree against HEAD, and a CI checkout is clean — so
-      # it reports nothing at all here while looking configured. The Lint job
-      # below does the equivalent properly, against the base commit.
-      # `golangci-lint-fmt` is NOT skipped: formatting is absolute rather than
-      # relative to a diff, and it is the same second of work.
-      env:
-        SKIP: golangci-lint
+      # Nothing is skipped: pre-commit is the linter. `golangci-lint` reports
+      # what the change introduced, which is the whole point of running it
+      # here rather than in a job of its own.
       uses: blairham/go-pre-commit@v4.6.6
 
   # Gating happens inside the jobs, never with a workflow-level `paths:`
@@ -134,50 +129,6 @@ jobs:
       if: needs.changes.outputs.code == 'true'
     - run: go test -race ./...
       if: needs.changes.outputs.code == 'true'
-
-  # `go vet` is not run separately: govet is one of the linters .golangci.yml
-  # enables, so this job already does it, over the same code, with the same
-  # analysers. `go tool` rather than golangci-lint-action, so the version CI
-  # runs is the one pinned in go.mod — the same one `make lint` runs locally.
-  # The action's own `version:` was a second pin that drifted from it.
-  # "Only the changes", done in a way that works on a runner. The hook's
-  # `--new-from-rev HEAD` is a no-op against a clean checkout, so this diffs
-  # from the base *commit*: the pull request's base sha, or on a merge the
-  # commit main pointed at. `origin/<base_ref>` is deliberately not used —
-  # actions/checkout does not reliably leave that ref behind.
-  #
-  # `go vet` is not run separately: govet is one of the linters .golangci.yml
-  # enables, so this job already does it over the same code. `go tool` rather
-  # than golangci-lint-action, so the version CI runs is the one pinned in
-  # go.mod — the same one `make lint` runs locally.
-  lint:
-    name: Lint
-    needs: changes
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v6
-      if: needs.changes.outputs.code == 'true'
-      with:
-        fetch-depth: 0 # --new-from-rev needs the base commit, not just HEAD
-    - uses: actions/setup-go@v6
-      if: needs.changes.outputs.code == 'true'
-      with:
-        go-version-file: go.mod
-        check-latest: true
-        cache: true
-    - name: Lint what this change introduced
-      if: needs.changes.outputs.code == 'true'
-      env:
-        BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-      run: |
-        if git cat-file -e "$BASE" 2>/dev/null; then
-          go tool golangci-lint run --new-from-rev "$BASE"
-        else
-          # No usable base commit, so there is no diff to be relative to.
-          # Lint everything rather than silently lint nothing.
-          echo "base commit $BASE is not present — linting everything"
-          go tool golangci-lint run
-        fi
 
   oracle:
     name: Oracle (report only)

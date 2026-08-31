@@ -6,19 +6,23 @@ name: CI
 on:
   pull_request:
     # `synchronize` is every push to a branch with an open pull request, which
-    # is the feedback that matters. Drafts get pre-commit and nothing else:
-    # push freely while drafting, and `ready_for_review` starts the rest.
+    # is the feedback that matters. A draft is treated exactly like any other
+    # pull request: the distinction bought a little runner time and cost a
+    # second set of rules to hold in your head.
     types: [opened, reopened, synchronize, ready_for_review]
     # Nothing here fires for a push to a branch with no pull request open, so
     # branch pushes cost nothing at all. `synchronize` is a push to a branch
     # that *has* one, which is the feedback worth paying for — and even then
     # every job stands down while the pull request is a draft.
   push:
-    # Only the pre-commit job runs here — see its `if:`. Tests are deliberately
-    # not re-run after a merge: branch protection requires the branch to be up
-    # to date, so for a squash merge the tree that lands on main is the tree
-    # that was already tested, and running it again proves nothing while
-    # delaying the next merge.
+    # A merge runs the tests again, and not pre-commit. Protection requires
+    # the branch to be up to date, so the tree that lands is the tree that was
+    # tested — which makes re-running the *deterministic* checks pointless, and
+    # pre-commit is entirely deterministic.
+    #
+    # Tests are not. A race can pass on a branch and fail on main with the same
+    # tree, and that is the one thing a post-merge run can tell you that the
+    # pull request could not.
     branches: [main]
 
 permissions:
@@ -37,14 +41,11 @@ jobs:
   # and a secret committed to a draft is committed.
   pre-commit:
     name: Pre-commit
-    # Skipped while a pull request is a draft, like everything else. Drafting
-    # costs nothing; marking it ready starts the lot.
-    #
-    # What this gives up is small but worth naming: gitleaks and the licence
-    # check do not see a draft's commits until it is ready. The same hooks run
-    # locally at commit time, so this is the second line rather than the only
-    # one — and a draft cannot be merged.
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    # Pull requests only. On a push to main these hooks have already run —
+    # on the pull request that produced the commit, as a required check — and
+    # the tree that landed is the tree they ran against, because protection
+    # requires the branch to be up to date first.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
@@ -71,8 +72,9 @@ jobs:
   # expensive question, so this waits on pre-commit.
   changes:
     name: Detect changed files
+    # No `needs: pre-commit` for a push, where pre-commit does not run at all.
     needs: pre-commit
-    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    if: always() && (needs.pre-commit.result == 'success' || needs.pre-commit.result == 'skipped')
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.filter.outputs.code }}

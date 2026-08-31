@@ -25,6 +25,13 @@ jobs:
         go-version-file: go.mod
         check-latest: true # setup-go's manifest lags fresh Go patch releases; resolve via go.dev
     - name: Run pre-commit hooks
+      # Not the golangci-lint ones. The Lint job runs the same tool over the
+      # whole repository rather than over the diff, and `golangci-lint run`
+      # reports formatter findings too, so both hooks are a strict subset of
+      # a job that already has to pass. Leaving them in took this job from
+      # thirty seconds to three minutes to prove something twice.
+      env:
+        SKIP: golangci-lint,golangci-lint-fmt
       # check-license-headers is a golang-language hook, so pre-commit builds
       # it here; the version it runs is the `rev` pinned in
       # .pre-commit-config.yaml, which stays the single source of truth.

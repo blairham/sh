@@ -4282,6 +4282,70 @@
         "TimedOut": false
       }
     },
+    "kill/sig-prefix-after-s": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: kill: SIGCONT: invalid signal specification~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: kill: invalid signal number or name: SIGCONT~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "kill/sig-prefix-as-a-flag": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: kill: SIGCONT: invalid signal specification~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: kill: Illegal option -S~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "kill/signaling-a-process-that-is-not-ours": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: kill: (1) - Operation not permitted~st=1",
@@ -7962,6 +8026,38 @@
         "TimedOut": false
       }
     },
+    "trap/bad-signal-name": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: trap: NOPE: invalid signal specification~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: trap: NOPE: invalid signal specification~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: trap: NOPE: invalid signal specification~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "trap: NOPE: bad trap~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: trap: NOPE: bad trap~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:trap:1: undefined signal: NOPE~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "trap/default-signal-terminates": {
       "bash": {
         "Output": "",
@@ -8246,6 +8342,38 @@
       },
       "zsh": {
         "Output": "enter~TRAP~between",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/sig-prefix-diverges": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "trap: SIGUSR1: bad trap~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
         "Status": 0,
         "TimedOut": false
       }

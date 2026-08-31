@@ -50,6 +50,7 @@ func Semantics() interp.Semantics {
 	s.EmptyPathIsTheCurrentDirectory = interp.No
 	s.ExitTrapRunsOnSignalDeath = interp.Yes
 	s.KillListAcceptsName = interp.Yes
+	s.SIGPrefixAccepted = interp.Yes
 	s.KillStatus = interp.KillStatusAnyFailure
 	return s
 }
@@ -84,6 +85,7 @@ func Diagnostics() interp.Diagnostics {
 		// Not "cannot execute": ksh93 distinguishes a missing command from one
 		// that will not run, and only the second gets the brackets.
 		ExecNotFound:      "exec: %[1]s: not found",
+		TrapBadSignal:     "trap: %[1]s: bad trap",
 		KillNoSuchProcess: "kill: %[1]s: no such process",
 		KillNotPermitted:  "kill: %[1]s: permission denied",
 		KillInvalidSignal: "kill: %[1]s: unknown signal name",

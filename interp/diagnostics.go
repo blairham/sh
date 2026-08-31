@@ -173,6 +173,19 @@ type Diagnostics struct {
 	// four are fields rather than strings in the builtin.
 	TestMissingBracket string
 
+	// TrapBadSignal is what `trap` says about a condition that names no
+	// signal it knows. One verb: the condition as written.
+	//
+	// The status is not a field beside it: all four report 1, which is the
+	// only part of this any two of them agree on.
+	TrapBadSignal string
+	// TrapBadSignalUnprefixed prints that complaint with no location and no
+	// shell name in front of it. dash alone, and only for `trap`: its `kill`
+	// diagnostics carry the prefix like anyone's. bash does the same thing to
+	// `trap`'s *usage* line and not to this one, which is why the flag is on
+	// the message rather than on the builtin.
+	TrapBadSignalUnprefixed bool
+
 	// KillNoSuchProcess is a target that is not there. One verb: the pid.
 	//
 	// The four are worth reading together, because they are the same fact
@@ -190,6 +203,11 @@ type Diagnostics struct {
 	// `-l Q` spells it. One verb: the specification.
 	KillInvalidSignal string
 	// KillIllegalOption is that same failure spelled as a flag: `kill -Q`.
+	//
+	// Two verbs, positional: %[1]s is the specification as written and %[2]s
+	// its first character alone. dash names only the character — `kill -99`
+	// is "Illegal option -9" and `kill -SIGCONT` is "Illegal option -S" —
+	// because it stopped reading at the first thing that was not an option.
 	//
 	// Two fields because two dialects answer "what did you just give me" by
 	// where it appeared rather than by what it was — dash calls `-Q` an

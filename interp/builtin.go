@@ -494,10 +494,24 @@ func biTrap(r *Runner, _ context.Context, args []string) int {
 			targets = append(targets, target{exit: true})
 			continue
 		}
-		name, sig, ok := canonicalSignal(c)
-		if !ok {
+		name, sig, kind := r.canonicalSignal(c)
+		switch kind {
+		case signalUncatchable:
+			// A real signal that nobody can catch. Every shell in the panel
+			// takes `trap … KILL` and then never fires it; this refuses
+			// instead, which is a deliberate divergence and keeps its own
+			// wording, because it is not the dialect's complaint to word.
 			r.diagf("trap: %s: not a signal this shell can catch\n", c)
 			return 2
+		case signalUnknown:
+			msg := Wording(r.diag().TrapBadSignal, "trap: %[1]s: bad trap", c)
+			if r.diag().TrapBadSignalUnprefixed {
+				r.errf("%s\n", msg)
+			} else {
+				r.diagf("%s\n", msg)
+			}
+			// 1 in all four, and the one thing they agree on here.
+			return 1
 		}
 		targets = append(targets, target{name: name, sig: sig})
 	}

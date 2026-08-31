@@ -564,6 +564,40 @@ zsh**, where `$((0100))` is one hundred rather than sixty-four. Nothing
 warns, both answers are plausible numbers, and file modes are written that
 way.
 
+## One axis in three places
+
+**dash reads no SIG-prefixed signal name.** The prefix is simply not part
+of a signal's name there, and the same refusal surfaces three times with
+three different sentences:
+
+    trap 'x' SIGINT     trap: SIGINT: bad trap
+    kill -SIGINT $$     kill: Illegal option -S
+    kill -s SIGINT $$   kill: invalid signal number or name: SIGINT
+
+bash, ksh93 and zsh take all three. It is one axis rather than one per
+builtin because it is a property of how the shell *reads a signal name*,
+and the shell that refuses it refuses it everywhere — which is also the
+argument for asking it in `canonicalSignal` and in `kill`'s spec parser
+rather than at each of the places a name arrives.
+
+Two details of it are worth keeping, because each was a wrong answer
+before it was measured. dash names only the **first character** of an
+illegal option — `-SIGCONT` is `Illegal option -S`, and `-99` is
+`Illegal option -9` — because it stopped reading there; the wording takes
+that as a second verb. And zsh names an unknown signal with exactly
+**one** prefix however many the operand arrived with: `Q` is `SIGQ` and
+`SIGNOPE` is `SIGNOPE`, where a format that added one to the operand as
+written produced `SIGSIGNOPE`.
+
+Measuring it also turned up something that was not an axis at all. The
+trappable set was nine names, so `trap 'x' CONT` was refused as a signal
+this shell cannot catch — in a shell where all four panel members catch
+it, along with CHLD, WINCH, TSTP, URG, IO, SYS, TRAP and XCPU. The set is
+now derived: everything except KILL and STOP. Refusing those two remains
+a deliberate divergence, since all four accept `trap … KILL` and then
+never fire it, and it keeps its own wording rather than borrowing the
+dialect's complaint about a word that names nothing.
+
 ## A measured non-conflict, recorded so it is not over-generalised
 
 **zsh splits an unquoted command substitution**, exactly like the other

@@ -190,6 +190,23 @@ type Semantics struct {
 	// that function returns, rather than when the script ends. zsh alone; a
 	// trap set at the top level behaves the same everywhere.
 	ExitTrapIsFunctionLocal Answer
+	// SIGPrefixAccepted reads `SIGINT` as a name for the same signal `INT`
+	// names, wherever a signal can be named.
+	//
+	// dash alone says no, and says it in three places for two different
+	// reasons — the prefix is simply not part of a signal's name there:
+	//
+	//	trap 'x' SIGINT   trap: SIGINT: bad trap
+	//	kill -SIGINT $$   kill: Illegal option -S
+	//	kill -s SIGINT $$ kill: invalid signal number or name: SIGINT
+	//
+	// It is one axis rather than one per builtin because it is a property of
+	// how the shell reads a signal name, and the shell that refuses it
+	// refuses it everywhere. Asked only where the prefix is actually present
+	// and stripping it would name a signal: `trap 'x' INT` needs no answer
+	// from anyone, and neither does `SIGNOPE`, which names nothing either way.
+	SIGPrefixAccepted Answer
+
 	// KillListAcceptsName lets `kill -l` translate a name into a number, as
 	// the reverse of what it does with one. True in bash, ksh93 and zsh.
 	//

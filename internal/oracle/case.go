@@ -1179,6 +1179,52 @@ var Corpus = []Case{
 		Snippet: `echo "echo cwd-hit" > fb.sh; PATH=/usr/bin:/bin; . fb.sh; echo st=$?`,
 		Why:     "only bash looks in the current directory once PATH has missed; the other three call it not found, so a script relying on it is bash-only",
 	},
+	// --- finding a command: the script's PATH, and why it will not run ---
+	{
+		ID: "path/script-path-governs-lookup", Category: "command lookup",
+		Snippet: `mkdir -p d; printf '#!/bin/sh\necho on-path\n' > d/c; chmod +x d/c; PATH=$PWD/d; c`,
+		Why:     "setting PATH in a script decides what it can reach — an implementation that asks os/exec instead answers with the *process's* PATH and ignores the script entirely",
+	},
+	{
+		ID: "path/clearing-path-finds-nothing", Category: "command lookup",
+		Snippet: `mkdir -p d; printf '#!/bin/sh\necho ran\n' > d/c; chmod +x d/c; cp d/c ./c; PATH=$PWD/d; c; PATH=; c; echo "st=$?"`,
+		Why:     "the other half, and the worse one: a script that clears PATH to control what it can reach must not still reach everything on the machine. The command is one this case creates, because a builtin would prove nothing — printf is a builtin in bash and an external in dash, so it answers a different question in each",
+	},
+	{
+		ID: "path/builtins-ignore-path", Category: "command lookup",
+		Snippet: `PATH=; echo builtin-ok`,
+		Why:     "the contrast that makes the previous case a finding rather than a broken shell: a builtin is not looked up at all",
+	},
+	{
+		ID: "path/first-match-wins", Category: "command lookup",
+		Snippet: `mkdir -p a b; printf '#!/bin/sh\necho from-a\n' > a/dup; printf '#!/bin/sh\necho from-b\n' > b/dup; chmod +x a/dup b/dup; PATH=$PWD/a:$PWD/b; dup`,
+		Why:     "PATH is searched in order and the first executable wins",
+	},
+	{
+		ID: "path/empty-element-is-the-cwd", Category: "command lookup",
+		Snippet: `mkdir -p a; printf '#!/bin/sh\necho from-a\n' > a/dup; printf '#!/bin/sh\necho from-cwd\n' > dup; chmod +x a/dup dup; PATH=:$PWD/a; dup`,
+		Why:     "an empty PATH element means the current directory, which is POSIX and is not the same as searching it by default — none of them do that",
+	},
+	{
+		ID: "path/non-executable-is-skipped", Category: "command lookup",
+		Snippet: `mkdir -p a b; printf '#!/bin/sh\necho from-a\n' > a/dup; printf '#!/bin/sh\necho from-b\n' > b/dup; chmod -x a/dup; chmod +x b/dup; PATH=$PWD/a:$PWD/b; dup`,
+		Why:     "a file without the execute bit does not end the search — the walk carries on and the next entry wins, which an implementation stopping at the first name match gets wrong",
+	},
+	{
+		ID: "path/unrunnable-is-126-not-127", Category: "command lookup",
+		Snippet: `printf '#!/bin/sh\necho hi\n' > ne; chmod -x ne; ./ne; echo "st=$?"`,
+		Why:     "126 for a file that is there and will not start, against 127 for a name that resolved to nothing — two different failures that a single \"command not found\" collapses into one",
+	},
+	{
+		ID: "path/directory-as-a-command", Category: "command lookup",
+		Snippet: `mkdir -p adir; ./adir; echo "st=$?"`,
+		Why:     "126 as well, and the reason diverges: bash and ksh93 check for a directory and say so, dash and zsh report the permission error execve returns",
+	},
+	{
+		ID: "path/missing-path-is-not-a-missing-name", Category: "command lookup",
+		Snippet: `./nope; echo "st=$?"`,
+		Why:     "a path that is not there and a bare name PATH never had are both 127 and are worded differently in three of the four",
+	},
 	{
 		ID: "exec/replaces-the-shell", Category: "eval and dot",
 		Snippet: `exec echo replaced; echo NOT-REACHED`,

@@ -145,13 +145,13 @@ func TestExecAxesAndWording(t *testing.T) {
 	d := bash.Diagnostics()
 	// bash alone names the path it tried rather than the operand as written,
 	// and only for `exec` — the same bash reports `. ./nosuch.sh` as written.
-	if !d.ExecNamesResolvedPath {
-		t.Error("ExecNamesResolvedPath should be true for bash")
+	if !d.NamesResolvedPath {
+		t.Error("NamesResolvedPath should be true for bash")
 	}
 	// It checks for a directory itself rather than reporting execve's EACCES,
 	// so it needs no override for that reason.
-	if d.ExecDirectoryReason != "" {
-		t.Errorf("ExecDirectoryReason = %q, want empty: bash says what the OS said", d.ExecDirectoryReason)
+	if d.DirectoryReason != "" {
+		t.Errorf("DirectoryReason = %q, want empty: bash says what the OS said", d.DirectoryReason)
 	}
 	if d.LowercaseReason {
 		t.Error("bash prints the C strerror string as it comes")

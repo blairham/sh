@@ -69,15 +69,18 @@ func Diagnostics() interp.Diagnostics {
 		DotNoOperandStatus:       1,
 		// zsh leads with the reason, lowercased, and names the command after
 		// it — the reverse of the other three.
-		ExecFailed: "%[2]s: %[1]s",
+		CannotExecute: "%[2]s: %[1]s",
 		// zsh says "command not found" for a bare name it could not resolve,
 		// where the other three say "not found".
-		ExecNotFound:     "command not found: %[1]s",
-		ExecPathNotFound: "no such file or directory: %[1]s",
+		// zsh leads with the complaint and names the command after it, for a
+		// command word exactly as for `exec`.
+		NotFound:     "command not found: %[1]s",
+		ExecNotFound: "command not found: %[1]s",
+		PathNotFound: "no such file or directory: %[1]s",
 		// zsh lowercases every strerror string it quotes, where the other
 		// three print the C string as it comes.
-		LowercaseReason:     true,
-		ExecDirectoryReason: "Permission denied",
+		LowercaseReason: true,
+		DirectoryReason: "Permission denied",
 	}
 }
 

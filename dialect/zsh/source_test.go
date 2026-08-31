@@ -117,10 +117,10 @@ func TestExecAxesAndWording(t *testing.T) {
 	}
 	// zsh hands the path to execve rather than checking for a directory, so it
 	// reports the permission error that comes back.
-	if d.ExecDirectoryReason == "" {
+	if d.DirectoryReason == "" {
 		t.Error("zsh reports execve's own error for a directory")
 	}
-	if d.ExecNamesResolvedPath {
+	if d.NamesResolvedPath {
 		t.Error("zsh reports the operand as written, not resolved")
 	}
 }

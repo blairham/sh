@@ -46,6 +46,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | `.` passes positional parameters | **no** | yes | yes | yes |
 | `.` falls back to the current directory | no | **yes** | no | no |
 | `source` as a synonym for `.` | **absent** | yes | yes | yes |
+| an empty PATH means the cwd | yes | yes | **no** | yes |
 | a failed `exec` runs the EXIT trap | yes | yes | **no** | **no** |
 | `exec` reads options of its own | **no** | yes | yes | yes |
 | a failed `exec` names | the operand | **the resolved path** | the operand | the operand |
@@ -71,6 +72,7 @@ Probes, for reproduction:
     dot arguments    . f.sh ARG   (f.sh echoes $1)    → OUTER, ARG, ARG, ARG
     dot cwd fallback PATH=/bin; . f.sh               → not found, FOUND, not found, not found
     source synonym   source f.sh                     → not found, works, works, works
+    empty PATH       PATH=; ./x-in-cwd-by-name       → runs, runs, NOT FOUND, runs
     exec trap        trap T EXIT; exec nosuch        → T, T, silent, silent
     exec options     exec -a n sh -c 'echo $0'       → not found, n, n, n
     exec names       cd /tmp; exec ./noexec.sh       → ./noexec.sh, /tmp/noexec.sh, ./…, ./…

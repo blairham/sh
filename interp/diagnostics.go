@@ -65,19 +65,25 @@ type Diagnostics struct {
 	// positional because the shells order them differently: %[1]s is the
 	// operand as written and %[2]s the reason.
 	DotCannotOpen string
-	// ExecFailed is what `exec` says when the command is there and will not
+	// CannotExecute is what `exec` says when the command is there and will not
 	// run — a file without the execute bit, a directory. Two verbs,
 	// positional because the shells order them differently: %[1]s is the
 	// command as written and %[2]s the reason.
-	ExecFailed string
+	CannotExecute string
+	// ExecCannotExecute is the same failure reported by `exec` rather than by
+	// a command word. Two dialects name the builtin there and do not name it
+	// for an ordinary command — dash says `exec: x: Permission denied` for
+	// one and `x: Permission denied` for the other. Empty means "the same as
+	// CannotExecute", which is bash and zsh.
+	ExecCannotExecute string
 	// ExecNotFound is what `exec` says when there is no such command at all,
 	// which every shell words as some form of "not found" rather than with
-	// the strerror text ExecFailed carries. Same two verbs; the reason is the
+	// the strerror text CannotExecute carries. Same two verbs; the reason is the
 	// literal "not found", so most dialects ignore it.
 	//
-	// Empty means "the same as ExecFailed".
+	// Empty means "the same as CannotExecute".
 	ExecNotFound string
-	// ExecPathNotFound is what `exec` says when the operand had a slash in it
+	// PathNotFound is what `exec` says when the operand had a slash in it
 	// and there is no such file — as opposed to a bare name that was not on
 	// PATH. Same two verbs.
 	//
@@ -88,9 +94,9 @@ type Diagnostics struct {
 	// DotCannotOpen, arrived at from the other direction.
 	//
 	// Empty means "the same as ExecNotFound".
-	ExecPathNotFound string
+	PathNotFound string
 
-	// ExecNamesResolvedPath makes a failed `exec` name the absolute path it
+	// NamesResolvedPath makes a failed `exec` name the absolute path it
 	// tried rather than the operand as written.
 	//
 	// bash alone, and only for `exec`: `exec ./ne.sh` in /tmp reports
@@ -98,9 +104,9 @@ type Diagnostics struct {
 	// report "./ne.sh". The same bash reports `. ./nosuch.sh` as written, so
 	// this is not a general habit of the shell and cannot be shared with the
 	// `.` wording.
-	ExecNamesResolvedPath bool
+	NamesResolvedPath bool
 
-	// ExecDirectoryReason is the reason this dialect gives for `exec` on a
+	// DirectoryReason is the reason this dialect gives for `exec` on a
 	// directory, when it is not the one the operating system reported.
 	//
 	// bash and ksh93 check for a directory themselves and say so — "Is a
@@ -111,7 +117,7 @@ type Diagnostics struct {
 	//
 	// Empty means "whatever the operating system said", which is the first
 	// pair.
-	ExecDirectoryReason string
+	DirectoryReason string
 
 	// LowercaseReason lowercases the strerror text this dialect quotes.
 	//

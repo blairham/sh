@@ -45,6 +45,9 @@ func Semantics() interp.Semantics {
 	s.DotPassesArguments = interp.Yes
 	s.ExecFailureRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes
+	// Alone in the panel: `PATH=` finds nothing here, where dash, bash and
+	// zsh still search the current directory.
+	s.EmptyPathIsTheCurrentDirectory = interp.No
 	return s
 }
 
@@ -66,7 +69,9 @@ func Diagnostics() interp.Diagnostics {
 		DotNoOperand:       ".: Usage: . [ options ] name [arg ...]",
 		DotNoOperandStatus: 2,
 		// The reason goes in brackets, as it does for `.`.
-		ExecFailed: "exec: %[1]s: cannot execute [%[2]s]",
+		// A command word names no builtin; `exec` names itself.
+		CannotExecute:     "%[1]s: cannot execute [%[2]s]",
+		ExecCannotExecute: "exec: %[1]s: cannot execute [%[2]s]",
 		// Not "cannot execute": ksh93 distinguishes a missing command from one
 		// that will not run, and only the second gets the brackets.
 		ExecNotFound: "exec: %[1]s: not found",

@@ -282,6 +282,21 @@ type Semantics struct {
 	// a shell left to decide anything, and the panel splits on it.
 	ExecFailureRunsExitTrap Answer
 
+	// EmptyPathIsTheCurrentDirectory searches the current directory when PATH
+	// is set and empty.
+	//
+	// True in dash, bash and zsh; false in ksh93. `PATH=` reads like "nowhere"
+	// and is not: an empty PATH is one *empty element*, and an empty element
+	// means the current directory, so three of the four will still run a
+	// command sitting next to the script. Measured with the command in the
+	// current directory, which is the only arrangement that tells the two
+	// answers apart — with it anywhere else all four report not-found and the
+	// axis is invisible.
+	//
+	// `PATH=:` is not this question. Two empty elements is unanimous: every
+	// shell searches the current directory for it.
+	EmptyPathIsTheCurrentDirectory Answer
+
 	// ExecTakesOptions lets `exec` read options of its own, such as
 	// `-a name` to choose the argv[0] the command sees. True in bash, ksh93
 	// and zsh; false in dash, where a leading `-a` is the name of a command
@@ -375,6 +390,10 @@ func PosixSemantics() Semantics {
 		// -a is an extension three of the four grew.
 		ExecFailureRunsExitTrap: Yes,
 		ExecTakesOptions:        No,
+		// The standard says an empty element is the current directory and
+		// makes no exception for the whole variable being empty, so the
+		// preset follows the text and the majority together.
+		EmptyPathIsTheCurrentDirectory: Yes,
 	}
 }
 

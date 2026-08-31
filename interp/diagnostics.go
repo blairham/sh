@@ -83,6 +83,9 @@ type Diagnostics struct {
 	// EqualsNotFound is `=cmd` naming nothing. One verb: the name. zsh omits
 	// the colon it uses everywhere else, which is why this is not NotFound.
 	EqualsNotFound string
+	// UnboundVariable is an unset parameter under `set -u`. One verb: the
+	// name. bash calls it unbound where the other three call it not set.
+	UnboundVariable string
 	// BadPattern is a pattern the dialect rejects. One verb: the pattern.
 	BadPattern string
 	// CannotOpen is a redirection that could not be opened. Two verbs: the

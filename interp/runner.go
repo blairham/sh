@@ -127,6 +127,8 @@ type Runner struct {
 	// main script, and not in either of those — so the copy must know it is
 	// a copy.
 	inSubshell bool
+	// nounset is `set -u`: expanding an unset parameter is an error.
+	nounset bool
 	// errexit is `set -e`: a command that fails ends the script.
 	errexit bool
 	// tested counts the contexts where a command's status is being *used*

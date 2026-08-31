@@ -25,9 +25,13 @@ repos:
   # type-checks the whole module regardless and `--new-from-rev` only filters
   # what it prints. It is about the signal, not the second.
   #
-  # `--new-from-rev HEAD` is useless on a runner, where the checkout is clean
-  # and the hook therefore reports nothing at all. CI skips this hook and the
-  # Lint job diffs from the base commit instead.
+  # `--new-from-rev HEAD` compares the *working tree* against HEAD, so it is
+  # exactly right locally — it reports what you are about to commit, and
+  # `--fix` in the upstream entry corrects it in place — and reports nothing at
+  # all on a runner, where the checkout is clean. That is not a subtle failure:
+  # measured on a committed errcheck violation, the hook passes while
+  # `golangci-lint run` reports two issues on the same tree. CI skips this hook
+  # and runs the `golangci-lint-new` alias below instead.
   #
   # Keep `rev` in lockstep with go.mod's tool pin.
   - repo: https://github.com/golangci/golangci-lint
@@ -35,6 +39,20 @@ repos:
     hooks:
       - id: golangci-lint-fmt
       - id: golangci-lint
+
+      # The same upstream hook, told which base to diff against.
+      # `--new-from-merge-base` overrides the entry's `--new-from-rev HEAD`
+      # (measured), which is the whole reason this works on a clean checkout,
+      # where the tree and HEAD are identical so the entry finds nothing.
+      #
+      # `stages: [manual]` keeps it out of every local commit, where the hook
+      # above already reports what you are about to write and `--fix` corrects
+      # it. CI asks for this one by name.
+      - id: golangci-lint
+        alias: golangci-lint-new
+        name: golangci-lint (issues this change introduces)
+        stages: [manual]
+        args: [--new-from-merge-base=origin/main]
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.0

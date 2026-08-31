@@ -1,9 +1,20 @@
 name: Pre-commit
 on:
   pull_request:
+    # `synchronize` is every push to a branch with an open pull request, which
+    # is the feedback that matters — but only once the change is meant to be
+    # looked at. A draft is work in progress, so nothing here runs for one;
+    # `ready_for_review` starts it, and until then the local hooks are the
+    # feedback. That is the whole trade: push freely while drafting, and the
+    # gate runs when you say it is ready.
+    types: [opened, reopened, synchronize, ready_for_review]
 jobs:
   pre-commit:
     name: Pre-commit
+    # The engineer's own hooks are the first line; this is the guarantee,
+    # because a hook can be skipped and a contributor may not have installed
+    # one at all.
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
     - name: Check out code

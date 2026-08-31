@@ -153,11 +153,38 @@ tree, which is precisely the case worth defending against.
 
 ## CI and merging
 
+Work is checked in three places, and each does something the others
+cannot.
+
+**Local, on every commit.** The hooks in `.pre-commit-config.yaml`:
+hygiene, secrets, licence headers, `go mod tidy`, the toolchain-pin
+invariant, and golangci-lint in two forms — `golangci-lint-fmt` applies
+every formatter the config names, and `golangci-lint` lints *what changed
+since HEAD*. Seconds, not minutes, and it is the only feedback that
+arrives before the code leaves the machine.
+
+**On a pull request.** The gate. Build and test with `-race` on Linux and
+macOS, and the *whole-repo* lint — which is not the same run as the hook,
+because `--new-from-rev` cannot see whole-module linters like `unused`,
+and `unused` has caught dead code here that nothing else would have. The
+pre-commit job runs again too: a hook can be skipped, and a contributor
+may never have installed one.
+
+Nothing runs while a pull request is a **draft**. Push freely; marking it
+ready starts the gate.
+
+**After a merge.** One test job, on one platform — see `main-canary.yml`
+for why that and nothing else.
+
+`go vet` is deliberately not a step of its own: `govet` is one of the
+linters `.golangci.yml` enables, so the lint job already runs it over the
+same code.
+
 `main` is protected. All of these must pass before a merge, and branches
 must be **up to date** with `main` first:
 
-    Build, vet and test (ubuntu-latest)
-    Build, vet and test (macos-latest)
+    Build and test (ubuntu-latest)
+    Build and test (macos-latest)
     Lint
     Pre-commit
 

@@ -2,6 +2,13 @@ name: CI
 
 on:
   pull_request:
+    # `synchronize` is every push to a branch with an open pull request, which
+    # is the feedback that matters — but only once the change is meant to be
+    # looked at. A draft is work in progress, so nothing here runs for one;
+    # `ready_for_review` starts it, and until then the local hooks are the
+    # feedback. That is the whole trade: push freely while drafting, and the
+    # gate runs when you say it is ready.
+    types: [opened, reopened, synchronize, ready_for_review]
 
 permissions:
   contents: read
@@ -14,6 +21,7 @@ permissions:
 jobs:
   changes:
     name: Detect changed files
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     outputs:
       go: ${{ steps.filter.outputs.go }}
@@ -33,8 +41,12 @@ jobs:
           echo "No Go files changed — build, test and lint will be skipped."
         fi
 
+  # `go vet` is not run here: govet is one of the linters .golangci.yml
+  # enables, so the Lint job already does it, over the same code, with the
+  # same analysers. Running it twice cost a minute a build and found nothing
+  # the other did not.
   test:
-    name: Build, vet and test
+    name: Build and test
     needs: changes
     runs-on: ${{ matrix.os }}
     strategy:
@@ -50,8 +62,6 @@ jobs:
         go-version-file: go.mod
         check-latest: true
     - run: go build ./...
-      if: needs.changes.outputs.go == 'true'
-    - run: go vet ./...
       if: needs.changes.outputs.go == 'true'
     - run: go test -race ./...
       if: needs.changes.outputs.go == 'true'

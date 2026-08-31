@@ -19,8 +19,49 @@ permissions:
 # check makes a docs-only pull request unmergeable. The jobs therefore always
 # run and report; only the expensive steps are skipped.
 jobs:
+  # Pre-commit runs for every pull request, draft or not, and everything else
+  # waits on it. It is the only job that looks at *every* file rather than at
+  # Go: trailing whitespace, licence headers, secrets, the toolchain pin. None
+  # of that is worth detecting changes for, and a secret committed to a draft
+  # is committed.
+  #
+  # The hook environments are cached. pre-commit builds an environment for a
+  # hook even when SKIP tells it not to run one, which cost two and a half
+  # minutes a build to install a linter this job then declines to use.
+  pre-commit:
+    name: Pre-commit
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v6
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+        check-latest: true # setup-go's manifest lags fresh Go patch releases; resolve via go.dev
+    - name: Cache the hook environments
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pre-commit
+        key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+    - name: Run pre-commit hooks
+      # Not the golangci-lint ones. The Lint job runs the same tool over the
+      # whole repository rather than over the diff, and `golangci-lint run`
+      # reports formatter findings too, so both hooks are a strict subset of
+      # a job that already has to pass. Leaving them in took this job from
+      # thirty seconds to three minutes to prove something twice.
+      env:
+        SKIP: golangci-lint,golangci-lint-fmt
+      # check-license-headers is a golang-language hook, so pre-commit builds
+      # it here; the version it runs is the `rev` pinned in
+      # .pre-commit-config.yaml, which stays the single source of truth.
+      uses: blairham/go-pre-commit@v4.6.6
+
+  # Only after the cheap universal checks have passed is it worth asking the
+  # expensive question.
   changes:
     name: Detect changed files
+    needs: pre-commit
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     outputs:

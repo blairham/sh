@@ -31,5 +31,8 @@ func Semantics() interp.Semantics {
 
 // Diagnostics is how ksh93 reports failure.
 func Diagnostics() interp.Diagnostics {
-	return interp.Diagnostics{SyntaxErrorStatus: 3}
+	return interp.Diagnostics{
+		Location:          interp.LocationNone,
+		SyntaxErrorStatus: 3,
+	}
 }

@@ -97,7 +97,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.C
 		f, err := os.OpenFile(path, flags, 0o666)
 		if err != nil {
 			r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
-			r.errf("sh: cannot open %s: %v\n", name, err)
+			r.diagf("cannot open %s: %v\n", name, err)
 			r.status = 1
 			r.redirErr = true
 			return closers, nil

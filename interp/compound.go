@@ -252,7 +252,7 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 // and `local` is what carves out an exception. `local` is not here yet.
 func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []string) error {
 	if r.depth >= maxDepth {
-		r.errf("sh: %s: too deeply nested\n", fn.Name)
+		r.diagf("%s: too deeply nested\n", fn.Name)
 		r.status = 1
 		return nil
 	}

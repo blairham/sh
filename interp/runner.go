@@ -101,6 +101,10 @@ type Runner struct {
 	// not run: a redirect that could not be applied would otherwise send its
 	// output to the terminal, which is the loudest possible wrong answer.
 	redirErr bool
+	// line is where execution currently is, for diagnostics that name it.
+	// Real shells report the line of the command that failed, so this is
+	// updated per statement rather than per token.
+	line int
 	// noclobber is `set -C`: a plain `>` will not truncate an existing file.
 	noclobber bool
 	// readonly names refuse assignment.
@@ -179,6 +183,20 @@ func (r *Runner) errf(format string, args ...any) {
 	_, _ = fmt.Fprintf(r.stderr(), format, args...)
 }
 
+// diagf writes a diagnostic with the dialect's own prefix.
+//
+// Every message goes through here rather than spelling "sh: " itself, because
+// the prefix is the dialect's answer and not this package's: dash, bash, ksh93
+// and zsh each name the location differently, and one of them names it not at
+// all.
+func (r *Runner) diagf(format string, args ...any) {
+	name := r.Name
+	if name == "" {
+		name = "sh"
+	}
+	r.errf("%s%s", r.diag().prefix(name, r.line), fmt.Sprintf(format, args...))
+}
+
 func (r *Runner) emit(ctx context.Context, e Event) {
 	if r.Events != nil {
 		r.Events.Emit(ctx, e)
@@ -192,7 +210,7 @@ func (r *Runner) allowed(ctx context.Context, a Action) bool {
 		return true
 	}
 	r.emit(ctx, Event{Kind: EventDenied, Action: a})
-	r.errf("sh: %s: refused: %s\n", a.Kind, a.Path)
+	r.diagf("%s: refused: %s\n", a.Kind, a.Path)
 	r.status = 126
 	return false
 }
@@ -212,6 +230,9 @@ func (r *Runner) Run(ctx context.Context, f *syntax.File) (int, error) {
 }
 
 func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
+	if st.Expr != nil {
+		r.line = st.Expr.Pos().Line
+	}
 	if st.Background {
 		return r.background(ctx, st)
 	}
@@ -426,7 +447,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	}
 	if lookErr != nil {
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: lookErr})
-		r.errf("sh: %s: not found\n", argv[0])
+		r.diagf("%s: not found\n", argv[0])
 		// 127 is the status every shell in the panel uses for this.
 		r.status = 127
 		return nil
@@ -451,7 +472,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		// waited for — `$!` has to be answerable immediately.
 		if err := cmd.Start(); err != nil {
 			r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
-			r.errf("sh: %s: %v\n", argv[0], err)
+			r.diagf("%s: %v\n", argv[0], err)
 			r.status = 126
 			return nil
 		}
@@ -474,7 +495,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		r.status = ee.ExitCode()
 	default:
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
-		r.errf("sh: %s: %v\n", argv[0], err)
+		r.diagf("%s: %v\n", argv[0], err)
 		r.status = 126
 		return nil
 	}
@@ -523,7 +544,7 @@ func (r *Runner) fatalQuiet() {
 }
 
 func (r *Runner) fatal(format string, args ...any) {
-	r.errf(format, args...)
+	r.diagf(format, args...)
 	r.fatalQuiet()
 }
 
@@ -532,10 +553,10 @@ func (r *Runner) setVar(name, value string) {
 		// Fatal everywhere but bash, measured with a plain assignment in a
 		// script — which is the contaminated-probe case oracle.md records.
 		if r.ask(r.sem().ReadonlyReassignmentFatal, "a readonly reassignment being fatal") {
-			r.fatal("sh: %s: readonly variable\n", name)
+			r.fatal("%s: readonly variable\n", name)
 			return
 		}
-		r.errf("sh: %s: readonly variable\n", name)
+		r.diagf("%s: readonly variable\n", name)
 		r.status = 1
 		return
 	}
@@ -573,7 +594,7 @@ func (r *Runner) assign(a *syntax.Assign) {
 	case a.Index != nil:
 		idx, err := r.parseNum(strings.TrimSpace(r.joinWord(a.Index)))
 		if err != nil {
-			r.errf("sh: %s: bad array subscript\n", a.Name)
+			r.diagf("%s: bad array subscript\n", a.Name)
 			return
 		}
 		r.setArrayElem(a.Name, idx, strings.Join(r.expandWord(a.Value), " "))

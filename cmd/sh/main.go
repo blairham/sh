@@ -25,6 +25,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/blairham/sh/dialect/bash"
@@ -501,17 +503,52 @@ func run(src string, d syntax.Dialect, sem interp.Semantics, dg interp.Diagnosti
 		// it came from -c. *Which* status it carries is the dialect's: the
 		// comment that used to stand here said 2 in every shell in the
 		// panel, and that is true of half of them — ksh93 exits 3 and zsh 1.
-		fmt.Fprintln(os.Stderr, "sh:", err)
+		line, msg := splitPos(err.Error())
+		fmt.Fprint(os.Stderr, dg.Report(shellName(), line, msg+"\n"))
 		return dg.SyntaxError()
 	}
 
-	r := &interp.Runner{Dialect: &d, Semantics: &sem, Diagnostics: &dg, Name: "sh"}
+	r := &interp.Runner{Dialect: &d, Semantics: &sem, Diagnostics: &dg, Name: shellName()}
 	status, err := r.Run(context.Background(), f)
 	if err != nil {
 		// Refused rather than silently doing nothing: a shell that quietly
 		// skips what it cannot do is worse than one that says so.
-		fmt.Fprintln(os.Stderr, "sh:", err)
+		fmt.Fprint(os.Stderr, dg.Report(shellName(), 1, err.Error()+"\n"))
 		return 2
 	}
 	return status
+}
+
+// splitPos separates a parse error's own "line:col: " from its message.
+//
+// The parser reports both, which is right for a caller showing a caret and
+// wrong for a diagnostic: the dialect already says where it happened, in its
+// own shape, and printing "sh: 1: 1:8: …" says it twice.
+func splitPos(s string) (int, string) {
+	// Written by hand rather than with Sscanf: Go's fmt has no %n, so the
+	// obvious "%d:%d:%n" silently never matched and every parse error kept
+	// printing its position twice.
+	m := posPrefix.FindStringSubmatch(s)
+	if m == nil {
+		return 1, s
+	}
+	line, err := strconv.Atoi(m[1])
+	if err != nil {
+		return 1, s
+	}
+	return line, strings.TrimSpace(s[len(m[0]):])
+}
+
+var posPrefix = regexp.MustCompile(`^(\d+):(\d+): `)
+
+// shellName is what `$0` reports and what a diagnostic names itself with.
+//
+// Real shells use the path they were invoked by — dash says "/bin/dash: 1: …"
+// — so a hardcoded "sh" was wrong twice: in `$0` inside a function, and at
+// the start of every diagnostic.
+func shellName() string {
+	if len(os.Args) > 0 && os.Args[0] != "" {
+		return os.Args[0]
+	}
+	return "sh"
 }

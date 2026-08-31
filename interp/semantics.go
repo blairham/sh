@@ -292,7 +292,7 @@ func (r *Runner) ask(a Answer, axis string) bool {
 	case No:
 		return false
 	}
-	r.errf("sh: %s: the shells disagree here and no dialect was chosen\n", axis)
+	r.diagf("%s: the shells disagree here and no dialect was chosen\n", axis)
 	r.status = 2
 	r.unspecified = true
 	return false

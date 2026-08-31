@@ -315,7 +315,7 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 			return nil
 		}
 		if err != nil {
-			r.errf("sh: %v\n", err)
+			r.diagf("%v\n", err)
 			r.status = 1
 			return nil
 		}

@@ -3,6 +3,8 @@
 
 package interp
 
+import "fmt"
+
 // Diagnostics is how a dialect reports failure.
 //
 // It is a third vector beside [Dialect] and [Semantics], and it exists because
@@ -34,6 +36,63 @@ type Diagnostics struct {
 	//
 	// Zero means the substrate's own, which is 2.
 	SyntaxErrorStatus int
+
+	// Location is how the shell prefixes a diagnostic with where it
+	// happened. Measured, and all four differ:
+	//
+	//	dash    dash: 1: [[: not found
+	//	bash    bash: line 1: [[: not found
+	//	ksh93   ksh: [[: not found
+	//	zsh     zsh:1: [[: not found
+	//
+	// Zero is LocationNone, the substrate's own — the shell's name and
+	// nothing else, which is what this printed before any of it was a
+	// dialect's answer.
+	Location LocationStyle
+}
+
+// LocationStyle is one shell's way of saying where a diagnostic happened.
+//
+// It is an enumeration rather than a format string because the shapes are a
+// closed set that was measured, and a format string invites a fifth spelling
+// that no shell actually uses.
+type LocationStyle int
+
+const (
+	// LocationNone names the shell and stops: `ksh: msg`. Also the
+	// substrate's own.
+	LocationNone LocationStyle = iota
+	// LocationColonLine is `dash: 1: msg`.
+	LocationColonLine
+	// LocationLineWord is `bash: line 1: msg`.
+	LocationLineWord
+	// LocationTightLine is `zsh:1: msg`.
+	LocationTightLine
+)
+
+// Report renders a complete diagnostic for a shell called name at line.
+//
+// Exported because the first thing a shell reports is usually a syntax error,
+// and that happens before a Runner exists — whoever parsed the script has to
+// render it with the same answers the Runner would have used.
+func (d Diagnostics) Report(name string, line int, msg string) string {
+	return d.prefix(name, line) + msg
+}
+
+// prefix renders the start of a diagnostic for a shell called name at line.
+func (d Diagnostics) prefix(name string, line int) string {
+	if name == "" {
+		name = "sh"
+	}
+	switch d.Location {
+	case LocationColonLine:
+		return fmt.Sprintf("%s: %d: ", name, line)
+	case LocationLineWord:
+		return fmt.Sprintf("%s: line %d: ", name, line)
+	case LocationTightLine:
+		return fmt.Sprintf("%s:%d: ", name, line)
+	}
+	return name + ": "
 }
 
 // SyntaxError reports the status a failed parse should carry.

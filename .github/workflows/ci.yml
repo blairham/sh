@@ -41,14 +41,6 @@ jobs:
         go-version-file: go.mod
         check-latest: true
         cache: true # go-mod-tidy-repo resolves the whole graph; an uncached run is slow and flaky # setup-go's manifest lags fresh Go patch releases; resolve via go.dev
-    - name: Cache the hook environments
-      # pre-commit builds an environment for a hook even when SKIP tells it not
-      # to run one, which cost two and a half minutes a build to install a
-      # linter this job then declines to use.
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/pre-commit
-        key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
     - name: Run pre-commit hooks
       # Not the golangci-lint ones. The Lint job runs the same tool over the
       # whole repository rather than over the diff, and `golangci-lint run`

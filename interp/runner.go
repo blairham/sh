@@ -105,6 +105,20 @@ type Runner struct {
 	// Real shells report the line of the command that failed, so this is
 	// updated per statement rather than per token.
 	line int
+	// exitTrap is the body of `trap … EXIT`, or nil when none is set. Only
+	// EXIT is stored: the other signals need delivery, which is a separate
+	// piece, and `trap` refuses them rather than accepting one and never
+	// firing it.
+	exitTrap *string
+	// trapDepth is the function nesting the EXIT trap was set at, which zsh
+	// alone needs: there a trap set inside a function fires when the
+	// function returns rather than when the script ends.
+	trapDepth int
+	// inSubshell marks a runner that stands for a subshell or a command
+	// substitution. Measured: the EXIT trap fires once, at the end of the
+	// main script, and not in either of those — so the copy must know it is
+	// a copy.
+	inSubshell bool
 	// errexit is `set -e`: a command that fails ends the script.
 	errexit bool
 	// tested counts the contexts where a command's status is being *used*
@@ -135,6 +149,7 @@ const maxDepth = 256
 // clone copies the state for a subshell, so nothing it does escapes.
 func (r *Runner) clone() *Runner {
 	c := *r
+	c.inSubshell = true
 	c.Vars = make(map[string]string, len(r.Vars))
 	for k, v := range r.Vars {
 		c.Vars[k] = v
@@ -201,6 +216,11 @@ func (r *Runner) stderr() io.Writer {
 // The write error is discarded deliberately: this is already the error path,
 // there is nowhere better to report a failure to report, and a shell whose
 // stderr is closed should still run the command.
+// printf writes to the shell's output stream.
+func (r *Runner) printf(format string, args ...any) {
+	_, _ = fmt.Fprintf(r.stdout(), format, args...)
+}
+
 func (r *Runner) errf(format string, args ...any) {
 	_, _ = fmt.Fprintf(r.stderr(), format, args...)
 }
@@ -246,13 +266,64 @@ func (r *Runner) Run(ctx context.Context, f *syntax.File) (int, error) {
 	r.ctx = ctx
 	for _, st := range f.Stmts {
 		if err := r.stmt(ctx, st); err != nil {
+			r.runExitTrap(ctx)
 			return r.status, err
 		}
 		if r.ctl == controlExit {
 			break
 		}
 	}
+	r.runExitTrap(ctx)
 	return r.status, nil
+}
+
+// runExitTrap runs `trap … EXIT` as the script ends.
+//
+// Once, and only for the main script: a subshell and a command substitution
+// both leave it alone, which is unanimous across the panel and the reason
+// clone marks its copies.
+//
+// The status is left as it is so the body can read `$?` — measured: a trap set
+// after `false` sees 1. If the body exits with a status of its own, that wins,
+// which is why the control flag is cleared first and consulted after.
+func (r *Runner) runExitTrap(ctx context.Context) {
+	if r.exitTrap == nil || r.inSubshell {
+		return
+	}
+	body := *r.exitTrap
+	// Cleared before running so the body cannot fire it again, and so a
+	// `trap` inside it replaces rather than recurses.
+	r.exitTrap = nil
+	before := r.status
+	r.ctl = controlNone
+	r.runTrapBody(ctx, body)
+	if r.ctl != controlExit {
+		// The body ran to the end without exiting, so the script keeps the
+		// status it already had.
+		r.status = before
+	}
+	r.ctl = controlExit
+}
+
+// runTrapBody parses and runs a trap's text, which is re-parsed at fire time
+// because that is when a shell reads it.
+func (r *Runner) runTrapBody(ctx context.Context, body string) {
+	p := syntax.NewParser(body, r.dialect())
+	f := p.Parse()
+	if err := p.Err(); err != nil {
+		r.diagf("trap: %v\n", err)
+		r.status = r.diag().SyntaxStatus()
+		return
+	}
+	for _, st := range f.Stmts {
+		if err := r.stmt(ctx, st); err != nil {
+			r.diagf("trap: %v\n", err)
+			return
+		}
+		if r.ctl != controlNone {
+			return
+		}
+	}
 }
 
 func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {

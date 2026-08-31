@@ -371,6 +371,57 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   set -C; echo one>b; echo two>|b; printf "[%s]" "$(cat b)"
   ```
 
+## traps and exit
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `trap/exit-runs-at-the-end` | `hi~bye` | `hi~bye` | `hi~bye` | `hi~bye` | `hi~bye` | `hi~bye` |
+| `trap/exit-sees-the-last-status` | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* |
+| `trap/exit-trap-can-override-the-status` | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* |
+| `trap/second-trap-replaces` | `body~two` | `body~two` | `body~two` | `body~two` | `body~two` | `body~two` |
+| `trap/subshell-does-not-refire` | `sub~after~T` | `sub~after~T` | `sub~after~T` | `sub~after~T` | `sub~after~T` | `sub~after~T` |
+| `trap/set-in-a-function-diverges` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~TRAP~between` |
+| `exit/status-and-wrapping` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` |
+| `exit/bad-argument-diverges` | `<shell>: 1: exit: Illegal number: -1~[2]~<shell>: 1: exit: Illegal number: abc~[2]` | `[255]~<shell>: line 1: exit: abc: numeric argument required~[2]` | `[255]~<shell>: line 1: exit: abc: numeric argument required~[2]` | `[255]~<shell>: line 0: exit: abc: numeric argument required~[255]` | `[255]~[0]` | `[255]~[0]` |
+
+- `trap/exit-runs-at-the-end` — the EXIT trap runs after the script, not where it was set
+  ```sh
+  trap 'echo bye' EXIT; echo hi
+  ```
+- `trap/exit-sees-the-last-status` — the body reads `$?` at the moment it fires, which is what makes an EXIT trap useful for reporting
+  ```sh
+  trap 'echo st=$?' EXIT
+  false
+
+  ```
+- `trap/exit-trap-can-override-the-status` — the trap's own exit wins over the one that triggered it
+  ```sh
+  trap 'echo bye; exit 7' EXIT; exit 2
+  ```
+- `trap/second-trap-replaces` — traps are set rather than accumulated, and `trap -` removes
+  ```sh
+  trap 'echo one' EXIT; trap 'echo two' EXIT; echo body
+  ```
+- `trap/subshell-does-not-refire` — the trap fires once for the script: neither a subshell nor a command substitution repeats it
+  ```sh
+  trap 'echo T' EXIT; (echo sub); x=$(echo cs); echo after
+  ```
+- `trap/set-in-a-function-diverges` — zsh runs a trap set inside a function when the function returns; dash, bash and ksh93 keep it for the end of the script
+  ```sh
+  f() { trap 'echo TRAP' EXIT; echo enter; }
+  f
+  echo between
+
+  ```
+- `exit/status-and-wrapping` — a status is taken modulo 256, and a bare `exit` reports what the last command did
+  ```sh
+  (exit 300); echo "[$?]"; (false; exit); echo "[$?]"
+  ```
+- `exit/bad-argument-diverges` — an ordering rather than a side: dash refuses both, bash refuses only the one that is not a number, ksh93 and zsh take either
+  ```sh
+  (exit -1); echo "[$?]"; (exit abc); echo "[$?]"
+  ```
+
 ## shell options
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |

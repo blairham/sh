@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -31,6 +32,8 @@ var builtins = map[string]Builtin{
 	"pwd":      biPwd,
 	"read":     biRead,
 	"wait":     biWait,
+	"exit":     biExit,
+	"trap":     biTrap,
 	"local":    biLocal,
 	"readonly": biReadonly,
 	"break":    biBreak,
@@ -405,4 +408,97 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		r.readonly[name] = true
 	}
 	return 0
+}
+
+// biExit ends the shell.
+//
+// A bare `exit` reports what the last command did, and a status is taken
+// modulo 256 because that is all a process can carry — `exit 300` is 44 in
+// every shell measured.
+func biExit(r *Runner, _ context.Context, args []string) int {
+	if len(args) > 0 {
+		// strconv rather than the local atoi, which is for file descriptors
+		// and rejects a sign — `exit -1` has to parse before it can be
+		// judged.
+		// strconv rather than the local atoi, which is for file descriptors
+		// and rejects a sign — `exit -1` has to parse before it can be
+		// judged.
+		n, err := strconv.Atoi(strings.TrimSpace(args[0]))
+		switch {
+		case err == nil && n >= 0:
+			r.status = n % 256
+		default:
+			switch r.exitArgument() {
+			case ExitArgStrict:
+				return r.badExitArg(args[0])
+			case ExitArgNumeric:
+				if err != nil {
+					return r.badExitArg(args[0])
+				}
+				r.status = ((n % 256) + 256) % 256
+			case ExitArgLenient:
+				// Text reads as zero there, which is what `exit abc` gives.
+				r.status = ((n % 256) + 256) % 256
+			default:
+				// No dialect answered; exitArgument has already said so,
+				// and the script stops rather than exiting with a status it
+				// just refused to choose.
+				r.ctl = controlExit
+				return r.status
+			}
+		}
+	}
+	r.ctl = controlExit
+	return r.status
+}
+
+// biTrap sets what runs when the shell ends.
+//
+// Only EXIT is implemented. The other conditions need signal delivery, and
+// accepting `trap … INT` without ever firing it would be the silent wrong
+// answer this package exists to avoid — so it is refused and says so.
+func biTrap(r *Runner, _ context.Context, args []string) int {
+	if len(args) == 0 {
+		if r.exitTrap != nil {
+			r.printf("trap -- %s EXIT\n", singleQuote(*r.exitTrap))
+		}
+		return 0
+	}
+	body, conds := args[0], args[1:]
+	if len(conds) == 0 {
+		r.diagf("trap: usage: trap action condition ...\n")
+		return 2
+	}
+	for _, c := range conds {
+		if !strings.EqualFold(c, "EXIT") && c != "0" {
+			r.diagf("trap: only EXIT is implemented, not %s\n", c)
+			return 2
+		}
+	}
+	if body == "-" {
+		r.exitTrap = nil
+		return 0
+	}
+	// A second trap replaces the first rather than adding to it.
+	r.exitTrap = &body
+	r.trapDepth = r.depth
+	return 0
+}
+
+// singleQuote renders text the way `trap` lists it, so the output could be
+// fed back in.
+func singleQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// badExitArg reports an argument `exit` will not take.
+//
+// The status is 2 in both shells that refuse, and it is not the fatal-error
+// status: bash exits 1 for a fatal error and 2 for this. A usage error is its
+// own thing, which is why it is written here rather than routed through fatal.
+func (r *Runner) badExitArg(arg string) int {
+	r.diagf("%s\n", Wording(r.diag().InvalidNumber, "invalid number: %s", arg))
+	r.status = 2
+	r.ctl = controlExit
+	return r.status
 }

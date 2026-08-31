@@ -2266,6 +2266,70 @@
         "TimedOut": false
       }
     },
+    "exit/bad-argument-diverges": {
+      "bash": {
+        "Output": "[255]~\u003cshell\u003e: line 1: exit: abc: numeric argument required~[2]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[255]~\u003cshell\u003e: line 1: exit: abc: numeric argument required~[2]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[255]~\u003cshell\u003e: line 0: exit: abc: numeric argument required~[255]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: exit: Illegal number: -1~[2]~\u003cshell\u003e: 1: exit: Illegal number: abc~[2]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[255]~[0]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[255]~[0]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "exit/status-and-wrapping": {
+      "bash": {
+        "Output": "[44]~[1]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[44]~[1]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[44]~[1]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[44]~[1]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[44]~[1]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[44]~[1]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "expand/brace": {
       "bash": {
         "Output": "1 2 3",
@@ -5622,6 +5686,198 @@
       },
       "zsh": {
         "Output": "[a$HOME]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/exit-runs-at-the-end": {
+      "bash": {
+        "Output": "hi~bye",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "hi~bye",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "hi~bye",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "hi~bye",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "hi~bye",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "hi~bye",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/exit-sees-the-last-status": {
+      "bash": {
+        "Output": "st=1",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=1",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=1",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=1",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=1",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=1",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "trap/exit-trap-can-override-the-status": {
+      "bash": {
+        "Output": "bye",
+        "Status": 7,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "bye",
+        "Status": 7,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "bye",
+        "Status": 7,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "bye",
+        "Status": 7,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "bye",
+        "Status": 7,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "bye",
+        "Status": 7,
+        "TimedOut": false
+      }
+    },
+    "trap/second-trap-replaces": {
+      "bash": {
+        "Output": "body~two",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "body~two",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "body~two",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "body~two",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "body~two",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "body~two",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/set-in-a-function-diverges": {
+      "bash": {
+        "Output": "enter~between~TRAP",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "enter~between~TRAP",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "enter~between~TRAP",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "enter~between~TRAP",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "enter~between~TRAP",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "enter~TRAP~between",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/subshell-does-not-refire": {
+      "bash": {
+        "Output": "sub~after~T",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "sub~after~T",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "sub~after~T",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "sub~after~T",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "sub~after~T",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "sub~after~T",
         "Status": 0,
         "TimedOut": false
       }

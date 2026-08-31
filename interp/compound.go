@@ -280,6 +280,9 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 	// A scope the function's locals unwind into.
 	sc := &scope{saved: map[string]string{}, existed: map[string]bool{}}
 	r.scopes = append(r.scopes, sc)
+	// What the EXIT trap was on the way in, so zsh can tell whether this
+	// function set one of its own.
+	outerTrap, outerDepth := r.exitTrap, r.trapDepth
 
 	err := r.command(ctx, fn.Body)
 
@@ -294,6 +297,21 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 		}
 	}
 	r.scopes = r.scopes[:len(r.scopes)-1]
+	// zsh runs an EXIT trap set *inside* a function when the function
+	// returns, and then forgets it; the other three keep it for the end of
+	// the script. Only a trap this call installed counts, which is what the
+	// depth records — an inherited one is the caller's business.
+	if r.exitTrap != nil && r.exitTrap != outerTrap && r.trapDepth == r.depth+1 &&
+		r.ask(r.sem().ExitTrapIsFunctionLocal, "an EXIT trap set in a function firing when it returns") {
+		body := *r.exitTrap
+		r.exitTrap, r.trapDepth = outerTrap, outerDepth
+		ctl := r.ctl
+		r.ctl = controlNone
+		r.runTrapBody(ctx, body)
+		if r.ctl == controlNone {
+			r.ctl = ctl
+		}
+	}
 	r.Params, r.inFunc = saved, savedIn
 	if r.ctl == controlReturn {
 		r.ctl = controlNone

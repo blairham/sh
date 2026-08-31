@@ -395,20 +395,17 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   trap 'echo caught' INT
   kill -INT $$
   echo after
-
   ```
 - `trap/empty-handler-ignores` — an empty handler ignores the signal, which is different from having no trap at all
   ```sh
   trap '' INT
   kill -INT $$
   echo after
-
   ```
 - `trap/default-signal-terminates` — untrapped, INT kills the shell and the status is 128 plus the number
   ```sh
   kill -INT $$
   echo after
-
   ```
 - `trap/reset-restores-the-default` — `trap -` puts the default back rather than leaving an empty handler
   ```sh
@@ -416,14 +413,12 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   trap - INT
   kill -INT $$
   echo after
-
   ```
 - `trap/numeric-signal-name` — a signal can be named by number, and 2 is INT everywhere the panel runs
   ```sh
   trap 'echo caught' 2
   kill -INT $$
   echo after
-
   ```
 - `trap/signal-handler-status-diverges` — zsh shows the handler the status from before the command that triggered it; the other three show that command's own
   ```sh
@@ -431,7 +426,6 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   false
   kill -INT $$
   echo after
-
   ```
 - `trap/exit-runs-at-the-end` — the EXIT trap runs after the script, not where it was set
   ```sh
@@ -441,7 +435,6 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   trap 'echo st=$?' EXIT
   false
-
   ```
 - `trap/exit-trap-can-override-the-status` — the trap's own exit wins over the one that triggered it
   ```sh
@@ -460,7 +453,6 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   f() { trap 'echo TRAP' EXIT; echo enter; }
   f
   echo between
-
   ```
 - `exit/status-and-wrapping` — a status is taken modulo 256, and a bare `exit` reports what the last command did
   ```sh
@@ -492,14 +484,12 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   set -u
   echo "[$NOPE]"
   echo after
-
   ```
 - `nounset/defaults-are-exempt` — a form that supplies a value, or asks whether one is set, is not a use of an unset one
   ```sh
   set -u
   echo "[${NOPE:-d}][${NOPE-d}][${NOPE+a}]"
   echo after
-
   ```
 - `nounset/empty-is-not-unset` — set-but-empty is the distinction -u rests on, and it is unanimous
   ```sh
@@ -507,21 +497,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   E=
   echo "[$E]"
   echo after
-
   ```
 - `nounset/no-parameters-is-not-unset` — `$@` and `$*` with nothing to expand are quiet in all four, which is not obvious and is often got wrong
   ```sh
   set -u
   echo "[$@][$*]"
   echo after
-
   ```
 - `nounset/unset-positional-diverges` — ksh93 lets an argument it was not given expand to nothing where the other three stop, and neither says anything about it
   ```sh
   set -u
   echo "[$1]"
   echo after
-
   ```
 - `errexit/failure-ends-the-script` — the whole point of -e, and the baseline the exemptions are measured against
   ```sh

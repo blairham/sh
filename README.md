@@ -11,12 +11,13 @@ The core language is the **common denominator of real shells** — not
 strict POSIX, and not bash. Dialects (`posix`, `bash`, `zsh`, `ksh`) are
 **presets over a semantics vector**, not layers, translations or forks.
 
-That distinction is not stylistic. Measuring nine behavioural axes across
-dash, bash, ksh93 and zsh produces six different groupings of those
-shells — dash sides with zsh on `echo`, bash sides with zsh on `shift`,
-ksh93 sides with zsh on pipelines. **No "sh → bash → zsh" ladder explains
-the data.** Dialect is a point in a multi-dimensional space, so the model
-is a vector of independent switches. See `docs/spec/semantics.md`.
+That distinction is not stylistic. Measuring twenty-eight behavioural axes
+across dash, bash, ksh93 and zsh produces eight different groupings of
+those shells — dash sides with zsh on `echo`, bash sides with zsh on
+`shift`, ksh93 sides with zsh on pipelines. **No "sh → bash → zsh" ladder
+explains the data.** Dialect is a point in a multi-dimensional space, so
+the model is a vector of independent switches. See
+`docs/spec/semantics.md`.
 
 Execution is **gateable and observable from the inside**. Sandbox
 policy, agent permission prompts, AI context and audit trails are
@@ -34,18 +35,23 @@ spec. `CLEANROOM.md` is the binding rule set.
 
 ## Using it
 
-The core is a library. A dialect extends it rather than forking it:
+The core is a library, and it does not know which shells exist: `syntax`
+and `interp` define the questions, and each shell answers them in its own
+package under `dialect/`.
 
 ```go
-sem := interp.BashSemantics()      // choose the axes — they are values
-dial := syntax.Bash()
-r := &interp.Runner{Semantics: &sem, Dialect: &dial}
+sem, dial, diag := bash.Semantics(), bash.Dialect(), bash.Diagnostics()
+r := &interp.Runner{Semantics: &sem, Dialect: &dial, Diagnostics: &diag}
+bash.Apply(r)                      // what this shell adds or removes
 
 r.Register("cd", cd)               // only what shell cannot express
 
 prelude, _ := syntax.Parse(`basename() { printf '%s\n' "${1##*/}"; }`, dial)
 r.Run(ctx, prelude)                // everything else
 ```
+
+Adding a shell adds a directory. Nothing under `syntax/` or `interp/`
+names one.
 
 Functions shadow builtins and external commands alike, so most of a dialect
 needs no Go at all.

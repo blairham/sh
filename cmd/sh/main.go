@@ -9,15 +9,19 @@
 // built on top. What is here exists to exercise the library, to make its
 // behaviour inspectable, and to be a column in the conformance harness.
 //
-// What exists today is the lexer, so this exposes that and refuses everything
-// else rather than pretending. It is a development tool that will grow into
-// the real thing as the pieces land, which is also how it becomes a column in
-// the oracle panel: that harness needs something it can hand a snippet to.
+// It runs scripts, and the -dialect flag chooses which shell it is being:
+// core refuses anything the panel disagrees about, and the others answer the
+// way that shell does. That is what makes it a column in the conformance
+// harness, which needs something it can hand a snippet to.
 //
-//	sh -tokens 'echo hi'    # dump the token stream
-//	sh -parse 'a && b'      # dump the syntax tree
-//	sh -parse -f script.sh
-//	sh -c 'echo hi'         # not yet: there is no interpreter
+//	sh -c 'echo hi'              # run a command
+//	sh script.sh                 # run a script
+//	sh -dialect bash -c '…'      # be bash where the shells differ
+//	sh -tokens 'echo hi'         # dump the token stream
+//	sh -parse 'a && b'           # dump the syntax tree
+//
+// It is still not the product. A shell people run needs an interactive
+// surface — line editing, history, job control — and none of that is here.
 package main
 
 import (
@@ -47,7 +51,7 @@ func main() {
 	var (
 		tokens  = flag.Bool("tokens", false, "print the token stream and exit")
 		parse   = flag.Bool("parse", false, "print the syntax tree and exit")
-		command = flag.String("c", "", "run the given command (not implemented)")
+		command = flag.String("c", "", "run the given command")
 		file    = flag.String("f", "", "read from this file instead of an argument")
 		dialect = flag.String("dialect", "core", "core, posix, bash, zsh, ksh or dash")
 	)

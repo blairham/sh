@@ -77,6 +77,9 @@ func Diagnostics() interp.Diagnostics {
 		DotNoOperandStatus:       1,
 		// zsh leads with the reason, lowercased, and names the command after
 		// it — the reverse of the other three.
+		// zsh alone says something for a shift it survives; bash says
+		// nothing, and the two that speak up here treat it as fatal.
+		ShiftTooMany:  "shift count must be <= $#",
 		CannotExecute: "%[2]s: %[1]s",
 		// zsh says "command not found" for a bare name it could not resolve,
 		// where the other three say "not found".
@@ -95,7 +98,11 @@ func Diagnostics() interp.Diagnostics {
 		KillNotAPid:               "illegal pid: %[1]s",
 		KillMissingSignalArgument: "%[1]s: argument expected",
 		KillUsage:                 "not enough arguments",
-		KillUnknownSignalHint:     "type kill -l for a list of signals",
+		// -L, capitalized, and measured against the zsh the panel resolves:
+		// 5.9.2 from Homebrew says -L where Apple's /bin/zsh 5.9 says -l.
+		// Probing whichever zsh came first on PATH is how the lowercase one
+		// got here.
+		KillUnknownSignalHint: "type kill -L for a list of signals",
 		// zsh is the one dialect that does not treat "nothing to signal" as a
 		// usage error worth a different number from any other failure.
 		KillUsageStatus:      1,

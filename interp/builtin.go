@@ -196,6 +196,13 @@ func biShift(r *Runner, _ context.Context, args []string) int {
 			r.fatal("%s\n", Wording(r.diag().ShiftTooMany, "shift: can't shift that many", n))
 			return r.status
 		}
+		// Survivable, and still worth saying where the dialect says it: zsh
+		// prints its complaint and carries on, and bash prints nothing at
+		// all. No fallback here for that reason — an empty wording is bash's
+		// answer rather than a dialect that has not been asked.
+		if w := r.diag().ShiftTooMany; w != "" {
+			r.diagf("%s\n", Wording(w, w, n))
+		}
 		return 1
 	}
 	r.Params = r.Params[n:]

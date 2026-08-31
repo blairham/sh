@@ -15,6 +15,35 @@ import (
 	"github.com/blairham/sh/syntax"
 )
 
+// TestSurvivableShiftSpeaksOnlyWhereTheDialectHasWords names the field rather
+// than a shell, which is the rule for a test in this package.
+//
+// An empty wording is an answer — one shell in the panel prints nothing at all
+// for a shift it survives — so this path deliberately has no fallback, and
+// that is the part worth pinning: a fallback here would put a sentence in the
+// mouth of a shell that stays quiet.
+func TestSurvivableShiftSpeaksOnlyWhereTheDialectHasWords(t *testing.T) {
+	sem := CoreSemantics()
+	sem.ShiftPastEndFatal = No
+	for _, tc := range []struct{ name, wording, want string }{
+		{"silent", "", ""},
+		{"speaks", "shift: too far", "sh: shift: too far\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dg := Diagnostics{ShiftTooMany: tc.wording}
+			out, st := run(t, `set -- a; shift 5; echo "st=$?"`, func(r *Runner) {
+				r.Semantics, r.Diagnostics = &sem, &dg
+			})
+			if want := tc.want + "st=1\n"; out != want {
+				t.Errorf("got %q, want %q", out, want)
+			}
+			if st != 0 {
+				t.Errorf("status %d, want 0 — the script survives", st)
+			}
+		})
+	}
+}
+
 func run(t *testing.T, src string, setup func(*Runner)) (out string, status int) {
 	t.Helper()
 	f, err := syntax.Parse(src, syntax.Core())

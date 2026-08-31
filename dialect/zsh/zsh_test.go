@@ -99,6 +99,49 @@ func TestUnknownSignalIsNamedWithOnePrefix(t *testing.T) {
 	}
 }
 
+// TestWhatZshSaysAndWhereItSaysIt covers three wordings that were each wrong
+// in a different way, and are only checkable against zsh's own vector.
+func TestWhatZshSaysAndWhereItSaysIt(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			// Measured against the zsh the panel resolves. 5.9.2 from
+			// Homebrew says -L; Apple's /bin/zsh 5.9 says -l, and probing
+			// whichever came first on PATH is how the wrong one shipped.
+			"the hint names -L", `kill -Q 1`,
+			"type kill -L for a list of signals",
+		},
+		{
+			// zsh is the only shell in the panel that says anything about a
+			// shift it survives.
+			"a survivable shift still complains", `set -- a; shift 5`,
+			"shift count must be <= $#",
+		},
+		{
+			// No `exec` segment: a command that could not be found is the
+			// shell's failure rather than the builtin's, and zsh reports it
+			// exactly as it reports a bare command word.
+			"exec does not name itself", `exec nosuchcmd-xyz`,
+			"zsh:1: command not found: nosuchcmd-xyz",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := syntax.Parse(tc.src, zsh.Dialect())
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			var errs bytes.Buffer
+			sem, dg := zsh.Semantics(), zsh.Diagnostics()
+			r := &interp.Runner{Stderr: &errs, Semantics: &sem, Diagnostics: &dg, Name: "zsh"}
+			if _, err := r.Run(context.Background(), f); err != nil {
+				t.Fatalf("run: %v", err)
+			}
+			if got := errs.String(); !strings.Contains(got, tc.want) {
+				t.Errorf("got %q, want it to contain %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestDerivesFromTheStandardNotFromASibling(t *testing.T) {
 	posix := interp.PosixSemantics()
 	s := zsh.Semantics()

@@ -175,15 +175,36 @@ every formatter the config names, and `golangci-lint` lints *what changed
 since HEAD*. Seconds, not minutes, and it is the only feedback that
 arrives before the code leaves the machine.
 
-**On a pull request.** The gate. Build and test with `-race` on Linux and
-macOS, and the *whole-repo* lint — which is not the same run as the hook,
-because `--new-from-rev` cannot see whole-module linters like `unused`,
-and `unused` has caught dead code here that nothing else would have. The
-pre-commit job runs again too: a hook can be skipped, and a contributor
-may never have installed one.
+**On a pull request.** The gate, in two tiers.
 
-Nothing runs while a pull request is a **draft**. Push freely; marking it
-ready starts the gate.
+`Pre-commit` runs first and runs *always*, draft or not, and everything
+else waits on it. It is the only job that looks at every file rather than
+at Go — trailing whitespace, licence headers, secrets, the toolchain pin —
+none of which is worth detecting changes for, and a secret committed to a
+draft is committed. A hook can be skipped and a contributor may never have
+installed one, which is why it runs here as well as there.
+
+Linting happens there too, and only there. The hook is
+`golangci-lint-full`, which lints the whole module — not `golangci-lint`,
+which runs `--new-from-rev HEAD` and, in upstream's own words, cannot make
+linters like `unused` "work as expected". There is no separate lint job to
+keep in step, because a second whole-module run would find exactly what
+the first one did.
+
+It is worth knowing why that is affordable: a warm whole-module lint of
+this repository takes under a second. A lint job spends two minutes on
+`setup-go` and the module download to run something that fast, which is
+what made it look expensive and made splitting it seem necessary.
+
+Only once pre-commit passes is it worth asking the expensive question.
+`Detect changed files` gates build and test with `-race` on Linux and
+macOS. Those stand down for a **draft**: push freely, and marking it ready
+starts them.
+
+The hook environments are cached, and that is not an optimisation to skip.
+pre-commit builds an environment for a hook even when `SKIP` tells it not
+to run one, which cost two and a half minutes a build installing a linter
+this job then declines to use.
 
 **After a merge.** One test job, on one platform — see `main-canary.yml`
 for why that and nothing else.
@@ -197,7 +218,6 @@ must be **up to date** with `main` first:
 
     Build and test (ubuntu-latest)
     Build and test (macos-latest)
-    Lint
     Pre-commit
 
 Merges are **squash only** — linear history is enforced, and the merge and
@@ -266,6 +286,35 @@ This is not a preference about tidiness. Working directly on `main` is how
 a local commit ends up rewritten to recover from a mistake, and how a
 half-finished experiment ends up in the same tree as the fix you meant to
 send. Remove the worktree when the pull request opens, not when it merges.
+
+## Every commit must be signed, and check before you push
+
+`main` requires signatures. An unsigned commit does not fail loudly: the
+pull request shows **every check green** and simply refuses to merge, with
+`mergeStateStatus: BLOCKED` and nothing on the page saying why. That has
+cost real time twice — once to a commit that signed *badly*, once to four
+that did not sign at all.
+
+Before pushing:
+
+    git log --format='%h %G? %s' origin/main..HEAD
+
+`G` or `U` is fine; `U` means a good signature that is untrusted in the
+local keyring, which is normal here. `N` is unsigned and `B` is bad, and
+either one blocks the merge.
+
+To fix it, re-sign in place and force-push the *branch*:
+
+    git rebase --exec 'git commit --amend --no-edit -S' <last-good-sha>
+    git diff <old-head> HEAD          # must be empty — content is unchanged
+    git push --force-with-lease
+
+Check the tree diff is empty before pushing and that GitHub agrees after:
+
+    gh api repos/blairham/sh/commits/<sha> -q '.commit.verification'
+
+This is the one case where a force-push is the right answer. It is only
+ever a feature branch, never `main`.
 
 ## Testing
 

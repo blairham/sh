@@ -25,8 +25,11 @@ an oracle run, never at someone else's source.
 
 ## 2. The Contributor Licence Agreement
 
-Contributions require a signed CLA. A bot will prompt you on your first
-pull request; signing takes one comment.
+Contributions require a signed CLA. The automated check is **currently
+turned off** — the workflow that prompted for a signature and recorded it
+has been removed while the pipeline is reorganised, and will come back. The
+requirement stands in the meantime; the agreement text is in `CLA.md` and
+the signatures already collected are on the `cla-signatures` branch.
 
 **Why.** The project may need to offer different licensing terms in the
 future. That is only possible if one party can license the whole work,

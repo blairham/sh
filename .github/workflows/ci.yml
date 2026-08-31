@@ -1,50 +1,116 @@
 name: CI
 
+# One workflow holds everything that gates a merge, so there is one file to
+# read and one check to require. Splitting pre-commit or tests into their own
+# workflow bought nothing and cost a second place to keep in sync.
 on:
   pull_request:
     # `synchronize` is every push to a branch with an open pull request, which
-    # is the feedback that matters — but only once the change is meant to be
-    # looked at. A draft is work in progress, so nothing here runs for one;
-    # `ready_for_review` starts it, and until then the local hooks are the
-    # feedback. That is the whole trade: push freely while drafting, and the
-    # gate runs when you say it is ready.
+    # is the feedback that matters. A draft is treated exactly like any other
+    # pull request: the distinction bought a little runner time and cost a
+    # second set of rules to hold in your head.
     types: [opened, reopened, synchronize, ready_for_review]
+    # Nothing here fires for a push to a branch with no pull request open, so
+    # branch pushes cost nothing at all. `synchronize` is a push to a branch
+    # that *has* one, which is the feedback worth paying for — and even then
+    # every job stands down while the pull request is a draft.
+  push:
+    # A merge runs the tests again, and not pre-commit. Protection requires
+    # the branch to be up to date, so the tree that lands is the tree that was
+    # tested — which makes re-running the *deterministic* checks pointless, and
+    # pre-commit is entirely deterministic.
+    #
+    # Tests are not. A race can pass on a branch and fail on main with the same
+    # tree, and that is the one thing a post-merge run can tell you that the
+    # pull request could not.
+    branches: [main]
 
 permissions:
   contents: read
 
-# Gating is done inside the jobs rather than with a `paths:` filter on the
-# workflow, and the difference matters: a required check that never runs is
-# reported as *pending forever*, not as passed, so a paths-filtered required
-# check makes a docs-only pull request unmergeable. The jobs therefore always
-# run and report; only the expensive steps are skipped.
+concurrency:
+  # A superseded push is not worth finishing; only the newest commit matters.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  changes:
-    name: Detect changed files
-    if: github.event.pull_request.draft == false
+  # Runs for every commit that reaches GitHub — every push to a pull request,
+  # draft or not, and every push to main. It is the only job that looks at
+  # *every* file rather than at Go: trailing whitespace, licence headers,
+  # secrets, the toolchain pin. None of that is worth detecting changes for,
+  # and a secret committed to a draft is committed.
+  pre-commit:
+    name: Pre-commit
+    # Pull requests only. On a push to main these hooks have already run —
+    # on the pull request that produced the commit, as a required check — and
+    # the tree that landed is the tree they ran against, because protection
+    # requires the branch to be up to date first.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    outputs:
-      go: ${{ steps.filter.outputs.go }}
     steps:
     - uses: actions/checkout@v6
+    - uses: actions/setup-go@v6
       with:
-        fetch-depth: 0
-    - id: filter
-      name: Did anything Go change?
-      run: |
-        base="origin/${{ github.base_ref }}"
-        if git diff --name-only "$base"...HEAD | grep -qE '(\.go|^go\.mod|^go\.sum)$'; then
-          echo "go=true" >> "$GITHUB_OUTPUT"
-          echo "Go files changed — building and testing."
-        else
-          echo "go=false" >> "$GITHUB_OUTPUT"
-          echo "No Go files changed — build, test and lint will be skipped."
-        fi
+        go-version-file: go.mod
+        check-latest: true
+        cache: true # go-mod-tidy-repo resolves the whole graph; an uncached run is slow and flaky # setup-go's manifest lags fresh Go patch releases; resolve via go.dev
+    - name: Run pre-commit hooks
+      # Not the golangci-lint ones. The Lint job runs the same tool over the
+      # whole repository rather than over the diff, and `golangci-lint run`
+      # reports formatter findings too, so both hooks are a strict subset of a
+      # job that already has to pass.
+      env:
+        SKIP: golangci-lint-full,golangci-lint-fmt
+      uses: blairham/go-pre-commit@v4.6.6
 
-  # `go vet` is not run here: govet is one of the linters .golangci.yml
-  # enables, so the Lint job already does it, over the same code, with the
-  # same analysers. Running it twice cost a minute a build and found nothing
-  # the other did not.
+  # Gating happens inside the jobs, never with a workflow-level `paths:`
+  # filter: a required check that never runs reports as *pending forever*
+  # rather than as passed, which makes a docs-only pull request unmergeable.
+  # Anything unrecognised counts as code, so when this is wrong it is wrong in
+  # the direction of running the tests.
+  # Only after the cheap universal checks have passed is it worth asking the
+  # expensive question, so this waits on pre-commit.
+  changes:
+    name: Detect changed files
+    # No `needs: pre-commit` for a push, where pre-commit does not run at all.
+    needs: pre-commit
+    if: always() && (needs.pre-commit.result == 'success' || needs.pre-commit.result == 'skipped')
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+    # Gated per step, not on the job. A required check that never runs is
+    # reported as pending forever, and a matrix job skipped by `if:` never
+    # expands at all — so the job always runs and reports, and only the
+    # expensive steps are skipped.
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0 # the diff needs the base commit, not just HEAD
+    - id: filter
+      name: Is any of this code?
+      env:
+        BASE: ${{ github.event.pull_request.base.sha }}
+      run: |
+        code=false
+        if ! git cat-file -e "$BASE" 2>/dev/null; then
+          # No usable base commit — a force push, or a shallow fetch that did
+          # not reach it. `git diff` would fail here and print nothing, and an
+          # empty diff is indistinguishable from "only prose changed", so this
+          # would silently skip every test. The safe answer is to run them.
+          echo "base commit $BASE is not present — running everything"
+          code=true
+        else
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            case "$f" in
+              docs/*|*.md|LICENSE|LICENSE.*|*.png|*.jpg|*.gif|*.svg) ;; # prose
+              *) code=true; break ;;
+            esac
+          done <<<"$(git diff --name-only "$BASE"...HEAD)"
+        fi
+        echo "code=$code" >> "$GITHUB_OUTPUT"
+        echo "changed files are $([ "$code" = true ] && echo 'code — full run' || echo 'prose only — skipping the code jobs')"
+
   test:
     name: Build and test
     needs: changes
@@ -55,49 +121,41 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
     - uses: actions/checkout@v6
-      if: needs.changes.outputs.go == 'true'
+      if: needs.changes.outputs.code == 'true'
     - uses: actions/setup-go@v6
-      if: needs.changes.outputs.go == 'true'
+      if: needs.changes.outputs.code == 'true'
       with:
         go-version-file: go.mod
         check-latest: true
+        cache: true
     - run: go build ./...
-      if: needs.changes.outputs.go == 'true'
+      if: needs.changes.outputs.code == 'true'
     - run: go test -race ./...
-      if: needs.changes.outputs.go == 'true'
+      if: needs.changes.outputs.code == 'true'
 
-  lint:
-    name: Lint
-    needs: changes
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v6
-      if: needs.changes.outputs.go == 'true'
-    - uses: actions/setup-go@v6
-      if: needs.changes.outputs.go == 'true'
-      with:
-        go-version-file: go.mod
-        check-latest: true
-    - run: go tool golangci-lint run
-      if: needs.changes.outputs.go == 'true'
-
+  # `go vet` is not run separately: govet is one of the linters .golangci.yml
+  # enables, so this job already does it, over the same code, with the same
+  # analysers. `go tool` rather than golangci-lint-action, so the version CI
+  # runs is the one pinned in go.mod — the same one `make lint` runs locally.
+  # The action's own `version:` was a second pin that drifted from it.
   oracle:
     name: Oracle (report only)
     needs: changes
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
-      if: needs.changes.outputs.go == 'true'
+      if: needs.changes.outputs.code == 'true'
     - uses: actions/setup-go@v6
-      if: needs.changes.outputs.go == 'true'
+      if: needs.changes.outputs.code == 'true'
       with:
         go-version-file: go.mod
         check-latest: true
+        cache: true
     - name: Install as much of the panel as this runner can host
-      if: needs.changes.outputs.go == 'true'
+      if: needs.changes.outputs.code == 'true'
       run: sudo apt-get update -qq && sudo apt-get install -y -qq dash ksh zsh
     - name: Report drift without failing on it
-      if: needs.changes.outputs.go == 'true'
+      if: needs.changes.outputs.code == 'true'
       # The golden record is generated on one machine and a runner does not
       # have the same builds of the same shells, so some differences here are
       # legitimate. A check that is red for a legitimate reason is one people

@@ -1,0 +1,51 @@
+name: Drift
+
+# The panel is real shell binaries, and they change without anyone here
+# touching a file: a runner image ships a new bash, a distribution patches
+# dash, and behaviour this project recorded as fact quietly stops being one.
+#
+# The pull-request oracle job cannot catch that. It only runs when code
+# changes, which is the wrong clock — drift happens on the shells' timetable,
+# not ours — and it is `|| true`, because a runner does not have the same
+# builds the golden record was made from, so some differences there are
+# legitimate and a check that is red for a legitimate reason is one people
+# learn to ignore.
+#
+# This one is allowed to fail, and that is the point. It gates nothing, so a
+# red run costs no one a merge; it is a message that the world moved.
+on:
+  schedule:
+  # Weekly, at a minute nobody else picked. Scheduled runs cluster on the hour
+  # and get delayed for it.
+  - cron: '37 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: drift
+  cancel-in-progress: true
+
+jobs:
+  drift:
+    name: Panel drift
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+        check-latest: true
+        cache: true
+    - name: Install as much of the panel as this runner can host
+      run: sudo apt-get update -qq && sudo apt-get install -y -qq dash ksh zsh
+    - name: Fail if the panel no longer behaves as recorded
+      # No `|| true` here, unlike the pull-request job. Nothing waits on this
+      # run, so failing is free and is the only way anyone finds out.
+      #
+      # One invocation, not one to report and one to fail: the oracle runs the
+      # whole corpus against every shell it can find, and doing that twice to
+      # see the output *and* get the exit status is exactly the duplication
+      # this pipeline has been shedding all day. The output is in the log.
+      run: go run ./cmd/oracle -check

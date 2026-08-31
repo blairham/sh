@@ -282,6 +282,15 @@ type Semantics struct {
 	// a shell left to decide anything, and the panel splits on it.
 	ExecFailureRunsExitTrap Answer
 
+	// TimesRejectsArguments makes `times` refuse an argument rather than
+	// ignore it. True in zsh, false in dash and bash.
+	//
+	// ksh93 answers neither: `times` is a reserved word there, so `times foo`
+	// is a *syntax* error and no builtin ever runs. That is a grammar question
+	// rather than this one, and it is recorded in the corpus rather than
+	// modeled here.
+	TimesRejectsArguments Answer
+
 	// EmptyPathIsTheCurrentDirectory searches the current directory when PATH
 	// is set and empty.
 	//
@@ -394,6 +403,9 @@ func PosixSemantics() Semantics {
 		// makes no exception for the whole variable being empty, so the
 		// preset follows the text and the majority together.
 		EmptyPathIsTheCurrentDirectory: Yes,
+		// The standard says `times` takes no operands and does not say what to
+		// do with one; the two shells that follow it most closely ignore it.
+		TimesRejectsArguments: No,
 	}
 }
 

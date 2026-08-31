@@ -72,7 +72,8 @@ func Diagnostics() interp.Diagnostics {
 		// and the reason, the same shape it uses for `.`.
 		CannotExecute: "%[1]s: %[2]s",
 		// bash names the builtin only when the command was not found at all.
-		ExecNotFound: "exec: %[1]s: not found",
+		ExecNotFound:  "exec: %[1]s: not found",
+		TimesDecimals: 3,
 		// A path that is not there is the OS reason and does not name the
 		// builtin; a bare name off PATH does the reverse.
 		PathNotFound: "%[1]s: No such file or directory",

@@ -45,7 +45,7 @@ type Shell struct {
 	// MustReport, when set, is a substring the shell's version string has to
 	// contain for this entry to be believed. /bin/sh is bash on macOS and
 	// dash on Debian, so the bash-as-sh entry silently recorded dash on a
-	// Linux runner until this existed — a mislabelled column is worse than a
+	// Linux runner until this existed — a mislabeled column is worse than a
 	// missing one, because nothing looks wrong.
 	MustReport string
 }

@@ -42,6 +42,8 @@ func Semantics() interp.Semantics {
 	// still run it.
 	s.ExecFailureRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes
+	// Alone in refusing an argument to `times`; dash and bash ignore it.
+	s.TimesRejectsArguments = interp.Yes
 	s.UnterminatedBracket = interp.BracketBadPattern
 	s.ExitTrapIsFunctionLocal = interp.Yes
 	s.SignalHandlerSeesEarlierStatus = interp.Yes
@@ -74,9 +76,11 @@ func Diagnostics() interp.Diagnostics {
 		// where the other three say "not found".
 		// zsh leads with the complaint and names the command after it, for a
 		// command word exactly as for `exec`.
-		NotFound:     "command not found: %[1]s",
-		ExecNotFound: "command not found: %[1]s",
-		PathNotFound: "no such file or directory: %[1]s",
+		NotFound:       "command not found: %[1]s",
+		ExecNotFound:   "command not found: %[1]s",
+		TimesDecimals:  2,
+		TimesArguments: "times: too many arguments",
+		PathNotFound:   "no such file or directory: %[1]s",
 		// zsh lowercases every strerror string it quotes, where the other
 		// three print the C string as it comes.
 		LowercaseReason: true,

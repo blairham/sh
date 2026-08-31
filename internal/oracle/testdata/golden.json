@@ -6490,6 +6490,198 @@
         "TimedOut": false
       }
     },
+    "times/argument-diverges": {
+      "bash": {
+        "Output": "NmN.Ns NmN.Ns~NmN.Ns NmN.Ns~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "NmN.Ns NmN.Ns~NmN.Ns NmN.Ns~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "NmN.Ns NmN.Ns~NmN.Ns NmN.Ns~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "NmN.Ns NmN.Ns~NmN.Ns NmN.Ns~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: syntax error at line 1: `foo' unexpected",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:times:N: too many arguments~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "times/decimals-diverge": {
+      "bash": {
+        "Output": "3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "6",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "2",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "times/goes-to-stdout": {
+      "bash": {
+        "Output": "0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "times/shape-diverges": {
+      "bash": {
+        "Output": "NmN.Ns NmN.Ns~NmN.Ns NmN.Ns",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "NmN.Ns NmN.Ns~NmN.Ns NmN.Ns",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "NmN.Ns NmN.Ns~NmN.Ns NmN.Ns",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "NmN.Ns NmN.Ns~NmN.Ns NmN.Ns",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "user\tNmN.Ns~sys\tNmN.Ns",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "NmN.Ns NmN.Ns~NmN.Ns NmN.Ns",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "times/status-is-zero": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "times/two-lines-of-two": {
+      "bash": {
+        "Output": "1: 2~2: 2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1: 2~2: 2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1: 2~2: 2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "1: 2~2: 2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1: 2~2: 2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1: 2~2: 2",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "token/ampersand-redirect-means-two-things": {
       "bash": {
         "Output": "[hi]",

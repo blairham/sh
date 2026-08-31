@@ -14,9 +14,41 @@ import (
 
 // arithError is a failure inside an expression, such as dividing by zero.
 // It is a runtime error rather than a syntax one: the expression parsed.
-type arithError struct{ msg string }
+//
+// token is the part of the expression the failure is attributed to, which
+// bash prints and the other three do not. Empty means "the whole
+// expression", which is both a sensible default and what bash itself says
+// when the failing literal is the entire thing: `$((08))` names `08`.
+type arithError struct {
+	msg   string
+	token string
+	// complete says the message is the whole diagnostic and must not be
+	// wrapped. Measured: dash wraps a division by zero — `arithmetic
+	// expression: division by zero: "1/0"` — but reports a non-numeric
+	// operand bare, as `Illegal number: abc`. One wrapper for every
+	// arithmetic failure would put a shape on the second that dash does not
+	// use, so the failure says which it is.
+	complete bool
+}
 
 func (e arithError) Error() string { return e.msg }
+
+// arithToken names the part of an expression a failure should be blamed on.
+//
+// Only a literal and a bare name can be named this way. Anything else — a
+// parenthesised sub-expression, say — has no text of its own in the tree,
+// because the parser records what an operand *is* rather than the characters
+// it was written with. Those return empty and are reported against the whole
+// expression, which is the honest answer rather than a reconstructed one.
+func arithToken(e syntax.ArithExpr) string {
+	switch x := e.(type) {
+	case *syntax.ArithNum:
+		return x.Text
+	case *syntax.ArithVar:
+		return x.Name
+	}
+	return ""
+}
 
 // evalArith evaluates an expression tree.
 //
@@ -54,7 +86,7 @@ func (r *Runner) evalArith(e syntax.ArithExpr) (int, error) {
 	case *syntax.ArithBinary:
 		return r.evalBinary(x)
 	}
-	return 0, arithError{fmt.Sprintf("unsupported expression %T", e)}
+	return 0, arithError{msg: fmt.Sprintf("unsupported expression %T", e)}
 }
 
 func (r *Runner) evalUnary(x *syntax.ArithUnary) (int, error) {
@@ -63,7 +95,7 @@ func (r *Runner) evalUnary(x *syntax.ArithUnary) (int, error) {
 	if x.Op == "++" || x.Op == "--" {
 		v, ok := x.X.(*syntax.ArithVar)
 		if !ok {
-			return 0, arithError{x.Op + " needs a variable"}
+			return 0, arithError{msg: x.Op + " needs a variable"}
 		}
 		old, err := r.arithValueOf(v.Name, 0)
 		if err != nil {
@@ -96,7 +128,7 @@ func (r *Runner) evalUnary(x *syntax.ArithUnary) (int, error) {
 	case "!":
 		return boolInt(v == 0), nil
 	}
-	return 0, arithError{"unknown unary " + x.Op}
+	return 0, arithError{msg: "unknown unary " + x.Op}
 }
 
 func (r *Runner) evalAssign(x *syntax.ArithAssign) (int, error) {
@@ -154,7 +186,15 @@ func (r *Runner) evalBinary(x *syntax.ArithBinary) (int, error) {
 		// The sequence operator evaluates both and yields the right.
 		return rv, nil
 	}
-	return r.apply(x.Op, l, rv)
+	v, err := r.apply(x.Op, l, rv)
+	if ae, ok := err.(arithError); ok && ae.token == "" {
+		// apply sees values, not the tree, so the operand that caused the
+		// failure is named here where the tree is still in hand. `5/y` with
+		// y unset is blamed on `y` rather than on the zero it became.
+		ae.token = arithToken(x.Y)
+		err = ae
+	}
+	return v, err
 }
 
 // apply is a method because a division by zero is worded by the dialect,
@@ -169,7 +209,7 @@ func (sh *Runner) apply(op string, l, r int) (int, error) {
 		return l * r, nil
 	case "/", "%":
 		if r == 0 {
-			return 0, arithError{Wording(sh.diag().DivisionByZero, "division by zero")}
+			return 0, arithError{msg: Wording(sh.diag().DivisionByZero, "division by zero")}
 		}
 		if op == "/" {
 			return l / r, nil
@@ -198,7 +238,7 @@ func (sh *Runner) apply(op string, l, r int) (int, error) {
 	case "|":
 		return l | r, nil
 	}
-	return 0, arithError{"unknown operator " + op}
+	return 0, arithError{msg: "unknown operator " + op}
 }
 
 func boolInt(b bool) int {
@@ -219,7 +259,7 @@ func boolInt(b bool) int {
 // The depth bound is not decoration: `x=x` would otherwise recur forever.
 func (r *Runner) arithValueOf(name string, depth int) (int, error) {
 	if depth > 32 {
-		return 0, arithError{"expression nested too deeply: " + name}
+		return 0, arithError{msg: "expression nested too deeply: " + name}
 	}
 	value, ok := r.getVar(name)
 	if !ok || strings.TrimSpace(value) == "" {
@@ -232,7 +272,8 @@ func (r *Runner) arithValueOf(name string, depth int) (int, error) {
 		return r.arithValueOf(strings.TrimSpace(value), depth+1)
 	}
 	// Not a number and not a name: an error rather than a silent zero.
-	return 0, arithError{r.wordInvalidNumber(strings.TrimSpace(value))}
+	text := strings.TrimSpace(value)
+	return 0, arithError{msg: r.wordInvalidNumber(text), token: text, complete: true}
 }
 
 func isNameLike(s string) bool {
@@ -258,7 +299,7 @@ func isNameLike(s string) bool {
 func (r *Runner) parseNum(s string) (int, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
-		return 0, arithError{"empty number"}
+		return 0, arithError{msg: "empty number"}
 	}
 	neg := false
 	if s[0] == '-' || s[0] == '+' {
@@ -268,18 +309,28 @@ func (r *Runner) parseNum(s string) (int, error) {
 
 	var n int64
 	var err error
+	// Why the literal is not a number, which is worded separately from the
+	// fact that it isn't: bash calls a bad octal digit "value too great for
+	// base" and reserves its generic wording for operands that are not
+	// literals at all.
+	// badDigit says the literal parsed as far as its base and then met a
+	// digit that base does not allow. bash words that separately from an
+	// operand that is not a literal at all, and wraps it where it reports
+	// the other bare.
+	badDigit := false
 	switch {
 	case strings.Contains(s, "#"):
 		base, digits, _ := strings.Cut(s, "#")
 		b, berr := strconv.Atoi(base)
 		if berr != nil || b < 2 || b > 64 {
-			return 0, arithError{"invalid base: " + base}
+			return 0, arithError{msg: "invalid base: " + base}
 		}
 		n, err = strconv.ParseInt(digits, b, 64)
 	case strings.HasPrefix(s, "0x"), strings.HasPrefix(s, "0X"):
 		n, err = strconv.ParseInt(s[2:], 16, 64)
 	case len(s) > 1 && s[0] == '0' && !strings.ContainsAny(s, "xX#") && r.octalLeadingZero():
 		n, err = strconv.ParseInt(s[1:], 8, 64)
+		badDigit = err != nil
 		if err != nil && !r.ask(r.sem().ArithInvalidOctalDigitIsError, "an invalid octal digit being an error") {
 			// ksh93 is octal *and* tolerant: `08` is 8 there, not a
 			// failure. Asked only once the octal read has actually failed,
@@ -290,7 +341,13 @@ func (r *Runner) parseNum(s string) (int, error) {
 		n, err = strconv.ParseInt(s, 10, 64)
 	}
 	if err != nil {
-		return 0, arithError{r.wordInvalidNumber(s)}
+		if badDigit {
+			return 0, arithError{
+				msg:   Wording(r.diag().DigitTooGreatForBase, "invalid number"),
+				token: s,
+			}
+		}
+		return 0, arithError{msg: r.wordInvalidNumber(s), token: s, complete: true}
 	}
 	if neg {
 		n = -n

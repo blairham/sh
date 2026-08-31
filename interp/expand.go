@@ -194,7 +194,20 @@ func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
 			// The expression as written is what dash and ksh93 quote back,
 			// and the span still has it: the parser keeps the raw text
 			// beside the tree it built from it.
-			r.diagf("%s\n", Wording(r.diag().ArithError, "%[2]s", s.Value, err.Error()))
+			ae, _ := err.(arithError)
+			token := ae.token
+			if token == "" {
+				// bash blames the whole expression when the failing part is
+				// the whole expression, which is also the honest answer when
+				// the tree cannot name a smaller piece.
+				token = strings.TrimSpace(s.Value)
+			}
+			if ae.complete {
+				r.diagf("%s\n", err.Error())
+			} else {
+				r.diagf("%s\n", Wording(r.diag().ArithError, "%[2]s",
+					strings.TrimSpace(s.Value), err.Error(), token))
+			}
 			// The command must not run: `echo $((1/0))` fails in every shell
 			// in the panel rather than echoing an empty string.
 			r.expandErr = true
@@ -804,8 +817,14 @@ func (r *Runner) checkNounset(e *syntax.ParamExpr) {
 		return
 	}
 	if isPositional(e.Name) && !r.ask(r.sem().UnsetPositionalIsAllowed, "an unset positional parameter under set -u") {
-		// ksh93 alone lets `$1` be empty here.
-		r.fatal("%s\n", Wording(r.diag().UnboundVariable, "%s: parameter not set", e.Name))
+		// ksh93 alone lets `$1` be empty here. bash writes the `$` back for
+		// a positional and not for a name, which is why the wording is its
+		// own field rather than a decoration applied here.
+		format := r.diag().UnboundPositional
+		if format == "" {
+			format = r.diag().UnboundVariable
+		}
+		r.fatal("%s\n", Wording(format, "%s: parameter not set", e.Name))
 		return
 	}
 	if !isPositional(e.Name) {

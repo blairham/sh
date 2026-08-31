@@ -43,8 +43,16 @@ func Diagnostics() interp.Diagnostics {
 		Location:          interp.LocationLineWord,
 		NotFound:          "%s: command not found",
 		UnboundVariable:   "%s: unbound variable",
-		TraceQuoting:      interp.QuoteShell,
-		SyntaxErrorStatus: 2,
+		UnboundPositional: "$%s: unbound variable",
+		NumericArgument:   "%[1]s: %[2]s: numeric argument required",
+		ArithError:        `%[1]s: %[2]s (error token is "%[3]s")`,
+		DivisionByZero:    "division by 0",
+
+		// bash reserves its generic arithmetic wording for operands that are
+		// not literals, so a bad digit gets a reason of its own.
+		DigitTooGreatForBase: "value too great for base",
+		TraceQuoting:         interp.QuoteShell,
+		SyntaxErrorStatus:    2,
 	}
 }
 

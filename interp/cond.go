@@ -64,7 +64,7 @@ func (r *Runner) evalCond(c syntax.CondExpr) (bool, error) {
 	case *syntax.CondBinary:
 		return r.evalCondBinary(x)
 	}
-	return false, arithError{"unsupported condition"}
+	return false, arithError{msg: "unsupported condition"}
 }
 
 func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
@@ -107,7 +107,7 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 		li, lerr := os.Lstat(s)
 		return lerr == nil && li.Mode()&os.ModeSymlink != 0, nil
 	}
-	return false, arithError{"unsupported test " + x.Op}
+	return false, arithError{msg: "unsupported test " + x.Op}
 }
 
 func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
@@ -121,7 +121,7 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		l, lerr := strconv.Atoi(strings.TrimSpace(left))
 		rv, rerr := strconv.Atoi(strings.TrimSpace(r.condOperand(x.Y)))
 		if lerr != nil || rerr != nil {
-			return false, arithError{"integer expression expected"}
+			return false, arithError{msg: "integer expression expected"}
 		}
 		switch x.Op {
 		case "-eq":
@@ -150,7 +150,7 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		}
 		re, err := regexp.Compile(pat)
 		if err != nil {
-			return false, arithError{"invalid regular expression: " + pat}
+			return false, arithError{msg: "invalid regular expression: " + pat}
 		}
 		return re.MatchString(left), nil
 
@@ -168,7 +168,7 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 	case ">":
 		return left > r.condOperand(x.Y), nil
 	}
-	return false, arithError{"unsupported test " + x.Op}
+	return false, arithError{msg: "unsupported test " + x.Op}
 }
 
 // condOperand expands a word to a single string. Nothing inside `[[ ]]` is

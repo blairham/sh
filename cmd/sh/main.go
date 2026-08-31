@@ -25,19 +25,16 @@
 package main
 
 import (
-	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
-	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/blairham/sh/dialect/bash"
 	"github.com/blairham/sh/dialect/dash"
 	"github.com/blairham/sh/dialect/ksh"
 	"github.com/blairham/sh/dialect/zsh"
+	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -57,10 +54,11 @@ func main() {
 	)
 	flag.Parse()
 
-	d, sem, dg, apply, err := pickDialect(*dialect)
+	sh, err := pickDialect(*dialect)
 	if err != nil {
 		fail(err)
 	}
+	sh.Name = shellName()
 
 	src, err := source(*file, flag.Args())
 	if err != nil {
@@ -69,30 +67,40 @@ func main() {
 
 	switch {
 	case *tokens:
-		if err := dumpTokens(src, d); err != nil {
+		if err := dumpTokens(src, sh.Dialect); err != nil {
 			fail(err)
 		}
 	case *parse:
-		if err := dumpTree(src, d); err != nil {
+		if err := dumpTree(src, sh.Dialect); err != nil {
 			fail(err)
 		}
 	case *command != "":
-		os.Exit(run(*command, d, sem, dg, apply))
+		os.Exit(driver.Run(sh, *command, sh.Name))
 	case len(flag.Args()) > 0:
 		// A bare argument is a script to run, which is how a shell is
 		// normally invoked and how the corpus runs the cases that depend on
 		// being read from a file rather than from -c.
-		path := flag.Args()[0]
-		b, err := os.ReadFile(path)
-		if err != nil {
-			fail(err)
-		}
-		// A shell running a script names the *script* in `$0` and in every
-		// diagnostic, not itself. ksh93 also changes how it names the line.
-		os.Exit(runScript(string(b), path, d, sem, dg.ForScript(), apply))
+		os.Exit(runPath(sh, flag.Args()[0]))
+	case *file != "":
+		// -f names a file, and its help text says so, but until the run path
+		// moved into driver only -tokens and -parse ever read it: `sh -f x.sh`
+		// fell through to "nothing to do". It reads it as a script, which is
+		// what it always claimed to do.
+		os.Exit(runPath(sh, *file))
 	default:
 		fail(fmt.Errorf("nothing to do: pass a script, -c, -tokens or -parse"))
 	}
+}
+
+// runPath runs a file, which is not the same as running its contents: a shell
+// names the *script* in `$0` and in every diagnostic, not itself, and ksh93
+// also changes how it names the line.
+func runPath(sh driver.Shell, path string) int {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		fail(err)
+	}
+	return driver.RunScript(sh, string(b), path)
 }
 
 func fail(err error) {
@@ -100,35 +108,70 @@ func fail(err error) {
 	os.Exit(exitFailure)
 }
 
-// pickDialect resolves a name to a grammar and a semantics.
+// shellName is what `$0` reports and what a diagnostic names itself with.
 //
-// They are chosen together because they answer different questions about the
-// same shell: which constructs it accepts, and what it means by them.
+// Real shells use the path they were invoked by — dash says "/bin/dash: 1: …"
+// — so a hardcoded "sh" was wrong twice: in `$0` inside a function, and at the
+// start of every diagnostic. driver does the same for a binary that hands it
+// the argument vector; this one parses its own flags, so it answers here.
+func shellName() string {
+	if len(os.Args) > 0 && os.Args[0] != "" {
+		return os.Args[0]
+	}
+	return "sh"
+}
+
+// pickDialect resolves a name to a shell.
+//
+// The three vectors are chosen together because they answer different
+// questions about the same shell: which constructs it accepts, what it means
+// by them, and what it says when they fail. A driver.Shell is those three plus
+// the two extension points, which is the whole of "which shell am I" — the
+// same value each cmd/<shell> binary is built from, so this cannot answer
+// differently from them.
 //
 // `core` is built the same way on both sides. The grammar refuses constructs
 // not every shell has; the semantics refuses *behaviors* not every shell
 // shares. A script that runs under it depends on nothing the panel disagrees
 // about, which is a useful thing to be able to check and a poor way to run a
 // shell — the same split docs/spec/core.md drew for strict POSIX.
-func pickDialect(name string) (syntax.Dialect, interp.Semantics, interp.Diagnostics, func(*interp.Runner), error) {
+func pickDialect(name string) (driver.Shell, error) {
 	switch name {
 	case "core":
 		// Strict: what every shell agrees on is done, and anything they
 		// disagree about is refused rather than silently given one shell's
 		// answer. A portability check rather than a runtime.
-		return syntax.Core(), interp.CoreSemantics(), interp.CoreDiagnostics(), nil, nil
+		return driver.Shell{
+			Dialect: syntax.Core(), Semantics: interp.CoreSemantics(),
+			Diagnostics: interp.CoreDiagnostics(),
+		}, nil
 	case "posix":
-		return syntax.POSIX(), interp.PosixSemantics(), interp.PosixDiagnostics(), nil, nil
+		return driver.Shell{
+			Dialect: syntax.POSIX(), Semantics: interp.PosixSemantics(),
+			Diagnostics: interp.PosixDiagnostics(),
+		}, nil
 	case "bash":
-		return bash.Dialect(), bash.Semantics(), bash.Diagnostics(), bash.Apply, nil
+		return driver.Shell{
+			Dialect: bash.Dialect(), Semantics: bash.Semantics(),
+			Diagnostics: bash.Diagnostics(), Register: bash.Apply,
+		}, nil
 	case "zsh":
-		return zsh.Dialect(), zsh.Semantics(), zsh.Diagnostics(), zsh.Apply, nil
+		return driver.Shell{
+			Dialect: zsh.Dialect(), Semantics: zsh.Semantics(),
+			Diagnostics: zsh.Diagnostics(), Register: zsh.Apply,
+		}, nil
 	case "ksh":
-		return ksh.Dialect(), ksh.Semantics(), ksh.Diagnostics(), ksh.Apply, nil
+		return driver.Shell{
+			Dialect: ksh.Dialect(), Semantics: ksh.Semantics(),
+			Diagnostics: ksh.Diagnostics(), Register: ksh.Apply,
+		}, nil
 	case "dash":
-		return dash.Dialect(), dash.Semantics(), dash.Diagnostics(), dash.Apply, nil
+		return driver.Shell{
+			Dialect: dash.Dialect(), Semantics: dash.Semantics(),
+			Diagnostics: dash.Diagnostics(), Register: dash.Apply,
+		}, nil
 	}
-	return syntax.Dialect{}, interp.Semantics{}, interp.Diagnostics{}, nil,
+	return driver.Shell{},
 		fmt.Errorf("unknown dialect %q: want core, posix, bash, zsh, ksh or dash", name)
 }
 
@@ -500,91 +543,4 @@ func condString(c syntax.CondExpr) string {
 		return "[" + condString(x.X) + "]"
 	}
 	return "?"
-}
-
-// run parses and executes a command, returning the status to exit with.
-func run(src string, d syntax.Dialect, sem interp.Semantics, dg interp.Diagnostics, apply func(*interp.Runner)) int {
-	return runScript(src, shellName(), d, sem, dg, apply)
-}
-
-func runScript(src, name string, d syntax.Dialect, sem interp.Semantics, dg interp.Diagnostics, apply func(*interp.Runner)) int {
-	p := syntax.NewParser(src, d)
-	f := p.Parse()
-	if err := p.Err(); err != nil {
-		// An unfinished script is a syntax error rather than a prompt when
-		// it came from -c. *Which* status it carries is the dialect's: the
-		// comment that used to stand here said 2 in every shell in the
-		// panel, and that is true of half of them — ksh93 exits 3 and zsh 1.
-		line, msg := wordParseError(dg, err)
-		fmt.Fprint(os.Stderr, dg.Report(name, line, msg+"\n"))
-		return dg.SyntaxStatus()
-	}
-
-	r := &interp.Runner{Dialect: &d, Semantics: &sem, Diagnostics: &dg, Name: name}
-	if apply != nil {
-		// The dialect's own adjustment: what it adds to or removes from the
-		// substrate's builtins, which is neither grammar nor semantics.
-		apply(r)
-	}
-	status, err := r.Run(context.Background(), f)
-	if err != nil {
-		// Refused rather than silently doing nothing: a shell that quietly
-		// skips what it cannot do is worse than one that says so.
-		fmt.Fprint(os.Stderr, dg.Report(name, 1, err.Error()+"\n"))
-		return 2
-	}
-	return status
-}
-
-// splitPos separates a parse error's own "line:col: " from its message.
-//
-// The parser reports both, which is right for a caller showing a caret and
-// wrong for a diagnostic: the dialect already says where it happened, in its
-// own shape, and printing "sh: 1: 1:8: …" says it twice.
-func splitPos(s string) (int, string) {
-	// Written by hand rather than with Sscanf: Go's fmt has no %n, so the
-	// obvious "%d:%d:%n" silently never matched and every parse error kept
-	// printing its position twice.
-	m := posPrefix.FindStringSubmatch(s)
-	if m == nil {
-		return 1, s
-	}
-	line, err := strconv.Atoi(m[1])
-	if err != nil {
-		return 1, s
-	}
-	return line, strings.TrimSpace(s[len(m[0]):])
-}
-
-var posPrefix = regexp.MustCompile(`^(\d+):(\d+): `)
-
-// shellName is what `$0` reports and what a diagnostic names itself with.
-//
-// Real shells use the path they were invoked by — dash says "/bin/dash: 1: …"
-// — so a hardcoded "sh" was wrong twice: in `$0` inside a function, and at
-// the start of every diagnostic.
-func shellName() string {
-	if len(os.Args) > 0 && os.Args[0] != "" {
-		return os.Args[0]
-	}
-	return "sh"
-}
-
-// wordParseError renders a parse failure the way the dialect words it.
-//
-// The kind is what decides, not the message text: dash says "Bad
-// substitution" for anything wrong inside `${ }` and "Syntax error: …" for
-// everything else, and matching on our own phrasing to tell those apart would
-// break the first time the phrasing changed.
-func wordParseError(dg interp.Diagnostics, err error) (int, string) {
-	line, msg := splitPos(err.Error())
-	var se *syntax.Error
-	if errors.As(err, &se) {
-		line = se.Pos.Line
-		msg = se.Msg
-		if se.Kind == syntax.ErrBadSubstitution {
-			return line, interp.Wording(dg.BadSubstitution, msg)
-		}
-	}
-	return line, interp.Wording(dg.SyntaxError, "%s", msg)
 }

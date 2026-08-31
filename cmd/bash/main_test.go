@@ -4,32 +4,32 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/driver"
 )
 
-// capture runs a script and returns what it wrote, so the dialect can be
-// tested without building a binary.
+// capture runs a script through the binary's own shell value and returns what
+// it wrote, so the dialect can be tested without building a binary.
+//
+// It takes the writers rather than redirecting os.Stdout, which is what the
+// shared front end made possible: the pipe-and-goroutine version this replaced
+// could deadlock on more than a pipe buffer of output.
 func capture(t *testing.T, src string) (string, int) {
 	t.Helper()
-	old := os.Stdout
-	rd, wr, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
+	var out, errs bytes.Buffer
+	sh := shell()
+	sh.Stdout = &out
+	sh.Stderr = &errs
+	code := driver.Run(sh, src, "bash")
+	if errs.Len() > 0 {
+		t.Logf("stderr: %s", errs.String())
 	}
-	os.Stdout = wr
-	done := make(chan string, 1)
-	go func() {
-		var b [4096]byte
-		n, _ := rd.Read(b[:])
-		done <- string(b[:n])
-	}()
-	code := run(src)
-	_ = wr.Close()
-	os.Stdout = old
-	return strings.TrimRight(<-done, "\n"), code
+	return strings.TrimRight(out.String(), "\n"), code
 }
 
 func TestPrimitivesDoWhatShellCannot(t *testing.T) {
@@ -71,5 +71,50 @@ func TestTheDialectIsBash(t *testing.T) {
 	}
 	if out, _ := capture(t, `x="a b"; printf "[%s]" $x`); out != "[a][b]" {
 		t.Errorf("an unquoted expansion should split here, got %q", out)
+	}
+}
+
+// TestItRunsAScriptFileAndNotOnlyDashC is the hole that made the conformance
+// harness lie. This binary took only -c, so every case the corpus runs from a
+// file failed with "bash: -c is required" — fourteen of them — and the number
+// the harness published was a measurement of this file rather than of the core.
+func TestItRunsAScriptFileAndNotOnlyDashC(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "case.sh")
+	if err := os.WriteFile(path, []byte("echo from-a-file\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errs bytes.Buffer
+	sh := shell()
+	sh.Stdout = &out
+	sh.Stderr = &errs
+	code := driver.MainArgs(sh, []string{"bash", path})
+	if code != 0 {
+		t.Fatalf("status %d, stderr %q", code, errs.String())
+	}
+	if got := strings.TrimSpace(out.String()); got != "from-a-file" {
+		t.Errorf("output = %q, want %q", got, "from-a-file")
+	}
+}
+
+// TestAScriptIsNamedByItsPath is the other half of running a file: a shell
+// names the *script* in a diagnostic, not itself. Without it the wording is
+// right and the name in front of it is wrong, which the corpus checks for.
+func TestAScriptIsNamedByItsPath(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "case.sh")
+	if err := os.WriteFile(path, []byte("set -u\necho \"$NOPE\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errs bytes.Buffer
+	sh := shell()
+	sh.Stdout = &out
+	sh.Stderr = &errs
+	if code := driver.MainArgs(sh, []string{"bash", path}); code == 0 {
+		t.Fatal("an unset variable under set -u should fail")
+	}
+	if got := errs.String(); !strings.Contains(got, path) {
+		t.Errorf("diagnostic %q does not name the script %q", got, path)
 	}
 }

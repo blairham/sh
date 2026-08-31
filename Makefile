@@ -42,5 +42,9 @@ conformance: ## Grade the core driver against bash over the whole corpus
 conformance-dialects: ## Grade each dialect binary against the shell it claims to be
 	@go build -o $${TMPDIR:-/tmp}/our-bash ./cmd/bash
 	@go build -o $${TMPDIR:-/tmp}/our-zsh ./cmd/zsh
+	@go build -o $${TMPDIR:-/tmp}/our-dash ./cmd/dash
+	@go build -o $${TMPDIR:-/tmp}/our-ksh ./cmd/ksh
 	@go run ./cmd/oracle -bin $${TMPDIR:-/tmp}/our-bash -against bash $(ARGS)
 	@go run ./cmd/oracle -bin $${TMPDIR:-/tmp}/our-zsh -against zsh $(ARGS)
+	@go run ./cmd/oracle -bin $${TMPDIR:-/tmp}/our-dash -against dash $(ARGS)
+	@go run ./cmd/oracle -bin $${TMPDIR:-/tmp}/our-ksh -against ksh93 $(ARGS)

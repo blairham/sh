@@ -40,9 +40,12 @@ jobs:
         cache: true
     - name: Install as much of the panel as this runner can host
       run: sudo apt-get update -qq && sudo apt-get install -y -qq dash ksh zsh
-    - name: Record which shells answered
-      run: go run ./cmd/oracle -check 2>&1 | head -20
     - name: Fail if the panel no longer behaves as recorded
       # No `|| true` here, unlike the pull-request job. Nothing waits on this
       # run, so failing is free and is the only way anyone finds out.
+      #
+      # One invocation, not one to report and one to fail: the oracle runs the
+      # whole corpus against every shell it can find, and doing that twice to
+      # see the output *and* get the exit status is exactly the duplication
+      # this pipeline has been shedding all day. The output is in the log.
       run: go run ./cmd/oracle -check

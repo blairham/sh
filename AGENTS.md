@@ -55,12 +55,14 @@ refuses what every real shell accepts is a core nobody can write against.
       shell-matrix.md the measured feature matrix that set the core
     syntax/           lexer, grammar, AST — public
     interp/           execution, the semantics vector, the extension points
+    driver/           the front end: -c, a script file, argv[0], exit status
     dialect/bash/     one package per shell: Dialect, Semantics, Diagnostics
     dialect/zsh/      …
     dialect/ksh/      …
     dialect/dash/     …
     cmd/sh            the substrate's driver, with -dialect
     cmd/bash cmd/zsh  dialect binaries, as proof the library goal holds
+    cmd/dash cmd/ksh  …
     cmd/oracle        records what real shells do
 
 **The core does not know its successors.** `syntax` and `interp` define the
@@ -103,6 +105,34 @@ core, not forked from it — and there are exactly three ways to do that:
 
 `interp/extend_test.go` builds a miniature dialect with all three, as a
 working example rather than as prose.
+
+## One driver, four dialects
+
+**Nothing outside `driver/` implements how a shell is invoked.** Reading
+`-c` or a script file, naming the shell from `argv[0]`, naming a *script*
+by its path in a diagnostic, wording a parse failure the dialect's way and
+exiting with the dialect's status — that is one front end taking a
+`driver.Shell`, which is the three vectors plus the two extension points.
+
+It is public rather than under `internal/` on purpose, and this is the one
+exception to "packages start under `internal/`". A dialect built outside
+this repository needs a front end as much as it needs a semantics vector;
+if this were internal, copying the file would be the only way to ship a
+dialect binary, and `cmd/bash`'s reason for existing — proving the core is
+a library rather than a program with options — would be false.
+
+That rule exists because it was broken. Every binary had its own copy;
+`cmd/sh` learned to run a script file and the dialect binaries never did,
+so `make conformance-dialects` graded the *drivers* and reported bash at
+178/198 when the core scored 198/198. Fourteen of the twenty failures were
+literally `bash: -c is required`. Adding a front-end feature to one
+binary, or writing a fifth copy for a new dialect, brings that straight
+back.
+
+Each `cmd/<shell>` still builds its own `driver.Shell` from its own
+dialect package rather than looking one up in a shared registry. That
+duplication is deliberate: a central registry of every dialect is exactly
+what a binary meant to be liftable into its own repository must not need.
 
 ## Make targets
 
@@ -261,6 +291,14 @@ records what six real shells do, so pointing it at our binary turns every
 case into a conformance test with no new expectations to maintain. Add
 `ARGS=-v` to list what does not match — the passing set is a number and the
 failing set is the work.
+
+`make conformance-dialects` grades all four dialect binaries against the
+shells they claim to be. Each scores exactly what `make conformance` scores
+for the same dialect — bash 198, zsh 195, ksh93 193, dash 190 — because
+both routes run the same core through the same front end. **If the two ever
+disagree, the difference is a driver bug and not a dialect one**; that is
+the whole reason the front end is shared, and comparing the two numbers is
+the cheapest way to notice.
 
 It is deliberately **not** a gate. The number is meant to be low and to
 climb; failing CI on it would only mean failing CI on unfinished work.

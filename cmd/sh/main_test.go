@@ -14,11 +14,11 @@ func TestPickDialect(t *testing.T) {
 	// A name resolves to a grammar, a semantics *and* a diagnostics,
 	// because they answer different questions about the same shell.
 	for _, name := range []string{"core", "posix", "bash", "zsh", "ksh", "dash"} {
-		if _, _, _, _, err := pickDialect(name); err != nil {
+		if _, err := pickDialect(name); err != nil {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
-	if _, _, _, _, err := pickDialect("nosuchshell"); err == nil {
+	if _, err := pickDialect("nosuchshell"); err == nil {
 		t.Error("an unknown dialect must be refused rather than defaulted")
 	}
 
@@ -26,14 +26,14 @@ func TestPickDialect(t *testing.T) {
 	// three rather than one name. bash and zsh disagree on a semantics axis
 	// and on a diagnostic; bash and dash agree on the diagnostic and
 	// disagree on semantics.
-	_, bashSem, bashDiag, _, _ := pickDialect("bash")
-	_, zshSem, zshDiag, _, _ := pickDialect("zsh")
-	_, dashSem, dashDiag, _, _ := pickDialect("dash")
-	_, _, kshDiag, _, _ := pickDialect("ksh")
-	if bashSem.ArithLeadingZeroIsOctal == zshSem.ArithLeadingZeroIsOctal {
+	bashSh, _ := pickDialect("bash")
+	zshSh, _ := pickDialect("zsh")
+	dashSh, _ := pickDialect("dash")
+	kshSh, _ := pickDialect("ksh")
+	if bashSh.Semantics.ArithLeadingZeroIsOctal == zshSh.Semantics.ArithLeadingZeroIsOctal {
 		t.Error("bash and zsh should disagree about whether a leading zero is octal")
 	}
-	if bashSem.EchoInterpretsEscapes == dashSem.EchoInterpretsEscapes {
+	if bashSh.Semantics.EchoInterpretsEscapes == dashSh.Semantics.EchoInterpretsEscapes {
 		t.Error("bash and dash should disagree about echo and backslashes")
 	}
 	for _, tc := range []struct {
@@ -41,13 +41,39 @@ func TestPickDialect(t *testing.T) {
 		got  int
 		want int
 	}{
-		{"dash", dashDiag.SyntaxStatus(), 2},
-		{"bash", bashDiag.SyntaxStatus(), 2},
-		{"ksh93", kshDiag.SyntaxStatus(), 3},
-		{"zsh", zshDiag.SyntaxStatus(), 1},
+		{"dash", dashSh.Diagnostics.SyntaxStatus(), 2},
+		{"bash", bashSh.Diagnostics.SyntaxStatus(), 2},
+		{"ksh93", kshSh.Diagnostics.SyntaxStatus(), 3},
+		{"zsh", zshSh.Diagnostics.SyntaxStatus(), 1},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s syntax-error status = %d, want %d", tc.name, tc.got, tc.want)
+		}
+	}
+}
+
+// TestEveryDialectResolvesToARegisteredShell pins the thing the extraction was
+// for: this driver and each cmd/<shell> binary are built from the same value,
+// so a dialect cannot behave one way here and another way there. The named
+// shells all carry an Apply; core and posix are the substrate's own and carry
+// none, which is what makes them a portability check rather than a shell.
+func TestEveryDialectResolvesToARegisteredShell(t *testing.T) {
+	for _, name := range []string{"bash", "zsh", "ksh", "dash"} {
+		sh, err := pickDialect(name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if sh.Register == nil {
+			t.Errorf("%s: a named shell should carry its dialect's Apply", name)
+		}
+	}
+	for _, name := range []string{"core", "posix"} {
+		sh, err := pickDialect(name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if sh.Register != nil {
+			t.Errorf("%s: the substrate's own answers need no dialect Apply", name)
 		}
 	}
 }

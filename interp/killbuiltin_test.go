@@ -98,7 +98,16 @@ func TestKillTargetsAndStatuses(t *testing.T) {
 		{"-l translates a name", `kill -l INT`, "2\n", 0},
 		{"the SIG prefix is accepted", `kill -s SIGCONT $$; echo "st=$?"`, "st=0\n", 0},
 		{"a lowercase name is accepted", `kill -cont $$; echo "st=$?"`, "st=0\n", 0},
-		{"a number names a signal", `kill -19 $$; echo "st=$?"`, "st=0\n", 0},
+		// 15 rather than a harmless-looking number, because harmless is not
+		// portable: 19 is CONT on a BSD and STOP on Linux, so the first
+		// version of this line suspended the test binary on one platform and
+		// hung there until CI killed it eleven minutes later. The numbers
+		// that agree everywhere are all fatal, so this one is trapped.
+		{
+			"a number names a signal",
+			"trap 'echo caught' TERM\nkill -15 $$\necho \"st=$?\"\n",
+			"caught\nst=0\n", 0,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

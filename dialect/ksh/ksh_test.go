@@ -115,3 +115,13 @@ func TestApplyRemovesLocal(t *testing.T) {
 		t.Errorf("status = %d, want 127", st)
 	}
 }
+
+// TestNoAmpersandRedirect pins the build this panel measures. `&>` is the
+// divergence syntax.Dialect names as the reason its fields are called after
+// constructs rather than after shells: ksh93u+ 2012 has no `&>` and
+// ksh93u+m does, twelve years apart under the same name.
+func TestNoAmpersandRedirect(t *testing.T) {
+	if ksh.Dialect().AmpersandRedirect {
+		t.Error("ksh93u+ 2012 has no &>, and treating it as one operator silently redirects what should have been backgrounded")
+	}
+}

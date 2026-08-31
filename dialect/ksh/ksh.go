@@ -13,6 +13,12 @@ import (
 func Dialect() syntax.Dialect {
 	d := syntax.Core()
 	d.ParamIndirection = true
+	// The measured ksh93 is 93u+ 2012, which has no `&>`. Later ksh93u+m
+	// does, twelve years apart under the same name — which is the divergence
+	// syntax.Dialect's own comment names as the reason its fields are called
+	// after constructs rather than after shells. A dialect built for the
+	// newer build sets this back to true; the panel measures the older one.
+	d.AmpersandRedirect = false
 	return d
 }
 

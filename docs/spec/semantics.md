@@ -23,6 +23,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | a name-shaped value is re-evaluated | **no** | yes | **no** | yes |
 | an invalid octal digit is an error | yes | yes | **no** | *n/a* |
 | `${!x}` is the name, not the value | *n/a* | no | **yes** | *n/a* |
+| `=cmd` expands to a path | *n/a* | no | no | **yes** |
 | brace expansion happens | **no** | yes | yes | yes |
 | arithmetic does floating point | no | no | **yes** | **yes** |
 | quoting a `=~` regex makes it literal | *n/a* | **yes** | no | no |
@@ -67,6 +68,7 @@ Group the shells by which side of each axis they fall on:
     `${#@}` is a count   {dash}
     `[^…]` negates       {dash}
     brace expansion      {dash}
+    `=cmd` expands       {zsh}
     leading zero octal   {zsh}
     fatal error status   {dash}
     `${!x}` is the name  {ksh93}
@@ -84,7 +86,7 @@ Group the shells by which side of each axis they fall on:
     readonly continues   {bash}
     shift survives       {bash, zsh}
 
-Eight distinct groupings across twenty-three axes: `{zsh}`, `{dash,zsh}`,
+Eight distinct groupings across twenty-four axes: `{zsh}`, `{dash,zsh}`,
 `{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`, `{dash,ksh93}` and
 `{dash}` — the last of which `${#@}` now produces on its own, where
 previously it appeared only as the modern-ksh reading of the `&>` axis.

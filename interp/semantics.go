@@ -140,6 +140,15 @@ type Semantics struct {
 	// silent in the `&>` sense — `echo {1..3}` prints something either way,
 	// and nothing reports that one of them is not what was meant.
 	BraceExpansion Answer
+	// EqualsExpansion replaces an unquoted word beginning with `=` by the
+	// path of the command named after it: `echo =ls` prints /bin/ls. zsh
+	// alone, and silent in the `&>` sense — the other three take the word
+	// literally and report nothing, so the same script prints two different
+	// things and neither shell complains.
+	//
+	// Its failure is not silent: a name that resolves to nothing is fatal to
+	// the script, like any other failed expansion.
+	EqualsExpansion Answer
 	// BracketCaretNegates reads `[^abc]` as a negated class. dash alone
 	// treats `^` as an ordinary character, so `[^abc]` matches a caret there
 	// and everything-but there elsewhere: the two answers are both matches,
@@ -218,6 +227,7 @@ func PosixSemantics() Semantics {
 		ArithNameValueRecurses:             No,
 		BraceExpansion:                     No,
 		BracketCaretNegates:                No,
+		EqualsExpansion:                    No,
 		ArithInvalidOctalDigitIsError:      Yes,
 		ArithFloat:                         No,
 		RegexQuotingMakesLiteral:           No,

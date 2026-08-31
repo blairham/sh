@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"os/exec"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -42,6 +43,7 @@ func (r *Runner) expandOneWord(w *syntax.Word) []string {
 		return nil
 	}
 	r.expandTilde(w)
+	r.expandEquals(w)
 
 	// Fields are built up span by span. A span joins onto the field before it
 	// unless splitting started a new one, which is what makes x$(f)y attach
@@ -700,6 +702,37 @@ func (r *Runner) parseSpans(spans []syntax.Span) []syntax.Span {
 // An assignment's value is also a tilde context, which is what makes
 // `PATH=~/bin` work — and it comes for free here, because the parser gives an
 // assignment's value its own word.
+// expandEquals replaces `=cmd` with the path of cmd, which zsh alone does.
+//
+// It sits beside expandTilde because it is the same kind of thing and zsh
+// groups them together: both rewrite the head of an unquoted word into a
+// filename before anything else looks at it. Quoting removes it, and so does
+// anything other than `=` in first position — `a=b` is an assignment and stays
+// one.
+func (r *Runner) expandEquals(w *syntax.Word) {
+	if len(w.Spans) == 0 {
+		return
+	}
+	s := &w.Spans[0]
+	if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted ||
+		!strings.HasPrefix(s.Value, "=") || len(s.Value) == 1 {
+		return
+	}
+	if !r.ask(r.sem().EqualsExpansion, "`=cmd` expanding to a path") {
+		return
+	}
+	name := s.Value[1:]
+	path, err := exec.LookPath(name)
+	if err != nil {
+		// zsh reports the name without a colon and abandons the script,
+		// which is what any failed expansion does here.
+		r.diagf("%s\n", Wording(r.diag().EqualsNotFound, "%s not found", name))
+		r.expandErr = true
+		return
+	}
+	s.Value = path
+}
+
 func (r *Runner) expandTilde(w *syntax.Word) {
 	if len(w.Spans) == 0 {
 		return

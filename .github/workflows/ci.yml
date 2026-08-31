@@ -40,16 +40,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
+      with:
+        # `--new-from-merge-base` needs the base branch's history to find the
+        # common ancestor, and the default shallow clone has none of it.
+        fetch-depth: 0
     - uses: actions/setup-go@v6
       with:
         go-version-file: go.mod
         check-latest: true
         cache: true # go-mod-tidy-repo resolves the whole graph; an uncached run is slow and flaky # setup-go's manifest lags fresh Go patch releases; resolve via go.dev
     - name: Run pre-commit hooks
-      # Nothing is skipped: pre-commit is the linter. `golangci-lint` reports
-      # what the change introduced, which is the whole point of running it
-      # here rather than in a job of its own.
+      # pre-commit is the linter, and there is no second lint job — but the
+      # `golangci-lint` hook is `--new-from-rev HEAD`, which on a clean
+      # checkout compares the tree against itself and reports nothing. Skipped
+      # here and replaced by the step below; keeping it would be the same
+      # "nothing linted, and it looked configured" this repository has already
+      # shipped once.
+      env:
+        SKIP: golangci-lint
       uses: blairham/go-pre-commit@v4.6.6
+    - name: Lint what this change introduces
+      # Same config, same binary, same pin as `make lint` — one lint authority,
+      # asked a narrower question. On a pull request it grades the diff against
+      # the merge base, so the backlog is not the contributor's problem. On a
+      # merge it lints the whole module, because that run exists to catch what
+      # the pull requests could not see: a tree nobody has run in this
+      # combination before.
+      env:
+        GOLANGCI_NEW_FROM: >-
+          ${{ github.event_name == 'pull_request'
+              && format('origin/{0}', github.base_ref) || '' }}
+      run: pre-commit run --hook-stage manual golangci-lint-new --all-files
 
   # Gating happens inside the jobs, never with a workflow-level `paths:`
   # filter: a required check that never runs reports as *pending forever*

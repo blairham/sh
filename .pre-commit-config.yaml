@@ -25,9 +25,13 @@ repos:
   # type-checks the whole module regardless and `--new-from-rev` only filters
   # what it prints. It is about the signal, not the second.
   #
-  # `--new-from-rev HEAD` is useless on a runner, where the checkout is clean
-  # and the hook therefore reports nothing at all. CI skips this hook and the
-  # Lint job diffs from the base commit instead.
+  # `--new-from-rev HEAD` compares the *working tree* against HEAD, so it is
+  # exactly right locally — it reports what you are about to commit, and
+  # `--fix` in the upstream entry corrects it in place — and reports nothing at
+  # all on a runner, where the checkout is clean. That is not a subtle failure:
+  # measured on a committed errcheck violation, `golangci-lint` passes and
+  # `golangci-lint run` reports two issues on the same tree. CI skips this hook
+  # and runs `golangci-lint-new` below instead.
   #
   # Keep `rev` in lockstep with go.mod's tool pin.
   - repo: https://github.com/golangci/golangci-lint
@@ -35,6 +39,45 @@ repos:
     hooks:
       - id: golangci-lint-fmt
       - id: golangci-lint
+
+  # The CI half of the same lint: what this change introduces, and nothing
+  # else. `--new-from-merge-base` reports only issues after the best common
+  # ancestor with the base branch, so a pull request is graded on its own diff
+  # rather than on the repository's backlog — verified both ways: it catches a
+  # violation the branch added, and stays silent about one that was already
+  # there.
+  #
+  # `stages: [manual]` keeps it out of every local commit, where the hook above
+  # already does the job and fixes what it finds. CI asks for it by name.
+  #
+  # `go tool golangci-lint` rather than the pinned repo above, deliberately:
+  # it is the same binary `make lint` runs, resolved from go.mod's tool block,
+  # which AGENTS.md makes authoritative. GOLANGCI_NEW_FROM chooses the base;
+  # unset, the hook lints the whole module, which is what a merge to main
+  # wants.
+  #
+  # The `rev-parse --verify` is the point, not ceremony. A base ref that does
+  # not resolve — a shallow clone with no base branch, a deleted branch, a
+  # `base_ref` that came through empty — makes golangci-lint report `0 issues`
+  # and exit 0. Measured. That is the same "nothing linted, and it looked
+  # configured" this hook exists to end, so an unresolvable base is a failure
+  # here rather than a silent pass.
+  - repo: local
+    hooks:
+      - id: golangci-lint-new
+        name: golangci-lint (issues this change introduces)
+        entry: >-
+          bash -c 'if [ -n "${GOLANGCI_NEW_FROM:-}" ]; then
+          git rev-parse --verify -q "$GOLANGCI_NEW_FROM" >/dev/null ||
+          { echo "golangci-lint-new: base ref \"$GOLANGCI_NEW_FROM\" does not
+          resolve — refusing to report success on a lint that ran against
+          nothing" >&2; exit 1; };
+          set -- --new-from-merge-base "$GOLANGCI_NEW_FROM"; fi;
+          exec go tool golangci-lint run "$@"'
+        language: system
+        types: [go]
+        pass_filenames: false
+        stages: [manual]
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.0

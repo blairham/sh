@@ -33,6 +33,7 @@ func Semantics() interp.Semantics {
 	s.ArithFloat = interp.Yes
 	s.LastPipelineElementInCurrentShell = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
+	s.ExitArgument = interp.ExitArgLenient
 	return s
 }
 

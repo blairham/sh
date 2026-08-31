@@ -366,6 +366,48 @@ var Corpus = []Case{
 		Why: "the dangerous case: &> redirects both streams in bash and zsh, and is `&` then `>` in dash and ksh93 — no error, different meaning",
 	},
 	{
+		ID: "trap/exit-runs-at-the-end", Category: "traps and exit",
+		Snippet: `trap 'echo bye' EXIT; echo hi`,
+		Why:     "the EXIT trap runs after the script, not where it was set",
+	},
+	{
+		ID: "trap/exit-sees-the-last-status", Category: "traps and exit",
+		Script:  true,
+		Snippet: "trap 'echo st=$?' EXIT\nfalse\n",
+		Why:     "the body reads `$?` at the moment it fires, which is what makes an EXIT trap useful for reporting",
+	},
+	{
+		ID: "trap/exit-trap-can-override-the-status", Category: "traps and exit",
+		Snippet: `trap 'echo bye; exit 7' EXIT; exit 2`,
+		Why:     "the trap's own exit wins over the one that triggered it",
+	},
+	{
+		ID: "trap/second-trap-replaces", Category: "traps and exit",
+		Snippet: `trap 'echo one' EXIT; trap 'echo two' EXIT; echo body`,
+		Why:     "traps are set rather than accumulated, and `trap -` removes",
+	},
+	{
+		ID: "trap/subshell-does-not-refire", Category: "traps and exit",
+		Snippet: `trap 'echo T' EXIT; (echo sub); x=$(echo cs); echo after`,
+		Why:     "the trap fires once for the script: neither a subshell nor a command substitution repeats it",
+	},
+	{
+		ID: "trap/set-in-a-function-diverges", Category: "traps and exit",
+		Script:  true,
+		Snippet: "f() { trap 'echo TRAP' EXIT; echo enter; }\nf\necho between\n",
+		Why:     "zsh runs a trap set inside a function when the function returns; dash, bash and ksh93 keep it for the end of the script",
+	},
+	{
+		ID: "exit/status-and-wrapping", Category: "traps and exit",
+		Snippet: `(exit 300); echo "[$?]"; (false; exit); echo "[$?]"`,
+		Why:     "a status is taken modulo 256, and a bare `exit` reports what the last command did",
+	},
+	{
+		ID: "exit/bad-argument-diverges", Category: "traps and exit",
+		Snippet: `(exit -1); echo "[$?]"; (exit abc); echo "[$?]"`,
+		Why:     "an ordering rather than a side: dash refuses both, bash refuses only the one that is not a number, ksh93 and zsh take either",
+	},
+	{
 		ID: "errexit/failure-ends-the-script", Category: "shell options",
 		Snippet: `set -e; false; echo reached`,
 		Why:     "the whole point of -e, and the baseline the exemptions are measured against",

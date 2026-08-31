@@ -32,6 +32,7 @@ func Semantics() interp.Semantics {
 	s.ShiftPastEndFatal = interp.No
 	s.ReadonlyReassignmentFatal = interp.No
 	s.UnterminatedBracket = interp.BracketLiteral
+	s.ExitArgument = interp.ExitArgNumeric
 	return s
 }
 

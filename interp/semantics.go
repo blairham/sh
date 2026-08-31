@@ -169,6 +169,21 @@ type Semantics struct {
 	// with three values; the twenty-three binary ones keep the type that
 	// says so.
 	UnterminatedBracket BracketPolicy
+	// ExitTrapIsFunctionLocal fires an EXIT trap set inside a function when
+	// that function returns, rather than when the script ends. zsh alone; a
+	// trap set at the top level behaves the same everywhere.
+	ExitTrapIsFunctionLocal Answer
+	// ExitArgument is how strict `exit` is about what it is given, and it is
+	// an ordering rather than a side:
+	//
+	//	exit -1     dash → error 2   bash → 255   ksh93, zsh → 255
+	//	exit abc    dash → error 2   bash → 2     ksh93, zsh → 0
+	//
+	// dash rejects both, bash rejects only the one that is not a number, and
+	// ksh93 and zsh take anything. Three behaviours on a line, so a policy
+	// rather than a bool — the same shape as UnterminatedBracket, and for
+	// the same reason.
+	ExitArgument ExitArgumentPolicy
 	// BracketCaretNegates reads `[^abc]` as a negated class. dash alone
 	// treats `^` as an ordinary character, so `[^abc]` matches a caret there
 	// and everything-but there elsewhere: the two answers are both matches,
@@ -247,6 +262,8 @@ func PosixSemantics() Semantics {
 		ArithNameValueRecurses:             No,
 		BraceExpansion:                     No,
 		BracketCaretNegates:                No,
+		ExitTrapIsFunctionLocal:            No,
+		ExitArgument:                       ExitArgStrict,
 		EqualsExpansion:                    No,
 		ArithInvalidOctalDigitIsError:      Yes,
 		ArithFloat:                         No,
@@ -289,6 +306,46 @@ func (r *Runner) sem() Semantics {
 		return *r.Semantics
 	}
 	return CoreSemantics()
+}
+
+// ExitArgumentPolicy is how strict `exit` is about its argument.
+type ExitArgumentPolicy int
+
+const (
+	// ExitArgUnspecified is no answer, and is refused like any other.
+	ExitArgUnspecified ExitArgumentPolicy = iota
+	// ExitArgStrict refuses anything that is not a non-negative number:
+	// dash.
+	ExitArgStrict
+	// ExitArgNumeric refuses text but wraps a negative: bash.
+	ExitArgNumeric
+	// ExitArgLenient takes anything, reading text as zero: ksh93 and zsh.
+	ExitArgLenient
+)
+
+func (e ExitArgumentPolicy) String() string {
+	switch e {
+	case ExitArgStrict:
+		return "strict"
+	case ExitArgNumeric:
+		return "numeric"
+	case ExitArgLenient:
+		return "lenient"
+	}
+	return "unspecified"
+}
+
+// exitArgument resolves the axis, and only for an argument that is actually
+// questionable — `exit 3` needs no answer from anyone.
+func (r *Runner) exitArgument() ExitArgumentPolicy {
+	p := r.sem().ExitArgument
+	if p == ExitArgUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			"exit: this argument: the shells disagree here and no dialect was chosen"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
 }
 
 // BracketPolicy is what an unterminated bracket expression means.

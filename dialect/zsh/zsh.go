@@ -36,6 +36,8 @@ func Semantics() interp.Semantics {
 	s.ArrayBaseIsZero = interp.No
 	s.DollarZeroInFunctionIsFunctionName = interp.Yes
 	s.UnterminatedBracket = interp.BracketBadPattern
+	s.ExitTrapIsFunctionLocal = interp.Yes
+	s.ExitArgument = interp.ExitArgLenient
 	return s
 }
 

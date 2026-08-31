@@ -24,6 +24,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | an invalid octal digit is an error | yes | yes | **no** | *n/a* |
 | `${!x}` is the name, not the value | *n/a* | no | **yes** | *n/a* |
 | `=cmd` expands to a path | *n/a* | no | no | **yes** |
+| an EXIT trap set in a function fires there | no | no | no | **yes** |
 | brace expansion happens | **no** | yes | yes | yes |
 | arithmetic does floating point | no | no | **yes** | **yes** |
 | quoting a `=~` regex makes it literal | *n/a* | **yes** | no | no |
@@ -68,6 +69,7 @@ Group the shells by which side of each axis they fall on:
     `${#@}` is a count   {dash}
     `[^…]` negates       {dash}
     brace expansion      {dash}
+    function EXIT trap   {zsh}
     `=cmd` expands       {zsh}
     leading zero octal   {zsh}
     fatal error status   {dash}
@@ -86,7 +88,7 @@ Group the shells by which side of each axis they fall on:
     readonly continues   {bash}
     shift survives       {bash, zsh}
 
-Eight distinct groupings across twenty-four axes: `{zsh}`, `{dash,zsh}`,
+Eight distinct groupings across twenty-six axes: `{zsh}`, `{dash,zsh}`,
 `{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`, `{dash,ksh93}` and
 `{dash}` — the last of which `${#@}` now produces on its own, where
 previously it appeared only as the modern-ksh reading of the `&>` axis.
@@ -169,6 +171,22 @@ That is worth stating because the obvious reading of the measurements is
 two separate quirks. It is one behaviour observed twice, and an
 implementation with two switches for it will eventually set them
 inconsistently.
+
+## A second axis that is an ordering
+
+`exit` is not equally fussy about what it is given:
+
+    exit -1     dash → error 2   bash → 255   ksh93, zsh → 255
+    exit abc    dash → error 2   bash → 2     ksh93, zsh → 0
+
+dash refuses both, bash refuses only the one that is not a number, and
+ksh93 and zsh take either. Three behaviours on a line rather than two
+sides, so `ExitArgument` is a policy with three values — the shape
+`UnterminatedBracket` established, used a second time without argument.
+
+The status those two refusals carry is *not* the fatal-error axis. bash
+exits 1 for a fatal error and 2 for this, and dash exits 2 for both; a
+usage error is its own thing, and unanimous where it happens at all.
 
 ## A prediction that measurement contradicted
 

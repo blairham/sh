@@ -40,6 +40,45 @@ type Diagnostics struct {
 	// Zero means the substrate's own, which is 2.
 	SyntaxErrorStatus int
 
+	// SourcedSyntaxErrorStatus is what a parse failure in a file read by `.`
+	// reports, when that differs from SyntaxErrorStatus.
+	//
+	// It is a separate field because one shell answers the two differently:
+	// zsh reports 1 for a syntax error it read from -c and 126 for the same
+	// text read by `.`, where bash says 2 for both and ksh93 says 3 for both.
+	// Folding them together would have given zsh one answer and lost the
+	// other.
+	//
+	// Zero means "the same as SyntaxErrorStatus", which is the common case.
+	SourcedSyntaxErrorStatus int
+
+	// DotNoOperand is what `.` says when given no filename at all. No verbs.
+	DotNoOperand string
+	// DotNoOperandStatus is the status that carries. bash and ksh93 say 2,
+	// zsh says 1; dash does not treat it as an error at all, which is a
+	// semantics axis rather than a value here.
+	//
+	// Zero means the substrate's own, which is 2.
+	DotNoOperandStatus int
+
+	// DotCannotOpen is what `.` says when it cannot read the file. Two verbs,
+	// positional because the shells order them differently: %[1]s is the
+	// operand as written and %[2]s the reason.
+	DotCannotOpen string
+	// DotNotFound is what `.` says when the operand had no slash in it and
+	// PATH did not have it — as opposed to a path that would not open.
+	//
+	// Same two verbs. Only dash sets it: it says ".: name: not found" for a
+	// bare name and ".: cannot open path: …" for a path, where bash, ksh93 and
+	// zsh use one message for both. Empty means "the same as DotCannotOpen".
+	DotNotFound string
+	// DotCannotOpenStatus is the status that carries when the failure is not
+	// fatal: bash says 1 and zsh says 127. dash and ksh93 end the script
+	// instead, so this never speaks for them.
+	//
+	// Zero means the substrate's own, which is 1.
+	DotCannotOpenStatus int
+
 	// ScriptLocation is Location for a script read from a file, when the two
 	// differ. ksh93 is the only shell in the panel where they do: `ksh -c`
 	// names no location at all, and `ksh script` says "line 2". Zero means
@@ -230,6 +269,29 @@ func (d Diagnostics) SyntaxStatus() int {
 		return 2
 	}
 	return d.SyntaxErrorStatus
+}
+
+// sourcedSyntaxStatus is SyntaxStatus for text `.` read from a file, which is
+// the same number in every dialect but zsh.
+func (d Diagnostics) sourcedSyntaxStatus() int {
+	if d.SourcedSyntaxErrorStatus == 0 {
+		return d.SyntaxStatus()
+	}
+	return d.SourcedSyntaxErrorStatus
+}
+
+func (d Diagnostics) dotNoOperandStatus() int {
+	if d.DotNoOperandStatus == 0 {
+		return 2
+	}
+	return d.DotNoOperandStatus
+}
+
+func (d Diagnostics) dotCannotOpenStatus() int {
+	if d.DotCannotOpenStatus == 0 {
+		return 1
+	}
+	return d.DotCannotOpenStatus
 }
 
 // PosixDiagnostics is dash's, which is also the substrate's own.

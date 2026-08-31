@@ -60,6 +60,20 @@ func (r *Runner) Unregister(name string) {
 	r.custom[name] = nil
 }
 
+// Builtin looks up a builtin by name, so a dialect can give one a second name
+// without reimplementing it.
+//
+// `source` is why this exists. It is a synonym for `.` in bash, ksh93 and zsh
+// and absent from dash, which makes it a dialect's answer rather than the
+// substrate's — but a synonym should be the *same* function, not a copy of it,
+// and a dialect package cannot reach an unexported one. Registering what this
+// returns is the difference between two names for one builtin and two
+// builtins that will drift.
+//
+// It follows the same precedence lookupBuiltin does, so a dialect that has
+// already replaced `.` gets its own replacement back rather than the core's.
+func (r *Runner) Builtin(name string) (Builtin, bool) { return r.lookupBuiltin(name) }
+
 // lookupBuiltin resolves a name, letting a registration win over the built-in
 // table so a dialect can replace as well as add.
 func (r *Runner) lookupBuiltin(name string) (Builtin, bool) {

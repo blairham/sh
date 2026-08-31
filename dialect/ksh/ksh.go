@@ -37,6 +37,12 @@ func Semantics() interp.Semantics {
 	s.UnsetPositionalIsAllowed = interp.Yes
 	s.TraceShowsItsOwnDisabling = interp.No
 	s.TraceAssignmentsSeparately = interp.Yes
+	// An unparseable `eval` is reported and survived here, unlike dash, but a
+	// file `.` cannot open still ends the script — so the two halves of the
+	// POSIX "a special builtin's failure is fatal" rule are answered
+	// differently, which is why they are two axes.
+	s.BuiltinSyntaxErrorFatal = interp.No
+	s.DotPassesArguments = interp.Yes
 	return s
 }
 
@@ -51,15 +57,34 @@ func Diagnostics() interp.Diagnostics {
 		ArithError:        "%[1]s: %[2]s",
 		DivisionByZero:    "divide by zero",
 		SyntaxErrorStatus: 3,
+		// The status is never reached — a file `.` cannot open ends the script
+		// here — but the wording is, and it names the operand and the reason in
+		// brackets rather than after a colon.
+		DotCannotOpen:      ".: %[1]s: cannot open [%[2]s]",
+		DotNoOperand:       ".: Usage: . [ options ] name [arg ...]",
+		DotNoOperandStatus: 2,
 	}
 }
 
-// Apply removes `local`, which ksh93 does not have.
+// Apply adjusts the substrate to ksh93: one removal and one addition.
 //
 // Which builtins a shell provides is neither grammar nor a conflict of
 // meaning, so it is not a Dialect flag or a Semantics axis. It is what the
-// extension seam is for, and a dialect uses it exactly as anything else
-// built on the substrate would — the difference being that this one takes
-// something away. ksh93 is the only shell in the panel without `local`, and
-// reports it as a command that was not found.
-func Apply(r *interp.Runner) { r.Unregister("local") }
+// extension seam is for, and a dialect uses it exactly as anything else built
+// on the substrate would — the difference being that this one also takes
+// something away.
+//
+// `local` goes because ksh93 is the only shell in the panel without it: it
+// spells the same idea `typeset` and reports `local` as a command that was not
+// found, so a script finding it here would be relying on something the real
+// shell does not have.
+//
+// `source` arrives because ksh93 has it as a synonym for `.` and dash does
+// not, which makes the name a dialect's answer. It is the same function under
+// a second name rather than a second implementation.
+func Apply(r *interp.Runner) {
+	r.Unregister("local")
+	if dot, ok := r.Builtin("."); ok {
+		r.Register("source", dot)
+	}
+}

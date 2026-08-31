@@ -511,7 +511,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   set -x; set +x; echo done
   ```
-- `xtrace/compound-header-diverges` — bash and zsh print the `for` header once per iteration where dash and ksh93 print only the commands inside — measured, and not reproduced here
+- `xtrace/compound-header-diverges` — three answers, not two: dash and ksh93 print only the commands inside, bash reprints the header as written once per iteration, and zsh prints neither but shows the assignment the iteration made
   ```sh
   set -x; for i in 1 2; do echo $i; done
   ```
@@ -1168,4 +1168,95 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `cond/command-language-is-the-other-way` — the contrast that makes the previous case a finding rather than a curiosity
   ```sh
   true || true && false; echo "st=$?"
+  ```
+
+## eval and dot
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `eval/runs-in-the-calling-shell` | `2` | `2` | `2` | `2` | `2` | `2` |
+| `eval/expands-twice` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
+| `eval/joins-arguments-with-a-space` | `a b c` | `a b c` | `a b c` | `a b c` | `a b c` | `a b c` |
+| `eval/nothing-to-run-reports-success` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `eval/is-transparent-to-return` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` |
+| `eval/is-transparent-to-break` | `done` | `done` | `done` | `done` | `done` | `done` |
+| `eval/unparseable-text-diverges` | `<shell>: 1: eval: Syntax error: end of file unexpected (expecting "then")` *(status 2)* | `<shell>: eval: line 2: syntax error: unexpected end of file from `if' command on line 1~REACHED st=2` | `<shell>: eval: line 2: syntax error: unexpected end of file from `if' command on line 1` *(status 2)* | `<shell>: eval: line 1: syntax error: unexpected end of file~REACHED st=1` | `<shell>: eval: syntax error at line 1: `if' unmatched~REACHED st=3` | `(eval):1: parse error near `if'~REACHED st=1` |
+| `dot/runs-in-the-calling-shell` | `7` | `7` | `7` | `7` | `7` | `7` |
+| `dot/status-is-the-last-command` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
+| `dot/empty-file-clears-the-status` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `dot/return-ends-the-source` | `one~st=5` | `one~st=5` | `one~st=5` | `one~st=5` | `one~st=5` | `one~st=5` |
+| `dot/searches-path-and-path-wins` | `from-path` | `from-path` | `from-path` | `from-path` | `from-path` | `from-path` |
+| `dot/arguments-diverge` | `got=OUTER~after=OUTER` | `got=INNER~after=OUTER` | `got=INNER~after=OUTER` | `got=INNER~after=OUTER` | `got=INNER~after=OUTER` | `got=INNER~after=OUTER` |
+| `dot/missing-file-diverges` | `<shell>: 1: .: cannot open ./nonexistent-xyz.sh: No such file` *(status 2)* | `<shell>: line 1: ./nonexistent-xyz.sh: No such file or directory~REACHED st=1` | `<shell>: line 1: ./nonexistent-xyz.sh: No such file or directory` *(status 1)* | `<shell>: ./nonexistent-xyz.sh: No such file or directory~REACHED st=1` | `<shell>: .: ./nonexistent-xyz.sh: cannot open [No such file or directory]` *(status 1)* | `<shell>:.:1: no such file or directory: ./nonexistent-xyz.sh~REACHED st=127` |
+| `dot/no-operand-diverges` | `REACHED st=0` | `<shell>: line 1: .: filename argument required~.: usage: . [-p path] filename [arguments]~REACHED st=2` | `<shell>: line 1: .: filename argument required~.: usage: . [-p path] filename [arguments]` *(status 2)* | `<shell>: line 0: .: filename argument required~.: usage: . filename [arguments]~REACHED st=2` | `Usage: . [ options ] name [arg ...]` *(status 2)* | `<shell>:.:1: not enough arguments~REACHED st=1` |
+| `dot/cwd-fallback-is-bash-only` | `<shell>: 1: .: fb.sh: not found` *(status 2)* | `cwd-hit~st=0` | `<shell>: line 1: .: fb.sh: file not found` *(status 1)* | `cwd-hit~st=0` | `<shell>: .: fb.sh: cannot open [No such file or directory]` *(status 1)* | `<shell>:.:1: no such file or directory: fb.sh~st=127` |
+| `dot/source-is-not-in-dash` | `<shell>: 1: source: not found~st=127` | `via-source~st=0` | `via-source~st=0` | `via-source~st=0` | `via-source~st=0` | `via-source~st=0` |
+
+- `eval/runs-in-the-calling-shell` — the reason eval is a builtin and not a command: a child process could not change this shell's variable
+  ```sh
+  x=1; eval "x=2"; echo $x
+  ```
+- `eval/expands-twice` — the point of eval — the text is expanded once as a word and again as a script, so $$a reaches the second pass as $b
+  ```sh
+  a=b; b=hi; eval "echo \$$a"
+  ```
+- `eval/joins-arguments-with-a-space` — eval rejoins its arguments before parsing, so the word boundaries the shell made are not preserved
+  ```sh
+  eval echo a b c
+  ```
+- `eval/nothing-to-run-reports-success` — reads like it should leave the status alone and does not: an eval with no commands clears a failure rather than preserving it
+  ```sh
+  false; eval ""; echo st=$?
+  ```
+- `eval/is-transparent-to-return` — eval is not a scope: `return` inside it returns from the function around it, which is the opposite of what a sourced file does
+  ```sh
+  f() { eval return 3; echo NOT-REACHED; }; f; echo st=$?
+  ```
+- `eval/is-transparent-to-break` — the same transparency for loop control, which a naive implementation running the text on a child runner would lose
+  ```sh
+  for i in 1 2 3; do eval break; echo NOT-REACHED; done; echo done
+  ```
+- `eval/unparseable-text-diverges` — POSIX makes a special builtin's failure fatal to a non-interactive shell and only dash still does it; bash, ksh93 and zsh report it and carry on, each with its own status
+  ```sh
+  eval "if"; echo REACHED st=$?
+  ```
+- `dot/runs-in-the-calling-shell` — the same property as eval, from a file: a sourced assignment survives because no child process was involved
+  ```sh
+  echo "x=7" > p.sh; . ./p.sh; echo $x
+  ```
+- `dot/status-is-the-last-command` — `.` reports what the file's last command reported, which is what makes it usable in a conditional
+  ```sh
+  echo false > p.sh; . ./p.sh; echo st=$?
+  ```
+- `dot/empty-file-clears-the-status` — "the status of the last command" with no last command is 0 rather than whatever came before, the same surprise as an empty eval
+  ```sh
+  : > p.sh; false; . ./p.sh; echo st=$?
+  ```
+- `dot/return-ends-the-source` — a sourced file *is* a scope for `return`, unlike eval — the one way the two builtins differ in how they treat control flow
+  ```sh
+  printf 'echo one\nreturn 5\necho NOT-REACHED\n' > p.sh; . ./p.sh; echo st=$?
+  ```
+- `dot/searches-path-and-path-wins` — an operand with no slash is a PATH lookup and PATH beats an identically named file next to you, which surprises everyone and is unanimous
+  ```sh
+  mkdir -p d; echo "echo from-path" > d/amb.sh; echo "echo from-cwd" > amb.sh; PATH=$PWD/d:$PATH; . amb.sh
+  ```
+- `dot/arguments-diverge` — bash, ksh93 and zsh give a sourced file its own positional parameters and restore the caller's afterwards; dash ignores the words entirely, so the file still sees OUTER
+  ```sh
+  echo 'echo got=$1' > p.sh; set -- OUTER; . ./p.sh INNER; echo after=$1
+  ```
+- `dot/missing-file-diverges` — the other half of the POSIX fatal rule, and the panel splits differently than for eval: dash and ksh93 end the script, bash reports 1 and zsh 127
+  ```sh
+  . ./nonexistent-xyz.sh; echo REACHED st=$?
+  ```
+- `dot/no-operand-diverges` — four answers to one degenerate input: dash calls it success and does nothing, bash reports 2 and survives, ksh93 reports 2 and exits, zsh reports 1 and survives
+  ```sh
+  . ; echo REACHED st=$?
+  ```
+- `dot/cwd-fallback-is-bash-only` — only bash looks in the current directory once PATH has missed; the other three call it not found, so a script relying on it is bash-only
+  ```sh
+  echo "echo cwd-hit" > fb.sh; PATH=/usr/bin:/bin; . fb.sh; echo st=$?
+  ```
+- `dot/source-is-not-in-dash` — `source` is a synonym for `.` in bash, ksh93 and zsh and absent from dash, which is why the substrate keeps `.` and leaves the second name to each dialect
+  ```sh
+  echo "echo via-source" > p.sh; source ./p.sh; echo st=$?
   ```

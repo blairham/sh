@@ -1,0 +1,134 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+package bash_test
+
+import (
+	"bytes"
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/blairham/sh/dialect/bash"
+	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
+)
+
+// What bash does about `eval` and `.`, measured against the real binary and
+// recorded here rather than in the substrate.
+
+func runBash(t *testing.T, dir, src string) (string, int) {
+	t.Helper()
+	f, err := syntax.Parse(src, bash.Dialect())
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	var buf bytes.Buffer
+	sem, diag := bash.Semantics(), bash.Diagnostics()
+	r := &interp.Runner{
+		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag,
+		Dir: dir, Name: "bash", Vars: map[string]string{"PATH": dir},
+	}
+	bash.Apply(r)
+	st, rerr := r.Run(context.Background(), f)
+	if rerr != nil {
+		t.Fatalf("run %q: %v", src, rerr)
+	}
+	return buf.String(), st
+}
+
+func TestSourceIsASynonymForDot(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "s.sh")
+	if err := os.WriteFile(path, []byte("echo via-source\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, st := runBash(t, dir, `source `+path)
+	if st != 0 || strings.TrimSpace(out) != "via-source" {
+		t.Errorf("output = %q status %d, want via-source", out, st)
+	}
+}
+
+func TestEvalAndDotAxes(t *testing.T) {
+	s := bash.Semantics()
+	for _, tc := range []struct {
+		axis string
+		got  interp.Answer
+		want interp.Answer
+	}{
+		// Measured: `eval "if"; echo REACHED` prints REACHED here and does
+		// not in dash.
+		{"BuiltinSyntaxErrorFatal", s.BuiltinSyntaxErrorFatal, interp.No},
+		{"DotMissingFileFatal", s.DotMissingFileFatal, interp.No},
+		{"DotPassesArguments", s.DotPassesArguments, interp.Yes},
+		// The one shell in the panel that does this.
+		{"DotFallsBackToCurrentDirectory", s.DotFallsBackToCurrentDirectory, interp.Yes},
+	} {
+		if tc.got != tc.want {
+			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)
+		}
+	}
+}
+
+// TestAnUnparseableEvalIsSurvivable is the axis as behavior rather than as a
+// field, which is what stops the two drifting apart.
+func TestAnUnparseableEvalIsSurvivable(t *testing.T) {
+	out, _ := runBash(t, t.TempDir(), `eval "if"; echo REACHED`)
+	if !strings.Contains(out, "REACHED") {
+		t.Errorf("bash reports an unparseable eval and carries on: %q", out)
+	}
+}
+
+// TestDotFindsAFileInTheCurrentDirectory is bash's alone. PATH here has the
+// temp directory in it, so the file is found without the fallback; the point
+// of the second half is that the fallback is what finds it when PATH cannot.
+func TestDotFindsAFileInTheCurrentDirectory(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "fb.sh"), []byte("echo cwd-hit\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	f, err := syntax.Parse(`. fb.sh`, bash.Dialect())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	sem, diag := bash.Semantics(), bash.Diagnostics()
+	r := &interp.Runner{
+		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag,
+		Dir: dir, Name: "bash",
+		// PATH deliberately cannot reach it, so only the fallback can.
+		Vars: map[string]string{"PATH": t.TempDir()},
+	}
+	bash.Apply(r)
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "cwd-hit") {
+		t.Errorf("bash looks in the current directory once PATH misses: %q", buf.String())
+	}
+}
+
+func TestDotStatusesAreBashs(t *testing.T) {
+	d := bash.Diagnostics()
+	// Two numbers for what reads like one failure, which is why they are two
+	// fields: a file it cannot open is 1 and a missing operand is 2.
+	if got := d.DotCannotOpenStatus; got != 1 {
+		t.Errorf("DotCannotOpenStatus = %d, want 1", got)
+	}
+	if got := d.DotNoOperandStatus; got != 2 {
+		t.Errorf("DotNoOperandStatus = %d, want 2", got)
+	}
+	// bash prints a complaint and a usage line, and only the first carries the
+	// shell's prefix — so the wording itself has to hold the newline.
+	if !strings.Contains(d.DotNoOperand, "\n") {
+		t.Errorf("DotNoOperand = %q, want the two lines bash prints", d.DotNoOperand)
+	}
+	// A syntax error is 2 whether it was read from -c or from a sourced file,
+	// so the sourced override stays empty here. zsh is the one that needs it.
+	if got := d.SourcedSyntaxErrorStatus; got != 0 {
+		t.Errorf("SourcedSyntaxErrorStatus = %d, want 0: bash answers both the same", got)
+	}
+}

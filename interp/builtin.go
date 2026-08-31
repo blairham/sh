@@ -41,6 +41,9 @@ var builtins = map[string]Builtin{
 	"break":    biBreak,
 	"continue": biContinue,
 	"return":   biReturn,
+	// `eval` and `.` are added in source.go's init rather than here — they
+	// run arbitrary shell, so they reach the dispatcher that reads this map,
+	// and Go calls a literal that closes that loop an initialization cycle.
 }
 
 // biBreak and biContinue transfer control out of a loop. They are recorded on

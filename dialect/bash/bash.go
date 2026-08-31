@@ -31,6 +31,13 @@ func Semantics() interp.Semantics {
 	s.RegexQuotingMakesLiteral = interp.Yes
 	s.ShiftPastEndFatal = interp.No
 	s.ReadonlyReassignmentFatal = interp.No
+	s.BuiltinSyntaxErrorFatal = interp.No
+	s.DotMissingFileFatal = interp.No
+	s.DotPassesArguments = interp.Yes
+	// The only shell in the panel that looks in the current directory once
+	// PATH has missed. Measured: `PATH=/usr/bin:/bin; . f.sh` finds an f.sh in
+	// the current directory here, and is "not found" in the other three.
+	s.DotFallsBackToCurrentDirectory = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
 	s.ExitArgument = interp.ExitArgNumeric
 	s.TraceAssignmentsSeparately = interp.Yes
@@ -54,9 +61,28 @@ func Diagnostics() interp.Diagnostics {
 		TraceQuoting:         interp.QuoteShell,
 		TraceForHeader:       interp.TraceForSource,
 		SyntaxErrorStatus:    2,
+		// Measured: `.` of a file it cannot open reports 1 and carries on,
+		// where a missing operand is 2 — two numbers for what reads like one
+		// failure, which is why they are two fields.
+		DotCannotOpen:       "%[1]s: %[2]s",
+		DotCannotOpenStatus: 1,
+		// Two lines, which is bash rather than a mistake: it prints the
+		// complaint and then a usage line, and only the first carries the
+		// shell's own prefix.
+		DotNoOperand: ".: filename argument required\n" +
+			".: usage: . [-p path] filename [arguments]",
+		DotNoOperandStatus: 2,
 	}
 }
 
-// Apply makes any adjustment that is not a vector value. bash needs none:
-// every builtin the substrate provides, bash also has.
-func Apply(_ *interp.Runner) {}
+// Apply adds what bash has and the substrate does not.
+//
+// `source` is a synonym for `.`, and is a dialect's answer rather than the
+// core's because dash does not have it at all — `command -v source` reports
+// "not found" there. It is the same function under a second name rather than a
+// second implementation, which is the only way the two cannot drift apart.
+func Apply(r *interp.Runner) {
+	if dot, ok := r.Builtin("."); ok {
+		r.Register("source", dot)
+	}
+}

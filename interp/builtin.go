@@ -171,8 +171,8 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 // biShift drops the first n positional parameters.
 //
 // Shifting past the end is where the panel splits: fatal in dash and ksh93,
-// survivable in bash and zsh. The survivable answer is taken, and the
-// difference is a dialect question the interpreter does not yet carry.
+// survivable in bash and zsh. The dialect answers it rather than this taking
+// a side.
 func biShift(r *Runner, _ context.Context, args []string) int {
 	n := 1
 	if len(args) > 0 {

@@ -599,13 +599,10 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	// `set` and `shift` change state a child process could not.
 	if fn, ok := r.lookupBuiltin(argv[0]); ok {
 		// An assignment prefixed to a *special* builtin persists, which is
-		// the POSIX rule dash and ksh93 follow and bash and zsh do not.
-		// Following POSIX here; the divergence is a dialect question the
-		// interpreter does not yet carry.
+		// the POSIX rule dash and ksh93 follow and bash and zsh do not. The
+		// dialect answers it, three lines down.
 		for _, a := range c.Assigns {
 			v := strings.Join(r.expandWord(a.Value), " ")
-			// POSIX keeps an assignment prefixed to a special builtin;
-			// dash and ksh93 comply, bash and zsh do not.
 			if specialBuiltins[argv[0]] &&
 				r.ask(r.sem().AssignmentPrefixPersistsOnSpecialBuiltin, "an assignment before a special builtin persisting") {
 				r.setVar(a.Name, v)

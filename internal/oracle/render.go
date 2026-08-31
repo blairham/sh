@@ -93,8 +93,8 @@ func (r *Run) Markdown(cases []Case) string {
 		b.WriteString("\n")
 		for _, c := range cases {
 			if c.Category == cat {
-				fmt.Fprintf(&b, "- `%s` — %s\n  ```sh\n  %s\n  ```\n", c.ID, c.Why,
-					strings.ReplaceAll(c.Snippet, "\n", "\n  "))
+				fmt.Fprintf(&b, "- `%s` — %s\n  ```sh\n%s\n  ```\n", c.ID, c.Why,
+					indentSnippet(c.Snippet))
 			}
 		}
 		b.WriteString("\n")
@@ -207,4 +207,21 @@ func (r *Run) NewCases(golden *Run) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// indentSnippet puts a snippet inside a fenced block.
+//
+// Blank lines are left blank rather than indented. Replacing every newline
+// with a newline and two spaces was simpler and indented the empty line a
+// trailing newline leaves behind, so every regeneration of this file added
+// thirteen lines of trailing whitespace for the commit hook to strip — and a
+// commit that a hook rewrites is a commit that does not happen.
+func indentSnippet(s string) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	for i, line := range lines {
+		if line != "" {
+			lines[i] = "  " + line
+		}
+	}
+	return strings.Join(lines, "\n")
 }

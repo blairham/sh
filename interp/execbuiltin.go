@@ -159,6 +159,16 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 // two identically in every case but one: a bare name that was never found is
 // "command not found" from a command word and "exec: name: not found" here.
 func (r *Runner) execCannotRun(err error) int {
+	// A command that could not be found is the shell's failure rather than
+	// the builtin's, and the one dialect that names a builtin in the location
+	// agrees: `exec nosuchcmd` is `zsh:1: command not found: nosuchcmd`, with
+	// no `exec` segment — exactly what a bare command word reports. The
+	// message still names exec wherever the dialect's wording does; it is the
+	// *location* that must not, which is the rule Diagnostics already states
+	// and this was the one place not following it.
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
 	return r.cannotRun(err, naming{
 		bare:          r.diag().ExecNotFound,
 		fallback:      "exec: %[1]s: not found",

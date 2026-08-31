@@ -76,11 +76,18 @@ func Diagnostics() interp.Diagnostics {
 		// where the other three say "not found".
 		// zsh leads with the complaint and names the command after it, for a
 		// command word exactly as for `exec`.
-		NotFound:       "command not found: %[1]s",
-		ExecNotFound:   "command not found: %[1]s",
-		TimesDecimals:  2,
-		TimesArguments: "times: too many arguments",
-		PathNotFound:   "no such file or directory: %[1]s",
+		NotFound:     "command not found: %[1]s",
+		ExecNotFound: "command not found: %[1]s",
+		// The builtin's name comes from the location here, not the message.
+		TestUnaryExpected:    "unknown condition: %[1]s",
+		TestBinaryExpected:   "condition expected: %[1]s",
+		TestIntegerExpected:  "integer expression expected: %[1]s",
+		TestTooManyArguments: "too many arguments",
+		TestOperandExpected:  "argument expected",
+		TestMissingBracket:   "']' expected",
+		TimesDecimals:        2,
+		TimesArguments:       "times: too many arguments",
+		PathNotFound:         "no such file or directory: %[1]s",
 		// zsh lowercases every strerror string it quotes, where the other
 		// three print the C string as it comes.
 		// zsh names the builtin that is speaking between its own name and the

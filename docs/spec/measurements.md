@@ -1321,6 +1321,57 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   echo "echo via-source" > p.sh; source ./p.sh; echo st=$?
   ```
 
+## test
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `test/argument-count-decides` | `one=0~two=0` | `one=0~two=0` | `one=0~two=0` | `one=0~two=0` | `one=0~two=0` | `one=0~two=0` |
+| `test/the-quoting-trap` | `unquoted=0~quoted=1` | `unquoted=0~quoted=1` | `unquoted=0~quoted=1` | `unquoted=0~quoted=1` | `unquoted=0~quoted=1` | `unquoted=0~quoted=1` |
+| `test/equals-is-not-a-pattern` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
+| `test/numeric-and-string-compare-differ` | `numeric=0~string=1` | `numeric=0~string=1` | `numeric=0~string=1` | `numeric=0~string=1` | `numeric=0~string=1` | `numeric=0~string=1` |
+| `test/and-binds-tighter-than-or` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `test/parentheses-group` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `test/bracket-wants-its-bracket` | `<shell>: 1: [: missing ]~st=2` | `<shell>: line 1: [: missing `]'~st=2` | `<shell>: line 1: [: missing `]'~st=2` | `<shell>: line 0: [: missing `]'~st=2` | `<shell>: [: ']' missing~st=2` | `<shell>:[:1: ']' expected~st=2` |
+| `test/a-malformed-expression-is-2` | `<shell>: 1: test: -Q: unexpected operator~st=2` | `<shell>: line 1: test: -Q: unary operator expected~st=2` | `<shell>: line 1: test: -Q: unary operator expected~st=2` | `<shell>: line 0: test: -Q: unary operator expected~st=2` | `<shell>: test: -Q: unknown operator~st=2` | `<shell>:test:1: unknown condition: -Q~st=2` |
+| `test/classification-diverges` | `<shell>: 1: test: a: unexpected operator~st=2` | `<shell>: line 1: test: b: binary operator expected~st=2` | `<shell>: line 1: test: b: binary operator expected~st=2` | `<shell>: line 0: test: b: binary operator expected~st=2` | `<shell>: test: b: unknown operator~st=2` | `<shell>:1: condition expected: b~st=2` |
+
+- `test/argument-count-decides` — POSIX defines `test` by argument count before grammar, which is why `test -f` alone is *true*: one argument is a string, and `-f` is a non-empty one. Two arguments make the same word an operator
+  ```sh
+  test -f; echo "one=$?"; test -n x; echo "two=$?"
+  ```
+- `test/the-quoting-trap` — the reason `[ ]` needs quotes where `[[ ]]` does not: an unquoted empty expansion is not an empty argument, it is *no* argument, so the count changes and with it the meaning
+  ```sh
+  u=; test -n $u; echo "unquoted=$?"; test -n "$u"; echo "quoted=$?"
+  ```
+- `test/equals-is-not-a-pattern` — the sharpest difference from `[[ ]]`, where the same right operand is a pattern and the answer is the opposite. `test` sees words, so `=` can only compare strings
+  ```sh
+  test abc = "a*"; echo "st=$?"
+  ```
+- `test/numeric-and-string-compare-differ` — the word-spelled operators compare numbers and `=` compares text, which is the same trap `[[ ]]` has and worth pinning on both surfaces
+  ```sh
+  test 10 -gt 9; echo "numeric=$?"; test 10 = 9; echo "string=$?"
+  ```
+- `test/and-binds-tighter-than-or` — `-a` binds tighter than `-o`, so this is (false and true) or true rather than false and (true or true)
+  ```sh
+  test a = b -a b = b -o c = c; echo "st=$?"
+  ```
+- `test/parentheses-group` — the parenthesised form is words rather than syntax — they are ordinary arguments the builtin matches, which is why they need quoting from the shell
+  ```sh
+  test \( a = b -o c = c \) -a d = d; echo "st=$?"
+  ```
+- `test/bracket-wants-its-bracket` — `[` is a command and `]` is an ordinary argument, so nothing but the builtin checks for it — every shell reports it and words it differently
+  ```sh
+  [ x ; echo "st=$?"
+  ```
+- `test/a-malformed-expression-is-2` — 2 for "this is not an expression", deliberately distinct from 1, "the expression is false" — a script that branches on $? can tell them apart, and every shell in the panel agrees on the number while wording it four ways
+  ```sh
+  test -Q x; echo "st=$?"
+  ```
+- `test/classification-diverges` — all four report a malformed expression and none agrees on what it is: bash blames the middle word and says a binary operator was expected, dash blames the *first* word, ksh93 calls it an unknown operator and zsh a condition. Status 2 everywhere, so this is a wording and classification divergence rather than a behavioral one
+  ```sh
+  test a b c; echo "st=$?"
+  ```
+
 ## times
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |

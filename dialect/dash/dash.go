@@ -56,6 +56,13 @@ func Diagnostics() interp.Diagnostics {
 		CannotExecute:     "%[1]s: %[2]s",
 		ExecCannotExecute: "exec: %[1]s: %[2]s",
 		ExecNotFound:      "exec: %[1]s: not found",
+		// One message for either operator position.
+		TestUnaryExpected:    "test: %[1]s: unexpected operator",
+		TestBinaryExpected:   "test: %[1]s: unexpected operator",
+		TestIntegerExpected:  "test: Illegal number: %[1]s",
+		TestTooManyArguments: "test: too many arguments",
+		TestOperandExpected:  "test: argument expected",
+		TestMissingBracket:   "[: missing ]",
 		// Six decimal places, the most of any shell in the panel.
 		TimesDecimals: 6,
 		// dash hands the path to execve rather than checking first, so a

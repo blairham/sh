@@ -151,6 +151,28 @@ type Diagnostics struct {
 	// file is `./f.sh:2: NOPE: parameter not set`, with no `.` anywhere in it.
 	NamesBuiltinInLocation bool
 
+	// TestUnaryExpected is what `test` says about a word where a unary
+	// operator belonged. One verb: the word.
+	TestUnaryExpected string
+	// TestBinaryExpected is the same for a binary operator's place. One verb.
+	//
+	// Two fields because one dialect words them differently — "unary operator
+	// expected" against "binary operator expected" — where the other three use
+	// one message for both and simply set these to the same string.
+	TestBinaryExpected string
+	// TestIntegerExpected is a non-numeric operand to `-eq` and its siblings.
+	// One verb: the operand.
+	TestIntegerExpected string
+	// TestOperandExpected is an operator with nothing after it. No verbs.
+	TestOperandExpected string
+	// TestTooManyArguments is a well-formed expression with words left over.
+	// No verbs.
+	TestTooManyArguments string
+	// TestMissingBracket is `[` without its closing `]`. No verbs — and every
+	// shell in the panel words it differently, which is the whole reason these
+	// four are fields rather than strings in the builtin.
+	TestMissingBracket string
+
 	// LowercaseReason lowercases the strerror text this dialect quotes.
 	//
 	// zsh alone: `permission denied` where the other three print the C

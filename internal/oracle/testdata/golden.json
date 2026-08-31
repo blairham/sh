@@ -6490,6 +6490,294 @@
         "TimedOut": false
       }
     },
+    "test/a-malformed-expression-is-2": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: test: -Q: unary operator expected~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: test: -Q: unary operator expected~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: test: -Q: unary operator expected~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: test: -Q: unexpected operator~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: test: -Q: unknown operator~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:test:1: unknown condition: -Q~st=2",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "test/and-binds-tighter-than-or": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "test/argument-count-decides": {
+      "bash": {
+        "Output": "one=0~two=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "one=0~two=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "one=0~two=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "one=0~two=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "one=0~two=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "one=0~two=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "test/bracket-wants-its-bracket": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: [: missing `]'~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: [: missing `]'~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: [: missing `]'~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [: missing ]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: [: ']' missing~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:[:1: ']' expected~st=2",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "test/classification-diverges": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: test: b: binary operator expected~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: test: b: binary operator expected~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: test: b: binary operator expected~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: test: a: unexpected operator~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: test: b: unknown operator~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: condition expected: b~st=2",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "test/equals-is-not-a-pattern": {
+      "bash": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "test/numeric-and-string-compare-differ": {
+      "bash": {
+        "Output": "numeric=0~string=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "numeric=0~string=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "numeric=0~string=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "numeric=0~string=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "numeric=0~string=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "numeric=0~string=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "test/parentheses-group": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "test/the-quoting-trap": {
+      "bash": {
+        "Output": "unquoted=0~quoted=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "unquoted=0~quoted=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "unquoted=0~quoted=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "unquoted=0~quoted=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "unquoted=0~quoted=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "unquoted=0~quoted=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "times/argument-diverges": {
       "bash": {
         "Output": "NmN.Ns NmN.Ns~NmN.Ns NmN.Ns~st=0",

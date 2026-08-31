@@ -1179,6 +1179,53 @@ var Corpus = []Case{
 		Snippet: `echo "echo cwd-hit" > fb.sh; PATH=/usr/bin:/bin; . fb.sh; echo st=$?`,
 		Why:     "only bash looks in the current directory once PATH has missed; the other three call it not found, so a script relying on it is bash-only",
 	},
+	// --- test and [ : a command, not a construct ---------------------
+	{
+		ID: "test/argument-count-decides", Category: "test",
+		Snippet: `test -f; echo "one=$?"; test -n x; echo "two=$?"`,
+		Why:     "POSIX defines `test` by argument count before grammar, which is why `test -f` alone is *true*: one argument is a string, and `-f` is a non-empty one. Two arguments make the same word an operator",
+	},
+	{
+		ID: "test/the-quoting-trap", Category: "test",
+		Snippet: `u=; test -n $u; echo "unquoted=$?"; test -n "$u"; echo "quoted=$?"`,
+		Why:     "the reason `[ ]` needs quotes where `[[ ]]` does not: an unquoted empty expansion is not an empty argument, it is *no* argument, so the count changes and with it the meaning",
+	},
+	{
+		ID: "test/equals-is-not-a-pattern", Category: "test",
+		Snippet: `test abc = "a*"; echo "st=$?"`,
+		Why:     "the sharpest difference from `[[ ]]`, where the same right operand is a pattern and the answer is the opposite. `test` sees words, so `=` can only compare strings",
+	},
+	{
+		ID: "test/numeric-and-string-compare-differ", Category: "test",
+		Snippet: `test 10 -gt 9; echo "numeric=$?"; test 10 = 9; echo "string=$?"`,
+		Why:     "the word-spelled operators compare numbers and `=` compares text, which is the same trap `[[ ]]` has and worth pinning on both surfaces",
+	},
+	{
+		ID: "test/and-binds-tighter-than-or", Category: "test",
+		Snippet: `test a = b -a b = b -o c = c; echo "st=$?"`,
+		Why:     "`-a` binds tighter than `-o`, so this is (false and true) or true rather than false and (true or true)",
+	},
+	{
+		ID: "test/parentheses-group", Category: "test",
+		Snippet: `test \( a = b -o c = c \) -a d = d; echo "st=$?"`,
+		Why:     "the parenthesised form is words rather than syntax — they are ordinary arguments the builtin matches, which is why they need quoting from the shell",
+	},
+	{
+		ID: "test/bracket-wants-its-bracket", Category: "test",
+		Snippet: `[ x ; echo "st=$?"`,
+		Why:     "`[` is a command and `]` is an ordinary argument, so nothing but the builtin checks for it — every shell reports it and words it differently",
+	},
+	{
+		ID: "test/a-malformed-expression-is-2", Category: "test",
+		Snippet: `test -Q x; echo "st=$?"`,
+		Why:     "2 for \"this is not an expression\", deliberately distinct from 1, \"the expression is false\" — a script that branches on $? can tell them apart, and every shell in the panel agrees on the number while wording it four ways",
+	},
+	{
+		ID: "test/classification-diverges", Category: "test",
+		Snippet: `test a b c; echo "st=$?"`,
+		Why:     "all four report a malformed expression and none agrees on what it is: bash blames the middle word and says a binary operator was expected, dash blames the *first* word, ksh93 calls it an unknown operator and zsh a condition. Status 2 everywhere, so this is a wording and classification divergence rather than a behavioral one",
+	},
+
 	// --- times: the last special builtin, and the most divergent for its size
 	//
 	// Every snippet masks the digits. The figures are real timings and cannot

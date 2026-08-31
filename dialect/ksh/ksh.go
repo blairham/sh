@@ -74,7 +74,13 @@ func Diagnostics() interp.Diagnostics {
 		ExecCannotExecute: "exec: %[1]s: cannot execute [%[2]s]",
 		// Not "cannot execute": ksh93 distinguishes a missing command from one
 		// that will not run, and only the second gets the brackets.
-		ExecNotFound: "exec: %[1]s: not found",
+		ExecNotFound:         "exec: %[1]s: not found",
+		TestUnaryExpected:    "test: %[1]s: unknown operator",
+		TestBinaryExpected:   "test: %[1]s: unknown operator",
+		TestIntegerExpected:  "test: %[1]s: integer expected",
+		TestTooManyArguments: "test: too many arguments",
+		TestOperandExpected:  "test: argument expected",
+		TestMissingBracket:   "[: ']' missing",
 		// Labeled lines, one figure each, and no children's times at all —
 		// genuinely less information than the other three report.
 		TimesLayout:   interp.TimesUserAndSystem,

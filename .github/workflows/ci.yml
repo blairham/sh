@@ -46,12 +46,9 @@ jobs:
         check-latest: true
         cache: true # go-mod-tidy-repo resolves the whole graph; an uncached run is slow and flaky # setup-go's manifest lags fresh Go patch releases; resolve via go.dev
     - name: Run pre-commit hooks
-      # Not the golangci-lint ones. The Lint job runs the same tool over the
-      # whole repository rather than over the diff, and `golangci-lint run`
-      # reports formatter findings too, so both hooks are a strict subset of a
-      # job that already has to pass.
-      env:
-        SKIP: golangci-lint-full,golangci-lint-fmt
+      # Nothing is skipped: pre-commit is the linter. `golangci-lint` reports
+      # what the change introduced, which is the whole point of running it
+      # here rather than in a job of its own.
       uses: blairham/go-pre-commit@v4.6.6
 
   # Gating happens inside the jobs, never with a workflow-level `paths:`
@@ -133,11 +130,6 @@ jobs:
     - run: go test -race ./...
       if: needs.changes.outputs.code == 'true'
 
-  # `go vet` is not run separately: govet is one of the linters .golangci.yml
-  # enables, so this job already does it, over the same code, with the same
-  # analysers. `go tool` rather than golangci-lint-action, so the version CI
-  # runs is the one pinned in go.mod — the same one `make lint` runs locally.
-  # The action's own `version:` was a second pin that drifted from it.
   oracle:
     name: Oracle (report only)
     needs: changes

@@ -19,19 +19,22 @@ repos:
   # `golangci-lint-fmt` applies every formatter configured in .golangci.yml —
   # gofumpt and goimports both.
   #
-  # `golangci-lint-full` and not `golangci-lint`: the latter runs
-  # `--new-from-rev HEAD`, and upstream's own description says linters that
-  # scan the whole module, like `unused`, "won't work as expected" under it.
-  # The full hook is the one upstream tells you to use when pre-commit runs in
-  # CI, and it is what makes a separate lint job unnecessary. It costs under a
-  # second on a warm cache, so there is nothing to trade away.
+  # `golangci-lint` and not `golangci-lint-full`: this runs on every commit and
+  # should report what you just wrote, not the repository's whole backlog. The
+  # choice costs nothing either way — `pass_filenames` is false, so golangci
+  # type-checks the whole module regardless and `--new-from-rev` only filters
+  # what it prints. It is about the signal, not the second.
+  #
+  # `--new-from-rev HEAD` is useless on a runner, where the checkout is clean
+  # and the hook therefore reports nothing at all. CI skips this hook and the
+  # Lint job diffs from the base commit instead.
   #
   # Keep `rev` in lockstep with go.mod's tool pin.
   - repo: https://github.com/golangci/golangci-lint
     rev: v2.13.2
     hooks:
       - id: golangci-lint-fmt
-      - id: golangci-lint-full
+      - id: golangci-lint
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.0

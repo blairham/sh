@@ -1,0 +1,122 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+package ksh_test
+
+import (
+	"bytes"
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/blairham/sh/dialect/ksh"
+	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
+)
+
+func runKsh(t *testing.T, dir, src string) (string, int) {
+	t.Helper()
+	f, err := syntax.Parse(src, ksh.Dialect())
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	var buf bytes.Buffer
+	sem, diag := ksh.Semantics(), ksh.Diagnostics()
+	r := &interp.Runner{
+		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag,
+		Dir: dir, Name: "ksh", Vars: map[string]string{"PATH": dir},
+	}
+	ksh.Apply(r)
+	st, rerr := r.Run(context.Background(), f)
+	if rerr != nil {
+		t.Fatalf("run %q: %v", src, rerr)
+	}
+	return buf.String(), st
+}
+
+// TestApplyAddsSourceAndStillRemovesLocal covers both halves of Apply, because
+// the addition arrived later and the removal is easy to lose to it.
+func TestApplyAddsSourceAndStillRemovesLocal(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "s.sh")
+	if err := os.WriteFile(path, []byte("echo via-source\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, st := runKsh(t, dir, `source `+path)
+	if st != 0 || strings.TrimSpace(out) != "via-source" {
+		t.Errorf("`source` should work: %q status %d", out, st)
+	}
+
+	out, st = runKsh(t, dir, `f() { local v=in; }; f`)
+	if !strings.Contains(out, "local: not found") {
+		t.Errorf("ksh93 still has no `local`: %q", out)
+	}
+	if st != 127 {
+		t.Errorf("status = %d, want 127", st)
+	}
+}
+
+// TestTheTwoHalvesOfTheFatalRuleDisagree is why one axis was not enough.
+//
+// POSIX makes any special builtin's failure fatal. ksh93 kept half of it: a
+// file `.` cannot open ends the script, and unparseable text handed to `eval`
+// does not. dash kept both halves, bash and zsh neither.
+func TestTheTwoHalvesOfTheFatalRuleDisagree(t *testing.T) {
+	s := ksh.Semantics()
+	if got := s.BuiltinSyntaxErrorFatal; got != interp.No {
+		t.Errorf("BuiltinSyntaxErrorFatal = %v, want No", got)
+	}
+	if got := s.DotMissingFileFatal; got != interp.Yes {
+		t.Errorf("DotMissingFileFatal = %v, want Yes", got)
+	}
+
+	dir := t.TempDir()
+	// `$?` is read immediately, because the trailing echo succeeds and would
+	// otherwise be the status this asserts on — the script exits 0 here in the
+	// real shell too, and the 3 belongs to the eval.
+	out, _ := runKsh(t, dir, `eval "if"; echo REACHED st=$?`)
+	if !strings.Contains(out, "REACHED") {
+		t.Errorf("an unparseable eval is survivable here: %q", out)
+	}
+	if !strings.Contains(out, "st=3") {
+		t.Errorf("output = %q, want st=3 — ksh93's syntax status", out)
+	}
+
+	out, st := runKsh(t, dir, `. `+filepath.Join(dir, "absent.sh")+`; echo NOT-REACHED`)
+	if strings.Contains(out, "NOT-REACHED") {
+		t.Errorf("a file `.` cannot open ends the script here: %q", out)
+	}
+	if st != 1 {
+		t.Errorf("status = %d, want 1", st)
+	}
+}
+
+// TestNoOperandIsFatalWithItsOwnStatus is the case that caught a bug: the
+// generic fatal status for ksh93 is 1, and this failure reports 2. Taking the
+// status from the fatal path rather than from the field was wrong by one.
+func TestNoOperandIsFatalWithItsOwnStatus(t *testing.T) {
+	if got := ksh.Diagnostics().DotNoOperandStatus; got != 2 {
+		t.Fatalf("DotNoOperandStatus = %d, want 2", got)
+	}
+	out, st := runKsh(t, t.TempDir(), `. ; echo NOT-REACHED`)
+	if strings.Contains(out, "NOT-REACHED") {
+		t.Errorf("`.` with no operand ends the script here: %q", out)
+	}
+	if st != 2 {
+		t.Errorf("status = %d, want 2 — not the generic fatal status of 1", st)
+	}
+}
+
+func TestDotPassesArgumentsHere(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.sh")
+	if err := os.WriteFile(path, []byte("echo got=$1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := runKsh(t, dir, `set -- OUTER; . `+path+` INNER; echo after=$1`)
+	if got := strings.TrimSpace(out); got != "got=INNER\nafter=OUTER" {
+		t.Errorf("output = %q, want the file to see INNER and the caller OUTER", got)
+	}
+}

@@ -1097,4 +1097,91 @@ var Corpus = []Case{
 		Snippet: `true || true && false; echo "st=$?"`,
 		Why:     "the contrast that makes the previous case a finding rather than a curiosity",
 	},
+
+	// --- eval and . : the special builtins that run text in this shell ---
+	{
+		ID: "eval/runs-in-the-calling-shell", Category: "eval and dot",
+		Snippet: `x=1; eval "x=2"; echo $x`,
+		Why:     "the reason eval is a builtin and not a command: a child process could not change this shell's variable",
+	},
+	{
+		ID: "eval/expands-twice", Category: "eval and dot",
+		Snippet: `a=b; b=hi; eval "echo \$$a"`,
+		Why:     "the point of eval — the text is expanded once as a word and again as a script, so $$a reaches the second pass as $b",
+	},
+	{
+		ID: "eval/joins-arguments-with-a-space", Category: "eval and dot",
+		Snippet: `eval echo a b c`,
+		Why:     "eval rejoins its arguments before parsing, so the word boundaries the shell made are not preserved",
+	},
+	{
+		ID: "eval/nothing-to-run-reports-success", Category: "eval and dot",
+		Snippet: `false; eval ""; echo st=$?`,
+		Why:     "reads like it should leave the status alone and does not: an eval with no commands clears a failure rather than preserving it",
+	},
+	{
+		ID: "eval/is-transparent-to-return", Category: "eval and dot",
+		Snippet: `f() { eval return 3; echo NOT-REACHED; }; f; echo st=$?`,
+		Why:     "eval is not a scope: `return` inside it returns from the function around it, which is the opposite of what a sourced file does",
+	},
+	{
+		ID: "eval/is-transparent-to-break", Category: "eval and dot",
+		Snippet: `for i in 1 2 3; do eval break; echo NOT-REACHED; done; echo done`,
+		Why:     "the same transparency for loop control, which a naive implementation running the text on a child runner would lose",
+	},
+	{
+		ID: "eval/unparseable-text-diverges", Category: "eval and dot",
+		Snippet: `eval "if"; echo REACHED st=$?`,
+		Why:     "POSIX makes a special builtin's failure fatal to a non-interactive shell and only dash still does it; bash, ksh93 and zsh report it and carry on, each with its own status",
+	},
+	{
+		ID: "dot/runs-in-the-calling-shell", Category: "eval and dot",
+		Snippet: `echo "x=7" > p.sh; . ./p.sh; echo $x`,
+		Why:     "the same property as eval, from a file: a sourced assignment survives because no child process was involved",
+	},
+	{
+		ID: "dot/status-is-the-last-command", Category: "eval and dot",
+		Snippet: `echo false > p.sh; . ./p.sh; echo st=$?`,
+		Why:     "`.` reports what the file's last command reported, which is what makes it usable in a conditional",
+	},
+	{
+		ID: "dot/empty-file-clears-the-status", Category: "eval and dot",
+		Snippet: `: > p.sh; false; . ./p.sh; echo st=$?`,
+		Why:     "\"the status of the last command\" with no last command is 0 rather than whatever came before, the same surprise as an empty eval",
+	},
+	{
+		ID: "dot/return-ends-the-source", Category: "eval and dot",
+		Snippet: `printf 'echo one\nreturn 5\necho NOT-REACHED\n' > p.sh; . ./p.sh; echo st=$?`,
+		Why:     "a sourced file *is* a scope for `return`, unlike eval — the one way the two builtins differ in how they treat control flow",
+	},
+	{
+		ID: "dot/searches-path-and-path-wins", Category: "eval and dot",
+		Snippet: `mkdir -p d; echo "echo from-path" > d/amb.sh; echo "echo from-cwd" > amb.sh; PATH=$PWD/d:$PATH; . amb.sh`,
+		Why:     "an operand with no slash is a PATH lookup and PATH beats an identically named file next to you, which surprises everyone and is unanimous",
+	},
+	{
+		ID: "dot/arguments-diverge", Category: "eval and dot",
+		Snippet: `echo 'echo got=$1' > p.sh; set -- OUTER; . ./p.sh INNER; echo after=$1`,
+		Why:     "bash, ksh93 and zsh give a sourced file its own positional parameters and restore the caller's afterwards; dash ignores the words entirely, so the file still sees OUTER",
+	},
+	{
+		ID: "dot/missing-file-diverges", Category: "eval and dot",
+		Snippet: `. ./nonexistent-xyz.sh; echo REACHED st=$?`,
+		Why:     "the other half of the POSIX fatal rule, and the panel splits differently than for eval: dash and ksh93 end the script, bash reports 1 and zsh 127",
+	},
+	{
+		ID: "dot/no-operand-diverges", Category: "eval and dot",
+		Snippet: `. ; echo REACHED st=$?`,
+		Why:     "four answers to one degenerate input: dash calls it success and does nothing, bash reports 2 and survives, ksh93 reports 2 and exits, zsh reports 1 and survives",
+	},
+	{
+		ID: "dot/cwd-fallback-is-bash-only", Category: "eval and dot",
+		Snippet: `echo "echo cwd-hit" > fb.sh; PATH=/usr/bin:/bin; . fb.sh; echo st=$?`,
+		Why:     "only bash looks in the current directory once PATH has missed; the other three call it not found, so a script relying on it is bash-only",
+	},
+	{
+		ID: "dot/source-is-not-in-dash", Category: "eval and dot",
+		Snippet: `echo "echo via-source" > p.sh; source ./p.sh; echo st=$?`,
+		Why:     "`source` is a synonym for `.` in bash, ksh93 and zsh and absent from dash, which is why the substrate keeps `.` and leaves the second name to each dialect",
+	},
 }

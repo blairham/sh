@@ -21,6 +21,11 @@ func Semantics() interp.Semantics {
 	s.EchoInterpretsEscapes = interp.Yes
 	s.LengthOfSpecialIsCount = interp.No
 	s.UnterminatedBracket = interp.BracketNoMatch
+	// `.` with no filename at all is not an error here: dash does nothing and
+	// reports success, where the other three complain. Everything else about
+	// `.` and `eval` is the POSIX answer, which dash keeps and the others have
+	// each moved away from.
+	s.DotWithNoOperandIsAnError = interp.No
 	return s
 }
 
@@ -37,6 +42,16 @@ func Diagnostics() interp.Diagnostics {
 		CannotOpen:        "cannot open %s: %s",
 		ShiftTooMany:      "shift: can't shift that many",
 		SyntaxErrorStatus: 2,
+		// dash ends the script rather than reporting a status here, so only the
+		// wording speaks — and it uses two, where the other three use one.
+		//
+		// The reason verb goes unused in the first: dash truncates strerror's
+		// "No such file or directory" to "No such file" for this message
+		// alone, so the text is spelled out rather than taken from the error.
+		// An indexed format may ignore an argument, which is what makes that
+		// safe.
+		DotCannotOpen: ".: cannot open %[1]s: No such file",
+		DotNotFound:   ".: %[1]s: not found",
 	}
 }
 

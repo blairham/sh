@@ -284,6 +284,7 @@ func (r *Runner) allowed(ctx context.Context, a Action) bool {
 // Run executes a whole file, returning the last command's status.
 func (r *Runner) Run(ctx context.Context, f *syntax.File) (int, error) {
 	r.ctx = ctx
+	r.ensurePWD()
 	for _, st := range f.Stmts {
 		if err := r.stmt(ctx, st); err != nil {
 			r.runExitTrap(ctx)
@@ -777,6 +778,32 @@ func (r *Runner) setVar(name, value string) {
 		r.Vars = map[string]string{}
 	}
 	r.Vars[name] = value
+}
+
+// ensurePWD gives `$PWD` a value before the first command runs.
+//
+// POSIX requires a shell to set it at startup, and until this was here `cd`
+// was the only thing that ever did — so a shell handed an environment without
+// PWD in it, which is exactly what the conformance harness hands one, expanded
+// `$PWD` to nothing. `PATH=$PWD/d:$PATH` then meant `/d`, and a `.` lookup
+// that should have found a file on PATH silently fell through to the current
+// directory instead. Real bash sets it and got the case right; we did not.
+//
+// Only r.Vars is consulted, deliberately, and not getVar: getVar falls back to
+// the process environment, whose PWD describes the *parent* rather than this
+// runner. A Runner given a Dir of its own would otherwise report the directory
+// the program was started in, which is a different place — and real shells do
+// not trust an inherited PWD that disagrees with where they actually are
+// either.
+//
+// Idempotent, because Run is called more than once on a runner — a dialect's
+// prelude first and then the script — and because `cd` may already have moved,
+// and because a caller may have set it deliberately.
+func (r *Runner) ensurePWD() {
+	if _, ok := r.Vars["PWD"]; ok {
+		return
+	}
+	r.setVar("PWD", r.workDir())
 }
 
 func (r *Runner) getVar(name string) (string, bool) {

@@ -40,6 +40,12 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | `local` builtin | yes | yes | **absent** | yes |
 | readonly reassignment | fatal | **continues** | fatal | fatal |
 | `shift` past the end | fatal | **survives** | fatal | **survives** |
+| unparseable text in a special builtin | **fatal** | survives | survives | survives |
+| `.` cannot open its file | **fatal** | survives | **fatal** | survives |
+| `.` with no operand | **not an error** | 2, survives | 2, fatal | 1, survives |
+| `.` passes positional parameters | **no** | yes | yes | yes |
+| `.` falls back to the current directory | no | **yes** | no | no |
+| `source` as a synonym for `.` | **absent** | yes | yes | yes |
 
 Probes, for reproduction:
 
@@ -55,6 +61,12 @@ Probes, for reproduction:
     $0 in function   f() { echo "$0"; }; f            → shell, shell, shell, f
     readonly         readonly r=1; r=2; echo survived → fatal, CONTINUES, fatal, fatal
     shift past end   shift 5; echo survived           → fatal, survives, fatal, survives
+    eval unparseable eval "if"; echo REACHED          → fatal, 2, 3, 1 — only dash stops
+    dot missing file . /nope; echo REACHED            → fatal, 1, fatal, 127
+    dot no operand   . ; echo "st=$?"                 → st=0, 2, fatal 2, 1
+    dot arguments    . f.sh ARG   (f.sh echoes $1)    → OUTER, ARG, ARG, ARG
+    dot cwd fallback PATH=/bin; . f.sh               → not found, FOUND, not found, not found
+    source synonym   source f.sh                     → not found, works, works, works
 
 The readonly probe must be a **plain assignment in a script file**.
 Writing `r=2 2>/dev/null` makes it a command with a prefix and takes a
@@ -179,6 +191,37 @@ That is worth stating because the obvious reading of the measurements is
 two separate quirks. It is one behavior observed twice, and an
 implementation with two switches for it will eventually set them
 inconsistently.
+
+## One rule in the standard, two axes here
+
+The previous section is about one behavior that looked like two. This is
+the reverse: one *rule* that looked like one axis and measured as two.
+
+POSIX says a special builtin's failure is fatal to a non-interactive
+shell. `eval` and `.` are both special builtins, so the obvious model is a
+single `SpecialBuiltinFailureIsFatal` switch. The panel disagrees:
+
+| failure | dash | bash | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `eval "if"` — unparseable text | fatal | survives | survives | survives |
+| `. missing.sh` — cannot open | fatal | survives | **fatal** | survives |
+
+ksh93 kept half the rule. One switch would have to give it either bash's
+answer for the file or dash's answer for the eval, and both are wrong. So
+there are two axes, `BuiltinSyntaxErrorFatal` and `DotMissingFileFatal`,
+and dash answers yes to both, bash and zsh no to both, and ksh93 one of
+each.
+
+The same failure also splits three ways on *status*, which is a
+`Diagnostics` question rather than a semantics one, and one of those
+answers depends on where the text was read from: zsh reports 1 for
+unparseable text from `-c` and 126 for the same text in a file `.` opened.
+That is `SourcedSyntaxErrorStatus`, and it exists so zsh can hold both
+answers at once.
+
+Three questions, then, about what reads in the standard as one sentence:
+is it fatal, what status does it carry, and how is it worded. The rule for
+adding an axis at the end of this file is what forced them apart.
 
 ## One option, six divergences
 

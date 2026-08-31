@@ -237,6 +237,49 @@ type Semantics struct {
 	// DollarZeroInFunctionIsFunctionName makes `$0` inside a function the
 	// function's name. True only in zsh.
 	DollarZeroInFunctionIsFunctionName Answer
+
+	// BuiltinSyntaxErrorFatal ends a non-interactive shell when text handed
+	// to a special builtin does not parse — `eval "if"`, or a sourced file
+	// with an unterminated `if` in it.
+	//
+	// True only in dash, which is the POSIX rule that a special builtin's
+	// failure is fatal; bash, ksh93 and zsh report it and carry on. One axis
+	// covers both callers because the answers are the same for both in every
+	// shell measured, where the *status* is not — that is two fields on
+	// Diagnostics.
+	BuiltinSyntaxErrorFatal Answer
+
+	// DotWithNoOperandIsAnError decides whether `.` with no filename is a
+	// failure at all. False in dash, which does nothing and reports success;
+	// true in bash, ksh93 and zsh.
+	//
+	// Separate from the status and from the fatality because the panel splits
+	// four ways on `.` alone — dash 0, bash 2 surviving, ksh93 2 fatal, zsh 1
+	// surviving — and one field with four answers would have to invent a type
+	// to hold what is really three independent questions.
+	DotWithNoOperandIsAnError Answer
+
+	// DotMissingFileFatal ends the script when `.` cannot read its file.
+	// True in dash and ksh93, false in bash and zsh — the same split as
+	// ShiftPastEndFatal, and for the same POSIX reason.
+	DotMissingFileFatal Answer
+
+	// DotPassesArguments gives a sourced file its own positional parameters
+	// from the words after the filename, restoring the caller's afterwards.
+	//
+	// False in dash, which ignores them, so `. f.sh ARG` leaves `$1` as the
+	// caller's; true in bash, ksh93 and zsh. With no words after the filename
+	// every shell leaves the parameters alone, so the axis only speaks when
+	// there are some.
+	DotPassesArguments Answer
+
+	// DotFallsBackToCurrentDirectory looks in the current directory for a
+	// `.` operand with no slash in it, after PATH has missed.
+	//
+	// True only in bash. PATH is searched first everywhere, and wins over an
+	// identically named file in the current directory in all four — this is
+	// only about what happens when PATH does not have it.
+	DotFallsBackToCurrentDirectory Answer
 }
 
 // There is deliberately no CoreSemantics, and the absence is the sharpest
@@ -294,6 +337,19 @@ func PosixSemantics() Semantics {
 		ReadonlyReassignmentFatal:          Yes,
 		ArrayBaseIsZero:                    Yes,
 		DollarZeroInFunctionIsFunctionName: No,
+		// A special builtin's failure is fatal to a non-interactive shell,
+		// which the standard states outright. dash is the only member of the
+		// panel that still does it, and the preset follows the standard
+		// rather than the majority.
+		BuiltinSyntaxErrorFatal:   Yes,
+		DotMissingFileFatal:       Yes,
+		DotWithNoOperandIsAnError: Yes,
+		// The standard gives `.` a filename and nothing else; passing
+		// positional parameters to a sourced file is an extension three of
+		// the four grew. And it reads the file from PATH, with no mention of
+		// the current directory as a fallback.
+		DotPassesArguments:             No,
+		DotFallsBackToCurrentDirectory: No,
 	}
 }
 

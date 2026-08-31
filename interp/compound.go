@@ -146,6 +146,10 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 		r.status = 0
 		for _, it := range items {
 			r.setVar(c.Name, it)
+			// After the assignment, because zsh traces the assignment
+			// itself, and before the body, because bash's header is the
+			// line that introduces the iteration.
+			r.traceForIteration(c.Header, c.Name, it)
 			if err := r.runList(ctx, c.Body); err != nil {
 				return err
 			}

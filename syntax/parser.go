@@ -56,6 +56,16 @@ func (p *Parser) Err() error { return p.err }
 // could still be finished. A prompt should ask for another line.
 func (p *Parser) Incomplete() bool { return p.incomplete || p.lex.Incomplete() }
 
+// slice returns the source between two positions, which is how a node keeps
+// the text it was written as. A diagnostic quotes what the author typed, and
+// no reconstruction from the tree can be relied on to match it.
+func (p *Parser) slice(from, to Pos) string {
+	if from.Offset < 0 || to.Offset > len(p.lex.src) || from.Offset > to.Offset {
+		return ""
+	}
+	return p.lex.src[from.Offset:to.Offset]
+}
+
 func (p *Parser) next() {
 	p.tok = p.lex.Next()
 	if p.err == nil && p.lex.Err() != nil {
@@ -649,6 +659,7 @@ func (p *Parser) parseFor() Command {
 		return c
 	}
 	c.Name = p.tok.Literal()
+	nameEnd := p.tok.End
 	p.next()
 	p.skipNewlines()
 
@@ -661,6 +672,11 @@ func (p *Parser) parseFor() Command {
 			c.Items = append(c.Items, p.word())
 		}
 	}
+	end := nameEnd
+	if n := len(c.Items); n > 0 {
+		end = c.Items[n-1].End()
+	}
+	c.Header = p.slice(c.Start, end)
 	p.requireSep("do")
 	p.expectWord("do")
 	c.Body = p.parseList()
@@ -677,7 +693,9 @@ func (p *Parser) parseCase() Command {
 		return c
 	}
 	p.skipNewlines()
+	inEnd := p.tok.End
 	p.expectWord("in")
+	c.Header = p.slice(c.Start, inEnd)
 	p.skipNewlines()
 
 	for p.err == nil && !p.atWord("esac") && !p.at(TokEOF) {

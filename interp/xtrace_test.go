@@ -131,3 +131,44 @@ func TestXtracePipelineOrderIsDeterministic(t *testing.T) {
 		}
 	}
 }
+
+// TestXtraceForHeaderHasThreeAnswers records what each shell prints when a
+// `for` loop takes another turn. It is not a bool: two shells print nothing,
+// one reprints the header, and one prints something the header does not say.
+func TestXtraceForHeaderHasThreeAnswers(t *testing.T) {
+	const src = `set -x; for i in 1 2; do echo $i; done`
+	// bash reprints the header once per iteration, as written.
+	want := "+ for i in 1 2\n+ echo 1\n+ for i in 1 2\n+ echo 2\n"
+	if got := traceOf(t, src, bash.Semantics(), bash.Diagnostics()); got != want {
+		t.Errorf("bash: got %q, want %q", got, want)
+	}
+	// dash and ksh93 print only the commands inside.
+	want = "+ echo 1\n+ echo 2\n"
+	if got := traceOf(t, src, dash.Semantics(), dash.Diagnostics()); got != want {
+		t.Errorf("dash: got %q, want %q", got, want)
+	}
+	if got := traceOf(t, src, ksh.Semantics(), ksh.Diagnostics()); got != want {
+		t.Errorf("ksh93: got %q, want %q", got, want)
+	}
+	// zsh prints neither, and shows the assignment instead. Without the
+	// trailing space it puts on an assignment that stands alone as a
+	// command — measured, and the reason this does not reuse traceLine.
+	got := traceOf(t, src, zsh.Semantics(), zsh.Diagnostics())
+	if !strings.Contains(got, "> i=1\n") || strings.Contains(got, "for i in") {
+		t.Errorf("zsh: got %q, want an assignment and no header", got)
+	}
+}
+
+// TestXtraceForHeaderIsUnexpanded is the reason the header is kept as source
+// rather than rebuilt from the tree: bash prints what was written, so a
+// rebuilt line would lose the `$` and the quotes.
+func TestXtraceForHeaderIsUnexpanded(t *testing.T) {
+	got := traceOf(t, `x="a b"; set -x; for i in $x; do :; done`, bash.Semantics(), bash.Diagnostics())
+	if !strings.Contains(got, "+ for i in $x\n") {
+		t.Errorf("got %q, want it to contain %q", got, "+ for i in $x\n")
+	}
+	got = traceOf(t, `set -x; for i in "a b"; do :; done`, bash.Semantics(), bash.Diagnostics())
+	if !strings.Contains(got, `+ for i in "a b"`+"\n") {
+		t.Errorf("got %q, want the quotes kept", got)
+	}
+}

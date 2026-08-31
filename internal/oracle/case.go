@@ -476,7 +476,7 @@ var Corpus = []Case{
 	{
 		ID: "xtrace/compound-header-diverges", Category: "shell options",
 		Snippet: `set -x; for i in 1 2; do echo $i; done`,
-		Why:     "bash and zsh print the `for` header once per iteration where dash and ksh93 print only the commands inside — measured, and not reproduced here",
+		Why:     "three answers, not two: dash and ksh93 print only the commands inside, bash reprints the header as written once per iteration, and zsh prints neither but shows the assignment the iteration made",
 	},
 	{
 		ID: "xtrace/pipeline-order-diverges", Category: "shell options",

@@ -52,6 +52,7 @@ func Diagnostics() interp.Diagnostics {
 		// not literals, so a bad digit gets a reason of its own.
 		DigitTooGreatForBase: "value too great for base",
 		TraceQuoting:         interp.QuoteShell,
+		TraceForHeader:       interp.TraceForSource,
 		SyntaxErrorStatus:    2,
 	}
 }

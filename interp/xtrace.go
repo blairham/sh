@@ -27,6 +27,25 @@ const (
 	TraceNameLine
 )
 
+// TraceForHeader is what a `for` loop prints at each iteration under
+// `set -x`. Three answers, all measured, which is why it is a type of its own
+// rather than a bool: dash and ksh93 print nothing and go straight to the
+// body, bash reprints the header as written, and zsh prints neither but shows
+// the assignment the iteration performed.
+type TraceForHeader int
+
+const (
+	// TraceForNone prints nothing for the loop itself, only its body. dash
+	// and ksh93, and the substrate's own.
+	TraceForNone TraceForHeader = iota
+	// TraceForSource reprints the header as written, once per iteration:
+	// `+ for i in $x` — unexpanded, quotes and all. bash.
+	TraceForSource
+	// TraceForAssign prints the assignment the iteration made, `+ i=1`,
+	// which is the one thing the header does not say. zsh.
+	TraceForAssign
+)
+
 // TraceQuoting is how a shell renders a word that needs quoting.
 type TraceQuoting int
 
@@ -90,6 +109,34 @@ func (r *Runner) traceAssignments(assigns []*syntax.Assign, values []string) {
 }
 
 // traceLine writes one trace line.
+// traceForIteration prints what the dialect prints when a `for` loop takes
+// another turn, which is a different thing in three of the four shells.
+//
+// It does not go through traceLine: zsh appends a space to an assignment that
+// stands alone as a command and does not append one here, and this records
+// that rather than tidying it away.
+func (r *Runner) traceForIteration(header, name, value string) {
+	if !r.xtrace {
+		return
+	}
+	d := r.diag()
+	var line string
+	switch d.TraceForHeader {
+	case TraceForSource:
+		line = header
+	case TraceForAssign:
+		line = name + "=" + traceQuote(value, d.TraceQuoting)
+	default:
+		return
+	}
+	if line == "" {
+		return
+	}
+	r.awaitTraceTurn()
+	defer r.releaseTraceTurn()
+	r.errf("%s%s\n", r.tracePrefix(), line)
+}
+
 func (r *Runner) traceLine(line string, d Diagnostics) {
 	if d.TraceStyle == TraceNameLine {
 		// zsh puts a space after an assignment-only line and nowhere else.

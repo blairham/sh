@@ -125,6 +125,12 @@ type Diagnostics struct {
 	// what happens — the same argument the wording formats make.
 	TraceStyle   TraceStyle
 	TraceQuoting TraceQuoting
+	// TraceForHeader is what a `for` loop prints at each iteration. Zero is
+	// TraceForNone, which is dash's and ksh93's answer and the substrate's
+	// own. `case` diverges the same way and is not reproduced: bash prints
+	// `case $v in` once, zsh prints `case v (pattern)` once per pattern it
+	// tries, and the corpus records the difference rather than claiming it.
+	TraceForHeader TraceForHeader
 
 	// Location is how the shell prefixes a diagnostic with where it
 	// happened. Measured, and all four differ:

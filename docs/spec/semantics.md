@@ -170,6 +170,25 @@ two separate quirks. It is one behaviour observed twice, and an
 implementation with two switches for it will eventually set them
 inconsistently.
 
+## A divergence measured and not implemented
+
+zsh writes to *every* redirection target where the others write only to the
+last:
+
+    echo x >a >b        dash, bash, ksh93 → b only
+                        zsh              → both
+
+Nothing is reported either way, so it is the `&>` shape again. It is
+recorded as `redir/multios-is-zsh-only` and deliberately not implemented:
+writing to several targets at once is a feature rather than an answer, and
+adding it unasked would be inventing behaviour for three of the four.
+
+It also demonstrates the blind spot recorded above, on a case chosen for
+something else. The two answers differ in *output* and agree on the exit
+status, so the behavioural score counts them as agreeing and every other
+view calls it wording. A shell that writes to the wrong file is not a
+wording difference.
+
 ## Wording is a third kind of answer
 
 `Diagnostics` began as one number and now carries what a shell *says*. The

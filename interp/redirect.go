@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -47,6 +48,28 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.C
 			}
 		}
 		name := joinFields(r.expandWord(rd.Word))
+
+		// `N>&M` and `N<&M` duplicate a descriptor, and `N>&-` closes one.
+		// No file is opened, so the gate has nothing to see: this rearranges
+		// streams the shell already holds.
+		//
+		// Copying the stream *as it is now* is the whole of it, and is why
+		// order matters — `>f 2>&1` sends both to the file and `2>&1 >f`
+		// sends only stdout there, because the second one copied stdout
+		// before it was redirected. All four shells agree, and getting it
+		// right needs no special case: the loop already runs left to right.
+		if rd.Op == syntax.TokGreatAmp || rd.Op == syntax.TokLessAmp {
+			if rd.N == nil && rd.Op == syntax.TokLessAmp {
+				fd = 0
+			}
+			if err := r.dupFd(fd, name); err != nil {
+				r.diagf("%v\n", err)
+				r.status = 1
+				r.redirErr = true
+				return closers, nil
+			}
+			continue
+		}
 
 		// A here-document and a here-string are input the shell already
 		// holds, so there is no file to open and nothing for the gate to
@@ -186,3 +209,65 @@ func openReason(err error) string {
 	}
 	return err.Error()
 }
+
+// dupFd points one descriptor at another, or closes it.
+//
+// Only 0, 1 and 2 are addressable. A shell with an `exec 3>file` would need a
+// descriptor table; this has three named streams, and saying so is better than
+// accepting `3>&1` and quietly doing nothing with it.
+func (r *Runner) dupFd(fd int, target string) error {
+	if target == "-" {
+		switch fd {
+		case 0:
+			r.Stdin = closedFd{}
+		case 2:
+			r.Stderr = closedFd{}
+		default:
+			r.Stdout = closedFd{}
+		}
+		return nil
+	}
+	m, ok := atoi(target)
+	if !ok {
+		return fmt.Errorf("%s: ambiguous redirect", target)
+	}
+	var src any
+	switch m {
+	case 0:
+		src = r.stdin()
+	case 1:
+		src = r.stdout()
+	case 2:
+		src = r.stderr()
+	default:
+		return fmt.Errorf("%d: bad file descriptor", m)
+	}
+	switch fd {
+	case 0:
+		rd, ok := src.(io.Reader)
+		if !ok {
+			return fmt.Errorf("%d: bad file descriptor", m)
+		}
+		r.Stdin = rd
+	case 2, 1:
+		w, ok := src.(io.Writer)
+		if !ok {
+			return fmt.Errorf("%d: bad file descriptor", m)
+		}
+		if fd == 2 {
+			r.Stderr = w
+		} else {
+			r.Stdout = w
+		}
+	default:
+		return fmt.Errorf("%d: bad file descriptor", fd)
+	}
+	return nil
+}
+
+// closedFd is a descriptor that has been closed with `>&-`. Reading or writing
+// it fails the way the kernel would.
+type closedFd struct{}
+
+func (closedFd) Write([]byte) (int, error) { return 0, syscall.EBADF }
+func (closedFd) Read([]byte) (int, error)  { return 0, syscall.EBADF }

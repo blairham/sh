@@ -73,6 +73,10 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
     steps:
+    # Gated per step, not on the job. A required check that never runs is
+    # reported as pending forever, and a matrix job skipped by `if:` never
+    # expands at all — so the job always runs and reports, and only the
+    # expensive steps are skipped.
     - uses: actions/checkout@v6
       with:
         fetch-depth: 0 # the diff needs the base commit, not just HEAD
@@ -104,7 +108,6 @@ jobs:
   test:
     name: Build and test
     needs: changes
-    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -112,13 +115,17 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
     - uses: actions/checkout@v6
+      if: needs.changes.outputs.code == 'true'
     - uses: actions/setup-go@v6
+      if: needs.changes.outputs.code == 'true'
       with:
         go-version-file: go.mod
         check-latest: true
         cache: true
     - run: go build ./...
+      if: needs.changes.outputs.code == 'true'
     - run: go test -race ./...
+      if: needs.changes.outputs.code == 'true'
 
   # `go vet` is not run separately: govet is one of the linters .golangci.yml
   # enables, so this job already does it, over the same code, with the same
@@ -128,47 +135,24 @@ jobs:
   oracle:
     name: Oracle (report only)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
+      if: needs.changes.outputs.code == 'true'
     - uses: actions/setup-go@v6
+      if: needs.changes.outputs.code == 'true'
       with:
         go-version-file: go.mod
         check-latest: true
         cache: true
     - name: Install as much of the panel as this runner can host
+      if: needs.changes.outputs.code == 'true'
       run: sudo apt-get update -qq && sudo apt-get install -y -qq dash ksh zsh
     - name: Report drift without failing on it
+      if: needs.changes.outputs.code == 'true'
       # The golden record is generated on one machine and a runner does not
       # have the same builds of the same shells, so some differences here are
       # legitimate. A check that is red for a legitimate reason is one people
       # learn to ignore. `make oracle-check` is the gate locally, where the
       # panel matches the record.
       run: go run ./cmd/oracle -check || true
-
-  # The one check branch protection requires. Requiring the jobs by name does
-  # not survive this workflow's shape: a job skipped by the prose guard never
-  # reports, and a *matrix* job skipped by `if:` never expands, so a policy
-  # naming "test (ubuntu-latest)" waits for it forever. A single always-running
-  # gate that fails when any upstream job failed survives skips, matrix
-  # renames and new jobs alike — when jobs change here, update this `needs`
-  # list and nothing else.
-  ci-ok:
-    needs: [pre-commit, changes, test]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-    - name: Verify no required job failed
-      env:
-        RESULTS: ${{ toJSON(needs) }}
-      run: |
-        echo "$RESULTS"
-        bad=$(echo "$RESULTS" | jq -r 'to_entries[]
-          | select(.value.result != "success" and .value.result != "skipped")
-          | "\(.key)=\(.value.result)"')
-        if [ -n "$bad" ]; then
-          echo "not ok: $bad"
-          exit 1
-        fi
-        echo "ok"

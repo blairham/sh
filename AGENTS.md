@@ -287,6 +287,35 @@ a local commit ends up rewritten to recover from a mistake, and how a
 half-finished experiment ends up in the same tree as the fix you meant to
 send. Remove the worktree when the pull request opens, not when it merges.
 
+## Every commit must be signed, and check before you push
+
+`main` requires signatures. An unsigned commit does not fail loudly: the
+pull request shows **every check green** and simply refuses to merge, with
+`mergeStateStatus: BLOCKED` and nothing on the page saying why. That has
+cost real time twice — once to a commit that signed *badly*, once to four
+that did not sign at all.
+
+Before pushing:
+
+    git log --format='%h %G? %s' origin/main..HEAD
+
+`G` or `U` is fine; `U` means a good signature that is untrusted in the
+local keyring, which is normal here. `N` is unsigned and `B` is bad, and
+either one blocks the merge.
+
+To fix it, re-sign in place and force-push the *branch*:
+
+    git rebase --exec 'git commit --amend --no-edit -S' <last-good-sha>
+    git diff <old-head> HEAD          # must be empty — content is unchanged
+    git push --force-with-lease
+
+Check the tree diff is empty before pushing and that GitHub agrees after:
+
+    gh api repos/blairham/sh/commits/<sha> -q '.commit.verification'
+
+This is the one case where a force-push is the right answer. It is only
+ever a feature branch, never `main`.
+
 ## Testing
 
 Compatibility is proven by **differential testing against real shell

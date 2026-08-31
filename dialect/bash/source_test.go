@@ -132,3 +132,40 @@ func TestDotStatusesAreBashs(t *testing.T) {
 		t.Errorf("SourcedSyntaxErrorStatus = %d, want 0: bash answers both the same", got)
 	}
 }
+
+// TestExecAxesAndWording records what bash does about `exec`.
+func TestExecAxesAndWording(t *testing.T) {
+	s := bash.Semantics()
+	if got := s.ExecFailureRunsExitTrap; got != interp.Yes {
+		t.Errorf("ExecFailureRunsExitTrap = %v, want Yes", got)
+	}
+	if got := s.ExecTakesOptions; got != interp.Yes {
+		t.Errorf("ExecTakesOptions = %v, want Yes", got)
+	}
+	d := bash.Diagnostics()
+	// bash alone names the path it tried rather than the operand as written,
+	// and only for `exec` — the same bash reports `. ./nosuch.sh` as written.
+	if !d.ExecNamesResolvedPath {
+		t.Error("ExecNamesResolvedPath should be true for bash")
+	}
+	// It checks for a directory itself rather than reporting execve's EACCES,
+	// so it needs no override for that reason.
+	if d.ExecDirectoryReason != "" {
+		t.Errorf("ExecDirectoryReason = %q, want empty: bash says what the OS said", d.ExecDirectoryReason)
+	}
+	if d.LowercaseReason {
+		t.Error("bash prints the C strerror string as it comes")
+	}
+}
+
+// TestAFailedExecRunsTheExitTrap is the axis as behavior. bash and dash run
+// it; ksh93 and zsh drop it.
+func TestAFailedExecRunsTheExitTrap(t *testing.T) {
+	out, st := runBash(t, t.TempDir(), `trap "echo TRAP" EXIT; exec nosuchcmd-xyz`)
+	if !strings.Contains(out, "TRAP") {
+		t.Errorf("bash runs the EXIT trap after a failed exec: %q", out)
+	}
+	if st != 127 {
+		t.Errorf("status = %d, want 127", st)
+	}
+}

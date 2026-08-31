@@ -327,21 +327,21 @@ func TestDotReportsAFileItCannotRead(t *testing.T) {
 	}
 }
 
-// TestTheReasonIsCapitalisedLikeStrerror pins a one-letter difference that is
+// TestTheReasonIsCapitalizedLikeStrerror pins a one-letter difference that is
 // nonetheless visible in every diagnostic.
 //
 // Shells print the C strerror text — "No such file or directory" — and Go's
 // syscall.Errno lowercases it. Three dialects differed from the real shell by
 // that capital until the substrate fixed it, and nothing but the conformance
-// harness noticed: removing the capitalisation broke no unit test at all,
+// harness noticed: removing the capitalization broke no unit test at all,
 // which is what this is for.
-func TestTheReasonIsCapitalisedLikeStrerror(t *testing.T) {
+func TestTheReasonIsCapitalizedLikeStrerror(t *testing.T) {
 	dir := t.TempDir()
 	out, _ := sourceRun(t, dir, `. `+filepath.Join(dir, "absent.sh"), permissive(),
 		Diagnostics{DotCannotOpen: "%[2]s"})
 	got := strings.TrimSpace(out)
 	if !strings.Contains(got, "No such file") {
-		t.Errorf("output = %q, want the capitalised strerror text", got)
+		t.Errorf("output = %q, want the capitalized strerror text", got)
 	}
 	if strings.Contains(got, "no such file") {
 		t.Errorf("output = %q, want a capital N: Go lowercases where strerror does not", got)

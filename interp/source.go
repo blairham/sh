@@ -231,7 +231,7 @@ func (r *Runner) dotFailed(name string, err error) int {
 // reason is the part of an os error a shell prints, without the operation and
 // the path it already named itself.
 //
-// Capitalised, because every shell in the panel does: they print the C
+// Capitalized, because every shell in the panel does: they print the C
 // strerror text — "No such file or directory" — where Go's syscall.Errno
 // lowercases it. Four dialects differed from the real shell by that one letter
 // until this was here.

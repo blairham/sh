@@ -65,6 +65,62 @@ type Diagnostics struct {
 	// positional because the shells order them differently: %[1]s is the
 	// operand as written and %[2]s the reason.
 	DotCannotOpen string
+	// ExecFailed is what `exec` says when the command is there and will not
+	// run — a file without the execute bit, a directory. Two verbs,
+	// positional because the shells order them differently: %[1]s is the
+	// command as written and %[2]s the reason.
+	ExecFailed string
+	// ExecNotFound is what `exec` says when there is no such command at all,
+	// which every shell words as some form of "not found" rather than with
+	// the strerror text ExecFailed carries. Same two verbs; the reason is the
+	// literal "not found", so most dialects ignore it.
+	//
+	// Empty means "the same as ExecFailed".
+	ExecNotFound string
+	// ExecPathNotFound is what `exec` says when the operand had a slash in it
+	// and there is no such file — as opposed to a bare name that was not on
+	// PATH. Same two verbs.
+	//
+	// The distinction is real in three of the four: bash says `exec: x: not
+	// found` for a bare name and `/p/x: No such file or directory` for a
+	// path, and zsh says `command not found: x` against `no such file or
+	// directory: /p/x`. It is the same split `.` has between DotNotFound and
+	// DotCannotOpen, arrived at from the other direction.
+	//
+	// Empty means "the same as ExecNotFound".
+	ExecPathNotFound string
+
+	// ExecNamesResolvedPath makes a failed `exec` name the absolute path it
+	// tried rather than the operand as written.
+	//
+	// bash alone, and only for `exec`: `exec ./ne.sh` in /tmp reports
+	// "/tmp/ne.sh: Permission denied" there, where dash, ksh93 and zsh all
+	// report "./ne.sh". The same bash reports `. ./nosuch.sh` as written, so
+	// this is not a general habit of the shell and cannot be shared with the
+	// `.` wording.
+	ExecNamesResolvedPath bool
+
+	// ExecDirectoryReason is the reason this dialect gives for `exec` on a
+	// directory, when it is not the one the operating system reported.
+	//
+	// bash and ksh93 check for a directory themselves and say so — "Is a
+	// directory" — where dash and zsh hand the path to execve and report the
+	// EACCES it comes back with, as "Permission denied". Same failure, same
+	// status of 126, two different explanations, and the difference is
+	// whether the shell looked before it leapt.
+	//
+	// Empty means "whatever the operating system said", which is the first
+	// pair.
+	ExecDirectoryReason string
+
+	// LowercaseReason lowercases the strerror text this dialect quotes.
+	//
+	// zsh alone: `permission denied` where the other three print the C
+	// string's own `Permission denied`. It is a property of the shell rather
+	// than of any one message, which is why it is a flag here instead of
+	// being spelled out in every format that carries a reason.
+	LowercaseReason bool
+
 	// DotNotFound is what `.` says when the operand had no slash in it and
 	// PATH did not have it — as opposed to a path that would not open.
 	//
@@ -285,6 +341,18 @@ func (d Diagnostics) dotNoOperandStatus() int {
 		return 2
 	}
 	return d.DotNoOperandStatus
+}
+
+// reasonText renders a strerror string the way this dialect quotes one.
+//
+// The substrate capitalizes, because that is what the C string says and what
+// three of the four print. zsh lowercases everything, so it is one flag here
+// rather than a lowercase spelling in every format that carries a reason.
+func (d Diagnostics) reasonText(s string) string {
+	if !d.LowercaseReason || s == "" {
+		return s
+	}
+	return strings.ToLower(s[:1]) + s[1:]
 }
 
 func (d Diagnostics) dotCannotOpenStatus() int {

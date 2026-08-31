@@ -2810,6 +2810,390 @@
         "TimedOut": false
       }
     },
+    "exec/directory-reason-diverges": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: /tmp: Is a directory",
+        "Status": 126,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: /tmp: Is a directory",
+        "Status": 126,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: /tmp: is a directory~\u003cshell\u003e: line 0: exec: /tmp: cannot execute: Undefined error: 0",
+        "Status": 126,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: exec: /tmp: Permission denied",
+        "Status": 126,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: exec: /tmp: cannot execute [Is a directory]",
+        "Status": 126,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: permission denied: /tmp",
+        "Status": 126,
+        "TimedOut": false
+      }
+    },
+    "exec/failed-exec-trap-diverges": {
+      "bash": {
+        "Output": "TRAP",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "TRAP",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "TRAP",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "TRAP",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
+        "Status": 127,
+        "TimedOut": false
+      }
+    },
+    "exec/in-a-function-replaces-the-shell": {
+      "bash": {
+        "Output": "in-f",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "in-f",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "in-f",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "in-f",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "in-f",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "in-f",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "exec/in-a-pipeline-spares-the-parent": {
+      "bash": {
+        "Output": "piped~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "piped~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "piped~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "piped~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "piped~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "piped~after",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "exec/in-a-subshell-spares-the-parent": {
+      "bash": {
+        "Output": "in-sub~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "in-sub~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "in-sub~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "in-sub~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "in-sub~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "in-sub~after",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "exec/missing-command-is-127": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: exec: nosuchcmd-xyz: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: exec: nosuchcmd-xyz: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: exec: nosuchcmd-xyz: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: exec: nosuchcmd-xyz: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: exec: nosuchcmd-xyz: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: command not found: nosuchcmd-xyz",
+        "Status": 127,
+        "TimedOut": false
+      }
+    },
+    "exec/no-args-clears-the-status": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "exec/options-diverge": {
+      "bash": {
+        "Output": "myname",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "myname",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "myname",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: exec: -a: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "myname",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "myname",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "exec/redirection-is-permanent": {
+      "bash": {
+        "Output": "one~two",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "one~two",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "one~two",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "one~two",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "one~two",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "one~two",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "exec/replaces-the-shell": {
+      "bash": {
+        "Output": "replaced",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "replaced",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "replaced",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "replaced",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "replaced",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "replaced",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "exec/successful-exec-runs-no-exit-trap": {
+      "bash": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "exec/unrunnable-file-is-126": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: \u003ctmp\u003e/ne.sh: Permission denied",
+        "Status": 126,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: \u003ctmp\u003e/ne.sh: Permission denied",
+        "Status": 126,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: \u003ctmp\u003e/ne.sh: Permission denied~\u003cshell\u003e: line 0: exec: \u003ctmp\u003e/ne.sh: cannot execute: Undefined error: 0",
+        "Status": 126,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: exec: ./ne.sh: Permission denied",
+        "Status": 126,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: exec: ./ne.sh: cannot execute [Permission denied]",
+        "Status": 126,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: permission denied: ./ne.sh",
+        "Status": 126,
+        "TimedOut": false
+      }
+    },
     "exit/bad-argument-diverges": {
       "bash": {
         "Output": "[255]~\u003cshell\u003e: line 1: exit: abc: numeric argument required~[2]",

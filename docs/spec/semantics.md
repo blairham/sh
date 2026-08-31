@@ -46,6 +46,10 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | `.` passes positional parameters | **no** | yes | yes | yes |
 | `.` falls back to the current directory | no | **yes** | no | no |
 | `source` as a synonym for `.` | **absent** | yes | yes | yes |
+| a failed `exec` runs the EXIT trap | yes | yes | **no** | **no** |
+| `exec` reads options of its own | **no** | yes | yes | yes |
+| a failed `exec` names | the operand | **the resolved path** | the operand | the operand |
+| `exec` on a directory says | permission | is-a-directory | is-a-directory | permission |
 
 Probes, for reproduction:
 
@@ -67,6 +71,10 @@ Probes, for reproduction:
     dot arguments    . f.sh ARG   (f.sh echoes $1)    → OUTER, ARG, ARG, ARG
     dot cwd fallback PATH=/bin; . f.sh               → not found, FOUND, not found, not found
     source synonym   source f.sh                     → not found, works, works, works
+    exec trap        trap T EXIT; exec nosuch        → T, T, silent, silent
+    exec options     exec -a n sh -c 'echo $0'       → not found, n, n, n
+    exec names       cd /tmp; exec ./noexec.sh       → ./noexec.sh, /tmp/noexec.sh, ./…, ./…
+    exec a directory exec /tmp                       → Permission denied, Is a directory, Is a…, permission…
 
 The readonly probe must be a **plain assignment in a script file**.
 Writing `r=2 2>/dev/null` makes it a command with a prefix and takes a
@@ -222,6 +230,42 @@ answers at once.
 Three questions, then, about what reads in the standard as one sentence:
 is it fatal, what status does it carry, and how is it worded. The rule for
 adding an axis at the end of this file is what forced them apart.
+
+## A divergence that is not the shells' but ours
+
+Every other row in this file is a disagreement between real shells. This one
+is a disagreement between what a shell must do and what a *library* may do,
+and it is recorded here because it changed the design rather than a value.
+
+`exec cmd` replaces the process. A shell calls execve and becomes the
+command: same pid, same signal dispositions, nothing of the shell left.
+`interp` is a library, so doing that unconditionally means a program which
+embeds a Runner to interpret a script gets replaced by whatever that script
+named — not a shell feature but a way to lose a program.
+
+So `Runner.ReplaceProcess` is a hook with no default implementation. Nil
+runs the command as a child and stops the script with its status;
+`driver` sets it, because a binary that *is* a shell is the one place the
+call is correct. Everything the conformance harness can observe is the same
+either way — the output, the status, and that nothing after it runs. What
+differs is the pid, the signal dispositions, and which process the parent
+waits for.
+
+The measurement that made this more than a precaution: **a subshell must
+never replace the process at all.** `( exec echo hi ); echo after` prints
+both lines in every shell in the panel, because there a subshell is a
+separate process. Here it is a cloned Runner inside the same process, so
+execve in one takes the parent shell with it — and did, in all four dialect
+binaries, until the guard existed. A pipeline element is a subshell by
+another name and had the same hole.
+
+That is the general shape of the hazard, and it is worth stating once:
+**where a real shell relies on process boundaries, an implementation that
+does not have them has to reconstruct the boundary explicitly.** The EXIT
+trap is the same problem in miniature — no shell runs one after a
+successful `exec`, not as a rule but because the trap died with the process
+— so standing in a child means clearing it by hand or printing a handler
+nothing else prints.
 
 ## One option, six divergences
 

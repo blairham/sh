@@ -106,6 +106,28 @@ core, not forked from it — and there are exactly three ways to do that:
 `interp/extend_test.go` builds a miniature dialect with all three, as a
 working example rather than as prose.
 
+## The core is a library, so it may not touch the process
+
+**Nothing under `interp/` may change process-wide state.** Not the working
+directory, not the environment, and not the process image. A Runner is
+embedded in other programs, and two of them in one program must not fight
+over one cwd — which is why the core's `cd` sets `r.Dir` and never calls
+`os.Chdir`, and why `$PWD` is read from `r.Vars` rather than from the
+environment.
+
+`exec` is the sharpest case: replacing the process is exactly right for a
+shell and catastrophic for a library, so `Runner.ReplaceProcess` is a hook
+that `interp` never fills in. `driver` supplies `syscall.Exec`, because a
+binary that *is* a shell is the one place the call is correct. If a feature
+seems to need `os.Chdir`, `os.Setenv` or `syscall.Exec`, it belongs behind a
+hook and the implementation belongs in `driver`.
+
+The corollary caught a real bug: **where a real shell relies on process
+boundaries, we have to reconstruct the boundary by hand.** Our subshells are
+cloned Runners in one process, so `exec` inside one must not call execve —
+it would take the parent shell with it. `docs/spec/semantics.md` has the
+long version.
+
 ## One driver, four dialects
 
 **Nothing outside `driver/` implements how a shell is invoked.** Reading

@@ -273,6 +273,24 @@ type Semantics struct {
 	// there are some.
 	DotPassesArguments Answer
 
+	// ExecFailureRunsExitTrap runs a `trap … EXIT` handler when `exec` could
+	// not run the command it was given. True in dash and bash, false in ksh93
+	// and zsh.
+	//
+	// A *successful* exec runs no handler anywhere, and that is not an axis:
+	// the trap died with the process the exec replaced. Only the failure has
+	// a shell left to decide anything, and the panel splits on it.
+	ExecFailureRunsExitTrap Answer
+
+	// ExecTakesOptions lets `exec` read options of its own, such as
+	// `-a name` to choose the argv[0] the command sees. True in bash, ksh93
+	// and zsh; false in dash, where a leading `-a` is the name of a command
+	// and is reported as not found.
+	//
+	// The answer has to come before the command is looked up, because it
+	// decides which word the command is.
+	ExecTakesOptions Answer
+
 	// DotFallsBackToCurrentDirectory looks in the current directory for a
 	// `.` operand with no slash in it, after PATH has missed.
 	//
@@ -350,6 +368,13 @@ func PosixSemantics() Semantics {
 		// the current directory as a fallback.
 		DotPassesArguments:             No,
 		DotFallsBackToCurrentDirectory: No,
+		// The standard says a special builtin's failure is fatal and says
+		// nothing about a trap on the way out; dash, the panel's
+		// POSIX-faithful member, runs it, so the preset follows the shell
+		// rather than the silence. `exec` takes no options in the standard —
+		// -a is an extension three of the four grew.
+		ExecFailureRunsExitTrap: Yes,
+		ExecTakesOptions:        No,
 	}
 }
 

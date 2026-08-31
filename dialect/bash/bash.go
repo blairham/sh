@@ -38,6 +38,8 @@ func Semantics() interp.Semantics {
 	// PATH has missed. Measured: `PATH=/usr/bin:/bin; . f.sh` finds an f.sh in
 	// the current directory here, and is "not found" in the other three.
 	s.DotFallsBackToCurrentDirectory = interp.Yes
+	s.ExecFailureRunsExitTrap = interp.Yes
+	s.ExecTakesOptions = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
 	s.ExitArgument = interp.ExitArgNumeric
 	s.TraceAssignmentsSeparately = interp.Yes
@@ -66,6 +68,17 @@ func Diagnostics() interp.Diagnostics {
 		// failure, which is why they are two fields.
 		DotCannotOpen:       "%[1]s: %[2]s",
 		DotCannotOpenStatus: 1,
+		// bash names neither the builtin nor the operation: just the command
+		// and the reason, the same shape it uses for `.`.
+		ExecFailed: "%[1]s: %[2]s",
+		// bash names the builtin only when the command was not found at all.
+		ExecNotFound: "exec: %[1]s: not found",
+		// A path that is not there is the OS reason and does not name the
+		// builtin; a bare name off PATH does the reverse.
+		ExecPathNotFound: "%[1]s: No such file or directory",
+		// bash names the path it tried, absolute, where the other three
+		// report the operand as written.
+		ExecNamesResolvedPath: true,
 		// Two lines, which is bash rather than a mistake: it prints the
 		// complaint and then a usage line, and only the first carries the
 		// shell's own prefix.

@@ -48,10 +48,19 @@ func Semantics() interp.Semantics {
 	// Alone in the panel: `PATH=` finds nothing here, where dash, bash and
 	// zsh still search the current directory.
 	s.EmptyPathIsTheCurrentDirectory = interp.No
+	s.ExitTrapRunsOnSignalDeath = interp.Yes
+	s.KillListAcceptsName = interp.Yes
+	s.KillStatus = interp.KillStatusAnyFailure
 	return s
 }
 
 // Diagnostics is how ksh93 reports failure.
+// kshKillUsage is printed on its own for `kill` with no operands, and again
+// after an unknown option — with no shell name or line in front of it either
+// time, which is not how ksh93 prints anything else.
+const kshKillUsage = "Usage: kill [-lL] [-n signum] [-s signame] job ...\n" +
+	"   Or: kill [ options ] -l [arg ...]"
+
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
 		Location:          interp.LocationNone,
@@ -74,13 +83,27 @@ func Diagnostics() interp.Diagnostics {
 		ExecCannotExecute: "exec: %[1]s: cannot execute [%[2]s]",
 		// Not "cannot execute": ksh93 distinguishes a missing command from one
 		// that will not run, and only the second gets the brackets.
-		ExecNotFound:         "exec: %[1]s: not found",
-		TestUnaryExpected:    "test: %[1]s: unknown operator",
-		TestBinaryExpected:   "test: %[1]s: unknown operator",
-		TestIntegerExpected:  "test: %[1]s: integer expected",
-		TestTooManyArguments: "test: too many arguments",
-		TestOperandExpected:  "test: argument expected",
-		TestMissingBracket:   "[: ']' missing",
+		ExecNotFound:      "exec: %[1]s: not found",
+		KillNoSuchProcess: "kill: %[1]s: no such process",
+		KillNotPermitted:  "kill: %[1]s: permission denied",
+		KillInvalidSignal: "kill: %[1]s: unknown signal name",
+		KillNotAPid:       "kill: %[1]s: Arguments must be %%job, process ids, or job pool names",
+		KillUsage:         kshKillUsage,
+		// An unknown option is a usage error to ksh93 in both senses: it prints
+		// the usage after the complaint, and it reports the usage status where
+		// an unknown signal *name* reports 1.
+		KillIllegalOption:         "kill: -%[1]s: unknown option\n" + kshKillUsage,
+		KillMissingSignalArgument: "kill: %[1]s: signame argument expected\n" + kshKillUsage,
+		KillUsageStatus:           2,
+		KillBadOptionStatus:       2,
+		KillUsageUnprefixed:       true,
+		KillTargetUnprefixed:      true,
+		TestUnaryExpected:         "test: %[1]s: unknown operator",
+		TestBinaryExpected:        "test: %[1]s: unknown operator",
+		TestIntegerExpected:       "test: %[1]s: integer expected",
+		TestTooManyArguments:      "test: too many arguments",
+		TestOperandExpected:       "test: argument expected",
+		TestMissingBracket:        "[: ']' missing",
 		// Labeled lines, one figure each, and no children's times at all —
 		// genuinely less information than the other three report.
 		TimesLayout:   interp.TimesUserAndSystem,

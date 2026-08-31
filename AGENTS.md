@@ -122,6 +122,18 @@ binary that *is* a shell is the one place the call is correct. If a feature
 seems to need `os.Chdir`, `os.Setenv` or `syscall.Exec`, it belongs behind a
 hook and the implementation belongs in `driver`.
 
+`kill` is the second one, arrived at from the other side. A signal a script
+aims at the shell itself is delivered to the shell's own traps and never
+leaves the process: routing it through the kernel would let a line of script
+fire the *embedder's* signal handlers, and it bought nothing, because a shell
+that has just sent a signal already knows it sent one. Asking `os/signal` to
+confirm it is asking a question we hold the answer to — the PATH rule again —
+and the answer came back on a goroutine, which made a trapped signal's
+delivery a matter of scheduling and lost it outright under load. An untrapped
+*fatal* signal is the same split as `exec`: the core stops the script and
+`Runner.DieBySignal` — nil in a library, filled in by `driver` — ends the
+process.
+
 The corollary caught a real bug: **where a real shell relies on process
 boundaries, we have to reconstruct the boundary by hand.** Our subshells are
 cloned Runners in one process, so `exec` inside one must not call execve —

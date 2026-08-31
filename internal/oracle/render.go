@@ -172,11 +172,24 @@ func (d Drift) String() string {
 // not drift: CI and a laptop have different panels, and failing on that would
 // make the check useless exactly where it is most wanted.
 func (r *Run) Compare(golden *Run) []Drift {
+	racy := map[string]bool{}
+	for _, c := range Corpus {
+		if c.ReferenceRaces {
+			racy[c.ID] = true
+		}
+	}
 	var out []Drift
 	for id, now := range r.Results {
 		was, ok := golden.Results[id]
 		if !ok {
 			continue // a new case has nothing to drift from
+		}
+		if racy[id] {
+			// Nothing to drift from either: the recorded value was one of
+			// two answers the shell gives at random, so a disagreement with
+			// it is the coin landing the other way rather than a shell that
+			// changed.
+			continue
 		}
 		for sh, nowRes := range now {
 			wasRes, ok := was[sh]

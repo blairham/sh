@@ -48,6 +48,11 @@ func Semantics() interp.Semantics {
 	s.ExitTrapIsFunctionLocal = interp.Yes
 	s.SignalHandlerSeesEarlierStatus = interp.Yes
 	s.ExitArgument = interp.ExitArgLenient
+	// A status that carries a count rather than a verdict: two dead targets
+	// is 2.
+	s.ExitTrapRunsOnSignalDeath = interp.No
+	s.KillListAcceptsName = interp.Yes
+	s.KillStatus = interp.KillStatusFailureCount
 	return s
 }
 
@@ -79,6 +84,19 @@ func Diagnostics() interp.Diagnostics {
 		NotFound:     "command not found: %[1]s",
 		ExecNotFound: "command not found: %[1]s",
 		// The builtin's name comes from the location here, not the message.
+		// No "kill:" in front of any of these: zsh puts the builtin's name in
+		// the location instead, which NamesBuiltinInLocation already says.
+		KillNoSuchProcess:         "kill %[1]s failed: no such process",
+		KillNotPermitted:          "kill %[1]s failed: operation not permitted",
+		KillInvalidSignal:         "unknown signal: SIG%[1]s",
+		KillIllegalOption:         "unknown signal: SIG%[1]s",
+		KillNotAPid:               "illegal pid: %[1]s",
+		KillMissingSignalArgument: "%[1]s: argument expected",
+		KillUsage:                 "not enough arguments",
+		KillUnknownSignalHint:     "type kill -l for a list of signals",
+		// zsh is the one dialect that does not treat "nothing to signal" as a
+		// usage error worth a different number from any other failure.
+		KillUsageStatus:      1,
 		TestUnaryExpected:    "unknown condition: %[1]s",
 		TestBinaryExpected:   "condition expected: %[1]s",
 		TestIntegerExpected:  "integer expression expected: %[1]s",

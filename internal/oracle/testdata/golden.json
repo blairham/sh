@@ -3164,17 +3164,17 @@
     },
     "exec/unrunnable-file-is-126": {
       "bash": {
-        "Output": "\u003cshell\u003e: line 1: \u003ctmp\u003e/ne.sh: Permission denied",
+        "Output": "\u003cshell\u003e: line 1: /private\u003ctmp\u003e/ne.sh: Permission denied",
         "Status": 126,
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Output": "\u003cshell\u003e: line 1: \u003ctmp\u003e/ne.sh: Permission denied",
+        "Output": "\u003cshell\u003e: line 1: /private\u003ctmp\u003e/ne.sh: Permission denied",
         "Status": 126,
         "TimedOut": false
       },
       "bash32": {
-        "Output": "\u003cshell\u003e: \u003ctmp\u003e/ne.sh: Permission denied~\u003cshell\u003e: line 0: exec: \u003ctmp\u003e/ne.sh: cannot execute: Undefined error: 0",
+        "Output": "\u003cshell\u003e: /private\u003ctmp\u003e/ne.sh: Permission denied~\u003cshell\u003e: line 0: exec: /private\u003ctmp\u003e/ne.sh: cannot execute: Undefined error: 0",
         "Status": 126,
         "TimedOut": false
       },
@@ -3990,6 +3990,390 @@
       },
       "zsh": {
         "Output": "[a b]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "kill/every-target-failing": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: kill: (999998) - No such process~\u003cshell\u003e: line 1: kill: (999999) - No such process~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: kill: (999998) - No such process~\u003cshell\u003e: line 1: kill: (999999) - No such process~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: kill: (999998) - No such process~\u003cshell\u003e: line 0: kill: (999999) - No such process~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: kill: No such process~~\u003cshell\u003e: 1: kill: No such process~~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "kill: 999998: no such process~kill: 999999: no such process~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:kill:1: kill 999998 failed: no such process~\u003cshell\u003e:kill:1: kill 999999 failed: no such process~st=2",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "kill/exit-trap-after-a-fatal-signal": {
+      "bash": {
+        "Output": "bye",
+        "Status": -1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "bye",
+        "Status": -1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "bye",
+        "Status": -1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "",
+        "Status": -1,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "bye",
+        "Status": -1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
+        "Status": -1,
+        "TimedOut": false
+      }
+    },
+    "kill/list-a-name": {
+      "bash": {
+        "Output": "2~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "2~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "2~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: kill: Illegal number: INT~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "2~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "2~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "kill/list-a-number": {
+      "bash": {
+        "Output": "KILL",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "KILL",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "KILL",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "KILL",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "KILL",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "KILL",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "kill/no-operands-is-usage": {
+      "bash": {
+        "Output": "kill: usage: kill [-s sigspec | -n signum | -sigspec] pid | jobspec ... or kill -l [sigspec]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "kill: usage: kill [-s sigspec | -n signum | -sigspec] pid | jobspec ... or kill -l [sigspec]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "kill: usage: kill [-s sigspec | -n signum | -sigspec] pid | jobspec ... or kill -l [sigspec]~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: kill: Usage: kill [-s sigspec | -signum | -sigspec] [pid | job]... or~kill -l [exitstatus]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "Usage: kill [-lL] [-n signum] [-s signame] job ...~   Or: kill [ options ] -l [arg ...]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:kill:1: not enough arguments~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "kill/no-such-process": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: kill: (999999) - No such process~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: kill: (999999) - No such process~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: kill: (999999) - No such process~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: kill: No such process~~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "kill: 999999: no such process~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:kill:1: kill 999999 failed: no such process~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "kill/not-a-pid": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: kill: `abc': not a pid or valid job spec~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: kill: `abc': not a pid or valid job spec~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: kill: abc: arguments must be process or job IDs~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: kill: Illegal number: abc~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: kill: abc: Arguments must be %job, process ids, or job pool names~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:kill:1: illegal pid: abc~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "kill/probe-with-signal-zero": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "kill/several-targets-disagreeing": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: kill: (999999) - No such process~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: kill: (999999) - No such process~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: kill: (999999) - No such process~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: kill: No such process~~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "kill: 999999: no such process~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:kill:1: kill 999999 failed: no such process~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "kill/signaling-a-process-that-is-not-ours": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: kill: (1) - Operation not permitted~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: kill: (1) - Operation not permitted~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: kill: (1) - Operation not permitted~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: kill: Operation not permitted~~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "kill: 1: permission denied~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:kill:1: kill 1 failed: operation not permitted~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "kill/unknown-signal-after-s": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: kill: Q: invalid signal specification~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: kill: Q: invalid signal specification~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: kill: Q: invalid signal specification~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: kill: invalid signal number or name: Q~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: kill: Q: unknown signal name~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:kill:1: unknown signal: SIGQ~\u003cshell\u003e:kill:1: type kill -L for a list of signals~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "kill/unknown-signal-as-a-flag": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: kill: Q: invalid signal specification~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: kill: Q: invalid signal specification~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: kill: Q: invalid signal specification~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: kill: Illegal option -Q~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: kill: -Q: unknown option~Usage: kill [-lL] [-n signum] [-s signame] job ...~   Or: kill [ options ] -l [arg ...]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:kill:1: unknown signal: SIGQ~\u003cshell\u003e:kill:1: type kill -L for a list of signals~st=1",
         "Status": 0,
         "TimedOut": false
       }

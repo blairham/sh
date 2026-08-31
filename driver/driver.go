@@ -252,6 +252,9 @@ func (sh Shell) run(src, name string, dg interp.Diagnostics) int {
 		// embedded in some other program must not replace that program — so
 		// the decision is made here, in the binary, where it is visible.
 		r.ReplaceProcess = replaceProcess
+		// And for the same reason it may really die: a script that signals
+		// the shell fatally ends the process rather than the script.
+		r.DieBySignal = dieBySignal
 	}
 	if sh.Register != nil {
 		// The dialect's own adjustment: what it adds to or removes from the

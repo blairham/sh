@@ -51,6 +51,9 @@ type signalState struct {
 	mu    sync.Mutex
 	traps map[string]string
 	ch    chan os.Signal
+	// pending is what the shell already knows has arrived, ahead of the
+	// runtime telling it. Only `kill` puts anything here — see selfSignaled.
+	pending []string
 }
 
 // sigs returns the shared state, creating it on first use.
@@ -98,18 +101,49 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 	}
 }
 
-// takePending drains what the runtime has delivered.
+// selfSignaled records a signal a script aimed at this shell.
 //
-// Drained here rather than by a goroutine, because a goroutine introduces a
-// window: `kill -INT $$` would return before the collector had run, and the
-// handler would fire one command late — sometimes. The corpus cannot record a
-// sometimes.
+// It is recorded rather than sent, and that is the fix. os/signal forwards
+// what the runtime catches on a goroutine of its own, so a drain that only
+// reads the channel is asking a question whose answer depends on the
+// scheduler. Under load that goroutine could still be waiting to run when the
+// script ended, and a trapped signal was then not late but *lost* — measured
+// at three failures in three hundred runs on a busy machine and none at all
+// on an idle one, which is the shape that had this looking like a flaky
+// corpus case rather than a defect.
+//
+// So the trip through the kernel is not taken. A signal a script sends the
+// shell is for the shell's own traps: routing it through the process would
+// mean a Runner embedded in another program could fire *that* program's
+// handlers with a line of script, and would buy nothing, because the shell
+// already knows what it just sent. Which leaves the delivery deterministic by
+// construction rather than by timing.
+//
+// Everything aimed anywhere else is a real signal to a real process — see
+// sendSignal for the three cases and which of them still make the call.
+func (r *Runner) selfSignaled(name string) {
+	s := r.sigs()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pending = append(s.pending, name)
+}
+
+// takePending reports the arrivals the handler has not run yet.
+//
+// What the shell recorded itself comes first and is already in order; what the
+// runtime forwarded — a signal from some other process — is drained after it.
 func (r *Runner) takePending() []string {
 	s := r.signals
-	if s == nil || s.ch == nil {
+	if s == nil {
 		return nil
 	}
-	var got []string
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	got := s.pending
+	s.pending = nil
+	if s.ch == nil {
+		return got
+	}
 	for {
 		select {
 		case sig := <-s.ch:

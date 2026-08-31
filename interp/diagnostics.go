@@ -80,6 +80,9 @@ type Diagnostics struct {
 	// DivisionByZero is the reason itself, which dash and ksh93 spell
 	// differently. No verbs.
 	DivisionByZero string
+	// EqualsNotFound is `=cmd` naming nothing. One verb: the name. zsh omits
+	// the colon it uses everywhere else, which is why this is not NotFound.
+	EqualsNotFound string
 	// CannotOpen is a redirection that could not be opened. Two verbs: the
 	// name and the reason.
 	CannotOpen string

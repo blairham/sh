@@ -29,6 +29,7 @@ func Semantics() interp.Semantics {
 	s.ArithNameValueRecurses = interp.Yes
 	s.BraceExpansion = interp.Yes
 	s.BracketCaretNegates = interp.Yes
+	s.EqualsExpansion = interp.Yes
 	s.ArithFloat = interp.Yes
 	s.LastPipelineElementInCurrentShell = interp.Yes
 	s.ShiftPastEndFatal = interp.No

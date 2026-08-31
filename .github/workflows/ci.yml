@@ -26,9 +26,11 @@ jobs:
   # of that is worth detecting changes for, and a secret committed to a draft
   # is committed.
   #
-  # The hook environments are cached. pre-commit builds an environment for a
-  # hook even when SKIP tells it not to run one, which cost two and a half
-  # minutes a build to install a linter this job then declines to use.
+  # The hook environments are cached by the action itself. Adding an
+  # actions/cache step here as well produced two copies of the same 441MB
+  # under different keys, which is the duplication this whole change is about
+  # — if the action's cache is not doing its job, that is a bug to fix in
+  # go-pre-commit rather than to paper over from the caller.
   pre-commit:
     name: Pre-commit
     runs-on: ubuntu-latest
@@ -40,11 +42,6 @@ jobs:
       with:
         go-version-file: go.mod
         check-latest: true # setup-go's manifest lags fresh Go patch releases; resolve via go.dev
-    - name: Cache the hook environments
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/pre-commit
-        key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
     - name: Run pre-commit hooks
       # Nothing is skipped. `golangci-lint-full` lints the whole module here,
       # which is what a separate lint job used to do — badly, in the sense

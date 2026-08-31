@@ -371,10 +371,72 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   set -C; echo one>b; echo two>|b; printf "[%s]" "$(cat b)"
   ```
 
+## kill
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `kill/probe-with-signal-zero` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `kill/no-such-process` | `<shell>: 1: kill: No such process~~st=1` | `<shell>: line 1: kill: (999999) - No such process~st=1` | `<shell>: line 1: kill: (999999) - No such process~st=1` | `<shell>: line 0: kill: (999999) - No such process~st=1` | `kill: 999999: no such process~st=1` | `<shell>:kill:1: kill 999999 failed: no such process~st=1` |
+| `kill/not-a-pid` | `<shell>: 1: kill: Illegal number: abc~st=2` | `<shell>: line 1: kill: `abc': not a pid or valid job spec~st=1` | `<shell>: line 1: kill: `abc': not a pid or valid job spec~st=0` | `<shell>: line 0: kill: abc: arguments must be process or job IDs~st=1` | `<shell>: kill: abc: Arguments must be %job, process ids, or job pool names~st=1` | `<shell>:kill:1: illegal pid: abc~st=1` |
+| `kill/no-operands-is-usage` | `<shell>: 1: kill: Usage: kill [-s sigspec \| -signum \| -sigspec] [pid \| job]... or~kill -l [exitstatus]~st=2` | `kill: usage: kill [-s sigspec \| -n signum \| -sigspec] pid \| jobspec ... or kill -l [sigspec]~st=2` | `kill: usage: kill [-s sigspec \| -n signum \| -sigspec] pid \| jobspec ... or kill -l [sigspec]~st=2` | `kill: usage: kill [-s sigspec \| -n signum \| -sigspec] pid \| jobspec ... or kill -l [sigspec]~st=1` | `Usage: kill [-lL] [-n signum] [-s signame] job ...~   Or: kill [ options ] -l [arg ...]~st=2` | `<shell>:kill:1: not enough arguments~st=1` |
+| `kill/unknown-signal-as-a-flag` | `<shell>: 1: kill: Illegal option -Q~st=2` | `<shell>: line 1: kill: Q: invalid signal specification~st=1` | `<shell>: line 1: kill: Q: invalid signal specification~st=1` | `<shell>: line 0: kill: Q: invalid signal specification~st=1` | `<shell>: kill: -Q: unknown option~Usage: kill [-lL] [-n signum] [-s signame] job ...~   Or: kill [ options ] -l [arg ...]~st=2` | `<shell>:kill:1: unknown signal: SIGQ~<shell>:kill:1: type kill -L for a list of signals~st=1` |
+| `kill/unknown-signal-after-s` | `<shell>: 1: kill: invalid signal number or name: Q~st=2` | `<shell>: line 1: kill: Q: invalid signal specification~st=1` | `<shell>: line 1: kill: Q: invalid signal specification~st=1` | `<shell>: line 0: kill: Q: invalid signal specification~st=1` | `<shell>: kill: Q: unknown signal name~st=1` | `<shell>:kill:1: unknown signal: SIGQ~<shell>:kill:1: type kill -L for a list of signals~st=1` |
+| `kill/list-a-number` | `KILL` | `KILL` | `KILL` | `KILL` | `KILL` | `KILL` |
+| `kill/list-a-name` | `<shell>: 1: kill: Illegal number: INT~st=2` | `2~st=0` | `2~st=0` | `2~st=0` | `2~st=0` | `2~st=0` |
+| `kill/several-targets-disagreeing` | `<shell>: 1: kill: No such process~~st=1` | `<shell>: line 1: kill: (999999) - No such process~st=0` | `<shell>: line 1: kill: (999999) - No such process~st=1` | `<shell>: line 0: kill: (999999) - No such process~st=0` | `kill: 999999: no such process~st=1` | `<shell>:kill:1: kill 999999 failed: no such process~st=1` |
+| `kill/every-target-failing` | `<shell>: 1: kill: No such process~~<shell>: 1: kill: No such process~~st=1` | `<shell>: line 1: kill: (999998) - No such process~<shell>: line 1: kill: (999999) - No such process~st=1` | `<shell>: line 1: kill: (999998) - No such process~<shell>: line 1: kill: (999999) - No such process~st=1` | `<shell>: line 0: kill: (999998) - No such process~<shell>: line 0: kill: (999999) - No such process~st=1` | `kill: 999998: no such process~kill: 999999: no such process~st=1` | `<shell>:kill:1: kill 999998 failed: no such process~<shell>:kill:1: kill 999999 failed: no such process~st=2` |
+| `kill/signaling-a-process-that-is-not-ours` | `<shell>: 1: kill: Operation not permitted~~st=1` | `<shell>: line 1: kill: (1) - Operation not permitted~st=1` | `<shell>: line 1: kill: (1) - Operation not permitted~st=1` | `<shell>: line 0: kill: (1) - Operation not permitted~st=1` | `kill: 1: permission denied~st=1` | `<shell>:kill:1: kill 1 failed: operation not permitted~st=1` |
+
+- `kill/probe-with-signal-zero` — signal 0 is not a signal: it asks whether the process is there, and every shell in the panel answers 0 for one that is
+  ```sh
+  kill -0 $$; echo "st=$?"
+  ```
+- `kill/no-such-process` — status 1 in all four and four different sentences, one of which does not name the process it could not find
+  ```sh
+  kill 999999; echo "st=$?"
+  ```
+- `kill/not-a-pid` — an operand that is not a number is a complaint about the argument rather than a target that failed, which is why dash reports 2 here and 1 for a process that is not there
+  ```sh
+  kill abc; echo "st=$?"
+  ```
+- `kill/no-operands-is-usage` — the only diagnostic in the panel that two shells print with no location in front of it, and zsh is alone in not treating it as worth a different status from any other failure
+  ```sh
+  kill; echo "st=$?"
+  ```
+- `kill/unknown-signal-as-a-flag` — half the panel answers `what did you just give me` by where it appeared: dash and ksh93 call this an unknown option where `-s Q` is an unknown signal, and ksh93 prints its usage after one and not the other
+  ```sh
+  kill -Q 1; echo "st=$?"
+  ```
+- `kill/unknown-signal-after-s` — the same signal spelled the other way, which is where the two wordings and the two statuses come apart
+  ```sh
+  kill -s Q 1; echo "st=$?"
+  ```
+- `kill/list-a-number` — unanimous, and the only part of `kill -l` that is: the bare listing is four formats over a table that is not the same on two operating systems
+  ```sh
+  kill -l 9
+  ```
+- `kill/list-a-name` — dash's `-l` takes an exit status rather than a signal, so a name is an illegal number there and the number 2 everywhere else
+  ```sh
+  kill -l INT; echo "st=$?"
+  ```
+- `kill/several-targets-disagreeing` — three answers to one question: bash reports success because it signaled something, dash and ksh93 failure because something failed, and zsh how many failed
+  ```sh
+  kill -0 $$ 999999; echo "st=$?"
+  ```
+- `kill/every-target-failing` — the same axis read again, and the case that shows zsh's status is a count rather than a verdict: two dead targets is 2
+  ```sh
+  kill 999998 999999; echo "st=$?"
+  ```
+- `kill/signaling-a-process-that-is-not-ours` — pid 1 exists and will not take a signal from us, which is the other half of the target failure and worded differently again
+  ```sh
+  kill -TERM 1; echo "st=$?"
+  ```
+
 ## traps and exit
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
+| `kill/exit-trap-after-a-fatal-signal` | *(no output, status -1)* | `bye` *(status -1)* | `bye` *(status -1)* | `bye` *(status -1)* | `bye` *(status -1)* | *(no output, status -1)* |
 | `trap/signal-handler-runs-and-continues` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
 | `trap/empty-handler-ignores` | `after` | `after` | `after` | `after` | `after` | `after` |
 | `trap/default-signal-terminates` | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* |
@@ -390,6 +452,12 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `exit/status-and-wrapping` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` |
 | `exit/bad-argument-diverges` | `<shell>: 1: exit: Illegal number: -1~[2]~<shell>: 1: exit: Illegal number: abc~[2]` | `[255]~<shell>: line 1: exit: abc: numeric argument required~[2]` | `[255]~<shell>: line 1: exit: abc: numeric argument required~[2]` | `[255]~<shell>: line 0: exit: abc: numeric argument required~[255]` | `[255]~[0]` | `[255]~[0]` |
 
+- `kill/exit-trap-after-a-fatal-signal` — whether being killed counts as exiting: bash and ksh93 run the EXIT trap and dash and zsh do not, and all four report 130 without reaching the next command
+  ```sh
+  trap 'echo bye' EXIT
+  kill -INT $$
+  echo after
+  ```
 - `trap/signal-handler-runs-and-continues` — a caught signal runs its handler and the script carries on, which is the whole reason to catch one
   ```sh
   trap 'echo caught' INT
@@ -515,7 +583,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   set -x; for i in 1 2; do echo $i; done
   ```
-- `xtrace/pipeline-order-diverges` — ksh93 prints the last element first, which follows from its running that one in the current shell — measured, and not reproduced here
+- `xtrace/pipeline-order-diverges` — ksh93 usually prints the last element first, which follows from its running that one in the current shell — but only usually: its two processes race to their trace points, 26 runs in 400 come out the other way, and that is a fact about ksh93 rather than about anything measured against it
   ```sh
   set -x; echo a | cat
   ```
@@ -1196,7 +1264,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `exec/successful-exec-runs-no-exit-trap` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
 | `exec/failed-exec-trap-diverges` | `TRAP` *(status 127)* | `TRAP` *(status 127)* | `TRAP` *(status 127)* | `TRAP` | *(no output, status 127)* | *(no output, status 127)* |
 | `exec/missing-command-is-127` | `<shell>: 1: exec: nosuchcmd-xyz: not found` *(status 127)* | `<shell>: line 1: exec: nosuchcmd-xyz: not found` *(status 127)* | `<shell>: line 1: exec: nosuchcmd-xyz: not found` *(status 127)* | `<shell>: line 0: exec: nosuchcmd-xyz: not found` *(status 127)* | `<shell>: exec: nosuchcmd-xyz: not found` *(status 127)* | `<shell>:1: command not found: nosuchcmd-xyz` *(status 127)* |
-| `exec/unrunnable-file-is-126` | `<shell>: 1: exec: ./ne.sh: Permission denied` *(status 126)* | `<shell>: line 1: <tmp>/ne.sh: Permission denied` *(status 126)* | `<shell>: line 1: <tmp>/ne.sh: Permission denied` *(status 126)* | `<shell>: <tmp>/ne.sh: Permission denied~<shell>: line 0: exec: <tmp>/ne.sh: cannot execute: Undefined error: 0` *(status 126)* | `<shell>: exec: ./ne.sh: cannot execute [Permission denied]` *(status 126)* | `<shell>:1: permission denied: ./ne.sh` *(status 126)* |
+| `exec/unrunnable-file-is-126` | `<shell>: 1: exec: ./ne.sh: Permission denied` *(status 126)* | `<shell>: line 1: /private<tmp>/ne.sh: Permission denied` *(status 126)* | `<shell>: line 1: /private<tmp>/ne.sh: Permission denied` *(status 126)* | `<shell>: /private<tmp>/ne.sh: Permission denied~<shell>: line 0: exec: /private<tmp>/ne.sh: cannot execute: Undefined error: 0` *(status 126)* | `<shell>: exec: ./ne.sh: cannot execute [Permission denied]` *(status 126)* | `<shell>:1: permission denied: ./ne.sh` *(status 126)* |
 | `exec/directory-reason-diverges` | `<shell>: 1: exec: /tmp: Permission denied` *(status 126)* | `<shell>: line 1: /tmp: Is a directory` *(status 126)* | `<shell>: line 1: /tmp: Is a directory` *(status 126)* | `<shell>: /tmp: is a directory~<shell>: line 0: exec: /tmp: cannot execute: Undefined error: 0` *(status 126)* | `<shell>: exec: /tmp: cannot execute [Is a directory]` *(status 126)* | `<shell>:1: permission denied: /tmp` *(status 126)* |
 | `exec/in-a-subshell-spares-the-parent` | `in-sub~after` | `in-sub~after` | `in-sub~after` | `in-sub~after` | `in-sub~after` | `in-sub~after` |
 | `exec/in-a-pipeline-spares-the-parent` | `piped~after` | `piped~after` | `piped~after` | `piped~after` | `piped~after` | `piped~after` |

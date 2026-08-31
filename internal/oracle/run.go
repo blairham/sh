@@ -116,6 +116,18 @@ func normalize(s string, sh Found, dir string) string {
 		sh.Path, "<shell>",
 	)
 	s = rep.Replace(s)
+	// Some snippets mask their own digits before the harness sees anything —
+	// the `times` cases do, because the figures are real timings — and `sed
+	// -E "s/[0-9]+/N/g"` cannot tell a timing from the digits in the shell's
+	// own path. So a binary living under a directory with a number in it,
+	// which is every macOS TMPDIR, arrived here already spelled differently
+	// from sh.Path and went unreplaced: `make conformance-dialects` scored
+	// zsh one lower than the same corpus run against the same code built in
+	// /tmp. Where the binary sits is not a fact about the shell, so the
+	// masked spelling is replaced too.
+	if masked := digitRuns.ReplaceAllString(sh.Path, "N"); masked != sh.Path {
+		s = strings.ReplaceAll(s, masked, "<shell>")
+	}
 	// A shell names itself by basename at the start of a diagnostic. Replacing
 	// that basename anywhere would corrupt ordinary words — with sh, "can't
 	// shift that many" became "can't <shell>ift that many" — so it is anchored
@@ -134,6 +146,10 @@ func normalize(s string, sh Found, dir string) string {
 	// does, this is the place to escape it.
 	return strings.ReplaceAll(s, "\n", "~")
 }
+
+// digitRuns is the masking a snippet applies to its own output, spelled the
+// same way `sed -E "s/[0-9]+/N/g"` spells it.
+var digitRuns = regexp.MustCompile(`[0-9]+`)
 
 // diagPrefix matches a shell naming itself at the start of a diagnostic.
 // tracePrefix matches a shell naming itself inside a `set -x` line, which is

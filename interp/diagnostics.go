@@ -173,6 +173,65 @@ type Diagnostics struct {
 	// four are fields rather than strings in the builtin.
 	TestMissingBracket string
 
+	// KillNoSuchProcess is a target that is not there. One verb: the pid.
+	//
+	// The four are worth reading together, because they are the same fact
+	// four ways and only one of them names the process the way a script
+	// could parse:
+	//
+	//	bash   kill: (999999) - No such process
+	//	dash   kill: No such process
+	//	ksh93  kill: 999999: no such process
+	//	zsh    kill 999999 failed: no such process
+	KillNoSuchProcess string
+	// KillNotPermitted is a target that exists and is not ours. One verb.
+	KillNotPermitted string
+	// KillInvalidSignal is a name or number naming no signal, as `-s Q` or
+	// `-l Q` spells it. One verb: the specification.
+	KillInvalidSignal string
+	// KillIllegalOption is that same failure spelled as a flag: `kill -Q`.
+	//
+	// Two fields because two dialects answer "what did you just give me" by
+	// where it appeared rather than by what it was — dash calls `-Q` an
+	// illegal *option* and `-s Q` an invalid *signal*, and ksh93 an unknown
+	// option against an unknown signal name. bash and zsh set both to the
+	// same string, which is the same shape as the two `test` operator
+	// wordings and for the same reason.
+	KillIllegalOption string
+	// KillNotAPid is an operand that is not a number. One verb: the operand.
+	KillNotAPid string
+	// KillUsage is `kill` with nothing to signal. No verbs.
+	KillUsage string
+	// KillUsageUnprefixed prints that usage with no location and no shell
+	// name in front of it. ksh93 alone.
+	KillUsageUnprefixed bool
+	// KillTargetUnprefixed does the same for a target that could not be
+	// signaled. Also ksh93 alone, and the two are separate fields because
+	// they are separate questions with the same answer only here: ksh93
+	// prints `kill: 999999: no such process` bare and
+	// `/bin/ksh: kill: abc: Arguments must be …` prefixed, so what decides
+	// it is whether the complaint is about a target or about an argument.
+	KillTargetUnprefixed bool
+	// KillMissingSignalArgument is `-s` with nothing after it. One verb: the
+	// option, since two dialects name it and two do not.
+	KillMissingSignalArgument string
+	// KillUnknownSignalHint is a second line after an unrecognized signal,
+	// pointing at `kill -l`. zsh alone; empty means no second line.
+	KillUnknownSignalHint string
+	// KillUsageStatus is the status for `kill` with no operands: 2 in bash,
+	// dash and ksh93, and 1 in zsh. Zero means the substrate's own, 2.
+	KillUsageStatus int
+	// KillBadOptionStatus is the status for an unknown or incomplete option.
+	// bash and zsh report 1 where dash and ksh93 report 2 — ksh93 treating
+	// an unknown option as a usage error, which is also why it prints its
+	// usage after one. Zero means the substrate's own, 1.
+	KillBadOptionStatus int
+	// KillArgumentStatus is the status for an operand that is not a target
+	// and a signal name that is not a signal. dash alone reports 2, and it
+	// is the one dialect for which this is not the same question as the
+	// option status. Zero means the substrate's own, 1.
+	KillArgumentStatus int
+
 	// LowercaseReason lowercases the strerror text this dialect quotes.
 	//
 	// zsh alone: `permission denied` where the other three print the C

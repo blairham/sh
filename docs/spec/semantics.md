@@ -309,10 +309,55 @@ disagreed with the others, and neither did; it was the same code being
 timed differently.
 
 Draining the channel where the handler runs, rather than in a collector,
-closes it. The lesson is about the instrument: a corpus records what a
-shell does, and it cannot record a *sometimes*. Anything measured has to
-be deterministic first, or the measurement is of the machine rather than
-of the shell.
+narrows it. It does not close it, and this section said it did for
+several months.
+
+The window that remained was one level down. `os/signal` catches the
+signal in the runtime and forwards it to a channel from a goroutine of
+its own, so *any* drain that reads a channel is asking a question whose
+answer depends on the scheduler. Removing our collector removed one
+goroutine and left the other one, which is why the symptom got rare
+enough to look like a flaky test rather than a defect. Measured on a
+loaded machine: three failures in three hundred runs of one corpus case,
+against none at all in three hundred runs on an idle one — one of them
+running the handler a command late, and two never running it at all,
+because the script ended while the forwarding goroutine was still
+waiting to be scheduled. The shell was losing trapped signals.
+
+What closes it is not a better drain. It is noticing that the shell was
+asking the kernel to tell it something it already knew: `kill -INT $$` is
+the shell signaling *itself*, and the only reason the answer had to come
+back through the runtime is that `kill` was not a builtin. Making it one
+— see `interp/killbuiltin.go` — means the arrival is recorded at the
+point of sending, and a signal a script aims at the shell never leaves
+the shell at all.
+
+That last part is a design decision and not just an optimization. A
+Runner is embedded in other programs, and routing a script's `kill -INT
+$$` through the process would let a line of shell fire the *host's*
+signal handlers. The core does not do that, for the same reason its `cd`
+does not call `os.Chdir`. What a script sends the shell is delivered to
+the shell's traps; what it sends anywhere else is a real signal to a real
+process.
+
+An untrapped fatal signal is the mirror image and needed the same
+treatment for a sharper reason: the kernel runs the default action on
+whichever thread it likes, and a shell has several, so `kill -INT $$`
+with no trap printed the *next* command's output before the process went
+away. Nothing can make the dying thread win that race. So the shell stops
+the script, runs the EXIT trap where the dialect says it should, and
+hands the death to `driver` — the same split `exec` uses, and for the
+same reason.
+
+The lesson is about the instrument: a corpus records what a shell does,
+and it cannot record a *sometimes*. Anything measured has to be
+deterministic first, or the measurement is of the machine rather than of
+the shell. It is also about how a *sometimes* hides. This one survived
+because the external `/bin/kill` it used to run took about a millisecond
+to fork and exec, which was enough for the forwarding goroutine to win
+almost every time. Making `kill` a builtin removed that accidental
+padding, and the same case with the recording mutated out fails three
+hundred times in three hundred rather than three.
 
 ## A second axis that is an ordering
 

@@ -43,6 +43,11 @@ func Semantics() interp.Semantics {
 	s.UnterminatedBracket = interp.BracketLiteral
 	s.ExitArgument = interp.ExitArgNumeric
 	s.TraceAssignmentsSeparately = interp.Yes
+	// bash reports success if it signaled anything at all, where the others
+	// count failures one way or another.
+	s.ExitTrapRunsOnSignalDeath = interp.Yes
+	s.KillListAcceptsName = interp.Yes
+	s.KillStatus = interp.KillStatusAnySuccess
 	return s
 }
 
@@ -80,7 +85,22 @@ func Diagnostics() interp.Diagnostics {
 		TestTooManyArguments: "test: too many arguments",
 		TestOperandExpected:  "test: argument expected",
 		TestMissingBracket:   "[: missing `]'",
-		TimesDecimals:        3,
+		// `kill` puts the process in parentheses and the reason after a dash,
+		// which is the only wording in the panel a script could not confuse
+		// with a message about a signal name.
+		KillNoSuchProcess:         "kill: (%[1]s) - No such process",
+		KillNotPermitted:          "kill: (%[1]s) - Operation not permitted",
+		KillInvalidSignal:         "kill: %[1]s: invalid signal specification",
+		KillIllegalOption:         "kill: %[1]s: invalid signal specification",
+		KillNotAPid:               "kill: `%[1]s': not a pid or valid job spec",
+		KillMissingSignalArgument: "kill: %[1]s: option requires an argument",
+		KillUsage: "kill: usage: kill [-s sigspec | -n signum | -sigspec] pid | jobspec ... " +
+			"or kill -l [sigspec]",
+		// The usage is the one bash diagnostic with no location in front of
+		// it — every other message here carries "bash: line N:".
+		KillUsageUnprefixed: true,
+		KillUsageStatus:     2,
+		TimesDecimals:       3,
 		// A path that is not there is the OS reason and does not name the
 		// builtin; a bare name off PATH does the reverse.
 		PathNotFound: "%[1]s: No such file or directory",

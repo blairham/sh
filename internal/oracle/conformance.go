@@ -86,7 +86,10 @@ func RunConformance(ctx context.Context, path, against string, args []string, ca
 
 	rep := &Report{Against: against, Missing: missing}
 	for _, c := range cases {
-		if c.SyntaxError {
+		if c.SyntaxError || c.ReferenceRaces {
+			// A reference that answers differently on different runs cannot
+			// grade anything: the score would move without the implementation
+			// having changed.
 			continue
 		}
 		want := Exec(ctx, ref, c)

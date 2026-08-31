@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -83,6 +84,30 @@ type Runner struct {
 	// It returns only on failure — a successful replacement does not come
 	// back — and the error it returns is reported as the exec having failed.
 	ReplaceProcess func(path string, argv, env []string) error
+
+	// DieBySignal ends this process with the signal a script sent it and had
+	// no handler for, and nil — the default — stops the script with 128 plus
+	// the number instead.
+	//
+	// Opt-in for the reason ReplaceProcess is. `kill -INT $$` in a real shell
+	// kills the shell; the same line in a Runner embedded in some other
+	// program would kill *that* program, and a library that can be talked
+	// into killing its host by the text it was asked to interpret is not a
+	// library. So interp decides *when* — after the script has stopped and
+	// the EXIT trap has had its turn, which is the order a shell uses — and
+	// the caller decides whether, in the caller's own code.
+	//
+	// It does not return on success. The status matters even so: a process
+	// killed by a signal and one exiting with 128 plus the number are the
+	// same number to `$?` and different to `wait`, which is a difference the
+	// corpus records.
+	DieBySignal func(sig syscall.Signal) error
+
+	// killedBy is the signal this shell sent itself and had no handler for,
+	// with the number kept beside it so the death does not have to look the
+	// name up again.
+	killedBy    string
+	killedBySig syscall.Signal
 
 	// status is the exit status of the last command run.
 	status int
@@ -342,6 +367,13 @@ func (r *Runner) Run(ctx context.Context, f *syntax.File) (int, error) {
 	if !r.inSubshell {
 		r.stopSignals()
 	}
+	if r.killedBy != "" && r.DieBySignal != nil {
+		// Last, because a shell that is dying still runs its EXIT trap first
+		// where the dialect says so. This does not come back.
+		if err := r.DieBySignal(r.killedBySig); err != nil {
+			r.diagf("kill: %v\n", err)
+		}
+	}
 	return r.status, nil
 }
 
@@ -356,6 +388,12 @@ func (r *Runner) Run(ctx context.Context, f *syntax.File) (int, error) {
 // which is why the control flag is cleared first and consulted after.
 func (r *Runner) runExitTrap(ctx context.Context) {
 	if r.exitTrap == nil || r.inSubshell {
+		return
+	}
+	// A shell that was killed rather than ended is a two-two split: bash and
+	// ksh93 treat dying as exiting and run the trap, dash and zsh do not.
+	// Asked only where there is a trap and a death to disagree about.
+	if r.killedBy != "" && !r.ask(r.sem().ExitTrapRunsOnSignalDeath, "the EXIT trap after a fatal signal") {
 		return
 	}
 	body := *r.exitTrap

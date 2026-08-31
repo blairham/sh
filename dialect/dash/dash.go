@@ -26,6 +26,9 @@ func Semantics() interp.Semantics {
 	// `.` and `eval` is the POSIX answer, which dash keeps and the others have
 	// each moved away from.
 	s.DotWithNoOperandIsAnError = interp.No
+	s.ExitTrapRunsOnSignalDeath = interp.No
+	s.KillListAcceptsName = interp.No
+	s.KillStatus = interp.KillStatusAnyFailure
 	return s
 }
 
@@ -57,6 +60,22 @@ func Diagnostics() interp.Diagnostics {
 		ExecCannotExecute: "exec: %[1]s: %[2]s",
 		ExecNotFound:      "exec: %[1]s: not found",
 		// One message for either operator position.
+		// dash names no pid at all, and prints a blank line after the one
+		// message it has for a target — measured rather than assumed, because
+		// an invisible trailing newline is exactly what a golden record is for.
+		KillNoSuchProcess:         "kill: No such process\n",
+		KillNotPermitted:          "kill: Operation not permitted\n",
+		KillInvalidSignal:         "kill: invalid signal number or name: %[1]s",
+		KillIllegalOption:         "kill: Illegal option -%[1]s",
+		KillNotAPid:               "kill: Illegal number: %[1]s",
+		KillMissingSignalArgument: "kill: No arg for %[1]s option",
+		KillUsage: "kill: Usage: kill [-s sigspec | -signum | -sigspec] [pid | job]... or\n" +
+			"kill -l [exitstatus]",
+		// dash answers every complaint about its arguments with 2, which is the
+		// one dialect where the option and the operand are not two questions.
+		KillUsageStatus:      2,
+		KillBadOptionStatus:  2,
+		KillArgumentStatus:   2,
 		TestUnaryExpected:    "test: %[1]s: unexpected operator",
 		TestBinaryExpected:   "test: %[1]s: unexpected operator",
 		TestIntegerExpected:  "test: Illegal number: %[1]s",

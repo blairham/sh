@@ -190,6 +190,26 @@ type Semantics struct {
 	// that function returns, rather than when the script ends. zsh alone; a
 	// trap set at the top level behaves the same everywhere.
 	ExitTrapIsFunctionLocal Answer
+	// KillListAcceptsName lets `kill -l` translate a name into a number, as
+	// the reverse of what it does with one. True in bash, ksh93 and zsh.
+	//
+	// dash's `-l` takes an *exit status* rather than a signal, so `kill -l 9`
+	// agrees with everyone by arriving there another way and `kill -l INT` is
+	// an illegal number. One question with two answers rather than a feature
+	// dash is missing, which is why it is an axis and not a gap.
+	KillListAcceptsName Answer
+
+	// ExitTrapRunsOnSignalDeath fires the EXIT trap when the shell is ending
+	// because a signal it had no handler for killed it, rather than because
+	// it reached the end or ran `exit`.
+	//
+	//	trap 'echo bye' EXIT; kill -INT $$
+	//
+	// prints bye in bash and ksh93 and prints nothing in dash and zsh, and
+	// all four report 130. A two-two split on whether dying counts as
+	// exiting.
+	ExitTrapRunsOnSignalDeath Answer
+
 	// ExitArgument is how strict `exit` is about what it is given, and it is
 	// an ordering rather than a side:
 	//
@@ -206,6 +226,17 @@ type Semantics struct {
 	// and everything-but there elsewhere: the two answers are both matches,
 	// on different inputs, with nothing to warn on.
 	BracketCaretNegates Answer
+	// KillStatus is what `kill` reports when it was given several targets
+	// and they did not all agree. Three answers, and no two of them are the
+	// majority:
+	//
+	//	kill -0 $$ 999999    bash → 0   dash, ksh93 → 1   zsh → 1
+	//	kill 999998 999999   bash → 1   dash, ksh93 → 1   zsh → 2
+	//
+	// bash reports success if it signaled anything at all, and zsh reports
+	// the number that failed — which is a status carrying a count rather
+	// than a verdict, and the reason this is a policy rather than a bool.
+	KillStatus KillStatusPolicy
 	// ArithFloat evaluates floating point. True in ksh93 and zsh, where POSIX
 	// says integers only.
 	ArithFloat Answer
@@ -479,6 +510,59 @@ func (r *Runner) exitArgument() ExitArgumentPolicy {
 		r.unspecified = true
 	}
 	return p
+}
+
+// KillStatusPolicy is what `kill` reports when its targets disagreed.
+type KillStatusPolicy int
+
+const (
+	// KillStatusUnspecified is no answer, and is refused like any other.
+	KillStatusUnspecified KillStatusPolicy = iota
+	// KillStatusAnyFailure reports 1 if any target failed: dash, ksh93.
+	KillStatusAnyFailure
+	// KillStatusAnySuccess reports 0 if any target was signaled: bash.
+	KillStatusAnySuccess
+	// KillStatusFailureCount reports how many failed: zsh.
+	KillStatusFailureCount
+)
+
+func (k KillStatusPolicy) String() string {
+	switch k {
+	case KillStatusAnyFailure:
+		return "any failure"
+	case KillStatusAnySuccess:
+		return "any success"
+	case KillStatusFailureCount:
+		return "failure count"
+	}
+	return "unspecified"
+}
+
+// killStatusPolicy resolves the axis, and only where the targets actually
+// disagreed — `kill $$` needs no answer from anyone, and neither does a
+// command whose every target failed for the same reason.
+func (r *Runner) killStatusPolicy() KillStatusPolicy {
+	p := r.sem().KillStatus
+	if p == KillStatusUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			"kill: some of these targets: the shells disagree here and no dialect was chosen"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// killListAcceptsName resolves the axis, and only for an argument that is
+// actually a name — `kill -l 9` needs no answer from anyone.
+func (r *Runner) killListAcceptsName() Answer {
+	a := r.sem().KillListAcceptsName
+	if a == Unspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			"kill -l: a signal name: the shells disagree here and no dialect was chosen"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return a
 }
 
 // BracketPolicy is what an unterminated bracket expression means.

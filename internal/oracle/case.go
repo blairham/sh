@@ -40,6 +40,25 @@ type Case struct {
 	// ksh93, and parsed-but-unmatched by zsh. Naming the dialect makes the
 	// flag answerable; naming the panel would not.
 	SyntaxError bool
+
+	// ReferenceRaces marks a case whose *reference* output is not stable,
+	// because the shell being measured races with itself.
+	//
+	// Conformance grades a binary against a live panel shell rather than
+	// against the golden record, so a reference that answers differently on
+	// different runs makes the score move for reasons that have nothing to do
+	// with the implementation under test. Measured on the one case that does
+	// this: ksh93 prints a pipeline's trace lines in the order its two
+	// processes happen to reach them, 374 times one way and 26 the other in
+	// 400 runs — which showed up as a conformance number that wandered by one
+	// about once in fourteen full runs, in *both* directions, because the
+	// same coin flip fails a dialect that expects one order and passes the one
+	// that expects the other.
+	//
+	// Such a case is still worth recording: the divergence is real and the
+	// measurement documents it. It is simply not evidence about anybody's
+	// conformance, so it is not graded and not checked for drift.
+	ReferenceRaces bool
 }
 
 // Corpus is the checked-in set. Every table in docs/spec should be derivable
@@ -365,6 +384,68 @@ var Corpus = []Case{
 		// recorded into the golden file.
 		Why: "the dangerous case: &> redirects both streams in bash and zsh, and is `&` then `>` in dash and ksh93 — no error, different meaning",
 	},
+	// --- kill: a builtin, because a shell has to know what it sent ---------
+	{
+		ID: "kill/probe-with-signal-zero", Category: "kill",
+		Snippet: `kill -0 $$; echo "st=$?"`,
+		Why:     "signal 0 is not a signal: it asks whether the process is there, and every shell in the panel answers 0 for one that is",
+	},
+	{
+		ID: "kill/no-such-process", Category: "kill",
+		Snippet: `kill 999999; echo "st=$?"`,
+		Why:     "status 1 in all four and four different sentences, one of which does not name the process it could not find",
+	},
+	{
+		ID: "kill/not-a-pid", Category: "kill",
+		Snippet: `kill abc; echo "st=$?"`,
+		Why:     "an operand that is not a number is a complaint about the argument rather than a target that failed, which is why dash reports 2 here and 1 for a process that is not there",
+	},
+	{
+		ID: "kill/no-operands-is-usage", Category: "kill",
+		Snippet: `kill; echo "st=$?"`,
+		Why:     "the only diagnostic in the panel that two shells print with no location in front of it, and zsh is alone in not treating it as worth a different status from any other failure",
+	},
+	{
+		ID: "kill/unknown-signal-as-a-flag", Category: "kill",
+		Snippet: `kill -Q 1; echo "st=$?"`,
+		Why:     "half the panel answers `what did you just give me` by where it appeared: dash and ksh93 call this an unknown option where `-s Q` is an unknown signal, and ksh93 prints its usage after one and not the other",
+	},
+	{
+		ID: "kill/unknown-signal-after-s", Category: "kill",
+		Snippet: `kill -s Q 1; echo "st=$?"`,
+		Why:     "the same signal spelled the other way, which is where the two wordings and the two statuses come apart",
+	},
+	{
+		ID: "kill/list-a-number", Category: "kill",
+		Snippet: `kill -l 9`,
+		Why:     "unanimous, and the only part of `kill -l` that is: the bare listing is four formats over a table that is not the same on two operating systems",
+	},
+	{
+		ID: "kill/list-a-name", Category: "kill",
+		Snippet: `kill -l INT; echo "st=$?"`,
+		Why:     "dash's `-l` takes an exit status rather than a signal, so a name is an illegal number there and the number 2 everywhere else",
+	},
+	{
+		ID: "kill/several-targets-disagreeing", Category: "kill",
+		Snippet: `kill -0 $$ 999999; echo "st=$?"`,
+		Why:     "three answers to one question: bash reports success because it signaled something, dash and ksh93 failure because something failed, and zsh how many failed",
+	},
+	{
+		ID: "kill/every-target-failing", Category: "kill",
+		Snippet: `kill 999998 999999; echo "st=$?"`,
+		Why:     "the same axis read again, and the case that shows zsh's status is a count rather than a verdict: two dead targets is 2",
+	},
+	{
+		ID: "kill/signaling-a-process-that-is-not-ours", Category: "kill",
+		Snippet: `kill -TERM 1; echo "st=$?"`,
+		Why:     "pid 1 exists and will not take a signal from us, which is the other half of the target failure and worded differently again",
+	},
+	{
+		ID: "kill/exit-trap-after-a-fatal-signal", Category: "traps and exit",
+		Script:  true,
+		Snippet: "trap 'echo bye' EXIT\nkill -INT $$\necho after\n",
+		Why:     "whether being killed counts as exiting: bash and ksh93 run the EXIT trap and dash and zsh do not, and all four report 130 without reaching the next command",
+	},
 	{
 		ID: "trap/signal-handler-runs-and-continues", Category: "traps and exit",
 		Script:  true,
@@ -480,8 +561,9 @@ var Corpus = []Case{
 	},
 	{
 		ID: "xtrace/pipeline-order-diverges", Category: "shell options",
-		Snippet: `set -x; echo a | cat`,
-		Why:     "ksh93 prints the last element first, which follows from its running that one in the current shell — measured, and not reproduced here",
+		Snippet:        `set -x; echo a | cat`,
+		ReferenceRaces: true,
+		Why:            "ksh93 usually prints the last element first, which follows from its running that one in the current shell — but only usually: its two processes race to their trace points, 26 runs in 400 come out the other way, and that is a fact about ksh93 rather than about anything measured against it",
 	},
 	{
 		ID: "nounset/unset-variable-is-an-error", Category: "shell options",

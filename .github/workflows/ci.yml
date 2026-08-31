@@ -54,7 +54,7 @@ jobs:
       # reports formatter findings too, so both hooks are a strict subset of a
       # job that already has to pass.
       env:
-        SKIP: golangci-lint,golangci-lint-fmt
+        SKIP: golangci-lint-full,golangci-lint-fmt
       uses: blairham/go-pre-commit@v4.6.6
 
   # Gating happens inside the jobs, never with a workflow-level `paths:`

@@ -371,6 +371,42 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   set -C; echo one>b; echo two>|b; printf "[%s]" "$(cat b)"
   ```
 
+## shell options
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `errexit/failure-ends-the-script` | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* |
+| `errexit/condition-is-exempt` | `reached` | `reached` | `reached` | `reached` | `reached` | `reached` |
+| `errexit/exemption-reaches-into-functions` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` | `inner~reached` |
+| `errexit/only-the-last-of-a-chain` | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* |
+| `errexit/negation-is-exempt` | `reached` | `reached` | `reached` | `reached` | `reached` | `reached` |
+| `errexit/assignment-takes-the-substitution` | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* |
+
+- `errexit/failure-ends-the-script` — the whole point of -e, and the baseline the exemptions are measured against
+  ```sh
+  set -e; false; echo reached
+  ```
+- `errexit/condition-is-exempt` — a command whose status is being tested is not a failure; -e would otherwise make `if` useless
+  ```sh
+  set -e; if false; then :; fi; while false; do :; done; echo reached
+  ```
+- `errexit/exemption-reaches-into-functions` — the subtle one: the exemption is inherited, so the function keeps going past its own failure — unanimous, and the part most implementations get wrong
+  ```sh
+  set -e; f() { false; echo inner; }; if f; then :; fi; echo reached
+  ```
+- `errexit/only-the-last-of-a-chain` — -e judges the final operand of an && chain and nothing before it, so the first line survives and the second does not
+  ```sh
+  set -e; false && :; echo one; : && false; echo two
+  ```
+- `errexit/negation-is-exempt` — `!` tests a status rather than requiring success, so a failing negation is not a failure
+  ```sh
+  set -e; ! true; echo reached
+  ```
+- `errexit/assignment-takes-the-substitution` — an assignment reports what the substitution reported, so this ends the script where `echo "$(false)"` does not
+  ```sh
+  set -e; x=$(false); echo reached
+  ```
+
 ## redirection
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |

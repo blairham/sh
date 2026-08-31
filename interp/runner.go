@@ -105,6 +105,19 @@ type Runner struct {
 	// Real shells report the line of the command that failed, so this is
 	// updated per statement rather than per token.
 	line int
+	// errexit is `set -e`: a command that fails ends the script.
+	errexit bool
+	// tested counts the contexts where a command's status is being *used*
+	// rather than checked for failure — an `if` condition, a non-final
+	// operand of `&&`, the operand of `!`. `set -e` does not fire while it
+	// is above zero.
+	//
+	// A counter on the runner rather than a parameter, because the
+	// exemption is inherited: a function called from an `if` condition has
+	// it suppressed inside its body too, all the way down. That is measured,
+	// unanimous across the panel, and the part of `set -e` most
+	// implementations get wrong.
+	tested int
 	// noclobber is `set -C`: a plain `>` will not truncate an existing file.
 	noclobber bool
 	// readonly names refuse assignment.
@@ -249,13 +262,56 @@ func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
 	if st.Background {
 		return r.background(ctx, st)
 	}
-	return r.expr(ctx, st.Expr)
+	if err := r.expr(ctx, st.Expr); err != nil {
+		return err
+	}
+	if _, isChain := st.Expr.(*syntax.BinaryExpr); !isChain && !lastIsNegated(st.Expr) {
+		// A chain judges itself, inside expr, because only its final operand
+		// counts and only when that operand actually ran.
+		r.checkErrExit()
+	}
+	return nil
+}
+
+// lastIsNegated reports whether the command `set -e` would judge carries a
+// `!`. Negation tests a status rather than requiring success, so `! true`
+// yields 1 and does not end the script — measured, and unanimous.
+//
+// It asks about the *last* operand for the same reason the `&&` rule does:
+// that is the one whose status the statement reports.
+func lastIsNegated(e syntax.Expr) bool {
+	switch x := e.(type) {
+	case *syntax.BinaryExpr:
+		return lastIsNegated(x.Y)
+	case *syntax.Pipeline:
+		return x.Negated
+	}
+	return false
+}
+
+// checkErrExit ends the script when `set -e` is on and the statement failed.
+//
+// One place, after a whole statement, because that is the granularity the
+// shells use: `false | true` does not fire and `true | false` does, and both
+// are one statement whose status is the pipeline's.
+func (r *Runner) checkErrExit() {
+	if r.errexit && r.tested == 0 && r.status != 0 && r.ctl == controlNone {
+		// The status is the failing command's, not a status of its own —
+		// `set -e; exit` reports what failed.
+		r.ctl = controlExit
+	}
 }
 
 func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 	switch x := e.(type) {
 	case *syntax.BinaryExpr:
-		if err := r.expr(ctx, x.X); err != nil {
+		// Only the *last* command of an `&&`/`||` chain is subject to
+		// `set -e`. The tree is left-associative, so everything but the
+		// final operand is inside X, and one counter covers the lot.
+		r.tested++
+		err := r.expr(ctx, x.X)
+		r.tested--
+		if err != nil {
 			return err
 		}
 		// && runs the right side when the left succeeded, || when it failed.
@@ -263,9 +319,18 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 		// encodes; nothing here re-decides it.
 		runRight := (x.Op == syntax.TokAndAnd) == (r.status == 0)
 		if !runRight {
+			// The chain short-circuited, so the final operand never ran and
+			// there is nothing for `set -e` to judge: `false && :` leaves
+			// status 1 and does not end the script.
 			return nil
 		}
-		return r.expr(ctx, x.Y)
+		if err := r.expr(ctx, x.Y); err != nil {
+			return err
+		}
+		if !lastIsNegated(x.Y) {
+			r.checkErrExit()
+		}
+		return nil
 	case *syntax.Pipeline:
 		return r.pipeline(ctx, x)
 	}
@@ -373,6 +438,12 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	if len(argv) == 0 {
 		// Assignments with no command name persist, which is the difference
 		// between `x=1` and `x=1 cmd`.
+		//
+		// The status is set *before* they run, not after: `x=1` succeeds,
+		// and `x=$(false)` reports what the substitution reported, because
+		// the substitution sets the status as it goes. Zeroing afterwards
+		// hid that, and `set -e; x=$(false)` carried on.
+		r.status = 0
 		for _, a := range c.Assigns {
 			r.assign(a)
 		}
@@ -399,7 +470,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 				return nil
 			}
 		}
-		r.status = 0
+		// No zeroing here: the status was set before the assignments ran, so
+		// a command substitution inside one has already reported. This line
+		// used to overwrite it, which is why `set -e; x=$(false)` carried on.
 		return nil
 	}
 

@@ -9,6 +9,10 @@ on:
     # is the feedback that matters. Drafts get pre-commit and nothing else:
     # push freely while drafting, and `ready_for_review` starts the rest.
     types: [opened, reopened, synchronize, ready_for_review]
+    # Nothing here fires for a push to a branch with no pull request open, so
+    # branch pushes cost nothing at all. `synchronize` is a push to a branch
+    # that *has* one, which is the feedback worth paying for — and even then
+    # every job stands down while the pull request is a draft.
   push:
     # Only the pre-commit job runs here — see its `if:`. Tests are deliberately
     # not re-run after a merge: branch protection requires the branch to be up
@@ -33,6 +37,14 @@ jobs:
   # and a secret committed to a draft is committed.
   pre-commit:
     name: Pre-commit
+    # Skipped while a pull request is a draft, like everything else. Drafting
+    # costs nothing; marking it ready starts the lot.
+    #
+    # What this gives up is small but worth naming: gitleaks and the licence
+    # check do not see a draft's commits until it is ready. The same hooks run
+    # locally at commit time, so this is the second line rather than the only
+    # one — and a draft cannot be merged.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6

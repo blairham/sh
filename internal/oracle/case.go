@@ -444,6 +444,46 @@ var Corpus = []Case{
 		Why:     "an ordering rather than a side: dash refuses both, bash refuses only the one that is not a number, ksh93 and zsh take either",
 	},
 	{
+		ID: "xtrace/traces-each-command", Category: "shell options",
+		Snippet: `set -x; echo a b`,
+		Why:     "the structure is unanimous: every simple command goes to stderr, expanded, before it runs",
+	},
+	{
+		ID: "xtrace/quoting-diverges", Category: "shell options",
+		Snippet: `set -x; x="hello wor"; echo "$x"`,
+		Why:     "dash prints an expanded field with a space in it unquoted, so two arguments and one are indistinguishable; the others quote",
+	},
+	{
+		ID: "xtrace/embedded-quote-diverges", Category: "shell options",
+		Snippet: `set -x; x="it's"; echo "$x"`,
+		Why:     "ksh93 reaches for $'…' where bash and zsh close, escape and reopen",
+	},
+	{
+		ID: "xtrace/prefix-diverges", Category: "shell options",
+		Snippet: `set -x; f() { echo in; }; f`,
+		Why:     "zsh names the script and line, and the function and 0 inside one, where the others print a bare plus",
+	},
+	{
+		ID: "xtrace/assignments-per-line-diverges", Category: "shell options",
+		Snippet: `set -x; a=1 b=2`,
+		Why:     "bash and ksh93 give each assignment its own line; dash and zsh put them on one",
+	},
+	{
+		ID: "xtrace/disabling-set-diverges", Category: "shell options",
+		Snippet: `set -x; set +x; echo done`,
+		Why:     "ksh93 applies the change before printing the command that makes it, so the command that stops tracing leaves no trace of itself",
+	},
+	{
+		ID: "xtrace/compound-header-diverges", Category: "shell options",
+		Snippet: `set -x; for i in 1 2; do echo $i; done`,
+		Why:     "bash and zsh print the `for` header once per iteration where dash and ksh93 print only the commands inside — measured, and not reproduced here",
+	},
+	{
+		ID: "xtrace/pipeline-order-diverges", Category: "shell options",
+		Snippet: `set -x; echo a | cat`,
+		Why:     "ksh93 prints the last element first, which follows from its running that one in the current shell — measured, and not reproduced here",
+	},
+	{
 		ID: "nounset/unset-variable-is-an-error", Category: "shell options",
 		Script:  true,
 		Snippet: "set -u\necho \"[$NOPE]\"\necho after\n",

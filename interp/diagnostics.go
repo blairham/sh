@@ -92,6 +92,12 @@ type Diagnostics struct {
 	// name and the reason.
 	CannotOpen string
 
+	// TraceStyle and TraceQuoting are how `set -x` prints. They are here
+	// rather than in Semantics because they decide what is *written*, not
+	// what happens — the same argument the wording formats make.
+	TraceStyle   TraceStyle
+	TraceQuoting TraceQuoting
+
 	// Location is how the shell prefixes a diagnostic with where it
 	// happened. Measured, and all four differ:
 	//

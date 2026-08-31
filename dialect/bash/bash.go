@@ -33,6 +33,7 @@ func Semantics() interp.Semantics {
 	s.ReadonlyReassignmentFatal = interp.No
 	s.UnterminatedBracket = interp.BracketLiteral
 	s.ExitArgument = interp.ExitArgNumeric
+	s.TraceAssignmentsSeparately = interp.Yes
 	return s
 }
 
@@ -42,6 +43,7 @@ func Diagnostics() interp.Diagnostics {
 		Location:          interp.LocationLineWord,
 		NotFound:          "%s: command not found",
 		UnboundVariable:   "%s: unbound variable",
+		TraceQuoting:      interp.QuoteShell,
 		SyntaxErrorStatus: 2,
 	}
 }

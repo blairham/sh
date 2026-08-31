@@ -6265,6 +6265,262 @@
         "Status": 0,
         "TimedOut": false
       }
+    },
+    "xtrace/assignments-per-line-diverges": {
+      "bash": {
+        "Output": "+ a=1~+ b=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "+ a=1~+ b=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "+ a=1~+ b=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "+ a=1 b=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "+ a=1~+ b=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "+\u003cshell\u003e:1\u003e a=1 b=2 ",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/compound-header-diverges": {
+      "bash": {
+        "Output": "+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "+ echo 1~1~+ echo 2~2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "+ echo 1~1~+ echo 2~2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "+\u003cshell\u003e:1\u003e i=1~+\u003cshell\u003e:1\u003e echo 1~1~+\u003cshell\u003e:1\u003e i=2~+\u003cshell\u003e:1\u003e echo 2~2",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/disabling-set-diverges": {
+      "bash": {
+        "Output": "+ set +x~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "+ set +x~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "+ set +x~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "+ set +x~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "+\u003cshell\u003e:1\u003e set +x~done",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/embedded-quote-diverges": {
+      "bash": {
+        "Output": "+ x='it'\\''s'~+ echo 'it'\\''s'~it's",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "+ x='it'\\''s'~+ echo 'it'\\''s'~it's",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "+ x='it'\\''s'~+ echo 'it'\\''s'~it's",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "+ x=it's~+ echo it's~it's",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "+ x=$'it\\'s'~+ echo $'it\\'s'~it's",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "+\u003cshell\u003e:1\u003e x='it'\\''s' ~+\u003cshell\u003e:1\u003e echo 'it'\\''s'~it's",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/pipeline-order-diverges": {
+      "bash": {
+        "Output": "+ echo a~+ cat~a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "+ echo a~+ cat~a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "+ echo a~+ cat~a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "+ echo a~+ cat~a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "+ cat~+ echo a~a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "+\u003cshell\u003e:1\u003e echo a~+\u003cshell\u003e:1\u003e cat~a",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/prefix-diverges": {
+      "bash": {
+        "Output": "+ f~+ echo in~in",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "+ f~+ echo in~in",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "+ f~+ echo in~in",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "+ f~+ echo in~in",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "+ f~+ echo in~in",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "+\u003cshell\u003e:1\u003e f~+f:0\u003e echo in~in",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/quoting-diverges": {
+      "bash": {
+        "Output": "+ x='hello wor'~+ echo 'hello wor'~hello wor",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "+ x='hello wor'~+ echo 'hello wor'~hello wor",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "+ x='hello wor'~+ echo 'hello wor'~hello wor",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "+ x=hello wor~+ echo hello wor~hello wor",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "+ x='hello wor'~+ echo 'hello wor'~hello wor",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "+\u003cshell\u003e:1\u003e x='hello wor' ~+\u003cshell\u003e:1\u003e echo 'hello wor'~hello wor",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "xtrace/traces-each-command": {
+      "bash": {
+        "Output": "+ echo a b~a b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "+ echo a b~a b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "+ echo a b~a b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "+ echo a b~a b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "+ echo a b~a b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "+\u003cshell\u003e:1\u003e echo a b~a b",
+        "Status": 0,
+        "TimedOut": false
+      }
     }
   }
 }

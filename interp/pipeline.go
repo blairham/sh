@@ -103,9 +103,24 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline) error {
 	// each one. clone() reads the runner's fields, and the last element —
 	// when it runs in the current shell — writes them; doing both at once is
 	// a race the detector catches and a corrupted stream in production.
+	// One gate per element, so element i prints after i-1 has. Only the
+	// trace point is ordered; the commands still run at the same time.
+	var gates []chan struct{}
+	if r.xtrace {
+		gates = make([]chan struct{}, n)
+		for i := range gates {
+			gates[i] = make(chan struct{})
+		}
+	}
 	subs := make([]*Runner, last)
 	for i := 0; i < last; i++ {
 		sub := r.clone()
+		if gates != nil {
+			if i > 0 {
+				sub.traceWait = gates[i-1]
+			}
+			sub.traceDone, sub.traceOnce = gates[i], &sync.Once{}
+		}
 		sub.Stderr = sharedErr
 		sub.Stdout = sharedOut
 		if readers[i] != nil {
@@ -124,6 +139,9 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline) error {
 			defer wg.Done()
 			errs[i] = subs[i].command(ctx, cmd)
 			statuses[i] = subs[i].status
+			// An element that never reached a trace point must still let the
+			// next one print, or the pipeline deadlocks on its own logging.
+			subs[i].releaseTraceTurn()
 
 			// Closing the write end is what tells the next element its input
 			// has finished. Without it the pipeline deadlocks, which is the
@@ -140,6 +158,10 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline) error {
 		// The last element runs here, on the shell itself, so what it
 		// assigns survives the pipeline.
 		i := n - 1
+		if gates != nil {
+			r.traceWait, r.traceDone, r.traceOnce = gates[i-1], gates[i], &sync.Once{}
+			defer func() { r.traceWait, r.traceDone, r.traceOnce = nil, nil, nil }()
+		}
 		savedIn, savedOut, savedErr := r.Stdin, r.Stdout, r.Stderr
 		if readers[i] != nil {
 			r.Stdin = readers[i]

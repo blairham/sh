@@ -169,6 +169,13 @@ type Semantics struct {
 	// with three values; the twenty-three binary ones keep the type that
 	// says so.
 	UnterminatedBracket BracketPolicy
+	// TraceAssignmentsSeparately gives each assignment of `a=1 b=2` its own
+	// trace line. True in bash and ksh93; dash and zsh put them on one.
+	TraceAssignmentsSeparately Answer
+	// TraceShowsItsOwnDisabling prints `set +x` before acting on it. True in
+	// dash, bash and zsh; ksh93 applies the change first, so the command
+	// that stops tracing leaves no trace of itself.
+	TraceShowsItsOwnDisabling Answer
 	// UnsetPositionalIsAllowed lets `$1` expand to nothing under `set -u`
 	// rather than being an error. ksh93 alone, and quiet where it differs:
 	// a script that reads an argument it was not given carries on there and
@@ -275,6 +282,8 @@ func PosixSemantics() Semantics {
 		ExitTrapIsFunctionLocal:            No,
 		SignalHandlerSeesEarlierStatus:     No,
 		UnsetPositionalIsAllowed:           No,
+		TraceShowsItsOwnDisabling:          Yes,
+		TraceAssignmentsSeparately:         No,
 		ExitArgument:                       ExitArgStrict,
 		EqualsExpansion:                    No,
 		ArithInvalidOctalDigitIsError:      Yes,

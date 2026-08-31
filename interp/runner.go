@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -127,6 +128,15 @@ type Runner struct {
 	// main script, and not in either of those — so the copy must know it is
 	// a copy.
 	inSubshell bool
+	// traceWait and traceDone order the trace lines of a pipeline without
+	// ordering the pipeline itself: an element waits for the one before it
+	// to have printed, then prints, then releases the next. Only the
+	// printing is serialised.
+	traceWait <-chan struct{}
+	traceDone chan struct{}
+	traceOnce *sync.Once
+	// xtrace is `set -x`: every simple command is printed before it runs.
+	xtrace bool
 	// nounset is `set -u`: expanding an unset parameter is an error.
 	nounset bool
 	// errexit is `set -e`: a command that fails ends the script.
@@ -539,6 +549,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// the substitution sets the status as it goes. Zeroing afterwards
 		// hid that, and `set -e; x=$(false)` carried on.
 		r.status = 0
+		if r.xtrace {
+			values := make([]string, 0, len(c.Assigns))
+			for _, a := range c.Assigns {
+				values = append(values, strings.Join(r.expandWord(a.Value), " "))
+			}
+			r.traceAssignments(c.Assigns, values)
+		}
 		for _, a := range c.Assigns {
 			r.assign(a)
 		}
@@ -554,6 +571,8 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// in a dialect without `&>` came to leave no file behind, the exact
 		// silent case the AmpersandRedirect comment warns about.
 		if len(c.Redirs) > 0 {
+			r.traceCommand(argv)
+
 			closers, err := r.applyRedirs(ctx, c.Redirs)
 			for _, cl := range closers {
 				_ = cl.Close()
@@ -570,6 +589,8 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// used to overwrite it, which is why `set -e; x=$(false)` carried on.
 		return nil
 	}
+
+	r.traceCommand(argv)
 
 	closers, err := r.applyRedirs(ctx, c.Redirs)
 	defer func() {

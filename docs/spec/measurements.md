@@ -467,6 +467,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
+| `xtrace/traces-each-command` | `+ echo a b~a b` | `+ echo a b~a b` | `+ echo a b~a b` | `+ echo a b~a b` | `+ echo a b~a b` | `+<shell>:1> echo a b~a b` |
+| `xtrace/quoting-diverges` | `+ x=hello wor~+ echo hello wor~hello wor` | `+ x='hello wor'~+ echo 'hello wor'~hello wor` | `+ x='hello wor'~+ echo 'hello wor'~hello wor` | `+ x='hello wor'~+ echo 'hello wor'~hello wor` | `+ x='hello wor'~+ echo 'hello wor'~hello wor` | `+<shell>:1> x='hello wor' ~+<shell>:1> echo 'hello wor'~hello wor` |
+| `xtrace/embedded-quote-diverges` | `+ x=it's~+ echo it's~it's` | `+ x='it'\''s'~+ echo 'it'\''s'~it's` | `+ x='it'\''s'~+ echo 'it'\''s'~it's` | `+ x='it'\''s'~+ echo 'it'\''s'~it's` | `+ x=$'it\'s'~+ echo $'it\'s'~it's` | `+<shell>:1> x='it'\''s' ~+<shell>:1> echo 'it'\''s'~it's` |
+| `xtrace/prefix-diverges` | `+ f~+ echo in~in` | `+ f~+ echo in~in` | `+ f~+ echo in~in` | `+ f~+ echo in~in` | `+ f~+ echo in~in` | `+<shell>:1> f~+f:0> echo in~in` |
+| `xtrace/assignments-per-line-diverges` | `+ a=1 b=2` | `+ a=1~+ b=2` | `+ a=1~+ b=2` | `+ a=1~+ b=2` | `+ a=1~+ b=2` | `+<shell>:1> a=1 b=2 ` |
+| `xtrace/disabling-set-diverges` | `+ set +x~done` | `+ set +x~done` | `+ set +x~done` | `+ set +x~done` | `done` | `+<shell>:1> set +x~done` |
+| `xtrace/compound-header-diverges` | `+ echo 1~1~+ echo 2~2` | `+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2` | `+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2` | `+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2` | `+ echo 1~1~+ echo 2~2` | `+<shell>:1> i=1~+<shell>:1> echo 1~1~+<shell>:1> i=2~+<shell>:1> echo 2~2` |
+| `xtrace/pipeline-order-diverges` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ cat~+ echo a~a` | `+<shell>:1> echo a~+<shell>:1> cat~a` |
 | `nounset/unset-variable-is-an-error` | `<script>: 2: NOPE: parameter not set` *(status 2)* | `<script>: line 2: NOPE: unbound variable` *(status 1)* | `<script>: line 2: NOPE: unbound variable` *(status 1)* | `<script>: line 2: NOPE: unbound variable` *(status 1)* | `<script>: line 2: NOPE: parameter not set` *(status 1)* | `<script>:2: NOPE: parameter not set` *(status 1)* |
 | `nounset/defaults-are-exempt` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` |
 | `nounset/empty-is-not-unset` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` |
@@ -479,6 +487,38 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `errexit/negation-is-exempt` | `reached` | `reached` | `reached` | `reached` | `reached` | `reached` |
 | `errexit/assignment-takes-the-substitution` | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* |
 
+- `xtrace/traces-each-command` — the structure is unanimous: every simple command goes to stderr, expanded, before it runs
+  ```sh
+  set -x; echo a b
+  ```
+- `xtrace/quoting-diverges` — dash prints an expanded field with a space in it unquoted, so two arguments and one are indistinguishable; the others quote
+  ```sh
+  set -x; x="hello wor"; echo "$x"
+  ```
+- `xtrace/embedded-quote-diverges` — ksh93 reaches for $'…' where bash and zsh close, escape and reopen
+  ```sh
+  set -x; x="it's"; echo "$x"
+  ```
+- `xtrace/prefix-diverges` — zsh names the script and line, and the function and 0 inside one, where the others print a bare plus
+  ```sh
+  set -x; f() { echo in; }; f
+  ```
+- `xtrace/assignments-per-line-diverges` — bash and ksh93 give each assignment its own line; dash and zsh put them on one
+  ```sh
+  set -x; a=1 b=2
+  ```
+- `xtrace/disabling-set-diverges` — ksh93 applies the change before printing the command that makes it, so the command that stops tracing leaves no trace of itself
+  ```sh
+  set -x; set +x; echo done
+  ```
+- `xtrace/compound-header-diverges` — bash and zsh print the `for` header once per iteration where dash and ksh93 print only the commands inside — measured, and not reproduced here
+  ```sh
+  set -x; for i in 1 2; do echo $i; done
+  ```
+- `xtrace/pipeline-order-diverges` — ksh93 prints the last element first, which follows from its running that one in the current shell — measured, and not reproduced here
+  ```sh
+  set -x; echo a | cat
+  ```
 - `nounset/unset-variable-is-an-error` — the whole point of -u, and the baseline the exemptions are measured against
   ```sh
   set -u

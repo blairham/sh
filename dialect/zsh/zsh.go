@@ -49,6 +49,8 @@ func Diagnostics() interp.Diagnostics {
 		BadSubstitution:   "bad substitution",
 		BadPattern:        "bad pattern: %s",
 		ReadonlyVariable:  "read-only variable: %s",
+		TraceQuoting:      interp.QuoteShell,
+		TraceStyle:        interp.TraceNameLine,
 		SyntaxErrorStatus: 1,
 	}
 }

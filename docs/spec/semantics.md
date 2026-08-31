@@ -294,14 +294,30 @@ recorded in the corpus as `pat/unterminated-bracket` and is not yet
 answered, because answering it needs the non-binary shape this section
 describes rather than another bool.
 
-A second candidate has since appeared and it is not a yes-or-no at all:
-**the exit status of a syntax error** is 2 in dash and bash, 3 in ksh93
-and 1 in zsh. That is a value, not a side, and it is what every remaining
-behavioural mismatch against ksh93 and three of five against zsh come
-down to. It belongs with the diagnostic text rather than here — a shell
-that owns its wording owns its status — so it is the first thing the
-diagnostics seam has to carry, and the reason that seam cannot be
-cosmetic.
+A second candidate appeared and turned out to belong elsewhere: **the exit
+status of a syntax error** is 2 in dash and bash, 3 in ksh93 and 1 in zsh.
+That is a value, not a side, and it went to `Diagnostics` — a shell that
+owns its wording owns its status.
+
+## The prediction about Answer was wrong
+
+This document argued that `Answer` would have to grow a third state before
+a third non-binary axis arrived. Writing the bracket policy showed that
+would have been worse.
+
+`UnterminatedBracket` has its own type, `BracketPolicy`, with its own four
+values. A wider `Answer` would have let `BracketBadPattern` be assigned to
+any of the twenty-three genuinely binary axes and still compile, and the
+type would have stopped saying what it says now: *this axis has two sides
+and the shells picked different ones*. An axis with three answers gets a
+type with three values; the binary ones keep the type that says so.
+
+The rule that survived is the other half of the note above: **one field,
+one question**. `${!x}` was one field asked two questions and split into a
+grammar flag and a binary axis. `ArithLeadingZeroIsOctal` was one field
+asked two questions and split into two axes. The bracket policy is one
+field asked one question that happens to have three answers, and the fix
+is a wider *field*, not a wider `Answer`.
 
 The most dangerous of them all is in that document too, and it is binary,
 so it is in the table above: **a leading zero means octal everywhere but

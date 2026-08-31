@@ -20,6 +20,7 @@ func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
 	s.EchoInterpretsEscapes = interp.Yes
 	s.LengthOfSpecialIsCount = interp.No
+	s.UnterminatedBracket = interp.BracketNoMatch
 	return s
 }
 

@@ -107,6 +107,16 @@ func closesBracket(s string, i int) bool {
 // A pattern matching nothing is passed through unchanged, which is what dash,
 // bash and ksh93 do; zsh reports an error, and that is a recorded axis.
 func (r *Runner) glob(field string) []string {
+	if r.sem().UnterminatedBracket == BracketBadPattern &&
+		field != "[" && hasUnterminatedBracket(field) {
+		// zsh rejects an unterminated bracket against the filesystem too,
+		// with one exception it is worth stating because it is what keeps
+		// `[ a = a ]` working: a field that is exactly `[` is left alone.
+		// `a[` is not, so the rule is the whole field rather than where the
+		// bracket sits in it.
+		r.fatalPattern(field, 1)
+		return nil
+	}
 	if !hasUnescapedMeta(field) {
 		return nil
 	}
@@ -135,7 +145,7 @@ func (r *Runner) glob(field string) []string {
 		}
 		var next []string
 		for _, dir := range dirs {
-			next = append(next, matchIn(dir, part, r.caretNegates(part))...)
+			next = append(next, matchIn(dir, part, r.patternOpts(part))...)
 		}
 		if len(next) == 0 {
 			r.globMissed = true
@@ -176,7 +186,7 @@ func (r *Runner) glob(field string) []string {
 }
 
 // matchIn lists the entries of dir matching one pattern component.
-func matchIn(dir, pattern string, caret bool) []string {
+func matchIn(dir, pattern string, o patternOpts) []string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
@@ -192,7 +202,7 @@ func matchIn(dir, pattern string, caret bool) []string {
 		if strings.HasPrefix(name, ".") && !hidden {
 			continue
 		}
-		if matchPattern(pattern, name, caret) {
+		if matchPattern(pattern, name, o) {
 			out = append(out, filepath.Join(dir, name))
 		}
 	}

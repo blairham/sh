@@ -83,6 +83,8 @@ type Diagnostics struct {
 	// EqualsNotFound is `=cmd` naming nothing. One verb: the name. zsh omits
 	// the colon it uses everywhere else, which is why this is not NotFound.
 	EqualsNotFound string
+	// BadPattern is a pattern the dialect rejects. One verb: the pattern.
+	BadPattern string
 	// CannotOpen is a redirection that could not be opened. Two verbs: the
 	// name and the reason.
 	CannotOpen string

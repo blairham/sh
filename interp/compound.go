@@ -180,6 +180,11 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 
 		for i, item := range c.Items {
 			matched := r.caseItemMatches(item, subject)
+			if r.ctl != controlNone {
+				// A pattern the dialect rejects outright. Testing the later
+				// items would report it again, once per item.
+				return nil
+			}
 			if r.unspecified {
 				// A pattern asked an axis no dialect answered. Falling
 				// through to the next item would run a body chosen by a

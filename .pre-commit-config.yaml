@@ -8,6 +8,28 @@ repos:
       - id: check-added-large-files
       - id: check-merge-conflict
       - id: detect-private-key
+  # Go hygiene, at commit time. This repository had none of it, so a
+  # formatting slip or an untidy go.mod was only caught by CI — minutes later,
+  # on a different machine, for something the editor could have fixed.
+  - repo: https://github.com/TekWizely/pre-commit-golang
+    rev: v1.0.0-rc.4
+    hooks:
+      - id: go-mod-tidy-repo
+
+  # `golangci-lint-fmt` applies every formatter configured in .golangci.yml —
+  # gofumpt and goimports both. `golangci-lint` lints only what changed since
+  # HEAD, which is fast enough for every commit; the whole-repo run stays in
+  # CI, because --new-from-rev cannot see whole-module linters like `unused`.
+  # That is not hypothetical: `unused` is what caught a dead field in this
+  # package that nothing else would have.
+  #
+  # Keep `rev` in lockstep with go.mod's tool pin.
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v2.13.2
+    hooks:
+      - id: golangci-lint-fmt
+      - id: golangci-lint
+
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.0
     hooks:
@@ -17,3 +39,5 @@ repos:
     hooks:
       - id: check-license-headers
         args: [--license, Apache-2.0]
+      # go.mod's `go` directive and .tool-versions' golang pin must match.
+      - id: check-go-version-sync

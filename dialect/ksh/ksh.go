@@ -34,6 +34,7 @@ func Semantics() interp.Semantics {
 	s.LastPipelineElementInCurrentShell = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
 	s.ExitArgument = interp.ExitArgLenient
+	s.UnsetPositionalIsAllowed = interp.Yes
 	return s
 }
 

@@ -275,6 +275,10 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		value, set = r.getVar(e.Name)
 	}
 
+	if !set {
+		r.checkNounset(e)
+	}
+
 	if e.Indirect {
 		// `${!x}` reads x, then reads *that* as a name — in bash. ksh93
 		// parses the same text and yields the name itself, so the grammar
@@ -624,7 +628,11 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 		if n <= len(r.Params) {
 			return r.Params[n-1], true
 		}
-		return "", true
+		// Reported as *unset*, not as empty. Saying "set" here made
+		// `${1-default}` yield nothing, because the default only fires for a
+		// parameter that is not set — and it hid every unset positional from
+		// `set -u`, which is what turned this up.
+		return "", false
 	}
 	return "", false
 }
@@ -774,4 +782,46 @@ func escapeAll(in []string) []string {
 		out[i] = globEscape(s)
 	}
 	return out
+}
+
+// checkNounset reports an unset parameter under `set -u`.
+//
+// Only where the expansion would actually *use* the value. `${x:-d}` and
+// `${x-d}` supply one, `${x+d}` asks whether it is set, and `${x:?m}` reports
+// in its own words — none of those is an error, and all four shells agree.
+func (r *Runner) checkNounset(e *syntax.ParamExpr) {
+	if !r.nounset {
+		return
+	}
+	switch e.Op {
+	case syntax.ParamDefault, syntax.ParamAssign, syntax.ParamAlternate, syntax.ParamError:
+		return
+	}
+	switch e.Name {
+	case "@", "*":
+		// No parameters is not the same as unset: `"$@"` with none is empty
+		// and quiet in all four.
+		return
+	}
+	if isPositional(e.Name) && !r.ask(r.sem().UnsetPositionalIsAllowed, "an unset positional parameter under set -u") {
+		// ksh93 alone lets `$1` be empty here.
+		r.fatal("%s\n", Wording(r.diag().UnboundVariable, "%s: parameter not set", e.Name))
+		return
+	}
+	if !isPositional(e.Name) {
+		r.fatal("%s\n", Wording(r.diag().UnboundVariable, "%s: parameter not set", e.Name))
+	}
+}
+
+// isPositional reports whether a parameter name is a positional one.
+func isPositional(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }

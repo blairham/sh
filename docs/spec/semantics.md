@@ -26,6 +26,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | `=cmd` expands to a path | *n/a* | no | no | **yes** |
 | an EXIT trap set in a function fires there | no | no | no | **yes** |
 | a signal handler sees the earlier `$?` | no | no | no | **yes** |
+| an unset positional survives `set -u` | no | no | **yes** | no |
 | brace expansion happens | **no** | yes | yes | yes |
 | arithmetic does floating point | no | no | **yes** | **yes** |
 | quoting a `=~` regex makes it literal | *n/a* | **yes** | no | no |
@@ -72,6 +73,7 @@ Group the shells by which side of each axis they fall on:
     brace expansion      {dash}
     function EXIT trap   {zsh}
     handler sees $?      {zsh}
+    unset positional -u  {ksh93}
     `=cmd` expands       {zsh}
     leading zero octal   {zsh}
     fatal error status   {dash}
@@ -90,7 +92,7 @@ Group the shells by which side of each axis they fall on:
     readonly continues   {bash}
     shift survives       {bash, zsh}
 
-Eight distinct groupings across twenty-seven axes: `{zsh}`, `{dash,zsh}`,
+Eight distinct groupings across twenty-eight axes: `{zsh}`, `{dash,zsh}`,
 `{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`, `{dash,ksh93}` and
 `{dash}` — the last of which `${#@}` now produces on its own, where
 previously it appeared only as the modern-ksh reading of the `&>` axis.

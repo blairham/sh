@@ -3066,6 +3066,166 @@
         "TimedOut": false
       }
     },
+    "nounset/defaults-are-exempt": {
+      "bash": {
+        "Output": "[d][d][]~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[d][d][]~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[d][d][]~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[d][d][]~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[d][d][]~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[d][d][]~after",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "nounset/empty-is-not-unset": {
+      "bash": {
+        "Output": "[]~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[]~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[]~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[]~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[]~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[]~after",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "nounset/no-parameters-is-not-unset": {
+      "bash": {
+        "Output": "[][]~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[][]~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[][]~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[][]~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[][]~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[][]~after",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "nounset/unset-positional-diverges": {
+      "bash": {
+        "Output": "\u003cscript\u003e: line 2: $1: unbound variable",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cscript\u003e: line 2: $1: unbound variable",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cscript\u003e: line 2: $1: unbound variable",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cscript\u003e: 2: 1: parameter not set",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[]~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cscript\u003e:2: 1: parameter not set",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "nounset/unset-variable-is-an-error": {
+      "bash": {
+        "Output": "\u003cscript\u003e: line 2: NOPE: unbound variable",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cscript\u003e: line 2: NOPE: unbound variable",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cscript\u003e: line 2: NOPE: unbound variable",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cscript\u003e: 2: NOPE: parameter not set",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cscript\u003e: line 2: NOPE: parameter not set",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cscript\u003e:2: NOPE: parameter not set",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "param/array-element-inherits-the-base": {
       "bash": {
         "Output": "[q][3]",
@@ -3542,6 +3702,38 @@
       },
       "zsh": {
         "Output": "[a.b][a]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "param/unset-positional-takes-a-default": {
+      "bash": {
+        "Output": "[default]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[default]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[default]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[default]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[default]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[default]",
         "Status": 0,
         "TimedOut": false
       }

@@ -169,6 +169,11 @@ type Semantics struct {
 	// with three values; the twenty-three binary ones keep the type that
 	// says so.
 	UnterminatedBracket BracketPolicy
+	// UnsetPositionalIsAllowed lets `$1` expand to nothing under `set -u`
+	// rather than being an error. ksh93 alone, and quiet where it differs:
+	// a script that reads an argument it was not given carries on there and
+	// stops everywhere else.
+	UnsetPositionalIsAllowed Answer
 	// SignalHandlerSeesEarlierStatus shows a signal handler the status from
 	// before the command that triggered it rather than that command's own.
 	// zsh alone: after `false; kill -INT $$`, zsh's handler reads 1 where
@@ -269,6 +274,7 @@ func PosixSemantics() Semantics {
 		BracketCaretNegates:                No,
 		ExitTrapIsFunctionLocal:            No,
 		SignalHandlerSeesEarlierStatus:     No,
+		UnsetPositionalIsAllowed:           No,
 		ExitArgument:                       ExitArgStrict,
 		EqualsExpansion:                    No,
 		ArithInvalidOctalDigitIsError:      Yes,

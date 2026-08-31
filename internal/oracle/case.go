@@ -444,6 +444,41 @@ var Corpus = []Case{
 		Why:     "an ordering rather than a side: dash refuses both, bash refuses only the one that is not a number, ksh93 and zsh take either",
 	},
 	{
+		ID: "nounset/unset-variable-is-an-error", Category: "shell options",
+		Script:  true,
+		Snippet: "set -u\necho \"[$NOPE]\"\necho after\n",
+		Why:     "the whole point of -u, and the baseline the exemptions are measured against",
+	},
+	{
+		ID: "nounset/defaults-are-exempt", Category: "shell options",
+		Script:  true,
+		Snippet: "set -u\necho \"[${NOPE:-d}][${NOPE-d}][${NOPE+a}]\"\necho after\n",
+		Why:     "a form that supplies a value, or asks whether one is set, is not a use of an unset one",
+	},
+	{
+		ID: "nounset/empty-is-not-unset", Category: "shell options",
+		Script:  true,
+		Snippet: "set -u\nE=\necho \"[$E]\"\necho after\n",
+		Why:     "set-but-empty is the distinction -u rests on, and it is unanimous",
+	},
+	{
+		ID: "nounset/no-parameters-is-not-unset", Category: "shell options",
+		Script:  true,
+		Snippet: "set -u\necho \"[$@][$*]\"\necho after\n",
+		Why:     "`$@` and `$*` with nothing to expand are quiet in all four, which is not obvious and is often got wrong",
+	},
+	{
+		ID: "nounset/unset-positional-diverges", Category: "shell options",
+		Script:  true,
+		Snippet: "set -u\necho \"[$1]\"\necho after\n",
+		Why:     "ksh93 lets an argument it was not given expand to nothing where the other three stop, and neither says anything about it",
+	},
+	{
+		ID: "param/unset-positional-takes-a-default", Category: "parameter expansion",
+		Snippet: `echo "[${1-default}]"`,
+		Why:     "an out-of-range positional is unset rather than empty, so the plain default form fires for it",
+	},
+	{
 		ID: "errexit/failure-ends-the-script", Category: "shell options",
 		Snippet: `set -e; false; echo reached`,
 		Why:     "the whole point of -e, and the baseline the exemptions are measured against",

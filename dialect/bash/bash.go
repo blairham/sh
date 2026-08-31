@@ -41,6 +41,7 @@ func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
 		Location:          interp.LocationLineWord,
 		NotFound:          "%s: command not found",
+		UnboundVariable:   "%s: unbound variable",
 		SyntaxErrorStatus: 2,
 	}
 }

@@ -70,15 +70,15 @@ func Diagnostics() interp.Diagnostics {
 		DotCannotOpenStatus: 1,
 		// bash names neither the builtin nor the operation: just the command
 		// and the reason, the same shape it uses for `.`.
-		ExecFailed: "%[1]s: %[2]s",
+		CannotExecute: "%[1]s: %[2]s",
 		// bash names the builtin only when the command was not found at all.
 		ExecNotFound: "exec: %[1]s: not found",
 		// A path that is not there is the OS reason and does not name the
 		// builtin; a bare name off PATH does the reverse.
-		ExecPathNotFound: "%[1]s: No such file or directory",
+		PathNotFound: "%[1]s: No such file or directory",
 		// bash names the path it tried, absolute, where the other three
 		// report the operand as written.
-		ExecNamesResolvedPath: true,
+		NamesResolvedPath: true,
 		// Two lines, which is bash rather than a mistake: it prints the
 		// complaint and then a usage line, and only the first carries the
 		// shell's own prefix.

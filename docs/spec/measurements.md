@@ -1320,3 +1320,54 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   echo "echo via-source" > p.sh; source ./p.sh; echo st=$?
   ```
+
+## command lookup
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `path/script-path-governs-lookup` | `on-path` | `on-path` | `on-path` | `on-path` | `on-path` | `on-path` |
+| `path/clearing-path-finds-nothing` | `ran~ran~st=0` | `ran~ran~st=0` | `ran~ran~st=0` | `ran~ran~st=0` | `ran~<shell>: c: not found~st=127` | `ran~ran~st=0` |
+| `path/builtins-ignore-path` | `builtin-ok` | `builtin-ok` | `builtin-ok` | `builtin-ok` | `builtin-ok` | `builtin-ok` |
+| `path/first-match-wins` | `from-a` | `from-a` | `from-a` | `from-a` | `from-a` | `from-a` |
+| `path/empty-element-is-the-cwd` | `from-cwd` | `from-cwd` | `from-cwd` | `from-cwd` | `from-cwd` | `from-cwd` |
+| `path/non-executable-is-skipped` | `from-b` | `from-b` | `from-b` | `from-b` | `from-b` | `from-b` |
+| `path/unrunnable-is-126-not-127` | `<shell>: 1: ./ne: Permission denied~st=126` | `<shell>: line 1: ./ne: Permission denied~st=126` | `<shell>: line 1: ./ne: Permission denied~st=126` | `<shell>: ./ne: Permission denied~st=126` | `<shell>: ./ne: cannot execute [Permission denied]~st=126` | `<shell>:1: permission denied: ./ne~st=126` |
+| `path/directory-as-a-command` | `<shell>: 1: ./adir: Permission denied~st=126` | `<shell>: line 1: ./adir: Is a directory~st=126` | `<shell>: line 1: ./adir: Is a directory~st=126` | `<shell>: ./adir: is a directory~st=126` | `<shell>: ./adir: cannot execute [Is a directory]~st=126` | `<shell>:1: permission denied: ./adir~st=126` |
+| `path/missing-path-is-not-a-missing-name` | `<shell>: 1: ./nope: not found~st=127` | `<shell>: line 1: ./nope: No such file or directory~st=127` | `<shell>: line 1: ./nope: No such file or directory~st=127` | `<shell>: ./nope: No such file or directory~st=127` | `<shell>: ./nope: not found~st=127` | `<shell>:1: no such file or directory: ./nope~st=127` |
+
+- `path/script-path-governs-lookup` — setting PATH in a script decides what it can reach — an implementation that asks os/exec instead answers with the *process's* PATH and ignores the script entirely
+  ```sh
+  mkdir -p d; printf '#!/bin/sh\necho on-path\n' > d/c; chmod +x d/c; PATH=$PWD/d; c
+  ```
+- `path/clearing-path-finds-nothing` — the other half, and the worse one: a script that clears PATH to control what it can reach must not still reach everything on the machine. The command is one this case creates, because a builtin would prove nothing — printf is a builtin in bash and an external in dash, so it answers a different question in each
+  ```sh
+  mkdir -p d; printf '#!/bin/sh\necho ran\n' > d/c; chmod +x d/c; cp d/c ./c; PATH=$PWD/d; c; PATH=; c; echo "st=$?"
+  ```
+- `path/builtins-ignore-path` — the contrast that makes the previous case a finding rather than a broken shell: a builtin is not looked up at all
+  ```sh
+  PATH=; echo builtin-ok
+  ```
+- `path/first-match-wins` — PATH is searched in order and the first executable wins
+  ```sh
+  mkdir -p a b; printf '#!/bin/sh\necho from-a\n' > a/dup; printf '#!/bin/sh\necho from-b\n' > b/dup; chmod +x a/dup b/dup; PATH=$PWD/a:$PWD/b; dup
+  ```
+- `path/empty-element-is-the-cwd` — an empty PATH element means the current directory, which is POSIX and is not the same as searching it by default — none of them do that
+  ```sh
+  mkdir -p a; printf '#!/bin/sh\necho from-a\n' > a/dup; printf '#!/bin/sh\necho from-cwd\n' > dup; chmod +x a/dup dup; PATH=:$PWD/a; dup
+  ```
+- `path/non-executable-is-skipped` — a file without the execute bit does not end the search — the walk carries on and the next entry wins, which an implementation stopping at the first name match gets wrong
+  ```sh
+  mkdir -p a b; printf '#!/bin/sh\necho from-a\n' > a/dup; printf '#!/bin/sh\necho from-b\n' > b/dup; chmod -x a/dup; chmod +x b/dup; PATH=$PWD/a:$PWD/b; dup
+  ```
+- `path/unrunnable-is-126-not-127` — 126 for a file that is there and will not start, against 127 for a name that resolved to nothing — two different failures that a single "command not found" collapses into one
+  ```sh
+  printf '#!/bin/sh\necho hi\n' > ne; chmod -x ne; ./ne; echo "st=$?"
+  ```
+- `path/directory-as-a-command` — 126 as well, and the reason diverges: bash and ksh93 check for a directory and say so, dash and zsh report the permission error execve returns
+  ```sh
+  mkdir -p adir; ./adir; echo "st=$?"
+  ```
+- `path/missing-path-is-not-a-missing-name` — a path that is not there and a bare name PATH never had are both 127 and are worded differently in three of the four
+  ```sh
+  ./nope; echo "st=$?"
+  ```

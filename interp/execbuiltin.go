@@ -5,10 +5,7 @@ package interp
 
 import (
 	"context"
-	"errors"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
@@ -81,7 +78,7 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 		return 0
 	}
 
-	path, lookErr := exec.LookPath(argv[0])
+	path, lookErr := r.lookPath(argv[0])
 	if lookErr != nil {
 		path = argv[0]
 	}
@@ -94,7 +91,7 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 	}
 	if lookErr != nil {
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: lookErr})
-		return r.execFailed(argv[0], lookErr)
+		return r.execEnds(r.execCannotRun(lookErr))
 	}
 
 	// A subshell must never replace the *process*.
@@ -118,7 +115,10 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 		// Only reached if the replacement failed, which is the one case where
 		// there is still a shell to report it.
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
-		return r.execFailed(argv[0], err)
+		// A start that failed rather than a lookup that did: wrapped so the
+		// shared reporter has a name and a resolved path to work from.
+		return r.execEnds(r.execCannotRun(
+			&pathError{name: argv[0], resolved: path, err: err}))
 	}
 
 	r.emit(ctx, Event{Kind: EventCommandStart, Action: action})
@@ -134,7 +134,10 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 
 	if err := cmd.Start(); err != nil {
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
-		return r.execFailed(argv[0], err)
+		// A start that failed rather than a lookup that did: wrapped so the
+		// shared reporter has a name and a resolved path to work from.
+		return r.execEnds(r.execCannotRun(
+			&pathError{name: argv[0], resolved: path, err: err}))
 	}
 	status := exitStatus(cmd.Wait())
 	r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: status})
@@ -150,44 +153,18 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 	return status
 }
 
-// execFailed reports an exec that could not happen and ends the script.
+// execCannotRun reports an exec that could not happen.
 //
-// It always ends it — `exec nosuchcmd; echo REACHED` prints nothing in any
-// shell in the panel, so unlike almost everything else in this file that is
-// not an axis. Whether the EXIT trap runs on the way out *is* one: dash and
-// bash run it, ksh93 and zsh do not.
-func (r *Runner) execFailed(name string, err error) int {
-	// One dialect names the path it actually tried rather than the operand.
-	// Only where there is a path to resolve: a bare name off PATH is reported
-	// as written even there, because there is no file to point at.
-	if r.diag().ExecNamesResolvedPath && strings.ContainsRune(name, '/') {
-		if abs, absErr := filepath.Abs(r.atDir(name)); absErr == nil {
-			name = abs
-		}
-	}
-	// Two failures wearing one error type, and the shells word them
-	// differently: a command that is not there at all, and a file that is
-	// there and will not run.
-	missing, why := execReason(err)
-	if !missing {
-		if isDir(name) && r.diag().ExecDirectoryReason != "" {
-			// This dialect does not pre-check for a directory; it reports
-			// what execve came back with, which is a permission error.
-			why = r.diag().ExecDirectoryReason
-		}
-		r.diagf("%s\n", Wording(r.diag().ExecFailed, "exec: %[1]s: %[2]s",
-			name, r.diag().reasonText(why)))
-		return r.execEnds(126)
-	}
-	// A name with a slash in it is a path that is not there, which three of
-	// the four word differently from a bare name PATH did not have.
-	format := orElse(r.diag().ExecNotFound, r.diag().ExecFailed)
-	if strings.ContainsRune(name, '/') {
-		format = orElse(r.diag().ExecPathNotFound, format)
-	}
-	r.diagf("%s\n", Wording(format, "exec: %[1]s: not found",
-		name, r.diag().reasonText("Not found")))
-	return r.execEnds(127)
+// The wording is shared with an ordinary command, because the panel words the
+// two identically in every case but one: a bare name that was never found is
+// "command not found" from a command word and "exec: name: not found" here.
+func (r *Runner) execCannotRun(err error) int {
+	return r.cannotRun(err, naming{
+		bare:          r.diag().ExecNotFound,
+		fallback:      "exec: %[1]s: not found",
+		absolute:      true,
+		cannotExecute: r.diag().ExecCannotExecute,
+	})
 }
 
 // execEnds stops the script after an exec that could not happen.
@@ -203,35 +180,6 @@ func (r *Runner) execEnds(status int) int {
 	r.status = status
 	r.ctl = controlExit
 	return status
-}
-
-// execReason separates "there is no such command" from "it will not run", and
-// renders the second the way a shell does.
-//
-// Go wraps both in exec.Error, whose own text is Go's rather than a shell's —
-// `exec: "x": executable file not found in $PATH` reached four dialects'
-// diagnostics before this existed, where every real shell says `not found`.
-// Unwrapping to the syscall error underneath is what leaves a strerror string
-// the shells actually print.
-func execReason(err error) (missing bool, why string) {
-	var ee *exec.Error
-	if errors.As(err, &ee) {
-		if errors.Is(ee.Err, exec.ErrNotFound) {
-			return true, ""
-		}
-		err = ee.Err
-	}
-	if errors.Is(err, os.ErrNotExist) {
-		return true, ""
-	}
-	return false, reason(err)
-}
-
-// isDir reports whether a path is a directory, which two dialects need in
-// order to explain a failed exec the way they do.
-func isDir(path string) bool {
-	st, err := os.Stat(path)
-	return err == nil && st.IsDir()
 }
 
 // orElse is the empty-means-fall-back rule these wording fields use, in one

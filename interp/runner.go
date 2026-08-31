@@ -683,7 +683,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 }
 
 func (r *Runner) exec(ctx context.Context, argv, env []string) error {
-	path, lookErr := exec.LookPath(argv[0])
+	// This runner's PATH, not the process's — see lookpath.go for why that
+	// distinction is the whole bug and not a detail.
+	path, lookErr := r.lookPath(argv[0])
 	if lookErr != nil {
 		path = argv[0]
 	}
@@ -693,9 +695,14 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	}
 	if lookErr != nil {
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: lookErr})
-		r.diagf("%s\n", Wording(r.diag().NotFound, "%s: not found", argv[0]))
-		// 127 is the status every shell in the panel uses for this.
-		r.status = 127
+		// 127 for a name that resolved to nothing and 126 for a file that is
+		// there and will not start. Both unanimous, and collapsing them into
+		// one number was the other half of this bug: `./noexec` reported
+		// "command not found" where every shell says "Permission denied".
+		r.status = r.cannotRun(lookErr, naming{
+			bare:     r.diag().NotFound,
+			fallback: "%[1]s: not found",
+		})
 		return nil
 	}
 

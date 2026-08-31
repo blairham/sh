@@ -128,6 +128,17 @@ cloned Runners in one process, so `exec` inside one must not call execve —
 it would take the parent shell with it. `docs/spec/semantics.md` has the
 long version.
 
+**Nor may it ask the process a question it holds the answer to.** `PATH` is the
+worked example: `os/exec`'s `LookPath` reads the *process's* `PATH` and resolves
+relative entries against the *process's* directory, and a Runner holds both
+itself. Delegating to it produced a shell where `PATH=/tmp/mine; mycmd` found
+nothing and `PATH=; anything` still found everything on the developer's machine.
+`interp/lookpath.go` does the search against `r.Vars` and `r.Dir` instead.
+
+The tell is the same every time: if a package under `interp/` reaches for
+`os.Getenv`, `os.Getwd`, or anything in `os/exec` that consults them, it is
+about to borrow state the Runner already owns.
+
 ## One driver, four dialects
 
 **Nothing outside `driver/` implements how a shell is invoked.** Reading

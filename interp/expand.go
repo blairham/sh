@@ -5,7 +5,6 @@ package interp
 
 import (
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -750,7 +749,8 @@ func (r *Runner) expandEquals(w *syntax.Word) {
 		return
 	}
 	name := s.Value[1:]
-	path, err := exec.LookPath(name)
+	// The script's PATH, like every other lookup here.
+	path, err := r.lookPath(name)
 	if err != nil {
 		// zsh reports the name without a colon and abandons the script,
 		// which is what any failed expansion does here.

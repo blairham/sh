@@ -37,6 +37,7 @@ func Semantics() interp.Semantics {
 	s.DollarZeroInFunctionIsFunctionName = interp.Yes
 	s.UnterminatedBracket = interp.BracketBadPattern
 	s.ExitTrapIsFunctionLocal = interp.Yes
+	s.SignalHandlerSeesEarlierStatus = interp.Yes
 	s.ExitArgument = interp.ExitArgLenient
 	return s
 }

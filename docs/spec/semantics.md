@@ -25,6 +25,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | `${!x}` is the name, not the value | *n/a* | no | **yes** | *n/a* |
 | `=cmd` expands to a path | *n/a* | no | no | **yes** |
 | an EXIT trap set in a function fires there | no | no | no | **yes** |
+| a signal handler sees the earlier `$?` | no | no | no | **yes** |
 | brace expansion happens | **no** | yes | yes | yes |
 | arithmetic does floating point | no | no | **yes** | **yes** |
 | quoting a `=~` regex makes it literal | *n/a* | **yes** | no | no |
@@ -70,6 +71,7 @@ Group the shells by which side of each axis they fall on:
     `[^…]` negates       {dash}
     brace expansion      {dash}
     function EXIT trap   {zsh}
+    handler sees $?      {zsh}
     `=cmd` expands       {zsh}
     leading zero octal   {zsh}
     fatal error status   {dash}
@@ -88,7 +90,7 @@ Group the shells by which side of each axis they fall on:
     readonly continues   {bash}
     shift survives       {bash, zsh}
 
-Eight distinct groupings across twenty-six axes: `{zsh}`, `{dash,zsh}`,
+Eight distinct groupings across twenty-seven axes: `{zsh}`, `{dash,zsh}`,
 `{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`, `{dash,ksh93}` and
 `{dash}` — the last of which `${#@}` now produces on its own, where
 previously it appeared only as the modern-ksh reading of the `&>` axis.
@@ -171,6 +173,21 @@ That is worth stating because the obvious reading of the measurements is
 two separate quirks. It is one behaviour observed twice, and an
 implementation with two switches for it will eventually set them
 inconsistently.
+
+## Timing is not a divergence
+
+Signals arrive asynchronously, and the first implementation recorded them
+on a goroutine and read them between commands. That left a window: `kill
+-INT $$` returned before the arrival had been recorded, so the handler
+fired one command late — sometimes. Two dialects looked like they
+disagreed with the others, and neither did; it was the same code being
+timed differently.
+
+Draining the channel where the handler runs, rather than in a collector,
+closes it. The lesson is about the instrument: a corpus records what a
+shell does, and it cannot record a *sometimes*. Anything measured has to
+be deterministic first, or the measurement is of the machine rather than
+of the shell.
 
 ## A second axis that is an ordering
 

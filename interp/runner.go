@@ -105,6 +105,14 @@ type Runner struct {
 	// Real shells report the line of the command that failed, so this is
 	// updated per statement rather than per token.
 	line int
+	// signals is the signal-trap machinery, behind a pointer because clone
+	// copies a Runner by value and a mutex cannot be copied — the race
+	// detector says so, and it is right: handlers belong to the process, not
+	// to one runner among several sharing it.
+	signals *signalState
+	// statusBefore is `$?` as it was before the current statement, which one
+	// dialect shows to a signal handler instead of the current one.
+	statusBefore int
 	// exitTrap is the body of `trap … EXIT`, or nil when none is set. Only
 	// EXIT is stored: the other signals need delivery, which is a separate
 	// piece, and `trap` refuses them rather than accepting one and never
@@ -273,7 +281,13 @@ func (r *Runner) Run(ctx context.Context, f *syntax.File) (int, error) {
 			break
 		}
 	}
+	// Anything that arrived during the last command still runs, before the
+	// EXIT trap does.
+	r.runPendingTraps(ctx)
 	r.runExitTrap(ctx)
+	if !r.inSubshell {
+		r.stopSignals()
+	}
 	return r.status, nil
 }
 
@@ -327,9 +341,17 @@ func (r *Runner) runTrapBody(ctx context.Context, body string) {
 }
 
 func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
+	// Whatever arrived while the previous command ran. A shell finishes what
+	// it is doing and runs the handler between commands, which is measured
+	// and unanimous — so this is the point where a signal becomes visible.
+	r.runPendingTraps(ctx)
+	if r.ctl != controlNone {
+		return nil
+	}
 	if st.Expr != nil {
 		r.line = st.Expr.Pos().Line
 	}
+	r.statusBefore = r.status
 	if st.Background {
 		return r.background(ctx, st)
 	}

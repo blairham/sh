@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"os"
 	"os/exec"
 	"strings"
 
@@ -585,6 +586,12 @@ func (r *Runner) specialParam(e *syntax.ParamExpr) (string, bool) {
 		return itoa(len(r.Params)), true
 	case "?":
 		return itoa(r.status), true
+	case "$":
+		// The shell's own process id, and the same inside a subshell: POSIX
+		// says `$$` is the *invoking* shell's, which is what makes it usable
+		// as a lock name. Nothing here forks for a subshell, so the process
+		// id is already the right one.
+		return itoa(os.Getpid()), true
 	case "!":
 		if r.lastJob == nil {
 			return "", true

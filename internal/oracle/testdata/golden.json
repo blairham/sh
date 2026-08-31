@@ -5690,6 +5690,70 @@
         "TimedOut": false
       }
     },
+    "trap/default-signal-terminates": {
+      "bash": {
+        "Output": "",
+        "Status": -1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "",
+        "Status": -1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "",
+        "Status": -1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "",
+        "Status": -1,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": -1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
+        "Status": -1,
+        "TimedOut": false
+      }
+    },
+    "trap/empty-handler-ignores": {
+      "bash": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "trap/exit-runs-at-the-end": {
       "bash": {
         "Output": "hi~bye",
@@ -5786,6 +5850,70 @@
         "TimedOut": false
       }
     },
+    "trap/numeric-signal-name": {
+      "bash": {
+        "Output": "caught~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "caught~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "caught~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "caught~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "caught~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "caught~after",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/reset-restores-the-default": {
+      "bash": {
+        "Output": "",
+        "Status": -1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "",
+        "Status": -1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "",
+        "Status": -1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "",
+        "Status": -1,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": -1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
+        "Status": -1,
+        "TimedOut": false
+      }
+    },
     "trap/second-trap-replaces": {
       "bash": {
         "Output": "body~two",
@@ -5846,6 +5974,70 @@
       },
       "zsh": {
         "Output": "enter~TRAP~between",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/signal-handler-runs-and-continues": {
+      "bash": {
+        "Output": "caught~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "caught~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "caught~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "caught~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "caught~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "caught~after",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/signal-handler-status-diverges": {
+      "bash": {
+        "Output": "st=0~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=0~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=1~after",
         "Status": 0,
         "TimedOut": false
       }

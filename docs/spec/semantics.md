@@ -47,6 +47,9 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | `.` falls back to the current directory | no | **yes** | no | no |
 | `source` as a synonym for `.` | **absent** | yes | yes | yes |
 | an empty PATH means the cwd | yes | yes | **no** | yes |
+| `times` layout | self/children | self/children | **user/sys, labeled** | self/children |
+| `times` decimal places | **6** | **3** | 2 | 2 |
+| `times` with an argument | ignored | ignored | **syntax error** | **refused** |
 | a failed `exec` runs the EXIT trap | yes | yes | **no** | **no** |
 | `exec` reads options of its own | **no** | yes | yes | yes |
 | a failed `exec` names | the operand | **the resolved path** | the operand | the operand |
@@ -73,6 +76,8 @@ Probes, for reproduction:
     dot cwd fallback PATH=/bin; . f.sh               → not found, FOUND, not found, not found
     source synonym   source f.sh                     → not found, works, works, works
     empty PATH       PATH=; ./x-in-cwd-by-name       → runs, runs, NOT FOUND, runs
+    times shape      times | sed -E 's/[0-9]+/N/g'    → 2x2, 2x2, labeled user/sys, 2x2
+    times argument   times foo; echo $?              → 0, 0, syntax error 3, refused 1
     exec trap        trap T EXIT; exec nosuch        → T, T, silent, silent
     exec options     exec -a n sh -c 'echo $0'       → not found, n, n, n
     exec names       cd /tmp; exec ./noexec.sh       → ./noexec.sh, /tmp/noexec.sh, ./…, ./…

@@ -75,6 +75,10 @@ func Diagnostics() interp.Diagnostics {
 		// Not "cannot execute": ksh93 distinguishes a missing command from one
 		// that will not run, and only the second gets the brackets.
 		ExecNotFound: "exec: %[1]s: not found",
+		// Labeled lines, one figure each, and no children's times at all —
+		// genuinely less information than the other three report.
+		TimesLayout:   interp.TimesUserAndSystem,
+		TimesDecimals: 2,
 	}
 }
 

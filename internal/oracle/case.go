@@ -1179,6 +1179,42 @@ var Corpus = []Case{
 		Snippet: `echo "echo cwd-hit" > fb.sh; PATH=/usr/bin:/bin; . fb.sh; echo st=$?`,
 		Why:     "only bash looks in the current directory once PATH has missed; the other three call it not found, so a script relying on it is bash-only",
 	},
+	// --- times: the last special builtin, and the most divergent for its size
+	//
+	// Every snippet masks the digits. The figures are real timings and cannot
+	// be compared between two runs of the same shell, let alone between
+	// shells; the *shape* is what is being pinned, and it is what diverges.
+	{
+		ID: "times/shape-diverges", Category: "times",
+		Snippet: `times | sed -E "s/[0-9]+/N/g"`,
+		Why:     "four shells, four renderings of the same two facts: dash, bash and zsh print the shell's times then its children's, and ksh93 prints labeled `user` and `sys` lines with no children's times at all — genuinely less information rather than the same information rearranged",
+	},
+	{
+		ID: "times/decimals-diverge", Category: "times",
+		Snippet: `times | head -1 | sed -E "s/.*\.([0-9]+)s.*/\1/" | tr -d "\n" | wc -c | tr -d " "`,
+		Why:     "the number of decimal places is a four-way split nobody would think to ask about: dash 6, bash 3, ksh93 and zsh 2",
+	},
+	{
+		ID: "times/two-lines-of-two", Category: "times",
+		Snippet: `times | awk "{print NR\": \"NF}"`,
+		Why:     "two lines of two fields in every shell, including ksh93 — its label counts as a field, so the shapes agree here and disagree in what the fields mean",
+	},
+	{
+		ID: "times/goes-to-stdout", Category: "times",
+		Snippet: `times >o.txt 2>e.txt; wc -c <e.txt | tr -d " "`,
+		Why:     "unanimous, and worth pinning because a pipeline makes it look otherwise: `times 2>&1 >/dev/null | wc -l` suggests zsh uses stderr, and writing each stream to its own file shows all four use stdout",
+	},
+	{
+		ID: "times/status-is-zero", Category: "times",
+		Snippet: `times >/dev/null; echo "st=$?"`,
+		Why:     "unanimous",
+	},
+	{
+		ID: "times/argument-diverges", Category: "times",
+		Snippet: `times foo 2>&1 | sed -E "s/[0-9]+/N/g"; echo "st=$?"`,
+		Why:     "dash and bash ignore the argument, zsh refuses it with status 1, and ksh93 makes it a *syntax* error with status 3 — `times` is a reserved word there, so no builtin ever runs. The ksh93 answer is a grammar question rather than a builtin one and is recorded here rather than implemented; zsh's wording needs the builtin name inside the location prefix, which is a structural gap this repository has now measured three times",
+	},
+
 	// --- finding a command: the script's PATH, and why it will not run ---
 	{
 		ID: "path/script-path-governs-lookup", Category: "command lookup",

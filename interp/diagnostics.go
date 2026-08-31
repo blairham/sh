@@ -119,6 +119,21 @@ type Diagnostics struct {
 	// pair.
 	DirectoryReason string
 
+	// TimesLayout is how `times` arranges what it prints. Zero is the
+	// substrate's own, which is the two-line self-then-children shape dash,
+	// bash and zsh share.
+	TimesLayout TimesLayout
+	// TimesDecimals is how many decimal places `times` gives its seconds, and
+	// the panel offers four different answers to a question nobody would think
+	// to ask: dash 6, bash 3, ksh93 and zsh 2.
+	//
+	// Zero means the substrate's own, which is 3.
+	TimesDecimals int
+	// TimesArguments is what `times` says when given an argument it refuses.
+	// No verbs. Only zsh says anything — dash and bash ignore the argument, and
+	// ksh93 never reaches a builtin because `times` is a reserved word there.
+	TimesArguments string
+
 	// LowercaseReason lowercases the strerror text this dialect quotes.
 	//
 	// zsh alone: `permission denied` where the other three print the C
@@ -359,6 +374,14 @@ func (d Diagnostics) reasonText(s string) string {
 		return s
 	}
 	return strings.ToLower(s[:1]) + s[1:]
+}
+
+// timesDecimals is TimesDecimals with the substrate's own answer for zero.
+func (d Diagnostics) timesDecimals() int {
+	if d.TimesDecimals == 0 {
+		return 3
+	}
+	return d.TimesDecimals
 }
 
 func (d Diagnostics) dotCannotOpenStatus() int {

@@ -1321,6 +1321,42 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   echo "echo via-source" > p.sh; source ./p.sh; echo st=$?
   ```
 
+## times
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `times/shape-diverges` | `NmN.Ns NmN.Ns~NmN.Ns NmN.Ns` | `NmN.Ns NmN.Ns~NmN.Ns NmN.Ns` | `NmN.Ns NmN.Ns~NmN.Ns NmN.Ns` | `NmN.Ns NmN.Ns~NmN.Ns NmN.Ns` | `user	NmN.Ns~sys	NmN.Ns` | `NmN.Ns NmN.Ns~NmN.Ns NmN.Ns` |
+| `times/decimals-diverge` | `6` | `3` | `3` | `3` | `2` | `2` |
+| `times/two-lines-of-two` | `1: 2~2: 2` | `1: 2~2: 2` | `1: 2~2: 2` | `1: 2~2: 2` | `1: 2~2: 2` | `1: 2~2: 2` |
+| `times/goes-to-stdout` | `0` | `0` | `0` | `0` | `0` | `0` |
+| `times/status-is-zero` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `times/argument-diverges` | `NmN.Ns NmN.Ns~NmN.Ns NmN.Ns~st=0` | `NmN.Ns NmN.Ns~NmN.Ns NmN.Ns~st=0` | `NmN.Ns NmN.Ns~NmN.Ns NmN.Ns~st=0` | `NmN.Ns NmN.Ns~NmN.Ns NmN.Ns~st=0` | `<shell>: syntax error at line 1: `foo' unexpected` *(status 3)* | `<shell>:times:N: too many arguments~st=0` |
+
+- `times/shape-diverges` — four shells, four renderings of the same two facts: dash, bash and zsh print the shell's times then its children's, and ksh93 prints labeled `user` and `sys` lines with no children's times at all — genuinely less information rather than the same information rearranged
+  ```sh
+  times | sed -E "s/[0-9]+/N/g"
+  ```
+- `times/decimals-diverge` — the number of decimal places is a four-way split nobody would think to ask about: dash 6, bash 3, ksh93 and zsh 2
+  ```sh
+  times | head -1 | sed -E "s/.*\.([0-9]+)s.*/\1/" | tr -d "\n" | wc -c | tr -d " "
+  ```
+- `times/two-lines-of-two` — two lines of two fields in every shell, including ksh93 — its label counts as a field, so the shapes agree here and disagree in what the fields mean
+  ```sh
+  times | awk "{print NR\": \"NF}"
+  ```
+- `times/goes-to-stdout` — unanimous, and worth pinning because a pipeline makes it look otherwise: `times 2>&1 >/dev/null | wc -l` suggests zsh uses stderr, and writing each stream to its own file shows all four use stdout
+  ```sh
+  times >o.txt 2>e.txt; wc -c <e.txt | tr -d " "
+  ```
+- `times/status-is-zero` — unanimous
+  ```sh
+  times >/dev/null; echo "st=$?"
+  ```
+- `times/argument-diverges` — dash and bash ignore the argument, zsh refuses it with status 1, and ksh93 makes it a *syntax* error with status 3 — `times` is a reserved word there, so no builtin ever runs. The ksh93 answer is a grammar question rather than a builtin one and is recorded here rather than implemented; zsh's wording needs the builtin name inside the location prefix, which is a structural gap this repository has now measured three times
+  ```sh
+  times foo 2>&1 | sed -E "s/[0-9]+/N/g"; echo "st=$?"
+  ```
+
 ## command lookup
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |

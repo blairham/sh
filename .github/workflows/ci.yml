@@ -1,90 +1,98 @@
 name: CI
 
+# One workflow holds everything that gates a merge, so there is one file to
+# read and one check to require. Splitting pre-commit or tests into their own
+# workflow bought nothing and cost a second place to keep in sync.
 on:
   pull_request:
     # `synchronize` is every push to a branch with an open pull request, which
-    # is the feedback that matters — but only once the change is meant to be
-    # looked at. A draft is work in progress, so nothing here runs for one;
-    # `ready_for_review` starts it, and until then the local hooks are the
-    # feedback. That is the whole trade: push freely while drafting, and the
-    # gate runs when you say it is ready.
+    # is the feedback that matters. Drafts get pre-commit and nothing else:
+    # push freely while drafting, and `ready_for_review` starts the rest.
     types: [opened, reopened, synchronize, ready_for_review]
+  push:
+    # Only the pre-commit job runs here — see its `if:`. Tests are deliberately
+    # not re-run after a merge: branch protection requires the branch to be up
+    # to date, so for a squash merge the tree that lands on main is the tree
+    # that was already tested, and running it again proves nothing while
+    # delaying the next merge.
+    branches: [main]
 
 permissions:
   contents: read
 
-# Gating is done inside the jobs rather than with a `paths:` filter on the
-# workflow, and the difference matters: a required check that never runs is
-# reported as *pending forever*, not as passed, so a paths-filtered required
-# check makes a docs-only pull request unmergeable. The jobs therefore always
-# run and report; only the expensive steps are skipped.
+concurrency:
+  # A superseded push is not worth finishing; only the newest commit matters.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  # Pre-commit runs for every pull request, draft or not, and everything else
-  # waits on it. It is also where linting happens: `golangci-lint-full` covers
-  # the whole module, so there is no separate lint job to keep in step. It is the only job that looks at *every* file rather than at
-  # Go: trailing whitespace, licence headers, secrets, the toolchain pin. None
-  # of that is worth detecting changes for, and a secret committed to a draft
-  # is committed.
-  #
-  # The hook environments are cached by the action itself. Adding an
-  # actions/cache step here as well produced two copies of the same 441MB
-  # under different keys, which is the duplication this whole change is about
-  # — if the action's cache is not doing its job, that is a bug to fix in
-  # go-pre-commit rather than to paper over from the caller.
+  # Runs for every commit that reaches GitHub — every push to a pull request,
+  # draft or not, and every push to main. It is the only job that looks at
+  # *every* file rather than at Go: trailing whitespace, licence headers,
+  # secrets, the toolchain pin. None of that is worth detecting changes for,
+  # and a secret committed to a draft is committed.
   pre-commit:
     name: Pre-commit
     runs-on: ubuntu-latest
     steps:
-    - name: Check out code
-      uses: actions/checkout@v6
-    - name: Set up Go
-      uses: actions/setup-go@v6
+    - uses: actions/checkout@v6
+    - uses: actions/setup-go@v6
       with:
         go-version-file: go.mod
         check-latest: true # setup-go's manifest lags fresh Go patch releases; resolve via go.dev
+    - name: Cache the hook environments
+      # pre-commit builds an environment for a hook even when SKIP tells it not
+      # to run one, which cost two and a half minutes a build to install a
+      # linter this job then declines to use.
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pre-commit
+        key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
     - name: Run pre-commit hooks
-      # Nothing is skipped. `golangci-lint-full` lints the whole module here,
-      # which is what a separate lint job used to do — badly, in the sense
-      # that it spent two minutes on setup to run something that takes under
-      # a second.
-      #
-      # check-license-headers is a golang-language hook, so pre-commit builds
-      # it here; the version it runs is the `rev` pinned in
-      # .pre-commit-config.yaml, which stays the single source of truth.
+      # Not the golangci-lint ones. The Lint job runs the same tool over the
+      # whole repository rather than over the diff, and `golangci-lint run`
+      # reports formatter findings too, so both hooks are a strict subset of a
+      # job that already has to pass.
+      env:
+        SKIP: golangci-lint,golangci-lint-fmt
       uses: blairham/go-pre-commit@v4.6.6
 
+  # Gating happens inside the jobs, never with a workflow-level `paths:`
+  # filter: a required check that never runs reports as *pending forever*
+  # rather than as passed, which makes a docs-only pull request unmergeable.
+  # Anything unrecognised counts as code, so when this is wrong it is wrong in
+  # the direction of running the tests.
   # Only after the cheap universal checks have passed is it worth asking the
-  # expensive question.
+  # expensive question, so this waits on pre-commit.
   changes:
     name: Detect changed files
     needs: pre-commit
-    if: github.event.pull_request.draft == false
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     outputs:
-      go: ${{ steps.filter.outputs.go }}
+      code: ${{ steps.filter.outputs.code }}
     steps:
     - uses: actions/checkout@v6
       with:
-        fetch-depth: 0
+        fetch-depth: 0 # the diff needs the base commit, not just HEAD
     - id: filter
-      name: Did anything Go change?
+      name: Is any of this code?
       run: |
-        base="origin/${{ github.base_ref }}"
-        if git diff --name-only "$base"...HEAD | grep -qE '(\.go|^go\.mod|^go\.sum)$'; then
-          echo "go=true" >> "$GITHUB_OUTPUT"
-          echo "Go files changed — building and testing."
-        else
-          echo "go=false" >> "$GITHUB_OUTPUT"
-          echo "No Go files changed — build, test and lint will be skipped."
-        fi
+        code=false
+        while IFS= read -r f; do
+          [ -n "$f" ] || continue
+          case "$f" in
+            docs/*|*.md|LICENSE|LICENSE.*|*.png|*.jpg|*.gif|*.svg) ;; # prose
+            *) code=true; break ;;
+          esac
+        done <<<"$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD)"
+        echo "code=$code" >> "$GITHUB_OUTPUT"
+        echo "changed files are $([ "$code" = true ] && echo 'code — full run' || echo 'prose only — skipping the code jobs')"
 
-  # `go vet` is not run here: govet is one of the linters .golangci.yml
-  # enables, so the Lint job already does it, over the same code, with the
-  # same analysers. Running it twice cost a minute a build and found nothing
-  # the other did not.
   test:
     name: Build and test
     needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -92,37 +100,78 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
     - uses: actions/checkout@v6
-      if: needs.changes.outputs.go == 'true'
     - uses: actions/setup-go@v6
-      if: needs.changes.outputs.go == 'true'
       with:
         go-version-file: go.mod
         check-latest: true
+        cache: true
     - run: go build ./...
-      if: needs.changes.outputs.go == 'true'
     - run: go test -race ./...
-      if: needs.changes.outputs.go == 'true'
+
+  # `go vet` is not run separately: govet is one of the linters .golangci.yml
+  # enables, so this job already does it, over the same code, with the same
+  # analysers. `go tool` rather than golangci-lint-action, so the version CI
+  # runs is the one pinned in go.mod — the same one `make lint` runs locally.
+  # The action's own `version:` was a second pin that drifted from it.
+  lint:
+    name: Lint
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+        check-latest: true
+        cache: true
+    - run: go tool golangci-lint run
 
   oracle:
     name: Oracle (report only)
     needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
-      if: needs.changes.outputs.go == 'true'
     - uses: actions/setup-go@v6
-      if: needs.changes.outputs.go == 'true'
       with:
         go-version-file: go.mod
         check-latest: true
+        cache: true
     - name: Install as much of the panel as this runner can host
-      if: needs.changes.outputs.go == 'true'
       run: sudo apt-get update -qq && sudo apt-get install -y -qq dash ksh zsh
     - name: Report drift without failing on it
-      if: needs.changes.outputs.go == 'true'
       # The golden record is generated on one machine and a runner does not
       # have the same builds of the same shells, so some differences here are
       # legitimate. A check that is red for a legitimate reason is one people
       # learn to ignore. `make oracle-check` is the gate locally, where the
       # panel matches the record.
       run: go run ./cmd/oracle -check || true
+
+  # The one check branch protection requires. Requiring the jobs by name does
+  # not survive this workflow's shape: a job skipped by the prose guard never
+  # reports, and a *matrix* job skipped by `if:` never expands, so a policy
+  # naming "test (ubuntu-latest)" waits for it forever. A single always-running
+  # gate that fails when any upstream job failed survives skips, matrix
+  # renames and new jobs alike — when jobs change here, update this `needs`
+  # list and nothing else.
+  ci-ok:
+    name: CI OK
+    needs: [pre-commit, changes, test, lint]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: Verify no required job failed
+      env:
+        RESULTS: ${{ toJSON(needs) }}
+      run: |
+        echo "$RESULTS"
+        bad=$(echo "$RESULTS" | jq -r 'to_entries[]
+          | select(.value.result != "success" and .value.result != "skipped")
+          | "\(.key)=\(.value.result)"')
+        if [ -n "$bad" ]; then
+          echo "not ok: $bad"
+          exit 1
+        fi
+        echo "ok"

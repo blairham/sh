@@ -93,6 +93,12 @@ func (p *Parser) tokenText() string {
 }
 
 func (p *Parser) fail(format string, args ...any) {
+	p.failKind(ErrSyntax, format, args...)
+}
+
+// failKind records a parse failure with a classification, so a dialect can
+// word it without matching on the message text.
+func (p *Parser) failKind(kind ErrorKind, format string, args ...any) {
 	if p.err != nil {
 		return
 	}
@@ -100,7 +106,7 @@ func (p *Parser) fail(format string, args ...any) {
 		// Running out of input is unfinished rather than wrong.
 		p.incomplete = true
 	}
-	p.err = fmt.Errorf("%s: %s", p.tok.Pos, fmt.Sprintf(format, args...))
+	p.err = &Error{Pos: p.tok.Pos, Kind: kind, Msg: fmt.Sprintf(format, args...)}
 }
 
 // expectWord consumes a reserved word or records what was missing.

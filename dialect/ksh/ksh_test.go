@@ -61,7 +61,7 @@ func TestSemantics(t *testing.T) {
 }
 
 func TestDiagnostics(t *testing.T) {
-	if got, want := ksh.Diagnostics().SyntaxError(), 3; got != want {
+	if got, want := ksh.Diagnostics().SyntaxStatus(), 3; got != want {
 		t.Errorf("syntax-error status = %d, want %d", got, want)
 	}
 }

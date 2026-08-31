@@ -58,7 +58,7 @@ func TestSemantics(t *testing.T) {
 }
 
 func TestDiagnostics(t *testing.T) {
-	if got, want := zsh.Diagnostics().SyntaxError(), 1; got != want {
+	if got, want := zsh.Diagnostics().SyntaxStatus(), 1; got != want {
 		t.Errorf("syntax-error status = %d, want %d", got, want)
 	}
 }

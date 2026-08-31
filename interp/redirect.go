@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -97,7 +98,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.C
 		f, err := os.OpenFile(path, flags, 0o666)
 		if err != nil {
 			r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
-			r.diagf("cannot open %s: %v\n", name, err)
+			r.diagf("%s\n", Wording(r.diag().CannotOpen, "cannot open %s: %s", name, openReason(err)))
 			r.status = 1
 			r.redirErr = true
 			return closers, nil
@@ -171,4 +172,17 @@ func (r *Runner) heredocBody(rd *syntax.Redirect) string {
 	// Expanded but never split or globbed: a here-document is one blob of
 	// input, not a list of fields.
 	return r.expandRawText(body)
+}
+
+// openReason strips the layers Go's os package adds to an errno.
+//
+// A shell says "No such file"; os.OpenFile says "open b: no such file or
+// directory", which repeats the name the caller is about to print and reads
+// like a Go program rather than a shell.
+func openReason(err error) string {
+	var pe *os.PathError
+	if errors.As(err, &pe) {
+		err = pe.Err
+	}
+	return err.Error()
 }

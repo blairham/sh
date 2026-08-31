@@ -41,10 +41,10 @@ func TestPickDialect(t *testing.T) {
 		got  int
 		want int
 	}{
-		{"dash", dashDiag.SyntaxError(), 2},
-		{"bash", bashDiag.SyntaxError(), 2},
-		{"ksh93", kshDiag.SyntaxError(), 3},
-		{"zsh", zshDiag.SyntaxError(), 1},
+		{"dash", dashDiag.SyntaxStatus(), 2},
+		{"bash", bashDiag.SyntaxStatus(), 2},
+		{"ksh93", kshDiag.SyntaxStatus(), 3},
+		{"zsh", zshDiag.SyntaxStatus(), 1},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s syntax-error status = %d, want %d", tc.name, tc.got, tc.want)

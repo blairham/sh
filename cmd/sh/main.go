@@ -22,6 +22,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -77,11 +78,14 @@ func main() {
 		// A bare argument is a script to run, which is how a shell is
 		// normally invoked and how the corpus runs the cases that depend on
 		// being read from a file rather than from -c.
-		b, err := os.ReadFile(flag.Args()[0])
+		path := flag.Args()[0]
+		b, err := os.ReadFile(path)
 		if err != nil {
 			fail(err)
 		}
-		os.Exit(run(string(b), d, sem, dg, apply))
+		// A shell running a script names the *script* in `$0` and in every
+		// diagnostic, not itself. ksh93 also changes how it names the line.
+		os.Exit(runScript(string(b), path, d, sem, dg.ForScript(), apply))
 	default:
 		fail(fmt.Errorf("nothing to do: pass a script, -c, -tokens or -parse"))
 	}
@@ -496,6 +500,10 @@ func condString(c syntax.CondExpr) string {
 
 // run parses and executes a command, returning the status to exit with.
 func run(src string, d syntax.Dialect, sem interp.Semantics, dg interp.Diagnostics, apply func(*interp.Runner)) int {
+	return runScript(src, shellName(), d, sem, dg, apply)
+}
+
+func runScript(src, name string, d syntax.Dialect, sem interp.Semantics, dg interp.Diagnostics, apply func(*interp.Runner)) int {
 	p := syntax.NewParser(src, d)
 	f := p.Parse()
 	if err := p.Err(); err != nil {
@@ -503,12 +511,12 @@ func run(src string, d syntax.Dialect, sem interp.Semantics, dg interp.Diagnosti
 		// it came from -c. *Which* status it carries is the dialect's: the
 		// comment that used to stand here said 2 in every shell in the
 		// panel, and that is true of half of them — ksh93 exits 3 and zsh 1.
-		line, msg := splitPos(err.Error())
-		fmt.Fprint(os.Stderr, dg.Report(shellName(), line, msg+"\n"))
-		return dg.SyntaxError()
+		line, msg := wordParseError(dg, err)
+		fmt.Fprint(os.Stderr, dg.Report(name, line, msg+"\n"))
+		return dg.SyntaxStatus()
 	}
 
-	r := &interp.Runner{Dialect: &d, Semantics: &sem, Diagnostics: &dg, Name: shellName()}
+	r := &interp.Runner{Dialect: &d, Semantics: &sem, Diagnostics: &dg, Name: name}
 	if apply != nil {
 		// The dialect's own adjustment: what it adds to or removes from the
 		// substrate's builtins, which is neither grammar nor semantics.
@@ -518,7 +526,7 @@ func run(src string, d syntax.Dialect, sem interp.Semantics, dg interp.Diagnosti
 	if err != nil {
 		// Refused rather than silently doing nothing: a shell that quietly
 		// skips what it cannot do is worse than one that says so.
-		fmt.Fprint(os.Stderr, dg.Report(shellName(), 1, err.Error()+"\n"))
+		fmt.Fprint(os.Stderr, dg.Report(name, 1, err.Error()+"\n"))
 		return 2
 	}
 	return status
@@ -556,4 +564,23 @@ func shellName() string {
 		return os.Args[0]
 	}
 	return "sh"
+}
+
+// wordParseError renders a parse failure the way the dialect words it.
+//
+// The kind is what decides, not the message text: dash says "Bad
+// substitution" for anything wrong inside `${ }` and "Syntax error: …" for
+// everything else, and matching on our own phrasing to tell those apart would
+// break the first time the phrasing changed.
+func wordParseError(dg interp.Diagnostics, err error) (int, string) {
+	line, msg := splitPos(err.Error())
+	var se *syntax.Error
+	if errors.As(err, &se) {
+		line = se.Pos.Line
+		msg = se.Msg
+		if se.Kind == syntax.ErrBadSubstitution {
+			return line, interp.Wording(dg.BadSubstitution, msg)
+		}
+	}
+	return line, interp.Wording(dg.SyntaxError, "%s", msg)
 }

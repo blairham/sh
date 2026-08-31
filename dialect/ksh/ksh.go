@@ -33,6 +33,11 @@ func Semantics() interp.Semantics {
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
 		Location:          interp.LocationNone,
+		ScriptLocation:    interp.LocationLineWord,
+		ReadonlyVariable:  "%s: is read only",
+		ShiftTooMany:      "shift: %d: bad number",
+		ArithError:        "%[1]s: %[2]s",
+		DivisionByZero:    "divide by zero",
 		SyntaxErrorStatus: 3,
 	}
 }

@@ -36,8 +36,8 @@ func TestSyntaxErrorStatusIsADialectAnswer(t *testing.T) {
 		{"core", CoreDiagnostics(), 2},
 		{"zero value", Diagnostics{}, 2},
 	} {
-		if got := tc.diag.SyntaxError(); got != tc.want {
-			t.Errorf("%s: SyntaxError() = %d, want %d", tc.name, got, tc.want)
+		if got := tc.diag.SyntaxStatus(); got != tc.want {
+			t.Errorf("%s: SyntaxStatus() = %d, want %d", tc.name, got, tc.want)
 		}
 	}
 }

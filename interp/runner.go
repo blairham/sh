@@ -190,11 +190,15 @@ func (r *Runner) errf(format string, args ...any) {
 // and zsh each name the location differently, and one of them names it not at
 // all.
 func (r *Runner) diagf(format string, args ...any) {
-	name := r.Name
-	if name == "" {
-		name = "sh"
+	r.errf("%s%s", r.diag().prefix(r.name(), r.line), fmt.Sprintf(format, args...))
+}
+
+// name is what the shell calls itself in a diagnostic.
+func (r *Runner) name() string {
+	if r.Name == "" {
+		return "sh"
 	}
-	r.errf("%s%s", r.diag().prefix(name, r.line), fmt.Sprintf(format, args...))
+	return r.Name
 }
 
 func (r *Runner) emit(ctx context.Context, e Event) {
@@ -311,6 +315,20 @@ func (r *Runner) unsupported(what string) error {
 
 func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	r.unspecified, r.expandErr = false, false
+	// `=cmd` is resolved across the whole command before any of it is
+	// expanded, which is measured rather than assumed: `echo [[a == a]]`
+	// reports the `==` and never reaches the `[[a`, so zsh has finished this
+	// phase before pathname expansion begins on the first word.
+	for _, w := range c.Args {
+		r.expandEquals(w)
+	}
+	if r.expandErr {
+		// Only what this pass just set. Testing r.ctl here as well made
+		// every *later* command in an already-abandoned script report a
+		// fresh failure of its own.
+		r.fatalQuiet()
+		return nil
+	}
 	var argv []string
 	for _, w := range c.Args {
 		argv = append(argv, r.expandWord(w)...)

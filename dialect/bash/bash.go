@@ -31,6 +31,7 @@ func Semantics() interp.Semantics {
 	s.RegexQuotingMakesLiteral = interp.Yes
 	s.ShiftPastEndFatal = interp.No
 	s.ReadonlyReassignmentFatal = interp.No
+	s.UnterminatedBracket = interp.BracketLiteral
 	return s
 }
 

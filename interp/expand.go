@@ -365,14 +365,14 @@ func (r *Runner) numOf(w *syntax.Word) int {
 // trimWith and replaceWith resolve the caret axis for the pattern before
 // handing it to the matcher, which has no Runner and should not need one.
 func (r *Runner) trimWith(value, pattern string, op syntax.ParamOp) string {
-	return trim(value, pattern, op, r.caretNegates(pattern))
+	return trim(value, pattern, op, r.patternOpts(pattern))
 }
 
 func (r *Runner) replaceWith(value, pattern, with string, e *syntax.ParamExpr) string {
-	return replace(value, pattern, with, e, r.caretNegates(pattern))
+	return replace(value, pattern, with, e, r.patternOpts(pattern))
 }
 
-func trim(value, pattern string, op syntax.ParamOp, caret bool) string {
+func trim(value, pattern string, op syntax.ParamOp, o patternOpts) string {
 	prefix := op == syntax.ParamTrimPrefix || op == syntax.ParamTrimPrefixLong
 	longest := op == syntax.ParamTrimPrefixLong || op == syntax.ParamTrimSuffixLong
 
@@ -390,12 +390,12 @@ func trim(value, pattern string, op syntax.ParamOp, caret bool) string {
 	}
 	for _, i := range idx {
 		if prefix {
-			if matchPattern(pattern, value[:i], caret) {
+			if matchPattern(pattern, value[:i], o) {
 				return value[i:]
 			}
 			continue
 		}
-		if matchPattern(pattern, value[i:], caret) {
+		if matchPattern(pattern, value[i:], o) {
 			return value[:i]
 		}
 	}
@@ -405,18 +405,18 @@ func trim(value, pattern string, op syntax.ParamOp, caret bool) string {
 // replace substitutes a matching span, once or everywhere.
 //
 // The anchored forms match only at one end, which is what `/#` and `/%` mean.
-func replace(value, pattern, with string, e *syntax.ParamExpr, caret bool) string {
+func replace(value, pattern, with string, e *syntax.ParamExpr, o patternOpts) string {
 	switch e.Anchor {
 	case '#':
 		for i := len(value); i >= 0; i-- {
-			if matchPattern(pattern, value[:i], caret) {
+			if matchPattern(pattern, value[:i], o) {
 				return with + value[i:]
 			}
 		}
 		return value
 	case '%':
 		for i := 0; i <= len(value); i++ {
-			if matchPattern(pattern, value[i:], caret) {
+			if matchPattern(pattern, value[i:], o) {
 				return value[:i] + with
 			}
 		}
@@ -429,12 +429,12 @@ func replace(value, pattern, with string, e *syntax.ParamExpr, caret bool) strin
 		// everywhere else rather than matching empty and looping.
 		end := -1
 		for j := len(value); j >= i; j-- {
-			if matchPattern(pattern, value[i:j], caret) {
+			if matchPattern(pattern, value[i:j], o) {
 				end = j
 				break
 			}
 		}
-		if end < 0 || end == i && pattern != "" && !matchPattern(pattern, "", caret) {
+		if end < 0 || end == i && pattern != "" && !matchPattern(pattern, "", o) {
 			if i < len(value) {
 				b.WriteByte(value[i])
 			}

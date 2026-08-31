@@ -59,11 +59,23 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 // caller, because the same language is used by `case` and by parameter
 // expansion where there is no filesystem and no components. Putting them here
 // would be wrong in two places out of three.
-func matchPattern(pattern, s string, caret bool) bool {
-	return matchHere(pattern, s, caret)
+// patternOpts carries the dialect's answers into the matcher, which has no
+// Runner and should not need one. It grew from a single bool the moment a
+// second axis reached the same code.
+type patternOpts struct {
+	caret   bool
+	bracket BracketPolicy
+	// bad is set when the pattern is one the dialect rejects outright. It is
+	// a field rather than a return value because matchHere recurses, and
+	// threading a second result through every branch obscured the matching.
+	bad *bool
 }
 
-func matchHere(p, s string, caret bool) bool {
+func matchPattern(pattern, s string, o patternOpts) bool {
+	return matchHere(pattern, s, o)
+}
+
+func matchHere(p, s string, o patternOpts) bool {
 	for len(p) > 0 {
 		switch p[0] {
 		case '*':
@@ -77,7 +89,7 @@ func matchHere(p, s string, caret bool) bool {
 				return true
 			}
 			for i := 0; i <= len(s); i++ {
-				if matchHere(p, s[i:], caret) {
+				if matchHere(p, s[i:], o) {
 					return true
 				}
 			}
@@ -93,7 +105,7 @@ func matchHere(p, s string, caret bool) bool {
 			if s == "" {
 				return false
 			}
-			rest, ok := matchBracket(p, s[0], caret)
+			rest, ok := matchBracket(p, s[0], o)
 			if !ok {
 				return false
 			}
@@ -121,7 +133,7 @@ func matchHere(p, s string, caret bool) bool {
 
 // matchBracket consumes a bracket expression from p and reports whether c is
 // in it, returning what is left of the pattern.
-func matchBracket(p string, c byte, caret bool) (rest string, ok bool) {
+func matchBracket(p string, c byte, o patternOpts) (rest string, ok bool) {
 	i := 1
 	negate := false
 	// `!` is the portable negation, everywhere. `^` is an extension dash
@@ -129,7 +141,7 @@ func matchBracket(p string, c byte, caret bool) (rest string, ok bool) {
 	// negates is the caller's answer rather than this file's. Assuming it
 	// did made `[^abc]` match the complement under the dash dialect, where
 	// dash matches a literal caret.
-	if i < len(p) && (p[i] == '!' || (p[i] == '^' && caret)) {
+	if i < len(p) && (p[i] == '!' || (p[i] == '^' && o.caret)) {
 		negate = true
 		i++
 	}
@@ -171,8 +183,40 @@ func matchBracket(p string, c byte, caret bool) (rest string, ok bool) {
 		}
 		i++
 	}
-	// An unterminated bracket is not a bracket expression at all.
+	// An unterminated bracket is not a bracket expression, and what it is
+	// instead is the dialect's answer rather than this file's.
+	switch o.bracket {
+	case BracketLiteral:
+		// bash and ksh93: an ordinary `[`, and the rest of the pattern
+		// carries on from just after it.
+		return p[1:], c == '['
+	case BracketBadPattern:
+		// zsh: not a pattern at all. Recorded rather than returned, because
+		// matchHere recurses and a second result would have to be threaded
+		// through every branch of it.
+		if o.bad != nil {
+			*o.bad = true
+		}
+		return "", false
+	}
+	// dash, and the shape the matcher had before any of this: a class that
+	// can never match.
 	return "", false
+}
+
+// hasUnterminatedBracket reports whether a pattern contains a `[` with no
+// closing `]`, so the axis is asked only about patterns it applies to.
+func hasUnterminatedBracket(p string) bool {
+	for i := 0; i < len(p); i++ {
+		if p[i] == '\\' {
+			i++
+			continue
+		}
+		if p[i] == '[' && !closesBracket(p, i) {
+			return true
+		}
+	}
+	return false
 }
 
 func inClass(name string, c byte) bool {
@@ -200,3 +244,13 @@ func inClass(name string, c byte) bool {
 func isLetter(c byte) bool { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') }
 
 func isDigit(c byte) bool { return c >= '0' && c <= '9' }
+
+// patternOpts resolves the dialect's pattern answers for one pattern.
+//
+// The bracket axis is deliberately not resolved here: this is the path used by
+// parameter expansion and by globbing, where an unterminated bracket is
+// literal in every shell measured. Only `case` and `[[ ]]` ask it, through
+// matchPatternR.
+func (r *Runner) patternOpts(pattern string) patternOpts {
+	return patternOpts{caret: r.caretNegates(pattern), bracket: BracketLiteral}
+}

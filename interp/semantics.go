@@ -149,6 +149,26 @@ type Semantics struct {
 	// Its failure is not silent: a name that resolves to nothing is fatal to
 	// the script, like any other failed expansion.
 	EqualsExpansion Answer
+	// UnterminatedBracket is what `[` without a closing `]` means in a
+	// pattern, and it is the axis that does not fit Answer.
+	//
+	//	case "[" in [) hit;; *) miss;; esac
+	//	bash  → hit          a literal `[`
+	//	ksh93 → hit          a literal `[`
+	//	dash  → miss         a class that can never match
+	//	zsh   → bad pattern  an error
+	//
+	// Three answers, and it is load-bearing rather than exotic: `[` is the
+	// name of the test builtin.
+	//
+	// It gets its own type rather than a wider Answer. The prediction in
+	// semantics.md was that Answer would have to grow a third state; writing
+	// it showed that would be worse, because every other axis is genuinely
+	// binary and a wider Answer would let `BracketBadPattern` be assigned to
+	// any of them and still compile. An axis with three answers gets a type
+	// with three values; the twenty-three binary ones keep the type that
+	// says so.
+	UnterminatedBracket BracketPolicy
 	// BracketCaretNegates reads `[^abc]` as a negated class. dash alone
 	// treats `^` as an ordinary character, so `[^abc]` matches a caret there
 	// and everything-but there elsewhere: the two answers are both matches,
@@ -271,6 +291,46 @@ func (r *Runner) sem() Semantics {
 	return CoreSemantics()
 }
 
+// BracketPolicy is what an unterminated bracket expression means.
+type BracketPolicy int
+
+const (
+	// BracketUnspecified is no answer, and is refused like any other.
+	BracketUnspecified BracketPolicy = iota
+	// BracketLiteral treats the `[` as an ordinary character: bash, ksh93.
+	BracketLiteral
+	// BracketNoMatch treats it as a class that matches nothing: dash.
+	BracketNoMatch
+	// BracketBadPattern rejects the pattern: zsh.
+	BracketBadPattern
+)
+
+func (b BracketPolicy) String() string {
+	switch b {
+	case BracketLiteral:
+		return "literal"
+	case BracketNoMatch:
+		return "no match"
+	case BracketBadPattern:
+		return "bad pattern"
+	}
+	return "unspecified"
+}
+
+// bracketPolicy resolves the axis, refusing when no dialect answered — and
+// only for a pattern that actually has an unterminated bracket, which is the
+// rule the caret axis uses for the same reason.
+func (r *Runner) bracketPolicy() BracketPolicy {
+	p := r.sem().UnterminatedBracket
+	if p == BracketUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			"an unterminated bracket expression: the shells disagree here and no dialect was chosen"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
 // ask reads one axis.
 //
 // An unspecified axis is refused rather than guessed, and the refusal names
@@ -292,7 +352,28 @@ func (r *Runner) caretNegates(pattern string) bool {
 
 // matchPatternR is matchPattern with the caret axis resolved from the dialect.
 func (r *Runner) matchPatternR(pattern, s string) bool {
-	return matchPattern(pattern, s, r.caretNegates(pattern))
+	o := patternOpts{caret: r.caretNegates(pattern)}
+	var bad bool
+	if hasUnterminatedBracket(pattern) {
+		o.bracket, o.bad = r.bracketPolicy(), &bad
+	}
+	matched := matchPattern(pattern, s, o)
+	if bad {
+		// zsh abandons the script rather than failing the match.
+		// Measured: zsh abandons the script here with status 0, and with 1
+		// when the same pattern fails against the filesystem. Both are
+		// zsh's, and neither is guessable from the other.
+		r.fatalPattern(pattern, 0)
+		return false
+	}
+	return matched
+}
+
+// fatalPattern reports a pattern the dialect rejects outright.
+func (r *Runner) fatalPattern(pattern string, status int) {
+	r.diagf("%s\n", Wording(r.diag().BadPattern, "bad pattern: %s", pattern))
+	r.status = status
+	r.ctl = controlExit
 }
 
 func (r *Runner) ask(a Answer, axis string) bool {

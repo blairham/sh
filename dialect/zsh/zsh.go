@@ -35,6 +35,7 @@ func Semantics() interp.Semantics {
 	s.ShiftPastEndFatal = interp.No
 	s.ArrayBaseIsZero = interp.No
 	s.DollarZeroInFunctionIsFunctionName = interp.Yes
+	s.UnterminatedBracket = interp.BracketBadPattern
 	return s
 }
 
@@ -43,6 +44,7 @@ func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
 		Location:          interp.LocationTightLine,
 		BadSubstitution:   "bad substitution",
+		BadPattern:        "bad pattern: %s",
 		ReadonlyVariable:  "read-only variable: %s",
 		SyntaxErrorStatus: 1,
 	}

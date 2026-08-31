@@ -81,6 +81,15 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 		}
 		return s.syntaxStatus
 	}
+	// Whatever a borrowed script reports is the *script's*, not this
+	// builtin's. Measured: an unset parameter inside a sourced file is
+	// `./f.sh:2: NOPE: parameter not set` in the one dialect that names
+	// builtins at all, with no `.` anywhere in it. Leaving the marker set
+	// would have put one there on every line the script produced.
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
+
 	// Cleared before the first command rather than after the last, which is
 	// what makes an empty script report success: with nothing to run the loop
 	// below never executes and this is the answer. An `if len(f.Stmts) == 0`

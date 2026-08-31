@@ -134,6 +134,23 @@ type Diagnostics struct {
 	// ksh93 never reaches a builtin because `times` is a reserved word there.
 	TimesArguments string
 
+	// NamesBuiltinInLocation puts the reporting builtin's name between the
+	// shell's name and the line number: `zsh:shift:1: …` rather than
+	// `zsh:1: …`.
+	//
+	// zsh alone, and it is a rule rather than a handful of special cases —
+	// measured across `.`, `times`, `shift`, `cd`, `unset`, `read`, `trap` and
+	// `break`, every one of which names itself. What does *not* get a segment
+	// is equally consistent: a command that could not be found, a parse error,
+	// an unset parameter, a division by zero, a redirection that would not
+	// open. Those are the shell's own failures rather than a builtin's.
+	//
+	// The distinction is "whose diagnostic is this", not "where did it happen".
+	// A builtin that runs a script — `.`, `eval` — is not the author of what
+	// that script reports, and zsh agrees: an unset parameter inside a sourced
+	// file is `./f.sh:2: NOPE: parameter not set`, with no `.` anywhere in it.
+	NamesBuiltinInLocation bool
+
 	// LowercaseReason lowercases the strerror text this dialect quotes.
 	//
 	// zsh alone: `permission denied` where the other three print the C
@@ -321,13 +338,20 @@ func (d Diagnostics) ForScript() Diagnostics {
 // and that happens before a Runner exists — whoever parsed the script has to
 // render it with the same answers the Runner would have used.
 func (d Diagnostics) Report(name string, line int, msg string) string {
-	return d.prefix(name, line) + msg
+	return d.prefix(name, "", line) + msg
 }
 
 // prefix renders the start of a diagnostic for a shell called name at line.
-func (d Diagnostics) prefix(name string, line int) string {
+func (d Diagnostics) prefix(name, builtin string, line int) string {
 	if name == "" {
 		name = "sh"
+	}
+	if builtin != "" && d.NamesBuiltinInLocation {
+		// One dialect names the builtin that is speaking, between the shell
+		// and the line. It rides on the shell's name rather than being a
+		// fourth LocationStyle, because it composes with whichever style the
+		// dialect already uses instead of replacing it.
+		name += ":" + builtin
 	}
 	switch d.Location {
 	case LocationColonLine:

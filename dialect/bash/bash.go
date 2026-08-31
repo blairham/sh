@@ -38,6 +38,7 @@ func Semantics() interp.Semantics {
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
 		Location:          interp.LocationLineWord,
+		NotFound:          "%s: command not found",
 		SyntaxErrorStatus: 2,
 	}
 }

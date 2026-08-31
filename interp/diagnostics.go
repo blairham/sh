@@ -3,7 +3,10 @@
 
 package interp
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Diagnostics is how a dialect reports failure.
 //
@@ -36,6 +39,50 @@ type Diagnostics struct {
 	//
 	// Zero means the substrate's own, which is 2.
 	SyntaxErrorStatus int
+
+	// ScriptLocation is Location for a script read from a file, when the two
+	// differ. ksh93 is the only shell in the panel where they do: `ksh -c`
+	// names no location at all, and `ksh script` says "line 2". Zero means
+	// "the same as Location", which is true of the other three.
+	ScriptLocation LocationStyle
+
+	// The wording of individual failures. Each is a format string, and empty
+	// means the substrate's own — so a dialect states only where it differs,
+	// the same way a semantics preset does.
+	//
+	// These are the failures the panel words differently *for the same
+	// diagnosis*. Where a shell reaches a different diagnosis — dash calling
+	// `[[ ( x ) ]]` "word unexpected (expecting \")\")" where we say the
+	// paren is unexpected — no wording can close the gap, and none is
+	// offered here.
+
+	// SyntaxError wraps a parse failure's own text. One verb: the text.
+	SyntaxError string
+	// BadSubstitution replaces a parse failure inside `${ }` entirely. No
+	// verbs: no shell in the panel says which operator was wrong.
+	BadSubstitution string
+	// NotFound is a command name that resolved to nothing. One verb: the
+	// name.
+	NotFound string
+	// ReadonlyVariable is an assignment to a readonly name. One verb: the
+	// name.
+	ReadonlyVariable string
+	// InvalidNumber is arithmetic text that is not a number. One verb: the
+	// text.
+	InvalidNumber string
+	// ShiftTooMany is `shift` past the end. One verb: the count, as a
+	// number — which a format is free to ignore, and dash's does.
+	ShiftTooMany string
+	// ArithError wraps a failed arithmetic expansion. Two verbs, and the
+	// shells order them differently, so both are positional: %[1]s is the
+	// expression as written and %[2]s the reason.
+	ArithError string
+	// DivisionByZero is the reason itself, which dash and ksh93 spell
+	// differently. No verbs.
+	DivisionByZero string
+	// CannotOpen is a redirection that could not be opened. Two verbs: the
+	// name and the reason.
+	CannotOpen string
 
 	// Location is how the shell prefixes a diagnostic with where it
 	// happened. Measured, and all four differ:
@@ -70,6 +117,40 @@ const (
 	LocationTightLine
 )
 
+// Wording renders one failure, using the dialect's format when it has one.
+//
+// The fallback is the substrate's own wording, so a dialect that says nothing
+// about a failure still produces a sensible message rather than an empty one.
+// Both formats must take the same verbs, which is what the field comments
+// document.
+func Wording(custom, fallback string, args ...any) string {
+	if custom == "" {
+		custom = fallback
+	}
+	if !strings.Contains(custom, "%") {
+		// A format is allowed to ignore what it is given. dash's `shift`
+		// message names no count where ksh93's does, and passing the count
+		// to both is simpler than deciding per dialect which to pass —
+		// provided the unused one does not become "%!(EXTRA int=5)", which
+		// is exactly what it did.
+		return custom
+	}
+	return fmt.Sprintf(custom, args...)
+}
+
+// ForScript returns the diagnostics a script read from a file should use.
+//
+// A shell reports the *script's* name rather than its own once it is running
+// one, and ksh93 also changes how it names the line. Both are properties of
+// the invocation rather than of the dialect, which is why this returns a
+// value instead of being another field somebody has to remember to set.
+func (d Diagnostics) ForScript() Diagnostics {
+	if d.ScriptLocation != LocationNone {
+		d.Location = d.ScriptLocation
+	}
+	return d
+}
+
 // Report renders a complete diagnostic for a shell called name at line.
 //
 // Exported because the first thing a shell reports is usually a syntax error,
@@ -96,7 +177,7 @@ func (d Diagnostics) prefix(name string, line int) string {
 }
 
 // SyntaxError reports the status a failed parse should carry.
-func (d Diagnostics) SyntaxError() int {
+func (d Diagnostics) SyntaxStatus() int {
 	if d.SyntaxErrorStatus == 0 {
 		return 2
 	}

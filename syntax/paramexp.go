@@ -127,7 +127,7 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 		if !p.dialect.ParamIndirection {
 			// Refused rather than guessed: ksh93 accepts this and means
 			// something else, so a dialect without it cannot pretend.
-			p.fail("${!name} is not available in this dialect")
+			p.failKind(ErrBadSubstitution, "${!name} is not available in this dialect")
 			return e
 		}
 		e.Indirect = true
@@ -136,7 +136,7 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 
 	e.Name, s = scanParamName(s)
 	if e.Name == "" {
-		p.fail("expected a parameter name in ${%s}", src)
+		p.failKind(ErrBadSubstitution, "expected a parameter name in ${%s}", src)
 		return e
 	}
 
@@ -152,7 +152,7 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 
 	op, rest, ok := p.scanParamOp(s, e)
 	if !ok {
-		p.fail("unknown operator in ${%s}", src)
+		p.failKind(ErrBadSubstitution, "unknown operator in ${%s}", src)
 		return e
 	}
 	e.Op = op

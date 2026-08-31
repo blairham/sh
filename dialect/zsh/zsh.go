@@ -41,6 +41,8 @@ func Semantics() interp.Semantics {
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
 		Location:          interp.LocationTightLine,
+		BadSubstitution:   "bad substitution",
+		ReadonlyVariable:  "read-only variable: %s",
 		SyntaxErrorStatus: 1,
 	}
 }

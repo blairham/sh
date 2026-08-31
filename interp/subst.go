@@ -34,7 +34,7 @@ func (r *Runner) commandSubst(ctx context.Context, src string) string {
 		// it the diagnostic appeared and the next command ran regardless,
 		// which is the shape this package keeps finding.
 		r.diagf("%v\n", err)
-		r.status = r.diag().SyntaxError()
+		r.status = r.diag().SyntaxStatus()
 		r.ctl = controlExit
 		return ""
 	}

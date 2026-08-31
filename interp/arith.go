@@ -109,7 +109,7 @@ func (r *Runner) evalAssign(x *syntax.ArithAssign) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		v, err = apply(strings.TrimSuffix(x.Op, "="), old, v)
+		v, err = r.apply(strings.TrimSuffix(x.Op, "="), old, v)
 		if err != nil {
 			return 0, err
 		}
@@ -154,10 +154,12 @@ func (r *Runner) evalBinary(x *syntax.ArithBinary) (int, error) {
 		// The sequence operator evaluates both and yields the right.
 		return rv, nil
 	}
-	return apply(x.Op, l, rv)
+	return r.apply(x.Op, l, rv)
 }
 
-func apply(op string, l, r int) (int, error) {
+// apply is a method because a division by zero is worded by the dialect,
+// and the receiver is named `sh` because `r` is already the right operand.
+func (sh *Runner) apply(op string, l, r int) (int, error) {
 	switch op {
 	case "+":
 		return l + r, nil
@@ -167,7 +169,7 @@ func apply(op string, l, r int) (int, error) {
 		return l * r, nil
 	case "/", "%":
 		if r == 0 {
-			return 0, arithError{"division by zero"}
+			return 0, arithError{Wording(sh.diag().DivisionByZero, "division by zero")}
 		}
 		if op == "/" {
 			return l / r, nil
@@ -230,7 +232,7 @@ func (r *Runner) arithValueOf(name string, depth int) (int, error) {
 		return r.arithValueOf(strings.TrimSpace(value), depth+1)
 	}
 	// Not a number and not a name: an error rather than a silent zero.
-	return 0, arithError{"invalid number: " + strings.TrimSpace(value)}
+	return 0, arithError{r.wordInvalidNumber(strings.TrimSpace(value))}
 }
 
 func isNameLike(s string) bool {
@@ -288,7 +290,7 @@ func (r *Runner) parseNum(s string) (int, error) {
 		n, err = strconv.ParseInt(s, 10, 64)
 	}
 	if err != nil {
-		return 0, arithError{"invalid number: " + s}
+		return 0, arithError{r.wordInvalidNumber(s)}
 	}
 	if neg {
 		n = -n
@@ -322,4 +324,9 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 		r.status = boolInt(v == 0)
 		return nil
 	})
+}
+
+// wordInvalidNumber words "this is not a number" the way the dialect does.
+func (r *Runner) wordInvalidNumber(text string) string {
+	return Wording(r.diag().InvalidNumber, "invalid number: %s", text)
 }

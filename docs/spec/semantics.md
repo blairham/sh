@@ -168,6 +168,30 @@ two separate quirks. It is one behaviour observed twice, and an
 implementation with two switches for it will eventually set them
 inconsistently.
 
+## Wording is a third kind of answer
+
+`Diagnostics` began as one number and now carries what a shell *says*. The
+messages are formats, and empty means the substrate's own — so a dialect
+states only where it differs, exactly as a semantics preset does.
+
+Only failures the panel words differently *for the same diagnosis* are
+here. Where a shell reaches a different diagnosis no wording can close the
+gap: dash calls `[[ ( x ) ]]` "word unexpected (expecting \")\")" where
+we say the paren is unexpected, and matching that would mean imitating
+dash's parser rather than its vocabulary. Those cases stay open and are
+listed as such.
+
+Two things that look like wording are not:
+
+- A shell running a script names the **script** in `$0` and in every
+  diagnostic, not itself. ksh93 also changes how it names the line —
+  nothing for `-c`, "line 2" for a file — which is the only place in the
+  panel where the two forms differ.
+- `Wording` lets a format ignore the arguments it is given. dash's `shift`
+  message names no count where ksh93's does, and passing the count to both
+  is simpler than deciding per dialect which to pass — provided the unused
+  one does not become `%!(EXTRA int=5)`, which is what it did first.
+
 ## A value in a preset is not an implementation either
 
 `LastPipelineElementInCurrentShell` had a value in all five presets and

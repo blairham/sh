@@ -179,7 +179,7 @@ func biShift(r *Runner, _ context.Context, args []string) int {
 		if r.ask(r.sem().ShiftPastEndFatal, "shift past the end being fatal") {
 			// controlReturn only unwound a function, so at the top level the
 			// script carried on past an error the shell calls fatal.
-			r.fatal("shift: can't shift that many\n")
+			r.fatal("%s\n", Wording(r.diag().ShiftTooMany, "shift: can't shift that many", n))
 			return r.status
 		}
 		return 1

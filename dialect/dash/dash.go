@@ -27,6 +27,13 @@ func Semantics() interp.Semantics {
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
 		Location:          interp.LocationColonLine,
+		SyntaxError:       "Syntax error: %s",
+		BadSubstitution:   "Bad substitution",
+		ReadonlyVariable:  "%s: is read only",
+		InvalidNumber:     "Illegal number: %s",
+		ArithError:        "arithmetic expression: %[2]s: \"%[1]s\"",
+		CannotOpen:        "cannot open %s: %s",
+		ShiftTooMany:      "shift: can't shift that many",
 		SyntaxErrorStatus: 2,
 	}
 }

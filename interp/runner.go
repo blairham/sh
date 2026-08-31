@@ -447,7 +447,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	}
 	if lookErr != nil {
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: lookErr})
-		r.diagf("%s: not found\n", argv[0])
+		r.diagf("%s\n", Wording(r.diag().NotFound, "%s: not found", argv[0]))
 		// 127 is the status every shell in the panel uses for this.
 		r.status = 127
 		return nil
@@ -553,10 +553,10 @@ func (r *Runner) setVar(name, value string) {
 		// Fatal everywhere but bash, measured with a plain assignment in a
 		// script — which is the contaminated-probe case oracle.md records.
 		if r.ask(r.sem().ReadonlyReassignmentFatal, "a readonly reassignment being fatal") {
-			r.fatal("%s: readonly variable\n", name)
+			r.fatal("%s\n", Wording(r.diag().ReadonlyVariable, "%s: readonly variable", name))
 			return
 		}
-		r.diagf("%s: readonly variable\n", name)
+		r.diagf("%s\n", Wording(r.diag().ReadonlyVariable, "%s: readonly variable", name))
 		r.status = 1
 		return
 	}

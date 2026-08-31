@@ -1,6 +1,6 @@
 # The oracle method
 
-Behaviour is learned by **running real shell binaries and recording what
+Behavior is learned by **running real shell binaries and recording what
 they do**. This is the primary input to every spec entry, and it is
 clean-room safe: a snippet is ours, and the output of a binary is a fact
 about that binary, not an expression of anyone's authorship.
@@ -52,14 +52,14 @@ Rules that keep the facts honest:
     make oracle         # re-measure, rewrite measurements.md and the golden record
     make oracle-check   # fail if the panel no longer behaves as recorded
 
-The corpus is checked-in Go data, one entry per behaviour a spec entry
+The corpus is checked-in Go data, one entry per behavior a spec entry
 asserts. Each carries a `Why` explaining what it pins down — without
 that, a case that changes later gets "fixed" by updating the golden
 record, which is how a regression becomes a feature.
 
 `make oracle-check` runs in `make check` and in CI. Drift is deliberately
 **not** described as a failure of the code: a shell was upgraded, or a
-case was edited, and the recorded behaviour is no longer what the panel
+case was edited, and the recorded behavior is no longer what the panel
 does. The response is to work out which, update the affected spec
 entries, and re-record.
 

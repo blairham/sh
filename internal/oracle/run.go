@@ -23,7 +23,7 @@ const RunTimeout = 10 * time.Second
 type Result struct {
 	// Output is combined stdout and stderr, normalized and with the trailing
 	// newline removed. Both streams are kept because a diagnostic is part of
-	// the behaviour: two shells that print the same thing to different streams
+	// the behavior: two shells that print the same thing to different streams
 	// have not behaved the same way.
 	Output string
 
@@ -39,7 +39,7 @@ type Result struct {
 // Exec executes one case in one shell.
 //
 // The snippet is passed with -c rather than written to a file unless the case
-// asks otherwise: some behaviour depends on how input is read, and a case that
+// asks otherwise: some behavior depends on how input is read, and a case that
 // cares says so. See Case.Script.
 func Exec(ctx context.Context, sh Found, c Case) Result {
 	ctx, cancel := context.WithTimeout(ctx, RunTimeout)
@@ -88,7 +88,7 @@ func Exec(ctx context.Context, sh Found, c Case) Result {
 
 func command(ctx context.Context, sh Found, c Case, dir string) *exec.Cmd {
 	if c.Script {
-		// Written to a file and run as an argument, because a few behaviours
+		// Written to a file and run as an argument, because a few behaviors
 		// differ between a script and -c: a readonly reassignment is fatal in
 		// one and not the other, which is how the contaminated-probe trap in
 		// oracle.md was found.

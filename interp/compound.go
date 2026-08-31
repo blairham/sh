@@ -13,7 +13,7 @@ import (
 // control is how break, continue and return leave a construct without
 // unwinding the whole interpreter. They are not errors: a `break` that reaches
 // the top is a misuse, but a `break` inside a loop is ordinary control flow,
-// and modelling it as an error would make every caller check for something
+// and modeling it as an error would make every caller check for something
 // that is not a failure.
 type control uint8
 

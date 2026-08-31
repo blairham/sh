@@ -644,7 +644,7 @@ func (l *Lexer) scanBackticks(q Quoting) Span {
 // substitution form requires, so the value handed on is the command text.
 //
 // This belongs to the lexer rather than to whoever evaluates the span,
-// because it is part of *recognising* the construct: POSIX gives the
+// because it is part of *recognizing* the construct: POSIX gives the
 // backslash its literal meaning inside backquotes except before `$`, a
 // backquote, or another backslash. Doing it here is also what makes nesting
 // work at all — the inner `\“ becomes a plain backquote, and re-lexing the

@@ -72,7 +72,7 @@ func (r *Runner) lookupBuiltin(name string) (Builtin, bool) {
 }
 
 // IsSpecialBuiltin reports whether a name is one of the POSIX special
-// builtins, which a dialect layer needs in order to match the two behaviours
+// builtins, which a dialect layer needs in order to match the two behaviors
 // that follow from that list: an assignment prefixed to one persists, and a
 // failure in one is fatal to a non-interactive shell.
 func IsSpecialBuiltin(name string) bool { return specialBuiltins[name] }

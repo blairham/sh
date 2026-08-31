@@ -93,7 +93,7 @@ them as written, so they belong to a dialect and not to the core.
 
 Note the shape of the failures: dash and bash report a **syntax error**,
 because `(` is an operator where a pattern was expected, while zsh parses
-the pattern and simply does not match. Three behaviours again.
+the pattern and simply does not match. Three behaviors again.
 
 Vector field: `ExtendedPatterns` (default false, true for `ksh`).
 

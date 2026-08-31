@@ -116,7 +116,7 @@ binary and this is not.
 
 ## What this does not cover
 
-Integer width and overflow behaviour, which POSIX leaves to the C
+Integer width and overflow behavior, which POSIX leaves to the C
 implementation and which the panel would answer differently on different
 machines. Anything depending on it is unportable by construction, so no
 core answer is recorded rather than an arbitrary one being invented.

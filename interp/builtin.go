@@ -45,7 +45,7 @@ var builtins = map[string]Builtin{
 
 // biBreak and biContinue transfer control out of a loop. They are recorded on
 // the runner rather than returned as errors, because leaving a loop is
-// ordinary control flow and modelling it as a failure would make every caller
+// ordinary control flow and modeling it as a failure would make every caller
 // check for something that is not one.
 func biBreak(r *Runner, _ context.Context, args []string) int {
 	r.ctl, r.ctlDepth = controlBreak, loopDepth(args)
@@ -102,7 +102,7 @@ func biSet(r *Runner, _ context.Context, args []string) int {
 		return 2
 	}
 	// Options come before `--`, and each is a letter that may be turned on
-	// with `-` or off with `+`. Only the ones with implemented behaviour are
+	// with `-` or off with `+`. Only the ones with implemented behavior are
 	// accepted; the rest are refused rather than silently ignored, which
 	// would let a script believe it had asked for something.
 	i := 0
@@ -344,7 +344,7 @@ func biRead(r *Runner, _ context.Context, args []string) int {
 	return 0
 }
 
-// readLine reads one line, honouring a line continuation unless raw.
+// readLine reads one line, honoring a line continuation unless raw.
 func (r *Runner) readLine(raw bool) (string, error) {
 	var b strings.Builder
 	var ch [1]byte

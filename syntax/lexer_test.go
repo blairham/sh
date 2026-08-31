@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// render summarises a token stream so a test can state its expectation as one
+// render summarizes a token stream so a test can state its expectation as one
 // readable string rather than as a struct literal nobody checks.
 //
 // A word renders its spans, so quoting is visible: a"b c"d is

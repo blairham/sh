@@ -166,7 +166,7 @@ func TestNormalizeDoesNotEatShellNameInsideWords(t *testing.T) {
 }
 
 func TestResolveRejectsAPathThatIsNotTheShellItNames(t *testing.T) {
-	// /bin/sh is bash on macOS and dash on Debian. A column labelled
+	// /bin/sh is bash on macOS and dash on Debian. A column labeled
 	// bash-as-sh that actually ran dash is worse than a missing column,
 	// because nothing about it looks wrong.
 	var entry Shell

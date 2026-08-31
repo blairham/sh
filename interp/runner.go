@@ -25,7 +25,7 @@ import (
 // so, never silently skipped — a shell that quietly does nothing is worse than
 // one that says it cannot.
 type Runner struct {
-	// Vars holds shell variables. A nil map is initialised on first use.
+	// Vars holds shell variables. A nil map is initialized on first use.
 	Vars map[string]string
 	// Arrays holds indexed array variables, which are a different kind of
 	// thing from Vars rather than a formatting of one: an element can hold a
@@ -131,7 +131,7 @@ type Runner struct {
 	// traceWait and traceDone order the trace lines of a pipeline without
 	// ordering the pipeline itself: an element waits for the one before it
 	// to have printed, then prints, then releases the next. Only the
-	// printing is serialised.
+	// printing is serialized.
 	traceWait <-chan struct{}
 	traceDone chan struct{}
 	traceOnce *sync.Once
@@ -671,7 +671,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	cmd := exec.CommandContext(ctx, path, argv[1:]...)
 	if r.bg != nil {
 		// A background command runs in a process group of its own, which is
-		// what makes signalling and terminal ownership answerable at all.
+		// what makes signaling and terminal ownership answerable at all.
 		setProcessGroup(cmd)
 	}
 	cmd.Dir = r.Dir

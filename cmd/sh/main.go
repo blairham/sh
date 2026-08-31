@@ -7,7 +7,7 @@
 // interpreter other programs embed — and the shell people run, with its own
 // choice of dialect and its own interactive surface, is a separate thing
 // built on top. What is here exists to exercise the library, to make its
-// behaviour inspectable, and to be a column in the conformance harness.
+// behavior inspectable, and to be a column in the conformance harness.
 //
 // It runs scripts, and the -dialect flag chooses which shell it is being:
 // core refuses anything the panel disagrees about, and the others answer the
@@ -106,7 +106,7 @@ func fail(err error) {
 // same shell: which constructs it accepts, and what it means by them.
 //
 // `core` is built the same way on both sides. The grammar refuses constructs
-// not every shell has; the semantics refuses *behaviours* not every shell
+// not every shell has; the semantics refuses *behaviors* not every shell
 // shares. A script that runs under it depends on nothing the panel disagrees
 // about, which is a useful thing to be able to check and a poor way to run a
 // shell — the same split docs/spec/core.md drew for strict POSIX.

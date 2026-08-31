@@ -31,7 +31,7 @@ undertaken for architecture does not, provided the rules below hold.
 Not to "check how they did it". Not to "get unstuck". Not once.
 
 Re-expressing source you have just read produces work derived from its
-structure, sequence and organisation. That is a derivative work even
+structure, sequence and organization. That is a derivative work even
 when no line is copied verbatim, and it is the single mistake that
 would undo the entire effort.
 
@@ -42,11 +42,11 @@ Independence comes from separating *learning what a shell does* from
 
 | phase | may consult | produces |
 | --- | --- | --- |
-| **spec** | POSIX XCU, the bash/ksh/zsh/dash manuals, observed behaviour of real shell binaries, standards mailing lists, bug trackers (a bug *report* describes behaviour) | a behavioural spec, in our own words, under `docs/spec/` |
+| **spec** | POSIX XCU, the bash/ksh/zsh/dash manuals, observed behavior of real shell binaries, standards mailing lists, bug trackers (a bug *report* describes behavior) | a behavioral spec, in our own words, under `docs/spec/` |
 | **implement** | **only `docs/spec/`** and the Go standard library | code |
 
 `docs/spec/` is the wall. Anything that crosses it must be a
-**behavioural fact**, never someone else's **expression** of that fact.
+**behavioral fact**, never someone else's **expression** of that fact.
 
 If you are implementing and you find the spec inadequate: stop, go back
 to the spec phase, extend the spec from the specification or from an
@@ -56,10 +56,10 @@ implementation.
 ## Green list — consult freely
 
 - **POSIX.1 / XCU, Shell Command Language.** The normative source.
-  Grammar and behaviour are not copyrightable; this is the primary input.
+  Grammar and behavior are not copyrightable; this is the primary input.
 - **The bash, ksh, mksh, dash and zsh reference manuals.** Documentation
-  describing behaviour.
-- **Observed behaviour of real shell binaries.** Running `bash -c '...'`
+  describing behavior.
+- **Observed behavior of real shell binaries.** Running `bash -c '...'`
   and recording what happens produces *facts*. This is our best source
   and it is entirely clean. See `docs/spec/oracle.md`.
 - **Ideas, architecture and algorithms.** 17 U.S.C. §102(b): copyright
@@ -110,7 +110,7 @@ You do not. The escalation path is:
 2. Ask the oracle: write the snippet, run it against four shells, record
    what happened.
 3. Read the vendor manual.
-4. Write the behaviour down in `docs/spec/`, then implement from that.
+4. Write the behavior down in `docs/spec/`, then implement from that.
 
 Step 2 answers almost everything, because the question is nearly always
 "what does it actually do", and an implementation is a worse answer to
@@ -119,7 +119,7 @@ that than the binary itself.
 ## Provenance hygiene
 
 - Every commit is our own work. If you cannot say where a construct's
-  behaviour was learned, do not commit it.
+  behavior was learned, do not commit it.
 - `docs/spec/` cites its sources: a POSIX section number, a manual
   section, or an oracle run. Citations are to *specifications and
   observations*, never to source files.

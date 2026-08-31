@@ -228,7 +228,7 @@ func (r *Runner) expansionResult(v string, unquoted bool, split Answer, axis str
 	if hasUnescapedMeta(v) &&
 		!r.ask(r.sem().GlobExpansionResults, "globbing the result of an expansion") {
 		// zsh does not treat the result of an expansion as a pattern. The
-		// same rule decides `[[ abc == $p ]]`, which is one behaviour
+		// same rule decides `[[ abc == $p ]]`, which is one behavior
 		// observed twice rather than two quirks.
 		v = globEscape(v)
 	}

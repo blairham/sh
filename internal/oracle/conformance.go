@@ -39,7 +39,7 @@ type Report struct {
 	// SameStatus counts cases that agree about what *happened* — the same
 	// exit status — while disagreeing about the words. Diagnostics are not
 	// specified by anything and no two shells word them alike, so an
-	// exact-output score understates behavioural agreement and this says by
+	// exact-output score understates behavioral agreement and this says by
 	// how much.
 	SameStatus int
 	Total      int
@@ -121,7 +121,7 @@ func (r *Report) Summary(verbose bool) string {
 	fmt.Fprintf(&b, "conformance against %s: %d/%d (%.0f%%)\n", r.Against, r.Passed, r.Total, pct)
 	if r.SameStatus > 0 {
 		behav := 100 * float64(r.Passed+r.SameStatus) / float64(r.Total)
-		fmt.Fprintf(&b, "  plus %d agreeing on the exit status but not the wording — %.0f%% behavioural\n",
+		fmt.Fprintf(&b, "  plus %d agreeing on the exit status but not the wording — %.0f%% behavioral\n",
 			r.SameStatus, behav)
 	}
 	if len(r.Missing) > 0 {

@@ -11,7 +11,7 @@ This is an **independent implementation**. `CLEANROOM.md` is binding:
 > this one.
 
 Not mvdan.cc/sh, not bash, not dash, not zsh, not busybox — and not to
-"check how they did it". Behaviour is learned from POSIX, from vendor
+"check how they did it". Behavior is learned from POSIX, from vendor
 manuals, and from running real shell binaries as oracles. It is written
 down in `docs/spec/`, and code is written from the spec.
 
@@ -49,5 +49,5 @@ The agreement text is in `CLA.md`.
 - Every `.go` file carries the two-line SPDX header — see `AGENTS.md`.
   CI fails without it.
 - `make check` must pass. Lint runs in CI.
-- New behaviour needs a spec entry in `docs/spec/` with a citation: a
+- New behavior needs a spec entry in `docs/spec/` with a citation: a
   POSIX section, a manual section, or a recorded oracle run.

@@ -5,7 +5,7 @@ denominator of real shells, whose dialects are presets over a semantics
 vector, and whose execution is observable and gateable from the inside.
 
 Read `CLEANROOM.md` before writing code, and `docs/spec/` before
-designing behaviour.
+designing behavior.
 
 ## The three layers
 

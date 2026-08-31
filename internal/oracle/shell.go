@@ -3,7 +3,7 @@
 
 // Package oracle records what real shells do.
 //
-// It implements no shell behaviour. It runs shell binaries over a corpus of
+// It implements no shell behavior. It runs shell binaries over a corpus of
 // snippets and records their output, which is what makes it safe under the
 // rules in CLEANROOM.md: the snippets are ours, and the output of a binary is
 // a fact about that binary rather than anyone's expression.

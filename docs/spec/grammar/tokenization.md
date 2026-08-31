@@ -11,7 +11,7 @@ Citation: POSIX.1-2024 XCU §2.2 (quoting), §2.3 (token recognition),
 
 `expansion.md` asserts that the parser must record quoting **per span
 within a word**, not per word. That is a requirement on this stage, and
-it is the reason a word cannot be modelled as a string:
+it is the reason a word cannot be modeled as a string:
 
     set -- a"b c"d    →  [ab cd]   one field, in all six shells
 

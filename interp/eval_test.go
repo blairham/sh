@@ -162,7 +162,7 @@ func withSem(s Semantics) func(*Runner) { return func(r *Runner) { r.Semantics =
 
 func TestSemanticsAxesHaveTwoSides(t *testing.T) {
 	// Each row is an axis, run under two dialects that disagree about it.
-	// Asserting only one side asserts a default rather than a behaviour.
+	// Asserting only one side asserts a default rather than a behavior.
 	tests := []struct {
 		axis, src string
 		a         Semantics
@@ -228,7 +228,7 @@ func TestHeredocBodies(t *testing.T) {
 
 func TestCoreRefusesWhatTheShellsDisagreeAbout(t *testing.T) {
 	// The counterpart of syntax.Core(), built the same way: that refuses
-	// constructs not every shell has, this refuses behaviours not every shell
+	// constructs not every shell has, this refuses behaviors not every shell
 	// shares. A script that runs under it depends on nothing contested.
 	core := CoreSemantics()
 	for _, tc := range []struct{ name, src, axis string }{

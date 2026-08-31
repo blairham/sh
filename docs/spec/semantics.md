@@ -114,7 +114,7 @@ bash's 1 would have written one shell's policy into the core. It joins
 Its probe then found something the axis does not cover. All four shells
 **abandon the rest of the script**: none of them reach the `echo $?`, so
 the second command in that probe never runs anywhere. Fatality is
-therefore *core* behaviour that the substrate can simply implement, and
+therefore *core* behavior that the substrate can simply implement, and
 only the status is contested — the useful reminder being that a probe
 written to measure one axis reported on two, and the universal half was
 the half the interpreter had wrong.
@@ -153,7 +153,7 @@ faithfully is a vector of independent switches.
 
 This is the central architectural claim of this repository, and it is
 the one thing that cannot be retrofitted cheaply. Every axis above is a
-named field, set by a preset, read at the one place the behaviour
+named field, set by a preset, read at the one place the behavior
 happens.
 
 ## Not every difference announces itself
@@ -176,7 +176,7 @@ whether `p="a*"; [[ abc == $p ]]` matches, which it does in bash and ksh93
 and does not in zsh.
 
 That is worth stating because the obvious reading of the measurements is
-two separate quirks. It is one behaviour observed twice, and an
+two separate quirks. It is one behavior observed twice, and an
 implementation with two switches for it will eventually set them
 inconsistently.
 
@@ -226,7 +226,7 @@ of the shell.
     exit abc    dash → error 2   bash → 2     ksh93, zsh → 0
 
 dash refuses both, bash refuses only the one that is not a number, and
-ksh93 and zsh take either. Three behaviours on a line rather than two
+ksh93 and zsh take either. Three behaviors on a line rather than two
 sides, so `ExitArgument` is a policy with three values — the shape
 `UnterminatedBracket` established, used a second time without argument.
 
@@ -245,7 +245,7 @@ wrong. The exemption for a tested status is inherited into functions and
 all the way down anything they call, and an assignment reports what its
 command substitution reported. Both unanimous.
 
-So `set -e` is core behaviour and got no axis. Worth recording because the
+So `set -e` is core behavior and got no axis. Worth recording because the
 method is supposed to cut both ways: measuring is what stops a divergence
 being invented as readily as it stops one being missed.
 
@@ -260,11 +260,11 @@ last:
 Nothing is reported either way, so it is the `&>` shape again. It is
 recorded as `redir/multios-is-zsh-only` and deliberately not implemented:
 writing to several targets at once is a feature rather than an answer, and
-adding it unasked would be inventing behaviour for three of the four.
+adding it unasked would be inventing behavior for three of the four.
 
 It also demonstrates the blind spot recorded above, on a case chosen for
 something else. The two answers differ in *output* and agree on the exit
-status, so the behavioural score counts them as agreeing and every other
+status, so the behavioral score counts them as agreeing and every other
 view calls it wording. A shell that writes to the wrong file is not a
 wording difference.
 
@@ -323,7 +323,7 @@ core excludes dash". The row and the code disagreed, and the conformance
 run could not see it, because dash and the core give the same *exit
 status* for a `case` that takes a different branch.
 
-It was found by reading the wording bucket rather than the behavioural
+It was found by reading the wording bucket rather than the behavioral
 one. Three of the entries there were not diagnostics at all:
 
     echo {1..3}                    dash prints it literally; we expanded it
@@ -331,7 +331,7 @@ one. Three of the entries there were not diagnostics at all:
     >b with no command             creates the file; we created nothing
 
 None of the three changes an exit status, so all three were counted as
-agreements by the behavioural score and as wording by everything else. A
+agreements by the behavioral score and as wording by everything else. A
 score that compares only statuses cannot see a construct that silently
 produces the wrong output, which is the failure mode this project exists
 to be honest about — so the wording bucket is worth reading, not just
@@ -432,13 +432,13 @@ three, even though it does not split a parameter expansion:
     set -- $(printf 'a b');          echo $#   → 2 2 2 **2**
 
 "zsh does not word-split" is the usual summary and it is too broad. The
-splitting axis covers parameter expansion only, and modelling it as one
+splitting axis covers parameter expansion only, and modeling it as one
 switch over the whole of field splitting gives the wrong answer for
 `$(...)`. See `grammar/word-splitting.md`.
 
 ## A third vector
 
-Some differences are neither a construct that parses nor a behaviour with
+Some differences are neither a construct that parses nor a behavior with
 two sides. They are *values*: what a shell prints when it refuses, and
 which number it exits with. `Diagnostics` holds those.
 
@@ -454,7 +454,7 @@ in every shell in the panel". That is true of half of them.
 `Diagnostics` differs from this file's vector in one deliberate way: its
 zero value means *the substrate's own*, not *unset*. A semantics axis
 with no answer is refused, because answering it would claim some shell's
-behaviour. A status makes no such claim — the process must exit with some
+behavior. A status makes no such claim — the process must exit with some
 number, and refusing is not one of the options. `sh` is itself a shell,
 so where no dialect is chosen it answers for itself, with 2.
 
@@ -470,16 +470,16 @@ which is an architectural difference rather than an axis.
 
 1. **It must be measured**, with the probe recorded here. An axis added
    from a manual and not from a run is a guess.
-2. **It must be named for the behaviour, not for the dialect that wants
+2. **It must be named for the behavior, not for the dialect that wants
    it.** `WordSplitUnquoted`, not `ZshMode`. A field named after a
-   dialect will collect unrelated behaviour and become impossible to
+   dialect will collect unrelated behavior and become impossible to
    reason about — which is exactly what a monolithic `posix` flag
    becomes.
-3. **It is read at the site of the behaviour, once.** Never
+3. **It is read at the site of the behavior, once.** Never
    `if dialect == zsh` scattered across call sites. The whole point is
    that a second dialect must not add a second condition to every
    existing one.
 4. **Non-conflicts do not get an axis.** `${x:-y}`, `$((u+1))` with `u`
    unset, and field-count of an unset variable were measured and agree
-   across the panel. They are core behaviour, and adding a switch for
+   across the panel. They are core behavior, and adding a switch for
    them would be inventing a difference.

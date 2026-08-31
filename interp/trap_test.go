@@ -141,7 +141,7 @@ func TestTrapRefusesSignalsItCannotCatch(t *testing.T) {
 //
 // run() executes in-process, so `kill -INT $$` would send a real signal to the
 // test binary and `trap '' INT` would call signal.Ignore for the whole of it —
-// process-global state that outlives the test that set it. The behaviour is
+// process-global state that outlives the test that set it. The behavior is
 // covered by the corpus instead, which runs the built shell as its own
 // process against all four panel shells: see the trap/ cases in
 // internal/oracle/case.go.

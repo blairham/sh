@@ -54,9 +54,9 @@ consulting, translating, porting or re-expressing the source code, test
 files or test data of any other shell or shell library — including but
 not limited to `mvdan.cc/sh`, bash, dash, zsh, ksh, mksh and busybox.
 
-You affirm that any behaviour your Contribution implements was learned
+You affirm that any behavior your Contribution implements was learned
 from a public specification, from vendor documentation, or from observing
-the behaviour of a running program, as described in `CLEANROOM.md`.
+the behavior of a running program, as described in `CLEANROOM.md`.
 
 If you are uncertain whether something you have seen affects work you
 intend to contribute, say so before opening the pull request rather than

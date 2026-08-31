@@ -16,7 +16,7 @@ import (
 )
 
 // These three were found in the *wording* bucket of the conformance run:
-// cases whose exit status matched, so the behavioural score called them
+// cases whose exit status matched, so the behavioral score called them
 // agreements, and whose output differed for reasons that had nothing to do
 // with diagnostics. A score that compares only the status cannot see them.
 

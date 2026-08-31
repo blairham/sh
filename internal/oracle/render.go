@@ -153,7 +153,7 @@ func Load(path string) (*Run, error) {
 	return &r, nil
 }
 
-// Drift is one case whose behaviour moved.
+// Drift is one case whose behavior moved.
 type Drift struct {
 	CaseID string
 	Shell  string

@@ -15,7 +15,7 @@ import "strings"
 type Answer uint8
 
 const (
-	// Unspecified refuses the behaviour rather than guessing at it.
+	// Unspecified refuses the behavior rather than guessing at it.
 	Unspecified Answer = iota
 	Yes
 	No
@@ -40,7 +40,7 @@ func (a Answer) String() string {
 // text means different things, and no amount of adding or removing features
 // produces one from another. They need switches.
 //
-// Every field is named for the behaviour rather than for the shell that wants
+// Every field is named for the behavior rather than for the shell that wants
 // it, which the spec requires and the measurements insist on: ksh93 accepts
 // `&>` or does not depending on which build is installed, twelve years apart
 // under the same name, so a field called `Ksh` could not be given a value.
@@ -61,7 +61,7 @@ type Semantics struct {
 	// GlobExpansionResults matches the *result* of an expansion against the
 	// filesystem. False in zsh, where only a pattern written literally in the
 	// source is expanded. The same rule decides whether `[[ abc == $p ]]`
-	// treats $p as a pattern, which is one behaviour observed twice rather
+	// treats $p as a pattern, which is one behavior observed twice rather
 	// than two quirks.
 	GlobExpansionResults Answer
 	// GlobNoMatchIsError makes a pattern matching nothing an error instead of
@@ -197,7 +197,7 @@ type Semantics struct {
 	//	exit abc    dash → error 2   bash → 2     ksh93, zsh → 0
 	//
 	// dash rejects both, bash rejects only the one that is not a number, and
-	// ksh93 and zsh take anything. Three behaviours on a line, so a policy
+	// ksh93 and zsh take anything. Three behaviors on a line, so a policy
 	// rather than a bool — the same shape as UnterminatedBracket, and for
 	// the same reason.
 	ExitArgument ExitArgumentPolicy
@@ -301,7 +301,7 @@ func PosixSemantics() Semantics {
 // leaves the rest unspecified.
 //
 // It is the counterpart of syntax.Core(), built the same way: that refuses
-// constructs not every shell has, and this refuses *behaviours* not every
+// constructs not every shell has, and this refuses *behaviors* not every
 // shell shares. A script that runs under it depends on nothing the panel
 // disagrees about, which makes it a portability check rather than a runtime —
 // the same role docs/spec/core.md gave strict POSIX.

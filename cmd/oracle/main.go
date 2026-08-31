@@ -3,12 +3,12 @@
 
 // Command oracle records what real shells do, and fails when that changes.
 //
-// It implements no shell behaviour; it runs shell binaries over the corpus in
+// It implements no shell behavior; it runs shell binaries over the corpus in
 // internal/oracle and writes down what happened. That is what makes the specs
 // in docs/spec re-runnable rather than merely asserted.
 //
 //	oracle              # regenerate the measurements and the golden record
-//	oracle -check       # fail if the panel's behaviour moved
+//	oracle -check       # fail if the panel's behavior moved
 package main
 
 import (
@@ -108,7 +108,7 @@ func run(check bool, goldenPath, docPath string) error {
 	}
 	fmt.Fprint(os.Stderr, `
 Drift is not automatically a bug. A shell was upgraded, or a case was
-edited, and the recorded behaviour is no longer what the panel does.
+edited, and the recorded behavior is no longer what the panel does.
 Decide which, then update docs/spec to match and run `+"`make oracle`"+`.
 The spec entries that cite these cases are now the ones to re-read.
 `)

@@ -35,7 +35,7 @@ quotes, operators, or further expansions.
 
 A quote in expanded text is a literal quote. A `$` in expanded text does
 not expand. A `;` in expanded text is not a separator. All four shells
-agree, so this is **core behaviour with no vector field**.
+agree, so this is **core behavior with no vector field**.
 
 This is why `eval` exists: it is the only way to ask for a second pass,
 and it is the whole difference between data and code in a shell.
@@ -92,7 +92,7 @@ The assignment case is the one that surprises people: `x=~` expands
 because assignment values are a tilde-expansion context, so `PATH=~/bin`
 works as intended.
 
-All four agree. **Core behaviour, no vector field.**
+All four agree. **Core behavior, no vector field.**
 
 ## 3-5. Parameter, command and arithmetic expansion
 

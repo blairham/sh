@@ -8,8 +8,8 @@ layers on top and wins on conflict.
 
 This is an **independent implementation**. Never read another shell's
 source while writing code here — not mvdan.cc/sh, not bash, not dash,
-not zsh. Learn behaviour from POSIX, from vendor manuals, and from
-running real shell binaries as oracles; write the behaviour down in
+not zsh. Learn behavior from POSIX, from vendor manuals, and from
+running real shell binaries as oracles; write the behavior down in
 `docs/spec/`; implement from the spec. `CLEANROOM.md` is binding and
 non-negotiable, and breaking it destroys the only thing this repo is
 for.
@@ -24,11 +24,11 @@ bash. Dialects — `posix`, `bash`, `zsh`, `ksh` — are presets over a
 Two claims follow, and both are load-bearing:
 
 1. **Grammar differences are additive.** A dialect adds constructs to
-   the core grammar. This is modelled as a variant set on the parser.
+   the core grammar. This is modeled as a variant set on the parser.
 2. **Semantic differences are conflicts.** Where dialects disagree about
    identical syntax — word splitting, array base, whether a failing
    special builtin is fatal — there is no subset relationship, only a
-   switch. This is modelled as a named field on the semantics vector,
+   switch. This is modeled as a named field on the semantics vector,
    never an inline conditional.
 
 The second is the reason this repository exists. Retrofitting it into a
@@ -50,8 +50,8 @@ refuses what every real shell accepts is a core nobody can write against.
 
     CLEANROOM.md      the rules that keep this independent — read first
     docs/design.md    architecture: the semantics vector and dialects
-    docs/spec/        the wall: behavioural specs, in our own words
-      oracle.md       how behaviour is learned from real binaries
+    docs/spec/        the wall: behavioral specs, in our own words
+      oracle.md       how behavior is learned from real binaries
       shell-matrix.md the measured feature matrix that set the core
     syntax/           lexer, grammar, AST — public
     interp/           execution, the semantics vector, the extension points
@@ -116,7 +116,19 @@ slow for every commit. When in doubt run `make check` *and* `make lint`.
 - **Formatter**: gofumpt, pinned in `go.mod`'s `tool` block, run as
   `go tool gofumpt`.
 - **Linter**: golangci-lint v2, also `go tool`-pinned, config in
-  `.golangci.yml`.
+  `.golangci.yml` — the same file in every Go repository here.
+- **Linters follow dependencies.** The shared config is the base. When a
+  repository adopts a technology, the linter that understands it is added
+  **in the same change as the dependency**, not later and not by someone
+  noticing: protobuf → `protogetter`, `database/sql` → `sqlclosecheck` and
+  `rowserrcheck`, testify → `testifylint`, prometheus → `promlinter`,
+  `log/slog` → `sloglint`, OpenTelemetry → `spancheck`. A dependency
+  arriving without its linter is an incomplete change. The reverse holds
+  too: when the last use of a dependency goes, its linter goes with it.
+- **US English, everywhere.** Comments, documentation, commit messages and
+  identifiers. It is enforced rather than agreed — `misspell` is configured
+  with `locale: US` in `.golangci.yml`, so British spelling fails the build
+  rather than accumulating until someone minds.
 - **Toolchain pin**: `go.mod`'s `go` directive and `.tool-versions`'
   `golang` must match exactly; `go.mod` is authoritative.
 - **Tests**: `go test -race ./...`. Tests never touch real user state —
@@ -238,6 +250,22 @@ is generated on one machine and a runner does not have the same builds of
 the same shells, so some differences are legitimate. A check that is red
 for a legitimate reason is one people learn to ignore. `make check` is the
 gate locally, where the panel matches the record.
+
+## Never work on `main`
+
+Every change starts with a sibling worktree, including a one-line fix:
+
+    git worktree add ../sh-<topic> -b <topic> origin/main
+
+The main checkout stays on `main` and stays clean, so it is always there to
+compare against, to check whether something reproduces without your change,
+and to branch the next piece of work from. Two changes in flight never
+share a working tree.
+
+This is not a preference about tidiness. Working directly on `main` is how
+a local commit ends up rewritten to recover from a mistake, and how a
+half-finished experiment ends up in the same tree as the fix you meant to
+send. Remove the worktree when the pull request opens, not when it merges.
 
 ## Testing
 

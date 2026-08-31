@@ -190,7 +190,7 @@ func (r *Redirect) End() Pos {
 //
 // The three are interleaved in the source and separated here, because a
 // redirection may appear before the command name or between its arguments —
-// `>b echo hi` and `echo one >b two` both work — so they cannot be modelled as
+// `>b echo hi` and `echo one >b two` both work — so they cannot be modeled as
 // a suffix.
 type SimpleCmd struct {
 	Assigns []*Assign

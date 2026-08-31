@@ -23,7 +23,7 @@ func run(t *testing.T, src string, setup func(*Runner)) (out string, status int)
 	}
 	var buf bytes.Buffer
 	// Bash's answers unless a test says otherwise. A test asserting a
-	// *behaviour* has to name a dialect, because the default is the strict
+	// *behavior* has to name a dialect, because the default is the strict
 	// core and the core refuses anything the shells disagree about — which
 	// is exactly what these tests are full of.
 	bash := bash.Semantics()

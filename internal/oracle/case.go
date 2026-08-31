@@ -17,7 +17,7 @@ type Case struct {
 	Category string
 
 	// Snippet is the shell code. It should print something that makes the
-	// behaviour visible — field boundaries as [a][b], counts as n=2 — rather
+	// behavior visible — field boundaries as [a][b], counts as n=2 — rather
 	// than relying on exit status alone.
 	Snippet string
 
@@ -27,7 +27,7 @@ type Case struct {
 	Why string
 
 	// Script runs the snippet from a file instead of -c. Set it only when the
-	// behaviour depends on how input is read, and say why.
+	// behavior depends on how input is read, and say why.
 	Script bool
 
 	// SyntaxError marks a case that does not parse **under the bash
@@ -953,7 +953,7 @@ var Corpus = []Case{
 	{
 		ID: "pat/extended-patterns-are-not-core", SyntaxError: true, Category: "pattern matching",
 		Snippet: `case abc in @(abc|xyz)) echo at;; esac`,
-		Why:     "ksh93 alone accepts them as written; dash and bash report a syntax error and zsh parses but does not match — three behaviours, so not core",
+		Why:     "ksh93 alone accepts them as written; dash and bash report a syntax error and zsh parses but does not match — three behaviors, so not core",
 	},
 	// --- arithmetic -----------------------------------------------------------
 	{

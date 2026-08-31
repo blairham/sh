@@ -12,13 +12,13 @@ import (
 	"github.com/blairham/sh/syntax"
 )
 
-// lockedWriter serialises writes from concurrently running pipeline elements.
+// lockedWriter serializes writes from concurrently running pipeline elements.
 //
-// A real shell hands each element a file descriptor and the kernel serialises
+// A real shell hands each element a file descriptor and the kernel serializes
 // them. An io.Writer supplied by a caller carries no such guarantee — a
 // bytes.Buffer shared by two elements is a data race, which the race detector
 // found here rather than in anything exotic. The shell creates the
-// concurrency, so the shell owns the synchronisation; requiring callers to
+// concurrency, so the shell owns the synchronization; requiring callers to
 // pass thread-safe writers would be a surprising thing to demand of an
 // interface that says io.Writer.
 type lockedWriter struct {

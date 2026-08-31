@@ -54,7 +54,7 @@ Two warts worth not reproducing:
   rows cannot be reordered. Option identity should be a name.
 - **"Not implemented" needs to be a real answer, not a pretence** (#542,
   #575). obi distinguishes implemented, state-only (the bit is tracked;
-  the behaviour belongs to the layer above), and startup facts (login
+  the behavior belongs to the layer above), and startup facts (login
   shell, restricted). Requests to move an unsupported option are refused
   and the shell continues — because applying such an option at startup
   instead made `-vc 'echo hi'` fail where bash succeeds (#426). **An

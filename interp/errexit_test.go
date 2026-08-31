@@ -9,7 +9,7 @@ import (
 	"github.com/blairham/sh/dialect/bash"
 )
 
-// `set -e` is core behaviour: dash, bash, ksh93 and zsh agree on all
+// `set -e` is core behavior: dash, bash, ksh93 and zsh agree on all
 // twenty-four probes measured, including the ones where implementations
 // usually diverge. There is no axis here, which was not the expectation.
 func TestErrExit(t *testing.T) {

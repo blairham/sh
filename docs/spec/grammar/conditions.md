@@ -11,7 +11,7 @@ is measured on bash, ksh93 and zsh.
 
 ## It is a compound command, not a builtin
 
-That single fact explains most of the behaviour, and it is why `[[ … ]]`
+That single fact explains most of the behavior, and it is why `[[ … ]]`
 exists alongside `[ … ]`. Because the shell parses it rather than passing
 words to a program, **the expansions inside it are not split and not
 globbed**:
@@ -45,7 +45,7 @@ Where the pattern arrives through a variable, the panel splits:
 zsh does not treat the *result* of an expansion as a pattern, which is
 the `GlobExpansionResults` axis from `semantics.md` reaching into
 conditions. It is the same rule that stops `x="et*"; echo $x` globbing
-there, applied in a second place — so the axis is one behaviour, not two.
+there, applied in a second place — so the axis is one behavior, not two.
 
 ## `-gt` is numeric and `>` is a string comparison
 

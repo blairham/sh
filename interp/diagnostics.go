@@ -12,7 +12,7 @@ import (
 //
 // It is a third vector beside [Dialect] and [Semantics], and it exists because
 // the first two could not hold what goes in it. A dialect flag says whether a
-// construct parses; a semantics axis says which of two behaviours a construct
+// construct parses; a semantics axis says which of two behaviors a construct
 // has. Neither can say what a shell *prints* when it refuses, or which number
 // it exits with — those are not sides of a question, they are values.
 //
@@ -25,7 +25,7 @@ import (
 // The zero value means "the substrate's own", not "unset". That is the
 // difference between this and [Semantics], and it is deliberate: a semantics
 // axis with no answer is refused, because answering it would claim some
-// shell's behaviour. A status has no such claim to make — the process must
+// shell's behavior. A status has no such claim to make — the process must
 // exit with *some* number, and refusing to choose is not available. `sh` is
 // itself a shell, so where a dialect says nothing, `sh` answers for itself.
 type Diagnostics struct {

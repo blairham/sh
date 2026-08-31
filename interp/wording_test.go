@@ -66,7 +66,7 @@ func TestEachDialectWordsItsOwnFailures(t *testing.T) {
 	}
 }
 
-// TestScriptDiagnosticsNameTheScript is behaviour rather than wording: a shell
+// TestScriptDiagnosticsNameTheScript is behavior rather than wording: a shell
 // running a file reports the file, and ksh93 also changes how it names the
 // line — no location for -c, "line N" for a script.
 func TestScriptDiagnosticsNameTheScript(t *testing.T) {

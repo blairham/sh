@@ -26,7 +26,7 @@ would be unable to pass an argument containing a space.
 `IFS` names the delimiters. Three states, and they are genuinely
 different rather than degrees of the same thing:
 
-| state | behaviour | all four agree |
+| state | behavior | all four agree |
 | --- | --- | --- |
 | unset | default: space, tab, newline | yes |
 | set and non-empty | those characters delimit | yes |
@@ -145,6 +145,6 @@ error in the other three:
 | `SplitCommandSubstitution` | `true` | `true` |
 
 Two fields rather than one, because the panel shows the two moving
-independently. Naming them for the behaviour rather than for zsh is what
+independently. Naming them for the behavior rather than for zsh is what
 `../semantics.md` requires, and here it is also what keeps the second
 field from being silently wrong.

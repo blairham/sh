@@ -60,7 +60,7 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// A background job runs concurrently with everything after it, so it
 	// shares the caller's streams with the foreground. That is the pipeline
 	// race again in a second place: a real shell hands each side a file
-	// descriptor and the kernel serialises them, and an io.Writer carries no
+	// descriptor and the kernel serializes them, and an io.Writer carries no
 	// such guarantee. The shell creates the concurrency, so it guards them.
 	sub.Stdout = &lockedWriter{w: r.stdout()}
 	sub.Stderr = &lockedWriter{w: r.stderr()}

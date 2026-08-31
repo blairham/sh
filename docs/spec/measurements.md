@@ -1013,7 +1013,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   p="a*b"; case "a*b" in $p) printf pattern;; esac; case axb in "$p") printf " literal-matched";; *) printf " literal-no";; esac
   ```
-- `pat/extended-patterns-are-not-core` — ksh93 alone accepts them as written; dash and bash report a syntax error and zsh parses but does not match — three behaviours, so not core
+- `pat/extended-patterns-are-not-core` — ksh93 alone accepts them as written; dash and bash report a syntax error and zsh parses but does not match — three behaviors, so not core
   ```sh
   case abc in @(abc|xyz)) echo at;; esac
   ```

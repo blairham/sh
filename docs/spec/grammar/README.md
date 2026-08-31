@@ -1,7 +1,7 @@
 # Grammar and expansion specs
 
-Per-construct behavioural specs. Each entry follows the shape set out in
-`../README.md`: the construct, the core answer, the measured behaviour of
+Per-construct behavioral specs. Each entry follows the shape set out in
+`../README.md`: the construct, the core answer, the measured behavior of
 the reference panel, a citation, and the semantics-vector field that
 governs it where one does.
 
@@ -27,5 +27,5 @@ re-run rather than trusted.
 `tokenization.md` first: it produces the words everything else consumes,
 and it is where quoting is recorded. Then `expansion.md`, which
 establishes the pipeline, and word splitting is one stage within it. The single most important fact in both documents is
-that the stages are **ordered**, and that most surprising shell behaviour
+that the stages are **ordered**, and that most surprising shell behavior
 is a consequence of that order rather than of any individual stage.

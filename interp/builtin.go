@@ -9,8 +9,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 // builtins are commands the shell runs itself.
@@ -462,6 +464,9 @@ func biTrap(r *Runner, _ context.Context, args []string) int {
 		if r.exitTrap != nil {
 			r.printf("trap -- %s EXIT\n", singleQuote(*r.exitTrap))
 		}
+		for _, name := range sortedKeys(r.sigs().traps) {
+			r.printf("trap -- %s %s\n", singleQuote(r.sigs().traps[name]), name)
+		}
 		return 0
 	}
 	body, conds := args[0], args[1:]
@@ -469,20 +474,56 @@ func biTrap(r *Runner, _ context.Context, args []string) int {
 		r.diagf("trap: usage: trap action condition ...\n")
 		return 2
 	}
+	// Every condition is checked before any is acted on, so a bad one does
+	// not leave half the request applied.
+	type target struct {
+		name string
+		sig  syscall.Signal
+		exit bool
+	}
+	targets := make([]target, 0, len(conds))
 	for _, c := range conds {
-		if !strings.EqualFold(c, "EXIT") && c != "0" {
-			r.diagf("trap: only EXIT is implemented, not %s\n", c)
+		if strings.EqualFold(c, "EXIT") || c == "0" {
+			targets = append(targets, target{exit: true})
+			continue
+		}
+		name, sig, ok := canonicalSignal(c)
+		if !ok {
+			r.diagf("trap: %s: not a signal this shell can catch\n", c)
 			return 2
 		}
+		targets = append(targets, target{name: name, sig: sig})
 	}
-	if body == "-" {
-		r.exitTrap = nil
-		return 0
+	for _, tg := range targets {
+		switch {
+		case tg.exit:
+			if body == "-" {
+				r.exitTrap = nil
+				continue
+			}
+			// A second trap replaces the first rather than adding to it.
+			b := body
+			r.exitTrap = &b
+			r.trapDepth = r.depth
+		case body == "-":
+			r.trapSignal(tg.name, tg.sig, nil)
+		default:
+			b := body
+			r.trapSignal(tg.name, tg.sig, &b)
+		}
 	}
-	// A second trap replaces the first rather than adding to it.
-	r.exitTrap = &body
-	r.trapDepth = r.depth
 	return 0
+}
+
+// sortedKeys lists a map's keys in a stable order, so `trap` prints the same
+// thing twice running.
+func sortedKeys(m map[string]string) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // singleQuote renders text the way `trap` lists it, so the output could be

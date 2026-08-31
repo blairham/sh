@@ -375,6 +375,12 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
+| `trap/signal-handler-runs-and-continues` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
+| `trap/empty-handler-ignores` | `after` | `after` | `after` | `after` | `after` | `after` |
+| `trap/default-signal-terminates` | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* |
+| `trap/reset-restores-the-default` | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* |
+| `trap/numeric-signal-name` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
+| `trap/signal-handler-status-diverges` | `st=0~after` | `st=0~after` | `st=0~after` | `st=0~after` | `st=0~after` | `st=1~after` |
 | `trap/exit-runs-at-the-end` | `hi~bye` | `hi~bye` | `hi~bye` | `hi~bye` | `hi~bye` | `hi~bye` |
 | `trap/exit-sees-the-last-status` | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* |
 | `trap/exit-trap-can-override-the-status` | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* |
@@ -384,6 +390,49 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `exit/status-and-wrapping` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` |
 | `exit/bad-argument-diverges` | `<shell>: 1: exit: Illegal number: -1~[2]~<shell>: 1: exit: Illegal number: abc~[2]` | `[255]~<shell>: line 1: exit: abc: numeric argument required~[2]` | `[255]~<shell>: line 1: exit: abc: numeric argument required~[2]` | `[255]~<shell>: line 0: exit: abc: numeric argument required~[255]` | `[255]~[0]` | `[255]~[0]` |
 
+- `trap/signal-handler-runs-and-continues` — a caught signal runs its handler and the script carries on, which is the whole reason to catch one
+  ```sh
+  trap 'echo caught' INT
+  kill -INT $$
+  echo after
+
+  ```
+- `trap/empty-handler-ignores` — an empty handler ignores the signal, which is different from having no trap at all
+  ```sh
+  trap '' INT
+  kill -INT $$
+  echo after
+
+  ```
+- `trap/default-signal-terminates` — untrapped, INT kills the shell and the status is 128 plus the number
+  ```sh
+  kill -INT $$
+  echo after
+
+  ```
+- `trap/reset-restores-the-default` — `trap -` puts the default back rather than leaving an empty handler
+  ```sh
+  trap 'echo caught' INT
+  trap - INT
+  kill -INT $$
+  echo after
+
+  ```
+- `trap/numeric-signal-name` — a signal can be named by number, and 2 is INT everywhere the panel runs
+  ```sh
+  trap 'echo caught' 2
+  kill -INT $$
+  echo after
+
+  ```
+- `trap/signal-handler-status-diverges` — zsh shows the handler the status from before the command that triggered it; the other three show that command's own
+  ```sh
+  trap 'echo st=$?' INT
+  false
+  kill -INT $$
+  echo after
+
+  ```
 - `trap/exit-runs-at-the-end` — the EXIT trap runs after the script, not where it was set
   ```sh
   trap 'echo bye' EXIT; echo hi

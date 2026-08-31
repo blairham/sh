@@ -4,6 +4,8 @@
 package interp_test
 
 import (
+	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -124,10 +126,39 @@ func TestTrapInAFunctionIsAnAxis(t *testing.T) {
 	}
 }
 
-func TestTrapRefusesSignalsItCannotDeliver(t *testing.T) {
-	// Storing a handler that never fires would be the silent wrong answer.
-	out, st := run(t, `trap 'cleanup' INT`, withSem(bash.Semantics()))
-	if st == 0 || !strings.Contains(out, "only EXIT is implemented") {
-		t.Errorf("got %q/%d", out, st)
+func TestTrapRefusesSignalsItCannotCatch(t *testing.T) {
+	// KILL and STOP cannot be caught by anyone, so accepting them would be
+	// promising something the kernel will not allow.
+	for _, sig := range []string{"KILL", "STOP", "NOSUCHSIGNAL"} {
+		out, st := run(t, `trap 'x' `+sig, withSem(bash.Semantics()))
+		if st == 0 || !strings.Contains(out, "not a signal this shell can catch") {
+			t.Errorf("%s: got %q/%d", sig, out, st)
+		}
 	}
 }
+
+// Signal *delivery* is deliberately not tested in this process.
+//
+// run() executes in-process, so `kill -INT $$` would send a real signal to the
+// test binary and `trap '' INT` would call signal.Ignore for the whole of it —
+// process-global state that outlives the test that set it. The behaviour is
+// covered by the corpus instead, which runs the built shell as its own
+// process against all four panel shells: see the trap/ cases in
+// internal/oracle/case.go.
+
+func TestProcessIDParameter(t *testing.T) {
+	// `$$` is the shell's own process id, and the same inside a subshell:
+	// POSIX says the *invoking* shell's, which is what makes it usable as a
+	// lock name.
+	got, _ := run(t, `echo "[$$]"`, withSem(bash.Semantics()))
+	if got != "["+itoaForTest(os.Getpid())+"]\n" {
+		t.Errorf("got %q, want the process id", got)
+	}
+	inner, _ := run(t, `echo "$$"`, withSem(bash.Semantics()))
+	sub, _ := run(t, `(echo "$$")`, withSem(bash.Semantics()))
+	if inner != sub {
+		t.Errorf("a subshell should report the same id: %q vs %q", inner, sub)
+	}
+}
+
+func itoaForTest(n int) string { return strconv.Itoa(n) }

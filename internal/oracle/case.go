@@ -366,6 +366,42 @@ var Corpus = []Case{
 		Why: "the dangerous case: &> redirects both streams in bash and zsh, and is `&` then `>` in dash and ksh93 — no error, different meaning",
 	},
 	{
+		ID: "trap/signal-handler-runs-and-continues", Category: "traps and exit",
+		Script:  true,
+		Snippet: "trap 'echo caught' INT\nkill -INT $$\necho after\n",
+		Why:     "a caught signal runs its handler and the script carries on, which is the whole reason to catch one",
+	},
+	{
+		ID: "trap/empty-handler-ignores", Category: "traps and exit",
+		Script:  true,
+		Snippet: "trap '' INT\nkill -INT $$\necho after\n",
+		Why:     "an empty handler ignores the signal, which is different from having no trap at all",
+	},
+	{
+		ID: "trap/default-signal-terminates", Category: "traps and exit",
+		Script:  true,
+		Snippet: "kill -INT $$\necho after\n",
+		Why:     "untrapped, INT kills the shell and the status is 128 plus the number",
+	},
+	{
+		ID: "trap/reset-restores-the-default", Category: "traps and exit",
+		Script:  true,
+		Snippet: "trap 'echo caught' INT\ntrap - INT\nkill -INT $$\necho after\n",
+		Why:     "`trap -` puts the default back rather than leaving an empty handler",
+	},
+	{
+		ID: "trap/numeric-signal-name", Category: "traps and exit",
+		Script:  true,
+		Snippet: "trap 'echo caught' 2\nkill -INT $$\necho after\n",
+		Why:     "a signal can be named by number, and 2 is INT everywhere the panel runs",
+	},
+	{
+		ID: "trap/signal-handler-status-diverges", Category: "traps and exit",
+		Script:  true,
+		Snippet: "trap 'echo st=$?' INT\nfalse\nkill -INT $$\necho after\n",
+		Why:     "zsh shows the handler the status from before the command that triggered it; the other three show that command's own",
+	},
+	{
 		ID: "trap/exit-runs-at-the-end", Category: "traps and exit",
 		Snippet: `trap 'echo bye' EXIT; echo hi`,
 		Why:     "the EXIT trap runs after the script, not where it was set",

@@ -169,6 +169,11 @@ type Semantics struct {
 	// with three values; the twenty-three binary ones keep the type that
 	// says so.
 	UnterminatedBracket BracketPolicy
+	// SignalHandlerSeesEarlierStatus shows a signal handler the status from
+	// before the command that triggered it rather than that command's own.
+	// zsh alone: after `false; kill -INT $$`, zsh's handler reads 1 where
+	// the others read 0, because `kill` succeeded.
+	SignalHandlerSeesEarlierStatus Answer
 	// ExitTrapIsFunctionLocal fires an EXIT trap set inside a function when
 	// that function returns, rather than when the script ends. zsh alone; a
 	// trap set at the top level behaves the same everywhere.
@@ -263,6 +268,7 @@ func PosixSemantics() Semantics {
 		BraceExpansion:                     No,
 		BracketCaretNegates:                No,
 		ExitTrapIsFunctionLocal:            No,
+		SignalHandlerSeesEarlierStatus:     No,
 		ExitArgument:                       ExitArgStrict,
 		EqualsExpansion:                    No,
 		ArithInvalidOctalDigitIsError:      Yes,

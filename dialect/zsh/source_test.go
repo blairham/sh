@@ -98,3 +98,40 @@ func TestEvalAndDotAxes(t *testing.T) {
 		t.Errorf("DotCannotOpenStatus = %d, want 127", got)
 	}
 }
+
+// TestExecAxesAndWording records what zsh does about `exec`, which is the most
+// divergent of the four.
+func TestExecAxesAndWording(t *testing.T) {
+	s := zsh.Semantics()
+	// zsh and ksh93 drop the EXIT trap where dash and bash run it.
+	if got := s.ExecFailureRunsExitTrap; got != interp.No {
+		t.Errorf("ExecFailureRunsExitTrap = %v, want No", got)
+	}
+	if got := s.ExecTakesOptions; got != interp.Yes {
+		t.Errorf("ExecTakesOptions = %v, want Yes", got)
+	}
+	d := zsh.Diagnostics()
+	// The only dialect that lowercases every strerror string it quotes.
+	if !d.LowercaseReason {
+		t.Error("LowercaseReason should be true for zsh")
+	}
+	// zsh hands the path to execve rather than checking for a directory, so it
+	// reports the permission error that comes back.
+	if d.ExecDirectoryReason == "" {
+		t.Error("zsh reports execve's own error for a directory")
+	}
+	if d.ExecNamesResolvedPath {
+		t.Error("zsh reports the operand as written, not resolved")
+	}
+}
+
+// TestAFailedExecDropsTheExitTrap is the axis as behavior.
+func TestAFailedExecDropsTheExitTrap(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), `trap "echo TRAP" EXIT; exec nosuchcmd-xyz`)
+	if strings.Contains(out, "TRAP") {
+		t.Errorf("zsh drops the EXIT trap after a failed exec: %q", out)
+	}
+	if st != 127 {
+		t.Errorf("status = %d, want 127", st)
+	}
+}

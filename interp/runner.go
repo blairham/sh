@@ -64,6 +64,26 @@ type Runner struct {
 	// Events receives what happened. Nil discards.
 	Events Sink
 
+	// ReplaceProcess makes `exec cmd` actually replace this process, and nil
+	// — the default — makes it run the command as a child and then stop the
+	// script with its status.
+	//
+	// It is opt-in because this package is a library. A real shell calls
+	// execve and becomes the command; a Runner embedded in some other program
+	// doing that would replace *that* program with whatever a script named,
+	// which is not a shell feature but a way to lose a program. The core's
+	// `cd` declines to call os.Chdir for the same reason and much smaller
+	// stakes.
+	//
+	// A program that *is* a shell says so by setting this, and interp does
+	// not provide the implementation: reaching for syscall.Exec is the
+	// caller's decision to make, in the caller's own code, where it is
+	// visible. cmd/sh and the dialect binaries set it via driver.
+	//
+	// It returns only on failure — a successful replacement does not come
+	// back — and the error it returns is reported as the exec having failed.
+	ReplaceProcess func(path string, argv, env []string) error
+
 	// status is the exit status of the last command run.
 	status int
 	// ctl carries break, continue and return out of a construct. They are
@@ -86,6 +106,10 @@ type Runner struct {
 	// globMissed records that a pattern matched nothing, so the no-match
 	// axis can report it once the whole field is known.
 	globMissed bool
+	// keepRedirs records that this command's redirections outlive it, which
+	// is `exec > log` and nothing else. The dispatcher clears it after acting
+	// on it, so it cannot leak into the next command.
+	keepRedirs bool
 	// custom holds builtins registered by a shell built on this package. A
 	// nil value is an explicit removal.
 	custom map[string]Builtin
@@ -595,6 +619,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 
 	closers, err := r.applyRedirs(ctx, c.Redirs)
 	defer func() {
+		if r.keepRedirs {
+			// `exec > log` is the one command whose redirections outlive it.
+			// Not closing them is the whole of that: the first closer is what
+			// puts the saved streams back, and the rest hold files the script
+			// still needs open.
+			r.keepRedirs = false
+			return
+		}
 		for _, c := range closers {
 			_ = c.Close()
 		}

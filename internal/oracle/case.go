@@ -1180,6 +1180,66 @@ var Corpus = []Case{
 		Why:     "only bash looks in the current directory once PATH has missed; the other three call it not found, so a script relying on it is bash-only",
 	},
 	{
+		ID: "exec/replaces-the-shell", Category: "eval and dot",
+		Snippet: `exec echo replaced; echo NOT-REACHED`,
+		Why:     "the defining property: nothing after a successful exec runs, because in a real shell there is no shell left to run it",
+	},
+	{
+		ID: "exec/no-args-clears-the-status", Category: "eval and dot",
+		Snippet: `false; exec; echo st=$?`,
+		Why:     "exec with neither a command nor a redirection reports success rather than preserving a failure, the same surprise as an empty eval",
+	},
+	{
+		ID: "exec/redirection-is-permanent", Category: "eval and dot",
+		Snippet: `exec > out.txt; echo one; echo two; exec 1>&2; cat out.txt`,
+		Why:     "the other exec: no command, so the redirections outlive the command that made them and the shell carries on",
+	},
+	{
+		ID: "exec/successful-exec-runs-no-exit-trap", Category: "eval and dot",
+		Snippet: `trap "echo TRAP" EXIT; exec echo hi`,
+		Why:     "unanimous, and not a special case in a real shell: the trap died with the process the exec replaced. An implementation standing in a child has to say so explicitly or it prints a TRAP nothing else prints",
+	},
+	{
+		ID: "exec/failed-exec-trap-diverges", Category: "eval and dot",
+		Snippet: `trap "echo TRAP" EXIT; exec nosuchcmd-xyz 2>/dev/null`,
+		Why:     "the failure is the only case with a shell left to decide anything, and the panel splits: dash and bash run the EXIT trap, ksh93 and zsh drop it",
+	},
+	{
+		ID: "exec/missing-command-is-127", Category: "eval and dot",
+		Snippet: `exec nosuchcmd-xyz; echo NOT-REACHED`,
+		Why:     "127 and fatal in every shell, so the status is not an axis even though every shell words it differently",
+	},
+	{
+		ID: "exec/unrunnable-file-is-126", Category: "eval and dot",
+		Snippet: `echo x > ne.sh; chmod -x ne.sh; exec ./ne.sh; echo NOT-REACHED`,
+		Why:     "126 rather than 127: the file is there and will not run, which is a different failure from not finding it and the one an implementation using a single error type gets wrong",
+	},
+	{
+		ID: "exec/directory-reason-diverges", Category: "eval and dot",
+		Snippet: `exec /tmp; echo NOT-REACHED`,
+		Why:     "same failure and same status of 126, two explanations: bash and ksh93 check for a directory and say so, dash and zsh hand it to execve and report the permission error it returns",
+	},
+	{
+		ID: "exec/in-a-subshell-spares-the-parent", Category: "eval and dot",
+		Snippet: `( exec echo in-sub ); echo after`,
+		Why:     "a subshell is a separate process in a real shell, so exec replaces only that one — an implementation whose subshells share a process must not call execve in one, or the parent goes too",
+	},
+	{
+		ID: "exec/in-a-pipeline-spares-the-parent", Category: "eval and dot",
+		Snippet: `exec echo piped | cat; echo after`,
+		Why:     "a pipeline element is a subshell by another name, and the same hazard applies to it",
+	},
+	{
+		ID: "exec/in-a-function-replaces-the-shell", Category: "eval and dot",
+		Snippet: `f() { exec echo in-f; }; f; echo NOT-REACHED`,
+		Why:     "the contrast that makes the subshell cases a finding: a function is not a subshell, so exec inside one does replace the shell",
+	},
+	{
+		ID: "exec/options-diverge", Category: "eval and dot",
+		Snippet: `exec -a myname /bin/sh -c 'echo $0'`,
+		Why:     "bash, ksh93 and zsh read options here and dash reads none, so in dash the leading -a is the name of a command and is reported as not found",
+	},
+	{
 		ID: "dot/source-is-not-in-dash", Category: "eval and dot",
 		Snippet: `echo "echo via-source" > p.sh; source ./p.sh; echo st=$?`,
 		Why:     "`source` is a synonym for `.` in bash, ksh93 and zsh and absent from dash, which is why the substrate keeps `.` and leaves the second name to each dialect",

@@ -120,3 +120,21 @@ func TestDotPassesArgumentsHere(t *testing.T) {
 		t.Errorf("output = %q, want the file to see INNER and the caller OUTER", got)
 	}
 }
+
+// TestExecAxes records what ksh93 does about `exec`.
+func TestExecAxes(t *testing.T) {
+	s := ksh.Semantics()
+	if got := s.ExecFailureRunsExitTrap; got != interp.No {
+		t.Errorf("ExecFailureRunsExitTrap = %v, want No", got)
+	}
+	if got := s.ExecTakesOptions; got != interp.Yes {
+		t.Errorf("ExecTakesOptions = %v, want Yes", got)
+	}
+	out, st := runKsh(t, t.TempDir(), `trap "echo TRAP" EXIT; exec nosuchcmd-xyz`)
+	if strings.Contains(out, "TRAP") {
+		t.Errorf("ksh93 drops the EXIT trap after a failed exec: %q", out)
+	}
+	if st != 127 {
+		t.Errorf("status = %d, want 127", st)
+	}
+}

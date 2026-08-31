@@ -130,3 +130,29 @@ func TestDotHasTwoMessages(t *testing.T) {
 		t.Errorf("output = %q: dash says \"No such file\" here, not the full strerror", out)
 	}
 }
+
+// TestExecAxes records what dash does about `exec`, where it keeps the POSIX
+// answer on one axis and is the odd one out on the other.
+func TestExecAxes(t *testing.T) {
+	s := dash.Semantics()
+	// With bash, and against ksh93 and zsh.
+	if got := s.ExecFailureRunsExitTrap; got != interp.Yes {
+		t.Errorf("ExecFailureRunsExitTrap = %v, want Yes", got)
+	}
+	// Alone: `exec -a name cmd` is a command called "-a" here.
+	if got := s.ExecTakesOptions; got != interp.No {
+		t.Errorf("ExecTakesOptions = %v, want No", got)
+	}
+	out, _ := runDash(t, t.TempDir(), `exec -a myname echo hi`)
+	if strings.Contains(out, "hi") {
+		t.Errorf("dash does not read options here: %q", out)
+	}
+	if !strings.Contains(out, "-a") {
+		t.Errorf("output = %q, want -a reported as the command", out)
+	}
+
+	// dash hands a directory to execve rather than checking first.
+	if dash.Diagnostics().ExecDirectoryReason == "" {
+		t.Error("dash reports execve's own error for a directory")
+	}
+}

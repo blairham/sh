@@ -70,6 +70,17 @@ type Shell struct {
 	// Stdout and Stderr default to the process's. Tests set them; a binary
 	// leaves them alone.
 	Stdout, Stderr io.Writer
+
+	// KeepProcess stops `exec cmd` from replacing this process, which a
+	// binary being a shell does not want and a test does.
+	//
+	// interp defaults to *not* replacing the process, because it is a library
+	// and cannot do that behind an embedder's back. A shell binary is exactly
+	// the case where it is correct, so this is where the default flips: a
+	// driver.Shell replaces its process unless a caller says otherwise. The
+	// field is negative for that reason — the zero value is what a binary
+	// wants.
+	KeepProcess bool
 }
 
 // usageStatus is what a shell exits with when it was invoked wrongly, as
@@ -234,6 +245,13 @@ func (sh Shell) run(src, name string, dg interp.Diagnostics) int {
 		Name:        name,
 		Stdout:      sh.Stdout,
 		Stderr:      sh.Stderr,
+	}
+	if !sh.KeepProcess {
+		// This is a shell, so `exec` may really replace it. interp will not
+		// reach for syscall.Exec itself — it is a library, and a Runner
+		// embedded in some other program must not replace that program — so
+		// the decision is made here, in the binary, where it is visible.
+		r.ReplaceProcess = replaceProcess
 	}
 	if sh.Register != nil {
 		// The dialect's own adjustment: what it adds to or removes from the

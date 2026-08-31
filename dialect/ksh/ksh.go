@@ -43,6 +43,8 @@ func Semantics() interp.Semantics {
 	// differently, which is why they are two axes.
 	s.BuiltinSyntaxErrorFatal = interp.No
 	s.DotPassesArguments = interp.Yes
+	s.ExecFailureRunsExitTrap = interp.No
+	s.ExecTakesOptions = interp.Yes
 	return s
 }
 
@@ -63,6 +65,11 @@ func Diagnostics() interp.Diagnostics {
 		DotCannotOpen:      ".: %[1]s: cannot open [%[2]s]",
 		DotNoOperand:       ".: Usage: . [ options ] name [arg ...]",
 		DotNoOperandStatus: 2,
+		// The reason goes in brackets, as it does for `.`.
+		ExecFailed: "exec: %[1]s: cannot execute [%[2]s]",
+		// Not "cannot execute": ksh93 distinguishes a missing command from one
+		// that will not run, and only the second gets the brackets.
+		ExecNotFound: "exec: %[1]s: not found",
 	}
 }
 

@@ -52,6 +52,11 @@ func Diagnostics() interp.Diagnostics {
 		// safe.
 		DotCannotOpen: ".: cannot open %[1]s: No such file",
 		DotNotFound:   ".: %[1]s: not found",
+		ExecFailed:    "exec: %[1]s: %[2]s",
+		ExecNotFound:  "exec: %[1]s: not found",
+		// dash hands the path to execve rather than checking first, so a
+		// directory comes back as a permission error.
+		ExecDirectoryReason: "Permission denied",
 	}
 }
 

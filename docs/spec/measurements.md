@@ -1190,6 +1190,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `dot/missing-file-diverges` | `<shell>: 1: .: cannot open ./nonexistent-xyz.sh: No such file` *(status 2)* | `<shell>: line 1: ./nonexistent-xyz.sh: No such file or directory~REACHED st=1` | `<shell>: line 1: ./nonexistent-xyz.sh: No such file or directory` *(status 1)* | `<shell>: ./nonexistent-xyz.sh: No such file or directory~REACHED st=1` | `<shell>: .: ./nonexistent-xyz.sh: cannot open [No such file or directory]` *(status 1)* | `<shell>:.:1: no such file or directory: ./nonexistent-xyz.sh~REACHED st=127` |
 | `dot/no-operand-diverges` | `REACHED st=0` | `<shell>: line 1: .: filename argument required~.: usage: . [-p path] filename [arguments]~REACHED st=2` | `<shell>: line 1: .: filename argument required~.: usage: . [-p path] filename [arguments]` *(status 2)* | `<shell>: line 0: .: filename argument required~.: usage: . filename [arguments]~REACHED st=2` | `Usage: . [ options ] name [arg ...]` *(status 2)* | `<shell>:.:1: not enough arguments~REACHED st=1` |
 | `dot/cwd-fallback-is-bash-only` | `<shell>: 1: .: fb.sh: not found` *(status 2)* | `cwd-hit~st=0` | `<shell>: line 1: .: fb.sh: file not found` *(status 1)* | `cwd-hit~st=0` | `<shell>: .: fb.sh: cannot open [No such file or directory]` *(status 1)* | `<shell>:.:1: no such file or directory: fb.sh~st=127` |
+| `exec/replaces-the-shell` | `replaced` | `replaced` | `replaced` | `replaced` | `replaced` | `replaced` |
+| `exec/no-args-clears-the-status` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `exec/redirection-is-permanent` | `one~two` | `one~two` | `one~two` | `one~two` | `one~two` | `one~two` |
+| `exec/successful-exec-runs-no-exit-trap` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
+| `exec/failed-exec-trap-diverges` | `TRAP` *(status 127)* | `TRAP` *(status 127)* | `TRAP` *(status 127)* | `TRAP` | *(no output, status 127)* | *(no output, status 127)* |
+| `exec/missing-command-is-127` | `<shell>: 1: exec: nosuchcmd-xyz: not found` *(status 127)* | `<shell>: line 1: exec: nosuchcmd-xyz: not found` *(status 127)* | `<shell>: line 1: exec: nosuchcmd-xyz: not found` *(status 127)* | `<shell>: line 0: exec: nosuchcmd-xyz: not found` *(status 127)* | `<shell>: exec: nosuchcmd-xyz: not found` *(status 127)* | `<shell>:1: command not found: nosuchcmd-xyz` *(status 127)* |
+| `exec/unrunnable-file-is-126` | `<shell>: 1: exec: ./ne.sh: Permission denied` *(status 126)* | `<shell>: line 1: <tmp>/ne.sh: Permission denied` *(status 126)* | `<shell>: line 1: <tmp>/ne.sh: Permission denied` *(status 126)* | `<shell>: <tmp>/ne.sh: Permission denied~<shell>: line 0: exec: <tmp>/ne.sh: cannot execute: Undefined error: 0` *(status 126)* | `<shell>: exec: ./ne.sh: cannot execute [Permission denied]` *(status 126)* | `<shell>:1: permission denied: ./ne.sh` *(status 126)* |
+| `exec/directory-reason-diverges` | `<shell>: 1: exec: /tmp: Permission denied` *(status 126)* | `<shell>: line 1: /tmp: Is a directory` *(status 126)* | `<shell>: line 1: /tmp: Is a directory` *(status 126)* | `<shell>: /tmp: is a directory~<shell>: line 0: exec: /tmp: cannot execute: Undefined error: 0` *(status 126)* | `<shell>: exec: /tmp: cannot execute [Is a directory]` *(status 126)* | `<shell>:1: permission denied: /tmp` *(status 126)* |
+| `exec/in-a-subshell-spares-the-parent` | `in-sub~after` | `in-sub~after` | `in-sub~after` | `in-sub~after` | `in-sub~after` | `in-sub~after` |
+| `exec/in-a-pipeline-spares-the-parent` | `piped~after` | `piped~after` | `piped~after` | `piped~after` | `piped~after` | `piped~after` |
+| `exec/in-a-function-replaces-the-shell` | `in-f` | `in-f` | `in-f` | `in-f` | `in-f` | `in-f` |
+| `exec/options-diverge` | `<shell>: 1: exec: -a: not found` *(status 127)* | `myname` | `myname` | `myname` | `myname` | `myname` |
 | `dot/source-is-not-in-dash` | `<shell>: 1: source: not found~st=127` | `via-source~st=0` | `via-source~st=0` | `via-source~st=0` | `via-source~st=0` | `via-source~st=0` |
 
 - `eval/runs-in-the-calling-shell` — the reason eval is a builtin and not a command: a child process could not change this shell's variable
@@ -1255,6 +1267,54 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `dot/cwd-fallback-is-bash-only` — only bash looks in the current directory once PATH has missed; the other three call it not found, so a script relying on it is bash-only
   ```sh
   echo "echo cwd-hit" > fb.sh; PATH=/usr/bin:/bin; . fb.sh; echo st=$?
+  ```
+- `exec/replaces-the-shell` — the defining property: nothing after a successful exec runs, because in a real shell there is no shell left to run it
+  ```sh
+  exec echo replaced; echo NOT-REACHED
+  ```
+- `exec/no-args-clears-the-status` — exec with neither a command nor a redirection reports success rather than preserving a failure, the same surprise as an empty eval
+  ```sh
+  false; exec; echo st=$?
+  ```
+- `exec/redirection-is-permanent` — the other exec: no command, so the redirections outlive the command that made them and the shell carries on
+  ```sh
+  exec > out.txt; echo one; echo two; exec 1>&2; cat out.txt
+  ```
+- `exec/successful-exec-runs-no-exit-trap` — unanimous, and not a special case in a real shell: the trap died with the process the exec replaced. An implementation standing in a child has to say so explicitly or it prints a TRAP nothing else prints
+  ```sh
+  trap "echo TRAP" EXIT; exec echo hi
+  ```
+- `exec/failed-exec-trap-diverges` — the failure is the only case with a shell left to decide anything, and the panel splits: dash and bash run the EXIT trap, ksh93 and zsh drop it
+  ```sh
+  trap "echo TRAP" EXIT; exec nosuchcmd-xyz 2>/dev/null
+  ```
+- `exec/missing-command-is-127` — 127 and fatal in every shell, so the status is not an axis even though every shell words it differently
+  ```sh
+  exec nosuchcmd-xyz; echo NOT-REACHED
+  ```
+- `exec/unrunnable-file-is-126` — 126 rather than 127: the file is there and will not run, which is a different failure from not finding it and the one an implementation using a single error type gets wrong
+  ```sh
+  echo x > ne.sh; chmod -x ne.sh; exec ./ne.sh; echo NOT-REACHED
+  ```
+- `exec/directory-reason-diverges` — same failure and same status of 126, two explanations: bash and ksh93 check for a directory and say so, dash and zsh hand it to execve and report the permission error it returns
+  ```sh
+  exec /tmp; echo NOT-REACHED
+  ```
+- `exec/in-a-subshell-spares-the-parent` — a subshell is a separate process in a real shell, so exec replaces only that one — an implementation whose subshells share a process must not call execve in one, or the parent goes too
+  ```sh
+  ( exec echo in-sub ); echo after
+  ```
+- `exec/in-a-pipeline-spares-the-parent` — a pipeline element is a subshell by another name, and the same hazard applies to it
+  ```sh
+  exec echo piped | cat; echo after
+  ```
+- `exec/in-a-function-replaces-the-shell` — the contrast that makes the subshell cases a finding: a function is not a subshell, so exec inside one does replace the shell
+  ```sh
+  f() { exec echo in-f; }; f; echo NOT-REACHED
+  ```
+- `exec/options-diverge` — bash, ksh93 and zsh read options here and dash reads none, so in dash the leading -a is the name of a command and is reported as not found
+  ```sh
+  exec -a myname /bin/sh -c 'echo $0'
   ```
 - `dot/source-is-not-in-dash` — `source` is a synonym for `.` in bash, ksh93 and zsh and absent from dash, which is why the substrate keeps `.` and leaves the second name to each dialect
   ```sh

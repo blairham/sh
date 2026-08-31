@@ -38,6 +38,10 @@ func Semantics() interp.Semantics {
 	s.BuiltinSyntaxErrorFatal = interp.No
 	s.DotMissingFileFatal = interp.No
 	s.DotPassesArguments = interp.Yes
+	// zsh and ksh93 drop the EXIT trap when an exec fails; dash and bash
+	// still run it.
+	s.ExecFailureRunsExitTrap = interp.No
+	s.ExecTakesOptions = interp.Yes
 	s.UnterminatedBracket = interp.BracketBadPattern
 	s.ExitTrapIsFunctionLocal = interp.Yes
 	s.SignalHandlerSeesEarlierStatus = interp.Yes
@@ -63,6 +67,17 @@ func Diagnostics() interp.Diagnostics {
 		DotCannotOpenStatus:      127,
 		DotNoOperand:             ".: not enough arguments",
 		DotNoOperandStatus:       1,
+		// zsh leads with the reason, lowercased, and names the command after
+		// it — the reverse of the other three.
+		ExecFailed: "%[2]s: %[1]s",
+		// zsh says "command not found" for a bare name it could not resolve,
+		// where the other three say "not found".
+		ExecNotFound:     "command not found: %[1]s",
+		ExecPathNotFound: "no such file or directory: %[1]s",
+		// zsh lowercases every strerror string it quotes, where the other
+		// three print the C string as it comes.
+		LowercaseReason:     true,
+		ExecDirectoryReason: "Permission denied",
 	}
 }
 

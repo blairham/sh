@@ -30,3 +30,7 @@ func Diagnostics() interp.Diagnostics {
 		SyntaxErrorStatus: 2,
 	}
 }
+
+// Apply makes any adjustment that is not a vector value. dash needs none:
+// it has `local`, which is the only builtin the panel disagrees about.
+func Apply(_ *interp.Runner) {}

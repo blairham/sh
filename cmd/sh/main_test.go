@@ -14,11 +14,11 @@ func TestPickDialect(t *testing.T) {
 	// A name resolves to a grammar, a semantics *and* a diagnostics,
 	// because they answer different questions about the same shell.
 	for _, name := range []string{"core", "posix", "bash", "zsh", "ksh", "dash"} {
-		if _, _, _, err := pickDialect(name); err != nil {
+		if _, _, _, _, err := pickDialect(name); err != nil {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
-	if _, _, _, err := pickDialect("nosuchshell"); err == nil {
+	if _, _, _, _, err := pickDialect("nosuchshell"); err == nil {
 		t.Error("an unknown dialect must be refused rather than defaulted")
 	}
 
@@ -26,10 +26,10 @@ func TestPickDialect(t *testing.T) {
 	// three rather than one name. bash and zsh disagree on a semantics axis
 	// and on a diagnostic; bash and dash agree on the diagnostic and
 	// disagree on semantics.
-	_, bashSem, bashDiag, _ := pickDialect("bash")
-	_, zshSem, zshDiag, _ := pickDialect("zsh")
-	_, dashSem, dashDiag, _ := pickDialect("dash")
-	_, _, kshDiag, _ := pickDialect("ksh")
+	_, bashSem, bashDiag, _, _ := pickDialect("bash")
+	_, zshSem, zshDiag, _, _ := pickDialect("zsh")
+	_, dashSem, dashDiag, _, _ := pickDialect("dash")
+	_, _, kshDiag, _, _ := pickDialect("ksh")
 	if bashSem.ArithLeadingZeroIsOctal == zshSem.ArithLeadingZeroIsOctal {
 		t.Error("bash and zsh should disagree about whether a leading zero is octal")
 	}

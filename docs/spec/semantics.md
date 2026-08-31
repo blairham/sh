@@ -168,6 +168,28 @@ two separate quirks. It is one behaviour observed twice, and an
 implementation with two switches for it will eventually set them
 inconsistently.
 
+## A value in a preset is not an implementation either
+
+`LastPipelineElementInCurrentShell` had a value in all five presets and
+nothing read it. `runPipeline` carried a comment saying so — "this takes
+the majority until the interpreter carries a dialect" — written before the
+interpreter carried one, and left behind when it did.
+
+Implementing it raised a question the other axes do not. The answer is
+unobservable through an external command: `echo x | cat` behaves the same
+either way, and refusing every pipeline for want of a dialect would make
+the core useless. So the axis is asked only when the last element is a
+builtin, a function, or a group — something that can touch the shell.
+That is the rule `BracketCaretNegates` already uses: ask about the
+construct in front of you, not about every construct sharing a code path.
+
+Which builtins a shell *has* is not on this list and should not be. It is
+neither grammar nor a conflict of meaning: ksh93 simply lacks `local` and
+reports it as a command that was not found. A dialect says so through the
+extension seam — `dialect/ksh` calls `Unregister("local")` — which is the
+same mechanism anything built on the substrate would use, the difference
+being that this one takes something away.
+
 ## A row in this table is not an implementation
 
 `[^abc]` negates was measured, written into the table above, and never

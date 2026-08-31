@@ -41,3 +41,7 @@ func Diagnostics() interp.Diagnostics {
 		SyntaxErrorStatus: 2,
 	}
 }
+
+// Apply makes any adjustment that is not a vector value. bash needs none:
+// every builtin the substrate provides, bash also has.
+func Apply(_ *interp.Runner) {}

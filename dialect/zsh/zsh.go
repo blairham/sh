@@ -44,3 +44,6 @@ func Diagnostics() interp.Diagnostics {
 		SyntaxErrorStatus: 1,
 	}
 }
+
+// Apply makes any adjustment that is not a vector value. zsh needs none.
+func Apply(_ *interp.Runner) {}

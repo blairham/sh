@@ -366,6 +366,26 @@ var Corpus = []Case{
 		Why: "the dangerous case: &> redirects both streams in bash and zsh, and is `&` then `>` in dash and ksh93 — no error, different meaning",
 	},
 	{
+		ID: "redir/dup-to-stderr", Category: "redirection",
+		Snippet: `{ echo hi >&2; } 2>/dev/null; echo done`,
+		Why:     "`>&2` sends to stderr, so discarding stderr discards it — the check that the duplication happened rather than the word being an argument",
+	},
+	{
+		ID: "redir/merge-then-file", Category: "redirection",
+		Snippet: `{ echo out; echo err >&2; } >f 2>&1; printf "[%s]" "$(cat f)"`,
+		Why:     "both streams reach the file: stdout is redirected first, then stderr is pointed at where stdout now goes",
+	},
+	{
+		ID: "redir/file-then-merge", Category: "redirection",
+		Snippet: `{ echo out; echo err >&2; } 2>&1 >f; printf "[%s]" "$(cat f)"`,
+		Why:     "the same two operators in the other order put only stdout in the file, because 2>&1 copied stdout before it was redirected — the classic one, and unanimous",
+	},
+	{
+		ID: "redir/multios-is-zsh-only", Category: "redirection",
+		Snippet: `echo x >a >b; printf "[%s][%s]" "$(cat a 2>/dev/null)" "$(cat b 2>/dev/null)"`,
+		Why:     "zsh writes to every target and the others only to the last, with no error either way — the &> failure mode in a redirection, and not implemented here",
+	},
+	{
 		ID: "token/clobber-override", Category: "tokenization",
 		Snippet: `set -C; echo one>b; echo two>|b; printf "[%s]" "$(cat b)"`,
 		Why:     ">| overrides noclobber with the same meaning everywhere, unlike &>",

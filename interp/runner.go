@@ -167,6 +167,15 @@ func (r *Runner) stdout() io.Writer {
 	return r.Stdout
 }
 
+// stdin is the shell's input, defaulting to the process's own — the reading
+// half of what stdout and stderr already do.
+func (r *Runner) stdin() io.Reader {
+	if r.Stdin == nil {
+		return os.Stdin
+	}
+	return r.Stdin
+}
+
 func (r *Runner) stderr() io.Writer {
 	if r.Stderr == nil {
 		return os.Stderr

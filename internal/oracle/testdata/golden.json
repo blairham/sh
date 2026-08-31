@@ -3930,6 +3930,134 @@
         "TimedOut": false
       }
     },
+    "redir/dup-to-stderr": {
+      "bash": {
+        "Output": "done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "done",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/file-then-merge": {
+      "bash": {
+        "Output": "err~[out]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "err~[out]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "err~[out]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "err~[out]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "err~[out]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "err~[out]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/merge-then-file": {
+      "bash": {
+        "Output": "[out~err]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[out~err]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[out~err]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[out~err]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[out~err]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[out~err]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/multios-is-zsh-only": {
+      "bash": {
+        "Output": "[][x]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[][x]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[][x]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[][x]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[][x]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[x][x]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "shape/case-empty-body-and-no-match": {
       "bash": {
         "Output": "empty=0~nomatch=0",

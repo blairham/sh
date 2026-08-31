@@ -29,6 +29,19 @@ const (
 	controlExit
 )
 
+// condList runs a list whose status is being *tested* rather than required to
+// succeed, so `set -e` does not fire inside it.
+//
+// The suppression is a counter on the runner, so it reaches whatever the
+// condition calls: a function invoked from an `if` has it suppressed all the
+// way down. That is measured and unanimous, and it is the part of `set -e`
+// most implementations get wrong.
+func (r *Runner) condList(ctx context.Context, list []*syntax.Stmt) error {
+	r.tested++
+	defer func() { r.tested-- }()
+	return r.runList(ctx, list)
+}
+
 // runList executes a list of statements, stopping early if one of them
 // transferred control.
 func (r *Runner) runList(ctx context.Context, list []*syntax.Stmt) error {
@@ -66,14 +79,14 @@ func (r *Runner) ifClause(ctx context.Context, c *syntax.IfClause) error {
 	return r.withRedirs(ctx, c.Redirs, func() error {
 		// The condition is a *list* judged by its last command, which is why
 		// this runs the whole thing and then looks at the status.
-		if err := r.runList(ctx, c.Cond); err != nil {
+		if err := r.condList(ctx, c.Cond); err != nil {
 			return err
 		}
 		if r.status == 0 {
 			return r.runList(ctx, c.Then)
 		}
 		for _, e := range c.Elifs {
-			if err := r.runList(ctx, e.Cond); err != nil {
+			if err := r.condList(ctx, e.Cond); err != nil {
 				return err
 			}
 			if r.status == 0 {
@@ -95,7 +108,7 @@ func (r *Runner) loop(ctx context.Context, c *syntax.LoopClause) error {
 		// loop rather than left as whatever the condition produced.
 		r.status = 0
 		for {
-			if err := r.runList(ctx, c.Cond); err != nil {
+			if err := r.condList(ctx, c.Cond); err != nil {
 				return err
 			}
 			done := r.status == 0

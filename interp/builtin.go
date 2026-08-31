@@ -115,6 +115,8 @@ func biSet(r *Runner, _ context.Context, args []string) int {
 			switch opt {
 			case 'C':
 				r.noclobber = on
+			case 'e':
+				r.errexit = on
 			default:
 				r.diagf("set: -%c is not implemented\n", opt)
 				return 2

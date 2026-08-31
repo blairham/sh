@@ -2074,6 +2074,198 @@
         "TimedOut": false
       }
     },
+    "errexit/assignment-takes-the-substitution": {
+      "bash": {
+        "Output": "",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "errexit/condition-is-exempt": {
+      "bash": {
+        "Output": "reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "reached",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "errexit/exemption-reaches-into-functions": {
+      "bash": {
+        "Output": "inner~reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "inner~reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "inner~reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "inner~reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "inner~reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "inner~reached",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "errexit/failure-ends-the-script": {
+      "bash": {
+        "Output": "",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "errexit/negation-is-exempt": {
+      "bash": {
+        "Output": "reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "reached",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "errexit/only-the-last-of-a-chain": {
+      "bash": {
+        "Output": "one",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "one",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "one",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "one",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "one",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "one",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "expand/brace": {
       "bash": {
         "Output": "1 2 3",

@@ -366,6 +366,36 @@ var Corpus = []Case{
 		Why: "the dangerous case: &> redirects both streams in bash and zsh, and is `&` then `>` in dash and ksh93 — no error, different meaning",
 	},
 	{
+		ID: "errexit/failure-ends-the-script", Category: "shell options",
+		Snippet: `set -e; false; echo reached`,
+		Why:     "the whole point of -e, and the baseline the exemptions are measured against",
+	},
+	{
+		ID: "errexit/condition-is-exempt", Category: "shell options",
+		Snippet: `set -e; if false; then :; fi; while false; do :; done; echo reached`,
+		Why:     "a command whose status is being tested is not a failure; -e would otherwise make `if` useless",
+	},
+	{
+		ID: "errexit/exemption-reaches-into-functions", Category: "shell options",
+		Snippet: `set -e; f() { false; echo inner; }; if f; then :; fi; echo reached`,
+		Why:     "the subtle one: the exemption is inherited, so the function keeps going past its own failure — unanimous, and the part most implementations get wrong",
+	},
+	{
+		ID: "errexit/only-the-last-of-a-chain", Category: "shell options",
+		Snippet: `set -e; false && :; echo one; : && false; echo two`,
+		Why:     "-e judges the final operand of an && chain and nothing before it, so the first line survives and the second does not",
+	},
+	{
+		ID: "errexit/negation-is-exempt", Category: "shell options",
+		Snippet: `set -e; ! true; echo reached`,
+		Why:     "`!` tests a status rather than requiring success, so a failing negation is not a failure",
+	},
+	{
+		ID: "errexit/assignment-takes-the-substitution", Category: "shell options",
+		Snippet: `set -e; x=$(false); echo reached`,
+		Why:     "an assignment reports what the substitution reported, so this ends the script where `echo \"$(false)\"` does not",
+	},
+	{
 		ID: "redir/dup-to-stderr", Category: "redirection",
 		Snippet: `{ echo hi >&2; } 2>/dev/null; echo done`,
 		Why:     "`>&2` sends to stderr, so discarding stderr discards it — the check that the duplication happened rather than the word being an argument",

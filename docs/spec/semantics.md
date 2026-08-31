@@ -170,6 +170,21 @@ two separate quirks. It is one behaviour observed twice, and an
 implementation with two switches for it will eventually set them
 inconsistently.
 
+## A prediction that measurement contradicted
+
+`set -e` was expected to produce axes. Its exemptions are where shells are
+said to differ, and the survey that chose it as the next piece said so.
+
+Twenty-four probes across dash, bash, ksh93 and zsh: **no divergence at
+all**, byte for byte, including the two that implementations usually get
+wrong. The exemption for a tested status is inherited into functions and
+all the way down anything they call, and an assignment reports what its
+command substitution reported. Both unanimous.
+
+So `set -e` is core behaviour and got no axis. Worth recording because the
+method is supposed to cut both ways: measuring is what stops a divergence
+being invented as readily as it stops one being missed.
+
 ## A divergence measured and not implemented
 
 zsh writes to *every* redirection target where the others write only to the

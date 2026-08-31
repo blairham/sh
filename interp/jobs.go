@@ -68,7 +68,7 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		// Errors inside a background job are reported where the job runs;
 		// there is nowhere to return them to.
 		if err := sub.expr(ctx, st.Expr); err != nil {
-			sub.errf("sh: %v\n", err)
+			sub.diagf("%v\n", err)
 			job.markReady()
 			job.finish(1)
 			return
@@ -108,7 +108,7 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 	for _, a := range args {
 		pid, ok := atoi(a)
 		if !ok {
-			r.errf("sh: wait: %s: not a pid\n", a)
+			r.diagf("wait: %s: not a pid\n", a)
 			return 2
 		}
 		for _, j := range r.jobs {

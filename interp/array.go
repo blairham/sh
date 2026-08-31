@@ -41,7 +41,7 @@ func (r *Runner) setArrayElem(name string, idx int, value string) {
 	}
 	i := idx - r.arrayBase()
 	if i < 0 {
-		r.errf("sh: %s[%d]: index out of range\n", name, idx)
+		r.diagf("%s[%d]: index out of range\n", name, idx)
 		return
 	}
 	cur := r.Arrays[name]

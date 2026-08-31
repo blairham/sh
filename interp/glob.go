@@ -115,7 +115,7 @@ func (r *Runner) glob(field string) []string {
 			// An error, which in zsh means the command does not run and the
 			// script stops. Reporting it and then passing the pattern
 			// through was the same report-then-continue bug as the others.
-			r.fatal("sh: no matches found: %s\n", globUnescape(field))
+			r.fatal("no matches found: %s\n", globUnescape(field))
 		}
 		r.globMissed = false
 	}()

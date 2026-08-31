@@ -33,7 +33,7 @@ func (r *Runner) commandSubst(ctx context.Context, src string) string {
 		// time, so the same outcome has to be produced deliberately. Without
 		// it the diagnostic appeared and the next command ran regardless,
 		// which is the shape this package keeps finding.
-		r.errf("sh: %v\n", err)
+		r.diagf("%v\n", err)
 		r.status = r.diag().SyntaxError()
 		r.ctl = controlExit
 		return ""
@@ -43,7 +43,7 @@ func (r *Runner) commandSubst(ctx context.Context, src string) string {
 	sub := r.clone()
 	sub.Stdout = &out
 	if _, err := sub.Run(ctx, f); err != nil {
-		r.errf("sh: %v\n", err)
+		r.diagf("%v\n", err)
 		return ""
 	}
 	// The status of a substitution is the status of what ran inside it, which

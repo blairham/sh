@@ -23,7 +23,7 @@ func (r *Runner) testClause(ctx context.Context, c *syntax.TestClause) error {
 			return nil
 		}
 		if err != nil {
-			r.errf("sh: %v\n", err)
+			r.diagf("%v\n", err)
 			r.status = 2
 			return nil
 		}

@@ -93,7 +93,7 @@ func biFalse(*Runner, context.Context, []string) int { return 1 }
 // rather than guessed at.
 func biSet(r *Runner, _ context.Context, args []string) int {
 	if len(args) == 0 {
-		r.errf("sh: set: listing variables is not implemented yet\n")
+		r.diagf("set: listing variables is not implemented yet\n")
 		return 2
 	}
 	// Options come before `--`, and each is a letter that may be turned on
@@ -116,7 +116,7 @@ func biSet(r *Runner, _ context.Context, args []string) int {
 			case 'C':
 				r.noclobber = on
 			default:
-				r.errf("sh: set: -%c is not implemented\n", opt)
+				r.diagf("set: -%c is not implemented\n", opt)
 				return 2
 			}
 		}
@@ -147,7 +147,7 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 	}
 	for _, a := range args {
 		if a == "-p" {
-			r.errf("sh: export: -p is not implemented yet\n")
+			r.diagf("export: -p is not implemented yet\n")
 			return 2
 		}
 		name, value, hasValue := strings.Cut(a, "=")
@@ -169,7 +169,7 @@ func biShift(r *Runner, _ context.Context, args []string) int {
 	if len(args) > 0 {
 		v, ok := atoi(args[0])
 		if !ok {
-			r.errf("sh: shift: %s: numeric argument required\n", args[0])
+			r.diagf("shift: %s: numeric argument required\n", args[0])
 			return 2
 		}
 		n = v
@@ -179,7 +179,7 @@ func biShift(r *Runner, _ context.Context, args []string) int {
 		if r.ask(r.sem().ShiftPastEndFatal, "shift past the end being fatal") {
 			// controlReturn only unwound a function, so at the top level the
 			// script carried on past an error the shell calls fatal.
-			r.fatal("sh: shift: can't shift that many\n")
+			r.fatal("shift: can't shift that many\n")
 			return r.status
 		}
 		return 1
@@ -257,14 +257,14 @@ func biCd(r *Runner, _ context.Context, args []string) int {
 	case "":
 		dir, _ = r.getVar("HOME")
 		if dir == "" {
-			r.errf("sh: cd: HOME not set\n")
+			r.diagf("cd: HOME not set\n")
 			return 1
 		}
 	case "-":
 		// The previous directory, which is why cd records one.
 		dir, _ = r.getVar("OLDPWD")
 		if dir == "" {
-			r.errf("sh: cd: OLDPWD not set\n")
+			r.diagf("cd: OLDPWD not set\n")
 			return 1
 		}
 	}
@@ -275,7 +275,7 @@ func biCd(r *Runner, _ context.Context, args []string) int {
 	}
 	info, err := os.Stat(dir)
 	if err != nil || !info.IsDir() {
-		r.errf("sh: cd: %s: no such directory\n", args[0])
+		r.diagf("cd: %s: no such directory\n", args[0])
 		return 1
 	}
 	// Only the runner's own directory moves. Calling os.Chdir would move the
@@ -370,7 +370,7 @@ func (r *Runner) readLine(raw bool) (string, error) {
 // which of them to put back.
 func biLocal(r *Runner, _ context.Context, args []string) int {
 	if len(r.scopes) == 0 {
-		r.errf("sh: local: can only be used in a function\n")
+		r.diagf("local: can only be used in a function\n")
 		return 1
 	}
 	sc := r.scopes[len(r.scopes)-1]

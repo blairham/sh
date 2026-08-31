@@ -25,5 +25,8 @@ func Semantics() interp.Semantics {
 
 // Diagnostics is how dash reports failure.
 func Diagnostics() interp.Diagnostics {
-	return interp.Diagnostics{SyntaxErrorStatus: 2}
+	return interp.Diagnostics{
+		Location:          interp.LocationColonLine,
+		SyntaxErrorStatus: 2,
+	}
 }

@@ -39,5 +39,8 @@ func Semantics() interp.Semantics {
 
 // Diagnostics is how zsh reports failure.
 func Diagnostics() interp.Diagnostics {
-	return interp.Diagnostics{SyntaxErrorStatus: 1}
+	return interp.Diagnostics{
+		Location:          interp.LocationTightLine,
+		SyntaxErrorStatus: 1,
+	}
 }

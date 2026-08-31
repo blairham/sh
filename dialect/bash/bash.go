@@ -36,5 +36,8 @@ func Semantics() interp.Semantics {
 
 // Diagnostics is how bash 5 reports failure.
 func Diagnostics() interp.Diagnostics {
-	return interp.Diagnostics{SyntaxErrorStatus: 2}
+	return interp.Diagnostics{
+		Location:          interp.LocationLineWord,
+		SyntaxErrorStatus: 2,
+	}
 }

@@ -188,7 +188,7 @@ func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
 	case syntax.ArithSubst:
 		v, err := r.evalArith(s.Arith)
 		if err != nil {
-			r.errf("sh: %v\n", err)
+			r.diagf("%v\n", err)
 			// The command must not run: `echo $((1/0))` fails in every shell
 			// in the panel rather than echoing an empty string.
 			r.expandErr = true

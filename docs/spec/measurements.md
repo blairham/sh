@@ -371,6 +371,32 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   set -C; echo one>b; echo two>|b; printf "[%s]" "$(cat b)"
   ```
 
+## redirection
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `redir/dup-to-stderr` | `done` | `done` | `done` | `done` | `done` | `done` |
+| `redir/merge-then-file` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` |
+| `redir/file-then-merge` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` |
+| `redir/multios-is-zsh-only` | `[][x]` | `[][x]` | `[][x]` | `[][x]` | `[][x]` | `[x][x]` |
+
+- `redir/dup-to-stderr` — `>&2` sends to stderr, so discarding stderr discards it — the check that the duplication happened rather than the word being an argument
+  ```sh
+  { echo hi >&2; } 2>/dev/null; echo done
+  ```
+- `redir/merge-then-file` — both streams reach the file: stdout is redirected first, then stderr is pointed at where stdout now goes
+  ```sh
+  { echo out; echo err >&2; } >f 2>&1; printf "[%s]" "$(cat f)"
+  ```
+- `redir/file-then-merge` — the same two operators in the other order put only stdout in the file, because 2>&1 copied stdout before it was redirected — the classic one, and unanimous
+  ```sh
+  { echo out; echo err >&2; } 2>&1 >f; printf "[%s]" "$(cat f)"
+  ```
+- `redir/multios-is-zsh-only` — zsh writes to every target and the others only to the last, with no error either way — the &> failure mode in a redirection, and not implemented here
+  ```sh
+  echo x >a >b; printf "[%s][%s]" "$(cat a 2>/dev/null)" "$(cat b 2>/dev/null)"
+  ```
+
 ## command language
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |

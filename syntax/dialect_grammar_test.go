@@ -122,3 +122,15 @@ func TestSelectKeepsTheAbsentListDistinct(t *testing.T) {
 		}
 	}
 }
+
+// TestArraySubscriptIsADialectConstruct: a subscript is a separate flag from
+// the array literal because the two halves are separately reachable — a
+// subscript can be written for a variable that was never an array, and dash
+// rejects it there too. Without the flag `${a[@]}` on a plain variable read as
+// an array of one instead of failing.
+func TestArraySubscriptIsADialectConstruct(t *testing.T) {
+	for _, src := range []string{`echo ${a[0]}`, `echo ${a[@]}`, `echo ${a[*]}`, `a=1; echo ${a[@]}`} {
+		mustParse(t, src, Core(), "a subscript in a dialect with arrays")
+		mustFail(t, src, POSIX(), "a subscript in a dialect without them")
+	}
+}

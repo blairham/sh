@@ -181,7 +181,9 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline) error {
 			return err
 		}
 	}
-	// A pipeline reports its *last* command, not its first failure.
+	// A pipeline reports its *last* command, not its first failure — which
+	// is exactly why the others are worth keeping.
+	r.recordPipeStatus(statuses)
 	r.status = statuses[n-1]
 	return nil
 }

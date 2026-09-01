@@ -140,7 +140,7 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 		return e
 	}
 
-	if strings.HasPrefix(s, "[") {
+	if p.dialect.ArraySubscript && strings.HasPrefix(s, "[") {
 		if i := strings.LastIndexByte(s, ']'); i > 0 {
 			e.Index = p.wordFrom(s[1:i], start)
 			s = s[i+1:]

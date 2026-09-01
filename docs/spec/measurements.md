@@ -1861,7 +1861,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   set -- p q; select x; do echo "got=$x"; break; done <<< "2"
   ```
-- `select/ps3-is-read-each-time` — the prompt is read fresh each  iteration, so a body that changes PS3 changes the next prompt — and the menu itself is printed once
+- `select/ps3-is-read-each-time` — the prompt is read fresh each iteration, so a body that changes PS3 changes the next prompt — and the menu itself is printed once
   ```sh
   PS3=A; select x in a b; do PS3=B; echo "$x"; done <<< '1
   2'
@@ -1873,4 +1873,65 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `select/is-not-in-dash` — dash has no `select`, so the word is ordinary and the `do` after it has nothing to open — the grammar flag is what the other three turn on
   ```sh
   select x in a; do :; done
+  ```
+
+## pipeline status
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `pipestatus/every-element` | `<shell>: 1: Bad substitution` *(status 2)* | `[1 0 1]` | `[1 0 1]` | `[1 0 1]` | `[]` | `[]` |
+| `pipestatus/lowercase-is-zsh` | `<shell>: 1: Bad substitution` *(status 2)* | `[]` | `[]` | `[]` | `[]` | `[1 0 1]` |
+| `pipestatus/a-single-command-records-one` | `<shell>: 1: Bad substitution` *(status 2)* | `[1]` | `[1]` | `[1]` | `[]` | `[]` |
+| `pipestatus/a-compound-command-records-its-own` | `<shell>: 1: Bad substitution` *(status 2)* | `[0]` | `[0]` | `[0]` | `[]` | `[]` |
+| `pipestatus/negation-does-not-reach-it` | `<shell>: 1: Bad substitution` *(status 2)* | `st=1 [1 0]` | `st=1 [1 0]` | `st=1 [1 0]` | `st=1 []` | `st=1 []` |
+| `pipestatus/a-bare-assignment` | `<shell>: 1: Bad substitution` *(status 2)* | `[0]` | `[0]` | `[0]` | `[]` | `[]` |
+| `pipestatus/a-bare-assignment-in-zsh` | `<shell>: 1: Bad substitution` *(status 2)* | `[]` | `[]` | `[]` | `[]` | `[1 0]` |
+| `pipestatus/unset-then-another-pipeline` | `<shell>: 1: Bad substitution` *(status 2)* | `[1 0]` | `[1 0]` | `[1 0]` | `[]` | `[]` |
+| `pipestatus/unset-then-another-pipeline-in-zsh` | `<shell>: 1: Bad substitution` *(status 2)* | `[]` | `[]` | `[]` | `[]` | `[]` |
+| `pipestatus/read-as-a-plain-parameter` | `[]` | `[1]` | `[1]` | `[1]` | `[]` | `[]` |
+| `pipestatus/plain-parameter-on-an-array` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x]` | `[x]` | `[x]` | `[x]` | `[x y z]` |
+
+- `pipestatus/every-element` — `$?` reports the last element only, so without this a script cannot tell the first half of a pipeline failed — bash keeps them under this name, ksh93 has no name for it, and dash rejects the subscript outright because it has no arrays
+  ```sh
+  false | true | false; echo "[${PIPESTATUS[@]}]"
+  ```
+- `pipestatus/lowercase-is-zsh` — the same record under the name zsh gives it; the pair of cases is what makes the name a dialect's answer rather than an axis
+  ```sh
+  false | true | false; echo "[${pipestatus[@]}]"
+  ```
+- `pipestatus/a-single-command-records-one` — it is not only for pipelines: a command on its own records one element, which is why the record is kept by the pipeline runner rather than by the pipe
+  ```sh
+  false; echo "[${PIPESTATUS[@]}]"
+  ```
+- `pipestatus/a-compound-command-records-its-own` — the `if` is the command that just ran, so the record holds its status and not the pipeline inside it — the inner one is gone by the time the clause finishes
+  ```sh
+  if false | true; then :; fi; echo "[${PIPESTATUS[@]}]"
+  ```
+- `pipestatus/negation-does-not-reach-it` — `!` inverts what the pipeline reports and not what its elements did, so the record is taken before the inversion
+  ```sh
+  ! false | true; echo "st=$? [${PIPESTATUS[@]}]"
+  ```
+- `pipestatus/a-bare-assignment` — the axis: bash counts an assignment with no command name as a command and replaces the record with one element, and zsh does not count it and leaves the pipeline's two
+  ```sh
+  false | true; x=1; echo "[${PIPESTATUS[@]}]"
+  ```
+- `pipestatus/a-bare-assignment-in-zsh` — the other half of that axis, under the name that makes it observable in the shell that answers the other way
+  ```sh
+  false | true; x=1; echo "[${pipestatus[@]}]"
+  ```
+- `pipestatus/unset-then-another-pipeline` — in bash the producer outlives `unset` and the next pipeline fills the name again, which is the opposite of what a produced *scalar* does — `unset RANDOM` leaves an ordinary empty name in every shell
+  ```sh
+  unset PIPESTATUS; false | true; echo "[${PIPESTATUS[@]}]"
+  ```
+- `pipestatus/unset-then-another-pipeline-in-zsh` — and in zsh the name is gone for good, which is why `unset` is an axis here and not the rule Dynamic already follows
+  ```sh
+  unset pipestatus; false | true; echo "[${pipestatus[@]}]"
+  ```
+- `pipestatus/read-as-a-plain-parameter` — a plain `$a` on an array is the first element in bash and ksh93 and every element joined in zsh, which is a rule about arrays and not about this record — it is measured here because this is the array every shell that has one builds without being asked
+  ```sh
+  false | true | false; echo "[$PIPESTATUS]"
+  ```
+- `pipestatus/plain-parameter-on-an-array` — the same rule on an ordinary array, which is where it belongs: zsh joins and the other two take the first element
+  ```sh
+  a=(x y z); echo "[$a]"
   ```

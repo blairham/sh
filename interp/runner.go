@@ -253,6 +253,11 @@ type Runner struct {
 	// declaring names commands whose `name=value` arguments are assignments,
 	// beyond the ones the core already knows. A dialect adds its own.
 	declaring map[string]bool
+	// pipeStatus is what the last pipeline's elements reported, and
+	// pipeStatusName is what the dialect calls it. The record is only kept
+	// when a dialect has named it, because nothing else can read it.
+	pipeStatus     []int
+	pipeStatusName string
 	// readonly names refuse assignment.
 	readonly map[string]bool
 	// integer names evaluate what is assigned to them: with the attribute,
@@ -580,6 +585,7 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 		if err := r.command(ctx, p.Cmds[0]); err != nil {
 			return err
 		}
+		r.recordSingleStatus(p.Cmds[0])
 	} else if err := r.runPipeline(ctx, p); err != nil {
 		return err
 	}
@@ -1006,6 +1012,12 @@ func (r *Runner) ensurePWD() {
 }
 
 func (r *Runner) getVar(name string) (string, bool) {
+	// A produced array answers a plain `$name` too, and what it answers with
+	// is an axis: the whole array in one shell and its first element in the
+	// others.
+	if elems, ok := r.pipelineStatuses(name); ok {
+		return r.arrayScalar(elems), true
+	}
 	if f, ok := r.Dynamic[name]; ok {
 		// Ahead of the stored table, because a parameter that produces its
 		// value cannot be overwritten by assigning to it: `RANDOM=5` seeds
@@ -1015,6 +1027,11 @@ func (r *Runner) getVar(name string) (string, bool) {
 		if !r.removed[name] {
 			return f(r), true
 		}
+	}
+	if a, ok := r.Arrays[name]; ok && len(a) > 1 && !r.removed[name] {
+		// Ahead of Vars, which holds the first element: with more than one
+		// element the two views differ and the dialect decides.
+		return r.arrayScalar(a), true
 	}
 	if v, ok := r.Vars[name]; ok {
 		return v, true

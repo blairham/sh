@@ -33,6 +33,10 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | arithmetic does floating point | no | no | **yes** | **yes** |
 | quoting a `=~` regex makes it literal | *n/a* | **yes** | no | no |
 | array index base | *n/a* | 0 | 0 | **1** |
+| plain `$a` on an array | *n/a* | first element | first element | **all, joined** |
+| pipeline-status name | *none* | `PIPESTATUS` | *none* | `pipestatus` |
+| a bare assignment updates it | *n/a* | **yes** | *n/a* | no |
+| `unset` ends it | *n/a* | no | *n/a* | **yes** |
 | `echo` expands backslashes | **yes** | no | no | **yes** |
 | glob with no match | passes pattern | passes pattern | passes pattern | **error** |
 | last pipeline element runs in | subshell | subshell | **current shell** | **current shell** |
@@ -797,3 +801,55 @@ output to both destinations rather than to the last one. The probe was
 contaminated by the shell running it rather than by the shell under test,
 which is the same trap `oracle.md` records from the other direction. Writing
 each stream to its own file is what settled it.
+
+## The record `$?` cannot hold
+
+`$?` reports a pipeline's *last* command. `false | true` therefore succeeds,
+and without something else a script cannot discover that the first half
+failed — which is the entire reason two of the four shells keep the rest.
+
+The values are unanimous where they exist. What is not is the **name**:
+bash's `PIPESTATUS`, zsh's `pipestatus`, and no name at all in ksh93 or
+dash. So the core keeps the record and a dialect names it through `Apply`,
+the same seam that gives ksh93 `source` and takes `local` away. When no
+dialect names it the record is not even kept, because nothing could read it
+— which is also what keeps the axes below from being asked in the bare core.
+
+Despite the name it is not only for pipelines. A command on its own records
+one element, and so does a compound one: after `if false | true; then :; fi`
+the record holds the `if`'s own status, because the `if` is the command that
+just ran and the pipeline inside it is over. `!` does not reach it either —
+after `! false | true` the record is `1 0` and `$?` is 1, so the record is
+taken before the inversion.
+
+Two things about it are axes:
+
+- **a bare assignment counts as a command.** bash says yes, so
+  `false | true; x=1` leaves one element holding 0; zsh says no and leaves
+  the pipeline's two. Every other shape of command updates it in both, so
+  the question is asked only for an assignment with no command name.
+- **`unset` is permanent.** In zsh the name never fills again; in bash the
+  producer outlives it and the next pipeline fills it. This is the *opposite*
+  of what a produced scalar does — `unset RANDOM` leaves an ordinary empty
+  name in every shell measured — which is why it is asked here rather than
+  inherited from the rule `Dynamic` already follows.
+
+### Two bugs it uncovered, both about arrays and neither about pipelines
+
+Writing the cases for it found two things that had been wrong since arrays
+were added, and that nothing in the corpus had touched:
+
+**A plain `$a` on an array is not the first element everywhere.** zsh gives
+every element joined by a space where bash and ksh93 give the first alone.
+It is now an axis, and it is asked lazily — only when a scalar is actually
+read, and only when there is more than one element. Asking it in `setArray`
+instead made *building* an array require a dialect, which is a question the
+input does not depend on: `a=(x y z)` says nothing about how `$a` would be
+flattened.
+
+**dash rejects a subscript, and accepted one here.** `${a[@]}` is a bad
+substitution in dash whether or not `a` was ever an array, and ours read it
+as an array of one. It is a grammar flag now, and separate from the one that
+enables `a=(x y)`: the two halves are separately reachable, since a subscript
+can be written for a variable that was never an array — which is exactly the
+case that was wrong.

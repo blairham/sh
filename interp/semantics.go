@@ -388,6 +388,23 @@ type Semantics struct {
 	// standard error. bash alone does it.
 	SelectEofPrintsNewline Answer
 
+	// AssignmentUpdatesPipelineStatus counts a bare assignment as a command
+	// for the pipeline-status record. bash says yes, so `false | true; x=1`
+	// replaces the two elements with one holding 0; zsh says no and leaves
+	// them. Every other shape of command updates it in both.
+	AssignmentUpdatesPipelineStatus Answer
+	// UnsetEndsTheProducedPipelineStatus makes `unset` permanent. zsh says
+	// yes and the name never fills again; in bash the producer outlives it.
+	// It is the opposite of what a produced *scalar* does, where unset ends
+	// it in both — `unset RANDOM` leaves an ordinary empty name everywhere.
+	UnsetEndsTheProducedPipelineStatus Answer
+
+	// ArrayScalarIsTheWholeArray decides what a plain `$a` gives when `a` is
+	// an array: zsh says every element joined by a space, and bash and ksh93
+	// say the first element alone. dash has no arrays, which is why the axis
+	// is absent rather than false there.
+	ArrayScalarIsTheWholeArray Answer
+
 	// ArrayBaseIsZero indexes arrays from 0. True in bash and ksh93, false in
 	// zsh, which counts from 1. dash has no arrays at all, which is why the
 	// axis is absent rather than false there.

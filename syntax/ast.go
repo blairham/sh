@@ -313,6 +313,30 @@ func (c *ForClause) Pos() Pos     { return c.Start }
 func (c *ForClause) End() Pos     { return c.Stop }
 func (c *ForClause) commandNode() {}
 
+// SelectClause is `select name [in words] do … done`.
+//
+// The same shape as ForClause and not the same loop: the words are a menu
+// rather than a sequence, the body runs once per *reply* rather than once per
+// word, and the loop ends when the input does rather than when the list does.
+// Sharing a node would have made every use of one ask which it was.
+type SelectClause struct {
+	Name string
+	// Items and HasItems carry the same distinction as ForClause's: with `in`
+	// omitted the menu is built from the positional parameters.
+	Items    []*Word
+	HasItems bool
+	Body     []*Stmt
+	// Header is `select x in a b` as written. See ForClause.Header.
+	Header string
+	Start  Pos
+	Stop   Pos
+	redirs
+}
+
+func (c *SelectClause) Pos() Pos     { return c.Start }
+func (c *SelectClause) End() Pos     { return c.Stop }
+func (c *SelectClause) commandNode() {}
+
 // CaseClause is `case word in … esac`.
 type CaseClause struct {
 	Word  *Word

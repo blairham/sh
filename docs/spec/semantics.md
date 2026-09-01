@@ -38,6 +38,9 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | last pipeline element runs in | subshell | subshell | **current shell** | **current shell** |
 | `$0` inside a function | shell name | shell name | shell name | **function name** |
 | `local` builtin | yes | yes | **absent** | yes |
+| `select` menu layout | *n/a* | vertical, then tabs | vertical | **columns** |
+| `select` prompt | *n/a* | `#? ` | `#? ` *(terminal only)* | **`?# `** |
+| input ending a `select` | *n/a* | 1, newline on stdout | 1 | **0**, newline on stderr |
 | `typeset` needs a `function`-defined function to declare a local | *n/a* | no | **yes** | no |
 | a name declared without a value counts as set | no | no | no | **yes** |
 | readonly reassignment | fatal | **continues** | fatal | fatal |
@@ -715,3 +718,82 @@ axis, for the same reason `source` is: bash and zsh add `declare`, ksh93
 has only `typeset`, and dash has neither — and in dash `declare x=*` is an
 ordinary command with an ordinary globbed argument, so applying the rule
 to the name everywhere would be wrong in the shell that lacks it.
+
+## The widest presentation difference in the panel
+
+`select` prints a menu, and no two shells draw it the same way. The same
+twelve items, at `COLUMNS=80`:
+
+    bash    1) 1<TAB> 3) 3<TAB> 5) 5<TAB> 7) 7<TAB> 9) 9<TAB>11) 11
+            2) 2<TAB> 4) 4<TAB> 6) 6<TAB> 8) 8<TAB>10) 10<TAB>12) 12
+    ksh93    1) 1
+             2) 2
+            … one per line, all twelve
+    zsh     1) 1    3) 3    5) 5    7) 7    9) 9    11) 11
+            2) 2    4) 4    6) 6    8) 8    10) 10  12) 12
+
+Three engines, not two answers with a tie-break, which is why `SelectLayout`
+is a named type rather than a flag:
+
+- **vertical** — one per line, numbers right-aligned so `9)` and `10)` line
+  up their parentheses. ksh93's.
+- **vertical, then columns** — bash's, and the rule is the opposite way
+  round from how it sounds: one item per line *while the whole list would
+  fit on one line*, and tab-separated columns once it would not. Widening
+  the terminal to 200 columns puts twelve items back on twelve lines.
+- **columns** — zsh's, always packed, so even three items share a line.
+  Every cell is padded to the same width, the last one included, so a row
+  ends in trailing spaces.
+
+All three fill **column-major**: reading *down* the first column gives 1, 2,
+3. And all three put the menu and the prompt on standard error, so a
+script's own output can be redirected without taking the menu with it.
+
+Around the layout sit four more answers, each its own question:
+
+- the prompt when `PS3` is unset, which is `#? ` twice and `?# ` once;
+- whether the prompt is printed at all — ksh93 withholds it unless the
+  input is a terminal, which is why a ksh93 transcript has menus and no
+  prompts in it;
+- what an unset `COLUMNS` means: 80 to bash, and no limit at all to zsh,
+  which puts forty items on one line rather than wrapping;
+- and what the input running out does, which is three questions and no
+  shell answers them alike — bash reports 1 and writes a newline to
+  standard *output*, ksh93 reports 1 and writes nothing, zsh reports 0 and
+  closes the prompt line on standard error.
+
+Everything else about the loop is unanimous and is not an axis: a reply
+naming no item leaves the variable empty, keeps the raw line in `REPLY` and
+runs the body anyway; a blank line reprints the menu without running it; the
+menu is printed once and the prompt every iteration; `PS3` is read fresh each
+time; and an empty menu does not prompt at all — the loop never runs and the
+status is 0, which is the difference between a menu with nothing in it and a
+menu nobody answered.
+
+### Two things measured here and not built
+
+**ksh93 columnizes on height, not width.** Its menu goes to columns when the
+list is longer than the terminal, and the threshold is `LINES` — 30 items at
+`LINES=24` is two columns, and 12 items at `LINES=10` is two columns as well,
+where 12 at `LINES=24` is twelve lines. It is not built because a menu long
+enough to reach it cannot be graded by the corpus, whose cases do not control
+`LINES`, and a layout with no case behind it is a layout nobody can re-check.
+
+**zsh's cell width narrows in a way twelve samples did not explain.** With
+`COLUMNS` unset, or at 72 and above, its cell is the longest entry plus two,
+which is what is implemented and what matches. Below that it is sometimes one
+wider — 9 rather than 8 at `COLUMNS=40` and at 20, but 8 again at 36 — and
+the rule behind that is not derived here. A narrow terminal is the one place
+this implementation's menu differs from zsh's, and it is written down rather
+than approximated.
+
+### The harness was the contaminated probe this time
+
+Splitting the two EOF newlines between the streams needs care, and the first
+attempt got it wrong in a way worth recording. Measuring with
+`2>&1 >/dev/null` from an interactive **zsh** reports both newlines on
+standard error for every shell — because zsh's MULTIOS option sends the
+output to both destinations rather than to the last one. The probe was
+contaminated by the shell running it rather than by the shell under test,
+which is the same trap `oracle.md` records from the other direction. Writing
+each stream to its own file is what settled it.

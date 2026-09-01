@@ -47,6 +47,11 @@ func TestSemantics(t *testing.T) {
 		got  interp.Answer
 		want interp.Answer
 	}{
+		{"SelectPromptNeedsTerminal", s.SelectPromptNeedsTerminal, interp.No},
+		{"SelectEofIsSuccess", s.SelectEofIsSuccess, interp.Yes},
+		{"SelectEofPrintsNewline", s.SelectEofPrintsNewline, interp.No},
+		{"SelectEofEndsPromptLine", s.SelectEofEndsPromptLine, interp.Yes},
+		{"SelectAssumesUnboundedWidth", s.SelectAssumesUnboundedWidth, interp.Yes},
 		{"DeclaredNameWithoutValueIsEmpty", s.DeclaredNameWithoutValueIsEmpty, interp.Yes},
 		{"TypesetLocalNeedsKeywordFunction", s.TypesetLocalNeedsKeywordFunction, interp.No},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.No},
@@ -281,5 +286,17 @@ func TestGetoptsAnswers(t *testing.T) {
 	}
 	if got, want := s.GetoptsAssignmentRestartsWord, interp.No; got != want {
 		t.Errorf("GetoptsAssignmentRestartsWord = %v, want %v", got, want)
+	}
+}
+
+// TestSelectMenuLayout: zsh packs the menu into columns always, so even three
+// items share a line, and it asks with the same two characters as the others
+// in the other order.
+func TestSelectMenuLayout(t *testing.T) {
+	if got, want := zsh.Semantics().SelectLayout, interp.SelectMenuColumns; got != want {
+		t.Errorf("SelectLayout = %v, want %v", got, want)
+	}
+	if got, want := zsh.Diagnostics().SelectPrompt, "?# "; got != want {
+		t.Errorf("SelectPrompt = %q, want %q", got, want)
 	}
 }

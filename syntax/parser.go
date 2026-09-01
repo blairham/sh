@@ -412,6 +412,8 @@ func (p *Parser) parseCommand() Command {
 		return p.withRedirs(p.parseLoop())
 	case p.atWord("for"):
 		return p.withRedirs(p.parseFor())
+	case p.atWord("select") && p.dialect.Select:
+		return p.withRedirs(p.parseSelect())
 	case p.atWord("case"):
 		return p.withRedirs(p.parseCase())
 	case p.atWord("[[") && p.dialect.DoubleBracket:
@@ -938,6 +940,45 @@ func (p *Parser) parseFor() Command {
 
 	// An absent word list is not an empty one: without `in` the loop iterates
 	// the positional parameters, and with `in` and nothing after it, nothing.
+	if p.atWord("in") {
+		c.HasItems = true
+		p.next()
+		for p.tok.Kind == TokWord && !p.atStopWord() {
+			c.Items = append(c.Items, p.word())
+		}
+	}
+	end := nameEnd
+	if n := len(c.Items); n > 0 {
+		end = c.Items[n-1].End()
+	}
+	c.Header = p.slice(c.Start, end)
+	p.requireSep("do")
+	p.expectWord("do")
+	c.Body = p.parseList()
+	c.Stop = p.tok.End
+	p.expectWord("done")
+	return c
+}
+
+// parseSelect reads the menu loop, whose header is a for-loop's.
+func (p *Parser) parseSelect() Command {
+	c := &SelectClause{Start: p.tok.Pos}
+	defer p.opens("select")()
+	p.next()
+	if p.tok.Kind != TokWord || !isName(p.tok.Literal()) {
+		if p.err == nil {
+			p.err = &Error{
+				Pos: p.tok.Pos, Kind: ErrForName,
+				Token: p.tokenLiteral(), Class: p.tokenClass(false),
+				Msg: "expected a name after `select`",
+			}
+		}
+		return c
+	}
+	c.Name = p.tok.Literal()
+	nameEnd := p.tok.End
+	p.next()
+	p.skipNewlines()
 	if p.atWord("in") {
 		c.HasItems = true
 		p.next()

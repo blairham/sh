@@ -7386,6 +7386,358 @@
         "TimedOut": false
       }
     },
+    "select/blank-reply-reprints-the-menu": {
+      "bash": {
+        "Output": "1) a~2) b~#? 1) a~2) b~#? got=b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1) a~2) b~#? 1) a~2) b~#? got=b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1) a~2) b~#? 1) a~2) b~#? got=b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"do\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1) a~2) b~1) a~2) b~got=b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1) a  2) b  ~?# 1) a  2) b  ~?# got=b",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "select/break-leaves-the-loop": {
+      "bash": {
+        "Output": "1) a~2) b~#? b~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1) a~2) b~#? b~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1) a~2) b~#? b~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"do\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1) a~2) b~b~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1) a  2) b  ~?# b~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "select/empty-list": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `;'~\u003cshell\u003e: -c: line 0: `select x in; do echo hi; done; echo \"st=$?\"'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"do\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "select/input-ends": {
+      "bash": {
+        "Output": "1) a~#? ~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1) a~#? ~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1) a~#? ~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"do\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1) a~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1) a  ~?# ~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "select/is-not-in-dash": {
+      "bash": {
+        "Output": "1) a~#? ",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1) a~#? ",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1) a~#? ",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"do\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1) a",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1) a  ~?# ",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "select/menu-and-choice": {
+      "bash": {
+        "Output": "1) a~2) b~#? got=a rep=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1) a~2) b~#? got=a rep=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1) a~2) b~#? got=a rep=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"do\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1) a~2) b~got=a rep=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1) a  2) b  ~?# got=a rep=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "select/menu-goes-to-standard-error": {
+      "bash": {
+        "Output": "a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"do\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "a",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "select/no-list-uses-the-positionals": {
+      "bash": {
+        "Output": "1) p~2) q~#? got=q",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1) p~2) q~#? got=q",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1) p~2) q~#? got=q",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"do\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1) p~2) q~got=q",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1) p  2) q  ~?# got=q",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "select/ps3-is-read-each-time": {
+      "bash": {
+        "Output": "1) a~2) b~Aa~Bb~B",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1) a~2) b~Aa~Bb~B",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1) a~2) b~Aa~Bb~B",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"do\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1) a~2) b~a~b",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1) a  2) b  ~Aa~Bb~B",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "select/reply-is-not-a-number": {
+      "bash": {
+        "Output": "1) a~2) b~#? [] rep=zz",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1) a~2) b~#? [] rep=zz",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1) a~2) b~#? [] rep=zz",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"do\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1) a~2) b~[] rep=zz",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1) a  2) b  ~?# [] rep=zz",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "select/reply-out-of-range": {
+      "bash": {
+        "Output": "1) a~2) b~#? [] rep=9",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1) a~2) b~#? [] rep=9",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1) a~2) b~#? [] rep=9",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"do\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1) a~2) b~[] rep=9",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1) a  2) b  ~?# [] rep=9",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "shape/case-empty-body-and-no-match": {
       "bash": {
         "Output": "empty=0~nomatch=0",

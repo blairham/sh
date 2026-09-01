@@ -89,3 +89,36 @@ func TestIndirectionIsAFlag(t *testing.T) {
 	mustFail(t, `echo ${!x}`, Core(), "flag off")
 	mustFail(t, `echo ${!x}`, POSIX(), "flag off")
 }
+
+// TestSelectIsADialectConstruct: `select` is a menu loop in three of the four
+// shells and an ordinary word in dash, where the `do` that follows it has
+// nothing to open. That makes it a grammar flag rather than a semantic one —
+// a dialect *adds* it, and nothing about it conflicts.
+func TestSelectIsADialectConstruct(t *testing.T) {
+	for _, src := range []string{
+		`select x in a b; do echo "$x"; done`,
+		`select x; do echo "$x"; done`,
+		`select x in a; do :; done < f`,
+	} {
+		mustParse(t, src, Core(), "select in a dialect that has it")
+		mustFail(t, src, POSIX(), "select in a dialect that does not")
+	}
+	// The name is required and has to be a name, the same rule `for` has.
+	mustFail(t, `select; do :; done`, Core(), "select with no name")
+	mustFail(t, `select 1x in a; do :; done`, Core(), "select with a name that is not one")
+}
+
+// TestSelectKeepsTheAbsentListDistinct is the same distinction ForClause
+// draws: without `in` the menu is the positional parameters, and with `in` and
+// nothing after it there is no menu at all. A nil slice cannot say which.
+func TestSelectKeepsTheAbsentListDistinct(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`select x in a b; do :; done`, "select x in(a,b) do[cmd[:]]"},
+		{`select x; do :; done`, "select x no-list do[cmd[:]]"},
+		{`select x in; do :; done`, "select x in() do[cmd[:]]"},
+	} {
+		if got := parse(t, tc.src, Core()); got != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}

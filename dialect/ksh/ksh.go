@@ -31,6 +31,11 @@ func Dialect() syntax.Dialect {
 // Semantics is what ksh93 means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	s.SelectLayout = interp.SelectMenuVertical
+	s.SelectPromptNeedsTerminal = interp.Yes
+	s.SelectEofEndsPromptLine = interp.No
+	s.SelectEofIsSuccess = interp.No
+	s.SelectEofPrintsNewline = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	s.TypesetLocalNeedsKeywordFunction = interp.Yes
 	s.FatalErrorStatusIsOne = interp.Yes
@@ -82,6 +87,7 @@ const kshKillUsage = "Usage: kill [-lL] [-n signum] [-s signame] job ...\n" +
 
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		SelectPrompt:     "#? ",
 		Location:         interp.LocationNone,
 		TraceQuoting:     interp.QuoteDollar,
 		ScriptLocation:   interp.LocationLineWord,

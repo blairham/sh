@@ -76,6 +76,16 @@ func dump(n Node) string {
 			items = "in(" + strings.Join(ws, ",") + ")"
 		}
 		return "for " + x.Name + " " + items + " do[" + join(stmts(x.Body)) + "]" + redirStr(x.Redirs)
+	case *SelectClause:
+		items := "no-list"
+		if x.HasItems {
+			var ws []string
+			for _, w := range x.Items {
+				ws = append(ws, w.Literal())
+			}
+			items = "in(" + strings.Join(ws, ",") + ")"
+		}
+		return "select " + x.Name + " " + items + " do[" + join(stmts(x.Body)) + "]" + redirStr(x.Redirs)
 	case *CaseClause:
 		s := "case " + x.Word.Literal() + "{"
 		for _, it := range x.Items {

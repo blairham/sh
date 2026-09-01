@@ -35,6 +35,11 @@ type Dialect struct {
 	// the parenthesis after `for` is a syntax error.
 	CStyleFor bool
 
+	// Select enables `select name [in words] do … done`, the menu loop.
+	// Absent from dash, where `select` is an ordinary word and the `do` that
+	// follows it is a syntax error.
+	Select bool
+
 	// AppendAssign enables `name+=value`, which appends rather than
 	// replacing. Absent from dash, where `x+=b` is a command called `x+=b`.
 	AppendAssign bool
@@ -184,6 +189,7 @@ func Core() Dialect {
 	return Dialect{
 		AppendAssign:      true,
 		CStyleFor:         true,
+		Select:            true,
 		AmpersandRedirect: true,
 		CaseFallthrough:   true,
 		DollarSingleQuote: true,

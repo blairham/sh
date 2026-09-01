@@ -458,6 +458,10 @@ type Diagnostics struct {
 	// ShiftTooMany is `shift` past the end. One verb: the count, as a
 	// number — which a format is free to ignore, and dash's does.
 	ShiftTooMany string
+	// SelectPrompt is what `select` asks with when PS3 is unset. No verbs.
+	// bash and ksh93 write `#? ` and zsh writes the same two characters the
+	// other way round, which makes it a value rather than an axis.
+	SelectPrompt string
 	// ArithError wraps a failed arithmetic expansion. Three verbs, all
 	// positional because the shells order them differently and not every
 	// shell uses all three: %[1]s is the expression as written, %[2]s the

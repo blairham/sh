@@ -59,3 +59,20 @@ func TestAnUnreadableExpandedExpressionFailsWhenItRuns(t *testing.T) {
 		t.Errorf("got %q, want the failure reported", out)
 	}
 }
+
+// An absent condition means endless, not "never runs". It is the one place
+// the three parts of the header are not interchangeable: a missing step or
+// initialiser does nothing, and a missing condition does the opposite of
+// what evaluating an empty expression would say.
+func TestAnAbsentLoopConditionIsEndless(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`for ((;;)); do break; done; echo ok`, "ok"},
+		{`for ((i=0;;i++)); do [ $i -gt 2 ] && break; done; echo $i`, "3"},
+		// A condition that is present and false stops before the first pass.
+		{`for ((i=0;0;i++)); do echo no; done; echo done`, "done"},
+	} {
+		if out, _ := run(t, tc.src, nil); strings.TrimSpace(out) != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, strings.TrimSpace(out), tc.want)
+		}
+	}
+}

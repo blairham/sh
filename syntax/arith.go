@@ -127,9 +127,25 @@ func (p *Parser) parseArith(src string, at Pos) ArithExpr {
 	e := a.expr()
 	a.space()
 	if e != nil && a.off < len(a.src) {
-		a.failArith(ErrArithOperator, a.src[a.off:])
+		a.failArith(a.leftoverKind(), a.src[a.off:])
 	}
 	return e
+}
+
+// leftoverKind tells the two ways an expression can have something left over
+// apart: an operand where an operator belonged, or text that could be neither.
+//
+// Only one shell in the panel words them differently, but the distinction is
+// the parser's to make — it is about what the text could have been, which is a
+// grammar question and not a wording one.
+func (a *arithParser) leftoverKind() ErrorKind {
+	c := a.src[a.off]
+	switch {
+	case c >= '0' && c <= '9', c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z',
+		c == '_', c == '(', c == '$':
+		return ErrArithOperator
+	}
+	return ErrArithBadOperator
 }
 
 // failArith records an arithmetic failure with the whole expression and the
@@ -346,6 +362,14 @@ func (a *arithParser) primary() ArithExpr {
 	if c := a.src[a.off]; c >= '0' && c <= '9' {
 		return a.number(start)
 	}
+	// A literal may begin with its point where the dialect has floats: `.5`
+	// is a number there and is an operator followed by one everywhere else,
+	// which is why the two shells without floats blame the `.5` rather than
+	// the `1.5` it was part of.
+	if a.dial.ArithFloat && a.src[a.off] == '.' && a.off+1 < len(a.src) &&
+		a.src[a.off+1] >= '0' && a.src[a.off+1] <= '9' {
+		return a.number(start)
+	}
 	if name, ok := a.name(); ok {
 		return &ArithVar{Name: name, Start: start, Stop: start}
 	}
@@ -356,7 +380,11 @@ func (a *arithParser) primary() ArithExpr {
 			return &ArithVar{Name: name, Start: start, Stop: start}
 		}
 	}
-	a.failArith(ErrArithOperator, a.src[a.off:])
+	// Nothing here could begin a value, which is a missing *operand* and not
+	// a leftover operator: `$((.5))` in a dialect without floats is blamed
+	// for wanting a number, where `$((1 @))` is blamed for the `@`. Both
+	// shells without floats word the two apart.
+	a.failArith(ErrArithOperand, a.src[a.off:])
 	return nil
 }
 
@@ -367,6 +395,9 @@ func (a *arithParser) number(start Pos) ArithExpr {
 	for a.off < len(a.src) && isNumByte(a.src[a.off]) {
 		a.off++
 	}
+	if a.dial.ArithFloat && !isBasedLiteral(a.src[begin:a.off]) {
+		a.floatTail(begin)
+	}
 	if a.off < len(a.src) && a.src[a.off] == '#' && a.dial.ArithExplicitBase {
 		a.off++
 		for a.off < len(a.src) && isNumByte(a.src[a.off]) {
@@ -374,6 +405,52 @@ func (a *arithParser) number(start Pos) ArithExpr {
 		}
 	}
 	return &ArithNum{Text: a.src[begin:a.off], Start: start, Stop: start}
+}
+
+// floatTail extends a literal over the point and exponent a float may carry.
+//
+// Only where the dialect has floats: `1.5` is one number there and two tokens
+// with an operator between them in the shells that do not, which is the
+// difference their diagnostics show.
+//
+// A sign is taken only straight after the exponent letter, so `1e-3` is one
+// literal and `1-3` stays a subtraction.
+//
+// The exponent needs care because the digit scan before this one accepts `e`
+// as a hex digit, so `1e-3` arrives with the `e` already consumed and only the
+// `-3` left to find.
+func (a *arithParser) floatTail(begin int) {
+	if a.off < len(a.src) && a.src[a.off] == '.' {
+		a.off++
+		for a.off < len(a.src) && a.src[a.off] >= '0' && a.src[a.off] <= '9' {
+			a.off++
+		}
+	}
+	next := a.off
+	if a.off < len(a.src) && (a.src[a.off] == 'e' || a.src[a.off] == 'E') {
+		next++
+	} else if a.off > begin && (a.src[a.off-1] == 'e' || a.src[a.off-1] == 'E') {
+		// Already swallowed by the digit scan, which reads `e` as hex.
+	} else {
+		return
+	}
+	if next < len(a.src) && (a.src[next] == '+' || a.src[next] == '-') {
+		next++
+	}
+	if next < len(a.src) && a.src[next] >= '0' && a.src[next] <= '9' {
+		a.off = next
+		for a.off < len(a.src) && a.src[a.off] >= '0' && a.src[a.off] <= '9' {
+			a.off++
+		}
+	}
+}
+
+// isBasedLiteral reports whether a literal states its own base, which takes it
+// out of the float rules: `0x1e` is a hex integer whose digits include an `e`,
+// not a number with an exponent.
+func isBasedLiteral(text string) bool {
+	return strings.HasPrefix(text, "0x") || strings.HasPrefix(text, "0X") ||
+		strings.Contains(text, "#")
 }
 
 func isNumByte(c byte) bool {

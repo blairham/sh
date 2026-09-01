@@ -40,10 +40,20 @@ const (
 	// its own kind — dash calls it "expecting primary" and bash "operand
 	// expected", both inside the shape they use for a division by zero.
 	ErrArithOperand
-	// ErrArithOperator is an expression with something left over: `$((1 2))`,
-	// and in dash also `$((1,2))`, whose comma it does not have. dash calls
-	// it "expecting EOF" and zsh "operator expected".
+	// ErrArithOperator is an expression with something left over that could
+	// have been an operand: `$((1 2))`, and in dash also `$((1,2))`, whose
+	// comma it does not have. dash calls it "expecting EOF" and zsh
+	// "operator expected".
 	ErrArithOperator
+	// ErrArithBadOperator is text where an operator belonged that could not
+	// be one at all — `1 @`, or `1.5` in a dialect without floats, where the
+	// `.5` is neither an operator nor part of the number.
+	//
+	// A separate kind because one shell words the two differently: bash says
+	// "arithmetic syntax error in expression" when an operand stands where an
+	// operator belonged and "invalid arithmetic operator" when the text could
+	// not be either. The other three have one wording for both.
+	ErrArithBadOperator
 	// ErrUnexpected is a token where the grammar wanted something else. The
 	// panel names the token three ways and one of them names its *class*
 	// instead — dash says "word unexpected" for an ordinary word and quotes

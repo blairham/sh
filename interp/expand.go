@@ -5,6 +5,7 @@ package interp
 
 import (
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -227,7 +228,7 @@ func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
 		v := r.commandSubst(r.ctx, s.Value)
 		return r.expansionResult(v, unquoted, r.sem().SplitCommandSubstitution, "splitting an unquoted command substitution")
 	case syntax.ArithSubst:
-		v, err := r.evalArith(s.Arith)
+		v, err := r.evalNum(s.Arith)
 		if err != nil {
 			// The expression as written is what dash and ksh93 quote back,
 			// and the span still has it: the parser keeps the raw text
@@ -251,7 +252,7 @@ func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
 			r.expandErr = true
 			return "", false
 		}
-		return r.expansionResult(itoa(v), unquoted, r.sem().SplitParamExpansion, "splitting an unquoted arithmetic expansion")
+		return r.expansionResult(r.formatNum(v), unquoted, r.sem().SplitParamExpansion, "splitting an unquoted arithmetic expansion")
 	}
 	return "", false
 }
@@ -617,19 +618,14 @@ func splitFields(s string, ifs string, ifsSet bool) []string {
 	return out
 }
 
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var b [20]byte
-	i := len(b)
-	for n > 0 {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-	}
-	return string(b[i:])
-}
+// itoa writes an integer.
+//
+// It delegates rather than looping by hand, and the hand-written loop is why:
+// its condition was `n > 0`, so a negative number produced no digits at all
+// and every negative arithmetic result expanded to nothing. `echo $((2-7))`
+// printed an empty line in all four dialects, and the corpus had no case with
+// a negative result in it to notice.
+func itoa(n int) string { return strconv.Itoa(n) }
 
 // specialParam answers the parameters that are not variables.
 // specialParam supplies the value of a parameter that is not a variable. The

@@ -25,12 +25,15 @@ func Dialect() syntax.Dialect {
 	// rather than a builtin ignoring an argument — the one place in the panel
 	// where which builtin a shell has changes what parses.
 	d.TimesIsReserved = true
+	// Floating point, which POSIX has not and these two do.
+	d.ArithFloat = true
 	return d
 }
 
 // Semantics is what ksh93 means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	s.ArithIntegerOperatorRefusesFloat = interp.Yes
 	s.ArrayScalarIsTheWholeArray = interp.No
 	s.SelectLayout = interp.SelectMenuVertical
 	s.SelectPromptNeedsTerminal = interp.Yes
@@ -44,7 +47,6 @@ func Semantics() interp.Semantics {
 	s.IndirectionYieldsName = interp.Yes
 	s.BraceExpansion = interp.Yes
 	s.BracketCaretNegates = interp.Yes
-	s.ArithFloat = interp.Yes
 	s.LastPipelineElementInCurrentShell = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
 	s.ExitArgument = interp.ExitArgLenient
@@ -88,14 +90,19 @@ const kshKillUsage = "Usage: kill [-lL] [-n signum] [-s signame] job ...\n" +
 
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
-		SelectPrompt:     "#? ",
-		Location:         interp.LocationNone,
-		TraceQuoting:     interp.QuoteDollar,
-		ScriptLocation:   interp.LocationLineWord,
-		ReadonlyVariable: "%s: is read only",
-		ShiftTooMany:     "shift: %d: bad number",
-		ArithError:       "%[1]s: %[2]s",
-		DivisionByZero:   "divide by zero",
+		ArithFailureStatus:   1,
+		ArithInfinity:        "inf",
+		ArithNotANumber:      "nan",
+		ArithFloatDigits:     15,
+		ArithFloatKeepsPoint: false,
+		SelectPrompt:         "#? ",
+		Location:             interp.LocationNone,
+		TraceQuoting:         interp.QuoteDollar,
+		ScriptLocation:       interp.LocationLineWord,
+		ReadonlyVariable:     "%s: is read only",
+		ShiftTooMany:         "shift: %d: bad number",
+		ArithError:           "%[1]s: %[2]s",
+		DivisionByZero:       "divide by zero",
 		// ksh93 names the innermost keyword still awaiting a partner: `if`
 		// on its own, and the `then` inside it once that has been consumed.
 		EvalNaming:             interp.SourceBeforeLocation,

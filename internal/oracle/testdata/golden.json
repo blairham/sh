@@ -26,6 +26,262 @@
     }
   ],
   "results": {
+    "arith/a-bitwise-operator-on-a-float": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: 1.5 \u0026 1: arithmetic syntax error: invalid arithmetic operator (error token is \".5 \u0026 1\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: 1.5 \u0026 1: arithmetic syntax error: invalid arithmetic operator (error token is \".5 \u0026 1\")",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: 1.5 \u0026 1: syntax error: invalid arithmetic operator (error token is \".5 \u0026 1\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \"1.5 \u0026 1\"",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: 1.5 \u0026 1: invalid floating point operation",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/a-float-assignment-outlives-the-expression": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: i+=1.5: arithmetic syntax error: invalid arithmetic operator (error token is \".5\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: i+=1.5: arithmetic syntax error: invalid arithmetic operator (error token is \".5\")",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: i+=1.5: syntax error: invalid arithmetic operator (error token is \".5\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \"i+=1.5\"",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1.5~[1.5]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1.5~[1.5]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/a-float-may-begin-with-its-point": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: .5: arithmetic syntax error: operand expected (error token is \".5\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: .5: arithmetic syntax error: operand expected (error token is \".5\")",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: .5: syntax error: operand expected (error token is \".5\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: arithmetic expression: expecting primary: \".5\"",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "0.5",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "0.5",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/a-float-may-carry-an-exponent": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: 1.5e2: arithmetic syntax error: invalid arithmetic operator (error token is \".5e2\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: 1.5e2: arithmetic syntax error: invalid arithmetic operator (error token is \".5e2\")",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: 1.5e2: syntax error: invalid arithmetic operator (error token is \".5e2\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \"1.5e2\"",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "150",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "150.",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/a-negative-result": {
+      "bash": {
+        "Output": "-5 -5 -5 -2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "-5 -5 -5 -2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "-5 -5 -5 -2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "-5 -5 -5 -2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "-5 -5 -5 -2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "-5 -5 -5 -2",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/a-negative-result-in-a-variable": {
+      "bash": {
+        "Output": "[-6]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[-6]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[-6]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[-6]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[-6]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[-6]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/a-remainder-of-floats": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: 7%2.5: arithmetic syntax error: invalid arithmetic operator (error token is \".5\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: 7%2.5: arithmetic syntax error: invalid arithmetic operator (error token is \".5\")",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: 7%2.5: syntax error: invalid arithmetic operator (error token is \".5\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \"7%2.5\"",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: 7%2.5: invalid floating point operation",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "2.",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/a-whole-float-keeps-its-point": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: 1.5+2.5: arithmetic syntax error: invalid arithmetic operator (error token is \".5+2.5\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: 1.5+2.5: arithmetic syntax error: invalid arithmetic operator (error token is \".5+2.5\")",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: 1.5+2.5: syntax error: invalid arithmetic operator (error token is \".5+2.5\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \"1.5+2.5\"",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "4",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "4.",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "arith/assignment-escapes": {
       "bash": {
         "Output": "[5][5]",
@@ -122,6 +378,38 @@
         "TimedOut": false
       }
     },
+    "arith/comparing-floats-yields-a-truth": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: 1.5 \u003c 2: arithmetic syntax error: invalid arithmetic operator (error token is \".5 \u003c 2\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: 1.5 \u003c 2: arithmetic syntax error: invalid arithmetic operator (error token is \".5 \u003c 2\")",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: 1.5 \u003c 2: syntax error: invalid arithmetic operator (error token is \".5 \u003c 2\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \"1.5 \u003c 2\"",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "arith/comparison-yields-one-or-zero": {
       "bash": {
         "Output": "[1][0][1]",
@@ -150,6 +438,38 @@
       },
       "zsh": {
         "Output": "[1][0][1]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/dividing-a-float-by-zero": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: 1.0/0: arithmetic syntax error: invalid arithmetic operator (error token is \".0/0\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: 1.0/0: arithmetic syntax error: invalid arithmetic operator (error token is \".0/0\")",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: 1.0/0: syntax error: invalid arithmetic operator (error token is \".0/0\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \"1.0/0\"",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "inf",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "Inf",
         "Status": 0,
         "TimedOut": false
       }
@@ -282,6 +602,70 @@
         "TimedOut": false
       }
     },
+    "arith/float-precision-differs": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: 0.1+0.2: arithmetic syntax error: invalid arithmetic operator (error token is \".1+0.2\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: 0.1+0.2: arithmetic syntax error: invalid arithmetic operator (error token is \".1+0.2\")",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: 0.1+0.2: syntax error: invalid arithmetic operator (error token is \".1+0.2\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \"0.1+0.2\"",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "0.3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "0.30000000000000004",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/hex-is-not-a-float": {
+      "bash": {
+        "Output": "30 27",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "30 27",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "30 27",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "30 27",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "30 27",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "30 27",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "arith/increment-absent-from-dash": {
       "bash": {
         "Output": "[1][2]",
@@ -310,6 +694,38 @@
       },
       "zsh": {
         "Output": "[1][2]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/integer-division-stays-integer": {
+      "bash": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1",
         "Status": 0,
         "TimedOut": false
       }
@@ -438,6 +854,38 @@
       },
       "zsh": {
         "Output": "[1]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/one-float-makes-the-expression-float": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: 3.0/2: arithmetic syntax error: invalid arithmetic operator (error token is \".0/2\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: 3.0/2: arithmetic syntax error: invalid arithmetic operator (error token is \".0/2\")",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: 3.0/2: syntax error: invalid arithmetic operator (error token is \".0/2\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \"3.0/2\"",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1.5",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1.5",
         "Status": 0,
         "TimedOut": false
       }

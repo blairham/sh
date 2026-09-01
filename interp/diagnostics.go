@@ -471,6 +471,26 @@ type Diagnostics struct {
 	// ShiftTooMany is `shift` past the end. One verb: the count, as a
 	// number — which a format is free to ignore, and dash's does.
 	ShiftTooMany string
+	// ArithFloatDigits is how many significant digits a float is written to.
+	// ksh93 shows 15 and zsh 17, which is why `0.1+0.2` is 0.3 in one and
+	// 0.30000000000000004 in the other from the same arithmetic. Zero means
+	// 17, so a dialect that has floats and has not said is not silently
+	// rounded.
+	ArithFloatDigits int
+	// ArithFloatKeepsPoint writes a whole float with a trailing point, so
+	// `1.5+2.5` is `4.` rather than `4`. zsh alone does it, and it is what
+	// keeps a float visible as one.
+	ArithFloatKeepsPoint bool
+	// ArithInfinity is how an infinity is written — `inf` in ksh93 and `Inf`
+	// in zsh, with the sign in front of either. Empty leaves Go's own
+	// spelling, which is neither.
+	ArithInfinity string
+	// ArithNotANumber is how a NaN is written: `nan` and `NaN` respectively.
+	ArithNotANumber string
+	// ArithInvalidFloatOperation is the refusal when a float reaches an
+	// operator defined only on integers. One verb: %[1]s the operator.
+	ArithInvalidFloatOperation string
+
 	// SelectPrompt is what `select` asks with when PS3 is unset. No verbs.
 	// bash and ksh93 write `#? ` and zsh writes the same two characters the
 	// other way round, which makes it a value rather than an axis.
@@ -492,6 +512,17 @@ type Diagnostics struct {
 	// here are: ArithError wraps it, so a dialect states the reason once and
 	// the shape once instead of repeating the shape in every reason.
 	ArithOperandExpected string
+	// ArithFailureStatus is the status a failed arithmetic expression carries.
+	// bash reports 1, the status of a command that failed, because it finds
+	// the failure while *expanding* rather than while parsing — we find it
+	// earlier, so the difference has to be stated. Zero means the dialect's
+	// general syntax-error status, which is what the other three want.
+	ArithFailureStatus int
+	// ArithBadOperator is the reason when text where an operator belonged
+	// could not have been one — `1 @`. bash alone words it separately from an
+	// operand standing in an operator's place; empty falls back to
+	// ArithOperatorExpected, which is what the other three want.
+	ArithBadOperator string
 	// ArithOperatorExpected is the reason when an expression has something
 	// left over: `$((1 2))`. Same verb, and one shell puts it inside the
 	// reason — "operator expected at `2'".
@@ -685,10 +716,18 @@ func (d Diagnostics) ParseFailure(err error) string {
 		// than as a substitution that was bad: %[1]s the operator it could
 		// not read, %[2]d the line.
 		return Wording(d.BadSubstitution, se.Msg, se.Token, se.Pos.Line)
-	case syntax.ErrArithOperand, syntax.ErrArithOperator:
+	case syntax.ErrArithOperand, syntax.ErrArithOperator, syntax.ErrArithBadOperator:
 		reason, fallback := d.ArithOperandExpected, "operand expected"
-		if se.Kind == syntax.ErrArithOperator {
+		switch se.Kind {
+		case syntax.ErrArithOperator:
 			reason, fallback = d.ArithOperatorExpected, "operator expected"
+		case syntax.ErrArithBadOperator:
+			reason, fallback = d.ArithBadOperator, "operator expected"
+			if reason == "" {
+				// Only one dialect separates the two; for the rest the
+				// operator wording covers both.
+				reason = d.ArithOperatorExpected
+			}
 		}
 		return Wording(d.ArithError, "%[1]s: %[2]s",
 			se.Expr, Wording(reason, fallback, se.Token), se.Token)
@@ -839,8 +878,22 @@ func (d Diagnostics) StatusForParseError(err error) int {
 // there is one list and not two that could drift.
 func (d Diagnostics) runtimeRefusal(err error) (int, bool) {
 	var se *syntax.Error
-	if errors.As(err, &se) && se.Kind == syntax.ErrForName && d.ForNameStatus != 0 {
-		return d.ForNameStatus, true
+	if !errors.As(err, &se) {
+		return 0, false
+	}
+	switch se.Kind {
+	case syntax.ErrForName:
+		if d.ForNameStatus != 0 {
+			return d.ForNameStatus, true
+		}
+	case syntax.ErrArithOperand, syntax.ErrArithOperator, syntax.ErrArithBadOperator:
+		// A malformed expression is found while expanding in bash, so the
+		// command fails rather than the script failing to parse. The same
+		// three consequences follow as for `for` with a bad name, which is
+		// what makes this one predicate rather than three special cases.
+		if d.ArithFailureStatus != 0 {
+			return d.ArithFailureStatus, true
+		}
 	}
 	return 0, false
 }

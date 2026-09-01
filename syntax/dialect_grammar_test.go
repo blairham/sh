@@ -186,3 +186,61 @@ func TestABraceGroupNamesTheWordItStoppedOn(t *testing.T) {
 		}
 	}
 }
+
+// TestArithFloatIsAGrammarFlag: whether a float literal exists is a question
+// about what parses, so it lives on the dialect and not on the semantics
+// vector — where it was also declared, unused, answering the same question
+// twice. The interpreter reads the same flag for the half the parser cannot
+// answer: a float arriving in a variable.
+func TestArithFloatIsAGrammarFlag(t *testing.T) {
+	float := Core()
+	float.ArithFloat = true
+	for _, src := range []string{`echo $((1.5))`, `echo $((.5))`, `echo $((1.5e2))`, `echo $((3.0/2))`} {
+		mustParse(t, src, float, "a float literal where the dialect has them")
+		mustFail(t, src, Core(), "a float literal where it does not")
+	}
+	// `1e-3` is the exception, and it is why the corpus case for exponents is
+	// written with a point. It parses either way: the digit reader accepts
+	// `e` as a hex digit, so without floats the text is `1e` minus `3` — a
+	// perfectly good expression whose left operand is not a number, which
+	// fails when it is evaluated rather than when it is read.
+	mustParse(t, `echo $((1e-3))`, float, "an exponent where the dialect has floats")
+	mustParse(t, `echo $((1e-3))`, Core(), "the same text read as a subtraction")
+	// Integers parse either way, and a based literal is an integer whose
+	// digits may include an `e` — reading `0x1e` as an exponent would make it
+	// a different number.
+	for _, src := range []string{`echo $((3/2))`, `echo $((0x1e))`, `echo $((16#ff))`} {
+		mustParse(t, src, float, "an integer where the dialect has floats")
+		mustParse(t, src, Core(), "an integer where it does not")
+	}
+}
+
+// TestLeftoverTextIsBlamedForWhatItCouldHaveBeen: the two ways an expression
+// can fail to use all its text. One shell words them differently, so the
+// parser has to say which it was — it is a question about what the text could
+// have been, which is grammar rather than wording.
+func TestLeftoverTextIsBlamedForWhatItCouldHaveBeen(t *testing.T) {
+	for _, tc := range []struct {
+		src  string
+		kind ErrorKind
+	}{
+		// An operand standing where an operator belonged.
+		{`echo $((1 2))`, ErrArithOperator},
+		{`echo $((1 x))`, ErrArithOperator},
+		// Text that could be neither.
+		{`echo $((1 @))`, ErrArithBadOperator},
+		{`echo $((1.5))`, ErrArithBadOperator},
+		// Nothing at all where a value belonged, which is a third thing.
+		{`echo $((.5))`, ErrArithOperand},
+		{`echo $((1 +))`, ErrArithOperand},
+	} {
+		_, err := Parse(tc.src, Core())
+		var se *Error
+		if !errors.As(err, &se) {
+			t.Fatalf("%s: got %v, want a syntax error", tc.src, err)
+		}
+		if se.Kind != tc.kind {
+			t.Errorf("%s: kind %v, want %v", tc.src, se.Kind, tc.kind)
+		}
+	}
+}

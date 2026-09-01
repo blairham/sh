@@ -64,7 +64,7 @@ func TestSemantics(t *testing.T) {
 		{"IndirectionYieldsName", s.IndirectionYieldsName, interp.Yes},
 		{"ArithInvalidOctalDigitIsError", s.ArithInvalidOctalDigitIsError, interp.No},
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.Yes},
-		{"ArithFloat", s.ArithFloat, interp.Yes},
+		{"ArithIntegerOperatorRefusesFloat", s.ArithIntegerOperatorRefusesFloat, interp.Yes},
 		{"LastPipelineElementInCurrentShell", s.LastPipelineElementInCurrentShell, interp.Yes},
 	} {
 		if tc.got != tc.want {
@@ -298,5 +298,29 @@ func TestSelectMenuLayout(t *testing.T) {
 	// — which is why a ksh93 script's transcript has the menu and no prompt.
 	if got, want := ksh.Diagnostics().SelectPrompt, "#? "; got != want {
 		t.Errorf("SelectPrompt = %q, want %q", got, want)
+	}
+}
+
+// TestFloatFormatting: ksh93 shows fifteen significant digits and writes a
+// whole float as an integer, and it refuses a float where only an integer will
+// do rather than truncating.
+func TestFloatFormatting(t *testing.T) {
+	if !ksh.Dialect().ArithFloat {
+		t.Error("ksh93 has floating point")
+	}
+	d := ksh.Diagnostics()
+	if got, want := d.ArithFloatDigits, 15; got != want {
+		t.Errorf("ArithFloatDigits = %d, want %d", got, want)
+	}
+	if d.ArithFloatKeepsPoint {
+		t.Error("ksh93 writes a whole float as an integer")
+	}
+	if got, want := d.ArithInfinity, "inf"; got != want {
+		t.Errorf("ArithInfinity = %q, want %q", got, want)
+	}
+	// A malformed expression is a failed command here rather than a failed
+	// parse, the same as in bash.
+	if got, want := d.ArithFailureStatus, 1; got != want {
+		t.Errorf("ArithFailureStatus = %d, want %d", got, want)
 	}
 }

@@ -47,6 +47,7 @@ func TestSemantics(t *testing.T) {
 		got  interp.Answer
 		want interp.Answer
 	}{
+		{"ArithIntegerOperatorRefusesFloat", s.ArithIntegerOperatorRefusesFloat, interp.No},
 		{"AssignmentUpdatesPipelineStatus", s.AssignmentUpdatesPipelineStatus, interp.No},
 		{"UnsetEndsTheProducedPipelineStatus", s.UnsetEndsTheProducedPipelineStatus, interp.Yes},
 		{"ArrayScalarIsTheWholeArray", s.ArrayScalarIsTheWholeArray, interp.Yes},
@@ -353,5 +354,24 @@ func TestCloseBraceIsReservedEverywhere(t *testing.T) {
 	// And the other half of the same rule.
 	if _, err := syntax.Parse(`echo }`, zsh.Dialect()); err == nil {
 		t.Error("`echo }` should be a syntax error where `}` is always reserved")
+	}
+}
+
+// TestFloatFormatting: zsh shows seventeen significant digits and keeps a
+// point on a whole float, so the same arithmetic reads differently from
+// ksh93's.
+func TestFloatFormatting(t *testing.T) {
+	if !zsh.Dialect().ArithFloat {
+		t.Error("zsh has floating point")
+	}
+	d := zsh.Diagnostics()
+	if got, want := d.ArithFloatDigits, 17; got != want {
+		t.Errorf("ArithFloatDigits = %d, want %d", got, want)
+	}
+	if !d.ArithFloatKeepsPoint {
+		t.Error("zsh keeps a point on a whole float")
+	}
+	if got, want := d.ArithInfinity, "Inf"; got != want {
+		t.Errorf("ArithInfinity = %q, want %q", got, want)
 	}
 }

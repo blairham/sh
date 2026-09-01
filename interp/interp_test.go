@@ -397,3 +397,45 @@ func TestExitedStopsTheCaller(t *testing.T) {
 		t.Errorf("status %d, want 3", got)
 	}
 }
+
+// TestAHeredocBodyIsNotAWord: what reaches the command on the other end.
+//
+// The body was being run through the word lexer, so shell quoting applied to
+// it: `don't` arrived as `dont` and `\n` as `n`. Nothing reported it.
+func TestAHeredocBodyIsNotAWord(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"quotes are content",
+			"x=VAL\ncat <<EOF\ndon't say \"hi\"\nEOF\n",
+			"don't say \"hi\"\n",
+		},
+		{
+			"a backslash escapes three things and stays before the rest",
+			"x=VAL\ncat <<EOF\n\\$x \\\\ \\n \\' \\\"\nEOF\n",
+			"$x \\ \\n \\' \\\"\n",
+		},
+		{
+			"substitutions happen",
+			"x=VAL\ncat <<EOF\n$x ${x} $(echo sub) $((1+2))\nEOF\n",
+			"VAL VAL sub 3\n",
+		},
+		{
+			"a continued line is joined",
+			"cat <<EOF\nabc\\\ndef\nEOF\n",
+			"abcdef\n",
+		},
+		{
+			// The other side of the switch, which was already right and is
+			// here so that a change to one is not mistaken for both.
+			"a quoted delimiter takes the body whole",
+			"x=VAL\ncat <<'EOF'\ndon't $x \\$x \\\\ \"hi\"\nEOF\n",
+			"don't $x \\$x \\\\ \"hi\"\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if out, _ := run(t, tc.src, nil); out != tc.want {
+				t.Errorf("got  %q\nwant %q", out, tc.want)
+			}
+		})
+	}
+}

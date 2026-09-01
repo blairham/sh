@@ -474,6 +474,91 @@ func (l *Lexer) scanSingle() (Span, bool) {
 // backslash-then-n and not a newline — the rule C intuition gets wrong.
 const dquoteEscapes = "$`\"\\"
 
+// heredocEscapes are the only characters a backslash escapes in an unquoted
+// here-document body. It is the double-quote set without the quote, because a
+// quote there is an ordinary character with nothing to escape.
+const heredocEscapes = "$`\\"
+
+// HeredocSpans splits an unquoted here-document body into spans.
+//
+// A body is not a word and not a double-quoted string, though it is much
+// closer to the second: `$name`, `${ }`, `$( )`, `$(( ))` and backticks
+// expand, a backslash escapes only those and itself and a newline, and
+// everything else is literal — **quotes included**.
+//
+// Running the word lexer over it instead is what this replaces, and the
+// difference is not subtle: quoting rules applied, so `don't` came out as
+// `dont` and `\n` as `n`. It printed no error and exited 0, which is the
+// worst way to be wrong.
+//
+// A quoted delimiter is not this. That body is literal throughout and never
+// reaches here.
+func HeredocSpans(body string, d Dialect) []Span {
+	l := NewLexer(body, d)
+	return l.heredocSpans()
+}
+
+func (l *Lexer) heredocSpans() []Span {
+	var out []Span
+	var b strings.Builder
+	litPos := l.pos()
+	flush := func() {
+		if b.Len() > 0 {
+			out = append(out, Span{Kind: Literal, Value: b.String(), Quoting: DoubleQuoted, Pos: litPos})
+			b.Reset()
+		}
+	}
+	for !l.eof() {
+		c := l.peek()
+		switch {
+		// The substitutions, which are the whole reason an unquoted body is
+		// treated differently from a quoted one. Marked as double-quoted
+		// because that is what stops the result being split: a body is one
+		// blob of input, not a list of fields.
+		case c == '$' && l.peekAt(1) == '(' && l.peekAt(2) == '(':
+			flush()
+			out = append(out, l.scanParens(ArithSubst, DoubleQuoted))
+			litPos = l.pos()
+		case c == '$' && l.peekAt(1) == '(':
+			flush()
+			out = append(out, l.scanParens(CommandSubst, DoubleQuoted))
+			litPos = l.pos()
+		case c == '$' && l.peekAt(1) == '{':
+			flush()
+			out = append(out, l.scanBraces(DoubleQuoted))
+			litPos = l.pos()
+		case c == '$' && isBareParam(l.peekAt(1)):
+			flush()
+			out = append(out, l.scanBareParam(DoubleQuoted))
+			litPos = l.pos()
+		case c == '`':
+			flush()
+			out = append(out, l.scanBackticks(DoubleQuoted))
+			litPos = l.pos()
+
+		case c == '\\' && l.peekAt(1) == '\n':
+			// A continued line, joined with no newline between.
+			l.advance()
+			l.advance()
+		case c == '\\' && strings.IndexByte(heredocEscapes, l.peekAt(1)) >= 0:
+			l.advance()
+			if b.Len() == 0 {
+				litPos = l.pos()
+			}
+			b.WriteByte(l.advance())
+		default:
+			// Everything else, and there is a lot of it: a backslash before
+			// an ordinary character stays, both of it, and so does a quote.
+			if b.Len() == 0 {
+				litPos = l.pos()
+			}
+			b.WriteByte(l.advance())
+		}
+	}
+	flush()
+	return out
+}
+
 func (l *Lexer) scanDouble() []Span {
 	open := l.pos()
 	l.advance() // "

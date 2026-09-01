@@ -461,3 +461,52 @@ func withCaseContinue() Dialect {
 	d.CaseContinue = true
 	return d
 }
+
+// TestHeredocSpansTreatQuotesAsOrdinary: a here-document body is not a word.
+// It is closest to a double-quoted string, and the difference is exactly the
+// quote: there is nothing for one to quote, so it is content.
+//
+// The word lexer was used here instead, and the result had no error and no
+// non-zero status — `don't` simply arrived as `dont`.
+func TestHeredocSpansTreatQuotesAsOrdinary(t *testing.T) {
+	literal := func(spans []Span) string {
+		var b strings.Builder
+		for _, s := range spans {
+			if s.Kind != Literal {
+				b.WriteString("<" + s.Kind.String() + ">")
+				continue
+			}
+			b.WriteString(s.Value)
+		}
+		return b.String()
+	}
+	for _, tc := range []struct{ body, want string }{
+		// Quotes are content, single and double alike.
+		{`don't`, `don't`},
+		{`say "hi"`, `say "hi"`},
+		{`'wholly quoted'`, `'wholly quoted'`},
+		// A backslash escapes only these three, and disappears doing it.
+		{`\$x`, `$x`},
+		{"\\`x", "`x"},
+		{`\\`, `\`},
+		// Before anything else it stays, and so does what follows.
+		{`\n`, `\n`},
+		{`\'`, `\'`},
+		{`\"`, `\"`},
+		{`\*`, `\*`},
+		// A backslash before a newline joins the lines with nothing between.
+		{"abc\\\ndef", "abcdef"},
+		// And the substitutions are spans of their own.
+		{`$x`, `<parameter expansion>`},
+		{`${x}`, `<parameter expansion>`},
+		{`$(echo hi)`, `<command substitution>`},
+		{`$((1+2))`, `<arithmetic substitution>`},
+		{"`echo hi`", `<command substitution>`},
+		// A `$` with nothing a name can start with is just a dollar.
+		{`$ end`, `$ end`},
+	} {
+		if got := literal(HeredocSpans(tc.body, Core())); got != tc.want {
+			t.Errorf("%q gave %q, want %q", tc.body, got, tc.want)
+		}
+	}
+}

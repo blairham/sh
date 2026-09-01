@@ -703,37 +703,18 @@ func (r *Runner) specialLength() int {
 // a word: lexing alone would drop them as token separators.
 func (r *Runner) expandRawText(text string) string {
 	var b strings.Builder
-	for i, line := range strings.Split(text, "\n") {
-		if i > 0 {
-			b.WriteByte('\n')
+	for _, s := range syntax.HeredocSpans(text, r.dialect()) {
+		if s.Kind == syntax.ParamExp && s.Param == nil {
+			s.Param = syntax.NewParser("", r.dialect()).ParseParamExpFor(s.Value, s.Pos)
 		}
-		l := syntax.NewLexer(line, r.dialect())
-		var spans []syntax.Span
-		last := 0
-		for {
-			tk := l.Next()
-			if tk.Kind == syntax.TokEOF {
-				break
-			}
-			// Blanks between tokens are content here, not separators.
-			if tk.Pos.Offset > last {
-				spans = append(spans, syntax.Span{Kind: syntax.Literal, Value: line[last:tk.Pos.Offset]})
-			}
-			last = tk.End.Offset
-			if tk.Kind == syntax.TokWord {
-				w := r.parseSpans(tk.Spans)
-				spans = append(spans, w...)
-				continue
-			}
-			spans = append(spans, syntax.Span{Kind: syntax.Literal, Value: tk.Text})
+		if s.Kind == syntax.ArithSubst && s.Arith == nil {
+			s.Arith = syntax.NewParser("", r.dialect()).ParseArithFor(s.Value, s.Pos)
 		}
-		if last < len(line) {
-			spans = append(spans, syntax.Span{Kind: syntax.Literal, Value: line[last:]})
-		}
-		for _, s := range spans {
-			text, _ := r.expandSpan(s)
-			b.WriteString(globUnescape(text))
-		}
+		out, _ := r.expandSpan(s)
+		// expandSpan marks a literal's metacharacters for the glob stage,
+		// and a here-document has no glob stage — the text is input, not a
+		// pattern. Without this a backslash in the body came out doubled.
+		b.WriteString(globUnescape(out))
 	}
 	return b.String()
 }

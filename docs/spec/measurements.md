@@ -1127,6 +1127,11 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `redir/merge-then-file` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` |
 | `redir/file-then-merge` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` |
 | `redir/multios-is-zsh-only` | `[][x]` | `[][x]` | `[][x]` | `[][x]` | `[][x]` | `[x][x]` |
+| `heredoc/quotes-in-the-body-are-literal` | `don't say "hi"` | `don't say "hi"` | `don't say "hi"` | `don't say "hi"` | `don't say "hi"` | `don't say "hi"` |
+| `heredoc/a-backslash-escapes-three-things` | `$x \ \n \' \"` | `$x \ \n \' \"` | `$x \ \n \' \"` | `$x \ \n \' \"` | `$x \ \n \' \"` | `$x \ \n \' \"` |
+| `heredoc/an-unquoted-body-expands` | `VAL VAL sub 3` | `VAL VAL sub 3` | `VAL VAL sub 3` | `VAL VAL sub 3` | `VAL VAL sub 3` | `VAL VAL sub 3` |
+| `heredoc/a-quoted-delimiter-takes-the-body-whole` | `don't $x \$x \\ "hi"` | `don't $x \$x \\ "hi"` | `don't $x \$x \\ "hi"` | `don't $x \$x \\ "hi"` | `don't $x \$x \\ "hi"` | `don't $x \$x \\ "hi"` |
+| `heredoc/a-continued-line-is-joined` | `abcdef` | `abcdef` | `abcdef` | `abcdef` | `abcdef` | `abcdef` |
 
 - `redir/dup-to-stderr` — `>&2` sends to stderr, so discarding stderr discards it — the check that the duplication happened rather than the word being an argument
   ```sh
@@ -1143,6 +1148,40 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `redir/multios-is-zsh-only` — zsh writes to every target and the others only to the last, with no error either way — the &> failure mode in a redirection, and not implemented here
   ```sh
   echo x >a >b; printf "[%s][%s]" "$(cat a 2>/dev/null)" "$(cat b 2>/dev/null)"
+  ```
+- `heredoc/quotes-in-the-body-are-literal` — a here-document body is not a word: a quote in it is an ordinary character with nothing to quote, so running the word lexer over it removed them and turned don't into dont — silently, with status 0
+  ```sh
+  cat <<EOF
+  don't say "hi"
+  EOF
+  ```
+- `heredoc/a-backslash-escapes-three-things` — only `$`, a backtick and a backslash; before anything else the backslash stays and so does what follows it, which is the half that makes `\n` two characters here and one inside double quotes
+  ```sh
+  x=VAL
+  cat <<EOF
+  \$x \\ \n \' \"
+  EOF
+  ```
+- `heredoc/an-unquoted-body-expands` — the reason an unquoted body is treated differently at all: every substitution happens, which is what makes the quoting of the *delimiter* worth recording
+  ```sh
+  x=VAL
+  cat <<EOF
+  $x ${x} $(echo sub) $((1+2))
+  EOF
+  ```
+- `heredoc/a-quoted-delimiter-takes-the-body-whole` — the other side of the same switch: nothing expands and nothing is escaped, so the body is exactly what was written
+  ```sh
+  x=VAL
+  cat <<'EOF'
+  don't $x \$x \\ "hi"
+  EOF
+  ```
+- `heredoc/a-continued-line-is-joined` — a backslash before the newline joins the lines with nothing between them, which is the one escape that removes rather than reveals a character
+  ```sh
+  cat <<EOF
+  abc\
+  def
+  EOF
   ```
 
 ## substitutions

@@ -171,4 +171,8 @@ func TestABracketNamesItself(t *testing.T) {
 	if out, _ := runZsh(t, dir, `[ 1 -eq a ]`); !strings.Contains(out, `:[:`) {
 		t.Errorf("bracket: said %q, want %q", out, `:[:`)
 	}
+	// The unary wording is a separate string and carries the name too.
+	if out, _ := runZsh(t, dir, `[ -Q x ]`); !strings.Contains(out, `:[:`) {
+		t.Errorf("unary bracket: said %q, want %q", out, `:[:`)
+	}
 }

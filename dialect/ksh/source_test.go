@@ -166,4 +166,8 @@ func TestABracketNamesItself(t *testing.T) {
 	if out, _ := runKsh(t, dir, `[ a b c ]`); !strings.Contains(out, `[: b: unknown operator`) {
 		t.Errorf("bracket: said %q, want %q", out, `[: b: unknown operator`)
 	}
+	// The unary wording is a separate string and carries the name too.
+	if out, _ := runKsh(t, dir, `[ -Q x ]`); !strings.Contains(out, `[: -Q: unknown operator`) {
+		t.Errorf("unary bracket: said %q, want %q", out, `[: -Q: unknown operator`)
+	}
 }

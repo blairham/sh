@@ -197,4 +197,8 @@ func TestABracketNamesItself(t *testing.T) {
 	if out, _ := runBash(t, dir, `[ a b c ]`); !strings.Contains(out, `[: b: binary operator expected`) {
 		t.Errorf("bracket: said %q, want %q", out, `[: b: binary operator expected`)
 	}
+	// The unary wording is a separate string and carries the name too.
+	if out, _ := runBash(t, dir, `[ -Q x ]`); !strings.Contains(out, `[: -Q: unary operator expected`) {
+		t.Errorf("unary bracket: said %q, want %q", out, `[: -Q: unary operator expected`)
+	}
 }

@@ -228,7 +228,16 @@ func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
 		v := r.commandSubst(r.ctx, s.Value)
 		return r.expansionResult(v, unquoted, r.sem().SplitCommandSubstitution, "splitting an unquoted command substitution")
 	case syntax.ArithSubst:
-		v, err := r.evalNum(s.Arith)
+		tree, perr := r.arithTree(s.Arith, s.Value)
+		if perr != nil {
+			// A failure to *read* the expression, which can only happen once
+			// it has been expanded — so it is reported here rather than by
+			// the parser, exactly as the shells report it.
+			r.diagf("%s\n", r.diag().ParseFailure(perr))
+			r.expandErr = true
+			return "", false
+		}
+		v, err := r.evalNum(tree)
 		if err != nil {
 			// The expression as written is what dash and ksh93 quote back,
 			// and the span still has it: the parser keeps the raw text
@@ -726,7 +735,8 @@ func (r *Runner) parseSpans(spans []syntax.Span) []syntax.Span {
 		case out[i].Kind == syntax.ParamExp && out[i].Param == nil:
 			out[i].Param = p.ParseParamExpFor(out[i].Value, out[i].Pos)
 		case out[i].Kind == syntax.ArithSubst && out[i].Arith == nil:
-			out[i].Arith = p.ParseArithFor(out[i].Value, out[i].Pos)
+			// Left nil on purpose: an expression with an expansion in it is
+			// read when it is evaluated, which is where expandSpan does it.
 		}
 	}
 	return out

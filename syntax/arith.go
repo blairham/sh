@@ -121,8 +121,27 @@ type arithParser struct {
 	dial Dialect
 }
 
+// hasExpansion reports whether an arithmetic expression contains something
+// that has to be expanded before the expression can be read.
+//
+// `$(( $x$y ))` with x=`1+` and y=`2` is 3 in every shell in the panel: the
+// text is substituted first and the *result* is the expression. So an
+// expression with a `$` or a backtick in it has no tree until it runs, and a
+// tree built now would be built from something that is not the program.
+func hasExpansion(src string) bool {
+	return strings.ContainsAny(src, "$`")
+}
+
 // parseArith parses the text inside `$(( … ))` or `(( … ))`.
+//
+// An expression containing an expansion is left alone: nil, with the raw text
+// still beside it, for the interpreter to expand and read when it runs. That
+// is the only thing that can — `$#` is not an operand until something knows
+// what the parameters are.
 func (p *Parser) parseArith(src string, at Pos) ArithExpr {
+	if hasExpansion(src) {
+		return nil
+	}
 	a := &arithParser{src: src, at: at, p: p, dial: p.dialect}
 	e := a.expr()
 	a.space()

@@ -2015,4 +2015,39 @@ var Corpus = []Case{
 		Snippet: "cat <<EOF\nabc\\\ndef\nEOF\n",
 		Why:     "a backslash before the newline joins the lines with nothing between them, which is the one escape that removes rather than reveals a character",
 	},
+	{
+		ID: "arith/expansion-happens-before-reading", Category: "arithmetic",
+		Snippet: `x='1+'; y=2; echo $(( $x$y ))`,
+		Why:     "the substitution is textual and comes first, so the *result* is the expression — 3, which no tree built from `$x$y` as written could give, and the reason an expression containing a `$` has no tree until it runs",
+	},
+	{
+		ID: "arith/a-positional-parameter-in-an-expression", Category: "arithmetic",
+		Snippet: `set -- 5 7; echo $(( $2-2 ))`,
+		Why:     "`$2` is not a name and the arithmetic grammar has no room for it; it is text that is substituted before the grammar sees anything — the form that /usr/bin/man uses and that this could not read",
+	},
+	{
+		ID: "arith/the-parameter-count-in-an-expression", Category: "arithmetic",
+		Snippet: `set -- a b c; echo $(( $# + 1 ))`,
+		Why:     "the same for the special parameters, which are the ones a script most often does arithmetic on",
+	},
+	{
+		ID: "arith/the-last-status-in-an-expression", Category: "arithmetic",
+		Snippet: `false; echo $(( $? + 1 ))`,
+		Why:     "and for `$?`, where the value only exists at the moment the expression runs",
+	},
+	{
+		ID: "arith/a-braced-parameter-in-an-expression", Category: "arithmetic",
+		Snippet: `x=4; echo $(( ${x} + 1 ))`,
+		Why:     "the braced form goes the same way, which is what makes this about expansion rather than about a longer list of things the grammar accepts",
+	},
+	{
+		ID: "arith/a-command-substitution-in-an-expression", Category: "arithmetic",
+		Snippet: `x=5; echo $(( $(echo 2) + x ))`,
+		Why:     "a command runs to produce part of the expression, which settles that the substitution is the ordinary one and not a special case for parameters",
+	},
+	{
+		ID: "arith/a-name-is-not-substituted", Category: "arithmetic",
+		Snippet: `x=7; echo $(( x + 1 ))`,
+		Why:     "the counter-case: without a `$` nothing is substituted and the name is resolved by the evaluator, which is a different rule with a different answer where a value is not a number",
+	},
 }

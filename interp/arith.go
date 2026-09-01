@@ -609,7 +609,13 @@ func (r *Runner) octalLeadingZero() bool {
 func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 	return r.withRedirs(ctx, c.Redirs, func() error {
 		r.unspecified = false
-		v, err := r.evalArith(c.Parsed)
+		tree, perr := r.arithTree(c.Parsed, c.Expr)
+		if perr != nil {
+			r.diagf("%s\n", r.diag().ParseFailure(perr))
+			r.status = r.diag().StatusForParseError(perr)
+			return nil
+		}
+		v, err := r.evalArith(tree)
 		if r.unspecified {
 			r.status = 2
 			return nil
@@ -627,4 +633,45 @@ func (r *Runner) arithCmd(ctx context.Context, c *syntax.ArithCmdClause) error {
 // wordInvalidNumber words "this is not a number" the way the dialect does.
 func (r *Runner) wordInvalidNumber(text string) string {
 	return Wording(r.diag().InvalidNumber, "invalid number: %s", text)
+}
+
+// arithTree is the expression to evaluate, given what the parser managed and
+// the text it came from.
+//
+// A tree the parser built is used as it stands. A nil one means the text had
+// an expansion in it, so it is not an expression until that has happened —
+// substituted first, read second, which is the order every shell in the panel
+// uses and the only order that makes `$(( $x$y ))` with x=`1+` and y=`2`
+// come to 3.
+func (r *Runner) arithTree(tree syntax.ArithExpr, text string) (syntax.ArithExpr, error) {
+	if tree != nil {
+		return tree, nil
+	}
+	// No guard for empty text: the parser reads it as no expression at all,
+	// with no error, and the evaluator answers zero for a nil tree — which is
+	// what `$(( ))` is. A check here would be a line no test could tell from
+	// its absence.
+	p := syntax.NewParser("", r.dialect())
+	out := p.ParseArithFor(r.expandArithText(text), syntax.Pos{})
+	if err := p.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// expandArithText substitutes into an arithmetic expression before it is read.
+//
+// The inside of `$(( ))` is expanded the way a double-quoted string is —
+// parameters, command substitutions and nested arithmetic — and only then is
+// the result an expression. `$(( $x$y ))` with x=`1+` and y=`2` is 3 in every
+// shell in the panel, which is a fact about *when* the substitution happens
+// and cannot be reproduced by a tree built from the text as written.
+//
+// It is the same scan a here-document body gets, and for the same reason: in
+// both, a quote is an ordinary character and only the expansions matter.
+func (r *Runner) expandArithText(text string) string {
+	if !strings.ContainsAny(text, "$`") {
+		return text
+	}
+	return r.expandRawText(text)
 }

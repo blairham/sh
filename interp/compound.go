@@ -173,19 +173,17 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 // wrong.
 func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) error {
 	r.status = 0
-	if c.Init != nil {
-		if _, err := r.evalArith(c.Init); err != nil {
-			r.diagf("%v\n", err)
-			r.status = 1
-			return nil
-		}
+	// Each part is resolved from its text, because a part containing an
+	// expansion has no tree until it runs — and the condition and the step
+	// are resolved *again* every time round, since what they expand to may
+	// have changed since the last one.
+	if _, ok := r.forArithPart(c.Init, c.InitText); !ok {
+		return nil
 	}
 	for {
-		if c.Cond != nil {
-			v, err := r.evalArith(c.Cond)
-			if err != nil {
-				r.diagf("%v\n", err)
-				r.status = 1
+		if c.Cond != nil || c.CondText != "" {
+			v, ok := r.forArithPart(c.Cond, c.CondText)
+			if !ok {
 				return nil
 			}
 			if v == 0 {
@@ -199,14 +197,31 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 		if stop := r.loopControl(); stop {
 			return nil
 		}
-		if c.Post != nil {
-			if _, err := r.evalArith(c.Post); err != nil {
-				r.diagf("%v\n", err)
-				r.status = 1
-				return nil
-			}
+		if _, ok := r.forArithPart(c.Post, c.PostText); !ok {
+			return nil
 		}
 	}
+}
+
+// forArithPart evaluates one of the three parts of `for (( ; ; ))`.
+//
+// An absent part needs no special case. Its value is only ever read for the
+// condition, and the caller asks about that only when there is one — which is
+// what makes `for ((;;))` endless rather than a loop that never runs.
+func (r *Runner) forArithPart(tree syntax.ArithExpr, text string) (int, bool) {
+	resolved, perr := r.arithTree(tree, text)
+	if perr != nil {
+		r.diagf("%s\n", r.diag().ParseFailure(perr))
+		r.status = 1
+		return 0, false
+	}
+	v, err := r.evalArith(resolved)
+	if err != nil {
+		r.diagf("%v\n", err)
+		r.status = 1
+		return 0, false
+	}
+	return v, true
 }
 
 // loopControl consumes a break or continue aimed at this loop, reporting

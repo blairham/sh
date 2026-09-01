@@ -243,6 +243,16 @@ type Semantics struct {
 	// and everything-but there elsewhere: the two answers are both matches,
 	// on different inputs, with nothing to warn on.
 	BracketCaretNegates Answer
+	// RedirectsWriteToEveryTarget sends a command's output to *all* of the
+	// files it redirects to rather than only the last: `echo x >a >b` fills
+	// both in zsh and leaves `a` empty in the other three.
+	//
+	// Silent either way — the shells that write once report no error, and the
+	// script looks like it worked — which is the `&>` failure mode in a
+	// redirection. Asked only where a command redirects one stream twice,
+	// because that is the only place it decides anything.
+	RedirectsWriteToEveryTarget Answer
+
 	// KillStatus is what `kill` reports when it was given several targets
 	// and they did not all agree. Three answers, and no two of them are the
 	// majority:

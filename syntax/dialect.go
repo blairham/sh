@@ -31,6 +31,17 @@ type Dialect struct {
 	// macOS's /bin/sh.
 	CaseFallthrough bool
 
+	// FuncDefAtParen commits to a function definition as soon as a name is
+	// followed by `(`, rather than requiring the `()` pair.
+	//
+	// It decides *which token* a malformed one is blamed on, which is why it
+	// is a grammar flag and not a wording: `f ( x )` is "x" in bash and dash,
+	// which are already inside a definition looking for `)`, and "(" in
+	// ksh93, which never entered one. Reached most often through a construct
+	// a dialect does not have — `[[ ( -n x ) ]]` is a definition of a
+	// function called `[[` to a shell without `[[`.
+	FuncDefAtParen bool
+
 	// TimesIsReserved makes `times` a reserved word rather than a builtin,
 	// so a word after it is a syntax error rather than an argument it
 	// ignores. ksh93 alone, and the only place in the panel where *which*

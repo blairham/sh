@@ -55,6 +55,7 @@ func Semantics() interp.Semantics {
 	s.ExitTrapRunsOnSignalDeath = interp.Yes
 	s.KillListAcceptsName = interp.Yes
 	s.SIGPrefixAccepted = interp.Yes
+	s.RedirectsWriteToEveryTarget = interp.No
 	s.KillStatus = interp.KillStatusAnyFailure
 	return s
 }

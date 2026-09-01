@@ -644,6 +644,16 @@ func (p *Parser) looksLikeFuncDef() bool {
 	if p.tok.IsQuoted() || len(p.tok.Spans) != 1 || p.tok.Spans[0].Kind != Literal {
 		return false
 	}
+	if p.dialect.FuncDefAtParen {
+		// The paren is the whole announcement here, and the word before it is
+		// not checked for being a name: `[[ ( -n x ) ]]` is a definition of a
+		// function called `[[` to a shell without `[[`, which is how the
+		// dialect that does this reaches the diagnosis it reaches.
+		//
+		// `=` is still excluded, and for the reason below: an assignment of an
+		// array is a parenthesis after a word too.
+		return !strings.Contains(p.tok.Literal(), "=") && p.lex.peekIsLeftParen()
+	}
 	// A function name is a name, so it cannot contain `=`. Without this,
 	// `a=()` — an empty array — was read as a definition of a function
 	// called `a=`, because a parenthesis pair follows either way.
@@ -658,7 +668,7 @@ func (p *Parser) parseFuncPosix() Command {
 	p.next()
 	p.next() // (
 	if !p.at(TokRightParen) {
-		p.fail("expected ) in a function definition")
+		p.failUnexpected(")")
 		return fn
 	}
 	p.next()

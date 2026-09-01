@@ -770,6 +770,17 @@ func (l *Lexer) scanArithCommand(start Pos) Token {
 // The parser needs this because `name` and `name()` are indistinguishable
 // until the paren: a word at command position is a command name right up to
 // the point where it is a function being defined.
+// peekIsLeftParen reports whether the next thing is a `(`, whatever follows
+// it. Two dialects commit to a function definition there and complain about
+// what they find next; the other two never get that far.
+func (l *Lexer) peekIsLeftParen() bool {
+	i := l.off
+	for i < len(l.src) && isBlank(l.src[i]) {
+		i++
+	}
+	return i < len(l.src) && l.src[i] == '('
+}
+
 func (l *Lexer) peekIsFuncParens() bool {
 	i := l.off
 	for i < len(l.src) && isBlank(l.src[i]) {

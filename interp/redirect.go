@@ -33,6 +33,11 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.C
 		return nil, nil
 	}
 	var closers []io.Closer
+	// What this command has already opened for each stream, so a second
+	// redirection of the same one can be combined with the first where the
+	// dialect combines them. Per command rather than per runner: the stream
+	// it started with is not one of its targets.
+	opened := map[int]io.Writer{}
 	// Saved streams are restored when the command finishes, which is why the
 	// caller closes what comes back rather than this doing it.
 	savedOut, savedIn, savedErr := r.Stdout, r.Stdin, r.Stderr
@@ -132,16 +137,28 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.C
 
 		switch fd {
 		case -1:
-			r.Stdout, r.Stderr = f, f
+			w := r.eachTarget(-1, f, opened)
+			r.Stdout, r.Stderr = w, w
 		case 0:
 			r.Stdin = f
 		case 2:
-			r.Stderr = f
+			r.Stderr = r.eachTarget(2, f, opened)
 		default:
-			r.Stdout = f
+			r.Stdout = r.eachTarget(1, f, opened)
 		}
 	}
 	return closers, nil
+}
+
+// eachTarget combines a stream's targets where the dialect writes to all of
+// them, and returns the newest otherwise.
+func (r *Runner) eachTarget(fd int, f io.Writer, opened map[int]io.Writer) io.Writer {
+	if prev, ok := opened[fd]; ok &&
+		r.ask(r.sem().RedirectsWriteToEveryTarget, "a command redirecting one stream to several files") {
+		f = io.MultiWriter(prev, f)
+	}
+	opened[fd] = f
+	return f
 }
 
 type closerFunc func() error

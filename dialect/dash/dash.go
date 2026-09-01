@@ -12,7 +12,13 @@ import (
 // Dialect is what dash parses.
 func Dialect() syntax.Dialect {
 	// dash is the POSIX shell language and nothing more.
-	return syntax.POSIX()
+	d := syntax.POSIX()
+	// Not a construct it adds but how it reads one it already has: a name
+	// followed by `(` is a function definition here, whether or not the `)`
+	// comes next, which is what decides the token a malformed one is blamed
+	// on.
+	d.FuncDefAtParen = true
+	return d
 }
 
 // Semantics is what dash means where the shells conflict.
@@ -29,6 +35,7 @@ func Semantics() interp.Semantics {
 	s.ExitTrapRunsOnSignalDeath = interp.No
 	s.KillListAcceptsName = interp.No
 	s.SIGPrefixAccepted = interp.No
+	s.RedirectsWriteToEveryTarget = interp.No
 	s.KillStatus = interp.KillStatusAnyFailure
 	return s
 }

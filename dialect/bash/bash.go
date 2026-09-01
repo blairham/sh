@@ -16,6 +16,9 @@ func Dialect() syntax.Dialect {
 	d.ParamCaseChange = true
 	d.ParamIndirection = true
 	d.FunctionKeywordParens = true
+	// A name followed by `(` is a function definition here, whether or not
+	// the `)` comes next.
+	d.FuncDefAtParen = true
 	return d
 }
 
@@ -48,6 +51,7 @@ func Semantics() interp.Semantics {
 	s.ExitTrapRunsOnSignalDeath = interp.Yes
 	s.KillListAcceptsName = interp.Yes
 	s.SIGPrefixAccepted = interp.Yes
+	s.RedirectsWriteToEveryTarget = interp.No
 	s.KillStatus = interp.KillStatusAnySuccess
 	return s
 }

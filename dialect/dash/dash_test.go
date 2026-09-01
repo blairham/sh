@@ -224,3 +224,16 @@ func TestDashSpellsItsOwnReasons(t *testing.T) {
 		})
 	}
 }
+
+// TestAParenAfterAWordIsAFunctionDefinition is dash committing at the paren,
+// which is what decides the token it blames — and it reaches this most often
+// through a construct it does not have.
+func TestAParenAfterAWordIsAFunctionDefinition(t *testing.T) {
+	for _, src := range []string{"f ( x )", "[[ ( -n x ) ]]"} {
+		_, err := syntax.Parse(src, dash.Dialect())
+		want := `Syntax error: word unexpected (expecting ")")`
+		if got := dash.Diagnostics().ParseFailure(err); got != want {
+			t.Errorf("%q: got %q, want %q", src, got, want)
+		}
+	}
+}

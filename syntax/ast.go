@@ -373,9 +373,13 @@ func (i *CaseItem) End() Pos { return i.TermPos }
 // and nothing else.
 type ForArithClause struct {
 	Init, Cond, Post ArithExpr
-	Body             []*Stmt
-	Header           string
-	Start, Stop      Pos
+	// InitText, CondText and PostText are the three parts as written. A part
+	// containing an expansion has no tree until it runs, so the text is what
+	// the interpreter reads it from.
+	InitText, CondText, PostText string
+	Body                         []*Stmt
+	Header                       string
+	Start, Stop                  Pos
 }
 
 func (c *ForArithClause) Pos() Pos     { return c.Start }

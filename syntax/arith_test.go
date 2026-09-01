@@ -94,8 +94,13 @@ func TestArithVariablesAndLiterals(t *testing.T) {
 	if got, want := arith(parseArithOf(t, `x+1`, Core())), `(x + 1)`; got != want {
 		t.Errorf("got %s, want %s", got, want)
 	}
-	if got, want := arith(parseArithOf(t, `$x+1`, Core())), `(x + 1)`; got != want {
-		t.Errorf("dollar form: got %s, want %s", got, want)
+	// The dollar form has no tree here, and that is the point: the text is
+	// substituted before the expression is read, so `$x+1` with x=`2*3` is
+	// `2*3+1` and not `x+1`. Building a tree now would build it from
+	// something that is not the program. The interpreter reads it after it
+	// has expanded it.
+	if got := parseArithOf(t, `$x+1`, Core()); got != nil {
+		t.Errorf("dollar form: got %s, want no tree until it is expanded", arith(got))
 	}
 	// A literal is kept as written: whether 0100 is sixty-four or one hundred
 	// is a dialect question, so converting here would bake in an answer.

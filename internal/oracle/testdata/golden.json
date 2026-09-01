@@ -58,6 +58,70 @@
         "TimedOut": false
       }
     },
+    "arith/a-braced-parameter-in-an-expression": {
+      "bash": {
+        "Output": "5",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "5",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "5",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "5",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "5",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "5",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/a-command-substitution-in-an-expression": {
+      "bash": {
+        "Output": "7",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "7",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "7",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "7",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "7",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "7",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "arith/a-float-assignment-outlives-the-expression": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: i+=1.5: arithmetic syntax error: invalid arithmetic operator (error token is \".5\")",
@@ -154,6 +218,38 @@
         "TimedOut": false
       }
     },
+    "arith/a-name-is-not-substituted": {
+      "bash": {
+        "Output": "8",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "8",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "8",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "8",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "8",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "8",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "arith/a-negative-result": {
       "bash": {
         "Output": "-5 -5 -5 -2",
@@ -214,6 +310,38 @@
       },
       "zsh": {
         "Output": "[-6]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/a-positional-parameter-in-an-expression": {
+      "bash": {
+        "Output": "5",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "5",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "5",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "5",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "5",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "5",
         "Status": 0,
         "TimedOut": false
       }
@@ -534,6 +662,38 @@
       },
       "zsh": {
         "Output": "[1]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/expansion-happens-before-reading": {
+      "bash": {
+        "Output": "3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "3",
         "Status": 0,
         "TimedOut": false
       }
@@ -982,6 +1142,70 @@
       },
       "zsh": {
         "Output": "[2][3]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/the-last-status-in-an-expression": {
+      "bash": {
+        "Output": "2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "2",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/the-parameter-count-in-an-expression": {
+      "bash": {
+        "Output": "4",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "4",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "4",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "4",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "4",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "4",
         "Status": 0,
         "TimedOut": false
       }

@@ -874,6 +874,7 @@ func (p *Parser) parseForArith(start Pos) Command {
 	p.next()
 
 	init, cond, post := splitForArith(text)
+	c.InitText, c.CondText, c.PostText = init, cond, post
 	if init != "" {
 		c.Init = p.parseArith(init, at)
 	}

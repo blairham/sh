@@ -1245,3 +1245,37 @@ body happened to be valid word syntax.
 `Tokens` queues the here-document itself now, from the same two tokens the
 parser uses. It is the only caller that needs to: the parser does its own
 registering, and everything else goes through the parser.
+
+## An expression is not known until it is expanded
+
+`$(( $x$y ))` with `x=1+` and `y=2` is **3** in every shell in the panel. Not
+because `$x` and `$y` are operands slotted into a tree, but because the text
+inside `$(( ))` is substituted *first* and the result is then read as an
+expression. Two halves of an operator can come from two variables.
+
+That is a fact about ordering, and it decides where the work goes:
+
+    parse time   an expression containing a `$` or a backtick has no tree.
+                 Building one would be building it from text that is not the
+                 program.
+    run time     the text is expanded — parameters, command substitutions,
+                 nested arithmetic — and *then* read.
+
+So `parseArith` returns nil for such an expression and keeps the raw text
+beside it, and the interpreter reads it when it evaluates. The same applies to
+`(( ))` as a command and to each of the three parts of `for (( ; ; ))`, where
+the condition and the step are re-read every time round because what they
+expand to can change between iterations.
+
+An expression with no `$` in it is untouched by this and is still parsed once,
+which matters: `$(( x + 1 ))` resolves the *name* through the evaluator, under
+the axis that decides whether a name-shaped value is evaluated again. The two
+rules give different answers for a value that is not a number, and keeping
+them apart is the point.
+
+### What it fixed
+
+`/usr/bin/man` — and `apropos`, `manpath`, `whatis` and `sampleproc`, all of
+which use `$(( $# ))` or `$(( $2-2 ))`. Five of the seven parse failures
+`make wild` reported on this machine were this one cause. It was not on the
+list before the sweep existed; it was found by pointing the sweep at /usr/bin.

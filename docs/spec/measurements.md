@@ -1469,6 +1469,13 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `arith/dividing-a-float-by-zero` | `<shell>: 1: arithmetic expression: expecting EOF: "1.0/0"` *(status 2)* | `<shell>: line 1: 1.0/0: arithmetic syntax error: invalid arithmetic operator (error token is ".0/0")` *(status 1)* | `<shell>: line 1: 1.0/0: arithmetic syntax error: invalid arithmetic operator (error token is ".0/0")` *(status 127)* | `<shell>: 1.0/0: syntax error: invalid arithmetic operator (error token is ".0/0")` *(status 1)* | `inf` | `Inf` |
 | `arith/a-negative-result` | `-5 -5 -5 -2` | `-5 -5 -5 -2` | `-5 -5 -5 -2` | `-5 -5 -5 -2` | `-5 -5 -5 -2` | `-5 -5 -5 -2` |
 | `arith/a-negative-result-in-a-variable` | `[-6]` | `[-6]` | `[-6]` | `[-6]` | `[-6]` | `[-6]` |
+| `arith/expansion-happens-before-reading` | `3` | `3` | `3` | `3` | `3` | `3` |
+| `arith/a-positional-parameter-in-an-expression` | `5` | `5` | `5` | `5` | `5` | `5` |
+| `arith/the-parameter-count-in-an-expression` | `4` | `4` | `4` | `4` | `4` | `4` |
+| `arith/the-last-status-in-an-expression` | `2` | `2` | `2` | `2` | `2` | `2` |
+| `arith/a-braced-parameter-in-an-expression` | `5` | `5` | `5` | `5` | `5` | `5` |
+| `arith/a-command-substitution-in-an-expression` | `7` | `7` | `7` | `7` | `7` | `7` |
+| `arith/a-name-is-not-substituted` | `8` | `8` | `8` | `8` | `8` | `8` |
 
 - `arith/bare-name-is-a-variable` — a bare name inside arithmetic is a variable reference, which is why the contents cannot be lexed as ordinary words
   ```sh
@@ -1593,6 +1600,34 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `arith/a-negative-result-in-a-variable` — the same value stored rather than printed, since an assignment writes the number by the same route an expansion does
   ```sh
   x=$((3-9)); echo "[$x]"
+  ```
+- `arith/expansion-happens-before-reading` — the substitution is textual and comes first, so the *result* is the expression — 3, which no tree built from `$x$y` as written could give, and the reason an expression containing a `$` has no tree until it runs
+  ```sh
+  x='1+'; y=2; echo $(( $x$y ))
+  ```
+- `arith/a-positional-parameter-in-an-expression` — `$2` is not a name and the arithmetic grammar has no room for it; it is text that is substituted before the grammar sees anything — the form that /usr/bin/man uses and that this could not read
+  ```sh
+  set -- 5 7; echo $(( $2-2 ))
+  ```
+- `arith/the-parameter-count-in-an-expression` — the same for the special parameters, which are the ones a script most often does arithmetic on
+  ```sh
+  set -- a b c; echo $(( $# + 1 ))
+  ```
+- `arith/the-last-status-in-an-expression` — and for `$?`, where the value only exists at the moment the expression runs
+  ```sh
+  false; echo $(( $? + 1 ))
+  ```
+- `arith/a-braced-parameter-in-an-expression` — the braced form goes the same way, which is what makes this about expansion rather than about a longer list of things the grammar accepts
+  ```sh
+  x=4; echo $(( ${x} + 1 ))
+  ```
+- `arith/a-command-substitution-in-an-expression` — a command runs to produce part of the expression, which settles that the substitution is the ordinary one and not a special case for parameters
+  ```sh
+  x=5; echo $(( $(echo 2) + x ))
+  ```
+- `arith/a-name-is-not-substituted` — the counter-case: without a `$` nothing is substituted and the name is resolved by the evaluator, which is a different rule with a different answer where a value is not a number
+  ```sh
+  x=7; echo $(( x + 1 ))
   ```
 
 ## conditions

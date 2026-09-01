@@ -37,6 +37,7 @@ func Dialect() syntax.Dialect {
 // Semantics is what ksh93 means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	s.SetFTurnsOffGlobbing = interp.Yes
 	s.ArithIntegerOperatorRefusesFloat = interp.Yes
 	s.ArrayScalarIsTheWholeArray = interp.No
 	s.SelectLayout = interp.SelectMenuVertical

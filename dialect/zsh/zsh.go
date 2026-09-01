@@ -31,6 +31,7 @@ func Dialect() syntax.Dialect {
 // Semantics is what zsh means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	s.SetFTurnsOffGlobbing = interp.No
 	s.ArithIntegerOperatorRefusesFloat = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.Yes
 	s.AssignmentUpdatesPipelineStatus = interp.No

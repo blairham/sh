@@ -2050,4 +2050,29 @@ var Corpus = []Case{
 		Snippet: `x=7; echo $(( x + 1 ))`,
 		Why:     "the counter-case: without a `$` nothing is substituted and the name is resolved by the evaluator, which is a different rule with a different answer where a value is not a number",
 	},
+	{
+		ID: "opt/set-f-turns-off-pathname-expansion", Category: "shell options",
+		Snippet: `touch a.txt b.txt; set -f; echo *.txt`,
+		Why:     "`-f` is the short spelling of noglob in three of the four; zsh spells that option the long way only and uses `-f` for something else entirely, so the pattern still expands there",
+	},
+	{
+		ID: "opt/set-o-noglob-is-unanimous", Category: "shell options",
+		Snippet: `touch a.txt b.txt; set -o noglob; echo *.txt`,
+		Why:     "the long name means the same thing in all four, which is what makes it the spelling that needs no dialect — and the pair with the case above is the whole of the axis",
+	},
+	{
+		ID: "opt/noglob-does-not-stop-matching", Category: "shell options",
+		Snippet: `set -o noglob; case a.txt in *.txt) echo match;; *) echo no;; esac`,
+		Why:     "only the filesystem half is switched off: a pattern in a `case` arm still matches, because that is matching rather than expansion",
+	},
+	{
+		ID: "opt/an-option-can-be-turned-back-off", Category: "shell options",
+		Snippet: `touch a.txt; set -o noglob; set +o noglob; echo *.txt`,
+		Why:     "`+o` is the other half of the spelling, and without it an option once set could not be unset",
+	},
+	{
+		ID: "opt/an-expansions-result-is-not-globbed-under-noglob", Category: "shell options",
+		Snippet: `touch a.txt b.txt; set -o noglob; x=*.txt; echo $x`,
+		Why:     "the option reaches the result of an expansion too, which is the same stage by a different route",
+	},
 }

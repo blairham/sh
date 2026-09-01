@@ -93,6 +93,7 @@ func TestSemantics(t *testing.T) {
 		got  interp.Answer
 		want interp.Answer
 	}{
+		{"SetFTurnsOffGlobbing", s.SetFTurnsOffGlobbing, interp.Yes},
 		{"DeclaredNameWithoutValueIsEmpty", s.DeclaredNameWithoutValueIsEmpty, interp.No},
 		// dash has no `typeset`, so TypesetLocalNeedsKeywordFunction is absent
 		// rather than false — the axis does not arise.

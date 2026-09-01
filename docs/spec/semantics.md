@@ -32,6 +32,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | a signal handler sees the earlier `$?` | no | no | no | **yes** |
 | an unset positional survives `set -u` | no | no | **yes** | no |
 | `set +x` traces itself | yes | yes | **no** | yes |
+| `set -f` turns off globbing | yes | yes | yes | **no** |
 | each assignment gets its own trace line | no | **yes** | **yes** | no |
 | brace expansion happens | **no** | yes | yes | yes |
 | arithmetic does floating point | no | no | **yes** | **yes** |
@@ -1279,3 +1280,32 @@ them apart is the point.
 which use `$(( $# ))` or `$(( $2-2 ))`. Five of the seven parse failures
 `make wild` reported on this machine were this one cause. It was not on the
 list before the sweep existed; it was found by pointing the sweep at /usr/bin.
+
+## Two spellings of an option, and only one of them is portable
+
+`set -o noglob` means the same thing in all four shells. `set -f` is its short
+spelling in three of them, and in zsh it is a different option entirely —
+about startup files — which leaves globbing alone:
+
+    set -f; echo *.txt      *.txt in bash, dash and ksh93
+                            a.txt b.txt in zsh
+
+So the long name needs no dialect and the short one does. The axis is asked
+only where `-f` is written, which means a script using `set -o noglob` never
+raises the question.
+
+What the option switches off is the *filesystem* half and nothing else. A
+pattern in a `case` arm or after `==` still matches under it, because that is
+matching rather than expansion — the same split that keeps the pattern
+matcher free of the rules that belong to pathname expansion.
+
+### What it unblocked
+
+`/usr/bin/man`. With `$` in arithmetic fixed it parsed, and then failed at
+run time on `set -f` — which the sweep could not have told us, because the
+sweep reads and never runs. `man -w ls`, `manpath`, `whatis` and `apropos`
+all produce byte-identical output to bash now.
+
+That is the second time a fix has revealed the *next* thing behind it, and
+the argument for giving the sweep a run mode: a parse-only check finds what
+cannot be read, and says nothing about what cannot be done.

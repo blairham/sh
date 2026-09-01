@@ -120,6 +120,21 @@ func biSet(r *Runner, _ context.Context, args []string) int {
 			break
 		}
 		on := a[0] == '-'
+		if a[1:] == "o" {
+			// The long spelling, whose name is the next word. Every option
+			// this shell has can be written either way, and every shell in
+			// the panel uses the same names for them — which is what makes
+			// the long form the one that needs no dialect.
+			if i+1 >= len(args) {
+				r.diagf("set: -o needs an option name\n")
+				return 2
+			}
+			i++
+			if !r.setOption(args[i], on) {
+				return 2
+			}
+			continue
+		}
 		for _, opt := range a[1:] {
 			switch opt {
 			case 'C':
@@ -130,6 +145,14 @@ func biSet(r *Runner, _ context.Context, args []string) int {
 				r.nounset = on
 			case 'x':
 				r.xtrace = on
+			case 'f':
+				// Not universal: one shell spells this option the long way
+				// only and uses `-f` for something else, which does not
+				// touch globbing. Asked rather than assumed, and only here —
+				// `set -o noglob` needs no dialect.
+				if r.ask(r.sem().SetFTurnsOffGlobbing, "`set -f` turning off pathname expansion") {
+					r.noglob = on
+				}
 			default:
 				r.diagf("set: -%c is not implemented\n", opt)
 				return 2
@@ -142,6 +165,30 @@ func biSet(r *Runner, _ context.Context, args []string) int {
 		r.Params = append([]string(nil), args[i:]...)
 	}
 	return 0
+}
+
+// setOption applies `set -o name`, reporting whether the name is one we have.
+//
+// The names are the same in every shell in the panel, which is what makes the
+// long form the one that needs no dialect: `set -o noglob` means the same
+// thing in all four where `set -f` does not.
+func (r *Runner) setOption(name string, on bool) bool {
+	switch name {
+	case "errexit":
+		r.errexit = on
+	case "nounset":
+		r.nounset = on
+	case "xtrace":
+		r.xtrace = on
+	case "noclobber":
+		r.noclobber = on
+	case "noglob":
+		r.noglob = on
+	default:
+		r.diagf("set: %s: invalid option name\n", name)
+		return false
+	}
+	return true
 }
 
 func biUnset(r *Runner, _ context.Context, args []string) int {

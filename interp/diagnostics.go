@@ -350,6 +350,19 @@ type Diagnostics struct {
 	// Zero means the substrate's own, which is 1.
 	DotCannotOpenStatus int
 
+	// NamesTheInputInLocation puts *where the script came from* between the
+	// shell's name and the line, for a parse failure only: bash writes
+	// `bash: -c: line 1:` when it read the script from -c and plain
+	// `bash: line 1:` for a runtime diagnostic on the same input. What the
+	// input is called is the front end's to say — nothing here knows that a
+	// shell has a -c at all — so this is only whether it is said.
+	NamesTheInputInLocation bool
+	// EchoesTheOffendingLine repeats the source line after a parse failure,
+	// as bash's second line: "bash: -c: line 1: `{ fi; }'". Only after a token
+	// the grammar did not want; an input that simply ran out gets no echo,
+	// which EchoesLine decides.
+	EchoesTheOffendingLine bool
+
 	// ScriptLocation is Location for a script read from a file, when the two
 	// differ. ksh93 is the only shell in the panel where they do: `ksh -c`
 	// names no location at all, and `ksh script` says "line 2". Zero means
@@ -721,6 +734,65 @@ func (d Diagnostics) Report(name string, line int, msg string) string {
 	return d.prefix(name, "", line) + msg
 }
 
+// ReportFrom is Report for a parse failure, which one dialect prefixes with
+// where the script came from as well as with the shell's name.
+//
+// input is the front end's label for it — "-c", and empty for a script file or
+// for standard input, both of which that dialect leaves unnamed.
+func (d Diagnostics) ReportFrom(name, input string, line int, msg string) string {
+	if input != "" && d.NamesTheInputInLocation {
+		name += ": " + input
+	}
+	return d.prefix(name, "", line) + msg
+}
+
+// ParseDiagnostic is everything a shell prints for a failed parse: the located
+// message, and after it the echoed source line for the dialect that adds one.
+//
+// It is one call rather than a location and a message the caller joins,
+// because the three decisions are not independent — the wording, whether the
+// origin is named, and whether the line is echoed all turn on the same error —
+// and they belong together here for the same reason the wording does: `eval`
+// and `.` report the same failures and must say the same thing.
+//
+// name is the shell or the script; input is what the front end calls the
+// origin, "-c" or empty; src is the whole script, for the echo.
+func (d Diagnostics) ParseDiagnostic(name, input string, err error, src string) string {
+	line := d.ParseFailureLine(err)
+	if line == 0 {
+		// A failure that does not say where it was. Only the first line can
+		// be pointed at honestly, and saying "line 0" would be worse.
+		line = 1
+	}
+	if _, runtime := d.runtimeRefusal(err); runtime {
+		// Not a parse failure as far as this dialect is concerned, so it gets
+		// the plain location and no echo.
+		return d.Report(name, line, d.ParseFailure(err)+"\n")
+	}
+	out := d.ReportFrom(name, input, line, d.ParseFailure(err)+"\n")
+	return out + d.echoLine(name, input, line, err, src)
+}
+
+// echoLine is the second line, or empty for none.
+//
+// Only a token the grammar did not want gets one: an input that simply ran out
+// has no offending line to point at, and the shell that does this prints none
+// for it.
+func (d Diagnostics) echoLine(name, input string, line int, err error, src string) string {
+	if !d.EchoesTheOffendingLine {
+		return ""
+	}
+	var se *syntax.Error
+	if !errors.As(err, &se) || se.Kind != syntax.ErrUnexpected {
+		return ""
+	}
+	lines := strings.Split(src, "\n")
+	if line < 1 || line > len(lines) {
+		return ""
+	}
+	return d.ReportFrom(name, input, line, "`"+lines[line-1]+"'\n")
+}
+
 // prefix renders the start of a diagnostic for a shell called name at line.
 func (d Diagnostics) prefix(name, builtin string, line int) string {
 	if name == "" {
@@ -748,11 +820,29 @@ func (d Diagnostics) prefix(name, builtin string, line int) string {
 // StatusForParseError is the status a particular parse failure reports, which
 // is not always the dialect's general one.
 func (d Diagnostics) StatusForParseError(err error) int {
-	var se *syntax.Error
-	if errors.As(err, &se) && se.Kind == syntax.ErrForName && d.ForNameStatus != 0 {
-		return d.ForNameStatus
+	if st, ok := d.runtimeRefusal(err); ok {
+		return st
 	}
 	return d.SyntaxStatus()
+}
+
+// runtimeRefusal reports whether the dialect refuses this at *run* time rather
+// than while parsing, and with what status.
+//
+// `for 1x in a; do :; done` is the case: bash parses it and complains when it
+// reaches it, so the complaint carries the status of a failed command and none
+// of the decoration a parse failure gets — no naming of where the script came
+// from, and no echoed source line. We find it while parsing, which is why the
+// difference has to be said here rather than emerging from when it is noticed.
+//
+// The dialect having given the failure a status of its own is the signal, so
+// there is one list and not two that could drift.
+func (d Diagnostics) runtimeRefusal(err error) (int, bool) {
+	var se *syntax.Error
+	if errors.As(err, &se) && se.Kind == syntax.ErrForName && d.ForNameStatus != 0 {
+		return d.ForNameStatus, true
+	}
+	return 0, false
 }
 
 func (d Diagnostics) SyntaxStatus() int {

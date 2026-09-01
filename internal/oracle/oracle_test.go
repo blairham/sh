@@ -199,3 +199,30 @@ func TestNormalizeUsesTheNameTheShellWasInvokedUnder(t *testing.T) {
 		t.Errorf("argv0 name not normalized: %q", got)
 	}
 }
+
+// TestSyntaxErrorCasesAreGraded is the point of grading them at all.
+//
+// They were skipped alongside the cases whose reference races, and the two
+// exclusions are not alike: a racing reference cannot grade anything, but a
+// rejection is as deterministic as an acceptance and its wording is exactly
+// what the Diagnostics vector exists for. Skipping them left a whole vector
+// ungraded and a report of 100% silent about it — nine real gaps, at the time
+// this was written.
+func TestSyntaxErrorCasesAreGraded(t *testing.T) {
+	var syntaxErrors int
+	for _, c := range Corpus {
+		if c.SyntaxError {
+			syntaxErrors++
+			if !graded(c) {
+				t.Errorf("%s is not graded, but a rejection is as deterministic as an acceptance", c.ID)
+			}
+		}
+	}
+	if syntaxErrors == 0 {
+		t.Fatal("no SyntaxError cases in the corpus, so this proves nothing")
+	}
+	// The one thing that does disqualify a case still does.
+	if graded(Case{ReferenceRaces: true}) {
+		t.Error("a racing reference cannot grade anything and must stay excluded")
+	}
+}

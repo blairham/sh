@@ -310,3 +310,78 @@ func TestTheFrontEndAndEvalAgreeOnWhereAParseErrorIs(t *testing.T) {
 		t.Errorf("eval reported %q, want the line after the last", viaEval)
 	}
 }
+
+// TestWhereTheScriptCameFromIsNamedOnlyForACommand: one dialect puts the
+// origin between its name and the line, and only for `-c` — a script names
+// itself and standard input names neither.
+func TestWhereTheScriptCameFromIsNamedOnlyForACommand(t *testing.T) {
+	sh := shell()
+	sh.Diagnostics = interp.Diagnostics{
+		Location:                interp.LocationLineWord,
+		NamesTheInputInLocation: true,
+		SyntaxUnexpected:        `unexpected %[1]s`,
+	}
+
+	_, viaCommand, _ := runArgs(t, sh, "testsh", "-c", "{ fi; }")
+	if !strings.HasPrefix(viaCommand, "testsh: -c: line 1: ") {
+		t.Errorf("-c gave %q, want the origin named", viaCommand)
+	}
+	path := writeScript(t, "{ fi; }\n")
+	_, viaScript, _ := runArgs(t, sh, "testsh", path)
+	if strings.Contains(viaScript, "-c") {
+		t.Errorf("a script gave %q, want no origin named", viaScript)
+	}
+	// And a dialect that does not do this never gets it, whatever the route.
+	plain := shell()
+	plain.Diagnostics = interp.Diagnostics{Location: interp.LocationLineWord, SyntaxUnexpected: `unexpected %[1]s`}
+	if _, errs, _ := runArgs(t, plain, "testsh", "-c", "{ fi; }"); strings.Contains(errs, "-c") {
+		t.Errorf("got %q, want no origin named", errs)
+	}
+}
+
+// TestTheOffendingLineIsEchoedOnlyForAToken: the dialect that repeats the
+// source line does it for a word the grammar did not want and not for input
+// that simply ran out — there is no offending line to point at then.
+func TestTheOffendingLineIsEchoedOnlyForAToken(t *testing.T) {
+	sh := shell()
+	sh.Diagnostics = interp.Diagnostics{
+		Location:               interp.LocationLineWord,
+		EchoesTheOffendingLine: true,
+		SyntaxUnexpected:       `unexpected %[1]s`,
+		Unterminated:           `ran out`,
+	}
+	_, token, _ := runArgs(t, sh, "testsh", "-c", "echo one\n{ fi; }")
+	if want := "testsh: line 2: `{ fi; }'\n"; !strings.HasSuffix(token, want) {
+		t.Errorf("got %q, want it to end with %q — the line the failure was on", token, want)
+	}
+	_, ranOut, _ := runArgs(t, sh, "testsh", "-c", "{ echo a")
+	if strings.Count(ranOut, "\n") != 1 {
+		t.Errorf("got %q, want one line and no echo", ranOut)
+	}
+}
+
+// TestAFailureTheDialectRefusesAtRuntimeIsNotDecorated: `for 1x` is found
+// while parsing here and reported when it runs in the dialect this models, so
+// it carries that dialect's runtime status and none of a parse failure's
+// decoration — neither the named origin nor the echoed line.
+func TestAFailureTheDialectRefusesAtRuntimeIsNotDecorated(t *testing.T) {
+	sh := shell()
+	sh.Diagnostics = interp.Diagnostics{
+		Location:                interp.LocationLineWord,
+		NamesTheInputInLocation: true,
+		EchoesTheOffendingLine:  true,
+		ForNameStatus:           1,
+		ForName:                 `%[1]s is not a name`,
+		SyntaxUnexpected:        `unexpected %[1]s`,
+	}
+	_, errs, code := runArgs(t, sh, "testsh", "-c", "for 1x in a; do :; done")
+	if strings.Contains(errs, "-c") {
+		t.Errorf("got %q, want no origin named", errs)
+	}
+	if strings.Count(errs, "\n") != 1 {
+		t.Errorf("got %q, want no echoed line", errs)
+	}
+	if code != 1 {
+		t.Errorf("status %d, want the dialect's runtime status", code)
+	}
+}

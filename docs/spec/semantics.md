@@ -925,3 +925,60 @@ are one thing: it names the input in the location (`bash: -c: line 1:`) and
 echoes the offending source line after an unexpected-token error, and we do
 neither. None of that is fixed here; it is written down so the number is not
 read as coverage it does not have.
+
+## Closing the hole in the number
+
+`make conformance` used to skip every case marked `SyntaxError`, alongside
+the ones whose reference races. The two exclusions were not alike. A racing
+reference cannot grade anything — the score would move without the
+implementation having changed. A *rejection*, though, is as deterministic as
+an acceptance, and its wording is exactly what the `Diagnostics` vector
+exists for. Skipping those cases left a whole vector ungraded and a report of
+100% silent about it.
+
+Grading them found nine gaps behind a number that read as perfect. Seven
+were bash's and were two rules:
+
+**bash names where the script came from, for a parse failure only.** It
+writes `bash: -c: line 1:` when it read the script from `-c`, and plain
+`bash: line 1:` for a *runtime* diagnostic on the same input — so
+`echo ${x!}` carries no `-c`. A script names itself instead, and standard
+input names neither.
+
+**bash echoes the offending source line** after the message, as a second
+line of the same shape:
+
+    bash: -c: line 1: syntax error near unexpected token `fi'
+    bash: -c: line 1: `{ fi; }'
+
+Only after a token the grammar did not want. Input that simply ran out gets
+no echo — there is no offending line to point at.
+
+### A failure one shell finds later than we do
+
+Adding the origin to the location immediately broke a case that had been
+passing, and the reason is worth keeping. `for 1x in a; do :; done` is a
+parse failure here and a *runtime* one in bash: bash parses it and complains
+when it reaches it, so the complaint carries the status of a failed command
+and none of a parse failure's decoration.
+
+`Diagnostics` already knew this — `ForNameStatus` existed to give that
+failure its own status — but the knowledge was spelled out only for the
+status. Now one predicate answers it, and the status, the named origin and
+the echoed line all follow from it, so there is one list rather than three
+that could drift.
+
+The whole diagnostic is built in one call, `ParseDiagnostic`, for the same
+reason the wording lives in `interp`: the three decisions are not
+independent, they all turn on the same error, and `eval` and `.` must say
+the same thing about the same failure as the front end does.
+
+### What is left
+
+    bash   340/341     zsh  339/341
+    ksh93  339/341     dash 341/341
+
+Two cases remain and both are features rather than wordings: `ArithFloat`,
+which ksh93 and zsh answer yes and which is measured and not built, and
+extended patterns like `@(abc|xyz)`, which ksh93 matches, zsh parses without
+matching, and bash and dash reject.

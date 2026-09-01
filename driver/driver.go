@@ -30,8 +30,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/blairham/sh/interp"
@@ -105,12 +103,12 @@ func Main(sh Shell) int { return MainArgs(sh, os.Args) }
 // a shell that cannot name itself still has to produce diagnostics.
 func MainArgs(sh Shell, argv []string) int {
 	sh = sh.withDefaults(argv)
-	src, name, dg, err := sh.input(argv)
+	in, err := sh.input(argv)
 	if err != nil {
 		sh.errf("%s: %v\n", sh.Name, err)
 		return usageStatus
 	}
-	return sh.run(src, name, dg)
+	return sh.run(in.src, in.name, in.input, in.dg)
 }
 
 // Run parses and executes src, returning the status to exit with.
@@ -123,14 +121,14 @@ func Run(sh Shell, src, name string) int {
 	if name == "" {
 		name = sh.Name
 	}
-	return sh.run(src, name, sh.Diagnostics)
+	return sh.run(src, name, "", sh.Diagnostics)
 }
 
 // RunScript is Run for input that came from a file, which selects the
 // script-form diagnostics and names the script rather than the shell.
 func RunScript(sh Shell, src, path string) int {
 	sh = sh.withDefaults(nil)
-	return sh.run(src, path, sh.Diagnostics.ForScript())
+	return sh.run(src, path, "", sh.Diagnostics.ForScript())
 }
 
 // errf writes to the shell's error stream.
@@ -164,7 +162,20 @@ func (sh Shell) withDefaults(argv []string) Shell {
 // by its own path in every diagnostic and takes the script-form diagnostics,
 // because some behavior differs between a script and `-c`; `-c` and standard
 // input are named after the shell.
-func (sh Shell) input(argv []string) (src, name string, dg interp.Diagnostics, err error) {
+// source is where a shell's script came from: the text, what to call it in a
+// diagnostic, and how the dialect words one about it.
+type source struct {
+	src  string
+	name string
+	// input is the front end's label for the origin — "-c", and empty for a
+	// file or for standard input. One dialect names it in a parse failure's
+	// location and nowhere else, which is why it travels beside the name
+	// rather than being folded into it.
+	input string
+	dg    interp.Diagnostics
+}
+
+func (sh Shell) input(argv []string) (source, error) {
 	args := argv
 	if len(args) > 0 {
 		args = args[1:]
@@ -181,23 +192,23 @@ func (sh Shell) input(argv []string) (src, name string, dg interp.Diagnostics, e
 			return sh.operands(args[1:])
 		case a == "-c":
 			if len(args) < 2 {
-				return "", "", dg, errors.New("-c requires an argument")
+				return source{}, errors.New("-c requires an argument")
 			}
 			// Anything after the command word is a positional parameter
 			// rather than another option. Nothing here sets them yet; taking
 			// them at all is what keeps that a gap rather than a misparse.
-			return args[1], sh.Name, sh.Diagnostics, nil
+			return source{src: args[1], name: sh.Name, input: "-c", dg: sh.Diagnostics}, nil
 		case strings.HasPrefix(a, "-c") && len(a) > 2:
 			// `-c'echo hi'` as a single word, which getopt allows.
-			return a[2:], sh.Name, sh.Diagnostics, nil
+			return source{src: a[2:], name: sh.Name, input: "-c", dg: sh.Diagnostics}, nil
 		case a == "-s":
 			// The explicit "read standard input" spelling.
 			s, err := readAll(os.Stdin)
-			return s, sh.Name, sh.Diagnostics, err
+			return source{src: s, name: sh.Name, dg: sh.Diagnostics}, err
 		case a == "-" || !strings.HasPrefix(a, "-"):
 			return sh.operands(args)
 		default:
-			return "", "", dg, fmt.Errorf("unknown option %q", a)
+			return source{}, fmt.Errorf("unknown option %q", a)
 		}
 	}
 	return sh.operands(args)
@@ -205,20 +216,20 @@ func (sh Shell) input(argv []string) (src, name string, dg interp.Diagnostics, e
 
 // operands handles what is left once the options are gone: a script path, or
 // nothing at all, which means standard input.
-func (sh Shell) operands(args []string) (string, string, interp.Diagnostics, error) {
+func (sh Shell) operands(args []string) (source, error) {
 	if len(args) == 0 || args[0] == "-" {
 		src, err := readAll(os.Stdin)
-		return src, sh.Name, sh.Diagnostics, err
+		return source{src: src, name: sh.Name, dg: sh.Diagnostics}, err
 	}
 	path := args[0]
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return "", "", sh.Diagnostics, err
+		return source{}, err
 	}
 	// A shell running a script names the *script* in `$0` and in every
 	// diagnostic, not itself, and reports in the script form — ksh93 also
 	// changes how it names the line.
-	return string(b), path, sh.Diagnostics.ForScript(), nil
+	return source{src: string(b), name: path, dg: sh.Diagnostics.ForScript()}, nil
 }
 
 func readAll(r io.Reader) (string, error) {
@@ -226,15 +237,19 @@ func readAll(r io.Reader) (string, error) {
 	return string(b), err
 }
 
-func (sh Shell) run(src, name string, dg interp.Diagnostics) int {
+// run parses and executes src. input is what the front end calls where the
+// script came from — "-c", or empty for a file or standard input — which one
+// dialect names in a parse failure's location.
+func (sh Shell) run(src, name, input string, dg interp.Diagnostics) int {
 	p := syntax.NewParser(src, sh.Dialect)
 	f := p.Parse()
 	if err := p.Err(); err != nil {
 		// Input that ends unfinished is a syntax error rather than a prompt
 		// when it did not come from a terminal. *Which* status it carries is
 		// the dialect's: 2 in half the panel, 3 in ksh93, 1 in zsh.
-		line, msg := wordParseError(dg, err)
-		sh.errf("%s", dg.Report(name, line, msg+"\n"))
+		// The whole diagnostic is the dialect's: its wording, whether it
+		// names where the script came from, and whether it echoes the line.
+		sh.errf("%s", dg.ParseDiagnostic(name, input, err, src))
 		return dg.StatusForParseError(err)
 	}
 
@@ -293,41 +308,3 @@ func (sh Shell) source(r *interp.Runner, name string) int {
 	}
 	return 0
 }
-
-// wordParseError renders a parse failure the way the dialect words it.
-//
-// The kind is what decides, not the message text: dash says "Bad
-// substitution" for anything wrong inside `${ }` and "Syntax error: …" for
-// everything else, and matching on our own phrasing to tell those apart would
-// break the first time the phrasing changed.
-func wordParseError(dg interp.Diagnostics, err error) (int, string) {
-	line, _ := splitPos(err.Error())
-	if n := dg.ParseFailureLine(err); n > 0 {
-		line = n
-	}
-	// The wording itself is interp's, because `eval` and `.` report the same
-	// failures and must say the same thing about them.
-	return line, dg.ParseFailure(err)
-}
-
-// splitPos separates a parse error's own "line:col: " from its message.
-//
-// The parser reports both, which is right for a caller drawing a caret and
-// wrong for a diagnostic: the dialect already says where it happened, in its
-// own shape, and printing "sh: 1: 1:8: …" says it twice.
-func splitPos(s string) (int, string) {
-	// Written by hand rather than with Sscanf: Go's fmt has no %n, so the
-	// obvious "%d:%d:%n" silently never matched and every parse error kept
-	// printing its position twice.
-	m := posPrefix.FindStringSubmatch(s)
-	if m == nil {
-		return 1, s
-	}
-	line, err := strconv.Atoi(m[1])
-	if err != nil {
-		return 1, s
-	}
-	return line, strings.TrimSpace(s[len(m[0]):])
-}
-
-var posPrefix = regexp.MustCompile(`^(\d+):(\d+): `)

@@ -60,8 +60,13 @@ func TestAFloatIsWhatMakesAnExpressionFloat(t *testing.T) {
 		{`echo $((1.5 < 2))`, "1"},
 		{`echo $((1.5 == 1.5))`, "1"},
 		{`echo $((1.5 ? 3 : 4))`, "3"},
-		// Based literals are integers whose digits may include an `e`.
+		// Based literals are integers whose digits may include an `e`, and
+		// the exponent scan must not reach into what follows one: `0x1e-3`
+		// is a subtraction, not a literal with an exponent that will not
+		// parse.
 		{`echo $((0x1e))`, "30"},
+		{`echo $((0x1e-3))`, "27"},
+		{`echo $((16#1f-3))`, "28"},
 		// Dividing a float by zero is an infinity rather than the error the
 		// integer division gives: there is no integer to hand back.
 		{`echo $((1.0/0))`, "Inf"},

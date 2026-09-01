@@ -1878,8 +1878,8 @@ var Corpus = []Case{
 	},
 	{
 		ID: "arith/hex-is-not-a-float", Category: "arithmetic",
-		Snippet: `echo $((0x1e))`,
-		Why:     "the counter-case that keeps the exponent scan honest: `0x1e` is an integer whose digits include an `e`, and reading it as one would make it 0",
+		Snippet: `echo $((0x1e)) $((0x1e-3))`,
+		Why:     "the counter-case that keeps the exponent scan honest: `0x1e` is an integer whose digits include an `e`, and the second half is the one that bites — read as an exponent, `0x1e-3` is a literal that will not parse rather than a subtraction",
 	},
 	{
 		ID: "arith/a-remainder-of-floats", Category: "arithmetic", SyntaxError: true,

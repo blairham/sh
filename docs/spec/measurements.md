@@ -1348,7 +1348,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `arith/float-precision-differs` | `<shell>: 1: arithmetic expression: expecting EOF: "0.1+0.2"` *(status 2)* | `<shell>: line 1: 0.1+0.2: arithmetic syntax error: invalid arithmetic operator (error token is ".1+0.2")` *(status 1)* | `<shell>: line 1: 0.1+0.2: arithmetic syntax error: invalid arithmetic operator (error token is ".1+0.2")` *(status 127)* | `<shell>: 0.1+0.2: syntax error: invalid arithmetic operator (error token is ".1+0.2")` *(status 1)* | `0.3` | `0.30000000000000004` |
 | `arith/a-float-may-begin-with-its-point` | `<shell>: 1: arithmetic expression: expecting primary: ".5"` *(status 2)* | `<shell>: line 1: .5: arithmetic syntax error: operand expected (error token is ".5")` *(status 1)* | `<shell>: line 1: .5: arithmetic syntax error: operand expected (error token is ".5")` *(status 127)* | `<shell>: .5: syntax error: operand expected (error token is ".5")` *(status 1)* | `0.5` | `0.5` |
 | `arith/a-float-may-carry-an-exponent` | `<shell>: 1: arithmetic expression: expecting EOF: "1.5e2"` *(status 2)* | `<shell>: line 1: 1.5e2: arithmetic syntax error: invalid arithmetic operator (error token is ".5e2")` *(status 1)* | `<shell>: line 1: 1.5e2: arithmetic syntax error: invalid arithmetic operator (error token is ".5e2")` *(status 127)* | `<shell>: 1.5e2: syntax error: invalid arithmetic operator (error token is ".5e2")` *(status 1)* | `150` | `150.` |
-| `arith/hex-is-not-a-float` | `30` | `30` | `30` | `30` | `30` | `30` |
+| `arith/hex-is-not-a-float` | `30 27` | `30 27` | `30 27` | `30 27` | `30 27` | `30 27` |
 | `arith/a-remainder-of-floats` | `<shell>: 1: arithmetic expression: expecting EOF: "7%2.5"` *(status 2)* | `<shell>: line 1: 7%2.5: arithmetic syntax error: invalid arithmetic operator (error token is ".5")` *(status 1)* | `<shell>: line 1: 7%2.5: arithmetic syntax error: invalid arithmetic operator (error token is ".5")` *(status 127)* | `<shell>: 7%2.5: syntax error: invalid arithmetic operator (error token is ".5")` *(status 1)* | `<shell>: 7%2.5: invalid floating point operation` *(status 1)* | `2.` |
 | `arith/a-bitwise-operator-on-a-float` | `<shell>: 1: arithmetic expression: expecting EOF: "1.5 & 1"` *(status 2)* | `<shell>: line 1: 1.5 & 1: arithmetic syntax error: invalid arithmetic operator (error token is ".5 & 1")` *(status 1)* | `<shell>: line 1: 1.5 & 1: arithmetic syntax error: invalid arithmetic operator (error token is ".5 & 1")` *(status 127)* | `<shell>: 1.5 & 1: syntax error: invalid arithmetic operator (error token is ".5 & 1")` *(status 1)* | `<shell>: 1.5 & 1: invalid floating point operation` *(status 1)* | `1` |
 | `arith/comparing-floats-yields-a-truth` | `<shell>: 1: arithmetic expression: expecting EOF: "1.5 < 2"` *(status 2)* | `<shell>: line 1: 1.5 < 2: arithmetic syntax error: invalid arithmetic operator (error token is ".5 < 2")` *(status 1)* | `<shell>: line 1: 1.5 < 2: arithmetic syntax error: invalid arithmetic operator (error token is ".5 < 2")` *(status 127)* | `<shell>: 1.5 < 2: syntax error: invalid arithmetic operator (error token is ".5 < 2")` *(status 1)* | `1` | `1` |
@@ -1449,9 +1449,9 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   echo $((1.5e2))
   ```
-- `arith/hex-is-not-a-float` — the counter-case that keeps the exponent scan honest: `0x1e` is an integer whose digits include an `e`, and reading it as one would make it 0
+- `arith/hex-is-not-a-float` — the counter-case that keeps the exponent scan honest: `0x1e` is an integer whose digits include an `e`, and the second half is the one that bites — read as an exponent, `0x1e-3` is a literal that will not parse rather than a subtraction
   ```sh
-  echo $((0x1e))
+  echo $((0x1e)) $((0x1e-3))
   ```
 - `arith/a-remainder-of-floats` — zsh takes a remainder in floating point and ksh93 refuses a float here at all, so `%` is not simply an integer operator in both
   ```sh

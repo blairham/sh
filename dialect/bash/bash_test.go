@@ -322,3 +322,30 @@ func TestAParseFailureNamesItsOriginAndEchoesTheLine(t *testing.T) {
 		t.Error("the script form should answer this the same way; the front end supplies no origin for a file")
 	}
 }
+
+// TestAMalformedExpressionIsAFailedCommand: bash finds a bad expression while
+// expanding, so it reports the status of a command that failed rather than of
+// a script that would not parse — and carries none of a parse failure's
+// decoration. We find it while parsing, which is why it has to be said.
+func TestAMalformedExpressionIsAFailedCommand(t *testing.T) {
+	if got, want := bash.Diagnostics().ArithFailureStatus, 1; got != want {
+		t.Errorf("ArithFailureStatus = %d, want %d", got, want)
+	}
+	f, err := syntax.Parse(`echo $((1 2))`, bash.Dialect())
+	if err == nil {
+		t.Fatal("want a parse failure")
+	}
+	_ = f
+	d := bash.Diagnostics()
+	if got, want := d.StatusForParseError(err), 1; got != want {
+		t.Errorf("status = %d, want %d — a failed command, not a failed parse", got, want)
+	}
+	// And none of the decoration: no named origin, no echoed line.
+	out := d.ParseDiagnostic("bash", "-c", err, "echo $((1 2))")
+	if strings.Contains(out, "-c") {
+		t.Errorf("got %q, want no origin named", out)
+	}
+	if strings.Count(out, "\n") != 1 {
+		t.Errorf("got %q, want no echoed line", out)
+	}
+}

@@ -384,6 +384,23 @@ silently ate apostrophes were found the same way. Scripts in the wild ask
 different questions, in bulk, and were written without knowing this
 implementation exists.
 
+`make wild-run` goes further and **runs** each script that parses, under
+both shells with the same arguments, comparing what they produce. It is the
+half a reader cannot do, and it is where the last several gaps came from:
+`set -f` was invisible to the parse sweep and only turned up because
+/usr/bin/man parsed and then failed on it.
+
+It is opt-in, and the reason is worth stating plainly: **it executes third
+party code.** A `--help` is read-only by convention and not by guarantee.
+The containment is that each script runs under *both* shells with the same
+arguments, in a directory of its own, with no standard input and a timeout —
+so whatever a script does, it does the same twice, and the comparison is
+between two runs rather than between a run and an expectation.
+
+It is also slow — two shells times two probes times every script, with a
+timeout on each — so a whole-machine run takes minutes. `ARGS='-dirs
+/usr/bin -timeout 3s'` narrows it while working on one cause.
+
 Not a gate either, and for a stronger reason than conformance: the answer
 depends on what happens to be installed, so it cannot be the same twice on
 two machines.

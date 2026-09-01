@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -39,10 +40,27 @@ var trappableSignals = func() map[string]syscall.Signal {
 }()
 
 // signalNumbers is the other spelling: `trap … 2` is `trap … INT`.
-var signalNumbers = map[string]string{
-	"1": "HUP", "2": "INT", "3": "QUIT", "6": "ABRT",
-	"13": "PIPE", "14": "ALRM", "15": "TERM",
-}
+//
+// Derived for the same reason the set above is, and it was the same mistake:
+// seven entries written out by hand, so `trap 'x' 5` — TRAP, and in the wild
+// on this machine, in /usr/bin/bzless — was refused as not a signal at all
+// while `trap 'x' TRAP` worked. Every name the host knows now has both
+// spellings, and they refuse alike too: 9 is KILL, so it meets the same
+// deliberate refusal the name does rather than a different one.
+//
+// The numbers are the host's. 10 is BUS on a BSD and USR1 on Linux, and a
+// script that says 10 means whichever one it is running on.
+var signalNumbers = func() map[string]string {
+	m := make(map[string]string, len(knownSignals))
+	for _, k := range knownSignals {
+		// No two entries share a number, which a test insists on: the aliases
+		// that would collide — IOT for ABRT, CLD for CHLD, POLL for IO — are
+		// not in the list, and adding one would make this map's contents
+		// depend on the order it is written in.
+		m[strconv.Itoa(int(k.Sig))] = k.Name
+	}
+	return m
+}()
 
 // signalState is the machinery, shared by every runner in one process.
 //

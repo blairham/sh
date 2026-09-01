@@ -675,6 +675,18 @@ var Corpus = []Case{
 		Why:     "a signal can be named by number, and 2 is INT everywhere the panel runs",
 	},
 	{
+		ID: "trap/numeric-signal-beyond-the-common-few", Category: "traps and exit",
+		Script:  true,
+		Snippet: "trap 'echo caught' 5\nkill -TRAP $$\necho after\n",
+		Why:     "every signal has a number, not just the handful a script usually names. 5 is TRAP on every platform the panel runs on, and /usr/bin/bzless on macOS traps 0 2 3 5 10 13 15 — a script written against a shell that takes them all",
+	},
+	{
+		ID: "trap/number-and-name-are-one-trap", Category: "traps and exit",
+		Script:  true,
+		Snippet: "trap 'echo one' 5\ntrap 'echo two' TRAP\nkill -TRAP $$\necho after\n",
+		Why:     "the two spellings are the same signal rather than two entries, so the second setting replaces the first and only `two` runs",
+	},
+	{
 		ID: "trap/signal-handler-status-diverges", Category: "traps and exit",
 		Script:  true,
 		Snippet: "trap 'echo st=$?' INT\nfalse\nkill -INT $$\necho after\n",

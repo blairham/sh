@@ -1716,4 +1716,59 @@ var Corpus = []Case{
 		Snippet: "typeset -r c=1\necho \"[$c]\"\nc=2\necho \"[$c]\"\n",
 		Why:     "the declaration assigns and then freezes, so its own value survives and the next assignment does not — applying both at once would refuse the value it was given",
 	},
+	{
+		ID: "select/menu-and-choice", Category: "select",
+		Snippet: `select x in a b; do echo "got=$x rep=$REPLY"; break; done <<< "1"`,
+		Why:     "the base case, and the layouts diverge immediately: two lines in bash and ksh93, one in zsh — and the prompt is `#? ` in two, `?# ` in the third and absent in ksh93, which prints none unless the input is a terminal",
+	},
+	{
+		ID: "select/menu-goes-to-standard-error", Category: "select",
+		Snippet: `select x in a b; do echo "$x"; break; done 2>/dev/null <<< "1"`,
+		Why:     "the menu and the prompt are both on standard error, so a script's own output survives without them — unanimous, and the reason the base case above shows them at all",
+	},
+	{
+		ID: "select/reply-out-of-range", Category: "select",
+		Snippet: `select x in a b; do echo "[$x] rep=$REPLY"; break; done <<< "9"`,
+		Why:     "a reply naming no item leaves the variable empty and REPLY holding what was typed, and the body still runs — which is how a script detects it",
+	},
+	{
+		ID: "select/reply-is-not-a-number", Category: "select",
+		Snippet: `select x in a b; do echo "[$x] rep=$REPLY"; break; done <<< "zz"`,
+		Why:     "the same answer by a different route: nothing is an error, so the two kinds of bad reply are one case in the implementation",
+	},
+	{
+		ID: "select/blank-reply-reprints-the-menu", Category: "select",
+		Snippet: `printf '\n2\n' | select x in a b; do echo "got=$x"; break; done`,
+		Why:     "a blank line reprints the menu and does not run the body, which is the only way to see the menu again — every other iteration reprints the prompt alone",
+	},
+	{
+		ID: "select/input-ends", Category: "select",
+		Snippet: `select x in a; do echo hi; done; echo "st=$?"`,
+		Why:     "three answers to what happens when the input runs out: bash reports 1 and writes a newline to standard output, ksh93 reports 1 and writes nothing, zsh reports 0 and closes the prompt line on standard error",
+	},
+	{
+		ID: "select/empty-list", Category: "select",
+		Snippet: `select x in; do echo hi; done; echo "st=$?"`,
+		Why:     "an empty menu does not prompt at all — the loop never runs and the status is 0, which is the difference between a menu with nothing in it and a menu nobody answered",
+	},
+	{
+		ID: "select/no-list-uses-the-positionals", Category: "select",
+		Snippet: `set -- p q; select x; do echo "got=$x"; break; done <<< "2"`,
+		Why:     "`in` omitted builds the menu from the positional parameters, the same distinction ForClause draws between an absent list and an empty one",
+	},
+	{
+		ID: "select/ps3-is-read-each-time", Category: "select",
+		Snippet: "PS3=A; select x in a b; do PS3=B; echo \"$x\"; done <<< '1\n2'",
+		Why:     "the prompt is read fresh each iteration, so a body that changes PS3 changes the next prompt — and the menu itself is printed once",
+	},
+	{
+		ID: "select/break-leaves-the-loop", Category: "select",
+		Snippet: `select x in a b; do echo "$x"; break; done <<< "2"; echo "st=$?"`,
+		Why:     "`break` ends a menu loop like any other, and the status is the body's rather than the input-ended one",
+	},
+	{
+		ID: "select/is-not-in-dash", Category: "select", SyntaxError: false,
+		Snippet: `select x in a; do :; done`,
+		Why:     "dash has no `select`, so the word is ordinary and the `do` after it has nothing to open — the grammar flag is what the other three turn on",
+	},
 }

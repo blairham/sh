@@ -48,6 +48,13 @@ func TestSemantics(t *testing.T) {
 		got  interp.Answer
 		want interp.Answer
 	}{
+		{"SelectPromptNeedsTerminal", s.SelectPromptNeedsTerminal, interp.Yes},
+		{"SelectEofIsSuccess", s.SelectEofIsSuccess, interp.No},
+		{"SelectEofPrintsNewline", s.SelectEofPrintsNewline, interp.No},
+		{"SelectEofEndsPromptLine", s.SelectEofEndsPromptLine, interp.No},
+		// A menu that is always vertical never consults a width, so the
+		// axis does not arise here and is left unanswered.
+		{"SelectAssumesUnboundedWidth", s.SelectAssumesUnboundedWidth, interp.Unspecified},
 		{"DeclaredNameWithoutValueIsEmpty", s.DeclaredNameWithoutValueIsEmpty, interp.No},
 		{"TypesetLocalNeedsKeywordFunction", s.TypesetLocalNeedsKeywordFunction, interp.Yes},
 		{"IndirectionYieldsName", s.IndirectionYieldsName, interp.Yes},
@@ -272,5 +279,20 @@ func TestKshHasOnlyTheOlderDeclarationName(t *testing.T) {
 		if !strings.Contains(out.String(), tc.want) {
 			t.Errorf("%s: got %q, want it to contain %q", tc.name, out.String(), tc.want)
 		}
+	}
+}
+
+// TestSelectMenuLayout: ksh93's menu is always one item per line here. It does
+// columnize, but on the terminal's *height* rather than its width — measured
+// and not built, because a menu long enough to reach it cannot be graded by a
+// corpus whose cases do not control LINES.
+func TestSelectMenuLayout(t *testing.T) {
+	if got, want := ksh.Semantics().SelectLayout, interp.SelectMenuVertical; got != want {
+		t.Errorf("SelectLayout = %v, want %v", got, want)
+	}
+	// The same prompt as bash, and printed only when the input is a terminal
+	// — which is why a ksh93 script's transcript has the menu and no prompt.
+	if got, want := ksh.Diagnostics().SelectPrompt, "#? "; got != want {
+		t.Errorf("SelectPrompt = %q, want %q", got, want)
 	}
 }

@@ -1812,3 +1812,65 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   c=2
   echo "[$c]"
   ```
+
+## select
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `select/menu-and-choice` | `<shell>: 1: Syntax error: "do" unexpected` *(status 2)* | `1) a~2) b~#? got=a rep=1` | `1) a~2) b~#? got=a rep=1` | `1) a~2) b~#? got=a rep=1` | `1) a~2) b~got=a rep=1` | `1) a  2) b  ~?# got=a rep=1` |
+| `select/menu-goes-to-standard-error` | `<shell>: 1: Syntax error: "do" unexpected` *(status 2)* | `a` | `a` | `a` | `a` | `a` |
+| `select/reply-out-of-range` | `<shell>: 1: Syntax error: "do" unexpected` *(status 2)* | `1) a~2) b~#? [] rep=9` | `1) a~2) b~#? [] rep=9` | `1) a~2) b~#? [] rep=9` | `1) a~2) b~[] rep=9` | `1) a  2) b  ~?# [] rep=9` |
+| `select/reply-is-not-a-number` | `<shell>: 1: Syntax error: "do" unexpected` *(status 2)* | `1) a~2) b~#? [] rep=zz` | `1) a~2) b~#? [] rep=zz` | `1) a~2) b~#? [] rep=zz` | `1) a~2) b~[] rep=zz` | `1) a  2) b  ~?# [] rep=zz` |
+| `select/blank-reply-reprints-the-menu` | `<shell>: 1: Syntax error: "do" unexpected` *(status 2)* | `1) a~2) b~#? 1) a~2) b~#? got=b` | `1) a~2) b~#? 1) a~2) b~#? got=b` | `1) a~2) b~#? 1) a~2) b~#? got=b` | `1) a~2) b~1) a~2) b~got=b` | `1) a  2) b  ~?# 1) a  2) b  ~?# got=b` |
+| `select/input-ends` | `<shell>: 1: Syntax error: "do" unexpected` *(status 2)* | `1) a~#? ~st=1` | `1) a~#? ~st=1` | `1) a~#? ~st=1` | `1) a~st=1` | `1) a  ~?# ~st=0` |
+| `select/empty-list` | `<shell>: 1: Syntax error: "do" unexpected` *(status 2)* | `st=0` | `st=0` | `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `select x in; do echo hi; done; echo "st=$?"'` *(status 2)* | `st=0` | `st=0` |
+| `select/no-list-uses-the-positionals` | `<shell>: 1: Syntax error: "do" unexpected` *(status 2)* | `1) p~2) q~#? got=q` | `1) p~2) q~#? got=q` | `1) p~2) q~#? got=q` | `1) p~2) q~got=q` | `1) p  2) q  ~?# got=q` |
+| `select/ps3-is-read-each-time` | `<shell>: 1: Syntax error: "do" unexpected` *(status 2)* | `1) a~2) b~Aa~Bb~B` *(status 1)* | `1) a~2) b~Aa~Bb~B` *(status 1)* | `1) a~2) b~Aa~Bb~B` *(status 1)* | `1) a~2) b~a~b` *(status 1)* | `1) a  2) b  ~Aa~Bb~B` |
+| `select/break-leaves-the-loop` | `<shell>: 1: Syntax error: "do" unexpected` *(status 2)* | `1) a~2) b~#? b~st=0` | `1) a~2) b~#? b~st=0` | `1) a~2) b~#? b~st=0` | `1) a~2) b~b~st=0` | `1) a  2) b  ~?# b~st=0` |
+| `select/is-not-in-dash` | `<shell>: 1: Syntax error: "do" unexpected` *(status 2)* | `1) a~#? ` *(status 1)* | `1) a~#? ` *(status 1)* | `1) a~#? ` *(status 1)* | `1) a` *(status 1)* | `1) a  ~?# ` |
+
+- `select/menu-and-choice` — the base case, and the layouts diverge immediately: two lines in bash and ksh93, one in zsh — and the prompt is `#? ` in two, `?# ` in the third and absent in ksh93, which prints none unless the input is a terminal
+  ```sh
+  select x in a b; do echo "got=$x rep=$REPLY"; break; done <<< "1"
+  ```
+- `select/menu-goes-to-standard-error` — the menu and the prompt are both on standard error, so a script's own output survives without them — unanimous, and the reason the base case above shows them at all
+  ```sh
+  select x in a b; do echo "$x"; break; done 2>/dev/null <<< "1"
+  ```
+- `select/reply-out-of-range` — a reply naming no item leaves the variable empty and REPLY holding what was typed, and the body still runs — which is how a script detects it
+  ```sh
+  select x in a b; do echo "[$x] rep=$REPLY"; break; done <<< "9"
+  ```
+- `select/reply-is-not-a-number` — the same answer by a different route: nothing is an error, so the two kinds of bad reply are one case in the implementation
+  ```sh
+  select x in a b; do echo "[$x] rep=$REPLY"; break; done <<< "zz"
+  ```
+- `select/blank-reply-reprints-the-menu` — a blank line reprints the menu and does not run the body, which is the only way to see the menu again — every other iteration reprints the prompt alone
+  ```sh
+  printf '\n2\n' | select x in a b; do echo "got=$x"; break; done
+  ```
+- `select/input-ends` — three answers to what happens when the input runs out: bash reports 1 and writes a newline to standard output, ksh93 reports 1 and writes nothing, zsh reports 0 and closes the prompt line on standard error
+  ```sh
+  select x in a; do echo hi; done; echo "st=$?"
+  ```
+- `select/empty-list` — an empty menu does not prompt at all — the loop never runs and the status is 0, which is the difference between a menu with nothing in it and a menu nobody answered
+  ```sh
+  select x in; do echo hi; done; echo "st=$?"
+  ```
+- `select/no-list-uses-the-positionals` — `in` omitted builds the menu from the positional parameters, the same distinction ForClause draws between an absent list and an empty one
+  ```sh
+  set -- p q; select x; do echo "got=$x"; break; done <<< "2"
+  ```
+- `select/ps3-is-read-each-time` — the prompt is read fresh each  iteration, so a body that changes PS3 changes the next prompt — and the menu itself is printed once
+  ```sh
+  PS3=A; select x in a b; do PS3=B; echo "$x"; done <<< '1
+  2'
+  ```
+- `select/break-leaves-the-loop` — `break` ends a menu loop like any other, and the status is the body's rather than the input-ended one
+  ```sh
+  select x in a b; do echo "$x"; break; done <<< "2"; echo "st=$?"
+  ```
+- `select/is-not-in-dash` — dash has no `select`, so the word is ordinary and the `do` after it has nothing to open — the grammar flag is what the other three turn on
+  ```sh
+  select x in a; do :; done
+  ```

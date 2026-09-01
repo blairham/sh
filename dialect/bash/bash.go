@@ -28,6 +28,12 @@ func Dialect() syntax.Dialect {
 // Semantics is what bash 5 means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	s.SelectLayout = interp.SelectMenuVerticalThenColumns
+	s.SelectPromptNeedsTerminal = interp.No
+	s.SelectAssumesUnboundedWidth = interp.No
+	s.SelectEofEndsPromptLine = interp.No
+	s.SelectEofIsSuccess = interp.No
+	s.SelectEofPrintsNewline = interp.Yes
 	s.AssignmentPrefixPersistsOnSpecialBuiltin = interp.No
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes
@@ -72,6 +78,7 @@ func Semantics() interp.Semantics {
 // Diagnostics is how bash 5 reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		SelectPrompt:      "#? ",
 		Location:          interp.LocationLineWord,
 		NotFound:          "%s: command not found",
 		UnboundVariable:   "%s: unbound variable",

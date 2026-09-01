@@ -616,6 +616,8 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		return r.funcDecl(x)
 	case *syntax.TestClause:
 		return r.testClause(ctx, x)
+	case *syntax.SelectClause:
+		return r.selectClause(ctx, x)
 	case *syntax.ArithCmdClause:
 		return r.arithCmd(ctx, x)
 	}

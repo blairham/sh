@@ -49,6 +49,11 @@ func TestSemantics(t *testing.T) {
 		got  interp.Answer
 		want interp.Answer
 	}{
+		{"SelectPromptNeedsTerminal", s.SelectPromptNeedsTerminal, interp.No},
+		{"SelectEofIsSuccess", s.SelectEofIsSuccess, interp.No},
+		{"SelectEofPrintsNewline", s.SelectEofPrintsNewline, interp.Yes},
+		{"SelectEofEndsPromptLine", s.SelectEofEndsPromptLine, interp.No},
+		{"SelectAssumesUnboundedWidth", s.SelectAssumesUnboundedWidth, interp.No},
 		{"DeclaredNameWithoutValueIsEmpty", s.DeclaredNameWithoutValueIsEmpty, interp.No},
 		{"TypesetLocalNeedsKeywordFunction", s.TypesetLocalNeedsKeywordFunction, interp.No},
 		{"BraceExpansion", s.BraceExpansion, interp.Yes},
@@ -257,5 +262,18 @@ func TestBothDeclarationNames(t *testing.T) {
 		if strings.TrimSpace(out.String()) != "*" {
 			t.Errorf("%s: got %q, want the pattern left alone", name, out.String())
 		}
+	}
+}
+
+// TestSelectMenuLayout: the widest presentation difference in the panel. bash
+// prints one item per line while the list would fit on one line and switches
+// to tab-separated columns once it would not, which is the opposite way round
+// from how it sounds.
+func TestSelectMenuLayout(t *testing.T) {
+	if got, want := bash.Semantics().SelectLayout, interp.SelectMenuVerticalThenColumns; got != want {
+		t.Errorf("SelectLayout = %v, want %v", got, want)
+	}
+	if got, want := bash.Diagnostics().SelectPrompt, "#? "; got != want {
+		t.Errorf("SelectPrompt = %q, want %q", got, want)
 	}
 }

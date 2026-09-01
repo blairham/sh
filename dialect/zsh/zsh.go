@@ -22,6 +22,12 @@ func Dialect() syntax.Dialect {
 // Semantics is what zsh means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	s.SelectLayout = interp.SelectMenuColumns
+	s.SelectPromptNeedsTerminal = interp.No
+	s.SelectAssumesUnboundedWidth = interp.Yes
+	s.SelectEofEndsPromptLine = interp.Yes
+	s.SelectEofIsSuccess = interp.Yes
+	s.SelectEofPrintsNewline = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.Yes
 	s.TypesetLocalNeedsKeywordFunction = interp.No
 	s.SplitParamExpansion = interp.No
@@ -74,6 +80,7 @@ func Semantics() interp.Semantics {
 // Diagnostics is how zsh reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		SelectPrompt:     "?# ",
 		Location:         interp.LocationTightLine,
 		BadSubstitution:  "bad substitution",
 		BadPattern:       "bad pattern: %s",

@@ -363,6 +363,31 @@ type Semantics struct {
 	// makes it local in a function defined either way.
 	TypesetLocalNeedsKeywordFunction Answer
 
+	// SelectLayout is how `select` draws its menu. Three engines rather than
+	// two answers, which is why it has its own type.
+	SelectLayout SelectMenuLayout
+	// SelectPromptNeedsTerminal withholds PS3 unless the input is a terminal.
+	// ksh93 alone says yes, which is why a ksh93 script's transcript has the
+	// menu in it and no prompt.
+	SelectPromptNeedsTerminal Answer
+	// SelectEofIsSuccess makes the input running out a success. zsh alone
+	// says yes; the other two report 1.
+	SelectEofIsSuccess Answer
+	// SelectAssumesUnboundedWidth treats an unset COLUMNS as no limit rather
+	// than as 80. zsh says yes — with no terminal to ask it puts forty items
+	// on one line — and bash says no. It does not arise for a menu that is
+	// always vertical, which is why ksh93 leaves it unanswered.
+	SelectAssumesUnboundedWidth Answer
+	// SelectEofEndsPromptLine writes a newline to standard error when the
+	// input runs out, closing the line the prompt left open. zsh alone does;
+	// bash closes the line on standard *output* instead, which is a different
+	// question and the field below.
+	SelectEofEndsPromptLine Answer
+	// SelectEofPrintsNewline writes a newline to standard *output* when the
+	// input runs out — the one thing this loop prints that does not go to
+	// standard error. bash alone does it.
+	SelectEofPrintsNewline Answer
+
 	// ArrayBaseIsZero indexes arrays from 0. True in bash and ksh93, false in
 	// zsh, which counts from 1. dash has no arrays at all, which is why the
 	// axis is absent rather than false there.
@@ -481,6 +506,24 @@ type Semantics struct {
 // PosixSemantics is what the specification requires, which is not what any
 // shell does in full — it is the right target for a portability check and the
 // wrong one for a runtime.
+// SelectMenuLayout is how a shell draws a `select` menu. The engines differ
+// enough that the same nine items are nine lines in two shells and one line in
+// the third, so this is a named choice rather than a flag.
+type SelectMenuLayout int
+
+const (
+	// SelectMenuVertical is one item per line, always. ksh93's, whose column
+	// mode is reached on the terminal's height rather than its width.
+	SelectMenuVertical SelectMenuLayout = iota
+	// SelectMenuVerticalThenColumns is bash's: one item per line while the
+	// list would fit on one line, and tab-separated columns once it would
+	// not — which is the opposite way round from how it sounds.
+	SelectMenuVerticalThenColumns
+	// SelectMenuColumns is zsh's: always packed into columns padded with
+	// spaces, so even three items share one line.
+	SelectMenuColumns
+)
+
 func PosixSemantics() Semantics {
 	return Semantics{
 		SplitParamExpansion:                      Yes,

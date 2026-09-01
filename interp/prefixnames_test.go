@@ -76,3 +76,20 @@ func TestInheritedNamesAreListed(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// A produced parameter is listed, and stops being listed once `unset` takes
+// it away — which is the one path where that has to be checked. A name the
+// shell set is deleted outright, and one it inherited is already filtered out
+// of the environment, so the producer's table is the only place a removed
+// name survives to be listed by mistake.
+func TestAProducedNameIsListedUntilItIsUnset(t *testing.T) {
+	produce := func(r *Runner) {
+		r.SetDynamic("ZQ_made", func(*Runner) string { return "x" })
+	}
+	if got, want := runIndirect(t, `ZQ_set=1; echo "[${!ZQ_@}]"`, produce), "[ZQ_made ZQ_set]"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	if got, want := runIndirect(t, `ZQ_set=1; unset ZQ_made; echo "[${!ZQ_@}]"`, produce), "[ZQ_set]"; got != want {
+		t.Errorf("after unset: got %q, want %q", got, want)
+	}
+}

@@ -39,6 +39,9 @@ conformance: ## Grade the core driver against bash over the whole corpus
 	@go build -o $${TMPDIR:-/tmp}/sh-under-test ./cmd/sh
 	@go run ./cmd/oracle -bin $${TMPDIR:-/tmp}/sh-under-test -binargs "-dialect bash" $(ARGS)
 
+wild: ## Parse the shell scripts installed on this machine and report what fails
+	@go run ./cmd/wild $(ARGS)
+
 conformance-dialects: ## Grade each dialect binary against the shell it claims to be
 	@go build -o $${TMPDIR:-/tmp}/our-bash ./cmd/bash
 	@go build -o $${TMPDIR:-/tmp}/our-zsh ./cmd/zsh

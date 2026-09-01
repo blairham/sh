@@ -368,6 +368,26 @@ the cheapest way to notice.
 It is deliberately **not** a gate. The number is meant to be low and to
 climb; failing CI on it would only mean failing CI on unfinished work.
 
+`make wild` parses the shell scripts installed on the machine and reports
+the ones this parser cannot read. It reads and never runs — the reference
+shell is consulted with `-n` — which is what makes it safe to point at
+/usr/bin, and a file the reference also refuses is not counted, because a
+Tcl program with a `#!/bin/sh` shebang is not evidence about us.
+
+It exists because **the corpus cannot find this class of bug**. Every case
+in it is a snippet written to pin one behavior down, so it proves that what
+it asks about is right and says nothing about what nobody thought to ask.
+Positional parameters were missing entirely while the corpus stood at 100%:
+it invokes everything with `-c` and no operands, so `$#` is legitimately 0
+in every case it has. Incremental execution and a here-document bug that
+silently ate apostrophes were found the same way. Scripts in the wild ask
+different questions, in bulk, and were written without knowing this
+implementation exists.
+
+Not a gate either, and for a stronger reason than conformance: the answer
+depends on what happens to be installed, so it cannot be the same twice on
+two machines.
+
 `make oracle-check` runs in CI in **report-only** mode: the golden record
 is generated on one machine and a runner does not have the same builds of
 the same shells, so some differences are legitimate. A check that is red

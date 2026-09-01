@@ -68,6 +68,9 @@ func Diagnostics() interp.Diagnostics {
 		TraceStyle:       interp.TraceNameLine,
 		TraceForHeader:   interp.TraceForAssign,
 		// zsh names the last token it read and nothing else.
+		EvalNaming:        interp.SourceReplacesShell,
+		SourceFileNaming:  interp.SourceReplacesShell,
+		EvalSourceName:    "(eval)",
 		Unterminated:      "parse error near `%[5]s'",
 		SyntaxErrorStatus: 1,
 		// zsh alone answers "a syntax error" differently depending on where it

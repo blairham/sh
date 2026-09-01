@@ -90,3 +90,23 @@ func TestUnterminatedNamesTheConstructAndItsLine(t *testing.T) {
 		}
 	}
 }
+
+// TestBorrowedTextIsNamedTwoWays is the reason the naming is two fields.
+//
+// bash puts a sourced file's path where its own name goes and labels `eval`
+// after it, so one shell answers the same question differently depending on
+// which kind of borrowed text failed.
+func TestBorrowedTextIsNamedTwoWays(t *testing.T) {
+	d := bash.Diagnostics()
+	if got, want := d.SourceFileNaming, interp.SourceReplacesShell; got != want {
+		t.Errorf("a sourced file: got %v, want it to replace the shell's name", got)
+	}
+	if got, want := d.EvalNaming, interp.SourceBeforeLocation; got != want {
+		t.Errorf("eval: got %v, want it named before the location", got)
+	}
+	// And the end of input is a line further on than the other three put it,
+	// which is only visible when the text does not end in a newline.
+	if !d.UnterminatedEndsOnNextLine {
+		t.Error("the end of input should be the line after the text")
+	}
+}

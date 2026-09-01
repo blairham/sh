@@ -1237,6 +1237,15 @@ var Corpus = []Case{
 		Why:     "POSIX makes a special builtin's failure fatal to a non-interactive shell and only dash still does it; bash, ksh93 and zsh report it and carry on, each with its own status",
 	},
 	{
+		ID: "dot/unterminated-file-names-the-source", Category: "eval and dot",
+		// A file with nothing in it but the unterminated construct, so this
+		// records the naming and not the axis next to it: three of the four
+		// run what they parsed *before* the failure, and a file whose first
+		// line printed something would measure both at once.
+		Snippet: `printf 'if\n' > p.sh; . ./p.sh; echo "st=$?"`,
+		Why:     "one question with three answers and a fourth wrinkle: dash names the file after the location, ksh93 names the *builtin* before it, bash and zsh put the path where the shell's own name goes — and bash does that for a file while labeling `eval` after its name instead",
+	},
+	{
 		ID: "dot/runs-in-the-calling-shell", Category: "eval and dot",
 		Snippet: `echo "x=7" > p.sh; . ./p.sh; echo $x`,
 		Why:     "the same property as eval, from a file: a sourced assignment survives because no child process was involved",

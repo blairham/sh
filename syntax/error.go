@@ -60,6 +60,12 @@ type Error struct {
 	// LastToken is the last token consumed before the input ran out, which
 	// is what the remaining shell names.
 	LastToken string
+	// EndLine is the line *after* the input's last, which is where one shell
+	// considers the end of input to be: `eval "if"` is line 2 there and line
+	// 1 in the other three. Input that already ends in a newline puts Pos on
+	// that line anyway, so the two agree there and differ only when the text
+	// stops mid-line.
+	EndLine int
 }
 
 func (e *Error) Error() string { return e.Pos.String() + ": " + e.Msg }

@@ -70,8 +70,11 @@ func Diagnostics() interp.Diagnostics {
 		TraceForHeader:       interp.TraceForSource,
 		// bash names the construct and the line it opened on, and nothing
 		// about what would have closed it.
-		Unterminated:      "syntax error: unexpected end of file from `%[1]s' command on line %[2]d",
-		SyntaxErrorStatus: 2,
+		EvalNaming:                 interp.SourceBeforeLocation,
+		SourceFileNaming:           interp.SourceReplacesShell,
+		UnterminatedEndsOnNextLine: true,
+		Unterminated:               "syntax error: unexpected end of file from `%[1]s' command on line %[2]d",
+		SyntaxErrorStatus:          2,
 		// Measured: `.` of a file it cannot open reports 1 and carries on,
 		// where a missing operand is 2 — two numbers for what reads like one
 		// failure, which is why they are two fields.

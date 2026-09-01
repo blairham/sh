@@ -147,3 +147,16 @@ func TestUnterminatedNamesTheInnermostUnclosedKeyword(t *testing.T) {
 		}
 	}
 }
+
+// TestASourcedFileIsNamedByTheBuiltin is ksh93 alone: a diagnostic about a
+// file `.` read names `.` rather than the file, where the other three name
+// the path.
+func TestASourcedFileIsNamedByTheBuiltin(t *testing.T) {
+	d := ksh.Diagnostics()
+	if !d.SourceFileIsTheBuiltin {
+		t.Error("a sourced file should be named by the builtin that read it")
+	}
+	if got, want := d.SourceFileNaming, interp.SourceBeforeLocation; got != want {
+		t.Errorf("got %v, want it named before the location", got)
+	}
+}

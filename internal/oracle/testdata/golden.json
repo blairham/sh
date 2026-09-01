@@ -2394,6 +2394,38 @@
         "TimedOut": false
       }
     },
+    "dot/unterminated-file-names-the-source": {
+      "bash": {
+        "Output": "./p.sh: line 2: syntax error: unexpected end of file from `if' command on line 1~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "./p.sh: line 2: syntax error: unexpected end of file from `if' command on line 1",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "./p.sh: line 2: syntax error: unexpected end of file~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 2: ./p.sh: Syntax error: end of file unexpected (expecting \"then\")",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: .: syntax error at line 2: `if' unmatched~st=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "./p.sh:2: parse error near `\\n'~st=126",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "errexit/assignment-takes-the-substitution": {
       "bash": {
         "Output": "",

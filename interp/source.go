@@ -43,6 +43,11 @@ type sourced struct {
 	// label names the text in a diagnostic: "eval", or the path of the file.
 	label string
 
+	// eval marks the text as `eval`'s rather than a file's, because one
+	// dialect calls it something of its own — `(eval)` — where the others
+	// use the builtin's name.
+	eval bool
+
 	// syntaxStatus is what a parse failure reports when it is not fatal.
 	// It is passed rather than read from the dialect because the two callers
 	// disagree: measured, a parse failure inside `eval` carries the dialect's
@@ -61,6 +66,26 @@ type sourced struct {
 	catchReturn bool
 }
 
+// sourceName is what a diagnostic calls this text.
+func (s sourced) sourceName(d Diagnostics) string {
+	switch {
+	case s.eval && d.EvalSourceName != "":
+		return d.EvalSourceName
+	case !s.eval && d.SourceFileIsTheBuiltin:
+		// The builtin that read the file rather than the file itself.
+		return "."
+	}
+	return s.label
+}
+
+// naming is where this kind of borrowed text puts its name.
+func (s sourced) naming(d Diagnostics) SourceNaming {
+	if s.eval {
+		return d.EvalNaming
+	}
+	return d.SourceFileNaming
+}
+
 // runSourced parses src and runs it on this runner.
 //
 // The status is the last command's, or 0 when nothing ran — which is not the
@@ -75,12 +100,13 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 		// that sources a file whose `if` never closes is reported at the
 		// line in *that file* by every shell in the panel, and this reported
 		// line 1 for all of them.
-		outerLine := r.line
-		if se := parseErrorLine(err); se > 0 {
-			r.line = se
+		line := r.line
+		if at := r.diag().parseErrorLine(err); at > 0 {
+			line = at
 		}
-		r.diagf("%s: %s\n", s.label, r.diag().ParseFailure(err))
-		r.line = outerLine
+		d := r.diag()
+		r.errf("%s\n", d.SourceReport(s.naming(d), r.name(), s.sourceName(d),
+			line, d.ParseFailure(err)))
 		// POSIX makes a special builtin's failure fatal to a non-interactive
 		// shell. dash is the only member of the panel that does it here; the
 		// other three report the error and carry on.
@@ -156,6 +182,7 @@ func biEval(r *Runner, ctx context.Context, args []string) int {
 		return 0
 	}
 	return r.runSourced(ctx, strings.Join(args, " "), sourced{
+		eval:         true,
 		label:        "eval",
 		syntaxStatus: r.diag().SyntaxStatus(),
 	})

@@ -164,3 +164,20 @@ func TestUnterminatedNamesTheLastTokenRead(t *testing.T) {
 		}
 	}
 }
+
+// TestBorrowedTextReplacesTheShellName is zsh's answer to both halves of the
+// naming question, and it calls eval's text something of its own.
+func TestBorrowedTextReplacesTheShellName(t *testing.T) {
+	d := zsh.Diagnostics()
+	for _, tc := range []struct {
+		what string
+		got  interp.SourceNaming
+	}{{"eval", d.EvalNaming}, {"a sourced file", d.SourceFileNaming}} {
+		if tc.got != interp.SourceReplacesShell {
+			t.Errorf("%s: got %v, want it to replace the shell's name", tc.what, tc.got)
+		}
+	}
+	if got, want := d.EvalSourceName, "(eval)"; got != want {
+		t.Errorf("eval is called %q, want %q", got, want)
+	}
+}

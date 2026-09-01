@@ -1269,6 +1269,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `eval/is-transparent-to-return` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` |
 | `eval/is-transparent-to-break` | `done` | `done` | `done` | `done` | `done` | `done` |
 | `eval/unparseable-text-diverges` | `<shell>: 1: eval: Syntax error: end of file unexpected (expecting "then")` *(status 2)* | `<shell>: eval: line 2: syntax error: unexpected end of file from `if' command on line 1~REACHED st=2` | `<shell>: eval: line 2: syntax error: unexpected end of file from `if' command on line 1` *(status 2)* | `<shell>: eval: line 1: syntax error: unexpected end of file~REACHED st=1` | `<shell>: eval: syntax error at line 1: `if' unmatched~REACHED st=3` | `(eval):1: parse error near `if'~REACHED st=1` |
+| `dot/unterminated-file-names-the-source` | `<shell>: 2: ./p.sh: Syntax error: end of file unexpected (expecting "then")` *(status 2)* | `./p.sh: line 2: syntax error: unexpected end of file from `if' command on line 1~st=2` | `./p.sh: line 2: syntax error: unexpected end of file from `if' command on line 1` *(status 2)* | `./p.sh: line 2: syntax error: unexpected end of file~st=1` | `<shell>: .: syntax error at line 2: `if' unmatched~st=3` | `./p.sh:2: parse error near `\n'~st=126` |
 | `dot/runs-in-the-calling-shell` | `7` | `7` | `7` | `7` | `7` | `7` |
 | `dot/status-is-the-last-command` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
 | `dot/empty-file-clears-the-status` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
@@ -1319,6 +1320,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `eval/unparseable-text-diverges` — POSIX makes a special builtin's failure fatal to a non-interactive shell and only dash still does it; bash, ksh93 and zsh report it and carry on, each with its own status
   ```sh
   eval "if"; echo REACHED st=$?
+  ```
+- `dot/unterminated-file-names-the-source` — one question with three answers and a fourth wrinkle: dash names the file after the location, ksh93 names the *builtin* before it, bash and zsh put the path where the shell's own name goes — and bash does that for a file while labeling `eval` after its name instead
+  ```sh
+  printf 'if\n' > p.sh; . ./p.sh; echo "st=$?"
   ```
 - `dot/runs-in-the-calling-shell` — the same property as eval, from a file: a sourced assignment survives because no child process was involved
   ```sh

@@ -73,8 +73,11 @@ func Diagnostics() interp.Diagnostics {
 		DivisionByZero:   "divide by zero",
 		// ksh93 names the innermost keyword still awaiting a partner: `if`
 		// on its own, and the `then` inside it once that has been consumed.
-		Unterminated:      "syntax error at line %[6]d: `%[3]s' unmatched",
-		SyntaxErrorStatus: 3,
+		EvalNaming:             interp.SourceBeforeLocation,
+		SourceFileNaming:       interp.SourceBeforeLocation,
+		SourceFileIsTheBuiltin: true,
+		Unterminated:           "syntax error at line %[6]d: `%[3]s' unmatched",
+		SyntaxErrorStatus:      3,
 		// The status is never reached — a file `.` cannot open ends the script
 		// here — but the wording is, and it names the operand and the reason in
 		// brackets rather than after a colon.

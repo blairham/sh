@@ -185,3 +185,60 @@ func TestANestedGroupNeedsNoQuantifier(t *testing.T) {
 		}
 	}
 }
+
+// condRun evaluates a `[[ ]]` under the given pattern grammar, so the two
+// contexts can be compared with the same flags.
+func condRun(t *testing.T, src string, extended, condOnly, alternation bool) string {
+	t.Helper()
+	d := syntax.Core()
+	d.ExtendedPattern, d.ExtendedPatternInCondition, d.PatternAlternation = extended, condOnly, alternation
+	f, err := syntax.Parse(src, d)
+	if err != nil {
+		return "parse: " + err.Error()
+	}
+	var out bytes.Buffer
+	s := PosixSemantics()
+	s.GlobExpansionResults = Yes
+	r := &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &s}
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSpace(out.String())
+}
+
+// Where the pattern stands decides how its parentheses are read, and it
+// cannot be folded into "which shell this is".
+//
+// The argument for folding was that the lexer only produces a group where the
+// dialect allows one, so reading them wherever they arrive is the same answer.
+// That holds for text the lexer saw. It does not hold for text an *expansion*
+// supplies, which reaches the matcher without passing the lexer at all.
+func TestGroupsAreReadByWhereThePatternStands(t *testing.T) {
+	const inCase = `p="(b)"; case b in $p) echo yes;; *) echo no;; esac`
+	const inCond = `p="@(b|c)"; [[ b == $p ]] && echo yes || echo no`
+
+	// Groups everywhere: an expanded group is one in both places.
+	if got := condRun(t, inCase, true, true, false); got != "yes" {
+		t.Errorf("groups everywhere, in a case: got %s, want yes", got)
+	}
+	// Groups in a condition only: the same text is literal in a case.
+	if got := condRun(t, inCase, false, true, false); got != "no" {
+		t.Errorf("groups in a condition only, in a case: got %s, want no", got)
+	}
+	if got := condRun(t, inCond, false, true, false); got != "yes" {
+		t.Errorf("groups in a condition only, in a condition: got %s, want yes", got)
+	}
+	// No groups at all: literal in both.
+	if got := condRun(t, inCase, false, false, false); got != "no" {
+		t.Errorf("no groups, in a case: got %s, want no", got)
+	}
+	if got := condRun(t, inCond, false, false, false); got != "no" {
+		t.Errorf("no groups, in a condition: got %s, want no", got)
+	}
+	// And the subject that the literal reading matches, which is the half
+	// that shows the parentheses really were escaped rather than dropped.
+	const literal = `p="(b)"; case "(b)" in $p) echo yes;; *) echo no;; esac`
+	if got := condRun(t, literal, false, false, false); got != "yes" {
+		t.Errorf("no groups, literal subject: got %s, want yes", got)
+	}
+}

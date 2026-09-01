@@ -264,23 +264,25 @@ func (l *Lexer) isWordEnd(c byte) bool {
 // It is isWordEnd with the one exception that depends on where we are: a `(`
 // that opens a pattern group belongs to the word instead of ending it, and the
 // switch below cannot see it unless this lets it through.
-func (l *Lexer) endsWord(c byte, midWord bool) bool {
+func (l *Lexer) endsWord(c byte) bool {
 	if !l.isWordEnd(c) {
 		return false
 	}
-	return c != '(' || !l.opensPatternGroup(midWord)
+	return c != '(' || !l.opensPatternGroup()
 }
 
 // opensPatternGroup reports whether a `(` here belongs to the word.
 //
 // Two dialects allow it and they allow different things. One takes a group
 // only behind a quantifier — `@(`, `?(`, `+(`, `*(`, `!(` — and the other
-// takes a bare `(` anywhere inside a word. Both need to be mid-word, because
-// a `(` that starts one opens a subshell.
-func (l *Lexer) opensPatternGroup(midWord bool) bool {
-	if !midWord {
-		return false
-	}
+// takes a bare `(` anywhere inside a word.
+//
+// Nothing here tests for being mid-word, and it looked as though something
+// should: a `(` that *starts* a word opens a subshell. It cannot reach here
+// to start one. `(` is in the operator table, so a token beginning with it is
+// taken as an operator and scanWord is never entered on one — a guard for it
+// would be a line no test could distinguish.
+func (l *Lexer) opensPatternGroup() bool {
 	// An empty `()` is a function definition and not a group, which is how
 	// `f() { … }` survives the rule: the shell that takes bare groups rejects
 	// `a()` as a pattern outright, so nothing is lost by leaving it alone.
@@ -350,7 +352,7 @@ func (l *Lexer) scanWord(start Pos) Token {
 
 	for !l.eof() {
 		c := l.peek()
-		if l.endsWord(c, lit.Len() > 0 || len(spans) > 0) {
+		if l.endsWord(c) {
 			break
 		}
 		switch {
@@ -377,7 +379,7 @@ func (l *Lexer) scanWord(start Pos) Token {
 				Pos:     escPos,
 			})
 
-		case c == '(' && l.opensPatternGroup(lit.Len() > 0 || len(spans) > 0):
+		case c == '(' && l.opensPatternGroup():
 			// A parenthesised group belongs to the word rather than ending
 			// it. Only mid-word: a leading `(` opens a subshell, or is the
 			// paren a `case` arm may carry, and neither is a pattern.

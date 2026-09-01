@@ -84,8 +84,28 @@ func (n *ArithCond) arithNode() {}
 // It is a separate node rather than a binary operator because its effect
 // outlives the expression — `$((x=5))` leaves x set — which combined with
 // short-circuiting makes evaluation order part of the specification.
-type ArithAssign struct {
+// ArithIndex is `name[expr]` inside an arithmetic expression.
+//
+// The subscript is an expression of its own — `a[i+1]` — and neither the name
+// nor the subscript is written with a `$`, which is what makes this a node
+// rather than an expansion: `${a[1]}` is substituted before the expression is
+// read, and `a[1]` is read as part of it.
+type ArithIndex struct {
 	Name  string
+	Index ArithExpr
+	Start Pos
+	Stop  Pos
+}
+
+func (n *ArithIndex) Pos() Pos   { return n.Start }
+func (n *ArithIndex) End() Pos   { return n.Stop }
+func (n *ArithIndex) arithNode() {}
+
+type ArithAssign struct {
+	Name string
+	// Index is the subscript when the target is an array element, as in
+	// `(( a[0] = 9 ))`, and nil when the target is a plain name.
+	Index ArithExpr
 	Op    string // = += -= *= /= %= <<= >>= &= ^= |=
 	Value ArithExpr
 	Start Pos
@@ -229,6 +249,9 @@ func (a *arithParser) assign() ArithExpr {
 	a.space()
 	start := a.at
 	if name, ok := a.name(); ok {
+		// `a[0] = 9` assigns to an element, so the subscript belongs to the
+		// target rather than being a value of its own.
+		index := a.subscript()
 		a.space()
 		for _, op := range assignOps {
 			// `==` is equality, not assignment, so it must not be taken here.
@@ -241,7 +264,7 @@ func (a *arithParser) assign() ArithExpr {
 					a.failArith(ErrArithOperand, op)
 					return nil
 				}
-				return &ArithAssign{Name: name, Op: op, Value: v, Start: start}
+				return &ArithAssign{Name: name, Index: index, Op: op, Value: v, Start: start}
 			}
 		}
 	}
@@ -390,6 +413,9 @@ func (a *arithParser) primary() ArithExpr {
 		return a.number(start)
 	}
 	if name, ok := a.name(); ok {
+		if index := a.subscript(); index != nil {
+			return &ArithIndex{Name: name, Index: index, Start: start, Stop: start}
+		}
 		return &ArithVar{Name: name, Start: start, Stop: start}
 	}
 	// A `$` here is a parameter expansion the lexer left in place; both
@@ -475,6 +501,50 @@ func isBasedLiteral(text string) bool {
 func isNumByte(c byte) bool {
 	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
 		(c >= 'A' && c <= 'F') || c == 'x' || c == 'X'
+}
+
+// subscript reads `[ … ]` after a name, returning nil when there is none.
+//
+// The inside is an expression, so `a[i+1]` and `a[n]` both work and the
+// subscript is evaluated rather than taken as text.
+func (a *arithParser) subscript() ArithExpr {
+	// The same flag that admits `${a[1]}`: one question about whether the
+	// dialect has subscripts at all, asked in the two places that need it.
+	// Where it is off, `a[0]` is a name followed by text that cannot be an
+	// operator, and is reported as that.
+	if !a.dial.ArraySubscript {
+		return nil
+	}
+	if a.off >= len(a.src) || a.src[a.off] != '[' {
+		return nil
+	}
+	open := a.off
+	depth := 0
+	for a.off < len(a.src) {
+		switch a.src[a.off] {
+		case '[':
+			depth++
+		case ']':
+			depth--
+			if depth == 0 {
+				inner := a.src[open+1 : a.off]
+				a.off++
+				sub := &arithParser{src: inner, at: a.at, p: a.p, dial: a.dial}
+				e := sub.expr()
+				sub.space()
+				if e == nil || sub.off < len(sub.src) {
+					a.p.failKind(ErrArithOperand, "bad array subscript: %s", inner)
+					return nil
+				}
+				return e
+			}
+		}
+		a.off++
+	}
+	// No closing bracket: not a subscript at all, so the name stands alone
+	// and whatever follows is the caller's problem to report.
+	a.off = open
+	return nil
 }
 
 func (a *arithParser) name() (string, bool) {

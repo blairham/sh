@@ -378,6 +378,70 @@
         "TimedOut": false
       }
     },
+    "arith/a-subscript-is-an-expression": {
+      "bash": {
+        "Output": "5",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "5",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "5",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "5",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "4",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/a-subscript-on-something-that-is-not-an-array": {
+      "bash": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \" nosucharray[0] + 1 \"",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "arith/a-whole-float-keeps-its-point": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: 1.5+2.5: arithmetic syntax error: invalid arithmetic operator (error token is \".5+2.5\")",
@@ -406,6 +470,102 @@
       },
       "zsh": {
         "Output": "4.",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/an-array-element-in-an-expression": {
+      "bash": {
+        "Output": "4",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "4",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "4",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "4",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "3",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/an-element-past-the-end-is-zero": {
+      "bash": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/assigning-to-an-element": {
+      "bash": {
+        "Output": "9",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "9",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "9",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "9",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "9",
         "Status": 0,
         "TimedOut": false
       }

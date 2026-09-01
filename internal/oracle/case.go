@@ -2075,4 +2075,29 @@ var Corpus = []Case{
 		Snippet: `touch a.txt b.txt; set -o noglob; x=*.txt; echo $x`,
 		Why:     "the option reaches the result of an expansion too, which is the same stage by a different route",
 	},
+	{
+		ID: "arith/an-array-element-in-an-expression", Category: "arithmetic",
+		Snippet: `a=(3 4 5); echo $(( a[1] ))`,
+		Why:     "written without a `$`, so it is read as part of the expression rather than substituted into it — and it counts from the dialect's own base, which is why the same text is 4 in two shells and 3 in the third",
+	},
+	{
+		ID: "arith/a-subscript-is-an-expression", Category: "arithmetic",
+		Snippet: `a=(3 4 5); i=1; echo $(( a[i+1] ))`,
+		Why:     "the subscript is evaluated rather than taken as text, and the name inside it resolves without a `$` for the same reason the array's does",
+	},
+	{
+		ID: "arith/an-element-past-the-end-is-zero", Category: "arithmetic",
+		Snippet: `a=(3 4); echo $(( a[9] + 1 ))`,
+		Why:     "reading past the end is zero rather than an error, which is what lets a script test an element it may not have",
+	},
+	{
+		ID: "arith/a-subscript-on-something-that-is-not-an-array", Category: "arithmetic",
+		Snippet: `echo $(( nosucharray[0] + 1 ))`,
+		Why:     "and the same for a name that was never an array at all, which is the form a version check uses before it knows whether the shell set one",
+	},
+	{
+		ID: "arith/assigning-to-an-element", Category: "arithmetic",
+		Snippet: `a=(3 4); (( a[1] = 9 )); echo "${a[1]}"`,
+		Why:     "the subscript belongs to the assignment's target, so `a[1] = 9` writes an element rather than evaluating one and throwing it away",
+	},
 }

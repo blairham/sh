@@ -5,6 +5,9 @@
 package zsh
 
 import (
+	"os"
+	"strconv"
+
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -161,6 +164,14 @@ func Diagnostics() interp.Diagnostics {
 // is a dialect's answer, and it is the same function under a second name
 // rather than a second implementation.
 func Apply(r *interp.Runner) {
+	r.SetSpecial("UID", strconv.Itoa(os.Getuid()))
+	r.SetSpecial("EUID", strconv.Itoa(os.Geteuid()))
+	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
+	r.SetDynamic("SECONDS", func(rr *interp.Runner) string {
+		return strconv.Itoa(int(rr.SecondsFrom()))
+	})
+	// A NUL as well as the three whitespace characters, which is zsh's alone.
+	r.SetSpecial("IFS", " \t\n\x00")
 	if dot, ok := r.Builtin("."); ok {
 		r.Register("source", dot)
 	}

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -102,6 +103,20 @@ type Runner struct {
 	// same number to `$?` and different to `wait`, which is a difference the
 	// corpus records.
 	DieBySignal func(sig syscall.Signal) error
+
+	// Dynamic holds parameters whose value is produced when they are read,
+	// rather than stored: `LINENO` is wherever execution has reached, and
+	// `RANDOM` is a different number every time. A dialect fills in the ones
+	// it has through SetDynamic.
+	Dynamic map[string]func(*Runner) string
+
+	// assigned holds what a script assigned to a *produced* parameter, which
+	// is a message to whatever produces it rather than a value of its own.
+	assigned map[string]string
+
+	// started is when this runner was made, which is what `SECONDS` counts
+	// from in the dialects that have it.
+	started time.Time
 
 	// optChar is how far into a clustered option `getopts` has read — `-ab`
 	// is two options in one word, and OPTIND cannot say which of them is
@@ -378,6 +393,10 @@ func (r *Runner) allowed(ctx context.Context, a Action) bool {
 func (r *Runner) Run(ctx context.Context, f *syntax.File) (int, error) {
 	r.ctx = ctx
 	r.ensurePWD()
+	r.ensureSpecials()
+	if r.started.IsZero() {
+		r.started = time.Now()
+	}
 	for _, st := range f.Stmts {
 		if err := r.stmt(ctx, st); err != nil {
 			r.runExitTrap(ctx)
@@ -913,6 +932,16 @@ func (r *Runner) setVar(name, value string) {
 	if r.Vars == nil {
 		r.Vars = map[string]string{}
 	}
+	if _, dynamic := r.Dynamic[name]; dynamic {
+		// Assigning a produced parameter is a message to its producer rather
+		// than a replacement for it.
+		if r.assigned == nil {
+			r.assigned = map[string]string{}
+		}
+		r.assigned[name] = value
+		delete(r.removed, name)
+		return
+	}
 	if name == "OPTIND" {
 		// Noted rather than compared: see optindAssigned.
 		r.optindAssigned = true
@@ -947,14 +976,25 @@ func (r *Runner) ensurePWD() {
 }
 
 func (r *Runner) getVar(name string) (string, bool) {
+	if f, ok := r.Dynamic[name]; ok {
+		// Ahead of the stored table, because a parameter that produces its
+		// value cannot be overwritten by assigning to it: `RANDOM=5` seeds
+		// the generator and the next read is still a new number. What was
+		// assigned is kept where the producer can see it — SECONDS counts
+		// from it — rather than shadowing the producer entirely.
+		if !r.removed[name] {
+			return f(r), true
+		}
+	}
 	if v, ok := r.Vars[name]; ok {
 		return v, true
 	}
 	if r.removed[name] {
-		// `unset` took it away, and the environment is not allowed to put it
-		// back.
+		// `unset` took it away, and neither the environment nor a dynamic
+		// parameter is allowed to put it back.
 		return "", false
 	}
+
 	for _, kv := range r.environ() {
 		if k, v, ok := strings.Cut(kv, "="); ok && k == name {
 			return v, true

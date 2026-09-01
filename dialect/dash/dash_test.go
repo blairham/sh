@@ -290,3 +290,24 @@ func TestGetoptsAnswers(t *testing.T) {
 		t.Errorf("GetoptsBadOption = %q, want %q", got, want)
 	}
 }
+
+// TestParametersDashDoesNotProvide is the other half: dash has neither
+// RANDOM nor SECONDS, and a script tests for them exactly this way.
+func TestParametersDashDoesNotProvide(t *testing.T) {
+	for _, name := range []string{"RANDOM", "SECONDS", "UID"} {
+		f, err := syntax.Parse(`[ -n "${`+name+`-}" ] && echo have || echo none`, dash.Dialect())
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		sem := dash.Semantics()
+		r := &interp.Runner{Stdout: &out, Semantics: &sem}
+		dash.Apply(r)
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+		if strings.TrimSpace(out.String()) != "none" {
+			t.Errorf("%s: got %q, want dash not to provide it", name, out.String())
+		}
+	}
+}

@@ -5,6 +5,8 @@
 package ksh
 
 import (
+	"strconv"
+
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -176,6 +178,12 @@ func Diagnostics() interp.Diagnostics {
 // not, which makes the name a dialect's answer. It is the same function under
 // a second name rather than a second implementation.
 func Apply(r *interp.Runner) {
+	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
+	// Three decimal places, where the two other shells that have SECONDS
+	// report whole seconds.
+	r.SetDynamic("SECONDS", func(rr *interp.Runner) string {
+		return strconv.FormatFloat(rr.SecondsFrom(), 'f', 3, 64)
+	})
 	r.Unregister("local")
 	if dot, ok := r.Builtin("."); ok {
 		r.Register("source", dot)

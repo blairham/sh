@@ -5,6 +5,9 @@
 package bash
 
 import (
+	"os"
+	"strconv"
+
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -163,6 +166,15 @@ func Diagnostics() interp.Diagnostics {
 // "not found" there. It is the same function under a second name rather than a
 // second implementation, which is the only way the two cannot drift apart.
 func Apply(r *interp.Runner) {
+	// Parameters bash provides and the others do not all have. Which
+	// variables a shell supplies is the same kind of question as which
+	// builtins it has, so it is answered here rather than as an axis.
+	r.SetSpecial("UID", strconv.Itoa(os.Getuid()))
+	r.SetSpecial("EUID", strconv.Itoa(os.Geteuid()))
+	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
+	r.SetDynamic("SECONDS", func(rr *interp.Runner) string {
+		return strconv.Itoa(int(rr.SecondsFrom()))
+	})
 	if dot, ok := r.Builtin("."); ok {
 		r.Register("source", dot)
 	}

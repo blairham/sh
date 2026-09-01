@@ -4,6 +4,9 @@
 package bash_test
 
 import (
+	"bytes"
+	"context"
+	"strings"
 	"testing"
 
 	"github.com/blairham/sh/dialect/bash"
@@ -196,5 +199,28 @@ func TestGetoptsAnswers(t *testing.T) {
 	}
 	if got, want := bash.Semantics().GetoptsAssignmentRestartsWord, interp.Yes; got != want {
 		t.Errorf("GetoptsAssignmentRestartsWord = %v, want %v", got, want)
+	}
+}
+
+// TestParametersBashProvides: which parameters a shell supplies is the same
+// kind of question as which builtins it has, so it is answered through the
+// same seam rather than as an axis.
+func TestParametersBashProvides(t *testing.T) {
+	r := &interp.Runner{}
+	bash.Apply(r)
+	for _, name := range []string{"UID", "EUID", "RANDOM", "SECONDS"} {
+		f, err := syntax.Parse(`[ -n "${`+name+`-}" ] && echo have`, bash.Dialect())
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		rr := &interp.Runner{Stdout: &out}
+		bash.Apply(rr)
+		if _, err := rr.Run(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+		if strings.TrimSpace(out.String()) != "have" {
+			t.Errorf("%s: got %q, want bash to provide it", name, out.String())
+		}
 	}
 }

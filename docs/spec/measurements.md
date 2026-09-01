@@ -371,26 +371,40 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   set -C; echo one>b; echo two>|b; printf "[%s]" "$(cat b)"
   ```
 
-## quoting
-
-| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
-| --- | --- | --- | --- | --- | --- | --- |
-| `core/dollar-single-expands-escapes` | ` [ $ a \ t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` |
-
-- `core/dollar-single-expands-escapes` — read as bytes, because the failure mode was a literal backslash-t that looks almost right in a terminal — the quoting was recorded and nothing decoded it
-  ```sh
-  printf '[%s]' $'a\tb' | od -An -c | tr -s " "
-  ```
-
 ## parameters
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
+| `special/ifs-has-a-default` | ` \t \n ` | ` \t \n ` | ` \t \n ` | ` \t \n ` | ` \t \n ` | ` \t \n \0 ` |
+| `special/lineno-is-where-you-are` | `1~1` | `1~1` | `1~1` | `0~0` | `1~1` | `1~1` |
+| `special/random-is-absent-from-dash` | `none` | `have` | `have` | `have` | `have` | `have` |
+| `special/uid-is-bash-and-zsh` | `none` | `have` | `have` | `have` | `none` | `have` |
+| `special/assigning-random-seeds-it` | `none` | `produced` | `produced` | `produced` | `produced` | `produced` |
 | `core/append-assignment` | `<shell>: 1: x+=b: not found~[a]` | `[ab]` | `[ab]` | `[ab]` | `[ab]` | `[ab]` |
 | `core/append-to-an-array` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` |
 | `core/array-star-joins` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` |
 | `unset/takes-away-an-environment-name` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` |
 
+- `special/ifs-has-a-default` — space, tab and newline in three of them and a NUL as well in zsh — and read as bytes because whitespace is what it is made of. Splitting worked here while `$IFS` was empty, so a script could neither read it nor tell it had been changed
+  ```sh
+  printf '%s' "$IFS" | od -An -c | tr -s " "
+  ```
+- `special/lineno-is-where-you-are` — produced when it is read rather than stored, which is the whole of the distinction: a stored copy would be the line the shell started on
+  ```sh
+  echo "$LINENO"; echo "$LINENO"
+  ```
+- `special/random-is-absent-from-dash` — which parameters a shell provides is the same kind of question as which builtins it has — dash has neither RANDOM nor SECONDS, and the value cannot be recorded because it is a different number every time
+  ```sh
+  [ -n "${RANDOM-}" ] && echo have || echo none
+  ```
+- `special/uid-is-bash-and-zsh` — the parameter a real system script began with — `if [ $UID -ne 0 ]` is `[ -ne 0 ]` where it is unset, which is not the same test and does not fail the same way
+  ```sh
+  [ -n "${UID-}" ] && echo have || echo none
+  ```
+- `special/assigning-random-seeds-it` — assigning a produced parameter is a message to whatever produces it rather than a replacement for it: the next read is a new number and not the 5
+  ```sh
+  [ -n "${RANDOM-}" ] || { echo none; exit; }; RANDOM=5; a=$RANDOM; b=$RANDOM; [ "$a" = 5 ] && echo stored || echo produced
+  ```
 - `core/append-assignment` — dash has no += and reads the whole word as a command name, which is the divergence — the other three append
   ```sh
   x=a; x+=b; echo "[$x]"
@@ -406,6 +420,17 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `unset/takes-away-an-environment-name` — a name that arrived in the environment rather than from an assignment is still a name `unset` removes — deleting it from the shell's own table is not enough, because a lookup reads both
   ```sh
   unset HOME; echo "[${HOME-gone}]"
+  ```
+
+## quoting
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `core/dollar-single-expands-escapes` | ` [ $ a \ t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` |
+
+- `core/dollar-single-expands-escapes` — read as bytes, because the failure mode was a literal backslash-t that looks almost right in a terminal — the quoting was recorded and nothing decoded it
+  ```sh
+  printf '[%s]' $'a\tb' | od -An -c | tr -s " "
   ```
 
 ## command language

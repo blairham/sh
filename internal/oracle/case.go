@@ -384,6 +384,33 @@ var Corpus = []Case{
 		// recorded into the golden file.
 		Why: "the dangerous case: &> redirects both streams in bash and zsh, and is `&` then `>` in dash and ksh93 — no error, different meaning",
 	},
+	// --- the parameters a shell provides ----------------------------------
+	{
+		ID: "special/ifs-has-a-default", Category: "parameters",
+		Snippet: `printf '%s' "$IFS" | od -An -c | tr -s " "`,
+		Why:     "space, tab and newline in three of them and a NUL as well in zsh — and read as bytes because whitespace is what it is made of. Splitting worked here while `$IFS` was empty, so a script could neither read it nor tell it had been changed",
+	},
+	{
+		ID: "special/lineno-is-where-you-are", Category: "parameters",
+		Snippet: `echo "$LINENO"; echo "$LINENO"`,
+		Why:     "produced when it is read rather than stored, which is the whole of the distinction: a stored copy would be the line the shell started on",
+	},
+	{
+		ID: "special/random-is-absent-from-dash", Category: "parameters",
+		Snippet: `[ -n "${RANDOM-}" ] && echo have || echo none`,
+		Why:     "which parameters a shell provides is the same kind of question as which builtins it has — dash has neither RANDOM nor SECONDS, and the value cannot be recorded because it is a different number every time",
+	},
+	{
+		ID: "special/uid-is-bash-and-zsh", Category: "parameters",
+		Snippet: `[ -n "${UID-}" ] && echo have || echo none`,
+		Why:     "the parameter a real system script began with — `if [ $UID -ne 0 ]` is `[ -ne 0 ]` where it is unset, which is not the same test and does not fail the same way",
+	},
+	{
+		ID: "special/assigning-random-seeds-it", Category: "parameters",
+		Snippet: `[ -n "${RANDOM-}" ] || { echo none; exit; }; RANDOM=5; a=$RANDOM; b=$RANDOM; [ "$a" = 5 ] && echo stored || echo produced`,
+		Why:     "assigning a produced parameter is a message to whatever produces it rather than a replacement for it: the next read is a new number and not the 5",
+	},
+
 	// --- the core language, as documented ---------------------------------
 	{
 		ID: "core/dollar-single-expands-escapes", Category: "quoting",

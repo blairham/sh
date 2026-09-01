@@ -150,10 +150,11 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 	if err != nil {
 		return intNum(0), err
 	}
-	elems, ok := r.arrayElems(x.Name)
-	if !ok {
-		return intNum(0), nil
-	}
+	// No check that the name is an array: an unset one yields nothing, and
+	// nothing is out of range for every subscript, so the bounds test below
+	// already answers it. A guard here would be a line no test could tell
+	// from its absence.
+	elems, _ := r.arrayElems(x.Name)
 	i := idx.asInt() - r.arrayBase()
 	if i < 0 || i >= len(elems) {
 		return intNum(0), nil

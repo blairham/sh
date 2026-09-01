@@ -385,3 +385,95 @@ func TestAFailureTheDialectRefusesAtRuntimeIsNotDecorated(t *testing.T) {
 		t.Errorf("status %d, want the dialect's runtime status", code)
 	}
 }
+
+// TestPositionalParametersReachTheScript is the gap that made most real
+// scripts useless: the interpreter had positional parameters all along and the
+// front end never gave it any, so `$#` was 0 however the shell was invoked.
+//
+// Every route names them differently and the panel is unanimous about each,
+// which is why they are all here rather than one standing for the rest.
+func TestPositionalParametersReachTheScript(t *testing.T) {
+	const show = `echo "0=[$0] n=$# 1=[$1] 2=[$2] at=[$@]"`
+	path := writeScript(t, show+"\n")
+
+	for _, tc := range []struct {
+		name string
+		argv []string
+		want string
+	}{
+		// A script's path is `$0` and the operands after it are the
+		// parameters.
+		{"a script", []string{"testsh", path, "a", "b"}, "0=[" + path + "] n=2 1=[a] 2=[b] at=[a b]"},
+		{"a script with none", []string{"testsh", path}, "0=[" + path + "] n=0 1=[] 2=[] at=[]"},
+		{"after --", []string{"testsh", "--", path, "a"}, "0=[" + path + "] n=1 1=[a] 2=[] at=[a]"},
+		// `-c` is the odd one: the *first* operand becomes `$0`, so the
+		// parameters start at the second.
+		{"a command with a name", []string{"testsh", "-c", show, "name", "a", "b"}, "0=[name] n=2 1=[a] 2=[b] at=[a b]"},
+		{"a command with only a name", []string{"testsh", "-c", show, "name"}, "0=[name] n=0 1=[] 2=[] at=[]"},
+		// With no operands at all the shell keeps its own name.
+		{"a bare command", []string{"testsh", "-c", show}, "0=[testsh] n=0 1=[] 2=[] at=[]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, errs, _ := runArgs(t, shell(), tc.argv...)
+			if errs != "" {
+				t.Fatalf("stderr: %s", errs)
+			}
+			if strings.TrimSpace(out) != tc.want {
+				t.Errorf("got  %s\nwant %s", strings.TrimSpace(out), tc.want)
+			}
+		})
+	}
+}
+
+// TestPositionalParametersSurviveTheShell: what the invocation supplies is the
+// same list `set` and `shift` work on, rather than a second one beside it.
+func TestPositionalParametersSurviveTheShell(t *testing.T) {
+	path := writeScript(t, "shift; echo \"n=$# 1=[$1]\"\nset -- x\necho \"n=$# 1=[$1]\"\n")
+	out, _, _ := runArgs(t, shell(), "testsh", path, "a", "b", "c")
+	if want := "n=2 1=[b]\nn=1 1=[x]\n"; out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}
+
+// TestStandardInputKeepsTheShellsName: reading the script from standard input
+// is the third naming rule — the shell stays `$0` and *every* operand is a
+// parameter, since none of them was the script.
+//
+// The front end reads the process's own standard input, so the test replaces
+// it. That is the only way to reach this route, and leaving it untested is
+// what let the operands be dropped without anything noticing.
+func TestStandardInputKeepsTheShellsName(t *testing.T) {
+	path := writeScript(t, `echo "0=[$0] n=$# 1=[$1] at=[$@]"`+"\n")
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	saved := os.Stdin
+	os.Stdin = f
+	defer func() { os.Stdin = saved }()
+
+	out, errs, _ := runArgs(t, shell(), "testsh", "-s", "a", "b")
+	if errs != "" {
+		t.Fatalf("stderr: %s", errs)
+	}
+	if want := "0=[testsh] n=2 1=[a] at=[a b]"; strings.TrimSpace(out) != want {
+		t.Errorf("got  %s\nwant %s", strings.TrimSpace(out), want)
+	}
+}
+
+// TestALoneDashEndsTheOptions: `-` is an end-of-options marker like `--`, not
+// a request to read standard input. Every shell in the panel runs `sh - a b`
+// as the script `a`; only a `-` with nothing after it reaches standard input,
+// and it does that by falling through to the no-operands case rather than by
+// meaning anything itself.
+func TestALoneDashEndsTheOptions(t *testing.T) {
+	path := writeScript(t, `echo "0=[$0] n=$# 1=[$1]"`+"\n")
+	out, errs, _ := runArgs(t, shell(), "testsh", "-", path, "x")
+	if errs != "" {
+		t.Fatalf("stderr: %s", errs)
+	}
+	if want := "0=[" + path + "] n=1 1=[x]"; strings.TrimSpace(out) != want {
+		t.Errorf("got  %s\nwant %s", strings.TrimSpace(out), want)
+	}
+}

@@ -165,9 +165,19 @@ about to borrow state the Runner already owns.
 
 **Nothing outside `driver/` implements how a shell is invoked.** Reading
 `-c` or a script file, naming the shell from `argv[0]`, naming a *script*
-by its path in a diagnostic, wording a parse failure the dialect's way and
-exiting with the dialect's status — that is one front end taking a
-`driver.Shell`, which is the three vectors plus the two extension points.
+by its path in a diagnostic, handing the script its positional parameters,
+wording a parse failure the dialect's way and exiting with the dialect's
+status — that is one front end taking a `driver.Shell`, which is the three
+vectors plus the two extension points.
+
+Which operand becomes `$0` is the front end's to know and differs by route:
+a script's path is `$0` and the operands after it are `$1` onward, `-c`
+takes the *first* operand as `$0` and the rest as parameters, and standard
+input leaves `$0` as the shell. All four shells agree on all three. The
+interpreter had positional parameters long before anything gave it any,
+which is a reminder that a feature is not reachable until the front end
+reaches it — `$#` was 0 however the shell was invoked, and most real
+scripts do nothing useful with no arguments.
 
 It is public rather than under `internal/` on purpose, and this is the one
 exception to "packages start under `internal/`". A dialect built outside

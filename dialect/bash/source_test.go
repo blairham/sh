@@ -185,3 +185,16 @@ func TestDoubleEqualInTest(t *testing.T) {
 		t.Errorf("single equals: status %d, want 0", st)
 	}
 }
+
+// TestABracketNamesItself: `[` is `test` under another name, and the
+// diagnostic blames the name that was typed. Run rather than asserted against
+// the wording string, since the wording is what would be wrong.
+func TestABracketNamesItself(t *testing.T) {
+	dir := t.TempDir()
+	if out, _ := runBash(t, dir, `test a b c`); !strings.Contains(out, `test: b: binary operator expected`) {
+		t.Errorf("test: said %q, want %q", out, `test: b: binary operator expected`)
+	}
+	if out, _ := runBash(t, dir, `[ a b c ]`); !strings.Contains(out, `[: b: binary operator expected`) {
+		t.Errorf("bracket: said %q, want %q", out, `[: b: binary operator expected`)
+	}
+}

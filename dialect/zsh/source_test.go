@@ -159,3 +159,16 @@ func TestDoubleEqualInTest(t *testing.T) {
 		t.Errorf("unquoted: %q status %d, want the `=` expansion to miss", out, st)
 	}
 }
+
+// TestABracketNamesItself: `[` is `test` under another name, and the
+// diagnostic blames the name that was typed. Run rather than asserted against
+// the wording string, since the wording is what would be wrong.
+func TestABracketNamesItself(t *testing.T) {
+	dir := t.TempDir()
+	if out, _ := runZsh(t, dir, `test 1 -eq a`); !strings.Contains(out, `:test:`) {
+		t.Errorf("test: said %q, want %q", out, `:test:`)
+	}
+	if out, _ := runZsh(t, dir, `[ 1 -eq a ]`); !strings.Contains(out, `:[:`) {
+		t.Errorf("bracket: said %q, want %q", out, `:[:`)
+	}
+}

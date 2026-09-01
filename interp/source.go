@@ -71,7 +71,16 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	p := syntax.NewParser(src, r.dialect())
 	f := p.Parse()
 	if err := p.Err(); err != nil {
+		// The failure's own line, not the caller's. `.` on line 1 of a script
+		// that sources a file whose `if` never closes is reported at the
+		// line in *that file* by every shell in the panel, and this reported
+		// line 1 for all of them.
+		outerLine := r.line
+		if se := parseErrorLine(err); se > 0 {
+			r.line = se
+		}
 		r.diagf("%s: %s\n", s.label, r.diag().ParseFailure(err))
+		r.line = outerLine
 		// POSIX makes a special builtin's failure fatal to a non-interactive
 		// shell. dash is the only member of the panel that does it here; the
 		// other three report the error and carry on.

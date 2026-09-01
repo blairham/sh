@@ -327,3 +327,31 @@ func TestPipelineStatusName(t *testing.T) {
 		}
 	}
 }
+
+// TestCloseBraceIsReservedEverywhere: the grammar rule that makes zsh's brace
+// groups look different from the other three. It is documented in
+// docs/spec/semantics.md as measured, and was measured and never built — the
+// parser rejected `{ echo hi }`, which zsh runs.
+func TestCloseBraceIsReservedEverywhere(t *testing.T) {
+	if !zsh.Dialect().CloseBraceAlwaysReserved {
+		t.Error("zsh should reserve `}` wherever a word may stand")
+	}
+	f, err := syntax.Parse(`{ echo hi }`, zsh.Dialect())
+	if err != nil {
+		t.Fatalf("zsh should accept a group with no terminator: %v", err)
+	}
+	var out bytes.Buffer
+	s, d := zsh.Semantics(), zsh.Diagnostics()
+	r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+	zsh.Apply(r)
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(out.String()) != "hi" {
+		t.Errorf("got %q, want hi", out.String())
+	}
+	// And the other half of the same rule.
+	if _, err := syntax.Parse(`echo }`, zsh.Dialect()); err == nil {
+		t.Error("`echo }` should be a syntax error where `}` is always reserved")
+	}
+}

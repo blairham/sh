@@ -166,6 +166,16 @@ type Dialect struct {
 	// one is safe to be wrong about loudly.
 	ArrayLiteral bool
 
+	// CloseBraceAlwaysReserved makes `}` a reserved word wherever a word may
+	// stand, not only where a command may begin.
+	//
+	// It is what lets zsh write `{ echo hi }` with no terminator before the
+	// brace: the `}` cannot be an argument, so it can only be closing the
+	// group. The same rule is why `echo }` is a syntax error there and prints
+	// a brace in the other three, which is the half that shows it is one rule
+	// rather than a special case inside brace groups.
+	CloseBraceAlwaysReserved bool
+
 	// ArraySubscript enables `${a[i]}`, `${a[@]}` and `${a[*]}`. Absent from
 	// dash, which has no arrays at all and calls the subscript a bad
 	// substitution rather than reading it — a separate flag from

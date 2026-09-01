@@ -16,6 +16,10 @@ import (
 func Dialect() syntax.Dialect {
 	d := syntax.Core()
 	d.FunctionKeywordParens = true
+	// `}` is reserved wherever a word may stand here, which is what lets a
+	// brace group close without a terminator — and what makes `echo }` a
+	// syntax error rather than a brace on the output.
+	d.CloseBraceAlwaysReserved = true
 	return d
 }
 

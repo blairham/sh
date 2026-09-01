@@ -1826,4 +1826,24 @@ var Corpus = []Case{
 		Snippet: `a=(x y z); echo "[$a]"`,
 		Why:     "the same rule on an ordinary array, which is where it belongs: zsh joins and the other two take the first element",
 	},
+	{
+		ID: "cmd/close-brace-as-an-ordinary-word", Category: "command language",
+		Snippet: `echo }`,
+		Why:     "`}` is reserved only where a command may begin in three of the four, so as an argument it is an ordinary brace — and in zsh it is reserved wherever a word may stand, which is a parse error here and is the same rule that lets `{ echo a }` close without a terminator",
+	},
+	{
+		ID: "cmd/reserved-word-inside-a-brace-group", SyntaxError: true, Category: "command language",
+		Snippet: `{ echo a; do :; done; }`,
+		Why:     "every shell names the word it stopped on; dash also says what it expected, and only here — `(expecting \"}\")` appears after a group with something in it",
+	},
+	{
+		ID: "cmd/reserved-word-in-an-empty-brace-group", SyntaxError: true, Category: "command language",
+		Snippet: `{ fi; }`,
+		Why:     "the same failure with nothing before it, which is where dash drops the expectation: an empty group has nothing to be in the middle of",
+	},
+	{
+		ID: "cmd/unterminated-brace-group-line", SyntaxError: true, Category: "command language",
+		Snippet: `{ echo a; echo b`,
+		Why:     "where an unterminated construct is reported: bash puts it on the line *after* the input's last when the text does not end in one, and the other three on the last line itself",
+	},
 }

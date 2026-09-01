@@ -3,7 +3,10 @@
 
 package syntax
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
 
 func mustFail(t *testing.T, src string, d Dialect, why string) {
 	t.Helper()
@@ -132,5 +135,54 @@ func TestArraySubscriptIsADialectConstruct(t *testing.T) {
 	for _, src := range []string{`echo ${a[0]}`, `echo ${a[@]}`, `echo ${a[*]}`, `a=1; echo ${a[@]}`} {
 		mustParse(t, src, Core(), "a subscript in a dialect with arrays")
 		mustFail(t, src, POSIX(), "a subscript in a dialect without them")
+	}
+}
+
+// TestCloseBraceAlwaysReserved is one rule with two visible halves, which is
+// why the flag is about the word and not about brace groups: `}` reserved
+// wherever a word may stand is what lets a group close with no terminator, and
+// it is the same thing that stops `echo }` printing a brace.
+func TestCloseBraceAlwaysReserved(t *testing.T) {
+	reserved := Core()
+	reserved.CloseBraceAlwaysReserved = true
+
+	for _, src := range []string{`{ echo hi }`, `{ echo a; echo b }`, `f() { echo hi }`, `{ echo a } 2>/dev/null`} {
+		mustParse(t, src, reserved, "a group closing without a terminator")
+		mustFail(t, src, Core(), "the same group where the brace is only an argument")
+	}
+	// The other half: an argument that is a brace.
+	mustParse(t, `echo }`, Core(), "`}` as an ordinary word")
+	mustFail(t, `echo }`, reserved, "`}` where it is always reserved")
+	// Quoting takes it out of the rule, and so does anything but a word.
+	for _, src := range []string{`{ echo "a}" }`, `x=}`, `{ }`, `{ echo a; { echo b } }`} {
+		mustParse(t, src, reserved, "a brace that is not a reserved word")
+	}
+}
+
+// TestABraceGroupNamesTheWordItStoppedOn: a reserved word the group cannot use
+// is reported as the word, not as a missing brace. The expectation rides along
+// only when the group had something in it, which is the one shell that says
+// both and the reason the two cases are separate.
+func TestABraceGroupNamesTheWordItStoppedOn(t *testing.T) {
+	for _, tc := range []struct{ src, token, expected string }{
+		{`{ echo a; do :; done; }`, "do", "}"},
+		{`{ echo a; esac; }`, "esac", "}"},
+		{`{ fi; }`, "fi", ""},
+		{`{ then; }`, "then", ""},
+	} {
+		_, err := Parse(tc.src, Core())
+		var se *Error
+		if !errors.As(err, &se) {
+			t.Fatalf("%s: got %v, want a syntax error", tc.src, err)
+		}
+		if se.Kind != ErrUnexpected {
+			t.Errorf("%s: kind %v, want ErrUnexpected", tc.src, se.Kind)
+		}
+		if se.Token != tc.token {
+			t.Errorf("%s: token %q, want %q", tc.src, se.Token, tc.token)
+		}
+		if se.Expected != tc.expected {
+			t.Errorf("%s: expected %q, want %q", tc.src, se.Expected, tc.expected)
+		}
 	}
 }

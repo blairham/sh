@@ -302,9 +302,8 @@ func (sh Shell) source(r *interp.Runner, name string) int {
 // break the first time the phrasing changed.
 func wordParseError(dg interp.Diagnostics, err error) (int, string) {
 	line, _ := splitPos(err.Error())
-	var se *syntax.Error
-	if errors.As(err, &se) {
-		line = se.Pos.Line
+	if n := dg.ParseFailureLine(err); n > 0 {
+		line = n
 	}
 	// The wording itself is interp's, because `eval` and `.` report the same
 	// failures and must say the same thing about them.

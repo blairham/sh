@@ -125,3 +125,21 @@ func TestNoAmpersandRedirect(t *testing.T) {
 		t.Error("ksh93u+ 2012 has no &>, and treating it as one operator silently redirects what should have been backgrounded")
 	}
 }
+
+// TestUnterminatedNamesTheInnermostUnclosedKeyword is ksh93's view, and the
+// one with an irregularity in it: a `do` inside a while is named and a `do`
+// inside a `for` is not, which is measured rather than derived.
+func TestUnterminatedNamesTheInnermostUnclosedKeyword(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"if", "syntax error at line 1: `if' unmatched"},
+		{"if true; then echo x", "syntax error at line 1: `then' unmatched"},
+		{"if true; then echo x; else echo y", "syntax error at line 1: `else' unmatched"},
+		{"while true; do echo x", "syntax error at line 1: `do' unmatched"},
+		{"for i in a; do echo x", "syntax error at line 1: `for' unmatched"},
+	} {
+		_, err := syntax.Parse(tc.src, ksh.Dialect())
+		if got := ksh.Diagnostics().ParseFailure(err); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}

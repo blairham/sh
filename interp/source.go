@@ -71,7 +71,7 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	p := syntax.NewParser(src, r.dialect())
 	f := p.Parse()
 	if err := p.Err(); err != nil {
-		r.diagf("%s: %s\n", s.label, Wording(r.diag().SyntaxError, "%s", parseMessage(err)))
+		r.diagf("%s: %s\n", s.label, r.diag().ParseFailure(err))
 		// POSIX makes a special builtin's failure fatal to a non-interactive
 		// shell. dash is the only member of the panel that does it here; the
 		// other three report the error and carry on.

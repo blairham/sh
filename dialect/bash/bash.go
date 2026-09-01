@@ -68,7 +68,10 @@ func Diagnostics() interp.Diagnostics {
 		DigitTooGreatForBase: "value too great for base",
 		TraceQuoting:         interp.QuoteShell,
 		TraceForHeader:       interp.TraceForSource,
-		SyntaxErrorStatus:    2,
+		// bash names the construct and the line it opened on, and nothing
+		// about what would have closed it.
+		Unterminated:      "syntax error: unexpected end of file from `%[1]s' command on line %[2]d",
+		SyntaxErrorStatus: 2,
 		// Measured: `.` of a file it cannot open reports 1 and carries on,
 		// where a missing operand is 2 — two numbers for what reads like one
 		// failure, which is why they are two fields.

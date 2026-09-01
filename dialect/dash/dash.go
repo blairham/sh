@@ -36,7 +36,10 @@ func Semantics() interp.Semantics {
 // Diagnostics is how dash reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
-		Location:          interp.LocationColonLine,
+		Location: interp.LocationColonLine,
+		// dash names what it wanted instead, and calls the token by its
+		// class rather than by name.
+		Unterminated:      "Syntax error: end of file unexpected (expecting \"%[4]s\")",
 		SyntaxError:       "Syntax error: %s",
 		BadSubstitution:   "Bad substitution",
 		ReadonlyVariable:  "%s: is read only",

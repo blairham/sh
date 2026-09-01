@@ -149,3 +149,18 @@ func TestDerivesFromTheStandardNotFromASibling(t *testing.T) {
 		t.Error("the preset overrides nothing, which cannot be right")
 	}
 }
+
+// TestUnterminatedNamesTheLastTokenRead is zsh's view, which mentions neither
+// the construct nor what would have closed it.
+func TestUnterminatedNamesTheLastTokenRead(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"if", "parse error near `if'"},
+		{"if true; then echo x", "parse error near `x'"},
+		{"case a in a) echo hi", "parse error near `hi'"},
+	} {
+		_, err := syntax.Parse(tc.src, zsh.Dialect())
+		if got := zsh.Diagnostics().ParseFailure(err); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}

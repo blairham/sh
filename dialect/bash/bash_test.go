@@ -73,3 +73,20 @@ func TestDerivesFromTheStandardNotFromASibling(t *testing.T) {
 		t.Error("the preset overrides nothing, which cannot be right")
 	}
 }
+
+// TestUnterminatedNamesTheConstructAndItsLine is bash's view of input that ran
+// out: the construct and where it began, and nothing about what would have
+// closed it. The other three name three other parts of the same state.
+func TestUnterminatedNamesTheConstructAndItsLine(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"if", "syntax error: unexpected end of file from `if' command on line 1"},
+		{"if true; then echo x", "syntax error: unexpected end of file from `if' command on line 1"},
+		{"for i in a; do echo x", "syntax error: unexpected end of file from `for' command on line 1"},
+		{"{ echo x", "syntax error: unexpected end of file from `{' command on line 1"},
+	} {
+		_, err := syntax.Parse(tc.src, bash.Dialect())
+		if got := bash.Diagnostics().ParseFailure(err); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}

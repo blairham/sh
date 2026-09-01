@@ -122,3 +122,19 @@ func TestDerivesFromTheStandardNotFromASibling(t *testing.T) {
 		t.Error("the preset overrides nothing, which cannot be right")
 	}
 }
+
+// TestUnterminatedNamesWhatWouldHaveClosedIt is dash's view: the expected word
+// and the class of what it found instead, never the construct.
+func TestUnterminatedNamesWhatWouldHaveClosedIt(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"if", `Syntax error: end of file unexpected (expecting "then")`},
+		{"if true; then echo x", `Syntax error: end of file unexpected (expecting "fi")`},
+		{"case a in a) echo x", `Syntax error: end of file unexpected (expecting ";;")`},
+		{"{ echo x", `Syntax error: end of file unexpected (expecting "}")`},
+	} {
+		_, err := syntax.Parse(tc.src, dash.Dialect())
+		if got := dash.Diagnostics().ParseFailure(err); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}

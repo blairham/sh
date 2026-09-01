@@ -23,6 +23,13 @@ type Parser struct {
 	err        error
 	incomplete bool
 
+	// open is the constructs the parser is inside, innermost last, and
+	// lastText the token before the current one. Both exist for one reason:
+	// when the input runs out, the panel names four different parts of that
+	// state and this is where they come from.
+	open     []opener
+	lastText string
+
 	// depth bounds nesting while parsing operands, which are themselves
 	// words and may hold further expansions. Pathological input is the
 	// normal case on the keystroke path, so this is a bound rather than a
@@ -67,6 +74,9 @@ func (p *Parser) slice(from, to Pos) string {
 }
 
 func (p *Parser) next() {
+	if p.tok.Kind != TokEOF && p.tok.Text != "" {
+		p.lastText = p.tok.Text
+	}
 	p.tok = p.lex.Next()
 	if p.err == nil && p.lex.Err() != nil {
 		p.err = p.lex.Err()
@@ -102,6 +112,58 @@ func (p *Parser) tokenText() string {
 	return `"` + p.tok.Kind.String() + `"`
 }
 
+// opener is a construct or clause the parser is currently inside.
+//
+// It is kept so that running out of input can be *described* rather than just
+// reported: the panel names four different parts of that state — see
+// ErrUnterminated — and all four are here.
+type opener struct {
+	word string
+	line int
+	// construct marks a compound command rather than a clause of one. `if`
+	// is a construct and the `then` inside it is not, which is the
+	// distinction one shell's wording turns on.
+	construct bool
+}
+
+// opens records a construct and returns the function that closes it.
+//
+// The close truncates rather than pops, so a clause opened inside it — `then`,
+// `else` — needs no unwinding of its own and an early return cannot leave the
+// stack out of step with the parse.
+func (p *Parser) opens(word string) func() {
+	depth := len(p.open)
+	p.open = append(p.open, opener{word: word, line: p.tok.Pos.Line, construct: true})
+	return func() { p.open = p.open[:depth] }
+}
+
+// opensClause records a keyword that is itself awaiting a partner.
+func (p *Parser) opensClause(word string) {
+	p.open = append(p.open, opener{word: word, line: p.tok.Pos.Line})
+}
+
+// unterminated describes the state the parser gave up in.
+func (p *Parser) unterminated(expected string) *Error {
+	e := &Error{
+		Pos: p.tok.Pos, Kind: ErrUnterminated,
+		Expected: expected, LastToken: p.lastText,
+	}
+	if n := len(p.open); n > 0 {
+		e.Innermost = p.open[n-1].word
+		for i := n - 1; i >= 0; i-- {
+			if p.open[i].construct {
+				e.Construct, e.ConstructLine = p.open[i].word, p.open[i].line
+				break
+			}
+		}
+	}
+	e.Msg = "unexpected end of input"
+	if e.Construct != "" {
+		e.Msg = "unterminated " + e.Construct
+	}
+	return e
+}
+
 func (p *Parser) fail(format string, args ...any) {
 	p.failKind(ErrSyntax, format, args...)
 }
@@ -123,6 +185,16 @@ func (p *Parser) failKind(kind ErrorKind, format string, args ...any) {
 func (p *Parser) expectWord(s string) Pos {
 	pos := p.tok.Pos
 	if !p.atWord(s) {
+		if p.at(TokEOF) {
+			// The input ended with something still open, which every shell in
+			// the panel reports as its own kind of failure rather than as a
+			// word in the wrong place.
+			p.incomplete = true
+			if p.err == nil {
+				p.err = p.unterminated(s)
+			}
+			return pos
+		}
 		p.fail("expected %q", s)
 		return pos
 	}
@@ -578,9 +650,17 @@ func (p *Parser) parseSubshell() Command {
 
 func (p *Parser) parseGroup() Command {
 	c := &Group{Start: p.tok.Pos}
+	defer p.opens("{")()
 	p.next()
 	c.List = p.parseList()
 	if !p.atWord("}") {
+		if p.at(TokEOF) {
+			p.incomplete = true
+			if p.err == nil {
+				p.err = p.unterminated("}")
+			}
+			return c
+		}
 		// `{ echo a }` is a syntax error everywhere but zsh: the brace is a
 		// reserved word, so it needs a terminator before it.
 		p.fail("expected } — a brace group needs a terminator before it")
@@ -606,17 +686,41 @@ func (p *Parser) requireSep(before string) {
 		p.next()
 		p.skipNewlines()
 	default:
+		if p.at(TokEOF) {
+			// `if` on its own: the input ran out before the construct could
+			// be closed, which is a different failure from a word in the
+			// wrong place and is reported as one.
+			p.incomplete = true
+			if p.err == nil {
+				p.err = p.unterminated(before)
+			}
+			return
+		}
 		if !p.atWord(before) {
 			p.fail("expected ; or newline before %q", before)
 		}
 	}
 }
 
+// loopWord names the construct a loop opened with, which is what a
+// diagnostic has to say back.
+func loopWord(until bool) string {
+	if until {
+		return "until"
+	}
+	return "while"
+}
+
 func (p *Parser) parseIf() Command {
 	c := &IfClause{Start: p.tok.Pos}
+	defer p.opens("if")()
 	p.next()
 	c.Cond = p.parseList()
 	p.requireSep("then")
+	// Recorded after it is consumed: until then the innermost thing awaiting
+	// a partner is the `if` itself, which is what one shell names for
+	// `if true` and not for `if true; then echo x`.
+	p.opensClause("then")
 	p.expectWord("then")
 	c.Then = p.parseList()
 
@@ -630,6 +734,7 @@ func (p *Parser) parseIf() Command {
 		c.Elifs = append(c.Elifs, e)
 	}
 	if p.atWord("else") {
+		p.opensClause("else")
 		p.next()
 		c.HasElse = true
 		c.Else = p.parseList()
@@ -641,9 +746,16 @@ func (p *Parser) parseIf() Command {
 
 func (p *Parser) parseLoop() Command {
 	c := &LoopClause{Until: p.atWord("until"), Start: p.tok.Pos}
+	defer p.opens(loopWord(c.Until))()
 	p.next()
 	c.Cond = p.parseList()
 	p.requireSep("do")
+	// A `do` inside a while or until is a keyword awaiting its own partner,
+	// and inside a `for` it is not — measured, in the one shell whose wording
+	// can tell: `while true; do echo x` is "`do' unmatched" there and
+	// `for i in a; do echo x` is "`for' unmatched". An irregularity in that
+	// shell rather than in this one, recorded rather than smoothed over.
+	p.opensClause("do")
 	p.expectWord("do")
 	c.Body = p.parseList()
 	c.Stop = p.tok.End
@@ -653,6 +765,7 @@ func (p *Parser) parseLoop() Command {
 
 func (p *Parser) parseFor() Command {
 	c := &ForClause{Start: p.tok.Pos}
+	defer p.opens("for")()
 	p.next()
 	if p.tok.Kind != TokWord || !isName(p.tok.Literal()) {
 		p.fail("expected a name after `for`")
@@ -687,6 +800,7 @@ func (p *Parser) parseFor() Command {
 
 func (p *Parser) parseCase() Command {
 	c := &CaseClause{Start: p.tok.Pos}
+	defer p.opens("case")()
 	p.next()
 	if c.Word = p.word(); c.Word == nil {
 		p.fail("expected a word after `case`")
@@ -731,6 +845,15 @@ func (p *Parser) parseCase() Command {
 			// The last arm may omit its terminator before `esac`.
 			it.TermPos = p.tok.Pos
 			if !p.atWord("esac") {
+				if p.at(TokEOF) {
+					// The panel expects `;;` here rather than `esac`: an arm
+					// that has not been closed is what ran out, not the case.
+					p.incomplete = true
+					if p.err == nil {
+						p.err = p.unterminated(";;")
+					}
+					return c
+				}
 				p.fail("expected ;; after a case body")
 				return c
 			}

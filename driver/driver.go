@@ -301,16 +301,14 @@ func (sh Shell) source(r *interp.Runner, name string) int {
 // everything else, and matching on our own phrasing to tell those apart would
 // break the first time the phrasing changed.
 func wordParseError(dg interp.Diagnostics, err error) (int, string) {
-	line, msg := splitPos(err.Error())
+	line, _ := splitPos(err.Error())
 	var se *syntax.Error
 	if errors.As(err, &se) {
 		line = se.Pos.Line
-		msg = se.Msg
-		if se.Kind == syntax.ErrBadSubstitution {
-			return line, interp.Wording(dg.BadSubstitution, msg)
-		}
 	}
-	return line, interp.Wording(dg.SyntaxError, "%s", msg)
+	// The wording itself is interp's, because `eval` and `.` report the same
+	// failures and must say the same thing about them.
+	return line, dg.ParseFailure(err)
 }
 
 // splitPos separates a parse error's own "line:col: " from its message.

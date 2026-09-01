@@ -195,6 +195,7 @@ func TestTheDialectWordsItsOwnSyntaxError(t *testing.T) {
 	sh := shell()
 	sh.Diagnostics = interp.Diagnostics{
 		SyntaxError:       "Bespoke syntax complaint: %s",
+		Unterminated:      "Bespoke unfinished %[1]s on line %[2]d",
 		SyntaxErrorStatus: 7,
 	}
 
@@ -202,12 +203,24 @@ func TestTheDialectWordsItsOwnSyntaxError(t *testing.T) {
 		t.Fatal("an unfinished `if` should not succeed")
 	}
 
-	_, errs, code := runArgs(t, sh, "testsh", "-c", "if")
-	if code != 7 {
-		t.Errorf("status = %d, want the dialect's 7", code)
-	}
-	if !strings.Contains(errs, "Bespoke syntax complaint") {
-		t.Errorf("stderr = %q, want the dialect's own wording", errs)
+	// Two kinds, not one. A token in the wrong place is the general failure;
+	// input that ran out with a construct open is its own, because the panel
+	// names four different parts of that state rather than wording a shared
+	// diagnosis four ways. Both are the dialect's to word, and a dialect that
+	// words only one still gets the substrate's sentence for the other.
+	for _, tc := range []struct{ name, src, want string }{
+		{"a token in the wrong place", "echo )", "Bespoke syntax complaint"},
+		{"input that ran out", "if", "Bespoke unfinished if on line 1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, errs, code := runArgs(t, sh, "testsh", "-c", tc.src)
+			if code != 7 {
+				t.Errorf("status = %d, want the dialect's 7", code)
+			}
+			if !strings.Contains(errs, tc.want) {
+				t.Errorf("stderr = %q, want it to contain %q", errs, tc.want)
+			}
+		})
 	}
 }
 

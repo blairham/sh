@@ -87,3 +87,20 @@ func TestContinueGoesRoundAgainAndAnEmptyLoopReportsZero(t *testing.T) {
 		}
 	}
 }
+
+// `continue` counts its loops as `break` does: `continue 2` starts the next
+// round of the *outer* loop, skipping the rest of the outer body.
+//
+// Without the count it acts on the inner loop, which finishes on its own —
+// and then the outer body runs anyway, so the only visible difference is what
+// the outer body did.
+func TestContinueCountsItsLoops(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`i=0; for a in 1 2; do for b in 1 2 3; do continue 2; done; i=$((i+1)); done; echo $i`, "0"},
+		{`i=0; for a in 1 2; do for b in 1 2 3; do continue; done; i=$((i+1)); done; echo $i`, "2"},
+	} {
+		if out, _ := run(t, tc.src, nil); strings.TrimSpace(out) != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, strings.TrimSpace(out), tc.want)
+		}
+	}
+}

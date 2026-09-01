@@ -31,6 +31,7 @@ func Dialect() syntax.Dialect {
 // Semantics is what zsh means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.No
 	s.ArithIntegerOperatorRefusesFloat = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.Yes
@@ -94,6 +95,7 @@ func Semantics() interp.Semantics {
 // Diagnostics is how zsh reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		NotABuiltin:              "no such builtin: %[1]s",
 		CommandStringParsedWhole: true,
 		ArithInfinity:            "Inf",
 		ArithNotANumber:          "NaN",

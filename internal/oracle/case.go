@@ -2195,4 +2195,34 @@ var Corpus = []Case{
 		Snippet: `while :; do while :; do break 2; done; echo inner; done; echo after`,
 		Why:     "the counter-case: `break` still stops only as many loops as it was asked to, which is what an exit must not be confused with",
 	},
+	{
+		ID: "cmd/command-v-names-a-builtin", Category: "command lookup",
+		Snippet: `command -v echo`,
+		Why:     "`command -v` asks what would run rather than running it, and answers a builtin with the name as written — the portable way a script tests whether it has a tool",
+	},
+	{
+		ID: "cmd/command-v-names-an-external-by-path", Category: "command lookup",
+		Snippet: `command -v ls`,
+		Why:     "an external is answered by the path, because that is the part a script cannot work out for itself",
+	},
+	{
+		ID: "cmd/command-v-on-nothing", Category: "command lookup",
+		Snippet: `command -v nosuchthing; echo "st=$?"`,
+		Why:     "nothing found prints nothing at all, which is what makes `command -v x >/dev/null` the usual spelling — and dash answers 127 where the others answer a plain failure",
+	},
+	{
+		ID: "cmd/command-v-names-a-function", Category: "command lookup",
+		Snippet: `f() { :; }; command -v f`,
+		Why:     "a function is answered like a builtin, by name, even though `command` without -v would refuse to run it",
+	},
+	{
+		ID: "cmd/command-bypasses-a-function", Category: "command lookup",
+		Snippet: `echo() { echo overridden; }; command echo hi`,
+		Why:     "the whole reason `command` exists: a function may wrap the thing it is named after without calling itself",
+	},
+	{
+		ID: "cmd/command-v-names-a-reserved-word", Category: "command lookup",
+		Snippet: `command -v if`,
+		Why:     "a word of the grammar is answered too, which is not obvious — it is not a command at all, and every shell in the panel still names it",
+	},
 }

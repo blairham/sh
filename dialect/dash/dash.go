@@ -28,6 +28,7 @@ func Dialect() syntax.Dialect {
 // Semantics is what dash means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	s.CommandNotFoundStatusIsNotFound = interp.Yes
 	s.SetFTurnsOffGlobbing = interp.Yes
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	s.EchoInterpretsEscapes = interp.Yes
@@ -150,6 +151,8 @@ func Diagnostics() interp.Diagnostics {
 // Apply makes any adjustment that is not a vector value. dash needs none:
 // it has `local`, which is the only builtin the panel disagrees about.
 func Apply(r *interp.Runner) {
+	// dash has no `builtin`.
+	r.Unregister("builtin")
 	// dash has neither `typeset` nor `declare`. The core provides `typeset`
 	// because three of the four do; the one that does not takes it away, the
 	// same way ksh93 takes `local` away.

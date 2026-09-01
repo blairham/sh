@@ -2138,6 +2138,198 @@
         "TimedOut": false
       }
     },
+    "cmd/command-bypasses-a-function": {
+      "bash": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cmd/command-v-names-a-builtin": {
+      "bash": {
+        "Output": "echo",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "echo",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "echo",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "echo",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "echo",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "echo",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cmd/command-v-names-a-function": {
+      "bash": {
+        "Output": "f",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "f",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "f",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "f",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "f",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "f",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cmd/command-v-names-a-reserved-word": {
+      "bash": {
+        "Output": "if",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "if",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "if",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "if",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "if",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "if",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cmd/command-v-names-an-external-by-path": {
+      "bash": {
+        "Output": "/bin/ls",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "/bin/ls",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "/bin/ls",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "/bin/ls",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "/bin/ls",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "/bin/ls",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cmd/command-v-on-nothing": {
+      "bash": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "cmd/compound-takes-redirection": {
       "bash": {
         "Output": "[a,b,]",

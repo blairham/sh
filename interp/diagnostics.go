@@ -359,6 +359,9 @@ type Diagnostics struct {
 	// prefixed there as usual — `line 2: nosuchcmd: not found` — which is why
 	// this is not simply the script location being absent.
 	ParseFailureNamesItsOwnLine bool
+	// NotABuiltin is `builtin`'s refusal of a name that is not one. One verb:
+	// %[1]s the name.
+	NotABuiltin string
 	// CommandStringParsedWhole reads all of a `-c` command before running any
 	// of it. zsh alone does, so `sh -c 'echo one
 	// { fi; }'` prints one everywhere else and nothing there. A *script* is

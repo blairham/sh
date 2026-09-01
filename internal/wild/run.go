@@ -8,6 +8,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -176,8 +177,26 @@ func normalise(out, shell, script string) string {
 	// The full path only. Replacing the base name as well was too eager: it
 	// turned `GNU bashbug` into `GNU <shell>bug` and reported a difference
 	// between two identical outputs.
-	out = strings.ReplaceAll(out, shell, "<shell>")
-	out = strings.ReplaceAll(out, script, "<script>")
+	//
+	// And "the full path only" has to be enforced rather than assumed. The
+	// reference shell is named on the command line and defaults to `bash`, a
+	// bare word — which put the base name straight back in, on one side of
+	// the comparison only, because ours is always a path.
+	out = replacePath(out, shell, "<shell>")
+	out = replacePath(out, script, "<script>")
 	// A temporary directory's name is different every run.
 	return tempDirPattern.ReplaceAllString(out, "<tmp>")
+}
+
+// replacePath substitutes a file's path, and only a path.
+//
+// A name with no separator in it is a word that could turn up in any output
+// for any reason, so it is left alone. Nothing is lost by that: a shell names
+// itself in a diagnostic by the path it was invoked with, and the sweep now
+// resolves the reference to one before it starts.
+func replacePath(out, path, with string) string {
+	if !strings.ContainsRune(path, filepath.Separator) {
+		return out
+	}
+	return strings.ReplaceAll(out, path, with)
 }

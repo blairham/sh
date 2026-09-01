@@ -138,3 +138,13 @@ func TestUnexpectedTokensAreNamedPlainly(t *testing.T) {
 		}
 	}
 }
+
+// TestAParenAfterAWordIsAFunctionDefinition is bash committing at the paren,
+// which is why `f ( x )` blames the word and not the paren.
+func TestAParenAfterAWordIsAFunctionDefinition(t *testing.T) {
+	_, err := syntax.Parse("f ( x )", bash.Dialect())
+	want := "syntax error near unexpected token `x'"
+	if got := bash.Diagnostics().ParseFailure(err); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

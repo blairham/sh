@@ -811,9 +811,10 @@ failed — which is the entire reason two of the four shells keep the rest.
 The values are unanimous where they exist. What is not is the **name**:
 bash's `PIPESTATUS`, zsh's `pipestatus`, and no name at all in ksh93 or
 dash. So the core keeps the record and a dialect names it through `Apply`,
-the same seam that gives ksh93 `source` and takes `local` away. When no
-dialect names it the record is not even kept, because nothing could read it
-— which is also what keeps the axes below from being asked in the bare core.
+the same seam that gives ksh93 `source` and takes `local` away. With no name
+the record is unreadable, and — the part that matters — the axes below are
+never asked, so the bare core does not refuse an `x=1` over a difference
+nothing in that shell could observe.
 
 Despite the name it is not only for pipelines. A command on its own records
 one element, and so does a compound one: after `if false | true; then :; fi`

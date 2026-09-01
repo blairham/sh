@@ -4,10 +4,13 @@
 package interp_test
 
 import (
+	"bytes"
+	"context"
 	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // named runs with the pipeline-status record exposed under a name, which is
@@ -132,5 +135,25 @@ func TestArrayScalarIsTheWholeArrayIsAnAxis(t *testing.T) {
 				t.Errorf("got %q, want %q", strings.TrimSpace(out), tc.want)
 			}
 		})
+	}
+}
+
+// A shell with no name for the record must not be asked how to maintain one.
+// Without the guard, the bare core refused every `x=1` over a difference
+// nothing in that shell could observe.
+func TestNoNameAsksNoAxis(t *testing.T) {
+	f, err := syntax.Parse(`false | true; x=1; echo done`, syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	// The strict core: every axis unanswered, so anything asked is reported.
+	s := PosixSemantics()
+	r := &Runner{Stdout: &out, Stderr: &out, Semantics: &s}
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != "done\n" {
+		t.Errorf("got %q, want no dialect to be needed", got)
 	}
 }

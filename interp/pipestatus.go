@@ -21,8 +21,8 @@ import "github.com/blairham/sh/syntax"
 // SetPipelineStatus exposes the last pipeline's statuses under a name.
 //
 // A dialect calls it from Apply, the same seam that gives ksh93 `source` and
-// takes `local` away. The name is all a dialect supplies; when none does, the
-// record is not even kept, because nothing could read it.
+// takes `local` away. The name is all a dialect supplies; with none, the
+// record is unreadable and the axes that govern it are never asked.
 func (r *Runner) SetPipelineStatus(name string) { r.pipeStatusName = name }
 
 // recordPipeStatus keeps what a pipeline's elements reported.
@@ -30,14 +30,21 @@ func (r *Runner) SetPipelineStatus(name string) { r.pipeStatusName = name }
 // Called before `!` inverts anything, which is measured: after
 // `! false | true` the record holds 1 and 0 rather than the status the
 // pipeline ended up with.
+//
+// No check that a dialect named the record: keeping one nothing can read is
+// invisible, and a guard no test can distinguish is not worth the line. The
+// check that matters is in recordSingleStatus, where it stops an axis being
+// asked in a shell that could not observe the answer.
 func (r *Runner) recordPipeStatus(statuses []int) {
-	if r.pipeStatusName == "" {
-		return
-	}
 	r.pipeStatus = append(r.pipeStatus[:0], statuses...)
 }
 
 // recordSingleStatus is recordPipeStatus for a pipeline of one.
+//
+// The name check is load-bearing rather than thrift: without it the axis
+// below would be asked for every `x=1` in a shell that has no name for the
+// record, and the bare core would refuse an assignment over a difference
+// nothing in that shell could see.
 //
 // Whether a bare assignment counts is the axis. bash says yes, so `false |
 // true; x=1` leaves a one-element record holding 0; zsh says no and leaves the

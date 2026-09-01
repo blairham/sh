@@ -59,6 +59,19 @@ func (r *Runner) runTest(name string, args []string) int {
 	if err != nil {
 		var te *testError
 		if errors.As(err, &te) {
+			if te.kind == errBinaryExpected {
+				// An expression that never parsed is not the builtin's
+				// complaint. The one dialect that names a builtin in the
+				// location bears this out: `test a b c` is `zsh:1: condition
+				// expected: b` with no `test` in it, and so is `[[ a b c ]]`,
+				// which is not a builtin at all — while `test -Q x` and
+				// `test 1 -eq a`, which failed *evaluating* an expression
+				// that did parse, are `zsh:test:1:`. Same wordings, two
+				// speakers.
+				outer := r.inBuiltin
+				r.inBuiltin = ""
+				defer func() { r.inBuiltin = outer }()
+			}
 			r.diagf("%s\n", Wording(te.format(r.diag()), te.fallback(), te.operand))
 		} else {
 			r.diagf("%s: %v\n", name, err)
@@ -164,7 +177,13 @@ func (r *Runner) testExpr(args []string) (bool, error) {
 		if args[0] == "(" && args[2] == ")" {
 			return args[1] != "", nil
 		}
-		return false, &testError{kind: errBinaryExpected, operand: args[1]}
+		blamed := args[1]
+		if r.diag().TestNamesFirstOperand {
+			// dash names the first word instead of the one that should have
+			// been an operator.
+			blamed = args[0]
+		}
+		return false, &testError{kind: errBinaryExpected, operand: blamed}
 	case 4:
 		if args[0] == "!" {
 			v, err := r.testExpr(args[1:])

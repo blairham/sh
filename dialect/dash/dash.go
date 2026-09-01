@@ -57,6 +57,8 @@ func Diagnostics() interp.Diagnostics {
 		InvalidNumber:         "Illegal number: %s",
 		NumericArgument:       "%[1]s: Illegal number: %[2]s",
 		ArithError:            "arithmetic expression: %[2]s: \"%[1]s\"",
+		FileNotFound:          "No such file",
+		TestNamesFirstOperand: true,
 		CannotOpen:            "cannot open %s: %s",
 		ShiftTooMany:          "shift: can't shift that many",
 		SyntaxErrorStatus:     2,

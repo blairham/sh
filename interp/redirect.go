@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -121,7 +122,8 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.C
 		f, err := os.OpenFile(path, flags, 0o666)
 		if err != nil {
 			r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
-			r.diagf("%s\n", Wording(r.diag().CannotOpen, "cannot open %s: %s", name, openReason(err)))
+			r.diagf("%s\n", Wording(r.diag().CannotOpen, "cannot open %s: %s",
+				name, r.diag().openReason(err)))
 			r.status = 1
 			r.redirErr = true
 			return closers, nil
@@ -202,10 +204,13 @@ func (r *Runner) heredocBody(rd *syntax.Redirect) string {
 // A shell says "No such file"; os.OpenFile says "open b: no such file or
 // directory", which repeats the name the caller is about to print and reads
 // like a Go program rather than a shell.
-func openReason(err error) string {
+func (d Diagnostics) openReason(err error) string {
 	var pe *os.PathError
 	if errors.As(err, &pe) {
 		err = pe.Err
+	}
+	if d.FileNotFound != "" && errors.Is(err, fs.ErrNotExist) {
+		return d.FileNotFound
 	}
 	return err.Error()
 }

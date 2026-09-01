@@ -47,6 +47,8 @@ func TestSemantics(t *testing.T) {
 		got  interp.Answer
 		want interp.Answer
 	}{
+		{"DeclaredNameWithoutValueIsEmpty", s.DeclaredNameWithoutValueIsEmpty, interp.Yes},
+		{"TypesetLocalNeedsKeywordFunction", s.TypesetLocalNeedsKeywordFunction, interp.No},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.No},
 		{"ArrayBaseIsZero", s.ArrayBaseIsZero, interp.No},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.Yes},

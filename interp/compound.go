@@ -330,7 +330,7 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 	r.Params, r.inFunc = args, fn.Name
 	r.depth++
 	// A scope the function's locals unwind into.
-	sc := &scope{saved: map[string]string{}, existed: map[string]bool{}}
+	sc := &scope{saved: map[string]string{}, existed: map[string]bool{}, keyword: fn.Keyword}
 	r.scopes = append(r.scopes, sc)
 	// What the EXIT trap was on the way in, so zsh can tell whether this
 	// function set one of its own.

@@ -345,6 +345,24 @@ type Semantics struct {
 	// records.
 	ReadonlyReassignmentFatal Answer
 
+	// DeclaredNameWithoutValueIsEmpty gives a name a value when it is
+	// declared without one: `local u` or `typeset u`. zsh alone says yes, so
+	// `${u-UNSET}` is empty there and UNSET in bash and ksh93 — the name
+	// exists in all three, but only zsh considers it set.
+	DeclaredNameWithoutValueIsEmpty Answer
+	// TypesetLocalNeedsKeywordFunction restricts `typeset`'s local scope to
+	// functions defined with the `function` word. ksh93 says yes: in
+	// `f() { typeset x=1; }` the assignment reaches the caller's `x`, and in
+	// `function f { typeset x=1; }` it does not. bash and zsh make no such
+	// distinction, which is why the two definition forms are interchangeable
+	// there and are not in ksh93. dash has no `typeset` at all, which is why
+	// the axis is absent rather than false there.
+	//
+	// It asks about `typeset` and not about `local` because `local` is
+	// unanimous: every shell that has it — all but ksh93, which does not —
+	// makes it local in a function defined either way.
+	TypesetLocalNeedsKeywordFunction Answer
+
 	// ArrayBaseIsZero indexes arrays from 0. True in bash and ksh93, false in
 	// zsh, which counts from 1. dash has no arrays at all, which is why the
 	// axis is absent rather than false there.

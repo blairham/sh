@@ -31,6 +31,8 @@ func Dialect() syntax.Dialect {
 // Semantics is what ksh93 means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	s.DeclaredNameWithoutValueIsEmpty = interp.No
+	s.TypesetLocalNeedsKeywordFunction = interp.Yes
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.ArithInvalidOctalDigitIsError = interp.No
 	s.IndirectionYieldsName = interp.Yes

@@ -250,8 +250,15 @@ type Runner struct {
 	tested int
 	// noclobber is `set -C`: a plain `>` will not truncate an existing file.
 	noclobber bool
+	// declaring names commands whose `name=value` arguments are assignments,
+	// beyond the ones the core already knows. A dialect adds its own.
+	declaring map[string]bool
 	// readonly names refuse assignment.
 	readonly map[string]bool
+	// integer names evaluate what is assigned to them: with the attribute,
+	// `n=5+2` stores 7 rather than the four characters. It is a property of
+	// the name and not of the assignment, which is why it is recorded here.
+	integer map[string]bool
 	// funcs holds defined functions.
 	funcs map[string]*syntax.FuncDecl
 	// depth bounds function recursion, because a shell script can recurse
@@ -637,7 +644,15 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		return nil
 	}
 	var argv []string
-	for _, w := range c.Args {
+	for i, w := range c.Args {
+		// A declaration utility's `name=value` arguments are assignments and
+		// expand as ones, which is what keeps `typeset -i n=3*3` from being
+		// read as a pattern. Only after the first word is expanded is it
+		// known which utility this is, so the test is inside the loop.
+		if i > 0 && len(argv) > 0 && r.declares(argv[0]) && assignShaped(w) {
+			argv = append(argv, r.expandAssignArg(w))
+			continue
+		}
 		argv = append(argv, r.expandWord(w)...)
 	}
 	// A command whose expansion failed, or depended on an axis no dialect
@@ -893,6 +908,10 @@ func (r *Runner) environ() []string {
 type scope struct {
 	saved   map[string]string
 	existed map[string]bool
+	// keyword records that the function was defined with the `function` word
+	// rather than with parentheses. ksh93 gives only those functions a local
+	// scope, so `typeset` needs to know which kind it is standing in.
+	keyword bool
 }
 
 // fatal reports an error that abandons the script.
@@ -931,6 +950,15 @@ func (r *Runner) setVar(name, value string) {
 	}
 	if r.Vars == nil {
 		r.Vars = map[string]string{}
+	}
+	if r.integer[name] {
+		// The name was declared integer, so what is assigned to it is an
+		// expression rather than text.
+		v, ok := r.integerValue(value)
+		if !ok {
+			return
+		}
+		value = v
 	}
 	if _, dynamic := r.Dynamic[name]; dynamic {
 		// Assigning a produced parameter is a message to its producer rather
@@ -1028,9 +1056,9 @@ func (r *Runner) assign(a *syntax.Assign) {
 			r.diagf("%s: bad array subscript\n", a.Name)
 			return
 		}
-		r.setArrayElem(a.Name, idx, strings.Join(r.expandWord(a.Value), " "))
+		r.setArrayElem(a.Name, idx, r.expandAssignValue(a.Value))
 	default:
-		value := strings.Join(r.expandWord(a.Value), " ")
+		value := r.expandAssignValue(a.Value)
 		if a.Append {
 			old, _ := r.getVar(a.Name)
 			value = old + value

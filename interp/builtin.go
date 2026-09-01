@@ -37,6 +37,7 @@ var builtins = map[string]Builtin{
 	"exit":     biExit,
 	"trap":     biTrap,
 	"local":    biLocal,
+	"typeset":  biDeclare,
 	"readonly": biReadonly,
 	"break":    biBreak,
 	"continue": biContinue,
@@ -436,34 +437,26 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		r.diagf("local: can only be used in a function\n")
 		return 1
 	}
-	sc := r.scopes[len(r.scopes)-1]
 	for _, a := range args {
 		name, value, hasValue := strings.Cut(a, "=")
-		if _, seen := sc.saved[name]; !seen {
-			old, existed := r.Vars[name]
-			sc.saved[name] = old
-			sc.existed[name] = existed
-		}
+		r.shadow(name)
 		if hasValue {
 			r.setVar(name, value)
-		} else {
-			r.setVar(name, "")
+			continue
 		}
+		r.declareEmpty(name)
 	}
 	return 0
 }
 
 // biReadonly marks variables immutable.
 func biReadonly(r *Runner, _ context.Context, args []string) int {
-	if r.readonly == nil {
-		r.readonly = map[string]bool{}
-	}
 	for _, a := range args {
 		name, value, hasValue := strings.Cut(a, "=")
 		if hasValue {
 			r.setVar(name, value)
 		}
-		r.readonly[name] = true
+		r.markReadonly(name)
 	}
 	return 0
 }

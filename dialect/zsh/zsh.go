@@ -22,6 +22,8 @@ func Dialect() syntax.Dialect {
 // Semantics is what zsh means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	s.DeclaredNameWithoutValueIsEmpty = interp.Yes
+	s.TypesetLocalNeedsKeywordFunction = interp.No
 	s.SplitParamExpansion = interp.No
 	s.GlobExpansionResults = interp.No
 	s.GlobNoMatchIsError = interp.Yes
@@ -174,5 +176,15 @@ func Apply(r *interp.Runner) {
 	r.SetSpecial("IFS", " \t\n\x00")
 	if dot, ok := r.Builtin("."); ok {
 		r.Register("source", dot)
+	}
+	// `declare` is `typeset` under a second name rather than a second
+	// implementation. ksh93 has only the older name and dash has neither, so
+	// which names exist is a dialect's answer and not an axis.
+	if typeset, ok := r.Builtin("typeset"); ok {
+		r.Register("declare", typeset)
+		// And the assignment rule follows the name: `declare x=*` stores the
+		// character here, where in a shell without the name it would be an
+		// ordinary command with an ordinary globbed argument.
+		r.SetDeclaring("declare")
 	}
 }

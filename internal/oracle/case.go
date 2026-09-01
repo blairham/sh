@@ -1662,4 +1662,58 @@ var Corpus = []Case{
 		Snippet: `echo "echo via-source" > p.sh; source ./p.sh; echo st=$?`,
 		Why:     "`source` is a synonym for `.` in bash, ksh93 and zsh and absent from dash, which is why the substrate keeps `.` and leaves the second name to each dialect",
 	},
+	{
+		ID: "declare/typeset-assigns", Category: "declarations",
+		Snippet: `typeset x=1; echo "[$x]"`,
+		Why:     "`typeset` is the older of the two names and the one three of the four have; dash has neither and reports a command it cannot find",
+	},
+	{
+		ID: "declare/declare-is-the-second-name", Category: "declarations",
+		Snippet: `declare x=1; echo "[$x]"`,
+		Why:     "bash and zsh spell it `declare` as well, ksh93 only `typeset`, which makes the name a dialect's answer rather than an axis",
+	},
+	{
+		ID: "declare/local-in-a-posix-function", Category: "declarations",
+		Script:  true,
+		Snippet: "x=outer\nf() { typeset x=inner; }\nf\necho \"[$x]\"\n",
+		Why:     "ksh93 gives a local scope only to a function defined with the `function` word, so here its assignment reaches the caller and bash's and zsh's do not",
+	},
+	{
+		ID: "declare/local-in-a-keyword-function", Category: "declarations",
+		Script:  true,
+		Snippet: "x=outer\nfunction f { typeset x=inner; }\nf\necho \"[$x]\"\n",
+		Why:     "the same declaration in the other definition form, which is where ksh93 agrees with the rest — the pair is the whole of the axis",
+	},
+	{
+		ID: "declare/valueless-local", Category: "declarations",
+		Script:  true,
+		Snippet: "f() { local u; echo \"[${u-UNSET}]\"; }\nf\n",
+		Why:     "zsh alone considers a name declared without a value to be set, so `${u-UNSET}` is empty there and UNSET elsewhere; ksh93 has no `local` at all",
+	},
+	{
+		ID: "declare/integer-attribute-evaluates-a-later-assignment", Category: "declarations",
+		Snippet: `typeset -i n; n=5+2; echo "[$n]"`,
+		Why:     "the attribute belongs to the name, so an ordinary assignment made afterwards is an expression — which is the whole point of it",
+	},
+	{
+		ID: "declare/integer-attribute-on-the-declaration", Category: "declarations",
+		Snippet: `typeset -i n=3*3; echo "[$n]"`,
+		Why:     "the value on the declaring line is evaluated too, so the attribute has to be in place before its own assignment runs",
+	},
+	{
+		ID: "declare/integer-attribute-removed", Category: "declarations",
+		Snippet: `typeset -i n=1; typeset +i n; n=5+2; echo "[$n]"`,
+		Why:     "`+i` takes the attribute away, which is the one place a shell spells an option with a plus",
+	},
+	{
+		ID: "declare/integer-attribute-with-text", Category: "declarations",
+		Snippet: `typeset -i n; n=abc; echo "[$n]"`,
+		Why:     "text that is not a number is not an error: `abc` is an expression whose value is an unset name, so the result is zero and nothing is said",
+	},
+	{
+		ID: "declare/readonly-attribute-allows-its-own-value", Category: "declarations",
+		Script:  true,
+		Snippet: "typeset -r c=1\necho \"[$c]\"\nc=2\necho \"[$c]\"\n",
+		Why:     "the declaration assigns and then freezes, so its own value survives and the next assignment does not — applying both at once would refuse the value it was given",
+	},
 }

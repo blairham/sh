@@ -152,7 +152,13 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 
 	op, rest, ok := p.scanParamOp(s, e)
 	if !ok {
+		// The operator itself travels with the failure: one dialect does not
+		// call this a bad substitution at all, but a syntax error naming the
+		// character it could not read.
 		p.failKind(ErrBadSubstitution, "unknown operator in ${%s}", src)
+		if pe, isErr := p.err.(*Error); isErr {
+			pe.Token = firstRune(s)
+		}
 		return e
 	}
 	e.Op = op
@@ -335,4 +341,13 @@ func (p *Parser) wordFrom(text string, at Pos) *Word {
 		w.Spans = append(w.Spans, Span{Kind: Literal, Value: t.Text, Pos: at})
 	}
 	return w
+}
+
+// firstRune is the one character a diagnostic names when the operator it
+// could not read is longer than one — `${x^^}` is `^` unexpected.
+func firstRune(s string) string {
+	for _, r := range s {
+		return string(r)
+	}
+	return ""
 }

@@ -555,6 +555,13 @@ func (p *Parser) parseSimple() Command {
 				c.Assigns = append(c.Assigns, p.parseAssign(name))
 				continue
 			}
+			if p.dialect.TimesIsReserved && seenArg && len(c.Args) == 1 &&
+				c.Args[0].Literal() == "times" {
+				// A reserved word takes no arguments, so the word after it
+				// has nowhere to go.
+				p.failUnexpected("")
+				return c
+			}
 			seenArg = true
 			c.Args = append(c.Args, p.word())
 		case p.at(TokLeftParen) && (seenArg || len(c.Assigns) > 0 || len(c.Redirs) > 0):
@@ -877,7 +884,7 @@ func (p *Parser) parseCase() Command {
 		for {
 			w := p.word()
 			if w == nil {
-				p.fail("expected a case pattern")
+				p.failUnexpected("")
 				return c
 			}
 			it.Patterns = append(it.Patterns, w)

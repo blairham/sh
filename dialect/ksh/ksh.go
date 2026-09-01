@@ -19,6 +19,10 @@ func Dialect() syntax.Dialect {
 	// after constructs rather than after shells. A dialect built for the
 	// newer build sets this back to true; the panel measures the older one.
 	d.AmpersandRedirect = false
+	// `times` is a reserved word here, so `times foo` is a syntax error
+	// rather than a builtin ignoring an argument — the one place in the panel
+	// where which builtin a shell has changes what parses.
+	d.TimesIsReserved = true
 	return d
 }
 
@@ -78,14 +82,24 @@ func Diagnostics() interp.Diagnostics {
 		SourceFileIsTheBuiltin: true,
 		ArithOperandExpected:   "more tokens expected",
 		ArithOperatorExpected:  "arithmetic syntax error",
-		SyntaxUnexpected:       "syntax error at line %[3]d: `%[1]s' unexpected",
-		Unterminated:           "syntax error at line %[6]d: `%[3]s' unmatched",
-		SyntaxErrorStatus:      3,
+		// ksh93 does not call this a bad substitution: it is a syntax error
+		// naming the character it could not read.
+		BadSubstitution:   "syntax error at line %[2]d: `%[1]s' unexpected",
+		SyntaxUnexpected:  "syntax error at line %[3]d: `%[1]s' unexpected",
+		Unterminated:      "syntax error at line %[6]d: `%[3]s' unmatched",
+		SyntaxErrorStatus: 3,
 		// The status is never reached — a file `.` cannot open ends the script
 		// here — but the wording is, and it names the operand and the reason in
 		// brackets rather than after a colon.
-		DotCannotOpen:      ".: %[1]s: cannot open [%[2]s]",
-		DotNoOperand:       ".: Usage: . [ options ] name [arg ...]",
+		DotCannotOpen:          ".: %[1]s: cannot open [%[2]s]",
+		DotNoOperandUnprefixed: true,
+		// A value that is not a number is a parameter name in ksh93, so the
+		// failure is that the name is unset rather than that the text is not
+		// a number.
+		InvalidNumber: "%[1]s: parameter not set",
+		// No name in front of it and no `.:` either: ksh93 prints a usage
+		// line bare, the same way it prints `kill`'s.
+		DotNoOperand:       "Usage: . [ options ] name [arg ...]",
 		DotNoOperandStatus: 2,
 		// The reason goes in brackets, as it does for `.`.
 		// A command word names no builtin; `exec` names itself.

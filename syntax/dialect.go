@@ -31,6 +31,12 @@ type Dialect struct {
 	// macOS's /bin/sh.
 	CaseFallthrough bool
 
+	// TimesIsReserved makes `times` a reserved word rather than a builtin,
+	// so a word after it is a syntax error rather than an argument it
+	// ignores. ksh93 alone, and the only place in the panel where *which*
+	// builtin a shell has changes what parses.
+	TimesIsReserved bool
+
 	// CaseContinue enables `;;&`, which keeps testing later patterns. bash
 	// only: ksh93 and zsh both reject it, so it is not core.
 	CaseContinue bool

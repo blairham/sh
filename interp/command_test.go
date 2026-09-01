@@ -4,6 +4,8 @@
 package interp_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -17,9 +19,6 @@ func TestCommandVSaysWhatWouldRun(t *testing.T) {
 		{`f() { :; }; command -v f`, "f"},
 		{`command -v if`, "if"},
 		{`command -v while`, "while"},
-		// An external is named by its path, which is the part a script
-		// cannot work out for itself.
-		{`command -v sh`, "/bin/sh"},
 		// Nothing found prints nothing at all — the silence is what makes
 		// `command -v x >/dev/null` the usual spelling.
 		{`command -v nosuchthing_at_all`, ""},
@@ -30,6 +29,28 @@ func TestCommandVSaysWhatWouldRun(t *testing.T) {
 		if out, _ := run(t, tc.src, nil); strings.TrimSpace(out) != tc.want {
 			t.Errorf("%s = %q, want %q", tc.src, strings.TrimSpace(out), tc.want)
 		}
+	}
+}
+
+// An external is named by its path, which is the part a script cannot work
+// out for itself. The executable is made here rather than borrowed from the
+// host: `sh` is /bin/sh on a Mac and /usr/bin/sh on Ubuntu, so a test that
+// named a real one would be asserting where the machine keeps its shell.
+func TestCommandVNamesAnExternalByItsPath(t *testing.T) {
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "onlyhere")
+	if err := os.WriteFile(exe, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	setup := func(r *Runner) { r.Env = []string{"PATH=" + dir} }
+	if out, _ := run(t, `command -v onlyhere`, setup); strings.TrimSpace(out) != exe {
+		t.Errorf("command -v onlyhere = %q, want %q", strings.TrimSpace(out), exe)
+	}
+	// Off PATH it is not found, so the path in the answer above came from
+	// the search and not from the name.
+	setup = func(r *Runner) { r.Env = []string{"PATH="} }
+	if out, st := run(t, `command -v onlyhere`, setup); strings.TrimSpace(out) != "" || st == 0 {
+		t.Errorf("off PATH: %q status %d, want silence and a failure", out, st)
 	}
 }
 

@@ -397,6 +397,10 @@ arguments, in a directory of its own, with no standard input and a timeout —
 so whatever a script does, it does the same twice, and the comparison is
 between two runs rather than between a run and an expectation.
 
+It is also slow — two shells times two probes times every script, with a
+timeout on each — so a whole-machine run takes minutes. `ARGS='-dirs
+/usr/bin -timeout 3s'` narrows it while working on one cause.
+
 Not a gate either, and for a stronger reason than conformance: the answer
 depends on what happens to be installed, so it cannot be the same twice on
 two machines.

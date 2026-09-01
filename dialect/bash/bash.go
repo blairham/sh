@@ -57,6 +57,8 @@ func Semantics() interp.Semantics {
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
 	s.PrintfQuote = interp.PrintfQuoteBackslash
+	s.CdWithoutHomeIsAnError = interp.Yes
+	s.CdDashPrintsTheDirectory = interp.Yes
 	return s
 }
 
@@ -106,6 +108,9 @@ func Diagnostics() interp.Diagnostics {
 		// `kill` puts the process in parentheses and the reason after a dash,
 		// which is the only wording in the panel a script could not confuse
 		// with a message about a signal name.
+		CdCannotChange:  "cd: %[1]s: %[2]s",
+		CdHomeNotSet:    "cd: HOME not set",
+		CdOldpwdNotSet:  "cd: OLDPWD not set",
 		PrintfBadNumber: "printf: %[1]s: invalid number",
 		PrintfBadVerb:   "printf: `%[1]s': invalid format character",
 		PrintfUsage:     "printf: usage: printf [-v var] format [arguments]",

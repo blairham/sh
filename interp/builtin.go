@@ -150,6 +150,13 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		}
 		delete(r.Vars, name)
 		delete(r.exported, name)
+		// Recorded as well as deleted: a name that came from the environment
+		// is not in Vars to begin with, and deleting nothing left it visible
+		// to every lookup — `unset PATH` did not clear PATH.
+		if r.removed == nil {
+			r.removed = map[string]bool{}
+		}
+		r.removed[name] = true
 	}
 	return 0
 }
@@ -274,19 +281,28 @@ func biCd(r *Runner, _ context.Context, args []string) int {
 	if len(args) > 0 {
 		dir = args[0]
 	}
+	dash := false
 	switch dir {
 	case "":
 		dir, _ = r.getVar("HOME")
 		if dir == "" {
-			r.diagf("cd: HOME not set\n")
-			return 1
+			code, _ := r.cdNowhere(r.diag().CdHomeNotSet, "cd: HOME not set")
+			// With no HOME there is nowhere to go even for the dialects that
+			// do not call it an error, so this stops either way.
+			return code
 		}
 	case "-":
 		// The previous directory, which is why cd records one.
+		dash = true
 		dir, _ = r.getVar("OLDPWD")
 		if dir == "" {
-			r.diagf("cd: OLDPWD not set\n")
-			return 1
+			if code, stop := r.cdNowhere(r.diag().CdOldpwdNotSet, "cd: OLDPWD not set"); stop {
+				return code
+			}
+			// Not an error here, and not nothing either: the dialects that
+			// survive this go to where they already are, which still prints
+			// for the ones that print.
+			dir = r.workDir()
 		}
 	}
 
@@ -295,9 +311,18 @@ func biCd(r *Runner, _ context.Context, args []string) int {
 		dir = filepath.Join(old, dir)
 	}
 	info, err := os.Stat(dir)
-	if err != nil || !info.IsDir() {
-		r.diagf("cd: %s: no such directory\n", args[0])
-		return 1
+	if err == nil && !info.IsDir() {
+		err = &os.PathError{Op: "cd", Path: dir, Err: syscall.ENOTDIR}
+	}
+	if err != nil {
+		// The reason the operating system gave, rather than one made up
+		// here: three of the four report it, and two of those distinguish a
+		// path that is not there from one that is not a directory. Saying
+		// "no such directory" for both was a sentence no shell prints and an
+		// answer one of them can tell is wrong.
+		r.diagf("%s\n", Wording(r.diag().CdCannotChange, "cd: %[1]s: %[2]s",
+			args[0], r.diag().reasonText(reason(err))))
+		return orDefault(r.diag().CdStatus, 1)
 	}
 	// Only the runner's own directory moves. Calling os.Chdir would move the
 	// whole process, which is wrong for an embedded interpreter and would be
@@ -305,7 +330,24 @@ func biCd(r *Runner, _ context.Context, args []string) int {
 	r.Dir = dir
 	r.setVar("OLDPWD", old)
 	r.setVar("PWD", dir)
+	if dash && r.ask(r.sem().CdDashPrintsTheDirectory, "`cd -` printing where it went") {
+		// Asked only for `cd -`, which is the only form any of them prints.
+		r.printf("%s\n", dir)
+	}
 	return 0
+}
+
+// cdNowhere is `cd` with nothing to go to: no HOME, or no OLDPWD.
+//
+// Two dialects call that an error and two stay where they are and report
+// success — quietly, which is the surprising half: a script that relies on
+// `cd` moving has already carried on by the time it notices.
+func (r *Runner) cdNowhere(wording, fallback string) (int, bool) {
+	if !r.ask(r.sem().CdWithoutHomeIsAnError, "`cd` with nowhere to go being an error") {
+		return 0, false
+	}
+	r.diagf("%s\n", Wording(wording, fallback))
+	return orDefault(r.diag().CdStatus, 1), true
 }
 
 func biPwd(r *Runner, _ context.Context, _ []string) int {

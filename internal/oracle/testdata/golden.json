@@ -826,6 +826,134 @@
         "TimedOut": false
       }
     },
+    "cd/dash-announces-where-it-went": {
+      "bash": {
+        "Output": "printed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "printed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "printed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "printed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "printed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "silent",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cd/missing-directory-diverges": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: cd: /nope-xyz-abc: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: cd: /nope-xyz-abc: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: cd: /nope-xyz-abc: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: cd: can't cd to /nope-xyz-abc~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: cd: /nope-xyz-abc: [No such file or directory]~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:cd:1: no such file or directory: /nope-xyz-abc~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cd/no-home-diverges": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: cd: HOME not set~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: cd: HOME not set~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: cd: HOME not set~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: cd: bad directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cd/onto-a-file-is-a-different-reason": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: cd: ./f: Not a directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: cd: ./f: Not a directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: cd: ./f: Not a directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: cd: can't cd to ./f~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: cd: ./f: [Not a directory]~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:cd:1: not a directory: ./f~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "cmd/andor-equal-precedence": {
       "bash": {
         "Output": "B",
@@ -8790,6 +8918,38 @@
       },
       "zsh": {
         "Output": "sub~after~T",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "unset/takes-away-an-environment-name": {
+      "bash": {
+        "Output": "[gone]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[gone]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[gone]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[gone]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[gone]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[gone]",
         "Status": 0,
         "TimedOut": false
       }

@@ -254,3 +254,18 @@ func TestPrintfAnswers(t *testing.T) {
 		t.Errorf("PrintfReportsBadNumber = %v, want %v", got, want)
 	}
 }
+
+// TestCdAnswers: zsh moves silently and names the reason before the operand,
+// which is the reverse of everyone else.
+func TestCdAnswers(t *testing.T) {
+	s, d := zsh.Semantics(), zsh.Diagnostics()
+	if got, want := s.CdDashPrintsTheDirectory, interp.No; got != want {
+		t.Errorf("CdDashPrintsTheDirectory = %v, want %v", got, want)
+	}
+	if got, want := s.CdWithoutHomeIsAnError, interp.No; got != want {
+		t.Errorf("CdWithoutHomeIsAnError = %v, want %v", got, want)
+	}
+	if got, want := d.CdCannotChange, "%[2]s: %[1]s"; got != want {
+		t.Errorf("CdCannotChange = %q, want %q", got, want)
+	}
+}

@@ -62,6 +62,8 @@ func Semantics() interp.Semantics {
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfBackslashC = interp.PrintfBackslashCControl
 	s.PrintfQuote = interp.PrintfQuoteSingle
+	s.CdWithoutHomeIsAnError = interp.Yes
+	s.CdDashPrintsTheDirectory = interp.Yes
 	return s
 }
 
@@ -113,7 +115,11 @@ func Diagnostics() interp.Diagnostics {
 		ExecCannotExecute: "exec: %[1]s: cannot execute [%[2]s]",
 		// Not "cannot execute": ksh93 distinguishes a missing command from one
 		// that will not run, and only the second gets the brackets.
-		ExecNotFound:          "exec: %[1]s: not found",
+		ExecNotFound:   "exec: %[1]s: not found",
+		CdCannotChange: "cd: %[1]s: [%[2]s]",
+		// One message for both, where bash names which variable was missing.
+		CdHomeNotSet:          "cd: bad directory",
+		CdOldpwdNotSet:        "cd: bad directory",
 		PrintfBadVerb:         "printf: %[1]s: unknown format specifier",
 		PrintfUsage:           "Usage: printf [ options ] format [string ...]",
 		PrintfUsageUnprefixed: true,

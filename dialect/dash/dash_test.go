@@ -267,3 +267,14 @@ func TestPrintfAnswers(t *testing.T) {
 		t.Errorf("PrintfBadNumberStatus = %d, want the substrate's 1", d.PrintfBadNumberStatus)
 	}
 }
+
+// TestCdAnswers: dash gives no reason and reports 2 where the others report 1.
+func TestCdAnswers(t *testing.T) {
+	d := dash.Diagnostics()
+	if got, want := d.CdCannotChange, "cd: can't cd to %[1]s"; got != want {
+		t.Errorf("CdCannotChange = %q, want %q", got, want)
+	}
+	if got, want := d.CdStatus, 2; got != want {
+		t.Errorf("CdStatus = %d, want %d", got, want)
+	}
+}

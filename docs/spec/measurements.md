@@ -371,6 +371,43 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   set -C; echo one>b; echo two>|b; printf "[%s]" "$(cat b)"
   ```
 
+## cd
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `cd/missing-directory-diverges` | `<shell>: 1: cd: can't cd to /nope-xyz-abc~st=2` | `<shell>: line 1: cd: /nope-xyz-abc: No such file or directory~st=1` | `<shell>: line 1: cd: /nope-xyz-abc: No such file or directory~st=1` | `<shell>: line 0: cd: /nope-xyz-abc: No such file or directory~st=1` | `<shell>: cd: /nope-xyz-abc: [No such file or directory]~st=1` | `<shell>:cd:1: no such file or directory: /nope-xyz-abc~st=1` |
+| `cd/onto-a-file-is-a-different-reason` | `<shell>: 1: cd: can't cd to ./f~st=2` | `<shell>: line 1: cd: ./f: Not a directory~st=1` | `<shell>: line 1: cd: ./f: Not a directory~st=1` | `<shell>: line 0: cd: ./f: Not a directory~st=1` | `<shell>: cd: ./f: [Not a directory]~st=1` | `<shell>:cd:1: not a directory: ./f~st=1` |
+| `cd/no-home-diverges` | `st=0` | `<shell>: line 1: cd: HOME not set~st=1` | `<shell>: line 1: cd: HOME not set~st=1` | `<shell>: line 0: cd: HOME not set~st=1` | `<shell>: cd: bad directory~st=1` | `st=0` |
+| `cd/dash-announces-where-it-went` | `printed` | `printed` | `printed` | `printed` | `printed` | `silent` |
+
+- `cd/missing-directory-diverges` — four shapes and two statuses for one failure, and dash gives no reason at all — the one shell whose message cannot tell you why
+  ```sh
+  cd /nope-xyz-abc; echo "st=$?"
+  ```
+- `cd/onto-a-file-is-a-different-reason` — the case dash cannot express: three of the four say `not a directory` where they said `no such file`, and dash says the same sentence for both
+  ```sh
+  : > f; cd ./f; echo "st=$?"
+  ```
+- `cd/no-home-diverges` — bash and ksh93 call this an error and dash and zsh stay where they are and report success, which is the quieter answer and the surprising one
+  ```sh
+  unset HOME; cd; echo "st=$?"
+  ```
+- `cd/dash-announces-where-it-went` — `cd -` prints where it went in three of the four; zsh alone moves silently, so a script that pipes it gets an extra line everywhere but there
+  ```sh
+  cd /; out=$(cd -); [ -n "$out" ] && echo printed || echo silent
+  ```
+
+## parameters
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `unset/takes-away-an-environment-name` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` |
+
+- `unset/takes-away-an-environment-name` — a name that arrived in the environment rather than from an assignment is still a name `unset` removes — deleting it from the shell's own table is not enough, because a lookup reads both
+  ```sh
+  unset HOME; echo "[${HOME-gone}]"
+  ```
+
 ## printf
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |

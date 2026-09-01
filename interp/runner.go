@@ -103,6 +103,20 @@ type Runner struct {
 	// corpus records.
 	DieBySignal func(sig syscall.Signal) error
 
+	// removed are names `unset` took away that came from the environment
+	// rather than from Vars.
+	//
+	// Nothing clears an entry, and nothing needs to: a later assignment puts
+	// the name in Vars, which every lookup reads first, and exports append
+	// after the environment is filtered. A `delete` here looked right and no
+	// test could tell whether it was there.
+	//
+	// Deleting from Vars cannot hide those: the environment is a second
+	// source and getVar reads both, so `unset PATH` left PATH exactly where
+	// it was and every lookup still found it. A name here is gone until
+	// something assigns it again.
+	removed map[string]bool
+
 	// killedBy is the signal this shell sent itself and had no handler for,
 	// with the number kept beside it so the death does not have to look the
 	// name up again.
@@ -822,8 +836,15 @@ func (r *Runner) environ() []string {
 	if base == nil {
 		base = os.Environ()
 	}
-	out := make([]string, len(base), len(base)+len(r.Vars))
-	copy(out, base)
+	out := make([]string, 0, len(base)+len(r.Vars))
+	for _, kv := range base {
+		if k, _, ok := strings.Cut(kv, "="); ok && r.removed[k] {
+			// A name the shell unset does not reach a command either: the
+			// child would otherwise see what the parent cannot.
+			continue
+		}
+		out = append(out, kv)
+	}
 	for k, v := range r.Vars {
 		// Only exported names reach a command's environment; the rest are
 		// the shell's own.
@@ -909,6 +930,11 @@ func (r *Runner) ensurePWD() {
 func (r *Runner) getVar(name string) (string, bool) {
 	if v, ok := r.Vars[name]; ok {
 		return v, true
+	}
+	if r.removed[name] {
+		// `unset` took it away, and the environment is not allowed to put it
+		// back.
+		return "", false
 	}
 	for _, kv := range r.environ() {
 		if k, v, ok := strings.Cut(kv, "="); ok && k == name {

@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/blairham/sh/dialect/bash"
@@ -41,6 +42,10 @@ func TestFindReadsTheShebang(t *testing.T) {
 		{"python", "#!/usr/bin/python3\n"},
 		{"perl-via-env", "#!/usr/bin/env perl\n"},
 		{"no-shebang", "echo hi\n"},
+		// The shebang marker itself matters, not just the words after it: a
+		// file whose first line merely *mentions* a shell is not a script.
+		{"names-a-shell-without-a-shebang", "sh -c 'echo hi'\n"},
+		{"almost-a-shebang", "# !/bin/sh\n"},
 		{"empty", ""},
 		{"binary-ish", "\x7fELF\x02\x01\x01\x00"},
 	} {
@@ -89,14 +94,33 @@ func TestTheReferenceDecidesWhatIsNotAScript(t *testing.T) {
 }
 
 // The sweep reads and never runs, which is what makes it safe to point at
-// /usr/bin. A script that would leave a mark if executed must not leave one.
-func TestTheSweepDoesNotRunAnything(t *testing.T) {
+// /usr/bin. The reference is asked to *parse* the file and nothing more.
+//
+// This asserts on how the reference is invoked rather than on a side effect,
+// because a side effect needs a script this parser refuses and the reference
+// accepts — which is to say a current gap, and a test that stops testing
+// anything the day the gap is closed.
+func TestTheSweepOnlyAsksTheReferenceToParse(t *testing.T) {
 	dir := t.TempDir()
-	mark := filepath.Join(dir, "ran")
-	write(t, dir, "sideeffect", "#!/bin/sh\ntouch "+mark+"\n")
+	// A file this parser refuses, so the reference is consulted at all.
+	write(t, dir, "broken", "#!/bin/sh\n{ fi; }\n")
 
-	wild.Sweep(context.Background(), []string{dir}, bash.Dialect(), "bash")
-	if _, err := os.Stat(mark); err == nil {
-		t.Error("the sweep executed a script")
+	// A reference that records how it was called and accepts everything.
+	log := filepath.Join(dir, "argv")
+	ref := filepath.Join(dir, "ref")
+	if err := os.WriteFile(ref, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" >> "+log+"\nexit 0\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	rep := wild.Sweep(context.Background(), []string{dir}, bash.Dialect(), ref)
+	if len(rep.Failures) != 1 {
+		t.Fatalf("want the broken file counted against us, got %+v", rep)
+	}
+	argv, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal("the reference was never consulted")
+	}
+	if !strings.Contains(string(argv), "-n") {
+		t.Errorf("the reference was called with %q, want -n so that it parses rather than runs", argv)
 	}
 }

@@ -194,3 +194,18 @@ func TestABareAlternationInARegexIsADialectAnswer(t *testing.T) {
 	// flag is about the *bare* one.
 	mustParse(t, `[[ ab =~ (a|b) ]]`, Core(), "an alternation inside a group")
 }
+
+// TestRegexModeEndsWithTheOperand: the rule is scoped to the one word after
+// `=~`, so what follows is the shell's again. Without clearing it, a group
+// later in the same condition would be swallowed into a word.
+func TestRegexModeEndsWithTheOperand(t *testing.T) {
+	for _, src := range []string{
+		`[[ abc =~ b && (a = a) ]]`,
+		`[[ abc =~ b ]] && ( echo sub )`,
+		`[[ abc =~ b || (a = a) ]]`,
+	} {
+		mustParse(t, src, Core(), "a group after the operand")
+	}
+	// And the operand itself is still read as a regex in those.
+	mustParse(t, `[[ abc =~ (b) && (a = a) ]]`, Core(), "a regex group and then a condition group")
+}

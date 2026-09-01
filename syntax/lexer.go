@@ -674,11 +674,33 @@ func (l *Lexer) eofAt(n int) bool { return l.off+n >= len(l.src) }
 // that are not streaming; it stops at TokEOF or at the first error.
 func (l *Lexer) Tokens() []Token {
 	var out []Token
+	var heredoc Kind
 	for {
 		t := l.Next()
 		out = append(out, t)
 		if t.Kind == TokEOF || l.err != nil {
 			return out
+		}
+		// A here-document body is not lexical: where it ends is decided by a
+		// delimiter the *parser* normally registers, and without that the
+		// body is read as ordinary words. That is wrong in a way this helper
+		// used to hide — a body with an apostrophe in it reported an
+		// unterminated quote — so the queueing the parser would do is done
+		// here too, from the same two tokens it uses.
+		switch {
+		case t.Kind.IsHeredoc():
+			heredoc = t.Kind
+		case heredoc != 0 && t.Kind == TokWord:
+			// Only the delimiter's text is needed to find the body's end,
+			// so the word is the token's spans as they stand: nothing here
+			// expands, and a delimiter never does.
+			l.queueHeredoc(&Redirect{
+				Op:   heredoc,
+				Word: &Word{Spans: t.Spans, Start: t.Pos, Stop: t.End},
+			}, t.Text != t.Literal())
+			heredoc = 0
+		default:
+			heredoc = 0
 		}
 	}
 }

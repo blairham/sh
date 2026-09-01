@@ -1232,3 +1232,16 @@ marks a literal's metacharacters for the glob stage, and a here-document has
 no glob stage — its text is input, not a pattern. The old code unescaped them
 at the end and the replacement had to as well. It is the kind of thing that
 only shows once the layer above it is correct.
+
+### The lexer cannot read a here-document on its own
+
+Adding a case with an apostrophe in a body broke `TestCorpusLexes`, which
+lexes every snippet standalone. That test had been passing for here-documents
+by luck: where a body's end is decided by a delimiter the *parser* registers,
+so a lexer with no parser above it reads the body as ordinary words — the same
+mistake as the one above, one layer down, and invisible while every recorded
+body happened to be valid word syntax.
+
+`Tokens` queues the here-document itself now, from the same two tokens the
+parser uses. It is the only caller that needs to: the parser does its own
+registering, and everything else goes through the parser.

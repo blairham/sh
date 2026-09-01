@@ -703,13 +703,9 @@ func (r *Runner) specialLength() int {
 // a word: lexing alone would drop them as token separators.
 func (r *Runner) expandRawText(text string) string {
 	var b strings.Builder
-	for _, s := range syntax.HeredocSpans(text, r.dialect()) {
-		if s.Kind == syntax.ParamExp && s.Param == nil {
-			s.Param = syntax.NewParser("", r.dialect()).ParseParamExpFor(s.Value, s.Pos)
-		}
-		if s.Kind == syntax.ArithSubst && s.Arith == nil {
-			s.Arith = syntax.NewParser("", r.dialect()).ParseArithFor(s.Value, s.Pos)
-		}
+	// The lexer leaves an expansion's inside raw, so parseSpans fills it in —
+	// the same handoff a word goes through.
+	for _, s := range r.parseSpans(syntax.HeredocSpans(text, r.dialect())) {
 		out, _ := r.expandSpan(s)
 		// expandSpan marks a literal's metacharacters for the glob stage,
 		// and a here-document has no glob stage — the text is input, not a

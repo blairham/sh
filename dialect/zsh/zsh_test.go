@@ -195,3 +195,34 @@ func TestArithmeticFailuresQuoteNothing(t *testing.T) {
 		}
 	}
 }
+
+// TestWhoIsSpeakingInAConditionSplitsByWhenItFailed pins a distinction that
+// looks like an inconsistency until the mechanism shows.
+//
+// zsh names the builtin in the location for `test -Q x` and does not for
+// `test a b c` — the same builtin, two lines apart. `[[ a b c ]]` gives the
+// identical wording with no name, and `[[ ]]` is not a builtin at all: an
+// expression that never *parsed* is the condition parser's complaint, and one
+// that failed while being *evaluated* is the builtin's.
+func TestWhoIsSpeakingInAConditionSplitsByWhenItFailed(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"test a b c", "zsh:1: condition expected: b"},
+		{"test -Q x", "zsh:test:1: unknown condition: -Q"},
+		{"test 1 -eq a", "zsh:test:1: integer expression expected: a"},
+		{"[ x", "zsh:[:1: ']' expected"},
+	} {
+		f, err := syntax.Parse(tc.src, zsh.Dialect())
+		if err != nil {
+			t.Fatalf("parse %q: %v", tc.src, err)
+		}
+		var errs bytes.Buffer
+		sem, dg := zsh.Semantics(), zsh.Diagnostics()
+		r := &interp.Runner{Stderr: &errs, Semantics: &sem, Diagnostics: &dg, Name: "zsh"}
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatalf("run %q: %v", tc.src, err)
+		}
+		if got := strings.TrimSpace(errs.String()); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}

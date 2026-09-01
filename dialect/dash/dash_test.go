@@ -190,3 +190,37 @@ func TestUnexpectedTokensAreNamedByClass(t *testing.T) {
 		}
 	}
 }
+
+// TestDashSpellsItsOwnReasons covers two answers that are dash's alone.
+func TestDashSpellsItsOwnReasons(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			// "No such file", not the C string's "No such file or
+			// directory" — dash shortens it, and the reason is quoted by
+			// every message that reports a file it could not open.
+			"a file that is not there", "cat < nope", "cannot open nope: No such file",
+		},
+		{
+			// The *first* word, where the other three name the one that
+			// should have been an operator.
+			"a malformed three-argument test", "test a b c", "test: a: unexpected operator",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := syntax.Parse(tc.src, dash.Dialect())
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			var errs bytes.Buffer
+			sem, dg := dash.Semantics(), dash.Diagnostics()
+			r := &interp.Runner{Stderr: &errs, Semantics: &sem, Diagnostics: &dg, Name: "dash", Dir: dir}
+			if _, err := r.Run(context.Background(), f); err != nil {
+				t.Fatalf("run: %v", err)
+			}
+			if !strings.Contains(errs.String(), tc.want) {
+				t.Errorf("got %q, want it to contain %q", errs.String(), tc.want)
+			}
+		})
+	}
+}

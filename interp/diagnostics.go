@@ -154,6 +154,12 @@ type Diagnostics struct {
 	// file is `./f.sh:2: NOPE: parameter not set`, with no `.` anywhere in it.
 	NamesBuiltinInLocation bool
 
+	// TestNamesFirstOperand makes a malformed three-argument `test` blame the
+	// first word rather than the middle one: `test a b c` is "a: unexpected
+	// operator" in dash and names `b` — the word that should have been an
+	// operator — in the other three.
+	TestNamesFirstOperand bool
+
 	// TestUnaryExpected is what `test` says about a word where a unary
 	// operator belonged. One verb: the word.
 	TestUnaryExpected string
@@ -252,6 +258,16 @@ type Diagnostics struct {
 	// is the one dialect for which this is not the same question as the
 	// option status. Zero means the substrate's own, 1.
 	KillArgumentStatus int
+
+	// FileNotFound is how this dialect spells the reason a file was not
+	// there, when it does not quote the operating system's own text. No
+	// verbs.
+	//
+	// dash alone: `cannot open b: No such file` where the C string is "No
+	// such file or directory". It is a *reason* rather than a message for the
+	// same purpose the arithmetic ones are — every message that quotes a
+	// reason gets it, rather than each of them spelling it out.
+	FileNotFound string
 
 	// LowercaseReason lowercases the strerror text this dialect quotes.
 	//

@@ -384,6 +384,38 @@ var Corpus = []Case{
 		// recorded into the golden file.
 		Why: "the dangerous case: &> redirects both streams in bash and zsh, and is `&` then `>` in dash and ksh93 — no error, different meaning",
 	},
+	// --- the core language, as documented ---------------------------------
+	{
+		ID: "core/dollar-single-expands-escapes", Category: "quoting",
+		Snippet: `printf '[%s]' $'a\tb' | od -An -c | tr -s " "`,
+		Why:     "read as bytes, because the failure mode was a literal backslash-t that looks almost right in a terminal — the quoting was recorded and nothing decoded it",
+	},
+	{
+		ID: "core/append-assignment", Category: "parameters",
+		Snippet: `x=a; x+=b; echo "[$x]"`,
+		Why:     "dash has no += and reads the whole word as a command name, which is the divergence — the other three append",
+	},
+	{
+		ID: "core/append-to-an-array", Category: "parameters",
+		Snippet: `a=(one two); a+=(three); echo "[${a[*]}] ${#a[@]}"`,
+		Why:     "appending to an array adds to its end rather than to its first element, which is the same spelling doing a different thing",
+	},
+	{
+		ID: "core/array-star-joins", Category: "parameters",
+		Snippet: `a=(one two); echo "[${a[*]}]"; IFS=-; echo "[${a[*]}]"`,
+		Why:     "`[*]` is one field with the elements joined by the first character of IFS where `[@]` is one field each — the same difference `$*` has from `$@`",
+	},
+	{
+		ID: "core/c-style-for", Category: "command language",
+		Snippet: `for ((i=0;i<3;i++)); do printf "%s" "$i"; done; echo`,
+		Why:     "a loop on a condition rather than over a list; dash does not have it and says so about the loop variable rather than about the parenthesis",
+	},
+	{
+		ID: "core/for-wants-a-name", Category: "command language", SyntaxError: true,
+		Snippet: `for 1x in a; do echo; done`,
+		Why:     "four wordings for one refusal, and only one of them blames the word rather than saying something about names",
+	},
+
 	// --- getopts: the builtin a borrowed program could not have been ------
 	{
 		ID: "getopts/loop-reads-each-option", Category: "getopts",

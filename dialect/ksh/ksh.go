@@ -94,8 +94,12 @@ func Diagnostics() interp.Diagnostics {
 		ArithOperatorExpected:  "arithmetic syntax error",
 		// ksh93 does not call this a bad substitution: it is a syntax error
 		// naming the character it could not read.
-		BadSubstitution:   "syntax error at line %[2]d: `%[1]s' unexpected",
-		SyntaxUnexpected:  "syntax error at line %[3]d: `%[1]s' unexpected",
+		BadSubstitution:  "syntax error at line %[2]d: `%[1]s' unexpected",
+		SyntaxUnexpected: "syntax error at line %[3]d: `%[1]s' unexpected",
+		// A parse failure by every other measure, and 1 rather than this
+		// dialect's syntax-error status.
+		ForNameStatus:     1,
+		ForName:           "%[1]s: invalid variable name",
 		Unterminated:      "syntax error at line %[6]d: `%[3]s' unmatched",
 		SyntaxErrorStatus: 3,
 		// The status is never reached — a file `.` cannot open ends the script

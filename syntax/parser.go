@@ -505,7 +505,7 @@ func (p *Parser) parseRedirect() *Redirect {
 }
 
 // isAssign reports whether a word is `name=…` written so the name is unquoted.
-func isAssign(t Token) (string, bool) {
+func (p *Parser) isAssign(t Token) (string, bool) {
 	if t.Kind != TokWord || len(t.Spans) == 0 || t.Spans[0].Quoting != Unquoted ||
 		t.Spans[0].Kind != Literal {
 		return "", false
@@ -516,6 +516,15 @@ func isAssign(t Token) (string, bool) {
 		return "", false
 	}
 	name := head[:eq]
+	// `name+=value` appends. The `+` is part of neither the name nor the
+	// value, so it is taken off here and remembered by parseAssign, which
+	// reads the same head.
+	if strings.HasSuffix(name, "+") {
+		if !p.dialect.AppendAssign {
+			return "", false
+		}
+		name = name[:len(name)-1]
+	}
 	// `name[i]=` is an assignment too; the subscript is unpacked later.
 	if i := strings.IndexByte(name, '['); i >= 0 && strings.HasSuffix(name, "]") {
 		if !isName(name[:i]) {
@@ -567,7 +576,7 @@ func (p *Parser) parseSimple() Command {
 			if !seenArg && len(c.Assigns) == 0 && p.looksLikeFuncDef() {
 				return p.parseFuncPosix()
 			}
-			if name, ok := isAssign(p.tok); ok && !seenArg {
+			if name, ok := p.isAssign(p.tok); ok && !seenArg {
 				c.Assigns = append(c.Assigns, p.parseAssign(name))
 				continue
 			}
@@ -603,7 +612,9 @@ func (p *Parser) parseSimple() Command {
 }
 
 func (p *Parser) parseAssign(name string) *Assign {
-	a := &Assign{Name: name, Start: p.tok.Pos}
+	head := p.tok.Spans[0].Value
+	eq := strings.IndexByte(head, '=')
+	a := &Assign{Name: name, Start: p.tok.Pos, Append: eq > 0 && head[eq-1] == '+'}
 	// `name[i]=value`: the subscript is part of the name half, which the
 	// assignment scan already left in place.
 	if i := strings.IndexByte(name, '['); i >= 0 && strings.HasSuffix(name, "]") {
@@ -613,8 +624,7 @@ func (p *Parser) parseAssign(name string) *Assign {
 			Start: p.tok.Pos, Stop: p.tok.End,
 		}
 	}
-	head := p.tok.Spans[0].Value
-	rest := head[strings.IndexByte(head, '=')+1:]
+	rest := head[eq+1:]
 
 	spans := make([]Span, 0, len(p.tok.Spans))
 	if rest != "" {
@@ -791,6 +801,57 @@ func (p *Parser) requireSep(before string) {
 	}
 }
 
+// peekIsArithCmd reports whether `((` follows, which is what tells a
+// C-style `for` from one over a list. The lexer has already decided where the
+// matching `))` is, so this only has to look.
+func (p *Parser) peekIsArithCmd() bool {
+	return p.lex.peekIsArithCommand()
+}
+
+// parseForArith reads `for ((init; cond; post))`.
+//
+// The three expressions arrive as one token — the lexer keeps `(( … ))` whole
+// because what is inside is arithmetic and not a command list — so they are
+// split here on the semicolons the arithmetic grammar has no use for.
+func (p *Parser) parseForArith(start Pos) Command {
+	c := &ForArithClause{Start: start}
+	p.next() // for
+	text := p.tok.Text
+	c.Header = "for ((" + text + "))"
+	at := p.tok.Pos
+	p.next()
+
+	init, cond, post := splitForArith(text)
+	if init != "" {
+		c.Init = p.parseArith(init, at)
+	}
+	if cond != "" {
+		c.Cond = p.parseArith(cond, at)
+	}
+	if post != "" {
+		c.Post = p.parseArith(post, at)
+	}
+	p.requireSep("do")
+	p.opensClause("do")
+	p.expectWord("do")
+	c.Body = p.parseList()
+	c.Stop = p.tok.End
+	p.expectWord("done")
+	return c
+}
+
+// splitForArith cuts the header into its three parts.
+//
+// An omitted part is empty, and an omitted *condition* means true — which is
+// what makes `for ((;;))` an endless loop rather than one that never runs.
+func splitForArith(text string) (string, string, string) {
+	parts := strings.SplitN(text, ";", 3)
+	for len(parts) < 3 {
+		parts = append(parts, "")
+	}
+	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), strings.TrimSpace(parts[2])
+}
+
 // loopWord names the construct a loop opened with, which is what a
 // diagnostic has to say back.
 func loopWord(until bool) string {
@@ -853,11 +914,21 @@ func (p *Parser) parseLoop() Command {
 }
 
 func (p *Parser) parseFor() Command {
-	c := &ForClause{Start: p.tok.Pos}
+	start := p.tok.Pos
 	defer p.opens("for")()
+	if p.dialect.CStyleFor && p.peekIsArithCmd() {
+		return p.parseForArith(start)
+	}
+	c := &ForClause{Start: start}
 	p.next()
 	if p.tok.Kind != TokWord || !isName(p.tok.Literal()) {
-		p.fail("expected a name after `for`")
+		if p.err == nil {
+			p.err = &Error{
+				Pos: p.tok.Pos, Kind: ErrForName,
+				Token: p.tokenLiteral(), Class: p.tokenClass(false),
+				Msg: "expected a name after `for`",
+			}
+		}
 		return c
 	}
 	c.Name = p.tok.Literal()

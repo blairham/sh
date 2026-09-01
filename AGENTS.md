@@ -42,6 +42,16 @@ non-POSIX features. Excluding it yields a core containing arrays,
 `[[ ]]`, `$'...'`, `+=`, substrings, pattern substitution, C-style
 `for`, `function`, herestrings and process substitution.
 
+All of those are implemented except **process substitution**, which is
+measured and not built: `<(cmd)` needs a file descriptor the child can
+open by path, so it is plumbing rather than grammar and is the one item
+on this list the parser still refuses. Everything else here is a
+statement about the code and not only about the matrix — which it was
+not, for a while: `$'...'` recorded its quoting and never decoded the
+escapes, `+=` was read as a command name, C-style `for` did not parse,
+and the four were found by *running scripts* rather than by the corpus,
+because nothing in the corpus used them.
+
 Strict POSIX would reject all of those, and would also reject `local`,
 which every shell in the panel except ksh93 provides. A core that
 refuses what every real shell accepts is a core nobody can write against.

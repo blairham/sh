@@ -235,7 +235,7 @@ func (sh Shell) run(src, name string, dg interp.Diagnostics) int {
 		// the dialect's: 2 in half the panel, 3 in ksh93, 1 in zsh.
 		line, msg := wordParseError(dg, err)
 		sh.errf("%s", dg.Report(name, line, msg+"\n"))
-		return dg.SyntaxStatus()
+		return dg.StatusForParseError(err)
 	}
 
 	r := &interp.Runner{

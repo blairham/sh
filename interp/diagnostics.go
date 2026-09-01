@@ -401,6 +401,16 @@ type Diagnostics struct {
 	// valid. One verb: that word. Empty means the dialect never says.
 	SyntaxExpecting string
 
+	// ForName is a `for` whose variable is not one. Two verbs: %[1]s the word
+	// as written and %[2]d the line, for the dialect that carries its own.
+	ForName string
+	// ForNameStatus is what that reports, where it is not this dialect's
+	// ordinary syntax-error status. Two of the four report 1 for it and
+	// their syntax errors are 2 and 3 — so a refusal that is a parse failure
+	// by every other measure carries a different number. Zero means the
+	// syntax-error status.
+	ForNameStatus int
+
 	// Unterminated is input that ran out with a construct still open, and it
 	// is four verbs because the panel names four different parts of that one
 	// state rather than wording a shared diagnosis four ways:
@@ -658,6 +668,8 @@ func (d Diagnostics) ParseFailure(err error) string {
 		}
 		return Wording(d.ArithError, "%[1]s: %[2]s",
 			se.Expr, Wording(reason, fallback, se.Token), se.Token)
+	case syntax.ErrForName:
+		return Wording(d.ForName, "expected a name after `for`", se.Token, se.Pos.Line)
 	case syntax.ErrUnexpected:
 		form := d.SyntaxUnexpected
 		if se.Class == syntax.ClassWord && d.SyntaxUnexpectedWord != "" {
@@ -722,6 +734,16 @@ func (d Diagnostics) prefix(name, builtin string, line int) string {
 }
 
 // SyntaxError reports the status a failed parse should carry.
+// StatusForParseError is the status a particular parse failure reports, which
+// is not always the dialect's general one.
+func (d Diagnostics) StatusForParseError(err error) int {
+	var se *syntax.Error
+	if errors.As(err, &se) && se.Kind == syntax.ErrForName && d.ForNameStatus != 0 {
+		return d.ForNameStatus
+	}
+	return d.SyntaxStatus()
+}
+
 func (d Diagnostics) SyntaxStatus() int {
 	if d.SyntaxErrorStatus == 0 {
 		return 2

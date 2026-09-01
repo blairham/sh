@@ -371,6 +371,174 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   set -C; echo one>b; echo two>|b; printf "[%s]" "$(cat b)"
   ```
 
+## quoting
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `core/dollar-single-expands-escapes` | ` [ $ a \ t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` |
+
+- `core/dollar-single-expands-escapes` — read as bytes, because the failure mode was a literal backslash-t that looks almost right in a terminal — the quoting was recorded and nothing decoded it
+  ```sh
+  printf '[%s]' $'a\tb' | od -An -c | tr -s " "
+  ```
+
+## parameters
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `core/append-assignment` | `<shell>: 1: x+=b: not found~[a]` | `[ab]` | `[ab]` | `[ab]` | `[ab]` | `[ab]` |
+| `core/append-to-an-array` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` |
+| `core/array-star-joins` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` |
+| `unset/takes-away-an-environment-name` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` |
+
+- `core/append-assignment` — dash has no += and reads the whole word as a command name, which is the divergence — the other three append
+  ```sh
+  x=a; x+=b; echo "[$x]"
+  ```
+- `core/append-to-an-array` — appending to an array adds to its end rather than to its first element, which is the same spelling doing a different thing
+  ```sh
+  a=(one two); a+=(three); echo "[${a[*]}] ${#a[@]}"
+  ```
+- `core/array-star-joins` — `[*]` is one field with the elements joined by the first character of IFS where `[@]` is one field each — the same difference `$*` has from `$@`
+  ```sh
+  a=(one two); echo "[${a[*]}]"; IFS=-; echo "[${a[*]}]"
+  ```
+- `unset/takes-away-an-environment-name` — a name that arrived in the environment rather than from an assignment is still a name `unset` removes — deleting it from the shell's own table is not enough, because a lookup reads both
+  ```sh
+  unset HOME; echo "[${HOME-gone}]"
+  ```
+
+## command language
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `core/c-style-for` | `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `012` | `012` | `012` | `012` | `012` |
+| `core/for-wants-a-name` | `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `<shell>: line 1: `1x': not a valid identifier` *(status 1)* | `<shell>: line 1: `1x': not a valid identifier` *(status 2)* | `<shell>: `1x': not a valid identifier` *(status 1)* | `<shell>: 1x: invalid variable name` *(status 1)* | `<shell>:1: parse error near `1x'` *(status 1)* |
+| `cmd/andor-equal-precedence` | `B` | `B` | `B` | `B` | `B` | `B` |
+| `cmd/andor-left-to-right-success` | `A` | `A` | `A` | `A` | `A` | `A` |
+| `cmd/andor-left-to-right-failure` | `B` | `B` | `B` | `B` | `B` | `B` |
+| `cmd/bang-negates-the-pipeline` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `cmd/pipeline-status-is-last` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `cmd/pipeline-status-is-last-failing` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
+| `cmd/redirect-before-command-name` | `[hi]` | `[hi]` | `[hi]` | `[hi]` | `[hi]` | `[hi]` |
+| `cmd/redirect-between-arguments` | `[one two]` | `[one two]` | `[one two]` | `[one two]` | `[one two]` | `[one two]` |
+| `cmd/assignment-prefix-is-transient` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` |
+| `cmd/assignment-prefix-special-builtin` | `[2]` | `[1]` | `[2]` | `[1]` | `[2]` | `[1]` |
+| `cmd/subshell-isolates-state` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` |
+| `cmd/brace-group-shares-state` | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` |
+| `cmd/brace-group-needs-terminator` | `<shell>: 1: Syntax error: end of file unexpected (expecting "}")` *(status 2)* | `<shell>: -c: line 2: syntax error: unexpected end of file from `{' command on line 1` *(status 2)* | `<shell>: -c: line 2: syntax error: unexpected end of file from `{' command on line 1` *(status 2)* | `<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | `<shell>: syntax error at line 1: `{' unmatched` *(status 3)* | `a` |
+| `cmd/subshell-needs-no-terminator` | `a` | `a` | `a` | `a` | `a` | `a` |
+| `cmd/compound-takes-redirection` | `[a,b,]` | `[a,b,]` | `[a,b,]` | `[a,b,]` | `[a,b,]` | `[a,b,]` |
+| `cmd/loop-takes-redirection` | `[1,2,]` | `[1,2,]` | `[1,2,]` | `[1,2,]` | `[1,2,]` | `[1,2,]` |
+| `cmd/loop-status-when-body-never-runs` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `cmd/for-status-empty-list` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `cmd/case-fallthrough` | `<shell>: 1: Syntax error: "&" unexpected` *(status 2)* | `one~two` | `one~two` | `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in a) echo one;& b) echo two;; esac'` *(status 2)* | `one~two` | `one~two` |
+| `cmd/case-continue-matching` | `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `one~two` | `one~two` | `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in a) echo one;;& a) echo two;; esac'` *(status 2)* | `<shell>: syntax error at line 1: `&' unexpected` *(status 3)* | `<shell>:1: parse error near `&'` *(status 1)* |
+| `cmd/function-posix-form` | `posix` | `posix` | `posix` | `posix` | `posix` | `posix` |
+| `cmd/function-keyword-form` | `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `kw` | `kw` | `kw` | `kw` | `kw` |
+| `cmd/function-keyword-and-parens` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `both` | `both` | `both` | `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `both` |
+
+- `core/c-style-for` — a loop on a condition rather than over a list; dash does not have it and says so about the loop variable rather than about the parenthesis
+  ```sh
+  for ((i=0;i<3;i++)); do printf "%s" "$i"; done; echo
+  ```
+- `core/for-wants-a-name` — four wordings for one refusal, and only one of them blames the word rather than saying something about names
+  ```sh
+  for 1x in a; do echo; done
+  ```
+- `cmd/andor-equal-precedence` — the discriminating case: C's precedence would short-circuit and print nothing; the shell prints B
+  ```sh
+  true || echo A && echo B
+  ```
+- `cmd/andor-left-to-right-success` — left to right: A runs and succeeds, so || is skipped
+  ```sh
+  true && echo A || echo B
+  ```
+- `cmd/andor-left-to-right-failure` — and the failing && hands off to ||
+  ```sh
+  false && echo A || echo B
+  ```
+- `cmd/bang-negates-the-pipeline` — the pipeline's status is false's, so ! yields 0; binding ! to true alone would give 1
+  ```sh
+  ! true | false; echo "st=$?"
+  ```
+- `cmd/pipeline-status-is-last` — a pipeline reports its last command, not its first failure
+  ```sh
+  false | true; echo "st=$?"
+  ```
+- `cmd/pipeline-status-is-last-failing` — the other direction, so the previous case cannot pass by accident
+  ```sh
+  true | false; echo "st=$?"
+  ```
+- `cmd/redirect-before-command-name` — a redirection may precede the command name
+  ```sh
+  >b echo hi; printf "[%s]" "$(cat b)"
+  ```
+- `cmd/redirect-between-arguments` — and may sit between arguments; a parser treating redirections as a suffix is wrong
+  ```sh
+  echo one >b two; printf "[%s]" "$(cat b)"
+  ```
+- `cmd/assignment-prefix-is-transient` — an assignment prefix applies to that command's environment only
+  ```sh
+  x=1; x=2 true; echo "[$x]"
+  ```
+- `cmd/assignment-prefix-special-builtin` — except before a special builtin, where POSIX says it persists — dash and ksh93 comply, bash and zsh do not
+  ```sh
+  x=1; x=2 export y=3; echo "[$x]"
+  ```
+- `cmd/subshell-isolates-state` — ( ) runs in a subshell, so assignments do not escape
+  ```sh
+  x=1; (x=2); echo "[$x]"
+  ```
+- `cmd/brace-group-shares-state` — { } runs in the current shell, which is the whole difference between them
+  ```sh
+  x=1; { x=2; }; echo "[$x]"
+  ```
+- `cmd/brace-group-needs-terminator` — { } is made of reserved words and needs a terminator before the brace — except in zsh
+  ```sh
+  { echo a }
+  ```
+- `cmd/subshell-needs-no-terminator` — ( ) is made of operators, so it needs neither blanks nor a terminator
+  ```sh
+  (echo a)
+  ```
+- `cmd/compound-takes-redirection` — a redirection on a compound command applies to everything inside it
+  ```sh
+  { echo a; echo b; } >f; printf "[%s]" "$(tr '\n' ',' <f)"
+  ```
+- `cmd/loop-takes-redirection` — so every compound AST node needs a redirection list, not just simple commands
+  ```sh
+  for i in 1 2; do echo $i; done >f; printf "[%s]" "$(tr '\n' ',' <f)"
+  ```
+- `cmd/loop-status-when-body-never-runs` — zero iterations exits 0; "status of the last command" is the obvious wrong answer when there was none
+  ```sh
+  while false; do :; done; echo "st=$?"
+  ```
+- `cmd/for-status-empty-list` — same rule for an empty for list
+  ```sh
+  for i in; do echo x; done; echo "st=$?"
+  ```
+- `cmd/case-fallthrough` — ;& falls through to the next body; core, but absent from dash
+  ```sh
+  case a in a) echo one;& b) echo two;; esac
+  ```
+- `cmd/case-continue-matching` — ;;& keeps testing later patterns and is bash-only — lumping it with ;& would put a bash construct in the core
+  ```sh
+  case a in a) echo one;;& a) echo two;; esac
+  ```
+- `cmd/function-posix-form` — the universal definition form
+  ```sh
+  f() { echo posix; }; f
+  ```
+- `cmd/function-keyword-form` — the ksh keyword form: core, absent from dash
+  ```sh
+  function f { echo kw; }; f
+  ```
+- `cmd/function-keyword-and-parens` — the hybrid is rejected by ksh93, where the keyword originated, so it is not core
+  ```sh
+  function f() { echo both; }; f
+  ```
+
 ## getopts
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
@@ -441,17 +609,6 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `cd/dash-announces-where-it-went` — `cd -` prints where it went in three of the four; zsh alone moves silently, so a script that pipes it gets an extra line everywhere but there
   ```sh
   cd /; out=$(cd -); [ -n "$out" ] && echo printed || echo silent
-  ```
-
-## parameters
-
-| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
-| --- | --- | --- | --- | --- | --- | --- |
-| `unset/takes-away-an-environment-name` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` |
-
-- `unset/takes-away-an-environment-name` — a name that arrived in the environment rather than from an assignment is still a name `unset` removes — deleting it from the shell's own table is not enough, because a lookup reads both
-  ```sh
-  unset HOME; echo "[${HOME-gone}]"
   ```
 
 ## printf
@@ -912,127 +1069,6 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `redir/multios-is-zsh-only` — zsh writes to every target and the others only to the last, with no error either way — the &> failure mode in a redirection, and not implemented here
   ```sh
   echo x >a >b; printf "[%s][%s]" "$(cat a 2>/dev/null)" "$(cat b 2>/dev/null)"
-  ```
-
-## command language
-
-| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
-| --- | --- | --- | --- | --- | --- | --- |
-| `cmd/andor-equal-precedence` | `B` | `B` | `B` | `B` | `B` | `B` |
-| `cmd/andor-left-to-right-success` | `A` | `A` | `A` | `A` | `A` | `A` |
-| `cmd/andor-left-to-right-failure` | `B` | `B` | `B` | `B` | `B` | `B` |
-| `cmd/bang-negates-the-pipeline` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
-| `cmd/pipeline-status-is-last` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
-| `cmd/pipeline-status-is-last-failing` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
-| `cmd/redirect-before-command-name` | `[hi]` | `[hi]` | `[hi]` | `[hi]` | `[hi]` | `[hi]` |
-| `cmd/redirect-between-arguments` | `[one two]` | `[one two]` | `[one two]` | `[one two]` | `[one two]` | `[one two]` |
-| `cmd/assignment-prefix-is-transient` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` |
-| `cmd/assignment-prefix-special-builtin` | `[2]` | `[1]` | `[2]` | `[1]` | `[2]` | `[1]` |
-| `cmd/subshell-isolates-state` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` |
-| `cmd/brace-group-shares-state` | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` |
-| `cmd/brace-group-needs-terminator` | `<shell>: 1: Syntax error: end of file unexpected (expecting "}")` *(status 2)* | `<shell>: -c: line 2: syntax error: unexpected end of file from `{' command on line 1` *(status 2)* | `<shell>: -c: line 2: syntax error: unexpected end of file from `{' command on line 1` *(status 2)* | `<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | `<shell>: syntax error at line 1: `{' unmatched` *(status 3)* | `a` |
-| `cmd/subshell-needs-no-terminator` | `a` | `a` | `a` | `a` | `a` | `a` |
-| `cmd/compound-takes-redirection` | `[a,b,]` | `[a,b,]` | `[a,b,]` | `[a,b,]` | `[a,b,]` | `[a,b,]` |
-| `cmd/loop-takes-redirection` | `[1,2,]` | `[1,2,]` | `[1,2,]` | `[1,2,]` | `[1,2,]` | `[1,2,]` |
-| `cmd/loop-status-when-body-never-runs` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
-| `cmd/for-status-empty-list` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
-| `cmd/case-fallthrough` | `<shell>: 1: Syntax error: "&" unexpected` *(status 2)* | `one~two` | `one~two` | `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in a) echo one;& b) echo two;; esac'` *(status 2)* | `one~two` | `one~two` |
-| `cmd/case-continue-matching` | `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `one~two` | `one~two` | `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in a) echo one;;& a) echo two;; esac'` *(status 2)* | `<shell>: syntax error at line 1: `&' unexpected` *(status 3)* | `<shell>:1: parse error near `&'` *(status 1)* |
-| `cmd/function-posix-form` | `posix` | `posix` | `posix` | `posix` | `posix` | `posix` |
-| `cmd/function-keyword-form` | `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `kw` | `kw` | `kw` | `kw` | `kw` |
-| `cmd/function-keyword-and-parens` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `both` | `both` | `both` | `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `both` |
-
-- `cmd/andor-equal-precedence` — the discriminating case: C's precedence would short-circuit and print nothing; the shell prints B
-  ```sh
-  true || echo A && echo B
-  ```
-- `cmd/andor-left-to-right-success` — left to right: A runs and succeeds, so || is skipped
-  ```sh
-  true && echo A || echo B
-  ```
-- `cmd/andor-left-to-right-failure` — and the failing && hands off to ||
-  ```sh
-  false && echo A || echo B
-  ```
-- `cmd/bang-negates-the-pipeline` — the pipeline's status is false's, so ! yields 0; binding ! to true alone would give 1
-  ```sh
-  ! true | false; echo "st=$?"
-  ```
-- `cmd/pipeline-status-is-last` — a pipeline reports its last command, not its first failure
-  ```sh
-  false | true; echo "st=$?"
-  ```
-- `cmd/pipeline-status-is-last-failing` — the other direction, so the previous case cannot pass by accident
-  ```sh
-  true | false; echo "st=$?"
-  ```
-- `cmd/redirect-before-command-name` — a redirection may precede the command name
-  ```sh
-  >b echo hi; printf "[%s]" "$(cat b)"
-  ```
-- `cmd/redirect-between-arguments` — and may sit between arguments; a parser treating redirections as a suffix is wrong
-  ```sh
-  echo one >b two; printf "[%s]" "$(cat b)"
-  ```
-- `cmd/assignment-prefix-is-transient` — an assignment prefix applies to that command's environment only
-  ```sh
-  x=1; x=2 true; echo "[$x]"
-  ```
-- `cmd/assignment-prefix-special-builtin` — except before a special builtin, where POSIX says it persists — dash and ksh93 comply, bash and zsh do not
-  ```sh
-  x=1; x=2 export y=3; echo "[$x]"
-  ```
-- `cmd/subshell-isolates-state` — ( ) runs in a subshell, so assignments do not escape
-  ```sh
-  x=1; (x=2); echo "[$x]"
-  ```
-- `cmd/brace-group-shares-state` — { } runs in the current shell, which is the whole difference between them
-  ```sh
-  x=1; { x=2; }; echo "[$x]"
-  ```
-- `cmd/brace-group-needs-terminator` — { } is made of reserved words and needs a terminator before the brace — except in zsh
-  ```sh
-  { echo a }
-  ```
-- `cmd/subshell-needs-no-terminator` — ( ) is made of operators, so it needs neither blanks nor a terminator
-  ```sh
-  (echo a)
-  ```
-- `cmd/compound-takes-redirection` — a redirection on a compound command applies to everything inside it
-  ```sh
-  { echo a; echo b; } >f; printf "[%s]" "$(tr '\n' ',' <f)"
-  ```
-- `cmd/loop-takes-redirection` — so every compound AST node needs a redirection list, not just simple commands
-  ```sh
-  for i in 1 2; do echo $i; done >f; printf "[%s]" "$(tr '\n' ',' <f)"
-  ```
-- `cmd/loop-status-when-body-never-runs` — zero iterations exits 0; "status of the last command" is the obvious wrong answer when there was none
-  ```sh
-  while false; do :; done; echo "st=$?"
-  ```
-- `cmd/for-status-empty-list` — same rule for an empty for list
-  ```sh
-  for i in; do echo x; done; echo "st=$?"
-  ```
-- `cmd/case-fallthrough` — ;& falls through to the next body; core, but absent from dash
-  ```sh
-  case a in a) echo one;& b) echo two;; esac
-  ```
-- `cmd/case-continue-matching` — ;;& keeps testing later patterns and is bash-only — lumping it with ;& would put a bash construct in the core
-  ```sh
-  case a in a) echo one;;& a) echo two;; esac
-  ```
-- `cmd/function-posix-form` — the universal definition form
-  ```sh
-  f() { echo posix; }; f
-  ```
-- `cmd/function-keyword-form` — the ksh keyword form: core, absent from dash
-  ```sh
-  function f { echo kw; }; f
-  ```
-- `cmd/function-keyword-and-parens` — the hybrid is rejected by ksh93, where the keyword originated, so it is not core
-  ```sh
-  function f() { echo both; }; f
   ```
 
 ## substitutions

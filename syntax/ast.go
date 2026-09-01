@@ -148,8 +148,12 @@ type Assign struct {
 	IsArray bool
 	// Index is the subscript of `name[i]=value`, nil otherwise.
 	Index *Word
-	Start Pos
-	Stop  Pos
+	// Append is `name+=value`, which adds to what is there rather than
+	// replacing it — and adds to the *end* of an array rather than to its
+	// first element.
+	Append bool
+	Start  Pos
+	Stop   Pos
 }
 
 func (a *Assign) Pos() Pos { return a.Start }
@@ -337,6 +341,22 @@ type CaseItem struct {
 
 func (i *CaseItem) Pos() Pos { return i.Start }
 func (i *CaseItem) End() Pos { return i.TermPos }
+
+// ForArithClause is `for ((init; cond; post)) do … done`.
+//
+// A separate node from ForClause rather than a variant of it, because it
+// iterates on a condition rather than over a list: the two share a keyword
+// and nothing else.
+type ForArithClause struct {
+	Init, Cond, Post ArithExpr
+	Body             []*Stmt
+	Header           string
+	Start, Stop      Pos
+}
+
+func (c *ForArithClause) Pos() Pos     { return c.Start }
+func (c *ForArithClause) End() Pos     { return c.Stop }
+func (c *ForArithClause) commandNode() {}
 
 // ArithCmdClause is `(( expr ))` used as a command.
 //

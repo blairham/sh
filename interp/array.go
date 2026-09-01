@@ -77,7 +77,7 @@ func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 	if !ok {
 		return nil, true
 	}
-	switch idx := strings.TrimSpace(r.joinWord(e.Index)); idx {
+	switch idx := r.subscriptText(e.Index); idx {
 	case "@", "*":
 		return elems, true
 	default:
@@ -91,4 +91,21 @@ func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 		}
 		return []string{elems[i]}, true
 	}
+}
+
+// subscriptText reads a subscript without letting it expand as a pattern.
+//
+// `${a[*]}` is the whole array and `${a[@]}` is its elements, and the two were
+// behaving differently for a reason that had nothing to do with either: the
+// subscript went through ordinary expansion, where `*` is a pattern that
+// matched no file and became the empty string. `@` is not a pattern, so it
+// survived and `*` did not.
+//
+// A subscript written as a plain literal is taken as written. Anything else —
+// `${a[$i]}`, `${a[i+1]}` — still expands, because it has to.
+func (r *Runner) subscriptText(w *syntax.Word) string {
+	if w != nil && len(w.Spans) == 1 && w.Spans[0].Kind == syntax.Literal {
+		return strings.TrimSpace(w.Spans[0].Value)
+	}
+	return strings.TrimSpace(r.joinWord(w))
 }

@@ -707,6 +707,15 @@ func (l *Lexer) skipBackticks() {
 	}
 }
 
+// peekIsArithCommand reports whether an arithmetic command begins here.
+func (l *Lexer) peekIsArithCommand() bool {
+	i := l.off
+	for i < len(l.src) && isBlank(l.src[i]) {
+		i++
+	}
+	return l.dialect.ArithCommand && i+1 < len(l.src) && l.src[i] == '(' && l.src[i+1] == '('
+}
+
 // scanArithCommand reads `(( expr ))` used as a command.
 //
 // The expression is kept as raw text rather than tokenized, because what is

@@ -69,6 +69,7 @@ func Diagnostics() interp.Diagnostics {
 		SyntaxUnexpected:      "Syntax error: \"%[1]s\" unexpected",
 		SyntaxUnexpectedWord:  "Syntax error: word unexpected",
 		SyntaxExpecting:       " (expecting \"%[1]s\")",
+		ForName:               "Syntax error: Bad for loop variable",
 		Unterminated:          "Syntax error: end of file unexpected (expecting \"%[4]s\")",
 		SyntaxError:           "Syntax error: %s",
 		BadSubstitution:       "Bad substitution",

@@ -16,14 +16,6 @@ import (
 // matcher cannot be handed a plain string — it has to be told which characters
 // were quoted, and escaping them here is how that is carried.
 func (r *Runner) patternOf(w *syntax.Word) string {
-	return r.patternIn(w, false)
-}
-
-// patternIn is patternOf, told whether the pattern stands in a condition.
-//
-// One dialect reads groups there and nowhere else, so the same expanded text
-// is a group in `[[ ]]` and literal parentheses in a `case`.
-func (r *Runner) patternIn(w *syntax.Word, condition bool) string {
 	if w == nil {
 		return ""
 	}
@@ -46,16 +38,17 @@ func (r *Runner) patternIn(w *syntax.Word, condition bool) string {
 		// Quoted text, and the result of an expansion in a quoted context,
 		// are literal: every metacharacter in them is escaped.
 		//
-		// The parentheses are metacharacters only where the dialect reads
-		// groups, and there they have to be escaped too: without it a `(b)`
+		// The parentheses are in the set because they are metacharacters
+		// where the dialect reads groups: without escaping them a `(b)`
 		// arriving from a variable became a group in the shell that does not
 		// re-read an expansion as a pattern, so `case b in $p` matched.
-		meta := `*?[\`
-		if r.dialect().PatternAlternation || r.readsQuantifiedGroups(condition) {
-			meta += "()"
-		}
+		//
+		// They are escaped even where they are *not* metacharacters, and that
+		// is not an oversight: an escaped ordinary character is that
+		// character, so the two spellings match the same text and no test
+		// could tell a guard here from its absence.
 		for i := 0; i < len(text); i++ {
-			if strings.IndexByte(meta, text[i]) >= 0 {
+			if strings.IndexByte(`*?[\()`, text[i]) >= 0 {
 				b.WriteByte('\\')
 			}
 			b.WriteByte(text[i])

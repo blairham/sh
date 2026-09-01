@@ -1834,6 +1834,21 @@ var Corpus = []Case{
 		Why:     "dash has no `select`, so the word is ordinary and the `do` after it has nothing to open — the grammar flag is what the other three turn on",
 	},
 	{
+		ID: "set/o-at-the-end-of-a-bundle", Category: "pipeline status",
+		Snippet: `set -euo noglob; echo "ok=$?"; echo *`,
+		Why:     "`-o` is nearly always the last letter of a bundle rather than a word of its own — `set -euo pipefail` is the line at the top of a great many scripts — and the letters before it are ordinary letters that still apply. noglob rather than pipefail because every shell in the panel has it, so the case is about where the `o` sits and not about which options exist",
+	},
+	{
+		ID: "set/o-in-a-bundle-turns-off-too", Category: "pipeline status",
+		Snippet: `set -o noglob; set +uo noglob; echo *`,
+		Why:     "the same shape with `+`, which turns the named option off — so the bundle is read the same way whichever sign it carries",
+	},
+	{
+		ID: "pipefail/errexit-does-not-always-see-it", Category: "pipeline status",
+		Snippet: "if ( set -o pipefail ) 2>/dev/null; then set -eo pipefail; else set -e; fi\nfalse | true\necho reached\n",
+		Why:     "`set -e` stops for a failure that only pipefail produced in bash and zsh, and does not in ksh93 — which runs on and reaches the echo. dash reaches it too, for the other reason: it has no pipefail, so the pipeline reports its last element and never failed at all. An ordinary failing pipeline stops all four, so this is about the failure the option adds rather than about pipelines",
+	},
+	{
 		ID: "pipefail/last-failure-not-last-element", Category: "pipeline status",
 		Snippet: "if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi\n(exit 3) | (exit 4) | true; echo \"st=$?\"\n(exit 4) | (exit 3) | true; echo \"st=$?\"\n",
 		Why:     "`set -o pipefail` makes a pipeline report its last *failing* element rather than its last element — 4 then 3, so it is the rightmost failure and not the first. dash has no such option and reports 0 both times, which is the answer the option exists to avoid. The probe is how a portable script asks: run it in a subshell, throw the complaint away, and go without if it did not take",

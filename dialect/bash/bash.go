@@ -65,6 +65,7 @@ func Semantics() interp.Semantics {
 	s.ExecTakesOptions = interp.Yes
 	s.TestAcceptsDoubleEqual = interp.Yes
 	s.PipefailOption = interp.Yes
+	s.ErrexitSeesPipefailFailure = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
 	s.ExitArgument = interp.ExitArgNumeric
 	s.TraceAssignmentsSeparately = interp.Yes

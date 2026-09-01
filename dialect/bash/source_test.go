@@ -249,3 +249,29 @@ func TestARedirectFailure(t *testing.T) {
 		t.Errorf("create: said %q, want %q", got, `bash: line 1: nodir/out: No such file or directory`)
 	}
 }
+
+// TestSetOInABundle: `-o` as the last letter of a bundle, which is how every
+// real script writes it.
+func TestSetOInABundle(t *testing.T) {
+	dir := t.TempDir()
+	out, _ := runBash(t, dir, "set -uo noglob\necho ok=$?\necho *\n")
+	if !strings.Contains(out, "ok=0") || !strings.Contains(out, "*") {
+		t.Errorf("said %q, want the bundle's letters and its named option", out)
+	}
+}
+
+// TestErrexitAndPipefail: whether `set -e` stops for a failure only pipefail
+// produced. An ordinary failing pipeline stops every shell in the panel, so
+// this is about the failure the option adds and not about pipelines.
+func TestErrexitAndPipefail(t *testing.T) {
+	dir := t.TempDir()
+	out, _ := runBash(t, dir, "set -eo pipefail\nfalse | true\necho reached\n")
+	if got := strings.Contains(out, "reached"); got != false {
+		t.Errorf("said %q, want reached=false", out)
+	}
+	// Unanimous, and must not move with the answer above.
+	out, _ = runBash(t, dir, "set -eo pipefail\ntrue | false\necho unreached\n")
+	if strings.Contains(out, "unreached") {
+		t.Errorf("ordinary failure: said %q, want it to stop", out)
+	}
+}

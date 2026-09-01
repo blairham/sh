@@ -331,3 +331,69 @@ func TestOnlyExportedVariablesReachTheEnvironment(t *testing.T) {
 		t.Error("an exported variable did not reach the environment")
 	}
 }
+
+// TestRunPartLeavesTheShellOpen: a front end reading its input a line at a
+// time hands the interpreter one chunk after another, and everything a chunk
+// established has to still be there for the next one.
+func TestRunPartLeavesTheShellOpen(t *testing.T) {
+	var out bytes.Buffer
+	s := bash.Semantics()
+	r := &Runner{Stdout: &out, Stderr: &out, Semantics: &s}
+	for _, src := range []string{`x=1; f() { echo "f says $x"; }`, `x=2`, `f`} {
+		f, err := syntax.Parse(src, syntax.Core())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := r.RunPart(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := out.String(); got != "f says 2\n" {
+		t.Errorf("got %q, want the variable and the function to have survived", got)
+	}
+}
+
+// TestFinishRunsTheExitTrapOnce: the teardown belongs to the session and not
+// to a chunk, or a trap would fire after every line.
+func TestFinishRunsTheExitTrapOnce(t *testing.T) {
+	var out bytes.Buffer
+	s := bash.Semantics()
+	r := &Runner{Stdout: &out, Stderr: &out, Semantics: &s}
+	for _, src := range []string{`trap 'echo bye' EXIT`, `echo one`, `echo two`} {
+		f, err := syntax.Parse(src, syntax.Core())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := r.RunPart(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := out.String(); got != "one\ntwo\n" {
+		t.Errorf("before Finish: got %q, want no trap yet", got)
+	}
+	r.Finish(context.Background())
+	if got := out.String(); got != "one\ntwo\nbye\n" {
+		t.Errorf("after Finish: got %q, want the trap once at the end", got)
+	}
+}
+
+// TestExitedStopsTheCaller: `exit` in one chunk must stop the front end
+// reading another, or the rest of the script would run after it.
+func TestExitedStopsTheCaller(t *testing.T) {
+	var out bytes.Buffer
+	s := bash.Semantics()
+	r := &Runner{Stdout: &out, Stderr: &out, Semantics: &s}
+	f, err := syntax.Parse(`echo one; exit 3; echo two`, syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.RunPart(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	if !r.Exited() {
+		t.Error("Exited() is false after `exit`")
+	}
+	if got := r.Finish(context.Background()); got != 3 {
+		t.Errorf("status %d, want 3", got)
+	}
+}

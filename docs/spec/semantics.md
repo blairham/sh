@@ -1111,3 +1111,48 @@ ksh93 also matches the subject `(b)` against that same pattern, so it accepts
 both readings of the text at once. Ours takes the group reading and therefore
 answers the second half differently. It is one case, it needs the matcher to
 try a pattern two ways, and it is written down rather than approximated.
+
+## A shell runs what it has read
+
+`echo one` on line 1 runs before line 3 fails to parse. Every shell in the
+panel does this for a script, and it is the difference between a shell and a
+compiler: a script that ends badly still does what its good lines said.
+
+The **line** is the unit, not the statement. With `echo one; { fi; }` on one
+line, neither half runs — the whole line is parsed before any of it is. And
+the unit stretches past a newline while a construct is open, or a multi-line
+loop could never be read at all:
+
+    echo one            runs
+    for i in 1 2        one unit, all five lines
+    do
+      echo $i
+    done
+    { fi; }             fails here
+
+The EXIT trap still fires afterwards, which is why the failure returns
+through the teardown rather than around it. That is unanimous too.
+
+One thing about it is an axis. **zsh reads a `-c` command string whole**
+before running any of it, so `zsh -c 'echo one⏎{ fi; }'` prints nothing where
+the other three print `one`. A *script* is read a line at a time in all four,
+which is why the axis asks only about the command string.
+
+This shaped the interfaces rather than just the front end. `Parser.NextLine`
+returns one logical line, and `Parse` is now a loop over it, so nothing
+depends on which a caller chose. `Runner.RunPart` runs a chunk and leaves the
+shell open; `Runner.Finish` does the teardown once, however many chunks ran.
+
+### A line named twice
+
+Reading a script a line at a time made ksh93's parse failures visible for the
+first time, and they were being prefixed with a line the message already
+carried: `line 3: syntax error at line 3`. Its wording names the line itself,
+so the location must not. Only the parse failure — a runtime diagnostic in a
+script is still prefixed there, `line 2: nosuchcmd: not found`, which is why
+this is not the script location simply being absent.
+
+ksh93 sometimes prefixes a *different* line: the one it had reached rather
+than the one that failed, as in `line 2: syntax error at line 3`. When it does
+so is not derived here — six inputs did not settle it — and we do not track
+"the line reached" to print it with. Recorded rather than guessed at.

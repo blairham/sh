@@ -94,19 +94,20 @@ const kshKillUsage = "Usage: kill [-lL] [-n signum] [-s signame] job ...\n" +
 
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
-		ArithFailureStatus:   1,
-		ArithInfinity:        "inf",
-		ArithNotANumber:      "nan",
-		ArithFloatDigits:     15,
-		ArithFloatKeepsPoint: false,
-		SelectPrompt:         "#? ",
-		Location:             interp.LocationNone,
-		TraceQuoting:         interp.QuoteDollar,
-		ScriptLocation:       interp.LocationLineWord,
-		ReadonlyVariable:     "%s: is read only",
-		ShiftTooMany:         "shift: %d: bad number",
-		ArithError:           "%[1]s: %[2]s",
-		DivisionByZero:       "divide by zero",
+		ArithFailureStatus:          1,
+		ArithInfinity:               "inf",
+		ArithNotANumber:             "nan",
+		ArithFloatDigits:            15,
+		ArithFloatKeepsPoint:        false,
+		SelectPrompt:                "#? ",
+		Location:                    interp.LocationNone,
+		TraceQuoting:                interp.QuoteDollar,
+		ScriptLocation:              interp.LocationLineWord,
+		ParseFailureNamesItsOwnLine: true,
+		ReadonlyVariable:            "%s: is read only",
+		ShiftTooMany:                "shift: %d: bad number",
+		ArithError:                  "%[1]s: %[2]s",
+		DivisionByZero:              "divide by zero",
 		// ksh93 names the innermost keyword still awaiting a partner: `if`
 		// on its own, and the `then` inside it once that has been consumed.
 		EvalNaming:             interp.SourceBeforeLocation,

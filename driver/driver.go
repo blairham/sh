@@ -179,7 +179,10 @@ type source struct {
 	// the rest as parameters; and reading standard input leaves `$0` as the
 	// shell and makes every operand a parameter.
 	params []string
-	dg     interp.Diagnostics
+	// wholeFirst parses the whole input before running any of it, which one
+	// dialect does for a command string and no dialect does for a script.
+	wholeFirst bool
+	dg         interp.Diagnostics
 }
 
 func (sh Shell) input(argv []string) (source, error) {
@@ -252,7 +255,11 @@ func (sh Shell) operands(args []string) (source, error) {
 // so `sh -c 'echo $0' name a` prints `name`. With no operands at all the shell
 // keeps its own name and there are no parameters.
 func commandSource(sh Shell, src string, operands []string) source {
-	in := source{src: src, name: sh.Name, input: "-c", dg: sh.Diagnostics}
+	in := source{
+		src: src, name: sh.Name, input: "-c",
+		wholeFirst: sh.Diagnostics.CommandStringParsedWhole,
+		dg:         sh.Diagnostics,
+	}
 	if len(operands) > 0 {
 		in.name, in.params = operands[0], operands[1:]
 	}
@@ -270,15 +277,20 @@ func readAll(r io.Reader) (string, error) {
 func (sh Shell) run(in source) int {
 	src, name, input, dg := in.src, in.name, in.input, in.dg
 	p := syntax.NewParser(src, sh.Dialect)
-	f := p.Parse()
-	if err := p.Err(); err != nil {
-		// Input that ends unfinished is a syntax error rather than a prompt
-		// when it did not come from a terminal. *Which* status it carries is
-		// the dialect's: 2 in half the panel, 3 in ksh93, 1 in zsh.
-		// The whole diagnostic is the dialect's: its wording, whether it
-		// names where the script came from, and whether it echoes the line.
-		sh.errf("%s", dg.ParseDiagnostic(name, input, err, src))
-		return dg.StatusForParseError(err)
+	// One dialect reads a command string whole before running any of it, and
+	// the rest run each line as they reach it. Parsing everything up front is
+	// how that is done: the failure is then reported before anything has run.
+	if in.wholeFirst {
+		p.Parse()
+		if err := p.Err(); err != nil {
+			// Input that ends unfinished is a syntax error rather than a
+			// prompt when it did not come from a terminal. The whole
+			// diagnostic is the dialect's: its wording, whether it names
+			// where the script came from, and whether it echoes the line.
+			sh.errf("%s", dg.ParseDiagnostic(name, input, err, src))
+			return dg.StatusForParseError(err)
+		}
+		p = syntax.NewParser(src, sh.Dialect)
 	}
 
 	r := &interp.Runner{
@@ -314,14 +326,43 @@ func (sh Shell) run(in source) int {
 		}
 	}
 
-	status, err := r.Run(context.Background(), f)
-	if err != nil {
-		// Refused rather than silently doing nothing: a shell that quietly
-		// skips what it cannot do is worse than one that says so.
-		sh.errf("%s", dg.Report(name, 1, err.Error()+"\n"))
-		return usageStatus
+	return sh.execute(r, p, in)
+}
+
+// execute reads and runs the script a line at a time.
+//
+// A shell runs what it has read rather than reading everything first, so
+// `echo one` on line 1 runs before line 3 fails to parse. The line is the
+// unit and not the statement: with `echo one; { fi; }` on one line nothing
+// runs, so a whole line is parsed before any of it is.
+//
+// The EXIT trap fires either way, which is why the parse failure returns
+// through Finish rather than around it.
+func (sh Shell) execute(r *interp.Runner, p *syntax.Parser, in source) int {
+	ctx := context.Background()
+	for {
+		line, ok := p.NextLine()
+		if !ok {
+			break
+		}
+		if err := p.Err(); err != nil {
+			// The line did not parse, so none of it runs — not even the
+			// statements before the failure, which is measured.
+			sh.errf("%s", in.dg.ParseDiagnostic(in.name, in.input, err, in.src))
+			r.Finish(ctx)
+			return in.dg.StatusForParseError(err)
+		}
+		if err := r.RunPart(ctx, line); err != nil {
+			// Refused rather than silently doing nothing: a shell that
+			// quietly skips what it cannot do is worse than one that says so.
+			sh.errf("%s", in.dg.Report(in.name, 1, err.Error()+"\n"))
+			return usageStatus
+		}
+		if r.Exited() {
+			break
+		}
 	}
-	return status
+	return r.Finish(ctx)
 }
 
 // source runs the prelude on an existing runner, which is how a prelude is

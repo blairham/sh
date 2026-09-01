@@ -466,6 +466,9 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `cmd/reserved-word-inside-a-brace-group` | `<shell>: 1: Syntax error: "do" unexpected (expecting "}")` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `do'~<shell>: -c: line 1: `{ echo a; do :; done; }'` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `do'~<shell>: -c: line 1: `{ echo a; do :; done; }'` *(status 2)* | `<shell>: -c: line 0: syntax error near unexpected token `do'~<shell>: -c: line 0: `{ echo a; do :; done; }'` *(status 2)* | `<shell>: syntax error at line 1: `do' unexpected` *(status 3)* | `<shell>:1: parse error near `do'` *(status 1)* |
 | `cmd/reserved-word-in-an-empty-brace-group` | `<shell>: 1: Syntax error: "fi" unexpected` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `fi'~<shell>: -c: line 1: `{ fi; }'` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `fi'~<shell>: -c: line 1: `{ fi; }'` *(status 2)* | `<shell>: -c: line 0: syntax error near unexpected token `fi'~<shell>: -c: line 0: `{ fi; }'` *(status 2)* | `<shell>: syntax error at line 1: `fi' unexpected` *(status 3)* | `<shell>:1: parse error near `fi'` *(status 1)* |
 | `cmd/unterminated-brace-group-line` | `<shell>: 1: Syntax error: end of file unexpected (expecting "}")` *(status 2)* | `<shell>: -c: line 2: syntax error: unexpected end of file from `{' command on line 1` *(status 2)* | `<shell>: -c: line 2: syntax error: unexpected end of file from `{' command on line 1` *(status 2)* | `<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | `<shell>: syntax error at line 1: `{' unmatched` *(status 3)* | `<shell>:1: parse error near `b'` *(status 1)* |
+| `exec/lines-run-as-they-are-read` | `one~<script>: 2: Syntax error: "fi" unexpected` *(status 2)* | `one~<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `one~<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `one~<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `one~<script>: syntax error at line 2: `fi' unexpected` *(status 3)* | `one~<script>:2: parse error near `fi'` *(status 1)* |
+| `exec/a-line-is-the-unit-not-a-statement` | `one~<script>: 2: Syntax error: "fi" unexpected` *(status 2)* | `one~<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `echo two; { fi; }'` *(status 2)* | `one~<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `echo two; { fi; }'` *(status 2)* | `one~<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `echo two; { fi; }'` *(status 2)* | `one~<script>: syntax error at line 2: `fi' unexpected` *(status 3)* | `one~<script>:2: parse error near `fi'` *(status 1)* |
+| `exec/a-construct-spans-its-lines` | `one~1~2~<script>: 6: Syntax error: "fi" unexpected` *(status 2)* | `one~1~2~<script>: line 6: syntax error near unexpected token `fi'~<script>: line 6: `{ fi; }'` *(status 2)* | `one~1~2~<script>: line 6: syntax error near unexpected token `fi'~<script>: line 6: `{ fi; }'` *(status 2)* | `one~1~2~<script>: line 6: syntax error near unexpected token `fi'~<script>: line 6: `{ fi; }'` *(status 2)* | `one~1~2~<script>: syntax error at line 6: `fi' unexpected` *(status 3)* | `one~1~2~<script>:6: parse error near `fi'` *(status 1)* |
 
 - `core/c-style-for` — a loop on a condition rather than over a list; dash does not have it and says so about the loop variable rather than about the parenthesis
   ```sh
@@ -582,6 +585,26 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `cmd/unterminated-brace-group-line` — where an unterminated construct is reported: bash puts it on the line *after* the input's last when the text does not end in one, and the other three on the last line itself
   ```sh
   { echo a; echo b
+  ```
+- `exec/lines-run-as-they-are-read` — a shell runs what it has read rather than reading everything first, so the first line runs before the second fails to parse — unanimous, and the reason a script that ends badly still does what its good lines said
+  ```sh
+  echo one
+  { fi; }
+  echo three
+  ```
+- `exec/a-line-is-the-unit-not-a-statement` — the whole line is parsed before any of it runs, so `echo two` never happens even though it precedes the failure and would have been fine on its own
+  ```sh
+  echo one
+  echo two; { fi; }
+  ```
+- `exec/a-construct-spans-its-lines` — the unit stretches past a newline while a construct is open, so the whole loop runs before the line after it fails — a line-at-a-time reader that stopped at the first newline could not run it at all
+  ```sh
+  echo one
+  for i in 1 2
+  do
+    echo $i
+  done
+  { fi; }
   ```
 
 ## getopts
@@ -799,6 +822,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `trap/set-in-a-function-diverges` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~TRAP~between` |
 | `exit/status-and-wrapping` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` |
 | `exit/bad-argument-diverges` | `<shell>: 1: exit: Illegal number: -1~[2]~<shell>: 1: exit: Illegal number: abc~[2]` | `[255]~<shell>: line 1: exit: abc: numeric argument required~[2]` | `[255]~<shell>: line 1: exit: abc: numeric argument required~[2]` | `[255]~<shell>: line 0: exit: abc: numeric argument required~[255]` | `[255]~[0]` | `[255]~[0]` |
+| `exec/the-exit-trap-fires-after-a-syntax-error` | `<script>: 2: Syntax error: "fi" unexpected~bye` *(status 2)* | `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'~bye` *(status 2)* | `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'~bye` *(status 2)* | `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'~bye` *(status 2)* | `<script>: syntax error at line 2: `fi' unexpected~bye` *(status 3)* | `<script>:2: parse error near `fi'~bye` *(status 1)* |
 
 - `kill/exit-trap-after-a-fatal-signal` — whether being killed counts as exiting: bash and ksh93 run the EXIT trap and dash and zsh do not, and all four report 130 without reaching the next command
   ```sh
@@ -885,6 +909,11 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `exit/bad-argument-diverges` — an ordering rather than a side: dash refuses both, bash refuses only the one that is not a number, ksh93 and zsh take either
   ```sh
   (exit -1); echo "[$?]"; (exit abc); echo "[$?]"
+  ```
+- `exec/the-exit-trap-fires-after-a-syntax-error` — the trap set by a line that ran still fires when a later line will not parse, which is what makes the failure an ending rather than an abort
+  ```sh
+  trap 'echo bye' EXIT
+  { fi; }
   ```
 
 ## shell options

@@ -490,3 +490,70 @@ func TestHeredocUnterminatedIsIncomplete(t *testing.T) {
 		t.Error("want Incomplete when the delimiter never arrives")
 	}
 }
+
+// TestNextLineReadsOneLogicalLine: the unit a shell reads before it runs
+// anything. It is a *line* and not a statement, because `echo one; { fi; }`
+// runs neither half — and it stretches past a newline while a construct is
+// still open, or the loop could never be read at all.
+func TestNextLineReadsOneLogicalLine(t *testing.T) {
+	for _, tc := range []struct {
+		src   string
+		lines []int // statements in each logical line
+	}{
+		{"echo one\necho two\n", []int{1, 1}},
+		{"echo one; echo two\necho three\n", []int{2, 1}},
+		{"echo one\n\n\necho two\n", []int{1, 1}},
+		// A construct holds the line open across its newlines.
+		{"for i in 1 2\ndo\n echo $i\ndone\necho after\n", []int{1, 1}},
+		{"if true\nthen\n echo x\nfi\n", []int{1}},
+		// A trailing `&` ends a statement without ending the line.
+		{"echo one & echo two\n", []int{2}},
+		{"", nil},
+		{"\n\n", nil},
+	} {
+		p := NewParser(tc.src, Core())
+		var got []int
+		for {
+			line, ok := p.NextLine()
+			if !ok {
+				break
+			}
+			got = append(got, len(line.Stmts))
+		}
+		if err := p.Err(); err != nil {
+			t.Fatalf("%q: %v", tc.src, err)
+		}
+		if len(got) != len(tc.lines) {
+			t.Errorf("%q: %d lines, want %d", tc.src, len(got), len(tc.lines))
+			continue
+		}
+		for i := range got {
+			if got[i] != tc.lines[i] {
+				t.Errorf("%q: line %d has %d statements, want %d", tc.src, i+1, got[i], tc.lines[i])
+			}
+		}
+	}
+}
+
+// TestParseIsEveryLine: reading the whole input is the same as reading it a
+// line at a time, so nothing depends on which a caller chose.
+func TestParseIsEveryLine(t *testing.T) {
+	const src = "echo one; echo two\nfor i in 1 2\ndo\n echo $i\ndone\nif true; then :; fi\n"
+	whole := parse(t, src, Core())
+
+	p := NewParser(src, Core())
+	var f File
+	for {
+		line, ok := p.NextLine()
+		if !ok {
+			break
+		}
+		f.Stmts = append(f.Stmts, line.Stmts...)
+	}
+	if err := p.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if got := dump(&f); got != whole {
+		t.Errorf("line at a time gave\n%s\nwhole gave\n%s", got, whole)
+	}
+}

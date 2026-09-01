@@ -205,13 +205,10 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 
 // forArithPart evaluates one of the three parts of `for (( ; ; ))`.
 //
-// An absent part is 1 rather than 0, which is what makes `for ((;;))` endless
-// rather than a loop that never runs — the caller only asks about the
-// condition when there is one.
+// An absent part needs no special case. Its value is only ever read for the
+// condition, and the caller asks about that only when there is one — which is
+// what makes `for ((;;))` endless rather than a loop that never runs.
 func (r *Runner) forArithPart(tree syntax.ArithExpr, text string) (int, bool) {
-	if tree == nil && strings.TrimSpace(text) == "" {
-		return 1, true
-	}
 	resolved, perr := r.arithTree(tree, text)
 	if perr != nil {
 		r.diagf("%s\n", r.diag().ParseFailure(perr))

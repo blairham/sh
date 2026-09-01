@@ -647,10 +647,10 @@ func (r *Runner) arithTree(tree syntax.ArithExpr, text string) (syntax.ArithExpr
 	if tree != nil {
 		return tree, nil
 	}
-	if strings.TrimSpace(text) == "" {
-		// `$(( ))` is zero, not a failure.
-		return nil, nil
-	}
+	// No guard for empty text: the parser reads it as no expression at all,
+	// with no error, and the evaluator answers zero for a nil tree — which is
+	// what `$(( ))` is. A check here would be a line no test could tell from
+	// its absence.
 	p := syntax.NewParser("", r.dialect())
 	out := p.ParseArithFor(r.expandArithText(text), syntax.Pos{})
 	if err := p.Err(); err != nil {

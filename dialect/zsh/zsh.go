@@ -75,6 +75,7 @@ func Diagnostics() interp.Diagnostics {
 		ArithError:            "%[2]s",
 		ArithOperandExpected:  "bad math expression: operand expected at end of string",
 		ArithOperatorExpected: "bad math expression: operator expected at `%[1]s'",
+		SyntaxUnexpected:      "parse error near `%[1]s'",
 		Unterminated:          "parse error near `%[5]s'",
 		SyntaxErrorStatus:     1,
 		// zsh alone answers "a syntax error" differently depending on where it

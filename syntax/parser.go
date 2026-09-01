@@ -99,6 +99,16 @@ var stopWords = map[string]bool{
 	"do": true, "done": true, "esac": true, "}": true,
 }
 
+// reservedWords is every word the grammar reserves, which is the stop words
+// plus the ones that open a construct. It is the class distinction one
+// dialect's wording turns on: `fi` is quoted there and `echo` is "word".
+var reservedWords = map[string]bool{
+	"if": true, "then": true, "elif": true, "else": true, "fi": true,
+	"for": true, "while": true, "until": true, "do": true, "done": true,
+	"case": true, "in": true, "esac": true, "{": true, "}": true,
+	"function": true, "select": true, "time": true,
+}
+
 func (p *Parser) atStopWord() bool {
 	return p.tok.Kind == TokWord && !p.tok.IsQuoted() && stopWords[p.tok.Literal()]
 }
@@ -169,6 +179,47 @@ func (p *Parser) unterminated(expected string) *Error {
 	return e
 }
 
+// failUnexpected records a token the grammar did not want, with what would
+// have been valid where the parser knows it.
+//
+// The class travels because one dialect names it rather than the token: an
+// ordinary word is "word unexpected" there, where a reserved word and an
+// operator are quoted.
+func (p *Parser) failUnexpected(expected string) {
+	if p.err != nil {
+		return
+	}
+	if p.at(TokEOF) {
+		p.incomplete = true
+		p.err = p.unterminated(expected)
+		return
+	}
+	p.err = &Error{
+		Pos: p.tok.Pos, Kind: ErrUnexpected,
+		Token: p.tokenLiteral(), Class: p.tokenClass(), Expected: expected,
+		Msg: p.tokenText() + " unexpected",
+	}
+}
+
+// tokenLiteral is the token as a diagnostic writes it, without the quotes a
+// message may add of its own.
+func (p *Parser) tokenLiteral() string {
+	if p.tok.Kind == TokWord {
+		return p.tok.Literal()
+	}
+	return p.tok.Kind.String()
+}
+
+func (p *Parser) tokenClass() TokenClass {
+	if p.tok.Kind != TokWord {
+		return ClassOperator
+	}
+	if !p.tok.IsQuoted() && reservedWords[p.tok.Literal()] {
+		return ClassReserved
+	}
+	return ClassWord
+}
+
 func (p *Parser) fail(format string, args ...any) {
 	p.failKind(ErrSyntax, format, args...)
 }
@@ -200,7 +251,7 @@ func (p *Parser) expectWord(s string) Pos {
 			}
 			return pos
 		}
-		p.fail("expected %q", s)
+		p.failUnexpected(s)
 		return pos
 	}
 	p.next()
@@ -222,7 +273,7 @@ func (p *Parser) Parse() *File {
 				// the script. `function f { ...; }` in a dialect without the
 				// keyword is the case that found it: the `}` ended parsing,
 				// and the commands after it never ran.
-				p.fail("%s unexpected", p.tokenText())
+				p.failUnexpected("")
 			}
 			break
 		}
@@ -514,7 +565,7 @@ func (p *Parser) parseSimple() Command {
 			// `[[ ( -n x ) ]]` an error where `[[` is not a construct — both
 			// of which used to run as ordinary commands with surprising
 			// arguments.
-			p.fail("%s unexpected", p.tokenText())
+			p.failUnexpected("")
 			return c
 		default:
 			c.Stop = p.tok.Pos
@@ -561,7 +612,7 @@ func (p *Parser) parseAssign(name string) *Assign {
 	// to the paren-after-a-word rule in parseSimple.
 	if a.Value == nil && p.at(TokLeftParen) && p.tok.Pos.Offset == a.Stop.Offset {
 		if !p.dialect.ArrayLiteral {
-			p.fail("%s unexpected", p.tokenText())
+			p.failUnexpected("")
 			return a
 		}
 		a.IsArray = true
@@ -625,7 +676,7 @@ func (p *Parser) parseFuncKeyword() Command {
 		// it. Accepting it everywhere the keyword exists meant the ksh
 		// dialect ran a definition ksh93 calls a syntax error.
 		if !p.dialect.FunctionKeywordParens {
-			p.fail("%s unexpected", p.tokenText())
+			p.failUnexpected("")
 			return fn
 		}
 		p.next()
@@ -702,7 +753,7 @@ func (p *Parser) requireSep(before string) {
 			return
 		}
 		if !p.atWord(before) {
-			p.fail("expected ; or newline before %q", before)
+			p.failUnexpected(before)
 		}
 	}
 }
@@ -859,7 +910,11 @@ func (p *Parser) parseCase() Command {
 					}
 					return c
 				}
-				p.fail("expected ;; after a case body")
+				// No expectation named: either `;;` or `esac` would be
+				// valid here, so naming one of them would be inventing a
+				// grammar the parser does not have — and the one dialect
+				// that prints expectations does not print one here either.
+				p.failUnexpected("")
 				return c
 			}
 		}

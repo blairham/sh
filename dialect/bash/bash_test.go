@@ -124,3 +124,17 @@ func TestArithmeticFailuresNameTheToken(t *testing.T) {
 		}
 	}
 }
+
+// TestUnexpectedTokensAreNamedPlainly is bash's shape, which never says what
+// it wanted instead.
+func TestUnexpectedTokensAreNamedPlainly(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"echo )", "syntax error near unexpected token `)'"},
+		{"for i in a b; echo $i; done", "syntax error near unexpected token `echo'"},
+	} {
+		_, err := syntax.Parse(tc.src, bash.Dialect())
+		if got := bash.Diagnostics().ParseFailure(err); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}

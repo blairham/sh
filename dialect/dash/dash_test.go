@@ -173,3 +173,20 @@ func TestArithmeticFailuresAreDashsOwnShape(t *testing.T) {
 		t.Errorf("got %q, want it to contain %q", errs.String(), want)
 	}
 }
+
+// TestUnexpectedTokensAreNamedByClass is dash's rule and the reason the
+// wording is two fields: an ordinary word is not quoted and not named — it is
+// "word" — where a reserved word or an operator is quoted as itself.
+func TestUnexpectedTokensAreNamedByClass(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"echo )", `Syntax error: ")" unexpected`},
+		{"if true; echo x; fi", `Syntax error: "fi" unexpected (expecting "then")`},
+		{"for i in a b; echo $i; done", `Syntax error: word unexpected (expecting "do")`},
+		{"case a in a) echo x;& esac", `Syntax error: "&" unexpected`},
+	} {
+		_, err := syntax.Parse(tc.src, dash.Dialect())
+		if got := dash.Diagnostics().ParseFailure(err); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}

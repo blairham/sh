@@ -312,6 +312,20 @@ type Diagnostics struct {
 	// in the other three.
 	UnterminatedEndsOnNextLine bool
 
+	// SyntaxUnexpected is a token the grammar did not want. Three verbs:
+	// %[1]s the token, %[2]s what would have been valid where the parser
+	// knows, and %[3]d the line, for the dialect that has no location of its
+	// own to put it in.
+	SyntaxUnexpected string
+	// SyntaxUnexpectedWord is the same for an *ordinary* word, which one
+	// dialect refuses to quote: `word unexpected` where a reserved word or an
+	// operator is `"fi" unexpected`. Empty means "the same as
+	// SyntaxUnexpected", which is three of the four.
+	SyntaxUnexpectedWord string
+	// SyntaxExpecting is appended when the parser knows what would have been
+	// valid. One verb: that word. Empty means the dialect never says.
+	SyntaxExpecting string
+
 	// Unterminated is input that ran out with a construct still open, and it
 	// is four verbs because the panel names four different parts of that one
 	// state rather than wording a shared diagnosis four ways:
@@ -566,6 +580,16 @@ func (d Diagnostics) ParseFailure(err error) string {
 		}
 		return Wording(d.ArithError, "%[1]s: %[2]s",
 			se.Expr, Wording(reason, fallback, se.Token), se.Token)
+	case syntax.ErrUnexpected:
+		form := d.SyntaxUnexpected
+		if se.Class == syntax.ClassWord && d.SyntaxUnexpectedWord != "" {
+			form = d.SyntaxUnexpectedWord
+		}
+		msg := Wording(form, `"%[1]s" unexpected`, se.Token, se.Expected, se.Pos.Line)
+		if se.Expected != "" && d.SyntaxExpecting != "" {
+			msg += Wording(d.SyntaxExpecting, "", se.Expected)
+		}
+		return msg
 	case syntax.ErrUnterminated:
 		return Wording(d.Unterminated, "syntax error: unterminated %[1]s",
 			se.Construct, se.ConstructLine, se.Innermost, se.Expected,

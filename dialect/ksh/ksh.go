@@ -78,6 +78,7 @@ func Diagnostics() interp.Diagnostics {
 		SourceFileIsTheBuiltin: true,
 		ArithOperandExpected:   "more tokens expected",
 		ArithOperatorExpected:  "arithmetic syntax error",
+		SyntaxUnexpected:       "syntax error at line %[3]d: `%[1]s' unexpected",
 		Unterminated:           "syntax error at line %[6]d: `%[3]s' unmatched",
 		SyntaxErrorStatus:      3,
 		// The status is never reached — a file `.` cannot open ends the script

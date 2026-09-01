@@ -2150,4 +2150,29 @@ var Corpus = []Case{
 		Snippet: `ZQ_b=2; ZQ_a=1; echo ${!ZQ_@}`,
 		Why:     "set in the other order and returned in the same one, so the order is the names' rather than the order they happened to be created in — a map has none to inherit",
 	},
+	{
+		ID: "exit/from-inside-a-while-loop", Category: "traps and exit",
+		Snippet: `g() { exit 3; }; while :; do g; done; echo after`,
+		Why:     "`exit` ends the shell from inside a loop as surely as from anywhere else — the loop must stop and must not touch the status on the way out, which is what turned `exit 3` into an exit of 0",
+	},
+	{
+		ID: "exit/from-inside-an-until-loop", Category: "traps and exit",
+		Snippet: `g() { exit 3; }; until false; do g; done; echo after`,
+		Why:     "the same for `until`, which read the shell's refusal to run anything as its condition still holding and span forever rather than stopping",
+	},
+	{
+		ID: "exit/from-inside-a-for-loop", Category: "traps and exit",
+		Snippet: `g() { exit 3; }; for i in 1 2 3; do g; done; echo after`,
+		Why:     "and for `for`, which came out right by accident: a finite list ends on its own, so the loop stopped even without being told to — the shape most scripts use, and the reason this went unnoticed",
+	},
+	{
+		ID: "exit/from-inside-a-nested-loop", Category: "traps and exit",
+		Snippet: `g() { exit 3; }; while :; do while :; do g; done; done; echo after`,
+		Why:     "an exit passes out through every loop it is inside, unlike `break`, which counts them",
+	},
+	{
+		ID: "exit/break-still-counts-its-loops", Category: "traps and exit",
+		Snippet: `while :; do while :; do break 2; done; echo inner; done; echo after`,
+		Why:     "the counter-case: `break` still stops only as many loops as it was asked to, which is what an exit must not be confused with",
+	},
 }

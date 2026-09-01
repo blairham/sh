@@ -823,6 +823,11 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `exit/status-and-wrapping` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` |
 | `exit/bad-argument-diverges` | `<shell>: 1: exit: Illegal number: -1~[2]~<shell>: 1: exit: Illegal number: abc~[2]` | `[255]~<shell>: line 1: exit: abc: numeric argument required~[2]` | `[255]~<shell>: line 1: exit: abc: numeric argument required~[2]` | `[255]~<shell>: line 0: exit: abc: numeric argument required~[255]` | `[255]~[0]` | `[255]~[0]` |
 | `exec/the-exit-trap-fires-after-a-syntax-error` | `<script>: 2: Syntax error: "fi" unexpected~bye` *(status 2)* | `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'~bye` *(status 2)* | `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'~bye` *(status 2)* | `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'~bye` *(status 2)* | `<script>: syntax error at line 2: `fi' unexpected~bye` *(status 3)* | `<script>:2: parse error near `fi'~bye` *(status 1)* |
+| `exit/from-inside-a-while-loop` | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* |
+| `exit/from-inside-an-until-loop` | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* |
+| `exit/from-inside-a-for-loop` | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* |
+| `exit/from-inside-a-nested-loop` | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* | *(no output, status 3)* |
+| `exit/break-still-counts-its-loops` | `after` | `after` | `after` | `after` | `after` | `after` |
 
 - `kill/exit-trap-after-a-fatal-signal` — whether being killed counts as exiting: bash and ksh93 run the EXIT trap and dash and zsh do not, and all four report 130 without reaching the next command
   ```sh
@@ -914,6 +919,26 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   trap 'echo bye' EXIT
   { fi; }
+  ```
+- `exit/from-inside-a-while-loop` — `exit` ends the shell from inside a loop as surely as from anywhere else — the loop must stop and must not touch the status on the way out, which is what turned `exit 3` into an exit of 0
+  ```sh
+  g() { exit 3; }; while :; do g; done; echo after
+  ```
+- `exit/from-inside-an-until-loop` — the same for `until`, which read the shell's refusal to run anything as its condition still holding and span forever rather than stopping
+  ```sh
+  g() { exit 3; }; until false; do g; done; echo after
+  ```
+- `exit/from-inside-a-for-loop` — and for `for`, which came out right by accident: a finite list ends on its own, so the loop stopped even without being told to — the shape most scripts use, and the reason this went unnoticed
+  ```sh
+  g() { exit 3; }; for i in 1 2 3; do g; done; echo after
+  ```
+- `exit/from-inside-a-nested-loop` — an exit passes out through every loop it is inside, unlike `break`, which counts them
+  ```sh
+  g() { exit 3; }; while :; do while :; do g; done; done; echo after
+  ```
+- `exit/break-still-counts-its-loops` — the counter-case: `break` still stops only as many loops as it was asked to, which is what an exit must not be confused with
+  ```sh
+  while :; do while :; do break 2; done; echo inner; done; echo after
   ```
 
 ## shell options

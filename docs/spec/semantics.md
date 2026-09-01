@@ -1401,3 +1401,29 @@ That is a floor rather than a finish: the sweep reads and never runs, so it
 says nothing about what happens after a script parses — `set -f` was invisible
 to it, and was only found because `man` parsed and then failed. A run mode is
 the next thing this harness wants.
+
+## `exit` was not one of the things a loop stops for
+
+A loop asks, after each round, whether something has told it to stop. It
+knew about `break`, `continue` and `return`. It did not know about `exit`,
+and the consequences were not a missing feature but two wrong answers:
+
+    g() { exit 3; }; while :; do g; done      exited **0**
+    g() { exit 3; }; until false; do g; done  never returned
+
+Neither looks like the same bug. The loop carried on; the next round found
+the shell already refusing to run anything, so the condition produced
+nothing; `while` read that as its condition having failed and set the status
+to 0 on the way out, and `until` read the very same thing as its condition
+still holding and went round again, forever.
+
+A `for` over a list came out right, and that is why this lasted: the list
+ends on its own, so the loop stopped without being told to. The shape most
+scripts use is the one shape that hid it.
+
+`exit` joins `return` in the answer now — stop, and do not clear it, because
+the caller above has to see it too. `break` still counts its loops and
+`continue` still starts the next round; the point is that an exit is neither.
+
+It was found by `make wild-run`, in 43 of the 99 disagreements its first run
+reported.

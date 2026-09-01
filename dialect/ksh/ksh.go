@@ -27,6 +27,10 @@ func Dialect() syntax.Dialect {
 	d.TimesIsReserved = true
 	// Floating point, which POSIX has not and these two do.
 	d.ArithFloat = true
+	// Extended patterns wherever a pattern may stand.
+	d.ExtendedPattern = true
+	// And inside `[[ ]]`, which is the only place bash reads them.
+	d.ExtendedPatternInCondition = true
 	return d
 }
 

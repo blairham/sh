@@ -1916,4 +1916,49 @@ var Corpus = []Case{
 		Snippet: `x=$((3-9)); echo "[$x]"`,
 		Why:     "the same value stored rather than printed, since an assignment writes the number by the same route an expansion does",
 	},
+	{
+		ID: "pat/extended-pattern-quantifiers", Category: "pattern matching", SyntaxError: true,
+		Snippet: `case abc in ?(abc)) echo q;; esac; case aaa in +(a)) echo plus;; esac; case b in !(a)) echo bang;; esac`,
+		Why:     "the rest of the family, which only ksh93 has in a `case` pattern — zsh reads each `?`, `+` and `!` as an ordinary character in front of a group of its own, so none of them match",
+	},
+	{
+		ID: "pat/extended-patterns-in-a-condition", Category: "pattern matching",
+		Snippet: `[[ abc == @(abc|xyz) ]] && echo yes || echo no`,
+		Why:     "bash has extended patterns here and nowhere else — the same text is a syntax error in a `case` pattern there — so where they are available is a separate question from whether the shell has them",
+	},
+	{
+		ID: "pat/a-bare-group-is-alternation", Category: "pattern matching", SyntaxError: true,
+		Snippet: `case ab in a(b|c)) echo yes;; *) echo no;; esac`,
+		Why:     "zsh takes a group with no quantifier in front of it, which the other three refuse; it is the feature that makes `@(abc|xyz)` a literal `@` and a group there rather than an extended pattern",
+	},
+	{
+		ID: "pat/a-literal-at-before-a-bare-group", Category: "pattern matching", SyntaxError: true,
+		Snippet: `case @abc in @(abc|xyz)) echo yes;; *) echo no;; esac`,
+		Why:     "the other half of that reading: the subject that zsh matches and the extended-pattern shells do not, which is what proves the two are reading the same text by different rules",
+	},
+	{
+		ID: "pat/a-nested-group-needs-no-quantifier", Category: "pattern matching", SyntaxError: true,
+		Snippet: `case b in @(a|(b))) echo y;; *) echo n;; esac`,
+		Why:     "ksh93 needs a quantifier at the top level and not inside a group, so `@(a|(b))` matches b there — the lexer is what refuses the bare one, and by the time the matcher sees text it came from somewhere the dialect allows",
+	},
+	{
+		ID: "pat/a-group-from-an-expansion", Category: "pattern matching",
+		Snippet: `p="(b)"; case b in $p) echo y;; *) echo n;; esac`,
+		Why:     "whether an expansion's text is re-read for groups: ksh93 says yes and matches b, and the other three leave the parentheses literal — the same axis that decides whether `p=\"a*\"` globs, reaching a construct it was not written for",
+	},
+	{
+		ID: "pat/a-subshell-is-not-a-group", Category: "pattern matching",
+		Snippet: `(echo hi)`,
+		Why:     "the third thing a group must not swallow: a `(` that begins a word opens a subshell, so a group is only ever read mid-word",
+	},
+	{
+		ID: "pat/an-empty-group-is-a-function", Category: "pattern matching",
+		Snippet: `f() { echo hi; }; f`,
+		Why:     "the case that keeps a bare group from eating a function definition: `()` is empty, and the shell with bare groups rejects an empty one as a pattern, so the definition always wins",
+	},
+	{
+		ID: "pat/an-array-literal-is-not-a-group", Category: "pattern matching",
+		Snippet: `a=(x y); echo "[${a[@]}]"`,
+		Why:     "and the case that keeps it from eating an array literal: a `(` straight after `=` opens one, never a group — `a=(b|c)` is a parse error in that shell rather than a pattern",
+	},
 }

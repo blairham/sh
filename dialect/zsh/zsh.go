@@ -22,6 +22,9 @@ func Dialect() syntax.Dialect {
 	d.CloseBraceAlwaysReserved = true
 	// Floating point, which POSIX has not and these two do.
 	d.ArithFloat = true
+	// A bare `(a|b)` inside a pattern word, which makes `@(abc|xyz)` a
+	// literal `@` followed by a group here rather than an extended pattern.
+	d.PatternAlternation = true
 	return d
 }
 

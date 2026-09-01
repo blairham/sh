@@ -244,3 +244,49 @@ func TestLeftoverTextIsBlamedForWhatItCouldHaveBeen(t *testing.T) {
 		}
 	}
 }
+
+// TestPatternGroupsBelongToTheWord: a `(` inside a pattern is part of the word
+// rather than the end of it, which the lexer has to decide before any parser
+// sees a token. Three flags, because the three shells that allow one do not
+// allow the same one.
+func TestPatternGroupsBelongToTheWord(t *testing.T) {
+	ext, alt := Core(), Core()
+	ext.ExtendedPattern = true
+	alt.PatternAlternation = true
+
+	for _, src := range []string{`case x in @(a|b)) :;; esac`, `case x in ?(a)) :;; esac`, `case x in !(a)) :;; esac`} {
+		mustParse(t, src, ext, "a quantified group where the dialect has them")
+		mustFail(t, src, Core(), "a quantified group where it does not")
+	}
+	// A bare group is a different flag, and the quantified one does not
+	// imply it.
+	mustParse(t, `case x in a(b|c)) :;; esac`, alt, "a bare group where the dialect has them")
+	mustFail(t, `case x in a(b|c)) :;; esac`, ext, "a bare group under the quantified flag")
+	mustFail(t, `case x in a(b|c)) :;; esac`, Core(), "a bare group where there are none")
+
+	// Two things a bare group must not swallow, both measured against the one
+	// shell that has them: an empty `()` is a function definition, and a `(`
+	// straight after `=` is an array literal.
+	for _, src := range []string{`f() { echo hi; }`, `a=(x y)`, `f() { a=(x y); }`} {
+		mustParse(t, src, alt, "not a group")
+		mustParse(t, src, Core(), "not a group anywhere")
+	}
+}
+
+// TestQuantifiedGroupsMayBeConditionOnly: where a group is allowed is a
+// separate question from whether the shell has one. bash reads them inside
+// `[[ ]]` and calls the same text a syntax error in a `case` pattern.
+func TestQuantifiedGroupsMayBeConditionOnly(t *testing.T) {
+	cond := Core()
+	cond.ExtendedPatternInCondition = true
+
+	mustParse(t, `[[ abc == @(abc|xyz) ]]`, cond, "a group inside a condition")
+	mustFail(t, `case abc in @(abc|xyz)) :;; esac`, cond, "the same group in a case pattern")
+	// And the flag that allows them everywhere allows them in a condition too.
+	both := Core()
+	both.ExtendedPattern = true
+	mustParse(t, `[[ abc == @(abc|xyz) ]]`, both, "a group inside a condition")
+	mustParse(t, `case abc in @(abc|xyz)) :;; esac`, both, "and in a case pattern")
+	// The condition's rules end with the condition.
+	mustFail(t, `[[ a == b ]]; case abc in @(abc|xyz)) :;; esac`, cond, "after the condition has closed")
+}

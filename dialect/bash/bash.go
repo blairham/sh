@@ -22,6 +22,8 @@ func Dialect() syntax.Dialect {
 	// A name followed by `(` is a function definition here, whether or not
 	// the `)` comes next.
 	d.FuncDefAtParen = true
+	// And inside `[[ ]]`, which is the only place bash reads them.
+	d.ExtendedPatternInCondition = true
 	return d
 }
 

@@ -866,8 +866,14 @@ func (r *Runner) caretNegates(pattern string) bool {
 }
 
 // matchPatternR is matchPattern with the caret axis resolved from the dialect.
-func (r *Runner) matchPatternR(pattern, s string) bool {
-	o := patternOpts{caret: r.caretNegates(pattern)}
+// condition says the pattern stands inside `[[ ]]`, which one dialect reads by
+// different rules from a `case` pattern.
+func (r *Runner) matchPatternR(pattern, s string, condition bool) bool {
+	o := patternOpts{
+		caret:      r.caretNegates(pattern),
+		group:      r.dialect().PatternAlternation,
+		quantified: r.readsQuantifiedGroups(condition),
+	}
 	var bad bool
 	if hasUnterminatedBracket(pattern) {
 		o.bracket, o.bad = r.bracketPolicy(), &bad

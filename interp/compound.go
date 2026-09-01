@@ -298,7 +298,7 @@ func (r *Runner) caseItemMatches(item *syntax.CaseItem, subject string) bool {
 	for _, p := range item.Patterns {
 		// A pattern is a word: unquoted it is a pattern, quoted a literal,
 		// and only the spans still know which.
-		if r.matchPatternR(r.patternOf(p), subject) {
+		if r.matchPatternR(r.patternOf(p), subject, false) {
 			return true
 		}
 	}

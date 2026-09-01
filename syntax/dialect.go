@@ -161,6 +161,25 @@ type Dialect struct {
 	// does not.
 	ArithFloat bool
 
+	// ExtendedPattern enables `@(a|b)`, `?(a)`, `+(a)`, `*(a)` and `!(a)` in
+	// a pattern: a group with a quantifier in front of it. ksh93 has them
+	// wherever a pattern may stand.
+	ExtendedPattern bool
+
+	// ExtendedPatternInCondition enables the same groups inside `[[ ]]` and
+	// nowhere else, which is bash's answer: `[[ abc == @(abc|xyz) ]]` matches
+	// there while `case abc in @(abc|xyz))` is a syntax error, because bash
+	// reads the condition's operand under rules a `case` pattern does not
+	// get. ksh93 answers yes to this as well as to the field above; a shell
+	// with neither leaves both false.
+	ExtendedPatternInCondition bool
+
+	// PatternAlternation enables a bare `(a|b)` inside a pattern word, which
+	// zsh has and the others do not: `a(b|c)` matches `ab` there. It is why
+	// `@(abc|xyz)` is a literal `@` followed by a group in zsh rather than an
+	// extended pattern — the same text, read by a different rule.
+	PatternAlternation bool
+
 	// ArrayLiteral enables `a=(x y)`. Absent from dash, where the `(` is a
 	// syntax error rather than a different construct — so unlike `&>`, this
 	// one is safe to be wrong about loudly.

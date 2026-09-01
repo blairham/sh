@@ -1263,6 +1263,15 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `pat/escaped-metacharacter-is-literal` | `escaped no` | `escaped no` | `escaped no` | `escaped no` | `escaped no` | `escaped no` |
 | `pat/quoting-decides-pattern-or-literal` | `pattern literal-no` | `pattern literal-no` | `pattern literal-no` | `pattern literal-no` | `pattern literal-no` | `pattern literal-no` |
 | `pat/extended-patterns-are-not-core` | `<shell>: 1: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case abc in @(abc\|xyz)) echo at;; esac'` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case abc in @(abc\|xyz)) echo at;; esac'` *(status 2)* | `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `case abc in @(abc\|xyz)) echo at;; esac'` *(status 2)* | `at` | *(no output, status 0)* |
+| `pat/extended-pattern-quantifiers` | `<shell>: 1: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case abc in ?(abc)) echo q;; esac; case aaa in +(a)) echo plus;; esac; case b in !(a)) echo bang;; esac'` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case abc in ?(abc)) echo q;; esac; case aaa in +(a)) echo plus;; esac; case b in !(a)) echo bang;; esac'` *(status 2)* | `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `case abc in ?(abc)) echo q;; esac; case aaa in +(a)) echo plus;; esac; case b in !(a)) echo bang;; esac'` *(status 2)* | `q~plus~bang` | *(no output, status 0)* |
+| `pat/extended-patterns-in-a-condition` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `yes` | `yes` | `<shell>: -c: line 0: syntax error in conditional expression: unexpected token `('~<shell>: -c: line 0: syntax error near `@(a'~<shell>: -c: line 0: `[[ abc == @(abc\|xyz) ]] && echo yes \|\| echo no'` *(status 2)* | `yes` | `no` |
+| `pat/a-bare-group-is-alternation` | `<shell>: 1: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case ab in a(b\|c)) echo yes;; *) echo no;; esac'` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case ab in a(b\|c)) echo yes;; *) echo no;; esac'` *(status 2)* | `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `case ab in a(b\|c)) echo yes;; *) echo no;; esac'` *(status 2)* | `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `yes` |
+| `pat/a-literal-at-before-a-bare-group` | `<shell>: 1: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case @abc in @(abc\|xyz)) echo yes;; *) echo no;; esac'` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case @abc in @(abc\|xyz)) echo yes;; *) echo no;; esac'` *(status 2)* | `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `case @abc in @(abc\|xyz)) echo yes;; *) echo no;; esac'` *(status 2)* | `no` | `yes` |
+| `pat/a-nested-group-needs-no-quantifier` | `<shell>: 1: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case b in @(a\|(b))) echo y;; *) echo n;; esac'` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case b in @(a\|(b))) echo y;; *) echo n;; esac'` *(status 2)* | `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `case b in @(a\|(b))) echo y;; *) echo n;; esac'` *(status 2)* | `y` | `n` |
+| `pat/a-group-from-an-expansion` | `n` | `n` | `n` | `n` | `y` | `n` |
+| `pat/a-subshell-is-not-a-group` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
+| `pat/an-empty-group-is-a-function` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
+| `pat/an-array-literal-is-not-a-group` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x y]` | `[x y]` | `[x y]` | `[x y]` | `[x y]` |
 
 - `pat/star-matches-dot-in-case` — in case there is no filesystem, so nothing restricts the star
   ```sh
@@ -1319,6 +1328,42 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `pat/extended-patterns-are-not-core` — ksh93 alone accepts them as written; dash and bash report a syntax error and zsh parses but does not match — three behaviors, so not core
   ```sh
   case abc in @(abc|xyz)) echo at;; esac
+  ```
+- `pat/extended-pattern-quantifiers` — the rest of the family, which only ksh93 has in a `case` pattern — zsh reads each `?`, `+` and `!` as an ordinary character in front of a group of its own, so none of them match
+  ```sh
+  case abc in ?(abc)) echo q;; esac; case aaa in +(a)) echo plus;; esac; case b in !(a)) echo bang;; esac
+  ```
+- `pat/extended-patterns-in-a-condition` — bash has extended patterns here and nowhere else — the same text is a syntax error in a `case` pattern there — so where they are available is a separate question from whether the shell has them
+  ```sh
+  [[ abc == @(abc|xyz) ]] && echo yes || echo no
+  ```
+- `pat/a-bare-group-is-alternation` — zsh takes a group with no quantifier in front of it, which the other three refuse; it is the feature that makes `@(abc|xyz)` a literal `@` and a group there rather than an extended pattern
+  ```sh
+  case ab in a(b|c)) echo yes;; *) echo no;; esac
+  ```
+- `pat/a-literal-at-before-a-bare-group` — the other half of that reading: the subject that zsh matches and the extended-pattern shells do not, which is what proves the two are reading the same text by different rules
+  ```sh
+  case @abc in @(abc|xyz)) echo yes;; *) echo no;; esac
+  ```
+- `pat/a-nested-group-needs-no-quantifier` — ksh93 needs a quantifier at the top level and not inside a group, so `@(a|(b))` matches b there — the lexer is what refuses the bare one, and by the time the matcher sees text it came from somewhere the dialect allows
+  ```sh
+  case b in @(a|(b))) echo y;; *) echo n;; esac
+  ```
+- `pat/a-group-from-an-expansion` — whether an expansion's text is re-read for groups: ksh93 says yes and matches b, and the other three leave the parentheses literal — the same axis that decides whether `p="a*"` globs, reaching a construct it was not written for
+  ```sh
+  p="(b)"; case b in $p) echo y;; *) echo n;; esac
+  ```
+- `pat/a-subshell-is-not-a-group` — the third thing a group must not swallow: a `(` that begins a word opens a subshell, so a group is only ever read mid-word
+  ```sh
+  (echo hi)
+  ```
+- `pat/an-empty-group-is-a-function` — the case that keeps a bare group from eating a function definition: `()` is empty, and the shell with bare groups rejects an empty one as a pattern, so the definition always wins
+  ```sh
+  f() { echo hi; }; f
+  ```
+- `pat/an-array-literal-is-not-a-group` — and the case that keeps it from eating an array literal: a `(` straight after `=` opens one, never a group — `a=(b|c)` is a parse error in that shell rather than a pattern
+  ```sh
+  a=(x y); echo "[${a[@]}]"
   ```
 
 ## arithmetic

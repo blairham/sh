@@ -375,3 +375,13 @@ func TestFloatFormatting(t *testing.T) {
 		t.Errorf("ArithInfinity = %q, want %q", got, want)
 	}
 }
+
+// TestPatternGroups: which groups this shell reads, and where.
+func TestPatternGroups(t *testing.T) {
+	if zsh.Dialect().ExtendedPattern || zsh.Dialect().ExtendedPatternInCondition {
+		t.Error("zsh has no extended patterns; a quantifier before a group is an ordinary character")
+	}
+	if !zsh.Dialect().PatternAlternation {
+		t.Error("zsh takes a bare group")
+	}
+}

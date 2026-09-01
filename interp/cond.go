@@ -157,7 +157,7 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 	case "==", "=", "!=":
 		// Unquoted, the right operand is a pattern; quoted, a literal. Only
 		// the spans still know which, which is why the tree keeps a word.
-		got := r.matchPatternR(r.patternOf(x.Y), left)
+		got := r.matchPatternR(r.patternOf(x.Y), left, true)
 		if x.Op == "!=" {
 			return !got, nil
 		}

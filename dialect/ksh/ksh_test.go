@@ -324,3 +324,13 @@ func TestFloatFormatting(t *testing.T) {
 		t.Errorf("ArithFailureStatus = %d, want %d", got, want)
 	}
 }
+
+// TestPatternGroups: which groups this shell reads, and where.
+func TestPatternGroups(t *testing.T) {
+	if !ksh.Dialect().ExtendedPattern {
+		t.Error("ksh93 has extended patterns wherever a pattern may stand")
+	}
+	if ksh.Dialect().PatternAlternation {
+		t.Error("ksh93 needs a quantifier in front of a group")
+	}
+}

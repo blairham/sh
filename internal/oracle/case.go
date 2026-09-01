@@ -1942,6 +1942,11 @@ var Corpus = []Case{
 		Why:     "ksh93 needs a quantifier at the top level and not inside a group, so `@(a|(b))` matches b there — the lexer is what refuses the bare one, and by the time the matcher sees text it came from somewhere the dialect allows",
 	},
 	{
+		ID: "pat/a-group-from-an-expansion", Category: "pattern matching",
+		Snippet: `p="(b)"; case b in $p) echo y;; *) echo n;; esac`,
+		Why:     "whether an expansion's text is re-read for groups: ksh93 says yes and matches b, and the other three leave the parentheses literal — the same axis that decides whether `p=\"a*\"` globs, reaching a construct it was not written for",
+	},
+	{
 		ID: "pat/a-subshell-is-not-a-group", Category: "pattern matching",
 		Snippet: `(echo hi)`,
 		Why:     "the third thing a group must not swallow: a `(` that begins a word opens a subshell, so a group is only ever read mid-word",

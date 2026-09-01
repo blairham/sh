@@ -1098,3 +1098,16 @@ that has bare groups, and both are that shell's own answers:
 
 The first was found by the dialect's own prelude failing to parse. The second
 by five array cases in the corpus turning `(x y)` into a literal.
+
+### And one a single pass cannot express
+
+Whether an expansion's text is re-read for groups follows the axis that
+already decides whether `p="a*"` globs, and three of the four leave the
+parentheses alone:
+
+    p="(b)"; case b in $p)      ksh93 matches; the others do not
+
+ksh93 also matches the subject `(b)` against that same pattern, so it accepts
+both readings of the text at once. Ours takes the group reading and therefore
+answers the second half differently. It is one case, it needs the matcher to
+try a pattern two ways, and it is written down rather than approximated.

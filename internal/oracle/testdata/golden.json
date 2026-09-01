@@ -6842,6 +6842,38 @@
         "TimedOut": false
       }
     },
+    "pat/a-group-from-an-expansion": {
+      "bash": {
+        "Output": "n",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "n",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "n",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "n",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "y",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "n",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "pat/a-literal-at-before-a-bare-group": {
       "bash": {
         "Output": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 1: `case @abc in @(abc|xyz)) echo yes;; *) echo no;; esac'",

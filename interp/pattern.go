@@ -16,6 +16,14 @@ import (
 // matcher cannot be handed a plain string — it has to be told which characters
 // were quoted, and escaping them here is how that is carried.
 func (r *Runner) patternOf(w *syntax.Word) string {
+	return r.patternIn(w, false)
+}
+
+// patternIn is patternOf, told whether the pattern stands in a condition.
+//
+// One dialect reads groups there and nowhere else, so the same expanded text
+// is a group in `[[ ]]` and literal parentheses in a `case`.
+func (r *Runner) patternIn(w *syntax.Word, condition bool) string {
 	if w == nil {
 		return ""
 	}
@@ -37,8 +45,17 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 		}
 		// Quoted text, and the result of an expansion in a quoted context,
 		// are literal: every metacharacter in them is escaped.
+		//
+		// The parentheses are metacharacters only where the dialect reads
+		// groups, and there they have to be escaped too: without it a `(b)`
+		// arriving from a variable became a group in the shell that does not
+		// re-read an expansion as a pattern, so `case b in $p` matched.
+		meta := `*?[\`
+		if r.dialect().PatternAlternation || r.readsQuantifiedGroups(condition) {
+			meta += "()"
+		}
 		for i := 0; i < len(text); i++ {
-			if strings.IndexByte(`*?[\`, text[i]) >= 0 {
+			if strings.IndexByte(meta, text[i]) >= 0 {
 				b.WriteByte('\\')
 			}
 			b.WriteByte(text[i])
@@ -393,19 +410,18 @@ func (r *Runner) patternOpts(pattern string) patternOpts {
 		caret:      r.caretNegates(pattern),
 		bracket:    BracketLiteral,
 		group:      r.dialect().PatternAlternation,
-		quantified: r.hasQuantifiedGroups(),
+		quantified: r.readsQuantifiedGroups(false),
 	}
 }
 
-// hasQuantifiedGroups reports whether `@(a|b)` is a group here rather than a
-// literal `@` and some parentheses.
+// readsQuantifiedGroups reports whether `@(a|b)` is a group where this pattern
+// stands, rather than a literal `@` and some parentheses.
 //
-// The condition-only answer is folded in rather than tracked: the lexer keeps
-// a `(` inside a word only where the dialect allows one, so a group can only
-// have reached the matcher from a place that allows it. Reading them wherever
-// they arrive is therefore the same answer, and it saves threading the
-// condition down to a function that has no parser and should not need one.
-func (r *Runner) hasQuantifiedGroups() bool {
+// The context matters and cannot be folded away: one dialect reads them inside
+// `[[ ]]` and nowhere else, so an expanded `(b)` is a group in a condition
+// there and two ordinary characters in a `case`. Answering it globally made
+// `p="(b)"; case b in $p` match, which that shell does not.
+func (r *Runner) readsQuantifiedGroups(condition bool) bool {
 	d := r.dialect()
-	return d.ExtendedPattern || d.ExtendedPatternInCondition
+	return d.ExtendedPattern || (condition && d.ExtendedPatternInCondition)
 }

@@ -119,7 +119,7 @@ func TestWithoutAFlagAGroupIsNotOne(t *testing.T) {
 }
 
 // runWith executes src under a dialect with the given pattern grammar. These
-// are behaviour rather than parsing: the lexer's exceptions all *parse* either
+// are behavior rather than parsing: the lexer's exceptions all *parse* either
 // way, and only what they produce tells them apart.
 func runWith(t *testing.T, src string, extended, alternation bool) string {
 	t.Helper()

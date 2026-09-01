@@ -462,6 +462,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `cmd/function-posix-form` | `posix` | `posix` | `posix` | `posix` | `posix` | `posix` |
 | `cmd/function-keyword-form` | `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `kw` | `kw` | `kw` | `kw` | `kw` |
 | `cmd/function-keyword-and-parens` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `both` | `both` | `both` | `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `both` |
+| `cmd/close-brace-as-an-ordinary-word` | `}` | `}` | `}` | `}` | `}` | `<shell>:1: parse error near `}'` *(status 1)* |
+| `cmd/reserved-word-inside-a-brace-group` | `<shell>: 1: Syntax error: "do" unexpected (expecting "}")` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `do'~<shell>: -c: line 1: `{ echo a; do :; done; }'` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `do'~<shell>: -c: line 1: `{ echo a; do :; done; }'` *(status 2)* | `<shell>: -c: line 0: syntax error near unexpected token `do'~<shell>: -c: line 0: `{ echo a; do :; done; }'` *(status 2)* | `<shell>: syntax error at line 1: `do' unexpected` *(status 3)* | `<shell>:1: parse error near `do'` *(status 1)* |
+| `cmd/reserved-word-in-an-empty-brace-group` | `<shell>: 1: Syntax error: "fi" unexpected` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `fi'~<shell>: -c: line 1: `{ fi; }'` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `fi'~<shell>: -c: line 1: `{ fi; }'` *(status 2)* | `<shell>: -c: line 0: syntax error near unexpected token `fi'~<shell>: -c: line 0: `{ fi; }'` *(status 2)* | `<shell>: syntax error at line 1: `fi' unexpected` *(status 3)* | `<shell>:1: parse error near `fi'` *(status 1)* |
+| `cmd/unterminated-brace-group-line` | `<shell>: 1: Syntax error: end of file unexpected (expecting "}")` *(status 2)* | `<shell>: -c: line 2: syntax error: unexpected end of file from `{' command on line 1` *(status 2)* | `<shell>: -c: line 2: syntax error: unexpected end of file from `{' command on line 1` *(status 2)* | `<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | `<shell>: syntax error at line 1: `{' unmatched` *(status 3)* | `<shell>:1: parse error near `b'` *(status 1)* |
 
 - `core/c-style-for` — a loop on a condition rather than over a list; dash does not have it and says so about the loop variable rather than about the parenthesis
   ```sh
@@ -562,6 +566,22 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `cmd/function-keyword-and-parens` — the hybrid is rejected by ksh93, where the keyword originated, so it is not core
   ```sh
   function f() { echo both; }; f
+  ```
+- `cmd/close-brace-as-an-ordinary-word` — `}` is reserved only where a command may begin in three of the four, so as an argument it is an ordinary brace — and in zsh it is reserved wherever a word may stand, which is a parse error here and is the same rule that lets `{ echo a }` close without a terminator
+  ```sh
+  echo }
+  ```
+- `cmd/reserved-word-inside-a-brace-group` — every shell names the word it stopped on; dash also says what it expected, and only here — `(expecting "}")` appears after a group with something in it
+  ```sh
+  { echo a; do :; done; }
+  ```
+- `cmd/reserved-word-in-an-empty-brace-group` — the same failure with nothing before it, which is where dash drops the expectation: an empty group has nothing to be in the middle of
+  ```sh
+  { fi; }
+  ```
+- `cmd/unterminated-brace-group-line` — where an unterminated construct is reported: bash puts it on the line *after* the input's last when the text does not end in one, and the other three on the last line itself
+  ```sh
+  { echo a; echo b
   ```
 
 ## getopts

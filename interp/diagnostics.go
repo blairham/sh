@@ -631,10 +631,17 @@ func (d Diagnostics) locationOnly(line int) string {
 	return ""
 }
 
-// parseErrorLine is where a parse failure happened, or 0 if the error does not
-// say. A caller reporting borrowed text needs it: the line that matters is the
-// one inside the text, not the line the builtin was called on.
-func (d Diagnostics) parseErrorLine(err error) int {
+// ParseFailureLine is where a parse failure happened, or 0 if the error does
+// not say.
+//
+// It sits beside ParseFailure and is exported for the same reason: the front
+// end and the builtins that parse borrowed text must agree, and the line is as
+// much a part of the dialect's answer as the wording. One shell puts an
+// unterminated construct on the line *after* the input's last, so reading
+// `Pos.Line` directly gets it wrong — which is what the front end did while
+// `eval` and `.` got it right, the two paths disagreeing exactly as one shared
+// front end exists to prevent.
+func (d Diagnostics) ParseFailureLine(err error) int {
 	var se *syntax.Error
 	if !errors.As(err, &se) {
 		return 0

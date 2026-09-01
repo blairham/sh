@@ -281,3 +281,32 @@ func TestRegisterCanReplaceABuiltin(t *testing.T) {
 		t.Errorf("output = %q, want the registered builtin to have won", got)
 	}
 }
+
+// TestTheFrontEndAndEvalAgreeOnWhereAParseErrorIs is the same class of bug as
+// TestTheInvocationRouteDoesNotChangeTheAnswer, one layer down.
+//
+// One dialect puts an unterminated construct on the line *after* the input's
+// last when the text does not end in one. `eval` and `.` asked the dialect for
+// that line and the front end read the error's own position instead, so the
+// two reported the same failure on different lines — the front end being
+// shared is no help if it does not use the shared answer.
+func TestTheFrontEndAndEvalAgreeOnWhereAParseErrorIs(t *testing.T) {
+	sh := shell()
+	d := interp.Diagnostics{
+		Location:                   interp.LocationLineWord,
+		UnterminatedEndsOnNextLine: true,
+		SyntaxError:                "syntax error on line %[3]d",
+		Unterminated:               "syntax error on line %[3]d",
+	}
+	sh.Diagnostics = d
+
+	// The text has no trailing newline, so the end of it is line 2.
+	_, direct, _ := runArgs(t, sh, "testsh", "-c", "{ echo a")
+	_, viaEval, _ := runArgs(t, sh, "testsh", "-c", `eval "{ echo a"`)
+	if !strings.Contains(direct, "line 2") {
+		t.Errorf("the front end reported %q, want the line after the last", direct)
+	}
+	if !strings.Contains(viaEval, "line 2") {
+		t.Errorf("eval reported %q, want the line after the last", viaEval)
+	}
+}

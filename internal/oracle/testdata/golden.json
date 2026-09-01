@@ -1274,6 +1274,38 @@
         "TimedOut": false
       }
     },
+    "cmd/close-brace-as-an-ordinary-word": {
+      "bash": {
+        "Output": "}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: parse error near `}'",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "cmd/compound-takes-redirection": {
       "bash": {
         "Output": "[a,b,]",
@@ -1626,6 +1658,70 @@
         "TimedOut": false
       }
     },
+    "cmd/reserved-word-in-an-empty-brace-group": {
+      "bash": {
+        "Output": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `fi'~\u003cshell\u003e: -c: line 1: `{ fi; }'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `fi'~\u003cshell\u003e: -c: line 1: `{ fi; }'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `fi'~\u003cshell\u003e: -c: line 0: `{ fi; }'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"fi\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: syntax error at line 1: `fi' unexpected",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: parse error near `fi'",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "cmd/reserved-word-inside-a-brace-group": {
+      "bash": {
+        "Output": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `do'~\u003cshell\u003e: -c: line 1: `{ echo a; do :; done; }'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `do'~\u003cshell\u003e: -c: line 1: `{ echo a; do :; done; }'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `do'~\u003cshell\u003e: -c: line 0: `{ echo a; do :; done; }'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"do\" unexpected (expecting \"}\")",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: syntax error at line 1: `do' unexpected",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: parse error near `do'",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "cmd/subshell-isolates-state": {
       "bash": {
         "Output": "[1]",
@@ -1687,6 +1783,38 @@
       "zsh": {
         "Output": "a",
         "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cmd/unterminated-brace-group-line": {
+      "bash": {
+        "Output": "\u003cshell\u003e: -c: line 2: syntax error: unexpected end of file from `{' command on line 1",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: -c: line 2: syntax error: unexpected end of file from `{' command on line 1",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: -c: line 1: syntax error: unexpected end of file",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: end of file unexpected (expecting \"}\")",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: syntax error at line 1: `{' unmatched",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: parse error near `b'",
+        "Status": 1,
         "TimedOut": false
       }
     },

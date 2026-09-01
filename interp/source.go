@@ -101,7 +101,7 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 		// line in *that file* by every shell in the panel, and this reported
 		// line 1 for all of them.
 		line := r.line
-		if at := r.diag().parseErrorLine(err); at > 0 {
+		if at := r.diag().ParseFailureLine(err); at > 0 {
 			line = at
 		}
 		d := r.diag()

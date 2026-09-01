@@ -16,6 +16,8 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | `&>` is one redirection operator | **no** | yes | *build* | yes |
 | assignment prefix persists on a special builtin | **yes** | no | **yes** | no |
 | brace group needs a terminator before `}` | yes | yes | yes | **no** |
+| `}` as an ordinary argument | yes | yes | yes | **reserved** |
+| an unterminated construct is reported on | last line | **the line after** | last line | last line |
 | `${#@}` is the count of parameters | **no** | yes | yes | yes |
 | `[^abc]` negates | **no** | yes | yes | yes |
 | a leading zero means octal | yes | yes | yes | **no** |
@@ -854,3 +856,72 @@ as an array of one. It is a grammar flag now, and separate from the one that
 enables `a=(x y)`: the two halves are separately reachable, since a subscript
 can be written for a variable that was never an array — which is exactly the
 case that was wrong.
+
+## One rule, and the half of it that gives it away
+
+`{ echo hi }` runs in zsh and is a syntax error in the other three. The
+obvious reading is that zsh's brace groups do not need a terminator, and
+that reading is wrong in a way that matters for where the rule goes.
+
+The other half is `echo }`, which prints a brace in three shells and is a
+**parse error** in zsh. So the rule is not about brace groups at all: in zsh
+`}` is reserved wherever a word may stand, not only where a command may
+begin. A `}` cannot be an argument there, so the only thing it can be doing
+after `echo hi` is closing the group — and after `echo` on its own it is
+closing nothing.
+
+Modelled as `CloseBraceAlwaysReserved`, a grammar flag, it gets both halves.
+Modelled as "brace groups may omit their terminator" it would have got the
+first and left `echo }` printing a brace. This one was in the axes table as
+measured and had never been built: the parser rejected `{ echo hi }`, which
+is a valid zsh script.
+
+## A reserved word inside a brace group
+
+`{ echo a; do :; done; }` fails everywhere, and every shell in the panel
+names the word it stopped on. Ours said `expected } — a brace group needs a
+terminator before it`, which named neither the token nor any of the four
+ways the shells say it, so it now goes through the ordinary
+unexpected-token failure and each dialect words it.
+
+dash alone also says what it expected, and only sometimes:
+
+    { echo a; esac; }  →  "esac" unexpected (expecting "}")
+    { esac; }          →  "esac" unexpected
+
+The expectation rides along when the group had something in it and not when
+it was empty — an empty group has nothing to be in the middle of.
+
+## The front end was not using the shared answer
+
+Where an unterminated construct is reported is a dialect's answer: bash puts
+it on the line *after* the input's last when the text does not end in one,
+and the other three on the last line itself. `Diagnostics` knew that, and
+`eval` and `.` asked it. The front end read the error's own position
+instead, so the same failure came out on different lines depending on which
+route reached it.
+
+This is the bug `driver` exists to prevent, one layer down: sharing a front
+end is no help if the front end does not use the shared answer. The line is
+now `ParseFailureLine`, exported beside `ParseFailure` for the same reason —
+it is as much a part of the dialect's answer as the wording — and a test
+asserts the two routes agree.
+
+## What the conformance number does not cover
+
+`make conformance` skips every case marked `SyntaxError`, alongside the ones
+whose reference races. The two exclusions are not alike: a racing reference
+cannot grade anything, but a syntax error is perfectly deterministic and is
+exactly what the `Diagnostics` vector exists for.
+
+The effect is that parse-error wording — a whole vector — is ungraded, and a
+report of 100% is silent about it. Measured by including those cases:
+
+    bash   332/337     zsh  335/337
+    ksh93  335/337     dash 337/337
+
+Five gaps in bash, two each in zsh and ksh93, none in dash. The bash five
+are one thing: it names the input in the location (`bash: -c: line 1:`) and
+echoes the offending source line after an unexpected-token error, and we do
+neither. None of that is fixed here; it is written down so the number is not
+read as coverage it does not have.

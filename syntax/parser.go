@@ -589,6 +589,11 @@ func (p *Parser) parseSimple() Command {
 				p.failUnexpected("")
 				return c
 			}
+			if p.dialect.CloseBraceAlwaysReserved && p.atWord("}") {
+				// Reserved even here, so it ends the command rather than
+				// becoming an argument to it.
+				return c
+			}
 			seenArg = true
 			c.Args = append(c.Args, p.word())
 		case p.at(TokLeftParen) && (seenArg || len(c.Assigns) > 0 || len(c.Redirs) > 0):
@@ -762,9 +767,21 @@ func (p *Parser) parseGroup() Command {
 			}
 			return c
 		}
-		// `{ echo a }` is a syntax error everywhere but zsh: the brace is a
-		// reserved word, so it needs a terminator before it.
-		p.fail("expected } — a brace group needs a terminator before it")
+		// A reserved word the group cannot use — `{ echo a; do :; done; }`.
+		// Every shell in the panel names the word it stopped on, so this goes
+		// through the usual failure rather than describing the brace group:
+		// a message that said only "expected }" named neither the token nor
+		// the four different ways the shells say it.
+		//
+		// Whether the expectation is named alongside it depends on whether
+		// the group had anything in it. dash writes `(expecting "}")` after
+		// `{ echo a; esac; }` and not after `{ esac; }`, which is measured —
+		// the empty group has nothing to be in the middle of.
+		expected := ""
+		if len(c.List) > 0 {
+			expected = "}"
+		}
+		p.failUnexpected(expected)
 		return c
 	}
 	c.Stop = p.tok.End

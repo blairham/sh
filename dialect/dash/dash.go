@@ -45,6 +45,8 @@ func Semantics() interp.Semantics {
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
 	s.PrintfQuote = interp.PrintfQuoteAbsent
+	s.GetoptsAssignmentRestartsWord = interp.Yes
+	s.GetoptsClearsOptarg = interp.No
 	s.CdWithoutHomeIsAnError = interp.No
 	s.CdDashPrintsTheDirectory = interp.Yes
 	return s
@@ -100,9 +102,14 @@ func Diagnostics() interp.Diagnostics {
 		// No reason at all, so `cd` onto a file and `cd` onto nothing read
 		// identically here — the one shell whose message cannot tell you
 		// which it was.
-		CdCannotChange:  "cd: can't cd to %[1]s",
-		CdStatus:        2,
-		PrintfBadNumber: "printf: %[1]s: expected numeric value",
+		GetoptsBadOption:       "Illegal option -%[1]s",
+		GetoptsMissingArgument: "No arg for -%[1]s option",
+		// Nothing in front of it at all — the only diagnostic in the panel
+		// that names neither the shell nor a line.
+		GetoptsUnprefixed: true,
+		CdCannotChange:    "cd: can't cd to %[1]s",
+		CdStatus:          2,
+		PrintfBadNumber:   "printf: %[1]s: expected numeric value",
 		// Every complaint about an argument is 2 here, as it is elsewhere.
 		PrintfBadVerbStatus:     2,
 		PrintfBadVerb:           "printf: %[2]s: invalid directive",

@@ -3802,6 +3802,262 @@
         "TimedOut": false
       }
     },
+    "getopts/argument-attached-or-apart": {
+      "bash": {
+        "Output": "[b][val]~[b][val]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[b][val]~[b][val]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[b][val]~[b][val]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[b][val]~[b][val]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[b][val]~[b][val]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[b][val]~[b][val]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "getopts/clustered-options": {
+      "bash": {
+        "Output": "[a][b] ind=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a][b] ind=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[a][b] ind=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a][b] ind=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a][b] ind=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a][b] ind=2",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "getopts/double-dash-ends-the-options": {
+      "bash": {
+        "Output": "[a] ind=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a] ind=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[a] ind=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a] ind=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a] ind=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a] ind=3",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "getopts/loop-reads-each-option": {
+      "bash": {
+        "Output": "[a:]~[b:x]~ind=4",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a:]~[b:x]~ind=4",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[a:]~[b:x]~ind=4",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a:]~[b:x]~ind=4",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a:]~[b:x]~ind=4",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a:]~[b:x]~ind=4",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "getopts/missing-argument-diverges": {
+      "bash": {
+        "Output": "\u003cshell\u003e: option requires an argument -- b~st=0 o=[?]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: option requires an argument -- b~st=0 o=[?]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: option requires an argument -- b~st=0 o=[?]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "No arg for -b option~st=0 o=[?]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: -b: argument expected~st=0 o=[?]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: argument expected after -b option~st=0 o=[?]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "getopts/silent-missing-argument-is-a-colon": {
+      "bash": {
+        "Output": "st=0 o=[:] arg=[b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0 o=[:] arg=[b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0 o=[:] arg=[b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=0 o=[:] arg=[b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0 o=[:] arg=[b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0 o=[:] arg=[b]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "getopts/silent-mode-reports-through-optarg": {
+      "bash": {
+        "Output": "st=0 o=[?] arg=[z]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0 o=[?] arg=[z]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0 o=[?] arg=[z]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=0 o=[?] arg=[z]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0 o=[?] arg=[z]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0 o=[?] arg=[z]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "getopts/unknown-option-diverges": {
+      "bash": {
+        "Output": "\u003cshell\u003e: illegal option -- z~st=0 o=[?]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: illegal option -- z~st=0 o=[?]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: illegal option -- z~st=0 o=[?]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "Illegal option -z~st=0 o=[?]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: -z: unknown option~st=0 o=[?]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: bad option: -z~st=0 o=[?]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "ifs/default-edges-stripped": {
       "bash": {
         "Output": "[a][b]",

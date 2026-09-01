@@ -183,3 +183,18 @@ func TestCdAnswers(t *testing.T) {
 		t.Errorf("CdCannotChange = %q, want %q", got, want)
 	}
 }
+
+// TestGetoptsAnswers: bash names itself and no line for these two complaints,
+// where it gives a line to everything else it says.
+func TestGetoptsAnswers(t *testing.T) {
+	d := bash.Diagnostics()
+	if !d.GetoptsNamesNoLine {
+		t.Error("getopts should name the shell without a line")
+	}
+	if d.GetoptsUnprefixed {
+		t.Error("getopts should still name the shell")
+	}
+	if got, want := bash.Semantics().GetoptsAssignmentRestartsWord, interp.Yes; got != want {
+		t.Errorf("GetoptsAssignmentRestartsWord = %v, want %v", got, want)
+	}
+}

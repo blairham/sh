@@ -371,6 +371,52 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   set -C; echo one>b; echo two>|b; printf "[%s]" "$(cat b)"
   ```
 
+## getopts
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `getopts/loop-reads-each-option` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` |
+| `getopts/clustered-options` | `[a][b] ind=2` | `[a][b] ind=2` | `[a][b] ind=2` | `[a][b] ind=2` | `[a][b] ind=2` | `[a][b] ind=2` |
+| `getopts/argument-attached-or-apart` | `[b][val]~[b][val]` | `[b][val]~[b][val]` | `[b][val]~[b][val]` | `[b][val]~[b][val]` | `[b][val]~[b][val]` | `[b][val]~[b][val]` |
+| `getopts/unknown-option-diverges` | `Illegal option -z~st=0 o=[?]` | `<shell>: illegal option -- z~st=0 o=[?]` | `<shell>: illegal option -- z~st=0 o=[?]` | `<shell>: illegal option -- z~st=0 o=[?]` | `<shell>: -z: unknown option~st=0 o=[?]` | `<shell>:1: bad option: -z~st=0 o=[?]` |
+| `getopts/silent-mode-reports-through-optarg` | `st=0 o=[?] arg=[z]` | `st=0 o=[?] arg=[z]` | `st=0 o=[?] arg=[z]` | `st=0 o=[?] arg=[z]` | `st=0 o=[?] arg=[z]` | `st=0 o=[?] arg=[z]` |
+| `getopts/missing-argument-diverges` | `No arg for -b option~st=0 o=[?]` | `<shell>: option requires an argument -- b~st=0 o=[?]` | `<shell>: option requires an argument -- b~st=0 o=[?]` | `<shell>: option requires an argument -- b~st=0 o=[?]` | `<shell>: -b: argument expected~st=0 o=[?]` | `<shell>:1: argument expected after -b option~st=0 o=[?]` |
+| `getopts/silent-missing-argument-is-a-colon` | `st=0 o=[:] arg=[b]` | `st=0 o=[:] arg=[b]` | `st=0 o=[:] arg=[b]` | `st=0 o=[:] arg=[b]` | `st=0 o=[:] arg=[b]` | `st=0 o=[:] arg=[b]` |
+| `getopts/double-dash-ends-the-options` | `[a] ind=3` | `[a] ind=3` | `[a] ind=3` | `[a] ind=3` | `[a] ind=3` | `[a] ind=3` |
+
+- `getopts/loop-reads-each-option` — the shape every script uses it in, and the one that reported success while running its body zero times when getopts was a separate program that could not reach the shell's variables
+  ```sh
+  set -- -a -b x; while getopts "ab:" o; do echo "[$o:${OPTARG-}]"; done; echo "ind=$OPTIND"
+  ```
+- `getopts/clustered-options` — two options in one word, which is why the position inside a word cannot be OPTIND — that counts words
+  ```sh
+  set -- -ab; while getopts "ab" o; do printf "[%s]" "$o"; done; echo " ind=$OPTIND"
+  ```
+- `getopts/argument-attached-or-apart` — `-bval` and `-b val` are the same option, and resetting OPTIND is how a script starts a second scan
+  ```sh
+  set -- -bval; getopts "b:" o; echo "[$o][$OPTARG]"; set -- -b val; OPTIND=1; getopts "b:" o; echo "[$o][$OPTARG]"
+  ```
+- `getopts/unknown-option-diverges` — four wordings, and four different amounts of prefix: bash names itself with no line where it gives a line to everything else, and dash prints neither a name nor a line — the only diagnostic in the panel with nothing in front of it
+  ```sh
+  set -- -z; getopts "ab" o; echo "st=$? o=[$o]"
+  ```
+- `getopts/silent-mode-reports-through-optarg` — a leading colon turns the complaint off and puts the letter in OPTARG instead, which is how a script takes the reporting over — unanimous, unlike the message it replaces
+  ```sh
+  set -- -z; getopts ":ab" o; echo "st=$? o=[$o] arg=[$OPTARG]"
+  ```
+- `getopts/missing-argument-diverges` — the second of the two complaints, worded four ways again
+  ```sh
+  set -- -b; getopts "b:" o; echo "st=$? o=[$o]"
+  ```
+- `getopts/silent-missing-argument-is-a-colon` — `:` rather than `?` in silent mode, which is what lets a script tell a missing argument from an unknown option without reading a sentence
+  ```sh
+  set -- -b; getopts ":b:" o; echo "st=$? o=[$o] arg=[$OPTARG]"
+  ```
+- `getopts/double-dash-ends-the-options` — `--` ends them and OPTIND points past it, so what follows is an operand however much it looks like an option
+  ```sh
+  set -- -a -- -b; while getopts "ab" o; do printf "[%s]" "$o"; done; echo " ind=$OPTIND"
+  ```
+
 ## cd
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |

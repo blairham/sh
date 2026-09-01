@@ -243,6 +243,20 @@ type Semantics struct {
 	// and everything-but there elsewhere: the two answers are both matches,
 	// on different inputs, with nothing to warn on.
 	BracketCaretNegates Answer
+	// GetoptsAssignmentRestartsWord makes assigning OPTIND begin the word
+	// again, dropping any position inside a cluster.
+	//
+	// True in bash, dash and ksh93, and it is the *assignment* that does it
+	// rather than the value: `set -- -ab; getopts ab o; OPTIND=1` writes the
+	// number OPTIND already held, and those three still restart and read `a`
+	// a second time where zsh carries on to `b`.
+	GetoptsAssignmentRestartsWord Answer
+
+	// GetoptsClearsOptarg empties OPTARG when `getopts` reports a bad option
+	// rather than leaving it unset. zsh alone, and a script testing
+	// `${OPTARG-}` can tell the two apart.
+	GetoptsClearsOptarg Answer
+
 	// CdWithoutHomeIsAnError makes `cd` with no operand and no HOME a
 	// failure. True in bash and ksh93; dash and zsh stay where they are and
 	// report success, which is the quieter answer and the surprising one.

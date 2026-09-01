@@ -187,6 +187,19 @@ type Diagnostics struct {
 	// four are fields rather than strings in the builtin.
 	TestMissingBracket string
 
+	// GetoptsBadOption is an option `getopts` does not have in its string.
+	// One verb: the letter.
+	GetoptsBadOption string
+	// GetoptsMissingArgument is an option whose argument is not there. Same.
+	GetoptsMissingArgument string
+	// GetoptsNamesNoLine prints those with the shell's name and no line,
+	// where this dialect gives a line to everything else. bash alone.
+	GetoptsNamesNoLine bool
+	// GetoptsUnprefixed prints them with neither a name nor a line. dash
+	// alone, and the only diagnostic in the panel with nothing in front of
+	// it at all.
+	GetoptsUnprefixed bool
+
 	// CdCannotChange is a directory `cd` could not move to. Two verbs,
 	// positional because the shells order them differently and one does not
 	// use the second at all: %[1]s is the operand as written and %[2]s the

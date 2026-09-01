@@ -384,6 +384,48 @@ var Corpus = []Case{
 		// recorded into the golden file.
 		Why: "the dangerous case: &> redirects both streams in bash and zsh, and is `&` then `>` in dash and ksh93 — no error, different meaning",
 	},
+	// --- getopts: the builtin a borrowed program could not have been ------
+	{
+		ID: "getopts/loop-reads-each-option", Category: "getopts",
+		Snippet: `set -- -a -b x; while getopts "ab:" o; do echo "[$o:${OPTARG-}]"; done; echo "ind=$OPTIND"`,
+		Why:     "the shape every script uses it in, and the one that reported success while running its body zero times when getopts was a separate program that could not reach the shell's variables",
+	},
+	{
+		ID: "getopts/clustered-options", Category: "getopts",
+		Snippet: `set -- -ab; while getopts "ab" o; do printf "[%s]" "$o"; done; echo " ind=$OPTIND"`,
+		Why:     "two options in one word, which is why the position inside a word cannot be OPTIND — that counts words",
+	},
+	{
+		ID: "getopts/argument-attached-or-apart", Category: "getopts",
+		Snippet: `set -- -bval; getopts "b:" o; echo "[$o][$OPTARG]"; set -- -b val; OPTIND=1; getopts "b:" o; echo "[$o][$OPTARG]"`,
+		Why:     "`-bval` and `-b val` are the same option, and resetting OPTIND is how a script starts a second scan",
+	},
+	{
+		ID: "getopts/unknown-option-diverges", Category: "getopts",
+		Snippet: `set -- -z; getopts "ab" o; echo "st=$? o=[$o]"`,
+		Why:     "four wordings, and four different amounts of prefix: bash names itself with no line where it gives a line to everything else, and dash prints neither a name nor a line — the only diagnostic in the panel with nothing in front of it",
+	},
+	{
+		ID: "getopts/silent-mode-reports-through-optarg", Category: "getopts",
+		Snippet: `set -- -z; getopts ":ab" o; echo "st=$? o=[$o] arg=[$OPTARG]"`,
+		Why:     "a leading colon turns the complaint off and puts the letter in OPTARG instead, which is how a script takes the reporting over — unanimous, unlike the message it replaces",
+	},
+	{
+		ID: "getopts/missing-argument-diverges", Category: "getopts",
+		Snippet: `set -- -b; getopts "b:" o; echo "st=$? o=[$o]"`,
+		Why:     "the second of the two complaints, worded four ways again",
+	},
+	{
+		ID: "getopts/silent-missing-argument-is-a-colon", Category: "getopts",
+		Snippet: `set -- -b; getopts ":b:" o; echo "st=$? o=[$o] arg=[$OPTARG]"`,
+		Why:     "`:` rather than `?` in silent mode, which is what lets a script tell a missing argument from an unknown option without reading a sentence",
+	},
+	{
+		ID: "getopts/double-dash-ends-the-options", Category: "getopts",
+		Snippet: `set -- -a -- -b; while getopts "ab" o; do printf "[%s]" "$o"; done; echo " ind=$OPTIND"`,
+		Why:     "`--` ends them and OPTIND points past it, so what follows is an operand however much it looks like an option",
+	},
+
 	// --- cd, and what unset takes away -----------------------------------
 	{
 		ID: "cd/missing-directory-diverges", Category: "cd",

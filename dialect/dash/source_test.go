@@ -213,3 +213,17 @@ func TestPipefail(t *testing.T) {
 		t.Errorf("said %q, want st=0", out)
 	}
 }
+
+// TestARedirectFailure: this dialect's own wording and status for a redirect
+// that could not be opened. Run rather than asserted against the wording
+// string, since the wording is what would be wrong.
+func TestARedirectFailure(t *testing.T) {
+	dir := t.TempDir()
+	out, _ := runDash(t, dir, "cat < nope\necho st=$?\n")
+	if !strings.Contains(out, `cannot open nope: No such file`) {
+		t.Errorf("said %q, want %q", out, `cannot open nope: No such file`)
+	}
+	if !strings.Contains(out, "st=2") {
+		t.Errorf("said %q, want st=2", out)
+	}
+}

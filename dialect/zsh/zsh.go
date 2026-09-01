@@ -96,6 +96,11 @@ func Semantics() interp.Semantics {
 // Diagnostics is how zsh reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		// The reason first and the name after it, which is zsh's shape and
+		// nobody else's. Lowercased, which LowercaseReason already says.
+		// Same either way — zsh does not distinguish opening from creating.
+		CannotOpen:               "%[2]s: %[1]s",
+		CannotCreate:             "%[2]s: %[1]s",
 		NotABuiltin:              "no such builtin: %[1]s",
 		CommandStringParsedWhole: true,
 		ArithInfinity:            "Inf",

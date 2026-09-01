@@ -101,6 +101,11 @@ const kshKillUsage = "Usage: kill [-lL] [-n signum] [-s signame] job ...\n" +
 
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		// The name first, then the verb with the OS string bracketed after
+		// it — the same shape ksh93 uses for `.`, which DotCannotOpen
+		// already says.
+		CannotOpen:                  "%[1]s: cannot open [%[2]s]",
+		CannotCreate:                "%[1]s: cannot create [%[2]s]",
 		ArithFailureStatus:          1,
 		ArithInfinity:               "inf",
 		ArithNotANumber:             "nan",

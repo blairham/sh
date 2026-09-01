@@ -82,9 +82,21 @@ func Diagnostics() interp.Diagnostics {
 		ArithError:            "arithmetic expression: %[2]s: \"%[1]s\"",
 		FileNotFound:          "No such file",
 		TestNamesFirstOperand: true,
-		CannotOpen:            "cannot open %s: %s",
-		ShiftTooMany:          "shift: can't shift that many",
-		SyntaxErrorStatus:     2,
+		// 2 rather than the 1 the other three report, for a read and a write
+		// alike. Not fatal — the script carries on — so this is a different
+		// question from FatalErrorStatusIsOne, which is about a failure that
+		// ends the shell.
+		RedirectFailureStatus: 2,
+		// A verb, and a different one for each direction.
+		CannotOpen:   "cannot open %[1]s: %[2]s",
+		CannotCreate: "cannot create %[1]s: %[2]s",
+		// Its own text for ENOENT, and a different one each way: a read that
+		// finds nothing is "No such file", a write that cannot make one is
+		// "Directory nonexistent". The OS says "No such file or directory"
+		// for both.
+		DirectoryNotFound: "Directory nonexistent",
+		ShiftTooMany:      "shift: can't shift that many",
+		SyntaxErrorStatus: 2,
 		// dash ends the script rather than reporting a status here, so only the
 		// wording speaks — and it uses two, where the other three use one.
 		//

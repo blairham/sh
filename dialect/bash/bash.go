@@ -89,6 +89,10 @@ func Semantics() interp.Semantics {
 // Diagnostics is how bash 5 reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		// No verb at all: the name, then the OS string. Same either way —
+		// bash does not distinguish opening from creating.
+		CannotOpen:              "%[1]s: %[2]s",
+		CannotCreate:            "%[1]s: %[2]s",
 		NamesTheInputInLocation: true,
 		EchoesTheOffendingLine:  true,
 		SelectPrompt:            "#? ",

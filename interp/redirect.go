@@ -127,9 +127,18 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.C
 		f, err := os.OpenFile(path, flags, 0o666)
 		if err != nil {
 			r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
-			r.diagf("%s\n", Wording(r.diag().CannotOpen, "cannot open %s: %s",
-				name, r.diag().openReason(err)))
-			r.status = 1
+			// Two verbs, positional because the shells order them
+			// differently: %[1]s is the name as written and %[2]s the
+			// reason. Two wordings because two of the four say "create"
+			// rather than "open" when the redirect was making the file.
+			creating := flags != os.O_RDONLY
+			format, fallback := r.diag().CannotOpen, "cannot open %[1]s: %[2]s"
+			if creating {
+				format, fallback = r.diag().CannotCreate, "cannot create %[1]s: %[2]s"
+			}
+			r.diagf("%s\n", Wording(format, fallback,
+				name, r.diag().openReason(err, creating)))
+			r.status = r.diag().redirectFailureStatus()
 			r.redirErr = true
 			return closers, nil
 		}
@@ -221,15 +230,29 @@ func (r *Runner) heredocBody(rd *syntax.Redirect) string {
 // A shell says "No such file"; os.OpenFile says "open b: no such file or
 // directory", which repeats the name the caller is about to print and reads
 // like a Go program rather than a shell.
-func (d Diagnostics) openReason(err error) string {
+func (d Diagnostics) openReason(err error, creating bool) string {
 	var pe *os.PathError
 	if errors.As(err, &pe) {
 		err = pe.Err
 	}
-	if d.FileNotFound != "" && errors.Is(err, fs.ErrNotExist) {
-		return d.FileNotFound
+	if errors.Is(err, fs.ErrNotExist) {
+		// dash writes its own text for this one errno, and writes a
+		// *different* one depending on which way the file was being opened:
+		// a read that finds nothing is "No such file", a write that cannot
+		// make one is "Directory nonexistent". The OS says "No such file or
+		// directory" for both.
+		if creating && d.DirectoryNotFound != "" {
+			return d.DirectoryNotFound
+		}
+		if !creating && d.FileNotFound != "" {
+			return d.FileNotFound
+		}
 	}
-	return err.Error()
+	// reason() capitalizes, because that is what the C string says and what
+	// three of the four print; reasonText() puts it back down for the one
+	// that lowercases everything. Go's own errno strings are lowercase, which
+	// is why this went through neither before and matched nobody.
+	return d.reasonText(reason(err))
 }
 
 // dupFd points one descriptor at another, or closes it.

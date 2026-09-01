@@ -6,6 +6,7 @@ package dash_test
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/blairham/sh/dialect/dash"
@@ -136,5 +137,39 @@ func TestUnterminatedNamesWhatWouldHaveClosedIt(t *testing.T) {
 		if got := dash.Diagnostics().ParseFailure(err); got != tc.want {
 			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
 		}
+	}
+}
+
+// TestArithmeticFailuresAreDashsOwnShape covers the four dash reaches, and the
+// one it does not: a digit too great for its base is not a diagnosis dash has
+// — the literal ends there and what follows is left over, so it says the same
+// thing it says about `$((1 2))`.
+func TestArithmeticFailuresAreDashsOwnShape(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"echo $((1 2))", `arithmetic expression: expecting EOF: "1 2"`},
+		{"echo $((1+))", `arithmetic expression: expecting primary: "1+"`},
+		{"echo $((1,2))", `arithmetic expression: expecting EOF: "1,2"`},
+	} {
+		_, err := syntax.Parse(tc.src, dash.Dialect())
+		if got := dash.Diagnostics().ParseFailure(err); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
+		}
+	}
+
+	// `08` parses here and fails when it is evaluated, so it never reaches
+	// ParseFailure — and it is the case that says a bad digit is not a
+	// diagnosis dash has.
+	f, err := syntax.Parse("echo $((08))", dash.Dialect())
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	var errs bytes.Buffer
+	sem, dg := dash.Semantics(), dash.Diagnostics()
+	r := &interp.Runner{Stderr: &errs, Semantics: &sem, Diagnostics: &dg, Name: "dash"}
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if want := `arithmetic expression: expecting EOF: "08"`; !strings.Contains(errs.String(), want) {
+		t.Errorf("got %q, want it to contain %q", errs.String(), want)
 	}
 }

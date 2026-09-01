@@ -39,16 +39,24 @@ func Diagnostics() interp.Diagnostics {
 		Location: interp.LocationColonLine,
 		// dash names what it wanted instead, and calls the token by its
 		// class rather than by name.
-		Unterminated:      "Syntax error: end of file unexpected (expecting \"%[4]s\")",
-		SyntaxError:       "Syntax error: %s",
-		BadSubstitution:   "Bad substitution",
-		ReadonlyVariable:  "%s: is read only",
-		InvalidNumber:     "Illegal number: %s",
-		NumericArgument:   "%[1]s: Illegal number: %[2]s",
-		ArithError:        "arithmetic expression: %[2]s: \"%[1]s\"",
-		CannotOpen:        "cannot open %s: %s",
-		ShiftTooMany:      "shift: can't shift that many",
-		SyntaxErrorStatus: 2,
+		// A bad digit is not a diagnosis dash reaches at all: the literal
+		// simply ends there and what follows is left over, so `08`, `09`,
+		// `0778` and `0x1z` are all "expecting EOF" — the same sentence it
+		// gives $((1 2)). Ours calls it a digit too great for its base and
+		// dash words that as the leftovers it would have seen.
+		DigitTooGreatForBase:  "expecting EOF",
+		ArithOperandExpected:  "expecting primary",
+		ArithOperatorExpected: "expecting EOF",
+		Unterminated:          "Syntax error: end of file unexpected (expecting \"%[4]s\")",
+		SyntaxError:           "Syntax error: %s",
+		BadSubstitution:       "Bad substitution",
+		ReadonlyVariable:      "%s: is read only",
+		InvalidNumber:         "Illegal number: %s",
+		NumericArgument:       "%[1]s: Illegal number: %[2]s",
+		ArithError:            "arithmetic expression: %[2]s: \"%[1]s\"",
+		CannotOpen:            "cannot open %s: %s",
+		ShiftTooMany:          "shift: can't shift that many",
+		SyntaxErrorStatus:     2,
 		// dash ends the script rather than reporting a status here, so only the
 		// wording speaks — and it uses two, where the other three use one.
 		//

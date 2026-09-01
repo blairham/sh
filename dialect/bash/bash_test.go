@@ -110,3 +110,17 @@ func TestBorrowedTextIsNamedTwoWays(t *testing.T) {
 		t.Error("the end of input should be the line after the text")
 	}
 }
+
+// TestArithmeticFailuresNameTheToken is bash's shape, and the only one of the
+// four that names the token it blamed.
+func TestArithmeticFailuresNameTheToken(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"echo $((1 2))", `1 2: arithmetic syntax error in expression (error token is "2")`},
+		{"echo $((1+))", `1+: arithmetic syntax error: operand expected (error token is "+")`},
+	} {
+		_, err := syntax.Parse(tc.src, bash.Dialect())
+		if got := bash.Diagnostics().ParseFailure(err); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}

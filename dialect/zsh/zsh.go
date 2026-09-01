@@ -68,11 +68,15 @@ func Diagnostics() interp.Diagnostics {
 		TraceStyle:       interp.TraceNameLine,
 		TraceForHeader:   interp.TraceForAssign,
 		// zsh names the last token it read and nothing else.
-		EvalNaming:        interp.SourceReplacesShell,
-		SourceFileNaming:  interp.SourceReplacesShell,
-		EvalSourceName:    "(eval)",
-		Unterminated:      "parse error near `%[5]s'",
-		SyntaxErrorStatus: 1,
+		EvalNaming:       interp.SourceReplacesShell,
+		SourceFileNaming: interp.SourceReplacesShell,
+		EvalSourceName:   "(eval)",
+		// zsh does not quote the expression, where the other three do.
+		ArithError:            "%[2]s",
+		ArithOperandExpected:  "bad math expression: operand expected at end of string",
+		ArithOperatorExpected: "bad math expression: operator expected at `%[1]s'",
+		Unterminated:          "parse error near `%[5]s'",
+		SyntaxErrorStatus:     1,
 		// zsh alone answers "a syntax error" differently depending on where it
 		// read the text: 1 from -c, 126 from a file `.` opened.
 		SourcedSyntaxErrorStatus: 126,

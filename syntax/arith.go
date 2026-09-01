@@ -127,9 +127,25 @@ func (p *Parser) parseArith(src string, at Pos) ArithExpr {
 	e := a.expr()
 	a.space()
 	if e != nil && a.off < len(a.src) {
-		p.fail("unexpected %q in arithmetic", a.src[a.off:])
+		a.failArith(ErrArithOperator, a.src[a.off:])
 	}
 	return e
+}
+
+// failArith records an arithmetic failure with the whole expression and the
+// part of it that failed.
+//
+// It is not p.fail: a shell does not call this a syntax error. All four report
+// it the way they report a division by zero — the expression quoted, and a
+// reason — so it travels as its own kind and is worded by the same vector.
+func (a *arithParser) failArith(kind ErrorKind, token string) {
+	if a.p.err != nil {
+		return
+	}
+	a.p.err = &Error{
+		Pos: a.at, Kind: kind, Expr: a.src, Token: token,
+		Msg: "arithmetic expression: " + a.src,
+	}
 }
 
 func (a *arithParser) space() {
@@ -187,7 +203,7 @@ func (a *arithParser) assign() ArithExpr {
 			if a.take(op) {
 				v := a.assign()
 				if v == nil {
-					a.p.fail("expected a value after %s in arithmetic", op)
+					a.failArith(ErrArithOperand, op)
 					return nil
 				}
 				return &ArithAssign{Name: name, Op: op, Value: v, Start: start}
@@ -250,7 +266,7 @@ func (a *arithParser) binary(level int) ArithExpr {
 		a.off += len(op)
 		y := a.binary(level + 1)
 		if y == nil {
-			a.p.fail("expected an operand after %s in arithmetic", op)
+			a.failArith(ErrArithOperand, op)
 			return x
 		}
 		x = &ArithBinary{Op: op, X: x, Y: y}
@@ -291,7 +307,7 @@ func (a *arithParser) unary() ArithExpr {
 		a.off++
 		x := a.unary()
 		if x == nil {
-			a.p.fail("expected an operand after unary %s", op)
+			a.failArith(ErrArithOperand, op)
 			return nil
 		}
 		return &ArithUnary{Op: op, X: x, Start: start}
@@ -340,7 +356,7 @@ func (a *arithParser) primary() ArithExpr {
 			return &ArithVar{Name: name, Start: start, Stop: start}
 		}
 	}
-	a.p.fail("unexpected %q in arithmetic", a.src[a.off:])
+	a.failArith(ErrArithOperator, a.src[a.off:])
 	return nil
 }
 

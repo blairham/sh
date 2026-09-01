@@ -32,7 +32,6 @@ type declareFlags struct {
 	integer  bool
 	readonly bool
 	export   bool
-	array    bool
 	remove   bool
 }
 
@@ -56,7 +55,15 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 			case 'x':
 				f.export = true
 			case 'a':
-				f.array = true
+				// Accepted and recorded nowhere. An array here is dynamic,
+				// so `typeset -a arr` followed by `arr[0]=x` works without
+				// the attribute existing — which is what the flag is used
+				// for. The compound form `typeset -a arr=(x y)` is a
+				// different thing and is not built: the parser reads the
+				// parenthesis as an ordinary word, and making it an array
+				// literal in argument position is grammar rather than a
+				// flag. Refusing the flag outright would break the common
+				// use to be honest about the rare one.
 			default:
 				r.diagf("declare: -%c: invalid option\n", c)
 				return 2

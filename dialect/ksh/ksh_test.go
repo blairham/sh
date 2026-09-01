@@ -348,3 +348,23 @@ func TestAParseFailureNamesItsOwnLine(t *testing.T) {
 		t.Errorf("a script's runtime location = %v, want %v — still prefixed", got, want)
 	}
 }
+
+// TestAParseFailureIsNotPrefixedWithItsOwnLine renders one, because asserting
+// the flag says nothing about whether anything reads it.
+func TestAParseFailureIsNotPrefixedWithItsOwnLine(t *testing.T) {
+	_, err := syntax.Parse("echo one\n{ fi; }\n", ksh.Dialect())
+	if err == nil {
+		t.Fatal("want a parse failure")
+	}
+	got := ksh.Diagnostics().ForScript().ParseDiagnostic("s.sh", "", err, "echo one\n{ fi; }\n")
+	if strings.Contains(got, "line 2: syntax error") {
+		t.Errorf("got %q, want the line named once", got)
+	}
+	if !strings.Contains(got, "at line 2") {
+		t.Errorf("got %q, want the wording to still name the line", got)
+	}
+	// A runtime diagnostic in a script keeps its prefix.
+	if runtime := ksh.Diagnostics().ForScript().Report("s.sh", 2, "nosuchcmd: not found\n"); !strings.Contains(runtime, "line 2:") {
+		t.Errorf("got %q, want a runtime diagnostic still prefixed", runtime)
+	}
+}

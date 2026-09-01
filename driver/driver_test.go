@@ -570,3 +570,24 @@ func TestACommandStringMayBeReadWhole(t *testing.T) {
 		}
 	}
 }
+
+// TestExitStopsTheReading: `exit` ends the script, so what follows is never
+// read — not even far enough to find that it would not parse. Without that,
+// a script that exits cleanly before a broken line would report the breakage
+// it was never going to reach.
+func TestExitStopsTheReading(t *testing.T) {
+	sh := shell()
+	sh.Diagnostics = interp.Diagnostics{Location: interp.LocationLineWord, SyntaxUnexpected: `unexpected %[1]s`}
+
+	path := writeScript(t, "echo one\nexit 3\n{ fi; }\n")
+	out, errs, code := runArgs(t, sh, "testsh", path)
+	if out != "one\n" {
+		t.Errorf("output %q, want %q", out, "one\n")
+	}
+	if errs != "" {
+		t.Errorf("stderr %q, want nothing — the broken line is never reached", errs)
+	}
+	if code != 3 {
+		t.Errorf("status %d, want 3 from the exit", code)
+	}
+}

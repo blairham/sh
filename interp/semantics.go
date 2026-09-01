@@ -322,9 +322,11 @@ type Semantics struct {
 	// the number that failed — which is a status carrying a count rather
 	// than a verdict, and the reason this is a policy rather than a bool.
 	KillStatus KillStatusPolicy
-	// ArithFloat evaluates floating point. True in ksh93 and zsh, where POSIX
-	// says integers only.
-	ArithFloat Answer
+	// ArithIntegerOperatorRefusesFloat rejects a float where only an integer
+	// will do — `7 % 2.5`, `1.5 & 1`, a shift. ksh93 says yes and refuses;
+	// zsh says no and truncates. It does not arise in a shell without floats,
+	// which is why bash and dash leave it unanswered.
+	ArithIntegerOperatorRefusesFloat Answer
 
 	// RegexQuotingMakesLiteral treats a quoted right operand of `=~` as a
 	// literal string. True in bash alone; ksh93 and zsh keep it a regex, so
@@ -566,7 +568,6 @@ func PosixSemantics() Semantics {
 		ExitArgument:                       ExitArgStrict,
 		EqualsExpansion:                    No,
 		ArithInvalidOctalDigitIsError:      Yes,
-		ArithFloat:                         No,
 		RegexQuotingMakesLiteral:           No,
 		LastPipelineElementInCurrentShell:  No,
 		ShiftPastEndFatal:                  Yes,

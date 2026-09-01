@@ -33,6 +33,10 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | each assignment gets its own trace line | no | **yes** | **yes** | no |
 | brace expansion happens | **no** | yes | yes | yes |
 | arithmetic does floating point | no | no | **yes** | **yes** |
+| significant digits in a float | *n/a* | *n/a* | 15 | **17** |
+| a whole float keeps its point | *n/a* | *n/a* | no | **yes** |
+| an integer-only operator on a float | *n/a* | *n/a* | **refused** | truncated |
+| a malformed expression reports | 2 | **1** | **1** | 1 |
 | quoting a `=~` regex makes it literal | *n/a* | **yes** | no | no |
 | array index base | *n/a* | 0 | 0 | **1** |
 | plain `$a` on an array | *n/a* | first element | first element | **all, joined** |
@@ -982,3 +986,74 @@ Two cases remain and both are features rather than wordings: `ArithFloat`,
 which ksh93 and zsh answer yes and which is measured and not built, and
 extended patterns like `@(abc|xyz)`, which ksh93 matches, zsh parses without
 matching, and bash and dash reject.
+
+## Floating point, and the bug under it
+
+ksh93 and zsh evaluate arithmetic in floating point; bash and dash do not.
+The axis had been recorded in two places at once — a `Dialect.ArithFloat`
+and a `Semantics.ArithFloat`, neither of them read by anything — which is
+one question with two answers, exactly what the vectors exist to prevent.
+
+It is the **dialect's**, because it decides what parses: `1.5` is one
+literal where the shell has floats and, where it does not, a `1` followed by
+text that could not be an operator. That is why bash blames the `.5` rather
+than the `1.5` it was part of. The interpreter reads the same flag for the
+half the parser cannot answer — a float arriving in a *variable* — so there
+is one field consulted in two places rather than two fields that could
+disagree.
+
+An expression is integer until a float enters it. `3/2` is 1 in all four
+shells and `3.0/2` is 1.5 in the two with floats, so values carry which kind
+they are and each operation promotes rather than everything being a float
+from the start.
+
+Three things about it diverge, and one does not:
+
+- **precision.** Fifteen significant digits in ksh93 and seventeen in zsh,
+  so `0.1+0.2` is `0.3` in one and `0.30000000000000004` in the other from
+  identical arithmetic.
+- **whether a whole float keeps its point.** zsh writes `4.` where ksh93
+  writes `4`, which is what keeps a float visible as one.
+- **what an integer-only operator does with a float.** ksh93 refuses;
+  zsh truncates for the bitwise operators and takes a *floating* remainder,
+  so `7%2.5` is `2.` there and an error in ksh93. A remainder is not the
+  same question as a bitwise and, which the implementation had to learn: the
+  first attempt asked only about the left operand, and `7%2.5` has a whole
+  number there.
+- **a comparison does not.** `1.5 < 2` is `1` and not `1.` in either, so
+  comparisons answer an integer whatever they compared.
+
+Dividing a float by zero is an infinity rather than the error integer
+division gives — there is no integer to hand back — and each shell spells
+the infinity and the NaN its own way.
+
+### A malformed expression is a failed command, not a failed parse
+
+bash and ksh93 report `1` for `$((1.5))`, the status of a command that
+failed, because they find the failure while *expanding*. We find it while
+parsing, so without saying otherwise it would carry the status of a syntax
+error and the decoration one gets. It goes through the same
+`runtimeRefusal` predicate `for` with a bad name already used, which is what
+keeps that one list rather than several.
+
+bash also words two leftovers apart: `arithmetic syntax error in expression`
+when an operand stands where an operator belonged, and `invalid arithmetic
+operator` when the text could be neither. The parser distinguishes them,
+because it is a question about what the text could have been. And a third
+case is neither: `$((.5))` without floats is a missing *operand*, which both
+shells without floats word as such — that site had been reporting a leftover
+operator.
+
+### The bug the feature uncovered
+
+`echo $((2-7))` printed an empty line. In every dialect.
+
+The integer writer was hand-rolled and looped while `n > 0`, so a negative
+number produced no digits at all and every negative arithmetic result
+expanded to nothing — silently, with status 0. Nothing in the corpus had a
+negative result in it, and no *other* caller of that writer could ever pass
+one: the lengths, exit statuses and process ids it also serves are never
+below zero. It went unnoticed because the one caller that could reach it was
+the one nothing tested.
+
+It was found by writing a test for `~1.5`, whose expected answer is `-2`.

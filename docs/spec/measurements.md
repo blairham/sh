@@ -1342,6 +1342,20 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `arith/comma-absent-from-dash` | `<shell>: 1: arithmetic expression: expecting EOF: "1,2"` *(status 2)* | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` |
 | `arith/division-by-zero-is-a-runtime-error` | `<shell>: 1: arithmetic expression: division by zero: "1/0"` *(status 2)* | `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 1)* | `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 127)* | `<shell>: 1/0: division by 0 (error token is "0")` *(status 1)* | `<shell>: 1/0: divide by zero` *(status 1)* | `<shell>:1: division by zero` *(status 1)* |
 | `arith/non-numeric-variable-diverges` | `<shell>: 1: Illegal number: abc` *(status 2)* | `[1]` | `[1]` | `[1]` | `<shell>: abc: parameter not set` *(status 1)* | `[1]` |
+| `arith/integer-division-stays-integer` | `1` | `1` | `1` | `1` | `1` | `1` |
+| `arith/one-float-makes-the-expression-float` | `<shell>: 1: arithmetic expression: expecting EOF: "3.0/2"` *(status 2)* | `<shell>: line 1: 3.0/2: arithmetic syntax error: invalid arithmetic operator (error token is ".0/2")` *(status 1)* | `<shell>: line 1: 3.0/2: arithmetic syntax error: invalid arithmetic operator (error token is ".0/2")` *(status 127)* | `<shell>: 3.0/2: syntax error: invalid arithmetic operator (error token is ".0/2")` *(status 1)* | `1.5` | `1.5` |
+| `arith/a-whole-float-keeps-its-point` | `<shell>: 1: arithmetic expression: expecting EOF: "1.5+2.5"` *(status 2)* | `<shell>: line 1: 1.5+2.5: arithmetic syntax error: invalid arithmetic operator (error token is ".5+2.5")` *(status 1)* | `<shell>: line 1: 1.5+2.5: arithmetic syntax error: invalid arithmetic operator (error token is ".5+2.5")` *(status 127)* | `<shell>: 1.5+2.5: syntax error: invalid arithmetic operator (error token is ".5+2.5")` *(status 1)* | `4` | `4.` |
+| `arith/float-precision-differs` | `<shell>: 1: arithmetic expression: expecting EOF: "0.1+0.2"` *(status 2)* | `<shell>: line 1: 0.1+0.2: arithmetic syntax error: invalid arithmetic operator (error token is ".1+0.2")` *(status 1)* | `<shell>: line 1: 0.1+0.2: arithmetic syntax error: invalid arithmetic operator (error token is ".1+0.2")` *(status 127)* | `<shell>: 0.1+0.2: syntax error: invalid arithmetic operator (error token is ".1+0.2")` *(status 1)* | `0.3` | `0.30000000000000004` |
+| `arith/a-float-may-begin-with-its-point` | `<shell>: 1: arithmetic expression: expecting primary: ".5"` *(status 2)* | `<shell>: line 1: .5: arithmetic syntax error: operand expected (error token is ".5")` *(status 1)* | `<shell>: line 1: .5: arithmetic syntax error: operand expected (error token is ".5")` *(status 127)* | `<shell>: .5: syntax error: operand expected (error token is ".5")` *(status 1)* | `0.5` | `0.5` |
+| `arith/a-float-may-carry-an-exponent` | `<shell>: 1: arithmetic expression: expecting EOF: "1.5e2"` *(status 2)* | `<shell>: line 1: 1.5e2: arithmetic syntax error: invalid arithmetic operator (error token is ".5e2")` *(status 1)* | `<shell>: line 1: 1.5e2: arithmetic syntax error: invalid arithmetic operator (error token is ".5e2")` *(status 127)* | `<shell>: 1.5e2: syntax error: invalid arithmetic operator (error token is ".5e2")` *(status 1)* | `150` | `150.` |
+| `arith/hex-is-not-a-float` | `30` | `30` | `30` | `30` | `30` | `30` |
+| `arith/a-remainder-of-floats` | `<shell>: 1: arithmetic expression: expecting EOF: "7%2.5"` *(status 2)* | `<shell>: line 1: 7%2.5: arithmetic syntax error: invalid arithmetic operator (error token is ".5")` *(status 1)* | `<shell>: line 1: 7%2.5: arithmetic syntax error: invalid arithmetic operator (error token is ".5")` *(status 127)* | `<shell>: 7%2.5: syntax error: invalid arithmetic operator (error token is ".5")` *(status 1)* | `<shell>: 7%2.5: invalid floating point operation` *(status 1)* | `2.` |
+| `arith/a-bitwise-operator-on-a-float` | `<shell>: 1: arithmetic expression: expecting EOF: "1.5 & 1"` *(status 2)* | `<shell>: line 1: 1.5 & 1: arithmetic syntax error: invalid arithmetic operator (error token is ".5 & 1")` *(status 1)* | `<shell>: line 1: 1.5 & 1: arithmetic syntax error: invalid arithmetic operator (error token is ".5 & 1")` *(status 127)* | `<shell>: 1.5 & 1: syntax error: invalid arithmetic operator (error token is ".5 & 1")` *(status 1)* | `<shell>: 1.5 & 1: invalid floating point operation` *(status 1)* | `1` |
+| `arith/comparing-floats-yields-a-truth` | `<shell>: 1: arithmetic expression: expecting EOF: "1.5 < 2"` *(status 2)* | `<shell>: line 1: 1.5 < 2: arithmetic syntax error: invalid arithmetic operator (error token is ".5 < 2")` *(status 1)* | `<shell>: line 1: 1.5 < 2: arithmetic syntax error: invalid arithmetic operator (error token is ".5 < 2")` *(status 127)* | `<shell>: 1.5 < 2: syntax error: invalid arithmetic operator (error token is ".5 < 2")` *(status 1)* | `1` | `1` |
+| `arith/a-float-assignment-outlives-the-expression` | `<shell>: 1: arithmetic expression: expecting EOF: "i+=1.5"` *(status 2)* | `<shell>: line 1: i+=1.5: arithmetic syntax error: invalid arithmetic operator (error token is ".5")` *(status 1)* | `<shell>: line 1: i+=1.5: arithmetic syntax error: invalid arithmetic operator (error token is ".5")` *(status 127)* | `<shell>: i+=1.5: syntax error: invalid arithmetic operator (error token is ".5")` *(status 1)* | `1.5~[1.5]` | `1.5~[1.5]` |
+| `arith/dividing-a-float-by-zero` | `<shell>: 1: arithmetic expression: expecting EOF: "1.0/0"` *(status 2)* | `<shell>: line 1: 1.0/0: arithmetic syntax error: invalid arithmetic operator (error token is ".0/0")` *(status 1)* | `<shell>: line 1: 1.0/0: arithmetic syntax error: invalid arithmetic operator (error token is ".0/0")` *(status 127)* | `<shell>: 1.0/0: syntax error: invalid arithmetic operator (error token is ".0/0")` *(status 1)* | `inf` | `Inf` |
+| `arith/a-negative-result` | `-5 -5 -5 -2` | `-5 -5 -5 -2` | `-5 -5 -5 -2` | `-5 -5 -5 -2` | `-5 -5 -5 -2` | `-5 -5 -5 -2` |
+| `arith/a-negative-result-in-a-variable` | `[-6]` | `[-6]` | `[-6]` | `[-6]` | `[-6]` | `[-6]` |
 
 - `arith/bare-name-is-a-variable` — a bare name inside arithmetic is a variable reference, which is why the contents cannot be lexed as ordinary words
   ```sh
@@ -1410,6 +1424,62 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `arith/non-numeric-variable-diverges` — three answers: dash and ksh93 error differently, while bash and zsh re-evaluate the value as an expression and reach 0
   ```sh
   x=abc; printf "[%s]" "$((x+1))"
+  ```
+- `arith/integer-division-stays-integer` — whole numbers mean the same thing everywhere, floats or not — an expression is integer until a float enters it, which is why the shells with floats still answer 1 here
+  ```sh
+  echo $((3/2))
+  ```
+- `arith/one-float-makes-the-expression-float` — the same division with one operand written as a float, which is the whole difference: 1.5 where the dialect has floats and not a number at all where it does not
+  ```sh
+  echo $((3.0/2))
+  ```
+- `arith/a-whole-float-keeps-its-point` — zsh writes a trailing point so a float still reads as one, and ksh93 writes the integer — same arithmetic, two spellings of four
+  ```sh
+  echo $((1.5+2.5))
+  ```
+- `arith/float-precision-differs` — the classic float, and the two shells show it differently: 15 significant digits rounds it to 0.3 and 17 does not, so the precision is a value the dialect supplies
+  ```sh
+  echo $((0.1+0.2))
+  ```
+- `arith/a-float-may-begin-with-its-point` — `.5` is a literal where the dialect has floats and, where it does not, an operator that cannot be one — which is why the shells without floats blame the point rather than the number it was part of
+  ```sh
+  echo $((.5))
+  ```
+- `arith/a-float-may-carry-an-exponent` — the exponent needs its own scan, because the digit reader accepts `e` as a hex digit and stops at a sign — written with its point so that every dialect divides it into the same tokens, which `1e-3` does not: bash reads `1e` as a number with a bad digit and dash reads `1` and stops
+  ```sh
+  echo $((1.5e2))
+  ```
+- `arith/hex-is-not-a-float` — the counter-case that keeps the exponent scan honest: `0x1e` is an integer whose digits include an `e`, and reading it as one would make it 0
+  ```sh
+  echo $((0x1e))
+  ```
+- `arith/a-remainder-of-floats` — zsh takes a remainder in floating point and ksh93 refuses a float here at all, so `%` is not simply an integer operator in both
+  ```sh
+  echo $((7%2.5))
+  ```
+- `arith/a-bitwise-operator-on-a-float` — and here they part the other way: zsh truncates to an integer and ksh93 refuses, which is the axis — a remainder is not the same question as a bitwise and
+  ```sh
+  echo $((1.5 & 1))
+  ```
+- `arith/comparing-floats-yields-a-truth` — a comparison answers 0 or 1 whatever it compared, so the shell that writes a point after a whole float does not write one here
+  ```sh
+  echo $((1.5 < 2))
+  ```
+- `arith/a-float-assignment-outlives-the-expression` — the value left behind is the float and not its truncation, which is what makes the stored form the dialect's business as much as the printed one
+  ```sh
+  i=0; echo $((i+=1.5)); echo "[$i]"
+  ```
+- `arith/dividing-a-float-by-zero` — an infinity rather than the error the integer division gives, and each shell spells it its own way — there is no integer to hand back, so there is nothing to refuse
+  ```sh
+  echo $((1.0/0))
+  ```
+- `arith/a-negative-result` — every shell prints the minus sign, and nothing in the corpus had a negative result in it — the hand-written integer writer looped while `n > 0`, so all four dialects expanded a negative to nothing at all and `echo $((2-7))` printed an empty line
+  ```sh
+  echo $((2-7)) $((0-5)) $((-5)) $((~1))
+  ```
+- `arith/a-negative-result-in-a-variable` — the same value stored rather than printed, since an assignment writes the number by the same route an expansion does
+  ```sh
+  x=$((3-9)); echo "[$x]"
   ```
 
 ## conditions

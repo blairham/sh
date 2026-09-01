@@ -104,6 +104,8 @@ func Diagnostics() interp.Diagnostics {
 		UnterminatedEndsOnNextLine: true,
 		ArithOperandExpected:       "arithmetic syntax error: operand expected",
 		ArithOperatorExpected:      "arithmetic syntax error in expression",
+		ArithBadOperator:           "arithmetic syntax error: invalid arithmetic operator",
+		ArithFailureStatus:         1,
 		SyntaxUnexpected:           "syntax error near unexpected token `%[1]s'",
 		// A parse failure by every other measure, and 1 rather than this
 		// dialect's syntax-error status.

@@ -20,12 +20,15 @@ func Dialect() syntax.Dialect {
 	// brace group close without a terminator — and what makes `echo }` a
 	// syntax error rather than a brace on the output.
 	d.CloseBraceAlwaysReserved = true
+	// Floating point, which POSIX has not and these two do.
+	d.ArithFloat = true
 	return d
 }
 
 // Semantics is what zsh means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	s.ArithIntegerOperatorRefusesFloat = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.Yes
 	s.AssignmentUpdatesPipelineStatus = interp.No
 	s.UnsetEndsTheProducedPipelineStatus = interp.Yes
@@ -48,7 +51,6 @@ func Semantics() interp.Semantics {
 	s.BraceExpansion = interp.Yes
 	s.BracketCaretNegates = interp.Yes
 	s.EqualsExpansion = interp.Yes
-	s.ArithFloat = interp.Yes
 	s.LastPipelineElementInCurrentShell = interp.Yes
 	s.ShiftPastEndFatal = interp.No
 	s.ArrayBaseIsZero = interp.No
@@ -87,14 +89,18 @@ func Semantics() interp.Semantics {
 // Diagnostics is how zsh reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
-		SelectPrompt:     "?# ",
-		Location:         interp.LocationTightLine,
-		BadSubstitution:  "bad substitution",
-		BadPattern:       "bad pattern: %s",
-		ReadonlyVariable: "read-only variable: %s",
-		TraceQuoting:     interp.QuoteShell,
-		TraceStyle:       interp.TraceNameLine,
-		TraceForHeader:   interp.TraceForAssign,
+		ArithInfinity:        "Inf",
+		ArithNotANumber:      "NaN",
+		ArithFloatDigits:     17,
+		ArithFloatKeepsPoint: true,
+		SelectPrompt:         "?# ",
+		Location:             interp.LocationTightLine,
+		BadSubstitution:      "bad substitution",
+		BadPattern:           "bad pattern: %s",
+		ReadonlyVariable:     "read-only variable: %s",
+		TraceQuoting:         interp.QuoteShell,
+		TraceStyle:           interp.TraceNameLine,
+		TraceForHeader:       interp.TraceForAssign,
 		// zsh names the last token it read and nothing else.
 		EvalNaming:       interp.SourceReplacesShell,
 		SourceFileNaming: interp.SourceReplacesShell,

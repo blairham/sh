@@ -6,6 +6,7 @@ package interp
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -56,13 +57,59 @@ func arithToken(e syntax.ArithExpr) string {
 // detail, because assignment is an operator whose effect outlives the
 // expression: `x=0; $((0 && (x=9)))` must leave x alone. So the logical
 // operators short-circuit here, and nothing evaluates both sides eagerly.
+// arithNum is a value in an arithmetic expression.
+//
+// Two shells in the panel do floating point and two do not, and an expression
+// in the two that do is integer until a float enters it: `3/2` is 1 there as
+// well, and `3.0/2` is 1.5. So a value carries which it is rather than being
+// promoted everywhere, and the promotion happens per operation.
+type arithNum struct {
+	i     int
+	f     float64
+	float bool
+}
+
+func intNum(i int) arithNum       { return arithNum{i: i} }
+func floatNum(f float64) arithNum { return arithNum{f: f, float: true} }
+
+// asFloat is the value as a float, whichever it is.
+func (n arithNum) asFloat() float64 {
+	if n.float {
+		return n.f
+	}
+	return float64(n.i)
+}
+
+// asInt truncates, which is what an integer context does with a float: an
+// array subscript, the truth of `(( ))`, or a shell that has no floats at all.
+func (n arithNum) asInt() int {
+	if n.float {
+		return int(n.f)
+	}
+	return n.i
+}
+
+func (n arithNum) isZero() bool {
+	if n.float {
+		return n.f == 0
+	}
+	return n.i == 0
+}
+
+// evalArith is the integer answer, for the callers that can only use one: an
+// array subscript, the truth test of `(( ))`, the integer attribute.
 func (r *Runner) evalArith(e syntax.ArithExpr) (int, error) {
+	v, err := r.evalNum(e)
+	return v.asInt(), err
+}
+
+func (r *Runner) evalNum(e syntax.ArithExpr) (arithNum, error) {
 	switch x := e.(type) {
 	case nil:
-		return 0, nil
+		return intNum(0), nil
 
 	case *syntax.ArithNum:
-		return r.parseNum(x.Text)
+		return r.parseArithNum(x.Text)
 
 	case *syntax.ArithVar:
 		return r.arithValueOf(x.Name, 0)
@@ -71,14 +118,14 @@ func (r *Runner) evalArith(e syntax.ArithExpr) (int, error) {
 		return r.evalUnary(x)
 
 	case *syntax.ArithCond:
-		c, err := r.evalArith(x.Cond)
+		c, err := r.evalNum(x.Cond)
 		if err != nil {
-			return 0, err
+			return intNum(0), err
 		}
-		if c != 0 {
-			return r.evalArith(x.Then)
+		if !c.isZero() {
+			return r.evalNum(x.Then)
 		}
-		return r.evalArith(x.Else)
+		return r.evalNum(x.Else)
 
 	case *syntax.ArithAssign:
 		return r.evalAssign(x)
@@ -86,26 +133,27 @@ func (r *Runner) evalArith(e syntax.ArithExpr) (int, error) {
 	case *syntax.ArithBinary:
 		return r.evalBinary(x)
 	}
-	return 0, arithError{msg: fmt.Sprintf("unsupported expression %T", e)}
+	return intNum(0), arithError{msg: fmt.Sprintf("unsupported expression %T", e)}
 }
 
-func (r *Runner) evalUnary(x *syntax.ArithUnary) (int, error) {
+func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {
 	// ++ and -- read and write a variable, so they need its name rather than
 	// its value.
 	if x.Op == "++" || x.Op == "--" {
 		v, ok := x.X.(*syntax.ArithVar)
 		if !ok {
-			return 0, arithError{msg: x.Op + " needs a variable"}
+			return intNum(0), arithError{msg: x.Op + " needs a variable"}
 		}
 		old, err := r.arithValueOf(v.Name, 0)
 		if err != nil {
-			return 0, err
+			return intNum(0), err
 		}
-		next := old + 1
+		step := 1.0
 		if x.Op == "--" {
-			next = old - 1
+			step = -1
 		}
-		r.setVar(v.Name, strconv.Itoa(next))
+		next := r.addNum(old, step)
+		r.setVar(v.Name, r.formatNum(next))
 		if x.Postfix {
 			// The difference between the two spellings is what they evaluate
 			// to, not what they do.
@@ -114,73 +162,89 @@ func (r *Runner) evalUnary(x *syntax.ArithUnary) (int, error) {
 		return next, nil
 	}
 
-	v, err := r.evalArith(x.X)
+	v, err := r.evalNum(x.X)
 	if err != nil {
-		return 0, err
+		return intNum(0), err
 	}
 	switch x.Op {
 	case "-":
-		return -v, nil
+		if v.float {
+			return floatNum(-v.f), nil
+		}
+		return intNum(-v.i), nil
 	case "+":
 		return v, nil
 	case "~":
-		return ^v, nil
+		i, err := r.integerOperand(v, "~")
+		if err != nil {
+			return intNum(0), err
+		}
+		return intNum(^i), nil
 	case "!":
-		return boolInt(v == 0), nil
+		return intNum(boolInt(v.isZero())), nil
 	}
-	return 0, arithError{msg: "unknown unary " + x.Op}
+	return intNum(0), arithError{msg: "unknown unary " + x.Op}
 }
 
-func (r *Runner) evalAssign(x *syntax.ArithAssign) (int, error) {
-	v, err := r.evalArith(x.Value)
+// addNum steps a value by one, keeping it whichever kind it was.
+func (r *Runner) addNum(n arithNum, step float64) arithNum {
+	if n.float {
+		return floatNum(n.f + step)
+	}
+	return intNum(n.i + int(step))
+}
+
+func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
+	v, err := r.evalNum(x.Value)
 	if err != nil {
-		return 0, err
+		return intNum(0), err
 	}
 	if x.Op != "=" {
 		old, err := r.arithValueOf(x.Name, 0)
 		if err != nil {
-			return 0, err
+			return intNum(0), err
 		}
 		v, err = r.apply(strings.TrimSuffix(x.Op, "="), old, v)
 		if err != nil {
-			return 0, err
+			return intNum(0), err
 		}
 	}
-	// The side effect that outlives the expression.
-	r.setVar(x.Name, strconv.Itoa(v))
+	// The side effect that outlives the expression, written the way the
+	// dialect writes a number — so `i+=1.5` leaves 1.5 behind and not 1.
+	r.setVar(x.Name, r.formatNum(v))
 	return v, nil
 }
 
-func (r *Runner) evalBinary(x *syntax.ArithBinary) (int, error) {
+func (r *Runner) evalBinary(x *syntax.ArithBinary) (arithNum, error) {
 	// The short-circuiting operators must not evaluate their right side when
 	// the answer is already known, because that side can assign.
 	switch x.Op {
 	case "&&":
-		l, err := r.evalArith(x.X)
-		if err != nil || l == 0 {
-			return 0, err
+		l, err := r.evalNum(x.X)
+		if err != nil || l.isZero() {
+			return intNum(0), err
 		}
-		v, err := r.evalArith(x.Y)
-		return boolInt(v != 0), err
+		v, err := r.evalNum(x.Y)
+		return intNum(boolInt(!v.isZero())), err
 	case "||":
-		l, err := r.evalArith(x.X)
+		l, err := r.evalNum(x.X)
 		if err != nil {
-			return 0, err
+			return intNum(0), err
 		}
-		if l != 0 {
-			return 1, nil
+		if !l.isZero() {
+			return intNum(1), nil
 		}
-		v, err := r.evalArith(x.Y)
-		return boolInt(v != 0), err
+		v, err := r.evalNum(x.Y)
+		return intNum(boolInt(!v.isZero())), err
 	}
 
-	l, err := r.evalArith(x.X)
+	l, err := r.evalNum(x.X)
 	if err != nil {
-		return 0, err
+		return intNum(0), err
 	}
-	rv, err := r.evalArith(x.Y)
+	rv, err := r.evalNum(x.Y)
 	if err != nil {
-		return 0, err
+		return intNum(0), err
 	}
 	if x.Op == "," {
 		// The sequence operator evaluates both and yields the right.
@@ -199,46 +263,145 @@ func (r *Runner) evalBinary(x *syntax.ArithBinary) (int, error) {
 
 // apply is a method because a division by zero is worded by the dialect,
 // and the receiver is named `sh` because `r` is already the right operand.
-func (sh *Runner) apply(op string, l, r int) (int, error) {
+//
+// An operation is floating point when either operand is, and integer
+// otherwise — so `3/2` is 1 even in a shell that has floats, and `3.0/2` is
+// 1.5. A comparison is the exception in the other direction: it answers 0 or 1
+// whatever it compared.
+func (sh *Runner) apply(op string, l, r arithNum) (arithNum, error) {
+	if v, ok, err := sh.compare(op, l, r); ok {
+		return v, err
+	}
+	if l.float || r.float {
+		return sh.applyFloat(op, l, r)
+	}
 	switch op {
 	case "+":
-		return l + r, nil
+		return intNum(l.i + r.i), nil
 	case "-":
-		return l - r, nil
+		return intNum(l.i - r.i), nil
 	case "*":
-		return l * r, nil
+		return intNum(l.i * r.i), nil
 	case "/", "%":
-		if r == 0 {
-			return 0, arithError{msg: Wording(sh.diag().DivisionByZero, "division by zero")}
+		if r.i == 0 {
+			return intNum(0), arithError{msg: Wording(sh.diag().DivisionByZero, "division by zero")}
 		}
 		if op == "/" {
-			return l / r, nil
+			return intNum(l.i / r.i), nil
 		}
-		return l % r, nil
+		return intNum(l.i % r.i), nil
 	case "<<":
-		return l << uint(r), nil
+		return intNum(l.i << uint(r.i)), nil
 	case ">>":
-		return l >> uint(r), nil
-	case "<":
-		return boolInt(l < r), nil
-	case "<=":
-		return boolInt(l <= r), nil
-	case ">":
-		return boolInt(l > r), nil
-	case ">=":
-		return boolInt(l >= r), nil
-	case "==":
-		return boolInt(l == r), nil
-	case "!=":
-		return boolInt(l != r), nil
+		return intNum(l.i >> uint(r.i)), nil
 	case "&":
-		return l & r, nil
+		return intNum(l.i & r.i), nil
 	case "^":
-		return l ^ r, nil
+		return intNum(l.i ^ r.i), nil
 	case "|":
-		return l | r, nil
+		return intNum(l.i | r.i), nil
 	}
-	return 0, arithError{msg: "unknown operator " + op}
+	return intNum(0), arithError{msg: "unknown operator " + op}
+}
+
+// compare answers the operators that yield a truth rather than a number. They
+// are separated because their answer is an integer whatever they compared,
+// which is measured: `1.5 < 2` is 1 and not 1. in the shell that prints a
+// point after a whole float.
+func (sh *Runner) compare(op string, l, r arithNum) (arithNum, bool, error) {
+	if !l.float && !r.float {
+		switch op {
+		case "<":
+			return intNum(boolInt(l.i < r.i)), true, nil
+		case "<=":
+			return intNum(boolInt(l.i <= r.i)), true, nil
+		case ">":
+			return intNum(boolInt(l.i > r.i)), true, nil
+		case ">=":
+			return intNum(boolInt(l.i >= r.i)), true, nil
+		case "==":
+			return intNum(boolInt(l.i == r.i)), true, nil
+		case "!=":
+			return intNum(boolInt(l.i != r.i)), true, nil
+		}
+		return intNum(0), false, nil
+	}
+	a, b := l.asFloat(), r.asFloat()
+	switch op {
+	case "<":
+		return intNum(boolInt(a < b)), true, nil
+	case "<=":
+		return intNum(boolInt(a <= b)), true, nil
+	case ">":
+		return intNum(boolInt(a > b)), true, nil
+	case ">=":
+		return intNum(boolInt(a >= b)), true, nil
+	case "==":
+		return intNum(boolInt(a == b)), true, nil
+	case "!=":
+		return intNum(boolInt(a != b)), true, nil
+	}
+	return intNum(0), false, nil
+}
+
+// applyFloat is apply where at least one operand is a float.
+//
+// Division by zero is not an error here: it is an infinity, which is what both
+// shells with floats produce. The integer path keeps the error, because there
+// is no integer to give back.
+func (sh *Runner) applyFloat(op string, l, r arithNum) (arithNum, error) {
+	a, b := l.asFloat(), r.asFloat()
+	switch op {
+	case "+":
+		return floatNum(a + b), nil
+	case "-":
+		return floatNum(a - b), nil
+	case "*":
+		return floatNum(a * b), nil
+	case "/":
+		return floatNum(a / b), nil
+	case "%":
+		// A remainder is a float operation in one of the two shells with
+		// floats — `7 % 2.5` is 2 there — and refused outright in the other,
+		// which is the same axis the bitwise operators answer.
+		//
+		// Both operands are offered, because either may be the float: `7%2.5`
+		// has a whole number on the left, and asking only about that one let
+		// the refusal through.
+		if _, err := sh.integerOperand(l, op); err != nil {
+			return intNum(0), err
+		}
+		if _, err := sh.integerOperand(r, op); err != nil {
+			return intNum(0), err
+		}
+		return floatNum(math.Mod(a, b)), nil
+	}
+	// Everything else is defined on integers only, and what a float does to
+	// it is the axis: one shell refuses and the other truncates.
+	li, err := sh.integerOperand(l, op)
+	if err != nil {
+		return intNum(0), err
+	}
+	ri, err := sh.integerOperand(r, op)
+	if err != nil {
+		return intNum(0), err
+	}
+	return sh.apply(op, intNum(li), intNum(ri))
+}
+
+// integerOperand is a value where only an integer will do.
+//
+// `1.5 & 1` and `7 % 2.5` are the cases. ksh93 refuses them and zsh truncates,
+// so the axis is asked — and only when the value really is a float, because a
+// shell whose numbers are all integers never reaches the question.
+func (sh *Runner) integerOperand(n arithNum, op string) (int, error) {
+	if !n.float {
+		return n.i, nil
+	}
+	if sh.ask(sh.sem().ArithIntegerOperatorRefusesFloat, "an integer-only operator refusing a float") {
+		return 0, arithError{msg: Wording(sh.diag().ArithInvalidFloatOperation, "invalid floating point operation"), token: op}
+	}
+	return int(n.f), nil
 }
 
 func boolInt(b bool) int {
@@ -257,15 +420,15 @@ func boolInt(b bool) int {
 // three-way divergence, and this takes the two that agree.
 //
 // The depth bound is not decoration: `x=x` would otherwise recur forever.
-func (r *Runner) arithValueOf(name string, depth int) (int, error) {
+func (r *Runner) arithValueOf(name string, depth int) (arithNum, error) {
 	if depth > 32 {
-		return 0, arithError{msg: "expression nested too deeply: " + name}
+		return intNum(0), arithError{msg: "expression nested too deeply: " + name}
 	}
 	value, ok := r.getVar(name)
 	if !ok || strings.TrimSpace(value) == "" {
-		return 0, nil
+		return intNum(0), nil
 	}
-	if n, err := r.parseNum(strings.TrimSpace(value)); err == nil {
+	if n, err := r.parseArithNum(strings.TrimSpace(value)); err == nil {
 		return n, nil
 	}
 	if isNameLike(value) && r.ask(r.sem().ArithNameValueRecurses, "re-evaluating a name-shaped value") {
@@ -273,7 +436,85 @@ func (r *Runner) arithValueOf(name string, depth int) (int, error) {
 	}
 	// Not a number and not a name: an error rather than a silent zero.
 	text := strings.TrimSpace(value)
-	return 0, arithError{msg: r.wordInvalidNumber(text), token: text, complete: true}
+	return intNum(0), arithError{msg: r.wordInvalidNumber(text), token: text, complete: true}
+}
+
+// parseArithNum reads a literal, which may be a float where the dialect has
+// them.
+//
+// The axis is asked only when the text is float-shaped. An expression of whole
+// numbers means the same thing in every shell in the panel, so `3/2` needs no
+// dialect and `3.0/2` does.
+func (r *Runner) parseArithNum(s string) (arithNum, error) {
+	s = strings.TrimSpace(s)
+	if !floatShaped(s) {
+		n, err := r.parseNum(s)
+		return intNum(n), err
+	}
+	if !r.dialect().ArithFloat {
+		// The dialect has no floats, so this is not a number at all. It is
+		// the *grammar* that answers — the parser would not have produced a
+		// float literal here either — which is why this reads the dialect
+		// rather than an axis: one question, asked in the two places that
+		// need it, rather than two fields that could disagree.
+		return intNum(0), arithError{msg: r.wordInvalidNumber(s), token: s}
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return intNum(0), arithError{msg: r.wordInvalidNumber(s), token: s}
+	}
+	return floatNum(f), nil
+}
+
+// floatShaped reports whether a literal can only be a float.
+//
+// A point or an exponent, and not a hex literal — `0x1e5` is an integer whose
+// digits happen to include an `e`, and `16#1f` is one whose base separator is
+// not a point.
+func floatShaped(s string) bool {
+	if s == "" || strings.ContainsAny(s, "#") || strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
+		return false
+	}
+	if strings.Contains(s, ".") {
+		return true
+	}
+	i := strings.IndexAny(s, "eE")
+	// An exponent needs digits before it, or it is a name: `e5` is a
+	// variable and `1e5` is a number.
+	return i > 0 && strings.IndexFunc(s[:i], func(c rune) bool { return c < '0' || c > '9' }) < 0
+}
+
+// formatNum writes a value the way the dialect writes one.
+//
+// Integers are the same everywhere. Floats are not: the two shells that have
+// them disagree on how many digits to show and on whether a whole one keeps
+// its point, so both are the dialect's to answer.
+func (r *Runner) formatNum(n arithNum) string {
+	if !n.float {
+		return itoa(n.i)
+	}
+	// An infinity and a NaN are named rather than formatted, and each shell
+	// names them its own way.
+	switch {
+	case math.IsInf(n.f, 1):
+		return Wording(r.diag().ArithInfinity, "+Inf")
+	case math.IsInf(n.f, -1):
+		return "-" + Wording(r.diag().ArithInfinity, "Inf")
+	case math.IsNaN(n.f):
+		return Wording(r.diag().ArithNotANumber, "NaN")
+	}
+	digits := r.diag().ArithFloatDigits
+	if digits == 0 {
+		digits = 17
+	}
+	out := strconv.FormatFloat(n.f, 'g', digits, 64)
+	if r.diag().ArithFloatKeepsPoint && !strings.ContainsAny(out, ".eEnif") {
+		// A whole float still reads as one: 4 becomes `4.`. Skipped when the
+		// text already carries a point, an exponent, or is an infinity or a
+		// NaN, none of which could be mistaken for an integer.
+		out += "."
+	}
+	return out
 }
 
 func isNameLike(s string) bool {

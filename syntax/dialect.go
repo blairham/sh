@@ -31,6 +31,23 @@ type Dialect struct {
 	// macOS's /bin/sh.
 	CaseFallthrough bool
 
+	// CasePatternAcceptsOperator lets an operator stand where a case pattern
+	// belongs, which produces an arm with no patterns at all.
+	//
+	// Measured rather than inferred from the error it causes, because the
+	// error is not the whole of it: `case a in & ) echo hit;; *) echo miss;;
+	// esac` *parses and runs* in dash, and prints miss — the `&` is consumed
+	// and the arm it opens matches nothing, not even `&` and not even the
+	// empty string. `&a )` then fails at the word and `a& )` at the `&`, so
+	// what dash accepts is one operator where the pattern list would start
+	// and nothing else.
+	//
+	// The other three reject it outright, which is why `;;&` in a dialect
+	// without that terminator reaches a different diagnosis there: dash is
+	// already past the `&` and complaining about the `esac` where the `)`
+	// should be.
+	CasePatternAcceptsOperator bool
+
 	// FuncDefAtParen commits to a function definition as soon as a name is
 	// followed by `(`, rather than requiring the `()` pair.
 	//

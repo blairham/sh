@@ -506,6 +506,18 @@ type Semantics struct {
 	// identically named file in the current directory in all four — this is
 	// only about what happens when PATH does not have it.
 	DotFallsBackToCurrentDirectory Answer
+
+	// TestAcceptsDoubleEqual makes `==` a synonym for `=` in `test` and `[`,
+	// so `test a == a` is a string comparison. True in bash, ksh93 and zsh.
+	//
+	// False in dash, and false does not mean "compares unequal": it means the
+	// word is not an operator at all, so `test a == b` is three words with no
+	// operator among them and is reported as one. The answer therefore has to
+	// come before the comparison, not after it.
+	//
+	// This is only about `test` and `[`. Inside `[[ ]]` the same spelling is
+	// a pattern match, which is a different question entirely.
+	TestAcceptsDoubleEqual Answer
 }
 
 // There is deliberately no CoreSemantics, and the absence is the sharpest
@@ -562,17 +574,20 @@ func PosixSemantics() Semantics {
 		// dash is the panel's POSIX-faithful member and the only one
 		// exiting 2, so the POSIX preset follows it. The standard itself
 		// requires only "greater than zero", which decides nothing.
-		FatalErrorStatusIsOne:              No,
-		ArithNameValueRecurses:             No,
-		BraceExpansion:                     No,
-		BracketCaretNegates:                No,
-		ExitTrapIsFunctionLocal:            No,
-		SignalHandlerSeesEarlierStatus:     No,
-		UnsetPositionalIsAllowed:           No,
-		TraceShowsItsOwnDisabling:          Yes,
-		TraceAssignmentsSeparately:         No,
-		ExitArgument:                       ExitArgStrict,
-		EqualsExpansion:                    No,
+		FatalErrorStatusIsOne:          No,
+		ArithNameValueRecurses:         No,
+		BraceExpansion:                 No,
+		BracketCaretNegates:            No,
+		ExitTrapIsFunctionLocal:        No,
+		SignalHandlerSeesEarlierStatus: No,
+		UnsetPositionalIsAllowed:       No,
+		TraceShowsItsOwnDisabling:      Yes,
+		TraceAssignmentsSeparately:     No,
+		ExitArgument:                   ExitArgStrict,
+		EqualsExpansion:                No,
+		// POSIX gives `test` one spelling of string equality, so `==` is not
+		// an operator; the three shells that accept it added it.
+		TestAcceptsDoubleEqual:             No,
 		ArithInvalidOctalDigitIsError:      Yes,
 		RegexQuotingMakesLiteral:           No,
 		LastPipelineElementInCurrentShell:  No,

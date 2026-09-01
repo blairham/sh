@@ -135,3 +135,44 @@ func TestAFailedExecDropsTheExitTrap(t *testing.T) {
 		t.Errorf("status = %d, want 127", st)
 	}
 }
+
+// TestDoubleEqualInTest: zsh takes `==` as a second spelling of `=`, and is
+// the one dialect where it has to be quoted to reach the builtin at all — an
+// unquoted word starting with `=` is expanded to the path of the command
+// named after it, so bare `==` is a search for a command called `=`. Real zsh
+// says "= not found" and exits 1, and so do we.
+func TestDoubleEqualInTest(t *testing.T) {
+	dir := t.TempDir()
+	if _, st := runZsh(t, dir, `test a "==" a`); st != 0 {
+		t.Errorf("equal operands: status %d, want 0", st)
+	}
+	if _, st := runZsh(t, dir, `test a "==" b`); st != 1 {
+		t.Errorf("unequal operands: status %d, want 1", st)
+	}
+	// The single `=` is unanimous, and pins the difference to the operator
+	// rather than to anything else about how the words are read.
+	if _, st := runZsh(t, dir, `test a = a`); st != 0 {
+		t.Errorf("single equals: status %d, want 0", st)
+	}
+	// Unquoted, the expansion gets it first and the builtin never sees it.
+	if out, st := runZsh(t, dir, `test a == a`); st != 1 || !strings.Contains(out, "not found") {
+		t.Errorf("unquoted: %q status %d, want the `=` expansion to miss", out, st)
+	}
+}
+
+// TestABracketNamesItself: `[` is `test` under another name, and the
+// diagnostic blames the name that was typed. Run rather than asserted against
+// the wording string, since the wording is what would be wrong.
+func TestABracketNamesItself(t *testing.T) {
+	dir := t.TempDir()
+	if out, _ := runZsh(t, dir, `test 1 -eq a`); !strings.Contains(out, `:test:`) {
+		t.Errorf("test: said %q, want %q", out, `:test:`)
+	}
+	if out, _ := runZsh(t, dir, `[ 1 -eq a ]`); !strings.Contains(out, `:[:`) {
+		t.Errorf("bracket: said %q, want %q", out, `:[:`)
+	}
+	// The unary wording is a separate string and carries the name too.
+	if out, _ := runZsh(t, dir, `[ -Q x ]`); !strings.Contains(out, `:[:`) {
+		t.Errorf("unary bracket: said %q, want %q", out, `:[:`)
+	}
+}

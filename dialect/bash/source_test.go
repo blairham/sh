@@ -169,3 +169,36 @@ func TestAFailedExecRunsTheExitTrap(t *testing.T) {
 		t.Errorf("status = %d, want 127", st)
 	}
 }
+
+// TestDoubleEqualInTest: bash takes `==` as a second spelling of `=`.
+func TestDoubleEqualInTest(t *testing.T) {
+	dir := t.TempDir()
+	if _, st := runBash(t, dir, `test a == a`); st != 0 {
+		t.Errorf("equal operands: status %d, want 0", st)
+	}
+	if _, st := runBash(t, dir, `test a == b`); st != 1 {
+		t.Errorf("unequal operands: status %d, want 1", st)
+	}
+	// The single `=` is unanimous, and pins the difference to the operator
+	// rather than to anything else about how the words are read.
+	if _, st := runBash(t, dir, `test a = a`); st != 0 {
+		t.Errorf("single equals: status %d, want 0", st)
+	}
+}
+
+// TestABracketNamesItself: `[` is `test` under another name, and the
+// diagnostic blames the name that was typed. Run rather than asserted against
+// the wording string, since the wording is what would be wrong.
+func TestABracketNamesItself(t *testing.T) {
+	dir := t.TempDir()
+	if out, _ := runBash(t, dir, `test a b c`); !strings.Contains(out, `test: b: binary operator expected`) {
+		t.Errorf("test: said %q, want %q", out, `test: b: binary operator expected`)
+	}
+	if out, _ := runBash(t, dir, `[ a b c ]`); !strings.Contains(out, `[: b: binary operator expected`) {
+		t.Errorf("bracket: said %q, want %q", out, `[: b: binary operator expected`)
+	}
+	// The unary wording is a separate string and carries the name too.
+	if out, _ := runBash(t, dir, `[ -Q x ]`); !strings.Contains(out, `[: -Q: unary operator expected`) {
+		t.Errorf("unary bracket: said %q, want %q", out, `[: -Q: unary operator expected`)
+	}
+}

@@ -66,6 +66,7 @@ func Semantics() interp.Semantics {
 	// still run it.
 	s.ExecFailureRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes
+	s.TestAcceptsDoubleEqual = interp.Yes
 	// Alone in refusing an argument to `times`; dash and bash ignore it.
 	s.TimesRejectsArguments = interp.Yes
 	s.UnterminatedBracket = interp.BracketBadPattern

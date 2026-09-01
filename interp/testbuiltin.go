@@ -72,7 +72,12 @@ func (r *Runner) runTest(name string, args []string) int {
 				r.inBuiltin = ""
 				defer func() { r.inBuiltin = outer }()
 			}
-			r.diagf("%s\n", Wording(te.format(r.diag()), te.fallback(), te.operand))
+			// The name is the word that was typed. `[` is `test` under
+			// another name, and every shell in the panel blames the name it
+			// was called by rather than a fixed one — including zsh, which
+			// carries it in the location instead of the message and so needs
+			// nothing here.
+			r.diagf("%s\n", Wording(te.format(r.diag()), te.fallback(), te.operand, name))
 		} else {
 			r.diagf("%s: %v\n", name, err)
 		}
@@ -116,15 +121,15 @@ func (e *testError) Error() string { return e.fallback() }
 func (e *testError) fallback() string {
 	switch e.kind {
 	case errOperandExpected:
-		return "test: argument expected"
+		return "%[2]s: argument expected"
 	case errTooManyArguments:
-		return "test: too many arguments"
+		return "%[2]s: too many arguments"
 	case errIntegerExpected:
-		return "test: %[1]s: integer expected"
+		return "%[2]s: %[1]s: integer expected"
 	case errBinaryExpected:
-		return "test: %[1]s: binary operator expected"
+		return "%[2]s: %[1]s: binary operator expected"
 	}
-	return "test: %[1]s: unary operator expected"
+	return "%[2]s: %[1]s: unary operator expected"
 }
 
 func (e *testError) format(d Diagnostics) string {
@@ -385,6 +390,17 @@ func (r *Runner) binaryTest(left, op, right string) (bool, error, bool) {
 		// A *string* comparison, and never a pattern. `[[ abc == a* ]]` is
 		// true and `test abc = a*` is false, which is the sharpest difference
 		// between the two constructs and is unanimous across the panel.
+		return left == right, nil, true
+	case "==":
+		// Where the answer is no, `==` is not an operator at all — so the
+		// caller has to be told this was not handled and go on to read the
+		// three words some other way, which is how dash arrives at
+		// "unexpected operator". Refusing to guess is the one case that
+		// still counts as handled: the refusal has already been reported and
+		// a second complaint about the same words would only obscure it.
+		if !r.ask(r.sem().TestAcceptsDoubleEqual, "`test a == b`") {
+			return false, nil, r.unspecified
+		}
 		return left == right, nil, true
 	case "!=":
 		return left != right, nil, true

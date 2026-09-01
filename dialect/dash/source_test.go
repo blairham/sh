@@ -156,3 +156,36 @@ func TestExecAxes(t *testing.T) {
 		t.Error("dash reports execve's own error for a directory")
 	}
 }
+
+// TestDoubleEqualInTest: dash has only `=`, so `==` is not an operator and the three words are a malformed expression — 2 for both pairs of operands, where the others answer 0 and 1.
+func TestDoubleEqualInTest(t *testing.T) {
+	dir := t.TempDir()
+	if _, st := runDash(t, dir, `test a == a`); st != 2 {
+		t.Errorf("equal operands: status %d, want 2", st)
+	}
+	if _, st := runDash(t, dir, `test a == b`); st != 2 {
+		t.Errorf("unequal operands: status %d, want 2", st)
+	}
+	// The single `=` is unanimous, and pins the difference to the operator
+	// rather than to anything else about how the words are read.
+	if _, st := runDash(t, dir, `test a = a`); st != 0 {
+		t.Errorf("single equals: status %d, want 0", st)
+	}
+}
+
+// TestABracketNamesItself: `[` is `test` under another name, and the
+// diagnostic blames the name that was typed. Run rather than asserted against
+// the wording string, since the wording is what would be wrong.
+func TestABracketNamesItself(t *testing.T) {
+	dir := t.TempDir()
+	if out, _ := runDash(t, dir, `test a b c`); !strings.Contains(out, `test: a: unexpected operator`) {
+		t.Errorf("test: said %q, want %q", out, `test: a: unexpected operator`)
+	}
+	if out, _ := runDash(t, dir, `[ a b c ]`); !strings.Contains(out, `[: a: unexpected operator`) {
+		t.Errorf("bracket: said %q, want %q", out, `[: a: unexpected operator`)
+	}
+	// The unary wording is a separate string and carries the name too.
+	if out, _ := runDash(t, dir, `[ -Q x ]`); !strings.Contains(out, `[: -Q: unexpected operator`) {
+		t.Errorf("unary bracket: said %q, want %q", out, `[: -Q: unexpected operator`)
+	}
+}

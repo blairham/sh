@@ -236,3 +236,13 @@ func TestARedirectFailure(t *testing.T) {
 		t.Errorf("create: said %q, want %q", got, `dash: 1: cannot create nodir/out: Directory nonexistent`)
 	}
 }
+
+// TestSetOInABundle: `-o` as the last letter of a bundle, which is how every
+// real script writes it.
+func TestSetOInABundle(t *testing.T) {
+	dir := t.TempDir()
+	out, _ := runDash(t, dir, "set -uo noglob\necho ok=$?\necho *\n")
+	if !strings.Contains(out, "ok=0") || !strings.Contains(out, "*") {
+		t.Errorf("said %q, want the bundle's letters and its named option", out)
+	}
+}

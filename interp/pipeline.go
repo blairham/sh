@@ -185,6 +185,16 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline) error {
 	// is exactly why the others are worth keeping.
 	r.recordPipeStatus(statuses)
 	r.status = statuses[n-1]
+	if r.pipefail && r.status == 0 {
+		// Recorded before the status changes, because "only pipefail saw it"
+		// means exactly that the last element did not.
+		for _, st := range statuses {
+			if st != 0 {
+				r.pipefailRaised = true
+				break
+			}
+		}
+	}
 	if r.pipefail {
 		// The last failure rather than the first: `false | false | true` is
 		// 1 either way, but where two elements fail with different statuses

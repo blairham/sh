@@ -545,6 +545,18 @@ type Semantics struct {
 	// its last element — which is the answer a script guarding against a
 	// failure upstream is specifically trying not to get.
 	PipefailOption Answer
+
+	// ErrexitSeesPipefailFailure lets `set -e` stop for a failure that only
+	// pipefail produced — a pipeline whose last element succeeded and whose
+	// earlier one did not. True in bash and zsh; false in ksh93, which runs
+	// on.
+	//
+	// Absent rather than false in dash, which has no pipefail, so the
+	// question cannot arise there and is never asked.
+	//
+	// Narrower than it looks: an ordinary failing pipeline — `true | false` —
+	// stops all three, and this is only about the failure the option adds.
+	ErrexitSeesPipefailFailure Answer
 }
 
 // There is deliberately no CoreSemantics, and the absence is the sharpest

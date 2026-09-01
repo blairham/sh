@@ -72,6 +72,7 @@ func Semantics() interp.Semantics {
 	s.TestAcceptsDoubleEqual = interp.Yes
 	s.SignalDeathStatusIsTwoFiftySix = interp.Yes
 	s.PipefailOption = interp.Yes
+	s.ErrexitSeesPipefailFailure = interp.No
 	// Alone in the panel: `PATH=` finds nothing here, where dash, bash and
 	// zsh still search the current directory.
 	s.EmptyPathIsTheCurrentDirectory = interp.No

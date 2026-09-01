@@ -120,11 +120,20 @@ func biSet(r *Runner, _ context.Context, args []string) int {
 			break
 		}
 		on := a[0] == '-'
-		if a[1:] == "o" {
-			// The long spelling, whose name is the next word. Every option
-			// this shell has can be written either way, and every shell in
-			// the panel uses the same names for them — which is what makes
-			// the long form the one that needs no dialect.
+		// The long spelling, whose name is the next word. Every option this
+		// shell has can be written either way, and every shell in the panel
+		// uses the same names for them — which is what makes the long form
+		// the one that needs no dialect.
+		//
+		// `o` is read where it sits rather than only as a word of its own,
+		// because it is nearly always the last letter of a bundle:
+		// `set -euo pipefail` is the line at the top of a great many scripts,
+		// and it was refused outright. The letters before it are ordinary
+		// letters and still apply.
+		if letters, ok := strings.CutSuffix(a[1:], "o"); ok {
+			if !r.setLetters(letters, on) {
+				return 2
+			}
 			if i+1 >= len(args) {
 				r.diagf("set: -o needs an option name\n")
 				return 2
@@ -135,28 +144,8 @@ func biSet(r *Runner, _ context.Context, args []string) int {
 			}
 			continue
 		}
-		for _, opt := range a[1:] {
-			switch opt {
-			case 'C':
-				r.noclobber = on
-			case 'e':
-				r.errexit = on
-			case 'u':
-				r.nounset = on
-			case 'x':
-				r.xtrace = on
-			case 'f':
-				// Not universal: one shell spells this option the long way
-				// only and uses `-f` for something else, which does not
-				// touch globbing. Asked rather than assumed, and only here —
-				// `set -o noglob` needs no dialect.
-				if r.ask(r.sem().SetFTurnsOffGlobbing, "`set -f` turning off pathname expansion") {
-					r.noglob = on
-				}
-			default:
-				r.diagf("set: -%c is not implemented\n", opt)
-				return 2
-			}
+		if !r.setLetters(a[1:], on) {
+			return 2
 		}
 	}
 	// `set -C` alone sets an option and leaves the parameters alone; only an
@@ -165,6 +154,40 @@ func biSet(r *Runner, _ context.Context, args []string) int {
 		r.Params = append([]string(nil), args[i:]...)
 	}
 	return 0
+}
+
+// setLetters applies the short spelling, reporting whether every letter was
+// one this shell has.
+//
+// Split out of the loop above so a bundle ending in `o` can apply the letters
+// before it and then read the name that follows — `set -euo pipefail` is
+// errexit and nounset as well as pipefail, and dropping either half of that
+// would be worse than refusing the whole line.
+func (r *Runner) setLetters(letters string, on bool) bool {
+	for _, opt := range letters {
+		switch opt {
+		case 'C':
+			r.noclobber = on
+		case 'e':
+			r.errexit = on
+		case 'u':
+			r.nounset = on
+		case 'x':
+			r.xtrace = on
+		case 'f':
+			// Not universal: one shell spells this option the long way only
+			// and uses `-f` for something else, which does not touch
+			// globbing. Asked rather than assumed, and only here — `set -o
+			// noglob` needs no dialect.
+			if r.ask(r.sem().SetFTurnsOffGlobbing, "`set -f` turning off pathname expansion") {
+				r.noglob = on
+			}
+		default:
+			r.diagf("set: -%c is not implemented\n", opt)
+			return false
+		}
+	}
+	return true
 }
 
 // setOption applies `set -o name`, reporting whether the name is one we have.

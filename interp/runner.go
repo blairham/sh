@@ -259,6 +259,16 @@ type Runner struct {
 	// element instead of its last one. Not every dialect has the option, so
 	// the field is only ever set through an axis.
 	pipefail bool
+
+	// pipefailRaised says the statement just run reported a failure that only
+	// pipefail produced — its last element succeeded and an earlier one did
+	// not. Kept because one shell's `set -e` does not count that as a failure
+	// worth stopping for, which is a question only askable about this exact
+	// case.
+	//
+	// Set for every pipeline, not only failing ones, so a stale yes cannot
+	// outlive the statement that earned it.
+	pipefailRaised bool
 	// declaring names commands whose `name=value` arguments are assignments,
 	// beyond the ones the core already knows. A dialect adds its own.
 	declaring map[string]bool
@@ -575,11 +585,20 @@ func lastIsNegated(e syntax.Expr) bool {
 // shells use: `false | true` does not fire and `true | false` does, and both
 // are one statement whose status is the pipeline's.
 func (r *Runner) checkErrExit() {
-	if r.errexit && r.tested == 0 && r.status != 0 && r.ctl == controlNone {
-		// The status is the failing command's, not a status of its own —
-		// `set -e; exit` reports what failed.
-		r.ctl = controlExit
+	if !r.errexit || r.tested != 0 || r.status == 0 || r.ctl != controlNone {
+		return
 	}
+	// Asked only here, where the answer decides something. A pipeline whose
+	// failure came only from pipefail is a failure one shell does not stop
+	// for — but with `set -e` off, or with the statement's failure already
+	// accounted for, nothing turns on it and the core must not refuse.
+	if r.pipefailRaised &&
+		!r.ask(r.sem().ErrexitSeesPipefailFailure, "`set -e` stopping for a failure only pipefail saw") {
+		return
+	}
+	// The status is the failing command's, not a status of its own —
+	// `set -e; exit` reports what failed.
+	r.ctl = controlExit
 }
 
 func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
@@ -618,6 +637,7 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 }
 
 func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
+	r.pipefailRaised = false
 	if len(p.Cmds) == 1 {
 		if err := r.command(ctx, p.Cmds[0]); err != nil {
 			return err

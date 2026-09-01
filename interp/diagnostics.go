@@ -303,6 +303,8 @@ type Diagnostics struct {
 	//	%[3]s  the innermost unclosed keyword, `then` inside an `if`
 	//	%[4]s  the word that would have closed it, `fi`
 	//	%[5]s  the last token before the input ran out
+	//	%[6]d  the line the failure is on, for a dialect that has no location
+	//	       of its own to put it in
 	//
 	// bash names the first two, ksh93 the third, dash the fourth and zsh the
 	// fifth. Empty means the substrate's own, which names the construct.
@@ -435,6 +437,29 @@ func Wording(custom, fallback string, args ...any) string {
 	return fmt.Sprintf(custom, args...)
 }
 
+// escapeToken spells a token the way a diagnostic can print it: a newline is
+// the one that arrives as itself and has to be written rather than obeyed.
+func escapeToken(s string) string {
+	switch s {
+	case "\n":
+		return `\n`
+	case "":
+		return s
+	}
+	return s
+}
+
+// parseErrorLine is where a parse failure happened, or 0 if the error does not
+// say. A caller reporting borrowed text needs it: the line that matters is the
+// one inside the text, not the line the builtin was called on.
+func parseErrorLine(err error) int {
+	var se *syntax.Error
+	if errors.As(err, &se) {
+		return se.Pos.Line
+	}
+	return 0
+}
+
 // ParseFailure words a parse error the way this dialect words it.
 //
 // It lives here rather than in the front end because the front end is not the
@@ -454,7 +479,8 @@ func (d Diagnostics) ParseFailure(err error) string {
 		return Wording(d.BadSubstitution, se.Msg)
 	case syntax.ErrUnterminated:
 		return Wording(d.Unterminated, "syntax error: unterminated %[1]s",
-			se.Construct, se.ConstructLine, se.Innermost, se.Expected, se.LastToken)
+			se.Construct, se.ConstructLine, se.Innermost, se.Expected,
+			escapeToken(se.LastToken), se.Pos.Line)
 	}
 	return Wording(d.SyntaxError, "%s", se.Msg)
 }

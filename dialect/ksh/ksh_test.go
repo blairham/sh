@@ -136,6 +136,10 @@ func TestUnterminatedNamesTheInnermostUnclosedKeyword(t *testing.T) {
 		{"if true; then echo x; else echo y", "syntax error at line 1: `else' unmatched"},
 		{"while true; do echo x", "syntax error at line 1: `do' unmatched"},
 		{"for i in a; do echo x", "syntax error at line 1: `for' unmatched"},
+		// The line ksh93 embeds is where the input ran out, not where the
+		// construct began — the two differ only across lines, which is why a
+		// single-line case could not tell them apart.
+		{"if true; then\necho x", "syntax error at line 2: `then' unmatched"},
 	} {
 		_, err := syntax.Parse(tc.src, ksh.Dialect())
 		if got := ksh.Diagnostics().ParseFailure(err); got != tc.want {

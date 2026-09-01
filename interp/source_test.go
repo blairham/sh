@@ -67,6 +67,30 @@ func write(t *testing.T, dir, name, body string) string {
 	return path
 }
 
+// TestBorrowedTextReportsItsOwnLine pins where a parse failure inside `.` or
+// `eval` says it happened.
+//
+// The line that matters is the one inside the borrowed text, not the line the
+// builtin was called on — every shell in the panel reports the former, and
+// this reported the latter for all of them. The wording is the substrate's
+// here; what each dialect does with the same number is measured in dialect/.
+func TestBorrowedTextReportsItsOwnLine(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "late.sh", "echo one\necho two\nif\n")
+
+	// The `.` is on line 3 of the caller and the failure is on line 4 of the
+	// file, so a test that got them the wrong way round could not pass by
+	// accident.
+	out, _ := sourceRun(t, dir, "echo a\necho b\n. ./late.sh\n", permissive(),
+		Diagnostics{Location: LocationLineWord, Unterminated: "unfinished %[1]s"})
+	if !strings.Contains(out, "line 4: ") {
+		t.Errorf("got %q, want the failure's own line 4", out)
+	}
+	if strings.Contains(out, "line 3: ") {
+		t.Errorf("got %q, want the file's line rather than the caller's", out)
+	}
+}
+
 // TestEvalRunsInTheCallingShell is the whole point of eval being a builtin
 // rather than a command: a child process could not do this.
 func TestEvalRunsInTheCallingShell(t *testing.T) {

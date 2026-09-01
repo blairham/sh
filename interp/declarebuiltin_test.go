@@ -72,7 +72,7 @@ func TestAnAssignmentIsNotAGlobbingOrSplittingContext(t *testing.T) {
 	// back unchanged whether or not the value was protected — which is a test
 	// that passes against the bug. A file the whole word can match is what
 	// makes the assertion bite.
-	dir := fileDir(t, "a.txt", "b.txt", "E=x", "R=x", "T=x", "L=x")
+	dir := fileDir(t, "a.txt", "b.txt", "E=x", "R=x", "T=x", "L=x", "x=yz")
 	inDir := func(r *Runner) { r.Dir = dir }
 	for _, tc := range []struct{ src, want string }{
 		{`n=*; echo "$n"`, "*"},
@@ -86,8 +86,12 @@ func TestAnAssignmentIsNotAGlobbingOrSplittingContext(t *testing.T) {
 		{`readonly R=*; echo "$R"`, "*"},
 		{`typeset T=*; echo "$T"`, "*"},
 		{`f() { local L=*; echo "$L"; }; f`, "*"},
-		// Only a word shaped like one: an argument that is not `name=value`
-		// is an ordinary word and still globs.
+		// Only a word shaped like one, and the shape has to be in the word
+		// as written. Quoting the `name=` prefix takes it out of assignment
+		// context and the whole word globs — measured, and the reason the
+		// test is on the span's quoting rather than only on its text.
+		{`typeset "x=y"*; echo "$x"`, "yz"},
+		// An argument that is not `name=value` at all is an ordinary word.
 		{`typeset -i n=1; echo *.txt`, "a.txt b.txt"},
 	} {
 		if out, _ := run(t, tc.src, inDir); strings.TrimSpace(out) != tc.want {

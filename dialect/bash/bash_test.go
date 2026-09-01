@@ -6,6 +6,8 @@ package bash_test
 import (
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -230,22 +232,30 @@ func TestParametersBashProvides(t *testing.T) {
 // TestBothDeclarationNames: bash spells the declaration two ways, and the
 // assignment rule follows the second name as well as the first.
 func TestBothDeclarationNames(t *testing.T) {
+	// A file the unprotected word would match, so the assertion distinguishes
+	// the two paths. Without one, `declare x=*` matches nothing and comes
+	// back as `x=*` whether or not the value was ever protected — which is a
+	// test that passes against the bug.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "x=a"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	for _, name := range []string{"typeset", "declare"} {
-		f, err := syntax.Parse(name+` -i n=3*3; echo "$n"`, bash.Dialect())
+		f, err := syntax.Parse(name+` x=*; echo "$x"`, bash.Dialect())
 		if err != nil {
 			t.Fatal(err)
 		}
 		var out bytes.Buffer
 		s, d := bash.Semantics(), bash.Diagnostics()
-		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d, Dir: dir}
 		bash.Apply(r)
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)
 		}
-		// 9 rather than the pattern: the value is an assignment's and is
-		// neither globbed nor split, and the integer attribute evaluates it.
-		if strings.TrimSpace(out.String()) != "9" {
-			t.Errorf("%s: got %q, want 9", name, out.String())
+		// The character, not the file it would have matched: the assignment
+		// rule follows the second name as well as the first.
+		if strings.TrimSpace(out.String()) != "*" {
+			t.Errorf("%s: got %q, want the pattern left alone", name, out.String())
 		}
 	}
 }

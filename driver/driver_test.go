@@ -434,3 +434,30 @@ func TestPositionalParametersSurviveTheShell(t *testing.T) {
 		t.Errorf("got %q, want %q", out, want)
 	}
 }
+
+// TestStandardInputKeepsTheShellsName: reading the script from standard input
+// is the third naming rule — the shell stays `$0` and *every* operand is a
+// parameter, since none of them was the script.
+//
+// The front end reads the process's own standard input, so the test replaces
+// it. That is the only way to reach this route, and leaving it untested is
+// what let the operands be dropped without anything noticing.
+func TestStandardInputKeepsTheShellsName(t *testing.T) {
+	path := writeScript(t, `echo "0=[$0] n=$# 1=[$1] at=[$@]"`+"\n")
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	saved := os.Stdin
+	os.Stdin = f
+	defer func() { os.Stdin = saved }()
+
+	out, errs, _ := runArgs(t, shell(), "testsh", "-s", "a", "b")
+	if errs != "" {
+		t.Fatalf("stderr: %s", errs)
+	}
+	if want := "0=[testsh] n=2 1=[a] at=[a b]"; strings.TrimSpace(out) != want {
+		t.Errorf("got  %s\nwant %s", strings.TrimSpace(out), want)
+	}
+}

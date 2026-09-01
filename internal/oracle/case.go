@@ -1937,6 +1937,16 @@ var Corpus = []Case{
 		Why:     "the other half of that reading: the subject that zsh matches and the extended-pattern shells do not, which is what proves the two are reading the same text by different rules",
 	},
 	{
+		ID: "pat/a-nested-group-needs-no-quantifier", Category: "pattern matching", SyntaxError: true,
+		Snippet: `case b in @(a|(b))) echo y;; *) echo n;; esac`,
+		Why:     "ksh93 needs a quantifier at the top level and not inside a group, so `@(a|(b))` matches b there — the lexer is what refuses the bare one, and by the time the matcher sees text it came from somewhere the dialect allows",
+	},
+	{
+		ID: "pat/a-subshell-is-not-a-group", Category: "pattern matching",
+		Snippet: `(echo hi)`,
+		Why:     "the third thing a group must not swallow: a `(` that begins a word opens a subshell, so a group is only ever read mid-word",
+	},
+	{
 		ID: "pat/an-empty-group-is-a-function", Category: "pattern matching",
 		Snippet: `f() { echo hi; }; f`,
 		Why:     "the case that keeps a bare group from eating a function definition: `()` is empty, and the shell with bare groups rejects an empty one as a pattern, so the definition always wins",

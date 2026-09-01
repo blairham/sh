@@ -6874,6 +6874,70 @@
         "TimedOut": false
       }
     },
+    "pat/a-nested-group-needs-no-quantifier": {
+      "bash": {
+        "Output": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 1: `case b in @(a|(b))) echo y;; *) echo n;; esac'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 1: `case b in @(a|(b))) echo y;; *) echo n;; esac'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `('~\u003cshell\u003e: -c: line 0: `case b in @(a|(b))) echo y;; *) echo n;; esac'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected (expecting \")\")",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "y",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "n",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "pat/a-subshell-is-not-a-group": {
+      "bash": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "pat/an-array-literal-is-not-a-group": {
       "bash": {
         "Output": "[x y]",

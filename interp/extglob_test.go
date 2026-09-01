@@ -117,3 +117,71 @@ func TestWithoutAFlagAGroupIsNotOne(t *testing.T) {
 		}
 	}
 }
+
+// runWith executes src under a dialect with the given pattern grammar. These
+// are behaviour rather than parsing: the lexer's exceptions all *parse* either
+// way, and only what they produce tells them apart.
+func runWith(t *testing.T, src string, extended, alternation bool) string {
+	t.Helper()
+	d := syntax.Core()
+	d.ExtendedPattern, d.PatternAlternation = extended, alternation
+	f, err := syntax.Parse(src, d)
+	if err != nil {
+		return "parse: " + err.Error()
+	}
+	var out bytes.Buffer
+	s := PosixSemantics()
+	r := &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &s}
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSpace(out.String())
+}
+
+// Three things a group must not swallow. Each of them still parses when the
+// rule is too wide, which is why none of these can be a parsing test: the
+// difference is only in what the word turns out to be.
+func TestAGroupDoesNotSwallowWhatIsNotOne(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		// A `(` that starts a word opens a subshell. Absorbed into the word,
+		// `(echo hi)` becomes a command with that name.
+		{"a subshell", `(echo hi)`, "hi"},
+		// An empty `()` is a function definition.
+		{"a function definition", `f() { echo hi; }; f`, "hi"},
+		// A `(` straight after `=` opens an array literal. Absorbed, the
+		// value becomes the text `(x y)`.
+		{"an array literal", `a=(x y); echo "${a[@]}" ${#a[@]}`, "x y 2"},
+		{"an array literal in a function", `f() { a=(x y); echo "${a[0]}"; }; f`, "x"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := runWith(t, tc.src, false, true); got != tc.want {
+				t.Errorf("with bare groups: got %q, want %q", got, tc.want)
+			}
+			// And the same under the other flag, and under neither.
+			if got := runWith(t, tc.src, true, false); got != tc.want {
+				t.Errorf("with quantified groups: got %q, want %q", got, tc.want)
+			}
+			if got := runWith(t, tc.src, false, false); got != tc.want {
+				t.Errorf("with no groups at all: got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// A group nested inside a group needs no quantifier of its own, even in the
+// dialect that requires one at the top level: `@(a|(b))` matches b there,
+// while `a(b|c)` on its own is a syntax error. The lexer refuses the second,
+// so by the time text reaches the matcher a bare paren came from somewhere the
+// dialect allows.
+func TestANestedGroupNeedsNoQuantifier(t *testing.T) {
+	for _, tc := range []struct{ subject, pattern, want string }{
+		{"b", "@(a|(b))", "yes"},
+		{"a", "@(a|(b))", "yes"},
+		{"(b)", "@(a|(b))", "no"},
+		{"c", "@(a|(b))", "no"},
+	} {
+		if got := matchWith(t, tc.subject, tc.pattern, true, false); got != tc.want {
+			t.Errorf("%s against %s = %s, want %s", tc.subject, tc.pattern, got, tc.want)
+		}
+	}
+}

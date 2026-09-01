@@ -157,7 +157,17 @@ func splitGroup(p string, o patternOpts) (body string, quant byte, rest string, 
 		}
 	}
 	if quant == 0 {
-		if !o.group || p[0] != '(' {
+		// A bare `(`. The dialect with bare groups takes one anywhere; the
+		// dialect with quantified ones takes it *inside* a group, which is
+		// measured — `@(a|(b))` matches b in ksh93, so the nested group is a
+		// group there even though `a(b|c)` at the top level is a syntax
+		// error. The lexer is what refuses that one, so by the time text
+		// reaches here a bare paren can only have come from somewhere the
+		// dialect allows it.
+		if !o.group && !o.quantified {
+			return "", 0, "", false
+		}
+		if p[0] != '(' {
 			return "", 0, "", false
 		}
 	}

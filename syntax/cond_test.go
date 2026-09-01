@@ -195,10 +195,10 @@ func TestABareAlternationInARegexIsADialectAnswer(t *testing.T) {
 	mustParse(t, `[[ ab =~ (a|b) ]]`, Core(), "an alternation inside a group")
 }
 
-// TestRegexModeEndsWithTheOperand: the rule is scoped to the one word after
-// `=~`, so what follows is the shell's again. Without clearing it, a group
-// later in the same condition would be swallowed into a word.
-func TestRegexModeEndsWithTheOperand(t *testing.T) {
+// TestRegexModeEndsWithTheOperandParses: the shapes below have to parse. That
+// they parse is not enough to show the rule is scoped — a group swallowed
+// into a word parses too — so what they *answer* is checked in interp.
+func TestRegexModeEndsWithTheOperandParses(t *testing.T) {
 	for _, src := range []string{
 		`[[ abc =~ b && (a = a) ]]`,
 		`[[ abc =~ b ]] && ( echo sub )`,

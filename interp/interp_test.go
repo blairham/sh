@@ -439,3 +439,23 @@ func TestAHeredocBodyIsNotAWord(t *testing.T) {
 		})
 	}
 }
+
+// TestRegexModeEndsWithTheOperand: after the regular expression, a `(` is the
+// shell's again — grouping inside the condition rather than part of a word.
+//
+// It has to be checked by what it *answers*, not by whether it parses: a
+// group swallowed into a word parses perfectly well and becomes a test for
+// non-emptiness, which is true where the grouped condition is false.
+func TestRegexModeEndsWithTheOperand(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`[[ abc =~ b && (a = z) ]] && echo y || echo n`, "n"},
+		{`[[ abc =~ b && (a = a) ]] && echo y || echo n`, "y"},
+		{`[[ abc =~ (b) && (a = z) ]] && echo y || echo n`, "n"},
+		// And a subshell after the condition is still a subshell.
+		{`[[ abc =~ b ]] && ( echo sub )`, "sub"},
+	} {
+		if out, _ := run(t, tc.src, nil); strings.TrimSpace(out) != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, strings.TrimSpace(out), tc.want)
+		}
+	}
+}

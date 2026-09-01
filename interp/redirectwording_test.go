@@ -88,12 +88,14 @@ func TestDashNamesOneErrnoTwoWays(t *testing.T) {
 		CannotOpen: "cannot open %[1]s: %[2]s", CannotCreate: "cannot create %[1]s: %[2]s",
 		FileNotFound: "No such file", DirectoryNotFound: "Directory nonexistent",
 	}
-	if out, _ := redirRun(t, dir, dg, `cat < nodir/in`); !strings.Contains(out, "No such file") ||
-		strings.Contains(out, "Directory nonexistent") {
-		t.Errorf("read: said %q, want the open text", out)
+	// Exactly, not as a prefix: "No such file" is the front of the operating
+	// system's own "No such file or directory", so a Contains check here
+	// passes whether dash's text is used or not.
+	if out, _ := redirRun(t, dir, dg, `cat < nodir/in`); !strings.HasSuffix(strings.TrimSpace(out), "cannot open nodir/in: No such file") {
+		t.Errorf("read: said %q, want dash's own open text and nothing more", out)
 	}
-	if out, _ := redirRun(t, dir, dg, `echo x > nodir/out`); !strings.Contains(out, "Directory nonexistent") {
-		t.Errorf("create: said %q, want the create text", out)
+	if out, _ := redirRun(t, dir, dg, `echo x > nodir/out`); !strings.HasSuffix(strings.TrimSpace(out), "cannot create nodir/out: Directory nonexistent") {
+		t.Errorf("create: said %q, want dash's own create text and nothing more", out)
 	}
 	// Without either, the operating system's own string, capitalized — which
 	// is what the other three print and what Go's errno does not give.

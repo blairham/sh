@@ -226,4 +226,11 @@ func TestARedirectFailure(t *testing.T) {
 	if !strings.Contains(out, "st=2") {
 		t.Errorf("said %q, want st=2", out)
 	}
+	// A failed *create* is worded twice over differently: the verb changes,
+	// and so does dash's own name for the same errno. Checked exactly, since
+	// "No such file" is a prefix of the operating system's own string.
+	out, _ = runDash(t, dir, "echo x > nodir/out\n")
+	if got := strings.TrimSpace(out); !strings.HasSuffix(got, "cannot create nodir/out: Directory nonexistent") {
+		t.Errorf("create: said %q, want dash's create text", got)
+	}
 }

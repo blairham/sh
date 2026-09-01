@@ -242,3 +242,15 @@ func TestEveryTargetIsWritten(t *testing.T) {
 		t.Errorf("got %v, want a command's output in every file it names", got)
 	}
 }
+
+// TestPrintfAnswers: zsh stops the output at `\c`, which is the answer that
+// looks like ksh93's until the bytes are read.
+func TestPrintfAnswers(t *testing.T) {
+	s := zsh.Semantics()
+	if got, want := s.PrintfBackslashC, interp.PrintfBackslashCStops; got != want {
+		t.Errorf("PrintfBackslashC = %v, want %v", got, want)
+	}
+	if got, want := s.PrintfReportsBadNumber, interp.No; got != want {
+		t.Errorf("PrintfReportsBadNumber = %v, want %v", got, want)
+	}
+}

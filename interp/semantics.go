@@ -243,6 +243,41 @@ type Semantics struct {
 	// and everything-but there elsewhere: the two answers are both matches,
 	// on different inputs, with nothing to warn on.
 	BracketCaretNegates Answer
+	// PrintfReportsBadNumber complains when a numeric conversion is given
+	// something that is not a number. True in bash and dash, false in ksh93
+	// and zsh — and all four print the zero either way, so the complaint sits
+	// beside the output rather than instead of it.
+	PrintfReportsBadNumber Answer
+	// PrintfBackslashC is what `\c` means in a printf format, and it is three
+	// different things rather than a switch:
+	//
+	//	printf "a\cbZ"   bash, dash  a\cbZ      two literal characters
+	//	                 ksh93       a<0x02>Z   \cX is control-X
+	//	                 zsh         a          the output stops there
+	//
+	// Measured by the bytes rather than by the display, which is the only way
+	// to tell the middle one from the last: ksh93's output *looks* truncated
+	// next to zsh's until the control character is read as a byte.
+	PrintfBackslashC PrintfBackslashCPolicy
+	// PrintfOutputPrecedesComplaint writes what `printf` produced before it
+	// complains about the rest, rather than after.
+	//
+	// True in ksh93 alone. It is visible only where both streams arrive at
+	// one place, which is exactly how the corpus reads them: `printf "[%z]"`
+	// is `[` then the complaint there and the complaint then `[` in the other
+	// three, whose output is still sitting in a buffer when the complaint
+	// goes out.
+	PrintfOutputPrecedesComplaint Answer
+	// PrintfEmptyIsNotANumber complains about a numeric conversion given an
+	// operand that is present and empty. bash alone: `printf '%d' ""` is an
+	// error there and a zero in the other three, all of which print the zero
+	// anyway. An argument that is *missing* is never an error in any of them.
+	PrintfEmptyIsNotANumber Answer
+
+	// PrintfQuote is how `%q` quotes, which is three answers and an absence
+	// rather than a switch — see PrintfQuoteStyle.
+	PrintfQuote PrintfQuoteStyle
+
 	// RedirectsWriteToEveryTarget sends a command's output to *all* of the
 	// files it redirects to rather than only the last: `echo x >a >b` fills
 	// both in zsh and leaves `a` empty in the other three.
@@ -533,6 +568,83 @@ func (r *Runner) exitArgument() ExitArgumentPolicy {
 	if p == ExitArgUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
 			"exit: this argument: the shells disagree here and no dialect was chosen"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// PrintfBackslashCPolicy is what `\c` means in a printf format.
+type PrintfBackslashCPolicy int
+
+const (
+	// PrintfBackslashCUnspecified is no answer, and is refused like any other.
+	PrintfBackslashCUnspecified PrintfBackslashCPolicy = iota
+	// PrintfBackslashCLiteral writes the two characters: bash, dash.
+	PrintfBackslashCLiteral
+	// PrintfBackslashCControl reads `\cX` as control-X: ksh93.
+	PrintfBackslashCControl
+	// PrintfBackslashCStops ends the output there: zsh.
+	PrintfBackslashCStops
+)
+
+func (p PrintfBackslashCPolicy) String() string {
+	switch p {
+	case PrintfBackslashCLiteral:
+		return "literal"
+	case PrintfBackslashCControl:
+		return "control character"
+	case PrintfBackslashCStops:
+		return "stops the output"
+	}
+	return "unspecified"
+}
+
+// backslashC resolves the axis, and only for a format that has a `\c` in it.
+func (r *Runner) backslashC() PrintfBackslashCPolicy {
+	p := r.sem().PrintfBackslashC
+	if p == PrintfBackslashCUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			`printf: \c: the shells disagree here and no dialect was chosen`))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// PrintfQuoteStyle is how `%q` quotes a word so the shell can read it back.
+type PrintfQuoteStyle int
+
+const (
+	// PrintfQuoteUnspecified is no answer, and is refused like any other.
+	PrintfQuoteUnspecified PrintfQuoteStyle = iota
+	// PrintfQuoteBackslash escapes each character that needs it: bash, zsh.
+	PrintfQuoteBackslash
+	// PrintfQuoteSingle wraps the word in single quotes: ksh93.
+	PrintfQuoteSingle
+	// PrintfQuoteAbsent is a dialect without `%q` at all: dash, which calls
+	// it an invalid directive like any other conversion it does not have.
+	PrintfQuoteAbsent
+)
+
+func (p PrintfQuoteStyle) String() string {
+	switch p {
+	case PrintfQuoteBackslash:
+		return "backslash"
+	case PrintfQuoteSingle:
+		return "single quoted"
+	case PrintfQuoteAbsent:
+		return "absent"
+	}
+	return "unspecified"
+}
+
+// quoteStyle resolves the axis, and only for a `%q` that is actually there.
+func (r *Runner) quoteStyle() PrintfQuoteStyle {
+	p := r.sem().PrintfQuote
+	if p == PrintfQuoteUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			"printf: %q: the shells disagree here and no dialect was chosen"))
 		r.status = 2
 		r.unspecified = true
 	}

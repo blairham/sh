@@ -384,6 +384,53 @@ var Corpus = []Case{
 		// recorded into the golden file.
 		Why: "the dangerous case: &> redirects both streams in bash and zsh, and is `&` then `>` in dash and ksh93 — no error, different meaning",
 	},
+	// --- printf: the last builtin that was not one ------------------------
+	{
+		ID: "printf/format-is-reused", Category: "printf",
+		Snippet: `printf "[%s]" a b c; echo`,
+		Why:     "the format runs again until the arguments are gone, which is the property that makes printf a loop rather than a formatter",
+	},
+	{
+		ID: "printf/missing-argument-is-empty", Category: "printf",
+		Snippet: `printf "[%s][%s]\n" a`,
+		Why:     "an argument that is not there is the empty string rather than an error, unanimously — and different from one that is there and empty",
+	},
+	{
+		ID: "printf/b-escapes-and-s-does-not", Category: "printf",
+		Snippet: `printf "[%b][%s]\n" "a\tb" "a\tb"`,
+		Why:     "the whole reason %b exists: the same argument, escaped by one verb and left alone by the other",
+	},
+	{
+		ID: "printf/bad-number-diverges", Category: "printf",
+		Snippet: `printf "[%d]\n" abc; echo "st=$?"`,
+		Why:     "bash and dash complain and report failure where ksh93 and zsh say nothing, and all four print the zero — so the complaint sits beside the output rather than instead of it",
+	},
+	{
+		ID: "printf/empty-operand-is-bash-only", Category: "printf",
+		Snippet: `printf "[%d]\n" ""; echo "st=$?"`,
+		Why:     "an operand that is present and empty is an error in bash alone, where a missing one is an error in none of them",
+	},
+	{
+		ID: "printf/quote-diverges", Category: "printf",
+		Snippet: `printf "[%q]\n" "a b"; echo "st=$?"`,
+		Why:     "three answers and an absence: bash and zsh backslash-escape, ksh93 single-quotes, and dash has no %q at all",
+	},
+	{
+		ID: "printf/unknown-verb-diverges", Category: "printf",
+		Snippet: `printf "[%z]\n" x; echo "st=$?"`,
+		Why:     "half the panel names the character *after* the one it could not read and half names the conversion, with four wordings and three statuses between them",
+	},
+	{
+		ID: "printf/no-format-at-all", Category: "printf",
+		Snippet: `printf; echo "st=$?"`,
+		Why:     "four usages, two of them printed with no shell name in front, and zsh alone not treating it as worth a different status from any other failure",
+	},
+	{
+		ID: "printf/backslash-c-means-three-things", Category: "printf",
+		Snippet: `printf "a\cbZ" | od -An -c | tr -s " "`,
+		Why:     "read as bytes rather than as text, because that is the only way to tell ksh93's control character from zsh's stopping: bash and dash write two literal characters, ksh93 reads \\cX as control-X, and zsh ends the output there",
+	},
+
 	// --- kill: a builtin, because a shell has to know what it sent ---------
 	{
 		ID: "kill/probe-with-signal-zero", Category: "kill",

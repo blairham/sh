@@ -57,6 +57,11 @@ func Semantics() interp.Semantics {
 	s.SIGPrefixAccepted = interp.Yes
 	s.RedirectsWriteToEveryTarget = interp.No
 	s.KillStatus = interp.KillStatusAnyFailure
+	s.PrintfOutputPrecedesComplaint = interp.Yes
+	s.PrintfEmptyIsNotANumber = interp.No
+	s.PrintfReportsBadNumber = interp.No
+	s.PrintfBackslashC = interp.PrintfBackslashCControl
+	s.PrintfQuote = interp.PrintfQuoteSingle
 	return s
 }
 
@@ -108,13 +113,16 @@ func Diagnostics() interp.Diagnostics {
 		ExecCannotExecute: "exec: %[1]s: cannot execute [%[2]s]",
 		// Not "cannot execute": ksh93 distinguishes a missing command from one
 		// that will not run, and only the second gets the brackets.
-		ExecNotFound:      "exec: %[1]s: not found",
-		TrapBadSignal:     "trap: %[1]s: bad trap",
-		KillNoSuchProcess: "kill: %[1]s: no such process",
-		KillNotPermitted:  "kill: %[1]s: permission denied",
-		KillInvalidSignal: "kill: %[1]s: unknown signal name",
-		KillNotAPid:       "kill: %[1]s: Arguments must be %%job, process ids, or job pool names",
-		KillUsage:         kshKillUsage,
+		ExecNotFound:          "exec: %[1]s: not found",
+		PrintfBadVerb:         "printf: %[1]s: unknown format specifier",
+		PrintfUsage:           "Usage: printf [ options ] format [string ...]",
+		PrintfUsageUnprefixed: true,
+		TrapBadSignal:         "trap: %[1]s: bad trap",
+		KillNoSuchProcess:     "kill: %[1]s: no such process",
+		KillNotPermitted:      "kill: %[1]s: permission denied",
+		KillInvalidSignal:     "kill: %[1]s: unknown signal name",
+		KillNotAPid:           "kill: %[1]s: Arguments must be %%job, process ids, or job pool names",
+		KillUsage:             kshKillUsage,
 		// An unknown option is a usage error to ksh93 in both senses: it prints
 		// the usage after the complaint, and it reports the usage status where
 		// an unknown signal *name* reports 1.

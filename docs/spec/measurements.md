@@ -2072,6 +2072,12 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `path/unrunnable-is-126-not-127` | `<shell>: 1: ./ne: Permission denied~st=126` | `<shell>: line 1: ./ne: Permission denied~st=126` | `<shell>: line 1: ./ne: Permission denied~st=126` | `<shell>: ./ne: Permission denied~st=126` | `<shell>: ./ne: cannot execute [Permission denied]~st=126` | `<shell>:1: permission denied: ./ne~st=126` |
 | `path/directory-as-a-command` | `<shell>: 1: ./adir: Permission denied~st=126` | `<shell>: line 1: ./adir: Is a directory~st=126` | `<shell>: line 1: ./adir: Is a directory~st=126` | `<shell>: ./adir: is a directory~st=126` | `<shell>: ./adir: cannot execute [Is a directory]~st=126` | `<shell>:1: permission denied: ./adir~st=126` |
 | `path/missing-path-is-not-a-missing-name` | `<shell>: 1: ./nope: not found~st=127` | `<shell>: line 1: ./nope: No such file or directory~st=127` | `<shell>: line 1: ./nope: No such file or directory~st=127` | `<shell>: ./nope: No such file or directory~st=127` | `<shell>: ./nope: not found~st=127` | `<shell>:1: no such file or directory: ./nope~st=127` |
+| `cmd/command-v-names-a-builtin` | `echo` | `echo` | `echo` | `echo` | `echo` | `echo` |
+| `cmd/command-v-names-an-external-by-path` | `/bin/ls` | `/bin/ls` | `/bin/ls` | `/bin/ls` | `/bin/ls` | `/bin/ls` |
+| `cmd/command-v-on-nothing` | `st=127` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
+| `cmd/command-v-names-a-function` | `f` | `f` | `f` | `f` | `f` | `f` |
+| `cmd/command-bypasses-a-function` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
+| `cmd/command-v-names-a-reserved-word` | `if` | `if` | `if` | `if` | `if` | `if` |
 
 - `path/script-path-governs-lookup` — setting PATH in a script decides what it can reach — an implementation that asks os/exec instead answers with the *process's* PATH and ignores the script entirely
   ```sh
@@ -2108,6 +2114,30 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `path/missing-path-is-not-a-missing-name` — a path that is not there and a bare name PATH never had are both 127 and are worded differently in three of the four
   ```sh
   ./nope; echo "st=$?"
+  ```
+- `cmd/command-v-names-a-builtin` — `command -v` asks what would run rather than running it, and answers a builtin with the name as written — the portable way a script tests whether it has a tool
+  ```sh
+  command -v echo
+  ```
+- `cmd/command-v-names-an-external-by-path` — an external is answered by the path, because that is the part a script cannot work out for itself
+  ```sh
+  command -v ls
+  ```
+- `cmd/command-v-on-nothing` — nothing found prints nothing at all, which is what makes `command -v x >/dev/null` the usual spelling — and dash answers 127 where the others answer a plain failure
+  ```sh
+  command -v nosuchthing; echo "st=$?"
+  ```
+- `cmd/command-v-names-a-function` — a function is answered like a builtin, by name, even though `command` without -v would refuse to run it
+  ```sh
+  f() { :; }; command -v f
+  ```
+- `cmd/command-bypasses-a-function` — the whole reason `command` exists: a function may wrap the thing it is named after without calling itself
+  ```sh
+  echo() { echo overridden; }; command echo hi
+  ```
+- `cmd/command-v-names-a-reserved-word` — a word of the grammar is answered too, which is not obvious — it is not a command at all, and every shell in the panel still names it
+  ```sh
+  command -v if
   ```
 
 ## declarations

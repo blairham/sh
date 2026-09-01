@@ -1427,3 +1427,46 @@ the caller above has to see it too. `break` still counts its loops and
 
 It was found by `make wild-run`, in 43 of the 99 disagreements its first run
 reported.
+
+## Asking for a command without asking a function
+
+`command name` runs the builtin or the external and never the function of that
+name. That is the whole reason it exists: a function may wrap the thing it is
+named after — `ls() { command ls --color "$@"; }` — without calling itself.
+
+`command -v name` asks *what* would run rather than running it, and it is how
+a portable script tests whether it has a tool. It is unanimous across the
+panel in almost every respect: a builtin or a function is answered by the name
+as written, an external by the path, and a word of the *grammar* is answered
+too — `command -v if` prints `if` in all four, which is not obvious, since
+`if` is not a command at all. Nothing found prints nothing, and the silence is
+what makes `command -v x >/dev/null` the usual spelling.
+
+The one divergence is the status when the answer is nothing: dash reports 127,
+the status of a command that was looked for and run, where the other three
+report a plain failure.
+
+### `builtin` is not the same command everywhere
+
+bash and zsh have a `builtin` that runs a builtin and only a builtin. **ksh93
+has one of the same name that does something else**: it *registers* builtins,
+so `builtin echo hi` there looks for a builtin called `hi` and says so. dash
+has none at all.
+
+So the name is a dialect's answer rather than part of the substrate, and
+ksh93's meaning is measured and not built — taking the name away there is more
+honest than leaving bash's meaning under it.
+
+One detail of the refusal is worth recording. zsh names the speaking builtin
+in a diagnostic's location — `zsh:cd:1:`, `zsh:shift:1:` — and does *not* here:
+`zsh:1: no such builtin: ls`. The message is about a name that is not a
+builtin, so there is no builtin speaking.
+
+### What this does not close
+
+The 30 disagreements `make wild-run` attributed to `builtin` are the
+`/usr/bin` stubs, each of which runs `builtin <its own name>`: `alias`, `bg`,
+`fg`, `jobs`, `fc`, `hash`, `type`, `ulimit`, `umask`, `unalias`. Eleven of
+those are builtins this shell does not have, and most are interactive. The
+error moves from "builtin: command not found" to naming the one that is
+missing, which is a better answer to the same unfinished question.

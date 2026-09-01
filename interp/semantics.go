@@ -322,6 +322,12 @@ type Semantics struct {
 	// the number that failed — which is a status carrying a count rather
 	// than a verdict, and the reason this is a policy rather than a bool.
 	KillStatus KillStatusPolicy
+	// CommandNotFoundStatusIsNotFound makes `command -v` answer 127 for a
+	// name that is nothing, rather than a plain 1. dash alone says yes; the
+	// other three report a failure and leave 127 to mean a command that was
+	// looked for and run.
+	CommandNotFoundStatusIsNotFound Answer
+
 	// SetFTurnsOffGlobbing makes `set -f` the short spelling of `set -o
 	// noglob`. True in bash, dash and ksh93. zsh spells that option the long
 	// way only: there `-f` is about startup files and leaves globbing alone,

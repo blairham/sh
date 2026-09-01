@@ -39,6 +39,7 @@ func Dialect() syntax.Dialect {
 // Semantics is what ksh93 means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
 	s.ArithIntegerOperatorRefusesFloat = interp.Yes
 	s.ArrayScalarIsTheWholeArray = interp.No
@@ -202,6 +203,12 @@ func Diagnostics() interp.Diagnostics {
 // not, which makes the name a dialect's answer. It is the same function under
 // a second name rather than a second implementation.
 func Apply(r *interp.Runner) {
+	// ksh93 has a `builtin` of its own and it is a different command: it
+	// *registers* builtins rather than running one, so `builtin echo hi`
+	// there looks for a builtin called `hi`. Measured and not built, and
+	// taking the name away is more honest than leaving bash's meaning under
+	// it.
+	r.Unregister("builtin")
 	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
 	// Three decimal places, where the two other shells that have SECONDS
 	// report whole seconds.

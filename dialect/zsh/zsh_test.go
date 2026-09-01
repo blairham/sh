@@ -385,3 +385,13 @@ func TestPatternGroups(t *testing.T) {
 		t.Error("zsh takes a bare group")
 	}
 }
+
+// TestACommandStringIsReadWhole: zsh parses all of a `-c` command before
+// running any of it, where the other three run each line as they reach it. A
+// script is read a line at a time in all four, so this is about the command
+// string alone.
+func TestACommandStringIsReadWhole(t *testing.T) {
+	if !zsh.Diagnostics().CommandStringParsedWhole {
+		t.Error("zsh reads a command string whole")
+	}
+}

@@ -477,3 +477,96 @@ func TestALoneDashEndsTheOptions(t *testing.T) {
 		t.Errorf("got  %s\nwant %s", strings.TrimSpace(out), want)
 	}
 }
+
+// TestLinesRunAsTheyAreRead is the difference between a shell and a compiler.
+//
+// A script that ends badly still does what its good lines said, because the
+// shell runs what it has read rather than reading everything first. All four
+// shells do this for a script file.
+func TestLinesRunAsTheyAreRead(t *testing.T) {
+	sh := shell()
+	sh.Diagnostics = interp.Diagnostics{Location: interp.LocationLineWord, SyntaxUnexpected: `unexpected %[1]s`}
+
+	path := writeScript(t, "echo one\necho two\n{ fi; }\necho four\n")
+	out, errs, code := runArgs(t, sh, "testsh", path)
+	if want := "one\ntwo\n"; out != want {
+		t.Errorf("output %q, want %q — the good lines run first", out, want)
+	}
+	if !strings.Contains(errs, "unexpected") {
+		t.Errorf("stderr %q, want the failure reported", errs)
+	}
+	if code == 0 {
+		t.Error("status 0, want a failure")
+	}
+}
+
+// TestALineIsTheUnit: the whole line is parsed before any of it runs, so a
+// statement that precedes the failure on the same line never happens. A
+// statement-at-a-time reader would have run it.
+func TestALineIsTheUnit(t *testing.T) {
+	sh := shell()
+	sh.Diagnostics = interp.Diagnostics{Location: interp.LocationLineWord, SyntaxUnexpected: `unexpected %[1]s`}
+
+	path := writeScript(t, "echo one\necho two; { fi; }\n")
+	out, _, _ := runArgs(t, sh, "testsh", path)
+	if want := "one\n"; out != want {
+		t.Errorf("output %q, want %q — `echo two` shares its line with the failure", out, want)
+	}
+}
+
+// TestTheExitTrapFiresAfterAParseFailure: the failure is an ending rather than
+// an abort, so a trap set by a line that ran still fires. Unanimous.
+func TestTheExitTrapFiresAfterAParseFailure(t *testing.T) {
+	sh := shell()
+	sh.Diagnostics = interp.Diagnostics{Location: interp.LocationLineWord, SyntaxUnexpected: `unexpected %[1]s`}
+
+	path := writeScript(t, "trap 'echo bye' EXIT\necho one\n{ fi; }\n")
+	out, _, _ := runArgs(t, sh, "testsh", path)
+	if want := "one\nbye\n"; out != want {
+		t.Errorf("output %q, want %q", out, want)
+	}
+}
+
+// TestAConstructHoldsTheLineOpen: the unit stretches past a newline while a
+// construct is open, or a multi-line loop could never run at all.
+func TestAConstructHoldsTheLineOpen(t *testing.T) {
+	path := writeScript(t, "for i in 1 2\ndo\n  echo $i\ndone\necho after\n")
+	out, errs, _ := runArgs(t, shell(), "testsh", path)
+	if errs != "" {
+		t.Fatalf("stderr: %s", errs)
+	}
+	if want := "1\n2\nafter\n"; out != want {
+		t.Errorf("output %q, want %q", out, want)
+	}
+}
+
+// TestACommandStringMayBeReadWhole is the axis: one dialect parses all of a
+// `-c` command before running any of it, so a failure anywhere in it means
+// nothing runs. Every dialect reads a *script* a line at a time.
+func TestACommandStringMayBeReadWhole(t *testing.T) {
+	const src = "echo one\n{ fi; }\n"
+	for _, tc := range []struct {
+		whole bool
+		want  string
+	}{
+		{false, "one\n"},
+		{true, ""},
+	} {
+		sh := shell()
+		sh.Diagnostics = interp.Diagnostics{
+			Location:                 interp.LocationLineWord,
+			SyntaxUnexpected:         `unexpected %[1]s`,
+			CommandStringParsedWhole: tc.whole,
+		}
+		out, _, _ := runArgs(t, sh, "testsh", "-c", src)
+		if out != tc.want {
+			t.Errorf("whole=%v: output %q, want %q", tc.whole, out, tc.want)
+		}
+		// A script is read a line at a time whatever the answer, because the
+		// axis is about the command string alone.
+		path := writeScript(t, src)
+		if out, _, _ := runArgs(t, sh, "testsh", path); out != "one\n" {
+			t.Errorf("whole=%v: a script gave %q, want the first line to run", tc.whole, out)
+		}
+	}
+}

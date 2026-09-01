@@ -4058,6 +4058,70 @@
         "TimedOut": false
       }
     },
+    "exec/a-construct-spans-its-lines": {
+      "bash": {
+        "Output": "one~1~2~\u003cscript\u003e: line 6: syntax error near unexpected token `fi'~\u003cscript\u003e: line 6: `{ fi; }'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "one~1~2~\u003cscript\u003e: line 6: syntax error near unexpected token `fi'~\u003cscript\u003e: line 6: `{ fi; }'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "one~1~2~\u003cscript\u003e: line 6: syntax error near unexpected token `fi'~\u003cscript\u003e: line 6: `{ fi; }'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "one~1~2~\u003cscript\u003e: 6: Syntax error: \"fi\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "one~1~2~\u003cscript\u003e: syntax error at line 6: `fi' unexpected",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "one~1~2~\u003cscript\u003e:6: parse error near `fi'",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "exec/a-line-is-the-unit-not-a-statement": {
+      "bash": {
+        "Output": "one~\u003cscript\u003e: line 2: syntax error near unexpected token `fi'~\u003cscript\u003e: line 2: `echo two; { fi; }'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "one~\u003cscript\u003e: line 2: syntax error near unexpected token `fi'~\u003cscript\u003e: line 2: `echo two; { fi; }'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "one~\u003cscript\u003e: line 2: syntax error near unexpected token `fi'~\u003cscript\u003e: line 2: `echo two; { fi; }'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "one~\u003cscript\u003e: 2: Syntax error: \"fi\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "one~\u003cscript\u003e: syntax error at line 2: `fi' unexpected",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "one~\u003cscript\u003e:2: parse error near `fi'",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "exec/directory-reason-diverges": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: /tmp: Is a directory",
@@ -4215,6 +4279,38 @@
       "zsh": {
         "Output": "in-sub~after",
         "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "exec/lines-run-as-they-are-read": {
+      "bash": {
+        "Output": "one~\u003cscript\u003e: line 2: syntax error near unexpected token `fi'~\u003cscript\u003e: line 2: `{ fi; }'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "one~\u003cscript\u003e: line 2: syntax error near unexpected token `fi'~\u003cscript\u003e: line 2: `{ fi; }'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "one~\u003cscript\u003e: line 2: syntax error near unexpected token `fi'~\u003cscript\u003e: line 2: `{ fi; }'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "one~\u003cscript\u003e: 2: Syntax error: \"fi\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "one~\u003cscript\u003e: syntax error at line 2: `fi' unexpected",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "one~\u003cscript\u003e:2: parse error near `fi'",
+        "Status": 1,
         "TimedOut": false
       }
     },
@@ -4407,6 +4503,38 @@
       "zsh": {
         "Output": "hi",
         "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "exec/the-exit-trap-fires-after-a-syntax-error": {
+      "bash": {
+        "Output": "\u003cscript\u003e: line 2: syntax error near unexpected token `fi'~\u003cscript\u003e: line 2: `{ fi; }'~bye",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cscript\u003e: line 2: syntax error near unexpected token `fi'~\u003cscript\u003e: line 2: `{ fi; }'~bye",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cscript\u003e: line 2: syntax error near unexpected token `fi'~\u003cscript\u003e: line 2: `{ fi; }'~bye",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cscript\u003e: 2: Syntax error: \"fi\" unexpected~bye",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cscript\u003e: syntax error at line 2: `fi' unexpected~bye",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cscript\u003e:2: parse error near `fi'~bye",
+        "Status": 1,
         "TimedOut": false
       }
     },

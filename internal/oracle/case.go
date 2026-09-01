@@ -1961,4 +1961,28 @@ var Corpus = []Case{
 		Snippet: `a=(x y); echo "[${a[@]}]"`,
 		Why:     "and the case that keeps it from eating an array literal: a `(` straight after `=` opens one, never a group — `a=(b|c)` is a parse error in that shell rather than a pattern",
 	},
+	{
+		ID: "exec/lines-run-as-they-are-read", Category: "command language", SyntaxError: true,
+		Script:  true,
+		Snippet: "echo one\n{ fi; }\necho three\n",
+		Why:     "a shell runs what it has read rather than reading everything first, so the first line runs before the second fails to parse — unanimous, and the reason a script that ends badly still does what its good lines said",
+	},
+	{
+		ID: "exec/a-line-is-the-unit-not-a-statement", Category: "command language", SyntaxError: true,
+		Script:  true,
+		Snippet: "echo one\necho two; { fi; }\n",
+		Why:     "the whole line is parsed before any of it runs, so `echo two` never happens even though it precedes the failure and would have been fine on its own",
+	},
+	{
+		ID: "exec/the-exit-trap-fires-after-a-syntax-error", Category: "traps and exit", SyntaxError: true,
+		Script:  true,
+		Snippet: "trap 'echo bye' EXIT\n{ fi; }\n",
+		Why:     "the trap set by a line that ran still fires when a later line will not parse, which is what makes the failure an ending rather than an abort",
+	},
+	{
+		ID: "exec/a-construct-spans-its-lines", Category: "command language", SyntaxError: true,
+		Script:  true,
+		Snippet: "echo one\nfor i in 1 2\ndo\n  echo $i\ndone\n{ fi; }\n",
+		Why:     "the unit stretches past a newline while a construct is open, so the whole loop runs before the line after it fails — a line-at-a-time reader that stopped at the first newline could not run it at all",
+	},
 }

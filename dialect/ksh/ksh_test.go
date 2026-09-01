@@ -334,3 +334,17 @@ func TestPatternGroups(t *testing.T) {
 		t.Error("ksh93 needs a quantifier in front of a group")
 	}
 }
+
+// TestAParseFailureNamesItsOwnLine: ksh93's parse wording carries the line
+// already — `syntax error at line 3` — so the location must not carry it too.
+// A *runtime* diagnostic in a script is still prefixed, which is why this is
+// not simply the script location being absent.
+func TestAParseFailureNamesItsOwnLine(t *testing.T) {
+	d := ksh.Diagnostics()
+	if !d.ParseFailureNamesItsOwnLine {
+		t.Error("ksh93's parse failure names its own line")
+	}
+	if got, want := d.ForScript().Location, interp.LocationLineWord; got != want {
+		t.Errorf("a script's runtime location = %v, want %v — still prefixed", got, want)
+	}
+}

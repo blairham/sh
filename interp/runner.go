@@ -403,6 +403,20 @@ func (r *Runner) allowed(ctx context.Context, a Action) bool {
 
 // Run executes a whole file, returning the last command's status.
 func (r *Runner) Run(ctx context.Context, f *syntax.File) (int, error) {
+	if err := r.RunPart(ctx, f); err != nil {
+		r.runExitTrap(ctx)
+		return r.status, err
+	}
+	return r.Finish(ctx), nil
+}
+
+// RunPart runs one chunk of a script and leaves the shell open for the next,
+// which is what a front end reading its input a line at a time needs: the
+// variables, functions and traps of one chunk are still there for the one
+// after it.
+//
+// Nothing is torn down here. Finish does that, once, however many chunks ran.
+func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	r.ctx = ctx
 	r.ensurePWD()
 	r.ensureSpecials()
@@ -411,15 +425,29 @@ func (r *Runner) Run(ctx context.Context, f *syntax.File) (int, error) {
 	}
 	for _, st := range f.Stmts {
 		if err := r.stmt(ctx, st); err != nil {
-			r.runExitTrap(ctx)
-			return r.status, err
+			return err
 		}
 		if r.ctl == controlExit {
 			break
 		}
 	}
+	return nil
+}
+
+// Exited reports whether the shell has been asked to stop, so a front end
+// feeding it chunks knows not to read another.
+func (r *Runner) Exited() bool { return r.ctl == controlExit }
+
+// Finish ends the session and reports the status to exit with.
+//
+// It is separate from RunPart because the EXIT trap fires once at the end and
+// not after every chunk — and it fires even when the *next* chunk failed to
+// parse, which is unanimous: a script whose last line is a syntax error still
+// runs its EXIT trap.
+func (r *Runner) Finish(ctx context.Context) int {
 	// Anything that arrived during the last command still runs, before the
 	// EXIT trap does.
+	r.ctx = ctx
 	r.runPendingTraps(ctx)
 	r.runExitTrap(ctx)
 	if !r.inSubshell {
@@ -432,7 +460,7 @@ func (r *Runner) Run(ctx context.Context, f *syntax.File) (int, error) {
 			r.diagf("kill: %v\n", err)
 		}
 	}
-	return r.status, nil
+	return r.status
 }
 
 // runExitTrap runs `trap … EXIT` as the script ends.

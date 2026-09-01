@@ -350,6 +350,21 @@ type Diagnostics struct {
 	// Zero means the substrate's own, which is 1.
 	DotCannotOpenStatus int
 
+	// ParseFailureNamesItsOwnLine says the parse-failure wording already
+	// carries the line, so the location must not carry it as well. ksh93
+	// writes `syntax error at line 3` and would otherwise be prefixed into
+	// `line 3: syntax error at line 3`.
+	//
+	// It is only the parse failure. A runtime diagnostic in a script is
+	// prefixed there as usual — `line 2: nosuchcmd: not found` — which is why
+	// this is not simply the script location being absent.
+	ParseFailureNamesItsOwnLine bool
+	// CommandStringParsedWhole reads all of a `-c` command before running any
+	// of it. zsh alone does, so `sh -c 'echo one
+	// { fi; }'` prints one everywhere else and nothing there. A *script* is
+	// read a line at a time in all four, which is why this asks only about
+	// the command string.
+	CommandStringParsedWhole bool
 	// NamesTheInputInLocation puts *where the script came from* between the
 	// shell's name and the line, for a parse failure only: bash writes
 	// `bash: -c: line 1:` when it read the script from -c and plain
@@ -797,6 +812,10 @@ func (d Diagnostics) ReportFrom(name, input string, line int, msg string) string
 // name is the shell or the script; input is what the front end calls the
 // origin, "-c" or empty; src is the whole script, for the echo.
 func (d Diagnostics) ParseDiagnostic(name, input string, err error, src string) string {
+	if d.ParseFailureNamesItsOwnLine {
+		// The wording says where it was, so the location says only who.
+		d.Location = LocationNone
+	}
 	line := d.ParseFailureLine(err)
 	if line == 0 {
 		// A failure that does not say where it was. Only the first line can

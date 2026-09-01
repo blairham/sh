@@ -277,8 +277,39 @@ func (p *Parser) expectWord(s string) Pos {
 // Parse reads the whole input.
 func (p *Parser) Parse() *File {
 	f := &File{}
+	for {
+		line, ok := p.NextLine()
+		if !ok {
+			break
+		}
+		f.Stmts = append(f.Stmts, line.Stmts...)
+	}
+	f.Last = p.tok.Pos
+	return f
+}
+
+// NextLine parses one logical line: the statements up to the newline that ends
+// them, which is more than one line of text when a construct is still open.
+//
+// It exists because a shell runs what it has read rather than reading
+// everything first. `echo one` on line 1 runs before line 3 fails to parse,
+// which is unanimous across the panel and is why a script that ends badly
+// still does what its good lines said.
+//
+// The *line* is the unit and not the statement, which is measured: with
+// `echo one; { fi; }` on one line, nothing runs. So everything up to the
+// newline is parsed before any of it is run, and a failure anywhere in it
+// discards the whole line.
+//
+// The second result is false at the end of the input, and when parsing has
+// already failed.
+func (p *Parser) NextLine() (*File, bool) {
 	p.skipNewlines()
-	for !p.at(TokEOF) && p.err == nil {
+	if p.at(TokEOF) || p.err != nil {
+		return nil, false
+	}
+	f := &File{}
+	for p.err == nil {
 		st := p.parseStmt()
 		if st == nil {
 			if p.err == nil && !p.at(TokEOF) {
@@ -294,10 +325,12 @@ func (p *Parser) Parse() *File {
 			break
 		}
 		f.Stmts = append(f.Stmts, st)
-		p.skipNewlines()
+		if p.at(TokNewline) || p.at(TokEOF) {
+			break
+		}
 	}
 	f.Last = p.tok.Pos
-	return f
+	return f, true
 }
 
 func (p *Parser) skipNewlines() {

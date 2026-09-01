@@ -62,6 +62,7 @@ func Semantics() interp.Semantics {
 	s.DotFallsBackToCurrentDirectory = interp.Yes
 	s.ExecFailureRunsExitTrap = interp.Yes
 	s.ExecTakesOptions = interp.Yes
+	s.TestAcceptsDoubleEqual = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
 	s.ExitArgument = interp.ExitArgNumeric
 	s.TraceAssignmentsSeparately = interp.Yes

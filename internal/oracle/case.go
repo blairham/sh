@@ -1514,6 +1514,16 @@ var Corpus = []Case{
 		Snippet: `test a b c; echo "st=$?"`,
 		Why:     "all four report a malformed expression and none agrees on what it is: bash blames the middle word and says a binary operator was expected, dash blames the *first* word, ksh93 calls it an unknown operator and zsh a condition. Status 2 everywhere, so this is a wording and classification divergence rather than a behavioral one",
 	},
+	{
+		ID: "test/double-equal-is-equal", Category: "test",
+		Snippet: `test a "==" a; echo "st=$?"`,
+		Why:     "bash, ksh93 and zsh take `==` as a second spelling of `=`; dash has only the one, and refusing it is not \"unequal\" but \"that word is not an operator\", so the three words are reported as a malformed expression instead of compared. The quoting is zsh's doing: an unquoted `==` starts with `=` and would be expanded to a path",
+	},
+	{
+		ID: "test/double-equal-unequal", Category: "test",
+		Snippet: `test a "==" b; echo "st=$?"`,
+		Why:     "the same operator answering false, which is 1 — distinct from the 2 that dash reports for the same words, so the status alone tells the two readings apart",
+	},
 
 	// --- times: the last special builtin, and the most divergent for its size
 	//

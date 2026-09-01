@@ -386,6 +386,17 @@ func (r *Runner) binaryTest(left, op, right string) (bool, error, bool) {
 		// true and `test abc = a*` is false, which is the sharpest difference
 		// between the two constructs and is unanimous across the panel.
 		return left == right, nil, true
+	case "==":
+		// Where the answer is no, `==` is not an operator at all — so the
+		// caller has to be told this was not handled and go on to read the
+		// three words some other way, which is how dash arrives at
+		// "unexpected operator". Refusing to guess is the one case that
+		// still counts as handled: the refusal has already been reported and
+		// a second complaint about the same words would only obscure it.
+		if !r.ask(r.sem().TestAcceptsDoubleEqual, "`test a == b`") {
+			return false, nil, r.unspecified
+		}
+		return left == right, nil, true
 	case "!=":
 		return left != right, nil, true
 	case "-eq", "-ne", "-lt", "-le", "-gt", "-ge":

@@ -124,7 +124,9 @@ func runOnce(ctx context.Context, shell, script string, args []string, timeout t
 
 	cmd := exec.CommandContext(ctx, shell, append([]string{script}, args...)...)
 	cmd.Dir = dir
-	cmd.Stdin = nil
+	// Stdin is left nil on purpose and not assigned: nil *is* the empty
+	// input, so a script that reads gets an immediate end rather than
+	// waiting for a person. Assigning it would say the same thing twice.
 	cmd.Env = []string{
 		"PATH=/usr/bin:/bin:/usr/sbin:/sbin",
 		"HOME=" + dir,

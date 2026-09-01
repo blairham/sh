@@ -2125,4 +2125,29 @@ var Corpus = []Case{
 		Snippet: `( echo subshell )`,
 		Why:     "the counter-case for the lexer change: a `(` outside a regex operand still opens a subshell, which is what it would stop doing if the rule were not scoped to the operand",
 	},
+	{
+		ID: "param/the-names-with-a-prefix", Category: "parameter expansion",
+		Snippet: `ZQ_a=1; ZQ_b=2; echo ${!ZQ_@}`,
+		Why:     "yields the *names* rather than any value, sorted — bash and ksh93 have it and the other two call it a bad substitution, which is the same flag that governs `${!x}`",
+	},
+	{
+		ID: "param/the-names-with-a-prefix-one-field-each", Category: "parameter expansion",
+		Snippet: `ZQ_a=1; ZQ_b=2; printf "[%s]" "${!ZQ_@}"; echo`,
+		Why:     "quoted, `@` is one field per name exactly as `\"$@\"` is one per parameter — joining them would lose a name that contained a space, which a name cannot, but the two spellings still differ",
+	},
+	{
+		ID: "param/the-names-with-a-prefix-joined", Category: "parameter expansion",
+		Snippet: `ZQ_a=1; ZQ_b=2; printf "[%s]" "${!ZQ_*}"; echo`,
+		Why:     "and `*` is one field with the names joined, the same difference `\"$*\"` has from `\"$@\"` — which is why both spellings exist here too",
+	},
+	{
+		ID: "param/no-names-with-that-prefix", Category: "parameter expansion",
+		Snippet: `echo "[${!ZQNOSUCH_@}]"`,
+		Why:     "nothing matching is empty rather than an error, which is what lets a script ask for a family of variables it may not have been given",
+	},
+	{
+		ID: "param/the-names-with-a-prefix-are-sorted", Category: "parameter expansion",
+		Snippet: `ZQ_b=2; ZQ_a=1; echo ${!ZQ_@}`,
+		Why:     "set in the other order and returned in the same one, so the order is the names' rather than the order they happened to be created in — a map has none to inherit",
+	},
 }

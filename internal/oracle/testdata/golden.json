@@ -7354,6 +7354,38 @@
         "TimedOut": false
       }
     },
+    "param/no-names-with-that-prefix": {
+      "bash": {
+        "Output": "[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: bad substitution",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "param/pattern-is-a-glob": {
       "bash": {
         "Output": "[bc][bc][abc]",
@@ -7575,6 +7607,134 @@
       "zsh": {
         "Output": "[a.b][a]",
         "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "param/the-names-with-a-prefix": {
+      "bash": {
+        "Output": "ZQ_a ZQ_b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "ZQ_a ZQ_b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "ZQ_a ZQ_b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "ZQ_a ZQ_b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: bad substitution",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "param/the-names-with-a-prefix-are-sorted": {
+      "bash": {
+        "Output": "ZQ_a ZQ_b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "ZQ_a ZQ_b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "ZQ_a ZQ_b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "ZQ_a ZQ_b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: bad substitution",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "param/the-names-with-a-prefix-joined": {
+      "bash": {
+        "Output": "[ZQ_a ZQ_b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[ZQ_a ZQ_b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[ZQ_a ZQ_b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[ZQ_a ZQ_b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: bad substitution",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "param/the-names-with-a-prefix-one-field-each": {
+      "bash": {
+        "Output": "[ZQ_a][ZQ_b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[ZQ_a][ZQ_b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[ZQ_a][ZQ_b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[ZQ_a][ZQ_b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: bad substitution",
+        "Status": 1,
         "TimedOut": false
       }
     },

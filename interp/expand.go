@@ -5,6 +5,7 @@ package interp
 
 import (
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -151,6 +152,23 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 		return nil, false
 	}
 	e := s.Param
+	// `${!prefix@}` and `${!prefix*}` yield the *names* that begin with the
+	// prefix, and the two spellings differ exactly as `$@` and `$*` do.
+	if e.Prefix != 0 {
+		names := r.namesWithPrefix(e.Name)
+		ifs, set := r.ifs()
+		if e.Prefix == '*' {
+			joined := strings.Join(names, ifsFirst(ifs, set))
+			if s.Quoting != syntax.Unquoted {
+				return []string{globEscape(joined)}, true
+			}
+			return splitFields(joined, ifs, set), true
+		}
+		if s.Quoting != syntax.Unquoted {
+			return escapeAll(names), true
+		}
+		return names, true
+	}
 	// `${a[@]}` is one field per element for the same reason `"$@"` is one
 	// per parameter: joining them would lose an element containing a space.
 	if e.Index != nil && e.Op == syntax.ParamNone && !e.Length {
@@ -983,4 +1001,38 @@ func ifsFirst(ifs string, set bool) string {
 		return ""
 	}
 	return ifs[:1]
+}
+
+// namesWithPrefix is every variable name beginning with prefix, sorted.
+//
+// Sorted because the shells that have this return them so, and because a map
+// has no order to inherit: without it the same script would print its names
+// differently on different runs.
+//
+// It reads the same places a lookup does — what the shell has set, and what
+// it inherited — and skips what `unset` took away, so a name that cannot be
+// read is not listed either.
+func (r *Runner) namesWithPrefix(prefix string) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(name string) {
+		if seen[name] || r.removed[name] || !strings.HasPrefix(name, prefix) {
+			return
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	for name := range r.Vars {
+		add(name)
+	}
+	for name := range r.Dynamic {
+		add(name)
+	}
+	for _, kv := range r.environ() {
+		if k, _, ok := strings.Cut(kv, "="); ok {
+			add(k)
+		}
+	}
+	sort.Strings(out)
+	return out
 }

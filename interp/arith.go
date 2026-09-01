@@ -114,6 +114,9 @@ func (r *Runner) evalNum(e syntax.ArithExpr) (arithNum, error) {
 	case *syntax.ArithVar:
 		return r.arithValueOf(x.Name, 0)
 
+	case *syntax.ArithIndex:
+		return r.arithElement(x)
+
 	case *syntax.ArithUnary:
 		return r.evalUnary(x)
 
@@ -134,6 +137,32 @@ func (r *Runner) evalNum(e syntax.ArithExpr) (arithNum, error) {
 		return r.evalBinary(x)
 	}
 	return intNum(0), arithError{msg: fmt.Sprintf("unsupported expression %T", e)}
+}
+
+// arithElement reads `a[i]` written inside an expression.
+//
+// The subscript is an expression, so it is evaluated first; the base it counts
+// from is the dialect's, the same one `${a[1]}` uses. An element that is not
+// there is zero rather than an error, which is what every shell in the panel
+// does with a subscript past the end and with a name that was never an array.
+func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
+	idx, err := r.evalNum(x.Index)
+	if err != nil {
+		return intNum(0), err
+	}
+	// No check that the name is an array: an unset one yields nothing, and
+	// nothing is out of range for every subscript, so the bounds test below
+	// already answers it. A guard here would be a line no test could tell
+	// from its absence.
+	elems, _ := r.arrayElems(x.Name)
+	i := idx.asInt() - r.arrayBase()
+	if i < 0 || i >= len(elems) {
+		return intNum(0), nil
+	}
+	if strings.TrimSpace(elems[i]) == "" {
+		return intNum(0), nil
+	}
+	return r.parseArithNum(strings.TrimSpace(elems[i]))
 }
 
 func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {
@@ -200,7 +229,7 @@ func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
 		return intNum(0), err
 	}
 	if x.Op != "=" {
-		old, err := r.arithValueOf(x.Name, 0)
+		old, err := r.arithAssignTarget(x)
 		if err != nil {
 			return intNum(0), err
 		}
@@ -211,8 +240,25 @@ func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
 	}
 	// The side effect that outlives the expression, written the way the
 	// dialect writes a number — so `i+=1.5` leaves 1.5 behind and not 1.
+	if x.Index != nil {
+		idx, ierr := r.evalNum(x.Index)
+		if ierr != nil {
+			return intNum(0), ierr
+		}
+		r.setArrayElem(x.Name, idx.asInt(), r.formatNum(v))
+		return v, nil
+	}
 	r.setVar(x.Name, r.formatNum(v))
 	return v, nil
+}
+
+// arithAssignTarget is the current value of what an assignment writes to,
+// which is an element when the target carries a subscript.
+func (r *Runner) arithAssignTarget(x *syntax.ArithAssign) (arithNum, error) {
+	if x.Index == nil {
+		return r.arithValueOf(x.Name, 0)
+	}
+	return r.arithElement(&syntax.ArithIndex{Name: x.Name, Index: x.Index})
 }
 
 func (r *Runner) evalBinary(x *syntax.ArithBinary) (arithNum, error) {

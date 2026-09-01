@@ -1501,6 +1501,11 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `arith/a-braced-parameter-in-an-expression` | `5` | `5` | `5` | `5` | `5` | `5` |
 | `arith/a-command-substitution-in-an-expression` | `7` | `7` | `7` | `7` | `7` | `7` |
 | `arith/a-name-is-not-substituted` | `8` | `8` | `8` | `8` | `8` | `8` |
+| `arith/an-array-element-in-an-expression` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `4` | `4` | `4` | `4` | `3` |
+| `arith/a-subscript-is-an-expression` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `5` | `5` | `5` | `5` | `4` |
+| `arith/an-element-past-the-end-is-zero` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `1` | `1` | `1` | `1` | `1` |
+| `arith/a-subscript-on-something-that-is-not-an-array` | `<shell>: 1: arithmetic expression: expecting EOF: " nosucharray[0] + 1 "` *(status 2)* | `1` | `1` | `1` | `1` | `1` |
+| `arith/assigning-to-an-element` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `9` | `9` | `9` | `9` | `9` |
 
 - `arith/bare-name-is-a-variable` — a bare name inside arithmetic is a variable reference, which is why the contents cannot be lexed as ordinary words
   ```sh
@@ -1653,6 +1658,26 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `arith/a-name-is-not-substituted` — the counter-case: without a `$` nothing is substituted and the name is resolved by the evaluator, which is a different rule with a different answer where a value is not a number
   ```sh
   x=7; echo $(( x + 1 ))
+  ```
+- `arith/an-array-element-in-an-expression` — written without a `$`, so it is read as part of the expression rather than substituted into it — and it counts from the dialect's own base, which is why the same text is 4 in two shells and 3 in the third
+  ```sh
+  a=(3 4 5); echo $(( a[1] ))
+  ```
+- `arith/a-subscript-is-an-expression` — the subscript is evaluated rather than taken as text, and the name inside it resolves without a `$` for the same reason the array's does
+  ```sh
+  a=(3 4 5); i=1; echo $(( a[i+1] ))
+  ```
+- `arith/an-element-past-the-end-is-zero` — reading past the end is zero rather than an error, which is what lets a script test an element it may not have
+  ```sh
+  a=(3 4); echo $(( a[9] + 1 ))
+  ```
+- `arith/a-subscript-on-something-that-is-not-an-array` — and the same for a name that was never an array at all, which is the form a version check uses before it knows whether the shell set one
+  ```sh
+  echo $(( nosucharray[0] + 1 ))
+  ```
+- `arith/assigning-to-an-element` — the subscript belongs to the assignment's target, so `a[1] = 9` writes an element rather than evaluating one and throwing it away
+  ```sh
+  a=(3 4); (( a[1] = 9 )); echo "${a[1]}"
   ```
 
 ## conditions

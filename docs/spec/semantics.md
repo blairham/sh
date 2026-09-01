@@ -1309,3 +1309,31 @@ all produce byte-identical output to bash now.
 That is the second time a fix has revealed the *next* thing behind it, and
 the argument for giving the sweep a run mode: a parse-only check finds what
 cannot be read, and says nothing about what cannot be done.
+
+## Two routes to the same element
+
+`${a[1]}` is substituted into an expression before it is read. `a[1]` is read
+as part of it. Same element, two routes, and both have to count from the same
+base — the dialect's, which is 0 in bash and ksh93 and 1 in zsh, so the same
+text is 4 in two shells and 3 in the third.
+
+The subscript is an expression of its own, so `a[i+1]` works and the name in
+it needs no `$` for the same reason the array's does not. Reading past the end
+is zero, and so is a subscript on a name that was never an array — which is
+the form a version check uses before it knows whether the shell set one:
+
+    (( BASH_VERSINFO[0] < 3 ))     zero, not an error, where there is no such
+                                   array
+
+A subscript on an assignment's target belongs to the target, so `(( a[1] = 9 ))`
+writes an element rather than evaluating one and discarding it.
+
+Whether a dialect has subscripts at all is the flag that already admits
+`${a[1]}` — one question asked in the two places that need it. Where it is
+off, `a[0]` inside an expression is a name followed by text that cannot be an
+operator, and dash reports it as exactly that.
+
+### What it fixed
+
+`bats`, the last of the two arithmetic causes the sweep found. The sweep is
+now down to one failure: `brew`, which uses a regex group in `[[ =~ ]]`.

@@ -290,3 +290,20 @@ func TestQuantifiedGroupsMayBeConditionOnly(t *testing.T) {
 	// The condition's rules end with the condition.
 	mustFail(t, `[[ a == b ]]; case abc in @(abc|xyz)) :;; esac`, cond, "after the condition has closed")
 }
+
+// TestAnArithmeticSubscriptNeedsTheSameFlag: whether `a[i]` is a subscript is
+// one question, asked in the two places that need it — `${a[i]}` and inside an
+// expression. A dialect with no arrays has neither.
+func TestAnArithmeticSubscriptNeedsTheSameFlag(t *testing.T) {
+	for _, src := range []string{`echo $(( a[0] ))`, `echo $(( a[i+1] ))`, `echo $(( a[0] = 1 ))`} {
+		mustParse(t, src, Core(), "a subscript where the dialect has them")
+		mustFail(t, src, POSIX(), "a subscript where it does not")
+	}
+	// `(( … ))` is not the way to show it: a dialect without the arithmetic
+	// command reads that as two nested subshells running a command called
+	// `a[0]`, which parses perfectly well and means something else entirely.
+	mustParse(t, `(( a[0] = 1 ))`, POSIX(), "nested subshells")
+	// Without the brackets it parses either way, which is what makes the
+	// flag about subscripts rather than about arithmetic.
+	mustParse(t, `echo $(( a ))`, POSIX(), "a plain name")
+}

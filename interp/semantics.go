@@ -534,6 +534,17 @@ type Semantics struct {
 	// them. POSIX requires only "greater than 128", which decides nothing,
 	// so the preset follows the three that agree.
 	SignalDeathStatusIsTwoFiftySix Answer
+
+	// PipefailOption is whether `set -o pipefail` exists, making a pipeline
+	// report its last failing element rather than its last element. True in
+	// bash, ksh93 and zsh; absent from dash and from POSIX, where a pipeline
+	// is defined to report its last command and nothing offers to change it.
+	//
+	// Not a wording difference: where it is absent the name is not an option
+	// at all, so `set -o pipefail` fails and the pipeline goes on reporting
+	// its last element — which is the answer a script guarding against a
+	// failure upstream is specifically trying not to get.
+	PipefailOption Answer
 }
 
 // There is deliberately no CoreSemantics, and the absence is the sharpest
@@ -606,7 +617,10 @@ func PosixSemantics() Semantics {
 		TestAcceptsDoubleEqual: No,
 		// POSIX requires only "greater than 128" for a command killed by a
 		// signal, which decides nothing; three of the four use 128.
-		SignalDeathStatusIsTwoFiftySix:     No,
+		SignalDeathStatusIsTwoFiftySix: No,
+		// POSIX defines a pipeline's status as its last command's, and
+		// offers nothing to change it.
+		PipefailOption:                     No,
 		ArithInvalidOctalDigitIsError:      Yes,
 		RegexQuotingMakesLiteral:           No,
 		LastPipelineElementInCurrentShell:  No,

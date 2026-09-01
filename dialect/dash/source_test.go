@@ -204,3 +204,12 @@ func TestAKilledCommandsStatus(t *testing.T) {
 		t.Errorf("said %q, want st=141", out)
 	}
 }
+
+// TestPipefail: dash has no such option: the name is refused and the pipeline goes on reporting its last element, which is the 0 the option exists to avoid.
+func TestPipefail(t *testing.T) {
+	dir := t.TempDir()
+	out, _ := runDash(t, dir, "set -o pipefail\n(exit 3) | (exit 4) | true\necho st=$?\n")
+	if !strings.Contains(out, "st=0") {
+		t.Errorf("said %q, want st=0", out)
+	}
+}

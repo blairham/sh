@@ -217,3 +217,12 @@ func TestAKilledCommandsStatus(t *testing.T) {
 		t.Errorf("said %q, want st=141", out)
 	}
 }
+
+// TestPipefail: bash has the option, and the last *failing* element is 4 rather than the last element's 0.
+func TestPipefail(t *testing.T) {
+	dir := t.TempDir()
+	out, _ := runBash(t, dir, "set -o pipefail\n(exit 3) | (exit 4) | true\necho st=$?\n")
+	if !strings.Contains(out, "st=4") {
+		t.Errorf("said %q, want st=4", out)
+	}
+}

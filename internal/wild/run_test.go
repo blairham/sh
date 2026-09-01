@@ -121,3 +121,32 @@ func TestNormalisingDoesNotEatTheScriptsOwnWords(t *testing.T) {
 		t.Errorf("two shells naming themselves were reported as different: %+v", rep.Mismatches)
 	}
 }
+
+// A shell named by a bare word must not have that word struck out of the
+// scripts' output.
+//
+// The reference shell is named on the command line and defaults to `bash`, so
+// normalise was handed a bare word and replaced every occurrence of it — a
+// word that appears in a great many scripts' own output for reasons that have
+// nothing to do with which shell is running. `GNU bashbug` became
+// `GNU <shell>bug` on one side and stayed as it was on the other, and two
+// identical outputs were reported as a difference.
+//
+// The two sides have to be *named* differently for this to bite, which is
+// exactly the sweep's own arrangement: ours is a built binary's path and the
+// reference is whatever was typed on the command line. Here they are one
+// shell under two names, so anything they disagree about is the harness.
+func TestAShellsNameIsNotStruckOutOfTheOutput(t *testing.T) {
+	dir := t.TempDir()
+	// The script says the reference's name as part of a longer word, which is
+	// what a bare-word replacement would cut in half.
+	script := write(t, dir, "s", "#!/bin/sh\necho 'GNU shbug'\n")
+
+	rep := wild.RunSweep(context.Background(), []string{script}, "/bin/sh", "sh", 10*time.Second)
+	if rep.Ran == 0 {
+		t.Skip("sh did not run here")
+	}
+	if rep.Agreed != rep.Ran || len(rep.Mismatches) != 0 {
+		t.Errorf("one shell under two names disagreed with itself: %+v", rep.Mismatches)
+	}
+}

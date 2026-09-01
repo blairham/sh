@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -38,6 +39,13 @@ func main() {
 		timeout = flag.Duration("timeout", 10*time.Second, "how long one run may take")
 	)
 	flag.Parse()
+	// Resolved to a path before it is used, so a diagnostic naming the shell
+	// can be recognized and so normalise is never handed a bare word. A name
+	// that is not on PATH is left as it was and fails where it is used, which
+	// says more than a failure here would.
+	if p, err := exec.LookPath(*reference); err == nil {
+		*reference = p
+	}
 
 	rep := wild.Sweep(context.Background(), strings.Split(*dirs, ","), bash.Dialect(), *reference)
 

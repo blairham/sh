@@ -396,3 +396,42 @@ func TestACommandStringIsReadWhole(t *testing.T) {
 		t.Error("zsh reads a command string whole")
 	}
 }
+
+// TestTheRefusalOfANonBuiltinNamesNoBuiltin: zsh names the speaking builtin in
+// a diagnostic's location — `zsh:cd:1:`, `zsh:shift:1:` — and does not here.
+// The message is about a name that is *not* a builtin, so there is no builtin
+// speaking, and naming `builtin` there would be naming the wrong one.
+func TestTheRefusalOfANonBuiltinNamesNoBuiltin(t *testing.T) {
+	f, err := syntax.Parse(`builtin ls`, zsh.Dialect())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	s, d := zsh.Semantics(), zsh.Diagnostics()
+	r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+	zsh.Apply(r)
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	got := strings.TrimSpace(out.String())
+	if !strings.Contains(got, "no such builtin: ls") {
+		t.Errorf("got %q, want zsh's wording", got)
+	}
+	if strings.Contains(got, ":builtin:") {
+		t.Errorf("got %q, want no builtin named in the location", got)
+	}
+	// The contrast: a builtin that really is speaking is named.
+	out.Reset()
+	f, err = syntax.Parse(`shift 99`, zsh.Dialect())
+	if err != nil {
+		t.Fatal(err)
+	}
+	r = &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+	zsh.Apply(r)
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); !strings.Contains(got, ":shift:") {
+		t.Errorf("got %q, want the speaking builtin named", got)
+	}
+}

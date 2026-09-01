@@ -184,6 +184,20 @@ func (r *Runner) setOption(name string, on bool) bool {
 		r.noclobber = on
 	case "noglob":
 		r.noglob = on
+	case "pipefail":
+		// The one name here that is not unanimous.
+		if r.ask(r.sem().PipefailOption, "`set -o pipefail`") {
+			r.pipefail = on
+			return true
+		}
+		if r.unspecified {
+			// The refusal is already reported. A second complaint about the
+			// same word would only obscure it.
+			return true
+		}
+		// A definite no: the name is not an option in this dialect, and is
+		// reported exactly as any other name this shell does not have.
+		fallthrough
 	default:
 		r.diagf("set: %s: invalid option name\n", name)
 		return false

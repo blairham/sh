@@ -191,3 +191,12 @@ func TestAKilledCommandsStatus(t *testing.T) {
 		t.Errorf("said %q, want st=141", out)
 	}
 }
+
+// TestPipefail: zsh has the option.
+func TestPipefail(t *testing.T) {
+	dir := t.TempDir()
+	out, _ := runZsh(t, dir, "set -o pipefail\n(exit 3) | (exit 4) | true\necho st=$?\n")
+	if !strings.Contains(out, "st=4") {
+		t.Errorf("said %q, want st=4", out)
+	}
+}

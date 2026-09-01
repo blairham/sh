@@ -254,6 +254,11 @@ type Runner struct {
 	// expansion — a `case` pattern still matches, because that is matching
 	// and not expansion.
 	noglob bool
+
+	// pipefail is `set -o pipefail`: a pipeline reports its last *failing*
+	// element instead of its last one. Not every dialect has the option, so
+	// the field is only ever set through an axis.
+	pipefail bool
 	// declaring names commands whose `name=value` arguments are assignments,
 	// beyond the ones the core already knows. A dialect adds its own.
 	declaring map[string]bool

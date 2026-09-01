@@ -185,6 +185,17 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline) error {
 	// is exactly why the others are worth keeping.
 	r.recordPipeStatus(statuses)
 	r.status = statuses[n-1]
+	if r.pipefail {
+		// The last failure rather than the first: `false | false | true` is
+		// 1 either way, but where two elements fail with different statuses
+		// it is the rightmost one that is reported. Measured against bash,
+		// ksh93 and zsh, which agree.
+		for _, st := range statuses {
+			if st != 0 {
+				r.status = st
+			}
+		}
+	}
 	return nil
 }
 

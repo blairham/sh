@@ -24,8 +24,6 @@ func TestEverySignalHasBothSpellings(t *testing.T) {
 			t.Errorf("%s is %s, and %s names nothing", k.Name, n, n)
 			continue
 		}
-		// A number two constants share resolves to whichever the list names
-		// first, so the round trip is checked by number rather than by name.
 		if sig, found := trappableSignals[got]; found && int(sig) != int(k.Sig) {
 			t.Errorf("%s resolves to %s, which is %d and not %d", n, got, sig, k.Sig)
 		}
@@ -48,5 +46,20 @@ func TestNoNumberNamesASignalTheHostDoesNotHave(t *testing.T) {
 		if name, ok := signalNumbers[n]; ok {
 			t.Errorf("%q names %s, want nothing — 0 is EXIT and is handled before the table", n, name)
 		}
+	}
+}
+
+// No two signals in the list share a number, which is what lets the map be
+// built by assignment without deciding which name wins. The aliases that
+// would collide — IOT for ABRT, CLD for CHLD, POLL for IO — are deliberately
+// absent; adding one would make the map depend on the order above it.
+func TestNoTwoSignalsShareANumber(t *testing.T) {
+	byNumber := map[int]string{}
+	for _, k := range knownSignals {
+		if first, seen := byNumber[int(k.Sig)]; seen {
+			t.Errorf("%s and %s are both %d: the number map would depend on the order they are listed in",
+				first, k.Name, k.Sig)
+		}
+		byNumber[int(k.Sig)] = k.Name
 	}
 }

@@ -53,12 +53,11 @@ var trappableSignals = func() map[string]syscall.Signal {
 var signalNumbers = func() map[string]string {
 	m := make(map[string]string, len(knownSignals))
 	for _, k := range knownSignals {
-		n := strconv.Itoa(int(k.Sig))
-		// First name wins, so a number two constants share resolves the way
-		// the list is ordered rather than the way a map happens to iterate.
-		if _, seen := m[n]; !seen {
-			m[n] = k.Name
-		}
+		// No two entries share a number, which a test insists on: the aliases
+		// that would collide — IOT for ABRT, CLD for CHLD, POLL for IO — are
+		// not in the list, and adding one would make this map's contents
+		// depend on the order it is written in.
+		m[strconv.Itoa(int(k.Sig))] = k.Name
 	}
 	return m
 }()

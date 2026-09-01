@@ -73,10 +73,11 @@ func biBuiltin(r *Runner, ctx context.Context, args []string) int {
 		// names it everywhere else: this message is *about* a name that is
 		// not one, so there is no builtin speaking. Measured — `zsh:cd:1:`
 		// and `zsh:shift:1:` against a plain `zsh:1: no such builtin`.
-		outer := r.inBuiltin
+		// Cleared and not put back: the caller that dispatched this builtin
+		// saved the name and restores it either way, so restoring it here
+		// would be a line nothing could ever observe.
 		r.inBuiltin = ""
 		r.diagf("%s\n", Wording(r.diag().NotABuiltin, "builtin: %s: not a shell builtin", args[0]))
-		r.inBuiltin = outer
 		return 1
 	}
 	return fn(r, ctx, args[1:])

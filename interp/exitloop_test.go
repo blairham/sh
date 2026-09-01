@@ -62,3 +62,28 @@ func TestTheOtherLoopControlsAreUnchanged(t *testing.T) {
 		}
 	}
 }
+
+// `continue` starts the next round rather than stopping the loop, and a loop
+// that ran no rounds reports 0 rather than whatever its condition produced.
+//
+// Both are easy to break in a way that nothing notices: a `continue` that
+// stopped the loop still reaches whatever follows it, and a status left over
+// from a failed condition is overwritten by the next command. Counting the
+// rounds and reading `$?` straight away is what makes them visible.
+func TestContinueGoesRoundAgainAndAnEmptyLoopReportsZero(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`i=0; for x in 1 2 3; do i=$((i+1)); continue; done; echo $i`, "3"},
+		{`i=0; while [ $i -lt 3 ]; do i=$((i+1)); continue; done; echo $i`, "3"},
+		{`for x in 1 2 3; do continue; echo no; done; echo done`, "done"},
+		// The status of a loop that never ran a round, read before anything
+		// else can overwrite it.
+		{`while false; do :; done; echo $?`, "0"},
+		{`for x in; do :; done; echo $?`, "0"},
+		// And a loop that did run reports its body's.
+		{`for x in 1; do false; done; echo $?`, "1"},
+	} {
+		if out, _ := run(t, tc.src, nil); strings.TrimSpace(out) != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, strings.TrimSpace(out), tc.want)
+		}
+	}
+}

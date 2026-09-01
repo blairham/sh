@@ -20,6 +20,8 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | an unterminated construct is reported on | last line | **the line after** | last line | last line |
 | `${#@}` is the count of parameters | **no** | yes | yes | yes |
 | `[^abc]` negates | **no** | yes | yes | yes |
+| `@(a|b)` in a pattern | no | **in `[[ ]]` only** | yes | no |
+| a bare `(a|b)` in a pattern | no | no | no | **yes** |
 | a leading zero means octal | yes | yes | yes | **no** |
 | a fatal error exits | **2** | 1 | 1 | 1 |
 | a name-shaped value is re-evaluated | **no** | yes | **no** | yes |
@@ -1057,3 +1059,42 @@ below zero. It went unnoticed because the one caller that could reach it was
 the one nothing tested.
 
 It was found by writing a test for `~1.5`, whose expected answer is `-2`.
+
+## The same text, read by two different rules
+
+`@(abc|xyz)` matches `abc` in ksh93 and matches `@abc` in zsh. Both parse it,
+neither is wrong, and they are not reading the same thing:
+
+- **ksh93** has *extended patterns*: a quantifier — `@`, `?`, `+`, `*`, `!` —
+  in front of a group. `@(abc|xyz)` is "exactly one of these".
+- **zsh** has *alternation*: a bare group anywhere inside a pattern word, so
+  `a(b|c)` matches `ab`. The `@` in `@(abc|xyz)` is then just a literal `@`,
+  and the group follows it.
+
+So the two are separate flags rather than one, and a shell can have either
+without the other. Reading them as one feature would have made `@abc` match
+in ksh93 and `abc` match in zsh, which is wrong in both.
+
+**bash has the first, and only inside `[[ ]]`.** `[[ abc == @(abc|xyz) ]]`
+matches while `case abc in @(abc|xyz))` is a syntax error, so *where* a group
+is allowed is a separate question from whether the shell has one, and it is
+its own field. The lexer is what has to know, because whether `(` ends the
+word is settled before any parser sees a token — so the parser tells it when
+a condition opens and when it closes.
+
+### Two things a bare group must not swallow
+
+Allowing `(` inside a word is a wide rule, and it broke two narrower ones
+before the exceptions were found. Both are measured against the one shell
+that has bare groups, and both are that shell's own answers:
+
+    f() { echo hi; }     an empty `()` is a function definition. That shell
+                         rejects `a()` as a pattern outright, so nothing is
+                         lost by leaving an empty group alone.
+
+    a=(x y)              a `(` straight after `=` opens an array literal,
+                         never a group: `a=(b|c)` is a parse error there
+                         rather than a pattern, so the assignment always wins.
+
+The first was found by the dialect's own prelude failing to parse. The second
+by five array cases in the corpus turning `(x y)` into a literal.

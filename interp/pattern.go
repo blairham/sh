@@ -65,6 +65,16 @@ func (r *Runner) patternOf(w *syntax.Word) string {
 type patternOpts struct {
 	caret   bool
 	bracket BracketPolicy
+	// group says a parenthesised group in the pattern is a group rather than
+	// literal parentheses, and quantified says a `@?+*!` in front of one is
+	// its quantifier rather than an ordinary character.
+	//
+	// They are separate because the two dialects that have groups do not have
+	// the same one: `a(b|c)` matches `ab` in the shell with bare groups, and
+	// `@(abc|xyz)` is a literal `@` followed by a group there where the other
+	// reads it as an extended pattern.
+	group      bool
+	quantified bool
 	// bad is set when the pattern is one the dialect rejects outright. It is
 	// a field rather than a return value because matchHere recurses, and
 	// threading a second result through every branch obscured the matching.
@@ -77,6 +87,9 @@ func matchPattern(pattern, s string, o patternOpts) bool {
 
 func matchHere(p, s string, o patternOpts) bool {
 	for len(p) > 0 {
+		if body, quant, rest, ok := splitGroup(p, o); ok {
+			return matchGroup(body, quant, rest, s, o)
+		}
 		switch p[0] {
 		case '*':
 			// Collapse a run of stars, then try every split point. The
@@ -129,6 +142,120 @@ func matchHere(p, s string, o patternOpts) bool {
 		}
 	}
 	return s == ""
+}
+
+// splitGroup peels a group off the front of a pattern.
+//
+// quant is the character in front of it, or 0 for a bare group, which the
+// dialect with bare groups treats as "exactly one" — the same as `@`.
+func splitGroup(p string, o patternOpts) (body string, quant byte, rest string, ok bool) {
+	i := 0
+	if o.quantified && len(p) > 1 && p[1] == '(' {
+		switch p[0] {
+		case '@', '?', '+', '*', '!':
+			quant, i = p[0], 1
+		}
+	}
+	if quant == 0 {
+		if !o.group || p[0] != '(' {
+			return "", 0, "", false
+		}
+	}
+	end, found := closingParen(p[i:])
+	if !found {
+		return "", 0, "", false
+	}
+	return p[i+1 : i+end], quant, p[i+end+1:], true
+}
+
+// closingParen is the offset of the `)` that closes the `(` at the start of p.
+func closingParen(p string) (int, bool) {
+	depth := 0
+	for i := 0; i < len(p); i++ {
+		switch p[i] {
+		case '\\':
+			i++
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return i, true
+			}
+		}
+	}
+	return 0, false
+}
+
+// alternatives splits a group's body on the `|` between its arms, ignoring the
+// ones inside a nested group or a bracket expression.
+func alternatives(body string) []string {
+	var out []string
+	depth, start := 0, 0
+	for i := 0; i < len(body); i++ {
+		switch body[i] {
+		case '\\':
+			i++
+		case '(':
+			depth++
+		case ')':
+			depth--
+		case '|':
+			if depth == 0 {
+				out = append(out, body[start:i])
+				start = i + 1
+			}
+		}
+	}
+	return append(out, body[start:])
+}
+
+// matchGroup matches a group and whatever follows it.
+//
+// Every arm is tried against every split of the subject, because a group that
+// matches more than one length can only be resolved by what comes after it:
+// `+(a)b` against `aab` needs the group to stop before the b.
+func matchGroup(body string, quant byte, rest, s string, o patternOpts) bool {
+	arms := alternatives(body)
+	// `!(…)` is the odd one: it matches any text the arms do *not*, so it is
+	// answered by asking the ordinary question and inverting it rather than
+	// by trying the arms one at a time.
+	if quant == '!' {
+		for i := 0; i <= len(s); i++ {
+			if !matchesAnyArm(arms, s[:i], o) && matchHere(rest, s[i:], o) {
+				return true
+			}
+		}
+		return false
+	}
+	if quant == '?' || quant == '*' {
+		// Zero repetitions is allowed, so the rest may start here.
+		if matchHere(rest, s, o) {
+			return true
+		}
+	}
+	repeat := quant == '*' || quant == '+'
+	for i := 1; i <= len(s); i++ {
+		if !matchesAnyArm(arms, s[:i], o) {
+			continue
+		}
+		if matchHere(rest, s[i:], o) {
+			return true
+		}
+		if repeat && matchGroup(body, quant, rest, s[i:], o) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesAnyArm(arms []string, s string, o patternOpts) bool {
+	for _, a := range arms {
+		if matchHere(a, s, o) {
+			return true
+		}
+	}
+	return false
 }
 
 // matchBracket consumes a bracket expression from p and reports whether c is
@@ -252,5 +379,23 @@ func isDigit(c byte) bool { return c >= '0' && c <= '9' }
 // literal in every shell measured. Only `case` and `[[ ]]` ask it, through
 // matchPatternR.
 func (r *Runner) patternOpts(pattern string) patternOpts {
-	return patternOpts{caret: r.caretNegates(pattern), bracket: BracketLiteral}
+	return patternOpts{
+		caret:      r.caretNegates(pattern),
+		bracket:    BracketLiteral,
+		group:      r.dialect().PatternAlternation,
+		quantified: r.hasQuantifiedGroups(),
+	}
+}
+
+// hasQuantifiedGroups reports whether `@(a|b)` is a group here rather than a
+// literal `@` and some parentheses.
+//
+// The condition-only answer is folded in rather than tracked: the lexer keeps
+// a `(` inside a word only where the dialect allows one, so a group can only
+// have reached the matcher from a place that allows it. Reading them wherever
+// they arrive is therefore the same answer, and it saves threading the
+// condition down to a function that has no parser and should not need one.
+func (r *Runner) hasQuantifiedGroups() bool {
+	d := r.dialect()
+	return d.ExtendedPattern || d.ExtendedPatternInCondition
 }

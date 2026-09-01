@@ -28,6 +28,12 @@ type Lexer struct {
 	err        error
 	incomplete bool
 
+	// inCondition is set while the parser is inside `[[ ]]`. One dialect
+	// reads pattern groups there and nowhere else, and the lexer is what has
+	// to know: whether `(` ends the word is decided before any parser sees a
+	// token.
+	inCondition bool
+
 	// pending holds here-documents whose bodies have not been read yet.
 	//
 	// A body starts after the *next newline*, not after the operator — the
@@ -253,6 +259,80 @@ func (l *Lexer) isWordEnd(c byte) bool {
 	return false
 }
 
+// endsWord reports whether c closes the word being read.
+//
+// It is isWordEnd with the one exception that depends on where we are: a `(`
+// that opens a pattern group belongs to the word instead of ending it, and the
+// switch below cannot see it unless this lets it through.
+func (l *Lexer) endsWord(c byte, midWord bool) bool {
+	if !l.isWordEnd(c) {
+		return false
+	}
+	return c != '(' || !l.opensPatternGroup(midWord)
+}
+
+// opensPatternGroup reports whether a `(` here belongs to the word.
+//
+// Two dialects allow it and they allow different things. One takes a group
+// only behind a quantifier — `@(`, `?(`, `+(`, `*(`, `!(` — and the other
+// takes a bare `(` anywhere inside a word. Both need to be mid-word, because
+// a `(` that starts one opens a subshell.
+func (l *Lexer) opensPatternGroup(midWord bool) bool {
+	if !midWord {
+		return false
+	}
+	// An empty `()` is a function definition and not a group, which is how
+	// `f() { … }` survives the rule: the shell that takes bare groups rejects
+	// `a()` as a pattern outright, so nothing is lost by leaving it alone.
+	if l.peekAt(1) == ')' {
+		return false
+	}
+	// And a `(` straight after `=` opens an array literal, never a group —
+	// measured, because it is the same shell: `a=(b|c)` is a parse error
+	// there rather than a pattern, so the assignment always wins.
+	if l.off > 0 && l.src[l.off-1] == '=' {
+		return false
+	}
+	if l.dialect.PatternAlternation {
+		return true
+	}
+	extended := l.dialect.ExtendedPattern ||
+		(l.inCondition && l.dialect.ExtendedPatternInCondition)
+	if !extended || l.off == 0 {
+		return false
+	}
+	switch l.src[l.off-1] {
+	case '@', '?', '+', '*', '!':
+		return true
+	}
+	return false
+}
+
+// scanPatternGroup consumes `( … )` and returns it as written, nesting and
+// all. Nothing is interpreted here: the group is text until the matcher reads
+// it, exactly as a bracket expression is.
+func (l *Lexer) scanPatternGroup() string {
+	start := l.off
+	depth := 0
+	for !l.eof() {
+		c := l.advance()
+		switch c {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return l.src[start:l.off]
+			}
+		}
+	}
+	// Unterminated: the caller reports the word as unfinished, the same as an
+	// unclosed quote.
+	l.incomplete = true
+	l.fail(l.pos(), "unterminated pattern group")
+	return l.src[start:l.off]
+}
+
 // scanWord reads a word as a sequence of spans, one per run of uniform
 // quoting. The spans are the point: a"b c"d is one word of three spans, and
 // only the unquoted ones are subject to splitting and globbing later.
@@ -270,7 +350,7 @@ func (l *Lexer) scanWord(start Pos) Token {
 
 	for !l.eof() {
 		c := l.peek()
-		if l.isWordEnd(c) {
+		if l.endsWord(c, lit.Len() > 0 || len(spans) > 0) {
 			break
 		}
 		switch {
@@ -296,6 +376,15 @@ func (l *Lexer) scanWord(start Pos) Token {
 				Quoting: BackslashQuoted,
 				Pos:     escPos,
 			})
+
+		case c == '(' && l.opensPatternGroup(lit.Len() > 0 || len(spans) > 0):
+			// A parenthesised group belongs to the word rather than ending
+			// it. Only mid-word: a leading `(` opens a subshell, or is the
+			// paren a `case` arm may carry, and neither is a pattern.
+			if lit.Len() == 0 {
+				litPos = l.pos()
+			}
+			lit.WriteString(l.scanPatternGroup())
 
 		case c == '\'':
 			flush()

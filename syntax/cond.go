@@ -107,12 +107,17 @@ var condBinaryWordOps = map[string]bool{
 // parseTestClause parses `[[ … ]]`. The opening word is current on entry.
 func (p *Parser) parseTestClause() Command {
 	c := &TestClause{Start: p.tok.Pos}
+	// One dialect reads pattern groups here and nowhere else, and the lexer
+	// decides where a word ends — so it has to be told before the first token
+	// inside the condition is read.
+	p.lex.inCondition = true
 	p.next()
 	c.Expr = p.condOr()
 	if c.Expr == nil && p.err == nil {
 		p.fail("expected a condition after [[")
 	}
 	c.Stop = p.tok.End
+	p.lex.inCondition = false
 	if !p.atWord("]]") {
 		p.fail("expected ]]")
 		return c

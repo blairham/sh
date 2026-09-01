@@ -349,3 +349,13 @@ func TestAMalformedExpressionIsAFailedCommand(t *testing.T) {
 		t.Errorf("got %q, want no echoed line", out)
 	}
 }
+
+// TestPatternGroups: which groups this shell reads, and where.
+func TestPatternGroups(t *testing.T) {
+	if bash.Dialect().ExtendedPattern {
+		t.Error("bash does not read extended patterns in a case pattern")
+	}
+	if !bash.Dialect().ExtendedPatternInCondition {
+		t.Error("bash reads them inside `[[ ]]`")
+	}
+}

@@ -867,7 +867,11 @@ func (r *Runner) caretNegates(pattern string) bool {
 
 // matchPatternR is matchPattern with the caret axis resolved from the dialect.
 func (r *Runner) matchPatternR(pattern, s string) bool {
-	o := patternOpts{caret: r.caretNegates(pattern)}
+	o := patternOpts{
+		caret:      r.caretNegates(pattern),
+		group:      r.dialect().PatternAlternation,
+		quantified: r.hasQuantifiedGroups(),
+	}
 	var bad bool
 	if hasUnterminatedBracket(pattern) {
 		o.bracket, o.bad = r.bracketPolicy(), &bad

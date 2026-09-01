@@ -64,6 +64,11 @@ type Diagnostics struct {
 	// Zero means the substrate's own, which is 2.
 	DotNoOperandStatus int
 
+	// DotNoOperandUnprefixed prints that usage with no location and no shell
+	// name in front of it. ksh93 alone, and the same thing it does to `kill`'s
+	// usage — a usage line is not a diagnostic there.
+	DotNoOperandUnprefixed bool
+
 	// DotCannotOpen is what `.` says when it cannot read the file. Two verbs,
 	// positional because the shells order them differently: %[1]s is the
 	// operand as written and %[2]s the reason.
@@ -588,7 +593,10 @@ func (d Diagnostics) ParseFailure(err error) string {
 	}
 	switch se.Kind {
 	case syntax.ErrBadSubstitution:
-		return Wording(d.BadSubstitution, se.Msg)
+		// Two verbs for the dialect that words this as a syntax error rather
+		// than as a substitution that was bad: %[1]s the operator it could
+		// not read, %[2]d the line.
+		return Wording(d.BadSubstitution, se.Msg, se.Token, se.Pos.Line)
 	case syntax.ErrArithOperand, syntax.ErrArithOperator:
 		reason, fallback := d.ArithOperandExpected, "operand expected"
 		if se.Kind == syntax.ErrArithOperator {

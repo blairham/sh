@@ -226,3 +226,12 @@ func TestWhoIsSpeakingInAConditionSplitsByWhenItFailed(t *testing.T) {
 		}
 	}
 }
+
+// TestAPatternThatIsNotOneNamesTheToken is the case-arm half of the
+// unexpected-token family: `;;&` is not zsh's, so it stops at the `&`.
+func TestAPatternThatIsNotOneNamesTheToken(t *testing.T) {
+	_, err := syntax.Parse("case a in a) echo x;;& esac", zsh.Dialect())
+	if got, want := zsh.Diagnostics().ParseFailure(err), "parse error near `&'"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

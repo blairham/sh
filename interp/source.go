@@ -201,7 +201,12 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 		if !r.ask(r.sem().DotWithNoOperandIsAnError, "`.` with no operand being an error") {
 			return 0
 		}
-		r.diagf("%s\n", Wording(r.diag().DotNoOperand, ".: filename argument required"))
+		usage := Wording(r.diag().DotNoOperand, ".: filename argument required")
+		if r.diag().DotNoOperandUnprefixed {
+			r.errf("%s\n", usage)
+		} else {
+			r.diagf("%s\n", usage)
+		}
 		// The status is the measured one either way, rather than the generic
 		// fatal status: ksh93 ends the script here *and* reports 2, where the
 		// fatal status it uses everywhere else is 1. Getting that from

@@ -187,3 +187,36 @@ func TestUnexpectedTokensCarryTheLine(t *testing.T) {
 		}
 	}
 }
+
+// TestKshHasItsOwnNamesForThings covers four answers that are ksh93's alone,
+// three of them wordings and one a grammar flag.
+func TestKshHasItsOwnNamesForThings(t *testing.T) {
+	// `times` is a reserved word, so a word after it does not parse at all.
+	if _, err := syntax.Parse("times foo", ksh.Dialect()); err == nil {
+		t.Error("`times foo` should not parse where times is reserved")
+	} else if got, want := ksh.Diagnostics().ParseFailure(err),
+		"syntax error at line 1: `foo' unexpected"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	// And `times` on its own still parses, which is the half a flag like this
+	// is easiest to break.
+	if _, err := syntax.Parse("times", ksh.Dialect()); err != nil {
+		t.Errorf("`times` alone should still parse: %v", err)
+	}
+
+	// An operator ksh93 cannot read is a syntax error naming the character,
+	// not a bad substitution.
+	_, err := syntax.Parse("echo ${x^^}", ksh.Dialect())
+	if got, want := ksh.Diagnostics().ParseFailure(err),
+		"syntax error at line 1: `^' unexpected"; got != want {
+		t.Errorf("${x^^}: got %q, want %q", got, want)
+	}
+
+	d := ksh.Diagnostics()
+	if !d.DotNoOperandUnprefixed {
+		t.Error("`.` with no operand should print its usage bare")
+	}
+	if got, want := d.InvalidNumber, "%[1]s: parameter not set"; got != want {
+		t.Errorf("InvalidNumber = %q, want %q — a value that is not a number is a name here", got, want)
+	}
+}

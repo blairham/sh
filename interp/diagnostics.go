@@ -368,6 +368,18 @@ type Diagnostics struct {
 	// %[3]s, which costs nothing — an indexed format ignores arguments past
 	// the highest index it uses.
 	ArithError string
+	// ArithOperandExpected is the reason when an expression needed a value
+	// and found none: `$((1+))`. One verb, the offending token, which only
+	// the shell that names one uses.
+	//
+	// It is a reason rather than a message for the same purpose the others
+	// here are: ArithError wraps it, so a dialect states the reason once and
+	// the shape once instead of repeating the shape in every reason.
+	ArithOperandExpected string
+	// ArithOperatorExpected is the reason when an expression has something
+	// left over: `$((1 2))`. Same verb, and one shell puts it inside the
+	// reason — "operator expected at `2'".
+	ArithOperatorExpected string
 	// DivisionByZero is the reason itself, which dash and ksh93 spell
 	// differently. No verbs.
 	DivisionByZero string
@@ -547,6 +559,13 @@ func (d Diagnostics) ParseFailure(err error) string {
 	switch se.Kind {
 	case syntax.ErrBadSubstitution:
 		return Wording(d.BadSubstitution, se.Msg)
+	case syntax.ErrArithOperand, syntax.ErrArithOperator:
+		reason, fallback := d.ArithOperandExpected, "operand expected"
+		if se.Kind == syntax.ErrArithOperator {
+			reason, fallback = d.ArithOperatorExpected, "operator expected"
+		}
+		return Wording(d.ArithError, "%[1]s: %[2]s",
+			se.Expr, Wording(reason, fallback, se.Token), se.Token)
 	case syntax.ErrUnterminated:
 		return Wording(d.Unterminated, "syntax error: unterminated %[1]s",
 			se.Construct, se.ConstructLine, se.Innermost, se.Expected,

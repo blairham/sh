@@ -34,6 +34,16 @@ const (
 	// carries the construct, the innermost unclosed keyword, what was
 	// expected and the last token seen: each dialect names the one it names.
 	ErrUnterminated
+	// ErrArithOperand is an arithmetic expression that needed a value and
+	// found none: `$((1+))`. Every shell in the panel words this as an
+	// *arithmetic* failure rather than as a syntax error, which is why it is
+	// its own kind — dash calls it "expecting primary" and bash "operand
+	// expected", both inside the shape they use for a division by zero.
+	ErrArithOperand
+	// ErrArithOperator is an expression with something left over: `$((1 2))`,
+	// and in dash also `$((1,2))`, whose comma it does not have. dash calls
+	// it "expecting EOF" and zsh "operator expected".
+	ErrArithOperator
 )
 
 // Error is a parse failure with its position, kind, and enough of the state
@@ -60,6 +70,11 @@ type Error struct {
 	// LastToken is the last token consumed before the input ran out, which
 	// is what the remaining shell names.
 	LastToken string
+	// Expr is the whole arithmetic expression a failure was inside, and
+	// Token the part of it the failure is attributed to. Every shell quotes
+	// the first; only one names the second.
+	Expr  string
+	Token string
 	// EndLine is the line *after* the input's last, which is where one shell
 	// considers the end of input to be: `eval "if"` is line 2 there and line
 	// 1 in the other three. Input that already ends in a newline puts Pos on

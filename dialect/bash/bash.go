@@ -73,6 +73,8 @@ func Diagnostics() interp.Diagnostics {
 		EvalNaming:                 interp.SourceBeforeLocation,
 		SourceFileNaming:           interp.SourceReplacesShell,
 		UnterminatedEndsOnNextLine: true,
+		ArithOperandExpected:       "arithmetic syntax error: operand expected",
+		ArithOperatorExpected:      "arithmetic syntax error in expression",
 		Unterminated:               "syntax error: unexpected end of file from `%[1]s' command on line %[2]d",
 		SyntaxErrorStatus:          2,
 		// Measured: `.` of a file it cannot open reports 1 and carries on,

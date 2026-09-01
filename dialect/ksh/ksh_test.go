@@ -160,3 +160,16 @@ func TestASourcedFileIsNamedByTheBuiltin(t *testing.T) {
 		t.Errorf("got %v, want it named before the location", got)
 	}
 }
+
+// TestArithmeticFailuresAreTerse is ksh93's shape.
+func TestArithmeticFailuresAreTerse(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"echo $((1 2))", "1 2: arithmetic syntax error"},
+		{"echo $((1+))", "1+: more tokens expected"},
+	} {
+		_, err := syntax.Parse(tc.src, ksh.Dialect())
+		if got := ksh.Diagnostics().ParseFailure(err); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}

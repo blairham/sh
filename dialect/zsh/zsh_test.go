@@ -181,3 +181,17 @@ func TestBorrowedTextReplacesTheShellName(t *testing.T) {
 		t.Errorf("eval is called %q, want %q", got, want)
 	}
 }
+
+// TestArithmeticFailuresQuoteNothing is zsh's shape: it does not quote the
+// expression at all, and it puts the token inside the reason.
+func TestArithmeticFailuresQuoteNothing(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"echo $((1 2))", "bad math expression: operator expected at `2'"},
+		{"echo $((1+))", "bad math expression: operand expected at end of string"},
+	} {
+		_, err := syntax.Parse(tc.src, zsh.Dialect())
+		if got := zsh.Diagnostics().ParseFailure(err); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}

@@ -524,6 +524,16 @@ type Semantics struct {
 	// This is only about `test` and `[`. Inside `[[ ]]` the same spelling is
 	// a pattern match, which is a different question entirely.
 	TestAcceptsDoubleEqual Answer
+
+	// SignalDeathStatusIsTwoFiftySix encodes a command killed by a signal as
+	// 256 + the signal rather than 128 + the signal. True only in ksh93,
+	// which reports 265 for KILL and 271 for TERM where the other three
+	// report 137 and 143.
+	//
+	// Measured across eight signals; it is not a special case for any one of
+	// them. POSIX requires only "greater than 128", which decides nothing,
+	// so the preset follows the three that agree.
+	SignalDeathStatusIsTwoFiftySix Answer
 }
 
 // There is deliberately no CoreSemantics, and the absence is the sharpest
@@ -593,7 +603,10 @@ func PosixSemantics() Semantics {
 		EqualsExpansion:                No,
 		// POSIX gives `test` one spelling of string equality, so `==` is not
 		// an operator; the three shells that accept it added it.
-		TestAcceptsDoubleEqual:             No,
+		TestAcceptsDoubleEqual: No,
+		// POSIX requires only "greater than 128" for a command killed by a
+		// signal, which decides nothing; three of the four use 128.
+		SignalDeathStatusIsTwoFiftySix:     No,
 		ArithInvalidOctalDigitIsError:      Yes,
 		RegexQuotingMakesLiteral:           No,
 		LastPipelineElementInCurrentShell:  No,

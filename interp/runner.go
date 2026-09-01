@@ -898,7 +898,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		// while this goroutine blocks on the process.
 		r.bg.markReady()
 		err := cmd.Wait()
-		r.status = exitStatus(err)
+		r.status = r.exitStatus(err)
 		r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: r.status})
 		return nil
 	}
@@ -909,7 +909,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	case err == nil:
 		r.status = 0
 	case errors.As(err, &ee):
-		r.status = ee.ExitCode()
+		r.status = r.exitStatus(err)
 	default:
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 		r.diagf("%s: %v\n", argv[0], err)
@@ -1121,13 +1121,37 @@ func (r *Runner) assign(a *syntax.Assign) {
 }
 
 // exitStatus turns a wait error into a status.
-func exitStatus(err error) int {
+//
+// A process killed by a signal has no exit code of its own, and Go says -1 —
+// which is not a status a shell can report at all. It reached `$?` as -1 and
+// the process's own exit code as 255, which is how the run sweep found it:
+// /usr/bin/wish is killed by its own launcher and every shell in the panel
+// says 137 where we said 255.
+//
+// The signal goes in the number instead. Which base is the axis.
+func (r *Runner) exitStatus(err error) int {
 	if err == nil {
 		return 0
 	}
 	var ee *exec.ExitError
 	if errors.As(err, &ee) {
+		if ws, ok := ee.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+			return r.signalDeathStatus(ws.Signal())
+		}
 		return ee.ExitCode()
 	}
 	return 126
+}
+
+// signalDeathStatus is 128 or 256 plus the signal.
+//
+// Measured across INT, TERM, KILL, QUIT, HUP, PIPE, ABRT and SEGV: bash, dash
+// and zsh use 128 for every one of them and ksh93 uses 256 for every one of
+// them. Neither is a special case for any particular signal.
+func (r *Runner) signalDeathStatus(sig syscall.Signal) int {
+	base := 128
+	if r.ask(r.sem().SignalDeathStatusIsTwoFiftySix, "the status of a command killed by a signal") {
+		base = 256
+	}
+	return base + int(sig)
 }

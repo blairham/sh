@@ -157,6 +157,11 @@ func (p *Parser) unterminated(expected string) *Error {
 			}
 		}
 	}
+	e.EndLine = p.tok.Pos.Line
+	if !strings.HasSuffix(p.lex.src, "\n") {
+		// The text stopped mid-line, so the end of it is the line after.
+		e.EndLine++
+	}
 	e.Msg = "unexpected end of input"
 	if e.Construct != "" {
 		e.Msg = "unterminated " + e.Construct

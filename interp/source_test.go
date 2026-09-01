@@ -91,6 +91,68 @@ func TestBorrowedTextReportsItsOwnLine(t *testing.T) {
 	}
 }
 
+// TestBorrowedTextIsNamedWhereTheDialectNamesIt covers the three shapes, and
+// the reason there are two fields rather than one: `eval` and a sourced file
+// are two questions, and a dialect may answer them differently.
+func TestBorrowedTextIsNamedWhereTheDialectNamesIt(t *testing.T) {
+	dir := t.TempDir()
+	// The name in the diagnostic is the path `.` resolved, which is absolute
+	// once the runner has a directory of its own. A shell reports the operand
+	// as written and its own directory is the process's, so the two coincide
+	// there and part here; where the name goes is what this is about either
+	// way.
+	path := write(t, dir, "p.sh", "if\n")
+	const src = ". ./p.sh"
+
+	for _, tc := range []struct {
+		name string
+		dg   Diagnostics
+		want string
+	}{
+		{
+			"after the location", Diagnostics{
+				Location: LocationColonLine, Unterminated: "unfinished",
+				SourceFileNaming: SourceAfterLocation,
+			}, "testsh: 2: " + path + ": unfinished\n",
+		},
+		{
+			"before it", Diagnostics{
+				Location: LocationLineWord, Unterminated: "unfinished",
+				SourceFileNaming: SourceBeforeLocation,
+			}, "testsh: " + path + ": line 2: unfinished\n",
+		},
+		{
+			"instead of the shell", Diagnostics{
+				Location: LocationTightLine, Unterminated: "unfinished",
+				SourceFileNaming: SourceReplacesShell,
+			}, path + ":2: unfinished\n",
+		},
+		{
+			// The builtin that read the file rather than the file itself.
+			"as the builtin", Diagnostics{
+				Location: LocationLineWord, Unterminated: "unfinished",
+				SourceFileNaming: SourceBeforeLocation, SourceFileIsTheBuiltin: true,
+			}, "testsh: .: line 2: unfinished\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if out, _ := sourceRun(t, dir, src, permissive(), tc.dg); out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+
+	// eval is asked separately, and can be named something else entirely.
+	dg := Diagnostics{
+		Location: LocationTightLine, Unterminated: "unfinished",
+		EvalNaming: SourceReplacesShell, EvalSourceName: "(eval)",
+		SourceFileNaming: SourceAfterLocation,
+	}
+	if out, _ := sourceRun(t, dir, `eval "if"`, permissive(), dg); out != "(eval):1: unfinished\n" {
+		t.Errorf("eval: got %q, want the name eval was given", out)
+	}
+}
+
 // TestEvalRunsInTheCallingShell is the whole point of eval being a builtin
 // rather than a command: a child process could not do this.
 func TestEvalRunsInTheCallingShell(t *testing.T) {

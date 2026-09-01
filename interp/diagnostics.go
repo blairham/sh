@@ -294,6 +294,24 @@ type Diagnostics struct {
 	// SyntaxError wraps a parse failure's own text. One verb: the text.
 	SyntaxError string
 
+	// EvalNaming and SourceFileNaming are where the name of borrowed text
+	// goes in a diagnostic about it. Two fields because they are two
+	// questions, and one shell answers them differently: bash puts a sourced
+	// file's path where its own name goes — `./f.sh: line 3: …` — and labels
+	// `eval` after its name instead, `bash: eval: line 2: …`.
+	EvalNaming       SourceNaming
+	SourceFileNaming SourceNaming
+	// EvalSourceName is what `eval`'s text is called when it is named. Empty
+	// means "eval", which is three of the four; zsh calls it `(eval)`.
+	EvalSourceName string
+	// SourceFileIsTheBuiltin names the builtin that read a file rather than
+	// the file: ksh93 reports `.` where the other three report the path.
+	SourceFileIsTheBuiltin bool
+	// UnterminatedEndsOnNextLine puts the end of input on the line after the
+	// text rather than on its last: `eval "if"` is line 2 in bash and line 1
+	// in the other three.
+	UnterminatedEndsOnNextLine bool
+
 	// Unterminated is input that ran out with a construct still open, and it
 	// is four verbs because the panel names four different parts of that one
 	// state rather than wording a shared diagnosis four ways:
@@ -449,15 +467,67 @@ func escapeToken(s string) string {
 	return s
 }
 
+// SourceReport is a diagnostic about borrowed text — the text `eval` was
+// given, or a file `.` read — with the source named the way this dialect
+// names it.
+//
+// Three shapes, and the shells split three ways over one question: dash names
+// the source after the location, bash and ksh93 before it, and zsh puts it
+// where the shell's own name goes and prints no label.
+func (d Diagnostics) SourceReport(naming SourceNaming, shell, source string, line int, msg string) string {
+	switch naming {
+	case SourceReplacesShell:
+		return d.prefix(source, "", line) + msg
+	case SourceBeforeLocation:
+		if shell == "" {
+			shell = "sh"
+		}
+		return shell + ": " + source + ": " + d.locationOnly(line) + msg
+	}
+	return d.prefix(shell, "", line) + source + ": " + msg
+}
+
+// SourceNaming is where the name of borrowed text goes.
+type SourceNaming int
+
+const (
+	// SourceAfterLocation names it last: dash's `dash: 3: ./f.sh: …`. The
+	// zero value, and the substrate's own.
+	SourceAfterLocation SourceNaming = iota
+	// SourceBeforeLocation names it between the shell and the line: bash's
+	// `bash: eval: line 2: …`, and ksh93 for both kinds.
+	SourceBeforeLocation
+	// SourceReplacesShell names it *instead* of the shell: zsh's
+	// `(eval):1: …`, and bash for a sourced file.
+	SourceReplacesShell
+)
+
+// locationOnly is the location without a name in front of it, for the one
+// shape that has already printed one.
+func (d Diagnostics) locationOnly(line int) string {
+	switch d.Location {
+	case LocationColonLine:
+		return fmt.Sprintf("%d: ", line)
+	case LocationLineWord:
+		return fmt.Sprintf("line %d: ", line)
+	case LocationTightLine:
+		return fmt.Sprintf("%d: ", line)
+	}
+	return ""
+}
+
 // parseErrorLine is where a parse failure happened, or 0 if the error does not
 // say. A caller reporting borrowed text needs it: the line that matters is the
 // one inside the text, not the line the builtin was called on.
-func parseErrorLine(err error) int {
+func (d Diagnostics) parseErrorLine(err error) int {
 	var se *syntax.Error
-	if errors.As(err, &se) {
-		return se.Pos.Line
+	if !errors.As(err, &se) {
+		return 0
 	}
-	return 0
+	if d.UnterminatedEndsOnNextLine && se.EndLine > 0 {
+		return se.EndLine
+	}
+	return se.Pos.Line
 }
 
 // ParseFailure words a parse error the way this dialect words it.

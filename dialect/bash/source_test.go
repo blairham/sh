@@ -202,3 +202,18 @@ func TestABracketNamesItself(t *testing.T) {
 		t.Errorf("unary bracket: said %q, want %q", out, `[: -Q: unary operator expected`)
 	}
 }
+
+// TestAKilledCommandsStatus: 128 + 13.
+func TestAKilledCommandsStatus(t *testing.T) {
+	dir := t.TempDir()
+	// PATH is the temp directory alone, so the command that dies has to be
+	// made here rather than borrowed from the host.
+	exe := filepath.Join(dir, "selfkill")
+	if err := os.WriteFile(exe, []byte("#!/bin/sh\nkill -PIPE $$\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := runBash(t, dir, "selfkill\necho st=$?\n")
+	if !strings.Contains(out, "st=141") {
+		t.Errorf("said %q, want st=141", out)
+	}
+}

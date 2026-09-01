@@ -171,3 +171,18 @@ func TestABracketNamesItself(t *testing.T) {
 		t.Errorf("unary bracket: said %q, want %q", out, `[: -Q: unknown operator`)
 	}
 }
+
+// TestAKilledCommandsStatus: ksh93 counts from 256, so 256 + 13 — measured across eight signals, not a special case for one.
+func TestAKilledCommandsStatus(t *testing.T) {
+	dir := t.TempDir()
+	// PATH is the temp directory alone, so the command that dies has to be
+	// made here rather than borrowed from the host.
+	exe := filepath.Join(dir, "selfkill")
+	if err := os.WriteFile(exe, []byte("#!/bin/sh\nkill -PIPE $$\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := runKsh(t, dir, "selfkill\necho st=$?\n")
+	if !strings.Contains(out, "st=269") {
+		t.Errorf("said %q, want st=269", out)
+	}
+}

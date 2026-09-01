@@ -669,6 +669,16 @@ var Corpus = []Case{
 		Why:     "`trap -` puts the default back rather than leaving an empty handler",
 	},
 	{
+		ID: "signal-death/status-encodes-the-signal", Category: "traps and exit",
+		Snippet: `sh -c 'kill -PIPE $$'; echo "st=$?"; echo after`,
+		Why:     "a command killed by a signal has no exit status of its own, so the signal goes in the number: 128 + 13 in bash, dash and zsh, and 256 + 13 in ksh93. PIPE is the signal to ask with — it is one of only two the panel does not announce (INT is the other), so the case is about the number and not about three wordings, and unlike INT it does not end the script in ksh93",
+	},
+	{
+		ID: "signal-death/an-ordinary-failure-is-untouched", Category: "traps and exit",
+		Snippet: `sh -c 'exit 3'; echo "st=$?"`,
+		Why:     "a command that exits by itself reports what it exited with, unanimously — which is what says the encoding above is about being killed rather than about failing",
+	},
+	{
 		ID: "trap/numeric-signal-name", Category: "traps and exit",
 		Script:  true,
 		Snippet: "trap 'echo caught' 2\nkill -INT $$\necho after\n",

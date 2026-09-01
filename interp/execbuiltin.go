@@ -139,7 +139,7 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 		return r.execEnds(r.execCannotRun(
 			&pathError{name: argv[0], resolved: path, err: err}))
 	}
-	status := exitStatus(cmd.Wait())
+	status := r.exitStatus(cmd.Wait())
 	r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: status})
 
 	// The script stops, and the EXIT trap does *not* run. That is unanimous

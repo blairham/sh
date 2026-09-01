@@ -7418,6 +7418,166 @@
         "TimedOut": false
       }
     },
+    "special/assigning-random-seeds-it": {
+      "bash": {
+        "Output": "produced",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "produced",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "produced",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "none",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "produced",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "produced",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "special/ifs-has-a-default": {
+      "bash": {
+        "Output": " \\t \\n ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": " \\t \\n ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": " \\t \\n ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": " \\t \\n ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": " \\t \\n ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": " \\t \\n \\0 ",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "special/lineno-is-where-you-are": {
+      "bash": {
+        "Output": "1~1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1~1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "0~0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "1~1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1~1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1~1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "special/random-is-absent-from-dash": {
+      "bash": {
+        "Output": "have",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "have",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "have",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "none",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "have",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "have",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "special/uid-is-bash-and-zsh": {
+      "bash": {
+        "Output": "have",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "have",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "have",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "none",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "none",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "have",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "split/cmdsub-unquoted": {
       "bash": {
         "Output": "n=2",

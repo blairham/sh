@@ -269,3 +269,15 @@ func TestCdAnswers(t *testing.T) {
 		t.Errorf("CdCannotChange = %q, want %q", got, want)
 	}
 }
+
+// TestGetoptsAnswers: zsh is the one that empties OPTARG rather than unsetting
+// it, and the one that carries on inside a word when OPTIND is assigned.
+func TestGetoptsAnswers(t *testing.T) {
+	s := zsh.Semantics()
+	if got, want := s.GetoptsClearsOptarg, interp.Yes; got != want {
+		t.Errorf("GetoptsClearsOptarg = %v, want %v", got, want)
+	}
+	if got, want := s.GetoptsAssignmentRestartsWord, interp.No; got != want {
+		t.Errorf("GetoptsAssignmentRestartsWord = %v, want %v", got, want)
+	}
+}

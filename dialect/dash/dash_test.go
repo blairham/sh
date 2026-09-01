@@ -278,3 +278,15 @@ func TestCdAnswers(t *testing.T) {
 		t.Errorf("CdStatus = %d, want %d", got, want)
 	}
 }
+
+// TestGetoptsAnswers: dash prints these with neither a name nor a line, which
+// is the only diagnostic in the panel with nothing in front of it.
+func TestGetoptsAnswers(t *testing.T) {
+	d := dash.Diagnostics()
+	if !d.GetoptsUnprefixed {
+		t.Error("getopts should print with nothing in front of it")
+	}
+	if got, want := d.GetoptsBadOption, "Illegal option -%[1]s"; got != want {
+		t.Errorf("GetoptsBadOption = %q, want %q", got, want)
+	}
+}

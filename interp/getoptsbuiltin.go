@@ -1,0 +1,249 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+package interp
+
+import (
+	"context"
+	"strconv"
+	"strings"
+)
+
+// `getopts`, the fourth builtin that was not one — and the only one of them
+// that a borrowed program could never have done.
+//
+// `test`, `[`, `kill` and `printf` all worked after a fashion while they were
+// separate programs, because what they do is visible from outside. This is
+// not: getopts sets `name`, `OPTARG` and `OPTIND` in the *calling* shell, and
+// a child process cannot reach them. macOS ships a 120-byte /usr/bin/getopts,
+// so the lookup found something, ran it, and got back a status of 1 — which
+// reads as "no more options" and makes the loop around it exit immediately.
+//
+//	while getopts "ab:" opt; do ...; done
+//
+// never ran its body, said nothing, and reported success. That is the silent
+// wrong answer this package exists to avoid, and it survived because no
+// corpus case used getopts.
+//
+// The behavior is almost entirely unanimous, which is unusual for a builtin
+// this fiddly: OPTIND, clustered options like `-ab`, an argument attached as
+// `-bval` or separate as `-b val`, `--` ending the options, a non-option
+// ending them, and the `:` prefix that turns complaints off and reports
+// through OPTARG instead — all four agree on every one.
+//
+// Only the two complaints diverge, and they diverge in where they are printed
+// as much as in what they say: bash names itself without a line where it
+// names a line everywhere else, and dash prints neither.
+
+func init() {
+	builtins["getopts"] = biGetopts
+}
+
+func biGetopts(r *Runner, _ context.Context, args []string) int {
+	if len(args) < 2 {
+		r.diagf("getopts: usage: getopts optstring name [arg]\n")
+		return 2
+	}
+	optstring, name := args[0], args[1]
+	// The operands to scan are the ones given, or the shell's own parameters
+	// when none are — which is what every use of it in a script relies on.
+	words := args[2:]
+	if len(words) == 0 {
+		words = r.Params
+	}
+
+	// A leading colon turns the complaints off and reports through OPTARG
+	// instead, which is how a script takes over the reporting.
+	silent := strings.HasPrefix(optstring, ":")
+	spec := strings.TrimPrefix(optstring, ":")
+
+	ind := r.optIndex()
+	if r.optindAssigned {
+		// The script wrote OPTIND itself — resetting it to 1 to scan a second
+		// list is the documented way to do that — so any position inside a
+		// cluster belongs to the old scan. Three of the four drop it; asked
+		// only here, where there is an assignment to have an opinion about.
+		r.optindAssigned = false
+		if r.ask(r.sem().GetoptsAssignmentRestartsWord, "assigning OPTIND restarting the word") {
+			r.optChar = 1
+		}
+	}
+
+	i := ind - 1
+	if i < 0 || i >= len(words) {
+		return r.getoptsEnd(name, ind)
+	}
+	word := words[i]
+	if word == "" || word[0] != '-' || word == "-" {
+		return r.getoptsEnd(name, ind)
+	}
+	if word == "--" {
+		return r.getoptsEnd(name, ind+1)
+	}
+	if r.optChar < 1 {
+		r.optChar = 1
+	}
+	if r.optChar >= len(word) {
+		// The cluster is spent; go on to the next word.
+		r.optChar = 1
+		return r.getoptsAt(name, spec, silent, words, ind+1)
+	}
+	return r.getoptsAt(name, spec, silent, words, ind)
+}
+
+// getoptsAt reads the option at the current position.
+func (r *Runner) getoptsAt(name, spec string, silent bool, words []string, ind int) int {
+	i := ind - 1
+	if i >= len(words) {
+		return r.getoptsEnd(name, ind)
+	}
+	word := words[i]
+	if word == "" || word[0] != '-' || word == "-" || word == "--" {
+		// Re-checked because the position moved: `-a file` stops here rather
+		// than reading `file` as a cluster.
+		if word == "--" {
+			return r.getoptsEnd(name, ind+1)
+		}
+		return r.getoptsEnd(name, ind)
+	}
+	if r.optChar >= len(word) {
+		r.optChar = 1
+		return r.getoptsAt(name, spec, silent, words, ind+1)
+	}
+
+	c := word[r.optChar]
+	at := strings.IndexByte(spec, c)
+	switch {
+	case at < 0 || c == ':':
+		r.advance(word, ind)
+		return r.getoptsBad(name, string(c), silent, false)
+	case at+1 < len(spec) && spec[at+1] == ':':
+		// The option takes an argument: the rest of this word if there is
+		// any, and the next word otherwise.
+		if rest := word[r.optChar+1:]; rest != "" {
+			r.optChar = 1
+			r.setOptind(ind + 1)
+			r.setVar("OPTARG", rest)
+			r.setVar(name, string(c))
+			return 0
+		}
+		if ind >= len(words) {
+			r.optChar = 1
+			r.setOptind(ind + 1)
+			return r.getoptsBad(name, string(c), silent, true)
+		}
+		r.optChar = 1
+		r.setOptind(ind + 2)
+		r.setVar("OPTARG", words[ind])
+		r.setVar(name, string(c))
+		return 0
+	default:
+		r.advance(word, ind)
+		r.clearOptarg()
+		r.setVar(name, string(c))
+		return 0
+	}
+}
+
+// advance moves past the character just read, staying inside the word while
+// there is more of the cluster to come.
+func (r *Runner) advance(word string, ind int) {
+	if r.optChar+1 >= len(word) {
+		r.optChar = 1
+		r.setOptind(ind + 1)
+		return
+	}
+	r.optChar++
+	r.setOptind(ind)
+}
+
+// getoptsEnd reports that there are no more options.
+func (r *Runner) getoptsEnd(name string, ind int) int {
+	r.optChar = 1
+	r.setOptind(ind)
+	r.setVar(name, "?")
+	return 1
+}
+
+// getoptsBad is an option the string does not have, or one whose argument is
+// missing.
+//
+// Silent mode is the interesting half: the letter goes into OPTARG and the
+// name becomes `?` for an unknown option and `:` for a missing argument, so a
+// script can tell the two apart without reading a message.
+func (r *Runner) getoptsBad(name, letter string, silent, missingArg bool) int {
+	if silent {
+		r.setVar("OPTARG", letter)
+		if missingArg {
+			r.setVar(name, ":")
+		} else {
+			r.setVar(name, "?")
+		}
+		return 0
+	}
+	r.clearOptarg()
+	r.setVar(name, "?")
+
+	// Not the builtin's complaint as far as the one dialect that names a
+	// builtin in the location is concerned: `getopts` reports like `test`
+	// rather than like `shift`, with no name between the shell and the line.
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
+
+	d := r.diag()
+	wording, fallback := d.GetoptsBadOption, "illegal option -- %[1]s"
+	if missingArg {
+		wording, fallback = d.GetoptsMissingArgument, "option requires an argument -- %[1]s"
+	}
+	msg := Wording(wording, fallback, letter)
+	switch {
+	case d.GetoptsUnprefixed:
+		// Neither a name nor a location: one dialect prints the complaint on
+		// its own.
+		r.errf("%s\n", msg)
+	case d.GetoptsNamesNoLine:
+		// The shell's name and no line, where this dialect gives a line to
+		// everything else it says.
+		r.errf("%s: %s\n", r.name(), msg)
+	default:
+		r.diagf("%s\n", msg)
+	}
+	return 0
+}
+
+// optIndex reads OPTIND, which is the shell's and which a script may set.
+func (r *Runner) optIndex() int {
+	v, ok := r.getVar("OPTIND")
+	if !ok {
+		return 1
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || n < 1 {
+		return 1
+	}
+	return n
+}
+
+func (r *Runner) setOptind(n int) {
+	r.setVar("OPTIND", strconv.Itoa(n))
+	// This builtin's own write is not the script's.
+	r.optindAssigned = false
+}
+
+// clearOptarg takes OPTARG away, or empties it where the dialect empties it.
+//
+// Three of the four leave it *unset* and one sets it to the empty string,
+// which a script testing `${OPTARG-}` can tell apart. Asked only here, where
+// there is no argument to put in it.
+func (r *Runner) clearOptarg() {
+	if r.ask(r.sem().GetoptsClearsOptarg, "`getopts` emptying OPTARG rather than unsetting it") {
+		r.setVar("OPTARG", "")
+		return
+	}
+	delete(r.Vars, "OPTARG")
+	if r.removed == nil {
+		r.removed = map[string]bool{}
+	}
+	r.removed["OPTARG"] = true
+}

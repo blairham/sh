@@ -103,6 +103,19 @@ type Runner struct {
 	// corpus records.
 	DieBySignal func(sig syscall.Signal) error
 
+	// optChar is how far into a clustered option `getopts` has read — `-ab`
+	// is two options in one word, and OPTIND cannot say which of them is
+	// next because it counts words. lastOptind is what this builtin last set
+	// OPTIND to, so a script moving it itself is noticed and the position
+	// inside the cluster dropped.
+	optChar int
+	// optindAssigned records that a script wrote OPTIND since the last
+	// `getopts` wrote it. The value cannot say so on its own: resetting it to
+	// 1 while a cluster is half read is an assignment of the value it already
+	// had, and three of the four restart the word on the strength of the
+	// assignment rather than the number.
+	optindAssigned bool
+
 	// removed are names `unset` took away that came from the environment
 	// rather than from Vars.
 	//
@@ -897,6 +910,10 @@ func (r *Runner) setVar(name, value string) {
 	}
 	if r.Vars == nil {
 		r.Vars = map[string]string{}
+	}
+	if name == "OPTIND" {
+		// Noted rather than compared: see optindAssigned.
+		r.optindAssigned = true
 	}
 	r.Vars[name] = value
 }

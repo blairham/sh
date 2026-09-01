@@ -213,3 +213,26 @@ func TestPipefail(t *testing.T) {
 		t.Errorf("said %q, want st=0", out)
 	}
 }
+
+// TestARedirectFailure: this dialect's own wording and status for a redirect
+// that could not be opened, and for one that could not be created.
+//
+// The whole line, location included, rather than a substring or a suffix of
+// it. A shape that gained a verb in *front* — `cannot open f: …` where this
+// dialect says `f: …` — still ends with the shape that did not, so neither
+// Contains nor HasSuffix can tell the two apart.
+func TestARedirectFailure(t *testing.T) {
+	dir := t.TempDir()
+	out, _ := runDash(t, dir, "cat < nope\necho st=$?\n")
+	if got := strings.SplitN(strings.TrimSpace(out), "\n", 2)[0]; got != `dash: 1: cannot open nope: No such file` {
+		t.Errorf("read: said %q, want %q", got, `dash: 1: cannot open nope: No such file`)
+	}
+	if !strings.Contains(out, "st=2") {
+		t.Errorf("said %q, want st=2", out)
+	}
+	// The other direction, which two of the four word differently.
+	out, _ = runDash(t, dir, "echo x > nodir/out\n")
+	if got := strings.TrimSpace(out); got != `dash: 1: cannot create nodir/out: Directory nonexistent` {
+		t.Errorf("create: said %q, want %q", got, `dash: 1: cannot create nodir/out: Directory nonexistent`)
+	}
+}

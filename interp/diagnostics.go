@@ -562,9 +562,39 @@ type Diagnostics struct {
 	UnboundPositional string
 	// BadPattern is a pattern the dialect rejects. One verb: the pattern.
 	BadPattern string
-	// CannotOpen is a redirection that could not be opened. Two verbs: the
-	// name and the reason.
+	// CannotOpen is a redirection that could not be opened for reading. Two
+	// verbs, positional because the shells order them differently: %[1]s is
+	// the name as written and %[2]s the reason.
+	//
+	// All four word it differently, and only one of them puts a verb in it:
+	// bash says `f: No such file or directory`, dash `cannot open f: No such
+	// file`, ksh93 `f: cannot open [No such file or directory]` and zsh `no
+	// such file or directory: f` — the reason first.
 	CannotOpen string
+
+	// CannotCreate is the same failure for a redirection that was making the
+	// file rather than reading it. Same two verbs.
+	//
+	// A separate field because two of the four make the distinction: dash and
+	// ksh93 say "create" where they said "open", and bash and zsh say the
+	// same thing either way.
+	CannotCreate string
+
+	// RedirectFailureStatus is what a command whose redirect could not be
+	// opened reports. Zero means the substrate's own, which is 1.
+	//
+	// dash alone says 2, for a read and a write alike and in a brace group
+	// and a subshell alike. Not fatal there — the script carries on — which
+	// is what makes this a different question from FatalErrorStatusIsOne.
+	RedirectFailureStatus int
+
+	// DirectoryNotFound is FileNotFound for a write rather than a read.
+	//
+	// dash alone again, and a different string from its own FileNotFound:
+	// `cannot create a/b: Directory nonexistent` where a failed read of the
+	// same path is `cannot open a/b: No such file`. The OS says "No such file
+	// or directory" for both.
+	DirectoryNotFound string
 
 	// TraceStyle and TraceQuoting are how `set -x` prints. They are here
 	// rather than in Semantics because they decide what is *written*, not
@@ -953,6 +983,15 @@ func (d Diagnostics) reasonText(s string) string {
 		return s
 	}
 	return strings.ToLower(s[:1]) + s[1:]
+}
+
+// redirectFailureStatus is RedirectFailureStatus with the substrate's own
+// answer for zero.
+func (d Diagnostics) redirectFailureStatus() int {
+	if d.RedirectFailureStatus == 0 {
+		return 1
+	}
+	return d.RedirectFailureStatus
 }
 
 // timesDecimals is TimesDecimals with the substrate's own answer for zero.

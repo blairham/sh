@@ -851,6 +851,26 @@ var Corpus = []Case{
 		Why:     "an assignment reports what the substitution reported, so this ends the script where `echo \"$(false)\"` does not",
 	},
 	{
+		ID: "redir/open-failure-wording", Category: "redirection",
+		Snippet: `cat < nosuchfile; echo "st=$?"`,
+		Why:     "all four word a failed open differently and only two of them use a verb: bash prints the name then the OS string, dash puts `cannot open` in front, ksh93 puts the name first and brackets the reason after it, and zsh prints the reason first, lowercased. dash also writes its own text for this errno — `No such file`, where the OS says `No such file or directory`",
+	},
+	{
+		ID: "redir/create-failure-says-create", Category: "redirection",
+		Snippet: `mkdir d; echo x > d; echo "st=$?"`,
+		Why:     "two of the four say `create` rather than `open` when the redirect was making the file — dash and ksh93 — where bash and zsh word it identically either way. A directory is the way to fail a create without needing a permission the test machine may or may not have",
+	},
+	{
+		ID: "redir/create-failure-reason-diverges", Category: "redirection",
+		Snippet: `echo x > nodir/out; echo "st=$?"`,
+		Why:     "the same errno as a failed open, and dash alone gives it a different name depending on the direction: `Directory nonexistent` for a write against its own `No such file` for a read, where the OS says `No such file or directory` for both",
+	},
+	{
+		ID: "redir/failure-does-not-run-the-command", Category: "redirection",
+		Snippet: `echo reached > nodir/out; echo "st=$?"`,
+		Why:     "the redirect is set up before the command runs, so a redirect that cannot be opened means the command does not run at all — nothing prints but the status, unanimously, and 1 rather than the 2 a syntax error would give",
+	},
+	{
 		ID: "redir/dup-to-stderr", Category: "redirection",
 		Snippet: `{ echo hi >&2; } 2>/dev/null; echo done`,
 		Why:     "`>&2` sends to stderr, so discarding stderr discards it — the check that the duplication happened rather than the word being an argument",

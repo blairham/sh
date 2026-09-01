@@ -36,7 +36,12 @@ func (r *Runner) SetPipelineStatus(name string) { r.pipeStatusName = name }
 // check that matters is in recordSingleStatus, where it stops an axis being
 // asked in a shell that could not observe the answer.
 func (r *Runner) recordPipeStatus(statuses []int) {
-	r.pipeStatus = append(r.pipeStatus[:0], statuses...)
+	// A fresh slice rather than the old one refilled. A subshell clones the
+	// runner by value, which copies the slice header and leaves both sharing
+	// one backing array — so two subshells in the same pipeline, running at
+	// once, each recorded their own status over the other's. The race
+	// detector found it; the reuse was saving one allocation per pipeline.
+	r.pipeStatus = append([]int(nil), statuses...)
 }
 
 // recordSingleStatus is recordPipeStatus for a pipeline of one.

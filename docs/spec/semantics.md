@@ -1156,3 +1156,43 @@ ksh93 sometimes prefixes a *different* line: the one it had reached rather
 than the one that failed, as in `line 2: syntax error at line 3`. When it does
 so is not derived here — six inputs did not settle it — and we do not track
 "the line reached" to print it with. Recorded rather than guessed at.
+
+## A leniency measured and deliberately not built
+
+zsh accepts a `case` arm the other three reject:
+
+    case a in (a)) echo y;; esac      zsh prints y; bash, ksh93 and dash
+                                      all call it a syntax error
+
+It looks like tolerance of a redundant `)`, and it is not. The leading `(`
+is a *pattern group* — the same alternation described above — rather than the
+optional paren a `case` arm may carry:
+
+    case ab in (a|b)b)   matches. The pattern is the group `(a|b)` followed
+                         by a literal `b`, which is `ab`.
+    case "b)b" in (a|b)b)  does not match, so the `)` is not literal either.
+    case a in (a|b)|c)   matches. `(a|b)` and `c` are two arm patterns, so
+                         the `|` between them is the arm's and the one inside
+                         the group is the group's.
+
+But the ordinary form still works there too:
+
+    case a in (a) echo y;; esac       zsh prints y
+
+and under the group reading that arm never closes — the `(a)` is the whole
+pattern and the `)` that would end the arm has been used up. So zsh accepts
+*both* readings of a leading `(`, which needs the parser to try one and fall
+back to the other.
+
+**Not built.** Backtracking a case arm would mean re-reading tokens whose
+lexing has side effects — a here-document body is consumed at the newline,
+not at the operator — and it buys a form nobody writes: `(a))` is a typo that
+one shell happens to forgive. The half that scripts do use, a group inside a
+pattern, is implemented and tested.
+
+A second thing shows here and is worth writing down beside it. `((` at the
+start of a `case` arm is read as an arithmetic command, because that is what
+`((` means wherever a command may begin. zsh reads `case a in ((a))` as the
+arm's paren followed by the group `(a)`, so it prints y where we report an
+arithmetic error. Telling the two apart needs the lexer to know it is in a
+case arm, which is the same lookahead problem in a different place.

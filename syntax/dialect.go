@@ -166,6 +166,13 @@ type Dialect struct {
 	// one is safe to be wrong about loudly.
 	ArrayLiteral bool
 
+	// ArraySubscript enables `${a[i]}`, `${a[@]}` and `${a[*]}`. Absent from
+	// dash, which has no arrays at all and calls the subscript a bad
+	// substitution rather than reading it — a separate flag from
+	// ArrayLiteral because the two halves are separately reachable: a
+	// subscript can be written for a variable that was never an array.
+	ArraySubscript bool
+
 	// DoubleBracket enables `[[ ... ]]`.
 	//
 	// Consumed by the *parser*, not the lexer, and the reason is worth
@@ -198,6 +205,7 @@ func Core() Dialect {
 		DoubleBracket:     true,
 		FunctionKeyword:   true,
 		ArrayLiteral:      true,
+		ArraySubscript:    true,
 		ParamSubstitution: true,
 		ParamSubstring:    true,
 

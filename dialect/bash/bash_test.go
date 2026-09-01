@@ -49,6 +49,9 @@ func TestSemantics(t *testing.T) {
 		got  interp.Answer
 		want interp.Answer
 	}{
+		{"AssignmentUpdatesPipelineStatus", s.AssignmentUpdatesPipelineStatus, interp.Yes},
+		{"UnsetEndsTheProducedPipelineStatus", s.UnsetEndsTheProducedPipelineStatus, interp.No},
+		{"ArrayScalarIsTheWholeArray", s.ArrayScalarIsTheWholeArray, interp.No},
 		{"SelectPromptNeedsTerminal", s.SelectPromptNeedsTerminal, interp.No},
 		{"SelectEofIsSuccess", s.SelectEofIsSuccess, interp.No},
 		{"SelectEofPrintsNewline", s.SelectEofPrintsNewline, interp.Yes},
@@ -275,5 +278,30 @@ func TestSelectMenuLayout(t *testing.T) {
 	}
 	if got, want := bash.Diagnostics().SelectPrompt, "#? "; got != want {
 		t.Errorf("SelectPrompt = %q, want %q", got, want)
+	}
+}
+
+// TestPipelineStatusName: the core keeps the record of what a pipeline's
+// elements reported and a dialect names it. bash's name is the uppercase one.
+func TestPipelineStatusName(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`false | true | false; echo "[${PIPESTATUS[@]}]"`, "[1 0 1]"},
+		// And not under any other name, which is what makes it an answer.
+		{`false | true | false; echo "[${pipestatus[@]}]"`, "[]"},
+	} {
+		f, err := syntax.Parse(tc.src, bash.Dialect())
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		s, d := bash.Semantics(), bash.Diagnostics()
+		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+		bash.Apply(r)
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+		if strings.TrimSpace(out.String()) != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.src, out.String(), tc.want)
+		}
 	}
 }

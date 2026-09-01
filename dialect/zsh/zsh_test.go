@@ -47,6 +47,9 @@ func TestSemantics(t *testing.T) {
 		got  interp.Answer
 		want interp.Answer
 	}{
+		{"AssignmentUpdatesPipelineStatus", s.AssignmentUpdatesPipelineStatus, interp.No},
+		{"UnsetEndsTheProducedPipelineStatus", s.UnsetEndsTheProducedPipelineStatus, interp.Yes},
+		{"ArrayScalarIsTheWholeArray", s.ArrayScalarIsTheWholeArray, interp.Yes},
 		{"SelectPromptNeedsTerminal", s.SelectPromptNeedsTerminal, interp.No},
 		{"SelectEofIsSuccess", s.SelectEofIsSuccess, interp.Yes},
 		{"SelectEofPrintsNewline", s.SelectEofPrintsNewline, interp.No},
@@ -298,5 +301,29 @@ func TestSelectMenuLayout(t *testing.T) {
 	}
 	if got, want := zsh.Diagnostics().SelectPrompt, "?# "; got != want {
 		t.Errorf("SelectPrompt = %q, want %q", got, want)
+	}
+}
+
+// TestPipelineStatusName: zsh's name for the same record is the lowercase one,
+// and the uppercase name is nothing here.
+func TestPipelineStatusName(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`false | true | false; echo "[${pipestatus[@]}]"`, "[1 0 1]"},
+		{`false | true | false; echo "[${PIPESTATUS[@]}]"`, "[]"},
+	} {
+		f, err := syntax.Parse(tc.src, zsh.Dialect())
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		s, d := zsh.Semantics(), zsh.Diagnostics()
+		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+		zsh.Apply(r)
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+		if strings.TrimSpace(out.String()) != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.src, out.String(), tc.want)
+		}
 	}
 }

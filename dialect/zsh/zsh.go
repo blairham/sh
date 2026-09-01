@@ -22,6 +22,9 @@ func Dialect() syntax.Dialect {
 // Semantics is what zsh means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	s.ArrayScalarIsTheWholeArray = interp.Yes
+	s.AssignmentUpdatesPipelineStatus = interp.No
+	s.UnsetEndsTheProducedPipelineStatus = interp.Yes
 	s.SelectLayout = interp.SelectMenuColumns
 	s.SelectPromptNeedsTerminal = interp.No
 	s.SelectAssumesUnboundedWidth = interp.Yes
@@ -173,6 +176,9 @@ func Diagnostics() interp.Diagnostics {
 // is a dialect's answer, and it is the same function under a second name
 // rather than a second implementation.
 func Apply(r *interp.Runner) {
+	// The statuses of the last pipeline's elements. The core keeps the
+	// record and this names it; ksh93 and dash have no name for it at all.
+	r.SetPipelineStatus("pipestatus")
 	r.SetSpecial("UID", strconv.Itoa(os.Getuid()))
 	r.SetSpecial("EUID", strconv.Itoa(os.Geteuid()))
 	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })

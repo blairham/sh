@@ -28,6 +28,9 @@ func Dialect() syntax.Dialect {
 // Semantics is what bash 5 means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	s.ArrayScalarIsTheWholeArray = interp.No
+	s.AssignmentUpdatesPipelineStatus = interp.Yes
+	s.UnsetEndsTheProducedPipelineStatus = interp.No
 	s.SelectLayout = interp.SelectMenuVerticalThenColumns
 	s.SelectPromptNeedsTerminal = interp.No
 	s.SelectAssumesUnboundedWidth = interp.No
@@ -175,6 +178,9 @@ func Diagnostics() interp.Diagnostics {
 // "not found" there. It is the same function under a second name rather than a
 // second implementation, which is the only way the two cannot drift apart.
 func Apply(r *interp.Runner) {
+	// The statuses of the last pipeline's elements. The core keeps the
+	// record and this names it; ksh93 and dash have no name for it at all.
+	r.SetPipelineStatus("PIPESTATUS")
 	// Parameters bash provides and the others do not all have. Which
 	// variables a shell supplies is the same kind of question as which
 	// builtins it has, so it is answered here rather than as an axis.

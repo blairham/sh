@@ -24,12 +24,33 @@ func (r *Runner) setArray(name string, elems []string) {
 		r.Arrays = map[string][]string{}
 	}
 	r.Arrays[name] = elems
-	// The scalar view of an array is its first element, so a plain `$a` keeps
-	// working. Storing it keeps getVar honest without a special case there.
+	// A plain `$a` has to keep working. The first element is stored rather
+	// than the scalar view, because *which* view it is depends on a dialect
+	// and building an array must not need one: getVar asks, and only when
+	// the answer could differ.
 	if len(elems) > 0 {
 		r.setVar(name, elems[0])
 	} else {
 		r.setVar(name, "")
+	}
+}
+
+// arrayScalar is what a plain `$a` gives when `a` is an array.
+//
+// Two answers: every element joined by a space, or the first element alone.
+// Asked only when there is more than one element, because with none or one the
+// two agree — and only when a scalar is actually read, because building an
+// array is not a question about how it would be flattened.
+func (r *Runner) arrayScalar(elems []string) string {
+	switch {
+	case len(elems) == 0:
+		return ""
+	case len(elems) == 1:
+		return elems[0]
+	case r.ask(r.sem().ArrayScalarIsTheWholeArray, "a plain `$a` giving the whole array"):
+		return strings.Join(elems, " ")
+	default:
+		return elems[0]
 	}
 }
 
@@ -55,6 +76,12 @@ func (r *Runner) setArrayElem(name string, idx int, value string) {
 // arrayElems returns an array's elements, treating a plain variable as a
 // one-element array — which is what makes `x=v; echo ${x[0]}` work in bash.
 func (r *Runner) arrayElems(name string) ([]string, bool) {
+	// Produced first, for the same reason a produced scalar is read ahead of
+	// the stored table: the record is the answer, and a copy left in Arrays
+	// would be the previous pipeline's.
+	if elems, ok := r.pipelineStatuses(name); ok {
+		return elems, true
+	}
 	if a, ok := r.Arrays[name]; ok {
 		return a, true
 	}

@@ -1771,4 +1771,59 @@ var Corpus = []Case{
 		Snippet: `select x in a; do :; done`,
 		Why:     "dash has no `select`, so the word is ordinary and the `do` after it has nothing to open — the grammar flag is what the other three turn on",
 	},
+	{
+		ID: "pipestatus/every-element", Category: "pipeline status",
+		Snippet: `false | true | false; echo "[${PIPESTATUS[@]}]"`,
+		Why:     "`$?` reports the last element only, so without this a script cannot tell the first half of a pipeline failed — bash keeps them under this name, ksh93 has no name for it, and dash rejects the subscript outright because it has no arrays",
+	},
+	{
+		ID: "pipestatus/lowercase-is-zsh", Category: "pipeline status",
+		Snippet: `false | true | false; echo "[${pipestatus[@]}]"`,
+		Why:     "the same record under the name zsh gives it; the pair of cases is what makes the name a dialect's answer rather than an axis",
+	},
+	{
+		ID: "pipestatus/a-single-command-records-one", Category: "pipeline status",
+		Snippet: `false; echo "[${PIPESTATUS[@]}]"`,
+		Why:     "it is not only for pipelines: a command on its own records one element, which is why the record is kept by the pipeline runner rather than by the pipe",
+	},
+	{
+		ID: "pipestatus/a-compound-command-records-its-own", Category: "pipeline status",
+		Snippet: `if false | true; then :; fi; echo "[${PIPESTATUS[@]}]"`,
+		Why:     "the `if` is the command that just ran, so the record holds its status and not the pipeline inside it — the inner one is gone by the time the clause finishes",
+	},
+	{
+		ID: "pipestatus/negation-does-not-reach-it", Category: "pipeline status",
+		Snippet: `! false | true; echo "st=$? [${PIPESTATUS[@]}]"`,
+		Why:     "`!` inverts what the pipeline reports and not what its elements did, so the record is taken before the inversion",
+	},
+	{
+		ID: "pipestatus/a-bare-assignment", Category: "pipeline status",
+		Snippet: `false | true; x=1; echo "[${PIPESTATUS[@]}]"`,
+		Why:     "the axis: bash counts an assignment with no command name as a command and replaces the record with one element, and zsh does not count it and leaves the pipeline's two",
+	},
+	{
+		ID: "pipestatus/a-bare-assignment-in-zsh", Category: "pipeline status",
+		Snippet: `false | true; x=1; echo "[${pipestatus[@]}]"`,
+		Why:     "the other half of that axis, under the name that makes it observable in the shell that answers the other way",
+	},
+	{
+		ID: "pipestatus/unset-then-another-pipeline", Category: "pipeline status",
+		Snippet: `unset PIPESTATUS; false | true; echo "[${PIPESTATUS[@]}]"`,
+		Why:     "in bash the producer outlives `unset` and the next pipeline fills the name again, which is the opposite of what a produced *scalar* does — `unset RANDOM` leaves an ordinary empty name in every shell",
+	},
+	{
+		ID: "pipestatus/unset-then-another-pipeline-in-zsh", Category: "pipeline status",
+		Snippet: `unset pipestatus; false | true; echo "[${pipestatus[@]}]"`,
+		Why:     "and in zsh the name is gone for good, which is why `unset` is an axis here and not the rule Dynamic already follows",
+	},
+	{
+		ID: "pipestatus/read-as-a-plain-parameter", Category: "pipeline status",
+		Snippet: `false | true | false; echo "[$PIPESTATUS]"`,
+		Why:     "a plain `$a` on an array is the first element in bash and ksh93 and every element joined in zsh, which is a rule about arrays and not about this record — it is measured here because this is the array every shell that has one builds without being asked",
+	},
+	{
+		ID: "pipestatus/plain-parameter-on-an-array", Category: "pipeline status",
+		Snippet: `a=(x y z); echo "[$a]"`,
+		Why:     "the same rule on an ordinary array, which is where it belongs: zsh joins and the other two take the first element",
+	},
 }

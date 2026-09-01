@@ -48,6 +48,10 @@ func TestSemantics(t *testing.T) {
 		got  interp.Answer
 		want interp.Answer
 	}{
+		// ksh93 has no name for the pipeline status, so neither axis
+		// arises; the scalar view of an array does.
+		{"AssignmentUpdatesPipelineStatus", s.AssignmentUpdatesPipelineStatus, interp.Unspecified},
+		{"ArrayScalarIsTheWholeArray", s.ArrayScalarIsTheWholeArray, interp.No},
 		{"SelectPromptNeedsTerminal", s.SelectPromptNeedsTerminal, interp.Yes},
 		{"SelectEofIsSuccess", s.SelectEofIsSuccess, interp.No},
 		{"SelectEofPrintsNewline", s.SelectEofPrintsNewline, interp.No},

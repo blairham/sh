@@ -939,6 +939,11 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `errexit/only-the-last-of-a-chain` | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* |
 | `errexit/negation-is-exempt` | `reached` | `reached` | `reached` | `reached` | `reached` | `reached` |
 | `errexit/assignment-takes-the-substitution` | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* |
+| `opt/set-f-turns-off-pathname-expansion` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `a.txt b.txt` |
+| `opt/set-o-noglob-is-unanimous` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` |
+| `opt/noglob-does-not-stop-matching` | `match` | `match` | `match` | `match` | `match` | `match` |
+| `opt/an-option-can-be-turned-back-off` | `a.txt` | `a.txt` | `a.txt` | `a.txt` | `a.txt` | `a.txt` |
+| `opt/an-expansions-result-is-not-globbed-under-noglob` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` |
 
 - `xtrace/traces-each-command` — the structure is unanimous: every simple command goes to stderr, expanded, before it runs
   ```sh
@@ -1026,6 +1031,26 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `errexit/assignment-takes-the-substitution` — an assignment reports what the substitution reported, so this ends the script where `echo "$(false)"` does not
   ```sh
   set -e; x=$(false); echo reached
+  ```
+- `opt/set-f-turns-off-pathname-expansion` — `-f` is the short spelling of noglob in three of the four; zsh spells that option the long way only and uses `-f` for something else entirely, so the pattern still expands there
+  ```sh
+  touch a.txt b.txt; set -f; echo *.txt
+  ```
+- `opt/set-o-noglob-is-unanimous` — the long name means the same thing in all four, which is what makes it the spelling that needs no dialect — and the pair with the case above is the whole of the axis
+  ```sh
+  touch a.txt b.txt; set -o noglob; echo *.txt
+  ```
+- `opt/noglob-does-not-stop-matching` — only the filesystem half is switched off: a pattern in a `case` arm still matches, because that is matching rather than expansion
+  ```sh
+  set -o noglob; case a.txt in *.txt) echo match;; *) echo no;; esac
+  ```
+- `opt/an-option-can-be-turned-back-off` — `+o` is the other half of the spelling, and without it an option once set could not be unset
+  ```sh
+  touch a.txt; set -o noglob; set +o noglob; echo *.txt
+  ```
+- `opt/an-expansions-result-is-not-globbed-under-noglob` — the option reaches the result of an expansion too, which is the same stage by a different route
+  ```sh
+  touch a.txt b.txt; set -o noglob; x=*.txt; echo $x
   ```
 
 ## parameter expansion

@@ -48,6 +48,7 @@ func TestSemantics(t *testing.T) {
 		got  interp.Answer
 		want interp.Answer
 	}{
+		{"SetFTurnsOffGlobbing", s.SetFTurnsOffGlobbing, interp.Yes},
 		// ksh93 has no name for the pipeline status, so neither axis
 		// arises; the scalar view of an array does.
 		{"AssignmentUpdatesPipelineStatus", s.AssignmentUpdatesPipelineStatus, interp.Unspecified},

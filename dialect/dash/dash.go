@@ -28,6 +28,7 @@ func Dialect() syntax.Dialect {
 // Semantics is what dash means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	s.SetFTurnsOffGlobbing = interp.Yes
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	s.EchoInterpretsEscapes = interp.Yes
 	s.LengthOfSpecialIsCount = interp.No

@@ -30,6 +30,7 @@ func Dialect() syntax.Dialect {
 // Semantics is what bash 5 means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	s.SetFTurnsOffGlobbing = interp.Yes
 	s.ArrayScalarIsTheWholeArray = interp.No
 	s.AssignmentUpdatesPipelineStatus = interp.Yes
 	s.UnsetEndsTheProducedPipelineStatus = interp.No

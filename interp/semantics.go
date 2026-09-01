@@ -322,6 +322,12 @@ type Semantics struct {
 	// the number that failed — which is a status carrying a count rather
 	// than a verdict, and the reason this is a policy rather than a bool.
 	KillStatus KillStatusPolicy
+	// SetFTurnsOffGlobbing makes `set -f` the short spelling of `set -o
+	// noglob`. True in bash, dash and ksh93. zsh spells that option the long
+	// way only: there `-f` is about startup files and leaves globbing alone,
+	// so `set -f; echo *.txt` lists the files.
+	SetFTurnsOffGlobbing Answer
+
 	// ArithIntegerOperatorRefusesFloat rejects a float where only an integer
 	// will do — `7 % 2.5`, `1.5 & 1`, a shift. ksh93 says yes and refuses;
 	// zsh says no and truncates. It does not arise in a shell without floats,

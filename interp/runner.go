@@ -250,6 +250,10 @@ type Runner struct {
 	tested int
 	// noclobber is `set -C`: a plain `>` will not truncate an existing file.
 	noclobber bool
+	// noglob is `set -f`: pathname expansion does not happen. Only pathname
+	// expansion — a `case` pattern still matches, because that is matching
+	// and not expansion.
+	noglob bool
 	// declaring names commands whose `name=value` arguments are assignments,
 	// beyond the ones the core already knows. A dialect adds its own.
 	declaring map[string]bool

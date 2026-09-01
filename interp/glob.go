@@ -107,6 +107,12 @@ func closesBracket(s string, i int) bool {
 // A pattern matching nothing is passed through unchanged, which is what dash,
 // bash and ksh93 do; zsh reports an error, and that is a recorded axis.
 func (r *Runner) glob(field string) []string {
+	if r.noglob {
+		// `set -f`. Only the filesystem half is switched off: a pattern in a
+		// `case` arm or after `==` still matches, which is measured and is
+		// why this is here rather than in the matcher.
+		return nil
+	}
 	if r.sem().UnterminatedBracket == BracketBadPattern &&
 		field != "[" && hasUnterminatedBracket(field) {
 		// zsh rejects an unterminated bracket against the filesystem too,

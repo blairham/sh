@@ -251,3 +251,19 @@ func TestACasePatternMayBeAnOperator(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// TestPrintfAnswers: dash has no `%q` at all, and its statuses are not one
+// answer — a directive it does not have is 2 and an operand that is not a
+// number is 1.
+func TestPrintfAnswers(t *testing.T) {
+	if got, want := dash.Semantics().PrintfQuote, interp.PrintfQuoteAbsent; got != want {
+		t.Errorf("PrintfQuote = %v, want %v", got, want)
+	}
+	d := dash.Diagnostics()
+	if got, want := d.PrintfBadVerbStatus, 2; got != want {
+		t.Errorf("PrintfBadVerbStatus = %d, want %d", got, want)
+	}
+	if d.PrintfBadNumberStatus != 0 {
+		t.Errorf("PrintfBadNumberStatus = %d, want the substrate's 1", d.PrintfBadNumberStatus)
+	}
+}

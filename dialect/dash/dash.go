@@ -41,6 +41,10 @@ func Semantics() interp.Semantics {
 	s.SIGPrefixAccepted = interp.No
 	s.RedirectsWriteToEveryTarget = interp.No
 	s.KillStatus = interp.KillStatusAnyFailure
+	s.PrintfEmptyIsNotANumber = interp.No
+	s.PrintfReportsBadNumber = interp.Yes
+	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
+	s.PrintfQuote = interp.PrintfQuoteAbsent
 	return s
 }
 
@@ -91,6 +95,11 @@ func Diagnostics() interp.Diagnostics {
 		// dash names no pid at all, and prints a blank line after the one
 		// message it has for a target — measured rather than assumed, because
 		// an invisible trailing newline is exactly what a golden record is for.
+		PrintfBadNumber: "printf: %[1]s: expected numeric value",
+		// Every complaint about an argument is 2 here, as it is elsewhere.
+		PrintfBadVerbStatus:     2,
+		PrintfBadVerb:           "printf: %[2]s: invalid directive",
+		PrintfUsage:             "printf: usage: printf format [arg ...]",
 		TrapBadSignal:           "trap: %[1]s: bad trap",
 		TrapBadSignalUnprefixed: true,
 		KillNoSuchProcess:       "kill: No such process\n",

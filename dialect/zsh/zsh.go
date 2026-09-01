@@ -55,6 +55,10 @@ func Semantics() interp.Semantics {
 	s.SIGPrefixAccepted = interp.Yes
 	s.RedirectsWriteToEveryTarget = interp.Yes
 	s.KillStatus = interp.KillStatusFailureCount
+	s.PrintfEmptyIsNotANumber = interp.No
+	s.PrintfReportsBadNumber = interp.No
+	s.PrintfBackslashC = interp.PrintfBackslashCStops
+	s.PrintfQuote = interp.PrintfQuoteBackslash
 	return s
 }
 
@@ -101,6 +105,10 @@ func Diagnostics() interp.Diagnostics {
 		// The builtin's name comes from the location here, not the message.
 		// No "kill:" in front of any of these: zsh puts the builtin's name in
 		// the location instead, which NamesBuiltinInLocation already says.
+		// No "printf:" in front: zsh puts the builtin in the location.
+		PrintfBadVerb:             "%[2]s: invalid directive",
+		PrintfUsage:               "not enough arguments",
+		PrintfUsageStatus:         1,
 		TrapBadSignal:             "undefined signal: %[1]s",
 		KillNoSuchProcess:         "kill %[1]s failed: no such process",
 		KillNotPermitted:          "kill %[1]s failed: operation not permitted",

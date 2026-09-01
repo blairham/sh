@@ -371,6 +371,57 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   set -C; echo one>b; echo two>|b; printf "[%s]" "$(cat b)"
   ```
 
+## printf
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `printf/format-is-reused` | `[a][b][c]` | `[a][b][c]` | `[a][b][c]` | `[a][b][c]` | `[a][b][c]` | `[a][b][c]` |
+| `printf/missing-argument-is-empty` | `[a][]` | `[a][]` | `[a][]` | `[a][]` | `[a][]` | `[a][]` |
+| `printf/b-escapes-and-s-does-not` | `[a	b][a\tb]` | `[a	b][a\tb]` | `[a	b][a\tb]` | `[a	b][a\tb]` | `[a	b][a\tb]` | `[a	b][a\tb]` |
+| `printf/bad-number-diverges` | `<shell>: 1: printf: abc: expected numeric value~[0]~st=1` | `<shell>: line 1: printf: abc: invalid number~[0]~st=1` | `<shell>: line 1: printf: abc: invalid number~[0]~st=1` | `<shell>: line 0: printf: abc: invalid number~[0]~st=1` | `[0]~st=0` | `[0]~st=0` |
+| `printf/empty-operand-is-bash-only` | `[0]~st=0` | `<shell>: line 1: printf: : invalid number~[0]~st=1` | `<shell>: line 1: printf: : invalid number~[0]~st=1` | `[0]~st=0` | `[0]~st=0` | `[0]~st=0` |
+| `printf/quote-diverges` | `<shell>: 1: printf: %q: invalid directive~[st=2` | `[a\ b]~st=0` | `[a\ b]~st=0` | `[a\ b]~st=0` | `['a b']~st=0` | `[a\ b]~st=0` |
+| `printf/unknown-verb-diverges` | `<shell>: 1: printf: %z: invalid directive~[st=2` | `<shell>: line 1: printf: `]': invalid format character~[st=1` | `<shell>: line 1: printf: `]': invalid format character~[st=1` | `<shell>: line 0: printf: `]': invalid format character~[st=1` | `[<shell>: printf: ]: unknown format specifier~st=1` | `<shell>:printf:1: %z: invalid directive~[st=1` |
+| `printf/no-format-at-all` | `<shell>: 1: printf: usage: printf format [arg ...]~st=2` | `printf: usage: printf [-v var] format [arguments]~st=2` | `printf: usage: printf [-v var] format [arguments]~st=2` | `printf: usage: printf [-v var] format [arguments]~st=2` | `Usage: printf [ options ] format [string ...]~st=2` | `<shell>:printf:1: not enough arguments~st=1` |
+| `printf/backslash-c-means-three-things` | ` a \ c b Z ` | ` a \ c b Z ` | ` a \ c b Z ` | ` a \ c b Z ` | ` a 002 Z ` | ` a ` |
+
+- `printf/format-is-reused` — the format runs again until the arguments are gone, which is the property that makes printf a loop rather than a formatter
+  ```sh
+  printf "[%s]" a b c; echo
+  ```
+- `printf/missing-argument-is-empty` — an argument that is not there is the empty string rather than an error, unanimously — and different from one that is there and empty
+  ```sh
+  printf "[%s][%s]\n" a
+  ```
+- `printf/b-escapes-and-s-does-not` — the whole reason %b exists: the same argument, escaped by one verb and left alone by the other
+  ```sh
+  printf "[%b][%s]\n" "a\tb" "a\tb"
+  ```
+- `printf/bad-number-diverges` — bash and dash complain and report failure where ksh93 and zsh say nothing, and all four print the zero — so the complaint sits beside the output rather than instead of it
+  ```sh
+  printf "[%d]\n" abc; echo "st=$?"
+  ```
+- `printf/empty-operand-is-bash-only` — an operand that is present and empty is an error in bash alone, where a missing one is an error in none of them
+  ```sh
+  printf "[%d]\n" ""; echo "st=$?"
+  ```
+- `printf/quote-diverges` — three answers and an absence: bash and zsh backslash-escape, ksh93 single-quotes, and dash has no %q at all
+  ```sh
+  printf "[%q]\n" "a b"; echo "st=$?"
+  ```
+- `printf/unknown-verb-diverges` — half the panel names the character *after* the one it could not read and half names the conversion, with four wordings and three statuses between them
+  ```sh
+  printf "[%z]\n" x; echo "st=$?"
+  ```
+- `printf/no-format-at-all` — four usages, two of them printed with no shell name in front, and zsh alone not treating it as worth a different status from any other failure
+  ```sh
+  printf; echo "st=$?"
+  ```
+- `printf/backslash-c-means-three-things` — read as bytes rather than as text, because that is the only way to tell ksh93's control character from zsh's stopping: bash and dash write two literal characters, ksh93 reads \cX as control-X, and zsh ends the output there
+  ```sh
+  printf "a\cbZ" | od -An -c | tr -s " "
+  ```
+
 ## kill
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |

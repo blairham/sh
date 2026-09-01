@@ -6074,6 +6074,294 @@
         "TimedOut": false
       }
     },
+    "printf/b-escapes-and-s-does-not": {
+      "bash": {
+        "Output": "[a\tb][a\\tb]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a\tb][a\\tb]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[a\tb][a\\tb]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a\tb][a\\tb]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a\tb][a\\tb]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a\tb][a\\tb]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/backslash-c-means-three-things": {
+      "bash": {
+        "Output": " a \\ c b Z ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": " a \\ c b Z ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": " a \\ c b Z ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": " a \\ c b Z ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": " a 002 Z ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": " a ",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/bad-number-diverges": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: printf: abc: invalid number~[0]~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: printf: abc: invalid number~[0]~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: printf: abc: invalid number~[0]~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: printf: abc: expected numeric value~[0]~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[0]~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[0]~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/empty-operand-is-bash-only": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: printf: : invalid number~[0]~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: printf: : invalid number~[0]~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[0]~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[0]~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[0]~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[0]~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/format-is-reused": {
+      "bash": {
+        "Output": "[a][b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a][b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[a][b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a][b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a][b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a][b][c]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/missing-argument-is-empty": {
+      "bash": {
+        "Output": "[a][]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a][]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[a][]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a][]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a][]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a][]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/no-format-at-all": {
+      "bash": {
+        "Output": "printf: usage: printf [-v var] format [arguments]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "printf: usage: printf [-v var] format [arguments]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "printf: usage: printf [-v var] format [arguments]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: printf: usage: printf format [arg ...]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "Usage: printf [ options ] format [string ...]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:printf:1: not enough arguments~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/quote-diverges": {
+      "bash": {
+        "Output": "[a\\ b]~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a\\ b]~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[a\\ b]~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: printf: %q: invalid directive~[st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "['a b']~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a\\ b]~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/unknown-verb-diverges": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: printf: `]': invalid format character~[st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: printf: `]': invalid format character~[st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: printf: `]': invalid format character~[st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: printf: %z: invalid directive~[st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[\u003cshell\u003e: printf: ]: unknown format specifier~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:printf:1: %z: invalid directive~[st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "redir/dup-to-stderr": {
       "bash": {
         "Output": "done",

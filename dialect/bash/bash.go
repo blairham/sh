@@ -53,6 +53,10 @@ func Semantics() interp.Semantics {
 	s.SIGPrefixAccepted = interp.Yes
 	s.RedirectsWriteToEveryTarget = interp.No
 	s.KillStatus = interp.KillStatusAnySuccess
+	s.PrintfEmptyIsNotANumber = interp.Yes
+	s.PrintfReportsBadNumber = interp.Yes
+	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
+	s.PrintfQuote = interp.PrintfQuoteBackslash
 	return s
 }
 
@@ -102,6 +106,11 @@ func Diagnostics() interp.Diagnostics {
 		// `kill` puts the process in parentheses and the reason after a dash,
 		// which is the only wording in the panel a script could not confuse
 		// with a message about a signal name.
+		PrintfBadNumber: "printf: %[1]s: invalid number",
+		PrintfBadVerb:   "printf: `%[1]s': invalid format character",
+		PrintfUsage:     "printf: usage: printf [-v var] format [arguments]",
+		// The usage carries no location, as `kill`'s does not.
+		PrintfUsageUnprefixed:     true,
 		TrapBadSignal:             "trap: %[1]s: invalid signal specification",
 		KillNoSuchProcess:         "kill: (%[1]s) - No such process",
 		KillNotPermitted:          "kill: (%[1]s) - Operation not permitted",

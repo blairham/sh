@@ -187,6 +187,24 @@ type Diagnostics struct {
 	// four are fields rather than strings in the builtin.
 	TestMissingBracket string
 
+	// PrintfBadNumber is a numeric conversion given something that is not a
+	// number. One verb: the operand.
+	PrintfBadNumber string
+	// PrintfBadNumberStatus is what that reports. Zero means 1.
+	PrintfBadNumberStatus int
+	// PrintfBadVerb is a conversion this shell does not have. One verb, and
+	// the panel does not agree on what to put in it: half name the character
+	// *after* the one they could not read and half name the conversion.
+	PrintfBadVerb string
+	// PrintfBadVerbStatus is what that reports. Zero means 1.
+	PrintfBadVerbStatus int
+	// PrintfUsage is `printf` with no format at all. No verbs.
+	PrintfUsage string
+	// PrintfUsageUnprefixed prints it bare, as ksh93 prints every usage.
+	PrintfUsageUnprefixed bool
+	// PrintfUsageStatus is what that reports. Zero means 2.
+	PrintfUsageStatus int
+
 	// TrapBadSignal is what `trap` says about a condition that names no
 	// signal it knows. One verb: the condition as written.
 	//

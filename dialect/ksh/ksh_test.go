@@ -220,3 +220,19 @@ func TestKshHasItsOwnNamesForThings(t *testing.T) {
 		t.Errorf("InvalidNumber = %q, want %q — a value that is not a number is a name here", got, want)
 	}
 }
+
+// TestPrintfAnswers covers the two that are ksh93's alone: `\cX` is a control
+// character rather than two characters or a full stop, and its output reaches
+// the reader before its complaint about the rest.
+func TestPrintfAnswers(t *testing.T) {
+	s := ksh.Semantics()
+	if got, want := s.PrintfBackslashC, interp.PrintfBackslashCControl; got != want {
+		t.Errorf("PrintfBackslashC = %v, want %v", got, want)
+	}
+	if got, want := s.PrintfOutputPrecedesComplaint, interp.Yes; got != want {
+		t.Errorf("PrintfOutputPrecedesComplaint = %v, want %v", got, want)
+	}
+	if got, want := s.PrintfQuote, interp.PrintfQuoteSingle; got != want {
+		t.Errorf("PrintfQuote = %v, want %v", got, want)
+	}
+}

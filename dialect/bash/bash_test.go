@@ -148,3 +148,24 @@ func TestAParenAfterAWordIsAFunctionDefinition(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// TestPrintfAnswers covers bash's four, one of which is bash's alone.
+func TestPrintfAnswers(t *testing.T) {
+	s := bash.Semantics()
+	for _, tc := range []struct {
+		axis string
+		got  any
+		want any
+	}{
+		{"PrintfReportsBadNumber", s.PrintfReportsBadNumber, interp.Yes},
+		// bash alone: an operand present and empty is an error, where a
+		// missing one is an error in none of the four.
+		{"PrintfEmptyIsNotANumber", s.PrintfEmptyIsNotANumber, interp.Yes},
+		{"PrintfBackslashC", s.PrintfBackslashC, interp.PrintfBackslashCLiteral},
+		{"PrintfQuote", s.PrintfQuote, interp.PrintfQuoteBackslash},
+	} {
+		if tc.got != tc.want {
+			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)
+		}
+	}
+}

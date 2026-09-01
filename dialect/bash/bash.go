@@ -130,11 +130,11 @@ func Diagnostics() interp.Diagnostics {
 		// bash names the builtin only when the command was not found at all.
 		ExecNotFound: "exec: %[1]s: not found",
 		// bash is the only one that says which *kind* of operator it wanted.
-		TestUnaryExpected:    "test: %[1]s: unary operator expected",
-		TestBinaryExpected:   "test: %[1]s: binary operator expected",
-		TestIntegerExpected:  "test: %[1]s: integer expected",
-		TestTooManyArguments: "test: too many arguments",
-		TestOperandExpected:  "test: argument expected",
+		TestUnaryExpected:    "%[2]s: %[1]s: unary operator expected",
+		TestBinaryExpected:   "%[2]s: %[1]s: binary operator expected",
+		TestIntegerExpected:  "%[2]s: %[1]s: integer expected",
+		TestTooManyArguments: "%[2]s: too many arguments",
+		TestOperandExpected:  "%[2]s: argument expected",
 		TestMissingBracket:   "[: missing `]'",
 		// `kill` puts the process in parentheses and the reason after a dash,
 		// which is the only wording in the panel a script could not confuse

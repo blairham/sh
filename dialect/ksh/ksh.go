@@ -173,11 +173,11 @@ func Diagnostics() interp.Diagnostics {
 		KillBadOptionStatus:       2,
 		KillUsageUnprefixed:       true,
 		KillTargetUnprefixed:      true,
-		TestUnaryExpected:         "test: %[1]s: unknown operator",
-		TestBinaryExpected:        "test: %[1]s: unknown operator",
-		TestIntegerExpected:       "test: %[1]s: integer expected",
-		TestTooManyArguments:      "test: too many arguments",
-		TestOperandExpected:       "test: argument expected",
+		TestUnaryExpected:         "%[2]s: %[1]s: unknown operator",
+		TestBinaryExpected:        "%[2]s: %[1]s: unknown operator",
+		TestIntegerExpected:       "%[2]s: %[1]s: integer expected",
+		TestTooManyArguments:      "%[2]s: too many arguments",
+		TestOperandExpected:       "%[2]s: argument expected",
 		TestMissingBracket:        "[: ']' missing",
 		// Labeled lines, one figure each, and no children's times at all —
 		// genuinely less information than the other three report.

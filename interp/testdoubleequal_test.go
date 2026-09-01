@@ -83,3 +83,41 @@ func TestARefusedOperatorIsNotAlsoAMalformedExpression(t *testing.T) {
 		t.Errorf("said %q, want no second complaint about the same words", out)
 	}
 }
+
+// `[` is `test` under another name, and a diagnostic blames the name that was
+// typed. The wordings carry it, so a fixed "test:" in them looks right until
+// the same expression is written the other way.
+func TestADiagnosticNamesTheWordThatWasTyped(t *testing.T) {
+	// Not the substrate's empty wordings, which name nothing at all: this is
+	// about a wording that does name the builtin, so it needs one.
+	dg := Diagnostics{
+		TestBinaryExpected:   "%[2]s: %[1]s: binary operator expected",
+		TestTooManyArguments: "%[2]s: too many arguments",
+	}
+	for _, c := range []struct{ src, want string }{
+		{`test a b c`, "test: b: binary operator expected"},
+		{`[ a b c ]`, "[: b: binary operator expected"},
+		// A wording with no operand in it still has a name in it, and the
+		// operand it is handed must not surface as a stray argument.
+		{`test a = a = a`, "test: too many arguments"},
+		{`[ a = a = a ]`, "[: too many arguments"},
+	} {
+		f, err := syntax.Parse(c.src, syntax.Core())
+		if err != nil {
+			t.Fatalf("parse %q: %v", c.src, err)
+		}
+		var buf bytes.Buffer
+		sem := permissive()
+		r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatalf("run %q: %v", c.src, err)
+		}
+		got := buf.String()
+		if !strings.Contains(got, c.want) {
+			t.Errorf("%s: said %q, want it to contain %q", c.src, got, c.want)
+		}
+		if strings.Contains(got, "%!") {
+			t.Errorf("%s: said %q, want no formatting wreckage", c.src, got)
+		}
+	}
+}

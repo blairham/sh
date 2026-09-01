@@ -72,7 +72,12 @@ func (r *Runner) runTest(name string, args []string) int {
 				r.inBuiltin = ""
 				defer func() { r.inBuiltin = outer }()
 			}
-			r.diagf("%s\n", Wording(te.format(r.diag()), te.fallback(), te.operand))
+			// The name is the word that was typed. `[` is `test` under
+			// another name, and every shell in the panel blames the name it
+			// was called by rather than a fixed one — including zsh, which
+			// carries it in the location instead of the message and so needs
+			// nothing here.
+			r.diagf("%s\n", Wording(te.format(r.diag()), te.fallback(), te.operand, name))
 		} else {
 			r.diagf("%s: %v\n", name, err)
 		}
@@ -116,15 +121,15 @@ func (e *testError) Error() string { return e.fallback() }
 func (e *testError) fallback() string {
 	switch e.kind {
 	case errOperandExpected:
-		return "test: argument expected"
+		return "%[2]s: argument expected"
 	case errTooManyArguments:
-		return "test: too many arguments"
+		return "%[2]s: too many arguments"
 	case errIntegerExpected:
-		return "test: %[1]s: integer expected"
+		return "%[2]s: %[1]s: integer expected"
 	case errBinaryExpected:
-		return "test: %[1]s: binary operator expected"
+		return "%[2]s: %[1]s: binary operator expected"
 	}
-	return "test: %[1]s: unary operator expected"
+	return "%[2]s: %[1]s: unary operator expected"
 }
 
 func (e *testError) format(d Diagnostics) string {

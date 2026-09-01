@@ -196,6 +196,7 @@ func TestTheDialectWordsItsOwnSyntaxError(t *testing.T) {
 	sh.Diagnostics = interp.Diagnostics{
 		SyntaxError:       "Bespoke syntax complaint: %s",
 		Unterminated:      "Bespoke unfinished %[1]s on line %[2]d",
+		SyntaxUnexpected:  "Bespoke surprise at %[1]s",
 		SyntaxErrorStatus: 7,
 	}
 
@@ -209,8 +210,12 @@ func TestTheDialectWordsItsOwnSyntaxError(t *testing.T) {
 	// diagnosis four ways. Both are the dialect's to word, and a dialect that
 	// words only one still gets the substrate's sentence for the other.
 	for _, tc := range []struct{ name, src, want string }{
-		{"a token in the wrong place", "echo )", "Bespoke syntax complaint"},
+		// Three kinds now, and the split is the point: the panel words each
+		// of them its own way, so a dialect that answers one and not the
+		// others gets the substrate's sentence for the rest.
+		{"a token in the wrong place", "echo )", "Bespoke surprise at )"},
 		{"input that ran out", "if", "Bespoke unfinished if on line 1"},
+		{"something else entirely", "echo ${", "Bespoke syntax complaint"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, errs, code := runArgs(t, sh, "testsh", "-c", tc.src)

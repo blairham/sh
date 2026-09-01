@@ -173,3 +173,17 @@ func TestArithmeticFailuresAreTerse(t *testing.T) {
 		}
 	}
 }
+
+// TestUnexpectedTokensCarryTheLine is ksh93's shape: the line rides inside the
+// message, because ksh93 prints no location of its own for a parse failure.
+func TestUnexpectedTokensCarryTheLine(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"echo )", "syntax error at line 1: `)' unexpected"},
+		{"echo x\necho )", "syntax error at line 2: `)' unexpected"},
+	} {
+		_, err := syntax.Parse(tc.src, ksh.Dialect())
+		if got := ksh.Diagnostics().ParseFailure(err); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}

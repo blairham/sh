@@ -44,6 +44,24 @@ const (
 	// and in dash also `$((1,2))`, whose comma it does not have. dash calls
 	// it "expecting EOF" and zsh "operator expected".
 	ErrArithOperator
+	// ErrUnexpected is a token where the grammar wanted something else. The
+	// panel names the token three ways and one of them names its *class*
+	// instead — dash says "word unexpected" for an ordinary word and quotes
+	// a reserved word or an operator — so the class travels with it.
+	ErrUnexpected
+)
+
+// TokenClass is what sort of thing a token is, for the dialect that words an
+// ordinary word differently from a reserved one.
+type TokenClass int
+
+const (
+	// ClassOperator is punctuation: `&`, `)`, `}`.
+	ClassOperator TokenClass = iota
+	// ClassWord is an ordinary word, the one class dash does not quote.
+	ClassWord
+	// ClassReserved is a word the grammar reserves: `fi`, `do`, `esac`.
+	ClassReserved
 )
 
 // Error is a parse failure with its position, kind, and enough of the state
@@ -70,6 +88,8 @@ type Error struct {
 	// LastToken is the last token consumed before the input ran out, which
 	// is what the remaining shell names.
 	LastToken string
+	// Class is what sort of token Token is, when the kind is ErrUnexpected.
+	Class TokenClass
 	// Expr is the whole arithmetic expression a failure was inside, and
 	// Token the part of it the failure is attributed to. Every shell quotes
 	// the first; only one names the second.

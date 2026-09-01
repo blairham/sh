@@ -75,6 +75,7 @@ func Diagnostics() interp.Diagnostics {
 		UnterminatedEndsOnNextLine: true,
 		ArithOperandExpected:       "arithmetic syntax error: operand expected",
 		ArithOperatorExpected:      "arithmetic syntax error in expression",
+		SyntaxUnexpected:           "syntax error near unexpected token `%[1]s'",
 		Unterminated:               "syntax error: unexpected end of file from `%[1]s' command on line %[2]d",
 		SyntaxErrorStatus:          2,
 		// Measured: `.` of a file it cannot open reports 1 and carries on,

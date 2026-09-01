@@ -24,6 +24,8 @@ func Dialect() syntax.Dialect {
 	d.FuncDefAtParen = true
 	// And inside `[[ ]]`, which is the only place bash reads them.
 	d.ExtendedPatternInCondition = true
+	// A bare `|` in a `=~` operand belongs to the regular expression.
+	d.RegexTakesAlternation = true
 	return d
 }
 

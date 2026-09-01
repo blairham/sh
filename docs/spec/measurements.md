@@ -1695,6 +1695,11 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `cond/logical-and-grouping` | `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `grouped` | `grouped` | `grouped` | `grouped` | `grouped` |
 | `cond/andand-binds-tighter-than-oror` | `<shell>: 1: [[: not found~<shell>: 1: -n: not found~false` | `true` | `true` | `true` | `true` | `true` |
 | `cond/command-language-is-the-other-way` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
+| `cond/a-group-in-a-regex` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `y` | `y` | `y` | `y` | `y` |
+| `cond/a-group-starting-a-regex` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `y` | `y` | `y` | `y` | `y` |
+| `cond/nested-groups-in-a-regex` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `y` | `y` | `y` | `y` | `y` |
+| `cond/escaped-parens-in-a-regex` | `<shell>: 1: [[: not found~n` | `y` | `y` | `y` | `y` | `y` |
+| `cond/a-subshell-is-still-a-subshell` | `subshell` | `subshell` | `subshell` | `subshell` | `subshell` | `subshell` |
 
 - `cond/no-field-splitting-inside` — [[ ]] is parsed rather than executed, so the words never become arguments and are never split
   ```sh
@@ -1739,6 +1744,26 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `cond/command-language-is-the-other-way` — the contrast that makes the previous case a finding rather than a curiosity
   ```sh
   true || true && false; echo "st=$?"
+  ```
+- `cond/a-group-in-a-regex` — the parentheses belong to the regular expression rather than to the shell, so the word does not end at one — which the lexer has to be told, since where a word ends is settled before any parser sees a token
+  ```sh
+  [[ abc =~ ^(a|x)bc$ ]] && echo y || echo n
+  ```
+- `cond/a-group-starting-a-regex` — and at the very start of the operand, where the `(` would otherwise be taken as an operator before the word scanner ran at all
+  ```sh
+  [[ abc =~ (b) ]] && echo y || echo n
+  ```
+- `cond/nested-groups-in-a-regex` — nesting, which is what makes the scan need to balance rather than stop at the first `)`
+  ```sh
+  [[ abc =~ ^((a)(b))c$ ]] && echo y || echo n
+  ```
+- `cond/escaped-parens-in-a-regex` — escaped, they are ordinary characters to the regex and match literal parentheses — the counter-case that keeps the rule about the regex's syntax rather than about the character
+  ```sh
+  [[ "(b)" =~ \(b\) ]] && echo y || echo n
+  ```
+- `cond/a-subshell-is-still-a-subshell` — the counter-case for the lexer change: a `(` outside a regex operand still opens a subshell, which is what it would stop doing if the rule were not scoped to the operand
+  ```sh
+  ( echo subshell )
   ```
 
 ## eval and dot

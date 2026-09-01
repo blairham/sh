@@ -164,3 +164,48 @@ func TestCondNeverPanics(t *testing.T) {
 		}()
 	}
 }
+
+// TestARegexOperandOwnsItsParentheses: after `=~` the operand is a regular
+// expression, so its parentheses are the regex's and do not end the word.
+// Where a word ends is settled by the lexer, so the lexer has to be told.
+func TestARegexOperandOwnsItsParentheses(t *testing.T) {
+	for _, src := range []string{
+		`[[ abc =~ ^(a|x)bc$ ]]`,
+		`[[ abc =~ (b) ]]`,
+		`[[ abc =~ ^((a)(b))c$ ]]`,
+		`[[ abc =~ (a)(b) ]]`,
+	} {
+		mustParse(t, src, Core(), "a group in a regex")
+	}
+	// Scoped to the operand: everywhere else a `(` is the shell's again.
+	mustParse(t, `( echo subshell )`, Core(), "a subshell")
+	mustParse(t, `[[ (a = a) ]]`, Core(), "grouping inside a condition")
+	mustFail(t, `[[ abc == (b) ]]`, Core(), "a group after == is not a regex")
+}
+
+// TestABareAlternationInARegexIsADialectAnswer: two of the three shells with
+// `[[ ]]` take a bare `|` as the regex's, and the third ends the word there.
+func TestABareAlternationInARegexIsADialectAnswer(t *testing.T) {
+	takes := Core()
+	takes.RegexTakesAlternation = true
+	mustParse(t, `[[ ab =~ a|b ]]`, takes, "a bare alternation where the dialect takes it")
+	mustFail(t, `[[ ab =~ a|b ]]`, Core(), "a bare alternation where it does not")
+	// Inside parentheses it belongs to the group either way, which is why the
+	// flag is about the *bare* one.
+	mustParse(t, `[[ ab =~ (a|b) ]]`, Core(), "an alternation inside a group")
+}
+
+// TestRegexModeEndsWithTheOperandParses: the shapes below have to parse. That
+// they parse is not enough to show the rule is scoped — a group swallowed
+// into a word parses too — so what they *answer* is checked in interp.
+func TestRegexModeEndsWithTheOperandParses(t *testing.T) {
+	for _, src := range []string{
+		`[[ abc =~ b && (a = a) ]]`,
+		`[[ abc =~ b ]] && ( echo sub )`,
+		`[[ abc =~ b || (a = a) ]]`,
+	} {
+		mustParse(t, src, Core(), "a group after the operand")
+	}
+	// And the operand itself is still read as a regex in those.
+	mustParse(t, `[[ abc =~ (b) && (a = a) ]]`, Core(), "a regex group and then a condition group")
+}

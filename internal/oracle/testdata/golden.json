@@ -5146,6 +5146,166 @@
         "TimedOut": false
       }
     },
+    "exit/break-still-counts-its-loops": {
+      "bash": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "exit/from-inside-a-for-loop": {
+      "bash": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      }
+    },
+    "exit/from-inside-a-nested-loop": {
+      "bash": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      }
+    },
+    "exit/from-inside-a-while-loop": {
+      "bash": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      }
+    },
+    "exit/from-inside-an-until-loop": {
+      "bash": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
+        "Status": 3,
+        "TimedOut": false
+      }
+    },
     "exit/status-and-wrapping": {
       "bash": {
         "Output": "[44]~[1]",

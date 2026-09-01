@@ -245,7 +245,17 @@ func (r *Runner) loopControl() bool {
 			return true
 		}
 		return false
-	case controlReturn:
+	case controlReturn, controlExit:
+		// `exit` ends the loop as surely as `return` does, and neither is
+		// cleared here: the caller above has to see it too.
+		//
+		// Leaving `exit` out was not a missing case so much as an invisible
+		// one. The loop carried on, the next round found the shell refusing
+		// to run anything, and `while` then fell out of its condition and set
+		// the status to 0 — so `exit 3` from inside one exited 0. `until`
+		// read the same refusal as its condition still holding and span
+		// forever. A `for` over a finite list happened to come out right,
+		// which is why this survived: the shape most scripts use hid it.
 		return true
 	}
 	return false

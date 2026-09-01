@@ -60,13 +60,15 @@ func Semantics() interp.Semantics {
 // Diagnostics is how zsh reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
-		Location:          interp.LocationTightLine,
-		BadSubstitution:   "bad substitution",
-		BadPattern:        "bad pattern: %s",
-		ReadonlyVariable:  "read-only variable: %s",
-		TraceQuoting:      interp.QuoteShell,
-		TraceStyle:        interp.TraceNameLine,
-		TraceForHeader:    interp.TraceForAssign,
+		Location:         interp.LocationTightLine,
+		BadSubstitution:  "bad substitution",
+		BadPattern:       "bad pattern: %s",
+		ReadonlyVariable: "read-only variable: %s",
+		TraceQuoting:     interp.QuoteShell,
+		TraceStyle:       interp.TraceNameLine,
+		TraceForHeader:   interp.TraceForAssign,
+		// zsh names the last token it read and nothing else.
+		Unterminated:      "parse error near `%[5]s'",
 		SyntaxErrorStatus: 1,
 		// zsh alone answers "a syntax error" differently depending on where it
 		// read the text: 1 from -c, 126 from a file `.` opened.

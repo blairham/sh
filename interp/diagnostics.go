@@ -4,8 +4,11 @@
 package interp
 
 import (
+	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // Diagnostics is how a dialect reports failure.
@@ -290,6 +293,20 @@ type Diagnostics struct {
 
 	// SyntaxError wraps a parse failure's own text. One verb: the text.
 	SyntaxError string
+
+	// Unterminated is input that ran out with a construct still open, and it
+	// is four verbs because the panel names four different parts of that one
+	// state rather than wording a shared diagnosis four ways:
+	//
+	//	%[1]s  the construct — `if`, `for`, `case`, `{`
+	//	%[2]d  the line the construct began on
+	//	%[3]s  the innermost unclosed keyword, `then` inside an `if`
+	//	%[4]s  the word that would have closed it, `fi`
+	//	%[5]s  the last token before the input ran out
+	//
+	// bash names the first two, ksh93 the third, dash the fourth and zsh the
+	// fifth. Empty means the substrate's own, which names the construct.
+	Unterminated string
 	// BadSubstitution replaces a parse failure inside `${ }` entirely. No
 	// verbs: no shell in the panel says which operator was wrong.
 	BadSubstitution string
@@ -416,6 +433,30 @@ func Wording(custom, fallback string, args ...any) string {
 		return custom
 	}
 	return fmt.Sprintf(custom, args...)
+}
+
+// ParseFailure words a parse error the way this dialect words it.
+//
+// It lives here rather than in the front end because the front end is not the
+// only one reporting parse failures: `eval` and `.` parse borrowed text and
+// have to say the same thing about the same failure. The kind is what
+// decides, never the message text — dash says "Bad substitution" for anything
+// wrong inside `${ }` and "Syntax error: …" for everything else, and matching
+// on our own phrasing to tell those apart would break the first time the
+// phrasing changed.
+func (d Diagnostics) ParseFailure(err error) string {
+	var se *syntax.Error
+	if !errors.As(err, &se) {
+		return Wording(d.SyntaxError, "%s", parseMessage(err))
+	}
+	switch se.Kind {
+	case syntax.ErrBadSubstitution:
+		return Wording(d.BadSubstitution, se.Msg)
+	case syntax.ErrUnterminated:
+		return Wording(d.Unterminated, "syntax error: unterminated %[1]s",
+			se.Construct, se.ConstructLine, se.Innermost, se.Expected, se.LastToken)
+	}
+	return Wording(d.SyntaxError, "%s", se.Msg)
 }
 
 // ForScript returns the diagnostics a script read from a file should use.

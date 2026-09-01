@@ -19,13 +19,47 @@ const (
 	// the panel has a distinct message for it, and none of them mentions
 	// which operator was wrong.
 	ErrBadSubstitution
+	// ErrUnterminated is input that ran out with a construct still open.
+	//
+	// It is its own kind because the panel does not merely word it
+	// differently — each shell names a *different part* of the same failure.
+	// For `if true; then echo x`:
+	//
+	//	bash   unexpected end of file from `if' command on line 1
+	//	dash   end of file unexpected (expecting "fi")
+	//	ksh93  `then' unmatched
+	//	zsh    parse error near `x'
+	//
+	// Four views of one state rather than four states, which is why Error
+	// carries the construct, the innermost unclosed keyword, what was
+	// expected and the last token seen: each dialect names the one it names.
+	ErrUnterminated
 )
 
-// Error is a parse failure with its position and kind.
+// Error is a parse failure with its position, kind, and enough of the state
+// it failed in that a dialect can word it its own way.
+//
+// The context fields are set where the parser has them and are empty
+// otherwise. A caller that only wants a sentence still has Msg.
 type Error struct {
 	Pos  Pos
 	Kind ErrorKind
 	Msg  string
+
+	// Construct is the compound command left open — `if`, `for`, `case`,
+	// `{`, `(` — and ConstructLine is the line it began on. One shell names
+	// both.
+	Construct     string
+	ConstructLine int
+	// Innermost is the unclosed keyword nearest the failure, which is the
+	// construct itself until a clause of it has been entered: `if` alone is
+	// `if`, and `if cond; then` is `then`. Another shell names this instead.
+	Innermost string
+	// Expected is the word that would have closed it — `fi`, `done`, `esac`.
+	Expected string
+	// LastToken is the last token consumed before the input ran out, which
+	// is what the remaining shell names.
+	LastToken string
 }
 
 func (e *Error) Error() string { return e.Pos.String() + ": " + e.Msg }

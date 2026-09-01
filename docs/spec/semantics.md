@@ -1196,3 +1196,52 @@ start of a `case` arm is read as an arithmetic command, because that is what
 arm's paren followed by the group `(a)`, so it prints y where we report an
 arithmetic error. Telling the two apart needs the lexer to know it is in a
 case arm, which is the same lookahead problem in a different place.
+
+## A here-document body is not a word
+
+`don't` came out as `dont`. No error, status 0 — the worst way to be wrong,
+and it survived a corpus at 100% because nothing in the corpus had an
+apostrophe in a here-document.
+
+The body of an *unquoted* here-document was being run through the word lexer,
+so shell quoting applied to it. It is not a word. It is closest to a
+double-quoted string, and the difference is exactly the quote:
+
+| in the body | means |
+| --- | --- |
+| `'` `"` | ordinary characters. There is nothing for a quote to quote. |
+| `$name` `${ }` `$( )` `$(( ))` `` ` `` | expand |
+| `\$` `` \` `` `\\` | the character, without the backslash |
+| `\` before anything else | both characters, kept |
+| `\` before a newline | the lines joined, with nothing between |
+| `~` `*` | ordinary. No tilde expansion and no globbing. |
+
+All four shells agree on every row, so none of it is an axis.
+
+`syntax.HeredocSpans` scans it now — a sibling of the double-quote scanner
+with the quote taken out of the escape set and no terminator to look for. The
+one thing it must not reuse is the *word* path, which is what this replaced.
+
+A quoted delimiter is a different question and was already right: that body
+is literal throughout and never reaches the scanner.
+
+### And a second bug hiding behind the first
+
+With the quoting fixed, every backslash came out doubled. The span expander
+marks a literal's metacharacters for the glob stage, and a here-document has
+no glob stage — its text is input, not a pattern. The old code unescaped them
+at the end and the replacement had to as well. It is the kind of thing that
+only shows once the layer above it is correct.
+
+### The lexer cannot read a here-document on its own
+
+Adding a case with an apostrophe in a body broke `TestCorpusLexes`, which
+lexes every snippet standalone. That test had been passing for here-documents
+by luck: where a body's end is decided by a delimiter the *parser* registers,
+so a lexer with no parser above it reads the body as ordinary words — the same
+mistake as the one above, one layer down, and invisible while every recorded
+body happened to be valid word syntax.
+
+`Tokens` queues the here-document itself now, from the same two tokens the
+parser uses. It is the only caller that needs to: the parser does its own
+registering, and everything else goes through the parser.

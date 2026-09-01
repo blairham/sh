@@ -5274,6 +5274,166 @@
         "TimedOut": false
       }
     },
+    "heredoc/a-backslash-escapes-three-things": {
+      "bash": {
+        "Output": "$x \\ \\n \\' \\\"",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "$x \\ \\n \\' \\\"",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "$x \\ \\n \\' \\\"",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "$x \\ \\n \\' \\\"",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "$x \\ \\n \\' \\\"",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "$x \\ \\n \\' \\\"",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "heredoc/a-continued-line-is-joined": {
+      "bash": {
+        "Output": "abcdef",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "abcdef",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "abcdef",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "abcdef",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "abcdef",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "abcdef",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "heredoc/a-quoted-delimiter-takes-the-body-whole": {
+      "bash": {
+        "Output": "don't $x \\$x \\\\ \"hi\"",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "don't $x \\$x \\\\ \"hi\"",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "don't $x \\$x \\\\ \"hi\"",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "don't $x \\$x \\\\ \"hi\"",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "don't $x \\$x \\\\ \"hi\"",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "don't $x \\$x \\\\ \"hi\"",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "heredoc/an-unquoted-body-expands": {
+      "bash": {
+        "Output": "VAL VAL sub 3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "VAL VAL sub 3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "VAL VAL sub 3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "VAL VAL sub 3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "VAL VAL sub 3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "VAL VAL sub 3",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "heredoc/quotes-in-the-body-are-literal": {
+      "bash": {
+        "Output": "don't say \"hi\"",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "don't say \"hi\"",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "don't say \"hi\"",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "don't say \"hi\"",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "don't say \"hi\"",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "don't say \"hi\"",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "ifs/default-edges-stripped": {
       "bash": {
         "Output": "[a][b]",

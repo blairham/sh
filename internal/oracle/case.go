@@ -1985,4 +1985,34 @@ var Corpus = []Case{
 		Snippet: "echo one\nfor i in 1 2\ndo\n  echo $i\ndone\n{ fi; }\n",
 		Why:     "the unit stretches past a newline while a construct is open, so the whole loop runs before the line after it fails — a line-at-a-time reader that stopped at the first newline could not run it at all",
 	},
+	{
+		ID: "heredoc/quotes-in-the-body-are-literal", Category: "redirection",
+		Script:  true,
+		Snippet: "cat <<EOF\ndon't say \"hi\"\nEOF\n",
+		Why:     "a here-document body is not a word: a quote in it is an ordinary character with nothing to quote, so running the word lexer over it removed them and turned don't into dont — silently, with status 0",
+	},
+	{
+		ID: "heredoc/a-backslash-escapes-three-things", Category: "redirection",
+		Script:  true,
+		Snippet: "x=VAL\ncat <<EOF\n\\$x \\\\ \\n \\' \\\"\nEOF\n",
+		Why:     "only `$`, a backtick and a backslash; before anything else the backslash stays and so does what follows it, which is the half that makes `\\n` two characters here and one inside double quotes",
+	},
+	{
+		ID: "heredoc/an-unquoted-body-expands", Category: "redirection",
+		Script:  true,
+		Snippet: "x=VAL\ncat <<EOF\n$x ${x} $(echo sub) $((1+2))\nEOF\n",
+		Why:     "the reason an unquoted body is treated differently at all: every substitution happens, which is what makes the quoting of the *delimiter* worth recording",
+	},
+	{
+		ID: "heredoc/a-quoted-delimiter-takes-the-body-whole", Category: "redirection",
+		Script:  true,
+		Snippet: "x=VAL\ncat <<'EOF'\ndon't $x \\$x \\\\ \"hi\"\nEOF\n",
+		Why:     "the other side of the same switch: nothing expands and nothing is escaped, so the body is exactly what was written",
+	},
+	{
+		ID: "heredoc/a-continued-line-is-joined", Category: "redirection",
+		Script:  true,
+		Snippet: "cat <<EOF\nabc\\\ndef\nEOF\n",
+		Why:     "a backslash before the newline joins the lines with nothing between them, which is the one escape that removes rather than reveals a character",
+	},
 }

@@ -703,37 +703,14 @@ func (r *Runner) specialLength() int {
 // a word: lexing alone would drop them as token separators.
 func (r *Runner) expandRawText(text string) string {
 	var b strings.Builder
-	for i, line := range strings.Split(text, "\n") {
-		if i > 0 {
-			b.WriteByte('\n')
-		}
-		l := syntax.NewLexer(line, r.dialect())
-		var spans []syntax.Span
-		last := 0
-		for {
-			tk := l.Next()
-			if tk.Kind == syntax.TokEOF {
-				break
-			}
-			// Blanks between tokens are content here, not separators.
-			if tk.Pos.Offset > last {
-				spans = append(spans, syntax.Span{Kind: syntax.Literal, Value: line[last:tk.Pos.Offset]})
-			}
-			last = tk.End.Offset
-			if tk.Kind == syntax.TokWord {
-				w := r.parseSpans(tk.Spans)
-				spans = append(spans, w...)
-				continue
-			}
-			spans = append(spans, syntax.Span{Kind: syntax.Literal, Value: tk.Text})
-		}
-		if last < len(line) {
-			spans = append(spans, syntax.Span{Kind: syntax.Literal, Value: line[last:]})
-		}
-		for _, s := range spans {
-			text, _ := r.expandSpan(s)
-			b.WriteString(globUnescape(text))
-		}
+	// The lexer leaves an expansion's inside raw, so parseSpans fills it in —
+	// the same handoff a word goes through.
+	for _, s := range r.parseSpans(syntax.HeredocSpans(text, r.dialect())) {
+		out, _ := r.expandSpan(s)
+		// expandSpan marks a literal's metacharacters for the glob stage,
+		// and a here-document has no glob stage — the text is input, not a
+		// pattern. Without this a backslash in the body came out doubled.
+		b.WriteString(globUnescape(out))
 	}
 	return b.String()
 }

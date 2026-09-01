@@ -138,3 +138,19 @@ func TestExecAxes(t *testing.T) {
 		t.Errorf("status = %d, want 127", st)
 	}
 }
+
+// TestDoubleEqualInTest: ksh93 takes `==` as a second spelling of `=`.
+func TestDoubleEqualInTest(t *testing.T) {
+	dir := t.TempDir()
+	if _, st := runKsh(t, dir, `test a == a`); st != 0 {
+		t.Errorf("equal operands: status %d, want 0", st)
+	}
+	if _, st := runKsh(t, dir, `test a == b`); st != 1 {
+		t.Errorf("unequal operands: status %d, want 1", st)
+	}
+	// The single `=` is unanimous, and pins the difference to the operator
+	// rather than to anything else about how the words are read.
+	if _, st := runKsh(t, dir, `test a = a`); st != 0 {
+		t.Errorf("single equals: status %d, want 0", st)
+	}
+}

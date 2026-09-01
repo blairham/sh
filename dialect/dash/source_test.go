@@ -156,3 +156,19 @@ func TestExecAxes(t *testing.T) {
 		t.Error("dash reports execve's own error for a directory")
 	}
 }
+
+// TestDoubleEqualInTest: dash has only `=`, so `==` is not an operator and the three words are a malformed expression — 2 for both pairs of operands, where the others answer 0 and 1.
+func TestDoubleEqualInTest(t *testing.T) {
+	dir := t.TempDir()
+	if _, st := runDash(t, dir, `test a == a`); st != 2 {
+		t.Errorf("equal operands: status %d, want 2", st)
+	}
+	if _, st := runDash(t, dir, `test a == b`); st != 2 {
+		t.Errorf("unequal operands: status %d, want 2", st)
+	}
+	// The single `=` is unanimous, and pins the difference to the operator
+	// rather than to anything else about how the words are read.
+	if _, st := runDash(t, dir, `test a = a`); st != 0 {
+		t.Errorf("single equals: status %d, want 0", st)
+	}
+}

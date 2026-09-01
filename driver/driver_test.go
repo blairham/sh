@@ -385,3 +385,52 @@ func TestAFailureTheDialectRefusesAtRuntimeIsNotDecorated(t *testing.T) {
 		t.Errorf("status %d, want the dialect's runtime status", code)
 	}
 }
+
+// TestPositionalParametersReachTheScript is the gap that made most real
+// scripts useless: the interpreter had positional parameters all along and the
+// front end never gave it any, so `$#` was 0 however the shell was invoked.
+//
+// Every route names them differently and the panel is unanimous about each,
+// which is why they are all here rather than one standing for the rest.
+func TestPositionalParametersReachTheScript(t *testing.T) {
+	const show = `echo "0=[$0] n=$# 1=[$1] 2=[$2] at=[$@]"`
+	path := writeScript(t, show+"\n")
+
+	for _, tc := range []struct {
+		name string
+		argv []string
+		want string
+	}{
+		// A script's path is `$0` and the operands after it are the
+		// parameters.
+		{"a script", []string{"testsh", path, "a", "b"}, "0=[" + path + "] n=2 1=[a] 2=[b] at=[a b]"},
+		{"a script with none", []string{"testsh", path}, "0=[" + path + "] n=0 1=[] 2=[] at=[]"},
+		{"after --", []string{"testsh", "--", path, "a"}, "0=[" + path + "] n=1 1=[a] 2=[] at=[a]"},
+		// `-c` is the odd one: the *first* operand becomes `$0`, so the
+		// parameters start at the second.
+		{"a command with a name", []string{"testsh", "-c", show, "name", "a", "b"}, "0=[name] n=2 1=[a] 2=[b] at=[a b]"},
+		{"a command with only a name", []string{"testsh", "-c", show, "name"}, "0=[name] n=0 1=[] 2=[] at=[]"},
+		// With no operands at all the shell keeps its own name.
+		{"a bare command", []string{"testsh", "-c", show}, "0=[testsh] n=0 1=[] 2=[] at=[]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, errs, _ := runArgs(t, shell(), tc.argv...)
+			if errs != "" {
+				t.Fatalf("stderr: %s", errs)
+			}
+			if strings.TrimSpace(out) != tc.want {
+				t.Errorf("got  %s\nwant %s", strings.TrimSpace(out), tc.want)
+			}
+		})
+	}
+}
+
+// TestPositionalParametersSurviveTheShell: what the invocation supplies is the
+// same list `set` and `shift` work on, rather than a second one beside it.
+func TestPositionalParametersSurviveTheShell(t *testing.T) {
+	path := writeScript(t, "shift; echo \"n=$# 1=[$1]\"\nset -- x\necho \"n=$# 1=[$1]\"\n")
+	out, _, _ := runArgs(t, shell(), "testsh", path, "a", "b", "c")
+	if want := "n=2 1=[b]\nn=1 1=[x]\n"; out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}

@@ -108,7 +108,7 @@ func MainArgs(sh Shell, argv []string) int {
 		sh.errf("%s: %v\n", sh.Name, err)
 		return usageStatus
 	}
-	return sh.run(in.src, in.name, in.input, in.dg)
+	return sh.run(in)
 }
 
 // Run parses and executes src, returning the status to exit with.
@@ -121,14 +121,14 @@ func Run(sh Shell, src, name string) int {
 	if name == "" {
 		name = sh.Name
 	}
-	return sh.run(src, name, "", sh.Diagnostics)
+	return sh.run(source{src: src, name: name, dg: sh.Diagnostics})
 }
 
 // RunScript is Run for input that came from a file, which selects the
 // script-form diagnostics and names the script rather than the shell.
 func RunScript(sh Shell, src, path string) int {
 	sh = sh.withDefaults(nil)
-	return sh.run(src, path, "", sh.Diagnostics.ForScript())
+	return sh.run(source{src: src, name: path, dg: sh.Diagnostics.ForScript()})
 }
 
 // errf writes to the shell's error stream.
@@ -172,7 +172,14 @@ type source struct {
 	// location and nowhere else, which is why it travels beside the name
 	// rather than being folded into it.
 	input string
-	dg    interp.Diagnostics
+	// params are the positional parameters the invocation supplies, which is
+	// everything after whichever operand became the name. Unanimous across
+	// the panel: a script's path is `$0` and the operands after it are `$1`
+	// onward; `-c` takes the *first* operand after the command as `$0` and
+	// the rest as parameters; and reading standard input leaves `$0` as the
+	// shell and makes every operand a parameter.
+	params []string
+	dg     interp.Diagnostics
 }
 
 func (sh Shell) input(argv []string) (source, error) {
@@ -197,14 +204,16 @@ func (sh Shell) input(argv []string) (source, error) {
 			// Anything after the command word is a positional parameter
 			// rather than another option. Nothing here sets them yet; taking
 			// them at all is what keeps that a gap rather than a misparse.
-			return source{src: args[1], name: sh.Name, input: "-c", dg: sh.Diagnostics}, nil
+			return commandSource(sh, args[1], args[2:]), nil
 		case strings.HasPrefix(a, "-c") && len(a) > 2:
 			// `-c'echo hi'` as a single word, which getopt allows.
-			return source{src: a[2:], name: sh.Name, input: "-c", dg: sh.Diagnostics}, nil
+			return commandSource(sh, a[2:], args[1:]), nil
 		case a == "-s":
 			// The explicit "read standard input" spelling.
 			s, err := readAll(os.Stdin)
-			return source{src: s, name: sh.Name, dg: sh.Diagnostics}, err
+			// Standard input keeps the shell's own name, so every operand
+			// after `-s` is a parameter and none of them is `$0`.
+			return source{src: s, name: sh.Name, params: args[1:], dg: sh.Diagnostics}, err
 		case a == "-" || !strings.HasPrefix(a, "-"):
 			return sh.operands(args)
 		default:
@@ -219,7 +228,11 @@ func (sh Shell) input(argv []string) (source, error) {
 func (sh Shell) operands(args []string) (source, error) {
 	if len(args) == 0 || args[0] == "-" {
 		src, err := readAll(os.Stdin)
-		return source{src: src, name: sh.Name, dg: sh.Diagnostics}, err
+		rest := args
+		if len(rest) > 0 {
+			rest = rest[1:]
+		}
+		return source{src: src, name: sh.Name, params: rest, dg: sh.Diagnostics}, err
 	}
 	path := args[0]
 	b, err := os.ReadFile(path)
@@ -229,7 +242,19 @@ func (sh Shell) operands(args []string) (source, error) {
 	// A shell running a script names the *script* in `$0` and in every
 	// diagnostic, not itself, and reports in the script form — ksh93 also
 	// changes how it names the line.
-	return source{src: string(b), name: path, dg: sh.Diagnostics.ForScript()}, nil
+	return source{src: string(b), name: path, params: args[1:], dg: sh.Diagnostics.ForScript()}, nil
+}
+
+// commandSource is the source for `-c`, whose operands are named differently
+// from every other route: the first is `$0` and only the rest are parameters,
+// so `sh -c 'echo $0' name a` prints `name`. With no operands at all the shell
+// keeps its own name and there are no parameters.
+func commandSource(sh Shell, src string, operands []string) source {
+	in := source{src: src, name: sh.Name, input: "-c", dg: sh.Diagnostics}
+	if len(operands) > 0 {
+		in.name, in.params = operands[0], operands[1:]
+	}
+	return in
 }
 
 func readAll(r io.Reader) (string, error) {
@@ -240,7 +265,8 @@ func readAll(r io.Reader) (string, error) {
 // run parses and executes src. input is what the front end calls where the
 // script came from — "-c", or empty for a file or standard input — which one
 // dialect names in a parse failure's location.
-func (sh Shell) run(src, name, input string, dg interp.Diagnostics) int {
+func (sh Shell) run(in source) int {
+	src, name, input, dg := in.src, in.name, in.input, in.dg
 	p := syntax.NewParser(src, sh.Dialect)
 	f := p.Parse()
 	if err := p.Err(); err != nil {
@@ -258,8 +284,12 @@ func (sh Shell) run(src, name, input string, dg interp.Diagnostics) int {
 		Semantics:   &sh.Semantics,
 		Diagnostics: &dg,
 		Name:        name,
-		Stdout:      sh.Stdout,
-		Stderr:      sh.Stderr,
+		// `$1` onward. A nil slice and an empty one mean the same thing to
+		// the interpreter, so nothing distinguishes "no operands" from
+		// "operands that were all consumed as the name".
+		Params: in.params,
+		Stdout: sh.Stdout,
+		Stderr: sh.Stderr,
 	}
 	if !sh.KeepProcess {
 		// This is a shell, so `exec` may really replace it. interp will not

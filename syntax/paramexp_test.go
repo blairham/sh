@@ -198,3 +198,39 @@ func everyFlag() Dialect {
 	d.FunctionKeywordParens = true
 	return d
 }
+
+// TestPrefixNamesNeedIndirection: `${!name@}` is a different thing from
+// `${!name}` and from `${name@op}`, and all three ride on the flag that says
+// this dialect has the `!` form at all.
+func TestPrefixNamesNeedIndirection(t *testing.T) {
+	ind := Core()
+	ind.ParamIndirection = true
+
+	for _, tc := range []struct {
+		src    string
+		prefix byte
+	}{
+		{`echo ${!FOO_@}`, '@'},
+		{`echo ${!FOO_*}`, '*'},
+		// Not a prefix form: a plain indirection.
+		{`echo ${!FOO_}`, 0},
+	} {
+		e := firstParam(t, tc.src, ind)
+		if e.Prefix != tc.prefix {
+			t.Errorf("%s: prefix %q, want %q", tc.src, e.Prefix, tc.prefix)
+		}
+		if !e.Indirect {
+			t.Errorf("%s: want Indirect", tc.src)
+		}
+	}
+	// Without the `!` there is no prefix form at all: `@` there is where an
+	// operator belongs, and a bare one is not an operator this shell has.
+	if _, err := Parse(`echo ${FOO_@}`, ind); err == nil {
+		t.Error("`${FOO_@}` should not be read as a prefix form")
+	}
+	// And a dialect without the `!` refuses the whole family rather than
+	// reading it as something else.
+	if _, err := Parse(`echo ${!FOO_@}`, Core()); err == nil {
+		t.Error("want a refusal where the dialect has no `${!x}`")
+	}
+}

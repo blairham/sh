@@ -83,6 +83,11 @@ type ParamExpr struct {
 	// something else and does not error, so a dialect that lacks it must
 	// refuse rather than guess.
 	Indirect bool
+	// Prefix is `${!name@}` or `${!name*}`, which yields the *names* of the
+	// variables beginning with name rather than any value. It carries the
+	// `@` or the `*`, which differ exactly as `$@` and `$*` do: one field
+	// each, or one field joined.
+	Prefix byte
 
 	Op ParamOp
 	// Colon records the `:` that extends the test from "unset" to "unset or
@@ -137,6 +142,14 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 	e.Name, s = scanParamName(s)
 	if e.Name == "" {
 		p.failKind(ErrBadSubstitution, "expected a parameter name in ${%s}", src)
+		return e
+	}
+
+	// `${!name@}` and `${!name*}` are the names beginning with name, not a
+	// value at all. Only after `!`, and only when the whole rest is the one
+	// character — `${!name@U}` is an operator on an indirection and not this.
+	if e.Indirect && (s == "@" || s == "*") {
+		e.Prefix = s[0]
 		return e
 	}
 

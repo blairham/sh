@@ -1365,3 +1365,39 @@ names the token — and we say "expected ]]" to all of them. That gap predates
 this change and is only visible through it in one case: where zsh refuses a
 bare `|`, we refuse it too and say something else. The behaviour matches; the
 wording does not.
+
+## The names, rather than a value
+
+`${!prefix@}` and `${!prefix*}` yield the *names* of the variables beginning
+with the prefix. bash and ksh93 have them; zsh and dash call the whole `${!…}`
+family a bad substitution, which is the flag that already governs `${!x}` — so
+this needed no new one.
+
+The two spellings differ exactly as `$@` and `$*` do:
+
+    "${!ZQ_@}"    one field per name
+    "${!ZQ_*}"    one field, the names joined
+
+The names come back **sorted**, which is not decoration: they are collected
+from a map, which has no order to inherit, so without sorting the same script
+would print them differently on different runs. They are gathered from
+everywhere a lookup would find one — what the shell has set, what it produces,
+and what it inherited — and a name `unset` took away is not listed, because it
+cannot be read either.
+
+Nothing matching is empty rather than an error, which is what lets a script
+ask for a family of variables it may not have been given. That is the form
+`brew` uses.
+
+## The sweep is clear
+
+    scripts found: 178   parsed: 175   refused by bash too: 3   failures: 0
+
+Every shell script installed on this machine that is actually a shell script
+now parses. The three not counted are a Tcl and two other programs whose first
+line names a shell and whose second does not.
+
+That is a floor rather than a finish: the sweep reads and never runs, so it
+says nothing about what happens after a script parses — `set -f` was invisible
+to it, and was only found because `man` parsed and then failed. A run mode is
+the next thing this harness wants.

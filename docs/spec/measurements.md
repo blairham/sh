@@ -1074,6 +1074,11 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `param/case-change-is-bash-only` | `<shell>: 1: Bad substitution` *(status 2)* | `[ABC][abc]` | `[ABC][abc]` | `<shell>: ${x^^}: bad substitution` *(status 1)* | `<shell>: syntax error at line 1: `^' unexpected` *(status 3)* | `<shell>:1: bad substitution` *(status 1)* |
 | `param/indirection-diverges-four-ways` | `<shell>: 1: Bad substitution` *(status 2)* | `[V]` | `[V]` | `[V]` | `[x]` | `<shell>:1: bad substitution` *(status 1)* |
 | `param/array-element-inherits-the-base` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[q][3]` | `[q][3]` | `[q][3]` | `[q][3]` | `[p][3]` |
+| `param/the-names-with-a-prefix` | `<shell>: 1: Bad substitution` *(status 2)* | `ZQ_a ZQ_b` | `ZQ_a ZQ_b` | `ZQ_a ZQ_b` | `ZQ_a ZQ_b` | `<shell>:1: bad substitution` *(status 1)* |
+| `param/the-names-with-a-prefix-one-field-each` | `<shell>: 1: Bad substitution` *(status 2)* | `[ZQ_a][ZQ_b]` | `[ZQ_a][ZQ_b]` | `[ZQ_a][ZQ_b]` | `[ZQ_a][ZQ_b]` | `<shell>:1: bad substitution` *(status 1)* |
+| `param/the-names-with-a-prefix-joined` | `<shell>: 1: Bad substitution` *(status 2)* | `[ZQ_a ZQ_b]` | `[ZQ_a ZQ_b]` | `[ZQ_a ZQ_b]` | `[ZQ_a ZQ_b]` | `<shell>:1: bad substitution` *(status 1)* |
+| `param/no-names-with-that-prefix` | `<shell>: 1: Bad substitution` *(status 2)* | `[]` | `[]` | `[]` | `[]` | `<shell>:1: bad substitution` *(status 1)* |
+| `param/the-names-with-a-prefix-are-sorted` | `<shell>: 1: Bad substitution` *(status 2)* | `ZQ_a ZQ_b` | `ZQ_a ZQ_b` | `ZQ_a ZQ_b` | `ZQ_a ZQ_b` | `<shell>:1: bad substitution` *(status 1)* |
 
 - `param/unset-positional-takes-a-default` — an out-of-range positional is unset rather than empty, so the plain default form fires for it
   ```sh
@@ -1142,6 +1147,26 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `param/array-element-inherits-the-base` — array subscripting inherits the 0-versus-1 base axis
   ```sh
   a=(p q r); printf "[%s]" "${a[1]}" "${#a[@]}"
+  ```
+- `param/the-names-with-a-prefix` — yields the *names* rather than any value, sorted — bash and ksh93 have it and the other two call it a bad substitution, which is the same flag that governs `${!x}`
+  ```sh
+  ZQ_a=1; ZQ_b=2; echo ${!ZQ_@}
+  ```
+- `param/the-names-with-a-prefix-one-field-each` — quoted, `@` is one field per name exactly as `"$@"` is one per parameter — joining them would lose a name that contained a space, which a name cannot, but the two spellings still differ
+  ```sh
+  ZQ_a=1; ZQ_b=2; printf "[%s]" "${!ZQ_@}"; echo
+  ```
+- `param/the-names-with-a-prefix-joined` — and `*` is one field with the names joined, the same difference `"$*"` has from `"$@"` — which is why both spellings exist here too
+  ```sh
+  ZQ_a=1; ZQ_b=2; printf "[%s]" "${!ZQ_*}"; echo
+  ```
+- `param/no-names-with-that-prefix` — nothing matching is empty rather than an error, which is what lets a script ask for a family of variables it may not have been given
+  ```sh
+  echo "[${!ZQNOSUCH_@}]"
+  ```
+- `param/the-names-with-a-prefix-are-sorted` — set in the other order and returned in the same one, so the order is the names' rather than the order they happened to be created in — a map has none to inherit
+  ```sh
+  ZQ_b=2; ZQ_a=1; echo ${!ZQ_@}
   ```
 
 ## redirection

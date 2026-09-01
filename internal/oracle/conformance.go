@@ -53,6 +53,19 @@ type Report struct {
 // Cases the reference shells reject are skipped: what an implementation does
 // with input that is not valid shell is a separate question from whether it
 // agrees about input that is.
+// graded reports whether a case can grade an implementation.
+//
+// Only one thing disqualifies a case: a reference that answers differently on
+// different runs, which would move the score without the implementation having
+// changed.
+//
+// SyntaxError used to disqualify one too, and should not have. A rejection is
+// as deterministic as an acceptance, and its wording is exactly what the
+// Diagnostics vector exists for — so excluding those cases left a whole vector
+// ungraded and a report of 100% silent about it. Nine real gaps were hiding
+// behind it when this was changed.
+func graded(c Case) bool { return !c.ReferenceRaces }
+
 func RunConformance(ctx context.Context, path, against string, args []string, cases []Case) (*Report, error) {
 	if path == "" {
 		return &Report{NotBuilt: true}, nil
@@ -86,10 +99,7 @@ func RunConformance(ctx context.Context, path, against string, args []string, ca
 
 	rep := &Report{Against: against, Missing: missing}
 	for _, c := range cases {
-		if c.SyntaxError || c.ReferenceRaces {
-			// A reference that answers differently on different runs cannot
-			// grade anything: the score would move without the implementation
-			// having changed.
+		if !graded(c) {
 			continue
 		}
 		want := Exec(ctx, ref, c)

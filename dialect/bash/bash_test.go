@@ -305,3 +305,20 @@ func TestPipelineStatusName(t *testing.T) {
 		}
 	}
 }
+
+// TestAParseFailureNamesItsOriginAndEchoesTheLine: bash decorates a parse
+// failure twice over, and neither part appears on a runtime diagnostic about
+// the same input.
+func TestAParseFailureNamesItsOriginAndEchoesTheLine(t *testing.T) {
+	d := bash.Diagnostics()
+	if !d.NamesTheInputInLocation {
+		t.Error("bash writes `bash: -c: line 1:` for a parse failure")
+	}
+	if !d.EchoesTheOffendingLine {
+		t.Error("bash repeats the offending source line after the message")
+	}
+	// A script names itself instead, so the origin is not named twice.
+	if bash.Diagnostics().ForScript().NamesTheInputInLocation != d.NamesTheInputInLocation {
+		t.Error("the script form should answer this the same way; the front end supplies no origin for a file")
+	}
+}

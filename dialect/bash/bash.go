@@ -81,14 +81,16 @@ func Semantics() interp.Semantics {
 // Diagnostics is how bash 5 reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
-		SelectPrompt:      "#? ",
-		Location:          interp.LocationLineWord,
-		NotFound:          "%s: command not found",
-		UnboundVariable:   "%s: unbound variable",
-		UnboundPositional: "$%s: unbound variable",
-		NumericArgument:   "%[1]s: %[2]s: numeric argument required",
-		ArithError:        `%[1]s: %[2]s (error token is "%[3]s")`,
-		DivisionByZero:    "division by 0",
+		NamesTheInputInLocation: true,
+		EchoesTheOffendingLine:  true,
+		SelectPrompt:            "#? ",
+		Location:                interp.LocationLineWord,
+		NotFound:                "%s: command not found",
+		UnboundVariable:         "%s: unbound variable",
+		UnboundPositional:       "$%s: unbound variable",
+		NumericArgument:         "%[1]s: %[2]s: numeric argument required",
+		ArithError:              `%[1]s: %[2]s (error token is "%[3]s")`,
+		DivisionByZero:          "division by 0",
 
 		// bash reserves its generic arithmetic wording for operands that are
 		// not literals, so a bad digit gets a reason of its own.

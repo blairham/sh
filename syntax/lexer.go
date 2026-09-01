@@ -28,6 +28,11 @@ type Lexer struct {
 	err        error
 	incomplete bool
 
+	// inRegex is set while the token being read is the operand of `=~`. Its
+	// parentheses belong to the regular expression rather than to the shell,
+	// and in two of the three dialects that have `[[ ]]` so does a bare `|`.
+	inRegex bool
+
 	// inCondition is set while the parser is inside `[[ ]]`. One dialect
 	// reads pattern groups there and nowhere else, and the lexer is what has
 	// to know: whether `(` ends the word is decided before any parser sees a
@@ -137,6 +142,13 @@ func (l *Lexer) Next() Token {
 	// no space, so no knowledge of command position is needed here.
 	if l.dialect.ArithCommand && l.peek() == '(' && l.peekAt(1) == '(' {
 		return l.scanArithCommand(start)
+	}
+
+	// A regular expression's operand owns its parentheses even at the start
+	// of it — `[[ x =~ (b) ]]` — and the operator table would otherwise take
+	// the `(` before the word scanner ever saw it.
+	if l.inRegex && (l.peek() == '(' || l.peek() == ')') {
+		return l.scanWord(start)
 	}
 
 	if k, ok := l.matchOperator(); ok {
@@ -268,6 +280,18 @@ func (l *Lexer) endsWord(c byte) bool {
 	if !l.isWordEnd(c) {
 		return false
 	}
+	if l.inRegex {
+		// A regular expression owns its parentheses — a group is taken whole
+		// by the scanner above — and owns a bare `|` where the dialect says
+		// so: `[[ ab =~ a|b ]]` matches in two of the three shells with
+		// `[[ ]]` and is a parse error in the third.
+		switch c {
+		case '(', ')':
+			return false
+		case '|':
+			return !l.dialect.RegexTakesAlternation
+		}
+	}
 	return c != '(' || !l.opensPatternGroup()
 }
 
@@ -378,6 +402,16 @@ func (l *Lexer) scanWord(start Pos) Token {
 				Quoting: BackslashQuoted,
 				Pos:     escPos,
 			})
+
+		case c == '(' && l.inRegex:
+			// A regular expression's group is taken whole, balanced, with
+			// whatever is inside it — an alternation in there belongs to the
+			// group in all three shells that have `[[ ]]`, so it needs no
+			// dialect. Only a *bare* `|` outside one does.
+			if lit.Len() == 0 {
+				litPos = l.pos()
+			}
+			lit.WriteString(l.scanPatternGroup())
 
 		case c == '(' && l.opensPatternGroup():
 			// A parenthesised group belongs to the word rather than ending

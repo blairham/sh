@@ -231,7 +231,14 @@ func (p *Parser) condOperator() string {
 	}
 	if p.tok.Kind == TokWord && !p.tok.IsQuoted() && condBinaryWordOps[p.tok.Literal()] {
 		op := p.tok.Literal()
+		// The operand of `=~` is a regular expression, where `(`, `)` and in
+		// some dialects `|` are the regex's and not the shell's. Whether a
+		// word ends at one is settled by the lexer, so it has to be told
+		// before the operand is read — which is here, before the token after
+		// the operator is fetched.
+		p.lex.inRegex = op == "=~"
 		p.next()
+		p.lex.inRegex = false
 		return op
 	}
 	return ""

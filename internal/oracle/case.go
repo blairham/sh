@@ -2100,4 +2100,29 @@ var Corpus = []Case{
 		Snippet: `a=(3 4); (( a[1] = 9 )); echo "${a[1]}"`,
 		Why:     "the subscript belongs to the assignment's target, so `a[1] = 9` writes an element rather than evaluating one and throwing it away",
 	},
+	{
+		ID: "cond/a-group-in-a-regex", Category: "conditions",
+		Snippet: `[[ abc =~ ^(a|x)bc$ ]] && echo y || echo n`,
+		Why:     "the parentheses belong to the regular expression rather than to the shell, so the word does not end at one — which the lexer has to be told, since where a word ends is settled before any parser sees a token",
+	},
+	{
+		ID: "cond/a-group-starting-a-regex", Category: "conditions",
+		Snippet: `[[ abc =~ (b) ]] && echo y || echo n`,
+		Why:     "and at the very start of the operand, where the `(` would otherwise be taken as an operator before the word scanner ran at all",
+	},
+	{
+		ID: "cond/nested-groups-in-a-regex", Category: "conditions",
+		Snippet: `[[ abc =~ ^((a)(b))c$ ]] && echo y || echo n`,
+		Why:     "nesting, which is what makes the scan need to balance rather than stop at the first `)`",
+	},
+	{
+		ID: "cond/escaped-parens-in-a-regex", Category: "conditions",
+		Snippet: `[[ "(b)" =~ \(b\) ]] && echo y || echo n`,
+		Why:     "escaped, they are ordinary characters to the regex and match literal parentheses — the counter-case that keeps the rule about the regex's syntax rather than about the character",
+	},
+	{
+		ID: "cond/a-subshell-is-still-a-subshell", Category: "conditions",
+		Snippet: `( echo subshell )`,
+		Why:     "the counter-case for the lexer change: a `(` outside a regex operand still opens a subshell, which is what it would stop doing if the rule were not scoped to the operand",
+	},
 }

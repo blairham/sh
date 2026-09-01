@@ -1337,3 +1337,31 @@ operator, and dash reports it as exactly that.
 
 `bats`, the last of the two arithmetic causes the sweep found. The sweep is
 now down to one failure: `brew`, which uses a regex group in `[[ =~ ]]`.
+
+## A regular expression owns its parentheses
+
+After `=~` the operand is a regular expression, so `(` and `)` are the
+regex's and do not end the word. Where a word ends is settled by the lexer
+before any parser sees a token, so the lexer has to be told it is reading one
+— the parser sets that when it consumes the operator and clears it after the
+operand, which is what keeps the rule from leaking: a `(` anywhere else still
+opens a subshell.
+
+A **group is taken whole**, balanced, with whatever is inside it. An
+alternation in there belongs to the group in all three shells that have
+`[[ ]]`, so it needs no dialect. A **bare** `|` outside a group does:
+
+    [[ ab =~ a|b ]]     matches in bash and ksh93
+                        parse error in zsh, which ends the word at the `|`
+
+That is `RegexTakesAlternation`, and it is asked only for the bare form.
+
+### Not fixed here
+
+An unterminated or badly terminated `[[ ]]` is worded three different ways by
+the three shells that have it — bash says "syntax error in conditional
+expression" or "unexpected EOF", ksh93 names either `[[` or the token, zsh
+names the token — and we say "expected ]]" to all of them. That gap predates
+this change and is only visible through it in one case: where zsh refuses a
+bare `|`, we refuse it too and say something else. The behaviour matches; the
+wording does not.

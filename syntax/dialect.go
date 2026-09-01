@@ -195,6 +195,13 @@ type Dialect struct {
 	// rather than a special case inside brace groups.
 	CloseBraceAlwaysReserved bool
 
+	// RegexTakesAlternation makes a bare `|` part of a `=~` operand rather
+	// than the end of the word. bash and ksh93 say yes, so `[[ ab =~ a|b ]]`
+	// matches there; zsh says no and reports a parse error. Parentheses are
+	// taken by all three and so need no flag — a dialect without `[[ ]]`
+	// never reaches the question.
+	RegexTakesAlternation bool
+
 	// ArraySubscript enables `${a[i]}`, `${a[@]}` and `${a[*]}`, and `a[i]`
 	// inside an arithmetic expression. Absent from dash, which has no arrays
 	// at all and calls the subscript a bad substitution rather than reading

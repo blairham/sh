@@ -214,7 +214,13 @@ func (sh Shell) input(argv []string) (source, error) {
 			// Standard input keeps the shell's own name, so every operand
 			// after `-s` is a parameter and none of them is `$0`.
 			return source{src: s, name: sh.Name, params: args[1:], dg: sh.Diagnostics}, err
-		case a == "-" || !strings.HasPrefix(a, "-"):
+		case a == "-":
+			// A lone `-` ends the options, exactly as `--` does. It does not
+			// mean "read standard input": every shell in the panel treats
+			// `sh - a b` as running the script `a`, and only a `-` with
+			// nothing after it falls through to standard input.
+			return sh.operands(args[1:])
+		case !strings.HasPrefix(a, "-"):
 			return sh.operands(args)
 		default:
 			return source{}, fmt.Errorf("unknown option %q", a)
@@ -226,13 +232,9 @@ func (sh Shell) input(argv []string) (source, error) {
 // operands handles what is left once the options are gone: a script path, or
 // nothing at all, which means standard input.
 func (sh Shell) operands(args []string) (source, error) {
-	if len(args) == 0 || args[0] == "-" {
+	if len(args) == 0 {
 		src, err := readAll(os.Stdin)
-		rest := args
-		if len(rest) > 0 {
-			rest = rest[1:]
-		}
-		return source{src: src, name: sh.Name, params: rest, dg: sh.Diagnostics}, err
+		return source{src: src, name: sh.Name, dg: sh.Diagnostics}, err
 	}
 	path := args[0]
 	b, err := os.ReadFile(path)

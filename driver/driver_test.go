@@ -461,3 +461,19 @@ func TestStandardInputKeepsTheShellsName(t *testing.T) {
 		t.Errorf("got  %s\nwant %s", strings.TrimSpace(out), want)
 	}
 }
+
+// TestALoneDashEndsTheOptions: `-` is an end-of-options marker like `--`, not
+// a request to read standard input. Every shell in the panel runs `sh - a b`
+// as the script `a`; only a `-` with nothing after it reaches standard input,
+// and it does that by falling through to the no-operands case rather than by
+// meaning anything itself.
+func TestALoneDashEndsTheOptions(t *testing.T) {
+	path := writeScript(t, `echo "0=[$0] n=$# 1=[$1]"`+"\n")
+	out, errs, _ := runArgs(t, shell(), "testsh", "-", path, "x")
+	if errs != "" {
+		t.Fatalf("stderr: %s", errs)
+	}
+	if want := "0=[" + path + "] n=1 1=[x]"; strings.TrimSpace(out) != want {
+		t.Errorf("got  %s\nwant %s", strings.TrimSpace(out), want)
+	}
+}

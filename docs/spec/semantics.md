@@ -38,6 +38,8 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | last pipeline element runs in | subshell | subshell | **current shell** | **current shell** |
 | `$0` inside a function | shell name | shell name | shell name | **function name** |
 | `local` builtin | yes | yes | **absent** | yes |
+| `typeset` needs a `function`-defined function to declare a local | *n/a* | no | **yes** | no |
+| a name declared without a value counts as set | no | no | no | **yes** |
 | readonly reassignment | fatal | **continues** | fatal | fatal |
 | `shift` past the end | fatal | **survives** | fatal | **survives** |
 | unparseable text in a special builtin | **fatal** | survives | survives | survives |
@@ -658,3 +660,58 @@ which is an architectural difference rather than an axis.
    unset, and field-count of an unset variable were measured and agree
    across the panel. They are core behavior, and adding a switch for
    them would be inventing a difference.
+
+## An axis that is only about one of two names
+
+`typeset` and `local` do the same thing and do not have the same rule.
+
+Every shell that has `local` — all but ksh93, which does not — makes it
+local in a function defined either way. `typeset` is where ksh93 differs,
+and it differs on the *definition syntax* rather than on the declaration:
+
+    x=outer; f() { typeset x=inner; }; f; echo $x
+      bash inner? no — outer.  ksh93 **inner**.  zsh outer.
+
+    x=outer; function f { typeset x=inner; }; f; echo $x
+      outer everywhere, ksh93 included.
+
+Only a function defined with the `function` word has a scope for ksh93 to
+declare into. So the axis is `TypesetLocalNeedsKeywordFunction` and not
+`LocalNeedsKeywordFunction`: naming it after `local` would have made the
+bare core refuse a construct on which the shells do not actually disagree,
+and `f() { local x=1; }` is far too common to refuse for a difference that
+is not there. It was named that way first, and the core stopped running
+`local` at all — which is how the distinction was found.
+
+It is asked only where the two answers differ. Inside a keyword-defined
+function they do not, so that case needs no dialect.
+
+## A declaration is an assignment, and expands like one
+
+`export`, `readonly`, `local` and `typeset` are declaration utilities:
+their `name=value` arguments are assignments, so the value is subject to
+tilde, parameter, command and arithmetic expansion and **not** to field
+splitting or pathname expansion.
+
+This is not an axis — every shell in the panel agrees — but it is worth a
+section because getting it wrong is quiet. Sending an assignment's value
+through the ordinary word pipeline produced three wrong answers at once:
+
+    n=*                → the directory listing, not `*`
+    IFS=:; y=a:b; x=$y → `a b`, because the fields were split and
+                          rejoined on a space
+    typeset -i n=3*3   → a refusal, because `3*3` matched no file
+
+The first two are ordinary assignments and had been wrong from the start.
+Nothing in the corpus used a value that looked like a pattern, so nothing
+noticed until a case about the integer attribute needed one.
+
+Array elements are not this: `a=(*.txt)` does glob, because each element
+is an ordinary word. The rule is about an assignment's *value*, not about
+the `=`.
+
+Which names are declaration utilities is a dialect's answer rather than an
+axis, for the same reason `source` is: bash and zsh add `declare`, ksh93
+has only `typeset`, and dash has neither — and in dash `declare x=*` is an
+ordinary command with an ordinary globbed argument, so applying the rule
+to the name everywhere would be wrong in the shell that lacks it.

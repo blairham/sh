@@ -93,6 +93,10 @@ func TestSemantics(t *testing.T) {
 		got  interp.Answer
 		want interp.Answer
 	}{
+		{"DeclaredNameWithoutValueIsEmpty", s.DeclaredNameWithoutValueIsEmpty, interp.No},
+		// dash has no `typeset`, so TypesetLocalNeedsKeywordFunction is absent
+		// rather than false — the axis does not arise.
+		{"TypesetLocalNeedsKeywordFunction", s.TypesetLocalNeedsKeywordFunction, interp.Unspecified},
 		{"EchoInterpretsEscapes", s.EchoInterpretsEscapes, interp.Yes},
 		{"LengthOfSpecialIsCount", s.LengthOfSpecialIsCount, interp.No},
 		{"BraceExpansion", s.BraceExpansion, interp.No},
@@ -308,6 +312,28 @@ func TestParametersDashDoesNotProvide(t *testing.T) {
 		}
 		if strings.TrimSpace(out.String()) != "none" {
 			t.Errorf("%s: got %q, want dash not to provide it", name, out.String())
+		}
+	}
+}
+
+// TestDashHasNeitherDeclarationName: the core provides `typeset` because
+// three of the four have it, and the one that does not takes it away.
+func TestDashHasNeitherDeclarationName(t *testing.T) {
+	for _, name := range []string{"typeset", "declare"} {
+		f, err := syntax.Parse(name+` x=1`, dash.Dialect())
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		s, d := dash.Semantics(), dash.Diagnostics()
+		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+		dash.Apply(r)
+		status, err := r.Run(context.Background(), f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if status != 127 {
+			t.Errorf("%s: status %d, want 127 for a command dash does not have", name, status)
 		}
 	}
 }

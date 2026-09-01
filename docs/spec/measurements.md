@@ -1746,3 +1746,69 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   ./nope; echo "st=$?"
   ```
+
+## declarations
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `declare/typeset-assigns` | `<shell>: 1: typeset: not found~[]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` |
+| `declare/declare-is-the-second-name` | `<shell>: 1: declare: not found~[]` | `[1]` | `[1]` | `[1]` | `<shell>: declare: not found~[]` | `[1]` |
+| `declare/local-in-a-posix-function` | `<script>: 2: typeset: not found~[outer]` | `[outer]` | `[outer]` | `[outer]` | `[inner]` | `[outer]` |
+| `declare/local-in-a-keyword-function` | `<script>: 2: Syntax error: "}" unexpected` *(status 2)* | `[outer]` | `[outer]` | `[outer]` | `[outer]` | `[outer]` |
+| `declare/valueless-local` | `[UNSET]` | `[UNSET]` | `[UNSET]` | `[]` | `<script>: line 1: local: not found~[UNSET]` | `[]` |
+| `declare/integer-attribute-evaluates-a-later-assignment` | `<shell>: 1: typeset: not found~[5+2]` | `[7]` | `[7]` | `[7]` | `[7]` | `[7]` |
+| `declare/integer-attribute-on-the-declaration` | `<shell>: 1: typeset: not found~[]` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` |
+| `declare/integer-attribute-removed` | `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found~[5+2]` | `[5+2]` | `[5+2]` | `[5+2]` | `[5+2]` | `[5+2]` |
+| `declare/integer-attribute-with-text` | `<shell>: 1: typeset: not found~[abc]` | `[0]` | `[0]` | `[0]` | `[0]` | `[0]` |
+| `declare/readonly-attribute-allows-its-own-value` | `<script>: 1: typeset: not found~[]~[2]` | `[1]~<script>: line 3: c: readonly variable~[1]` | `[1]~<script>: line 3: c: readonly variable~[1]` | `[1]~<script>: line 3: c: readonly variable~[1]` | `[1]~<script>: line 3: c: is read only` *(status 1)* | `[1]~<script>:3: read-only variable: c` *(status 1)* |
+
+- `declare/typeset-assigns` — `typeset` is the older of the two names and the one three of the four have; dash has neither and reports a command it cannot find
+  ```sh
+  typeset x=1; echo "[$x]"
+  ```
+- `declare/declare-is-the-second-name` — bash and zsh spell it `declare` as well, ksh93 only `typeset`, which makes the name a dialect's answer rather than an axis
+  ```sh
+  declare x=1; echo "[$x]"
+  ```
+- `declare/local-in-a-posix-function` — ksh93 gives a local scope only to a function defined with the `function` word, so here its assignment reaches the caller and bash's and zsh's do not
+  ```sh
+  x=outer
+  f() { typeset x=inner; }
+  f
+  echo "[$x]"
+  ```
+- `declare/local-in-a-keyword-function` — the same declaration in the other definition form, which is where ksh93 agrees with the rest — the pair is the whole of the axis
+  ```sh
+  x=outer
+  function f { typeset x=inner; }
+  f
+  echo "[$x]"
+  ```
+- `declare/valueless-local` — zsh alone considers a name declared without a value to be set, so `${u-UNSET}` is empty there and UNSET elsewhere; ksh93 has no `local` at all
+  ```sh
+  f() { local u; echo "[${u-UNSET}]"; }
+  f
+  ```
+- `declare/integer-attribute-evaluates-a-later-assignment` — the attribute belongs to the name, so an ordinary assignment made afterwards is an expression — which is the whole point of it
+  ```sh
+  typeset -i n; n=5+2; echo "[$n]"
+  ```
+- `declare/integer-attribute-on-the-declaration` — the value on the declaring line is evaluated too, so the attribute has to be in place before its own assignment runs
+  ```sh
+  typeset -i n=3*3; echo "[$n]"
+  ```
+- `declare/integer-attribute-removed` — `+i` takes the attribute away, which is the one place a shell spells an option with a plus
+  ```sh
+  typeset -i n=1; typeset +i n; n=5+2; echo "[$n]"
+  ```
+- `declare/integer-attribute-with-text` — text that is not a number is not an error: `abc` is an expression whose value is an unset name, so the result is zero and nothing is said
+  ```sh
+  typeset -i n; n=abc; echo "[$n]"
+  ```
+- `declare/readonly-attribute-allows-its-own-value` — the declaration assigns and then freezes, so its own value survives and the next assignment does not — applying both at once would refuse the value it was given
+  ```sh
+  typeset -r c=1
+  echo "[$c]"
+  c=2
+  echo "[$c]"
+  ```

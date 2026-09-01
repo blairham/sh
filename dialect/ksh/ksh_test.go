@@ -48,6 +48,8 @@ func TestSemantics(t *testing.T) {
 		got  interp.Answer
 		want interp.Answer
 	}{
+		{"DeclaredNameWithoutValueIsEmpty", s.DeclaredNameWithoutValueIsEmpty, interp.No},
+		{"TypesetLocalNeedsKeywordFunction", s.TypesetLocalNeedsKeywordFunction, interp.Yes},
 		{"IndirectionYieldsName", s.IndirectionYieldsName, interp.Yes},
 		{"ArithInvalidOctalDigitIsError", s.ArithInvalidOctalDigitIsError, interp.No},
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.Yes},
@@ -246,5 +248,29 @@ func TestCdAnswers(t *testing.T) {
 	}
 	if d.CdHomeNotSet != d.CdOldpwdNotSet || d.CdHomeNotSet != "cd: bad directory" {
 		t.Errorf("one message for both, got %q and %q", d.CdHomeNotSet, d.CdOldpwdNotSet)
+	}
+}
+
+// TestKshHasOnlyTheOlderDeclarationName: ksh93 has `typeset` and not
+// `declare`, which is the mirror of it having `source` and not `local`.
+func TestKshHasOnlyTheOlderDeclarationName(t *testing.T) {
+	for _, tc := range []struct{ name, want string }{
+		{"typeset", "1"},
+		{"declare", "not found"},
+	} {
+		f, err := syntax.Parse(tc.name+` x=1; echo "$x"`, ksh.Dialect())
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		s, d := ksh.Semantics(), ksh.Diagnostics()
+		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+		ksh.Apply(r)
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(out.String(), tc.want) {
+			t.Errorf("%s: got %q, want it to contain %q", tc.name, out.String(), tc.want)
+		}
 	}
 }

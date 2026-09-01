@@ -47,6 +47,8 @@ func TestSemantics(t *testing.T) {
 		got  interp.Answer
 		want interp.Answer
 	}{
+		{"DeclaredNameWithoutValueIsEmpty", s.DeclaredNameWithoutValueIsEmpty, interp.No},
+		{"TypesetLocalNeedsKeywordFunction", s.TypesetLocalNeedsKeywordFunction, interp.No},
 		{"BraceExpansion", s.BraceExpansion, interp.Yes},
 		{"IndirectionYieldsName", s.IndirectionYieldsName, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.No},
@@ -221,6 +223,29 @@ func TestParametersBashProvides(t *testing.T) {
 		}
 		if strings.TrimSpace(out.String()) != "have" {
 			t.Errorf("%s: got %q, want bash to provide it", name, out.String())
+		}
+	}
+}
+
+// TestBothDeclarationNames: bash spells the declaration two ways, and the
+// assignment rule follows the second name as well as the first.
+func TestBothDeclarationNames(t *testing.T) {
+	for _, name := range []string{"typeset", "declare"} {
+		f, err := syntax.Parse(name+` -i n=3*3; echo "$n"`, bash.Dialect())
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		s, d := bash.Semantics(), bash.Diagnostics()
+		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+		bash.Apply(r)
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+		// 9 rather than the pattern: the value is an assignment's and is
+		// neither globbed nor split, and the integer attribute evaluates it.
+		if strings.TrimSpace(out.String()) != "9" {
+			t.Errorf("%s: got %q, want 9", name, out.String())
 		}
 	}
 }

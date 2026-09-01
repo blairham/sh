@@ -122,6 +122,25 @@ func (r *Runner) expandWordNoSplit(w *syntax.Word) []string {
 	return []string{globUnescape(b.String())}
 }
 
+// expandAssignValue expands the value of an assignment.
+//
+// An assignment is a tilde context and is not a splitting or a globbing one:
+// `PATH=~/bin` expands, `n=*` stores the character, and `IFS=:; x=$y` with
+// `y=a:b` stores `a:b` rather than `a b`. Sending it through the ordinary word
+// pipeline did all three wrong — the fields were split and rejoined on a
+// space, and a value that looked like a pattern was replaced by the directory
+// listing.
+//
+// Array elements are not this: `a=(*.txt)` does glob, because each element is
+// an ordinary word.
+func (r *Runner) expandAssignValue(w *syntax.Word) string {
+	if w == nil {
+		return ""
+	}
+	r.expandTilde(w)
+	return strings.Join(r.expandWordNoSplit(w), "")
+}
+
 // expandAt handles `$@`, the only expansion that produces several fields by
 // itself. Quoted, it is one field per parameter, each keeping its own spaces;
 // with no parameters it is *zero* fields, which is why `set -- "$@"` is safe

@@ -2394,6 +2394,326 @@
         "TimedOut": false
       }
     },
+    "declare/declare-is-the-second-name": {
+      "bash": {
+        "Output": "[1]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[1]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[1]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: declare: not found~[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: declare: not found~[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[1]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/integer-attribute-evaluates-a-later-assignment": {
+      "bash": {
+        "Output": "[7]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[7]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[7]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: typeset: not found~[5+2]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[7]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[7]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/integer-attribute-on-the-declaration": {
+      "bash": {
+        "Output": "[9]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[9]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[9]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: typeset: not found~[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[9]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[9]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/integer-attribute-removed": {
+      "bash": {
+        "Output": "[5+2]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[5+2]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[5+2]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: typeset: not found~\u003cshell\u003e: 1: typeset: not found~[5+2]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[5+2]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[5+2]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/integer-attribute-with-text": {
+      "bash": {
+        "Output": "[0]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[0]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[0]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: typeset: not found~[abc]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[0]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[0]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/local-in-a-keyword-function": {
+      "bash": {
+        "Output": "[outer]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[outer]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[outer]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cscript\u003e: 2: Syntax error: \"}\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[outer]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[outer]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/local-in-a-posix-function": {
+      "bash": {
+        "Output": "[outer]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[outer]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[outer]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cscript\u003e: 2: typeset: not found~[outer]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[inner]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[outer]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/readonly-attribute-allows-its-own-value": {
+      "bash": {
+        "Output": "[1]~\u003cscript\u003e: line 3: c: readonly variable~[1]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[1]~\u003cscript\u003e: line 3: c: readonly variable~[1]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[1]~\u003cscript\u003e: line 3: c: readonly variable~[1]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cscript\u003e: 1: typeset: not found~[]~[2]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[1]~\u003cscript\u003e: line 3: c: is read only",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[1]~\u003cscript\u003e:3: read-only variable: c",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "declare/typeset-assigns": {
+      "bash": {
+        "Output": "[1]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[1]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[1]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: typeset: not found~[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[1]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[1]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/valueless-local": {
+      "bash": {
+        "Output": "[UNSET]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[UNSET]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[UNSET]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cscript\u003e: line 1: local: not found~[UNSET]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "dot/arguments-diverge": {
       "bash": {
         "Output": "got=INNER~after=OUTER",

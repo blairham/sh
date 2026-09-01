@@ -36,6 +36,8 @@ func Semantics() interp.Semantics {
 	s.BracketCaretNegates = interp.Yes
 	s.RegexQuotingMakesLiteral = interp.Yes
 	s.ShiftPastEndFatal = interp.No
+	s.DeclaredNameWithoutValueIsEmpty = interp.No
+	s.TypesetLocalNeedsKeywordFunction = interp.No
 	s.ReadonlyReassignmentFatal = interp.No
 	s.BuiltinSyntaxErrorFatal = interp.No
 	s.DotMissingFileFatal = interp.No
@@ -177,5 +179,15 @@ func Apply(r *interp.Runner) {
 	})
 	if dot, ok := r.Builtin("."); ok {
 		r.Register("source", dot)
+	}
+	// `declare` is `typeset` under a second name rather than a second
+	// implementation. ksh93 has only the older name and dash has neither, so
+	// which names exist is a dialect's answer and not an axis.
+	if typeset, ok := r.Builtin("typeset"); ok {
+		r.Register("declare", typeset)
+		// And the assignment rule follows the name: `declare x=*` stores the
+		// character here, where in a shell without the name it would be an
+		// ordinary command with an ordinary globbed argument.
+		r.SetDeclaring("declare")
 	}
 }

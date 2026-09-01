@@ -237,3 +237,17 @@ func TestAParenAfterAWordIsAFunctionDefinition(t *testing.T) {
 		}
 	}
 }
+
+// TestACasePatternMayBeAnOperator is dash's grammar, not its recovery: the
+// first of these runs and prints miss, and the second is the error that comes
+// of dash already being past the `&` when it complains.
+func TestACasePatternMayBeAnOperator(t *testing.T) {
+	if _, err := syntax.Parse("case a in & ) echo hit;; *) echo miss;; esac", dash.Dialect()); err != nil {
+		t.Errorf("an operator should stand where a pattern belongs: %v", err)
+	}
+	_, err := syntax.Parse("case a in a) echo x;;& esac", dash.Dialect())
+	want := `Syntax error: word unexpected (expecting ")")`
+	if got := dash.Diagnostics().ParseFailure(err); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

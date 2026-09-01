@@ -185,7 +185,23 @@ func (p *Parser) unterminated(expected string) *Error {
 // The class travels because one dialect names it rather than the token: an
 // ordinary word is "word unexpected" there, where a reserved word and an
 // operator are quoted.
+// failUnexpectedOperand is failUnexpected where a *command* could not begin,
+// so no word there is reserved.
+//
+// A reserved word is only reserved where the grammar could take a command:
+// `esac` in the pattern position of `case a in a) echo x;;& esac` is an
+// ordinary word, and the dialect that names a word's class calls it one —
+// "word unexpected", not `"esac" unexpected`. Treating the list of reserved
+// words as reserved everywhere got that wrong in the one place it shows.
+func (p *Parser) failUnexpectedOperand(expected string) {
+	p.failUnexpectedAs(expected, true)
+}
+
 func (p *Parser) failUnexpected(expected string) {
+	p.failUnexpectedAs(expected, false)
+}
+
+func (p *Parser) failUnexpectedAs(expected string, plain bool) {
 	if p.err != nil {
 		return
 	}
@@ -196,7 +212,7 @@ func (p *Parser) failUnexpected(expected string) {
 	}
 	p.err = &Error{
 		Pos: p.tok.Pos, Kind: ErrUnexpected,
-		Token: p.tokenLiteral(), Class: p.tokenClass(), Expected: expected,
+		Token: p.tokenLiteral(), Class: p.tokenClass(plain), Expected: expected,
 		Msg: p.tokenText() + " unexpected",
 	}
 }
@@ -210,11 +226,11 @@ func (p *Parser) tokenLiteral() string {
 	return p.tok.Kind.String()
 }
 
-func (p *Parser) tokenClass() TokenClass {
+func (p *Parser) tokenClass(plain bool) TokenClass {
 	if p.tok.Kind != TokWord {
 		return ClassOperator
 	}
-	if !p.tok.IsQuoted() && reservedWords[p.tok.Literal()] {
+	if !plain && !p.tok.IsQuoted() && reservedWords[p.tok.Literal()] {
 		return ClassReserved
 	}
 	return ClassWord
@@ -668,7 +684,7 @@ func (p *Parser) parseFuncPosix() Command {
 	p.next()
 	p.next() // (
 	if !p.at(TokRightParen) {
-		p.failUnexpected(")")
+		p.failUnexpectedOperand(")")
 		return fn
 	}
 	p.next()
@@ -891,20 +907,27 @@ func (p *Parser) parseCase() Command {
 		if p.at(TokLeftParen) {
 			p.next()
 		}
-		for {
-			w := p.word()
-			if w == nil {
-				p.failUnexpected("")
-				return c
-			}
-			it.Patterns = append(it.Patterns, w)
-			if !p.at(TokPipe) {
-				break
-			}
+		if p.dialect.CasePatternAcceptsOperator && !p.at(TokWord) && !p.at(TokRightParen) && !p.at(TokEOF) {
+			// One operator may stand where the pattern list would start, and
+			// the arm it opens has no patterns — so it matches nothing, which
+			// is what the dialect that allows this does with it.
 			p.next()
+		} else {
+			for {
+				w := p.word()
+				if w == nil {
+					p.failUnexpected("")
+					return c
+				}
+				it.Patterns = append(it.Patterns, w)
+				if !p.at(TokPipe) {
+					break
+				}
+				p.next()
+			}
 		}
 		if !p.at(TokRightParen) {
-			p.fail("expected ) after a case pattern")
+			p.failUnexpectedOperand(")")
 			return c
 		}
 		p.next()

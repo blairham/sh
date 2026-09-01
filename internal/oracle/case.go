@@ -384,6 +384,36 @@ var Corpus = []Case{
 		// recorded into the golden file.
 		Why: "the dangerous case: &> redirects both streams in bash and zsh, and is `&` then `>` in dash and ksh93 — no error, different meaning",
 	},
+	// --- cd, and what unset takes away -----------------------------------
+	{
+		ID: "cd/missing-directory-diverges", Category: "cd",
+		Snippet: `cd /nope-xyz-abc; echo "st=$?"`,
+		Why:     "four shapes and two statuses for one failure, and dash gives no reason at all — the one shell whose message cannot tell you why",
+	},
+	{
+		ID: "cd/onto-a-file-is-a-different-reason", Category: "cd",
+		Snippet: `: > f; cd ./f; echo "st=$?"`,
+		Why:     "the case dash cannot express: three of the four say `not a directory` where they said `no such file`, and dash says the same sentence for both",
+	},
+	{
+		ID: "cd/no-home-diverges", Category: "cd",
+		Snippet: `unset HOME; cd; echo "st=$?"`,
+		Why:     "bash and ksh93 call this an error and dash and zsh stay where they are and report success, which is the quieter answer and the surprising one",
+	},
+	{
+		ID: "cd/dash-announces-where-it-went", Category: "cd",
+		// Whether anything was printed rather than what it was: the path
+		// itself would measure symlink resolution instead, which is a
+		// different divergence and not this one.
+		Snippet: `cd /; out=$(cd -); [ -n "$out" ] && echo printed || echo silent`,
+		Why:     "`cd -` prints where it went in three of the four; zsh alone moves silently, so a script that pipes it gets an extra line everywhere but there",
+	},
+	{
+		ID: "unset/takes-away-an-environment-name", Category: "parameters",
+		Snippet: `unset HOME; echo "[${HOME-gone}]"`,
+		Why:     "a name that arrived in the environment rather than from an assignment is still a name `unset` removes — deleting it from the shell's own table is not enough, because a lookup reads both",
+	},
+
 	// --- printf: the last builtin that was not one ------------------------
 	{
 		ID: "printf/format-is-reused", Category: "printf",

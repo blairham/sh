@@ -59,6 +59,8 @@ func Semantics() interp.Semantics {
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfBackslashC = interp.PrintfBackslashCStops
 	s.PrintfQuote = interp.PrintfQuoteBackslash
+	s.CdWithoutHomeIsAnError = interp.No
+	s.CdDashPrintsTheDirectory = interp.No
 	return s
 }
 
@@ -106,6 +108,9 @@ func Diagnostics() interp.Diagnostics {
 		// No "kill:" in front of any of these: zsh puts the builtin's name in
 		// the location instead, which NamesBuiltinInLocation already says.
 		// No "printf:" in front: zsh puts the builtin in the location.
+		// The reason first and the operand after it, which is the reverse of
+		// everyone else — and lowercased, which LowercaseReason already says.
+		CdCannotChange:            "%[2]s: %[1]s",
 		PrintfBadVerb:             "%[2]s: invalid directive",
 		PrintfUsage:               "not enough arguments",
 		PrintfUsageStatus:         1,

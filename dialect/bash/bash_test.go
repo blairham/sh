@@ -169,3 +169,17 @@ func TestPrintfAnswers(t *testing.T) {
 		}
 	}
 }
+
+// TestCdAnswers covers bash's three, one of which zsh answers the other way.
+func TestCdAnswers(t *testing.T) {
+	s, d := bash.Semantics(), bash.Diagnostics()
+	if got, want := s.CdWithoutHomeIsAnError, interp.Yes; got != want {
+		t.Errorf("CdWithoutHomeIsAnError = %v, want %v", got, want)
+	}
+	if got, want := s.CdDashPrintsTheDirectory, interp.Yes; got != want {
+		t.Errorf("CdDashPrintsTheDirectory = %v, want %v", got, want)
+	}
+	if got, want := d.CdCannotChange, "cd: %[1]s: %[2]s"; got != want {
+		t.Errorf("CdCannotChange = %q, want %q", got, want)
+	}
+}

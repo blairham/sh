@@ -243,6 +243,15 @@ type Semantics struct {
 	// and everything-but there elsewhere: the two answers are both matches,
 	// on different inputs, with nothing to warn on.
 	BracketCaretNegates Answer
+	// CdWithoutHomeIsAnError makes `cd` with no operand and no HOME a
+	// failure. True in bash and ksh93; dash and zsh stay where they are and
+	// report success, which is the quieter answer and the surprising one.
+	// The same axis answers `cd -` with no OLDPWD.
+	CdWithoutHomeIsAnError Answer
+	// CdDashPrintsTheDirectory writes the new directory when `cd -` moves.
+	// True in bash, dash and ksh93; zsh alone is silent.
+	CdDashPrintsTheDirectory Answer
+
 	// PrintfReportsBadNumber complains when a numeric conversion is given
 	// something that is not a number. True in bash and dash, false in ksh93
 	// and zsh — and all four print the zero either way, so the complaint sits

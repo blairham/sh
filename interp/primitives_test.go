@@ -75,10 +75,12 @@ func TestCdIsACorePrimitive(t *testing.T) {
 	if strings.TrimSpace(got) != dir && strings.TrimSpace(got) != real {
 		t.Errorf("pwd = %q, want %q", strings.TrimSpace(got), dir)
 	}
-	// It records where it came from, which is what `cd -` uses.
-	if got, _ := run(t, `cd `+dir+`; cd /; cd -; pwd`, nil); strings.TrimSpace(got) != dir &&
-		strings.TrimSpace(got) != real {
-		t.Errorf("cd - gave %q", strings.TrimSpace(got))
+	// It records where it came from, which is what `cd -` uses. Whether the
+	// move is *announced* is a dialect's answer, so this reads the last line
+	// rather than the whole output: three of the four print where they went.
+	if got, _ := run(t, `cd `+dir+`; cd /; cd -; pwd`, nil); lastLine(got) != dir &&
+		lastLine(got) != real {
+		t.Errorf("cd - gave %q", got)
 	}
 	if _, st := run(t, `cd /definitely/not/a/directory`, nil); st == 0 {
 		t.Error("cd to a missing directory should fail")
@@ -113,4 +115,11 @@ func TestReadSetsVariablesInTheCallingShell(t *testing.T) {
 	if got, _ := run(t, `printf 'one\n' | { read; printf "[%s]" "$REPLY"; }`, nil); got != "[one]" {
 		t.Errorf("read with no name should set REPLY, got %q", got)
 	}
+}
+
+// lastLine is what a command left behind once anything printed before it is
+// set aside.
+func lastLine(s string) string {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	return lines[len(lines)-1]
 }

@@ -236,3 +236,15 @@ func TestPrintfAnswers(t *testing.T) {
 		t.Errorf("PrintfQuote = %v, want %v", got, want)
 	}
 }
+
+// TestCdAnswers: ksh93 brackets the reason and has one message for both of
+// the variables bash names separately.
+func TestCdAnswers(t *testing.T) {
+	d := ksh.Diagnostics()
+	if got, want := d.CdCannotChange, "cd: %[1]s: [%[2]s]"; got != want {
+		t.Errorf("CdCannotChange = %q, want %q", got, want)
+	}
+	if d.CdHomeNotSet != d.CdOldpwdNotSet || d.CdHomeNotSet != "cd: bad directory" {
+		t.Errorf("one message for both, got %q and %q", d.CdHomeNotSet, d.CdOldpwdNotSet)
+	}
+}

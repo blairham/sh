@@ -187,6 +187,29 @@ type Diagnostics struct {
 	// four are fields rather than strings in the builtin.
 	TestMissingBracket string
 
+	// CdCannotChange is a directory `cd` could not move to. Two verbs,
+	// positional because the shells order them differently and one does not
+	// use the second at all: %[1]s is the operand as written and %[2]s the
+	// reason.
+	//
+	//	bash   cd: /nope: No such file or directory
+	//	dash   cd: can't cd to /nope
+	//	ksh93  cd: /nope: [No such file or directory]
+	//	zsh    no such file or directory: /nope
+	//
+	// dash gives no reason at all, so `cd` onto a file and `cd` onto nothing
+	// read identically there — the one shell where the message cannot tell
+	// you which it was.
+	CdCannotChange string
+	// CdStatus is what that reports. dash says 2 and the other three say 1.
+	// Zero means the substrate's own, 1.
+	CdStatus int
+	// CdHomeNotSet is `cd` with no operand and no HOME. One verb: the name.
+	// Only the two dialects that treat it as an error say anything.
+	CdHomeNotSet string
+	// CdOldpwdNotSet is `cd -` with no OLDPWD. Same.
+	CdOldpwdNotSet string
+
 	// PrintfBadNumber is a numeric conversion given something that is not a
 	// number. One verb: the operand.
 	PrintfBadNumber string

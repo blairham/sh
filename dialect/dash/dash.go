@@ -45,6 +45,8 @@ func Semantics() interp.Semantics {
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
 	s.PrintfQuote = interp.PrintfQuoteAbsent
+	s.CdWithoutHomeIsAnError = interp.No
+	s.CdDashPrintsTheDirectory = interp.Yes
 	return s
 }
 
@@ -95,6 +97,11 @@ func Diagnostics() interp.Diagnostics {
 		// dash names no pid at all, and prints a blank line after the one
 		// message it has for a target — measured rather than assumed, because
 		// an invisible trailing newline is exactly what a golden record is for.
+		// No reason at all, so `cd` onto a file and `cd` onto nothing read
+		// identically here — the one shell whose message cannot tell you
+		// which it was.
+		CdCannotChange:  "cd: can't cd to %[1]s",
+		CdStatus:        2,
 		PrintfBadNumber: "printf: %[1]s: expected numeric value",
 		// Every complaint about an argument is 2 here, as it is elsewhere.
 		PrintfBadVerbStatus:     2,

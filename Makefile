@@ -42,6 +42,10 @@ conformance: ## Grade the core driver against bash over the whole corpus
 wild: ## Parse the shell scripts installed on this machine and report what fails
 	@go run ./cmd/wild $(ARGS)
 
+wild-run: ## Also RUN each script that parses, under both shells, and report where they disagree
+	@go build -o $${TMPDIR:-/tmp}/wild-bash ./cmd/bash
+	@go run ./cmd/wild -run $${TMPDIR:-/tmp}/wild-bash $(ARGS)
+
 conformance-dialects: ## Grade each dialect binary against the shell it claims to be
 	@go build -o $${TMPDIR:-/tmp}/our-bash ./cmd/bash
 	@go build -o $${TMPDIR:-/tmp}/our-zsh ./cmd/zsh

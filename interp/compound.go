@@ -161,6 +161,54 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 	})
 }
 
+// forArithClause runs `for ((init; cond; post))`.
+//
+// It iterates on a condition rather than over a list, which is why it is a
+// separate clause: the list form knows how many times it will run before it
+// starts, and this one does not.
+//
+// An omitted condition is *true*, not false. `for ((;;))` is the endless loop
+// every shell writes it as, and treating a missing expression as zero would
+// have made it run no times at all — the quietest possible way to get this
+// wrong.
+func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) error {
+	r.status = 0
+	if c.Init != nil {
+		if _, err := r.evalArith(c.Init); err != nil {
+			r.diagf("%v\n", err)
+			r.status = 1
+			return nil
+		}
+	}
+	for {
+		if c.Cond != nil {
+			v, err := r.evalArith(c.Cond)
+			if err != nil {
+				r.diagf("%v\n", err)
+				r.status = 1
+				return nil
+			}
+			if v == 0 {
+				return nil
+			}
+		}
+		r.traceForIteration(c.Header, "", "")
+		if err := r.runList(ctx, c.Body); err != nil {
+			return err
+		}
+		if stop := r.loopControl(); stop {
+			return nil
+		}
+		if c.Post != nil {
+			if _, err := r.evalArith(c.Post); err != nil {
+				r.diagf("%v\n", err)
+				r.status = 1
+				return nil
+			}
+		}
+	}
+}
+
 // loopControl consumes a break or continue aimed at this loop, reporting
 // whether the loop should stop.
 func (r *Runner) loopControl() bool {

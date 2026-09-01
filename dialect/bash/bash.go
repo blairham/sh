@@ -88,8 +88,12 @@ func Diagnostics() interp.Diagnostics {
 		ArithOperandExpected:       "arithmetic syntax error: operand expected",
 		ArithOperatorExpected:      "arithmetic syntax error in expression",
 		SyntaxUnexpected:           "syntax error near unexpected token `%[1]s'",
-		Unterminated:               "syntax error: unexpected end of file from `%[1]s' command on line %[2]d",
-		SyntaxErrorStatus:          2,
+		// A parse failure by every other measure, and 1 rather than this
+		// dialect's syntax-error status.
+		ForNameStatus:     1,
+		ForName:           "`%[1]s': not a valid identifier",
+		Unterminated:      "syntax error: unexpected end of file from `%[1]s' command on line %[2]d",
+		SyntaxErrorStatus: 2,
 		// Measured: `.` of a file it cannot open reports 1 and carries on,
 		// where a missing operand is 2 — two numbers for what reads like one
 		// failure, which is why they are two fields.

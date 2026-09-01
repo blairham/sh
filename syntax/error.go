@@ -49,6 +49,11 @@ const (
 	// instead — dash says "word unexpected" for an ordinary word and quotes
 	// a reserved word or an operator — so the class travels with it.
 	ErrUnexpected
+	// ErrForName is a `for` whose variable is not a name. Its own kind
+	// because the panel does not word it as an unexpected token: three of the
+	// four say something about the *name* and only the fourth blames the
+	// word it found.
+	ErrForName
 )
 
 // TokenClass is what sort of thing a token is, for the dialect that words an

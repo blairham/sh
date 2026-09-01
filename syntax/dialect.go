@@ -31,6 +31,14 @@ type Dialect struct {
 	// macOS's /bin/sh.
 	CaseFallthrough bool
 
+	// CStyleFor enables `for ((init; cond; post))`. Absent from dash, where
+	// the parenthesis after `for` is a syntax error.
+	CStyleFor bool
+
+	// AppendAssign enables `name+=value`, which appends rather than
+	// replacing. Absent from dash, where `x+=b` is a command called `x+=b`.
+	AppendAssign bool
+
 	// CasePatternAcceptsOperator lets an operator stand where a case pattern
 	// belongs, which produces an arm with no patterns at all.
 	//
@@ -174,6 +182,8 @@ type Dialect struct {
 // something every non-dash shell in the reference panel accepts.
 func Core() Dialect {
 	return Dialect{
+		AppendAssign:      true,
+		CStyleFor:         true,
 		AmpersandRedirect: true,
 		CaseFallthrough:   true,
 		DollarSingleQuote: true,

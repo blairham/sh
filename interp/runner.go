@@ -582,6 +582,8 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		return r.loop(ctx, x)
 	case *syntax.ForClause:
 		return r.forClause(ctx, x)
+	case *syntax.ForArithClause:
+		return r.forArithClause(ctx, x)
 	case *syntax.CaseClause:
 		return r.caseClause(ctx, x)
 	case *syntax.FuncDecl:
@@ -973,6 +975,12 @@ func (r *Runner) assign(a *syntax.Assign) {
 			// command's output.
 			elems = append(elems, r.expandWord(w)...)
 		}
+		if a.Append {
+			// `a+=(d)` adds to the end of the array rather than to its first
+			// element, which is what makes append two operations sharing a
+			// spelling rather than one.
+			elems = append(append([]string(nil), r.Arrays[a.Name]...), elems...)
+		}
 		r.setArray(a.Name, elems)
 	case a.Index != nil:
 		idx, err := r.parseNum(strings.TrimSpace(r.joinWord(a.Index)))
@@ -982,7 +990,12 @@ func (r *Runner) assign(a *syntax.Assign) {
 		}
 		r.setArrayElem(a.Name, idx, strings.Join(r.expandWord(a.Value), " "))
 	default:
-		r.setVar(a.Name, strings.Join(r.expandWord(a.Value), " "))
+		value := strings.Join(r.expandWord(a.Value), " ")
+		if a.Append {
+			old, _ := r.getVar(a.Name)
+			value = old + value
+		}
+		r.setVar(a.Name, value)
 		// A scalar assignment replaces any array of the same name.
 		delete(r.Arrays, a.Name)
 	}

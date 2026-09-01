@@ -135,10 +135,22 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 	// per parameter: joining them would lose an element containing a space.
 	if e.Index != nil && e.Op == syntax.ParamNone && !e.Length {
 		if elems, ok := r.arraySubscript(e); ok {
+			ifs, set := r.ifs()
+			if r.subscriptText(e.Index) == "*" {
+				// `[*]` is *one* field with the elements joined, where `[@]`
+				// is one field each — the same difference `"$*"` has from
+				// `"$@"`, and the reason both spellings exist. Taking the
+				// `[@]` path for it produced no field at all inside a larger
+				// word, so `echo "[${a[*]}]"` printed `[]`.
+				joined := strings.Join(elems, ifsFirst(ifs, set))
+				if s.Quoting != syntax.Unquoted {
+					return []string{globEscape(joined)}, true
+				}
+				return splitFields(joined, ifs, set), true
+			}
 			if s.Quoting != syntax.Unquoted {
 				return escapeAll(elems), true
 			}
-			ifs, set := r.ifs()
 			var out []string
 			for _, el := range elems {
 				out = append(out, splitFields(el, ifs, set)...)
@@ -174,6 +186,14 @@ func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
 	unquoted := s.Quoting == syntax.Unquoted
 	switch s.Kind {
 	case syntax.Literal:
+		if s.Quoting == syntax.DollarSingleQuoted {
+			// `$'a\tb'` is a tab, and the lexer kept both bytes on purpose so
+			// the source text stays recoverable. Decoding it here is what was
+			// missing: the quoting was recorded, nothing read it, and the
+			// escape reached the output as the two characters it was written
+			// as. The result is quoted text like any other.
+			return globEscape(expandDollarSingle(s.Value)), false
+		}
 		// Literal text is never split, however it was written. Its
 		// metacharacters stay live only when it was unquoted; quoting is
 		// what decides whether text is a pattern at all.
@@ -269,7 +289,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 				// `${#a[@]}` is the number of elements; `${#a[0]}` is the
 				// length of one. The subscript decides which question was
 				// asked, which is why this is here rather than below.
-				idx := strings.TrimSpace(r.joinWord(e.Index))
+				idx := r.subscriptText(e.Index)
 				if idx == "@" || idx == "*" {
 					return itoa(len(elems))
 				}
@@ -843,4 +863,122 @@ func isPositional(s string) bool {
 		}
 	}
 	return true
+}
+
+// expandDollarSingle decodes the escapes `$'…'` gives meaning to.
+//
+// The same set `printf` reads, plus `\e` for escape and the hexadecimal and
+// unicode forms, and without `\c`: there is no output to stop here, only a
+// word being built.
+func expandDollarSingle(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		if s[i] != '\\' || i+1 >= len(s) {
+			b.WriteByte(s[i])
+			i++
+			continue
+		}
+		switch c := s[i+1]; c {
+		case 'n':
+			b.WriteByte('\n')
+			i += 2
+		case 't':
+			b.WriteByte('\t')
+			i += 2
+		case 'r':
+			b.WriteByte('\r')
+			i += 2
+		case 'a':
+			b.WriteByte('\a')
+			i += 2
+		case 'b':
+			b.WriteByte('\b')
+			i += 2
+		case 'f':
+			b.WriteByte('\f')
+			i += 2
+		case 'v':
+			b.WriteByte('\v')
+			i += 2
+		case 'e', 'E':
+			b.WriteByte(0x1b)
+			i += 2
+		case '\\', '\'', '"', '?':
+			b.WriteByte(c)
+			i += 2
+		case 'x':
+			n, used := scanBase(s[i+2:], 16, 2)
+			if used == 0 {
+				b.WriteString(`\x`)
+				i += 2
+				continue
+			}
+			b.WriteByte(byte(n))
+			i += 2 + used
+		case 'u', 'U':
+			width := 4
+			if c == 'U' {
+				width = 8
+			}
+			n, used := scanBase(s[i+2:], 16, width)
+			if used == 0 {
+				b.WriteByte('\\')
+				b.WriteByte(c)
+				i += 2
+				continue
+			}
+			b.WriteRune(rune(n))
+			i += 2 + used
+		case '0', '1', '2', '3', '4', '5', '6', '7':
+			n, used := scanBase(s[i+1:], 8, 3)
+			b.WriteByte(byte(n))
+			i += 1 + used
+		default:
+			// An escape with no meaning keeps both characters, which is what
+			// the panel does rather than dropping the backslash.
+			b.WriteByte('\\')
+			b.WriteByte(c)
+			i += 2
+		}
+	}
+	return b.String()
+}
+
+// scanBase reads up to max digits in the given base, reporting how many it
+// used so the caller can tell "no digits at all" from a zero.
+func scanBase(s string, base, maxDigits int) (int, int) {
+	n, used := 0, 0
+	for used < maxDigits && used < len(s) {
+		d := digitValue(s[used])
+		if d < 0 || d >= base {
+			break
+		}
+		n = n*base + d
+		used++
+	}
+	return n, used
+}
+
+func digitValue(c byte) int {
+	switch {
+	case c >= '0' && c <= '9':
+		return int(c - '0')
+	case c >= 'a' && c <= 'f':
+		return int(c-'a') + 10
+	case c >= 'A' && c <= 'F':
+		return int(c-'A') + 10
+	}
+	return -1
+}
+
+// ifsFirst is the character `*` joins with: the first of IFS, a space when
+// IFS is unset, and nothing at all when IFS is set but empty.
+func ifsFirst(ifs string, set bool) string {
+	if !set {
+		return " "
+	}
+	if ifs == "" {
+		return ""
+	}
+	return ifs[:1]
 }

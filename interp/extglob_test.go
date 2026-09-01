@@ -190,6 +190,14 @@ func TestANestedGroupNeedsNoQuantifier(t *testing.T) {
 // contexts can be compared with the same flags.
 func condRun(t *testing.T, src string, extended, condOnly, alternation bool) string {
 	t.Helper()
+	return condRunGlob(t, src, extended, condOnly, alternation, Yes)
+}
+
+// condRunGlob is condRun with the axis that decides whether an expansion's
+// result is a pattern at all, which is the other half of how parentheses from
+// a variable are read.
+func condRunGlob(t *testing.T, src string, extended, condOnly, alternation bool, globs Answer) string {
+	t.Helper()
 	d := syntax.Core()
 	d.ExtendedPattern, d.ExtendedPatternInCondition, d.PatternAlternation = extended, condOnly, alternation
 	f, err := syntax.Parse(src, d)
@@ -198,7 +206,7 @@ func condRun(t *testing.T, src string, extended, condOnly, alternation bool) str
 	}
 	var out bytes.Buffer
 	s := PosixSemantics()
-	s.GlobExpansionResults = Yes
+	s.GlobExpansionResults = globs
 	r := &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &s}
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
@@ -240,5 +248,32 @@ func TestGroupsAreReadByWhereThePatternStands(t *testing.T) {
 	const literal = `p="(b)"; case "(b)" in $p) echo yes;; *) echo no;; esac`
 	if got := condRun(t, literal, false, false, false); got != "yes" {
 		t.Errorf("no groups, literal subject: got %s, want yes", got)
+	}
+}
+
+// A shell that does not re-read an expansion as a pattern escapes what it
+// produced, and the parentheses have to be in that set where they are
+// metacharacters — otherwise a `(b)` from a variable becomes a group in the
+// one shell that has bare groups and does *not* re-read expansions.
+func TestParenthesesFromAnExpansionAreEscaped(t *testing.T) {
+	const asGroup = `p="(b)"; case b in $p) echo yes;; *) echo no;; esac`
+	const asText = `p="(b)"; case "(b)" in $p) echo yes;; *) echo no;; esac`
+
+	// Bare groups, and an expansion's result is not a pattern: literal.
+	if got := condRunGlob(t, asGroup, false, false, true, No); got != "no" {
+		t.Errorf("got %s, want no — the parentheses came from a variable", got)
+	}
+	if got := condRunGlob(t, asText, false, false, true, No); got != "yes" {
+		t.Errorf("got %s, want yes — escaped, not dropped", got)
+	}
+	// The same shell where an expansion's result *is* a pattern reads the
+	// group, which is what keeps this about the escaping and not about
+	// groups being switched off.
+	if got := condRunGlob(t, asGroup, false, false, true, Yes); got != "yes" {
+		t.Errorf("got %s, want yes — the expansion is a pattern here", got)
+	}
+	// And a shell with no groups leaves them alone either way.
+	if got := condRunGlob(t, asText, false, false, false, No); got != "yes" {
+		t.Errorf("got %s, want yes", got)
 	}
 }

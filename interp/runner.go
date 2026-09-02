@@ -173,6 +173,9 @@ type Runner struct {
 	procSubs    []string
 	procSubSeq  int
 	procSubHome *procSubDirs
+	// streams holds one lock per stream the caller supplied, shared with
+	// every subshell — see lockedWriter.
+	streams *streamLocks
 
 	// Dynamic holds parameters whose value is produced when they are read,
 	// rather than stored: `LINENO` is wherever execution has reached, and
@@ -365,6 +368,10 @@ const maxDepth = 256
 
 // clone copies the state for a subshell, so nothing it does escapes.
 func (r *Runner) clone() *Runner {
+	// Before the copy, so the subshell shares the parent's stream locks
+	// rather than lazily making its own — two locks over one io.Writer
+	// exclude nothing.
+	r.streamLocks()
 	c := *r
 	c.inSubshell = true
 	// A pending process substitution belongs to the command being built in

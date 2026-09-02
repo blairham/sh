@@ -12,7 +12,7 @@ import (
 	"github.com/blairham/sh/syntax"
 )
 
-// lockedWriter serializes writes from concurrently running pipeline elements.
+// lockedWriter serializes writes to a stream the shell was handed.
 //
 // A real shell hands each element a file descriptor and the kernel serializes
 // them. An io.Writer supplied by a caller carries no such guarantee — a
@@ -21,8 +21,14 @@ import (
 // concurrency, so the shell owns the synchronization; requiring callers to
 // pass thread-safe writers would be a surprising thing to demand of an
 // interface that says io.Writer.
+//
+// The lock is a pointer to one held by the shell, and not a field of its own.
+// Three things write concurrently to these streams — a pipeline's elements, a
+// background job, a process substitution — and a lock per writer would give
+// each of them a *different* lock over the *same* io.Writer, which excludes
+// nothing. The lock has to belong to the stream.
 type lockedWriter struct {
-	mu sync.Mutex
+	mu *sync.Mutex
 	w  io.Writer
 }
 
@@ -30,6 +36,36 @@ func (l *lockedWriter) Write(p []byte) (int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.w.Write(p)
+}
+
+// streamLocks is one lock per stream the shell was handed, shared by a runner
+// and every subshell cloned from it — which is exactly the set of runners that
+// can be writing to those streams at once.
+type streamLocks struct {
+	out, err sync.Mutex
+}
+
+// streamLocks returns the shell's locks, making them on first use.
+//
+// Lazily, because a Runner is a struct literal its caller fills in and there
+// is no constructor to do it. Safe to be lazy because a runner that has not
+// been cloned has no other goroutine in it yet, and clone() takes them from
+// the parent before there is a second — so every runner that shares a stream
+// also shares the lock over it.
+func (r *Runner) streamLocks() *streamLocks {
+	if r.streams == nil {
+		r.streams = &streamLocks{}
+	}
+	return r.streams
+}
+
+// lockedStdout and lockedStderr are the shell's streams, guarded.
+func (r *Runner) lockedStdout() *lockedWriter {
+	return &lockedWriter{mu: &r.streamLocks().out, w: r.stdout()}
+}
+
+func (r *Runner) lockedStderr() *lockedWriter {
+	return &lockedWriter{mu: &r.streamLocks().err, w: r.stderr()}
 }
 
 // runPipeline runs several commands with their streams joined.
@@ -69,8 +105,8 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline) error {
 	// The streams the shell itself supplied are shared by every element that
 	// does not have a pipe in their place, so they are guarded for the
 	// duration of the pipeline.
-	sharedOut := &lockedWriter{w: r.stdout()}
-	sharedErr := &lockedWriter{w: r.stderr()}
+	sharedOut := r.lockedStdout()
+	sharedErr := r.lockedStderr()
 
 	var wg sync.WaitGroup
 	statuses := make([]int, n)

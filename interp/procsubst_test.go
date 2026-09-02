@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,6 +26,11 @@ func TestProcessSubstitutionReadsACommandAsAFile(t *testing.T) {
 		// second substitution closed the first one's end and `one` was lost.
 		{"two", `cat <(echo one) <(echo two)`, "one\ntwo\n"},
 		{"nested in a substitution", `cat <(cat <(echo deep))`, "deep\n"},
+		// A command substitution after one is a subshell — a cloned runner —
+		// and a clone that carried the pending pipes removed this one before
+		// `cat` had opened it. The order is the whole test: the clone runs
+		// during expansion, before the command it is an argument to.
+		{"a subshell expanded after one", `cat <(echo hi) $(echo)`, "hi\n"},
 		// The reason it exists rather than a pipeline: the loop runs in this
 		// shell, so what it read is still here afterwards.
 		{"feeds a loop in this shell", `while read -r l; do n=$((n+1)); done < <(printf "a\nb\nc\n"); echo "$n"`, "3\n"},
@@ -39,6 +45,67 @@ func TestProcessSubstitutionReadsACommandAsAFile(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A substitution runs beside the command that named it and writes to the same
+// streams, which is concurrency the shell created rather than the caller. An
+// io.Writer carries no promise of being safe to write from two places, so the
+// shell has to add one — and the lock has to belong to the *stream*: a lock
+// per writer gives two substitutions two locks over one io.Writer, which
+// excludes nothing and is what this was first written as.
+func TestProcessSubstitutionSharesTheCallersStreamsSafely(t *testing.T) {
+	w := &overlapWriter{}
+	if _, st := run(t, `echo a > >(cat); echo b > >(cat); sleep 0.5`, func(r *Runner) {
+		r.Stdout = w
+	}); st != 0 {
+		t.Fatalf("status %d", st)
+	}
+	if n := w.writes(); n < 2 {
+		t.Fatalf("%d writes to the shared stream, want both substitutions", n)
+	}
+	if w.overlapped() {
+		t.Error("two substitutions wrote to the stream at once — the lock does not cover the stream")
+	}
+}
+
+// overlapWriter is a caller's io.Writer that notices being written to from two
+// places at once. It holds a lock of its own, so the *test* is safe whatever
+// the shell does; what it reports is whether the shell needed it to.
+type overlapWriter struct {
+	mu     sync.Mutex
+	inside int
+	n      int
+	seen   bool
+}
+
+func (w *overlapWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	w.inside++
+	w.n++
+	if w.inside > 1 {
+		w.seen = true
+	}
+	w.mu.Unlock()
+
+	// Wide enough that two unsynchronized writers land in it together.
+	time.Sleep(20 * time.Millisecond)
+
+	w.mu.Lock()
+	w.inside--
+	w.mu.Unlock()
+	return len(p), nil
+}
+
+func (w *overlapWriter) writes() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.n
+}
+
+func (w *overlapWriter) overlapped() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.seen
 }
 
 // The other direction: a path to write *to*, with a command on the far end.

@@ -64,9 +64,9 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 	// guard for the same reason: an io.Writer carries no promise of being
 	// safe to write from two places, and the shell is what created the
 	// concurrency.
-	sub.Stderr = &lockedWriter{w: r.stderr()}
+	sub.Stderr = r.lockedStderr()
 	if kind == syntax.ProcSubstOut {
-		sub.Stdout = &lockedWriter{w: r.stdout()}
+		sub.Stdout = r.lockedStdout()
 	}
 
 	go func() {

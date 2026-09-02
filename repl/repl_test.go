@@ -152,6 +152,25 @@ func TestAConstructSpansLinesWithoutATerminal(t *testing.T) {
 	}
 }
 
+// A backslash continuation is the case that shows an unfinished line being run
+// early, and the loop above cannot: an unfinished construct parses to no
+// statements, so running it does nothing visible. `echo one \` is a *finished*
+// command in a file — the shells all print `one` for it — and a promise at a
+// prompt, so running it when it arrives prints one line too many.
+func TestABackslashHoldsTheLineWithoutATerminal(t *testing.T) {
+	var out strings.Builder
+	in := readerFile(t, "echo one \\\ntwo\n")
+	r := newTestRunner(nil)
+	r.Stdout = &out
+	s := Shell{Runner: r, In: in, Out: &out, Err: &strings.Builder{}}
+	if _, err := s.Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != "one two\n" {
+		t.Errorf("out = %q, want one command, not the first half and then both", got)
+	}
+}
+
 // readerFile is standard input that is not a terminal, holding what would
 // have been typed.
 func readerFile(t *testing.T, s string) *os.File {

@@ -319,6 +319,9 @@ func (sh Shell) run(in source) int {
 		// program would be changing *its* mask for everything it writes
 		// afterwards, so the decision belongs here rather than in interp.
 		r.SetUmask = setUmask
+		// And the limits it runs under, for the same reason again — a limit
+		// outlives the command that set it.
+		r.GetRlimit, r.SetRlimit = getRlimit, setRlimit
 	}
 	if sh.Register != nil {
 		// The dialect's own adjustment: what it adds to or removes from the

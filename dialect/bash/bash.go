@@ -88,6 +88,10 @@ func Semantics() interp.Semantics {
 	s.CdDashPrintsTheDirectory = interp.Yes
 	s.PrintfAssignsWithV = interp.Yes
 	s.PrintfRejectsUnknownOption = interp.Yes
+	s.UlimitBlockIsKilobyte = interp.Yes
+	s.UlimitHasResidentSet = interp.Yes
+	s.UlimitHasProcessCount = interp.Yes
+	s.UlimitSetsBothLimits = interp.Yes
 	return s
 }
 
@@ -163,6 +167,8 @@ func Diagnostics() interp.Diagnostics {
 		PrintfBadOption:           "printf: %[1]s: invalid option",
 		PrintfBadOptionShowsUsage: true,
 		LetNoExpression:           "let: expression expected",
+		UlimitBadOption:           "ulimit: -%[1]s: invalid option",
+		UlimitBadNumber:           "ulimit: %[1]s: invalid number",
 		PrintfUsage:               "printf: usage: printf [-v var] format [arguments]",
 		UmaskBadMask:              "umask: %[1]s: octal number out of range",
 		UmaskBadOption:            "umask: %[1]s: invalid option",

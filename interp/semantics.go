@@ -591,6 +591,30 @@ type Semantics struct {
 	// Only for that combination: `umask mask` is silent in all four, and
 	// `umask -S` with no mask prints in all four.
 	UmaskSetWithSPrints Answer
+
+	// UlimitBlockIsKilobyte counts `ulimit -c` and `-f` in 1024-byte blocks
+	// rather than POSIX's 512. True only in bash.
+	//
+	// Measured rather than read: `ulimit -f 1` then writing until the kernel
+	// objected. bash allowed 1000 bytes and refused 1200; dash, ksh93 and zsh
+	// refused 600.
+	UlimitBlockIsKilobyte Answer
+
+	// UlimitHasResidentSet is `ulimit -m`. True in bash, dash and ksh93; zsh
+	// has no such letter and reports it as a bad option.
+	UlimitHasResidentSet Answer
+
+	// UlimitHasProcessCount is `ulimit -u`. True in bash, ksh93 and zsh; dash
+	// has no such letter.
+	UlimitHasProcessCount Answer
+
+	// UlimitSetsBothLimits lowers the hard limit along with the soft one when
+	// neither -H nor -S was given — which is what makes `ulimit -t 3600`
+	// irreversible. True in bash, dash and ksh93.
+	//
+	// False in zsh, which sets only the soft limit and leaves the hard one
+	// where it was, so the same line there can be undone.
+	UlimitSetsBothLimits Answer
 }
 
 // There is deliberately no CoreSemantics, and the absence is the sharpest
@@ -673,6 +697,12 @@ func PosixSemantics() Semantics {
 		UmaskPrintsFourDigits: Yes,
 		// POSIX says setting the mask writes nothing.
 		UmaskSetWithSPrints: No,
+		// POSIX counts these in 512-byte blocks, and names neither -m nor -u.
+		UlimitBlockIsKilobyte: No,
+		UlimitHasResidentSet:  No,
+		UlimitHasProcessCount: No,
+		// POSIX sets both when neither is named.
+		UlimitSetsBothLimits: Yes,
 		// POSIX defines a pipeline's status as its last command's, and
 		// offers nothing to change it.
 		PipefailOption:                     No,

@@ -329,3 +329,46 @@ func TestLet(t *testing.T) {
 		t.Errorf("empty: said %q, want prefixed=true", out)
 	}
 }
+
+// TestUlimit: this dialect's answers about `ulimit`, through hooks that keep
+// the limits in a map — nothing here touches the process's own.
+func TestUlimit(t *testing.T) {
+	held := map[interp.Resource][2]int64{
+		interp.ResourceFileSize: {2048, interp.RlimitInfinity},
+		interp.ResourceCPUTime:  {100, interp.RlimitInfinity},
+	}
+	run := func(src string) (string, int) {
+		t.Helper()
+		f, err := syntax.Parse(src, zsh.Dialect())
+		if err != nil {
+			t.Fatal(err)
+		}
+		var buf bytes.Buffer
+		sem, dg := zsh.Semantics(), zsh.Diagnostics()
+		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "zsh"}
+		r.GetRlimit = func(res interp.Resource) (int64, int64, error) { p := held[res]; return p[0], p[1], nil }
+		r.SetRlimit = func(res interp.Resource, soft, hard int64) error { held[res] = [2]int64{soft, hard}; return nil }
+		zsh.Apply(r)
+		st, rerr := r.Run(context.Background(), f)
+		if rerr != nil {
+			t.Fatal(rerr)
+		}
+		return buf.String(), st
+	}
+	// 2048 bytes is 4 blocks of 512 and 2 of 1024.
+	if out, _ := run("ulimit -f"); strings.TrimSpace(out) != "4" {
+		t.Errorf("block size: said %q, want 4", out)
+	}
+	// The two letters that are not universal.
+	if _, st := run("ulimit -m"); st == 0 {
+		t.Errorf("-m: status %d, want present=no", st)
+	}
+	if _, st := run("ulimit -u"); st != 0 {
+		t.Errorf("-u: status %d, want present=yes", st)
+	}
+	// Whether setting lowers the hard limit with the soft one.
+	run("ulimit -t 50")
+	if got := held[interp.ResourceCPUTime]; got[1] == 50 {
+		t.Errorf("hard limit is %d, want soft", got[1])
+	}
+}

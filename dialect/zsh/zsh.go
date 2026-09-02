@@ -95,6 +95,10 @@ func Semantics() interp.Semantics {
 	s.PrintfRejectsUnknownOption = interp.No
 	s.UmaskPrintsFourDigits = interp.No
 	s.UmaskSetWithSPrints = interp.No
+	s.UlimitBlockIsKilobyte = interp.No
+	s.UlimitHasResidentSet = interp.No
+	s.UlimitHasProcessCount = interp.Yes
+	s.UlimitSetsBothLimits = interp.No
 	return s
 }
 
@@ -165,6 +169,9 @@ func Diagnostics() interp.Diagnostics {
 		UmaskBadOption:            "bad option: %[1]s",
 		UmaskBadOptionStatus:      1,
 		LetNoExpression:           "not enough arguments",
+		UlimitBadOption:           "bad option: -%[1]s",
+		UlimitBadNumber:           "invalid number: %[1]s",
+		UlimitBadOptionStatus:     1,
 		PrintfUsage:               "not enough arguments",
 		PrintfUsageStatus:         1,
 		TrapBadSignal:             "undefined signal: %[1]s",

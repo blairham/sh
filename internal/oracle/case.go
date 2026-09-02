@@ -749,6 +749,31 @@ var Corpus = []Case{
 		Why:     "three wordings and two statuses: bash and zsh report 1, ksh93 reports 2 and prints a bare usage line with no shell name in front of it",
 	},
 	{
+		ID: "ulimit/reads-the-file-size-limit", Category: "traps and exit",
+		Snippet: `ulimit; ulimit -f`,
+		Why:     "bare `ulimit` is `-f`, which is why it reports the file-size limit rather than a summary — unanimous, and the reason a script that means something else has to say which",
+	},
+	{
+		ID: "ulimit/hard-and-soft", Category: "traps and exit",
+		Snippet: `ulimit -Ht; ulimit -St; ulimit -t`,
+		Why:     "`-H` and `-S` choose which of the two limits is read, and neither means the soft one — so the third line repeats the second. CPU time rather than open files: the file-descriptor limit is the one resource whose value differs between our process and bash's, for reasons outside either shell",
+	},
+	{
+		ID: "ulimit/unlimited-is-a-word", Category: "traps and exit",
+		Snippet: `ulimit -Hf`,
+		Why:     "no limit is printed as `unlimited` rather than as a very large number, in all four — and is read back from that word too, which is what lets a script save and restore one",
+	},
+	{
+		ID: "ulimit/setting-then-reading", Category: "traps and exit",
+		Snippet: `ulimit -t 3600; ulimit -t; ulimit -Ht`,
+		Why:     "setting without -H or -S lowers both, which is what makes it irreversible — the hard limit follows the soft one down and cannot be raised again",
+	},
+	{
+		ID: "ulimit/a-limit-it-cannot-read", Category: "traps and exit",
+		Snippet: `ulimit -t abc; echo "st=$?"`,
+		Why:     "four wordings, and ksh93's is the odd one — `parameter not set` where the others call it a bad or invalid number",
+	},
+	{
 		ID: "trap/numeric-signal-name", Category: "traps and exit",
 		Script:  true,
 		Snippet: "trap 'echo caught' 2\nkill -INT $$\necho after\n",

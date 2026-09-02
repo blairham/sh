@@ -52,10 +52,12 @@ func (r *Runner) selectClause(ctx context.Context, c *syntax.SelectClause) error
 				show = false
 			}
 			r.selectPrompt()
-			// A final line with no newline is a reply like any other here,
-			// and the read after it is the one that ends the loop — which is
-			// why this asks whether there is a line and not only whether the
-			// input ended.
+			// A final line with no newline is treated as a reply here, and
+			// the read after it is the one that ends the loop. That is what
+			// this has always done rather than what was decided: bash and
+			// ksh93 ignore such a reply and zsh takes it, so it is a conflict
+			// and wants an axis — issue #142. Asking for both answers keeps
+			// the existing behavior rather than changing it in passing.
 			line, atEOF := r.readLine(false)
 			if atEOF && line == "" {
 				return r.selectEOF()

@@ -16,8 +16,13 @@ import (
 // are the same shell: the hooks, the dialect's builtins and its prelude are
 // all wired the way they are for a file. What differs is where the lines come
 // from and that an unfinished construct asks for more rather than failing.
-func Interactive(sh Shell) int {
-	sh = sh.withDefaults(os.Args)
+func Interactive(sh Shell) int { return InteractiveArgs(sh, os.Args) }
+
+// InteractiveArgs is Interactive with the argument vector given rather than
+// taken from the process, which is what makes it testable without a
+// subprocess — the same split as Main and MainArgs, and for the same reason.
+func InteractiveArgs(sh Shell, argv []string) int {
+	sh = sh.withDefaults(argv)
 	dg := sh.Diagnostics
 	name := sh.Name
 	r := sh.newRunner(name, nil, dg)
@@ -28,7 +33,7 @@ func Interactive(sh Shell) int {
 	}
 	// The prelude is the dialect's own; these are the user's, and come after
 	// it so a person's settings win over the shell's defaults.
-	if code := sh.startup(r, LoginShell(os.Args)); code != 0 {
+	if code := sh.startup(r, LoginShell(argv)); code != 0 {
 		return code
 	}
 	s := repl.Shell{

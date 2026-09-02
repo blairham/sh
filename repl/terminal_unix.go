@@ -6,7 +6,6 @@
 package repl
 
 import (
-	"errors"
 	"os"
 	"syscall"
 	"unsafe"
@@ -90,6 +89,3 @@ func isTerminal(f *os.File) bool {
 	info, err := f.Stat()
 	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }
-
-// errNotTerminal says the editor was given something it cannot edit on.
-var errNotTerminal = errors.New("not a terminal")

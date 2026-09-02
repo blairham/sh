@@ -13,6 +13,7 @@
 package repl
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -50,7 +51,11 @@ type Shell struct {
 // with — the same thing a script's last command decides.
 func (s Shell) Run(ctx context.Context) (int, error) {
 	if !isTerminal(s.In) {
-		return 0, errNotTerminal
+		// A prompt without a terminal is not a mistake to refuse: every shell
+		// in the panel, given `-i` on a pipe, still prints a prompt and runs
+		// the lines — it only says that job control is off. The *editor* is
+		// what needs a terminal, and it is the editor that goes away.
+		return s.runPlain(ctx)
 	}
 	state, err := makeRaw(s.In)
 	if err != nil {
@@ -105,7 +110,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		case err != nil:
 			return s.status(), err
 		}
-		stmts, perr, ready := s.accept(&pending, ed, line)
+		stmts, perr, ready := s.accept(&pending, ed.remember, line)
 		if !ready {
 			continue
 		}
@@ -140,6 +145,13 @@ func (s Shell) run(ctx context.Context, state *terminalState, stmts []*syntax.Fi
 			s.errf("%v\n", err)
 		}
 	}()
+	return s.runStmts(ctx, stmts)
+}
+
+// runStmts executes the statements of one accepted line, reporting whether the
+// shell should stop. Without a terminal there is nothing to hand back, which
+// is the only difference between this and run.
+func (s Shell) runStmts(ctx context.Context, stmts []*syntax.File) bool {
 	for _, st := range stmts {
 		if err := s.Runner.RunPart(ctx, st); err != nil {
 			// Refused rather than silently skipped, the same way the script
@@ -154,6 +166,53 @@ func (s Shell) run(ctx context.Context, state *terminalState, stmts []*syntax.Fi
 	return false
 }
 
+// runPlain reads lines from something that is not a terminal.
+//
+// No editor, so no cursor movement, no completion and no history — there is
+// nothing to edit on. What remains is what makes it a shell rather than a
+// script runner: a prompt before each line, and a continuation prompt for a
+// construct that has not finished. That is what the panel does with `-i` on a
+// pipe, and it is also the only way to drive a prompt from a test.
+//
+// The prompt goes to the error stream, where a shell always puts it: the
+// output of `sh -i < script > out` is the commands' output and nothing else.
+func (s Shell) runPlain(ctx context.Context) (int, error) {
+	in := bufio.NewReader(s.In)
+	var pending strings.Builder
+	for {
+		name, fallback := "PS1", "$ "
+		if pending.Len() > 0 {
+			name, fallback = "PS2", "> "
+		}
+		s.errf("%s", s.prompt(name, fallback))
+
+		line, err := in.ReadString('\n')
+		if line == "" && err != nil {
+			// End of input ends the session, exactly as ^D does at a
+			// terminal. A final line without a newline is still a line,
+			// which is why this asks about the text and not only the error.
+			return s.status(), nil
+		}
+		line = strings.TrimSuffix(line, "\n")
+
+		stmts, perr, ready := s.accept(&pending, nil, line)
+		if !ready {
+			// Nothing to run yet. accept returns no statements and no error
+			// in that case, so this guard cannot change an outcome — it says
+			// what the loop is doing, and the contract it relies on is
+			// asserted in TestAcceptReturnsNothingUntilTheConstructIsDone.
+			continue
+		}
+		if perr != nil {
+			s.errf("%s", s.report(perr))
+			continue
+		}
+		if s.runStmts(ctx, stmts) {
+			return s.status(), nil
+		}
+	}
+}
+
 // accept adds a typed line to what is pending and says whether it is a command
 // yet.
 //
@@ -166,7 +225,7 @@ func (s Shell) run(ctx context.Context, state *terminalState, stmts []*syntax.Fi
 // Remembering each continuation line as it was typed put a `for` loop in the
 // history four times over — once per line and once entire — and left
 // `do echo $i` there as something that can be recalled and cannot be run.
-func (s Shell) accept(pending *strings.Builder, ed *editor, line string) ([]*syntax.File, error, bool) {
+func (s Shell) accept(pending *strings.Builder, remember func(string), line string) ([]*syntax.File, error, bool) {
 	pending.WriteString(line)
 	pending.WriteString("\n")
 	text := pending.String()
@@ -177,7 +236,11 @@ func (s Shell) accept(pending *strings.Builder, ed *editor, line string) ([]*syn
 		return nil, nil, false
 	}
 	pending.Reset()
-	ed.remember(strings.TrimSuffix(text, "\n"))
+	if remember != nil {
+		// Nil where there is nothing to recall with: a session without an
+		// editor has no way to reach a history and no reason to keep one.
+		remember(strings.TrimSuffix(text, "\n"))
+	}
 	return stmts, err, true
 }
 

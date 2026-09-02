@@ -156,7 +156,7 @@ func TestAMultiLineCommandIsOneEntry(t *testing.T) {
 	// Typed as it would be at a prompt: the first two lines leave the
 	// construct unfinished and the third completes it.
 	for _, line := range []string{"for i in 1 2", "do echo n=$i", "done"} {
-		_, _, ready := sh.accept(&pending, e, line)
+		_, _, ready := sh.accept(&pending, e.remember, line)
 		if ready != (line == "done") {
 			t.Fatalf("%q: ready=%v", line, ready)
 		}
@@ -170,7 +170,7 @@ func TestAMultiLineCommandIsOneEntry(t *testing.T) {
 	}
 	// A one-line command is remembered too, and the pending text does not
 	// leak into it.
-	if _, _, ready := sh.accept(&pending, e, "echo after"); !ready {
+	if _, _, ready := sh.accept(&pending, e.remember, "echo after"); !ready {
 		t.Fatal("a complete line was not ready")
 	}
 	if len(e.history) != 2 || e.history[1] != "echo after" {

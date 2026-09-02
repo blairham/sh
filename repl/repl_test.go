@@ -4,6 +4,7 @@
 package repl
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -104,12 +105,118 @@ func TestPrompts(t *testing.T) {
 	}
 }
 
-// Run refuses anything that is not a terminal rather than editing blind.
-func TestRunNeedsATerminal(t *testing.T) {
-	s := Shell{Runner: newTestRunner(nil), Out: &strings.Builder{}}
-	if _, err := s.Run(t.Context()); err == nil {
-		t.Error("ran without a terminal, want it refused")
+// Without a terminal there is still a shell — there is just no editor.
+//
+// Run used to refuse, which is right about the editor and wrong about the
+// shell: every shell in the panel, handed `-i` on a pipe, prints a prompt and
+// runs the lines. What goes away is cursor movement, completion and history,
+// because there is nothing to edit on.
+func TestWithoutATerminalTheEditorGoesAwayAndTheShellDoesNot(t *testing.T) {
+	var out, errs strings.Builder
+	in := readerFile(t, "echo one\necho two\n")
+	r := newTestRunner(nil)
+	// The commands' output is the *runner's*, not the repl's: the repl owns
+	// the prompt and the runner owns everything a command prints.
+	r.Stdout, r.Stderr = &out, &errs
+	s := Shell{Runner: r, In: in, Out: &out, Err: &errs}
+	if _, err := s.Run(t.Context()); err != nil {
+		t.Fatalf("refused a pipe: %v", err)
 	}
+	if got := out.String(); got != "one\ntwo\n" {
+		t.Errorf("out = %q, want both lines run", got)
+	}
+	// The prompt goes to the error stream, which is what keeps
+	// `sh -i < script > out` producing the commands' output and nothing else.
+	if got := errs.String(); !strings.Contains(got, "$ ") {
+		t.Errorf("err = %q, want a prompt on it", got)
+	}
+	if strings.Contains(out.String(), "$") {
+		t.Errorf("out = %q, want no prompt on the output stream", out.String())
+	}
+}
+
+// A construct spanning lines is the one thing a prompt needs that a script
+// runner does not, and it is not the editor's doing — so it survives without
+// a terminal.
+func TestAConstructSpansLinesWithoutATerminal(t *testing.T) {
+	var out strings.Builder
+	in := readerFile(t, "for i in 1 2; do\necho \"n=$i\"\ndone\n")
+	r := newTestRunner(nil)
+	r.Stdout = &out
+	s := Shell{Runner: r, In: in, Out: &out, Err: &strings.Builder{}}
+	if _, err := s.Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != "n=1\nn=2\n" {
+		t.Errorf("out = %q, want the loop to have run once whole", got)
+	}
+}
+
+// A final line with no newline is still a line. It is the last thing typed
+// before the input ends, and asking only whether the read failed loses it.
+func TestAFinalLineWithoutANewlineStillRuns(t *testing.T) {
+	var out strings.Builder
+	in := readerFile(t, "echo one")
+	r := newTestRunner(nil)
+	r.Stdout = &out
+	s := Shell{Runner: r, In: in, Out: &out, Err: &strings.Builder{}}
+	if _, err := s.Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != "one\n" {
+		t.Errorf("out = %q, want the last line run", got)
+	}
+}
+
+// accept returns nothing at all until the construct is finished — not a
+// half-parsed statement and not the error that says it is unfinished. The
+// loops rely on it: a caller that ran what it was handed anyway would run
+// nothing, which is why the guard against it cannot be observed.
+func TestAcceptReturnsNothingUntilTheConstructIsDone(t *testing.T) {
+	s := Shell{Runner: newTestRunner(nil), Out: &strings.Builder{}}
+	var pending strings.Builder
+	stmts, err, ready := s.accept(&pending, nil, "for i in 1 2; do")
+	if ready {
+		t.Fatal("said it was ready with the loop unfinished")
+	}
+	if stmts != nil || err != nil {
+		t.Errorf("accept gave %v, %v — want nothing until it is finished", stmts, err)
+	}
+}
+
+// A backslash continuation is the case that shows an unfinished line being run
+// early, and the loop above cannot: an unfinished construct parses to no
+// statements, so running it does nothing visible. `echo one \` is a *finished*
+// command in a file — the shells all print `one` for it — and a promise at a
+// prompt, so running it when it arrives prints one line too many.
+func TestABackslashHoldsTheLineWithoutATerminal(t *testing.T) {
+	var out strings.Builder
+	in := readerFile(t, "echo one \\\ntwo\n")
+	r := newTestRunner(nil)
+	r.Stdout = &out
+	s := Shell{Runner: r, In: in, Out: &out, Err: &strings.Builder{}}
+	if _, err := s.Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != "one two\n" {
+		t.Errorf("out = %q, want one command, not the first half and then both", got)
+	}
+}
+
+// readerFile is standard input that is not a terminal, holding what would
+// have been typed.
+func readerFile(t *testing.T, s string) *os.File {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		_, _ = w.WriteString(s)
+		_ = w.Close()
+	}()
+	t.Cleanup(func() { _ = r.Close() })
+	return r
 }
 
 // ^C at the prompt and ^C during a command are different events reaching the

@@ -108,6 +108,10 @@ func TestSemantics(t *testing.T) {
 		// has already ended appears in it at all. Both split the panel two
 		// and two, which is why both are fields.
 		{"AnnouncesBackgroundJob", s.AnnouncesBackgroundJob, interp.No},
+		// What `type` does: whether it follows the sentence with the
+		// function itself, and whether `--` ends its options.
+		{"TypePrintsFunctionBody", s.TypePrintsFunctionBody, interp.No},
+		{"TypeEndsOptionsWithDashDash", s.TypeEndsOptionsWithDashDash, interp.No},
 		{"JobsShowBackgroundCommand", s.JobsShowBackgroundCommand, interp.No},
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.Yes},
 		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.Yes},

@@ -93,12 +93,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	}()
 	var pending strings.Builder
 	for {
-		s.reportFinishedJobs(pending.Len() > 0)
-		prompt := s.prompt("PS1", "$ ")
-		if pending.Len() > 0 {
-			prompt = s.prompt("PS2", "> ")
-		}
-		line, err := ed.readLine(prompt)
+		line, err := ed.readLine(s.beforeReading(&pending))
 		switch {
 		case errors.Is(err, ErrInterrupted):
 			// ^C abandons whatever was half-typed, including the earlier
@@ -167,6 +162,21 @@ func (s Shell) runStmts(ctx context.Context, stmts []*syntax.File) bool {
 	return false
 }
 
+// beforeReading is everything that happens between one line and the next: what
+// to say about the jobs, and what to prompt with.
+//
+// One place, used by both loops. They differ in how a line is read and in
+// nothing else that happens first, and having written this twice is how the
+// editor's copy came to be the one nothing exercised.
+func (s Shell) beforeReading(pending *strings.Builder) string {
+	continuing := pending.Len() > 0
+	s.reportFinishedJobs(continuing)
+	if continuing {
+		return s.prompt("PS2", "> ")
+	}
+	return s.prompt("PS1", "$ ")
+}
+
 // reportFinishedJobs says what ended while the last command was running.
 //
 // Before the prompt rather than the moment the job ends, which is what every
@@ -200,12 +210,7 @@ func (s Shell) runPlain(ctx context.Context) (int, error) {
 	in := bufio.NewReader(s.In)
 	var pending strings.Builder
 	for {
-		s.reportFinishedJobs(pending.Len() > 0)
-		name, fallback := "PS1", "$ "
-		if pending.Len() > 0 {
-			name, fallback = "PS2", "> "
-		}
-		s.errf("%s", s.prompt(name, fallback))
+		s.errf("%s", s.beforeReading(&pending))
 
 		line, err := in.ReadString('\n')
 		if line == "" && err != nil {

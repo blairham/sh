@@ -1020,6 +1020,12 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	r.emit(ctx, Event{Kind: EventCommandStart, Action: action})
 
 	cmd := exec.CommandContext(ctx, path, argv[1:]...)
+	// A command names itself from argv[0], and what it should find there is
+	// the word that was typed rather than the path PATH resolved to. os/exec
+	// sets both from the one argument, so the two have to be pulled apart
+	// again: `basename --bad` complains as `basename` in every shell in the
+	// panel and complained as `/usr/bin/basename` here.
+	cmd.Args[0] = argv[0]
 	if r.bg != nil || r.WaitForCommand != nil {
 		// A process group of its own, which is what makes signaling and
 		// terminal ownership answerable at all — for a foreground command as

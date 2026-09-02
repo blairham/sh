@@ -104,6 +104,11 @@ func TestSemantics(t *testing.T) {
 		{"BracketCaretNegates", s.BracketCaretNegates, interp.No},
 		{"FatalErrorStatusIsOne", s.FatalErrorStatusIsOne, interp.No},
 		{"SIGPrefixAccepted", s.SIGPrefixAccepted, interp.No},
+		// A `jobs` listing: which end it starts from, and whether a job that
+		// has already ended appears in it at all. Both split the panel two
+		// and two, which is why both are fields.
+		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.Yes},
+		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.Yes},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)

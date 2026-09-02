@@ -67,6 +67,11 @@ func TestSemantics(t *testing.T) {
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.Yes},
 		{"ArithIntegerOperatorRefusesFloat", s.ArithIntegerOperatorRefusesFloat, interp.Yes},
 		{"LastPipelineElementInCurrentShell", s.LastPipelineElementInCurrentShell, interp.Yes},
+		// A `jobs` listing: which end it starts from, and whether a job that
+		// has already ended appears in it at all. Both split the panel two
+		// and two, which is why both are fields.
+		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.Yes},
+		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.Yes},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)
@@ -75,6 +80,12 @@ func TestSemantics(t *testing.T) {
 }
 
 func TestDiagnostics(t *testing.T) {
+	// ksh93 lists a job that has already ended as "Running" — not a reaping
+	// race, it still says so after `wait`. The word ksh uses, rather than
+	// the word a shell ought to use.
+	if got, want := ksh.Diagnostics().JobDone, "Running"; got != want {
+		t.Errorf("JobDone = %q, want %q", got, want)
+	}
 	if got, want := ksh.Diagnostics().SyntaxStatus(), 3; got != want {
 		t.Errorf("syntax-error status = %d, want %d", got, want)
 	}

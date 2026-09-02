@@ -65,6 +65,11 @@ func TestSemantics(t *testing.T) {
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
 		{"DollarZeroInFunctionIsFunctionName", s.DollarZeroInFunctionIsFunctionName, interp.Yes},
+		// A `jobs` listing: which end it starts from, and whether a job that
+		// has already ended appears in it at all. Both split the panel two
+		// and two, which is why both are fields.
+		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.No},
+		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.No},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)

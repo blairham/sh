@@ -75,6 +75,11 @@ func jobRun(t *testing.T, f *fakeJobs, src string) (string, int, *Runner) {
 	out := sink(t)
 	sem := permissive()
 	sem.SignalDeathStatusIsTwoFiftySix = No
+	// Which end a listing starts from is a conflict, so the core refuses it
+	// where there is more than one job. These tests are about the markers
+	// and the states rather than the order, so they name an answer.
+	sem.JobsListNewestFirst = No
+	sem.JobsListFinishedJobs = Yes
 	dg := Diagnostics{}
 	r := &Runner{Stdout: out, Stderr: out, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
 	if f != nil {

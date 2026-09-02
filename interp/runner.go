@@ -368,10 +368,6 @@ const maxDepth = 256
 
 // clone copies the state for a subshell, so nothing it does escapes.
 func (r *Runner) clone() *Runner {
-	// Before the copy, so the subshell shares the parent's stream locks
-	// rather than lazily making its own — two locks over one io.Writer
-	// exclude nothing.
-	r.streamLocks()
 	c := *r
 	c.inSubshell = true
 	// A pending process substitution belongs to the command being built in

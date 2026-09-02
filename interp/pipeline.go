@@ -48,10 +48,13 @@ type streamLocks struct {
 // streamLocks returns the shell's locks, making them on first use.
 //
 // Lazily, because a Runner is a struct literal its caller fills in and there
-// is no constructor to do it. Safe to be lazy because a runner that has not
-// been cloned has no other goroutine in it yet, and clone() takes them from
-// the parent before there is a second — so every runner that shares a stream
-// also shares the lock over it.
+// is no constructor to do it. Safe to be lazy, and clone() needs no line of
+// its own for it, because the lock is always taken from the runner that
+// *creates* the concurrency — the one running the pipeline, starting the
+// background job, or naming the substitution — and that runner is the one
+// holding the stream. A subshell that starts its own carries the parent's
+// pointer with the struct copy, and one that does not is writing through the
+// parent's guarded writer already.
 func (r *Runner) streamLocks() *streamLocks {
 	if r.streams == nil {
 		r.streams = &streamLocks{}

@@ -173,6 +173,9 @@ type Runner struct {
 	procSubs    []string
 	procSubSeq  int
 	procSubHome *procSubDirs
+	// substRan records that a command substitution reported a status during
+	// the expansion just performed — see simple().
+	substRan bool
 	// streams holds one lock per stream the caller supplied, shared with
 	// every subshell — see lockedWriter.
 	streams *streamLocks
@@ -841,11 +844,17 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// Assignments with no command name persist, which is the difference
 		// between `x=1` and `x=1 cmd`.
 		//
-		// The status is set *before* they run, not after: `x=1` succeeds,
-		// and `x=$(false)` reports what the substitution reported, because
-		// the substitution sets the status as it goes. Zeroing afterwards
-		// hid that, and `set -e; x=$(false)` carried on.
-		r.status = 0
+		// The status cannot be decided until they have run. `x=1` succeeds
+		// and `x=$(false)` reports what the substitution reported, which
+		// once made zeroing *first* look right — but `$?` on a right-hand
+		// side names the command before the assignment, so zeroing first
+		// meant `E=$?` read 0. That is the most common idiom in shell and it
+		// was silently returning success; /usr/sbin/apachectl exiting 0
+		// where it should exit 1 is what surfaced it.
+		//
+		// So: run them with the previous status still in place, and decide
+		// afterwards from whether a substitution reported anything.
+		r.substRan = false
 		if r.xtrace {
 			values := make([]string, 0, len(c.Assigns))
 			for _, a := range c.Assigns {
@@ -861,6 +870,13 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			// Zeroing the status here is what made it look survivable: the
 			// script stopped, and then reported success for having done so.
 			return nil
+		}
+		if !r.substRan && !r.expandErr {
+			// Nothing in them reported, so the assignment itself does, and
+			// an assignment that happens cannot fail. After the fatal check
+			// above, not before: an assignment that stopped the script has a
+			// status of its own and this would report success for it.
+			r.status = 0
 		}
 		// `>b` with no command still opens the file, and truncates it if it
 		// exists. Returning early skipped that, so a redirection that was
@@ -881,9 +897,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 				return nil
 			}
 		}
-		// No zeroing here: the status was set before the assignments ran, so
-		// a command substitution inside one has already reported. This line
-		// used to overwrite it, which is why `set -e; x=$(false)` carried on.
+		// No zeroing here: the status was decided above from what the
+		// right-hand sides did. Zeroing here is what once made
+		// `set -e; x=$(false)` carry on.
 		return nil
 	}
 

@@ -956,6 +956,16 @@ var Corpus = []Case{
 		Why:     "`!` tests a status rather than requiring success, so a failing negation is not a failure",
 	},
 	{
+		ID: "status/an-assignment-can-read-the-previous-status", Category: "shell options",
+		Snippet: `false; E=$?; echo "E=$E ?=$?"`,
+		Why:     "the most common idiom there is, and it asks two things at once: `$?` on the right names the command before the assignment, and the assignment then reports its own success. Getting the order wrong makes `E=$?` read 0 and nothing looks broken",
+	},
+	{
+		ID: "status/an-assignment-reports-its-substitution", Category: "shell options",
+		Snippet: `true; x=$(false); echo "st=$?"; false; y=1; echo "st=$?"`,
+		Why:     "the other half of the same rule, and why the status cannot simply be set before the right-hand sides run: an assignment reports what a substitution in it reported, and reports success when there is none — even where a failing command came first",
+	},
+	{
 		ID: "errexit/assignment-takes-the-substitution", Category: "shell options",
 		Snippet: `set -e; x=$(false); echo reached`,
 		Why:     "an assignment reports what the substitution reported, so this ends the script where `echo \"$(false)\"` does not",

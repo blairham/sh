@@ -21,6 +21,13 @@ import (
 // Trailing newlines are removed, which is the rule that makes `x=$(pwd)`
 // usable at all.
 func (r *Runner) commandSubst(ctx context.Context, src string) string {
+	// An assignment with no command name reports what the substitutions in
+	// it reported, and reports success when there are none. Those are two
+	// different facts and neither can be read off the status afterwards —
+	// `false; x=$(false)` leaves the same 1 that was already there — so the
+	// fact that one ran is recorded rather than inferred.
+	r.substRan = true
+
 	p := syntax.NewParser(src, r.dialect())
 	f := p.Parse()
 	if err := p.Err(); err != nil {

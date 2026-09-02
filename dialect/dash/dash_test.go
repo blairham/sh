@@ -188,6 +188,14 @@ func TestUnexpectedTokensAreNamedByClass(t *testing.T) {
 		{"if true; echo x; fi", `Syntax error: "fi" unexpected (expecting "then")`},
 		{"for i in a b; echo $i; done", `Syntax error: word unexpected (expecting "do")`},
 		{"case a in a) echo x;& esac", `Syntax error: "&" unexpected`},
+		// The exception to the rule above, and dash's alone: where the
+		// unexpected token is itself a redirection operator it is not named
+		// at all. Reached by `cat < <(cmd)` — process substitution is not in
+		// this dialect, so what dash reads is a redirection whose target is
+		// another redirection.
+		{"cat < < x", `Syntax error: redirection unexpected`},
+		{"cat <(echo hi)", `Syntax error: "(" unexpected`},
+		{"echo x > >(cat)", `Syntax error: redirection unexpected`},
 	} {
 		_, err := syntax.Parse(tc.src, dash.Dialect())
 		if got := dash.Diagnostics().ParseFailure(err); got != tc.want {

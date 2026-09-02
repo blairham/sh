@@ -51,13 +51,11 @@ var reservedBuiltins = map[string]bool{
 // reservedBuiltin reports whether a name must be answered by this shell or not
 // at all, rather than being looked for on PATH.
 //
-// A dialect that registers one of these stops it being reserved, because then
-// the shell does answer it — the point is never to run a *child* for one, not
-// to keep the name unimplemented.
-func (r *Runner) reservedBuiltin(name string) bool {
-	if !reservedBuiltins[name] {
-		return false
-	}
-	_, have := r.lookupBuiltin(name)
-	return !have
-}
+// It answers about the *name* and not about whether the builtin exists. Both
+// callers look the builtin up first and return before reaching this, so a
+// dialect that registers one of these gets it — the point is never to run a
+// *child* for one, not to keep the name unimplemented. Asking here as well
+// was a line no test could distinguish, which mutation found; the rule it was
+// protecting lives in the two callers, and in the tests that register a
+// builtin and expect it to run.
+func (r *Runner) reservedBuiltin(name string) bool { return reservedBuiltins[name] }

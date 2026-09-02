@@ -113,6 +113,12 @@ func MainArgs(sh Shell, argv []string) int {
 		sh.errf("%s: %v\n", sh.Name, err)
 		return usageStatus
 	}
+	if in.interactive {
+		// A prompt rather than a script, and reached from here so that every
+		// binary built on this front end has one. It was in a single binary's
+		// main once, which is how `sh` learned to prompt and `bash` did not.
+		return InteractiveArgs(sh, argv)
+	}
 	return sh.run(in)
 }
 
@@ -187,6 +193,11 @@ type source struct {
 	// the rest as parameters; and reading standard input leaves `$0` as the
 	// shell and makes every operand a parameter.
 	params []string
+	// interactive says there is nothing to run and a person at a keyboard,
+	// so the shell should prompt rather than read a script. It travels on
+	// the source because deciding it is part of reading the invocation:
+	// `-i`, or no operands and a terminal on standard input.
+	interactive bool
 	// wholeFirst parses the whole input before running any of it, which one
 	// dialect does for a command string and no dialect does for a script.
 	wholeFirst bool
@@ -199,6 +210,11 @@ func (sh Shell) input(argv []string) (source, error) {
 		args = args[1:]
 	}
 
+	// `-i` asks for a prompt even where standard input is not a terminal,
+	// which is how a shell is driven by something that is not a person: a
+	// test, or a program feeding it lines.
+	forcePrompt := false
+
 	// Hand-parsed rather than with the flag package, because a shell's
 	// conventions are not Go's: options stop at the first operand, `-c` takes
 	// either the rest of its word or the next argument, and the words after
@@ -206,8 +222,14 @@ func (sh Shell) input(argv []string) (source, error) {
 	for len(args) > 0 {
 		a := args[0]
 		switch {
+		case a == "-i":
+			// An option like any other rather than a mode, because it can be
+			// given with the rest: `sh -i script.sh` still runs the script.
+			forcePrompt = true
+			args = args[1:]
+			continue
 		case a == "--":
-			return sh.operands(args[1:])
+			return sh.operands(args[1:], forcePrompt)
 		case a == "-c":
 			if len(args) < 2 {
 				return source{}, errors.New("-c requires an argument")
@@ -221,7 +243,7 @@ func (sh Shell) input(argv []string) (source, error) {
 			return commandSource(sh, a[2:], args[1:]), nil
 		case a == "-s":
 			// The explicit "read standard input" spelling.
-			s, err := readAll(os.Stdin)
+			s, err := readAll(sh.Stdin)
 			// Standard input keeps the shell's own name, so every operand
 			// after `-s` is a parameter and none of them is `$0`.
 			return source{src: s, name: sh.Name, params: args[1:], dg: sh.Diagnostics}, err
@@ -230,21 +252,32 @@ func (sh Shell) input(argv []string) (source, error) {
 			// mean "read standard input": every shell in the panel treats
 			// `sh - a b` as running the script `a`, and only a `-` with
 			// nothing after it falls through to standard input.
-			return sh.operands(args[1:])
+			return sh.operands(args[1:], forcePrompt)
 		case !strings.HasPrefix(a, "-"):
-			return sh.operands(args)
+			return sh.operands(args, forcePrompt)
 		default:
 			return source{}, fmt.Errorf("unknown option %q", a)
 		}
 	}
-	return sh.operands(args)
+	return sh.operands(args, forcePrompt)
 }
 
 // operands handles what is left once the options are gone: a script path, or
 // nothing at all, which means standard input.
-func (sh Shell) operands(args []string) (source, error) {
+func (sh Shell) operands(args []string, forcePrompt bool) (source, error) {
 	if len(args) == 0 {
-		src, err := readAll(os.Stdin)
+		if forcePrompt || Interactively(sh, false) {
+			// Nothing to run and someone at a keyboard. Asked before
+			// reading, not after: reading standard input from a terminal
+			// waits for an end-of-file that a person has not typed yet.
+			return source{interactive: true, name: sh.Name, dg: sh.Diagnostics}, nil
+		}
+		// sh.Stdin, not os.Stdin: a Runner's streams are its own, and a
+		// front end that reaches past them is not usable by anything that
+		// embeds it — including its own tests, where the difference is that
+		// a test for the standard-input path silently reads the *test
+		// binary's* input and passes whatever it is given.
+		src, err := readAll(sh.Stdin)
 		return source{src: src, name: sh.Name, dg: sh.Diagnostics}, err
 	}
 	path := args[0]

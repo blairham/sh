@@ -228,9 +228,21 @@ func (r *Runner) setOption(name string, on bool) bool {
 }
 
 func biUnset(r *Runner, _ context.Context, args []string) int {
-	args, _, code := r.builtinOptions("unset", args, "vfn")
+	args, opts, code := r.builtinOptions("unset", args, "vfn")
 	if code != 0 {
 		return code
+	}
+	if strings.ContainsRune(opts, 'f') {
+		// `unset -f` is about functions and not about variables, unanimously
+		// — and the option was read and then ignored, so a function survived
+		// being unset and went on answering to its name. The exported set
+		// goes with it: what is not a function cannot be carried as one.
+		for _, name := range args {
+			delete(r.funcs, name)
+			delete(r.funcFiles, name)
+			delete(r.exportedFuncs, name)
+		}
+		return 0
 	}
 	for _, name := range args {
 		delete(r.Vars, name)
@@ -248,12 +260,38 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 
 // biExport marks a name for the environment, and assigns when given a value.
 func biExport(r *Runner, _ context.Context, args []string) int {
-	args, opts, code := r.builtinOptions("export", args, "pfn")
+	// `-f` is offered only where the dialect has it. Where it does not, it
+	// goes through the ordinary unknown-option path and gets that shell's
+	// own refusal, which in two of them ends the script.
+	letters := "pn"
+	// Asked only where there is an `-f` to decide about. `export A=1` is the
+	// same in all four, and refusing it over a question nothing turned on
+	// would be refusing to export anything.
+	if hasOption(args, 'f') {
+		carries := r.ask(r.sem().ExportCarriesFunctions, "`export -f`")
+		if r.unspecified {
+			return 2
+		}
+		switch {
+		case carries:
+			letters = "pfn"
+		case r.diag().ExportFunctionOptionRefused != "":
+			// A dialect that knows the letter and will not do it, which is
+			// not the same as one that has never heard of it — and says so
+			// in different words.
+			r.diagf("%s\n", r.diag().ExportFunctionOptionRefused)
+			return 1
+		}
+	}
+	args, opts, code := r.builtinOptions("export", args, letters)
 	if code != 0 {
 		return code
 	}
 	if r.exported == nil {
 		r.exported = map[string]bool{}
+	}
+	if strings.ContainsRune(opts, 'f') {
+		return r.exportFuncs(args)
 	}
 	for _, a := range args {
 		if strings.ContainsRune(opts, 'p') {
@@ -274,6 +312,20 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 // Shifting past the end is where the panel splits: fatal in dash and ksh93,
 // survivable in bash and zsh. The dialect answers it rather than this taking
 // a side.
+// hasOption reports whether the letter appears in the option words before the
+// first operand.
+func hasOption(args []string, letter byte) bool {
+	for _, a := range args {
+		if a == "--" || !strings.HasPrefix(a, "-") || a == "-" {
+			return false
+		}
+		if strings.IndexByte(a[1:], letter) >= 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func biShift(r *Runner, _ context.Context, args []string) int {
 	n := 1
 	if len(args) > 0 {

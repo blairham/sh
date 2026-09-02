@@ -108,6 +108,8 @@ func Semantics() interp.Semantics {
 	s.JobsShowBackgroundCommand = interp.No
 
 	// Whether a backgrounded job is announced to whoever is typing.
+	// Whether `export -f` carries a function to a child.
+	s.ExportCarriesFunctions = interp.No
 	s.AnnouncesBackgroundJob = interp.Yes
 
 	// Whether a redirection target is expanded as an ordinary word.

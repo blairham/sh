@@ -36,11 +36,30 @@ func Print(f *File) string {
 }
 
 // PrintCommand renders one command, which is what a function's body is.
-func PrintCommand(c Command) string {
+func PrintCommand(c Command) string { return PrintWith(c, Layout{}) }
+
+// Layout is how a printed block is arranged.
+//
+// The zero value keeps the source's own line structure, which is what a round
+// trip wants. A caller that needs a *particular* shape — a shell writing a
+// function into the environment, or showing one to a person — says so here
+// rather than reformatting the text afterwards.
+type Layout struct {
+	// Indent is written before every statement of a block. Once, whatever
+	// the nesting: the shells that lay a function out this way do not deepen
+	// it for a construct inside one.
+	Indent string
+	// Lines puts each statement of a block on a line of its own, whatever
+	// the source did.
+	Lines bool
+}
+
+// PrintWith renders one command with a chosen arrangement.
+func PrintWith(c Command, l Layout) string {
 	if c == nil {
 		return ""
 	}
-	var p printer
+	p := printer{layout: l}
 	p.command(c)
 	return p.b.String()
 }
@@ -53,6 +72,8 @@ type printer struct {
 	// raw suppresses escaping of an unquoted literal, for the places where
 	// the punctuation belongs to a pattern rather than to the shell.
 	raw bool
+	// layout is how a block is arranged, when the caller asked for one.
+	layout Layout
 	// heredocs are the bodies owed by the statement being written, which go
 	// after it rather than where the operator is.
 	heredocs []*Redirect
@@ -90,6 +111,15 @@ func (p *printer) stmts(list []*Stmt) {
 
 // separate writes what goes between two statements.
 func (p *printer) separate(prev, next *Stmt) {
+	if p.layout.Lines {
+		// A shape the caller asked for, so the source's own lines do not
+		// come into it. A backgrounded statement still needs no `;`.
+		if !prev.Background {
+			p.str(";")
+		}
+		p.str("\n" + p.layout.Indent)
+		return
+	}
 	// A here-document body has already ended the line.
 	ended := strings.HasSuffix(p.b.String(), "\n")
 	if prev.End().Line != next.Pos().Line {
@@ -156,6 +186,13 @@ func (p *printer) command(c Command) {
 	case *Group:
 		// The space after `{` and the `;` before `}` are both required: they
 		// are what make it a reserved word rather than the start of a name.
+		if p.layout.Lines {
+			p.str("{ " + p.layout.Indent)
+			p.stmts(x.List)
+			p.str("\n}")
+			p.redirs(x.Redirs)
+			return
+		}
 		p.str("{ ")
 		p.stmts(x.List)
 		p.str("; }")
@@ -169,30 +206,30 @@ func (p *printer) command(c Command) {
 		}
 		p.str(word + " ")
 		p.stmts(x.Cond)
-		p.str("; do ")
-		p.stmts(x.Body)
-		p.str("; done")
+		p.str("; do")
+		p.body(x.Body)
+		p.keyword("done")
 		p.redirs(x.Redirs)
 	case *ForClause:
 		p.str("for " + x.Name)
 		p.items(x.HasItems, x.Items)
-		p.str("; do ")
-		p.stmts(x.Body)
-		p.str("; done")
+		p.str("; do")
+		p.body(x.Body)
+		p.keyword("done")
 		p.redirs(x.Redirs)
 	case *SelectClause:
 		p.str("select " + x.Name)
 		p.items(x.HasItems, x.Items)
-		p.str("; do ")
-		p.stmts(x.Body)
-		p.str("; done")
+		p.str("; do")
+		p.body(x.Body)
+		p.keyword("done")
 		p.redirs(x.Redirs)
 	case *CaseClause:
 		p.caseClause(x)
 	case *ForArithClause:
-		p.str("for ((" + x.InitText + "; " + x.CondText + "; " + x.PostText + ")); do ")
-		p.stmts(x.Body)
-		p.str("; done")
+		p.str("for ((" + x.InitText + "; " + x.CondText + "; " + x.PostText + ")); do")
+		p.body(x.Body)
+		p.keyword("done")
 	case *TestClause:
 		p.str("[[ ")
 		p.cond(x.Expr)
@@ -267,20 +304,45 @@ func (p *printer) items(has bool, items []*Word) {
 func (p *printer) ifClause(x *IfClause) {
 	p.str("if ")
 	p.stmts(x.Cond)
-	p.str("; then ")
-	p.stmts(x.Then)
+	p.str("; then")
+	p.body(x.Then)
 	for _, e := range x.Elifs {
-		p.str("; elif ")
+		p.keyword("elif ")
 		p.stmts(e.Cond)
-		p.str("; then ")
-		p.stmts(e.Then)
+		p.str("; then")
+		p.body(e.Then)
 	}
 	if x.HasElse {
-		p.str("; else ")
-		p.stmts(x.Else)
+		p.keyword("else")
+		p.body(x.Else)
 	}
-	p.str("; fi")
+	p.keyword("fi")
 	p.redirs(x.Redirs)
+}
+
+// body writes the statements between two keywords.
+//
+// On one line where the caller asked for nothing, and one to a line where a
+// layout was chosen — the arrangement reaches inside a construct rather than
+// stopping at the outermost block, because a shell laying a function out this
+// way lays all of it out.
+func (p *printer) body(list []*Stmt) {
+	if !p.layout.Lines {
+		p.str(" ")
+		p.stmts(list)
+		return
+	}
+	p.str("\n" + p.layout.Indent)
+	p.stmts(list)
+}
+
+// keyword writes the word that closes or continues a construct.
+func (p *printer) keyword(word string) {
+	if p.layout.Lines {
+		p.str(";\n" + p.layout.Indent + word)
+		return
+	}
+	p.str("; " + word)
 }
 
 func (p *printer) caseClause(x *CaseClause) {

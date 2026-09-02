@@ -102,9 +102,19 @@ func (r *Runner) reportWhatRuns(name string) int {
 		r.printf("%s\n", name)
 		return 0
 	}
-	if path, err := r.lookPath(name); err == nil {
-		r.printf("%s\n", path)
-		return 0
+	// Not a PATH hit for a name this shell reserves. There is an executable
+	// called /usr/bin/umask and we refuse to run it, so reporting it here
+	// would defeat the guard a careful script writes:
+	//
+	//	if command -v umask >/dev/null; then umask 077; fi
+	//
+	// The guard exists to avoid exactly the failure that follows. It has to
+	// answer for what will actually run, not for what is on the disk.
+	if !r.reservedBuiltin(name) {
+		if path, err := r.lookPath(name); err == nil {
+			r.printf("%s\n", path)
+			return 0
+		}
 	}
 	if r.ask(r.sem().CommandNotFoundStatusIsNotFound, "`command -v` reporting a missing name as not found") {
 		// One shell answers with the status a missing *command* has — 127 —

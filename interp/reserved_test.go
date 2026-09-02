@@ -25,6 +25,9 @@ func reservedRun(t *testing.T, dir, src string, setup func(*Runner)) (string, in
 	}
 	var buf bytes.Buffer
 	sem := permissive()
+	// `command -v` on a name that is not there asks this, and these tests
+	// reach it deliberately.
+	sem.CommandNotFoundStatusIsNotFound = No
 	dg := Diagnostics{}
 	r := &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
@@ -131,5 +134,59 @@ func TestAFunctionStillShadowsAReservedName(t *testing.T) {
 	}
 	if st != 0 || !strings.Contains(out, "the-function") {
 		t.Errorf("said %q status %d, want the function", out, st)
+	}
+}
+
+// `command -v` has to answer for what will actually run.
+//
+// There is an executable called /usr/bin/umask and this shell refuses to run
+// it, so reporting it would defeat the guard a careful script writes — and
+// that guard exists to avoid exactly the failure that follows it.
+func TestCommandVDoesNotAdvertiseAReservedExternal(t *testing.T) {
+	dir := t.TempDir()
+	shadow(t, dir, "umask", "echo ran-the-external")
+	shadow(t, dir, "ordinary", "echo ran-the-external")
+
+	out, _, err := reservedRun(t, dir, `command -v umask; echo "st=$?"`, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "umask") || !strings.Contains(out, "st=1") {
+		t.Errorf("said %q, want silence and a failure", out)
+	}
+	// The guard, end to end: it must take the other branch and carry on
+	// rather than passing and then dying.
+	out, _, err = reservedRun(t, dir,
+		"if command -v umask >/dev/null; then umask 077; else echo no-umask; fi\necho reached", nil)
+	if err != nil {
+		t.Fatalf("the guard did not protect the script: %v", err)
+	}
+	if !strings.Contains(out, "no-umask") || !strings.Contains(out, "reached") {
+		t.Errorf("said %q, want the else branch and the script to carry on", out)
+	}
+	// An ordinary name is still reported by the path that would run.
+	out, _, err = reservedRun(t, dir, `command -v ordinary`, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, filepath.Join(dir, "ordinary")) {
+		t.Errorf("said %q, want the external's path", out)
+	}
+}
+
+// And a dialect that registers one gets it reported as a builtin, which is the
+// clause that makes reserving conditional on not having it.
+func TestCommandVReportsARegisteredReservedName(t *testing.T) {
+	dir := t.TempDir()
+	shadow(t, dir, "umask", "echo ran-the-external")
+	setup := func(r *Runner) {
+		r.Register("umask", func(*Runner, context.Context, []string) int { return 0 })
+	}
+	out, _, err := reservedRun(t, dir, `command -v umask`, setup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(out) != "umask" {
+		t.Errorf("said %q, want the builtin named", out)
 	}
 }

@@ -152,7 +152,11 @@ func TestProcessSubstitutionCleanUpRemovesTheDirectory(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("TMPDIR", dir)
 	var r *Runner
-	if _, st := run(t, `cat <(echo hi) >/dev/null`, func(rr *Runner) { r = rr }); st != 0 {
+	// Four substitutions across two commands, because the claim is one
+	// directory per *shell* — made when the first one needs it and not per
+	// substitution, which leaves one behind for every one but the last.
+	src := "cat <(echo a) <(echo b) >/dev/null; cat <(echo c) <(echo d) >/dev/null"
+	if _, st := run(t, src, func(rr *Runner) { r = rr }); st != 0 {
 		t.Fatalf("status %d", st)
 	}
 	if n := len(subdirs(t, dir)); n != 1 {

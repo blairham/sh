@@ -24,7 +24,8 @@
 //	sh -parse 'a && b'           # dump the syntax tree
 //
 // With nothing to run and a terminal on stdin it prompts: a line editor with
-// history, PS1 and PS2, and a continuation prompt for a construct that has not
+// history that survives the session, Tab completion of commands and files,
+// PS1 and PS2, and a continuation prompt for a construct that has not
 // finished. Job control is still missing, and until it is this is a shell to
 // try rather than one to live in.
 package main

@@ -162,6 +162,7 @@ func Diagnostics() interp.Diagnostics {
 		PrintfBadVerb:             "printf: `%[1]s': invalid format character",
 		PrintfBadOption:           "printf: %[1]s: invalid option",
 		PrintfBadOptionShowsUsage: true,
+		LetNoExpression:           "let: expression expected",
 		PrintfUsage:               "printf: usage: printf [-v var] format [arguments]",
 		UmaskBadMask:              "umask: %[1]s: octal number out of range",
 		UmaskBadOption:            "umask: %[1]s: invalid option",

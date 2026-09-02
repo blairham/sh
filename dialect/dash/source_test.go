@@ -300,3 +300,21 @@ func TestUmask(t *testing.T) {
 		t.Errorf("-S with a mask: said %q, want %q", got, "")
 	}
 }
+
+// TestDashHasNoLet: dash evaluates arithmetic only with `$(( ))`, and reports
+// `let` as a command it never heard of — so the substrate's builtin has to be
+// taken away rather than left to answer.
+func TestDashHasNoLet(t *testing.T) {
+	dir := t.TempDir()
+	// `let`'s own status, not the script's — the echo after it succeeds.
+	out, _ := runDash(t, dir, "let \"x = 2 + 3\"\necho \"st=$? [$x]\"\n")
+	if !strings.Contains(out, "not found") {
+		t.Errorf("said %q, want it reported as not found", out)
+	}
+	if strings.Contains(out, "[5]") {
+		t.Errorf("said %q, want no arithmetic to have happened", out)
+	}
+	if !strings.Contains(out, "st=127") {
+		t.Errorf("said %q, want the not-found status", out)
+	}
+}

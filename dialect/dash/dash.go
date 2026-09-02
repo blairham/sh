@@ -177,4 +177,8 @@ func Apply(r *interp.Runner) {
 	// because three of the four do; the one that does not takes it away, the
 	// same way ksh93 takes `local` away.
 	r.Unregister("typeset")
+	// And no `let`. The other three evaluate arithmetic with it; dash has
+	// only `$(( ))`, and reports `let: not found` like any other command it
+	// has never heard of.
+	r.Unregister("let")
 }

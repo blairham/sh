@@ -729,6 +729,26 @@ var Corpus = []Case{
 		Why:     "four wordings and two statuses — 1 in bash, ksh93 and zsh, 2 in dash — and zsh names no operand at all, saying only `bad umask`",
 	},
 	{
+		ID: "let/evaluates-and-assigns", Category: "arithmetic",
+		Snippet: `let "x = 2 + 3"; echo "$x"`,
+		Why:     "`let` is `(( ))` with the expression as a word rather than inside parentheses. bash, ksh93 and zsh have it; dash has only `$(( ))` and reports it as a command it never heard of",
+	},
+	{
+		ID: "let/zero-is-a-failure", Category: "arithmetic",
+		Snippet: `let "x=5"; echo "a=$?"; let "x=0"; echo "b=$?"`,
+		Why:     "the surprising part, and unanimous among the three that have it: an expression coming out *zero* reports 1, because a shell reports false for it — so `let` cannot be used to assign 0 without the caller expecting a failure",
+	},
+	{
+		ID: "let/the-last-expression-decides", Category: "arithmetic",
+		Snippet: `let a=0 b=1; echo "st=$? a=$a b=$b"`,
+		Why:     "every argument is evaluated — they have side effects — and only the last one decides the status, so a leading zero does not make the whole thing fail",
+	},
+	{
+		ID: "let/with-nothing-to-evaluate", Category: "arithmetic",
+		Snippet: `let; echo "st=$?"`,
+		Why:     "three wordings and two statuses: bash and zsh report 1, ksh93 reports 2 and prints a bare usage line with no shell name in front of it",
+	},
+	{
 		ID: "trap/numeric-signal-name", Category: "traps and exit",
 		Script:  true,
 		Snippet: "trap 'echo caught' 2\nkill -INT $$\necho after\n",

@@ -81,6 +81,17 @@ func TestAPromptIsTheSameShellAsAScript(t *testing.T) {
 	}
 }
 
+// The prompt is given the invocation, not the process's. A shell names itself
+// by the path it was invoked by, in `$0` and in every diagnostic, and reading
+// os.Args instead is invisible in a binary — where the two are the same — and
+// wrong everywhere else, a test included.
+func TestThePromptIsNamedByTheInvocation(t *testing.T) {
+	out, _, _ := runPiped(t, "echo \"$0\"\n", "/some/where/myshell", "-i")
+	if !strings.Contains(out, "/some/where/myshell\n") {
+		t.Errorf("out = %q, want the shell named by argv[0]", out)
+	}
+}
+
 func runPiped(t *testing.T, typed string, argv ...string) (out, errs string, code int) {
 	t.Helper()
 	return runPipedShell(t, shell(), typed, argv...)

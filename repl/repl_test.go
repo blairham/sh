@@ -152,6 +152,38 @@ func TestAConstructSpansLinesWithoutATerminal(t *testing.T) {
 	}
 }
 
+// A final line with no newline is still a line. It is the last thing typed
+// before the input ends, and asking only whether the read failed loses it.
+func TestAFinalLineWithoutANewlineStillRuns(t *testing.T) {
+	var out strings.Builder
+	in := readerFile(t, "echo one")
+	r := newTestRunner(nil)
+	r.Stdout = &out
+	s := Shell{Runner: r, In: in, Out: &out, Err: &strings.Builder{}}
+	if _, err := s.Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != "one\n" {
+		t.Errorf("out = %q, want the last line run", got)
+	}
+}
+
+// accept returns nothing at all until the construct is finished — not a
+// half-parsed statement and not the error that says it is unfinished. The
+// loops rely on it: a caller that ran what it was handed anyway would run
+// nothing, which is why the guard against it cannot be observed.
+func TestAcceptReturnsNothingUntilTheConstructIsDone(t *testing.T) {
+	s := Shell{Runner: newTestRunner(nil), Out: &strings.Builder{}}
+	var pending strings.Builder
+	stmts, err, ready := s.accept(&pending, nil, "for i in 1 2; do")
+	if ready {
+		t.Fatal("said it was ready with the loop unfinished")
+	}
+	if stmts != nil || err != nil {
+		t.Errorf("accept gave %v, %v — want nothing until it is finished", stmts, err)
+	}
+}
+
 // A backslash continuation is the case that shows an unfinished line being run
 // early, and the loop above cannot: an unfinished construct parses to no
 // statements, so running it does nothing visible. `echo one \` is a *finished*

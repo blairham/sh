@@ -197,6 +197,10 @@ func (s Shell) runPlain(ctx context.Context) (int, error) {
 
 		stmts, perr, ready := s.accept(&pending, nil, line)
 		if !ready {
+			// Nothing to run yet. accept returns no statements and no error
+			// in that case, so this guard cannot change an outcome — it says
+			// what the loop is doing, and the contract it relies on is
+			// asserted in TestAcceptReturnsNothingUntilTheConstructIsDone.
 			continue
 		}
 		if perr != nil {

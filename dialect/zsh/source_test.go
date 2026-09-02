@@ -306,3 +306,26 @@ func TestUmask(t *testing.T) {
 		t.Errorf("-S with a mask: said %q, want %q", got, "")
 	}
 }
+
+// TestLet: this dialect has `let`, and words an empty one its own way.
+func TestLet(t *testing.T) {
+	dir := t.TempDir()
+	if out, _ := runZsh(t, dir, "let \"x = 2 + 3\"\necho $x\n"); strings.TrimSpace(out) != "5" {
+		t.Errorf("said %q, want 5", out)
+	}
+	// Zero is a failure, which is the half a caller has to know about.
+	if _, st := runZsh(t, dir, "let \"x=0\"\n"); st != 1 {
+		t.Errorf("zero: status %d, want 1", st)
+	}
+	if _, st := runZsh(t, dir, "let \"x=5\"\n"); st != 0 {
+		t.Errorf("nonzero: status %d, want 0", st)
+	}
+	out, st := runZsh(t, dir, "let\n")
+	if st != 1 {
+		t.Errorf("empty: status %d, want 1", st)
+	}
+	// Whether the complaint carries this shell's name and a location.
+	if got := strings.HasPrefix(strings.TrimSpace(out), "zsh"); got != true {
+		t.Errorf("empty: said %q, want prefixed=true", out)
+	}
+}

@@ -337,11 +337,27 @@ func (p *Parser) wordFrom(text string, at Pos) *Word {
 
 	sub := NewLexer(text, p.dialect)
 	w := &Word{Start: at, Stop: at}
+	// Whatever the lexer stepped over between two tokens is text here, not a
+	// separator: `${u:-a b}` is the two words `a b` and not `ab`. A lexer
+	// reading a command is right to drop the blank between two words, and an
+	// operand is not a command — everything up to the closing brace belongs
+	// to it. The gap is put back by offset rather than guessed at, so a run
+	// of spaces, a tab, or a `#` the lexer read as a comment all survive as
+	// what they were.
+	last := 0
+	gap := func(upto int) {
+		if upto > last && last >= 0 && upto <= len(text) {
+			w.Spans = append(w.Spans, Span{Kind: Literal, Value: text[last:upto], Pos: at})
+		}
+	}
 	for {
 		t := sub.Next()
 		if t.Kind == TokEOF {
+			gap(len(text))
 			break
 		}
+		gap(t.Pos.Offset)
+		last = t.End.Offset
 		if t.Kind == TokWord {
 			// Through newWord, so a nested ${ } in an operand is parsed too.
 			nested := p.newWord(t.Spans, at, at)

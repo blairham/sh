@@ -37,6 +37,26 @@ func TestTheCommandColumnOfAJobsListing(t *testing.T) {
 			"Done                    true\n",
 		},
 		{
+			// A job that ended badly says so, and the two shells that
+			// distinguish it disagree about how — `Exit 1` against
+			// `Done(1)` — so the status is a verb rather than part of a
+			// fixed word.
+			"a job that failed reports its status",
+			`false & sleep 0.05; jobs`,
+			Diagnostics{JobExited: "Exit %[1]d"},
+			Yes,
+			"Exit 1",
+		},
+		{
+			// And a dialect that says nothing different keeps its one word
+			// for both, which is what an empty JobExited means.
+			"where the dialect has no separate word, it is still Done",
+			`false & sleep 0.05; jobs`,
+			Diagnostics{},
+			Yes,
+			"Done",
+		},
+		{
 			"and is absent where the dialect does not ask for it",
 			`sleep 0.3 & jobs`,
 			Diagnostics{},

@@ -699,6 +699,36 @@ var Corpus = []Case{
 		Why:     "a command that exits by itself reports what it exited with, unanimously — which is what says the encoding above is about being killed rather than about failing",
 	},
 	{
+		ID: "umask/reads-the-mask", Category: "traps and exit",
+		Snippet: `umask`,
+		Why:     "three of the four write four octal digits and zsh writes three — `0022` against `022`. The value itself is the machine's, so this pins the shape rather than the number, and the harness runs every case with the same mask",
+	},
+	{
+		ID: "umask/symbolic-is-unanimous", Category: "traps and exit",
+		Snippet: `umask -S`,
+		Why:     "`-S` writes the permissions the mask *allows* rather than the bits it takes away, and all four spell it identically — the one part of this builtin needing no dialect",
+	},
+	{
+		ID: "umask/setting-then-reading", Category: "traps and exit",
+		Snippet: `umask 077; umask; umask -S`,
+		Why:     "the mask a script sets is the mask it reads back, which is the whole point of the builtin and exactly what a `/usr/bin/umask` in a child process cannot do",
+	},
+	{
+		ID: "umask/setting-is-silent", Category: "traps and exit",
+		Snippet: `umask 077; echo "st=$?"`,
+		Why:     "setting writes nothing in any of the four — so a script can set a mask without its output changing, and the `-S` form below is the exception rather than the rule",
+	},
+	{
+		ID: "umask/dash-s-with-a-mask-echoes-in-bash", Category: "traps and exit",
+		Snippet: `umask -S 077; umask 022`,
+		Why:     "bash alone echoes the new mask symbolically when asked to set *and* shown `-S`; dash, ksh93 and zsh set it and say nothing. The trailing `umask 022` puts the machine back so the case leaves nothing behind",
+	},
+	{
+		ID: "umask/a-mask-it-cannot-read", Category: "traps and exit",
+		Snippet: `umask 9999; echo "st=$?"`,
+		Why:     "four wordings and two statuses — 1 in bash, ksh93 and zsh, 2 in dash — and zsh names no operand at all, saying only `bad umask`",
+	},
+	{
 		ID: "trap/numeric-signal-name", Category: "traps and exit",
 		Script:  true,
 		Snippet: "trap 'echo caught' 2\nkill -INT $$\necho after\n",

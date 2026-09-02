@@ -64,6 +64,8 @@ func Semantics() interp.Semantics {
 	s.ExecFailureRunsExitTrap = interp.Yes
 	s.ExecTakesOptions = interp.Yes
 	s.TestAcceptsDoubleEqual = interp.Yes
+	s.UmaskPrintsFourDigits = interp.Yes
+	s.UmaskSetWithSPrints = interp.Yes
 	s.PipefailOption = interp.Yes
 	s.ErrexitSeesPipefailFailure = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
@@ -161,6 +163,10 @@ func Diagnostics() interp.Diagnostics {
 		PrintfBadOption:           "printf: %[1]s: invalid option",
 		PrintfBadOptionShowsUsage: true,
 		PrintfUsage:               "printf: usage: printf [-v var] format [arguments]",
+		UmaskBadMask:              "umask: %[1]s: octal number out of range",
+		UmaskBadOption:            "umask: %[1]s: invalid option",
+		UmaskUsage:                "umask: usage: umask [-p] [-S] [mode]",
+		UmaskUsageUnprefixed:      true,
 		// The usage carries no location, as `kill`'s does not.
 		PrintfUsageUnprefixed:     true,
 		TrapBadSignal:             "trap: %[1]s: invalid signal specification",

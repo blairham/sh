@@ -314,6 +314,11 @@ func (sh Shell) run(in source) int {
 		// And for the same reason it may really die: a script that signals
 		// the shell fatally ends the process rather than the script.
 		r.DieBySignal = dieBySignal
+		// And for the same reason again, `umask` may really change the mask
+		// this process creates files with. A Runner embedded in some other
+		// program would be changing *its* mask for everything it writes
+		// afterwards, so the decision belongs here rather than in interp.
+		r.SetUmask = setUmask
 	}
 	if sh.Register != nil {
 		// The dialect's own adjustment: what it adds to or removes from the

@@ -93,6 +93,8 @@ func Semantics() interp.Semantics {
 	s.CdDashPrintsTheDirectory = interp.No
 	s.PrintfAssignsWithV = interp.Yes
 	s.PrintfRejectsUnknownOption = interp.No
+	s.UmaskPrintsFourDigits = interp.No
+	s.UmaskSetWithSPrints = interp.No
 	return s
 }
 
@@ -159,6 +161,9 @@ func Diagnostics() interp.Diagnostics {
 		GetoptsMissingArgument:    "argument expected after -%[1]s option",
 		CdCannotChange:            "%[2]s: %[1]s",
 		PrintfBadVerb:             "%[2]s: invalid directive",
+		UmaskBadMask:              "bad umask",
+		UmaskBadOption:            "bad option: %[1]s",
+		UmaskBadOptionStatus:      1,
 		PrintfUsage:               "not enough arguments",
 		PrintfUsageStatus:         1,
 		TrapBadSignal:             "undefined signal: %[1]s",

@@ -244,3 +244,26 @@ func TestErrexitAndPipefail(t *testing.T) {
 		t.Errorf("ordinary failure: said %q, want it to stop", out)
 	}
 }
+
+// TestPrintfOptions: this dialect's answers about `printf`'s options, run
+// rather than asserted against the fields — the wordings and the usage line
+// are what would be wrong.
+func TestPrintfOptions(t *testing.T) {
+	dir := t.TempDir()
+	out, _ := runKsh(t, dir, "printf -v o \"%05d\" 42\necho \"[$o]\"\n")
+	if !strings.Contains(out, `printf: -v: unknown option`) {
+		t.Errorf("-v: said %q, want %q", out, `printf: -v: unknown option`)
+	}
+	// `--` ends the options everywhere.
+	if out, _ := runKsh(t, dir, "printf -- \"x\n\"\n"); strings.TrimSpace(out) != "x" {
+		t.Errorf("--: said %q, want x", out)
+	}
+	out, _ = runKsh(t, dir, "printf -q x\n")
+	if !strings.Contains(out, `printf: -q: unknown option`) {
+		t.Errorf("unknown option: said %q, want %q", out, `printf: -q: unknown option`)
+	}
+	// Whether the complaint is followed by a usage line.
+	if got := strings.Contains(out, `Usage`) || strings.Contains(out, `usage`); got != true {
+		t.Errorf("usage line present=%v, want true (said %q)", got, out)
+	}
+}

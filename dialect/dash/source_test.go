@@ -246,3 +246,26 @@ func TestSetOInABundle(t *testing.T) {
 		t.Errorf("said %q, want the bundle's letters and its named option", out)
 	}
 }
+
+// TestPrintfOptions: this dialect's answers about `printf`'s options, run
+// rather than asserted against the fields — the wordings and the usage line
+// are what would be wrong.
+func TestPrintfOptions(t *testing.T) {
+	dir := t.TempDir()
+	out, _ := runDash(t, dir, "printf -v o \"%05d\" 42\necho \"[$o]\"\n")
+	if !strings.Contains(out, `printf: Illegal option -v`) {
+		t.Errorf("-v: said %q, want %q", out, `printf: Illegal option -v`)
+	}
+	// `--` ends the options everywhere.
+	if out, _ := runDash(t, dir, "printf -- \"x\n\"\n"); strings.TrimSpace(out) != "x" {
+		t.Errorf("--: said %q, want x", out)
+	}
+	out, _ = runDash(t, dir, "printf -q x\n")
+	if !strings.Contains(out, `printf: Illegal option -q`) {
+		t.Errorf("unknown option: said %q, want %q", out, `printf: Illegal option -q`)
+	}
+	// Whether the complaint is followed by a usage line.
+	if got := strings.Contains(out, `Usage`) || strings.Contains(out, `usage`); got != false {
+		t.Errorf("usage line present=%v, want false (said %q)", got, out)
+	}
+}

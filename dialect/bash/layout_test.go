@@ -1,24 +1,28 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-package syntax_test
+package bash_test
 
 import (
 	"testing"
 
+	"github.com/blairham/sh/dialect/bash"
 	"github.com/blairham/sh/syntax"
 )
 
-// The two arrangements a caller can ask for, and they are one set of rules
-// with two indents: a single space that never deepens, and four per level.
+// This shell's two arrangements, measured from it: what it shows a person and
+// what it writes into the environment.
 //
-// Every row was measured. What makes them worth a table rather than a
-// property is that the rules are per construct and not uniform — a `then`
-// stays where it is and a `do` moves, a body closed by a keyword takes a `;`
-// and one closed by a brace does not.
+// Here rather than beside the printer, because an arrangement is one shell's
+// taste — the printer knows how to apply one and decides none of it, which
+// syntax's own test proves by writing a different shell's.
+//
+// A table rather than a property because the rules are per construct and not
+// uniform: a `then` stays where it is and a `do` moves, a body closed by a
+// keyword takes a `;` and one closed by a brace does not.
 func TestTheTwoArrangements(t *testing.T) {
-	flat := syntax.Layout{Indent: " ", Lines: true}
-	nested := syntax.Layout{Indent: "    ", Lines: true, Nested: true}
+	flat := bash.ExportedFunctionLayout()
+	nested := bash.FunctionLayout()
 
 	for _, tc := range []struct {
 		name, src    string

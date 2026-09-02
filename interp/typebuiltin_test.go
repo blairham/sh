@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // `type` says what a name would run, and every part of the sentence is a
@@ -181,6 +182,14 @@ func TestTypeCanShowAFunctionsBody(t *testing.T) {
 		sem := CoreSemantics()
 		sem.TypePrintsFunctionBody = Yes
 		r.Semantics = &sem
+		// The arrangement is the caller's: the core has none, so a runner
+		// told nothing prints the body on one line. Supplying one here is
+		// what a dialect does.
+		r.SetFunctionLayout(syntax.Layout{
+			Indent: "    ", Nested: true, Lines: true,
+			Separator: ";", KeywordTerminator: ";",
+			BraceOpenSuffix: " ", OutermostBraceOpensALine: true,
+		}, syntax.Layout{})
 	})
 	if st != 0 {
 		t.Fatalf("status %d: %s", st, out)

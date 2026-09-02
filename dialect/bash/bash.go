@@ -269,6 +269,9 @@ func Apply(r *interp.Runner) {
 	// A function carried to a child through the environment, under the name
 	// bash gives it. The other three do not carry functions at all.
 	r.SetFunctionExport("BASH_FUNC_", "%%")
+	// And how they are laid out, which is this shell's taste rather than
+	// anything the printer should know.
+	r.SetFunctionLayout(FunctionLayout(), ExportedFunctionLayout())
 	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
 	r.SetDynamic("SECONDS", func(rr *interp.Runner) string {
 		return strconv.Itoa(int(rr.SecondsFrom()))

@@ -1,0 +1,51 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+package bash
+
+import "github.com/blairham/sh/syntax"
+
+// How this shell lays a function out, in the two places it does.
+//
+// Here rather than in syntax, because an arrangement is one shell's taste and
+// nothing under syntax knows a shell. Every field was measured from the real
+// thing, and they differ enough between shells to be worth saying: this one
+// terminates a statement with `;` and puts `then` on the line of its `if`,
+// where another terminates with nothing and gives `then` a line of its own.
+
+// FunctionLayout is how a function is shown to a person.
+func FunctionLayout() syntax.Layout {
+	l := common()
+	l.Indent, l.Nested = "    ", true
+	// Shown, the outermost brace stands alone on its line; written into the
+	// environment it does not, which is the only difference between the two.
+	l.OutermostBraceOpensALine = true
+	return l
+}
+
+// ExportedFunctionLayout is how a function is written into the environment for
+// a child to read back.
+func ExportedFunctionLayout() syntax.Layout {
+	l := common()
+	// One space, and the same space however deep: what goes into the
+	// environment is not indented to be read.
+	l.Indent, l.Nested = " ", false
+	return l
+}
+
+func common() syntax.Layout {
+	return syntax.Layout{
+		Lines:             true,
+		Separator:         ";",
+		KeywordTerminator: ";",
+		// `then` keeps the line of its `if`, and so does the `do` of a loop
+		// over a command — but not the `do` of a loop over words, which
+		// takes a line of its own. Three answers rather than one, and this
+		// shell gives two of them.
+		ThenOnItsOwnLine:           false,
+		DoAfterCommandOnItsOwnLine: false,
+		DoAfterWordsOnItsOwnLine:   true,
+		BraceOpenSuffix:            " ",
+		CaseHeaderSuffix:           " ",
+	}
+}

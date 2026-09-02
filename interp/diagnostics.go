@@ -274,6 +274,22 @@ type Diagnostics struct {
 	// front, which is what ksh93 does with a usage line.
 	UmaskUsageUnprefixed bool
 
+	// LetNoExpression is `let` with nothing to evaluate. No verbs.
+	//
+	// bash `let: expression expected`, ksh93 a bare usage line, zsh
+	// `not enough arguments`.
+	LetNoExpression string
+
+	// LetNoExpressionStatus is what that reports. Zero means the substrate's
+	// own, which is 1 — ksh93 alone says 2, treating it as a usage error
+	// where bash and zsh treat it as an ordinary failure.
+	LetNoExpressionStatus int
+
+	// LetNoExpressionUnprefixed writes that complaint with no location and no
+	// shell name in front. ksh93 alone, which is what it does with every
+	// usage line.
+	LetNoExpressionUnprefixed bool
+
 	PrintfUsage string
 	// PrintfUsageUnprefixed prints it bare, as ksh93 prints every usage.
 	PrintfUsageUnprefixed bool

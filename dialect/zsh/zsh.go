@@ -164,6 +164,7 @@ func Diagnostics() interp.Diagnostics {
 		UmaskBadMask:              "bad umask",
 		UmaskBadOption:            "bad option: %[1]s",
 		UmaskBadOptionStatus:      1,
+		LetNoExpression:           "not enough arguments",
 		PrintfUsage:               "not enough arguments",
 		PrintfUsageStatus:         1,
 		TrapBadSignal:             "undefined signal: %[1]s",

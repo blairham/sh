@@ -65,6 +65,11 @@ type Shell struct {
 	// case now that cd, pwd and read live in the core.
 	Register func(*interp.Runner)
 
+	// Stdin is where an interactive shell reads its lines from, and has to be
+	// a terminal for the editor to work. A script's input is the script, so
+	// nothing else here reads it.
+	Stdin *os.File
+
 	// Stdout and Stderr default to the process's. Tests set them; a binary
 	// leaves them alone.
 	Stdout, Stderr io.Writer
@@ -141,6 +146,9 @@ func (sh Shell) errf(format string, args ...any) {
 }
 
 func (sh Shell) withDefaults(argv []string) Shell {
+	if sh.Stdin == nil {
+		sh.Stdin = os.Stdin
+	}
 	if sh.Stdout == nil {
 		sh.Stdout = os.Stdout
 	}
@@ -274,25 +282,13 @@ func readAll(r io.Reader) (string, error) {
 // run parses and executes src. input is what the front end calls where the
 // script came from — "-c", or empty for a file or standard input — which one
 // dialect names in a parse failure's location.
-func (sh Shell) run(in source) int {
-	src, name, input, dg := in.src, in.name, in.input, in.dg
-	p := syntax.NewParser(src, sh.Dialect)
-	// One dialect reads a command string whole before running any of it, and
-	// the rest run each line as they reach it. Parsing everything up front is
-	// how that is done: the failure is then reported before anything has run.
-	if in.wholeFirst {
-		p.Parse()
-		if err := p.Err(); err != nil {
-			// Input that ends unfinished is a syntax error rather than a
-			// prompt when it did not come from a terminal. The whole
-			// diagnostic is the dialect's: its wording, whether it names
-			// where the script came from, and whether it echoes the line.
-			sh.errf("%s", dg.ParseDiagnostic(name, input, err, src))
-			return dg.StatusForParseError(err)
-		}
-		p = syntax.NewParser(src, sh.Dialect)
-	}
-
+// newRunner builds the interpreter a shell runs in.
+//
+// Shared by the script path and the interactive one, which have to agree
+// about every hook: an interactive shell that could not `exec`, or whose
+// `umask` did nothing, would be a different shell from the one that runs the
+// same lines from a file.
+func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics) *interp.Runner {
 	r := &interp.Runner{
 		Dialect:     &sh.Dialect,
 		Semantics:   &sh.Semantics,
@@ -301,7 +297,7 @@ func (sh Shell) run(in source) int {
 		// `$1` onward. A nil slice and an empty one mean the same thing to
 		// the interpreter, so nothing distinguishes "no operands" from
 		// "operands that were all consumed as the name".
-		Params: in.params,
+		Params: params,
 		Stdout: sh.Stdout,
 		Stderr: sh.Stderr,
 	}
@@ -328,6 +324,29 @@ func (sh Shell) run(in source) int {
 		// substrate's builtins, which is neither grammar nor semantics.
 		sh.Register(r)
 	}
+	return r
+}
+
+func (sh Shell) run(in source) int {
+	src, name, input, dg := in.src, in.name, in.input, in.dg
+	p := syntax.NewParser(src, sh.Dialect)
+	// One dialect reads a command string whole before running any of it, and
+	// the rest run each line as they reach it. Parsing everything up front is
+	// how that is done: the failure is then reported before anything has run.
+	if in.wholeFirst {
+		p.Parse()
+		if err := p.Err(); err != nil {
+			// Input that ends unfinished is a syntax error rather than a
+			// prompt when it did not come from a terminal. The whole
+			// diagnostic is the dialect's: its wording, whether it names
+			// where the script came from, and whether it echoes the line.
+			sh.errf("%s", dg.ParseDiagnostic(name, input, err, src))
+			return dg.StatusForParseError(err)
+		}
+		p = syntax.NewParser(src, sh.Dialect)
+	}
+
+	r := sh.newRunner(name, in.params, dg)
 	if sh.Prelude != "" {
 		if code := sh.source(r, name); code != 0 {
 			return code

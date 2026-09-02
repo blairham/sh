@@ -290,6 +290,24 @@ type Diagnostics struct {
 	// usage line.
 	LetNoExpressionUnprefixed bool
 
+	// UlimitBadOption is an option `ulimit` does not have — which includes a
+	// resource letter this dialect lacks. One verb: the letter.
+	UlimitBadOption string
+
+	// UlimitBadOptionStatus is what that reports. Zero means the substrate's
+	// own, which is 2.
+	UlimitBadOptionStatus int
+
+	// UlimitBadNumber is a limit it could not read. One verb.
+	UlimitBadNumber string
+
+	// UlimitBadNumberStatus is what that reports. Zero means 1.
+	UlimitBadNumberStatus int
+
+	// UlimitCannotChange is the kernel refusing the change — raising a hard
+	// limit, most often. One verb: the reason.
+	UlimitCannotChange string
+
 	PrintfUsage string
 	// PrintfUsageUnprefixed prints it bare, as ksh93 prints every usage.
 	PrintfUsageUnprefixed bool

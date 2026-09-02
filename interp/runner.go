@@ -121,6 +121,20 @@ type Runner struct {
 	// getter.
 	SetUmask func(mask int) (old int, err error)
 
+	// GetRlimit and SetRlimit read and change this process's resource limits.
+	// Nil — the default — means this shell has none to offer and `ulimit` is
+	// refused.
+	//
+	// Opt-in for the reason SetUmask is, and more so: a limit outlives the
+	// command that set it and binds everything the process does afterwards,
+	// so a Runner embedded in another program must not be able to cap its
+	// host's memory or its open files on the say-so of a script.
+	//
+	// Two hooks rather than one, because these are two system calls — unlike
+	// the umask, which only ever swaps.
+	GetRlimit func(res Resource) (soft, hard int64, err error)
+	SetRlimit func(res Resource, soft, hard int64) error
+
 	// Dynamic holds parameters whose value is produced when they are read,
 	// rather than stored: `LINENO` is wherever execution has reached, and
 	// `RANDOM` is a different number every time. A dialect fills in the ones

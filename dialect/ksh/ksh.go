@@ -94,6 +94,10 @@ func Semantics() interp.Semantics {
 	s.PrintfRejectsUnknownOption = interp.Yes
 	s.UmaskPrintsFourDigits = interp.Yes
 	s.UmaskSetWithSPrints = interp.No
+	s.UlimitBlockIsKilobyte = interp.No
+	s.UlimitHasResidentSet = interp.Yes
+	s.UlimitHasProcessCount = interp.Yes
+	s.UlimitSetsBothLimits = interp.Yes
 	return s
 }
 
@@ -178,6 +182,8 @@ func Diagnostics() interp.Diagnostics {
 		LetNoExpression:           "Usage: let [ options ] [expr ...]",
 		LetNoExpressionStatus:     2,
 		LetNoExpressionUnprefixed: true,
+		UlimitBadOption:           "not supported",
+		UlimitBadNumber:           "ulimit: %[1]s: parameter not set",
 		PrintfUsage:               "Usage: printf [ options ] format [string ...]",
 		PrintfUsageUnprefixed:     true,
 		TrapBadSignal:             "trap: %[1]s: bad trap",

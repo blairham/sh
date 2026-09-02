@@ -333,18 +333,23 @@ type Diagnostics struct {
 	// JobLine is one row of a `jobs` listing. Four verbs: the number, the
 	// marker that says which job `%%` means, the state and the command.
 	//
-	// Not yet filled in by any dialect, and the substrate's own shape is what
-	// every one of them prints. Four shells word it four ways — measured from
-	// a terminal:
+	// All four are filled in, and none of them agrees with another about any
+	// of it — measured to the byte:
 	//
 	//	bash   [1]-  Running                    sleep 0.3 &
 	//	dash   [2] + Running
 	//	ksh93  [2] +  Running                 <command unknown>
 	//	zsh    [1]  - running    sleep 0.3
 	//
-	// dash keeps no command text at all and ksh93 prints a placeholder where
-	// one would go, so matching them is not only a matter of spacing. The
-	// behavior is the feature here and the wording is the follow-up.
+	// The marker spacing, the width of the state column and the case of the
+	// word are all this string's business. Whether the command is there is
+	// not: dash and ksh93 kept no text for a `&` job, which
+	// JobsShowBackgroundCommand answers, and JobUnknownCommand is only what
+	// to print in its place.
+	//
+	// ksh93's running state carries a leading space of its own, so that its
+	// stopped and running lines end in the same column. Odd, and exactly
+	// what it does.
 	JobLine string
 
 	// JobRunning, JobStopped and JobDone are the states a job is listed in.
@@ -355,6 +360,30 @@ type Diagnostics struct {
 	JobRunning string
 	JobStopped string
 	JobDone    string
+
+	// JobExited replaces JobDone where the job ended with a non-zero status.
+	// One verb: the status. Empty leaves JobDone standing for both, which is
+	// what a dialect that does not distinguish them wants.
+	//
+	//	bash   Exit 1
+	//	dash   Done(1)
+	JobExited string
+
+	// JobUnknownCommand is printed in the command column of a job whose text
+	// the shell did not keep. No verbs.
+	//
+	// ksh93 alone: `<command unknown>`, where dash leaves the column empty.
+	// Whether the text was kept is the semantics question — this is only
+	// what to print in its place.
+	JobUnknownCommand string
+
+	// JobRunningShowsAmpersand puts the `&` back on the command of a job
+	// that is still running.
+	//
+	// bash alone, and only while it runs: the same job listed after it ends
+	// has no `&`. So it is part of rendering the line rather than part of
+	// the text that was kept.
+	JobRunningShowsAmpersand bool
 
 	// NoSuchJob is a job spec that names nothing. Two verbs: the builtin and
 	// the spec as written.

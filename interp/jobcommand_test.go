@@ -65,6 +65,7 @@ func TestABackgroundedPipelineTakesTheLastElementsPid(t *testing.T) {
 		// The dialect where the last element is a child rather than this
 		// shell, which is the arrangement that had every element writing.
 		sem.LastPipelineElementInCurrentShell = No
+		sem.JobsShowBackgroundCommand = Yes
 		rr.Semantics = &sem
 		r = rr
 	}); st != 0 {
@@ -81,6 +82,7 @@ func TestABackgroundedPipelineTakesTheLastElementsPid(t *testing.T) {
 	out, _ := run(t, `/usr/bin/true | /usr/bin/true & echo "$!"`, func(rr *Runner) {
 		sem := CoreSemantics()
 		sem.LastPipelineElementInCurrentShell = No
+		sem.JobsShowBackgroundCommand = Yes
 		rr.Semantics = &sem
 	})
 	if strings.TrimSpace(out) == "0" || strings.TrimSpace(out) == "" {

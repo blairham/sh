@@ -80,6 +80,7 @@ func jobRun(t *testing.T, f *fakeJobs, src string) (string, int, *Runner) {
 	// and the states rather than the order, so they name an answer.
 	sem.JobsListNewestFirst = No
 	sem.JobsListFinishedJobs = Yes
+	sem.JobsShowBackgroundCommand = Yes
 	dg := Diagnostics{}
 	r := &Runner{Stdout: out, Stderr: out, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
 	if f != nil {

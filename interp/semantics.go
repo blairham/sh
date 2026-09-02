@@ -349,6 +349,16 @@ type Semantics struct {
 	// in this shell, so `echo x | read v` sets v. True in ksh93 and zsh.
 	LastPipelineElementInCurrentShell Answer
 
+	// JobsShowBackgroundCommand puts the command of a `&` job in a `jobs`
+	// listing. True in bash and zsh; dash prints an empty column there and
+	// ksh93 a placeholder.
+	//
+	// Only for a `&` job, which is the whole reason this is not a question
+	// about rendering a command at all: both of the shells that leave it out
+	// here *do* print the command of a job they stopped themselves. They
+	// kept nothing for this kind of job, and the listing is where that shows.
+	JobsShowBackgroundCommand Answer
+
 	// JobsListNewestFirst puts the most recent job at the top of a `jobs`
 	// listing. True in dash and ksh93; bash and zsh list oldest first.
 	//

@@ -247,6 +247,33 @@ type Diagnostics struct {
 	// bash and ksh93 do; dash prints the complaint alone.
 	PrintfBadOptionShowsUsage bool
 
+	// UmaskBadMask is a mask `umask` could not read. One verb: the operand
+	// as written — except in zsh, which names nothing.
+	//
+	// bash `umask: 9999: octal number out of range`, dash
+	// `umask: Illegal number: 9999`, ksh93 `umask: 9999: bad number`, zsh a
+	// bare `bad umask`.
+	UmaskBadMask string
+
+	// UmaskBadMaskStatus is what that reports. Zero means the substrate's
+	// own, which is 1 — dash alone says 2.
+	UmaskBadMaskStatus int
+
+	// UmaskBadOption is an option `umask` does not have. One verb.
+	UmaskBadOption string
+
+	// UmaskBadOptionStatus is what that reports. Zero means the substrate's
+	// own, which is 2 — zsh alone says 1, where it says 2 for a bad *mask*.
+	UmaskBadOptionStatus int
+
+	// UmaskUsage follows a bad option, where the dialect prints one. bash and
+	// ksh93 do; dash and zsh print the complaint alone. Empty means none.
+	UmaskUsage string
+
+	// UmaskUsageUnprefixed writes it with no location and no shell name in
+	// front, which is what ksh93 does with a usage line.
+	UmaskUsageUnprefixed bool
+
 	PrintfUsage string
 	// PrintfUsageUnprefixed prints it bare, as ksh93 prints every usage.
 	PrintfUsageUnprefixed bool

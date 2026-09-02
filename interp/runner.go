@@ -104,6 +104,23 @@ type Runner struct {
 	// corpus records.
 	DieBySignal func(sig syscall.Signal) error
 
+	// SetUmask sets this process's file-creation mask and returns the one it
+	// replaced. Nil — the default — means this shell has no umask to offer
+	// and the builtin is refused.
+	//
+	// Opt-in for the reason ReplaceProcess and DieBySignal are. A umask is
+	// *process* state: a Runner embedded in some other program would be
+	// changing that program's mask for every file it writes afterwards, on
+	// the say-so of the text it was asked to interpret. So interp decides
+	// when, and the caller decides whether, in the caller's own code.
+	//
+	// One hook rather than a reader and a writer, because the system call is
+	// one: it always sets, and returns what was there. Reading without
+	// changing is setting the old value straight back, which is what the
+	// builtin does and why it cannot be done by a caller who only offered a
+	// getter.
+	SetUmask func(mask int) (old int, err error)
+
 	// Dynamic holds parameters whose value is produced when they are read,
 	// rather than stored: `LINENO` is wherever execution has reached, and
 	// `RANDOM` is a different number every time. A dialect fills in the ones

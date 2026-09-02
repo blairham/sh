@@ -576,6 +576,21 @@ type Semantics struct {
 	// else as the format — so `printf -q x` prints `-q` there and is an error
 	// in the other three.
 	PrintfRejectsUnknownOption Answer
+
+	// UmaskPrintsFourDigits writes the mask with a leading zero — `0022`
+	// against zsh's `022`. True in bash, dash and ksh93.
+	//
+	// Only about printing: all four read `022` and `0022` alike, and the
+	// symbolic form `umask -S` is identical in every one of them.
+	UmaskPrintsFourDigits Answer
+
+	// UmaskSetWithSPrints echoes the new mask when `umask -S mask` both sets
+	// and is asked for the symbolic form. True only in bash, which prints
+	// `u=rwx,g=,o=` after setting; the other three set and say nothing.
+	//
+	// Only for that combination: `umask mask` is silent in all four, and
+	// `umask -S` with no mask prints in all four.
+	UmaskSetWithSPrints Answer
 }
 
 // There is deliberately no CoreSemantics, and the absence is the sharpest
@@ -653,6 +668,11 @@ func PosixSemantics() Semantics {
 		// assign with and a leading `-` word is not one.
 		PrintfAssignsWithV:         No,
 		PrintfRejectsUnknownOption: Yes,
+		// POSIX shows the mask in a form that can be read back; three of the
+		// four write four octal digits.
+		UmaskPrintsFourDigits: Yes,
+		// POSIX says setting the mask writes nothing.
+		UmaskSetWithSPrints: No,
 		// POSIX defines a pipeline's status as its last command's, and
 		// offers nothing to change it.
 		PipefailOption:                     No,

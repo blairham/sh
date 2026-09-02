@@ -150,10 +150,25 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.C
 			r.Stdout, r.Stderr = w, w
 		case 0:
 			r.Stdin = f
+		case 1:
+			r.Stdout = r.eachTarget(1, f, opened)
 		case 2:
 			r.Stderr = r.eachTarget(2, f, opened)
 		default:
-			r.Stdout = r.eachTarget(1, f, opened)
+			// A descriptor this shell cannot address is refused, not rounded
+			// down to one it can. `default` used to land on stdout, so
+			//
+			//	exec 3>out.txt
+			//
+			// opened the file, said nothing, exited 0 — and sent every later
+			// `echo` into it, because the 3 was dropped and the redirection
+			// applied to stdout. A side channel took the script's whole
+			// output with it.
+			//
+			// Three named streams is what this shell has; see dupFd, which
+			// says the same thing about `>&N`. Saying so is better than
+			// quietly meaning something else.
+			return closers, fmt.Errorf("not implemented yet: redirecting file descriptor %d, which needs a descriptor table", fd)
 		}
 	}
 	return closers, nil

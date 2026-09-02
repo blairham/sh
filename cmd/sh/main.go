@@ -83,7 +83,10 @@ func main() {
 			fail(err)
 		}
 	case *command != "":
-		os.Exit(driver.Run(sh, *command, sh.Name))
+		// Through driver's own `-c`, not past it: the label in a parse
+		// failure's location, the dialect that parses the string whole, and
+		// the operands that become `$0` and the parameters all belong to it.
+		os.Exit(driver.RunCommand(sh, *command, flag.Args()))
 	case len(flag.Args()) > 0:
 		// A bare argument is a script to run, which is how a shell is
 		// normally invoked and how the corpus runs the cases that depend on

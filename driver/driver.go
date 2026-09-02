@@ -138,6 +138,21 @@ func Run(sh Shell, src, name string) int {
 	return sh.run(source{src: src, name: name, dg: sh.Diagnostics})
 }
 
+// RunCommand is Run for a `-c` command string, which is not the same as
+// running its text: the origin is labeled `-c` in a parse failure's location,
+// one dialect parses the whole string before running any of it, and the first
+// operand is `$0` with the rest the positional parameters.
+//
+// It exists because a front end with options of its own — `sh` has `-tokens`,
+// `-parse` and `-dialect`, which are not shell conventions — still has to
+// reach the same `-c` as everyone else. Reaching past it instead is what left
+// `sh -dialect bash` printing a location without the `-c` in it and running
+// `-c 'echo $1' a b` with no parameters at all.
+func RunCommand(sh Shell, src string, operands []string) int {
+	sh = sh.withDefaults(nil)
+	return sh.run(commandSource(sh, src, operands))
+}
+
 // RunScript is Run for input that came from a file, which selects the
 // script-form diagnostics and names the script rather than the shell.
 func RunScript(sh Shell, src, path string) int {

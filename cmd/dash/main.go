@@ -28,6 +28,7 @@ func shell() driver.Shell {
 		Dialect:     dash.Dialect(),
 		Semantics:   dash.Semantics(),
 		Diagnostics: dash.Diagnostics(),
+		Prelude:     dash.Prelude(),
 		Register:    dash.Apply,
 	}
 }

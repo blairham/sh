@@ -9,9 +9,9 @@
 // and keeping this in cmd/ while importing nothing internal is what keeps
 // proving it.
 //
-// The whole of the dialect is one value. What is left below it is a prelude —
-// dialect written as shell — and nothing else. The front end is shared, in
-// driver, because how a shell is invoked is not part of what makes it bash.
+// The whole of the dialect is one value, prelude included: what this file
+// does is name it. The front end is shared, in driver, because how a shell is
+// invoked is not part of what makes it what it is.
 package main
 
 import (
@@ -20,16 +20,6 @@ import (
 	"github.com/blairham/sh/dialect/bash"
 	"github.com/blairham/sh/driver"
 )
-
-// prelude is the part of the dialect that needs no Go.
-//
-// A function shadows a builtin and an external command alike, so anything here
-// replaces the core's answer without the core knowing. Most of a real dialect
-// belongs in a file like this.
-const prelude = `
-pushd() { cd "$1"; }
-popd()  { cd "$OLDPWD"; }
-`
 
 // shell is the whole of "which shell am I", as data.
 //
@@ -42,7 +32,7 @@ func shell() driver.Shell {
 		Dialect:     bash.Dialect(),
 		Semantics:   bash.Semantics(),
 		Diagnostics: bash.Diagnostics(),
-		Prelude:     prelude,
+		Prelude:     bash.Prelude(),
 		Register:    bash.Apply,
 	}
 }

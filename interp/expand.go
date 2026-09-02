@@ -171,8 +171,30 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 	}
 	// `${a[@]}` is one field per element for the same reason `"$@"` is one
 	// per parameter: joining them would lose an element containing a space.
-	if e.Index != nil && e.Op == syntax.ParamNone && !e.Length {
+	// ParamSubstring as well as ParamNone: `${a[@]:1}` is a slice of the
+	// *list*, not a substring of the elements joined together, and taking it
+	// down the scalar path is what made it come back as the whole array.
+	//
+	// Only for `[@]` and `[*]`, though. `${a[0]:1}` names one element and is
+	// a substring of it — slicing there is a one-element list with its first
+	// element dropped, which is no field at all. The corpus caught that.
+	if e.Index != nil && !e.Length &&
+		(e.Op == syntax.ParamNone ||
+			(e.Op == syntax.ParamSubstring && wholeArraySubscript(r.subscriptText(e.Index)))) {
 		if elems, ok := r.arraySubscript(e); ok {
+			if e.Indirect {
+				// `${!a[@]}` is the array's *indices*, not its elements —
+				// and the indirection was being ignored, so it answered with
+				// the elements and a script iterating `for i in "${!a[@]}"`
+				// silently looped over the wrong thing.
+				//
+				// Counted from this dialect's own base, for the same reason
+				// a subscript is.
+				elems = arrayIndices(len(elems))
+			}
+			if e.Op == syntax.ParamSubstring {
+				elems = sliceElems(elems, r.numOf(e.Arg), e.Arg2, r)
+			}
 			ifs, set := r.ifs()
 			if r.subscriptText(e.Index) == "*" {
 				// `[*]` is *one* field with the elements joined, where `[@]`
@@ -329,7 +351,16 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		return ""
 	}
 	// An array subscript supplies a value too, and the operators apply to it
-	// exactly as they do to a variable.
+	// exactly as they do to a variable. That is what the comment said before
+	// this function returned here instead: every operator was skipped, so
+	// `${a[0]#h}` on `hello` came back `hello`, and so did `${a[0]/l/L}`,
+	// `${a[0]%%o}` and `${a[0]:1}` — silently, with status 0. The same
+	// mistake the positional-parameter path made and was fixed for.
+	var (
+		value     string
+		set       bool
+		subscript bool
+	)
 	if e.Index != nil {
 		if elems, ok := r.arraySubscript(e); ok {
 			if e.Length {
@@ -342,16 +373,20 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 				}
 				return itoa(len(strings.Join(elems, "")))
 			}
-			return strings.Join(elems, " ")
+			// nil rather than empty is what says the element was not there:
+			// an element holding "" is set, and `${a[0]:-d}` has to tell the
+			// two apart.
+			subscript, value, set = true, strings.Join(elems, " "), elems != nil
 		}
 	}
-
 	// A special parameter supplies a *value*; it does not skip the operators.
 	// Returning here was a bug: `${1##*/}` left its argument untouched,
 	// because the positional parameter answered and the trim never ran.
-	value, set := r.specialParam(e)
-	if !set {
-		value, set = r.getVar(e.Name)
+	if !subscript {
+		value, set = r.specialParam(e)
+		if !set {
+			value, set = r.getVar(e.Name)
+		}
 	}
 
 	if !set {
@@ -399,7 +434,14 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	case syntax.ParamAssign:
 		if fires {
 			v := r.joinWord(e.Arg)
-			// The side effect that outlives the expansion.
+			// The side effect that outlives the expansion — and with a
+			// subscript it belongs to the *element*. Assigning to the name
+			// would replace the whole array with one string, which is worse
+			// than the nothing this used to do.
+			if subscript {
+				r.assignSubscript(e, v)
+				return v
+			}
 			r.setVar(e.Name, v)
 			return v
 		}
@@ -427,6 +469,84 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	}
 	// Anything else is left empty rather than guessed at.
 	return ""
+}
+
+// assignSubscript is `${a[i]:=v}`, which assigns to the element rather than to
+// the array.
+//
+// Only a numeric subscript: `${a[@]:=v}` is a question about the whole array
+// that the panel does not answer alike, and guessing at it would be worse than
+// leaving it alone.
+func (r *Runner) assignSubscript(e *syntax.ParamExpr, v string) {
+	idx := r.subscriptText(e.Index)
+	n, err := r.parseNum(idx)
+	if err != nil {
+		return
+	}
+	r.setArrayElem(e.Name, n, v)
+}
+
+// wholeArraySubscript reports whether a subscript names the whole array rather
+// than one element, which is what decides whether `:` slices a list or takes a
+// substring of a single value.
+func wholeArraySubscript(idx string) bool { return idx == "@" || idx == "*" }
+
+// arrayIndices is the subscripts of an array of n elements, as words.
+//
+// From 0, not from this dialect's array base. Both shells that have the form
+// count from 0 — bash and ksh93 answer `0 1 2` — and zsh, the one that counts
+// subscripts from 1, rejects `${!a[@]}` as a bad substitution before any of
+// this runs. So a base here would be a guess about a dialect that never
+// reaches it, and mutation duly showed no test could tell it from 0.
+//
+// Dense, because this shell's arrays are: `a=(x); a[5]=y` leaves six elements
+// here where bash leaves two, so these are 0..n-1 rather than the subscripts
+// that were actually assigned. That is the array model rather than this
+// expansion, and it is the same gap `${#a[@]}` already has.
+func arrayIndices(n int) []string {
+	out := make([]string, 0, n)
+	for i := range n {
+		out = append(out, itoa(i))
+	}
+	return out
+}
+
+// sliceElems is `${a[@]:off:len}` — the same arithmetic substring does, over a
+// list instead of a string.
+//
+// Measured unanimous in bash, ksh93 and zsh for every shape but one, including
+// the offset being counted from 0 in zsh, whose *subscripts* count from 1.
+//
+// The exception is a negative length, where the three disagree: bash refuses
+// it outright for a list (`substring expression < 0`) though it accepts it for
+// a string, ksh93 yields nothing, and zsh reads it as an offset from the end.
+// This follows the rule the string form here already uses, so the two spellings
+// agree with each other, and lands on zsh's answer.
+func sliceElems(elems []string, off int, lenWord *syntax.Word, r *Runner) []string {
+	if off < 0 {
+		off += len(elems)
+	}
+	if off < 0 {
+		off = 0
+	}
+	if off > len(elems) {
+		return nil
+	}
+	out := elems[off:]
+	if lenWord == nil {
+		return out
+	}
+	n := r.numOf(lenWord)
+	if n < 0 {
+		n = len(elems) + n - off
+	}
+	if n < 0 {
+		n = 0
+	}
+	if n > len(out) {
+		n = len(out)
+	}
+	return out[:n]
 }
 
 // numOf evaluates a word as a number, for a substring's offset and length.

@@ -863,6 +863,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		return nil
 	}
 
+	// A builtin this shell does not have is refused rather than looked for on
+	// PATH. See reserved.go: the alternative is running a child that changes
+	// its own state and exits, which is how `umask 077` came to succeed and
+	// do nothing.
+	if r.reservedBuiltin(argv[0]) {
+		return r.unsupported(argv[0] + ", which is a shell builtin and cannot be run as a command")
+	}
+
 	// An assignment prefix applies to this command's environment only.
 	env := r.environ()
 	for _, a := range c.Assigns {

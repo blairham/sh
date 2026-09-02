@@ -193,6 +193,10 @@ type Runner struct {
 	// exportedFuncs are the functions written into a command's environment,
 	// and funcExportPrefix/Suffix are what the entry is called. Only one
 	// dialect carries functions that way, so the naming comes from it.
+	// functionLayout and exportedFunctionLayout are how this shell arranges
+	// a function it has to say back — see SetFunctionLayout.
+	functionLayout                     syntax.Layout
+	exportedFunctionLayout             syntax.Layout
 	exportedFuncs                      map[string]bool
 	importedFuncs                      bool
 	funcExportPrefix, funcExportSuffix string

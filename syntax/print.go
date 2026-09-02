@@ -40,23 +40,58 @@ func PrintCommand(c Command) string { return PrintWith(c, Layout{}) }
 
 // Layout is how a printed block is arranged.
 //
-// The zero value keeps the source's own line structure, which is what a round
-// trip wants. A caller that needs a *particular* shape — a shell writing a
-// function into the environment, or showing one to a person — says so here
-// rather than reformatting the text afterwards.
+// Every field is a junction where the shells differ, and the type exists so
+// that this package decides none of them. The zero value keeps the source's
+// own line structure and adds nothing, which is what a round trip wants; a
+// caller that needs a particular shape fills the fields in.
+//
+// That is the whole point of it being data. An arrangement measured from one
+// shell and written into this package would be that shell's taste living
+// where nothing is supposed to know a shell — and the differences are not
+// small: one puts `then` on the line of its `if` and another on a line of its
+// own, one terminates statements with `;` and another with nothing at all.
 type Layout struct {
-	// Indent is written before every statement of a block. Once, whatever
-	// the nesting: the shells that lay a function out this way do not deepen
-	// it for a construct inside one.
+	// Indent is one level of indentation, and Nested repeats it once per
+	// enclosing block. Without Nested every block is indented the same,
+	// however deep.
 	Indent string
-	// Lines puts each statement of a block on a line of its own, whatever
-	// the source did.
-	Lines bool
-	// Nested repeats Indent once per enclosing block, so a body inside a
-	// body is further in. Without it every block is indented the same,
-	// however deep — which is a shape one caller wants and the other does
-	// not, and is the only difference between the two.
 	Nested bool
+	// Lines puts each statement of a block on a line of its own, whatever
+	// the source did. Nothing else here applies without it.
+	Lines bool
+
+	// Separator goes after every statement of a block but the last.
+	Separator string
+	// KeywordTerminator goes after the *last* statement of a body closed by
+	// a keyword — `fi`, `done`, `else`. A body closed by a bracket takes
+	// nothing, in every shell measured.
+	KeywordTerminator string
+
+	// ThenOnItsOwnLine, DoAfterWordsOnItsOwnLine and DoAfterCommandOnItsOwnLine
+	// say whether the keyword that opens a body starts a line of its own.
+	//
+	// Three fields and not one, because a shell may answer them differently:
+	// one keeps `then` with its `if` and moves the `do` of a loop over words
+	// while keeping the `do` of a loop over a command.
+	ThenOnItsOwnLine           bool
+	DoAfterWordsOnItsOwnLine   bool
+	DoAfterCommandOnItsOwnLine bool
+
+	// BraceOpenSuffix follows the `{` that opens a block — a space, or
+	// nothing.
+	BraceOpenSuffix string
+	// OutermostBraceOpensALine puts the first statement of the outermost
+	// block on a line of its own. A block inside one always does.
+	OutermostBraceOpensALine bool
+
+	// CaseHeaderSuffix follows the `in` of a `case`.
+	CaseHeaderSuffix string
+	// CaseArmsOnOneLine keeps a `case` arm's pattern, body and terminator
+	// together instead of giving each a line.
+	CaseArmsOnOneLine bool
+	// CasePatternsParenthesised writes an arm's pattern with the opening
+	// parenthesis that the grammar allows and most shells leave out.
+	CasePatternsParenthesised bool
 }
 
 // PrintWith renders one command with a chosen arrangement.
@@ -120,9 +155,10 @@ func (p *printer) stmts(list []*Stmt) {
 func (p *printer) separate(prev, next *Stmt) {
 	if p.layout.Lines {
 		// A shape the caller asked for, so the source's own lines do not
-		// come into it. A backgrounded statement still needs no `;`.
+		// come into it. A backgrounded statement is already terminated
+		// whatever the arrangement says.
 		if !prev.Background {
-			p.str(";")
+			p.str(p.layout.Separator)
 		}
 		p.str("\n" + p.pad())
 		return
@@ -196,11 +232,11 @@ func (p *printer) command(c Command) {
 		// The space after `{` and the `;` before `}` are both required: they
 		// are what make it a reserved word rather than the start of a name.
 		if p.layout.Lines {
-			p.str("{ ")
-			// The outermost brace — a function's own — opens on its own
-			// line in one arrangement and on the brace's line in the
-			// other. Every brace inside one opens on its own line in both.
-			p.bodyAt(x.List, false, p.layout.Nested || p.depth > 0)
+			p.str("{" + p.layout.BraceOpenSuffix)
+			// The outermost brace — a function's own — is the one that
+			// differs; a brace inside one opens a line in every arrangement
+			// measured.
+			p.bodyAt(x.List, false, p.layout.OutermostBraceOpensALine || p.depth > 0)
 			p.str("\n" + p.pad() + "}")
 			p.redirs(x.Redirs)
 			return
@@ -218,7 +254,7 @@ func (p *printer) command(c Command) {
 		}
 		p.str(word + " ")
 		p.stmts(x.Cond)
-		p.str("; do")
+		p.opener("do", p.layout.DoAfterCommandOnItsOwnLine)
 		p.body(x.Body, true)
 		p.keyword("done")
 		p.redirs(x.Redirs)
@@ -302,12 +338,20 @@ func (p *printer) cond(e CondExpr) {
 // On a line of its own, which a `while` body's is not — the header of one is
 // a word list and of the other a command, and the arrangement follows that
 // rather than being uniform.
-func (p *printer) doKeyword() {
-	if p.layout.Lines {
-		p.str(";\n" + p.pad() + "do")
+func (p *printer) doKeyword() { p.opener("do", p.layout.DoAfterWordsOnItsOwnLine) }
+
+// opener writes the keyword that introduces a body — `then`, `do` — either on
+// the header's line or on one of its own, which the arrangement decides.
+func (p *printer) opener(word string, ownLine bool) {
+	if !p.layout.Lines {
+		p.str("; " + word)
 		return
 	}
-	p.str("; do")
+	if ownLine {
+		p.str(p.layout.Separator + "\n" + p.pad() + word)
+		return
+	}
+	p.str(p.layout.Separator + " " + word)
 }
 
 // items writes a `for` or `select` header's word list.
@@ -329,12 +373,12 @@ func (p *printer) items(has bool, items []*Word) {
 func (p *printer) ifClause(x *IfClause) {
 	p.str("if ")
 	p.stmts(x.Cond)
-	p.str("; then")
+	p.opener("then", p.layout.ThenOnItsOwnLine)
 	p.body(x.Then, true)
 	for _, e := range x.Elifs {
 		p.keyword("elif ")
 		p.stmts(e.Cond)
-		p.str("; then")
+		p.opener("then", p.layout.ThenOnItsOwnLine)
 		p.body(e.Then, true)
 	}
 	if x.HasElse {
@@ -376,7 +420,7 @@ func (p *printer) bodyAt(list []*Stmt, closedByKeyword, ownLine bool) {
 	p.str(p.pad())
 	p.stmts(list)
 	if closedByKeyword {
-		p.str(";")
+		p.str(p.layout.KeywordTerminator)
 	}
 	p.depth--
 }
@@ -406,11 +450,12 @@ func (p *printer) keyword(word string) {
 func (p *printer) caseClause(x *CaseClause) {
 	p.str("case ")
 	p.word(x.Word)
-	p.str(" in ")
 	if p.layout.Lines {
+		p.str(" in" + p.layout.CaseHeaderSuffix)
 		p.caseArms(x)
 		return
 	}
+	p.str(" in ")
 	for _, it := range x.Items {
 		for i, pat := range it.Patterns {
 			if i > 0 {
@@ -441,6 +486,9 @@ func (p *printer) caseArms(x *CaseClause) {
 	p.depth++
 	for _, it := range x.Items {
 		p.str("\n" + p.pad())
+		if p.layout.CasePatternsParenthesised {
+			p.str("(")
+		}
 		for i, pat := range it.Patterns {
 			if i > 0 {
 				p.str("|")
@@ -448,11 +496,19 @@ func (p *printer) caseArms(x *CaseClause) {
 			p.word(pat)
 		}
 		p.str(")")
-		p.bodyAt(it.Body, false, true)
 		term := it.Term.String()
 		if it.Term == 0 {
+			// The last arm may leave its terminator out, and putting one in
+			// is what lets what follows follow.
 			term = ";;"
 		}
+		if p.layout.CaseArmsOnOneLine {
+			p.str(" ")
+			p.stmts(it.Body)
+			p.str(" " + term)
+			continue
+		}
+		p.bodyAt(it.Body, false, true)
 		p.str("\n" + p.pad() + term)
 	}
 	p.depth--

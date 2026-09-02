@@ -68,8 +68,7 @@ func (r *Runner) typeOne(name string) int {
 			// what this shell has, and the spelling it was written with is
 			// gone by now. Which is why there is a printer — see
 			// syntax.PrintWith.
-			r.printf("%s () \n%s\n", name,
-				syntax.PrintWith(fn.Body, syntax.Layout{Indent: "    ", Lines: true, Nested: true}))
+			r.printf("%s () \n%s\n", name, syntax.PrintWith(fn.Body, r.functionLayout))
 		}
 		return 0
 	}

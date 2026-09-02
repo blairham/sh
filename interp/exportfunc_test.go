@@ -14,9 +14,12 @@ import (
 // way there is: an environment holds strings, so the source goes in and is
 // parsed again at the other end. Which is why this needs the printer.
 func TestAFunctionCanBeCarriedInTheEnvironment(t *testing.T) {
+	// With no arrangement asked for, which is what a runner told nothing
+	// gets: the core has no layout of its own and writes the body on one
+	// line. What shape it takes is the dialect's to say.
 	t.Run("it reaches a child", func(t *testing.T) {
 		out := carrying(t, `f(){ echo carried; }; export -f f; env | grep SH_FUNC_f`)
-		if !strings.Contains(out, "SH_FUNC_f%%=() {  echo carried") {
+		if !strings.Contains(out, "SH_FUNC_f%%=() { echo carried; }") {
 			t.Errorf("env = %q, want the function written into it", out)
 		}
 	})

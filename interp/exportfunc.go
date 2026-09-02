@@ -22,6 +22,16 @@ import (
 // all. The core keeps the set and renders the value; what the entry is called
 // comes from above.
 
+// SetFunctionLayout says how this shell lays a function out: shown to a
+// person, and written into the environment.
+//
+// Two arrangements because they differ, and both the dialect's because an
+// arrangement is one shell's taste. The zero value of either is the neutral
+// one, which keeps whatever line structure the source had.
+func (r *Runner) SetFunctionLayout(shown, exported syntax.Layout) {
+	r.functionLayout, r.exportedFunctionLayout = shown, exported
+}
+
 // SetFunctionExport says how a function is written into the environment: the
 // text before the name and the text after it.
 //
@@ -65,7 +75,7 @@ func (r *Runner) functionEnviron() []string {
 			// rather than told about a function this shell no longer has.
 			continue
 		}
-		body := syntax.PrintWith(fn.Body, syntax.Layout{Indent: " ", Lines: true})
+		body := syntax.PrintWith(fn.Body, r.exportedFunctionLayout)
 		out = append(out, r.funcExportPrefix+name+r.funcExportSuffix+"=() "+body)
 	}
 	return out

@@ -104,13 +104,18 @@ func Semantics() interp.Semantics {
 	// Whether a backgrounded job is announced to whoever is typing.
 	s.AnnouncesBackgroundJob = interp.Yes
 
+	// Whether a redirection target is expanded as an ordinary word.
+	s.RedirectTargetIsAnOrdinaryWord = interp.Yes
+
 	return s
 }
 
 // Diagnostics is how bash 5 reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
-		JobStarted: "[%[1]d] %[2]d",
+		// The target as it was written, not as it expanded.
+		AmbiguousRedirect: "%[1]s: ambiguous redirect",
+		JobStarted:        "[%[1]d] %[2]d",
 		// Measured from a terminal: `[1]+` then two spaces, the state in a
 		// 27-wide column, then the command — with the `&` back on it while
 		// the job runs and gone once it has ended.

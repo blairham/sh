@@ -178,6 +178,15 @@ type Redirect struct {
 	N     *Word
 	Op    Kind
 	OpPos Pos
+	// Text is the target as it was written, before any expansion.
+	//
+	// One dialect names it in a diagnostic — `$e: ambiguous redirect`, where
+	// `$e` is what was typed and not what it came to — and by the time that
+	// is known the word has been expanded and there is nothing left that
+	// remembers how it was spelled. Same reason a background statement keeps
+	// its text.
+	Text string
+
 	// Word is the target: a filename, a descriptor for `>&`, or a here-string
 	// body. For a here-document it is the delimiter.
 	Word *Word

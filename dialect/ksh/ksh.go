@@ -110,6 +110,9 @@ func Semantics() interp.Semantics {
 	// Whether a backgrounded job is announced to whoever is typing.
 	s.AnnouncesBackgroundJob = interp.Yes
 
+	// Whether a redirection target is expanded as an ordinary word.
+	s.RedirectTargetIsAnOrdinaryWord = interp.No
+
 	return s
 }
 
@@ -142,7 +145,10 @@ func Diagnostics() interp.Diagnostics {
 		// The name first, then the verb with the OS string bracketed after
 		// it — the same shape ksh93 uses for `.`, which DotCannotOpen
 		// already says.
-		CannotOpen:                  "%[1]s: cannot open [%[2]s]",
+		CannotOpen: "%[1]s: cannot open [%[2]s]",
+		// A target that expanded to nothing gets neither the reason nor the
+		// "create" wording, whichever direction the redirection was.
+		EmptyRedirectTarget:         "%[1]s: cannot open",
 		CannotCreate:                "%[1]s: cannot create [%[2]s]",
 		ArithFailureStatus:          1,
 		ArithInfinity:               "inf",

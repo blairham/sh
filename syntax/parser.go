@@ -557,6 +557,11 @@ func (p *Parser) parseRedirect() *Redirect {
 	// happens. Registering after p.word() looks equivalent and silently
 	// collects nothing.
 	r.Word = p.newWord(p.tok.Spans, p.tok.Pos, p.tok.End)
+	// As it was written, for the one dialect that names it when the target
+	// turns out not to be a single word. Taken from the input rather than
+	// rebuilt from the spans: `$e` and `${e}` are the same word and not the
+	// same text, and it is the text that goes in the message.
+	r.Text = p.textBetween(p.tok.Pos, p.tok.End)
 	if r.Op.IsHeredoc() {
 		// Any quoting *anywhere* in the delimiter makes the whole body
 		// literal, and a backslash counts. Both are detected the same way:

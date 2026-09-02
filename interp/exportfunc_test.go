@@ -58,6 +58,25 @@ func TestAFunctionCanBeCarriedInTheEnvironment(t *testing.T) {
 		}
 	})
 
+	t.Run("unset -f removes the function itself", func(t *testing.T) {
+		// The option was read and then ignored, so a function survived being
+		// unset and went on answering to its name.
+		out, st := run(t, `f(){ echo F; }; unset -f f; f`, exporting)
+		if st == 0 || strings.Contains(out, "F") {
+			t.Errorf("out = %q status %d, want the function gone", out, st)
+		}
+	})
+
+	t.Run("and unsetting it forgets that it was exported", func(t *testing.T) {
+		// Measured: a function defined again after `unset -f` is not
+		// carried, so the export goes with the function rather than sticking
+		// to the name.
+		out, _ := run(t, `f(){ :; }; export -f f; unset -f f; f(){ :; }; env | grep -c SH_FUNC_f`, exporting)
+		if strings.TrimSpace(out) != "0" {
+			t.Errorf("env grep = %q, want the export forgotten with the function", out)
+		}
+	})
+
 	t.Run("and one unset afterwards is not carried", func(t *testing.T) {
 		// Exported, then gone. The child is told nothing rather than told
 		// about a function this shell no longer has.
@@ -70,6 +89,27 @@ func TestAFunctionCanBeCarriedInTheEnvironment(t *testing.T) {
 			t.Errorf("env = %q, want a function that no longer exists left out", out)
 		}
 	})
+}
+
+// A dialect that knows the letter and will not do it says something different
+// from one that has never heard of it — measured twice, because the first
+// reading looked like a wording per builtin and it is per option.
+func TestADialectCanRefuseTheFunctionOptionInItsOwnWords(t *testing.T) {
+	out, st := run(t, `export -f f`, func(r *Runner) {
+		sem := CoreSemantics()
+		sem.ExportCarriesFunctions = No
+		dg := Diagnostics{ExportFunctionOptionRefused: "invalid option(s)"}
+		r.Semantics, r.Diagnostics = &sem, &dg
+	})
+	if !strings.Contains(out, "invalid option(s)") {
+		t.Errorf("out = %q, want the dialect's own refusal", out)
+	}
+	if strings.Contains(out, "-f") {
+		t.Errorf("out = %q, want the letter left unnamed, which is the whole difference", out)
+	}
+	if st == 0 {
+		t.Error("status 0, want it refused")
+	}
 }
 
 // The option is offered only where the dialect has it, and asked about only

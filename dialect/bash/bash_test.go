@@ -84,6 +84,16 @@ func TestSemantics(t *testing.T) {
 }
 
 func TestDiagnostics(t *testing.T) {
+	// The four lines `type` prints, each of them this shell's own words.
+	if got, want := bash.Diagnostics().TypeKeyword, "%[1]s is a shell keyword"; got != want {
+		t.Errorf("TypeKeyword = %q, want %q", got, want)
+	}
+	if got, want := bash.Diagnostics().TypeFunction, "%[1]s is a function"; got != want {
+		t.Errorf("TypeFunction = %q, want %q", got, want)
+	}
+	if got, want := bash.Diagnostics().TypeNotFound, "type: %[1]s: not found"; got != want {
+		t.Errorf("TypeNotFound = %q, want %q", got, want)
+	}
 	if got, want := bash.Diagnostics().SyntaxStatus(), 2; got != want {
 		t.Errorf("syntax-error status = %d, want %d", got, want)
 	}

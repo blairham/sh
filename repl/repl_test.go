@@ -111,3 +111,25 @@ func TestRunNeedsATerminal(t *testing.T) {
 		t.Error("ran without a terminal, want it refused")
 	}
 }
+
+// ^C at the prompt and ^C during a command are different events reaching the
+// shell two different ways, and it has to survive both.
+//
+// At the prompt the terminal is raw with ISIG off, so ^C is a byte the editor
+// returns ErrInterrupted for and no signal is sent at all. While a command
+// runs the terminal is back in its own line discipline, so ^C reaches the
+// whole foreground process group — this shell included.
+func TestAnInterruptIsRememberedAndForgotten(t *testing.T) {
+	in, stop := catchInterrupt()
+	defer stop()
+	if in.took() {
+		t.Error("reported an interrupt before any arrived")
+	}
+	in.hit.Store(true)
+	if !in.took() {
+		t.Error("did not report the interrupt")
+	}
+	if in.took() {
+		t.Error("reported the same interrupt twice — the prompt would get two newlines")
+	}
+}

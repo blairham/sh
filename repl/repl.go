@@ -61,6 +61,18 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// and not merely a crash.
 	defer func() { _ = state.restore() }()
 
+	// A command runs with the terminal back in its own line discipline, so
+	// ^C then reaches the foreground process group as a signal — and this
+	// shell is in it. Without a handler the shell dies with the command,
+	// which is the one failure that would make a prompt unusable.
+	//
+	// Caught rather than ignored, and the difference matters: an ignored
+	// signal is *inherited* across exec, so children would stop dying on ^C
+	// too. A handler is reset to the default in a child, so the child still
+	// dies and the shell still does not.
+	sig, stop := catchInterrupt()
+	defer stop()
+
 	ed := &editor{in: s.In, out: s.Out}
 	var pending strings.Builder
 	for {
@@ -100,7 +112,13 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			s.errf("%s", s.report(perr))
 			continue
 		}
-		if s.run(ctx, state, stmts) {
+		done := s.run(ctx, state, stmts)
+		if sig.took() {
+			// The terminal echoed `^C` where the cursor was and left it
+			// there, so the next prompt would land on top of it.
+			s.write("\n")
+		}
+		if done {
 			return s.status(), nil
 		}
 	}
@@ -189,6 +207,12 @@ func (s Shell) report(err error) string {
 		return s.Report(err)
 	}
 	return err.Error() + "\n"
+}
+
+func (s Shell) write(text string) {
+	if s.Out != nil {
+		_, _ = io.WriteString(s.Out, text)
+	}
 }
 
 func (s Shell) errf(format string, a ...any) {

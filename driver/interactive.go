@@ -26,6 +26,11 @@ func Interactive(sh Shell) int {
 			return code
 		}
 	}
+	// The prelude is the dialect's own; these are the user's, and come after
+	// it so a person's settings win over the shell's defaults.
+	if code := sh.startup(r, LoginShell(os.Args)); code != 0 {
+		return code
+	}
 	s := repl.Shell{
 		Runner:  r,
 		Dialect: sh.Dialect,

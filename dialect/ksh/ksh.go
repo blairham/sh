@@ -113,6 +113,10 @@ func Semantics() interp.Semantics {
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.No
 
+	// Whether `type --` ends the options.
+	s.TypePrintsFunctionBody = interp.No
+	s.TypeEndsOptionsWithDashDash = interp.Yes
+
 	return s
 }
 
@@ -125,6 +129,11 @@ const kshKillUsage = "Usage: kill [-lL] [-n signum] [-s signame] job ...\n" +
 
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		TypeKeyword: "%[1]s is a keyword",
+		// ksh93's `type` is `whence -v`, and the message says so.
+		TypeExternal:            "%[1]s is a tracked alias for %[2]s",
+		TypeFunction:            "%[1]s is a function",
+		TypeNotFound:            "whence: %[1]s: not found",
 		JobStarted:              "[%[1]d]\t%[2]d",
 		JobNoticeShowsAmpersand: true,
 		// `[1] + ` then a 25-wide state, and the leading space on the

@@ -79,8 +79,12 @@ func (r *Runner) storeArray(name string, a Array) {
 	// and building an array must not need one: getVar asks, and only when
 	// the answer could differ.
 	//
-	// First by subscript and not by insertion: `a[5]=y; a[0]=x` has `x`
-	// first, which a map cannot say and its ordered subscripts can.
+	// Which element this is cannot be seen from a script, and saying so is
+	// worth more than a test that looks as though it checks: with more than
+	// one element `$a` is answered by the array itself and never reaches
+	// here, and with one there is nothing to choose between. It is the
+	// lowest subscript because that is what it means, not because anything
+	// could tell.
 	if subs := a.subscripts(); len(subs) > 0 {
 		r.setVar(name, a[subs[0]])
 	} else {

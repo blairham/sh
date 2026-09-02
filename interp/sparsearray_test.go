@@ -98,12 +98,32 @@ func TestAppendingGoesAfterTheHighestSubscript(t *testing.T) {
 	}
 }
 
-// And the scalar view is the *first* element by subscript, which a map cannot
-// say and its ordered subscripts can.
+// A plain `$a` is the first element by *subscript* and not by the order the
+// subscripts were written in, which a list gave for free and a map has to be
+// asked for.
 func TestTheScalarViewIsTheLowestSubscript(t *testing.T) {
 	out := arrays(t, `a[5]=y; a[0]=x; echo "$a"`, Yes)
 	if strings.TrimSpace(out) != "x" {
 		t.Errorf("scalar = %q, want the lowest subscript's value", out)
+	}
+}
+
+// `unset a[i]` takes the subscript the *script* wrote, which is not the
+// position it is stored at wherever the dialect counts from one.
+func TestUnsettingUsesTheDialectsOwnSubscript(t *testing.T) {
+	out, st := run(t, `a=(p q r); unset "a[2]"; echo "[${a[@]}]"`, func(r *Runner) {
+		sem := CoreSemantics()
+		sem.ArraysAreSparse = No
+		// Counted from one, so `a[2]` is the middle element and not the last.
+		sem.ArrayBaseIsZero = No
+		sem.ArrayScalarIsTheWholeArray = No
+		r.Semantics = &sem
+	})
+	if st != 0 {
+		t.Fatalf("status %d: %s", st, out)
+	}
+	if strings.TrimSpace(out) != "[p  r]" {
+		t.Errorf("out = %q, want the middle element gone", strings.TrimSpace(out))
 	}
 }
 

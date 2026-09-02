@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -31,10 +32,14 @@ func TestTheLineOfAStoppedJob(t *testing.T) {
 		{
 			// One dialect names the signal instead of calling it stopped, so
 			// the number has to travel on the job to reach the wording.
+			//
+			// The number is not written out here: SIGTSTP is 18 on a BSD and
+			// 20 on Linux, so hardcoding either tests the platform rather
+			// than the shell. CI on the other one is what said so.
 			"and its state can name the signal",
 			Diagnostics{JobStopped: "Suspended: %[1]d"},
 			Yes,
-			"Suspended: 18",
+			"Suspended: " + strconv.Itoa(int(syscall.SIGTSTP)),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

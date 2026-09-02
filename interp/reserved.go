@@ -32,16 +32,17 @@ package interp
 // of them through an alias (`type` is `whence -v`, `hash` is `alias -t --`),
 // which is still not an external.
 //
-// `fc` is deliberately absent, and it is why the list is nine rather than ten:
+// `jobs`, `fg` and `bg` have left the list, for the reason `umask` and
+// `ulimit` did: they are builtins now, and a builtin is found before PATH is
+// searched, so the wrappers are unreachable rather than merely refused.
+//
+// `fc` is deliberately absent, and it is why the list was nine rather than ten:
 // dash answers `command -v fc` with `/usr/bin/fc`. It really is an external
 // there, so reserving it would be this shell inventing a rule the panel does
 // not have.
 var reservedBuiltins = map[string]bool{
 	"alias":   true,
-	"bg":      true,
-	"fg":      true,
 	"hash":    true,
-	"jobs":    true,
 	"type":    true,
 	"ulimit":  true,
 	"umask":   true,

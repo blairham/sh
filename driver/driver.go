@@ -318,6 +318,15 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics) *
 		// And the limits it runs under, for the same reason again — a limit
 		// outlives the command that set it.
 		r.GetRlimit, r.SetRlimit = getRlimit, setRlimit
+		// And it waits for its own children, which is the only way to be
+		// told that one *stopped* rather than finished.
+		r.WaitForCommand = waitForCommand
+		// And it may resume one it stopped, which is a signal leaving this
+		// process and so the binary's to send.
+		r.SignalGroup = signalGroup
+		// And it hands the terminal to whatever it is running, which is what
+		// makes ^C and ^Z reach the command rather than the shell.
+		r.Foreground = foreground
 	}
 	if sh.Register != nil {
 		// The dialect's own adjustment: what it adds to or removes from the

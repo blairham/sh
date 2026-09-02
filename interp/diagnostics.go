@@ -330,6 +330,32 @@ type Diagnostics struct {
 	// front, which is what ksh93 does with every usage line.
 	BuiltinUsageUnprefixed bool
 
+	// JobLine is one row of a `jobs` listing. Four verbs: the number, the
+	// marker that says which job `%%` means, the state and the command.
+	//
+	// Not yet filled in by any dialect, and the substrate's own shape is what
+	// every one of them prints. Four shells word it four ways — measured from
+	// a terminal:
+	//
+	//	bash   [1]-  Running                    sleep 0.3 &
+	//	dash   [2] + Running
+	//	ksh93  [2] +  Running                 <command unknown>
+	//	zsh    [1]  - running    sleep 0.3
+	//
+	// dash keeps no command text at all and ksh93 prints a placeholder where
+	// one would go, so matching them is not only a matter of spacing. The
+	// behavior is the feature here and the wording is the follow-up.
+	JobLine string
+
+	// JobRunning and JobStopped are the two states a job is listed in. No
+	// verbs.
+	JobRunning string
+	JobStopped string
+
+	// NoSuchJob is a job spec that names nothing. Two verbs: the builtin and
+	// the spec as written.
+	NoSuchJob string
+
 	PrintfUsage string
 	// PrintfUsageUnprefixed prints it bare, as ksh93 prints every usage.
 	PrintfUsageUnprefixed bool

@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/blairham/sh/syntax"
@@ -17,6 +18,15 @@ type Job struct {
 	// rather than papered over.
 	PID    int
 	Status int
+
+	// Stopped says the process is still there and waiting to be told to go
+	// on — what ^Z leaves behind. A stopped job is not a finished one, and
+	// the difference is the whole reason `fg` exists.
+	Stopped bool
+
+	// Command is what was typed, for a `jobs` listing to show. Empty where
+	// the shell had nothing to record — a job with no process of its own.
+	Command string
 
 	done chan struct{}
 	once sync.Once
@@ -118,4 +128,44 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 		}
 	}
 	return last
+}
+
+// addStoppedJob records a foreground command that stopped rather than
+// finished.
+//
+// It is a job now: `jobs` lists it, `fg` and `bg` name it, and it holds a
+// process that is still there and will stay there until something tells it to
+// go on. A shell that forgot it would leave the process stopped forever with
+// nothing able to name it.
+func (r *Runner) addStoppedJob(pid int, argv []string) {
+	job := &Job{
+		PID:     pid,
+		Stopped: true,
+		Command: strings.Join(argv, " "),
+		done:    make(chan struct{}),
+		ready:   make(chan struct{}),
+	}
+	job.markReady()
+	r.jobs = append(r.jobs, job)
+	r.lastJob = job
+}
+
+// Jobs is what this shell is keeping track of, oldest first.
+//
+// For the shell around it: a `jobs` builtin has to list them and `fg` has to
+// find one by number, and the bookkeeping is this package's.
+func (r *Runner) Jobs() []*Job { return r.jobs }
+
+// Forget drops a job the shell has finished with — one that has been resumed
+// into the foreground and ended, or reported as done.
+func (r *Runner) Forget(j *Job) {
+	for i, other := range r.jobs {
+		if other == j {
+			r.jobs = append(r.jobs[:i], r.jobs[i+1:]...)
+			break
+		}
+	}
+	if r.lastJob == j {
+		r.lastJob = nil
+	}
 }

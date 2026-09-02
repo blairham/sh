@@ -21,11 +21,15 @@ func Interactive(sh Shell) int { return InteractiveArgs(sh, os.Args) }
 // InteractiveArgs is Interactive with the argument vector given rather than
 // taken from the process, which is what makes it testable without a
 // subprocess — the same split as Main and MainArgs, and for the same reason.
-func InteractiveArgs(sh Shell, argv []string) int {
+func InteractiveArgs(sh Shell, argv []string) int { return sh.interactive(argv, nil) }
+
+// interactive is InteractiveArgs with the positional parameters the invocation
+// supplied, which only the front end reading it knows.
+func (sh Shell) interactive(argv, params []string) int {
 	sh = sh.withDefaults(argv)
 	dg := sh.Diagnostics
 	name := sh.Name
-	r := sh.newRunner(name, nil, dg)
+	r := sh.newRunner(name, params, dg)
 	// A prompt has someone to tell about its jobs, and a script does not:
 	// no shell in the panel announces a background job to `sh -c`, and a
 	// Runner embedded in another program has nobody to announce one to.

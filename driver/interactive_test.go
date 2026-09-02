@@ -143,6 +143,47 @@ func TestOnlyAPromptReportsItsJobs(t *testing.T) {
 	})
 }
 
+// `-s` is the explicit "read standard input" spelling, and standard input from
+// a terminal is a person: all four shells prompt for `sh -s` there and read a
+// script for `echo x | sh -s`.
+//
+// Reading it as a script either way meant waiting for an end-of-file nobody
+// was going to type — which does not look like a shell waiting for a decision,
+// it looks like a hang.
+func TestDashSReadsAPersonOrAScript(t *testing.T) {
+	t.Run("a script where standard input is not a terminal", func(t *testing.T) {
+		out, errs, _ := runPiped(t, "echo scripted\n", "testsh", "-s")
+		if !strings.Contains(out, "scripted\n") {
+			t.Errorf("out = %q, want it read as a script", out)
+		}
+		if strings.Contains(errs, "$ ") {
+			t.Errorf("err = %q, want no prompt", errs)
+		}
+	})
+
+	t.Run("and a prompt where -i says so", func(t *testing.T) {
+		// `-i` is what stands in for a terminal in a test, and it is the
+		// same branch a terminal takes.
+		_, errs, _ := runPiped(t, "echo prompted\n", "testsh", "-i", "-s")
+		if !strings.Contains(errs, "$ ") {
+			t.Errorf("err = %q, want a prompt", errs)
+		}
+	})
+
+	t.Run("the operands are parameters either way", func(t *testing.T) {
+		// Unanimous: `sh -s one two` sets `$1` in a script and at a prompt
+		// alike, and neither takes an operand as `$0`.
+		out, _, _ := runPiped(t, `echo "[$1][$2] n=$#"`+"\n", "testsh", "-s", "one", "two")
+		if !strings.Contains(out, "[one][two] n=2") {
+			t.Errorf("out = %q, want the operands as parameters", out)
+		}
+		out, _, _ = runPiped(t, `echo "[$1][$2] n=$#"`+"\n", "testsh", "-i", "-s", "one", "two")
+		if !strings.Contains(out, "[one][two] n=2") {
+			t.Errorf("out = %q, want the same at a prompt", out)
+		}
+	})
+}
+
 func runPiped(t *testing.T, typed string, argv ...string) (out, errs string, code int) {
 	t.Helper()
 	return runPipedShell(t, shell(), typed, argv...)

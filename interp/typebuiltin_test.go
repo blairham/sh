@@ -72,6 +72,67 @@ func TestTypeReportsANameThatIsNothing(t *testing.T) {
 	}
 }
 
+// Two of the four write the not-found line with nothing in front of it, where
+// every other message they print carries the shell's name. Asserted as the
+// whole line, because a prefix is exactly what a substring check cannot see.
+func TestTypeCanReportAMissingNameWithNoPrefix(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		unprefixed bool
+		want       string
+	}{
+		{"with the shell's name", false, "sh: type: nope: not found"},
+		{"and without it", true, "type: nope: not found"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, `type nope`, func(r *Runner) {
+				sem := CoreSemantics()
+				dg := Diagnostics{
+					TypeNotFound:           "type: %[1]s: not found",
+					TypeNotFoundUnprefixed: tc.unprefixed,
+				}
+				r.Semantics, r.Diagnostics, r.Name = &sem, &dg, "sh"
+			})
+			if got := strings.TrimSpace(out); got != tc.want {
+				t.Errorf("out = %q, want exactly %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// `--` ends the options in three of the four, and is a name in the fourth,
+// which has no options for `type` at all.
+func TestTypeAndTheDoubleDash(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		ends  Answer
+		want  string
+		notIn string
+	}{
+		{"where it ends the options", Yes, "cd is a shell builtin", "--"},
+		{"and where it is a name", No, "--", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, `type -- cd`, func(r *Runner) {
+				sem := CoreSemantics()
+				sem.TypeEndsOptionsWithDashDash = tc.ends
+				dg := Diagnostics{TypeNotFound: "%[1]s: not found"}
+				r.Semantics, r.Diagnostics = &sem, &dg
+			})
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("out = %q, want it to contain %q", out, tc.want)
+			}
+			if tc.notIn != "" && strings.Contains(out, tc.notIn) {
+				t.Errorf("out = %q, want no answer about %q", out, tc.notIn)
+			}
+			// Either way the real name is still answered.
+			if !strings.Contains(out, "cd is a shell builtin") {
+				t.Errorf("out = %q, want the name answered", out)
+			}
+		})
+	}
+}
+
 // One name failing does not stop the rest, and the failure is what the whole
 // command reports.
 func TestTypeAnswersEveryNameAndReportsTheFailure(t *testing.T) {

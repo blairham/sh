@@ -58,6 +58,21 @@ func (r *Runner) setVarQuietly(name, value string) {
 	r.Vars[name] = value
 }
 
+// SetDynamicArray registers an *array* whose elements are produced when they
+// are read.
+//
+// The same seam as SetDynamic and for a stronger reason: a call stack is not
+// a value a shell can store and keep correct. It changes with every function
+// call and every sourced file, and an array set once would be right until the
+// first `source` — which is the worst shape a bug can have, because the
+// script that reads it is usually the one working out where it lives.
+func (r *Runner) SetDynamicArray(name string, value func(*Runner) []string) {
+	if r.DynamicArrays == nil {
+		r.DynamicArrays = map[string]func(*Runner) []string{}
+	}
+	r.DynamicArrays[name] = value
+}
+
 // SetDynamic registers a parameter whose value is produced when it is read.
 //
 // This is the seam a dialect uses for the parameters it has and the others do

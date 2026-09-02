@@ -180,6 +180,17 @@ type Runner struct {
 	// every subshell — see lockedWriter.
 	streams *streamLocks
 
+	// frames is the call stack: a function entered or a file sourced, and
+	// nothing else. The script itself is not one of them — it is the floor
+	// under them, which CallStack adds.
+	frames []Frame
+	// scriptFile is the file the shell was given, which only the front end
+	// knows. Empty for `-c` and for a Runner nobody told.
+	scriptFile string
+	// funcFiles is where each function was defined, because that is the file
+	// its frame reports rather than the one that called it.
+	funcFiles map[string]string
+
 	// JobControl says this shell reports its jobs to a person: it announces
 	// one when it is backgrounded and says so when it ends.
 	//
@@ -194,6 +205,11 @@ type Runner struct {
 	// `RANDOM` is a different number every time. A dialect fills in the ones
 	// it has through SetDynamic.
 	Dynamic map[string]func(*Runner) string
+
+	// DynamicArrays is the same for arrays, and the call stack is why it
+	// exists: `BASH_SOURCE` and its relatives cannot be stored and stay
+	// right. A dialect fills in the names it has through SetDynamicArray.
+	DynamicArrays map[string]func(*Runner) []string
 
 	// assigned holds what a script assigned to a *produced* parameter, which
 	// is a message to whatever produces it rather than a value of its own.

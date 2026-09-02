@@ -157,7 +157,7 @@ func RunCommand(sh Shell, src string, operands []string) int {
 // script-form diagnostics and names the script rather than the shell.
 func RunScript(sh Shell, src, path string) int {
 	sh = sh.withDefaults(nil)
-	return sh.run(source{src: src, name: path, dg: sh.Diagnostics.ForScript()})
+	return sh.run(source{src: src, name: path, file: path, dg: sh.Diagnostics.ForScript()})
 }
 
 // errf writes to the shell's error stream.
@@ -216,6 +216,10 @@ type source struct {
 	// the source because deciding it is part of reading the invocation:
 	// `-i`, or no operands and a terminal on standard input.
 	interactive bool
+	// file is the path the input was read from, or empty where there was no
+	// file — `-c`, or standard input. It is the floor of the call stack: a
+	// script asking where it is means this, and only the front end knows.
+	file string
 	// wholeFirst parses the whole input before running any of it, which one
 	// dialect does for a command string and no dialect does for a script.
 	wholeFirst bool
@@ -316,7 +320,10 @@ func (sh Shell) operands(args []string, forcePrompt bool) (source, error) {
 	// A shell running a script names the *script* in `$0` and in every
 	// diagnostic, not itself, and reports in the script form — ksh93 also
 	// changes how it names the line.
-	return source{src: string(b), name: path, params: args[1:], dg: sh.Diagnostics.ForScript()}, nil
+	return source{
+		src: string(b), name: path, file: path,
+		params: args[1:], dg: sh.Diagnostics.ForScript(),
+	}, nil
 }
 
 // commandSource is the source for `-c`, whose operands are named differently
@@ -417,6 +424,7 @@ func (sh Shell) run(in source) int {
 	}
 
 	r := sh.newRunner(name, in.params, dg)
+	r.SetScriptFile(in.file)
 	if sh.Prelude != "" {
 		if code := sh.source(r, name); code != 0 {
 			return code

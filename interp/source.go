@@ -251,6 +251,13 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 		}
 	}
 
+	// A frame of its own, because a sourced file is a place a script can be
+	// *in*: the functions it declares remember it, and a script asking where
+	// it is while being sourced means the file rather than whatever sourced
+	// it. Named for the builtin, which is what the shells put in the stack.
+	r.pushFrame(Frame{File: path, Name: "source"})
+	defer r.popFrame()
+
 	return r.runSourced(ctx, string(b), sourced{
 		label:        path,
 		syntaxStatus: r.diag().sourcedSyntaxStatus(),

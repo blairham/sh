@@ -1206,6 +1206,31 @@ var Corpus = []Case{
 		Snippet: `a=(p q r); printf "[%s]" "${a[1]}" "${#a[@]}"`,
 		Why:     "array subscripting inherits the 0-versus-1 base axis",
 	},
+	{
+		ID: "param/an-operator-reaches-an-array-element", Category: "parameter expansion",
+		Snippet: `a=(hello); printf "[%s]" "${a[0]#h}" "${a[0]/l/L}" "${a[0]%%o}" "${a[0]:1}"`,
+		Why:     "an operator applies to a subscripted value exactly as it does to a variable — four spellings at once, because they shared one bug: the subscript answered and every operator was skipped, so each of these came back as the untouched element",
+	},
+	{
+		ID: "param/a-missing-element-fires-the-default", Category: "parameter expansion",
+		Snippet: `a=(hello); printf "[%s]" "${a[0]:-d}" "${a[9]:-d}"`,
+		Why:     "the element being absent is what the test is about, so an out-of-range subscript has to be distinguishable from one holding a value — and an element holding the empty string is set, which is the case `:-` and `-` disagree about",
+	},
+	{
+		ID: "param/array-slice", Category: "parameter expansion",
+		Snippet: `a=(p q r s); printf "[%s]" "${a[@]:1}" "${a[@]:1:2}" "${a[@]: -2}"`,
+		Why:     "a slice of the list rather than a substring of its elements joined together. Unanimous in the three that have arrays, including that the offset counts from 0 in zsh, whose *subscripts* count from 1 — so the slice does not inherit the base axis that `${a[1]}` does",
+	},
+	{
+		ID: "param/array-slice-keeps-its-fields", Category: "parameter expansion",
+		Snippet: `a=("a b" c d); printf "[%s]" "${a[@]:0:2}"`,
+		Why:     "the slice is a list, so an element holding a space stays one field — which is the whole reason this is not a substring of the joined text",
+	},
+	{
+		ID: "param/array-indices", Category: "parameter expansion",
+		Snippet: `a=(p q r); for i in "${!a[@]}"; do printf "%s=%s " "$i" "${a[$i]}"; done`,
+		Why:     "`${!a[@]}` is the array's subscripts, not its elements — written as the loop that uses it, since iterating an array by index is the only reason the form exists and answering with the elements made that loop silently iterate the wrong thing",
+	},
 	// --- pattern matching -----------------------------------------------------
 	{
 		ID: "pat/star-matches-dot-in-case", Category: "pattern matching",

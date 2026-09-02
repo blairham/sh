@@ -60,6 +60,7 @@ func Semantics() interp.Semantics {
 	s.UlimitHasResidentSet = interp.Yes
 	s.UlimitHasProcessCount = interp.No
 	s.UlimitSetsBothLimits = interp.Yes
+	s.BadOptionToSpecialBuiltinFatal = interp.Yes
 	return s
 }
 
@@ -144,6 +145,7 @@ func Diagnostics() interp.Diagnostics {
 		UlimitBadOption:         "ulimit: Illegal option -%[1]s",
 		UlimitBadNumber:         "ulimit: bad number",
 		UlimitBadNumberStatus:   2,
+		BuiltinBadOption:        "%[1]s: Illegal option %[2]s",
 		PrintfUsage:             "printf: usage: printf format [arg ...]",
 		TrapBadSignal:           "trap: %[1]s: bad trap",
 		TrapBadSignalUnprefixed: true,

@@ -615,6 +615,16 @@ type Semantics struct {
 	// False in zsh, which sets only the soft limit and leaves the hard one
 	// where it was, so the same line there can be undone.
 	UlimitSetsBothLimits Answer
+
+	// BadOptionToSpecialBuiltinFatal ends the script when a special builtin is
+	// given an option it does not have. True in dash and ksh93, which is the
+	// POSIX rule that a special builtin's failure is fatal; bash and zsh
+	// report it and carry on.
+	//
+	// A different question from BuiltinSyntaxErrorFatal, which is about text
+	// that would not *parse* and is true for dash alone. Measured across
+	// `export`, `readonly` and `unset`.
+	BadOptionToSpecialBuiltinFatal Answer
 }
 
 // There is deliberately no CoreSemantics, and the absence is the sharpest
@@ -717,9 +727,12 @@ func PosixSemantics() Semantics {
 		// which the standard states outright. dash is the only member of the
 		// panel that still does it, and the preset follows the standard
 		// rather than the majority.
-		BuiltinSyntaxErrorFatal:   Yes,
-		DotMissingFileFatal:       Yes,
-		DotWithNoOperandIsAnError: Yes,
+		BuiltinSyntaxErrorFatal: Yes,
+		// POSIX makes a special builtin's failure fatal, and a bad option is
+		// one.
+		BadOptionToSpecialBuiltinFatal: Yes,
+		DotMissingFileFatal:            Yes,
+		DotWithNoOperandIsAnError:      Yes,
 		// The standard gives `.` a filename and nothing else; passing
 		// positional parameters to a sourced file is an extension three of
 		// the four grew. And it reads the file from PATH, with no mention of

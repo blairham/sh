@@ -92,6 +92,7 @@ func Semantics() interp.Semantics {
 	s.UlimitHasResidentSet = interp.Yes
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.Yes
+	s.BadOptionToSpecialBuiltinFatal = interp.No
 	return s
 }
 
@@ -169,11 +170,18 @@ func Diagnostics() interp.Diagnostics {
 		LetNoExpression:           "let: expression expected",
 		UlimitBadOption:           "ulimit: -%[1]s: invalid option",
 		UlimitBadNumber:           "ulimit: %[1]s: invalid number",
-		PrintfUsage:               "printf: usage: printf [-v var] format [arguments]",
-		UmaskBadMask:              "umask: %[1]s: octal number out of range",
-		UmaskBadOption:            "umask: %[1]s: invalid option",
-		UmaskUsage:                "umask: usage: umask [-p] [-S] [mode]",
-		UmaskUsageUnprefixed:      true,
+		BuiltinBadOption:          "%[1]s: %[2]s: invalid option",
+		BuiltinUsageUnprefixed:    true,
+		BuiltinUsage: map[string]string{
+			"export":   "export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
+			"readonly": "readonly: usage: readonly [-aAf] [name[=value] ...] or readonly -p",
+			"unset":    "unset: usage: unset [-f] [-v] [-n] [name ...]",
+		},
+		PrintfUsage:          "printf: usage: printf [-v var] format [arguments]",
+		UmaskBadMask:         "umask: %[1]s: octal number out of range",
+		UmaskBadOption:       "umask: %[1]s: invalid option",
+		UmaskUsage:           "umask: usage: umask [-p] [-S] [mode]",
+		UmaskUsageUnprefixed: true,
 		// The usage carries no location, as `kill`'s does not.
 		PrintfUsageUnprefixed:     true,
 		TrapBadSignal:             "trap: %[1]s: invalid signal specification",

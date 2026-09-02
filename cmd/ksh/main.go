@@ -30,6 +30,7 @@ func shell() driver.Shell {
 		Dialect:     ksh.Dialect(),
 		Semantics:   ksh.Semantics(),
 		Diagnostics: ksh.Diagnostics(),
+		Prelude:     ksh.Prelude(),
 		Register:    ksh.Apply,
 	}
 }

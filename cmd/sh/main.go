@@ -180,21 +180,25 @@ func pickDialect(name string) (driver.Shell, error) {
 		return driver.Shell{
 			Dialect: bash.Dialect(), Semantics: bash.Semantics(),
 			Diagnostics: bash.Diagnostics(), Register: bash.Apply,
+			Prelude: bash.Prelude(),
 		}, nil
 	case "zsh":
 		return driver.Shell{
 			Dialect: zsh.Dialect(), Semantics: zsh.Semantics(),
 			Diagnostics: zsh.Diagnostics(), Register: zsh.Apply,
+			Prelude: zsh.Prelude(),
 		}, nil
 	case "ksh":
 		return driver.Shell{
 			Dialect: ksh.Dialect(), Semantics: ksh.Semantics(),
 			Diagnostics: ksh.Diagnostics(), Register: ksh.Apply,
+			Prelude: ksh.Prelude(),
 		}, nil
 	case "dash":
 		return driver.Shell{
 			Dialect: dash.Dialect(), Semantics: dash.Semantics(),
 			Diagnostics: dash.Diagnostics(), Register: dash.Apply,
+			Prelude: dash.Prelude(),
 		}, nil
 	}
 	return driver.Shell{},

@@ -213,7 +213,8 @@ func (p *Parser) failUnexpectedAs(expected string, plain bool) {
 	p.err = &Error{
 		Pos: p.tok.Pos, Kind: ErrUnexpected,
 		Token: p.tokenLiteral(), Class: p.tokenClass(plain), Expected: expected,
-		Msg: p.tokenText() + " unexpected",
+		Redirect: p.tok.Kind.IsRedirect(),
+		Msg:      p.tokenText() + " unexpected",
 	}
 }
 
@@ -517,7 +518,20 @@ func (p *Parser) parseRedirect() *Redirect {
 	r.Op, r.OpPos = p.tok.Kind, p.tok.Pos
 	p.next()
 	if p.tok.Kind != TokWord {
-		p.fail("expected a target after %s", r.Op)
+		// The token that is there, not the one that is missing. `cat <(x)` in
+		// a dialect without process substitution is `"(" unexpected` in dash,
+		// which is what it says about every other token in the wrong place —
+		// and this was the one redirection failure that said something else.
+		//
+		// Nothing named where a token is there, because dash names what it
+		// was waiting for only when that is a keyword. At end of input there
+		// is a construct to name, and the wording that reports one always
+		// prints the clause.
+		if p.at(TokEOF) {
+			p.failUnexpectedOperand("a redirection target")
+		} else {
+			p.failUnexpectedOperand("")
+		}
 		return nil
 	}
 	// Built without advancing, because advancing is what reaches the newline

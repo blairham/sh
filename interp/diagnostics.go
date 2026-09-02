@@ -549,6 +549,13 @@ type Diagnostics struct {
 	// operator is `"fi" unexpected`. Empty means "the same as
 	// SyntaxUnexpected", which is three of the four.
 	SyntaxUnexpectedWord string
+	// SyntaxRedirectUnexpected replaces the message where the unexpected
+	// token is itself a redirection operator. No verbs.
+	//
+	// dash alone: `cat < < x` is `redirection unexpected` there and names the
+	// token in the other three. Empty means the dialect makes no distinction.
+	SyntaxRedirectUnexpected string
+
 	// SyntaxExpecting is appended when the parser knows what would have been
 	// valid. One verb: that word. Empty means the dialect never says.
 	SyntaxExpecting string
@@ -906,6 +913,10 @@ func (d Diagnostics) ParseFailure(err error) string {
 		form := d.SyntaxUnexpected
 		if se.Class == syntax.ClassWord && d.SyntaxUnexpectedWord != "" {
 			form = d.SyntaxUnexpectedWord
+		}
+		if se.Redirect && d.SyntaxRedirectUnexpected != "" {
+			// One dialect does not name the token here at all.
+			return d.SyntaxRedirectUnexpected
 		}
 		msg := Wording(form, `"%[1]s" unexpected`, se.Token, se.Expected, se.Pos.Line)
 		if se.Expected != "" && d.SyntaxExpecting != "" {

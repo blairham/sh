@@ -168,6 +168,12 @@ type Runner struct {
 	GetRlimit func(res Resource) (soft, hard int64, err error)
 	SetRlimit func(res Resource, soft, hard int64) error
 
+	// procSubs are the named pipes this command's process substitutions made,
+	// waiting to be removed once it is done with them.
+	procSubs    []string
+	procSubSeq  int
+	procSubHome *procSubDirs
+
 	// Dynamic holds parameters whose value is produced when they are read,
 	// rather than stored: `LINENO` is wherever execution has reached, and
 	// `RANDOM` is a different number every time. A dialect fills in the ones
@@ -361,6 +367,13 @@ const maxDepth = 256
 func (r *Runner) clone() *Runner {
 	c := *r
 	c.inSubshell = true
+	// A pending process substitution belongs to the command being built in
+	// the runner that made it, not to a subshell cloned while it was being
+	// built. Carrying them over meant the second `<(…)` of a command cloned
+	// the first one's descriptor and then closed it on its way out, so
+	// `cat <(echo one) <(echo two)` reported a bad file descriptor for the
+	// half it had already opened.
+	c.procSubs = nil
 	c.Vars = make(map[string]string, len(r.Vars))
 	for k, v := range r.Vars {
 		c.Vars[k] = v
@@ -758,6 +771,15 @@ func (r *Runner) unsupported(what string) error {
 
 func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	r.unspecified, r.expandErr = false, false
+	// Whatever this command's process substitutions opened is closed when the
+	// command is done, whether it turned out to be a builtin, a function or
+	// something on PATH.
+	//
+	// Here rather than beside the exec, which was where it started and was
+	// wrong: `echo hi > >(tr a-z A-Z)` never reaches an exec at all, so the
+	// pipe stayed open, `tr` waited for an end-of-file that was never coming,
+	// and the substitution simply produced nothing.
+	defer func() { removeProcSubs(r.takeProcSubs()) }()
 	// `=cmd` is resolved across the whole command before any of it is
 	// expanded, which is measured rather than assumed: `echo [[a == a]]`
 	// reports the `==` and never reaches the `[[a`, so zsh has finished this

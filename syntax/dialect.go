@@ -221,6 +221,15 @@ type Dialect struct {
 	// inside `[[ ]]` and reinterprets the token. A lexer mode keyed on seeing
 	// the word `[[` would break `echo`.
 	DoubleBracket bool
+
+	// ProcessSubstitution is `<(cmd)` and `>(cmd)`: a command run with one end
+	// of a pipe, expanding to a path the other end can be opened by.
+	//
+	// It is the sharpest evidence that a dialect is a runtime switch rather
+	// than a build-time identity, and the reason is measured: bash 3.2 has it
+	// as `bash` and loses it as `sh`, from the same binary — see
+	// docs/spec/shell-matrix.md.
+	ProcessSubstitution bool
 }
 
 // Core is the common denominator of real shells: what dash, bash, ksh93 and
@@ -241,10 +250,14 @@ func Core() Dialect {
 		ArithCommand:      true,
 		DoubleBracket:     true,
 		FunctionKeyword:   true,
-		ArrayLiteral:      true,
-		ArraySubscript:    true,
-		ParamSubstitution: true,
-		ParamSubstring:    true,
+		// Every shell in the panel but dash has it, which is what puts it in
+		// the core — and docs/spec/core.md has named it as core since before
+		// there was code to refuse it.
+		ProcessSubstitution: true,
+		ArrayLiteral:        true,
+		ArraySubscript:      true,
+		ParamSubstitution:   true,
+		ParamSubstring:      true,
 
 		ArithIncDec:             true,
 		ArithComma:              true,

@@ -151,6 +151,15 @@ func (l *Lexer) Next() Token {
 		return l.scanWord(start)
 	}
 
+	// `<(` and `>(` begin a *word* rather than a redirection, so they have to
+	// be seen before the operator table takes the `<`. The adjacency is the
+	// whole rule, the same way it is for an IO number: `cat <(echo hi)` is a
+	// process substitution and `cat < (echo hi)` is a redirection to a
+	// subshell, which is a syntax error in every shell that has either.
+	if l.startsProcSubst() {
+		return l.scanWord(start)
+	}
+
 	if k, ok := l.matchOperator(); ok {
 		s := text[k]
 		for range s {
@@ -160,6 +169,16 @@ func (l *Lexer) Next() Token {
 	}
 
 	return l.scanWord(start)
+}
+
+// startsProcSubst reports whether the cursor is on `<(` or `>(` in a dialect
+// that has process substitution.
+func (l *Lexer) startsProcSubst() bool {
+	if !l.dialect.ProcessSubstitution {
+		return false
+	}
+	c := l.peek()
+	return (c == '<' || c == '>') && l.peekAt(1) == '('
 }
 
 // skipBlanksAndComments consumes what separates tokens: blanks, line
@@ -278,6 +297,13 @@ func (l *Lexer) isWordEnd(c byte) bool {
 // switch below cannot see it unless this lets it through.
 func (l *Lexer) endsWord(c byte) bool {
 	if !l.isWordEnd(c) {
+		return false
+	}
+	// `<(` and `>(` belong to the word rather than ending it, the same way a
+	// pattern group's `(` does. Without this the word scanner returns nothing
+	// at all where Next has just decided a word starts here, which is not a
+	// wrong answer so much as no answer: the cursor never moves.
+	if l.startsProcSubst() {
 		return false
 	}
 	if l.inRegex {
@@ -449,6 +475,14 @@ func (l *Lexer) scanWord(start Pos) Token {
 		case c == '$' && l.peekAt(1) == '(':
 			flush()
 			spans = append(spans, l.scanParens(CommandSubst, Unquoted))
+
+		case l.startsProcSubst():
+			// Unquoted only, and that is not an omission: `"<(cmd)"` is the
+			// five characters in every shell that has the construct, because
+			// what it produces is a *path* and a quoted path is still a path
+			// — there would be nothing for the quoting to change.
+			flush()
+			spans = append(spans, l.scanParens(procSubstKind(c), Unquoted))
 
 		case c == '$' && l.peekAt(1) == '{':
 			flush()
@@ -792,6 +826,14 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		end--
 	}
 	return Span{Kind: kind, Value: l.src[start:end], Quoting: q, Pos: open}
+}
+
+// procSubstKind says which end of the pipe the word will name.
+func procSubstKind(c byte) SpanKind {
+	if c == '>' {
+		return ProcSubstOut
+	}
+	return ProcSubstIn
 }
 
 func closers(k SpanKind) int {

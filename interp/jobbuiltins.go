@@ -109,7 +109,15 @@ func (r *Runner) jobRows(jobs []*Job) ([]jobRow, int) {
 // Four shells, four shapes — the number and the marker are common and
 // everything else is not, so the wording carries three verbs: the marker, the
 // state and the command.
+//
+// jobLineAs renders one row of a listing. noticing says the shell is reporting
+// that the job ended rather than listing one, which one dialect words
+// differently.
 func (r *Runner) jobLine(i int, j *Job, showBg bool) string {
+	return r.jobLineAs(i, j, showBg, false)
+}
+
+func (r *Runner) jobLineAs(i int, j *Job, showBg, noticing bool) string {
 	dg := r.diag()
 	state := Wording(dg.JobRunning, "Running")
 	switch {
@@ -118,6 +126,9 @@ func (r *Runner) jobLine(i int, j *Job, showBg bool) string {
 		state = Wording(dg.JobStopped, "Stopped", j.StopSig)
 	case j.Finished():
 		state = Wording(dg.JobDone, "Done")
+		if noticing && dg.JobDoneNotice != "" {
+			state = dg.JobDoneNotice
+		}
 		if j.Status != 0 && dg.JobExited != "" {
 			// A dialect that says something else for a job that failed. One
 			// verb, the status, and no dialect words it without one.
@@ -139,6 +150,11 @@ func (r *Runner) jobCommand(j *Job, showBg bool) string {
 		return r.diag().JobUnknownCommand
 	}
 	if r.diag().JobRunningShowsAmpersand && !j.Stopped && !j.Finished() {
+		return j.Command + " &"
+	}
+	if r.diag().JobNoticeShowsAmpersand && j.Finished() {
+		// A different shell and a different moment: one puts the `&` back
+		// while the job runs, the other when it reports that it ended.
 		return j.Command + " &"
 	}
 	return j.Command

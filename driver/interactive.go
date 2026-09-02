@@ -26,6 +26,10 @@ func InteractiveArgs(sh Shell, argv []string) int {
 	dg := sh.Diagnostics
 	name := sh.Name
 	r := sh.newRunner(name, nil, dg)
+	// A prompt has someone to tell about its jobs, and a script does not:
+	// no shell in the panel announces a background job to `sh -c`, and a
+	// Runner embedded in another program has nobody to announce one to.
+	r.JobControl = true
 	if sh.Prelude != "" {
 		if code := sh.source(r, name); code != 0 {
 			return code

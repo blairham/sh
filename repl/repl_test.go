@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/blairham/sh/interp"
+
 	"github.com/blairham/sh/syntax"
 )
 
@@ -149,6 +151,61 @@ func TestAConstructSpansLinesWithoutATerminal(t *testing.T) {
 	}
 	if got := out.String(); got != "n=1\nn=2\n" {
 		t.Errorf("out = %q, want the loop to have run once whole", got)
+	}
+}
+
+// What ended while the last command ran is reported before the next prompt,
+// which is the only place it can go: the shell is inside the editor for all of
+// the time between one command and the next, and a line arriving half typed
+// over would be unreadable.
+func TestFinishedJobsAreReportedBeforeThePrompt(t *testing.T) {
+	var out, errs strings.Builder
+	in := readerFile(t, "true &\nsleep 0.2\necho after\n")
+	r := newTestRunner(nil)
+	r.Stdout, r.Stderr = &out, &errs
+	r.JobControl = true
+	sem := interp.PosixSemantics()
+	sem.AnnouncesBackgroundJob = interp.No
+	sem.JobsShowBackgroundCommand = interp.Yes
+	r.Semantics = &sem
+	s := Shell{Runner: r, In: in, Out: &out, Err: &errs}
+	if _, err := s.Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(errs.String(), "Done") {
+		t.Errorf("err = %q, want the finished job reported", errs.String())
+	}
+	// Beside the prompt rather than in the output, the same as the prompt
+	// itself: `sh -i < in > out` collects what the commands printed.
+	if strings.Contains(out.String(), "Done") {
+		t.Errorf("out = %q, want the notice off the output stream", out.String())
+	}
+}
+
+// Not at a continuation prompt: the line being typed is unfinished, and a
+// notice in the middle of it says the same thing about the display that one
+// arriving mid-line does.
+func TestNoNoticeInTheMiddleOfAConstruct(t *testing.T) {
+	var out, errs strings.Builder
+	// The job ends while the loop is still being typed.
+	in := readerFile(t, "for i in 1; do\ntrue &\nsleep 0.2\ndone\necho after\n")
+	r := newTestRunner(nil)
+	r.Stdout, r.Stderr = &out, &errs
+	r.JobControl = true
+	sem := interp.PosixSemantics()
+	sem.AnnouncesBackgroundJob = interp.No
+	sem.JobsShowBackgroundCommand = interp.Yes
+	r.Semantics = &sem
+	s := Shell{Runner: r, In: in, Out: &out, Err: &errs}
+	if _, err := s.Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	// It still arrives, at the next prompt that is not a continuation.
+	if !strings.Contains(errs.String(), "Done") {
+		t.Errorf("err = %q, want the notice once the construct finished", errs.String())
+	}
+	if n := strings.Count(errs.String(), "Done"); n != 1 {
+		t.Errorf("%d notices, want one", n)
 	}
 }
 

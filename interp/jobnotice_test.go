@@ -1,0 +1,137 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+package interp_test
+
+import (
+	"strings"
+	"testing"
+
+	. "github.com/blairham/sh/interp"
+)
+
+// A shell tells whoever is typing about its jobs, twice: when one is
+// backgrounded, and when it ends. Neither happens to a script — no shell in
+// the panel announces anything to `sh -c` — so both hang off the front end
+// having said there is someone to tell.
+func TestABackgroundedJobIsAnnounced(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		jobControl bool
+		announces  Answer
+		dg         Diagnostics
+		want       string
+	}{
+		{"announced at a prompt", true, Yes, Diagnostics{}, "[1] "},
+		{"and the separator is the dialect's", true, Yes, Diagnostics{JobStarted: "[%[1]d]\t%[2]d"}, "[1]\t"},
+		{"a dialect can say nothing", true, No, Diagnostics{}, ""},
+		// The one that matters most: a script is told nothing, whatever the
+		// dialect would do at a prompt.
+		{"and a script is told nothing", false, Yes, Diagnostics{}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out := notices(t, `sleep 0.3 &`, tc.jobControl, tc.announces, tc.dg, nil)
+			if tc.want == "" {
+				if strings.Contains(out, "[1]") {
+					t.Errorf("out = %q, want nothing announced", out)
+				}
+				return
+			}
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("out = %q, want it to contain %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// The notice is taken rather than read, and reported once: the same rule a
+// listing follows, because saying it twice is exactly what a shell must not
+// do.
+func TestAFinishedJobIsReportedOnceAndForgotten(t *testing.T) {
+	var r *Runner
+	out := notices(t, `true & sleep 0.05`, true, No, Diagnostics{}, &r)
+	if strings.Contains(out, "Done") {
+		t.Fatalf("out = %q, want nothing said before the notice is asked for", out)
+	}
+	first := r.FinishedJobNotices()
+	if len(first) != 1 || !strings.Contains(first[0], "Done") {
+		t.Fatalf("notices = %v, want the finished job reported", first)
+	}
+	if again := r.FinishedJobNotices(); len(again) != 0 {
+		t.Errorf("notices = %v the second time, want it reported once", again)
+	}
+	// And gone, so a listing does not repeat what the notice already said.
+	if n := len(r.Jobs()); n != 0 {
+		t.Errorf("%d jobs left, want the reported one forgotten", n)
+	}
+}
+
+// A shell with nobody to tell says nothing and keeps the job, because a
+// script's `jobs` still has to be able to list it.
+func TestWithoutJobControlNothingIsReported(t *testing.T) {
+	var r *Runner
+	notices(t, `true & sleep 0.05`, false, Yes, Diagnostics{}, &r)
+	if lines := r.FinishedJobNotices(); len(lines) != 0 {
+		t.Errorf("notices = %v, want none without someone to tell", lines)
+	}
+	if n := len(r.Jobs()); n != 1 {
+		t.Errorf("%d jobs, want the job kept for a listing to find", n)
+	}
+}
+
+// The command is in the notice even in the dialects that leave it out of a
+// listing — both of them print it here, which is what makes
+// JobsShowBackgroundCommand a question about the listing and not about the
+// text that was kept.
+func TestANoticeShowsTheCommandAListingWouldNot(t *testing.T) {
+	var r *Runner
+	notices(t, `true & sleep 0.05`, true, No, Diagnostics{JobUnknownCommand: "<command unknown>"}, &r)
+	lines := r.FinishedJobNotices()
+	if len(lines) != 1 || !strings.Contains(lines[0], "true") {
+		t.Errorf("notices = %v, want the command in the notice", lines)
+	}
+}
+
+// One dialect puts the `&` back when it reports that a job ended, and it is
+// not the one that puts it back while a job runs. Neither does both.
+func TestANoticeCanCarryTheAmpersand(t *testing.T) {
+	var r *Runner
+	notices(t, `true & sleep 0.05`, true, No, Diagnostics{JobNoticeShowsAmpersand: true}, &r)
+	lines := r.FinishedJobNotices()
+	if len(lines) != 1 || !strings.HasSuffix(strings.TrimRight(lines[0], " "), "true &") {
+		t.Errorf("notices = %v, want the command with its ampersand", lines)
+	}
+}
+
+// One dialect says `Done` in a notice and lists the same job as `Running`,
+// because its listing has not noticed what its reaper already said. Two
+// statements about one job, and both are that shell's.
+func TestANoticeCanUseADifferentWordFromAListing(t *testing.T) {
+	var r *Runner
+	dg := Diagnostics{JobDone: "Running", JobDoneNotice: "Done"}
+	notices(t, `true & sleep 0.05`, true, No, dg, &r)
+	lines := r.FinishedJobNotices()
+	if len(lines) != 1 || !strings.Contains(lines[0], "Done") {
+		t.Errorf("notices = %v, want the notice's own word", lines)
+	}
+}
+
+func notices(t *testing.T, src string, jobControl bool, announces Answer, dg Diagnostics, into **Runner) string {
+	t.Helper()
+	out, st := run(t, src, func(r *Runner) {
+		sem := CoreSemantics()
+		sem.AnnouncesBackgroundJob = announces
+		sem.JobsShowBackgroundCommand = Yes
+		sem.JobsListFinishedJobs = Yes
+		sem.JobsListNewestFirst = No
+		r.Semantics, r.Diagnostics = &sem, &dg
+		r.JobControl = jobControl
+		if into != nil {
+			*into = r
+		}
+	})
+	if st != 0 {
+		t.Fatalf("status %d: %s", st, out)
+	}
+	return out
+}

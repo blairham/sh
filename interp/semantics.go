@@ -349,6 +349,13 @@ type Semantics struct {
 	// in this shell, so `echo x | read v` sets v. True in ksh93 and zsh.
 	LastPipelineElementInCurrentShell Answer
 
+	// AnnouncesBackgroundJob prints the job number and the process id when a
+	// job is backgrounded, before the next prompt. True in bash, ksh93 and
+	// zsh; dash says nothing at all.
+	//
+	// Only ever at a prompt: no shell announces one to a script.
+	AnnouncesBackgroundJob Answer
+
 	// JobsShowBackgroundCommand puts the command of a `&` job in a `jobs`
 	// listing. True in bash and zsh; dash prints an empty column there and
 	// ksh93 a placeholder.

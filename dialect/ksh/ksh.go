@@ -107,6 +107,9 @@ func Semantics() interp.Semantics {
 	// Whether a `&` job's command appears in a `jobs` listing.
 	s.JobsShowBackgroundCommand = interp.No
 
+	// Whether a backgrounded job is announced to whoever is typing.
+	s.AnnouncesBackgroundJob = interp.Yes
+
 	return s
 }
 
@@ -119,6 +122,8 @@ const kshKillUsage = "Usage: kill [-lL] [-n signum] [-s signame] job ...\n" +
 
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		JobStarted:              "[%[1]d]\t%[2]d",
+		JobNoticeShowsAmpersand: true,
 		// `[1] + ` then a 25-wide state, and the leading space on the
 		// running one is ksh's own: a stopped job's `Stopped` starts a
 		// column earlier than a running job's `Running`, and the two lines
@@ -132,7 +137,8 @@ func Diagnostics() interp.Diagnostics {
 		// the word ksh uses rather than corrected, which would be inventing
 		// a shell that does not exist. The leading space is ksh's too: see
 		// JobLine below.
-		JobDone: " Running",
+		JobDone:       " Running",
+		JobDoneNotice: " Done",
 		// The name first, then the verb with the OS string bracketed after
 		// it — the same shape ksh93 uses for `.`, which DotCannotOpen
 		// already says.

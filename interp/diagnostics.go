@@ -361,6 +361,15 @@ type Diagnostics struct {
 	JobStopped string
 	JobDone    string
 
+	// JobDoneNotice replaces JobDone when the shell is *reporting* that a job
+	// ended, rather than listing one that has. Empty uses JobDone for both,
+	// which is what three of the four want. No verbs.
+	//
+	// ksh93 needs the two: it announces `Done` and then lists the same job
+	// as `Running`, because its listing has not noticed what its reaper
+	// already said. Two statements about one job, and both are ksh's.
+	JobDoneNotice string
+
 	// JobExited replaces JobDone where the job ended with a non-zero status.
 	// One verb: the status. Empty leaves JobDone standing for both, which is
 	// what a dialect that does not distinguish them wants.
@@ -376,6 +385,23 @@ type Diagnostics struct {
 	// Whether the text was kept is the semantics question — this is only
 	// what to print in its place.
 	JobUnknownCommand string
+
+	// JobStarted announces a backgrounded job. Two verbs: the job number and
+	// the process id.
+	//
+	//	bash   [1] 13292
+	//	ksh93  [1]\t12886
+	//
+	// The separator is the whole difference, and it is a tab in one of them.
+	JobStarted string
+
+	// JobNoticeShowsAmpersand puts the `&` back on the command of a job the
+	// shell is reporting as finished.
+	//
+	// ksh93 alone, and not the same question as JobRunningShowsAmpersand:
+	// that one is bash, in a listing, while the job runs. Neither shell does
+	// both.
+	JobNoticeShowsAmpersand bool
 
 	// JobRunningShowsAmpersand puts the `&` back on the command of a job
 	// that is still running.

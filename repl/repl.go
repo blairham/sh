@@ -93,6 +93,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	}()
 	var pending strings.Builder
 	for {
+		s.reportFinishedJobs(pending.Len() > 0)
 		prompt := s.prompt("PS1", "$ ")
 		if pending.Len() > 0 {
 			prompt = s.prompt("PS2", "> ")
@@ -166,6 +167,25 @@ func (s Shell) runStmts(ctx context.Context, stmts []*syntax.File) bool {
 	return false
 }
 
+// reportFinishedJobs says what ended while the last command was running.
+//
+// Before the prompt rather than the moment the job ends, which is what every
+// shell in the panel does and is the only place it can go: a line arriving
+// half-typed-over would be unreadable, and the shell is inside the editor for
+// all of the time between one command and the next.
+//
+// Not at a continuation prompt. The line being typed is unfinished, and
+// putting a notice in the middle of it says the same thing about the display
+// that arriving mid-line does.
+func (s Shell) reportFinishedJobs(continuing bool) {
+	if continuing {
+		return
+	}
+	for _, line := range s.Runner.FinishedJobNotices() {
+		s.errf("%s\n", line)
+	}
+}
+
 // runPlain reads lines from something that is not a terminal.
 //
 // No editor, so no cursor movement, no completion and no history — there is
@@ -180,6 +200,7 @@ func (s Shell) runPlain(ctx context.Context) (int, error) {
 	in := bufio.NewReader(s.In)
 	var pending strings.Builder
 	for {
+		s.reportFinishedJobs(pending.Len() > 0)
 		name, fallback := "PS1", "$ "
 		if pending.Len() > 0 {
 			name, fallback = "PS2", "> "

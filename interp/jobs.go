@@ -131,9 +131,63 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// `$!` is the most recent background job, which is how a script waits for
 	// a specific one.
 	r.lastJob = job
+	r.announceJob(job)
 	// Starting a job succeeds even when the job will not.
 	r.status = 0
 	return nil
+}
+
+// announceJob says a job has started, which only a shell with someone to tell
+// does.
+//
+// The pid is settled by the time this runs: starting a job waits for it, so
+// that `$!` on the next line is not racing the goroutine that sets it, and the
+// announcement wants the same number.
+func (r *Runner) announceJob(job *Job) {
+	if !r.JobControl {
+		return
+	}
+	if !r.ask(r.sem().AnnouncesBackgroundJob, "a background job being announced") {
+		return
+	}
+	r.errf("%s\n", Wording(r.diag().JobStarted, "[%[1]d] %[2]d", len(r.jobs), job.PID))
+}
+
+// FinishedJobNotices is what to say about the jobs that have ended since it
+// was last asked, and forgets them.
+//
+// For the shell around it, because *when* is not this package's to decide: a
+// notice arrives before the next prompt rather than the moment the job ends,
+// which is why every shell in the panel reports it after the running command
+// has finished printing. The rendering is here because the wording is.
+//
+// Taken and forgotten, the same rule a listing follows: a job is reported
+// once. Reporting it and then listing it again would be saying it twice.
+func (r *Runner) FinishedJobNotices() []string {
+	if !r.JobControl {
+		return nil
+	}
+	var lines []string
+	kept := r.jobs[:0]
+	for i, j := range r.jobs {
+		if !j.Finished() {
+			kept = append(kept, j)
+			continue
+		}
+		// The command is always shown, even in the two dialects that leave
+		// it out of a `jobs` listing: both of them print it here. That is
+		// what makes JobsShowBackgroundCommand a question about the listing
+		// rather than about the text.
+		lines = append(lines, r.jobLineAs(i, j, true, true))
+	}
+	for i := len(kept); i < len(r.jobs); i++ {
+		r.jobs[i] = nil
+	}
+	r.jobs = kept
+	if r.lastJob != nil && r.lastJob.Finished() {
+		r.lastJob = nil
+	}
+	return lines
 }
 
 // biWait waits for background jobs.

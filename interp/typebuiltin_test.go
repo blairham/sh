@@ -173,22 +173,36 @@ func TestTypeWillNotNameAReservedBuiltinOnPath(t *testing.T) {
 	}
 }
 
-// bash follows the sentence with the function itself, reformatted. That needs
-// a printer for the syntax tree and there is not one, so it refuses rather
-// than printing the sentence and dropping the half that was asked for.
-func TestTypeRefusesAFunctionBodyItCannotPrint(t *testing.T) {
-	out, st := run(t, `f(){ echo hi; }; type f`, func(r *Runner) {
+// One dialect follows the sentence with the function itself, laid out — which
+// is what the printer exists for: the tree is what the shell has by then, and
+// the spelling it was written with is gone.
+func TestTypeCanShowAFunctionsBody(t *testing.T) {
+	out, st := run(t, "f(){ echo hi; }; type f", func(r *Runner) {
 		sem := CoreSemantics()
 		sem.TypePrintsFunctionBody = Yes
 		r.Semantics = &sem
 	})
-	if !strings.Contains(out, "not implemented yet") {
-		t.Errorf("out = %q, want an honest refusal", out)
+	if st != 0 {
+		t.Fatalf("status %d: %s", st, out)
 	}
-	if strings.Contains(out, "is a function") {
-		t.Errorf("out = %q, want no half answer before it", out)
+	// The sentence first, then the function — reformatted rather than
+	// echoed, which is the whole difference between a printer and keeping
+	// the text.
+	want := "f is a function\nf () \n{ \n    echo hi\n}\n"
+	if out != want {
+		t.Errorf("out = %q, want %q", out, want)
 	}
-	if st == 0 {
-		t.Error("status 0, want the refusal reported")
+}
+
+// And the three that stop at the sentence print nothing after it, however
+// long the function is.
+func TestTypeCanStopAtTheSentence(t *testing.T) {
+	out, _ := run(t, "f(){ echo hi; echo there; }; type f", func(r *Runner) {
+		sem := CoreSemantics()
+		sem.TypePrintsFunctionBody = No
+		r.Semantics = &sem
+	})
+	if out != "f is a function\n" {
+		t.Errorf("out = %q, want the sentence alone", out)
 	}
 }

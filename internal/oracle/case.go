@@ -1052,6 +1052,16 @@ var Corpus = []Case{
 		Why:     "a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else",
 	},
 	{
+		ID: "type/a-function-and-its-body", Category: "builtins",
+		Snippet: `f(){ echo hi; }; type f`,
+		Why:     "one shell follows the sentence with the function itself, laid out its own way, and the other three stop at the sentence. What is printed is not what was typed — the shell has a tree by then — so this is the one place a shell has to say a command back",
+	},
+	{
+		ID: "type/a-body-with-a-construct-in-it", Category: "builtins",
+		Snippet: `f(){ if true; then echo y; fi; }; type f`,
+		Why:     "the layout is per construct and not one rule: a `then` stays on the line of its `if` where a `do` moves to a line of its own, and a body closed by a keyword ends with a `;` where one closed by a brace does not",
+	},
+	{
 		ID: "type/what-a-name-would-run", Category: "builtins",
 		Snippet: `type cd; type if; type ls`,
 		Why:     "the same lookup `command -v` does, said in a sentence for a person to read — and every part of the sentence is worded differently: a keyword is `a shell keyword`, `a keyword` or `a reserved word`, and one shell reports an external as a tracked alias for the path",

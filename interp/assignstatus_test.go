@@ -36,6 +36,10 @@ func TestAnAssignmentReadsTheStatusBeforeSettingIts(t *testing.T) {
 		// status afterwards distinguishes it from no substitution at all.
 		{"a substitution reporting what was already there", `false; x=$(false); echo "st=$?"`, "st=1\n"},
 		{"the last of several is the one", `false; x=$(false) y=$(true); echo "st=$?"`, "st=0\n"},
+		// Per statement, not once for the shell: an earlier substitution
+		// anywhere must not make a later plain assignment keep whatever
+		// status was lying around.
+		{"a substitution in an earlier statement does not carry", `x=$(true); false; y=1; echo "st=$?"`, "st=0\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if out, _ := run(t, tc.src, nil); out != tc.want {

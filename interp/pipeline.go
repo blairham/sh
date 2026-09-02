@@ -40,9 +40,29 @@ func (l *lockedWriter) Write(p []byte) (int, error) {
 
 // streamLocks is one lock per stream the shell was handed, shared by a runner
 // and every subshell cloned from it — which is exactly the set of runners that
-// can be writing to those streams at once.
+// can be reading or writing those streams at once.
 type streamLocks struct {
-	out, err sync.Mutex
+	out, err, in sync.Mutex
+}
+
+// lockedReader serializes reads from a stream the shell was handed, for the
+// same reason lockedWriter serializes writes.
+//
+// A real shell's standard input is a file descriptor, and two children
+// reading it race for bytes in the kernel, which is arbitrary and safe. An
+// io.Reader from a caller has no such guarantee — os/exec copies from it on a
+// goroutine per child — so two children reading it is a data race in this
+// process rather than a scramble in the kernel. The shell made the
+// concurrency, so the shell guards it.
+type lockedReader struct {
+	mu *sync.Mutex
+	r  io.Reader
+}
+
+func (l *lockedReader) Read(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.r.Read(p)
 }
 
 // streamLocks returns the shell's locks, making them on first use.
@@ -69,6 +89,19 @@ func (r *Runner) lockedStdout() *lockedWriter {
 
 func (r *Runner) lockedStderr() *lockedWriter {
 	return &lockedWriter{mu: &r.streamLocks().err, w: r.stderr()}
+}
+
+// lockedStdin is the shell's input, guarded.
+//
+// A *os.File is left alone: os/exec hands a file to the child directly and
+// copies nothing, so there is no goroutine to race and wrapping it would
+// *create* the copying it is meant to make safe.
+func (r *Runner) lockedStdin() io.Reader {
+	in := r.In()
+	if _, ok := in.(*os.File); ok {
+		return in
+	}
+	return &lockedReader{mu: &r.streamLocks().in, r: in}
 }
 
 // runPipeline runs several commands with their streams joined.

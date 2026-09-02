@@ -108,6 +108,10 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// such guarantee. The shell creates the concurrency, so it guards them.
 	sub.Stdout = r.lockedStdout()
 	sub.Stderr = r.lockedStderr()
+	// And its input, for the same reason in the other direction: a
+	// background job and whatever runs next both read the shell's stdin, and
+	// os/exec copies from a caller's io.Reader on a goroutine of its own.
+	sub.Stdin = r.lockedStdin()
 	go func() {
 		// Errors inside a background job are reported where the job runs;
 		// there is nowhere to return them to.

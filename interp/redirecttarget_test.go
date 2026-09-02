@@ -124,6 +124,51 @@ func TestATildeExpandsWhereNothingIsSplit(t *testing.T) {
 	}
 }
 
+// A tilde expands in a redirection target too, which is the same rule as
+// inside `[[ ]]` reached by the other road.
+func TestATildeExpandsInARedirectionTarget(t *testing.T) {
+	dir := t.TempDir()
+	if _, st := run(t, `echo hi > ~/tf`, func(r *Runner) {
+		sem := CoreSemantics()
+		sem.RedirectTargetIsAnOrdinaryWord = No
+		r.Semantics, r.Dir = &sem, dir
+		r.Vars = map[string]string{"HOME": dir}
+	}); st != 0 {
+		t.Fatalf("status %d", st)
+	}
+	if got := readFile(t, dir, "tf"); got != "hi\n" {
+		t.Errorf("tf = %q, want the tilde expanded to the home directory", got)
+	}
+}
+
+// One dialect says something shorter for a target that expanded to nothing —
+// no reason attached, and "open" even where the redirection was creating.
+func TestAnEmptyTargetCanHaveAWordingOfItsOwn(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"creating", `e=; echo hi > $e`, ": cannot open"},
+		{"and opening", `e=; cat < $e`, ": cannot open"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := run(t, tc.src, func(r *Runner) {
+				sem := CoreSemantics()
+				sem.RedirectTargetIsAnOrdinaryWord = No
+				sem.SplitParamExpansion = Yes
+				dg := Diagnostics{EmptyRedirectTarget: "%[1]s: cannot open"}
+				r.Semantics, r.Diagnostics, r.Dir = &sem, &dg, t.TempDir()
+			})
+			// The whole line, so an added prefix or a bracketed reason
+			// cannot slip past: the ordinary wordings both end in one.
+			line := strings.TrimSpace(out)
+			if !strings.HasSuffix(line, tc.want) || strings.Contains(line, "[") {
+				t.Errorf("out = %q, want a line ending %q with no reason attached", out, tc.want)
+			}
+			if st == 0 {
+				t.Error("status 0, want the redirection to have failed")
+			}
+		})
+	}
+}
+
 func literalTargets(dir string) func(*Runner) {
 	return func(r *Runner) {
 		sem := CoreSemantics()

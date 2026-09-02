@@ -487,10 +487,7 @@ func (p *printer) caseClause(x *CaseClause) {
 			// is what lets `esac` follow without changing the tree.
 			term = ";;"
 		}
-		if !strings.HasSuffix(p.b.String(), "\n") {
-			p.str(" ")
-		}
-		p.str(term + " ")
+		p.str(" " + term + " ")
 	}
 	p.str("esac")
 	p.redirs(x.Redirs)

@@ -71,11 +71,14 @@ func TestPrintingWhatTheCorpusDoesNotReach(t *testing.T) {
 			"case x in a) cat <<EOF\nbody\nEOF\n;; esac\n",
 		},
 		{
-			// `$((` is arithmetic, so a command substitution whose first
-			// command is a subshell needs the space — the same trap as a
-			// redirection target beginning with `<`.
-			"a substitution beginning with a subshell",
-			"x=$( (echo hi) 2>/dev/null)\n",
+			// Backticks and `$( )` are one node, so every substitution is
+			// written the second way — and a backtick one has no space to
+			// inherit. `$((` is arithmetic, so a substitution whose first
+			// command is a subshell needs one put in: the same trap as a
+			// redirection target beginning with `<`, and the reason
+			// /opt/homebrew/bin/gettext.sh could not be reprinted.
+			"a backtick substitution beginning with a subshell",
+			"x=`(echo hi) 2>/dev/null`\n",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

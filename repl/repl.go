@@ -105,21 +105,10 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		case err != nil:
 			return s.status(), err
 		}
-		pending.WriteString(line)
-		pending.WriteString("\n")
-		text := pending.String()
-
-		p := syntax.NewParser(text, s.Dialect)
-		stmts, perr := collect(p)
-		if (perr != nil && p.Incomplete()) || endsWithContinuation(text) {
-			// Not an error: the construct has not finished. This is the one
-			// thing an interactive shell needs from a parser that a script
-			// runner does not, and it was already there.
-			ed.remember(line)
+		stmts, perr, ready := s.accept(&pending, ed, line)
+		if !ready {
 			continue
 		}
-		pending.Reset()
-		ed.remember(strings.TrimSuffix(text, "\n"))
 		if perr != nil {
 			s.errf("%s", s.report(perr))
 			continue
@@ -163,6 +152,33 @@ func (s Shell) run(ctx context.Context, state *terminalState, stmts []*syntax.Fi
 		}
 	}
 	return false
+}
+
+// accept adds a typed line to what is pending and says whether it is a command
+// yet.
+//
+// Not ready means the construct has not finished and the next line continues
+// it — the one thing an interactive shell needs from a parser that a script
+// runner does not, and it was already there.
+//
+// The history is written here rather than by the caller, because *when* is the
+// whole of the rule: only the finished construct is remembered, and only once.
+// Remembering each continuation line as it was typed put a `for` loop in the
+// history four times over — once per line and once entire — and left
+// `do echo $i` there as something that can be recalled and cannot be run.
+func (s Shell) accept(pending *strings.Builder, ed *editor, line string) ([]*syntax.File, error, bool) {
+	pending.WriteString(line)
+	pending.WriteString("\n")
+	text := pending.String()
+
+	p := syntax.NewParser(text, s.Dialect)
+	stmts, err := collect(p)
+	if (err != nil && p.Incomplete()) || endsWithContinuation(text) {
+		return nil, nil, false
+	}
+	pending.Reset()
+	ed.remember(strings.TrimSuffix(text, "\n"))
+	return stmts, err, true
 }
 
 // endsWithContinuation reports whether the text ends with a backslash joining

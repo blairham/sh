@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/syntax"
 )
 
 func vars(m map[string]string) func(string) (string, bool) {
@@ -139,5 +141,52 @@ func TestHistoryKeepsALongLine(t *testing.T) {
 	got := historyFile{path: path, size: 10}.load()
 	if len(got) != 2 || got[0] != long || got[1] != "after" {
 		t.Errorf("loaded %d lines, want the long one and the next", len(got))
+	}
+}
+
+// A multi-line construct is one entry, not one per line.
+//
+// Recalling `do echo $i` on its own is recalling something that cannot run,
+// and a `for` loop appearing four times over is a history nobody can walk
+// back through.
+func TestAMultiLineCommandIsOneEntry(t *testing.T) {
+	e := &editor{}
+	sh := Shell{Runner: newTestRunner(nil), Dialect: syntax.Core()}
+	var pending strings.Builder
+	// Typed as it would be at a prompt: the first two lines leave the
+	// construct unfinished and the third completes it.
+	for _, line := range []string{"for i in 1 2", "do echo n=$i", "done"} {
+		_, _, ready := sh.accept(&pending, e, line)
+		if ready != (line == "done") {
+			t.Fatalf("%q: ready=%v", line, ready)
+		}
+	}
+	if len(e.history) != 1 {
+		t.Fatalf("history is %q, want one entry", e.history)
+	}
+	if !strings.Contains(e.history[0], "for i in 1 2") ||
+		!strings.Contains(e.history[0], "done") {
+		t.Errorf("the entry is %q, want the whole construct", e.history[0])
+	}
+	// A one-line command is remembered too, and the pending text does not
+	// leak into it.
+	if _, _, ready := sh.accept(&pending, e, "echo after"); !ready {
+		t.Fatal("a complete line was not ready")
+	}
+	if len(e.history) != 2 || e.history[1] != "echo after" {
+		t.Errorf("history is %q, want the second entry alone", e.history)
+	}
+	// And it survives a round trip through the file, newlines and all... it
+	// does not: the file is a line per entry, so a multi-line command comes
+	// back as several. Stated rather than asserted the other way, because it
+	// is a real limit of the format and not a thing this test wants.
+	path := filepath.Join(t.TempDir(), "hist")
+	h := historyFile{path: path, size: 100}
+	if err := h.save(e.history); err != nil {
+		t.Fatal(err)
+	}
+	// Three lines from the loop and one from the command after it.
+	if got := h.load(); len(got) != 4 {
+		t.Errorf("loaded %q, want the four lines a line-per-entry file gives back", got)
 	}
 }

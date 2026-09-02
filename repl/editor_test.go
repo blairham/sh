@@ -162,3 +162,48 @@ func TestTheLineIsDrawn(t *testing.T) {
 		t.Errorf("drew %q, want the cursor moved back one", out)
 	}
 }
+
+// Tab completes, and a second Tab lists — which needs the editor to know the
+// previous keystroke was a Tab and nothing else.
+func TestTabAndSecondTab(t *testing.T) {
+	c := fakeCompleter{paths: []string{"apple.txt", "apricot.txt"}}
+	var out strings.Builder
+	e := &editor{in: strings.NewReader("echo ap\t\r"), out: &out, comp: c}
+	if line, err := e.readLine("$ "); err != nil || line != "echo ap" {
+		t.Fatalf("one Tab gave %q %v, want the line unchanged", line, err)
+	}
+	if strings.Contains(out.String(), "apricot") {
+		t.Error("one Tab listed the matches, want it to wait for the second")
+	}
+
+	out.Reset()
+	e = &editor{in: strings.NewReader("echo ap\t\t\r"), out: &out, comp: c}
+	if _, err := e.readLine("$ "); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "apple.txt") || !strings.Contains(out.String(), "apricot.txt") {
+		t.Errorf("two Tabs drew %q, want both matches listed", out.String())
+	}
+
+	// Anything between them is not two Tabs in a row.
+	out.Reset()
+	e = &editor{in: strings.NewReader("echo ap\tx\x7f\t\r"), out: &out, comp: c}
+	if _, err := e.readLine("$ "); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "apricot") {
+		t.Errorf("drew %q, want a keystroke between the Tabs to have reset it", out.String())
+	}
+}
+
+// With no completer, Tab does nothing rather than crashing — which is what an
+// embedded caller that never set one gets.
+func TestTabWithNoCompleter(t *testing.T) {
+	line, _, err := typed(t, "echo a\t\r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if line != "echo a" {
+		t.Errorf("got %q, want the line untouched", line)
+	}
+}

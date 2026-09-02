@@ -7,6 +7,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"sort"
 )
 
 // Builtin is a command the shell runs itself rather than executing.
@@ -118,3 +119,43 @@ func (r *Runner) SetVar(name, value string) { r.setVar(name, value) }
 
 // GetVar reads a shell variable, falling back to the environment.
 func (r *Runner) GetVar(name string) (string, bool) { return r.getVar(name) }
+
+// BuiltinNames is every builtin this runner has, sorted.
+//
+// For a shell that has to offer them: a completer at a prompt needs to know
+// what running a word would find, and the table is this package's. Sorted
+// because a caller listing them wants an order, and this is the only place
+// that can give a stable one — the registrations live in a map.
+func (r *Runner) BuiltinNames() []string {
+	seen := make(map[string]bool, len(builtins)+len(r.custom))
+	for name := range builtins {
+		seen[name] = true
+	}
+	// A registration wins, and a nil one is a removal rather than an entry.
+	for name, fn := range r.custom {
+		if fn == nil {
+			delete(seen, name)
+			continue
+		}
+		seen[name] = true
+	}
+	return sortedNames(seen)
+}
+
+// FuncNames is every function this runner has defined, sorted.
+func (r *Runner) FuncNames() []string {
+	seen := make(map[string]bool, len(r.funcs))
+	for name := range r.funcs {
+		seen[name] = true
+	}
+	return sortedNames(seen)
+}
+
+func sortedNames(seen map[string]bool) []string {
+	out := make([]string, 0, len(seen))
+	for name := range seen {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}

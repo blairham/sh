@@ -43,6 +43,12 @@ type editor struct {
 	history  []string
 	browsing int
 	stash    []rune
+
+	// comp answers what a prefix could become, and lastTab says the previous
+	// keystroke was already a Tab — which is what makes the second one list
+	// the matches rather than repeat a completion that changed nothing.
+	comp    completer
+	lastTab bool
 }
 
 // readLine reads one line, drawing it as it is typed.
@@ -63,6 +69,8 @@ func (e *editor) readLine(prompt string) (string, error) {
 		if n == 0 {
 			continue
 		}
+		wasTab := e.lastTab
+		e.lastTab = false
 		switch c := buf[0]; c {
 		case ctrlC:
 			// The line is abandoned, not run. The newline is ours to print:
@@ -110,6 +118,17 @@ func (e *editor) readLine(prompt string) (string, error) {
 		case backspace, del:
 			e.deleteBackward()
 			e.redraw(prompt)
+		case tab:
+			matches := e.complete(e.comp)
+			if len(matches) > 0 && wasTab {
+				e.list(matches, prompt)
+			}
+			e.redraw(prompt)
+			// Set after the redraw, and the only key that leaves it set: two
+			// Tabs in a row are a request to see the matches, and anything
+			// between them is not.
+			e.lastTab = true
+			continue
 		case esc:
 			e.escape(prompt)
 		default:
@@ -291,6 +310,21 @@ func (e *editor) redraw(prompt string) {
 	e.write(b.String())
 }
 
+// list prints the matches above the line, the way a shell does — the line is
+// then drawn again below them, because it is still being typed.
+//
+// One per line rather than in columns. Columns need the terminal's width, and
+// asking for it is a third ioctl and a resize signal to keep it right; a list
+// is honest and never wrong.
+func (e *editor) list(matches []string, prompt string) {
+	e.write("\r\n")
+	for _, m := range matches {
+		e.write(m)
+		e.write("\r\n")
+	}
+	e.write(prompt)
+}
+
 func (e *editor) write(s string) { _, _ = io.WriteString(e.out, s) }
 
 // itoa without importing strconv for one call on the keystroke path.
@@ -323,6 +357,7 @@ const (
 	ctrlP     = 0x10
 	ctrlU     = 0x15
 	ctrlW     = 0x17
+	tab       = 0x09
 	esc       = 0x1b
 	backspace = 0x08
 	del       = 0x7f

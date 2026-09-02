@@ -73,7 +73,19 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	sig, stop := catchInterrupt()
 	defer stop()
 
-	ed := &editor{in: s.In, out: s.Out}
+	ed := &editor{in: s.In, out: s.Out, comp: s.completer()}
+	// What earlier sessions typed, and where to add what this one does. The
+	// count is kept so only the new lines are written back: the rest are
+	// already in the file, and appending them again doubles it every time a
+	// shell is opened.
+	hist := s.historyFile()
+	ed.history = hist.load()
+	loaded := len(ed.history)
+	defer func() {
+		if err := hist.save(ed.history[min(loaded, len(ed.history)):]); err != nil {
+			s.errf("%v\n", err)
+		}
+	}()
 	var pending strings.Builder
 	for {
 		prompt := s.prompt("PS1", "$ ")
@@ -198,6 +210,57 @@ func (s Shell) prompt(name, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// historyFile is where this session reads and records its lines.
+//
+// HISTFILE and HISTFILESIZE come from the shell's own variables rather than
+// from the process environment, because a session can set them at the prompt
+// and mean it.
+func (s Shell) historyFile() historyFile {
+	if s.Runner == nil {
+		return historyFile{}
+	}
+	home, _ := s.Runner.GetVar("HOME")
+	return historyFrom(s.Runner.GetVar, home)
+}
+
+// completer answers Tab from this shell: its builtins, its functions, what is
+// on its PATH and the files in its working directory.
+//
+// Built once per session rather than per keystroke for the names, which do not
+// move; PATH and the directory are read each time because `cd` and an
+// assignment both change them under it.
+func (s Shell) completer() completer {
+	if s.Runner == nil {
+		return nil
+	}
+	return runnerCompleter{r: s.Runner}
+}
+
+// runnerCompleter reads the shell's state at the moment Tab is pressed.
+type runnerCompleter struct{ r *interp.Runner }
+
+func (c runnerCompleter) names() []string {
+	names := append(c.r.BuiltinNames(), c.r.FuncNames()...)
+	// The reserved words are commands too — `if` and `while` are what a line
+	// most often starts with, and a completer that offered every builtin but
+	// not those would feel broken.
+	return append(names, reservedWords...)
+}
+
+func (c runnerCompleter) shell() shellCompleter {
+	path, _ := c.r.GetVar("PATH")
+	return shellCompleter{names: c.names(), path: path, dir: c.r.Dir}
+}
+
+func (c runnerCompleter) commands(prefix string) []string { return c.shell().commands(prefix) }
+func (c runnerCompleter) files(prefix string) []string    { return c.shell().files(prefix) }
+
+// reservedWords is the grammar's own vocabulary, which no builtin table holds.
+var reservedWords = []string{
+	"case", "do", "done", "elif", "else", "esac", "fi", "for",
+	"function", "if", "in", "select", "then", "until", "while",
 }
 
 func (s Shell) status() int { return s.Runner.ExitStatus() }

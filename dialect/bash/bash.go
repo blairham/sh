@@ -170,11 +170,6 @@ func Diagnostics() interp.Diagnostics {
 		LetNoExpression:           "let: expression expected",
 		UlimitBadOption:           "ulimit: -%[1]s: invalid option",
 		UlimitBadNumber:           "ulimit: %[1]s: invalid number",
-		PrintfUsage:               "printf: usage: printf [-v var] format [arguments]",
-		UmaskBadMask:              "umask: %[1]s: octal number out of range",
-		UmaskBadOption:            "umask: %[1]s: invalid option",
-		UmaskUsage:                "umask: usage: umask [-p] [-S] [mode]",
-		UmaskUsageUnprefixed:      true,
 		BuiltinBadOption:          "%[1]s: %[2]s: invalid option",
 		BuiltinUsageUnprefixed:    true,
 		BuiltinUsage: map[string]string{

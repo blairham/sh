@@ -123,6 +123,10 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 
 	r.emit(ctx, Event{Kind: EventCommandStart, Action: action})
 	cmd := exec.CommandContext(ctx, path, argv[1:]...)
+	// The name the command finds in argv[0]: `-a` where it was given, and
+	// otherwise the word that was typed. os/exec puts the resolved path
+	// there, which is the one thing it should never be.
+	cmd.Args[0] = argv[0]
 	if argv0 != "" {
 		cmd.Args[0] = argv0
 	}

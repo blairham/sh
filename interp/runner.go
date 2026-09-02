@@ -32,7 +32,7 @@ type Runner struct {
 	// Arrays holds indexed array variables, which are a different kind of
 	// thing from Vars rather than a formatting of one: an element can hold a
 	// space without becoming two.
-	Arrays map[string][]string
+	Arrays map[string]Array
 	// Params holds the positional parameters, $1 first. `$0` is not one of
 	// them and is kept separate, because `shift` moves these and never
 	// touches that.
@@ -423,9 +423,13 @@ func (r *Runner) clone() *Runner {
 	for k, v := range r.exported {
 		c.exported[k] = v
 	}
-	c.Arrays = make(map[string][]string, len(r.Arrays))
+	c.Arrays = make(map[string]Array, len(r.Arrays))
 	for k, v := range r.Arrays {
-		c.Arrays[k] = append([]string(nil), v...)
+		copied := make(Array, len(v))
+		for i, e := range v {
+			copied[i] = e
+		}
+		c.Arrays[k] = copied
 	}
 	c.Params = append([]string(nil), r.Params...)
 	return &c
@@ -1306,7 +1310,7 @@ func (r *Runner) getVar(name string) (string, bool) {
 	if a, ok := r.Arrays[name]; ok && len(a) > 1 && !r.removed[name] {
 		// Ahead of Vars, which holds the first element: with more than one
 		// element the two views differ and the dialect decides.
-		return r.arrayScalar(a), true
+		return r.arrayScalar(r.readArray(a)), true
 	}
 	if v, ok := r.Vars[name]; ok {
 		return v, true
@@ -1341,7 +1345,12 @@ func (r *Runner) assign(a *syntax.Assign) {
 			// `a+=(d)` adds to the end of the array rather than to its first
 			// element, which is what makes append two operations sharing a
 			// spelling rather than one.
-			elems = append(append([]string(nil), r.Arrays[a.Name]...), elems...)
+			//
+			// After the highest subscript rather than after the count:
+			// appending to `a[0]=x a[5]=y` puts the next element at 6, which
+			// is where the end is.
+			r.appendArray(a.Name, elems)
+			return
 		}
 		r.setArray(a.Name, elems)
 	case a.Index != nil:

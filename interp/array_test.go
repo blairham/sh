@@ -17,7 +17,11 @@ func TestArrays(t *testing.T) {
 		{"count", `a=(1 2 3); printf "%s" "${#a[@]}"`, "3"},
 		{"empty array is not a bare assignment", `a=(); printf "%s" "${#a[@]}"`, "0"},
 		{"element assignment", `a=(1 2); a[1]=9; printf "%s" "${a[1]}"`, "9"},
-		{"assigning past the end grows it", `a=(1); a[3]=x; printf "%s" "${#a[@]}"`, "4"},
+		// Two elements and not four: an unassigned subscript is no element
+		// at all in this dialect, so the gap between 0 and 3 is a gap rather
+		// than two empty strings. The other reading — walking the extent —
+		// is a dialect away and is tested beside the axis.
+		{"assigning past the end leaves a gap", `a=(1); a[3]=x; printf "%s" "${#a[@]}"`, "2"},
 		// A plain reference is the first element, which is what keeps `$a`
 		// working on an array.
 		{"scalar view", `a=(p q); printf "%s" "$a"`, "p"},

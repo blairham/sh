@@ -109,6 +109,8 @@ func Semantics() interp.Semantics {
 
 	// Whether a backgrounded job is announced to whoever is typing.
 	// Whether `export -f` carries a function to a child.
+	// Whether an unassigned subscript is an element.
+	s.ArraysAreSparse = interp.Yes
 	s.ExportCarriesFunctions = interp.No
 	s.AnnouncesBackgroundJob = interp.Yes
 

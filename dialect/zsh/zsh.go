@@ -113,6 +113,8 @@ func Semantics() interp.Semantics {
 	// on a pipe as the other two do. Answered as "announces" either way: the
 	// difference is about what it is talking to rather than about the shell.
 	// Whether `export -f` carries a function to a child.
+	// Whether an unassigned subscript is an element.
+	s.ArraysAreSparse = interp.No
 	s.ExportCarriesFunctions = interp.No
 	s.AnnouncesBackgroundJob = interp.Yes
 

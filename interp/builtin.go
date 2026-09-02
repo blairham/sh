@@ -245,8 +245,17 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		return 0
 	}
 	for _, name := range args {
+		if base, idx, ok := r.subscriptOperand(name); ok {
+			// `unset a[1]` is about one element and not about the array.
+			// The subscript was read as part of the name, so the whole thing
+			// was deleted from a table it was never in and nothing happened
+			// at all.
+			r.unsetArrayElem(base, idx)
+			continue
+		}
 		delete(r.Vars, name)
 		delete(r.exported, name)
+		delete(r.Arrays, name)
 		// Recorded as well as deleted: a name that came from the environment
 		// is not in Vars to begin with, and deleting nothing left it visible
 		// to every lookup — `unset PATH` did not clear PATH.
@@ -312,6 +321,23 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 // Shifting past the end is where the panel splits: fatal in dash and ksh93,
 // survivable in bash and zsh. The dialect answers it rather than this taking
 // a side.
+// subscriptOperand splits `a[1]` into the name and the subscript.
+//
+// Only for a name that really ends in one: `unset a` is the whole array and
+// `unset a[1]` is an element of it, and the two arrive as the same kind of
+// word.
+func (r *Runner) subscriptOperand(operand string) (string, int, bool) {
+	open := strings.IndexByte(operand, '[')
+	if open <= 0 || !strings.HasSuffix(operand, "]") {
+		return "", 0, false
+	}
+	idx, err := r.parseNum(strings.TrimSpace(operand[open+1 : len(operand)-1]))
+	if err != nil {
+		return "", 0, false
+	}
+	return operand[:open], idx, true
+}
+
 // hasOption reports whether the letter appears in the option words before the
 // first operand.
 func hasOption(args []string, letter byte) bool {

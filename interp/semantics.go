@@ -381,6 +381,15 @@ type Semantics struct {
 	// a name there and gets answered as one before the real names are.
 	TypeEndsOptionsWithDashDash Answer
 
+	// ArraysAreSparse makes an unassigned subscript no element at all, so
+	// `a=(x); a[5]=y` is an array of two. True in bash and ksh93; zsh reads
+	// the whole extent and finds the gap empty, giving five.
+	//
+	// The store is sparse either way — only the reading differs — so this is
+	// asked when an array *has* a gap and never otherwise, which is almost
+	// every array there is.
+	ArraysAreSparse Answer
+
 	// ExportCarriesFunctions gives `export` its `-f`, which writes a
 	// function into a child's environment. True in bash alone: the other
 	// three have no way to carry a function at all, and each rejects the

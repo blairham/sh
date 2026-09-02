@@ -68,6 +68,8 @@ func TestSemantics(t *testing.T) {
 		// A `jobs` listing: which end it starts from, and whether a job that
 		// has already ended appears in it at all. Both split the panel two
 		// and two, which is why both are fields.
+		// Whether an unassigned subscript is an element.
+		{"ArraysAreSparse", s.ArraysAreSparse, interp.No},
 		{"AnnouncesBackgroundJob", s.AnnouncesBackgroundJob, interp.Yes},
 		// What `type` does: whether it follows the sentence with the
 		// function itself, and whether `--` ends its options.

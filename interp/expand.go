@@ -251,14 +251,14 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 			(e.Op == syntax.ParamSubstring && wholeArraySubscript(r.subscriptText(e.Index)))) {
 		if elems, ok := r.arraySubscript(e); ok {
 			if e.Indirect {
-				// `${!a[@]}` is the array's *indices*, not its elements —
+				// `${!a[@]}` is the array's *subscripts*, not its elements —
 				// and the indirection was being ignored, so it answered with
 				// the elements and a script iterating `for i in "${!a[@]}"`
 				// silently looped over the wrong thing.
 				//
-				// Counted from this dialect's own base, for the same reason
-				// a subscript is.
-				elems = arrayIndices(len(elems))
+				// The subscripts assigned, which is not `0..n-1`: an array
+				// with a gap in it has subscripts the count never reaches.
+				elems = r.subscriptsOf(e.Name, len(elems))
 			}
 			if e.Op == syntax.ParamSubstring {
 				elems = sliceElems(elems, r.numOf(e.Arg), e.Arg2, r)
@@ -580,6 +580,26 @@ func wholeArraySubscript(idx string) bool { return idx == "@" || idx == "*" }
 // here where bash leaves two, so these are 0..n-1 rather than the subscripts
 // that were actually assigned. That is the array model rather than this
 // expansion, and it is the same gap `${#a[@]}` already has.
+// subscriptsOf is what `${!a[@]}` yields: the subscripts of a stored array,
+// or a plain count for anything else that reads as one.
+func (r *Runner) subscriptsOf(name string, n int) []string {
+	if a, ok := r.Arrays[name]; ok {
+		keys := r.arrayKeys(a)
+		base := r.arrayBase()
+		out := make([]string, 0, len(keys))
+		for _, k := range keys {
+			// Positions are stored from zero and subscripts are written from
+			// wherever the dialect counts, so the base goes back on here —
+			// the same edge it came off at.
+			out = append(out, itoa(k+base))
+		}
+		return out
+	}
+	// Not a stored array — a produced one, or a scalar read as an array of
+	// one. Those have no subscripts of their own, so they are counted.
+	return arrayIndices(n)
+}
+
 func arrayIndices(n int) []string {
 	out := make([]string, 0, n)
 	for i := range n {

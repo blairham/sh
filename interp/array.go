@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -19,20 +20,121 @@ func (r *Runner) arrayBase() int {
 	return 1
 }
 
-func (r *Runner) setArray(name string, elems []string) {
-	if r.Arrays == nil {
-		r.Arrays = map[string][]string{}
+// Array is an indexed array: a subscript to a value, and no promise that the
+// subscripts run without gaps.
+//
+// A map rather than a list because that is what an array *is* in two of the
+// three shells that have them: `a=(x); a[5]=y` leaves an array of two
+// elements with subscripts 0 and 5, not six elements four of which are empty.
+// Storing it as a list made the padding real, and everything that counts or
+// lists an array counted it — `${#a[@]}` said 6, and `for i in "${!a[@]}"`
+// visited four subscripts nobody had assigned.
+//
+// The third shell reads the same store the other way, walking the whole
+// extent and finding an unassigned subscript empty. So the storage is sparse
+// in every dialect and only the *reading* is a question.
+type Array map[int]string
+
+// subscripts returns the assigned subscripts, in order.
+func (a Array) subscripts() []int {
+	out := make([]int, 0, len(a))
+	for k := range a {
+		out = append(out, k)
 	}
-	r.Arrays[name] = elems
+	sort.Ints(out)
+	return out
+}
+
+// extent is the range a dense reading walks: the base up to the highest
+// subscript assigned.
+func (a Array) extent(base int) (from, to int) {
+	subs := a.subscripts()
+	if len(subs) == 0 {
+		return base, base - 1
+	}
+	return base, subs[len(subs)-1]
+}
+
+// The subscripts stored are *positions*, counted from zero whatever the
+// dialect counts from. The base belongs at the edges — where a script writes
+// a subscript and where one is read back — and not in the store, because
+// `a=(one two)` says nothing about which number the first element answers to
+// and must not have to ask.
+func (r *Runner) setArray(name string, elems []string) {
+	a := make(Array, len(elems))
+	for i, v := range elems {
+		a[i] = v
+	}
+	r.storeArray(name, a)
+}
+
+// storeArray puts an array back and keeps the scalar view in step.
+func (r *Runner) storeArray(name string, a Array) {
+	if r.Arrays == nil {
+		r.Arrays = map[string]Array{}
+	}
+	r.Arrays[name] = a
 	// A plain `$a` has to keep working. The first element is stored rather
 	// than the scalar view, because *which* view it is depends on a dialect
 	// and building an array must not need one: getVar asks, and only when
 	// the answer could differ.
-	if len(elems) > 0 {
-		r.setVar(name, elems[0])
+	//
+	// First by subscript and not by insertion: `a[5]=y; a[0]=x` has `x`
+	// first, which a map cannot say and its ordered subscripts can.
+	if subs := a.subscripts(); len(subs) > 0 {
+		r.setVar(name, a[subs[0]])
 	} else {
 		r.setVar(name, "")
 	}
+}
+
+// setArrayElem assigns one element. Any subscript at or above the base is
+// legal, whether or not anything below it has been assigned.
+func (r *Runner) setArrayElem(name string, idx int, value string) {
+	// The subscript's meaning is the dialect's — `a[5]` is the sixth element
+	// in one shell and the fifth in another — so this is where the base is
+	// asked, at the edge where a script wrote a number.
+	pos := idx - r.arrayBase()
+	if pos < 0 {
+		r.diagf("%s[%d]: index out of range\n", name, idx)
+		return
+	}
+	a := r.Arrays[name]
+	if a == nil {
+		a = Array{}
+	}
+	a[pos] = value
+	r.storeArray(name, a)
+}
+
+// appendArray adds elements after the highest subscript.
+func (r *Runner) appendArray(name string, elems []string) {
+	a := r.Arrays[name]
+	if a == nil {
+		a = Array{}
+	}
+	next := 0
+	if subs := a.subscripts(); len(subs) > 0 {
+		next = subs[len(subs)-1] + 1
+	}
+	for i, v := range elems {
+		a[next+i] = v
+	}
+	r.storeArray(name, a)
+}
+
+// unsetArrayElem removes one subscript.
+//
+// Removed and not blanked, in every dialect: the dense reading finds an
+// unassigned subscript empty on its own, so `unset a[1]` leaves a hole in one
+// shell and an empty element in another out of the same store.
+func (r *Runner) unsetArrayElem(name string, idx int) {
+	a, ok := r.Arrays[name]
+	if !ok {
+		return
+	}
+	delete(a, idx-r.arrayBase())
+	r.storeArray(name, a)
 }
 
 // arrayScalar is what a plain `$a` gives when `a` is an array.
@@ -54,27 +156,14 @@ func (r *Runner) arrayScalar(elems []string) string {
 	}
 }
 
-// setArrayElem assigns one element, growing the array if the index is past
-// the end — which is what makes `a[5]=x` on an empty array legal.
-func (r *Runner) setArrayElem(name string, idx int, value string) {
-	if r.Arrays == nil {
-		r.Arrays = map[string][]string{}
-	}
-	i := idx - r.arrayBase()
-	if i < 0 {
-		r.diagf("%s[%d]: index out of range\n", name, idx)
-		return
-	}
-	cur := r.Arrays[name]
-	for len(cur) <= i {
-		cur = append(cur, "")
-	}
-	cur[i] = value
-	r.setArray(name, cur)
-}
-
-// arrayElems returns an array's elements, treating a plain variable as a
-// one-element array — which is what makes `x=v; echo ${x[0]}` work in bash.
+// arrayElems returns an array's elements as the dialect reads them, treating a
+// plain variable as a one-element array — which is what makes `x=v; echo
+// ${x[0]}` work.
+//
+// Two readings of one store. A sparse reading yields the assigned elements and
+// nothing else; a dense one walks the whole extent and yields an empty string
+// where nothing was assigned. Two of the shells with arrays read it the first
+// way and one the second, so the dialect answers.
 func (r *Runner) arrayElems(name string) ([]string, bool) {
 	// Produced first, for the same reason a produced scalar is read ahead of
 	// the stored table: the record is the answer, and a copy left in Arrays
@@ -83,7 +172,7 @@ func (r *Runner) arrayElems(name string) ([]string, bool) {
 		return elems, true
 	}
 	if a, ok := r.Arrays[name]; ok {
-		return a, true
+		return r.readArray(a), true
 	}
 	// Produced rather than stored, and asked after the stored table so that
 	// a script assigning to the name gets its own value back — the same
@@ -95,6 +184,54 @@ func (r *Runner) arrayElems(name string) ([]string, bool) {
 		return []string{v}, true
 	}
 	return nil, false
+}
+
+// readArray is the elements a dialect sees.
+func (r *Runner) readArray(a Array) []string {
+	subs := a.subscripts()
+	// Asked only where the two readings differ, which is when something is
+	// missing between the base and the highest subscript. A contiguous array
+	// reads the same either way, and that is almost every array there is.
+	if !r.arrayHasGaps(a) {
+		out := make([]string, 0, len(subs))
+		for _, k := range subs {
+			out = append(out, a[k])
+		}
+		return out
+	}
+	if r.ask(r.sem().ArraysAreSparse, "an unassigned subscript being no element at all") {
+		out := make([]string, 0, len(subs))
+		for _, k := range subs {
+			out = append(out, a[k])
+		}
+		return out
+	}
+	from, to := a.extent(0)
+	out := make([]string, 0, to-from+1)
+	for i := from; i <= to; i++ {
+		out = append(out, a[i])
+	}
+	return out
+}
+
+// arrayKeys is the subscripts a dialect sees, which `${!a[@]}` yields.
+func (r *Runner) arrayKeys(a Array) []int {
+	if !r.arrayHasGaps(a) || r.ask(r.sem().ArraysAreSparse, "an unassigned subscript being no element at all") {
+		return a.subscripts()
+	}
+	from, to := a.extent(0)
+	out := make([]int, 0, to-from+1)
+	for i := from; i <= to; i++ {
+		out = append(out, i)
+	}
+	return out
+}
+
+// arrayHasGaps reports whether anything between the base and the highest
+// subscript was never assigned — the only case the two readings differ in.
+func (r *Runner) arrayHasGaps(a Array) bool {
+	from, to := a.extent(0)
+	return to-from+1 != len(a)
 }
 
 // arraySubscript answers `${a[i]}`, `${a[@]}` and `${a[*]}`.

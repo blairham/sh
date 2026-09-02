@@ -69,6 +69,9 @@ func Semantics() interp.Semantics {
 	// Whether a `&` job's command appears in a `jobs` listing.
 	s.JobsShowBackgroundCommand = interp.No
 
+	// Whether a backgrounded job is announced to whoever is typing.
+	s.AnnouncesBackgroundJob = interp.No
+
 	return s
 }
 

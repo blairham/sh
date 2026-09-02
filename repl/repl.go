@@ -93,11 +93,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	}()
 	var pending strings.Builder
 	for {
-		prompt := s.prompt("PS1", "$ ")
-		if pending.Len() > 0 {
-			prompt = s.prompt("PS2", "> ")
-		}
-		line, err := ed.readLine(prompt)
+		line, err := ed.readLine(s.beforeReading(&pending))
 		switch {
 		case errors.Is(err, ErrInterrupted):
 			// ^C abandons whatever was half-typed, including the earlier
@@ -166,6 +162,40 @@ func (s Shell) runStmts(ctx context.Context, stmts []*syntax.File) bool {
 	return false
 }
 
+// beforeReading is everything that happens between one line and the next: what
+// to say about the jobs, and what to prompt with.
+//
+// One place, used by both loops. They differ in how a line is read and in
+// nothing else that happens first, and having written this twice is how the
+// editor's copy came to be the one nothing exercised.
+func (s Shell) beforeReading(pending *strings.Builder) string {
+	continuing := pending.Len() > 0
+	s.reportFinishedJobs(continuing)
+	if continuing {
+		return s.prompt("PS2", "> ")
+	}
+	return s.prompt("PS1", "$ ")
+}
+
+// reportFinishedJobs says what ended while the last command was running.
+//
+// Before the prompt rather than the moment the job ends, which is what every
+// shell in the panel does and is the only place it can go: a line arriving
+// half-typed-over would be unreadable, and the shell is inside the editor for
+// all of the time between one command and the next.
+//
+// Not at a continuation prompt. The line being typed is unfinished, and
+// putting a notice in the middle of it says the same thing about the display
+// that arriving mid-line does.
+func (s Shell) reportFinishedJobs(continuing bool) {
+	if continuing {
+		return
+	}
+	for _, line := range s.Runner.FinishedJobNotices() {
+		s.errf("%s\n", line)
+	}
+}
+
 // runPlain reads lines from something that is not a terminal.
 //
 // No editor, so no cursor movement, no completion and no history — there is
@@ -180,11 +210,7 @@ func (s Shell) runPlain(ctx context.Context) (int, error) {
 	in := bufio.NewReader(s.In)
 	var pending strings.Builder
 	for {
-		name, fallback := "PS1", "$ "
-		if pending.Len() > 0 {
-			name, fallback = "PS2", "> "
-		}
-		s.errf("%s", s.prompt(name, fallback))
+		s.errf("%s", s.beforeReading(&pending))
 
 		line, err := in.ReadString('\n')
 		if line == "" && err != nil {

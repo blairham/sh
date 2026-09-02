@@ -70,6 +70,7 @@ func TestSemantics(t *testing.T) {
 		// A `jobs` listing: which end it starts from, and whether a job that
 		// has already ended appears in it at all. Both split the panel two
 		// and two, which is why both are fields.
+		{"AnnouncesBackgroundJob", s.AnnouncesBackgroundJob, interp.Yes},
 		{"JobsShowBackgroundCommand", s.JobsShowBackgroundCommand, interp.No},
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.Yes},
 		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.Yes},
@@ -86,6 +87,15 @@ func TestDiagnostics(t *testing.T) {
 	// the word a shell ought to use.
 	if got, want := ksh.Diagnostics().JobDone, " Running"; got != want {
 		t.Errorf("JobDone = %q, want %q", got, want)
+	}
+	// And says something else when it is the one reporting: ksh announces
+	// `Done` and then lists the same job as `Running`.
+	if got, want := ksh.Diagnostics().JobDoneNotice, " Done"; got != want {
+		t.Errorf("JobDoneNotice = %q, want %q", got, want)
+	}
+	// The separator ksh puts between the job number and the pid is a tab.
+	if got, want := ksh.Diagnostics().JobStarted, "[%[1]d]\t%[2]d"; got != want {
+		t.Errorf("JobStarted = %q, want %q", got, want)
 	}
 	if got, want := ksh.Diagnostics().SyntaxStatus(), 3; got != want {
 		t.Errorf("syntax-error status = %d, want %d", got, want)

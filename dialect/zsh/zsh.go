@@ -108,17 +108,27 @@ func Semantics() interp.Semantics {
 	// Whether a `&` job's command appears in a `jobs` listing.
 	s.JobsShowBackgroundCommand = interp.Yes
 
+	// Whether a backgrounded job is announced to whoever is typing.
+	// zsh announces a job only where standard input is a terminal, and not
+	// on a pipe as the other two do. Answered as "announces" either way: the
+	// difference is about what it is talking to rather than about the shell.
+	s.AnnouncesBackgroundJob = interp.Yes
+
 	return s
 }
 
 // Diagnostics is how zsh reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		JobStarted: "[%[1]d] %[2]d",
 		// Two spaces before the marker, one after, and a state of its own in
 		// lower case in an 11-wide column. zsh never lists a finished job,
 		// so it needs no word for one.
 		JobLine:    "[%[1]d]  %[2]s %-11[3]s%[4]s",
 		JobRunning: "running",
+		// Only ever seen in a completion notice: zsh's listing never
+		// mentions a job that has ended.
+		JobDone:    "done",
 		JobStopped: "suspended",
 		// The reason first and the name after it, which is zsh's shape and
 		// nobody else's. Lowercased, which LowercaseReason already says.

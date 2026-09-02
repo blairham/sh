@@ -68,6 +68,7 @@ func TestSemantics(t *testing.T) {
 		// A `jobs` listing: which end it starts from, and whether a job that
 		// has already ended appears in it at all. Both split the panel two
 		// and two, which is why both are fields.
+		{"AnnouncesBackgroundJob", s.AnnouncesBackgroundJob, interp.Yes},
 		{"JobsShowBackgroundCommand", s.JobsShowBackgroundCommand, interp.Yes},
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.No},
 		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.Yes},

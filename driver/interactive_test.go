@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/interp"
 )
 
 // Deciding to prompt is part of reading the invocation, so it belongs to the
@@ -116,6 +117,30 @@ func TestAPromptReadsLoginFromItsOwnArgv(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A prompt has someone to tell about its jobs and a script does not, so the
+// front end is what says so: no shell in the panel announces a background job
+// to `sh -c`, and a Runner embedded in another program has nobody to tell.
+func TestOnlyAPromptReportsItsJobs(t *testing.T) {
+	sh := shell()
+	sem := interp.PosixSemantics()
+	sem.AnnouncesBackgroundJob = interp.Yes
+	sh.Semantics = sem
+
+	t.Run("a prompt announces", func(t *testing.T) {
+		_, errs, _ := runPipedShell(t, sh, "sleep 0.2 &\n", "testsh", "-i")
+		if !strings.Contains(errs, "[1] ") {
+			t.Errorf("err = %q, want the job announced", errs)
+		}
+	})
+
+	t.Run("a script does not", func(t *testing.T) {
+		_, errs, _ := runPipedShell(t, sh, "", "testsh", "-c", "sleep 0.2 &")
+		if strings.Contains(errs, "[1] ") {
+			t.Errorf("err = %q, want a script told nothing", errs)
+		}
+	})
 }
 
 func runPiped(t *testing.T, typed string, argv ...string) (out, errs string, code int) {

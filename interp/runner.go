@@ -180,6 +180,15 @@ type Runner struct {
 	// every subshell — see lockedWriter.
 	streams *streamLocks
 
+	// JobControl says this shell reports its jobs to a person: it announces
+	// one when it is backgrounded and says so when it ends.
+	//
+	// The front end's to set, and only for a prompt. A script is told
+	// nothing by any shell in the panel — `sh -c 'sleep 1 &'` announces
+	// nothing anywhere — and a Runner embedded in another program has no
+	// person to tell.
+	JobControl bool
+
 	// Dynamic holds parameters whose value is produced when they are read,
 	// rather than stored: `LINENO` is wherever execution has reached, and
 	// `RANDOM` is a different number every time. A dialect fills in the ones

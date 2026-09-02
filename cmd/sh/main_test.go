@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
@@ -110,5 +111,44 @@ func TestDetailDistinguishesSubstitutionsFromText(t *testing.T) {
 	}
 	if strings.Contains(got, "plain(echo hi)") {
 		t.Errorf("detail = %q: a substitution must not render as literal text", got)
+	}
+}
+
+// The wiring is what went wrong, so the wiring is what this tests: `-c`
+// reached past driver's own and lost the operands with it, and nothing in
+// this package could say so.
+//
+// `dispatch` returns a status rather than exiting for exactly that reason.
+func TestDispatchGivesTheCommandStringItsOperands(t *testing.T) {
+	sh, _ := pickDialect("bash")
+	var out bytes.Buffer
+	sh.Stdout, sh.Stderr = &out, &out
+	sh.Name = "testsh"
+
+	code := dispatch(sh, options{
+		command: `echo "0=$0 1=$1 n=$#"`, commandGiven: true,
+	}, "", []string{"zero", "one", "two"})
+	if code != 0 {
+		t.Fatalf("status %d: %s", code, out.String())
+	}
+	if got, want := strings.TrimSpace(out.String()), "0=zero 1=one n=2"; got != want {
+		t.Errorf("out = %q, want %q", got, want)
+	}
+}
+
+// An empty `-c` is a command string and an empty one: running nothing is not
+// the same as having named nothing to run, which is why the option carries
+// whether it was given rather than whether it is empty.
+func TestDispatchTellsAnEmptyCommandFromNone(t *testing.T) {
+	sh, _ := pickDialect("bash")
+	var out bytes.Buffer
+	sh.Stdout, sh.Stderr = &out, &out
+	sh.Name = "testsh"
+
+	if code := dispatch(sh, options{command: "", commandGiven: true}, "", nil); code != 0 {
+		t.Errorf("status %d for an empty command string, want it to run and do nothing", code)
+	}
+	if out.Len() != 0 {
+		t.Errorf("out = %q, want nothing", out.String())
 	}
 }

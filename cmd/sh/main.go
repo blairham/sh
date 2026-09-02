@@ -73,36 +73,65 @@ func main() {
 		fail(err)
 	}
 
+	os.Exit(dispatch(sh, options{
+		tokens: *tokens, parse: *parse, command: *command,
+		commandGiven: *command != "", file: *file, interactive: *interactive,
+	}, src, flag.Args()))
+}
+
+// options is what this front end reads that a shell's own conventions do not
+// cover — a token dump, a tree dump, and which dialect to be.
+type options struct {
+	tokens, parse bool
+	command       string
+	// commandGiven, because `-c ''` is a command string and an empty one:
+	// running nothing is not the same as having named nothing to run.
+	commandGiven bool
+	file         string
+	interactive  bool
+}
+
+// dispatch decides what to run, and returns the status rather than exiting so
+// that a test can call it.
+//
+// Separate from main because the wiring is what went wrong: `-c` reached past
+// driver's own and lost the operands with it, and nothing here could say so.
+func dispatch(sh driver.Shell, o options, src string, args []string) int {
 	switch {
-	case *tokens:
+	case o.tokens:
 		if err := dumpTokens(src, sh.Dialect); err != nil {
 			fail(err)
 		}
-	case *parse:
+		return exitOK
+	case o.parse:
 		if err := dumpTree(src, sh.Dialect); err != nil {
 			fail(err)
 		}
-	case *command != "":
-		os.Exit(driver.Run(sh, *command, sh.Name))
-	case len(flag.Args()) > 0:
+		return exitOK
+	case o.commandGiven:
+		// Through driver's own `-c`, not past it: the label in a parse
+		// failure's location, the dialect that parses the string whole, and
+		// the operands that become `$0` and the parameters all belong to it.
+		return driver.RunCommand(sh, o.command, args)
+	case len(args) > 0:
 		// A bare argument is a script to run, which is how a shell is
 		// normally invoked and how the corpus runs the cases that depend on
 		// being read from a file rather than from -c.
-		os.Exit(runPath(sh, flag.Args()[0]))
-	case *file != "":
+		return runPath(sh, args[0])
+	case o.file != "":
 		// -f names a file, and its help text says so, but until the run path
 		// moved into driver only -tokens and -parse ever read it: `sh -f x.sh`
 		// fell through to "nothing to do". It reads it as a script, which is
 		// what it always claimed to do.
-		os.Exit(runPath(sh, *file))
-	case *interactive || driver.Interactively(sh, false):
+		return runPath(sh, o.file)
+	case o.interactive || driver.Interactively(sh, false):
 		// Nothing to run was named and the input is a terminal, so this is
 		// someone at a keyboard rather than a script arriving on stdin.
-		os.Exit(driver.Interactive(sh))
+		return driver.Interactive(sh)
 	default:
 		// Not a terminal and nothing named: the script is on stdin, which is
 		// how `curl … | sh` and `sh < script` arrive.
-		os.Exit(runStdin(sh))
+		return runStdin(sh)
 	}
 }
 

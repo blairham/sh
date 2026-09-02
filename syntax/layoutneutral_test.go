@@ -85,6 +85,36 @@ func TestAnArrangementIsTheCallersAndNotThisPackages(t *testing.T) {
 	}
 }
 
+// Two knobs that no shell measured so far tells apart, kept apart anyway.
+//
+// Every arrangement seen indents its blocks *and* gives the outermost brace a
+// line of its own, or does neither — so one field could stand for both today.
+// Tying them together would be writing a coincidence into the type, and the
+// next shell to want a nested indent with the brace on its own line would
+// have to unpick it. They are separate, and this says so.
+func TestIndentingAndTheOutermostBraceAreSeparateQuestions(t *testing.T) {
+	body := functionBody(t, "f(){ if true; then echo y; fi; }")
+
+	nestedInline := syntax.Layout{
+		Indent: "  ", Nested: true, Lines: true, Separator: ";",
+		BraceOpenSuffix: " ",
+		// Nested, and the brace keeps its own line's company.
+		OutermostBraceOpensALine: false,
+	}
+	if got, want := syntax.PrintWith(body, nestedInline), "{   if true; then\n    echo y\n  fi\n}"; got != want {
+		t.Errorf("nested with the brace inline:\n  got  %q\n  want %q", got, want)
+	}
+
+	flatOpened := syntax.Layout{
+		Indent: " ", Nested: false, Lines: true, Separator: ";",
+		BraceOpenSuffix:          " ",
+		OutermostBraceOpensALine: true,
+	}
+	if got, want := syntax.PrintWith(body, flatOpened), "{ \n if true; then\n echo y\n fi\n}"; got != want {
+		t.Errorf("flat with the brace on its own line:\n  got  %q\n  want %q", got, want)
+	}
+}
+
 // And asking for nothing gets an arrangement that belongs to nobody: the
 // source's own line structure, which is what a round trip wants and what a
 // caller that has not chosen should get rather than somebody's house style.

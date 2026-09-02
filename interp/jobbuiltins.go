@@ -41,8 +41,12 @@ func biJobs(r *Runner, _ context.Context, args []string) int {
 	if code != 0 {
 		return code
 	}
+	showBg, code := r.showsBackgroundCommand(rows)
+	if code != 0 {
+		return code
+	}
 	for _, row := range rows {
-		r.printf("%s\n", r.jobLine(row.n, row.job))
+		r.printf("%s\n", r.jobLine(row.n, row.job, showBg))
 	}
 	// The listing that reports a finished job is the listing that forgets
 	// it: every shell in the panel mentions one at most once, so a second
@@ -105,16 +109,63 @@ func (r *Runner) jobRows(jobs []*Job) ([]jobRow, int) {
 // Four shells, four shapes — the number and the marker are common and
 // everything else is not, so the wording carries three verbs: the marker, the
 // state and the command.
-func (r *Runner) jobLine(i int, j *Job) string {
-	state := Wording(r.diag().JobRunning, "Running")
+func (r *Runner) jobLine(i int, j *Job, showBg bool) string {
+	dg := r.diag()
+	state := Wording(dg.JobRunning, "Running")
 	switch {
 	case j.Stopped:
-		state = Wording(r.diag().JobStopped, "Stopped")
+		// One verb, the signal that stopped it, which only one dialect names.
+		state = Wording(dg.JobStopped, "Stopped", j.StopSig)
 	case j.Finished():
-		state = Wording(r.diag().JobDone, "Done")
+		state = Wording(dg.JobDone, "Done")
+		if j.Status != 0 && dg.JobExited != "" {
+			// A dialect that says something else for a job that failed. One
+			// verb, the status, and no dialect words it without one.
+			state = Wording(dg.JobExited, "Exit %[1]d", j.Status)
+		}
 	}
-	return Wording(r.diag().JobLine, "[%[1]d]%[2]s  %-24[3]s%[4]s",
-		i+1, r.jobMarker(j), state, j.Command)
+	return Wording(dg.JobLine, "[%[1]d]%[2]s  %-24[3]s%[4]s",
+		i+1, r.jobMarker(j), state, r.jobCommand(j, showBg))
+}
+
+// jobCommand is the command column of a listing.
+//
+// Three things it is not simply j.Command. A shell that kept no text has a
+// placeholder to print in its place; a job still running carries its `&` back
+// in one dialect and not in the others; and a job that has ended never does,
+// even there.
+func (r *Runner) jobCommand(j *Job, showBg bool) string {
+	if j.Command == "" || (!j.Stopped && !showBg) {
+		return r.diag().JobUnknownCommand
+	}
+	if r.diag().JobRunningShowsAmpersand && !j.Stopped && !j.Finished() {
+		return j.Command + " &"
+	}
+	return j.Command
+}
+
+// showsBackgroundCommand asks whether a `&` job's command belongs in the
+// listing, once, and only where there is one to leave out.
+//
+// A stopped job's command is printed by every shell in the panel, and a job
+// whose text was never kept has nothing to decide about — so a listing of
+// those alone is the same in all four and must not be refused.
+func (r *Runner) showsBackgroundCommand(rows []jobRow) (bool, int) {
+	decides := false
+	for _, row := range rows {
+		if !row.job.Stopped && row.job.Command != "" {
+			decides = true
+			break
+		}
+	}
+	if !decides {
+		return false, 0
+	}
+	show := r.ask(r.sem().JobsShowBackgroundCommand, "the command of a `&` job appearing in a `jobs` listing")
+	if r.unspecified {
+		return false, 2
+	}
+	return show, 0
 }
 
 // jobMarker is the `+` on the job `fg` would pick and the `-` on the one after

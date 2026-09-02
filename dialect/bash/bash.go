@@ -98,12 +98,24 @@ func Semantics() interp.Semantics {
 	s.JobsListNewestFirst = interp.No
 	s.JobsListFinishedJobs = interp.Yes
 
+	// Whether a `&` job's command appears in a `jobs` listing.
+	s.JobsShowBackgroundCommand = interp.Yes
+
 	return s
 }
 
 // Diagnostics is how bash 5 reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		// Measured from a terminal: `[1]+` then two spaces, the state in a
+		// 27-wide column, then the command — with the `&` back on it while
+		// the job runs and gone once it has ended.
+		JobLine:                  "[%[1]d]%[2]s  %-27[3]s%[4]s",
+		JobRunning:               "Running",
+		JobStopped:               "Stopped",
+		JobDone:                  "Done",
+		JobExited:                "Exit %[1]d",
+		JobRunningShowsAmpersand: true,
 		// No verb at all: the name, then the OS string. Same either way —
 		// bash does not distinguish opening from creating.
 		CannotOpen:              "%[1]s: %[2]s",

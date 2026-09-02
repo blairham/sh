@@ -105,12 +105,21 @@ func Semantics() interp.Semantics {
 	s.JobsListNewestFirst = interp.No
 	s.JobsListFinishedJobs = interp.No
 
+	// Whether a `&` job's command appears in a `jobs` listing.
+	s.JobsShowBackgroundCommand = interp.Yes
+
 	return s
 }
 
 // Diagnostics is how zsh reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		// Two spaces before the marker, one after, and a state of its own in
+		// lower case in an 11-wide column. zsh never lists a finished job,
+		// so it needs no word for one.
+		JobLine:    "[%[1]d]  %[2]s %-11[3]s%[4]s",
+		JobRunning: "running",
+		JobStopped: "suspended",
 		// The reason first and the name after it, which is zsh's shape and
 		// nobody else's. Lowercased, which LowercaseReason already says.
 		// Same either way — zsh does not distinguish opening from creating.

@@ -7,6 +7,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -23,6 +24,13 @@ type Job struct {
 	// on — what ^Z leaves behind. A stopped job is not a finished one, and
 	// the difference is the whole reason `fg` exists.
 	Stopped bool
+
+	// StopSig is what stopped it, and is 0 where nothing did.
+	//
+	// Kept because one dialect names it: dash lists a stopped job as
+	// `Suspended: 18` rather than `Stopped`, so the number has to travel
+	// with the job to reach the listing.
+	StopSig int
 
 	// Command is what was typed, for a `jobs` listing to show. Empty where
 	// the shell had nothing to record — a job with no process of its own.
@@ -82,6 +90,12 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 		// What was typed. The words are about to be expanded and the
 		// process started, and after that nothing else remembers how the
 		// command was spelled — which is what a `jobs` listing shows.
+		//
+		// Kept whatever the dialect will do with it. Two shells never show
+		// it for a `&` job, and that is asked where the listing is built:
+		// starting the job does not turn on the answer, and refusing to
+		// start one over a question about how it would be *printed* would
+		// be refusing to work.
 		Command: st.Text,
 	}
 
@@ -157,10 +171,11 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 // process that is still there and will stay there until something tells it to
 // go on. A shell that forgot it would leave the process stopped forever with
 // nothing able to name it.
-func (r *Runner) addStoppedJob(pid int, argv []string) {
+func (r *Runner) addStoppedJob(pid int, argv []string, sig syscall.Signal) {
 	job := &Job{
 		PID:     pid,
 		Stopped: true,
+		StopSig: int(sig),
 		Command: strings.Join(argv, " "),
 		done:    make(chan struct{}),
 		ready:   make(chan struct{}),

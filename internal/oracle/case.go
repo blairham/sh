@@ -966,6 +966,26 @@ var Corpus = []Case{
 		Why:     "the other half of the same rule, and why the status cannot simply be set before the right-hand sides run: an assignment reports what a substitution in it reported, and reports success when there is none — even where a failing command came first",
 	},
 	{
+		ID: "jobs/a-running-background-job", Category: "builtins",
+		Snippet: `sleep 0.4 & jobs`,
+		Why:     "one line of a `jobs` listing, and four shells write it four ways — the marker spacing, the width of the state column, the case of the word, and whether the command is there at all. dash shows an empty column and ksh93 `<command unknown>`, because neither kept the text; bash puts the `&` back on",
+	},
+	{
+		ID: "jobs/a-finished-background-job", Category: "builtins",
+		Snippet: `sleep 0.05 & sleep 0.5; jobs; echo "---"; jobs`,
+		Why:     "reported once and then forgotten, in every shell that reports it at all — the second listing is empty. zsh never mentions it and ksh93 still calls it Running, which is not a reaping race: it says so after `wait` too",
+	},
+	{
+		ID: "jobs/a-background-job-that-failed", Category: "builtins",
+		Snippet: `false & sleep 0.3; jobs`,
+		Why:     "the status reaches the listing, and the two shells that say so disagree about how: `Exit 1` against `Done(1)`",
+	},
+	{
+		ID: "jobs/two-jobs-and-which-end-it-starts-from", Category: "builtins",
+		Snippet: `sleep 0.4 & sleep 0.4 & jobs`,
+		Why:     "dash and ksh93 print the most recent first and bash and zsh the oldest, and the number stays with the job either way — `%2` has to mean the same thing at both ends. Also where the `+` and `-` markers become visible",
+	},
+	{
 		ID: "errexit/assignment-takes-the-substitution", Category: "shell options",
 		Snippet: `set -e; x=$(false); echo reached`,
 		Why:     "an assignment reports what the substitution reported, so this ends the script where `echo \"$(false)\"` does not",

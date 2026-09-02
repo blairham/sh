@@ -66,13 +66,27 @@ func Semantics() interp.Semantics {
 	s.JobsListNewestFirst = interp.Yes
 	s.JobsListFinishedJobs = interp.Yes
 
+	// Whether a `&` job's command appears in a `jobs` listing.
+	s.JobsShowBackgroundCommand = interp.No
+
 	return s
 }
 
 // Diagnostics is how dash reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
-		Location: interp.LocationColonLine,
+		// `[1] + ` — a space each side of the marker — then a 27-wide state.
+		// The command column is empty for a `&` job because dash kept no
+		// text for one, which JobKeepsBackgroundCommand answers; a job dash
+		// stopped itself does print its command here.
+		JobLine:    "[%[1]d] %[2]s %-27[3]s%[4]s",
+		JobRunning: "Running",
+		// dash names the signal that stopped it rather than calling it
+		// stopped: `Suspended: 18`, where 18 is SIGTSTP.
+		JobStopped: "Suspended: %[1]d",
+		JobDone:    "Done",
+		JobExited:  "Done(%[1]d)",
+		Location:   interp.LocationColonLine,
 		// dash names what it wanted instead, and calls the token by its
 		// class rather than by name.
 		// A bad digit is not a diagnosis dash reaches at all: the literal

@@ -1112,7 +1112,7 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 	if stopped {
 		// Still there, so it becomes a job rather than a result. The prompt
 		// comes back and the command is waiting to be told to go on.
-		r.addStoppedJob(pid, argv)
+		r.addStoppedJob(pid, argv, w.Signal)
 	}
 	r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: r.status})
 	return nil

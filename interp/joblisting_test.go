@@ -85,23 +85,48 @@ func TestWhichEndAJobsListingStartsFrom(t *testing.T) {
 // decides something: one job is in the same place either way.
 func TestAJobsListingRefusesOnlyWhereTheAnswerMatters(t *testing.T) {
 	for _, tc := range []struct {
-		name, src string
-		refuses   bool
+		name, src, axis string
 	}{
-		{"two jobs, so the order decides", `sleep 0.3 & sleep 0.3 & jobs`, true},
-		{"one job, so it does not", `sleep 0.3 & jobs`, false},
-		{"a finished job, so whether to list it decides", `true & sleep 0.05; jobs`, true},
+		// Each row names the *one* question its listing turns on, so a
+		// refusal for the wrong reason is a failure rather than a pass.
+		{"two jobs, so the order decides", `sleep 0.3 & sleep 0.3 & jobs`, "starting with the most recent"},
+		{"a finished job, so whether to list it decides", `true & sleep 0.05; jobs`, "a finished job appearing"},
+		{"one job, so only its command decides", `sleep 0.3 & jobs`, "the command of a `&` job"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, _ := run(t, tc.src, func(r *Runner) {
 				sem := CoreSemantics()
+				// Answered, so the refusal that is left is the one this row
+				// is about.
+				if tc.axis != "starting with the most recent" {
+					sem.JobsListNewestFirst = No
+				}
+				if tc.axis != "a finished job appearing" {
+					sem.JobsListFinishedJobs = Yes
+				}
+				if tc.axis != "the command of a `&` job" {
+					sem.JobsShowBackgroundCommand = Yes
+				}
 				r.Semantics = &sem
 			})
-			if got := strings.Contains(out, "no dialect was chosen"); got != tc.refuses {
-				t.Errorf("refused = %v, want %v (out %q)", got, tc.refuses, out)
+			if !strings.Contains(out, tc.axis) {
+				t.Errorf("out = %q, want a refusal naming %q", out, tc.axis)
 			}
 		})
 	}
+
+	// And a listing that turns on none of them is the same in all four, so
+	// the core prints it rather than refusing.
+	t.Run("nothing to decide", func(t *testing.T) {
+		out, st := run(t, `sleep 0.3 & jobs`, func(r *Runner) {
+			sem := CoreSemantics()
+			sem.JobsShowBackgroundCommand = Yes
+			r.Semantics = &sem
+		})
+		if st != 0 || strings.Contains(out, "no dialect was chosen") {
+			t.Errorf("out = %q status %d, want the listing", out, st)
+		}
+	})
 }
 
 func withListing(finished, newest Answer, into **Runner) func(*Runner) {
@@ -109,6 +134,9 @@ func withListing(finished, newest Answer, into **Runner) func(*Runner) {
 		sem := CoreSemantics()
 		sem.JobsListFinishedJobs = finished
 		sem.JobsListNewestFirst = newest
+		// These are about what a listing contains and in what order, not
+		// about whether a `&` job's command is in it.
+		sem.JobsShowBackgroundCommand = Yes
 		r.Semantics = &sem
 		if into != nil {
 			*into = r

@@ -119,7 +119,12 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.C
 		}
 
 		path := name
-		if r.Dir != "" && !filepath.IsAbs(path) {
+		if name != "" && r.Dir != "" && !filepath.IsAbs(path) {
+			// A name that is not there is not a relative one. Joining it to
+			// the working directory turns "no name" into *the directory*,
+			// which then opens: `cd /tmp; cat < $unset` read the directory
+			// rather than failing, and only because the shell had been told
+			// where it was. Every shell reports that it cannot open "".
 			path = filepath.Join(r.Dir, path)
 		}
 		action := Action{Kind: ActionOpen, Path: path, Write: flags != os.O_RDONLY}

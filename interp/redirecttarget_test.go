@@ -169,6 +169,30 @@ func TestAnEmptyTargetCanHaveAWordingOfItsOwn(t *testing.T) {
 	}
 }
 
+// A name that is not there is not a relative one. Joining it to the working
+// directory turns "no name" into *the directory*, which then opens — so
+// `cd /tmp; cat < $unset` read the directory rather than failing, and only
+// once the shell had been told where it was.
+func TestAnEmptyTargetIsNotTheWorkingDirectory(t *testing.T) {
+	dir := t.TempDir()
+	touch(t, dir, "in-there")
+	out, st := run(t, `e=; cat < $e; echo "st=$?"`, func(r *Runner) {
+		sem := CoreSemantics()
+		sem.RedirectTargetIsAnOrdinaryWord = No
+		sem.SplitParamExpansion = Yes
+		r.Semantics, r.Dir = &sem, dir
+	})
+	if strings.Contains(out, "in-there") {
+		t.Errorf("out = %q, want the directory not opened", out)
+	}
+	if !strings.Contains(out, "st=1") && !strings.Contains(out, "st=2") {
+		t.Errorf("out = %q, want the redirection to have failed", out)
+	}
+	if st != 0 {
+		t.Logf("status %d", st)
+	}
+}
+
 func literalTargets(dir string) func(*Runner) {
 	return func(r *Runner) {
 		sem := CoreSemantics()

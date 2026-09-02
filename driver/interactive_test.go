@@ -6,6 +6,7 @@ package driver_test
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -89,6 +90,31 @@ func TestThePromptIsNamedByTheInvocation(t *testing.T) {
 	out, _, _ := runPiped(t, "echo \"$0\"\n", "/some/where/myshell", "-i")
 	if !strings.Contains(out, "/some/where/myshell\n") {
 		t.Errorf("out = %q, want the shell named by argv[0]", out)
+	}
+}
+
+// A login shell is one whose argv[0] begins with a dash, and the prompt has to
+// ask *its* argv rather than the process's — reading os.Args here is invisible
+// in a binary, where they are the same, and wrong in everything else.
+func TestAPromptReadsLoginFromItsOwnArgv(t *testing.T) {
+	home := t.TempDir()
+	if err := os.WriteFile(filepath.Join(home, ".profile"), []byte("echo from-profile\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	for _, tc := range []struct {
+		name, arg0 string
+		want       bool
+	}{
+		{"a login shell reads it", "-testsh", true},
+		{"an ordinary one does not", "testsh", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _, _ := runPiped(t, "", tc.arg0, "-i")
+			if got := strings.Contains(out, "from-profile"); got != tc.want {
+				t.Errorf("read .profile = %v, want %v (out %q)", got, tc.want, out)
+			}
+		})
 	}
 }
 

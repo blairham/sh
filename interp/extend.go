@@ -159,3 +159,20 @@ func sortedNames(seen map[string]bool) []string {
 	sort.Strings(out)
 	return out
 }
+
+// Expand performs parameter and command expansion on raw text.
+//
+// For a caller that holds a *setting* which is a path with parameters in it —
+// `ENV=$HOME/.shrc` is the usual spelling — and has to turn it into the path
+// before opening it. Without this the caller would have to parse and expand,
+// which is the whole of this package.
+//
+// No field splitting and no pathname expansion: a setting that names a file
+// names one, and the same reasoning a here-document's body goes through
+// applies here, which is why it goes through the same code.
+func (r *Runner) Expand(text string) string {
+	if text == "" {
+		return ""
+	}
+	return r.expandRawText(text)
+}

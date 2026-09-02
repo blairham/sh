@@ -269,3 +269,34 @@ func TestPrintfOptions(t *testing.T) {
 		t.Errorf("usage line present=%v, want false (said %q)", got, out)
 	}
 }
+
+// TestUmask: this dialect's answers about `umask`, run through a hook that
+// keeps the mask in a variable — nothing here touches the machine's own.
+func TestUmask(t *testing.T) {
+	run := func(src string) (string, int) {
+		t.Helper()
+		f, err := syntax.Parse(src, dash.Dialect())
+		if err != nil {
+			t.Fatal(err)
+		}
+		var buf bytes.Buffer
+		sem, dg := dash.Semantics(), dash.Diagnostics()
+		held := 0o022
+		r := &interp.Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "dash"}
+		r.SetUmask = func(mask int) (int, error) { old := held; held = mask; return old, nil }
+		dash.Apply(r)
+		st, rerr := r.Run(context.Background(), f)
+		if rerr != nil {
+			t.Fatal(rerr)
+		}
+		return buf.String(), st
+	}
+	if out, _ := run("umask"); strings.TrimSpace(out) != "0022" {
+		t.Errorf("read: said %q, want %q", out, "0022")
+	}
+	// Whether setting with -S echoes the new mask.
+	out, _ := run("umask -S 077")
+	if got := strings.TrimSpace(out); got != "" {
+		t.Errorf("-S with a mask: said %q, want %q", got, "")
+	}
+}

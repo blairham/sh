@@ -162,6 +162,15 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline) error {
 		}
 		sub.Stderr = sharedErr
 		sub.Stdout = sharedOut
+		if i != n-1 {
+			// Only the last element is the job. A backgrounded pipeline is
+			// one job with one pid, and bash and zsh both report the *last*
+			// element's — `sleep 1 | cat &` sets `$!` to the `cat`. Every
+			// element carrying the job meant every element writing the same
+			// Job.PID from its own goroutine: a data race, and wrong for all
+			// but one of them.
+			sub.bg = nil
+		}
 		if readers[i] != nil {
 			sub.Stdin = readers[i]
 		}

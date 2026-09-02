@@ -368,6 +368,12 @@ func (p *Parser) parseStmt() *Stmt {
 		// backgrounds the whole and-or.
 		st.Background = true
 		st.Semi = p.tok.Pos
+		// What was written, for a `jobs` listing to show. Taken from the
+		// input rather than rebuilt from the tree: `jobs` shows what someone
+		// typed, spacing and quoting included, and a printer would show what
+		// the parser understood — which is a different thing and the wrong
+		// one here.
+		st.Text = p.textBetween(expr.Pos(), st.Semi)
 		p.next()
 	case TokSemi:
 		st.Semi = p.tok.Pos
@@ -376,6 +382,18 @@ func (p *Parser) parseStmt() *Stmt {
 		st.Semi = p.tok.Pos
 	}
 	return st
+}
+
+// textBetween is the input from one position up to another, trimmed.
+//
+// Bounds-checked rather than trusted: a Pos is only as good as whatever
+// produced it, and this is on the path a `jobs` listing prints from.
+func (p *Parser) textBetween(from, to Pos) string {
+	src := p.lex.src
+	if from.Offset < 0 || to.Offset > len(src) || from.Offset >= to.Offset {
+		return ""
+	}
+	return strings.TrimSpace(src[from.Offset:to.Offset])
 }
 
 // parseAndOr reads pipelines joined by && and ||.

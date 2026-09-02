@@ -40,6 +40,17 @@ type Stmt struct {
 	// because `a && b &` backgrounds the whole and-or.
 	Background bool
 	Semi       Pos
+
+	// Text is the source this statement was written as, and is recorded only
+	// for a background one.
+	//
+	// Only there because that is the only place a shell has to show a
+	// command back to someone long after reading it: a `jobs` listing names
+	// what is running, and by then the words have been expanded, the
+	// process has been started, and nothing else remembers how it was
+	// spelled. Every other node can be re-read from the input it came from,
+	// so paying for the text everywhere would be paying for one case.
+	Text string
 }
 
 func (s *Stmt) Pos() Pos { return s.Expr.Pos() }

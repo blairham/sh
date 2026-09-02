@@ -517,6 +517,26 @@ var Corpus = []Case{
 
 	// --- printf: the last builtin that was not one ------------------------
 	{
+		ID: "printf/assigns-with-v", Category: "printf",
+		Snippet: `printf -v out "%05d" 42; echo "[$out]"`,
+		Why:     "`printf -v name` puts the formatted text in a variable and prints nothing, which is how a script formats a value without a command substitution and a subshell. bash and zsh have it; dash and ksh93 reject it as an unknown option, and each words that differently",
+	},
+	{
+		ID: "printf/double-dash-ends-the-options", Category: "printf",
+		Snippet: `printf -- "x\n"`,
+		Why:     "unanimous, and the reason a format that begins with a dash can be written at all — without it `printf -- \"x\\n\"` printed the `--`",
+	},
+	{
+		ID: "printf/a-dash-word-is-an-option", Category: "printf",
+		Snippet: `printf -q x; echo "st=$?"`,
+		Why:     "three of the four read a leading `-` word as options and refuse one they do not know, each wording it differently; zsh takes it as the format and prints `-q`. Not written with a dash-initial *format* — `printf \"-%s\\n\" x` is refused the same way and by its first letter, `-%`, but ksh93 then goes on through the rest of the bundle and complains about `-s` as well, which is a divergence of its own",
+	},
+	{
+		ID: "printf/a-lone-dash-is-an-operand", Category: "printf",
+		Snippet: `printf "%s\n" -`,
+		Why:     "a bare `-` is not an option in any of the four, which is what keeps the rule above from swallowing it",
+	},
+	{
 		ID: "printf/format-is-reused", Category: "printf",
 		Snippet: `printf "[%s]" a b c; echo`,
 		Why:     "the format runs again until the arguments are gone, which is the property that makes printf a loop rather than a formatter",

@@ -84,6 +84,8 @@ func Semantics() interp.Semantics {
 	s.GetoptsClearsOptarg = interp.No
 	s.CdWithoutHomeIsAnError = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.Yes
+	s.PrintfAssignsWithV = interp.Yes
+	s.PrintfRejectsUnknownOption = interp.Yes
 	return s
 }
 
@@ -150,13 +152,15 @@ func Diagnostics() interp.Diagnostics {
 		GetoptsMissingArgument: "option requires an argument -- %[1]s",
 		// bash names itself and no line here, where it gives a line to
 		// everything else it says.
-		GetoptsNamesNoLine: true,
-		CdCannotChange:     "cd: %[1]s: %[2]s",
-		CdHomeNotSet:       "cd: HOME not set",
-		CdOldpwdNotSet:     "cd: OLDPWD not set",
-		PrintfBadNumber:    "printf: %[1]s: invalid number",
-		PrintfBadVerb:      "printf: `%[1]s': invalid format character",
-		PrintfUsage:        "printf: usage: printf [-v var] format [arguments]",
+		GetoptsNamesNoLine:        true,
+		CdCannotChange:            "cd: %[1]s: %[2]s",
+		CdHomeNotSet:              "cd: HOME not set",
+		CdOldpwdNotSet:            "cd: OLDPWD not set",
+		PrintfBadNumber:           "printf: %[1]s: invalid number",
+		PrintfBadVerb:             "printf: `%[1]s': invalid format character",
+		PrintfBadOption:           "printf: %[1]s: invalid option",
+		PrintfBadOptionShowsUsage: true,
+		PrintfUsage:               "printf: usage: printf [-v var] format [arguments]",
 		// The usage carries no location, as `kill`'s does not.
 		PrintfUsageUnprefixed:     true,
 		TrapBadSignal:             "trap: %[1]s: invalid signal specification",

@@ -243,7 +243,8 @@ func (p *printer) command(c Command) {
 		}
 		p.str("{ ")
 		p.stmts(x.List)
-		p.str("; }")
+		p.terminate()
+		p.str("}")
 		p.redirs(x.Redirs)
 	case *IfClause:
 		p.ifClause(x)
@@ -444,7 +445,22 @@ func (p *printer) keyword(word string) {
 		p.str("\n" + p.pad() + word)
 		return
 	}
-	p.str("; " + word)
+	p.terminate()
+	p.str(word)
+}
+
+// terminate ends the statement before a closing word.
+//
+// A `;` unless the line has already ended, which a here-document body does:
+// its lines go after the statement, so what follows is at the start of a line
+// and `; fi` there is a `;` with nothing before it. Found by printing every
+// shell script on this machine — four of them close a block right after a
+// here-document, and the corpus has none that do.
+func (p *printer) terminate() {
+	if strings.HasSuffix(p.b.String(), "\n") {
+		return
+	}
+	p.str("; ")
 }
 
 func (p *printer) caseClause(x *CaseClause) {
@@ -692,6 +708,15 @@ func (p *printer) quoted(q Quoting, spans []Span) {
 func (p *printer) span(s Span) {
 	switch s.Kind {
 	case CommandSubst:
+		// A space where the command starts with its own parenthesis: `$((`
+		// is arithmetic, so `$( (echo x) )` written without one is a
+		// different construct entirely. The same trap as a redirection whose
+		// target begins with `<`, and found the same way — by printing
+		// scripts nobody wrote for this.
+		if strings.HasPrefix(s.Value, "(") {
+			p.str("$( " + s.Value + ")")
+			return
+		}
 		p.str("$(" + s.Value + ")")
 	case ArithSubst:
 		p.str("$((" + s.Value + "))")

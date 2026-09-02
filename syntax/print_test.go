@@ -45,3 +45,51 @@ func TestPrintingRoundTripsTheCorpus(t *testing.T) {
 		})
 	}
 }
+
+// What the corpus could not reach.
+//
+// Found by printing every shell script installed on this machine and reading
+// it back — 163 of them parse, and nine did not survive the round trip. The
+// corpus has 490 snippets and none of them does either of these, because
+// nobody writes a case to exercise a printer.
+func TestPrintingWhatTheCorpusDoesNotReach(t *testing.T) {
+	for _, tc := range []struct{ name, src string }{
+		{
+			// A here-document body ends the line, so what closes the block
+			// is at the start of the next one and `; }` there is a `;` with
+			// nothing before it. Four scripts on this machine close a block
+			// straight after a here-document.
+			"a block closed after a here-document",
+			"f() { cat <<EOF\nbody\nEOF\n}\n",
+		},
+		{
+			"a conditional closed after one",
+			"if true; then cat <<EOF\nbody\nEOF\nfi\n",
+		},
+		{
+			"an arm closed after one",
+			"case x in a) cat <<EOF\nbody\nEOF\n;; esac\n",
+		},
+		{
+			// Backticks and `$( )` are one node, so every substitution is
+			// written the second way — and a backtick one has no space to
+			// inherit. `$((` is arithmetic, so a substitution whose first
+			// command is a subshell needs one put in: the same trap as a
+			// redirection target beginning with `<`, and the reason
+			// /opt/homebrew/bin/gettext.sh could not be reprinted.
+			"a backtick substitution beginning with a subshell",
+			"x=`(echo hi) 2>/dev/null`\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := syntax.Parse(tc.src, syntax.Core())
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			printed := syntax.Print(f)
+			if _, err := syntax.Parse(printed, syntax.Core()); err != nil {
+				t.Fatalf("printed source does not parse: %v\n  from: %q\n  gave: %q", err, tc.src, printed)
+			}
+		})
+	}
+}

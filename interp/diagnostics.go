@@ -436,6 +436,22 @@ type Diagnostics struct {
 	// because only there can the result be a number of words other than one.
 	AmbiguousRedirect string
 
+	// ExportNotAFunction is `export -f` given a name that is not one. One
+	// verb: the name.
+	ExportNotAFunction string
+
+	// ExportFunctionOptionRefused is `export -f` in a dialect that knows the
+	// letter and will not carry a function. No verbs.
+	//
+	// One shell needs it, and needing it is the measurement: it answers
+	// `export -q` with `bad option: -q` and `export -f` with `invalid
+	// option(s)`, naming the letter in one and not the other. `-f` is not
+	// unknown to it — it means functions to that shell's `typeset` — so what
+	// it refuses is the combination rather than the letter, and it says so
+	// differently. Empty leaves `-f` to the ordinary unknown-option path,
+	// which is what the other two want.
+	ExportFunctionOptionRefused string
+
 	// JobStarted announces a backgrounded job. Two verbs: the job number and
 	// the process id.
 	//

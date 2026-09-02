@@ -102,6 +102,8 @@ func Semantics() interp.Semantics {
 	s.JobsShowBackgroundCommand = interp.Yes
 
 	// Whether a backgrounded job is announced to whoever is typing.
+	// Whether `export -f` carries a function to a child.
+	s.ExportCarriesFunctions = interp.Yes
 	s.AnnouncesBackgroundJob = interp.Yes
 
 	// Whether a redirection target is expanded as an ordinary word.
@@ -264,6 +266,9 @@ func Apply(r *interp.Runner) {
 	// Where the script is, which is a stack rather than a value — see
 	// callstack.go for why it cannot be stored.
 	registerCallStack(r)
+	// A function carried to a child through the environment, under the name
+	// bash gives it. The other three do not carry functions at all.
+	r.SetFunctionExport("BASH_FUNC_", "%%")
 	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
 	r.SetDynamic("SECONDS", func(rr *interp.Runner) string {
 		return strconv.Itoa(int(rr.SecondsFrom()))

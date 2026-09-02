@@ -190,6 +190,12 @@ type Runner struct {
 	// funcFiles is where each function was defined, because that is the file
 	// its frame reports rather than the one that called it.
 	funcFiles map[string]string
+	// exportedFuncs are the functions written into a command's environment,
+	// and funcExportPrefix/Suffix are what the entry is called. Only one
+	// dialect carries functions that way, so the naming comes from it.
+	exportedFuncs                      map[string]bool
+	importedFuncs                      bool
+	funcExportPrefix, funcExportSuffix string
 
 	// JobControl says this shell reports its jobs to a person: it announces
 	// one when it is backgrounded and says so when it ends.
@@ -547,6 +553,7 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	r.ctx = ctx
 	r.ensurePWD()
 	r.ensureSpecials()
+	r.ensureImportedFunctions()
 	if r.started.IsZero() {
 		r.started = time.Now()
 	}
@@ -1163,6 +1170,9 @@ func (r *Runner) environ() []string {
 		}
 		out = append(out, kv)
 	}
+	// The functions this shell was told to carry, written as source because
+	// there is nothing but a string to carry them in.
+	out = append(out, r.functionEnviron()...)
 	for k, v := range r.Vars {
 		// Only exported names reach a command's environment; the rest are
 		// the shell's own.

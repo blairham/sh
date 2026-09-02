@@ -381,6 +381,12 @@ type Semantics struct {
 	// a name there and gets answered as one before the real names are.
 	TypeEndsOptionsWithDashDash Answer
 
+	// ExportCarriesFunctions gives `export` its `-f`, which writes a
+	// function into a child's environment. True in bash alone: the other
+	// three have no way to carry a function at all, and each rejects the
+	// option as an option — two of them fatally.
+	ExportCarriesFunctions Answer
+
 	// AnnouncesBackgroundJob prints the job number and the process id when a
 	// job is backgrounded, before the next prompt. True in bash, ksh93 and
 	// zsh; dash says nothing at all.

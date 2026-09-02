@@ -112,6 +112,8 @@ func Semantics() interp.Semantics {
 	// zsh announces a job only where standard input is a terminal, and not
 	// on a pipe as the other two do. Answered as "announces" either way: the
 	// difference is about what it is talking to rather than about the shell.
+	// Whether `export -f` carries a function to a child.
+	s.ExportCarriesFunctions = interp.No
 	s.AnnouncesBackgroundJob = interp.Yes
 
 	// Whether a redirection target is expanded as an ordinary word.
@@ -136,8 +138,12 @@ func Diagnostics() interp.Diagnostics {
 		// Two spaces before the marker, one after, and a state of its own in
 		// lower case in an 11-wide column. zsh never lists a finished job,
 		// so it needs no word for one.
-		JobLine:    "[%[1]d]  %[2]s %-11[3]s%[4]s",
-		JobRunning: "running",
+		JobLine: "[%[1]d]  %[2]s %-11[3]s%[4]s",
+		// zsh knows `-f` — it means functions to its own typeset — so what
+		// it refuses is the combination, and it says so without naming the
+		// letter it names in every other refusal.
+		ExportFunctionOptionRefused: "invalid option(s)",
+		JobRunning:                  "running",
 		// Only ever seen in a completion notice: zsh's listing never
 		// mentions a job that has ended.
 		JobDone:    "done",

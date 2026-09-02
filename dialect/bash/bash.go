@@ -261,6 +261,9 @@ func Apply(r *interp.Runner) {
 	// builtins it has, so it is answered here rather than as an axis.
 	r.SetSpecial("UID", strconv.Itoa(os.Getuid()))
 	r.SetSpecial("EUID", strconv.Itoa(os.Geteuid()))
+	// Where the script is, which is a stack rather than a value — see
+	// callstack.go for why it cannot be stored.
+	registerCallStack(r)
 	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
 	r.SetDynamic("SECONDS", func(rr *interp.Runner) string {
 		return strconv.Itoa(int(rr.SecondsFrom()))

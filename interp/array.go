@@ -85,6 +85,12 @@ func (r *Runner) arrayElems(name string) ([]string, bool) {
 	if a, ok := r.Arrays[name]; ok {
 		return a, true
 	}
+	// Produced rather than stored, and asked after the stored table so that
+	// a script assigning to the name gets its own value back — the same
+	// order the scalar ones follow.
+	if produce, ok := r.DynamicArrays[name]; ok {
+		return produce(r), true
+	}
 	if v, ok := r.getVar(name); ok {
 		return []string{v}, true
 	}

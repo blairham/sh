@@ -335,6 +335,13 @@ func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
 		r.funcs = map[string]*syntax.FuncDecl{}
 	}
 	r.funcs[c.Name] = c
+	// Where it was defined, which is the file its frame reports — a function
+	// declared in a sourced library and called from the script names the
+	// library, not the script.
+	if r.funcFiles == nil {
+		r.funcFiles = map[string]string{}
+	}
+	r.funcFiles[c.Name] = r.currentFile()
 	r.status = 0
 	return nil
 }
@@ -353,6 +360,8 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 	}
 	saved, savedIn := r.Params, r.inFunc
 	r.Params, r.inFunc = args, fn.Name
+	r.pushFrame(Frame{File: r.funcFiles[fn.Name], Name: fn.Name})
+	defer r.popFrame()
 	r.depth++
 	// A scope the function's locals unwind into.
 	sc := &scope{saved: map[string]string{}, existed: map[string]bool{}, keyword: fn.Keyword}

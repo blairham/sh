@@ -100,6 +100,11 @@ func Semantics() interp.Semantics {
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.No
 	s.BadOptionToSpecialBuiltinFatal = interp.No
+	// A `jobs` listing: which end it starts from, and whether a job that
+	// has already ended appears in it at all.
+	s.JobsListNewestFirst = interp.No
+	s.JobsListFinishedJobs = interp.No
+
 	return s
 }
 

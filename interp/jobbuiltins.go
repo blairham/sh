@@ -37,10 +37,67 @@ func biJobs(r *Runner, _ context.Context, args []string) int {
 		}
 		jobs = []*Job{j}
 	}
-	for i, j := range jobs {
-		r.printf("%s\n", r.jobLine(i, j))
+	rows, code := r.jobRows(jobs)
+	if code != 0 {
+		return code
+	}
+	for _, row := range rows {
+		r.printf("%s\n", r.jobLine(row.n, row.job))
+	}
+	// The listing that reports a finished job is the listing that forgets
+	// it: every shell in the panel mentions one at most once, so a second
+	// `jobs` shows nothing. Not an axis and not optional — a shell that kept
+	// them would grow a listing for the length of the session.
+	//
+	// Over what was *looked at* rather than over what was printed, which is
+	// not the same set: the dialect that leaves a finished job out of the
+	// listing has still finished with it, and forgetting only the printed
+	// ones would keep them forever in exactly that dialect.
+	for _, j := range jobs {
+		if j.Finished() {
+			r.Forget(j)
+		}
 	}
 	return 0
+}
+
+// jobRow is a job together with the number it is listed under, which is its
+// own and not its place in the listing — the two differ wherever the newest
+// is printed first.
+type jobRow struct {
+	n   int
+	job *Job
+}
+
+// jobRows is what a `jobs` listing contains and in what order, both of which
+// the dialect answers.
+func (r *Runner) jobRows(jobs []*Job) ([]jobRow, int) {
+	rows := make([]jobRow, 0, len(jobs))
+	for i, j := range jobs {
+		// Asked only where there is a finished job to leave out. A listing
+		// of running ones is the same in every shell, and refusing it
+		// because of a question nothing turned on would be refusing to work.
+		if j.Finished() {
+			if !r.ask(r.sem().JobsListFinishedJobs, "a finished job appearing in a `jobs` listing") {
+				if r.unspecified {
+					return nil, 2
+				}
+				continue
+			}
+		}
+		rows = append(rows, jobRow{n: i, job: j})
+	}
+	// Likewise: one job is in the same place either way.
+	if len(rows) > 1 {
+		if r.ask(r.sem().JobsListNewestFirst, "a `jobs` listing starting with the most recent") {
+			for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
+				rows[i], rows[j] = rows[j], rows[i]
+			}
+		} else if r.unspecified {
+			return nil, 2
+		}
+	}
+	return rows, 0
 }
 
 // jobLine is one row of a `jobs` listing.
@@ -50,8 +107,11 @@ func biJobs(r *Runner, _ context.Context, args []string) int {
 // state and the command.
 func (r *Runner) jobLine(i int, j *Job) string {
 	state := Wording(r.diag().JobRunning, "Running")
-	if j.Stopped {
+	switch {
+	case j.Stopped:
 		state = Wording(r.diag().JobStopped, "Stopped")
+	case j.Finished():
+		state = Wording(r.diag().JobDone, "Done")
 	}
 	return Wording(r.diag().JobLine, "[%[1]d]%[2]s  %-24[3]s%[4]s",
 		i+1, r.jobMarker(j), state, j.Command)

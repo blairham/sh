@@ -347,10 +347,14 @@ type Diagnostics struct {
 	// behavior is the feature here and the wording is the follow-up.
 	JobLine string
 
-	// JobRunning and JobStopped are the two states a job is listed in. No
-	// verbs.
+	// JobRunning, JobStopped and JobDone are the states a job is listed in.
+	// No verbs.
+	//
+	// JobDone is the one a job is in exactly once: the listing that reports
+	// it is the listing that forgets it.
 	JobRunning string
 	JobStopped string
+	JobDone    string
 
 	// NoSuchJob is a job spec that names nothing. Two verbs: the builtin and
 	// the spec as written.

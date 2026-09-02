@@ -40,6 +40,19 @@ type Job struct {
 // markReady says the job's PID is now final, one way or the other.
 func (j *Job) markReady() { j.readyOnce.Do(func() { close(j.ready) }) }
 
+// Finished reports whether the job has ended, without waiting for it.
+//
+// Not the same question as Stopped: a stopped job has not ended and is
+// waiting to be told to go on, which is why `fg` can still name it.
+func (j *Job) Finished() bool {
+	select {
+	case <-j.done:
+		return true
+	default:
+		return false
+	}
+}
+
 // Wait blocks until the job finishes and reports its status.
 func (j *Job) Wait() int {
 	<-j.done

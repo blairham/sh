@@ -349,6 +349,24 @@ type Semantics struct {
 	// in this shell, so `echo x | read v` sets v. True in ksh93 and zsh.
 	LastPipelineElementInCurrentShell Answer
 
+	// JobsListNewestFirst puts the most recent job at the top of a `jobs`
+	// listing. True in dash and ksh93; bash and zsh list oldest first.
+	//
+	// A two-two split, which is the usual shape here and the reason this is
+	// a field rather than a choice: there is no ordering of the shells that
+	// explains it.
+	JobsListNewestFirst Answer
+
+	// JobsListFinishedJobs includes a job that has already ended in a `jobs`
+	// listing, once, before forgetting it. True in bash, dash and ksh93; zsh
+	// drops a finished job without ever mentioning it.
+	//
+	// The forgetting is not the axis and is not optional: every shell in the
+	// panel reports a finished job at most once, so a second `jobs` shows
+	// nothing. A shell that kept them would grow a listing for the length of
+	// the session.
+	JobsListFinishedJobs Answer
+
 	// ShiftPastEndFatal ends a non-interactive shell when `shift` runs off
 	// the end. True in dash and ksh93.
 	ShiftPastEndFatal Answer

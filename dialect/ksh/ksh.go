@@ -99,6 +99,11 @@ func Semantics() interp.Semantics {
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.Yes
 	s.BadOptionToSpecialBuiltinFatal = interp.Yes
+	// A `jobs` listing: which end it starts from, and whether a job that
+	// has already ended appears in it at all.
+	s.JobsListNewestFirst = interp.Yes
+	s.JobsListFinishedJobs = interp.Yes
+
 	return s
 }
 
@@ -111,6 +116,11 @@ const kshKillUsage = "Usage: kill [-lL] [-n signum] [-s signame] job ...\n" +
 
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		// ksh93 lists a job that has already ended as "Running", and it is
+		// not a reaping race — it still says so after `wait`. Recorded as
+		// the word ksh uses rather than corrected, which would be inventing
+		// a shell that does not exist.
+		JobDone: "Running",
 		// The name first, then the verb with the OS string bracketed after
 		// it — the same shape ksh93 uses for `.`, which DotCannotOpen
 		// already says.

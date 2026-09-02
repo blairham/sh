@@ -366,6 +366,21 @@ type Semantics struct {
 	// and `> $e` with a pattern truncated whichever file happened to match.
 	RedirectTargetIsAnOrdinaryWord Answer
 
+	// TypePrintsFunctionBody makes `type name` follow "name is a function"
+	// with the function itself, reformatted. True in bash alone; the other
+	// three stop at the sentence.
+	//
+	// Answered and not yet honored: printing a body needs a printer for the
+	// syntax tree, which this does not have — see the `type` builtin, which
+	// refuses rather than printing the sentence and silently dropping the
+	// half of the answer that was asked for.
+	TypePrintsFunctionBody Answer
+
+	// TypeEndsOptionsWithDashDash makes `type -- name` skip the `--`. True
+	// in bash, ksh93 and zsh; dash has no options for it at all, so `--` is
+	// a name there and gets answered as one before the real names are.
+	TypeEndsOptionsWithDashDash Answer
+
 	// AnnouncesBackgroundJob prints the job number and the process id when a
 	// job is backgrounded, before the next prompt. True in bash, ksh93 and
 	// zsh; dash says nothing at all.

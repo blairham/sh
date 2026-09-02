@@ -1052,6 +1052,21 @@ var Corpus = []Case{
 		Why:     "a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else",
 	},
 	{
+		ID: "type/what-a-name-would-run", Category: "builtins",
+		Snippet: `type cd; type if; type ls`,
+		Why:     "the same lookup `command -v` does, said in a sentence for a person to read — and every part of the sentence is worded differently: a keyword is `a shell keyword`, `a keyword` or `a reserved word`, and one shell reports an external as a tracked alias for the path",
+	},
+	{
+		ID: "type/a-name-that-is-nothing", Category: "builtins",
+		Snippet: `type nope; echo "st=$?"`,
+		Why:     "four wordings and two statuses, and two of the four write this line with no shell name in front of it where every other message they print carries one. The status is a plain failure in three and a missing command's 127 in the fourth",
+	},
+	{
+		ID: "type/several-names-and-a-double-dash", Category: "builtins",
+		Snippet: `type -- cd ls; echo "st=$?"`,
+		Why:     "`--` ends the options in three of them and is a name in the fourth, which has no options for `type` at all — so it answers about `--` first and then about the names, and reports the failure",
+	},
+	{
 		ID: "redir/open-failure-wording", Category: "redirection",
 		Snippet: `cat < nosuchfile; echo "st=$?"`,
 		Why:     "all four word a failed open differently and only two of them use a verb: bash prints the name then the OS string, dash puts `cannot open` in front, ksh93 puts the name first and brackets the reason after it, and zsh prints the reason first, lowercased. dash also writes its own text for this errno — `No such file`, where the OS says `No such file or directory`",

@@ -108,6 +108,10 @@ func TestSemantics(t *testing.T) {
 		// has already ended appears in it at all. Both split the panel two
 		// and two, which is why both are fields.
 		{"AnnouncesBackgroundJob", s.AnnouncesBackgroundJob, interp.No},
+		// What `type` does: whether it follows the sentence with the
+		// function itself, and whether `--` ends its options.
+		{"TypePrintsFunctionBody", s.TypePrintsFunctionBody, interp.No},
+		{"TypeEndsOptionsWithDashDash", s.TypeEndsOptionsWithDashDash, interp.No},
 		{"JobsShowBackgroundCommand", s.JobsShowBackgroundCommand, interp.No},
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.Yes},
 		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.Yes},
@@ -119,6 +123,21 @@ func TestSemantics(t *testing.T) {
 }
 
 func TestDiagnostics(t *testing.T) {
+	// The four lines `type` prints, each of them this shell's own words.
+	if got, want := dash.Diagnostics().TypeFunction, "%[1]s is a shell function"; got != want {
+		t.Errorf("TypeFunction = %q, want %q", got, want)
+	}
+	if got, want := dash.Diagnostics().TypeNotFound, "%[1]s: not found"; got != want {
+		t.Errorf("TypeNotFound = %q, want %q", got, want)
+	}
+	// A missing name gets no shell name in front of it, and a missing
+	// command's status rather than a plain failure.
+	if !dash.Diagnostics().TypeNotFoundUnprefixed {
+		t.Error("TypeNotFoundUnprefixed = false, want the line written bare")
+	}
+	if got, want := dash.Diagnostics().TypeNotFoundStatus, 127; got != want {
+		t.Errorf("TypeNotFoundStatus = %d, want %d", got, want)
+	}
 	if got, want := dash.Diagnostics().SyntaxStatus(), 2; got != want {
 		t.Errorf("syntax-error status = %d, want %d", got, want)
 	}

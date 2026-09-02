@@ -326,6 +326,38 @@ type Diagnostics struct {
 	// where the complaint above is a single string. dash and zsh print none.
 	BuiltinUsage map[string]string
 
+	// The four lines `type` prints, one per kind of thing a name can be.
+	// One verb each — the name — except TypeExternal, which takes the path
+	// as a second.
+	//
+	//	bash   if is a shell keyword     ls is /bin/ls
+	//	dash   if is a shell keyword     ls is /bin/ls
+	//	ksh93  if is a keyword           ls is a tracked alias for /bin/ls
+	//	zsh    if is a reserved word     ls is /bin/ls
+	//
+	// A function is the same story again: "a function" in two of them, "a
+	// shell function" in a third, and a fourth that names itself in the line.
+	TypeKeyword  string
+	TypeBuiltin  string
+	TypeFunction string
+	TypeExternal string
+
+	// TypeNotFound is a name `type` could not account for. One verb: the
+	// name. Two of the four write it with no shell name or location in
+	// front, which TypeNotFoundUnprefixed says.
+	//
+	//	bash   bash: line 1: type: nope: not found
+	//	dash   nope: not found
+	//	ksh93  ksh: whence: nope: not found
+	//	zsh    nope not found
+	TypeNotFound           string
+	TypeNotFoundUnprefixed bool
+
+	// TypeNotFoundStatus is what `type` reports when a name was not
+	// accounted for. Zero means 1, which is three of the four; dash answers
+	// with a missing command's 127.
+	TypeNotFoundStatus int
+
 	// BuiltinUsageUnprefixed writes it with no location and no shell name in
 	// front, which is what ksh93 does with every usage line.
 	BuiltinUsageUnprefixed bool

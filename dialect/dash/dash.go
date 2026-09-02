@@ -75,12 +75,24 @@ func Semantics() interp.Semantics {
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.No
 
+	// Whether `type --` ends the options.
+	s.TypePrintsFunctionBody = interp.No
+	s.TypeEndsOptionsWithDashDash = interp.No
+
 	return s
 }
 
 // Diagnostics is how dash reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		TypeKeyword:  "%[1]s is a shell keyword",
+		TypeFunction: "%[1]s is a shell function",
+		// No shell name and no location in front of it, alone among the
+		// messages dash prints.
+		TypeNotFound:           "%[1]s: not found",
+		TypeNotFoundUnprefixed: true,
+		// And a missing *command*'s status rather than a plain failure.
+		TypeNotFoundStatus: 127,
 		// `[1] + ` — a space each side of the marker — then a 27-wide state.
 		// The command column is empty for a `&` job because dash kept no
 		// text for one, which JobKeepsBackgroundCommand answers; a job dash

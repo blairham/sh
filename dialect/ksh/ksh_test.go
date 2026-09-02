@@ -71,6 +71,10 @@ func TestSemantics(t *testing.T) {
 		// has already ended appears in it at all. Both split the panel two
 		// and two, which is why both are fields.
 		{"AnnouncesBackgroundJob", s.AnnouncesBackgroundJob, interp.Yes},
+		// What `type` does: whether it follows the sentence with the
+		// function itself, and whether `--` ends its options.
+		{"TypePrintsFunctionBody", s.TypePrintsFunctionBody, interp.No},
+		{"TypeEndsOptionsWithDashDash", s.TypeEndsOptionsWithDashDash, interp.Yes},
 		{"JobsShowBackgroundCommand", s.JobsShowBackgroundCommand, interp.No},
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.Yes},
 		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.Yes},
@@ -82,6 +86,13 @@ func TestSemantics(t *testing.T) {
 }
 
 func TestDiagnostics(t *testing.T) {
+	// The four lines `type` prints, each of them this shell's own words.
+	if got, want := ksh.Diagnostics().TypeKeyword, "%[1]s is a keyword"; got != want {
+		t.Errorf("TypeKeyword = %q, want %q", got, want)
+	}
+	if got, want := ksh.Diagnostics().TypeExternal, "%[1]s is a tracked alias for %[2]s"; got != want {
+		t.Errorf("TypeExternal = %q, want %q", got, want)
+	}
 	// ksh93 lists a job that has already ended as "Running" — not a reaping
 	// race, it still says so after `wait`. The word ksh uses, rather than
 	// the word a shell ought to use.

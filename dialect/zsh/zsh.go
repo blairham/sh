@@ -117,13 +117,22 @@ func Semantics() interp.Semantics {
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.No
 
+	// Whether `type --` ends the options.
+	s.TypePrintsFunctionBody = interp.No
+	s.TypeEndsOptionsWithDashDash = interp.Yes
+
 	return s
 }
 
 // Diagnostics is how zsh reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
-		JobStarted: "[%[1]d] %[2]d",
+		TypeKeyword: "%[1]s is a reserved word",
+		// The only one that names itself in the line.
+		TypeFunction:           "%[1]s is a shell function from zsh",
+		TypeNotFound:           "%[1]s not found",
+		TypeNotFoundUnprefixed: true,
+		JobStarted:             "[%[1]d] %[2]d",
 		// Two spaces before the marker, one after, and a state of its own in
 		// lower case in an 11-wide column. zsh never lists a finished job,
 		// so it needs no word for one.

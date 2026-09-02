@@ -69,6 +69,10 @@ func TestSemantics(t *testing.T) {
 		// has already ended appears in it at all. Both split the panel two
 		// and two, which is why both are fields.
 		{"AnnouncesBackgroundJob", s.AnnouncesBackgroundJob, interp.Yes},
+		// What `type` does: whether it follows the sentence with the
+		// function itself, and whether `--` ends its options.
+		{"TypePrintsFunctionBody", s.TypePrintsFunctionBody, interp.No},
+		{"TypeEndsOptionsWithDashDash", s.TypeEndsOptionsWithDashDash, interp.Yes},
 		{"JobsShowBackgroundCommand", s.JobsShowBackgroundCommand, interp.Yes},
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.No},
 		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.No},
@@ -80,6 +84,16 @@ func TestSemantics(t *testing.T) {
 }
 
 func TestDiagnostics(t *testing.T) {
+	// The four lines `type` prints, each of them this shell's own words.
+	if got, want := zsh.Diagnostics().TypeKeyword, "%[1]s is a reserved word"; got != want {
+		t.Errorf("TypeKeyword = %q, want %q", got, want)
+	}
+	if got, want := zsh.Diagnostics().TypeFunction, "%[1]s is a shell function from zsh"; got != want {
+		t.Errorf("TypeFunction = %q, want %q", got, want)
+	}
+	if !zsh.Diagnostics().TypeNotFoundUnprefixed {
+		t.Error("TypeNotFoundUnprefixed = false, want the line written bare")
+	}
 	if got, want := zsh.Diagnostics().SyntaxStatus(), 1; got != want {
 		t.Errorf("syntax-error status = %d, want %d", got, want)
 	}

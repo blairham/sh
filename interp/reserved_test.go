@@ -58,7 +58,9 @@ func TestAMissingBuiltinIsNotLookedForOnPath(t *testing.T) {
 	// Its own protection is stronger and is tested below.
 	// `ulimit` has left too, for the reason umask did: it is a builtin now.
 	// `jobs`, `fg` and `bg` have left too: they are builtins now.
-	for _, name := range []string{"alias", "unalias", "hash", "type"} {
+	// And `type`, for the same reason — its own protection is that it never
+	// reports a reserved name's PATH hit, which TestTypeWillNotName covers.
+	for _, name := range []string{"alias", "unalias", "hash"} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			// An external of the same name that would happily succeed.

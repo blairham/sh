@@ -43,7 +43,6 @@ package interp
 var reservedBuiltins = map[string]bool{
 	"alias":   true,
 	"hash":    true,
-	"type":    true,
 	"ulimit":  true,
 	"umask":   true,
 	"unalias": true,

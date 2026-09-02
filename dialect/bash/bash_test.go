@@ -69,6 +69,10 @@ func TestSemantics(t *testing.T) {
 		// has already ended appears in it at all. Both split the panel two
 		// and two, which is why both are fields.
 		{"AnnouncesBackgroundJob", s.AnnouncesBackgroundJob, interp.Yes},
+		// What `type` does: whether it follows the sentence with the
+		// function itself, and whether `--` ends its options.
+		{"TypePrintsFunctionBody", s.TypePrintsFunctionBody, interp.Yes},
+		{"TypeEndsOptionsWithDashDash", s.TypeEndsOptionsWithDashDash, interp.Yes},
 		{"JobsShowBackgroundCommand", s.JobsShowBackgroundCommand, interp.Yes},
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.No},
 		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.Yes},
@@ -80,6 +84,16 @@ func TestSemantics(t *testing.T) {
 }
 
 func TestDiagnostics(t *testing.T) {
+	// The four lines `type` prints, each of them this shell's own words.
+	if got, want := bash.Diagnostics().TypeKeyword, "%[1]s is a shell keyword"; got != want {
+		t.Errorf("TypeKeyword = %q, want %q", got, want)
+	}
+	if got, want := bash.Diagnostics().TypeFunction, "%[1]s is a function"; got != want {
+		t.Errorf("TypeFunction = %q, want %q", got, want)
+	}
+	if got, want := bash.Diagnostics().TypeNotFound, "type: %[1]s: not found"; got != want {
+		t.Errorf("TypeNotFound = %q, want %q", got, want)
+	}
 	if got, want := bash.Diagnostics().SyntaxStatus(), 2; got != want {
 		t.Errorf("syntax-error status = %d, want %d", got, want)
 	}

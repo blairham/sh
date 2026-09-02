@@ -107,12 +107,19 @@ func Semantics() interp.Semantics {
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.Yes
 
+	// Whether `type --` ends the options.
+	s.TypePrintsFunctionBody = interp.Yes
+	s.TypeEndsOptionsWithDashDash = interp.Yes
+
 	return s
 }
 
 // Diagnostics is how bash 5 reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		TypeKeyword:  "%[1]s is a shell keyword",
+		TypeFunction: "%[1]s is a function",
+		TypeNotFound: "type: %[1]s: not found",
 		// The target as it was written, not as it expanded.
 		AmbiguousRedirect: "%[1]s: ambiguous redirect",
 		JobStarted:        "[%[1]d] %[2]d",

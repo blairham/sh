@@ -1,0 +1,198 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+package interp
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"syscall"
+)
+
+// `jobs`, `fg` and `bg` — three of the names reserved in #117, and the three
+// that could not be written until something could tell a stopped command from
+// a finished one.
+//
+// They are registered here rather than in a dialect because all four shells
+// have them and disagree only about how the listing is worded, which is what
+// Diagnostics is for.
+
+func init() {
+	builtins["jobs"] = biJobs
+	builtins["fg"] = biFg
+	builtins["bg"] = biBg
+}
+
+func biJobs(r *Runner, _ context.Context, args []string) int {
+	args, _, code := r.builtinOptions("jobs", args, "lpnrs")
+	if code != 0 {
+		return code
+	}
+	jobs := r.jobs
+	if len(args) > 0 {
+		j, code := r.findJob(args[0], "jobs")
+		if code != 0 {
+			return code
+		}
+		jobs = []*Job{j}
+	}
+	for i, j := range jobs {
+		r.printf("%s\n", r.jobLine(i, j))
+	}
+	return 0
+}
+
+// jobLine is one row of a `jobs` listing.
+//
+// Four shells, four shapes — the number and the marker are common and
+// everything else is not, so the wording carries three verbs: the marker, the
+// state and the command.
+func (r *Runner) jobLine(i int, j *Job) string {
+	state := Wording(r.diag().JobRunning, "Running")
+	if j.Stopped {
+		state = Wording(r.diag().JobStopped, "Stopped")
+	}
+	return Wording(r.diag().JobLine, "[%[1]d]%[2]s  %-24[3]s%[4]s",
+		i+1, r.jobMarker(j), state, j.Command)
+}
+
+// jobMarker is the `+` on the job `fg` would pick and the `-` on the one after
+// it, which is how a listing says what `%%` and `%-` mean without spelling
+// them out.
+func (r *Runner) jobMarker(j *Job) string {
+	switch {
+	case j == r.lastJob:
+		return "+"
+	case len(r.jobs) > 1 && j == r.jobs[len(r.jobs)-2]:
+		return "-"
+	}
+	return " "
+}
+
+func biFg(r *Runner, _ context.Context, args []string) int {
+	j, code := r.resume(args, "fg")
+	if code != 0 {
+		return code
+	}
+	// Named on the way in, which is how a shell says which job it just put
+	// back in front of you when you did not say.
+	r.printf("%s\n", j.Command)
+	if err := r.signalJob(j, syscall.SIGCONT); err != nil {
+		r.diagf("fg: %v\n", err)
+		return 1
+	}
+	j.Stopped = false
+	if r.WaitForCommand == nil {
+		// Nothing here can wait for it, so saying it was resumed is the most
+		// this can honestly claim.
+		return 0
+	}
+	// The terminal goes with it, for the same reason it does when a command
+	// starts: without it ^C and ^Z would reach this shell instead, and the
+	// job would run on unreachable while the wait below never returned.
+	if r.Foreground != nil {
+		if err := r.Foreground(j.PID); err == nil {
+			defer func() { _ = r.Foreground(0) }()
+		}
+	}
+	w, err := r.WaitForCommand(j.PID)
+	if err != nil {
+		r.diagf("fg: %v\n", err)
+		return 1
+	}
+	status, stopped := r.waitResult(w)
+	if stopped {
+		// Stopped again, so it stays a job rather than being forgotten.
+		j.Stopped = true
+		return status
+	}
+	r.Forget(j)
+	return status
+}
+
+func biBg(r *Runner, _ context.Context, args []string) int {
+	j, code := r.resume(args, "bg")
+	if code != 0 {
+		return code
+	}
+	if err := r.signalJob(j, syscall.SIGCONT); err != nil {
+		r.diagf("bg: %v\n", err)
+		return 1
+	}
+	j.Stopped = false
+	// `&` after it, which is what says the shell is not waiting.
+	r.printf("%s &\n", j.Command)
+	return 0
+}
+
+// resume finds the job `fg` or `bg` was asked about.
+func (r *Runner) resume(args []string, name string) (*Job, int) {
+	if len(args) == 0 {
+		if r.lastJob == nil {
+			r.diagf("%s\n", Wording(r.diag().NoSuchJob, "%[1]s: no current job", name))
+			return nil, 1
+		}
+		return r.lastJob, 0
+	}
+	return r.findJob(args[0], name)
+}
+
+// findJob reads a job spec.
+//
+// `%1` by number, `%%` and `%+` for the current one, `%-` for the one before
+// it, and a bare number for the same. Unanimous across the panel, which is why
+// none of it is a dialect question.
+func (r *Runner) findJob(spec, name string) (*Job, int) {
+	j, code := r.findJobQuietly(spec)
+	if code != 0 {
+		r.diagf("%s\n", Wording(r.diag().NoSuchJob, "%[1]s: %[2]s: no such job", name, spec))
+		return nil, 1
+	}
+	return j, 0
+}
+
+// signalJob sends to the job's process group rather than to the one process.
+//
+// The group is the point: a job is a pipeline as often as a command, and
+// signaling only the first of three would resume one and leave the rest
+// stopped. The negative pid is how the kernel is told to mean the group.
+func (r *Runner) signalJob(j *Job, sig syscall.Signal) error {
+	if j.PID == 0 {
+		// A job with no process of its own — a builtin or a compound command
+		// running on a cloned runner. There is nothing to signal, and saying
+		// so is better than signaling something else.
+		return errNoJobProcess
+	}
+	if r.SignalGroup == nil {
+		return errNoJobProcess
+	}
+	return r.SignalGroup(j.PID, sig)
+}
+
+// errNoJobProcess is a job there is nothing to signal for: one that never had
+// a process, or a shell with no way to send to a group.
+var errNoJobProcess = errors.New("this job has no process to resume")
+
+// findJobQuietly is findJob without the complaint, for a caller that words its
+// own — `kill %9` is `kill`'s error to report, not this one's.
+func (r *Runner) findJobQuietly(spec string) (*Job, int) {
+	text := strings.TrimPrefix(spec, "%")
+	switch text {
+	case "", "%", "+":
+		if r.lastJob == nil {
+			return nil, 1
+		}
+		return r.lastJob, 0
+	case "-":
+		if len(r.jobs) < 2 {
+			return nil, 1
+		}
+		return r.jobs[len(r.jobs)-2], 0
+	}
+	n, ok := atoi(text)
+	if !ok || n < 1 || n > len(r.jobs) {
+		return nil, 1
+	}
+	return r.jobs[n-1], 0
+}

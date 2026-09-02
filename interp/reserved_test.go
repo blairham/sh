@@ -57,7 +57,8 @@ func TestAMissingBuiltinIsNotLookedForOnPath(t *testing.T) {
 	// rather than refused, and the dispatch reaches it before this check.
 	// Its own protection is stronger and is tested below.
 	// `ulimit` has left too, for the reason umask did: it is a builtin now.
-	for _, name := range []string{"alias", "unalias", "hash", "type", "jobs", "fg", "bg"} {
+	// `jobs`, `fg` and `bg` have left too: they are builtins now.
+	for _, name := range []string{"alias", "unalias", "hash", "type"} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			// An external of the same name that would happily succeed.

@@ -10,7 +10,7 @@ import (
 	"syscall"
 )
 
-// catchInterrupt keeps ^C from killing the shell while a command runs.
+// catchInterrupt keeps ^C and ^Z from reaching the shell while a command runs.
 //
 // At the prompt the terminal is raw and ISIG is off, so ^C is a byte the
 // editor sees and no signal is sent at all. While a command runs the terminal
@@ -38,7 +38,10 @@ type interrupts struct {
 
 func catchInterrupt() (*interrupts, func()) {
 	in := &interrupts{ch: make(chan os.Signal, 1)}
-	signal.Notify(in.ch, syscall.SIGINT)
+	// SIGTSTP for the same reason as SIGINT, and with the same distinction:
+	// caught, so the *job* stops and the shell does not. Ignoring it would be
+	// inherited across exec and nothing would ever stop.
+	signal.Notify(in.ch, syscall.SIGINT, syscall.SIGTSTP)
 	done := make(chan struct{})
 	go func() {
 		for {

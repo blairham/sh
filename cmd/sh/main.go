@@ -26,8 +26,8 @@
 // With nothing to run and a terminal on stdin it prompts: a line editor with
 // history that survives the session, Tab completion of commands and files,
 // PS1 and PS2, and a continuation prompt for a construct that has not
-// finished. Job control is still missing, and until it is this is a shell to
-// try rather than one to live in.
+// finished, and job control: ^Z stops what is running and gives the prompt
+// back, `jobs` lists what is stopped, and `fg` and `bg` put one back.
 package main
 
 import (

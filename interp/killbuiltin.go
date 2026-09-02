@@ -229,9 +229,23 @@ func (r *Runner) signalSpec(spec string, form killSpecForm) (string, syscall.Sig
 func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) int {
 	sent, failed := 0, 0
 	for _, t := range targets {
-		pid, err := strconv.Atoi(t)
-		if err != nil {
+		pid, group, ok := r.killTarget(t)
+		if !ok {
 			return r.killReport(killNotAPid, t)
+		}
+		if group {
+			// A job is a process *group*, so the signal goes to all of it —
+			// which is what makes `kill %1` reach a pipeline rather than only
+			// its first command. Through the same hook `fg` and `bg` use, so
+			// that "a job is a group" is said in one place rather than two
+			// that could drift.
+			if err := r.signalGroupPid(pid, sig); err != nil {
+				failed++
+				r.killReport(killNoSuchProcess, t)
+				continue
+			}
+			sent++
+			continue
 		}
 		if r.killedBy != "" {
 			// This shell has just killed itself. Nothing after the signal
@@ -256,6 +270,35 @@ func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) 
 		return r.status
 	}
 	return r.killStatus(sent, failed)
+}
+
+// killTarget reads what `kill` was pointed at: a pid, or a job.
+//
+// `%1` names a job rather than a process, and a job is a process *group*. The
+// caller is told which it got, because reaching a group is a different call
+// from reaching a process and only one of them is this package's to make.
+func (r *Runner) killTarget(t string) (pid int, group, ok bool) {
+	if !strings.HasPrefix(t, "%") {
+		n, err := strconv.Atoi(t)
+		return n, false, err == nil
+	}
+	j, code := r.findJobQuietly(t)
+	if code != 0 || j.PID == 0 {
+		return 0, false, false
+	}
+	return j.PID, true, true
+}
+
+// signalGroupPid sends to a job's process group.
+//
+// Nil hook means this shell has no way to reach a group, which is not the same
+// as the group being gone — so it is reported as a process it could not find
+// rather than silently succeeding.
+func (r *Runner) signalGroupPid(pgid int, sig syscall.Signal) error {
+	if r.SignalGroup == nil {
+		return errNoJobProcess
+	}
+	return r.SignalGroup(pgid, sig)
 }
 
 // sendSignal sends one signal and settles what it means for this shell.

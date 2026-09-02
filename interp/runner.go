@@ -121,6 +121,39 @@ type Runner struct {
 	// getter.
 	SetUmask func(mask int) (old int, err error)
 
+	// WaitForCommand, when set, waits for a command this shell started and
+	// reports how it ended — including that it *stopped* rather than
+	// finished, which is what ^Z does and what an ordinary wait cannot say.
+	//
+	// Opt-in for the reason the other process hooks are, and for one more:
+	// waiting is the caller's to own because reaping is. A Runner embedded in
+	// a program that has its own child-handling must not race it, and a
+	// library that called wait4 behind the embedder's back would.
+	//
+	// Nil means the ordinary wait, which cannot see a stopped command — so a
+	// shell without this hook hangs on ^Z rather than returning to a prompt.
+	WaitForCommand func(pid int) (Wait, error)
+
+	// Foreground, when set, hands the terminal to a process group for as long
+	// as it runs, and takes it back afterwards. A pgid of 0 means the shell
+	// itself.
+	//
+	// It is what makes ^C and ^Z reach the command rather than the shell: the
+	// kernel sends them to the terminal's *foreground* group, so a command in
+	// a group of its own that was never given the terminal cannot be
+	// interrupted or stopped at all. Setting WaitForCommand without this is
+	// worse than setting neither — the command runs unreachable and the wait
+	// has nothing to report.
+	Foreground func(pgid int) error
+
+	// SignalGroup, when set, sends a signal to a process group — the pid
+	// given is the group's leader. Nil means this shell cannot resume a
+	// stopped job, and `fg` and `bg` say so rather than pretending.
+	//
+	// A group rather than a process because a job is a pipeline as often as a
+	// command: resuming only the first of three would leave the rest stopped.
+	SignalGroup func(pgid int, sig syscall.Signal) error
+
 	// GetRlimit and SetRlimit read and change this process's resource limits.
 	// Nil — the default — means this shell has none to offer and `ulimit` is
 	// refused.
@@ -937,9 +970,11 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	r.emit(ctx, Event{Kind: EventCommandStart, Action: action})
 
 	cmd := exec.CommandContext(ctx, path, argv[1:]...)
-	if r.bg != nil {
-		// A background command runs in a process group of its own, which is
-		// what makes signaling and terminal ownership answerable at all.
+	if r.bg != nil || r.WaitForCommand != nil {
+		// A process group of its own, which is what makes signaling and
+		// terminal ownership answerable at all — for a foreground command as
+		// much as a background one, once there is something able to notice it
+		// stopped.
 		setProcessGroup(cmd)
 	}
 	cmd.Dir = r.Dir
@@ -967,6 +1002,10 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		return nil
 	}
 
+	if r.WaitForCommand != nil {
+		return r.runWatched(ctx, cmd, argv, action)
+	}
+
 	err := cmd.Run()
 	var ee *exec.ExitError
 	switch {
@@ -979,6 +1018,60 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		r.diagf("%s: %v\n", argv[0], err)
 		r.status = 126
 		return nil
+	}
+	r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: r.status})
+	return nil
+}
+
+// runWatched runs a foreground command through the caller's own wait, which is
+// the only kind that can report a command that *stopped*.
+//
+// Started rather than run: the wait is the caller's, so this must not also be
+// waiting — two waits on one child is a race over who reaps it, and the loser
+// gets an error instead of a status.
+func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, action Action) error {
+	if err := cmd.Start(); err != nil {
+		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
+		r.diagf("%s: %v\n", argv[0], err)
+		r.status = 126
+		return nil
+	}
+	pid := cmd.Process.Pid
+	// The command's own group is the terminal's foreground group while it
+	// runs, so ^C and ^Z reach it rather than this shell. Taken back
+	// afterwards however it ended — a shell that left the terminal with a
+	// stopped job would have no way to read the next line.
+	if r.Foreground != nil {
+		if err := r.Foreground(pid); err != nil {
+			// Not fatal: a shell with no controlling terminal — a script, a
+			// pipeline — has no foreground group to set, and the command
+			// still runs.
+			r.Foreground = nil
+		} else {
+			defer func() { _ = r.Foreground(0) }()
+		}
+	}
+	w, err := r.WaitForCommand(pid)
+	if err != nil {
+		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
+		r.diagf("%s: %v\n", argv[0], err)
+		r.status = 126
+		return nil
+	}
+	if !stoppedWait(w) {
+		// The command has ended, so os/exec's own bookkeeping can be closed
+		// out: it copies to and from a stream that is not a file on
+		// goroutines of its own, and nothing joins them but Wait. The error
+		// is discarded because the child is already reaped — that *is* the
+		// arrangement — and the reaping is not what this call is for.
+		_ = cmd.Wait()
+	}
+	status, stopped := r.waitResult(w)
+	r.status = status
+	if stopped {
+		// Still there, so it becomes a job rather than a result. The prompt
+		// comes back and the command is waiting to be told to go on.
+		r.addStoppedJob(pid, argv)
 	}
 	r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: r.status})
 	return nil

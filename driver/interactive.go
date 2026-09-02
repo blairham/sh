@@ -1,0 +1,72 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+package driver
+
+import (
+	"context"
+	"os"
+
+	"github.com/blairham/sh/repl"
+)
+
+// Interactive reads and runs commands from a terminal until the input ends.
+//
+// The same Runner the script path builds, so an interactive shell and a script
+// are the same shell: the hooks, the dialect's builtins and its prelude are
+// all wired the way they are for a file. What differs is where the lines come
+// from and that an unfinished construct asks for more rather than failing.
+func Interactive(sh Shell) int {
+	sh = sh.withDefaults(os.Args)
+	dg := sh.Diagnostics
+	name := sh.Name
+	r := sh.newRunner(name, nil, dg)
+	if sh.Prelude != "" {
+		if code := sh.source(r, name); code != 0 {
+			return code
+		}
+	}
+	s := repl.Shell{
+		Runner:  r,
+		Dialect: sh.Dialect,
+		In:      sh.Stdin,
+		Out:     sh.Stdout,
+		Err:     sh.Stderr,
+		// A parse failure is worded by the dialect here exactly as it is for
+		// a script, minus the line echo: the line is still on the screen
+		// above the complaint, having just been typed.
+		Report: func(err error) string {
+			return dg.ParseDiagnostic(name, "", err, "")
+		},
+	}
+	ctx := context.Background()
+	status, err := s.Run(ctx)
+	if err != nil {
+		sh.errf("%s", dg.Report(name, 1, err.Error()+"\n"))
+		return usageStatus
+	}
+	// The EXIT trap fires when the session ends, the same as at the end of a
+	// script — `trap 'echo bye' EXIT` typed at the prompt has to mean
+	// something.
+	if code := r.Finish(ctx); code != 0 && status == 0 {
+		status = code
+	}
+	return status
+}
+
+// Interactively reports whether this shell should offer a prompt: nothing to
+// run was named, and the input is a terminal.
+//
+// Both halves matter. `sh < script.sh` has no argument either and must not
+// prompt, and `echo x | sh` must read the pipe rather than wait for a
+// keystroke that will never come.
+func Interactively(sh Shell, hasWork bool) bool {
+	if hasWork {
+		return false
+	}
+	if sh.Stdin == nil {
+		sh.Stdin = os.Stdin
+	}
+	info, err := sh.Stdin.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}

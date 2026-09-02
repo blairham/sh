@@ -14,19 +14,25 @@
 // way that shell does. That is what makes it a column in the conformance
 // harness, which needs something it can hand a snippet to.
 //
+//	sh                           # a prompt, if stdin is a terminal
 //	sh -c 'echo hi'              # run a command
 //	sh script.sh                 # run a script
+//	sh < script.sh               # or on stdin
 //	sh -dialect bash -c '…'      # be bash where the shells differ
+//	sh -i                        # a prompt even where stdin is not a terminal
 //	sh -tokens 'echo hi'         # dump the token stream
 //	sh -parse 'a && b'           # dump the syntax tree
 //
-// It is still not the product. A shell people run needs an interactive
-// surface — line editing, history, job control — and none of that is here.
+// With nothing to run and a terminal on stdin it prompts: a line editor with
+// history, PS1 and PS2, and a continuation prompt for a construct that has not
+// finished. Job control is still missing, and until it is this is a shell to
+// try rather than one to live in.
 package main
 
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -46,11 +52,12 @@ const (
 
 func main() {
 	var (
-		tokens  = flag.Bool("tokens", false, "print the token stream and exit")
-		parse   = flag.Bool("parse", false, "print the syntax tree and exit")
-		command = flag.String("c", "", "run the given command")
-		file    = flag.String("f", "", "read from this file instead of an argument")
-		dialect = flag.String("dialect", "core", "core, posix, bash, zsh, ksh or dash")
+		tokens      = flag.Bool("tokens", false, "print the token stream and exit")
+		parse       = flag.Bool("parse", false, "print the syntax tree and exit")
+		command     = flag.String("c", "", "run the given command")
+		file        = flag.String("f", "", "read from this file instead of an argument")
+		dialect     = flag.String("dialect", "core", "core, posix, bash, zsh, ksh or dash")
+		interactive = flag.Bool("i", false, "read commands from a terminal, even if stdin is not one")
 	)
 	flag.Parse()
 
@@ -87,9 +94,27 @@ func main() {
 		// fell through to "nothing to do". It reads it as a script, which is
 		// what it always claimed to do.
 		os.Exit(runPath(sh, *file))
+	case *interactive || driver.Interactively(sh, false):
+		// Nothing to run was named and the input is a terminal, so this is
+		// someone at a keyboard rather than a script arriving on stdin.
+		os.Exit(driver.Interactive(sh))
 	default:
-		fail(fmt.Errorf("nothing to do: pass a script, -c, -tokens or -parse"))
+		// Not a terminal and nothing named: the script is on stdin, which is
+		// how `curl … | sh` and `sh < script` arrive.
+		os.Exit(runStdin(sh))
 	}
+}
+
+// runStdin runs a script arriving on standard input.
+//
+// Named `-` the way a shell names input it did not open itself, rather than
+// with a path there is none of.
+func runStdin(sh driver.Shell) int {
+	b, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		fail(err)
+	}
+	return driver.Run(sh, string(b), sh.Name)
 }
 
 // runPath runs a file, which is not the same as running its contents: a shell

@@ -63,7 +63,14 @@ func (j *Job) finish(status int) {
 // limitation worth stating rather than hiding, because the difference is
 // visible the moment anything tries to signal it.
 func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
-	job := &Job{done: make(chan struct{}), ready: make(chan struct{})}
+	job := &Job{
+		done:  make(chan struct{}),
+		ready: make(chan struct{}),
+		// What was typed. The words are about to be expanded and the
+		// process started, and after that nothing else remembers how the
+		// command was spelled — which is what a `jobs` listing shows.
+		Command: st.Text,
+	}
 
 	sub := r.clone()
 	sub.bg = job

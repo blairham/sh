@@ -105,6 +105,13 @@ type Error struct {
 	LastToken string
 	// Class is what sort of token Token is, when the kind is ErrUnexpected.
 	Class TokenClass
+
+	// Redirect says the unexpected token was itself a redirection operator.
+	//
+	// One dialect words that case separately — dash says `redirection
+	// unexpected` where the other three name the token — so the fact has to
+	// travel with the error rather than being worked out from the text.
+	Redirect bool
 	// Expr is the whole arithmetic expression a failure was inside, and
 	// Token the part of it the failure is attributed to. Every shell quotes
 	// the first; only one names the second.

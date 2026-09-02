@@ -151,6 +151,17 @@ const (
 	// ParamExp is ${...}. Value is the inner text, unparsed — the operator
 	// set inside is a separate specification.
 	ParamExp
+	// ProcSubstIn is <(...) and ProcSubstOut is >(...). Value is the inner
+	// source, unparsed, exactly as for a command substitution: what is inside
+	// is a program.
+	//
+	// Two kinds rather than one with a direction on it, because the direction
+	// is not a property of the substitution so much as which end of the pipe
+	// the word names. `<(cmd)` gives a path to read cmd's output from and
+	// `>(cmd)` a path to write cmd's input to, and nothing that handles one
+	// handles the other by changing a flag.
+	ProcSubstIn
+	ProcSubstOut
 )
 
 func (k SpanKind) String() string {
@@ -161,6 +172,8 @@ func (k SpanKind) String() string {
 		return "arithmetic substitution"
 	case ParamExp:
 		return "parameter expansion"
+	case ProcSubstIn, ProcSubstOut:
+		return "process substitution"
 	}
 	return "literal"
 }

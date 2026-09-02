@@ -961,6 +961,27 @@ var Corpus = []Case{
 		Why:     "an assignment reports what the substitution reported, so this ends the script where `echo \"$(false)\"` does not",
 	},
 	{
+		ID: "procsub/reads-a-command-as-a-file", Category: "redirection",
+		Snippet: `cat <(echo hi)`,
+		Why:     "`<(cmd)` runs cmd and expands to a path its output can be read from — the last of the core language, and the clearest case of a dialect being a runtime switch: bash 3.2 has it as `bash` and loses it as `sh`. dash has it in neither guise and reports the `(` as unexpected",
+	},
+	{
+		ID: "procsub/two-of-them-in-one-command", Category: "redirection",
+		Snippet: `diff <(echo a) <(echo a) && echo same`,
+		Why:     "the reason the construct exists: two commands compared as though they were files, with no temporary file named anywhere. Two substitutions in one command also have to keep their own pipes, which is exactly what the first attempt got wrong",
+	},
+	{
+		ID: "procsub/a-redirection-where-a-target-belongs", Category: "redirection",
+		SyntaxError: true,
+		Snippet:     `cat < < x; echo "st=$?"`,
+		Why:         "what the three without process substitution make of the second `<`, and the one wording dash does not share: it says `redirection unexpected` where the other three name the token. Reached here because `< <(cmd)` is this text in a dialect that has no such construct",
+	},
+	{
+		ID: "procsub/feeds-a-loop", Category: "redirection",
+		Snippet: `while read -r l; do echo "[$l]"; done < <(printf "a\nb\n")`,
+		Why:     "the idiom people actually reach for it with, and the reason a pipeline will not do: the loop runs in *this* shell, so what it reads is still there afterwards",
+	},
+	{
 		ID: "redir/open-failure-wording", Category: "redirection",
 		Snippet: `cat < nosuchfile; echo "st=$?"`,
 		Why:     "all four word a failed open differently and only two of them use a verb: bash prints the name then the OS string, dash puts `cannot open` in front, ksh93 puts the name first and brackets the reason after it, and zsh prints the reason first, lowercased. dash also writes its own text for this errno — `No such file`, where the OS says `No such file or directory`",

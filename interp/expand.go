@@ -267,6 +267,15 @@ func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
 	case syntax.CommandSubst:
 		v := r.commandSubst(r.ctx, s.Value)
 		return r.expansionResult(v, unquoted, r.sem().SplitCommandSubstitution, "splitting an unquoted command substitution")
+	case syntax.ProcSubstIn, syntax.ProcSubstOut:
+		// A path, and a path is never split or globbed however it was
+		// written: what came back is a name this shell just made, not text
+		// from somewhere that might contain a separator.
+		path, ok := r.procSub(r.ctx, s.Kind, s.Value)
+		if !ok {
+			return "", false
+		}
+		return globEscape(path), false
 	case syntax.ArithSubst:
 		tree, perr := r.arithTree(s.Arith, s.Value)
 		if perr != nil {

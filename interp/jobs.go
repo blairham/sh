@@ -72,8 +72,8 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// race again in a second place: a real shell hands each side a file
 	// descriptor and the kernel serializes them, and an io.Writer carries no
 	// such guarantee. The shell creates the concurrency, so it guards them.
-	sub.Stdout = &lockedWriter{w: r.stdout()}
-	sub.Stderr = &lockedWriter{w: r.stderr()}
+	sub.Stdout = r.lockedStdout()
+	sub.Stderr = r.lockedStderr()
 	go func() {
 		// Errors inside a background job are reported where the job runs;
 		// there is nowhere to return them to.

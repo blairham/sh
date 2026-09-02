@@ -81,16 +81,18 @@ func Diagnostics() interp.Diagnostics {
 		SyntaxUnexpected:      "Syntax error: \"%[1]s\" unexpected",
 		SyntaxUnexpectedWord:  "Syntax error: word unexpected",
 		SyntaxExpecting:       " (expecting \"%[1]s\")",
-		ForName:               "Syntax error: Bad for loop variable",
-		Unterminated:          "Syntax error: end of file unexpected (expecting \"%[4]s\")",
-		SyntaxError:           "Syntax error: %s",
-		BadSubstitution:       "Bad substitution",
-		ReadonlyVariable:      "%s: is read only",
-		InvalidNumber:         "Illegal number: %s",
-		NumericArgument:       "%[1]s: Illegal number: %[2]s",
-		ArithError:            "arithmetic expression: %[2]s: \"%[1]s\"",
-		FileNotFound:          "No such file",
-		TestNamesFirstOperand: true,
+		// dash does not name the token when it is a redirection operator.
+		SyntaxRedirectUnexpected: "Syntax error: redirection unexpected",
+		ForName:                  "Syntax error: Bad for loop variable",
+		Unterminated:             "Syntax error: end of file unexpected (expecting \"%[4]s\")",
+		SyntaxError:              "Syntax error: %s",
+		BadSubstitution:          "Bad substitution",
+		ReadonlyVariable:         "%s: is read only",
+		InvalidNumber:            "Illegal number: %s",
+		NumericArgument:          "%[1]s: Illegal number: %[2]s",
+		ArithError:               "arithmetic expression: %[2]s: \"%[1]s\"",
+		FileNotFound:             "No such file",
+		TestNamesFirstOperand:    true,
 		// 2 rather than the 1 the other three report, for a read and a write
 		// alike. Not fatal — the script carries on — so this is a different
 		// question from FatalErrorStatusIsOne, which is about a failure that

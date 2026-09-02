@@ -125,3 +125,17 @@ func TestPrintfUnansweredOptionIsRefused(t *testing.T) {
 		t.Errorf("stdout %q, want silence — not the option echoed as a format", out)
 	}
 }
+
+// A lone `-` is an operand, not an option, in all four — which is what keeps
+// the leading-dash rule from swallowing it. As a format it prints itself.
+func TestPrintfALoneDashIsAFormat(t *testing.T) {
+	out, errs, _ := printfRun(t, nil, `printf -`)
+	if out != "-" {
+		t.Errorf("stdout %q (stderr %q), want the dash printed as the format", out, errs)
+	}
+	// And with the option rule at its strictest, it is still not an option.
+	out, _, _ = printfRun(t, func(s *Semantics) { s.PrintfRejectsUnknownOption = Yes }, `printf -`)
+	if out != "-" {
+		t.Errorf("stdout %q, want the dash printed", out)
+	}
+}

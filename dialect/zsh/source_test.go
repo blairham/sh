@@ -264,8 +264,11 @@ func TestPrintfOptions(t *testing.T) {
 		t.Errorf("--: said %q, want x", out)
 	}
 	out, _ = runZsh(t, dir, "printf -q x\n")
-	if !strings.Contains(out, `-q`) {
-		t.Errorf("unknown option: said %q, want %q", out, `-q`)
+	// The whole output, not a substring of it: zsh takes the word as the
+	// *format* and prints it, and a refusal would print `-q` too — inside
+	// `printf: -q: invalid option`. Contains cannot tell those apart.
+	if got := strings.TrimSpace(out); got != "-q" {
+		t.Errorf("unknown option: said %q, want exactly %q", got, "-q")
 	}
 	// Whether the complaint is followed by a usage line.
 	if got := strings.Contains(out, `Usage`) || strings.Contains(out, `usage`); got != false {

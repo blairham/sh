@@ -27,6 +27,10 @@ func (r *Runner) builtinOptions(name string, args []string, known string) (rest 
 	for len(args) > 0 {
 		a := args[0]
 		if len(a) < 2 || a[0] != '-' {
+			// A lone `-` is an operand — a *name*, which three of the four
+			// then reject as an invalid identifier. Eating it here would be
+			// wrong the moment operand validation arrives, and a test holds
+			// the rule directly because nothing here can yet observe it.
 			break
 		}
 		if a == "--" {

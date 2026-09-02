@@ -57,6 +57,16 @@ func TestTheCommandColumnOfAJobsListing(t *testing.T) {
 			"Done",
 		},
 		{
+			// The separate word is for a job that *failed*. A dialect having
+			// one does not make it the word for every finished job, which is
+			// the way round that reads as working: `Exit 0`.
+			"a job that succeeded is Done even where there is another word",
+			`true & sleep 0.05; jobs`,
+			Diagnostics{JobExited: "Exit %[1]d"},
+			Yes,
+			"Done",
+		},
+		{
 			"and is absent where the dialect does not ask for it",
 			`sleep 0.3 & jobs`,
 			Diagnostics{},

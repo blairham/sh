@@ -52,8 +52,12 @@ func (r *Runner) selectClause(ctx context.Context, c *syntax.SelectClause) error
 				show = false
 			}
 			r.selectPrompt()
-			line, err := r.readLine(false)
-			if err != nil {
+			// A final line with no newline is a reply like any other here,
+			// and the read after it is the one that ends the loop — which is
+			// why this asks whether there is a line and not only whether the
+			// input ended.
+			line, atEOF := r.readLine(false)
+			if atEOF && line == "" {
 				return r.selectEOF()
 			}
 			if strings.TrimSpace(line) == "" {

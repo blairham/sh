@@ -6,7 +6,6 @@ package interp
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -464,10 +463,14 @@ func biRead(r *Runner, _ context.Context, args []string) int {
 		args = []string{"REPLY"}
 	}
 
-	line, err := r.readLine(raw)
-	if err != nil {
-		return 1
-	}
+	line, atEOF := r.readLine(raw)
+
+	// A `read` that fails still assigns. All four shells clear the variables
+	// at end of input rather than leaving what was there, and the reason is
+	// the loop everyone writes: `while read -r l` leaves `l` behind, and a
+	// stale value after the loop reads as the last line rather than as
+	// nothing. Assigning happens before the status is decided, not instead
+	// of it.
 
 	// The last variable takes the whole remainder, which is what makes
 	// `read a b` put "c d" in b for input "a c d".
@@ -483,21 +486,28 @@ func biRead(r *Runner, _ context.Context, args []string) int {
 			r.setVar(name, fields[i])
 		}
 	}
+	if atEOF {
+		return 1
+	}
 	return 0
 }
 
-// readLine reads one line, honoring a line continuation unless raw.
-func (r *Runner) readLine(raw bool) (string, error) {
+// readLine reads one line, honoring a line continuation unless raw, and says
+// whether the input ended.
+//
+// The two are separate answers because a final line with no newline is both:
+// there is a line, and there will not be another. All four shells assign it
+// and report failure, which is what stops `while read -r l` from running a
+// last unterminated line twice — once as the line, once as the empty read
+// after it.
+func (r *Runner) readLine(raw bool) (line string, atEOF bool) {
 	var b strings.Builder
 	var ch [1]byte
 	in := r.In()
 	for {
 		n, err := in.Read(ch[:])
 		if n == 0 || err != nil {
-			if b.Len() > 0 {
-				return b.String(), nil
-			}
-			return "", io.EOF
+			return b.String(), true
 		}
 		c := ch[0]
 		if c == '\n' {
@@ -508,7 +518,7 @@ func (r *Runner) readLine(raw bool) (string, error) {
 				b.WriteString(strings.TrimSuffix(s, "\\"))
 				continue
 			}
-			return s, nil
+			return s, false
 		}
 		b.WriteByte(c)
 	}

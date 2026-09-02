@@ -982,6 +982,21 @@ var Corpus = []Case{
 		Why:     "the idiom people actually reach for it with, and the reason a pipeline will not do: the loop runs in *this* shell, so what it reads is still there afterwards",
 	},
 	{
+		ID: "read/a-failing-read-still-assigns", Category: "builtins",
+		Snippet: `l=keep; read -r l </dev/null; echo "st=$? l=[$l]"`,
+		Why:     "end of input clears the variables rather than leaving what was there, which is what stops `while read -r l` from leaving the last line behind for the code after the loop. Unanimous across the panel, so it is the core's answer and not an axis",
+	},
+	{
+		ID: "read/a-final-line-without-a-newline", Category: "builtins",
+		Snippet: `printf 'x' | { read -r l; echo "st=$? l=[$l]"; }`,
+		Why:     "both answers at once: there is a line, and there will not be another. Every shell assigns it *and* reports failure, which reads as a contradiction until the loop below explains it",
+	},
+	{
+		ID: "read/an-unterminated-last-line-is-dropped", Category: "builtins",
+		Snippet: `printf 'a\nb' | while read -r l; do printf "<%s>" "$l"; done; echo`,
+		Why:     "the consequence of the status above, and the reason it is worth pinning rather than fixing: a file whose last line has no newline loses that line in every shell there is. Returning 0 instead would run it twice — once as the line, once as the empty read after it",
+	},
+	{
 		ID: "redir/open-failure-wording", Category: "redirection",
 		Snippet: `cat < nosuchfile; echo "st=$?"`,
 		Why:     "all four word a failed open differently and only two of them use a verb: bash prints the name then the OS string, dash puts `cannot open` in front, ksh93 puts the name first and brackets the reason after it, and zsh prints the reason first, lowercased. dash also writes its own text for this errno — `No such file`, where the OS says `No such file or directory`",

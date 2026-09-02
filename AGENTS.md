@@ -172,6 +172,12 @@ wording a parse failure the dialect's way and exiting with the dialect's
 status — that is one front end taking a `driver.Shell`, which is the three
 vectors plus the two extension points.
 
+That includes **deciding to prompt**. `-i`, and no operands with a
+terminal on standard input, mean a person rather than a script — read
+in the same place as everything else about an invocation, so a dialect
+binary has a prompt by existing. It was in one binary's main once, and
+`./bash -i` answered `unknown option "-i"`.
+
 Which operand becomes `$0` is the front end's to know and differs by route:
 a script's path is `$0` and the operands after it are `$1` onward, `-c`
 takes the *first* operand as `$0` and the rest as parameters, and standard

@@ -72,6 +72,9 @@ func Semantics() interp.Semantics {
 	// Whether a backgrounded job is announced to whoever is typing.
 	s.AnnouncesBackgroundJob = interp.No
 
+	// Whether a redirection target is expanded as an ordinary word.
+	s.RedirectTargetIsAnOrdinaryWord = interp.No
+
 	return s
 }
 

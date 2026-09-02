@@ -104,14 +104,20 @@ func (r *Runner) expandOneWord(w *syntax.Word) []string {
 	return out
 }
 
-// expandWordNoSplit expands a word without field splitting, for the contexts
-// that do not have it: inside `[[ ]]`, and a redirection target. It is a
-// separate entry point rather than a flag on the runner because the caller
-// knows which context it is in and the expander should not have to guess.
+// expandWordNoSplit expands a word without field splitting or globbing, for
+// the contexts that have neither: inside `[[ ]]`, and a redirection target. It
+// is a separate entry point rather than a flag on the runner because the
+// caller knows which context it is in and the expander should not have to
+// guess.
+//
+// A tilde still expands. Not splitting is not the same as not expanding, and
+// leaving it out made `[[ -f ~/x ]]` false in a home directory that has the
+// file — which every shell with `[[ ]]` answers true.
 func (r *Runner) expandWordNoSplit(w *syntax.Word) []string {
 	if w == nil {
 		return nil
 	}
+	r.expandTilde(w)
 	var b strings.Builder
 	for _, s := range w.Spans {
 		if parts, ok := r.expandAt(s); ok {
@@ -122,6 +128,68 @@ func (r *Runner) expandWordNoSplit(w *syntax.Word) []string {
 		b.WriteString(text)
 	}
 	return []string{globUnescape(b.String())}
+}
+
+// expandRedirectTargetViews expands a redirection's target once and returns
+// both readings of it: the fields an ordinary word would have become, and the
+// text it comes to when nothing is split or matched.
+//
+// One pass, because the two readings must not each run the command
+// substitutions in `> $(f)`. And a pass of its own rather than two calls,
+// because splitting is quoting-aware — `"$e"` with a space in it is one field
+// and `$e` is two — so the unsplit text cannot be recovered by joining the
+// fields, and the fields cannot be recovered by splitting the text.
+func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields []string, plain string) {
+	if w == nil {
+		return nil, ""
+	}
+	r.expandTilde(w)
+
+	fields = []string{""}
+	any := false
+	var b strings.Builder
+
+	for _, s := range w.Spans {
+		if parts, ok := r.expandAt(s); ok {
+			b.WriteString(strings.Join(parts, " "))
+			if len(parts) == 0 {
+				continue
+			}
+			any = true
+			fields[len(fields)-1] += parts[0]
+			fields = append(fields, parts[1:]...)
+			continue
+		}
+		text, split := r.expandSpan(s)
+		b.WriteString(text)
+		if !split {
+			fields[len(fields)-1] += text
+			any = any || text != "" || s.Quoting != syntax.Unquoted
+			continue
+		}
+		ifs, set := r.ifs()
+		parts := splitFields(text, ifs, set)
+		if len(parts) == 0 {
+			continue
+		}
+		any = true
+		fields[len(fields)-1] += parts[0]
+		fields = append(fields, parts[1:]...)
+	}
+	plain = globUnescape(b.String())
+
+	if len(fields) == 1 && fields[0] == "" && !any {
+		return nil, plain
+	}
+	out := make([]string, 0, len(fields))
+	for _, f := range fields {
+		if matches := r.glob(f); len(matches) > 0 {
+			out = append(out, matches...)
+			continue
+		}
+		out = append(out, globUnescape(f))
+	}
+	return out, plain
 }
 
 // expandAssignValue expands the value of an assignment.

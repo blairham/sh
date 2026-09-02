@@ -114,6 +114,9 @@ func Semantics() interp.Semantics {
 	// difference is about what it is talking to rather than about the shell.
 	s.AnnouncesBackgroundJob = interp.Yes
 
+	// Whether a redirection target is expanded as an ordinary word.
+	s.RedirectTargetIsAnOrdinaryWord = interp.No
+
 	return s
 }
 

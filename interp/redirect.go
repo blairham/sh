@@ -53,7 +53,10 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.C
 				fd = n
 			}
 		}
-		name := joinFields(r.expandWord(rd.Word))
+		name, bad := r.redirectTarget(rd)
+		if bad {
+			return closers, nil
+		}
 
 		// `N>&M` and `N<&M` duplicate a descriptor, and `N>&-` closes one.
 		// No file is opened, so the gate has nothing to see: this rearranges
@@ -136,6 +139,14 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.C
 			if creating {
 				format, fallback = r.diag().CannotCreate, "cannot create %[1]s: %[2]s"
 			}
+			if name == "" && r.diag().EmptyRedirectTarget != "" {
+				// One dialect says something shorter for a name that is not
+				// there, and says it the same way in both directions.
+				r.diagf("%s\n", Wording(r.diag().EmptyRedirectTarget, "", name))
+				r.status = r.diag().redirectFailureStatus()
+				r.redirErr = true
+				return closers, nil
+			}
 			r.diagf("%s\n", Wording(format, fallback,
 				name, r.diag().openReason(err, creating)))
 			r.status = r.diag().redirectFailureStatus()
@@ -192,11 +203,49 @@ func (f closerFunc) Close() error { return f() }
 // joinFields is what a redirection target does with a word that expanded to
 // more than one field. One is the normal case; more than one is ambiguous and
 // the shells differ, so this takes the first and does not pretend otherwise.
-func joinFields(fields []string) string {
-	if len(fields) == 0 {
-		return ""
+// redirectTarget is the name a redirection opens, and says whether the shell
+// refused it.
+//
+// Two answers, and this had a third that is nobody's: it expanded the target
+// the way an argument is expanded — split into fields and matched as a
+// pattern — and then quietly took the first field. So `e="a b"; echo hi > $e`
+// wrote to `a`, and `e="x*"` truncated whichever file happened to match,
+// which the script never named.
+func (r *Runner) redirectTarget(rd *syntax.Redirect) (string, bool) {
+	fields, plain := r.expandRedirectTargetViews(rd.Word)
+
+	// Asked only where the two readings differ, which is almost never: `> f`
+	// and `> "$e"` are one word under both, and so is a pattern that matches
+	// nothing. Asking every time would refuse every redirection in the core
+	// over a question that decides nothing.
+	//
+	// Braces count as differing: a target that expands to several words is
+	// several words to the dialect that expands one.
+	same := len(fields) == 1 && fields[0] == plain && len(braceExpand(rd.Word)) == 1
+	if same {
+		return plain, false
 	}
-	return fields[0]
+
+	if !r.ask(r.sem().RedirectTargetIsAnOrdinaryWord, "a redirection target expanded as an ordinary word") {
+		if r.unspecified {
+			return "", true
+		}
+		// Expanded and no more: whatever it came to is the name, spaces and
+		// pattern characters included.
+		return plain, false
+	}
+	// bash's reading, and braces make words as surely as splitting does:
+	// `> {a,b}` names two files and so names none.
+	braced := len(braceExpand(rd.Word)) > 1 && r.ask(r.sem().BraceExpansion, "brace expansion")
+	if !braced && len(fields) == 1 {
+		return fields[0], false
+	}
+	// Anything but exactly one word, which includes none: an empty variable
+	// is as ambiguous as two filenames, because neither says where to write.
+	r.diagf("%s\n", Wording(r.diag().AmbiguousRedirect, "%[1]s: ambiguous redirect", rd.Text))
+	r.redirErr = true
+	r.status = 1
+	return "", true
 }
 
 func atoi(s string) (int, bool) {

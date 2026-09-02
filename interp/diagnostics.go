@@ -386,6 +386,24 @@ type Diagnostics struct {
 	// what to print in its place.
 	JobUnknownCommand string
 
+	// EmptyRedirectTarget replaces CannotOpen and CannotCreate where the
+	// target expanded to nothing. One verb: the name, which is empty — it is
+	// there so the shape matches the other two rather than because it says
+	// anything.
+	//
+	// ksh93 alone, and it is two departures at once: no bracketed reason,
+	// and "open" even where the redirection was creating. Empty leaves the
+	// ordinary wordings standing, which is what the other three want.
+	EmptyRedirectTarget string
+
+	// AmbiguousRedirect is a redirection whose target did not expand to
+	// exactly one word. One verb: the target *as it was written*, which is
+	// what bash names — `$e`, not what `$e` came to.
+	//
+	// Only the dialect that expands a target as an ordinary word has one,
+	// because only there can the result be a number of words other than one.
+	AmbiguousRedirect string
+
 	// JobStarted announces a backgrounded job. Two verbs: the job number and
 	// the process id.
 	//

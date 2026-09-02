@@ -1027,6 +1027,26 @@ var Corpus = []Case{
 		Why:     "the consequence of the status above, and the reason it is worth pinning rather than fixing: a file whose last line has no newline loses that line in every shell there is. Returning 0 instead would run it twice — once as the line, once as the empty read after it",
 	},
 	{
+		ID: "redir/a-target-that-is-not-one-word", Category: "redirection",
+		Snippet: `e="a b"; echo hi > $e; echo "st=$?"`,
+		Why:     "a redirection target is expanded and then, in three of the four, neither split nor matched — so `> $e` writes to a file called `a b`. bash expands it as an ordinary word and refuses anything that is not exactly one, naming the target *as written*. Doing bash's expansion and taking the first field is the answer nobody gives, and it wrote to `a`",
+	},
+	{
+		ID: "redir/a-target-that-expands-to-nothing", Category: "redirection",
+		Snippet: `e=; echo hi > $e; echo "st=$?"`,
+		Why:     "the same question with no words rather than two, and all four complain in four different ways — one of them shorter than its own wording for any other failed open, and with no reason attached",
+	},
+	{
+		ID: "redir/a-target-holding-a-pattern", Category: "redirection",
+		Snippet: `e="nomatch-*"; echo hi > $e; ls nomatch-*; rm -f nomatch-*`,
+		Why:     "a target is not matched as a pattern, so this creates a file whose name holds an asterisk rather than writing to whatever matched. The dangerous half is invisible here and was real: matching it truncated a file the script never named",
+	},
+	{
+		ID: "redir/a-quoted-target-with-a-space", Category: "redirection",
+		Snippet: `e="a b"; echo hi > "$e"; cat "a b"; rm -f "a b"`,
+		Why:     "quoting settles it in every dialect, including the one that refuses the unquoted form: splitting is what bash objects to, not the space",
+	},
+	{
 		ID: "redir/open-failure-wording", Category: "redirection",
 		Snippet: `cat < nosuchfile; echo "st=$?"`,
 		Why:     "all four word a failed open differently and only two of them use a verb: bash prints the name then the OS string, dash puts `cannot open` in front, ksh93 puts the name first and brackets the reason after it, and zsh prints the reason first, lowercased. dash also writes its own text for this errno — `No such file`, where the OS says `No such file or directory`",

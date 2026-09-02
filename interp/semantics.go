@@ -349,6 +349,23 @@ type Semantics struct {
 	// in this shell, so `echo x | read v` sets v. True in ksh93 and zsh.
 	LastPipelineElementInCurrentShell Answer
 
+	// RedirectTargetIsAnOrdinaryWord expands a redirection's target the way
+	// an argument is expanded — split into fields and matched as a pattern —
+	// and requires the result to be exactly one word. True in bash alone:
+	//
+	//	e="a b"; echo hi > $e      bash refuses; the rest write to `a b`
+	//	e="x*";  echo hi > $e      bash refuses where two files match, and
+	//	                           writes to the match where one does; the
+	//	                           rest create a file named `x*`
+	//
+	// The other three expand it and stop there: no splitting, no matching,
+	// whatever it came to is the name. A tilde expands either way.
+	//
+	// Doing bash's expansion and then quietly taking the first field is the
+	// answer no shell gives, and it is the one this had: `> $e` wrote to `a`,
+	// and `> $e` with a pattern truncated whichever file happened to match.
+	RedirectTargetIsAnOrdinaryWord Answer
+
 	// AnnouncesBackgroundJob prints the job number and the process id when a
 	// job is backgrounded, before the next prompt. True in bash, ksh93 and
 	// zsh; dash says nothing at all.

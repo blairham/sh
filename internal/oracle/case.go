@@ -774,6 +774,21 @@ var Corpus = []Case{
 		Why:     "four wordings, and ksh93's is the odd one — `parameter not set` where the others call it a bad or invalid number",
 	},
 	{
+		ID: "builtin/an-option-it-does-not-have", Category: "traps and exit",
+		Snippet: `export -Q x; echo "st=$?"; echo after`,
+		Why:     "four wordings, two statuses and a divergence about whether the script survives: bash and zsh report it and carry on — with 2 and 1 — while dash and ksh93 stop there, which is the POSIX rule that a special builtin's failure is fatal. bash and ksh93 print a usage line after it and word that per builtin",
+	},
+	{
+		ID: "builtin/the-same-refusal-for-another-builtin", Category: "traps and exit",
+		Snippet: `unset -Q x; echo "st=$?"; echo after`,
+		Why:     "the same shape from a different builtin, which is what says the wording is one rule rather than one per name — only the usage line changes, and only in the two that print one",
+	},
+	{
+		ID: "builtin/an-option-it-does-have", Category: "traps and exit",
+		Snippet: `x=1; export x; unset -v x; echo "[${x-unset}]"`,
+		Why:     "the options each of them really has still work, which is the half a refusal could break — and `--` and a bare name have to keep meaning what they did",
+	},
+	{
 		ID: "trap/numeric-signal-name", Category: "traps and exit",
 		Script:  true,
 		Snippet: "trap 'echo caught' 2\nkill -INT $$\necho after\n",

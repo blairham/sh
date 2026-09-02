@@ -98,6 +98,7 @@ func Semantics() interp.Semantics {
 	s.UlimitHasResidentSet = interp.Yes
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.Yes
+	s.BadOptionToSpecialBuiltinFatal = interp.Yes
 	return s
 }
 
@@ -192,6 +193,21 @@ func Diagnostics() interp.Diagnostics {
 		KillInvalidSignal:         "kill: %[1]s: unknown signal name",
 		KillNotAPid:               "kill: %[1]s: Arguments must be %%job, process ids, or job pool names",
 		KillUsage:                 kshKillUsage,
+		BuiltinBadOption:          "%[1]s: %[2]s: unknown option",
+		BuiltinUsageUnprefixed:    true,
+		BuiltinUsage: map[string]string{
+			"export":   "Usage: export [-p] [name[=value]...]",
+			"readonly": "Usage: readonly [-p] [name[=value]...]",
+			"unset":    "Usage: unset [-nfv] name...",
+		},
+		PrintfUsage:           "Usage: printf [ options ] format [string ...]",
+		PrintfUsageUnprefixed: true,
+		TrapBadSignal:         "trap: %[1]s: bad trap",
+		KillNoSuchProcess:     "kill: %[1]s: no such process",
+		KillNotPermitted:      "kill: %[1]s: permission denied",
+		KillInvalidSignal:     "kill: %[1]s: unknown signal name",
+		KillNotAPid:           "kill: %[1]s: Arguments must be %%job, process ids, or job pool names",
+		KillUsage:             kshKillUsage,
 		// An unknown option is a usage error to ksh93 in both senses: it prints
 		// the usage after the complaint, and it reports the usage status where
 		// an unknown signal *name* reports 1.

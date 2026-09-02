@@ -372,3 +372,22 @@ func TestUlimit(t *testing.T) {
 		t.Errorf("hard limit is %d, want soft", got[1])
 	}
 }
+
+// TestABadBuiltinOption: this dialect's wording, status, usage line and
+// whether a special builtin's bad option ends the script.
+func TestABadBuiltinOption(t *testing.T) {
+	dir := t.TempDir()
+	out, _ := runZsh(t, dir, "export -Q x\necho \"st=$?\"\necho after\n")
+	if !strings.Contains(out, "-Q") {
+		t.Errorf("said %q, want the option named", out)
+	}
+	if reached := strings.Contains(out, "after"); reached != true {
+		t.Errorf("said %q, want reached=true", out)
+	}
+	if !strings.Contains(out, "st=1") {
+		t.Errorf("said %q, want st=1", out)
+	}
+	if got := strings.Contains(strings.ToLower(out), "usage"); got != false {
+		t.Errorf("said %q, want usage=false", out)
+	}
+}

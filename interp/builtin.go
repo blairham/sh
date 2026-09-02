@@ -229,10 +229,11 @@ func (r *Runner) setOption(name string, on bool) bool {
 }
 
 func biUnset(r *Runner, _ context.Context, args []string) int {
+	args, _, code := r.builtinOptions("unset", args, "vfn")
+	if code != 0 {
+		return code
+	}
 	for _, name := range args {
-		if name == "-v" || name == "-f" {
-			continue
-		}
 		delete(r.Vars, name)
 		delete(r.exported, name)
 		// Recorded as well as deleted: a name that came from the environment
@@ -248,11 +249,15 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 
 // biExport marks a name for the environment, and assigns when given a value.
 func biExport(r *Runner, _ context.Context, args []string) int {
+	args, opts, code := r.builtinOptions("export", args, "pfn")
+	if code != 0 {
+		return code
+	}
 	if r.exported == nil {
 		r.exported = map[string]bool{}
 	}
 	for _, a := range args {
-		if a == "-p" {
+		if strings.ContainsRune(opts, 'p') {
 			r.diagf("export: -p is not implemented yet\n")
 			return 2
 		}
@@ -535,6 +540,10 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 
 // biReadonly marks variables immutable.
 func biReadonly(r *Runner, _ context.Context, args []string) int {
+	args, _, code := r.builtinOptions("readonly", args, "paAf")
+	if code != 0 {
+		return code
+	}
 	for _, a := range args {
 		name, value, hasValue := strings.Cut(a, "=")
 		if hasValue {

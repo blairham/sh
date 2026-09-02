@@ -308,6 +308,28 @@ type Diagnostics struct {
 	// limit, most often. One verb: the reason.
 	UlimitCannotChange string
 
+	// BuiltinBadOption is an option a builtin does not have. Two verbs: the
+	// builtin's name and the option as written.
+	//
+	// One wording rather than one per builtin, because the shape is the same
+	// for every one of them within a dialect: bash `export: -Q: invalid
+	// option`, dash `export: Illegal option -Q`, ksh93 `export: -Q: unknown
+	// option`, zsh `export: bad option: -Q`.
+	BuiltinBadOption string
+
+	// BuiltinBadOptionStatus is what that reports where it is not fatal.
+	// Zero means the substrate's own, which is 2 — zsh says 1.
+	BuiltinBadOptionStatus int
+
+	// BuiltinUsage is the usage line that follows, by builtin name. bash and
+	// ksh93 print one and word it per builtin, which is why this is a map
+	// where the complaint above is a single string. dash and zsh print none.
+	BuiltinUsage map[string]string
+
+	// BuiltinUsageUnprefixed writes it with no location and no shell name in
+	// front, which is what ksh93 does with every usage line.
+	BuiltinUsageUnprefixed bool
+
 	PrintfUsage string
 	// PrintfUsageUnprefixed prints it bare, as ksh93 prints every usage.
 	PrintfUsageUnprefixed bool

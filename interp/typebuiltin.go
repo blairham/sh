@@ -3,7 +3,11 @@
 
 package interp
 
-import "context"
+import (
+	"context"
+
+	"github.com/blairham/sh/syntax"
+)
 
 // `type` says what a name would run, in a sentence rather than as a path.
 //
@@ -53,19 +57,20 @@ func (r *Runner) typeOperands(args []string) ([]string, int) {
 // typeOne accounts for one name, and reports a status if it could not.
 func (r *Runner) typeOne(name string) int {
 	dg := r.diag()
-	if _, ok := r.funcs[name]; ok {
-		if r.ask(r.sem().TypePrintsFunctionBody, "`type` printing a function's body") {
-			// The sentence without the body would be most of an answer, and
-			// the missing half is the half that was asked for. Refused
-			// whole: printing a body needs a printer for the syntax tree,
-			// and there is not one yet.
-			r.diagf("type: printing a function's body is not implemented yet\n")
-			return 1
-		}
+	if fn, ok := r.funcs[name]; ok {
+		shows := r.ask(r.sem().TypePrintsFunctionBody, "`type` printing a function's body")
 		if r.unspecified {
 			return 2
 		}
 		r.printf("%s\n", Wording(dg.TypeFunction, "%[1]s is a function", name))
+		if shows {
+			// The function itself, laid out rather than quoted: the tree is
+			// what this shell has, and the spelling it was written with is
+			// gone by now. Which is why there is a printer — see
+			// syntax.PrintWith.
+			r.printf("%s () \n%s\n", name,
+				syntax.PrintWith(fn.Body, syntax.Layout{Indent: "    ", Lines: true, Nested: true}))
+		}
 		return 0
 	}
 	if _, ok := r.lookupBuiltin(name); ok {

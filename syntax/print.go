@@ -52,6 +52,11 @@ type Layout struct {
 	// Lines puts each statement of a block on a line of its own, whatever
 	// the source did.
 	Lines bool
+	// Nested repeats Indent once per enclosing block, so a body inside a
+	// body is further in. Without it every block is indented the same,
+	// however deep — which is a shape one caller wants and the other does
+	// not, and is the only difference between the two.
+	Nested bool
 }
 
 // PrintWith renders one command with a chosen arrangement.
@@ -72,8 +77,10 @@ type printer struct {
 	// raw suppresses escaping of an unquoted literal, for the places where
 	// the punctuation belongs to a pattern rather than to the shell.
 	raw bool
-	// layout is how a block is arranged, when the caller asked for one.
+	// layout is how a block is arranged, when the caller asked for one, and
+	// depth how many blocks deep the writing has reached.
 	layout Layout
+	depth  int
 	// heredocs are the bodies owed by the statement being written, which go
 	// after it rather than where the operator is.
 	heredocs []*Redirect
@@ -117,7 +124,7 @@ func (p *printer) separate(prev, next *Stmt) {
 		if !prev.Background {
 			p.str(";")
 		}
-		p.str("\n" + p.layout.Indent)
+		p.str("\n" + p.pad())
 		return
 	}
 	// A here-document body has already ended the line.
@@ -179,17 +186,22 @@ func (p *printer) command(c Command) {
 	case *SimpleCmd:
 		p.simple(x)
 	case *Subshell:
-		p.str("(")
+		// Spaced, which is not decoration: a subshell whose first command is
+		// itself a subshell needs the separation, `((` being arithmetic.
+		p.str("( ")
 		p.stmts(x.List)
-		p.str(")")
+		p.str(" )")
 		p.redirs(x.Redirs)
 	case *Group:
 		// The space after `{` and the `;` before `}` are both required: they
 		// are what make it a reserved word rather than the start of a name.
 		if p.layout.Lines {
-			p.str("{ " + p.layout.Indent)
-			p.stmts(x.List)
-			p.str("\n}")
+			p.str("{ ")
+			// The outermost brace — a function's own — opens on its own
+			// line in one arrangement and on the brace's line in the
+			// other. Every brace inside one opens on its own line in both.
+			p.bodyAt(x.List, false, p.layout.Nested || p.depth > 0)
+			p.str("\n" + p.pad() + "}")
 			p.redirs(x.Redirs)
 			return
 		}
@@ -207,28 +219,28 @@ func (p *printer) command(c Command) {
 		p.str(word + " ")
 		p.stmts(x.Cond)
 		p.str("; do")
-		p.body(x.Body)
+		p.body(x.Body, true)
 		p.keyword("done")
 		p.redirs(x.Redirs)
 	case *ForClause:
 		p.str("for " + x.Name)
 		p.items(x.HasItems, x.Items)
-		p.str("; do")
-		p.body(x.Body)
+		p.doKeyword()
+		p.body(x.Body, true)
 		p.keyword("done")
 		p.redirs(x.Redirs)
 	case *SelectClause:
 		p.str("select " + x.Name)
 		p.items(x.HasItems, x.Items)
-		p.str("; do")
-		p.body(x.Body)
+		p.doKeyword()
+		p.body(x.Body, true)
 		p.keyword("done")
 		p.redirs(x.Redirs)
 	case *CaseClause:
 		p.caseClause(x)
 	case *ForArithClause:
 		p.str("for ((" + x.InitText + "; " + x.CondText + "; " + x.PostText + ")); do")
-		p.body(x.Body)
+		p.body(x.Body, true)
 		p.keyword("done")
 	case *TestClause:
 		p.str("[[ ")
@@ -285,6 +297,19 @@ func (p *printer) cond(e CondExpr) {
 	}
 }
 
+// doKeyword writes the `do` that opens a `for` or `select` body.
+//
+// On a line of its own, which a `while` body's is not — the header of one is
+// a word list and of the other a command, and the arrangement follows that
+// rather than being uniform.
+func (p *printer) doKeyword() {
+	if p.layout.Lines {
+		p.str(";\n" + p.pad() + "do")
+		return
+	}
+	p.str("; do")
+}
+
 // items writes a `for` or `select` header's word list.
 //
 // `in` with nothing after it is not the same as no `in` at all — the first
@@ -305,16 +330,16 @@ func (p *printer) ifClause(x *IfClause) {
 	p.str("if ")
 	p.stmts(x.Cond)
 	p.str("; then")
-	p.body(x.Then)
+	p.body(x.Then, true)
 	for _, e := range x.Elifs {
 		p.keyword("elif ")
 		p.stmts(e.Cond)
 		p.str("; then")
-		p.body(e.Then)
+		p.body(e.Then, true)
 	}
 	if x.HasElse {
 		p.keyword("else")
-		p.body(x.Else)
+		p.body(x.Else, true)
 	}
 	p.keyword("fi")
 	p.redirs(x.Redirs)
@@ -324,22 +349,55 @@ func (p *printer) ifClause(x *IfClause) {
 //
 // On one line where the caller asked for nothing, and one to a line where a
 // layout was chosen — the arrangement reaches inside a construct rather than
-// stopping at the outermost block, because a shell laying a function out this
-// way lays all of it out.
-func (p *printer) body(list []*Stmt) {
+// stopping at the outermost block, because a caller laying a function out
+// this way lays all of it out.
+//
+// closedByKeyword says what follows: a word such as `fi` or `done`, or a
+// bracket. It decides the last statement's terminator, which is the one rule
+// here that is not about where the line breaks go — a keyword takes a `;`
+// before it and `}` and `;;` do not.
+func (p *printer) body(list []*Stmt, closedByKeyword bool) {
+	p.bodyAt(list, closedByKeyword, true)
+}
+
+// bodyAt is body, with whether the first statement starts on a line of its
+// own. It does everywhere but at a brace in the flatter of the two
+// arrangements, where the body opens on the brace's line.
+func (p *printer) bodyAt(list []*Stmt, closedByKeyword, ownLine bool) {
 	if !p.layout.Lines {
 		p.str(" ")
 		p.stmts(list)
 		return
 	}
-	p.str("\n" + p.layout.Indent)
+	p.depth++
+	if ownLine {
+		p.str("\n")
+	}
+	p.str(p.pad())
 	p.stmts(list)
+	if closedByKeyword {
+		p.str(";")
+	}
+	p.depth--
+}
+
+// pad is the indent for the depth being written.
+func (p *printer) pad() string {
+	if p.depth == 0 {
+		// Nothing encloses this, so nothing indents it: the brace that
+		// closes a function's body sits where the function does.
+		return ""
+	}
+	if !p.layout.Nested {
+		return p.layout.Indent
+	}
+	return strings.Repeat(p.layout.Indent, p.depth)
 }
 
 // keyword writes the word that closes or continues a construct.
 func (p *printer) keyword(word string) {
 	if p.layout.Lines {
-		p.str(";\n" + p.layout.Indent + word)
+		p.str("\n" + p.pad() + word)
 		return
 	}
 	p.str("; " + word)
@@ -349,6 +407,10 @@ func (p *printer) caseClause(x *CaseClause) {
 	p.str("case ")
 	p.word(x.Word)
 	p.str(" in ")
+	if p.layout.Lines {
+		p.caseArms(x)
+		return
+	}
 	for _, it := range x.Items {
 		for i, pat := range it.Patterns {
 			if i > 0 {
@@ -367,6 +429,34 @@ func (p *printer) caseClause(x *CaseClause) {
 		p.str(" " + term + " ")
 	}
 	p.str("esac")
+	p.redirs(x.Redirs)
+}
+
+// caseArms writes a `case`'s arms one to a line.
+//
+// The pattern, the body one further in, and the terminator back at the
+// pattern's depth — which is a block closed by `;;` rather than by a keyword,
+// so its last statement takes no `;`.
+func (p *printer) caseArms(x *CaseClause) {
+	p.depth++
+	for _, it := range x.Items {
+		p.str("\n" + p.pad())
+		for i, pat := range it.Patterns {
+			if i > 0 {
+				p.str("|")
+			}
+			p.word(pat)
+		}
+		p.str(")")
+		p.bodyAt(it.Body, false, true)
+		term := it.Term.String()
+		if it.Term == 0 {
+			term = ";;"
+		}
+		p.str("\n" + p.pad() + term)
+	}
+	p.depth--
+	p.str("\n" + p.pad() + "esac")
 	p.redirs(x.Redirs)
 }
 

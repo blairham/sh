@@ -52,6 +52,8 @@ func Semantics() interp.Semantics {
 	s.GetoptsClearsOptarg = interp.No
 	s.CdWithoutHomeIsAnError = interp.No
 	s.CdDashPrintsTheDirectory = interp.Yes
+	s.PrintfAssignsWithV = interp.No
+	s.PrintfRejectsUnknownOption = interp.Yes
 	return s
 }
 
@@ -129,6 +131,7 @@ func Diagnostics() interp.Diagnostics {
 		// Every complaint about an argument is 2 here, as it is elsewhere.
 		PrintfBadVerbStatus:     2,
 		PrintfBadVerb:           "printf: %[2]s: invalid directive",
+		PrintfBadOption:         "printf: Illegal option %[1]s",
 		PrintfUsage:             "printf: usage: printf format [arg ...]",
 		TrapBadSignal:           "trap: %[1]s: bad trap",
 		TrapBadSignalUnprefixed: true,

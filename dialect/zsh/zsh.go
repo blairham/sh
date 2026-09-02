@@ -91,6 +91,8 @@ func Semantics() interp.Semantics {
 	s.GetoptsClearsOptarg = interp.Yes
 	s.CdWithoutHomeIsAnError = interp.No
 	s.CdDashPrintsTheDirectory = interp.No
+	s.PrintfAssignsWithV = interp.Yes
+	s.PrintfRejectsUnknownOption = interp.No
 	return s
 }
 

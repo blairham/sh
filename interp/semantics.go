@@ -557,6 +557,25 @@ type Semantics struct {
 	// Narrower than it looks: an ordinary failing pipeline — `true | false` —
 	// stops all three, and this is only about the failure the option adds.
 	ErrexitSeesPipefailFailure Answer
+
+	// PrintfAssignsWithV makes `printf -v name fmt args` put the formatted
+	// text in a variable and print nothing. True in bash and zsh; dash and
+	// ksh93 have no such option and reject it as an unknown one.
+	//
+	// It is how a script formats a value without a command substitution, so
+	// without it the text goes to stdout and the variable stays empty — two
+	// wrongs at once, and both silent.
+	PrintfAssignsWithV Answer
+
+	// PrintfRejectsUnknownOption treats any leading word starting with `-` as
+	// an option and refuses one it does not know. True in bash, dash and
+	// ksh93, where even `printf "-%s\n" x` is an error because the format
+	// itself begins with a dash.
+	//
+	// False in zsh, which recognizes the options it has and takes anything
+	// else as the format — so `printf -q x` prints `-q` there and is an error
+	// in the other three.
+	PrintfRejectsUnknownOption Answer
 }
 
 // There is deliberately no CoreSemantics, and the absence is the sharpest
@@ -630,6 +649,10 @@ func PosixSemantics() Semantics {
 		// POSIX requires only "greater than 128" for a command killed by a
 		// signal, which decides nothing; three of the four use 128.
 		SignalDeathStatusIsTwoFiftySix: No,
+		// POSIX gives printf no options at all, so there is nothing to
+		// assign with and a leading `-` word is not one.
+		PrintfAssignsWithV:         No,
+		PrintfRejectsUnknownOption: Yes,
 		// POSIX defines a pipeline's status as its last command's, and
 		// offers nothing to change it.
 		PipefailOption:                     No,

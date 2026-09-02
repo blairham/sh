@@ -249,3 +249,29 @@ func TestErrexitAndPipefail(t *testing.T) {
 		t.Errorf("ordinary failure: said %q, want it to stop", out)
 	}
 }
+
+// TestPrintfOptions: this dialect's answers about `printf`'s options, run
+// rather than asserted against the fields — the wordings and the usage line
+// are what would be wrong.
+func TestPrintfOptions(t *testing.T) {
+	dir := t.TempDir()
+	out, _ := runZsh(t, dir, "printf -v o \"%05d\" 42\necho \"[$o]\"\n")
+	if !strings.Contains(out, `[00042]`) {
+		t.Errorf("-v: said %q, want %q", out, `[00042]`)
+	}
+	// `--` ends the options everywhere.
+	if out, _ := runZsh(t, dir, "printf -- \"x\n\"\n"); strings.TrimSpace(out) != "x" {
+		t.Errorf("--: said %q, want x", out)
+	}
+	out, _ = runZsh(t, dir, "printf -q x\n")
+	// The whole output, not a substring of it: zsh takes the word as the
+	// *format* and prints it, and a refusal would print `-q` too — inside
+	// `printf: -q: invalid option`. Contains cannot tell those apart.
+	if got := strings.TrimSpace(out); got != "-q" {
+		t.Errorf("unknown option: said %q, want exactly %q", got, "-q")
+	}
+	// Whether the complaint is followed by a usage line.
+	if got := strings.Contains(out, `Usage`) || strings.Contains(out, `usage`); got != false {
+		t.Errorf("usage line present=%v, want false (said %q)", got, out)
+	}
+}

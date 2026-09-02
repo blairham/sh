@@ -90,6 +90,8 @@ func Semantics() interp.Semantics {
 	s.GetoptsClearsOptarg = interp.No
 	s.CdWithoutHomeIsAnError = interp.Yes
 	s.CdDashPrintsTheDirectory = interp.Yes
+	s.PrintfAssignsWithV = interp.No
+	s.PrintfRejectsUnknownOption = interp.Yes
 	return s
 }
 
@@ -162,17 +164,19 @@ func Diagnostics() interp.Diagnostics {
 		GetoptsMissingArgument: "-%[1]s: argument expected",
 		CdCannotChange:         "cd: %[1]s: [%[2]s]",
 		// One message for both, where bash names which variable was missing.
-		CdHomeNotSet:          "cd: bad directory",
-		CdOldpwdNotSet:        "cd: bad directory",
-		PrintfBadVerb:         "printf: %[1]s: unknown format specifier",
-		PrintfUsage:           "Usage: printf [ options ] format [string ...]",
-		PrintfUsageUnprefixed: true,
-		TrapBadSignal:         "trap: %[1]s: bad trap",
-		KillNoSuchProcess:     "kill: %[1]s: no such process",
-		KillNotPermitted:      "kill: %[1]s: permission denied",
-		KillInvalidSignal:     "kill: %[1]s: unknown signal name",
-		KillNotAPid:           "kill: %[1]s: Arguments must be %%job, process ids, or job pool names",
-		KillUsage:             kshKillUsage,
+		CdHomeNotSet:              "cd: bad directory",
+		CdOldpwdNotSet:            "cd: bad directory",
+		PrintfBadVerb:             "printf: %[1]s: unknown format specifier",
+		PrintfBadOption:           "printf: %[1]s: unknown option",
+		PrintfBadOptionShowsUsage: true,
+		PrintfUsage:               "Usage: printf [ options ] format [string ...]",
+		PrintfUsageUnprefixed:     true,
+		TrapBadSignal:             "trap: %[1]s: bad trap",
+		KillNoSuchProcess:         "kill: %[1]s: no such process",
+		KillNotPermitted:          "kill: %[1]s: permission denied",
+		KillInvalidSignal:         "kill: %[1]s: unknown signal name",
+		KillNotAPid:               "kill: %[1]s: Arguments must be %%job, process ids, or job pool names",
+		KillUsage:                 kshKillUsage,
 		// An unknown option is a usage error to ksh93 in both senses: it prints
 		// the usage after the complaint, and it reports the usage status where
 		// an unknown signal *name* reports 1.

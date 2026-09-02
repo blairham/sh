@@ -44,11 +44,28 @@ func init() {
 }
 
 func biPrintf(r *Runner, _ context.Context, args []string) int {
+	args, assign, code := r.printfOptions(args)
+	if code != 0 {
+		return code
+	}
 	if len(args) == 0 {
 		return r.printfReport(printfUsage, "")
 	}
 	format, operands := args[0], args[1:]
 	status := 0
+
+	// `-v name` collects the text instead of printing it. Swapped rather than
+	// threaded through, because everything below writes to r.stdout() and the
+	// format is reused in a loop.
+	if assign != "" {
+		var into strings.Builder
+		saved := r.Stdout
+		r.Stdout = &into
+		defer func() {
+			r.Stdout = saved
+			r.setVar(assign, into.String())
+		}()
+	}
 
 	// The format is reused until the arguments run out, and once with none at
 	// all. Unanimous, and the reason this is a loop rather than one pass.
@@ -71,6 +88,71 @@ func biPrintf(r *Runner, _ context.Context, args []string) int {
 		}
 	}
 	return status
+}
+
+// printfOptions reads the leading `-` words, returning what is left, the name
+// `-v` named, and a non-zero status if one was refused.
+//
+// There were no options at all before this: `printf -v out "%05d" 42` printed
+// `-v` — the option itself, as the format — and left `out` empty, which is two
+// wrongs at once and both silent. `printf -- "x\n"` printed `--` for the same
+// reason.
+//
+// Ending them at `--` is unanimous. The rest is two axes: whether `-v` assigns,
+// and what an unrecognized one means.
+func (r *Runner) printfOptions(args []string) (rest []string, assign string, code int) {
+	for len(args) > 0 {
+		a := args[0]
+		if len(a) < 2 || a[0] != '-' {
+			// A lone `-` is an operand, not an option, in all four.
+			break
+		}
+		if a == "--" {
+			return args[1:], assign, 0
+		}
+		if a == "-v" && r.ask(r.sem().PrintfAssignsWithV, "`printf -v name`") {
+			if len(args) < 2 {
+				return nil, "", r.printfReport(printfUsage, "")
+			}
+			assign, args = args[1], args[2:]
+			continue
+		}
+		if r.unspecified {
+			return nil, "", 2
+		}
+		// Not an option this dialect knows. Three of the four refuse it —
+		// even `printf "-%s\n" x`, whose *format* begins with a dash — and
+		// zsh takes it as the format instead.
+		if !r.ask(r.sem().PrintfRejectsUnknownOption, "printf refusing a leading `-` word it does not know") {
+			break
+		}
+		if r.unspecified {
+			return nil, "", 2
+		}
+		// The *first letter*, not the whole word: a leading `-` word is a
+		// bundle of single-letter options, so `printf "-%s\n" x` is refused
+		// as `-%` and not as `-%s\n`. Measured against bash and dash, which
+		// stop there. ksh93 goes on through the bundle and complains about
+		// each letter in turn, which this does not follow.
+		return nil, "", r.printfBadOption("-" + string([]rune(a[1:])[0]))
+	}
+	return args, assign, 0
+}
+
+// printfBadOption is the complaint about a leading `-` word this dialect does
+// not know, with the usage line after it where the dialect prints one.
+func (r *Runner) printfBadOption(opt string) int {
+	d := r.diag()
+	r.diagf("%s\n", Wording(d.PrintfBadOption, "printf: %[1]s: invalid option", opt))
+	if d.PrintfBadOptionShowsUsage {
+		usage := Wording(d.PrintfUsage, "printf: usage: printf format [arguments]")
+		if d.PrintfUsageUnprefixed {
+			r.errf("%s\n", usage)
+		} else {
+			r.diagf("%s\n", usage)
+		}
+	}
+	return orDefault(d.PrintfUsageStatus, 2)
 }
 
 // printfOnce runs the format through once, returning how many operands it

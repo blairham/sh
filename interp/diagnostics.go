@@ -235,6 +235,18 @@ type Diagnostics struct {
 	// PrintfBadVerbStatus is what that reports. Zero means 1.
 	PrintfBadVerbStatus int
 	// PrintfUsage is `printf` with no format at all. No verbs.
+	// PrintfBadOption is a leading `-` word this dialect does not know. One
+	// verb: the word as written.
+	//
+	// bash `printf: -q: invalid option`, dash `printf: Illegal option -q`,
+	// ksh93 `printf: -q: unknown option`. zsh has none, because it takes an
+	// unknown one as the format instead.
+	PrintfBadOption string
+
+	// PrintfBadOptionShowsUsage follows that complaint with the usage line.
+	// bash and ksh93 do; dash prints the complaint alone.
+	PrintfBadOptionShowsUsage bool
+
 	PrintfUsage string
 	// PrintfUsageUnprefixed prints it bare, as ksh93 prints every usage.
 	PrintfUsageUnprefixed bool

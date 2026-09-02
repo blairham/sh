@@ -117,7 +117,10 @@ func MainArgs(sh Shell, argv []string) int {
 		// A prompt rather than a script, and reached from here so that every
 		// binary built on this front end has one. It was in a single binary's
 		// main once, which is how `sh` learned to prompt and `bash` did not.
-		return InteractiveArgs(sh, argv)
+		//
+		// With whatever parameters the invocation supplied: `sh -s one two`
+		// sets `$1` at a prompt in all four.
+		return sh.interactive(argv, in.params)
 	}
 	return sh.run(in)
 }
@@ -242,10 +245,20 @@ func (sh Shell) input(argv []string) (source, error) {
 			// `-c'echo hi'` as a single word, which getopt allows.
 			return commandSource(sh, a[2:], args[1:]), nil
 		case a == "-s":
-			// The explicit "read standard input" spelling.
+			// The explicit "read standard input" spelling, and standard
+			// input from a terminal is a person: all four prompt for `sh -s`
+			// there and read a script for `echo x | sh -s`. Reading it as a
+			// script either way meant waiting for an end-of-file nobody was
+			// going to type, which does not look like a shell waiting for a
+			// decision — it looks like a hang.
+			//
+			// Every operand after `-s` is a parameter and none of them is
+			// `$0`, at a prompt as much as in a script: all four answer
+			// `sh -s one two` with `$1` set.
+			if forcePrompt || Interactively(sh, false) {
+				return source{interactive: true, name: sh.Name, params: args[1:], dg: sh.Diagnostics}, nil
+			}
 			s, err := readAll(sh.Stdin)
-			// Standard input keeps the shell's own name, so every operand
-			// after `-s` is a parameter and none of them is `$0`.
 			return source{src: s, name: sh.Name, params: args[1:], dg: sh.Diagnostics}, err
 		case a == "-":
 			// A lone `-` ends the options, exactly as `--` does. It does not

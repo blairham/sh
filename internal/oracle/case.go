@@ -1184,6 +1184,22 @@ echo "st=$?"`,
 		Why: "three answers about which line a failed open is reported at, and they only differ when the redirect is not on the line its command began on. bash names the redirect's own line, dash and zsh name the line the command opened on, and ksh93 names the line before the redirect's — the same one-off in a loop, a brace group and a backslash continuation alike. Found on an installed script that opens a `while read` on line 5 and redirects it on line 11",
 	},
 	{
+		ID: "redir/failure-line-for-a-compound-on-one-line", Category: "redirection",
+		LayoutSensitive: true,
+		Snippet: `echo one
+{ echo hi; } < nosuchfile
+echo "st=$?"`,
+		Why: "a compound command and its redirect on the same line, which is what separates ksh93's rule from the others': it steps back a line for a compound command whatever the layout, so this says line 1 there — printing no line at all — and line 2 in the other three. The loop shape alone could not show it, because with the redirect already on a later line, stepping back and naming the command's line agree",
+	},
+	{
+		ID: "diag/a-line-worth-naming", Category: "diagnostics",
+		LayoutSensitive: true,
+		Snippet: `echo one
+nosuchcmd
+echo "st=$?"`,
+		Why: "ksh93 names the line under `-c` only after the first: `ksh: nosuchcmd: not found` on line 1 and `ksh: line 2: nosuchcmd: not found` here. Every earlier measurement used a one-line `-c`, where naming no line and naming line 1 are the same output",
+	},
+	{
 		ID: "redir/create-failure-says-create", Category: "redirection",
 		Snippet: `mkdir d; echo x > d; echo "st=$?"`,
 		Why:     "two of the four say `create` rather than `open` when the redirect was making the file — dash and ksh93 — where bash and zsh word it identically either way. A directory is the way to fail a create without needing a permission the test machine may or may not have",

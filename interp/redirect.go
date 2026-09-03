@@ -27,7 +27,7 @@ import (
 // This slice handles the plain file redirections. Descriptor duplication,
 // here-strings and here-document bodies are not here yet; the parser produces
 // them and this refuses them rather than ignoring them.
-func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.Closer, error) {
+func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compound bool) ([]io.Closer, error) {
 	r.redirErr = false
 	if len(rs) == 0 {
 		return nil, nil
@@ -63,6 +63,19 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.C
 		case LineBeforeRedirect:
 			if n := rd.Pos().Line; n > 1 {
 				r.line = n - 1
+			}
+		case LineBeforeRedirectWhenCompound:
+			// Only a compound command steps back a line. A simple one is
+			// reported where it began, which is why `cat \` on line 3 with
+			// its `< missing` on line 4 says 3 rather than either.
+			if !compound {
+				r.line = commandLine
+				break
+			}
+			if n := rd.Pos().Line; n > 1 {
+				r.line = n - 1
+			} else {
+				r.line = n
 			}
 		default:
 			r.line = commandLine

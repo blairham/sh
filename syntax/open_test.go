@@ -34,7 +34,26 @@ func TestWhatIsStillOpen(t *testing.T) {
 		{"while false\ndo\n", "while do*"},
 		{"case x in\n", "case"},
 		{"{\n", "{"},
-		{"f() {\n", "{"},
+		// A function's body is a brace group and is also a function body: a
+		// caller drawing what is open has to be able to tell them apart, and
+		// one shell draws them as different words.
+		{"f() {\n", "function {"},
+		{"function f {\n", "function {"},
+		// The parts of a line that is waiting for its other half.
+		{"( :\n", "("},
+		{"true &&\n", "&&*"},
+		{"true ||\n", "||*"},
+		{"true && :\n", ""},
+		{"until true\ndo\n", "until do*"},
+		{"select x in a\ndo\n", "select"},
+		{"if true\nthen\n:\nelif false\n", "if elif*"},
+		// Inside something, and not displacing it.
+		{"if true\nthen\ntrue &&\n", "if then* &&*"},
+		// And stops being open once it has one. The input below runs out
+		// inside the `if`, so an `&&` left standing would be reported as
+		// still waiting when its command arrived a word ago.
+		{"if true\nthen\ntrue && :\n", "if then*"},
+		{"for i in 1\ndo\n( :\n", "for ("},
 		// Innermost last, so a caller drawing them reads the list in the
 		// order they were opened.
 		{"for i in 1\ndo\nif true\nthen\n", "for if then*"},

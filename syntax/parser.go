@@ -467,8 +467,13 @@ func (p *Parser) parseAndOr() Expr {
 	if left == nil {
 		return nil
 	}
+	depth := len(p.open)
 	for p.at(TokAndAnd) || p.at(TokOrOr) {
 		op, pos := p.tok.Kind, p.tok.Pos
+		// Open while the command after it is looked for, the same way a
+		// pipeline's bar is: input ending on `&&` is a line waiting for its
+		// other half rather than a line that merely stopped.
+		p.open = append(p.open, opener{word: op.String(), line: pos.Line})
 		p.next()
 		p.skipNewlines()
 		right := p.parsePipeline()
@@ -476,6 +481,7 @@ func (p *Parser) parseAndOr() Expr {
 			p.fail("expected a command after %s", op)
 			return left
 		}
+		p.open = p.open[:depth]
 		left = &BinaryExpr{X: left, Op: op, OpPos: pos, Y: right}
 	}
 	return left
@@ -841,6 +847,7 @@ func (p *Parser) looksLikeFuncDef() bool {
 }
 
 func (p *Parser) parseFuncPosix() Command {
+	defer p.opens("function")()
 	fn := &FuncDecl{Name: p.tok.Literal(), Start: p.tok.Pos}
 	p.next()
 	p.next() // (
@@ -857,6 +864,7 @@ func (p *Parser) parseFuncPosix() Command {
 }
 
 func (p *Parser) parseFuncKeyword() Command {
+	defer p.opens("function")()
 	fn := &FuncDecl{Keyword: true, Start: p.tok.Pos}
 	p.next()
 	if p.tok.Kind != TokWord || !isName(p.tok.Literal()) {
@@ -887,6 +895,7 @@ func (p *Parser) parseFuncKeyword() Command {
 
 func (p *Parser) parseSubshell() Command {
 	c := &Subshell{Start: p.tok.Pos}
+	defer p.opens("(")()
 	p.next()
 	c.List = p.parseList()
 	if !p.at(TokRightParen) {
@@ -1040,6 +1049,7 @@ func (p *Parser) parseIf() Command {
 
 	for p.atWord("elif") && p.err == nil {
 		e := &Elif{Start: p.tok.Pos}
+		p.opensClause("elif")
 		p.next()
 		e.Cond = p.parseList()
 		p.requireSep("then")

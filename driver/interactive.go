@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 
+	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
 )
 
@@ -44,22 +45,7 @@ func (sh Shell) interactive(argv, params []string) int {
 	if code := sh.startup(r, LoginShell(argv)); code != 0 {
 		return code
 	}
-	s := repl.Shell{
-		Runner:  r,
-		Dialect: sh.Dialect,
-		In:      sh.Stdin,
-		Out:     sh.Stdout,
-		Err:     sh.Stderr,
-		// A parse failure is worded by the dialect here exactly as it is for
-		// a script, minus the line echo: the line is still on the screen
-		// above the complaint, having just been typed.
-		Report: func(err error) string {
-			return dg.ParseDiagnostic(name, "", err, "")
-		},
-		Style:  sh.PromptStyle,
-		Editor: sh.EditorStyle,
-		Name:   name,
-	}
+	s := sh.frontEnd(r, name, dg)
 	ctx := context.Background()
 	status, err := s.Run(ctx)
 	if err != nil {
@@ -90,4 +76,31 @@ func Interactively(sh Shell, hasWork bool) bool {
 	}
 	info, err := sh.Stdin.Stat()
 	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
+// frontEnd is the interactive shell this dialect asks for, as a value.
+//
+// Assembled here rather than inline so that what a dialect says reaches the
+// prompt is something a test can look at. Two mutations of this wiring
+// survived everything when it was inline: the editor exists only with a
+// terminal, so no test could reach the fields being carried across, and a
+// dialect's answer dropped on the floor here looks exactly like a dialect
+// that did not answer.
+func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) repl.Shell {
+	return repl.Shell{
+		Runner:  r,
+		Dialect: sh.Dialect,
+		In:      sh.Stdin,
+		Out:     sh.Stdout,
+		Err:     sh.Stderr,
+		// A parse failure is worded by the dialect here exactly as it is for
+		// a script, minus the line echo: the line is still on the screen
+		// above the complaint, having just been typed.
+		Report: func(err error) string {
+			return dg.ParseDiagnostic(name, "", err, "")
+		},
+		Style:  sh.PromptStyle,
+		Editor: sh.EditorStyle,
+		Name:   name,
+	}
 }

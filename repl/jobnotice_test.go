@@ -58,7 +58,13 @@ func runnerWithAFinishedJob(t *testing.T) *interp.Runner {
 	if err := r.RunPart(t.Context(), f); err != nil {
 		t.Fatal(err)
 	}
-	// The job is a builtin with no process of its own, so it has finished by
-	// the time backgrounding it returns.
+	// Waited for rather than assumed. The comment here used to say the job
+	// was a builtin with no process of its own and so had finished by the
+	// time backgrounding it returned — which is true almost always, and this
+	// test failed about once in three hundred runs because "almost" is not
+	// "always". A job is finished when it says it is.
+	for _, j := range r.Jobs() {
+		j.Wait()
+	}
 	return r
 }

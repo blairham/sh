@@ -326,6 +326,14 @@ type Runner struct {
 	// statusBefore is `$?` as it was before the current statement, which one
 	// dialect shows to a signal handler instead of the current one.
 	statusBefore int
+	// inExitTrap says the EXIT trap's body is running, and
+	// exitTrapEntryStatus is the status the shell had when it began. A bare
+	// `exit` in the body reports that rather than the body's own last
+	// command, in every dialect but one — see
+	// ExitInTrapReportsEarlierStatus.
+	inExitTrap          bool
+	exitTrapEntryStatus int
+
 	// exitTrap is the body of `trap … EXIT`, or nil when none is set. Only
 	// EXIT is stored: the other signals need delivery, which is a separate
 	// piece, and `trap` refuses them rather than accepting one and never
@@ -635,7 +643,11 @@ func (r *Runner) runExitTrap(ctx context.Context) {
 	r.exitTrap = nil
 	before := r.status
 	r.ctl = controlNone
+	// Kept for a bare `exit` inside the body, which in three of the four
+	// reports this rather than whatever the body's last command did.
+	r.inExitTrap, r.exitTrapEntryStatus = true, before
 	r.runTrapBody(ctx, body)
+	r.inExitTrap = false
 	if r.ctl != controlExit {
 		// The body ran to the end without exiting, so the script keeps the
 		// status it already had.

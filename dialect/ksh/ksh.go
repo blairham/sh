@@ -95,6 +95,7 @@ func Semantics() interp.Semantics {
 	// zsh still search the current directory.
 	s.EmptyPathIsTheCurrentDirectory = interp.No
 	s.ExitTrapRunsOnSignalDeath = interp.Yes
+	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	s.KillListAcceptsName = interp.Yes
 	s.SIGPrefixAccepted = interp.Yes
 	s.RedirectsWriteToEveryTarget = interp.No

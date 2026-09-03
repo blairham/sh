@@ -138,3 +138,48 @@ func TestAnOperandIsNotAPrefixAssignment(t *testing.T) {
 		})
 	}
 }
+
+// A `-` or `+` keeps the fields of whatever it came to, which is the whole
+// point of `"${a[@]+${a[@]}}"` — the standard way to expand a possibly-empty
+// array under `set -u` without collapsing it into one string.
+//
+// Reachable only once the parser stopped ending a subscript at the last `]` in
+// the word; before that this was a syntax error, so the joining went unseen.
+func TestASubstitutedWordKeepsItsFields(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		// The word is what it came to, and the word has fields of its own.
+		{"alternate, nested", `a=(x y); printf "[%s]" "${a[@]+${a[@]}}"`, "[x][y]"},
+		{"default, unset, nested", `b=(p q); printf "[%s]" "${n[@]-${b[@]}}"`, "[p][q]"},
+		// The *parameter* is what it came to, and it keeps its fields too.
+		{"default, set", `a=(x y); printf "[%s]" "${a[@]-${a[@]}}"`, "[x][y]"},
+		// A literal is one field however many words are in it, because
+		// nothing split it.
+		{"a literal stays one field", `a=(x); printf "[%s]" "${a[@]+p q}"`, "[p q]"},
+		{"one word is one field", `a=(x y); printf "[%s]" "${a[@]+Z}"`, "[Z]"},
+		// A single element is a scalar and gets no fields from this.
+		{"a numeric subscript is scalar", `a=(x); printf "[%s]" "${a[0]+p q}"`, "[p q]"},
+		{"a plain name is scalar", `x=1; printf "[%s]" "${x+p q}"`, "[p q]"},
+		// Nothing to substitute is no field at all rather than an empty one.
+		{"unset yields nothing", `printf "[%s]" "${n[@]+${n[@]}}"`, "[]"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _ := run(t, c.src, nil)
+			if strings.TrimSpace(out) != c.want {
+				t.Errorf("said %q, want %q", strings.TrimSpace(out), c.want)
+			}
+		})
+	}
+	// And the fields are real ones: they arrive as separate arguments and as
+	// separate elements, which is what a joined string would silently break.
+	for _, c := range []struct{ name, src, want string }{
+		{"as arguments", `a=(x y); f(){ echo $#; }; f "${a[@]+${a[@]}}"`, "2"},
+		{"as array elements", `a=(x y); b=("${a[@]+${a[@]}}"); echo "${#b[@]}"`, "2"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _ := run(t, c.src, nil)
+			if strings.TrimSpace(out) != c.want {
+				t.Errorf("said %q, want %q", strings.TrimSpace(out), c.want)
+			}
+		})
+	}
+}

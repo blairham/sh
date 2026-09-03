@@ -154,7 +154,7 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 	}
 
 	if p.dialect.ArraySubscript && strings.HasPrefix(s, "[") {
-		if i := strings.LastIndexByte(s, ']'); i > 0 {
+		if i := closingBracket(s); i > 0 {
 			e.Index = p.wordFrom(s[1:i], start)
 			s = s[i+1:]
 		}
@@ -201,6 +201,32 @@ func scanParamName(s string) (name, rest string) {
 		i++
 	}
 	return s[:i], s[i:]
+}
+
+// closingBracket finds the `]` that closes the subscript s opens with, or -1.
+//
+// Matched rather than *last*, which is what this used to take. A colon-less
+// operator whose value holds another subscripted expansion —
+// `${tags[@]+${tags[@]}}`, the standard way to expand a possibly-empty array
+// under `set -u` — put a second `]` in the string, and taking the last one
+// swallowed everything between. The simple `${a[@]+x}` worked, which is why
+// it went unnoticed until a real script used the nested form.
+//
+// Depth counting, because a subscript may itself hold one: `${a[b[0]]}`.
+func closingBracket(s string) int {
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '[':
+			depth++
+		case ']':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
 }
 
 func isNameStart(c byte) bool {

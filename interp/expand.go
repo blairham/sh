@@ -192,6 +192,82 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields []string, pla
 	return out, plain
 }
 
+// substitutedWordFields expands the word a `-` or `+` substituted, keeping the
+// fields it produces rather than joining them.
+//
+// It answers false when this expansion is not one of those, or when the word
+// is not what it came to — both of which leave the caller to carry on as
+// before. The test for which it came to is testFires, the same one
+// expandParam applies, so the two cannot drift apart.
+func (r *Runner) substitutedWordFields(s syntax.Span) ([]string, bool) {
+	e := s.Param
+	if e.Arg == nil || e.Length || e.Indirect || e.Index == nil {
+		return nil, false
+	}
+	// Only for a whole-array subscript. `${a[0]+x}` is one field whatever
+	// the word does, like any scalar, and taking it down this path would
+	// give it fields nothing asked for.
+	if !wholeArraySubscript(r.subscriptText(e.Index)) {
+		return nil, false
+	}
+	fires, ok := r.testFires(e)
+	if !ok {
+		return nil, false
+	}
+	switch {
+	case e.Op == syntax.ParamDefault && !fires,
+		e.Op == syntax.ParamAlternate && fires:
+		// The parameter is what it came to, not the word.
+		return nil, false
+	case e.Op != syntax.ParamDefault && e.Op != syntax.ParamAlternate:
+		return nil, false
+	}
+	// expandWord either way: it builds fields span by span, so a literal
+	// stays one field and a nested `${b[@]}` contributes its own — which is
+	// the difference between `"${a[@]+p q}"` being one field and
+	// `"${a[@]+${a[@]}}"` being two. Each span carries the quoting it was
+	// written with, so the outer quotes need no separate handling.
+	fields := r.expandWord(e.Arg)
+	if s.Quoting != syntax.Unquoted {
+		return escapeAll(fields), true
+	}
+	return fields, true
+}
+
+// yieldsTheArray reports whether a `-` or `+` expansion came to the parameter
+// rather than to its word.
+//
+// The mirror of substitutedWordFields, and needed for the same reason:
+// `"${a[@]-${a[@]}}"` on a set array is the *array*, and it keeps its fields
+// exactly as `"${a[@]}"` does. Without this it fell to the scalar path and
+// came back as one joined string.
+func (r *Runner) yieldsTheArray(e *syntax.ParamExpr) bool {
+	if e.Op != syntax.ParamDefault && e.Op != syntax.ParamAlternate {
+		return false
+	}
+	fires, ok := r.testFires(e)
+	if !ok {
+		return false
+	}
+	return (e.Op == syntax.ParamDefault && !fires) ||
+		(e.Op == syntax.ParamAlternate && fires)
+}
+
+// testFires reports whether the `-`/`+` test fires for a subscripted
+// expansion, by the same rule expandParam uses: unset, or unset-or-empty when
+// a colon was written.
+func (r *Runner) testFires(e *syntax.ParamExpr) (fires, ok bool) {
+	elems, found := r.arraySubscript(e)
+	if !found {
+		return false, false
+	}
+	value, set := strings.Join(elems, " "), elems != nil
+	if e.Colon {
+		return !set || value == "", true
+	}
+	return !set, true
+}
+
 // expandAssignValue expands the value of an assignment.
 //
 // An assignment is a tilde context and is not a splitting or a globbing one:
@@ -237,6 +313,18 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 		}
 		return names, true
 	}
+	// `${a[@]+word}` and `${a[@]-word}` substitute the *word*, and it keeps
+	// its own fields: `"${a[@]+${a[@]}}"` is two fields for a two-element
+	// array in all three shells that have arrays, not one joined string.
+	// That is the whole point of the idiom — it is how a script expands a
+	// possibly-empty array under `set -u` without collapsing it.
+	//
+	// Only when the word is what the expansion came to. When the *parameter*
+	// is what it came to, the array path below is the one that gives its
+	// fields.
+	if fields, ok := r.substitutedWordFields(s); ok {
+		return fields, true
+	}
 	// `${a[@]}` is one field per element for the same reason `"$@"` is one
 	// per parameter: joining them would lose an element containing a space.
 	// ParamSubstring as well as ParamNone: `${a[@]:1}` is a slice of the
@@ -248,7 +336,8 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 	// element dropped, which is no field at all. The corpus caught that.
 	if e.Index != nil && !e.Length &&
 		(e.Op == syntax.ParamNone ||
-			(e.Op == syntax.ParamSubstring && wholeArraySubscript(r.subscriptText(e.Index)))) {
+			((e.Op == syntax.ParamSubstring || r.yieldsTheArray(e)) &&
+				wholeArraySubscript(r.subscriptText(e.Index)))) {
 		if elems, ok := r.arraySubscript(e); ok {
 			if e.Indirect {
 				// `${!a[@]}` is the array's *subscripts*, not its elements —

@@ -440,17 +440,76 @@ func displayWidth(s string) int {
 // list prints the matches above the line, the way a shell does — the line is
 // then drawn again below them, because it is still being typed.
 //
-// One per line rather than in columns. Columns need the terminal's width, and
-// asking for it is a third ioctl and a resize signal to keep it right; a list
-// is honest and never wrong.
+// In columns, filled downwards. The note here used to say one per line was
+// honest and never wrong, because columns need the terminal's width and
+// asking for it meant an ioctl and a resize signal to keep it current. The
+// width arrived with the wrapped redraw and needs neither, and one per line
+// was never what a shell does: a directory of a hundred files became a
+// hundred rows and scrolled the prompt away.
+//
+// Measured, bash and zsh lay them out the same way — as many columns as fit,
+// each as wide as the longest match plus two, filled down one column before
+// starting the next, so that reading in sorted order means reading downwards.
 func (e *editor) list(matches []string, prompt string) {
 	e.endLine(prompt, "")
-	for _, m := range matches {
-		e.write(m)
+	for _, row := range columns(matches, e.cols()) {
+		e.write(row)
 		e.write("\r\n")
 	}
 	// The prompt and the line are not written back here: the caller redraws,
 	// and the redraw now knows it is starting from a fresh row.
+}
+
+// columns arranges the matches into the rows to print.
+//
+// Down each column rather than across each row: sorted matches read in order
+// down the first column, then the second. Both shells with a line editor do
+// it this way, and reading across would put `b` beside `a` and `z` below it.
+//
+// A width of zero is a terminal that will not say how wide it is, and one
+// match per row is the only arrangement that cannot be wrong on it.
+func columns(matches []string, width int) []string {
+	if len(matches) == 0 {
+		return nil
+	}
+	widest := 0
+	for _, m := range matches {
+		if w := displayWidth(m); w > widest {
+			widest = w
+		}
+	}
+	// Two spaces between columns, which is what both draw.
+	cell := widest + 2
+	perRow := 1
+	if width > 0 {
+		perRow = width / cell
+	}
+	if perRow < 1 {
+		// Wider than the screen: one to a row, and it wraps rather than
+		// being cut.
+		perRow = 1
+	}
+	rows := (len(matches) + perRow - 1) / perRow
+	out := make([]string, 0, rows)
+	for r := range rows {
+		var b strings.Builder
+		for c := range perRow {
+			i := c*rows + r
+			if i >= len(matches) {
+				break
+			}
+			b.WriteString(matches[i])
+			// No padding after the last one on a row: trailing spaces are
+			// invisible until something copies them.
+			if i+rows < len(matches) {
+				for n := displayWidth(matches[i]); n < cell; n++ {
+					b.WriteString(" ")
+				}
+			}
+		}
+		out = append(out, b.String())
+	}
+	return out
 }
 
 func (e *editor) write(s string) { _, _ = io.WriteString(e.out, s) }

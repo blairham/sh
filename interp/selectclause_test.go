@@ -263,25 +263,54 @@ func TestAnUnterminatedFinalReplyIsAnAxis(t *testing.T) {
 	}
 }
 
+// answeringErr is answering with standard error kept apart, because the
+// refusal is written there and asserting on the output graded nothing.
+func answeringErr(t *testing.T, src, input string, tune func(*Semantics)) (out, errOut string) {
+	t.Helper()
+	var stderr strings.Builder
+	out, _ = run(t, src, func(r *Runner) {
+		r.Stdin = strings.NewReader(input)
+		r.Stderr = &stderr
+		s := *r.Semantics
+		tune(&s)
+		r.Semantics = &s
+	})
+	return out, stderr.String()
+}
+
 // The axis is asked only when there is an unterminated reply to ask about, so
 // a script whose input ends properly runs under a dialect that never answered.
 func TestTheUnterminatedReplyAxisIsAskedOnlyWhenItArises(t *testing.T) {
 	const src = `select x in a b; do echo "picked=$x"; break; done; echo "st=$?"`
 	unset := func(s *Semantics) { s.SelectTakesUnterminatedReply = Unspecified }
 	// A terminated reply never reaches the question.
-	if out, _ := answering(t, src, "2\n", unset); !strings.Contains(out, "picked=b") {
+	out, errOut := answeringErr(t, src, "2\n", unset)
+	if !strings.Contains(out, "picked=b") {
 		t.Errorf("said %q, want a terminated reply to work with no answer", out)
 	}
-	// Nor does an input that was empty to begin with.
-	if out, _ := answering(t, src, "", unset); strings.Contains(out, "no dialect was chosen") {
-		t.Errorf("said %q, want an empty input not to need the answer", out)
+	if strings.Contains(errOut, "no dialect was chosen") {
+		t.Errorf("said %q, want a terminated reply not to reach the question", errOut)
+	}
+	// Nor does an input that was empty to begin with. The refusal goes to
+	// standard error, so this has to look there — looking at the output
+	// graded nothing, which is how the mutant that sent an empty input down
+	// the reply path survived.
+	_, errOut = answeringErr(t, src, "", unset)
+	if strings.Contains(errOut, "no dialect was chosen") {
+		t.Errorf("said %q, want an empty input not to need the answer", errOut)
 	}
 	// An unterminated one does, and is refused rather than guessed.
-	out, errOut := answering(t, src, "2", unset)
+	out, errOut = answeringErr(t, src, "2", unset)
 	if !strings.Contains(errOut, "no dialect was chosen") {
 		t.Errorf("said %q / %q, want the unspecified refusal", out, errOut)
 	}
 	if strings.Contains(out, "picked=") {
 		t.Errorf("said %q, want no choice made when the axis was refused", out)
+	}
+	// And the refusal keeps its own status, which is what the script goes on
+	// to read. Falling through to the ordinary end-of-input path overwrites
+	// it with 0 or 1 and reads as a shell that had decided something.
+	if !strings.Contains(out, "st=2") {
+		t.Errorf("said %q, want $? to be the refusal's 2 rather than an end-of-input status", out)
 	}
 }

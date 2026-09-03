@@ -539,6 +539,24 @@ type Diagnostics struct {
 	// which is what the other two want.
 	ExportFunctionOptionRefused string
 
+	// SetInvalidOptionName is a long `set -o` name this shell does not have.
+	// One verb: the name.
+	//
+	//	bash   set: bogusname: invalid option name
+	//	dash   set: Illegal option -o bogusname
+	//	ksh93  set: bogusname: bad option(s)
+	//	zsh    set: no such option: bogusname
+	//
+	// dash writes `-o` whichever way it was asked, so the operator is part
+	// of the wording rather than a verb. zsh puts the builtin's name in the
+	// location instead of in the sentence, which the location already does.
+	// ksh93 follows it with the usage line it keeps in BuiltinUsage.
+	SetInvalidOptionName string
+
+	// SetInvalidOptionNameStatus is what that reports. Zero means 2, which
+	// is three of the four; zsh answers 1.
+	SetInvalidOptionNameStatus int
+
 	// KilledCommandNotice is what a shell says when a signal ended a
 	// command. Three verbs: the process id, the words for the signal, and
 	// the command written back out.

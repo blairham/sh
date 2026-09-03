@@ -86,6 +86,7 @@ func TestSemantics(t *testing.T) {
 		{"ReportsACommandKilledBySignal", s.ReportsACommandKilledBySignal, interp.Yes},
 		{"CdRefusesUnknownOption", s.CdRefusesUnknownOption, interp.Yes},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.Yes},
+		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.Yes},
 		// What `type` does: whether it follows the sentence with the
 		// function itself, and whether `--` ends its options.
 		{"TypePrintsFunctionBody", s.TypePrintsFunctionBody, interp.No},

@@ -206,11 +206,23 @@ func TestAKilledCommandsStatus(t *testing.T) {
 }
 
 // TestPipefail: dash has no such option: the name is refused and the pipeline goes on reporting its last element, which is the 0 the option exists to avoid.
+// This shell has no `pipefail`, and asking for it does not merely fail — it
+// ends the script. Measured: `dash -c 'set -o pipefail; …'` prints the
+// refusal and nothing else, and exits 2.
+//
+// This test used to assert that the script carried on and reported `st=0`,
+// which is what *we* did rather than what dash does.
 func TestPipefail(t *testing.T) {
 	dir := t.TempDir()
-	out, _ := runDash(t, dir, "set -o pipefail\n(exit 3) | (exit 4) | true\necho st=$?\n")
-	if !strings.Contains(out, "st=0") {
-		t.Errorf("said %q, want st=0", out)
+	out, st := runDash(t, dir, "set -o pipefail\n(exit 3) | (exit 4) | true\necho st=$?\n")
+	if !strings.Contains(out, "Illegal option -o pipefail") {
+		t.Errorf("said %q, want the refusal this shell words", out)
+	}
+	if strings.Contains(out, "st=") {
+		t.Errorf("said %q, want the script abandoned at the refusal", out)
+	}
+	if st != 2 {
+		t.Errorf("status = %d, want 2", st)
 	}
 }
 

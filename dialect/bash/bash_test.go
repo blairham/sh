@@ -85,6 +85,7 @@ func TestSemantics(t *testing.T) {
 		{"ReportsACommandKilledBySignal", s.ReportsACommandKilledBySignal, interp.Yes},
 		{"CdRefusesUnknownOption", s.CdRefusesUnknownOption, interp.Yes},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.Yes},
+		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.No},
 		// What `type` does: whether it follows the sentence with the
 		// function itself, and whether `--` ends its options.
 		{"TypePrintsFunctionBody", s.TypePrintsFunctionBody, interp.Yes},
@@ -430,5 +431,55 @@ func TestAKilledCommandIsSaidBackInFull(t *testing.T) {
 func TestASubstitutionsBodyIsNumberedFromTheFile(t *testing.T) {
 	if bash.Diagnostics().BackquotedSubstitutionRestartsLines {
 		t.Error("backquotes are numbered from the file here, like $( )")
+	}
+}
+
+// Which `set -o` names a shell has is the same kind of question as which
+// parameters it supplies, so it goes through the same seam. This one has the
+// most, and five belong to it alone.
+//
+// "Has the name" is not the same as "succeeds": a name this shell has but
+// does not implement is refused as unimplemented, and only a name it does
+// not have at all is an invalid name. That difference is the whole point of
+// the change, so it is what is asserted.
+func TestSetOptionNamesBashHas(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		has  bool
+	}{
+		// Its own, and the reason this change exists: `set +o posix` is the
+		// thirteenth line of Homebrew's `brew`.
+		{"posix", true},
+		{"errtrace", true},
+		{"functrace", true},
+		{"history", true},
+		{"interactive-comments", true},
+		// Shared with some but not all of the panel.
+		{"braceexpand", true},
+		{"hashall", true},
+		{"privileged", true},
+		// Common to all four, so it needs no declaring and must still work.
+		{"noexec", true},
+		// Not an option anywhere.
+		{"bogusname", false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			sem := bash.Semantics()
+			dg := bash.Diagnostics()
+			var out bytes.Buffer
+			r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &sem, Diagnostics: &dg}
+			bash.Apply(r)
+			f, err := syntax.Parse("set +o "+c.name, bash.Dialect())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := r.Run(context.Background(), f); err != nil {
+				t.Fatal(err)
+			}
+			if has := !strings.Contains(out.String(), "invalid option name"); has != c.has {
+				t.Errorf("set +o %s said %q; has the name = %v, want %v",
+					c.name, out.String(), has, c.has)
+			}
+		})
 	}
 }

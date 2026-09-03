@@ -419,6 +419,16 @@ type Semantics struct {
 	// Only ever at a prompt: no shell announces one to a script.
 	AnnouncesBackgroundJob Answer
 
+	// BadSetOptionNameFatal ends the script when `set -o` is given a name
+	// this shell does not have. True in dash, ksh93 and zsh.
+	//
+	// Not the same question as BadOptionToSpecialBuiltinFatal, and measured
+	// rather than assumed to be: a bad option *letter* to the same builtin
+	// is fatal in only two of them, and zsh does not so much as complain
+	// about `set -Q`. So one shell treats an unknown name as worse than an
+	// unknown letter, which is why this is a field of its own.
+	BadSetOptionNameFatal Answer
+
 	// CdLastPathOptionWins lets the last of `cd -L` and `cd -P` decide.
 	// True in bash, dash and ksh93 — `cd -P -L` is logical there. zsh gives
 	// `-P` the answer wherever it appears, so both orders resolve.

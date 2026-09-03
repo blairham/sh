@@ -93,6 +93,7 @@ func Semantics() interp.Semantics {
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.CdRefusesUnknownOption = interp.Yes
 	s.CdLastPathOptionWins = interp.Yes
+	s.BadSetOptionNameFatal = interp.Yes
 
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.No
@@ -123,6 +124,9 @@ func Diagnostics() interp.Diagnostics {
 		// The words and nothing else — no process id, no command, and alone
 		// among this shell's messages, no name and no line in front of it.
 		KilledCommandNotice: "%[2]s",
+		// The operator is part of the sentence here: this shell writes `-o`
+		// whichever way it was asked.
+		SetInvalidOptionName: "set: Illegal option -o %[1]s",
 		// Backticks alone: this shell numbers a `$( … )` body from the file
 		// like the other three, and a backquoted one from one.
 		BackquotedSubstitutionRestartsLines: true,

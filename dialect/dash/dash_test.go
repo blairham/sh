@@ -31,6 +31,9 @@ func TestGrammar(t *testing.T) {
 		{`a=(x y)`, false},
 		{`function f { echo x; }`, false},
 		{`echo ${!x}`, false},
+		// The array form too, which dash refuses twice over: it has no
+		// indirection and no arrays either.
+		{`echo ${!a[@]}`, false},
 		// Not a syntax error: with the construct absent, `[[` is a command
 		// name and this parses. Real dash agrees, and fails at runtime with
 		// "[[: not found" and status 127 — the same trap as `&>`, where a

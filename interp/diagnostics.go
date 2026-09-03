@@ -321,6 +321,31 @@ type Diagnostics struct {
 	// Zero means the substrate's own, which is 2 — zsh says 1.
 	BuiltinBadOptionStatus int
 
+	// BuiltinBadName is what a builtin says about an operand that is not a
+	// name, by builtin name. Two verbs: the builtin and the operand.
+	//
+	// A map where BuiltinBadOption is one string, because two of the four
+	// word this one per builtin where they word that one per dialect: ksh93
+	// says `export: 1x: is not an identifier` and `readonly: 1x: invalid
+	// variable name`, and zsh writes the reason before the operand for
+	// `export` and `readonly` and after it for `unset`.
+	BuiltinBadName map[string]string
+
+	// BuiltinBadNameNumeric is that wording where the operand begins with a
+	// digit, for the one dialect that tells the two apart: zsh says `not an
+	// identifier: 1x` for `1x` and `not valid in this context: a-b` for
+	// `a-b`. An empty entry means the dialect says the same to both.
+	BuiltinBadNameNumeric map[string]string
+
+	// BuiltinBadNameStatus is what that reports where it is not fatal. Zero
+	// means 1 — dash says 2.
+	BuiltinBadNameStatus int
+
+	// BuiltinBadNameKeepsValue quotes the operand back as written, `1x=v` and
+	// all, rather than the name in front of the `=`. True in bash and ksh93;
+	// dash and zsh name `1x`.
+	BuiltinBadNameKeepsValue bool
+
 	// BuiltinUsage is the usage line that follows, by builtin name. bash and
 	// ksh93 print one and word it per builtin, which is why this is a map
 	// where the complaint above is a single string. dash and zsh print none.

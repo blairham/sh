@@ -100,6 +100,14 @@ func Semantics() interp.Semantics {
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.No
 	s.BadOptionToSpecialBuiltinFatal = interp.No
+	// Fatal to all three, which is the one place zsh is stricter than bash
+	// about a builtin's failure. It refuses fewer operands, though, and the
+	// two sets it adds have only `0` in common: `export ?` is quiet and
+	// `unset ?` is not, `unset 12` is quiet and `export 12` is not.
+	s.BadNameToDeclarationFatal = interp.Yes
+	s.BadNameToUnsetFatal = interp.Yes
+	s.DeclarationNameOperands = interp.NamesAndSpecialParameters
+	s.UnsetNameOperands = interp.NamesAndPositionals
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No
@@ -206,18 +214,32 @@ func Diagnostics() interp.Diagnostics {
 		// No "printf:" in front: zsh puts the builtin in the location.
 		// The reason first and the operand after it, which is the reverse of
 		// everyone else — and lowercased, which LowercaseReason already says.
-		GetoptsBadOption:          "bad option: -%[1]s",
-		GetoptsMissingArgument:    "argument expected after -%[1]s option",
-		CdCannotChange:            "%[2]s: %[1]s",
-		PrintfBadVerb:             "%[2]s: invalid directive",
-		UmaskBadMask:              "bad umask",
-		UmaskBadOption:            "bad option: %[1]s",
-		UmaskBadOptionStatus:      1,
-		LetNoExpression:           "not enough arguments",
-		UlimitBadOption:           "bad option: -%[1]s",
-		UlimitBadNumber:           "invalid number: %[1]s",
-		UlimitBadOptionStatus:     1,
-		BuiltinBadOption:          "%[1]s: bad option: %[2]s",
+		GetoptsBadOption:       "bad option: -%[1]s",
+		GetoptsMissingArgument: "argument expected after -%[1]s option",
+		CdCannotChange:         "%[2]s: %[1]s",
+		PrintfBadVerb:          "%[2]s: invalid directive",
+		UmaskBadMask:           "bad umask",
+		UmaskBadOption:         "bad option: %[1]s",
+		UmaskBadOptionStatus:   1,
+		LetNoExpression:        "not enough arguments",
+		UlimitBadOption:        "bad option: -%[1]s",
+		UlimitBadNumber:        "invalid number: %[1]s",
+		UlimitBadOptionStatus:  1,
+		BuiltinBadOption:       "%[1]s: bad option: %[2]s",
+		// The builtin's name comes from the location, so it is not in these.
+		// The reason leads for `export` and `readonly` and trails for `unset`,
+		// which is why this is a map.
+		BuiltinBadName: map[string]string{
+			"export":   "not valid in this context: %[2]s",
+			"readonly": "not valid in this context: %[2]s",
+			"unset":    "%[2]s: invalid parameter name",
+		},
+		// An operand that starts with a digit is a different complaint, for
+		// the two that have one. `unset` says the same to both.
+		BuiltinBadNameNumeric: map[string]string{
+			"export":   "not an identifier: %[2]s",
+			"readonly": "not an identifier: %[2]s",
+		},
 		BuiltinBadOptionStatus:    1,
 		PrintfUsage:               "not enough arguments",
 		PrintfUsageStatus:         1,

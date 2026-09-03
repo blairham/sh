@@ -93,6 +93,15 @@ func Semantics() interp.Semantics {
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.Yes
 	s.BadOptionToSpecialBuiltinFatal = interp.No
+	// bash reports every operand that is not a name, exports the ones that
+	// are, and carries on with a status of 1.
+	s.BadNameToDeclarationFatal = interp.No
+	s.BadNameToUnsetFatal = interp.No
+	s.DeclarationNameOperands = interp.PlainNamesOnly
+	// bash 5.3's bare `unset` checks nothing — `unset 1x`, `unset "a b"` and
+	// `unset -- -` are all quiet — while `unset -v 1x` refuses. bash 3.2
+	// refused all of them, so the panel's two bash columns differ here.
+	s.UnsetNameOperands = interp.AnythingIsAName
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No
@@ -210,7 +219,15 @@ func Diagnostics() interp.Diagnostics {
 		UlimitBadOption:           "ulimit: -%[1]s: invalid option",
 		UlimitBadNumber:           "ulimit: %[1]s: invalid number",
 		BuiltinBadOption:          "%[1]s: %[2]s: invalid option",
-		BuiltinUsageUnprefixed:    true,
+		// One wording for all three, and the operand quoted back exactly as
+		// given: `export 1x=v` says `1x=v', not `1x'.
+		BuiltinBadName: map[string]string{
+			"export":   "%[1]s: `%[2]s': not a valid identifier",
+			"readonly": "%[1]s: `%[2]s': not a valid identifier",
+			"unset":    "%[1]s: `%[2]s': not a valid identifier",
+		},
+		BuiltinBadNameKeepsValue: true,
+		BuiltinUsageUnprefixed:   true,
 		BuiltinUsage: map[string]string{
 			"export":   "export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
 			"readonly": "readonly: usage: readonly [-aAf] [name[=value] ...] or readonly -p",

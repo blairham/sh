@@ -60,8 +60,11 @@ func TestTheOptionsTheyDoHaveStillWork(t *testing.T) {
 		{`export -- y=2; echo "[$y]"`, "[2]"},
 		{`unset -- z; echo "st=$?"`, "st=0"},
 		{`readonly -- w=3; echo "[$w]"`, "[3]"},
-		// A bare `-` is an operand, not an option.
-		{`unset -; echo "st=$?"`, "st=0"},
+		// A bare `-` is an operand, not an option — which name validation
+		// finally made visible from outside: it reaches the operands and is
+		// refused *as a name*, where eating it as an option would have left
+		// nothing to refuse.
+		{`unset -`, "`-'"},
 	} {
 		if out, _ := optRun(t, nil, Diagnostics{}, c.src); !strings.Contains(out, c.want) {
 			t.Errorf("%s: said %q, want %q", c.src, out, c.want)

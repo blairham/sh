@@ -2645,6 +2645,58 @@ echo "st=$?"`,
 		Snippet: `echo() { echo overridden; }; command echo hi`,
 		Why:     "the whole reason `command` exists: a function may wrap the thing it is named after without calling itself",
 	},
+	// --- names: what may stand where a builtin wants one ---------------
+	{
+		ID: "name/export-refuses-an-operand-that-is-not-a-name", Category: "builtin names",
+		Snippet: `export 1x; echo "st=$?"`,
+		Why:     "the headline: an operand that is not a name was taken silently, which hides a typo. Three answers in four shells — bash reports it and carries on with 1, dash reports it and ends the script with 2, ksh93 and zsh end it with 1 — and three wordings, `not a valid identifier`, `bad variable name` and `is not an identifier`",
+	},
+	{
+		ID: "name/unset-is-not-export", Category: "builtin names",
+		Snippet: `unset 1x
+echo after`,
+		Why: "ksh93 splits the two: `export 1x` ends the script there and `unset 1x` prints the same kind of complaint, returns 1 and carries on. Not `unset` being less special — a bad *option* to it is fatal in ksh93 — so the split is about the kind of failure",
+	},
+	{
+		ID: "name/readonly-may-be-worded-apart-from-export", Category: "builtin names",
+		Snippet: `readonly 1x; echo "st=$?"`,
+		Why:     "ksh93 says `is not an identifier` for `export` and `invalid variable name` for `readonly`, which is why the wording is per builtin rather than per dialect",
+	},
+	{
+		ID: "name/every-bad-operand-is-reported", Category: "builtin names",
+		Snippet: `export a=1 1x b=2 2y; echo "[$a][$b]"`,
+		Why:     "bash prints a line for each operand that is not a name and exports the ones that are; the other three print one line because the first is fatal there and the loop never reaches the second",
+	},
+	{
+		ID: "name/a-lone-dash-is-an-operand", Category: "builtin names",
+		Snippet: `export -- -; echo "st=$?"`,
+		Why:     "`export -` is the form the bug was found on, written with `--` because a bare one lists the environment in zsh and would put this machine's into the record. A special parameter is a name to zsh and not to the other three",
+	},
+	{
+		ID: "name/a-special-parameter-is-not-a-positional-one", Category: "builtin names",
+		Snippet: `export -- 0; echo "a=$?"; export -- 12; echo "b=$?"`,
+		Why:     "zsh takes `0` and refuses `12`, which is the line between a special parameter and a positional one; the other three refuse both",
+	},
+	{
+		ID: "name/unset-takes-what-export-refuses", Category: "builtin names",
+		Snippet: `unset -- 12; echo "a=$?"`,
+		Why:     "the two sets zsh adds overlap only at `0`: its `unset` takes a positional where its `export` will not, and refuses the special parameters its `export` takes. One answer could not say that",
+	},
+	{
+		ID: "name/the-operand-may-be-quoted-back-whole", Category: "builtin names",
+		Snippet: `export 1x=v; echo "st=$?"`,
+		Why:     "bash and ksh93 quote back `1x=v` as written; dash and zsh name `1x`, the part they judged",
+	},
+	{
+		ID: "name/space-around-a-name-is-not-a-name", Category: "builtin names",
+		Snippet: `export -- " a "; echo "st=$?"`,
+		Why:     "unanimous, and worth a case because the obvious implementation is not: the name check this reached for trims its input first, which is right for judging an assignment and wrong here, and made ` a ` a name",
+	},
+	{
+		ID: "name/bare-unset-is-not-unset-v", Category: "builtin names",
+		Snippet: `unset 1x; echo "a=$?"; unset -v 1x; echo "b=$?"`,
+		Why:     "bash 5.3's bare `unset` checks nothing and its `unset -v` checks a name, which is the sharpest line in this whole area — and bash 3.2 refuses both, so the panel's two bash columns disagree here on purpose. The other three check either way",
+	},
 	{
 		ID: "cmd/command-v-names-a-reserved-word", Category: "command lookup",
 		Snippet: `command -v if`,

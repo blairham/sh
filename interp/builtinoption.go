@@ -20,17 +20,20 @@ import "strings"
 // builtinOptions reads the leading `-` words a builtin was given, returning
 // what is left.
 //
-// A word that is exactly `-` is an operand, and `--` ends the options — both
-// unanimous. `known` says which letters this builtin takes; anything else is
+// A word that is exactly `-` is an operand in three of the four, and `--` ends
+// the options in all of them. zsh is the exception and eats the `-`: `export -`
+// lists the environment there and `unset -` is "not enough arguments", which
+// only became visible once operand validation gave the kept `-` something to
+// fail. `known` says which letters this builtin takes; anything else is
 // refused.
 func (r *Runner) builtinOptions(name string, args []string, known string) (rest []string, opts string, code int) {
 	for len(args) > 0 {
 		a := args[0]
 		if len(a) < 2 || a[0] != '-' {
 			// A lone `-` is an operand — a *name*, which three of the four
-			// then reject as an invalid identifier. Eating it here would be
-			// wrong the moment operand validation arrives, and a test holds
-			// the rule directly because nothing here can yet observe it.
+			// then reject as an invalid identifier. Now that operand
+			// validation exists the rule is observable from outside, and
+			// `unset -` naming the dash is what holds it.
 			break
 		}
 		if a == "--" {

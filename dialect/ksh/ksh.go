@@ -99,6 +99,13 @@ func Semantics() interp.Semantics {
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.Yes
 	s.BadOptionToSpecialBuiltinFatal = interp.Yes
+	// Fatal to `export` and `readonly` and not to `unset`, which prints the
+	// same kind of complaint, returns 1 and carries on. Not `unset` being
+	// less special: a bad *option* to it is fatal, just above.
+	s.BadNameToDeclarationFatal = interp.Yes
+	s.BadNameToUnsetFatal = interp.No
+	s.DeclarationNameOperands = interp.PlainNamesOnly
+	s.UnsetNameOperands = interp.PlainNamesOnly
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.Yes
@@ -235,7 +242,15 @@ func Diagnostics() interp.Diagnostics {
 		UlimitBadOption:           "not supported",
 		UlimitBadNumber:           "ulimit: %[1]s: parameter not set",
 		BuiltinBadOption:          "%[1]s: %[2]s: unknown option",
-		BuiltinUsageUnprefixed:    true,
+		// Two wordings, split between `export` and the other two, and the
+		// operand quoted back as given.
+		BuiltinBadName: map[string]string{
+			"export":   "%[1]s: %[2]s: is not an identifier",
+			"readonly": "%[1]s: %[2]s: invalid variable name",
+			"unset":    "%[1]s: %[2]s: invalid variable name",
+		},
+		BuiltinBadNameKeepsValue: true,
+		BuiltinUsageUnprefixed:   true,
 		BuiltinUsage: map[string]string{
 			"export":   "Usage: export [-p] [name[=value]...]",
 			"readonly": "Usage: readonly [-p] [name[=value]...]",

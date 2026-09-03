@@ -9,6 +9,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // The two numbers look alike and are not.
@@ -272,5 +274,39 @@ func TestLookingUpADeviceByItsNumber(t *testing.T) {
 	t.Cleanup(func() { _ = f.Close() })
 	if got := lookupTerminal(f); got != "null" {
 		t.Errorf("looked up %s and got %q, want null", os.DevNull, got)
+	}
+}
+
+// A job that has finished is not one the shell is looking after.
+//
+// It stays in the table until its notice has been given, which is what makes
+// this worth stating: counting it would say something was running for exactly
+// as long as it takes to say that it is not.
+func TestAFinishedJobIsNotCounted(t *testing.T) {
+	r := newTestRunner(nil)
+	r.JobControl = true
+	var out strings.Builder
+	r.Stdout = &out
+	f := syntax.NewParser("sleep 0 &\n", syntax.Core()).Parse()
+	if err := r.RunPart(t.Context(), f); err != nil {
+		t.Fatal(err)
+	}
+	jobs := r.Jobs()
+	if len(jobs) == 0 {
+		t.Fatal("no job was started")
+	}
+	s := Shell{Runner: r}
+	if got := s.liveJobs(); got != 1 {
+		t.Fatalf("live jobs = %d while it runs, want 1", got)
+	}
+	for _, j := range jobs {
+		j.Wait()
+	}
+	// Still in the table, and no longer running.
+	if len(r.Jobs()) == 0 {
+		t.Fatal("the job left the table before its notice was given")
+	}
+	if got := s.liveJobs(); got != 0 {
+		t.Errorf("live jobs = %d after it finished, want 0", got)
 	}
 }

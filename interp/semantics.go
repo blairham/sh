@@ -462,6 +462,47 @@ type Semantics struct {
 	// SelectLayout is how `select` draws its menu. Three engines rather than
 	// two answers, which is why it has its own type.
 	SelectLayout SelectMenuLayout
+
+	// AliasParsesOptions lets `alias` read leading `-` words as options. True
+	// in bash, ksh93 and zsh; dash reads none, so `alias -p` is a name there
+	// and the answer is "-p not found" rather than a refusal.
+	AliasParsesOptions Answer
+
+	// AliasHasPrintOption gives `alias` a `-p`, which prints the listing with
+	// `alias ` in front of every line. bash and ksh93 have it — and it is
+	// what bash's plain listing already looks like, so it is only visible in
+	// ksh93. dash parses no options for `alias` at all, so `-p` is a *name*
+	// there and the answer is "not found"; zsh has options and refuses it.
+	AliasHasPrintOption Answer
+
+	// AliasReportsNotFound says something when `alias` is given a name the
+	// table does not hold. True in bash, dash and ksh93; zsh reports 1 and
+	// prints nothing.
+	AliasReportsNotFound Answer
+
+	// UnaliasReportsNotFound is that question for `unalias`, and the panel
+	// does not pair the two: ksh93 complains about `alias nope` and is silent
+	// about `unalias nope`, and zsh does exactly the reverse. One field could
+	// not say that.
+	UnaliasReportsNotFound Answer
+
+	// AliasNotFoundStatusCounts makes `alias` report how many names it could
+	// not find rather than a plain 1: `alias n1 n2 n3` is 3 in ksh93 and 1 in
+	// the other three.
+	//
+	// About `alias` alone — ksh93's own `unalias` answers 1 however many were
+	// missing — so it is asked where the count is known and not where the
+	// complaint is printed.
+	AliasNotFoundStatusCounts Answer
+
+	// UnaliasAllRefusesOperands makes `unalias -a name` an error that clears
+	// nothing. zsh alone: "-a: too many arguments", status 1, table intact.
+	// The other three take the `-a`, ignore the names and empty the table.
+	UnaliasAllRefusesOperands Answer
+
+	// AliasQuoting is how a value is spelled in a listing — four engines, no
+	// two alike. See AliasQuotingStyle.
+	AliasQuoting AliasQuotingStyle
 	// SelectPromptNeedsTerminal withholds PS3 unless the input is a terminal.
 	// ksh93 alone says yes, which is why a ksh93 script's transcript has the
 	// menu in it and no prompt.

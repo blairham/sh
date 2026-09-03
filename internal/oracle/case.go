@@ -2733,6 +2733,42 @@ echo after`,
 		Snippet: `umask 022; umask -- zz 2>/dev/null; umask`,
 		Why:     "a mask that could not be read must not half-apply — every clause is parsed before any of it lands",
 	},
+	// --- alias: the table and the two builtins -------------------------
+	{
+		ID: "alias/defines-and-lists-one", Category: "alias",
+		Snippet: `alias a='echo x'; alias a`,
+		Why:     "the shape of a listing, and it is not unanimous: bash writes `alias ` in front so the line reads back as a command, and the other three write only the assignment",
+	},
+	{
+		ID: "alias/a-value-that-needs-no-quotes", Category: "alias",
+		Snippet: `alias b=ls; alias b`,
+		Why:     "bash and dash quote every value; ksh93 and zsh quote only one that needs it, so this is `b=ls` in half the panel and `b='ls'` in the other half",
+	},
+	{
+		ID: "alias/a-value-holding-a-quote", Category: "alias",
+		Snippet: `alias q="it's"; alias q`,
+		Why:     "four engines and no two alike — a backslashed quote, a double-quoted one, and `$'...'` — because each listing has to be text its own shell could read back",
+	},
+	{
+		ID: "alias/a-name-the-table-does-not-hold", Category: "alias",
+		Snippet: `alias nope; echo "st=$?"`,
+		Why:     "three wordings and a silence, all reporting 1 — and two of the three write it without the shell and line in front, which they do almost nowhere else",
+	},
+	{
+		ID: "alias/unalias-is-not-alias", Category: "alias",
+		Snippet: `unalias nope; echo "st=$?"`,
+		Why:     "the panel does not pair the two: ksh93 complains about a missing name to `alias` and says nothing to `unalias`, and zsh does exactly the reverse. One answer could not say that",
+	},
+	{
+		ID: "alias/the-status-may-count-what-was-missing", Category: "alias",
+		Snippet: `alias n1 n2 n3; echo "st=$?"`,
+		Why:     "ksh93 answers with how many it could not find — 3 here — where the other three answer 1 however many were missing. Its own `unalias` does not count",
+	},
+	{
+		ID: "alias/unalias-removes-and-a-removes-all", Category: "alias",
+		Snippet: `alias a=1 b=2; unalias a; alias b; unalias -a; alias b; echo "st=$?"`,
+		Why:     "the table shrinks by one and then empties, and the second lookup fails — which is what proves -a did anything",
+	},
 	{
 		ID: "select/an-unterminated-final-reply", Category: "select",
 		Snippet: `printf 2 | { select x in a b; do echo "picked=$x"; break; done; }; echo "st=$?"`,

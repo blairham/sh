@@ -256,6 +256,11 @@ type Runner struct {
 	// something assigns it again.
 	removed map[string]bool
 
+	// aliases is the table `alias` and `unalias` keep. Nothing expands from
+	// it yet — substitution happens when a line is parsed, which is the other
+	// half of the feature and lives in the parser rather than here.
+	aliases map[string]string
+
 	// killedBy is the signal this shell sent itself and had no handler for,
 	// with the number kept beside it so the death does not have to look the
 	// name up again.

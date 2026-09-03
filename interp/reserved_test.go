@@ -60,7 +60,9 @@ func TestAMissingBuiltinIsNotLookedForOnPath(t *testing.T) {
 	// `jobs`, `fg` and `bg` have left too: they are builtins now.
 	// And `type`, for the same reason — its own protection is that it never
 	// reports a reserved name's PATH hit, which TestTypeWillNotName covers.
-	for _, name := range []string{"alias", "unalias", "hash"} {
+	// `alias` and `unalias` have left as well: they keep a table now, and a
+	// table kept in a child that then exits is the whole bug this guards.
+	for _, name := range []string{"hash"} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			// An external of the same name that would happily succeed.

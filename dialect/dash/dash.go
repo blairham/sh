@@ -271,6 +271,8 @@ func Diagnostics() interp.Diagnostics {
 func Apply(r *interp.Runner) {
 	// dash has no `builtin`.
 	r.Unregister("builtin")
+	// No `compgen` here; it is bash's alone.
+	r.Unregister("compgen")
 	// dash has neither `typeset` nor `declare`. The core provides `typeset`
 	// because three of the four do; the one that does not takes it away, the
 	// same way ksh93 takes `local` away.

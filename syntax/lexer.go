@@ -28,6 +28,11 @@ type Lexer struct {
 	err        error
 	incomplete bool
 
+	// openWord is what the input was inside when it ran out — a quote, an
+	// expansion, a here-document. The first one wins: a quote inside a
+	// substitution ends the input once, and it is the quote that is waiting.
+	openWord string
+
 	// inRegex is set while the token being read is the operand of `=~`. Its
 	// parentheses belong to the regular expression rather than to the shell,
 	// and in two of the three dialects that have `[[ ]]` so does a bare `|`.
@@ -73,6 +78,26 @@ func (l *Lexer) Err() error { return l.err }
 // could still be finished — an unclosed quote, a trailing line continuation.
 // A prompt should ask for another line; a script should report an error.
 func (l *Lexer) Incomplete() bool { return l.incomplete }
+
+// Open is what the lexer was inside when the input ran out, spelled as it is
+// written: `'`, `"`, `${`, “ ` “, `<<`. Empty when the input was whole, or
+// when what ran out was the parser's rather than the lexer's.
+//
+// One thing rather than a stack. What the lexer is inside nests through
+// recursion — a substitution runs a parser of its own — so the innermost is
+// the one this level knows about, and the outer ones are the callers'.
+func (l *Lexer) Open() string { return l.openWord }
+
+// ranOut records that the input ended inside something, and what.
+//
+// The first call wins. Once the input has ended, everything after it is a
+// consequence rather than another thing left open.
+func (l *Lexer) ranOut(word string) {
+	if !l.incomplete {
+		l.openWord = word
+	}
+	l.incomplete = true
+}
 
 func (l *Lexer) pos() Pos { return Pos{Offset: l.off, Line: l.line, Col: l.col} }
 
@@ -380,7 +405,7 @@ func (l *Lexer) scanPatternGroup() string {
 	}
 	// Unterminated: the caller reports the word as unfinished, the same as an
 	// unclosed quote.
-	l.incomplete = true
+	l.ranOut("pattern")
 	l.fail(l.pos(), "unterminated pattern group")
 	return l.src[start:l.off]
 }
@@ -415,7 +440,7 @@ func (l *Lexer) scanWord(start Pos) Token {
 			l.advance()
 			if l.eof() {
 				// A trailing backslash is unfinished rather than wrong.
-				l.incomplete = true
+				l.ranOut("\\")
 				l.fail(l.pos(), "input ends after a backslash")
 				break
 			}
@@ -525,7 +550,7 @@ func (l *Lexer) scanSingle() (Span, bool) {
 	var b strings.Builder
 	for {
 		if l.eof() {
-			l.incomplete = true
+			l.ranOut("'")
 			l.fail(open, "unterminated single quote")
 			return Span{Kind: Literal, Value: b.String(), Quoting: SingleQuoted, Pos: open}, true
 		}
@@ -643,7 +668,7 @@ func (l *Lexer) scanDouble() []Span {
 
 	for {
 		if l.eof() {
-			l.incomplete = true
+			l.ranOut("\"")
 			l.fail(open, "unterminated double quote")
 			flush()
 			return out
@@ -716,7 +741,7 @@ func (l *Lexer) scanDollarSingle() (Span, bool) {
 	var b strings.Builder
 	for {
 		if l.eof() {
-			l.incomplete = true
+			l.ranOut("$'")
 			l.fail(open, "unterminated $' quote")
 			return Span{Kind: Literal, Value: b.String(), Quoting: DollarSingleQuoted, Pos: open}, true
 		}
@@ -821,7 +846,7 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 	}
 	for depth > 0 {
 		if l.eof() {
-			l.incomplete = true
+			l.ranOut(openingOf(kind))
 			l.fail(open, "unterminated %s", kind)
 			break
 		}
@@ -898,7 +923,7 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 	depth := 1
 	for depth > 0 {
 		if l.eof() {
-			l.incomplete = true
+			l.ranOut("${")
 			l.fail(open, "unterminated parameter expansion")
 			break
 		}
@@ -938,7 +963,7 @@ func (l *Lexer) scanBackticks(q Quoting) Span {
 	start := l.off
 	for {
 		if l.eof() {
-			l.incomplete = true
+			l.ranOut("`")
 			l.fail(open, "unterminated backquote substitution")
 			return Span{Kind: CommandSubst, Backquoted: true, Value: unescapeBackquoted(l.src[start:l.off]), Quoting: q, Pos: open}
 		}
@@ -1052,7 +1077,7 @@ func (l *Lexer) scanArithCommand(start Pos) Token {
 
 	for depth > 0 {
 		if l.eof() {
-			l.incomplete = true
+			l.ranOut("$((")
 			l.fail(start, "unterminated arithmetic command")
 			break
 		}
@@ -1150,7 +1175,7 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 			// when the line ends should ask for another line rather than run
 			// with what it has. The parser reports both, and each front end
 			// reads the one it needs.
-			l.incomplete = true
+			l.ranOut("<<")
 			break
 		}
 		line, done := l.heredocLine(strip)
@@ -1234,4 +1259,27 @@ func (l *Lexer) scanBareParam(q Quoting) Span {
 		}
 	}
 	return Span{Kind: ParamExp, Value: l.src[begin:l.off], Quoting: q, Pos: open}
+}
+
+// openingOf is how a span's kind is written, for saying what is unfinished.
+//
+// A kind describes itself in words for a diagnostic — "command substitution"
+// — and a caller drawing what is still open wants the characters that opened
+// it instead.
+//
+// Only the kinds that reach here have a case. A parameter expansion runs out
+// in a scanner of its own and names itself there, and a branch for it here
+// was dead: a mutation of it changed nothing, which is how it was found.
+func openingOf(kind SpanKind) string {
+	switch kind {
+	case ArithSubst:
+		return "$(("
+	case CommandSubst:
+		return "$("
+	case ProcSubstIn:
+		return "<("
+	case ProcSubstOut:
+		return ">("
+	}
+	return kind.String()
 }

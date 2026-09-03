@@ -42,6 +42,7 @@ func Semantics() interp.Semantics {
 	s.SelectAssumesUnboundedWidth = interp.Yes
 	s.SelectEofEndsPromptLine = interp.Yes
 	s.SelectEofIsSuccess = interp.Yes
+	s.SelectTakesUnterminatedReply = interp.Yes
 	s.SelectEofPrintsNewline = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.Yes
 	s.TypesetLocalNeedsKeywordFunction = interp.No

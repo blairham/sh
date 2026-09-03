@@ -54,9 +54,11 @@ func TestDrawingWhatTheLineIsInside(t *testing.T) {
 			"for then",
 		},
 		{
+			// Beside a word that is drawn, so that an empty one being
+			// appended would show as a space rather than as nothing.
 			"a word with no text is not drawn",
-			[]syntax.Open{{Word: "while", Construct: true}, {Word: "do"}},
-			"",
+			[]syntax.Open{{Word: "for", Construct: true}, {Word: "do"}},
+			"for",
 		},
 		{
 			"and a word with no entry is not drawn either",
@@ -84,7 +86,10 @@ func TestDrawingWhatTheLineIsInside(t *testing.T) {
 func TestTheOpenStateIsKeptOnlyWhileWaiting(t *testing.T) {
 	var out, errs strings.Builder
 	in := readerFile(t, "for i in 1\ndo\n:\ndone\necho after\n")
-	r := newTestRunner(map[string]string{"PS1": "<>", "PS2": "<%_>"})
+	// Both prompts draw it. With only the continuation drawing it, a state
+	// that was never let go could not show: the prompt after the construct
+	// is whole is the one that would say so.
+	r := newTestRunner(map[string]string{"PS1": "<%_>", "PS2": "<%_>"})
 	r.Stdout = &out
 	s := Shell{
 		Runner: r, In: in, Out: &out, Err: &errs,

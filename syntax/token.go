@@ -202,6 +202,17 @@ type Span struct {
 	Param *ParamExpr
 	// Arith is the parsed form of an ArithSubst span, for the same reason.
 	Arith ArithExpr
+	// Backquoted says a command substitution was written `` `like this` ``
+	// rather than as `$( … )`.
+	//
+	// The two are one node to everything that runs them, and they are not
+	// the same syntax: a backquoted one ends at its closing backquote and
+	// the other ends where its contents end. So a substitution holding a
+	// here-document whose delimiter never matches — which happens, in a
+	// script installed on this machine — is terminated by the backquote and
+	// would not be terminated by a parenthesis. Anything writing one back
+	// has to write the spelling that was read.
+	Backquoted bool
 	// Pos is where the span starts, including its opening delimiter.
 	Pos Pos
 }

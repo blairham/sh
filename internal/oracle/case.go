@@ -1142,6 +1142,21 @@ var Corpus = []Case{
 		Why:     "the other nesting, which counting got right and which has to keep working: the parentheses here really do pair",
 	},
 	{
+		ID: "heredoc/a-body-that-runs-to-the-end", Category: "redirection",
+		Snippet: `{ x=$(cat <<EOF
+body
+EOF
+); } 2>/dev/null; echo "[$x]"`,
+		Why: "a delimiter that does arrive, as the control for the one below it",
+	},
+	{
+		ID: "heredoc/a-delimiter-that-never-matches", Category: "redirection",
+		Snippet: `{ x=` + "`" + `cat <<EOF
+a)
+ EOF` + "`" + `; } 2>/dev/null; echo "[$x]"`,
+		Why: "the terminator has a leading space, so it is not the delimiter and the body runs to the end of the input. Every shell takes it and runs the command — this made it a syntax error. Standard error is discarded because one shell warns about it and three say nothing, and the warning is a wording rather than the behavior this pins",
+	},
+	{
 		ID: "redir/open-failure-wording", Category: "redirection",
 		Snippet: `cat < nosuchfile; echo "st=$?"`,
 		Why:     "all four word a failed open differently and only two of them use a verb: bash prints the name then the OS string, dash puts `cannot open` in front, ksh93 puts the name first and brackets the reason after it, and zsh prints the reason first, lowercased. dash also writes its own text for this errno — `No such file`, where the OS says `No such file or directory`",

@@ -1577,6 +1577,30 @@ echo "st=$?"`,
 		Why:     "the slice is a list, so an element holding a space stays one field — which is the whole reason this is not a substring of the joined text",
 	},
 	{
+		ID: "cond/a-newline-continues-a-condition", Category: "pattern matching",
+		Snippet: `[[ 1 == 1 &&
+2 == 2 ]] && echo yes`,
+		Why: "a multi-line condition, which is ordinary formatting — found by the wild sweep in two unrelated files. A newline inside `[[ ]]` continues the condition rather than ending a command, and nothing multi-line parsed at all before: not after `&&`, not after `[[` itself, not before `]]`",
+	},
+	{
+		ID: "cond/a-newline-at-every-point", Category: "pattern matching",
+		// Deliberately without a parenthesised group, which the parser
+		// handles the same way and the unit tests cover: dash reads `(` as
+		// opening a subshell and names what it expected to close it, which
+		// is #216 and nothing to do with this.
+		//
+		// And with `&&` rather than `||`, for a reason of the same kind:
+		// dash has no `[[`, so the clause fails and `&&` stops there, where
+		// `||` would run the next line and expose a separate line-numbering
+		// bug — a command after an operator at end of line is reported at
+		// the operator's line, not its own.
+		Snippet: `[[
+1 == 1 &&
+2 == 2
+]] && echo yes`,
+		Why: "the same rule at three structural points at once — after `[[` itself, after `||`, and before `]]`. Unanimous in all three shells that have `[[ ]]`, and none of the three worked before",
+	},
+	{
 		ID: "decl/an-array-assignment-as-an-operand", Category: "parameter expansion",
 		// `typeset` rather than `local`, and at the top level rather than in
 		// a function, only to keep the case about this: dash adds an

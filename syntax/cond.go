@@ -112,7 +112,18 @@ func (p *Parser) parseTestClause() Command {
 	// inside the condition is read.
 	p.lex.inCondition = true
 	p.next()
+	// A newline inside `[[ ]]` continues the condition rather than ending a
+	// command, so it is skipped wherever the grammar is still waiting for
+	// something. Unanimous across the three shells that have `[[ ]]`, at
+	// every structural point: after `[[`, after `&&`, `||` and `!`, on both
+	// sides of a group's parentheses, and before `]]`.
+	//
+	// Not after a *binary operator* — `[[ 1 ==` then a newline is an error in
+	// bash and ksh93, and only zsh takes it. That one is left refused, which
+	// is what the two agree on.
+	p.skipNewlines()
 	c.Expr = p.condOr()
+	p.skipNewlines()
 	if c.Expr == nil && p.err == nil {
 		p.fail("expected a condition after [[")
 	}
@@ -130,6 +141,7 @@ func (p *Parser) condOr() CondExpr {
 	x := p.condAnd()
 	for x != nil && p.at(TokOrOr) && p.err == nil {
 		p.next()
+		p.skipNewlines()
 		y := p.condAnd()
 		if y == nil {
 			p.fail("expected a condition after ||")
@@ -144,6 +156,7 @@ func (p *Parser) condAnd() CondExpr {
 	x := p.condPrimary()
 	for x != nil && p.at(TokAndAnd) && p.err == nil {
 		p.next()
+		p.skipNewlines()
 		y := p.condPrimary()
 		if y == nil {
 			p.fail("expected a condition after &&")
@@ -162,6 +175,7 @@ func (p *Parser) condPrimary() CondExpr {
 	case p.atWord("!"):
 		start := p.tok.Pos
 		p.next()
+		p.skipNewlines()
 		x := p.condPrimary()
 		if x == nil {
 			p.fail("expected a condition after !")
@@ -173,11 +187,13 @@ func (p *Parser) condPrimary() CondExpr {
 		// Grouping, not a subshell: nothing here runs.
 		start := p.tok.Pos
 		p.next()
+		p.skipNewlines()
 		x := p.condOr()
 		if x == nil {
 			p.fail("expected a condition after (")
 			return nil
 		}
+		p.skipNewlines()
 		stop := p.tok.End
 		if !p.at(TokRightParen) {
 			p.fail("expected ) in a condition")

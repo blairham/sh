@@ -49,6 +49,10 @@ func TestWhatIsStillOpen(t *testing.T) {
 		{"if true\nthen\n:\nelif false\n", "if elif*"},
 		// Inside something, and not displacing it.
 		{"if true\nthen\ntrue &&\n", "if then* &&*"},
+		// And stops being open once it has one. The input below runs out
+		// inside the `if`, so an `&&` left standing would be reported as
+		// still waiting when its command arrived a word ago.
+		{"if true\nthen\ntrue && :\n", "if then*"},
 		{"for i in 1\ndo\n( :\n", "for ("},
 		// Innermost last, so a caller drawing them reads the list in the
 		// order they were opened.

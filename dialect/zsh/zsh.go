@@ -39,6 +39,15 @@ func Semantics() interp.Semantics {
 	s.UnsetEndsTheProducedPipelineStatus = interp.Yes
 	s.SelectLayout = interp.SelectMenuColumns
 	s.SelectPromptNeedsTerminal = interp.No
+	s.AliasParsesOptions = interp.Yes
+	s.AliasHasPrintOption = interp.No
+	// The reverse of ksh93: silent about `alias nope` and not about
+	// `unalias nope`.
+	s.AliasReportsNotFound = interp.No
+	s.UnaliasReportsNotFound = interp.Yes
+	s.AliasNotFoundStatusCounts = interp.No
+	s.UnaliasAllRefusesOperands = interp.Yes
+	s.AliasQuoting = interp.AliasQuoteWhenNeededEscaped
 	s.SelectAssumesUnboundedWidth = interp.Yes
 	s.SelectEofEndsPromptLine = interp.Yes
 	s.SelectEofIsSuccess = interp.Yes
@@ -220,6 +229,11 @@ func Diagnostics() interp.Diagnostics {
 		CdCannotChange:         "%[2]s: %[1]s",
 		PrintfBadVerb:          "%[2]s: invalid directive",
 		UmaskBadMask:           "bad umask",
+		// The builtin's name comes from the location, as everywhere in zsh.
+		UnaliasNotFound:        "no such hash table element: %[2]s",
+		UnaliasAllWithOperands: "-a: too many arguments",
+		UnaliasUsage:           "not enough arguments",
+		UnaliasNoOperandStatus: 1,
 		// The builtin's name comes from the location here, as everywhere in
 		// zsh, so it is not in the wording.
 		UmaskBadSymbolicMode:     "bad symbolic mode permission: %[2]s",

@@ -157,10 +157,13 @@ func TestTypeAnswersEveryNameAndReportsTheFailure(t *testing.T) {
 // it is. A script that asks before using it would be told yes and then fail.
 func TestTypeWillNotNameAReservedBuiltinOnPath(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "alias"), []byte("#!/bin/sh\n"), 0o700); err != nil {
+	// `hash` rather than `alias`, which is a builtin now and would be named
+	// as one — correctly. The guard needs a name that is still reserved and
+	// still unimplemented.
+	if err := os.WriteFile(filepath.Join(dir, "hash"), []byte("#!/bin/sh\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	out, st := run(t, `type alias`, func(r *Runner) {
+	out, st := run(t, `type hash`, func(r *Runner) {
 		sem := CoreSemantics()
 		dg := Diagnostics{TypeNotFound: "type: %[1]s: not found"}
 		r.Semantics, r.Diagnostics = &sem, &dg

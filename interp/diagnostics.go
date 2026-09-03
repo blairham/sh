@@ -267,6 +267,49 @@ type Diagnostics struct {
 	// bash and zsh name the character and say what kind it was.
 	UmaskBadSymbolicMode string
 
+	// AliasNotFound is `alias` naming one the table does not hold. Two verbs:
+	// the builtin and the name.
+	//
+	//	bash   alias: nope: not found
+	//	dash   alias: nope not found
+	//	ksh93  nope: alias not found
+	//
+	// zsh prints nothing, which AliasReportsNotFound answers rather than an
+	// empty string here — an empty wording means "the substrate's own".
+	AliasNotFound string
+
+	// AliasNotFoundUnprefixed writes it without the shell and line in front,
+	// which dash and ksh93 do here and almost nowhere else.
+	AliasNotFoundUnprefixed bool
+
+	// UnaliasNotFound is the same for `unalias`, and is a separate field
+	// because zsh words it differently from anything its `alias` says — "no
+	// such hash table element: nope", where its `alias` says nothing at all.
+	UnaliasNotFound string
+
+	// UnaliasNotFoundUnprefixed is that question for the `unalias` wording.
+	UnaliasNotFoundUnprefixed bool
+
+	// UnaliasUsage is what `unalias` prints when given no name and no -a.
+	// Empty means it prints nothing, which is dash.
+	UnaliasUsage string
+
+	// UnaliasUsageUnprefixed writes that without the shell and line in front.
+	UnaliasUsageUnprefixed bool
+
+	// UnaliasNoOperandStatus is what that reports. Zero means 2, except where
+	// UnaliasUsage is empty and nothing was wrong, which is 0.
+	UnaliasNoOperandStatus int
+
+	// UnaliasAllWithOperands is `unalias -a` given a name as well. No verbs.
+	// Only zsh refuses it, which UnaliasAllRefusesOperands answers.
+	UnaliasAllWithOperands string
+
+	// AliasListPrefix goes in front of every line of a listing. `alias ` in
+	// bash, which is what makes its output text that can be read back, and
+	// empty in the other three.
+	AliasListPrefix string
+
 	// UmaskBadSymbolicOperator is that complaint where what was wanted was
 	// one of `+-=` rather than one of `rwx`, for the two dialects that tell
 	// them apart: bash says "invalid symbolic mode operator" against

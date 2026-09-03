@@ -45,6 +45,15 @@ func Semantics() interp.Semantics {
 	s.ArrayScalarIsTheWholeArray = interp.No
 	s.SelectLayout = interp.SelectMenuVertical
 	s.SelectPromptNeedsTerminal = interp.Yes
+	s.AliasParsesOptions = interp.Yes
+	s.AliasHasPrintOption = interp.Yes
+	// It complains about `alias nope` and says nothing about `unalias nope`,
+	// which is why these are two questions.
+	s.AliasReportsNotFound = interp.Yes
+	s.UnaliasReportsNotFound = interp.No
+	s.AliasNotFoundStatusCounts = interp.Yes
+	s.UnaliasAllRefusesOperands = interp.No
+	s.AliasQuoting = interp.AliasQuoteWhenNeededDollar
 	s.SelectEofEndsPromptLine = interp.No
 	s.SelectEofIsSuccess = interp.No
 	s.SelectTakesUnterminatedReply = interp.No
@@ -234,6 +243,12 @@ func Diagnostics() interp.Diagnostics {
 		PrintfBadOption:           "printf: %[1]s: unknown option",
 		PrintfBadOptionShowsUsage: true,
 		UmaskBadMask:              "umask: %[1]s: bad number",
+		// The name leads and the builtin follows it, which is the reverse of
+		// everyone else — and unprefixed.
+		AliasNotFound:             "%[2]s: %[1]s not found",
+		AliasNotFoundUnprefixed:   true,
+		UnaliasUsage:              "Usage: unalias [-a] name...",
+		UnaliasUsageUnprefixed:    true,
 		UmaskBadSymbolicMode:      "umask: %[1]s: bad format",
 		UmaskBadOption:            "umask: %[1]s: unknown option",
 		UmaskUsage:                "Usage: umask [-S] [mask]",

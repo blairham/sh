@@ -39,6 +39,13 @@ func Semantics() interp.Semantics {
 	s.UnsetEndsTheProducedPipelineStatus = interp.No
 	s.SelectLayout = interp.SelectMenuVerticalThenColumns
 	s.SelectPromptNeedsTerminal = interp.No
+	s.AliasParsesOptions = interp.Yes
+	s.AliasHasPrintOption = interp.Yes
+	s.AliasReportsNotFound = interp.Yes
+	s.UnaliasReportsNotFound = interp.Yes
+	s.AliasNotFoundStatusCounts = interp.No
+	s.UnaliasAllRefusesOperands = interp.No
+	s.AliasQuoting = interp.AliasQuoteAlwaysEscaped
 	s.SelectAssumesUnboundedWidth = interp.No
 	s.SelectEofEndsPromptLine = interp.No
 	s.SelectEofIsSuccess = interp.No
@@ -234,8 +241,13 @@ func Diagnostics() interp.Diagnostics {
 			"readonly": "readonly: usage: readonly [-aAf] [name[=value] ...] or readonly -p",
 			"unset":    "unset: usage: unset [-f] [-v] [-n] [name ...]",
 		},
-		PrintfUsage:  "printf: usage: printf [-v var] format [arguments]",
-		UmaskBadMask: "umask: %[1]s: octal number out of range",
+		PrintfUsage:            "printf: usage: printf [-v var] format [arguments]",
+		UmaskBadMask:           "umask: %[1]s: octal number out of range",
+		AliasNotFound:          "%[1]s: %[2]s: not found",
+		UnaliasNotFound:        "%[1]s: %[2]s: not found",
+		AliasListPrefix:        "alias ",
+		UnaliasUsage:           "unalias: usage: unalias [-a] name [name ...]",
+		UnaliasUsageUnprefixed: true,
 		// bash names the character and says which kind it wanted.
 		UmaskBadSymbolicMode:     "umask: `%[2]s': invalid symbolic mode character",
 		UmaskBadSymbolicOperator: "umask: `%[2]s': invalid symbolic mode operator",

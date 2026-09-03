@@ -55,6 +55,14 @@ func Semantics() interp.Semantics {
 	s.PrintfAssignsWithV = interp.No
 	s.PrintfRejectsUnknownOption = interp.Yes
 	s.UmaskPrintsFourDigits = interp.Yes
+	// dash parses no options for `alias`, so `-p` is a name there.
+	s.AliasParsesOptions = interp.No
+	s.AliasHasPrintOption = interp.No
+	s.AliasReportsNotFound = interp.Yes
+	s.UnaliasReportsNotFound = interp.Yes
+	s.AliasNotFoundStatusCounts = interp.No
+	s.UnaliasAllRefusesOperands = interp.No
+	s.AliasQuoting = interp.AliasQuoteAlwaysDoubled
 	s.UmaskSetWithSPrints = interp.No
 	s.UlimitBlockIsKilobyte = interp.No
 	s.UlimitHasResidentSet = interp.Yes
@@ -187,6 +195,12 @@ func Diagnostics() interp.Diagnostics {
 		PrintfBadVerb:       "printf: %[2]s: invalid directive",
 		PrintfBadOption:     "printf: Illegal option %[1]s",
 		UmaskBadMask:        "umask: Illegal number: %[1]s",
+		// No shell and no line in front of either, which dash does almost
+		// nowhere else.
+		AliasNotFound:             "%[1]s: %[2]s not found",
+		AliasNotFoundUnprefixed:   true,
+		UnaliasNotFound:           "%[1]s: %[2]s not found",
+		UnaliasNotFoundUnprefixed: true,
 		// dash quotes the whole argument back and does not say what in it
 		// was wrong, so there is no operator wording to go with this.
 		UmaskBadSymbolicMode:  "umask: Illegal mode: %[1]s",

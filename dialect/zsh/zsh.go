@@ -327,6 +327,8 @@ func Apply(r *interp.Runner) {
 	// tables and takes none of bash's options — `enable -n` is a bad option
 	// there. Claiming a bash-shaped one would be worse than not having it.
 	r.Unregister("enable")
+	// No `compgen` here; it is bash's alone.
+	r.Unregister("compgen")
 	// The `set -o` names beyond the ones every shell has.
 	r.AddSetOptions(
 		"braceexpand",

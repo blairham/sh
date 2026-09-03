@@ -150,3 +150,115 @@ func TestAShellsNameIsNotStruckOutOfTheOutput(t *testing.T) {
 		t.Errorf("one shell under two names disagreed with itself: %+v", rep.Mismatches)
 	}
 }
+
+// A script that does not produce the same thing twice is not evidence about
+// either shell, and must not be reported as a difference between them.
+//
+// A third of what this sweep reported was exactly this: scripts whose output
+// carries a timestamp or a process id, which differ between any two runs
+// including two runs of the *same* shell.
+func TestAScriptThatIsNotTheSameTwiceIsNotAMismatch(t *testing.T) {
+	dir := t.TempDir()
+	// A process id, which is what the real cases carry.
+	script := write(t, dir, "s", "#!/bin/sh\necho \"pid $$\"\n")
+
+	rep := wild.RunSweep(context.Background(), []string{script}, "/bin/sh", "/bin/sh", 10*time.Second)
+	if rep.Unstable != len(wild.Probes) {
+		t.Errorf("unstable = %d, want %d: %+v", rep.Unstable, len(wild.Probes), rep)
+	}
+	if len(rep.Mismatches) != 0 {
+		t.Errorf("reported %d differences for a script that differs from itself: %+v", len(rep.Mismatches), rep)
+	}
+}
+
+// And the check must not swallow a real difference: a script that repeats
+// itself is still compared, and a shell that answers it differently is still
+// reported.
+func TestAStableDifferenceIsStillReported(t *testing.T) {
+	dir := t.TempDir()
+	script := write(t, dir, "s", "#!/bin/sh\necho hi\n")
+	odd := shellThat(t, "odd", `echo different`)
+
+	rep := wild.RunSweep(context.Background(), []string{script}, odd, "/bin/sh", 10*time.Second)
+	if len(rep.Mismatches) != len(wild.Probes) {
+		t.Errorf("got %d mismatches, want %d: %+v", len(rep.Mismatches), len(wild.Probes), rep)
+	}
+	if rep.Unstable != 0 {
+		t.Errorf("unstable = %d, want 0: a script that repeats itself is stable", rep.Unstable)
+	}
+}
+
+// The instability that matters is the *reference* shell's, because that is
+// what a difference is measured against. A shell under test that cannot
+// repeat itself is a fault in the shell under test, and is reported.
+func TestOnlyTheReferenceHasToRepeatItself(t *testing.T) {
+	dir := t.TempDir()
+	script := write(t, dir, "s", "#!/bin/sh\necho hi\n")
+	// Answers with something new every time, which is a real difference from
+	// a reference that does not.
+	odd := shellThat(t, "odd", `echo "$$"`)
+
+	rep := wild.RunSweep(context.Background(), []string{script}, odd, "/bin/sh", 10*time.Second)
+	if len(rep.Mismatches) != len(wild.Probes) {
+		t.Errorf("got %d mismatches, want %d: %+v", len(rep.Mismatches), len(wild.Probes), rep)
+	}
+}
+
+// Instability in the status alone counts too. A script can print the same
+// thing every time and still answer differently, and comparing only the
+// output would call that a difference between the shells.
+//
+// The counter lives beside the script rather than in the run's directory,
+// because each run gets a directory of its own and nothing in it survives.
+func TestAScriptWhoseStatusVariesIsNotAMismatch(t *testing.T) {
+	dir := t.TempDir()
+	script := write(t, dir, "s", `#!/bin/sh
+d=$(dirname "$0")
+n=0
+[ -f "$d/n" ] && n=$(cat "$d/n")
+echo $((n+1)) > "$d/n"
+echo stable
+exit $n
+`)
+
+	rep := wild.RunSweep(context.Background(), []string{script}, "/bin/sh", "/bin/sh", 10*time.Second)
+	if rep.Unstable != len(wild.Probes) {
+		t.Errorf("unstable = %d, want %d: %+v", rep.Unstable, len(wild.Probes), rep)
+	}
+	if len(rep.Mismatches) != 0 {
+		t.Errorf("reported %d differences for a script whose status varies: %+v", len(rep.Mismatches), rep)
+	}
+}
+
+// A repeat that times out is not an answer, and must not be read as one.
+//
+// A timed-out run comes back as a zero outcome — no output, status 0 — which
+// is indistinguishable from a reference that legitimately printed nothing and
+// succeeded. Comparing it anyway would call such a script stable on the
+// strength of a run that never finished.
+//
+// The script here hangs from its second run on, so the reference answers once
+// and then stops answering.
+func TestARepeatThatTimesOutIsNotStability(t *testing.T) {
+	dir := t.TempDir()
+	script := write(t, dir, "s", `#!/bin/sh
+d=$(dirname "$0")
+n=0
+[ -f "$d/n" ] && n=$(cat "$d/n")
+echo $((n+1)) > "$d/n"
+[ "$n" -ge 1 ] && sleep 30
+exit 0
+`)
+	// Prints something and never runs the script, so the reference is the
+	// only thing driving the counter.
+	odd := shellThat(t, "odd", `echo different`)
+
+	rep := wild.RunSweep(context.Background(), []string{script}, odd, "/bin/sh", 300*time.Millisecond)
+	if len(rep.Mismatches) != 0 {
+		t.Errorf("reported %d differences on the strength of a run that timed out: %+v",
+			len(rep.Mismatches), rep)
+	}
+	if rep.Unstable != 1 {
+		t.Errorf("unstable = %d, want 1: %+v", rep.Unstable, rep)
+	}
+}

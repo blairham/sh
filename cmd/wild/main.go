@@ -86,8 +86,8 @@ func runSweep(ours, reference string, dirs []string, parsed wild.Report, timeout
 	}
 
 	rep := wild.RunSweep(context.Background(), paths, ours, reference, timeout)
-	fmt.Printf("\nran: %d   agreed: %d   timed out: %d   disagreed: %d\n",
-		rep.Ran, rep.Agreed, rep.Timedout, len(rep.Mismatches))
+	fmt.Printf("\nran: %d   agreed: %d   timed out: %d   not the same twice: %d   disagreed: %d\n",
+		rep.Ran, rep.Agreed, rep.Timedout, rep.Unstable, len(rep.Mismatches))
 	for _, m := range rep.Mismatches {
 		fmt.Printf("  %s %s\n", m.Path, strings.Join(m.Args, " "))
 		fmt.Printf("    ours   (%d) %s\n", m.OurStatus, show(m.Ours, verbose))

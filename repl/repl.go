@@ -78,7 +78,13 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	sig, stop := catchInterrupt()
 	defer stop()
 
-	ed := &editor{in: s.In, out: s.Out, comp: s.completer()}
+	ed := &editor{
+		in: s.In, out: s.Out, comp: s.completer(),
+		// The width comes from the input, which is the terminal; the output
+		// may be a file the session was started with, and its size is not the
+		// screen's.
+		width: func() int { return terminalWidth(s.In) },
+	}
 	// What earlier sessions typed, and where to add what this one does. The
 	// count is kept so only the new lines are written back: the rest are
 	// already in the file, and appending them again doubles it every time a

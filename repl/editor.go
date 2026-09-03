@@ -49,6 +49,13 @@ type editor struct {
 	// the matches rather than repeat a completion that changed nothing.
 	comp    completer
 	lastTab bool
+
+	// width is how many columns the terminal has, asked each time it is
+	// needed; nil, or an answer of 0, means it will not say. row is which
+	// screen row the last draw left the cursor on, counted from the row the
+	// prompt starts in — 0 until the line is long enough to wrap.
+	width func() int
+	row   int
 }
 
 // readLine reads one line, drawing it as it is typed.
@@ -58,6 +65,7 @@ type editor struct {
 func (e *editor) readLine(prompt string) (string, error) {
 	e.line, e.pos = e.line[:0], 0
 	e.browsing = len(e.history)
+	e.row = 0
 	e.write(prompt)
 
 	var buf [1]byte
@@ -76,18 +84,18 @@ func (e *editor) readLine(prompt string) (string, error) {
 			// The line is abandoned, not run. The newline is ours to print:
 			// the terminal echoes nothing in raw mode, so without it the
 			// next prompt would land on top of what was typed.
-			e.write("^C\r\n")
+			e.endLine(prompt, "^C")
 			return "", ErrInterrupted
 		case ctrlD:
 			if len(e.line) == 0 {
-				e.write("\r\n")
+				e.endLine(prompt, "")
 				return "", io.EOF
 			}
 			// With something typed, ^D deletes forwards instead — which is
 			// what it means everywhere but on an empty line.
 			e.deleteForward()
 		case '\r', '\n':
-			e.write("\r\n")
+			e.endLine(prompt, "")
 			return string(e.line), nil
 		case ctrlA:
 			e.moveTo(0, prompt)
@@ -110,6 +118,7 @@ func (e *editor) readLine(prompt string) (string, error) {
 		case ctrlL:
 			// Clear the screen and put the line back at the top of it.
 			e.write("\x1b[H\x1b[2J")
+			e.row = 0
 			e.redraw(prompt)
 		case ctrlP:
 			e.browse(-1, prompt)
@@ -296,18 +305,132 @@ func (e *editor) moveTo(pos int, prompt string) {
 // is wider than one cell or the line wraps; and at typing speed there is
 // nothing to gain.
 func (e *editor) redraw(prompt string) {
+	cols := e.cols()
+	if cols <= 0 {
+		// Nothing known about the terminal, so the line is assumed to fit on
+		// the row it started on. Wrong for a long line, and the best that can
+		// be done without a width: guessing one would be wrong for every
+		// line rather than only the long ones.
+		var b strings.Builder
+		b.WriteString("\r\x1b[K")
+		b.WriteString(prompt)
+		b.WriteString(string(e.line))
+		if e.pos < len(e.line) {
+			b.WriteString("\x1b[")
+			b.WriteString(itoa(len(e.line) - e.pos))
+			b.WriteString("D")
+		}
+		e.row = 0
+		e.write(b.String())
+		return
+	}
+
+	// A line wider than the terminal occupies several screen rows, and the
+	// cursor is somewhere among them. `\r` returns to the start of the row it
+	// is on and not to the start of the line, so getting back to the prompt
+	// means going up as far as the last draw came down.
 	var b strings.Builder
-	b.WriteString("\r\x1b[K")
+	b.WriteString("\r")
+	if e.row > 0 {
+		b.WriteString("\x1b[")
+		b.WriteString(itoa(e.row))
+		b.WriteString("A")
+	}
+	// Erase to the end of the *screen* rather than the end of the row: what
+	// is being replaced may be several rows of it, and clearing only the
+	// first leaves the rest of the old line below the new one.
+	b.WriteString("\x1b[J")
 	b.WriteString(prompt)
 	b.WriteString(string(e.line))
-	if e.pos < len(e.line) {
-		// Back up to where the cursor belongs, in characters rather than
-		// bytes.
-		b.WriteString("\x1b[")
-		b.WriteString(itoa(len(e.line) - e.pos))
-		b.WriteString("D")
+
+	end := displayWidth(prompt) + len(e.line)
+	endRow, endCol := end/cols, end%cols
+	if end > 0 && endCol == 0 {
+		// The line ends exactly at the right-hand edge. A terminal does not
+		// move to the next row until there is something to put there, so the
+		// cursor is still on the old row and every count from here would be
+		// one row out. A space makes it wrap, and the carriage return undoes
+		// the space.
+		b.WriteString(" \r")
 	}
+	cur := displayWidth(prompt) + e.pos
+	curRow, curCol := cur/cols, cur%cols
+	if endRow > curRow {
+		b.WriteString("\x1b[")
+		b.WriteString(itoa(endRow - curRow))
+		b.WriteString("A")
+	}
+	b.WriteString("\r")
+	if curCol > 0 {
+		b.WriteString("\x1b[")
+		b.WriteString(itoa(curCol))
+		b.WriteString("C")
+	}
+	e.row = curRow
 	e.write(b.String())
+}
+
+// cols is the terminal's width, or 0 when there is nothing to ask.
+func (e *editor) cols() int {
+	if e.width == nil {
+		return 0
+	}
+	return e.width()
+}
+
+// toLastRow puts the cursor below everything drawn, so what comes next starts
+// on a clean row.
+//
+// The cursor sits wherever it was left, which for a wrapped line is usually
+// not the last row of it. A newline from there scrolls the rest of the line
+// out of the way of nothing and the next thing printed lands on top of it.
+func (e *editor) toLastRow(prompt string) {
+	cols := e.cols()
+	if cols <= 0 {
+		return
+	}
+	end := displayWidth(prompt) + len(e.line)
+	if endRow := end / cols; endRow > e.row {
+		e.write("\x1b[" + itoa(endRow-e.row) + "B")
+	}
+}
+
+// endLine finishes the line on the screen: down past the last row of it, then
+// a newline, and the next draw starts from the top again.
+func (e *editor) endLine(prompt, before string) {
+	e.toLastRow(prompt)
+	e.write(before + "\r\n")
+	e.row = 0
+}
+
+// displayWidth is how many columns a string takes on the screen.
+//
+// Escape sequences are skipped: they instruct the terminal rather than
+// putting anything in a cell, and counting them would push every calculation
+// here to the right by however many bytes it took to say "in green". One cell
+// per rune otherwise — which is not true of a character the terminal draws
+// double width, and is the remaining gap in this arithmetic.
+func displayWidth(s string) int {
+	n := 0
+	for i := 0; i < len(s); {
+		if s[i] == esc {
+			i++
+			if i < len(s) && s[i] == '[' {
+				i++
+				for i < len(s) && (s[i] < '@' || s[i] > '~') {
+					i++
+				}
+			}
+			if i < len(s) {
+				i++
+			}
+			continue
+		}
+		_, size := utf8.DecodeRuneInString(s[i:])
+		i += size
+		n++
+	}
+	return n
 }
 
 // list prints the matches above the line, the way a shell does — the line is
@@ -317,12 +440,13 @@ func (e *editor) redraw(prompt string) {
 // asking for it is a third ioctl and a resize signal to keep it right; a list
 // is honest and never wrong.
 func (e *editor) list(matches []string, prompt string) {
-	e.write("\r\n")
+	e.endLine(prompt, "")
 	for _, m := range matches {
 		e.write(m)
 		e.write("\r\n")
 	}
-	e.write(prompt)
+	// The prompt and the line are not written back here: the caller redraws,
+	// and the redraw now knows it is starting from a fresh row.
 }
 
 func (e *editor) write(s string) { _, _ = io.WriteString(e.out, s) }

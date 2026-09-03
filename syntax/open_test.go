@@ -150,6 +150,12 @@ func TestWhatTheLexerIsStillInside(t *testing.T) {
 		{"echo ${x\n", "${"},
 		{"echo `x\n", "`"},
 		{"echo $((1\n", "$(("},
+		{"echo <( :\n", "<("},
+		{"echo >( :\n", ">("},
+		// The innermost is what is waiting. Scanning descends, so the thing
+		// that runs out first is the one furthest in — here the expansion
+		// rather than the quote it sits inside.
+		{"echo \"x ${y\n", "${"},
 		// Innermost last: the quote is inside the construct, and the
 		// construct is what the line is inside.
 		{"if true\nthen\necho 'x\n", "if then '"},

@@ -1266,14 +1266,16 @@ func (l *Lexer) scanBareParam(q Quoting) Span {
 // A kind describes itself in words for a diagnostic — "command substitution"
 // — and a caller drawing what is still open wants the characters that opened
 // it instead.
+//
+// Only the kinds that reach here have a case. A parameter expansion runs out
+// in a scanner of its own and names itself there, and a branch for it here
+// was dead: a mutation of it changed nothing, which is how it was found.
 func openingOf(kind SpanKind) string {
 	switch kind {
 	case ArithSubst:
 		return "$(("
 	case CommandSubst:
 		return "$("
-	case ParamExp:
-		return "${"
 	case ProcSubstIn:
 		return "<("
 	case ProcSubstOut:

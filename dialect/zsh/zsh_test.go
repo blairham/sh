@@ -31,6 +31,12 @@ func TestGrammar(t *testing.T) {
 		{`case a in a) echo x;;& esac`, false},
 		{`echo ${x^^}`, false},
 		{`echo ${!x}`, false},
+		// The array form is the one scripts reach for — iterating an array by
+		// index — and it takes a name and a subscript where the scalar takes
+		// only a name. zsh refuses both, and refuses them at *parse* time, so
+		// nothing after the line runs. Its own spelling is `${(k)a}`.
+		{`echo ${!a[@]}`, false},
+		{`echo ${!a[*]}`, false},
 		{`function f() { echo x; }`, true},
 		{`a=(x y)`, true},
 	} {

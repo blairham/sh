@@ -201,25 +201,21 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields []string, pla
 // expandParam applies, so the two cannot drift apart.
 func (r *Runner) substitutedWordFields(s syntax.Span) ([]string, bool) {
 	e := s.Param
-	if e.Arg == nil || e.Length || e.Indirect || e.Index == nil {
+	if e.Arg == nil || e.Length || e.Indirect {
 		return nil, false
 	}
-	// Only for a whole-array subscript. `${a[0]+x}` is one field whatever
-	// the word does, like any scalar, and taking it down this path would
-	// give it fields nothing asked for.
-	if !wholeArraySubscript(r.subscriptText(e.Index)) {
+	if e.Op != syntax.ParamDefault && e.Op != syntax.ParamAlternate {
 		return nil, false
 	}
-	fires, ok := r.testFires(e)
-	if !ok {
-		return nil, false
-	}
-	switch {
-	case e.Op == syntax.ParamDefault && !fires,
-		e.Op == syntax.ParamAlternate && fires:
+	// Whatever the parameter is — a plain name, one element, or the whole
+	// array. The fields come from the *word*, so `${x+${b[@]}}` and
+	// `${a[0]+${b[@]}}` are two fields exactly as `${a[@]+${b[@]}}` is.
+	// Measured in bash and ksh93; restricting this to `[@]` made the first
+	// two come back joined.
+	fires := r.testFires(e)
+	if (e.Op == syntax.ParamDefault && !fires) ||
+		(e.Op == syntax.ParamAlternate && fires) {
 		// The parameter is what it came to, not the word.
-		return nil, false
-	case e.Op != syntax.ParamDefault && e.Op != syntax.ParamAlternate:
 		return nil, false
 	}
 	// expandWord either way: it builds fields span by span, so a literal
@@ -234,6 +230,31 @@ func (r *Runner) substitutedWordFields(s syntax.Span) ([]string, bool) {
 	return fields, true
 }
 
+// paramSource is the value an expansion starts from and whether it was set at
+// all, before any operator is applied.
+//
+// Shared with the two field-level questions below, so that "was it set" is
+// asked in one place. Answering it twice is how the joined and the split paths
+// would come to disagree about the same expansion.
+func (r *Runner) paramSource(e *syntax.ParamExpr) (value string, set, subscript bool) {
+	if e.Index != nil {
+		if elems, ok := r.arraySubscript(e); ok {
+			// nil rather than empty is what says the element was not there:
+			// an element holding "" is set, and `${a[0]:-d}` has to tell the
+			// two apart.
+			return strings.Join(elems, " "), elems != nil, true
+		}
+	}
+	// A special parameter supplies a *value*; it does not skip the operators.
+	// Returning here was a bug: `${1##*/}` left its argument untouched,
+	// because the positional parameter answered and the trim never ran.
+	value, set = r.specialParam(e)
+	if !set {
+		value, set = r.getVar(e.Name)
+	}
+	return value, set, false
+}
+
 // yieldsTheArray reports whether a `-` or `+` expansion came to the parameter
 // rather than to its word.
 //
@@ -245,27 +266,20 @@ func (r *Runner) yieldsTheArray(e *syntax.ParamExpr) bool {
 	if e.Op != syntax.ParamDefault && e.Op != syntax.ParamAlternate {
 		return false
 	}
-	fires, ok := r.testFires(e)
-	if !ok {
-		return false
-	}
+	fires := r.testFires(e)
 	return (e.Op == syntax.ParamDefault && !fires) ||
 		(e.Op == syntax.ParamAlternate && fires)
 }
 
-// testFires reports whether the `-`/`+` test fires for a subscripted
-// expansion, by the same rule expandParam uses: unset, or unset-or-empty when
-// a colon was written.
-func (r *Runner) testFires(e *syntax.ParamExpr) (fires, ok bool) {
-	elems, found := r.arraySubscript(e)
-	if !found {
-		return false, false
-	}
-	value, set := strings.Join(elems, " "), elems != nil
+// testFires reports whether the `-`/`+` test fires: unset, or unset-or-empty
+// when a colon was written. The same rule expandParam applies, from the same
+// source, so the joined and the split paths cannot disagree.
+func (r *Runner) testFires(e *syntax.ParamExpr) bool {
+	value, set, _ := r.paramSource(e)
 	if e.Colon {
-		return !set || value == "", true
+		return !set || value == ""
 	}
-	return !set, true
+	return !set
 }
 
 // expandAssignValue expands the value of an assignment.
@@ -529,7 +543,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	)
 	if e.Index != nil {
 		if elems, ok := r.arraySubscript(e); ok {
-			if e.Length {
+			if e.Length { //nolint:nestif // the Length question is answered here on purpose
 				// `${#a[@]}` is the number of elements; `${#a[0]}` is the
 				// length of one. The subscript decides which question was
 				// asked, which is why this is here rather than below.
@@ -542,18 +556,10 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 			// nil rather than empty is what says the element was not there:
 			// an element holding "" is set, and `${a[0]:-d}` has to tell the
 			// two apart.
-			subscript, value, set = true, strings.Join(elems, " "), elems != nil
+			_ = elems
 		}
 	}
-	// A special parameter supplies a *value*; it does not skip the operators.
-	// Returning here was a bug: `${1##*/}` left its argument untouched,
-	// because the positional parameter answered and the trim never ran.
-	if !subscript {
-		value, set = r.specialParam(e)
-		if !set {
-			value, set = r.getVar(e.Name)
-		}
-	}
+	value, set, subscript = r.paramSource(e)
 
 	if !set {
 		r.checkNounset(e)

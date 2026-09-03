@@ -156,9 +156,16 @@ func TestASubstitutedWordKeepsItsFields(t *testing.T) {
 		// nothing split it.
 		{"a literal stays one field", `a=(x); printf "[%s]" "${a[@]+p q}"`, "[p q]"},
 		{"one word is one field", `a=(x y); printf "[%s]" "${a[@]+Z}"`, "[Z]"},
-		// A single element is a scalar and gets no fields from this.
-		{"a numeric subscript is scalar", `a=(x); printf "[%s]" "${a[0]+p q}"`, "[p q]"},
-		{"a plain name is scalar", `x=1; printf "[%s]" "${x+p q}"`, "[p q]"},
+		// The parameter's own shape does not decide it: the fields come from
+		// the *word*, so a numeric subscript and a plain name get them too.
+		{"a numeric subscript, nested", `a=(x); b=(p q); printf "[%s]" "${a[0]+${b[@]}}"`, "[p][q]"},
+		{"a plain name, nested", `x=1; b=(p q); printf "[%s]" "${x+${b[@]}}"`, "[p][q]"},
+		// And a literal after either is still one field, for the same reason
+		// it is after `[@]` — nothing split it.
+		{"a numeric subscript, literal", `a=(x); printf "[%s]" "${a[0]+p q}"`, "[p q]"},
+		{"a plain name, literal", `x=1; printf "[%s]" "${x+p q}"`, "[p q]"},
+		// The colon extends the test and changes nothing about the fields.
+		{"with a colon", `a=(x y); printf "[%s]" "${a[@]:+${a[@]}}"`, "[x][y]"},
 		// Nothing to substitute is no field at all rather than an empty one.
 		{"unset yields nothing", `printf "[%s]" "${n[@]+${n[@]}}"`, "[]"},
 	} {

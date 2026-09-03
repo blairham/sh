@@ -35,6 +35,7 @@ func shell() driver.Shell {
 		Prelude:     bash.Prelude(),
 		Register:    bash.Apply,
 		PromptStyle: bash.PromptStyle(),
+		EditorStyle: bash.EditorStyle(),
 	}
 }
 

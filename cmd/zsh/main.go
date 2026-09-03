@@ -31,6 +31,7 @@ func shell() driver.Shell {
 		Prelude:     zsh.Prelude(),
 		Register:    zsh.Apply,
 		PromptStyle: zsh.PromptStyle(),
+		EditorStyle: zsh.EditorStyle(),
 	}
 }
 

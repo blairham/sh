@@ -56,8 +56,9 @@ func (sh Shell) interactive(argv, params []string) int {
 		Report: func(err error) string {
 			return dg.ParseDiagnostic(name, "", err, "")
 		},
-		Style: sh.PromptStyle,
-		Name:  name,
+		Style:  sh.PromptStyle,
+		Editor: sh.EditorStyle,
+		Name:   name,
 	}
 	ctx := context.Background()
 	status, err := s.Run(ctx)

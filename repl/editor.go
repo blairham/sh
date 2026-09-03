@@ -50,6 +50,10 @@ type editor struct {
 	comp    completer
 	lastTab bool
 
+	// interrupt is what marks a line abandoned with ^C. Empty draws nothing,
+	// which is what two of the four dialects do.
+	interrupt string
+
 	// width is how many columns the terminal has, asked each time it is
 	// needed; nil, or an answer of 0, means it will not say. row is which
 	// screen row the last draw left the cursor on, counted from the row the
@@ -84,7 +88,7 @@ func (e *editor) readLine(prompt string) (string, error) {
 			// The line is abandoned, not run. The newline is ours to print:
 			// the terminal echoes nothing in raw mode, so without it the
 			// next prompt would land on top of what was typed.
-			e.endLine(prompt, "^C")
+			e.endLine(prompt, e.interrupt)
 			return "", ErrInterrupted
 		case ctrlD:
 			if len(e.line) == 0 {

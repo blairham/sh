@@ -119,6 +119,16 @@ func TestTheDialectsDefaultPrompt(t *testing.T) {
 		t.Errorf("continuation = %q, want > ", got)
 	}
 
+	// With a continuation that is not the substrate's own text, so that the
+	// dialect being asked at all is what the answer depends on. bash's is
+	// `> ` and so is the fallback, which makes bash the one dialect whose
+	// continuation cannot grade this.
+	distinct := bashish
+	distinct.Style.DefaultContinued = `\s? `
+	if got := drawn(distinct, true); got != "bash? " {
+		t.Errorf("continuation = %q, want the dialect's own, drawn", got)
+	}
+
 	// An assignment still wins over it.
 	assigned := bashish
 	assigned.Runner = newTestRunner(map[string]string{"PS1": "mine> "})

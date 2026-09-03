@@ -42,15 +42,27 @@ func TestANewlineContinuesACondition(t *testing.T) {
 	}
 }
 
-// Not after a binary operator: `[[ 1 ==` then a newline is an error in bash
-// and ksh93, and only zsh takes it. Refused is what the two agree on.
-func TestANewlineDoesNotFollowABinaryOperator(t *testing.T) {
+// Not around a binary operator, on either side. `[[ 1 ==` and `[[ 1` each
+// followed by a newline are errors in bash and ksh93, and only zsh takes
+// them; refused is what the two agree on.
+//
+// Both sides, because they are separate places in the parser: one is the
+// operator having nothing after it, the other is the left operand having no
+// operator yet. Testing only the first left the second ungraded.
+func TestANewlineDoesNotSurroundABinaryOperator(t *testing.T) {
 	d := syntax.Core()
 	d.DoubleBracket = true
-	p := syntax.NewParser("[[ 1 ==\n1 ]]", d)
-	p.Parse()
-	if p.Err() == nil {
-		t.Error("parsed, want an operator with nothing after it to be refused")
+	for _, c := range []struct{ name, src string }{
+		{"after the operator", "[[ 1 ==\n1 ]]"},
+		{"before the operator", "[[ 1\n== 1 ]]"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			p := syntax.NewParser(c.src, d)
+			p.Parse()
+			if p.Err() == nil {
+				t.Errorf("%q parsed, want it refused", c.src)
+			}
+		})
 	}
 }
 

@@ -1577,6 +1577,26 @@ echo "st=$?"`,
 		Why:     "the slice is a list, so an element holding a space stays one field — which is the whole reason this is not a substring of the joined text",
 	},
 	{
+		ID: "decl/an-array-assignment-as-an-operand", Category: "parameter expansion",
+		// `typeset` rather than `local`, and at the top level rather than in
+		// a function, only to keep the case about this: dash adds an
+		// "expecting }" to the syntax error when the `(` is inside a brace
+		// group and we do not, which is a separate gap that would show up
+		// here as a wording mismatch about something else.
+		Snippet: `typeset a=(x y); echo "[${a[1]}]"`,
+		Why:     "an array assignment written as an *operand* of a declaration utility, which is ordinary bash and did not parse at all — found by the wild sweep in three installed bats-core files. dash has no array literal so it is a syntax error there, and the subscript base makes the answer differ between the three that do",
+	},
+	{
+		ID: "decl/a-local-array-stays-local", Category: "parameter expansion",
+		Snippet: `a=(g); f() { local a=(x y); }; f; echo "[${a[0]}]"`,
+		Why:     "the second half, and the one that is silent: making the form parse showed the array outliving the function, because `local` had saved a scalar of that name and nothing had saved the *array*. Arrays are a second table and shadowing has to cover both",
+	},
+	{
+		ID: "decl/readonly-takes-its-array-first", Category: "parameter expansion",
+		Snippet: `readonly a=(p q); echo "[${a[1]}]"`,
+		Why:     "`readonly` has to set the array before it locks the name, because locking first refuses the very assignment the command was given — the opposite order from `local`, which must make the name local before the array lands",
+	},
+	{
 		ID: "param/array-indices", Category: "parameter expansion",
 		Snippet: `a=(p q r); for i in "${!a[@]}"; do printf "%s=%s " "$i" "${a[$i]}"; done`,
 		Why:     "`${!a[@]}` is the array's subscripts, not its elements — written as the loop that uses it, since iterating an array by index is the only reason the form exists and answering with the elements made that loop silently iterate the wrong thing",

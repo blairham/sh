@@ -18,6 +18,12 @@ func Dialect() syntax.Dialect {
 	// bash expands them interactively and needs `shopt -s expand_aliases`
 	// otherwise, which is not modeled yet.
 	d.ExpandAliases = false
+	// The utilities that take an array assignment as an operand. bash has
+	// all five.
+	d.DeclarationUtilities = map[string]bool{
+		"declare": true, "typeset": true, "local": true,
+		"export": true, "readonly": true,
+	}
 	d.CaseContinue = true
 	d.ParamCaseChange = true
 	d.ParamIndirection = true

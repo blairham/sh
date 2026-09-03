@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/blairham/sh/dialect/bash"
@@ -74,5 +75,66 @@ func TestEmptyArrayIsNotAFunctionDefinition(t *testing.T) {
 	}
 	if got, _ := run(t, `f() { printf fn; }; f`, nil); got != "fn" {
 		t.Errorf("function definitions still work: got %q", got)
+	}
+}
+
+// An array assignment given to `local` lands in the function's scope, which
+// takes shadowing the *array* table and not only the scalar one.
+//
+// Found by the wild sweep: `local -a x=()` is in three installed bats-core
+// files and did not parse at all. Making it parse then showed the second half
+// — the array outlived the function, because `local` had saved a scalar of
+// that name and nothing had saved the array.
+func TestALocalArrayStaysInTheFunction(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{"set as an operand", `f(){ local a=(x y); }; f; echo "[${a[1]}]"`, "[]"},
+		{"set after declaring", `f(){ local a; a=(x y); }; f; echo "[${a[1]}]"`, "[]"},
+		{"visible inside", `f(){ local a=(x y); echo "[${a[1]}]"; }; f`, "[y]"},
+		{"an outer array survives", `a=(g); f(){ local a=(x y); }; f; echo "[${a[0]}]"`, "[g]"},
+		{"appending stays local", `f(){ local a=(); a+=(x); }; f; echo "[${a[0]}]"`, "[]"},
+		{"nested scopes", `a=(g); f(){ local a=(f1); g; echo "[${a[0]}]"; }; g(){ local a=(g1); }; f`, "[f1]"},
+		// Without `local` it is global, which is what makes the above a
+		// statement about `local` rather than about arrays.
+		{"no local is still global", `f(){ b=(x y); }; f; echo "[${b[1]}]"`, "[y]"},
+		// The saved array has to be a *copy*. An Array is a map, so keeping
+		// the value would keep a reference to the very table the function
+		// then writes into, and putting it back would put back the change.
+		{"an element written inside is put back", `a=(1 2); f(){ local a; a[0]=9; }; f; echo "[${a[0]}]"`, "[1]"},
+		{"and is visible while inside", `a=(1 2); f(){ local a; a[0]=9; echo "[${a[0]}]"; }; f`, "[9]"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _ := run(t, c.src, nil)
+			if strings.TrimSpace(out) != c.want {
+				t.Errorf("said %q, want %q", strings.TrimSpace(out), c.want)
+			}
+		})
+	}
+}
+
+// `readonly a=(x)` sets the array before it locks the name, because locking it
+// first would refuse the very assignment the command was given.
+func TestReadonlyTakesItsArrayBeforeLocking(t *testing.T) {
+	out, _ := run(t, `readonly a=(p q); echo "[${a[1]}]"`, nil)
+	if strings.TrimSpace(out) != "[q]" {
+		t.Errorf("said %q, want [q]", strings.TrimSpace(out))
+	}
+}
+
+// An operand is not a prefix, and the plain name proves it: a prefix
+// assignment of an array has no value to give, so treating one as a prefix
+// sets the scalar to the empty string and `$a` reads empty instead of the
+// first element.
+func TestAnOperandIsNotAPrefixAssignment(t *testing.T) {
+	for _, c := range []struct{ name, src string }{
+		{"readonly", `readonly a=(p q); echo "[$a]"`},
+		{"export", `export a=(p q); echo "[$a]"`},
+		{"typeset", `typeset a=(p q); echo "[$a]"`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _ := run(t, c.src, nil)
+			if strings.TrimSpace(out) != "[p]" {
+				t.Errorf("said %q, want [p]", strings.TrimSpace(out))
+			}
+		})
 	}
 }

@@ -150,6 +150,17 @@ func (w *Word) Literal() string {
 
 // Assign is `name=value` in a command prefix or on its own.
 type Assign struct {
+	// Operand marks an assignment written *after* the command word rather
+	// than in front of it — `local a=(x y)` rather than `a=1 cmd`. The two
+	// are different things wearing one syntax: a prefix assignment is the
+	// command's environment, and this one is an argument to a utility that
+	// takes assignments.
+	//
+	// Only the array form is ever parsed this way. `local a=1` stays an
+	// ordinary word, which is the path every shell's scalar case has always
+	// taken here and which expands by its own rules.
+	Operand bool
+
 	Name  string
 	Value *Word // nil for a bare `name=`
 	// Elems is `name=( … )`, and IsArray distinguishes an empty array from a

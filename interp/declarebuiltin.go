@@ -195,6 +195,29 @@ func (r *Runner) shadow(name string) {
 		sc.saved[name] = old
 		sc.existed[name] = existed
 	}
+	// Arrays live in a table of their own, so a name has to be saved from
+	// both. Saving only the scalar left `f() { local a; a=(x y); }` writing a
+	// global array: `local` shadowed nothing an array assignment then wrote
+	// to, and the value outlived the function.
+	if _, seen := sc.arrayExisted[name]; !seen {
+		old, existed := r.Arrays[name]
+		if sc.savedArrays == nil {
+			sc.savedArrays = map[string]Array{}
+			sc.arrayExisted = map[string]bool{}
+		}
+		// Copied rather than kept: an Array is a map, so saving the value
+		// would save a reference to the very table the function is about to
+		// write into, and putting it back would put back the changes.
+		if existed {
+			kept := make(Array, len(old))
+			for k, v := range old {
+				kept[k] = v
+			}
+			old = kept
+		}
+		sc.savedArrays[name] = old
+		sc.arrayExisted[name] = existed
+	}
 }
 
 // declarationUtilities are the commands whose `name=value` arguments are

@@ -540,13 +540,27 @@ func (p *printer) simple(c *SimpleCmd) {
 		}
 		first = false
 	}
+	// Prefixes first, then the command, then the assignments written as its
+	// operands. Printing them all in front turned `typeset a=(x y)` into
+	// `a=(x y) typeset`, which is a different command: the array became the
+	// environment of a `typeset` with nothing to declare.
 	for _, a := range c.Assigns {
+		if a.Operand {
+			continue
+		}
 		sep()
 		p.assign(a)
 	}
 	for _, w := range c.Args {
 		sep()
 		p.word(w)
+	}
+	for _, a := range c.Assigns {
+		if !a.Operand {
+			continue
+		}
+		sep()
+		p.assign(a)
 	}
 	p.redirs(c.Redirs)
 }

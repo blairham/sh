@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -634,10 +635,9 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	case syntax.ParamSubstring:
 		return substring(value, r.numOf(e.Arg), e.Arg2, r)
 
-	case syntax.ParamUpper:
-		return strings.ToUpper(value)
-	case syntax.ParamLower:
-		return strings.ToLower(value)
+	case syntax.ParamUpper, syntax.ParamLower, syntax.ParamToggle,
+		syntax.ParamUpperFirst, syntax.ParamLowerFirst, syntax.ParamToggleFirst:
+		return r.changeCase(value, e)
 	}
 	// Anything else is left empty rather than guessed at.
 	return ""
@@ -760,6 +760,53 @@ func (r *Runner) numOf(w *syntax.Word) int {
 // implementation. A pattern that does not match removes nothing.
 // trimWith and replaceWith resolve the caret axis for the pattern before
 // handing it to the matcher, which has no Runner and should not need one.
+// changeCase is `^`, `,` and `~` and their doubled forms.
+//
+// The operator carries a *pattern* saying which characters to convert, and it
+// is matched against one character at a time: `${x^^[ab]}` on `abc` is `ABc`,
+// not `ABC`. Discarding the pattern and converting everything was a silent
+// wrong answer — the script asked for a subset and got the lot, with status 0.
+//
+// An empty pattern means every character, which is what `?` would say. The
+// single forms look only at the first character, and leave the string alone
+// when the pattern does not match it: `${x^b}` on `abc` is `abc`.
+func (r *Runner) changeCase(value string, e *syntax.ParamExpr) string {
+	if value == "" {
+		return value
+	}
+	convert := unicode.ToUpper
+	switch e.Op {
+	case syntax.ParamLower, syntax.ParamLowerFirst:
+		convert = unicode.ToLower
+	case syntax.ParamToggle, syntax.ParamToggleFirst:
+		convert = toggleCase
+	}
+	first := e.Op == syntax.ParamUpperFirst ||
+		e.Op == syntax.ParamLowerFirst ||
+		e.Op == syntax.ParamToggleFirst
+
+	pattern := r.patternOf(e.Arg)
+	o := r.patternOpts(pattern)
+	var b strings.Builder
+	for i, c := range value {
+		if (pattern == "" || matchPattern(pattern, string(c), o)) &&
+			(!first || i == 0) {
+			b.WriteRune(convert(c))
+			continue
+		}
+		b.WriteRune(c)
+	}
+	return b.String()
+}
+
+// toggleCase swaps a letter's case and leaves anything else alone.
+func toggleCase(c rune) rune {
+	if unicode.IsUpper(c) {
+		return unicode.ToLower(c)
+	}
+	return unicode.ToUpper(c)
+}
+
 func (r *Runner) trimWith(value, pattern string, op syntax.ParamOp) string {
 	return trim(value, pattern, op, r.patternOpts(pattern))
 }

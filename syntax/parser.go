@@ -510,7 +510,12 @@ func (p *Parser) parsePipeline() Expr {
 		if !p.at(TokPipe) {
 			return pl
 		}
-		p.opensClause("|")
+		// Pushed rather than opened as a clause: a clause displaces the
+		// clause before it, and a bar is not one of those — it belongs to
+		// the pipeline and not to whatever construct the pipeline is in. As
+		// a clause it evicted the `then` it was written inside, which then
+		// reported an `if` waiting for a bar.
+		p.open = append(p.open, opener{word: "|", line: p.tok.Pos.Line})
 		p.next()
 		p.skipNewlines()
 	}

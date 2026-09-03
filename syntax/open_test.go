@@ -41,6 +41,14 @@ func TestWhatIsStillOpen(t *testing.T) {
 		// A bar is open only while the command after it is looked for.
 		{"echo x |\n", "|*"},
 		{"echo x | cat\n", ""},
+		// And stops being open once it has one: the input below runs out
+		// inside the `if`, and a bar left standing would be reported as
+		// still waiting when its command arrived two words ago.
+		{"if true\nthen\necho a | cat\n", "if then*"},
+		// And a bar written inside a construct does not displace it: as a
+		// clause it evicted the `then`, and the input below then reported an
+		// `if` waiting for a bar.
+		{"if true\nthen\necho a |\n", "if then* |*"},
 		// Wrong input is not unfinished input, and has nothing open.
 		{"for do done\n", ""},
 	} {

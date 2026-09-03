@@ -20,6 +20,41 @@ import (
 // `\$` drawing a bare dollar in dash, which has no table at all, is what a
 // backslash does to a dollar during the expansion that follows.
 func (s Shell) escapes(text string) string {
+	return s.history(s.table(text))
+}
+
+// history reads the character that stands for the history number, in a pass
+// of its own after the table.
+//
+// After, because the order is measurable: ksh93 draws `\!` as the number,
+// which is its table dropping the backslash and this reading the `!` that was
+// left behind. Doing both in one pass would leave that `!` alone, since it
+// was written by the table rather than typed.
+func (s Shell) history(text string) string {
+	if s.Style.History == 0 || text == "" {
+		return text
+	}
+	var b strings.Builder
+	runes := []rune(text)
+	for i := 0; i < len(runes); i++ {
+		if runes[i] != s.Style.History {
+			b.WriteRune(runes[i])
+			continue
+		}
+		if i+1 < len(runes) && runes[i+1] == s.Style.History {
+			// Doubled is one of itself, which is the only way to put one in
+			// a prompt that reads them.
+			b.WriteRune(runes[i])
+			i++
+			continue
+		}
+		b.WriteString(s.field(FieldHistoryNumber))
+	}
+	return b.String()
+}
+
+// table draws each code in the prompt's text.
+func (s Shell) table(text string) string {
 	if s.Style.Escape == 0 || text == "" {
 		return text
 	}

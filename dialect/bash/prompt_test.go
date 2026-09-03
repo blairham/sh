@@ -67,3 +67,10 @@ func TestPromptVersionMatchesTheOneClaimed(t *testing.T) {
 		t.Errorf("default prompt = %q, want the one real bash draws", st.Default)
 	}
 }
+
+// A bare `!` is a bare `!` here: measured, only ksh93 reads it.
+func TestNoHistoryCharacter(t *testing.T) {
+	if got := bash.PromptStyle().History; got != 0 {
+		t.Errorf("History = %q, want none", got)
+	}
+}

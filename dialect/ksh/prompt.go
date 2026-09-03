@@ -28,11 +28,14 @@ func PromptStyle() repl.PromptStyle {
 		// `\h` drew `h`, `\w` drew `w`. The backslash goes and the letter
 		// stands, which is what DropEscape says and why the table is empty.
 		//
-		// `\!` drew a history number, but by the same rule rather than by a table
-		// entry: dropping the backslash leaves a bare `!`, and a bare `!` is the
-		// history number in ksh93. That is a separate question about `!` itself
-		// and is not answered here.
+		// `\!` draws the history number by that same rule rather than by a
+		// table entry: dropping the backslash leaves a bare `!`, and a bare
+		// `!` is the history number in ksh93 — which History is for.
 		Escape:  '\\',
 		Unknown: repl.DropEscape,
+		// Measured: `<!>` drew 1, 2 and 3 on successive prompts with a
+		// writable history file, `<!!>` drew `<!>`, and `<a!b>` drew `<a1b>`.
+		// bash, dash and zsh draw a bare `!` as a bare `!`.
+		History: '!',
 	}
 }

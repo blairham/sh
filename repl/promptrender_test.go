@@ -158,3 +158,43 @@ func TestAbbreviatingTheHomeDirectory(t *testing.T) {
 		}
 	}
 }
+
+// A character that stands for the history number on its own.
+//
+// ksh93 alone has one, spelled `!`. Measured against it: `<!>` drew 1, 2 and
+// 3 on successive prompts, `<!!>` drew `<!>`, and `<a!b>` drew `<a1b>`. bash,
+// dash and zsh draw a bare `!` as a bare `!`.
+func TestTheCharacterThatStandsForTheHistoryNumber(t *testing.T) {
+	s := Shell{
+		Runner: newTestRunner(nil),
+		Style:  PromptStyle{History: '!', Escape: '\\', Unknown: DropEscape},
+		counts: &counts{history: 6},
+	}
+	for _, tc := range []struct{ in, want string }{
+		{"<!>", "<7>"},
+		{"<a!b>", "<a7b>"},
+		// Doubled is one of itself, which is the only way to put one in a
+		// prompt that reads them.
+		{"<!!>", "<!>"},
+		{"<!!!>", "<!7>"},
+		// Read after the table, not with it: ksh93 draws `\!` as the number,
+		// which is the backslash being dropped and the `!` left behind being
+		// read in the pass that follows. One pass would leave it alone.
+		{`<\!>`, "<7>"},
+		{`<\!!>`, "<!>"},
+	} {
+		t.Run(tc.in, func(t *testing.T) {
+			if got := s.escapes(tc.in); got != tc.want {
+				t.Errorf("drew %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// And with no such character the text is the text.
+func TestABareBangWithoutTheHabit(t *testing.T) {
+	s := Shell{Runner: newTestRunner(nil), counts: &counts{history: 6}}
+	if got := s.escapes("<!> <!!>"); got != "<!> <!!>" {
+		t.Errorf("drew %q, want it untouched", got)
+	}
+}

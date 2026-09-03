@@ -30,6 +30,12 @@ type Parser struct {
 	open     []opener
 	lastText string
 
+	// openAtEnd is what open held when the input ran out, kept because the
+	// stack is unwound by the time Parse returns: opens closes by deferring,
+	// so a caller that asked afterwards would always be told nothing was
+	// open. A prompt asking what it is waiting for asks afterwards.
+	openAtEnd []opener
+
 	// depth bounds nesting while parsing operands, which are themselves
 	// words and may hold further expansions. Pathological input is the
 	// normal case on the keystroke path, so this is a bound rather than a
@@ -148,8 +154,63 @@ func (p *Parser) opens(word string) func() {
 }
 
 // opensClause records a keyword that is itself awaiting a partner.
+//
+// A clause replaces the clause before it rather than stacking on it: `then`
+// and `else` are alternatives within one `if`, not one inside the other, and
+// a list saying both were open would be describing a state the parser was
+// never in. Constructs below are untouched, so `for` holding an `if` holding
+// an `else` still reads as the three of them.
 func (p *Parser) opensClause(word string) {
+	for len(p.open) > 0 && !p.open[len(p.open)-1].construct {
+		p.open = p.open[:len(p.open)-1]
+	}
 	p.open = append(p.open, opener{word: word, line: p.tok.Pos.Line})
+}
+
+// ranOut records that the input ended with something unfinished, and keeps
+// what was open at that moment.
+//
+// One place rather than an assignment at each site. The snapshot has to be
+// taken while the stack is still standing, and a site that set the flag
+// without taking it would leave a prompt with nothing to say — a failure that
+// looks exactly like nothing having been open.
+func (p *Parser) ranOut() {
+	if !p.incomplete {
+		p.openAtEnd = append([]opener(nil), p.open...)
+	}
+	p.incomplete = true
+}
+
+// Open is what the parser was still inside when the input ran out, outermost
+// first.
+//
+// Empty when the input was complete, or when it was wrong in some way other
+// than ending too soon. A caller drawing a continuation prompt wants this: it
+// is the difference between "there is more to type" and "there is more to
+// type and it is the `for` from three lines up".
+//
+// The words are the shell's own keywords, which is all this package knows.
+// What a dialect calls them at a prompt is the dialect's business — one of
+// them says `for` where another would say the clause inside it.
+func (p *Parser) Open() []Open {
+	out := make([]Open, 0, len(p.openAtEnd))
+	for _, o := range p.openAtEnd {
+		out = append(out, Open{Word: o.word, Line: o.line, Construct: o.construct})
+	}
+	return out
+}
+
+// Open is one thing the parser is inside.
+type Open struct {
+	// Word is the keyword that opened it: `if`, `for`, `case`, `{`, or a
+	// clause's own word such as `then` or `do`.
+	Word string
+	// Line is where it was opened, which is what a diagnostic names when the
+	// construct began further up than the failure.
+	Line int
+	// Construct distinguishes a compound command from a clause of one. `if`
+	// is a construct and the `then` inside it is not.
+	Construct bool
 }
 
 // unterminated describes the state the parser gave up in.
@@ -206,7 +267,7 @@ func (p *Parser) failUnexpectedAs(expected string, plain bool) {
 		return
 	}
 	if p.at(TokEOF) {
-		p.incomplete = true
+		p.ranOut()
 		p.err = p.unterminated(expected)
 		return
 	}
@@ -249,7 +310,7 @@ func (p *Parser) failKind(kind ErrorKind, format string, args ...any) {
 	}
 	if p.at(TokEOF) {
 		// Running out of input is unfinished rather than wrong.
-		p.incomplete = true
+		p.ranOut()
 	}
 	p.err = &Error{Pos: p.tok.Pos, Kind: kind, Msg: fmt.Sprintf(format, args...)}
 }
@@ -262,7 +323,7 @@ func (p *Parser) expectWord(s string) Pos {
 			// The input ended with something still open, which every shell in
 			// the panel reports as its own kind of failure rather than as a
 			// word in the wrong place.
-			p.incomplete = true
+			p.ranOut()
 			if p.err == nil {
 				p.err = p.unterminated(s)
 			}
@@ -429,6 +490,10 @@ func (p *Parser) parsePipeline() Expr {
 		pl.Bang = p.tok.Pos
 		p.next()
 	}
+	// A bar is recorded while the command after it is being looked for, so
+	// that input ending there is describable as a pipeline waiting for its
+	// other half and not only as input that ended.
+	depth := len(p.open)
 	for {
 		cmd := p.parseCommand()
 		if cmd == nil {
@@ -438,10 +503,19 @@ func (p *Parser) parsePipeline() Expr {
 			p.fail("expected a command after |")
 			return pl
 		}
+		// The bar has its command, so the pipeline is whole again: a failure
+		// after this has nothing to do with it.
+		p.open = p.open[:depth]
 		pl.Cmds = append(pl.Cmds, cmd)
 		if !p.at(TokPipe) {
 			return pl
 		}
+		// Pushed rather than opened as a clause: a clause displaces the
+		// clause before it, and a bar is not one of those — it belongs to
+		// the pipeline and not to whatever construct the pipeline is in. As
+		// a clause it evicted the `then` it was written inside, which then
+		// reported an `if` waiting for a bar.
+		p.open = append(p.open, opener{word: "|", line: p.tok.Pos.Line})
 		p.next()
 		p.skipNewlines()
 	}
@@ -831,7 +905,7 @@ func (p *Parser) parseGroup() Command {
 	c.List = p.parseList()
 	if !p.atWord("}") {
 		if p.at(TokEOF) {
-			p.incomplete = true
+			p.ranOut()
 			if p.err == nil {
 				p.err = p.unterminated("}")
 			}
@@ -878,7 +952,7 @@ func (p *Parser) requireSep(before string) {
 			// `if` on its own: the input ran out before the construct could
 			// be closed, which is a different failure from a word in the
 			// wrong place and is reported as one.
-			p.incomplete = true
+			p.ranOut()
 			if p.err == nil {
 				p.err = p.unterminated(before)
 			}
@@ -1144,7 +1218,7 @@ func (p *Parser) parseCase() Command {
 				if p.at(TokEOF) {
 					// The panel expects `;;` here rather than `esac`: an arm
 					// that has not been closed is what ran out, not the case.
-					p.incomplete = true
+					p.ranOut()
 					if p.err == nil {
 						p.err = p.unterminated(";;")
 					}

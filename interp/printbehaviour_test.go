@@ -30,6 +30,14 @@ func TestPrintedSourceStillMeansTheSameThing(t *testing.T) {
 		if c.SyntaxError {
 			continue
 		}
+		if c.LayoutSensitive {
+			// What this case pins is where a diagnostic points, which is a
+			// fact about the source's layout. The printer promises meaning,
+			// not layout, and its zero layout is nobody's — so running the
+			// printed form and comparing the line it named would be checking
+			// the wrong promise.
+			continue
+		}
 		t.Run(c.ID, func(t *testing.T) {
 			f, err := syntax.Parse(c.Snippet, bash.Dialect())
 			if err != nil {

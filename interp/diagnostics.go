@@ -833,6 +833,22 @@ type Diagnostics struct {
 	// same thing either way.
 	CannotCreate string
 
+	// RedirectFailureLine is which line a redirect that could not be opened
+	// is reported at, when the redirect and the command it belongs to are on
+	// different lines.
+	//
+	// Measured on `while read x` … `done < missing`, and again on a brace
+	// group, and again on a command split by a backslash: three answers.
+	// bash names the redirect's own line. dash and zsh name the line the
+	// command began on. ksh93 names the line *before* the redirect's, in all
+	// three shapes, which reads as an off-by-one of its own and is recorded
+	// as what it does rather than as what it might mean.
+	//
+	// Zero is the substrate's own answer, which is the line the command
+	// began on: that is where a statement is already reported, and a shell
+	// told nothing does not go looking for a second position.
+	RedirectFailureLine RedirectLine
+
 	// RedirectFailureStatus is what a command whose redirect could not be
 	// opened reports. Zero means the substrate's own, which is 1.
 	//
@@ -1280,3 +1296,17 @@ func (r *Runner) diag() Diagnostics {
 	}
 	return CoreDiagnostics()
 }
+
+// RedirectLine is which line a failed redirect is reported at.
+type RedirectLine uint8
+
+const (
+	// LineOfCommand is the line the command began on, which is where every
+	// other diagnostic about it is reported. dash and zsh.
+	LineOfCommand RedirectLine = iota
+	// LineOfRedirect is the line the redirect itself is written on. bash.
+	LineOfRedirect
+	// LineBeforeRedirect is the line before that. ksh93, in every shape
+	// measured.
+	LineBeforeRedirect
+)

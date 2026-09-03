@@ -30,6 +30,17 @@ type Case struct {
 	// behavior depends on how input is read, and say why.
 	Script bool
 
+	// LayoutSensitive marks a case whose output depends on how the source is
+	// laid out rather than only on what it means — a diagnostic naming the
+	// line it happened on, where that line is a fact about the text.
+	//
+	// The printer is excused from such a case. Its promise is that printed
+	// source *means* the same thing, and its zero layout deliberately
+	// belongs to no shell: it puts a loop's `do` on the line of its `while`,
+	// which moves everything after. Both are right and they cannot both be
+	// checked by running the printed form and comparing what it said.
+	LayoutSensitive bool
+
 	// SyntaxError marks a case that does not parse **under the bash
 	// dialect**, which is the one the parser's conformance test uses. The
 	// corpus records rejections as well as successes, because a rule is only
@@ -1160,6 +1171,17 @@ a)
 		ID: "redir/open-failure-wording", Category: "redirection",
 		Snippet: `cat < nosuchfile; echo "st=$?"`,
 		Why:     "all four word a failed open differently and only two of them use a verb: bash prints the name then the OS string, dash puts `cannot open` in front, ksh93 puts the name first and brackets the reason after it, and zsh prints the reason first, lowercased. dash also writes its own text for this errno — `No such file`, where the OS says `No such file or directory`",
+	},
+	{
+		ID: "redir/failure-line-when-the-redirect-is-elsewhere", Category: "redirection",
+		LayoutSensitive: true,
+		Snippet: `echo one
+while read -r x
+do
+  echo $x
+done < nosuchfile
+echo "st=$?"`,
+		Why: "three answers about which line a failed open is reported at, and they only differ when the redirect is not on the line its command began on. bash names the redirect's own line, dash and zsh name the line the command opened on, and ksh93 names the line before the redirect's — the same one-off in a loop, a brace group and a backslash continuation alike. Found on an installed script that opens a `while read` on line 5 and redirects it on line 11",
 	},
 	{
 		ID: "redir/create-failure-says-create", Category: "redirection",

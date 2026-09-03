@@ -138,7 +138,9 @@ func Diagnostics() interp.Diagnostics {
 		JobRunningShowsAmpersand: true,
 		// No verb at all: the name, then the OS string. Same either way —
 		// bash does not distinguish opening from creating.
-		CannotOpen:              "%[1]s: %[2]s",
+		CannotOpen: "%[1]s: %[2]s",
+		// Measured: bash reports a failed open at the redirect's own line.
+		RedirectFailureLine:     interp.LineOfRedirect,
 		CannotCreate:            "%[1]s: %[2]s",
 		NamesTheInputInLocation: true,
 		EchoesTheOffendingLine:  true,

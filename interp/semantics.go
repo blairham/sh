@@ -707,6 +707,80 @@ type Semantics struct {
 	// that would not *parse* and is true for dash alone. Measured across
 	// `export`, `readonly` and `unset`.
 	BadOptionToSpecialBuiltinFatal Answer
+
+	// BadNameToDeclarationFatal ends the script when `export` or `readonly` is
+	// given an operand that is not a name. True in dash, ksh93 and zsh; bash
+	// reports every bad operand, exports the well-formed ones and carries on
+	// with a status of 1.
+	BadNameToDeclarationFatal Answer
+
+	// BadNameToUnsetFatal is that question again for `unset`, and is a
+	// separate field because ksh93 answers the two differently: `export 1x`
+	// ends the script there where `unset 1x` prints the same kind of
+	// complaint, returns 1 and carries on.
+	//
+	// Not a question about `unset` being less special than the other two — a
+	// bad *option* to ksh93's `unset` is fatal, which is what makes the split
+	// about the kind of failure rather than about the builtin.
+	BadNameToUnsetFatal Answer
+
+	// DeclarationNameOperands says what may stand where `export` and
+	// `readonly` want a name, beyond a plain name itself.
+	//
+	// zsh is the only one that takes anything more: the special parameters
+	// are names to it, which is why `export -` is a complaint in three of the
+	// four and not in the fourth.
+	DeclarationNameOperands NameOperands
+
+	// UnsetNameOperands is that question for `unset`, and is a separate field
+	// because two dialects answer it differently from the declarations. zsh
+	// answers the two with *disjoint* sets — `export ?` is fine there and
+	// `unset ?` is not, while `unset 12` is fine and `export 12` is not — and
+	// bash 5.3 checks a name for `export` and nothing at all for `unset`. One
+	// field could not say either.
+	UnsetNameOperands NameOperands
+}
+
+// NameOperands is what a builtin takes where it wants a name.
+type NameOperands int
+
+const (
+	// NameOperandsUnspecified is no answer, and is refused like any other.
+	NameOperandsUnspecified NameOperands = iota
+	// PlainNamesOnly takes a name and nothing else: bash, dash and ksh93,
+	// for all three builtins.
+	PlainNamesOnly
+	// NamesAndSpecialParameters also takes `?`, `*`, `@`, `#`, `!`, `-`, `$`
+	// and `0`: zsh's `export` and `readonly`. Not the other digits — `export
+	// 0` is quiet there and `export 1` is "not an identifier", which is the
+	// difference between a special parameter and a positional one.
+	NamesAndSpecialParameters
+	// NamesAndPositionals also takes any all-digit operand: zsh's `unset`,
+	// where `unset 12` is quiet. `0` falls in here too, so both of zsh's
+	// answers take it and they agree on nothing else.
+	NamesAndPositionals
+	// AnythingIsAName checks nothing at all: bash 5.3's bare `unset`, which
+	// is quiet about `unset 1x`, `unset "a b"` and `unset -- -` alike while
+	// its `export` refuses every one of them.
+	//
+	// A change within bash rather than a difference between shells — bash
+	// 3.2 refuses all three — so the `bash32` and `bash` columns of a corpus
+	// case here disagree on purpose.
+	AnythingIsAName
+)
+
+func (n NameOperands) String() string {
+	switch n {
+	case PlainNamesOnly:
+		return "PlainNamesOnly"
+	case NamesAndSpecialParameters:
+		return "NamesAndSpecialParameters"
+	case NamesAndPositionals:
+		return "NamesAndPositionals"
+	case AnythingIsAName:
+		return "AnythingIsAName"
+	}
+	return "NameOperandsUnspecified"
 }
 
 // There is deliberately no CoreSemantics, and the absence is the sharpest
@@ -813,8 +887,17 @@ func PosixSemantics() Semantics {
 		// POSIX makes a special builtin's failure fatal, and a bad option is
 		// one.
 		BadOptionToSpecialBuiltinFatal: Yes,
-		DotMissingFileFatal:            Yes,
-		DotWithNoOperandIsAnError:      Yes,
+		// A bad name is a special builtin's failure too, and the standard
+		// makes no exception for `unset`.
+		BadNameToDeclarationFatal: Yes,
+		BadNameToUnsetFatal:       Yes,
+		// POSIX gives all three a *name*, and neither a special parameter
+		// nor a positional one is a name — a positional has `shift` to
+		// remove it.
+		DeclarationNameOperands:   PlainNamesOnly,
+		UnsetNameOperands:         PlainNamesOnly,
+		DotMissingFileFatal:       Yes,
+		DotWithNoOperandIsAnError: Yes,
 		// The standard gives `.` a filename and nothing else; passing
 		// positional parameters to a sourced file is an extension three of
 		// the four grew. And it reads the file from PATH, with no mention of

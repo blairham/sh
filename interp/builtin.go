@@ -244,6 +244,12 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		}
 		return 0
 	}
+	// After `-f`, so that a function name keeps its own laxer rule: bash
+	// takes `unset -f 1x` without a word where it refuses `unset 1x`.
+	args, status := r.builtinNames("unset", args, strings.ContainsRune(opts, 'v'))
+	if r.ctl == controlExit {
+		return status
+	}
 	for _, name := range args {
 		if base, idx, ok := r.subscriptOperand(name); ok {
 			// `unset a[1]` is about one element and not about the array.
@@ -264,7 +270,7 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		}
 		r.removed[name] = true
 	}
-	return 0
+	return status
 }
 
 // biExport marks a name for the environment, and assigns when given a value.
@@ -302,6 +308,10 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 	if strings.ContainsRune(opts, 'f') {
 		return r.exportFuncs(args)
 	}
+	args, status := r.builtinNames("export", args, false)
+	if r.ctl == controlExit {
+		return status
+	}
 	for _, a := range args {
 		if strings.ContainsRune(opts, 'p') {
 			r.diagf("export: -p is not implemented yet\n")
@@ -313,7 +323,7 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 		}
 		r.exported[name] = true
 	}
-	return 0
+	return status
 }
 
 // biShift drops the first n positional parameters.
@@ -632,6 +642,10 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 	if code != 0 {
 		return code
 	}
+	args, status := r.builtinNames("readonly", args, false)
+	if r.ctl == controlExit {
+		return status
+	}
 	for _, a := range args {
 		name, value, hasValue := strings.Cut(a, "=")
 		if hasValue {
@@ -639,7 +653,7 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		}
 		r.markReadonly(name)
 	}
-	return 0
+	return status
 }
 
 // biExit ends the shell.

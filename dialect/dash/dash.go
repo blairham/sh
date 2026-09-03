@@ -61,6 +61,12 @@ func Semantics() interp.Semantics {
 	s.UlimitHasProcessCount = interp.No
 	s.UlimitSetsBothLimits = interp.Yes
 	s.BadOptionToSpecialBuiltinFatal = interp.Yes
+	// A special builtin's failure is fatal, and a bad name is one — for all
+	// three of them.
+	s.BadNameToDeclarationFatal = interp.Yes
+	s.BadNameToUnsetFatal = interp.Yes
+	s.DeclarationNameOperands = interp.PlainNamesOnly
+	s.UnsetNameOperands = interp.PlainNamesOnly
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.Yes
@@ -177,16 +183,23 @@ func Diagnostics() interp.Diagnostics {
 		CdStatus:          2,
 		PrintfBadNumber:   "printf: %[1]s: expected numeric value",
 		// Every complaint about an argument is 2 here, as it is elsewhere.
-		PrintfBadVerbStatus:     2,
-		PrintfBadVerb:           "printf: %[2]s: invalid directive",
-		PrintfBadOption:         "printf: Illegal option %[1]s",
-		UmaskBadMask:            "umask: Illegal number: %[1]s",
-		UmaskBadOption:          "umask: Illegal option %[1]s",
-		UmaskBadMaskStatus:      2,
-		UlimitBadOption:         "ulimit: Illegal option -%[1]s",
-		UlimitBadNumber:         "ulimit: bad number",
-		UlimitBadNumberStatus:   2,
-		BuiltinBadOption:        "%[1]s: Illegal option %[2]s",
+		PrintfBadVerbStatus:   2,
+		PrintfBadVerb:         "printf: %[2]s: invalid directive",
+		PrintfBadOption:       "printf: Illegal option %[1]s",
+		UmaskBadMask:          "umask: Illegal number: %[1]s",
+		UmaskBadOption:        "umask: Illegal option %[1]s",
+		UmaskBadMaskStatus:    2,
+		UlimitBadOption:       "ulimit: Illegal option -%[1]s",
+		UlimitBadNumber:       "ulimit: bad number",
+		UlimitBadNumberStatus: 2,
+		BuiltinBadOption:      "%[1]s: Illegal option %[2]s",
+		// One wording for all three, naming the part in front of any `=`.
+		BuiltinBadName: map[string]string{
+			"export":   "%[1]s: %[2]s: bad variable name",
+			"readonly": "%[1]s: %[2]s: bad variable name",
+			"unset":    "%[1]s: %[2]s: bad variable name",
+		},
+		BuiltinBadNameStatus:    2,
 		PrintfUsage:             "printf: usage: printf format [arg ...]",
 		TrapBadSignal:           "trap: %[1]s: bad trap",
 		TrapBadSignalUnprefixed: true,

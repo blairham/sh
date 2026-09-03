@@ -64,6 +64,25 @@ func TestAliasKeepsWhatItWasGiven(t *testing.T) {
 	}
 }
 
+// One dialect writes `alias ` in front of every line so the listing reads back
+// as commands, and the other three write only the assignment.
+func TestTheListingPrefixIsTheDialects(t *testing.T) {
+	prefixed := Diagnostics{AliasListPrefix: "alias "}
+	for _, src := range []string{`alias a=1; alias a`, `alias a=1; alias`} {
+		out, _ := aliasRun(t, nil, prefixed, src)
+		if !strings.HasPrefix(out, "alias a='1'") {
+			t.Errorf("%s: said %q, want the dialect's prefix", src, out)
+		}
+	}
+	// And a dialect with none gets none — the assignment alone.
+	for _, src := range []string{`alias a=1; alias a`, `alias a=1; alias`} {
+		out, _ := aliasRun(t, nil, Diagnostics{}, src)
+		if !strings.HasPrefix(out, "a='1'") {
+			t.Errorf("%s: said %q, want no prefix", src, out)
+		}
+	}
+}
+
 // Listing with no operand gives every entry, in name order rather than in the
 // order they were defined — which is the only order a map can promise.
 func TestListingIsSortedAndComplete(t *testing.T) {
@@ -123,6 +142,44 @@ func TestANameTheTableDoesNotHold(t *testing.T) {
 	}, dg, `alias nope; echo "st=$?"`)
 	if !strings.Contains(out, "st=1") {
 		t.Errorf("said %q, want silence to still fail", out)
+	}
+}
+
+// Two of the four write the not-found line with no shell and no line in front
+// of it, which they do almost nowhere else.
+//
+// Asserting the wording alone could not see this: a Contains check matches the
+// same text whether or not something precedes it, which is how a mutant that
+// ignored the flag entirely survived.
+func TestTheNotFoundLineMayCarryNoPrefix(t *testing.T) {
+	prefixed := Diagnostics{
+		AliasNotFound:   "alias: %[2]s: not found",
+		UnaliasNotFound: "unalias: %[2]s: not found",
+	}
+	out, _ := aliasRun(t, nil, prefixed, `alias nope`)
+	if !strings.HasPrefix(out, "testsh: alias: nope") {
+		t.Errorf("said %q, want the shell named in front", out)
+	}
+	out, _ = aliasRun(t, nil, prefixed, `unalias nope`)
+	if !strings.HasPrefix(out, "testsh: unalias: nope") {
+		t.Errorf("said %q, want the shell named in front", out)
+	}
+
+	bare := prefixed
+	bare.AliasNotFoundUnprefixed = true
+	out, _ = aliasRun(t, nil, bare, `alias nope`)
+	if !strings.HasPrefix(out, "alias: nope") {
+		t.Errorf("said %q, want no shell in front", out)
+	}
+	// And the flag is per builtin: `unalias` still carries its prefix here.
+	out, _ = aliasRun(t, nil, bare, `unalias nope`)
+	if !strings.HasPrefix(out, "testsh: unalias: nope") {
+		t.Errorf("said %q, want unalias unaffected by the alias flag", out)
+	}
+	bare.UnaliasNotFoundUnprefixed = true
+	out, _ = aliasRun(t, nil, bare, `unalias nope`)
+	if !strings.HasPrefix(out, "unalias: nope") {
+		t.Errorf("said %q, want no shell in front", out)
 	}
 }
 

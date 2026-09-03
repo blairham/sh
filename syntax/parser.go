@@ -36,6 +36,12 @@ type Parser struct {
 	// open. A prompt asking what it is waiting for asks afterwards.
 	openAtEnd []opener
 
+	// funcBody says the command about to be parsed is a function's body, so
+	// that a brace group standing as one is recorded as the function rather
+	// than as a group. They are the same syntax and not the same thing to
+	// someone being told what is still open.
+	funcBody bool
+
 	// depth bounds nesting while parsing operands, which are themselves
 	// words and may hold further expansions. Pathological input is the
 	// normal case on the keystroke path, so this is a bound rather than a
@@ -544,6 +550,10 @@ func (p *Parser) parsePipeline() Expr {
 
 // parseCommand dispatches on what begins the command.
 func (p *Parser) parseCommand() Command {
+	// Taken here and cleared, so that only the command the function opened
+	// can be its body: anything nested inside is a group like any other.
+	body := p.funcBody
+	p.funcBody = false
 	switch {
 	case p.at(TokEOF), p.at(TokNewline), p.atStopWord():
 		return nil
@@ -552,7 +562,7 @@ func (p *Parser) parseCommand() Command {
 	case p.at(TokArithCmd):
 		return p.withRedirs(p.parseArithCmd())
 	case p.atWord("{"):
-		return p.withRedirs(p.parseGroup())
+		return p.withRedirs(p.parseGroup(body))
 	case p.atWord("if"):
 		return p.withRedirs(p.parseIf())
 	case p.atWord("while"), p.atWord("until"):
@@ -862,7 +872,6 @@ func (p *Parser) looksLikeFuncDef() bool {
 }
 
 func (p *Parser) parseFuncPosix() Command {
-	defer p.opens("function")()
 	fn := &FuncDecl{Name: p.tok.Literal(), Start: p.tok.Pos}
 	p.next()
 	p.next() // (
@@ -872,6 +881,7 @@ func (p *Parser) parseFuncPosix() Command {
 	}
 	p.next()
 	p.skipNewlines()
+	p.funcBody = true
 	if fn.Body = p.parseCommand(); fn.Body == nil {
 		p.fail("expected a body for function %q", fn.Name)
 	}
@@ -879,7 +889,6 @@ func (p *Parser) parseFuncPosix() Command {
 }
 
 func (p *Parser) parseFuncKeyword() Command {
-	defer p.opens("function")()
 	fn := &FuncDecl{Keyword: true, Start: p.tok.Pos}
 	p.next()
 	if p.tok.Kind != TokWord || !isName(p.tok.Literal()) {
@@ -902,6 +911,7 @@ func (p *Parser) parseFuncKeyword() Command {
 		}
 	}
 	p.skipNewlines()
+	p.funcBody = true
 	if fn.Body = p.parseCommand(); fn.Body == nil {
 		p.fail("expected a body for function %q", fn.Name)
 	}
@@ -922,9 +932,13 @@ func (p *Parser) parseSubshell() Command {
 	return c
 }
 
-func (p *Parser) parseGroup() Command {
+func (p *Parser) parseGroup(funcBody bool) Command {
 	c := &Group{Start: p.tok.Pos}
-	defer p.opens("{")()
+	word := "{"
+	if funcBody {
+		word = "function"
+	}
+	defer p.opens(word)()
 	p.next()
 	c.List = p.parseList()
 	if !p.atWord("}") {

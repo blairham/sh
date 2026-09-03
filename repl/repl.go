@@ -299,9 +299,15 @@ func (s Shell) accept(pending *strings.Builder, remember func(string), line stri
 	// exactly that — the parser takes what it has and says there may be
 	// more, which is an error to a script and a question to a prompt.
 	if p.Incomplete() || endsWithContinuation(text) {
+		// Kept for the continuation prompt: what the next line goes on with
+		// is what the parser is still inside, and this is the only place it
+		// is known.
+		s.counted().open = p.Open()
 		return nil, nil, false
 	}
 	pending.Reset()
+	// The construct is whole, so nothing is waiting on the next line.
+	s.counted().open = nil
 	if remember != nil {
 		// Nil where there is nothing to recall with: a session without an
 		// editor has no way to reach a history and no reason to keep one.

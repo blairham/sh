@@ -35,10 +35,11 @@ func TestWhatIsStillOpen(t *testing.T) {
 		{"case x in\n", "case"},
 		{"{\n", "{"},
 		// A function's body is a brace group and is also a function body: a
-		// caller drawing what is open has to be able to tell them apart, and
-		// one shell draws them as different words.
-		{"f() {\n", "function {"},
-		{"function f {\n", "function {"},
+		// caller drawing what is open has to tell them apart, and one shell
+		// draws them as different words. One entry, not two — the group is
+		// the body rather than something inside it.
+		{"f() {\n", "function"},
+		{"function f {\n", "function"},
 		// The parts of a line that is waiting for its other half.
 		{"( :\n", "("},
 		{"true &&\n", "&&*"},

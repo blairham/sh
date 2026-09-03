@@ -70,6 +70,11 @@ type PromptStyle struct {
 	// and the two disagreeing would be a shell lying to one of two questions.
 	Version, VersionFull string
 
+	// OpenWords is what this dialect calls each thing the parser can still be
+	// inside, for FieldOpenState to draw. A word with no entry is not drawn,
+	// which is how one shell says nothing about a loop's `do`.
+	OpenWords map[string]OpenWord
+
 	// Default and DefaultContinued are what this dialect prompts with when
 	// nothing has been assigned. They are read the same way an assigned value
 	// is, so a default may hold codes: bash's is `\s-\v\$ `, which is how
@@ -79,6 +84,21 @@ type PromptStyle struct {
 	// `> ` stand. It does not mean a prompt of nothing — that is a thing only
 	// an assignment can ask for.
 	Default, DefaultContinued string
+}
+
+// OpenWord is what a dialect calls one thing the parser is inside.
+type OpenWord struct {
+	// Text is the word to draw.
+	Text string
+
+	// Replaces says this word stands in place of the one before it rather
+	// than following it.
+	//
+	// Measured: zsh draws `if` as `if` and then, once `then` has been typed,
+	// as `then` — the clause instead of the construct. An operator does not
+	// do that: `true &&` inside a `then` draws `then cmdand`, both of them.
+	// So it is a property of the word and not a rule about clauses.
+	Replaces bool
 }
 
 // UnknownCode is what becomes of an escape whose code is not in the table.
@@ -156,6 +176,10 @@ const (
 	// FieldEscape is the escape character itself, for the table row that
 	// spells it doubled.
 	FieldEscape
+	// FieldOpenState is what the shell is still inside, drawn in this
+	// dialect's words: `for`, or `for then`, or `quote`. Empty at a prompt
+	// that is not a continuation, because nothing is waiting.
+	FieldOpenState
 	// FieldVersion and FieldVersionFull are the version the dialect claims,
 	// short and long. bash draws 5.3 for one and 5.3.15 for the other.
 	FieldVersion

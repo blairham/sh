@@ -55,8 +55,10 @@ func TestPromptDefaults(t *testing.T) {
 	if st.DefaultContinued != "%_> " {
 		t.Errorf("continuation = %q, want %%_> ", st.DefaultContinued)
 	}
-	if _, drawable := st.Codes['_']; drawable {
-		t.Error("%_ is in the table, so the comment explaining that it is not is stale")
+	// `%_` draws what the line is still inside, which is what makes the
+	// default continuation say `for> ` inside a for loop.
+	if st.Codes['_'] != repl.FieldOpenState {
+		t.Errorf("%%_ draws %v, want the open state", st.Codes['_'])
 	}
 }
 
@@ -64,5 +66,42 @@ func TestPromptDefaults(t *testing.T) {
 func TestNoHistoryCharacter(t *testing.T) {
 	if got := zsh.PromptStyle().History; got != 0 {
 		t.Errorf("History = %q, want none", got)
+	}
+}
+
+// What zsh calls each thing a line can still be inside.
+//
+// Measured one construct at a time with PS2='[%_]'. The two properties that
+// are not just a word: a clause stands in place of the construct it is inside
+// — `if true` draws `if` and then `then` once `then` is typed, not `if then`
+// — and an operator follows it, since `true &&` inside a `then` draws
+// `then cmdand`.
+func TestPromptOpenWords(t *testing.T) {
+	w := zsh.PromptStyle().OpenWords
+	for word, want := range map[string]string{
+		"for": "for", "while": "while", "until": "until", "select": "select",
+		"case": "case", "if": "if", "then": "then", "else": "else",
+		"elif": "elif", "{": "cursh", "function": "function", "(": "subsh",
+		"$(": "cmdsubst", "`": "bquote", "${": "braceparam", "<<": "heredoc",
+		"'": "quote", `"`: "dquote", "|": "pipe", "&&": "cmdand", "||": "cmdor",
+	} {
+		if got := w[word].Text; got != want {
+			t.Errorf("%q draws %q, want %q", word, got, want)
+		}
+	}
+	for _, clause := range []string{"then", "else", "elif"} {
+		if !w[clause].Replaces {
+			t.Errorf("%q follows its construct, want it to stand in place of it", clause)
+		}
+	}
+	for _, op := range []string{"|", "&&", "||"} {
+		if w[op].Replaces {
+			t.Errorf("%q stands in place of what it is inside, want it to follow", op)
+		}
+	}
+	// A loop's `do` is drawn as nothing at all, and the loop stays: zsh draws
+	// `while false` and then `do` alike as `while`.
+	if _, drawn := w["do"]; drawn {
+		t.Error("`do` has an entry, and zsh draws nothing for it")
 	}
 }

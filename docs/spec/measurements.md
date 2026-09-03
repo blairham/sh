@@ -1358,7 +1358,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `xtrace/assignments-per-line-diverges` | `+ a=1 b=2` | `+ a=1~+ b=2` | `+ a=1~+ b=2` | `+ a=1~+ b=2` | `+ a=1~+ b=2` | `+<shell>:1> a=1 b=2 ` |
 | `xtrace/disabling-set-diverges` | `+ set +x~done` | `+ set +x~done` | `+ set +x~done` | `+ set +x~done` | `done` | `+<shell>:1> set +x~done` |
 | `xtrace/compound-header-diverges` | `+ echo 1~1~+ echo 2~2` | `+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2` | `+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2` | `+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2` | `+ echo 1~1~+ echo 2~2` | `+<shell>:1> i=1~+<shell>:1> echo 1~1~+<shell>:1> i=2~+<shell>:1> echo 2~2` |
-| `xtrace/pipeline-order-diverges` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ cat~+ echo a~a` | `+<shell>:1> echo a~+<shell>:1> cat~a` |
+| `xtrace/pipeline-order-diverges` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+<shell>:1> echo a~+<shell>:1> cat~a` |
 | `nounset/unset-variable-is-an-error` | `<script>: 2: NOPE: parameter not set` *(status 2)* | `<script>: line 2: NOPE: unbound variable` *(status 1)* | `<script>: line 2: NOPE: unbound variable` *(status 1)* | `<script>: line 2: NOPE: unbound variable` *(status 1)* | `<script>: line 2: NOPE: parameter not set` *(status 1)* | `<script>:2: NOPE: parameter not set` *(status 1)* |
 | `nounset/defaults-are-exempt` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` |
 | `nounset/empty-is-not-unset` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` |
@@ -1676,6 +1676,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `read/a-failing-read-still-assigns` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` |
 | `read/a-final-line-without-a-newline` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` |
 | `read/an-unterminated-last-line-is-dropped` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` |
+| `return/with-nothing-to-return-from` | `before` *(status 7)* | `before~<shell>: line 1: return: can only `return' from a function or sourced script~after st=2` | `before~<shell>: line 1: return: can only `return' from a function or sourced script` *(status 2)* | `before~<shell>: line 0: return: can only `return' from a function or sourced script~after st=1` | `before` *(status 7)* | `before` *(status 7)* |
+| `return/inside-a-sourced-file` | `st=7` | `st=7` | `st=7` | `st=7` | `st=7` | `st=7` |
 | `set/a-name-only-one-shell-has` | `<shell>: 1: set: Illegal option -o posix` *(status 2)* | `st=0` | `st=0` | `st=0` | `<shell>: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | `<shell>:set:1: no such option: posix` *(status 1)* |
 | `set/allexport-marks-what-follows` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` |
 | `cd/keeps-or-resolves-the-name-it-was-given` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` |
@@ -1717,6 +1719,16 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `read/an-unterminated-last-line-is-dropped` — the consequence of the status above, and the reason it is worth pinning rather than fixing: a file whose last line has no newline loses that line in every shell there is. Returning 0 instead would run it twice — once as the line, once as the empty read after it
   ```sh
   printf 'a\nb' | while read -r l; do printf "<%s>" "$l"; done; echo
+  ```
+- `return/with-nothing-to-return-from` — a `return` outside both a function and a sourced file has nothing to return from, and the panel splits over what that means — not over the wording but over *where the script stops*. Three obey it and end there with the status given; one reports it, leaves 2 behind and runs the next command. A script whose last statement is such a `return` therefore ends two different ways with the same output, which is why the status is half the case
+  ```sh
+  echo before; return 7; echo "after st=$?"
+  ```
+- `return/inside-a-sourced-file` — the other side of the same question, and unanimous: a sourced file is something to return *from*, so all four obey it and it becomes the source's status. Recorded next to the case above because together they say the disagreement is about having nothing to return from rather than about `return` itself
+  ```sh
+  printf 'return 7\n' > s.sh
+  . ./s.sh
+  echo "st=$?"
   ```
 - `set/a-name-only-one-shell-has` — which long option names a shell has is not one list: fourteen are unanimous and the rest belong to one, two or three of the panel. `posix` belongs to one, and the other three refuse it — each in its own words and with its own status. Turning it *off* is the direction that matters, because it is what the thirteenth line of Homebrew's own script does and what a shell without a posix mode can honestly grant
   ```sh

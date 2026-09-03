@@ -284,6 +284,10 @@ type Runner struct {
 	inBuiltin string
 	// inFunc is the name of the function being run, for `$0`.
 	inFunc string
+	// sourceDepth is how many sourced files are running, which is the other
+	// place a `return` has something to return from. A count rather than a
+	// flag because a sourced file may source another.
+	sourceDepth int
 	// expandErr records that an expansion failed — a division by zero, a
 	// number that is not one. The command does not run, which is what every
 	// shell in the panel does and what the exit status has to say.

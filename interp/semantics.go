@@ -419,6 +419,15 @@ type Semantics struct {
 	// Only ever at a prompt: no shell announces one to a script.
 	AnnouncesBackgroundJob Answer
 
+	// ReturnOutsideAFunctionIsRefused reports a `return` that has nothing to
+	// return from and carries on, instead of ending the script with the
+	// status it was given. True in bash alone.
+	//
+	// Asked only where there is nothing to return from. Inside a function
+	// and inside a sourced file all four obey it, so the question is about
+	// the one case they split on.
+	ReturnOutsideAFunctionIsRefused Answer
+
 	// BadSetOptionNameFatal ends the script when `set -o` is given a name
 	// this shell does not have. True in dash, ksh93 and zsh.
 	//

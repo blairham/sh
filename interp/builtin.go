@@ -61,6 +61,21 @@ func biContinue(r *Runner, _ context.Context, args []string) int {
 }
 
 func biReturn(r *Runner, _ context.Context, args []string) int {
+	if r.inFunc == "" && r.sourceDepth == 0 {
+		// Nothing to return from. Three of the panel end the script here
+		// with the status given; bash refuses and carries on, which is a
+		// difference in *where the script stops* rather than in wording.
+		if r.ask(r.sem().ReturnOutsideAFunctionIsRefused, "a `return` with nothing to return from") {
+			r.diagf("%s\n", Wording(r.diag().ReturnOutsideAFunction,
+				"return: can only `return' from a function or sourced script"))
+			// Reported and not obeyed: no control flow is set, so the next
+			// statement runs.
+			return 2
+		}
+		if r.unspecified {
+			return 2
+		}
+	}
 	r.ctl = controlReturn
 	if len(args) > 0 {
 		if n, ok := atoi(args[0]); ok {

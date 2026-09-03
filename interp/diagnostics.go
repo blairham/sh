@@ -539,6 +539,13 @@ type Diagnostics struct {
 	// which is what the other two want.
 	ExportFunctionOptionRefused string
 
+	// ReturnOutsideAFunction is a `return` with nothing to return from —
+	// neither a function nor a sourced file. No verbs.
+	//
+	// Only one shell in the panel says anything at all: the other three obey
+	// it and end the script, so there is nothing for them to word.
+	ReturnOutsideAFunction string
+
 	// SetInvalidOptionName is a long `set -o` name this shell does not have.
 	// One verb: the name.
 	//

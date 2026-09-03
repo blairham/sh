@@ -20,6 +20,21 @@ type Parser struct {
 
 	tok Token
 
+	// Aliases answers what a word stands for, and is the caller's table
+	// rather than one this package keeps — see alias.go. Nil expands
+	// nothing.
+	Aliases Aliases
+
+	// pending are tokens an alias expansion put in front of the lexer, and
+	// aliasNextWord says the last expansion ended in a space, so the word
+	// after it is eligible in turn.
+	pending       []Token
+	aliasNextWord bool
+	// aliasSpliced counts the tokens of the current expansion still in hand,
+	// so the trailing-space rule can tell a word that *came from* the value
+	// from the word that follows it.
+	aliasSpliced int
+
 	err        error
 	incomplete bool
 
@@ -88,6 +103,15 @@ func (p *Parser) slice(from, to Pos) string {
 func (p *Parser) next() {
 	if p.tok.Kind != TokEOF && p.tok.Text != "" {
 		p.lastText = p.tok.Text
+	}
+	if p.aliasSpliced > 0 {
+		p.aliasSpliced--
+	}
+	if len(p.pending) > 0 {
+		// An alias expansion is still being handed out. Nothing else about
+		// the input has moved, so the lexer is not touched.
+		p.tok, p.pending = p.pending[0], p.pending[1:]
+		return
 	}
 	p.tok = p.lex.Next()
 	if p.err == nil && p.lex.Err() != nil {
@@ -554,6 +578,13 @@ func (p *Parser) parseCommand() Command {
 	// can be its body: anything nested inside is a group like any other.
 	body := p.funcBody
 	p.funcBody = false
+	// Before the keyword dispatch below, because an alias may hold one:
+	// `alias iff='if true; then'` has to produce the `if` the grammar reads.
+	// The set is fresh per command, so `e yes; e two` expands `e` twice.
+	if p.Aliases != nil {
+		p.aliasNextWord = false
+		p.expandAlias(map[string]bool{})
+	}
 	switch {
 	case p.at(TokEOF), p.at(TokNewline), p.atStopWord():
 		return nil
@@ -768,6 +799,17 @@ func (p *Parser) parseSimple() Command {
 				// Reserved even here, so it ends the command rather than
 				// becoming an argument to it.
 				return c
+			}
+			if p.aliasNextWord && p.aliasSpliced == 0 && p.Aliases != nil {
+				// The expansion before this one ended in a space, so this
+				// word is eligible too — the rule behind `alias sudo='sudo '`.
+				// Only once the expansion's own tokens are spent: the space
+				// makes the word *after* the value eligible, not the value's
+				// own second word. Cleared first so a value that does not end
+				// in a space stops the chain here.
+				p.aliasNextWord = false
+				p.expandAlias(map[string]bool{})
+				continue
 			}
 			seenArg = true
 			c.Args = append(c.Args, p.word())

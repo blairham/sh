@@ -26,6 +26,20 @@ func init() {
 	builtins["unalias"] = biUnalias
 }
 
+// LookupAlias answers what a name stands for, for a parser that expands
+// aliases.
+//
+// Exported because expansion happens when a line is *parsed* and the table
+// lives here: the front end owns the parser, this owns the table, and this
+// method is the whole of the seam between them. It matches syntax.Aliases.
+//
+// A shell that should not expand simply does not pass it, which is how the
+// panel's 2v2 split is expressed — see syntax.Dialect.ExpandAliases.
+func (r *Runner) LookupAlias(name string) (string, bool) {
+	v, ok := r.aliases[name]
+	return v, ok
+}
+
 func biAlias(r *Runner, _ context.Context, args []string) int {
 	print := false
 	// Two questions, because dash answers the first differently from the

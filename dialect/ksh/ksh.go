@@ -14,6 +14,8 @@ import (
 // Dialect is what ksh93 parses.
 func Dialect() syntax.Dialect {
 	d := syntax.Core()
+	// ksh93 expands them in a script too.
+	d.ExpandAliases = true
 	d.ParamIndirection = true
 	// The measured ksh93 is 93u+ 2012, which has no `&>`. Later ksh93u+m
 	// does, twelve years apart under the same name — which is the divergence

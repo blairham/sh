@@ -24,6 +24,10 @@ func parses(t *testing.T, src string) bool {
 }
 
 func TestGrammar(t *testing.T) {
+	// Expands aliases in a script, with no option to turn on.
+	if got, want := dash.Dialect().ExpandAliases, true; got != want {
+		t.Errorf("ExpandAliases = %v, want %v", got, want)
+	}
 	for _, tc := range []struct {
 		src  string
 		want bool

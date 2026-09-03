@@ -435,6 +435,15 @@ func (sh Shell) run(in source) int {
 
 	r := sh.newRunner(name, in.params, dg)
 	r.SetScriptFile(in.file)
+	// Aliases are expanded when a line is *parsed*, and the table is the
+	// runner's, so the front end is the only place the two can be joined.
+	// This works because execute reads a line at a time: the `alias` on one
+	// line has run by the time the next is read, which is exactly the rule
+	// every shell has — an alias is never expanded on the line that defines
+	// it.
+	if sh.Dialect.ExpandAliases || in.interactive {
+		p.Aliases = r.LookupAlias
+	}
 	if sh.Prelude != "" {
 		if code := sh.source(r, name); code != 0 {
 			return code

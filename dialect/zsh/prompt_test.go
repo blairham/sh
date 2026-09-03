@@ -44,3 +44,18 @@ func TestPromptCodes(t *testing.T) {
 		}
 	}
 }
+
+// zsh's defaults, as measured — including a continuation written the way zsh
+// writes it, with a code that is not drawable yet.
+func TestPromptDefaults(t *testing.T) {
+	st := zsh.PromptStyle()
+	if st.Default != "%m%# " {
+		t.Errorf("default = %q, want %%m%%# — host and privilege", st.Default)
+	}
+	if st.DefaultContinued != "%_> " {
+		t.Errorf("continuation = %q, want %%_> ", st.DefaultContinued)
+	}
+	if _, drawable := st.Codes['_']; drawable {
+		t.Error("%_ is in the table, so the comment explaining that it is not is stale")
+	}
+}

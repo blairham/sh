@@ -40,5 +40,16 @@ func PromptStyle() repl.PromptStyle {
 		Unknown: repl.DropBoth,
 		// zsh draws a percent sign where bash draws a dollar.
 		Privilege: "%",
+		// Measured with nothing assigned: real zsh prompts with the host and
+		// the privilege character, and continues with the construct being
+		// continued — `for> ` inside a for loop.
+		//
+		// `%_` is not in the table above, because what it draws is the parser's
+		// state and there is no way to ask for that yet. Until there is, an
+		// unknown code draws nothing and the continuation comes out as `> `,
+		// which is what it was before. The default is written as zsh writes it
+		// so that it starts working when the code does.
+		Default:          "%m%# ",
+		DefaultContinued: "%_> ",
 	}
 }

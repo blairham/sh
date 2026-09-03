@@ -3,7 +3,11 @@
 
 package bash
 
-import "github.com/blairham/sh/repl"
+import (
+	"fmt"
+
+	"github.com/blairham/sh/repl"
+)
 
 // PromptStyle is what bash does to a prompt parameter's value before drawing
 // it.
@@ -41,10 +45,20 @@ func PromptStyle() repl.PromptStyle {
 			'A':  repl.FieldTime24HM,
 			'@':  repl.FieldTime12AMPM,
 			'd':  repl.FieldDate,
+			'v':  repl.FieldVersion,
+			'V':  repl.FieldVersionFull,
 			'\\': repl.FieldEscape,
 		},
 		// `\q` draws `\q`.
 		Unknown:   repl.KeepBoth,
 		Privilege: "$",
+		// The same numbers the prelude puts in BASH_VERSION. Measured: real
+		// bash drew 5.3 for \v and 5.3.15 for \V, and ours claims 5.3.15.
+		Version:     fmt.Sprintf("%d.%d", major, minor),
+		VersionFull: version,
+		// Measured with nothing assigned: real bash prompts `bash-5.3$ `,
+		// which is this.
+		Default:          `\s-\v\$ `,
+		DefaultContinued: "> ",
 	}
 }

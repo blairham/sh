@@ -101,6 +101,10 @@ func (s Shell) field(f PromptField) string {
 		return "\t"
 	case FieldEscape:
 		return string(s.Style.Escape)
+	case FieldVersion:
+		return s.Style.Version
+	case FieldVersionFull:
+		return s.Style.VersionFull
 	case FieldTime24:
 		return s.now().Format("15:04:05")
 	case FieldTime12:

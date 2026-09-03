@@ -4,6 +4,7 @@
 package bash_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/blairham/sh/dialect/bash"
@@ -47,5 +48,22 @@ func TestPromptCodes(t *testing.T) {
 	// Not a tab. bash's \t is the time, and nothing carries over from C.
 	if st.Codes['t'] == repl.FieldTab {
 		t.Error("\\t is the time in bash, not a tab")
+	}
+}
+
+// The version drawn and the version claimed are the same number.
+//
+// Measured: real bash drew 5.3 for \v and 5.3.15 for \V. A shell whose
+// prompt and whose BASH_VERSION disagreed would be lying to one of them.
+func TestPromptVersionMatchesTheOneClaimed(t *testing.T) {
+	st := bash.PromptStyle()
+	if st.Version != "5.3" || st.VersionFull != "5.3.15" {
+		t.Errorf("version %q/%q, want 5.3/5.3.15", st.Version, st.VersionFull)
+	}
+	if !strings.Contains(bash.Prelude(), "BASH_VERSION='"+st.VersionFull+"(") {
+		t.Errorf("the prelude does not claim %s", st.VersionFull)
+	}
+	if st.Default != `\s-\v\$ ` {
+		t.Errorf("default prompt = %q, want the one real bash draws", st.Default)
 	}
 }

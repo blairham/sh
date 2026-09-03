@@ -19,6 +19,11 @@ import "github.com/blairham/sh/repl"
 func PromptStyle() repl.PromptStyle {
 	return repl.PromptStyle{
 		Expand: true,
+		// Measured with nothing assigned: real ksh93 prompts `$ ` and continues
+		// with `> `, which is what the substrate does anyway. Stated rather than
+		// left empty so the dialect describes itself.
+		Default:          "$ ",
+		DefaultContinued: "> ",
 		// ksh93 has an escape character and nothing behind it: `\u` drew `u`,
 		// `\h` drew `h`, `\w` drew `w`. The backslash goes and the letter
 		// stands, which is what DropEscape says and why the table is empty.

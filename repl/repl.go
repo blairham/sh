@@ -320,8 +320,21 @@ func collect(p *syntax.Parser) ([]*syntax.File, error) {
 }
 
 // prompt reads one of the prompt parameters, falling back to the usual text.
+//
+// Through GetVar rather than out of Vars, because Vars holds what this session
+// assigned and the environment is a second source underneath it. A shell
+// started from another shell is handed its prompt that way — `PS1='> ' sh` —
+// and reading only the map dropped it: every one of the four uses an exported
+// PS1, and we printed the default over the top of it.
+//
+// An empty value is a prompt of nothing rather than a missing one. `PS1=`
+// silences the prompt in all four, and treating empty as absent made the one
+// thing a person does to turn it off do the opposite.
 func (s Shell) prompt(name, fallback string) string {
-	if v, ok := s.Runner.Vars[name]; ok && v != "" {
+	if s.Runner == nil {
+		return fallback
+	}
+	if v, ok := s.Runner.GetVar(name); ok {
 		return v
 	}
 	return fallback

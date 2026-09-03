@@ -181,6 +181,22 @@ type Semantics struct {
 	// a script that reads an argument it was not given carries on there and
 	// stops everywhere else.
 	UnsetPositionalIsAllowed Answer
+	// ExitInTrapReportsEarlierStatus makes a bare `exit` in an EXIT trap
+	// report the status the shell had when the trap began, rather than that
+	// of the trap's own last command.
+	//
+	//	trap "false; exit" 0; true
+	//
+	// is 0 in bash, dash and ksh93 and 1 in zsh. Only the bare form: `exit 7`
+	// is 7 everywhere, and a trap that does not exit at all leaves the
+	// script's status alone in all four.
+	//
+	// Found on an installed script — /usr/bin/bzless traps `stty …; exit` on
+	// EXIT, and the `stty` failing made the script exit 1 where every shell
+	// exits 0. A wrong exit status is what a caller branches on, so this is
+	// the quiet kind of difference.
+	ExitInTrapReportsEarlierStatus Answer
+
 	// SignalHandlerSeesEarlierStatus shows a signal handler the status from
 	// before the command that triggered it rather than that command's own.
 	// zsh alone: after `false; kill -INT $$`, zsh's handler reads 1 where
@@ -899,6 +915,10 @@ func PosixSemantics() Semantics {
 		BracketCaretNegates:            No,
 		ExitTrapIsFunctionLocal:        No,
 		SignalHandlerSeesEarlierStatus: No,
+		// POSIX says a bare `exit` reports the status of the last command,
+		// and in an EXIT trap it names the value `$?` had when the trap was
+		// entered — which is what three of the four do.
+		ExitInTrapReportsEarlierStatus: Yes,
 		UnsetPositionalIsAllowed:       No,
 		TraceShowsItsOwnDisabling:      Yes,
 		TraceAssignmentsSeparately:     No,

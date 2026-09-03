@@ -694,6 +694,13 @@ func biExit(r *Runner, _ context.Context, args []string) int {
 			}
 		}
 	}
+	if len(args) == 0 && r.inExitTrap &&
+		r.ask(r.sem().ExitInTrapReportsEarlierStatus, "a bare `exit` in an EXIT trap") {
+		// The status the trap was entered with, not the one its own commands
+		// left behind: `trap "false; exit" 0; true` is 0 in three of the
+		// four.
+		r.status = r.exitTrapEntryStatus
+	}
 	r.ctl = controlExit
 	return r.status
 }

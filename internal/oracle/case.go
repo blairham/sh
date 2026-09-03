@@ -1621,6 +1621,12 @@ echo "st=$?"`,
 		Why:     "`readonly` has to set the array before it locks the name, because locking first refuses the very assignment the command was given — the opposite order from `local`, which must make the name local before the array lands",
 	},
 	{
+		ID: "trap/a-bare-exit-in-an-exit-trap", Category: "traps",
+		Snippet: `trap "false; exit" 0; true
+echo unreachable`,
+		Why: "a bare `exit` in an EXIT trap reports the status the shell had when the trap began, not the trap's own last command — 0 in bash, dash and ksh93 and 1 in zsh. Found by `make wild-run`: /usr/bin/bzless traps `stty …; exit` and with no terminal the `stty` fails, so the script exited 1 where every shell exits 0, with identical output. Only a *run* comparison can see that",
+	},
+	{
 		ID: "param/case-change-applies-its-pattern", Category: "parameter expansion",
 		Snippet: `x=abc; printf "[%s]" "${x^^[ab]}"`,
 		Why:     "the operator carries a pattern saying *which* characters to convert, matched one at a time — `ABc`, not `ABC`. Discarding it was a silent wrong answer in a feature already claimed: the script asked for a subset and got the whole string, with status 0. bash alone has the operator, so the other three refuse the word",

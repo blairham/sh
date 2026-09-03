@@ -52,6 +52,11 @@ func TestGrammar(t *testing.T) {
 }
 
 func TestSemantics(t *testing.T) {
+	// zsh alone: the trap's own last command decides, so
+	// `trap "false; exit" 0` exits 1.
+	if got, want := zsh.Semantics().ExitInTrapReportsEarlierStatus, interp.No; got != want {
+		t.Errorf("ExitInTrapReportsEarlierStatus = %v, want %v", got, want)
+	}
 	s := zsh.Semantics()
 	for _, tc := range []struct {
 		axis string

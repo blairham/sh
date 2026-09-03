@@ -279,4 +279,6 @@ func Apply(r *interp.Runner) {
 	// only `$(( ))`, and reports `let: not found` like any other command it
 	// has never heard of.
 	r.Unregister("let")
+	// This shell has no `enable` either.
+	r.Unregister("enable")
 }

@@ -323,6 +323,10 @@ func Diagnostics() interp.Diagnostics {
 // is a dialect's answer, and it is the same function under a second name
 // rather than a second implementation.
 func Apply(r *interp.Runner) {
+	// This shell has an `enable`, but a different one: it works on hash
+	// tables and takes none of bash's options — `enable -n` is a bad option
+	// there. Claiming a bash-shaped one would be worse than not having it.
+	r.Unregister("enable")
 	// The `set -o` names beyond the ones every shell has.
 	r.AddSetOptions(
 		"braceexpand",

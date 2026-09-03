@@ -84,6 +84,12 @@ func (r *Runner) Builtin(name string) (Builtin, bool) { return r.lookupBuiltin(n
 // lookupBuiltin resolves a name, letting a registration win over the built-in
 // table so a dialect can replace as well as add.
 func (r *Runner) lookupBuiltin(name string) (Builtin, bool) {
+	if r.disabledBuiltins[name] {
+		// `enable -n` puts a name aside without forgetting what it was, so
+		// the word is looked up on PATH like any other and enabling it again
+		// gets the same builtin back.
+		return nil, false
+	}
 	if fn, ok := r.custom[name]; ok {
 		// A nil entry is an explicit removal rather than a missing one.
 		return fn, fn != nil
@@ -144,6 +150,11 @@ func (r *Runner) BuiltinNames() []string {
 			continue
 		}
 		seen[name] = true
+	}
+	// And one `enable -n` switched off is not what running the word would
+	// find, which is what this list is for.
+	for name := range r.disabledBuiltins {
+		delete(seen, name)
 	}
 	return sortedNames(seen)
 }

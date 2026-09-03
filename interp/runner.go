@@ -282,6 +282,10 @@ type Runner struct {
 	// deliberately cleared by `.` and `eval` while they run borrowed text:
 	// what a sourced script reports is the script's, not the builtin's.
 	inBuiltin string
+	// disabledBuiltins are the names `enable -n` has switched off. Kept
+	// apart from custom so that switching one on again gets back whatever
+	// was registered rather than the core's.
+	disabledBuiltins map[string]bool
 	// inFunc is the name of the function being run, for `$0`.
 	inFunc string
 	// sourceDepth is how many sourced files are running, which is the other

@@ -354,6 +354,8 @@ func Apply(r *interp.Runner) {
 	// taking the name away is more honest than leaving bash's meaning under
 	// it.
 	r.Unregister("builtin")
+	// This shell has no `enable`.
+	r.Unregister("enable")
 	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })
 	// Three decimal places, where the two other shells that have SECONDS
 	// report whole seconds.

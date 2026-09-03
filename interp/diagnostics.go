@@ -259,6 +259,24 @@ type Diagnostics struct {
 	// own, which is 1 — dash alone says 2.
 	UmaskBadMaskStatus int
 
+	// UmaskBadSymbolicMode is a symbolic mode it could not read. Two verbs:
+	// the whole argument and the character that stopped it.
+	//
+	// The panel splits on which to name. dash and ksh93 quote the argument
+	// back — `umask: Illegal mode: u=q`, `umask: u=q: bad format` — while
+	// bash and zsh name the character and say what kind it was.
+	UmaskBadSymbolicMode string
+
+	// UmaskBadSymbolicOperator is that complaint where what was wanted was
+	// one of `+-=` rather than one of `rwx`, for the two dialects that tell
+	// them apart: bash says "invalid symbolic mode operator" against
+	// "invalid symbolic mode character", and zsh "bad symbolic mode
+	// operator" against "bad symbolic mode permission".
+	//
+	// Empty means the dialect says the same thing to both, which is dash and
+	// ksh93 — they name the argument and never reach the question.
+	UmaskBadSymbolicOperator string
+
 	// UmaskBadOption is an option `umask` does not have. One verb.
 	UmaskBadOption string
 

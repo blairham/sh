@@ -2697,6 +2697,42 @@ echo after`,
 		Snippet: `unset 1x; echo "a=$?"; unset -v 1x; echo "b=$?"`,
 		Why:     "bash 5.3's bare `unset` checks nothing and its `unset -v` checks a name, which is the sharpest line in this whole area — and bash 3.2 refuses both, so the panel's two bash columns disagree here on purpose. The other three check either way",
 	},
+	// --- umask: the symbolic spelling ----------------------------------
+	{
+		ID: "umask/symbolic-sets-the-mask", Category: "umask",
+		Snippet: `umask 022; umask u=rwx,g=,o=; umask`,
+		Why:     "the form the issue was filed on and the one scripts write. Unanimous — all four accept it and all four give 0077, which is what made accepting only octal a plain gap rather than a dialect question",
+	},
+	{
+		ID: "umask/symbolic-omitted-who-is-all-three", Category: "umask",
+		Snippet: `umask 022; umask -- -w; umask`,
+		Why:     "an omitted who is `a`, not the owner: 022 becomes 222 in all four. Written with `--` because a leading `-` is otherwise read as an option, which is how the first measurement of this got a wrong answer",
+	},
+	{
+		ID: "umask/symbolic-clauses-run-left-to-right", Category: "umask",
+		Snippet: `umask 022; umask a=r,+w; umask`,
+		Why:     "the second clause sees what the first did rather than both applying to the mask in force, which is the difference between 0111 and 0333",
+	},
+	{
+		ID: "umask/symbolic-plus-and-minus-are-not-equals", Category: "umask",
+		Snippet: `umask 077; umask g+r; umask -S`,
+		Why:     "`+` allows and `=` replaces, so this leaves the group's other bits alone where `g=r` would clear them. The mask records what is taken away and the symbolic form names what is allowed, and getting that backwards is silent",
+	},
+	{
+		ID: "umask/a-bad-number-is-not-a-bad-mode", Category: "umask",
+		Snippet: `umask 022; umask -- 1x; echo "st=$?"`,
+		Why:     "which spelling was meant is decided by the first character, and the complaint proves it: `1x` is a bad *number* in all four, so it was never a candidate for the symbolic reading despite containing a letter",
+	},
+	{
+		ID: "umask/a-bad-mode-is-not-a-bad-number", Category: "umask",
+		Snippet: `umask 022; umask -- u=q; echo "st=$?"; umask`,
+		Why:     "the other half: `u=q` is a bad *mode*, and bash names the character where dash and ksh93 quote the whole argument back. The mask is unchanged either way",
+	},
+	{
+		ID: "umask/a-refused-mode-leaves-the-mask-alone", Category: "umask",
+		Snippet: `umask 022; umask -- zz 2>/dev/null; umask`,
+		Why:     "a mask that could not be read must not half-apply — every clause is parsed before any of it lands",
+	},
 	{
 		ID: "cmd/command-v-names-a-reserved-word", Category: "command lookup",
 		Snippet: `command -v if`,

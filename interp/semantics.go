@@ -659,8 +659,13 @@ type Semantics struct {
 	// in the other three.
 	PrintfRejectsUnknownOption Answer
 
-	// UmaskPrintsFourDigits writes the mask with a leading zero — `0022`
+	// UmaskPrintsFourDigits writes the mask as four digits, always — `0022`
 	// against zsh's `022`. True in bash, dash and ksh93.
+	//
+	// False is not "three digits". zsh writes a C octal literal with a
+	// minimum of three, so the leading zero comes back as soon as the owner
+	// group denies anything: `022` and `077`, but `0333` and `0777`. Reading
+	// this as a flat three printed `333` where zsh prints `0333`.
 	//
 	// Only about printing: all four read `022` and `0022` alike, and the
 	// symbolic form `umask -S` is identical in every one of them.

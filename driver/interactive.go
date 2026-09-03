@@ -57,6 +57,7 @@ func (sh Shell) interactive(argv, params []string) int {
 			return dg.ParseDiagnostic(name, "", err, "")
 		},
 		Style: sh.PromptStyle,
+		Name:  name,
 	}
 	ctx := context.Background()
 	status, err := s.Run(ctx)

@@ -18,5 +18,27 @@ import "github.com/blairham/sh/repl"
 // Measured through a pty rather than taken from documentation: the panel
 // disagrees about this, and the disagreement is why the field exists.
 func PromptStyle() repl.PromptStyle {
-	return repl.PromptStyle{Expand: false}
+	return repl.PromptStyle{
+		Expand: false,
+		// Measured, one code per prompt. The clock codes (%t %* %w) and the full
+		// date are measured and not yet drawable.
+		Escape: '%',
+		Codes: map[rune]repl.PromptField{
+			'n': repl.FieldUser,
+			'm': repl.FieldHost,
+			'M': repl.FieldHostFull,
+			'~': repl.FieldCwd,
+			'd': repl.FieldCwdFull,
+			'C': repl.FieldCwdBase,
+			'#': repl.FieldPrivilege,
+			'%': repl.FieldEscape,
+			't': repl.FieldTime12Padded,
+			'*': repl.FieldTime24,
+			'w': repl.FieldDateShort,
+		},
+		// `%q` drew nothing at all.
+		Unknown: repl.DropBoth,
+		// zsh draws a percent sign where bash draws a dollar.
+		Privilege: "%",
+	}
 }

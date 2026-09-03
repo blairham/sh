@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
@@ -47,6 +48,14 @@ type Shell struct {
 	// Style is what this dialect does to a prompt parameter's value before
 	// it is drawn. The zero value draws it as it stands.
 	Style PromptStyle
+
+	// Clock is what a prompt with the time in it reads. Nil is the real one.
+	Clock func() time.Time
+
+	// Name is what the shell calls itself, for a prompt that draws it —
+	// bash's `\s`. Empty draws nothing, which is what a caller that has not
+	// said gets.
+	Name string
 }
 
 // Run reads, evaluates and prints until the input ends.
@@ -350,8 +359,12 @@ func (s Shell) prompt(name, fallback string) string {
 // point of expanding it: a prompt holding `$PWD` is expected to follow the
 // directory, and one holding a command substitution to run the command again.
 func (s Shell) render(value string) string {
-	if s.Style.Expand && value != "" {
-		return s.Runner.Expand(value)
+	if value == "" {
+		return value
+	}
+	value = s.escapes(value)
+	if s.Style.Expand {
+		value = s.Runner.Expand(value)
 	}
 	return value
 }

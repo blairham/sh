@@ -19,5 +19,32 @@ import "github.com/blairham/sh/repl"
 // Measured through a pty rather than taken from documentation: the panel
 // disagrees about this, and the disagreement is why the field exists.
 func PromptStyle() repl.PromptStyle {
-	return repl.PromptStyle{Expand: true}
+	return repl.PromptStyle{
+		Expand: true,
+		// Measured, one code per prompt, through a pty. The codes not here are
+		// measured too and not yet drawable: the clock (\t \T \A \@ \d), the
+		// count of jobs (\j), the history and command numbers (\! \#), the
+		// terminal's name (\l) and the version (\v).
+		Escape: '\\',
+		Codes: map[rune]repl.PromptField{
+			'u':  repl.FieldUser,
+			'h':  repl.FieldHost,
+			'H':  repl.FieldHostFull,
+			'w':  repl.FieldCwd,
+			'W':  repl.FieldCwdBase,
+			's':  repl.FieldShellName,
+			'$':  repl.FieldPrivilege,
+			'n':  repl.FieldNewline,
+			'r':  repl.FieldReturn,
+			't':  repl.FieldTime24,
+			'T':  repl.FieldTime12,
+			'A':  repl.FieldTime24HM,
+			'@':  repl.FieldTime12AMPM,
+			'd':  repl.FieldDate,
+			'\\': repl.FieldEscape,
+		},
+		// `\q` draws `\q`.
+		Unknown:   repl.KeepBoth,
+		Privilege: "$",
+	}
 }

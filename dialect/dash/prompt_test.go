@@ -17,3 +17,10 @@ func TestPromptStyle(t *testing.T) {
 		t.Errorf("Expand = %v, want %v", got, true)
 	}
 }
+
+// dash has no escape language at all: `\u` drew `\u`.
+func TestPromptCodes(t *testing.T) {
+	if st := dash.PromptStyle(); st.Escape != 0 || len(st.Codes) != 0 {
+		t.Errorf("Escape = %q with %d codes, want no escape language", st.Escape, len(st.Codes))
+	}
+}

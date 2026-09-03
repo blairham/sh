@@ -17,5 +17,17 @@ import "github.com/blairham/sh/repl"
 // Measured through a pty rather than taken from documentation: the panel
 // disagrees about this, and the disagreement is why the field exists.
 func PromptStyle() repl.PromptStyle {
-	return repl.PromptStyle{Expand: true}
+	return repl.PromptStyle{
+		Expand: true,
+		// ksh93 has an escape character and nothing behind it: `\u` drew `u`,
+		// `\h` drew `h`, `\w` drew `w`. The backslash goes and the letter
+		// stands, which is what DropEscape says and why the table is empty.
+		//
+		// `\!` drew a history number, but by the same rule rather than by a table
+		// entry: dropping the backslash leaves a bare `!`, and a bare `!` is the
+		// history number in ksh93. That is a separate question about `!` itself
+		// and is not answered here.
+		Escape:  '\\',
+		Unknown: repl.DropEscape,
+	}
 }

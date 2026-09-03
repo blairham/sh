@@ -17,5 +17,9 @@ import "github.com/blairham/sh/repl"
 // Measured through a pty rather than taken from documentation: the panel
 // disagrees about this, and the disagreement is why the field exists.
 func PromptStyle() repl.PromptStyle {
-	return repl.PromptStyle{Expand: true}
+	return repl.PromptStyle{
+		Expand: true,
+		// dash has no escape language. `\u` draws `\u`, and a `\$` drawing a
+		// bare dollar is expansion's doing rather than the prompt's.
+	}
 }

@@ -1073,6 +1073,11 @@ var Corpus = []Case{
 		Why:     "the layout is per construct and not one rule: a `then` stays on the line of its `if` where a `do` moves to a line of its own, and a body closed by a keyword ends with a `;` where one closed by a brace does not",
 	},
 	{
+		ID: "type/a-body-with-redirections-in-it", Category: "builtins",
+		Snippet: `f(){ echo hi 2>&1 >&2 3>/dev/null <&-; }; type f`,
+		Why:     "the one shell that says a body back writes a redirection two ways, and the tree it prints from has forgotten which was typed. A file target takes a space after the operator and keeps only the descriptor that was written; a dup is written tight and has the descriptor it acts on filled in, so `>&2` comes back as `1>&2` and a close comes back as `>&-` whichever operator asked for it",
+	},
+	{
 		ID: "type/what-a-name-would-run", Category: "builtins",
 		Snippet: `type cd; type if; type ls`,
 		Why:     "the same lookup `command -v` does, said in a sentence for a person to read — and every part of the sentence is worded differently: a keyword is `a shell keyword`, `a keyword` or `a reserved word`, and one shell reports an external as a tracked alias for the path",

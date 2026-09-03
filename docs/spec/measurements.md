@@ -1678,6 +1678,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `read/an-unterminated-last-line-is-dropped` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` |
 | `type/a-function-and-its-body` | `f is a shell function` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function` | `f is a shell function from zsh` |
 | `type/a-body-with-a-construct-in-it` | `f is a shell function` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function` | `f is a shell function from zsh` |
+| `type/a-body-with-redirections-in-it` | `f is a shell function` | `f is a function~f () ~{ ~    echo hi 2>&1 1>&2 3> /dev/null 0>&-~}` | `f is a function~f () ~{ ~    echo hi 2>&1 1>&2 3> /dev/null 0>&-~}` | `f is a function~f () ~{ ~    echo hi 2>&1 1>&2 3> /dev/null 0>&-~}` | `f is a function` | `f is a shell function from zsh` |
 | `type/what-a-name-would-run` | `cd is a shell builtin~if is a shell keyword~ls is /bin/ls` | `cd is a shell builtin~if is a shell keyword~ls is /bin/ls` | `cd is a shell builtin~if is a shell keyword~ls is /bin/ls` | `cd is a shell builtin~if is a shell keyword~ls is /bin/ls` | `cd is a shell builtin~if is a keyword~ls is a tracked alias for /bin/ls` | `cd is a shell builtin~if is a reserved word~ls is /bin/ls` |
 | `type/a-name-that-is-nothing` | `nope: not found~st=127` | `<shell>: line 1: type: nope: not found~st=1` | `<shell>: line 1: type: nope: not found~st=1` | `<shell>: line 0: type: nope: not found~st=1` | `<shell>: whence: nope: not found~st=1` | `nope not found~st=1` |
 | `type/several-names-and-a-double-dash` | `--: not found~cd is a shell builtin~ls is /bin/ls~st=127` | `cd is a shell builtin~ls is /bin/ls~st=0` | `cd is a shell builtin~ls is /bin/ls~st=0` | `cd is a shell builtin~ls is /bin/ls~st=0` | `cd is a shell builtin~ls is a tracked alias for /bin/ls~st=0` | `cd is a shell builtin~ls is /bin/ls~st=0` |
@@ -1720,6 +1721,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `type/a-body-with-a-construct-in-it` — the layout is per construct and not one rule: a `then` stays on the line of its `if` where a `do` moves to a line of its own, and a body closed by a keyword ends with a `;` where one closed by a brace does not
   ```sh
   f(){ if true; then echo y; fi; }; type f
+  ```
+- `type/a-body-with-redirections-in-it` — the one shell that says a body back writes a redirection two ways, and the tree it prints from has forgotten which was typed. A file target takes a space after the operator and keeps only the descriptor that was written; a dup is written tight and has the descriptor it acts on filled in, so `>&2` comes back as `1>&2` and a close comes back as `>&-` whichever operator asked for it
+  ```sh
+  f(){ echo hi 2>&1 >&2 3>/dev/null <&-; }; type f
   ```
 - `type/what-a-name-would-run` — the same lookup `command -v` does, said in a sentence for a person to read — and every part of the sentence is worded differently: a keyword is `a shell keyword`, `a keyword` or `a reserved word`, and one shell reports an external as a tracked alias for the path
   ```sh

@@ -4,6 +4,7 @@
 package syntax_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/blairham/sh/internal/oracle"
@@ -89,6 +90,71 @@ func TestPrintingWhatTheCorpusDoesNotReach(t *testing.T) {
 			printed := syntax.Print(f)
 			if _, err := syntax.Parse(printed, syntax.Core()); err != nil {
 				t.Fatalf("printed source does not parse: %v\n  from: %q\n  gave: %q", err, tc.src, printed)
+			}
+		})
+	}
+}
+
+// A dup redirection, which is spelled unlike every other one.
+//
+// Two rules, and the exact spelling is the whole of what is being tested, so
+// these assert the text rather than that it parses. The operator goes tight
+// against its target where every other redirection takes a space; and where
+// the target is one the reader can resolve — a bare number, or the `-` that
+// closes a descriptor — the descriptor being redirected is written out, which
+// nothing in the source had to say.
+//
+// The oracle is `type`: the only place any shell in the panel says a function
+// body back, and so the only place a printer can be checked against something
+// other than its own opinion.
+func TestPrintingADupRedirection(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"the descriptor read from is filled in", "echo hi >&2", "echo hi 1>&2"},
+		{"and the one read into", "echo hi <&3", "echo hi 0<&3"},
+		{"one already written stays as it is", "echo hi 2>&1", "echo hi 2>&1"},
+		{"and is not rewritten to the operator's own", "echo hi 3<&0", "echo hi 3<&0"},
+		{"a close names its descriptor too", "echo hi >&-", "echo hi 1>&-"},
+		{
+			// The operator changes and the descriptor does not: `<&-` closes
+			// standard input, and is written as a close of it rather than as
+			// a close of standard output.
+			"a close is written one way whichever asked for it",
+			"echo hi <&-", "echo hi 0>&-",
+		},
+		{"a close that named one keeps it", "echo hi 2>&-", "echo hi 2>&-"},
+		{
+			// Nothing here can say which descriptor this is: the word is
+			// settled when the command runs. Writing one in would be
+			// inventing it.
+			"a target that is not settled yet gets nothing filled in",
+			"echo hi >&$fd", "echo hi >&$fd",
+		},
+		{
+			// Quoting is what tells a descriptor from a file of that name,
+			// so a quoted number is not a descriptor to fill in from.
+			"a quoted number is not a descriptor",
+			"echo hi >&\"1\"", "echo hi >&\"1\"",
+		},
+		{"nor is a word", "echo hi >&x", "echo hi >&x"},
+		{"but the tightness is not conditional on any of that", "echo hi >&/dev/null", "echo hi >&/dev/null"},
+		{
+			// The operator that redirects both streams ends in the same
+			// character and is not a dup: it takes a file, and so takes the
+			// space and has no descriptor to fill in.
+			"the both-streams operator is not one of these",
+			"echo hi &>out", "echo hi &> out",
+		},
+		{"nor is its appending form", "echo hi &>>out", "echo hi &>> out"},
+		{"where a file target keeps the space", "echo hi >out", "echo hi > out"},
+		{"and keeps only the descriptor that was written", "echo hi 2>out", "echo hi 2> out"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := syntax.Parse(tc.src, syntax.Core())
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			if got := strings.TrimRight(syntax.Print(f), "\n"); got != tc.want {
+				t.Errorf("printing %q gave %q, want %q", tc.src, got, tc.want)
 			}
 		})
 	}

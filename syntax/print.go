@@ -594,6 +594,10 @@ func (p *printer) assign(a *Assign) {
 func (p *printer) redirs(rs []*Redirect) {
 	for _, rd := range rs {
 		p.str(" ")
+		if rd.Op == TokLessAmp || rd.Op == TokGreatAmp {
+			p.dup(rd)
+			continue
+		}
 		if rd.N != nil {
 			p.word(rd.N)
 		}
@@ -616,6 +620,71 @@ func (p *printer) redirs(rs []*Redirect) {
 			p.heredocs = append(p.heredocs, rd)
 		}
 	}
+}
+
+// dup writes a `<&` or `>&` redirection, which is spelled with no space.
+//
+// Measured through `type`, which is the only place any shell in the panel
+// shows a function body back, and so the only oracle a printer has at all.
+// Two things bash does there that the general shape above does not.
+//
+// It writes the operator tight against its target, whatever the target is:
+// `>&$fd` and `>&/dev/null` come back exactly as tight as `2>&1`. The space
+// the other operators take is there because `< <(cmd)` written without one
+// is `<<`, a different construct — and no dup target can begin an operator,
+// so the hazard the space guards against does not arise here.
+//
+// And it writes out the descriptor being redirected: `>&2` comes back as
+// `1>&2` and `<&3` as `0<&3`. Only where the target is one it can read as a
+// descriptor now — an unquoted number, or the `-` that closes one. `>&"1"`
+// and `>&$fd` are settled when the command runs rather than when it is read,
+// and both come back written as they were.
+func (p *printer) dup(rd *Redirect) {
+	op := rd.Op
+	// A close is written the same way whichever operator asked for it, which
+	// is the one case where the operator itself changes: `<&-` comes back as
+	// `0>&-`. Measured rather than reasoned — it is a normalization, and
+	// both spellings close the same descriptor.
+	closing := explicitDupTarget(rd.Word) && rd.Word.Literal() == "-"
+	if closing {
+		op = TokGreatAmp
+	}
+	switch {
+	case rd.N != nil:
+		p.word(rd.N)
+	case !explicitDupTarget(rd.Word):
+	case rd.Op == TokLessAmp:
+		// The descriptor is the one the operator as *written* names, even
+		// where the operator itself is about to be normalized: `<&-` comes
+		// back as `0>&-` and not as `1>&-`.
+		p.str("0")
+	default:
+		p.str("1")
+	}
+	p.str(op.String())
+	p.word(rd.Word)
+}
+
+// explicitDupTarget reports whether a dup names a descriptor the reader can
+// resolve, which is what decides whether the source descriptor is written
+// out. A quoted number does not count: quoting is what tells the two apart.
+func explicitDupTarget(w *Word) bool {
+	if w == nil || w.IsQuoted() {
+		return false
+	}
+	lit := w.Literal()
+	if lit == "-" {
+		return true
+	}
+	if lit == "" {
+		return false
+	}
+	for i := 0; i < len(lit); i++ {
+		if lit[i] < '0' || lit[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // flushHeredocs writes the bodies queued by the statement just printed.

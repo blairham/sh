@@ -148,4 +148,18 @@ const (
 	// short and long. bash draws 5.3 for one and 5.3.15 for the other.
 	FieldVersion
 	FieldVersionFull
+	// FieldHistoryNumber is the number the line about to be typed will have
+	// in the history, and FieldCommandNumber is how many commands this
+	// session has run. They look alike and are not: measured with three
+	// lines already in the history file, bash drew 4 for the first and 1 for
+	// the second, because the history carries over between sessions and the
+	// count of commands does not.
+	FieldHistoryNumber
+	FieldCommandNumber
+	// FieldJobCount is how many jobs the shell is looking after — 0 before a
+	// background command and 1 after it, until it is reaped.
+	FieldJobCount
+	// FieldTerminalName is the terminal's name without its directory:
+	// `ttys013` rather than `/dev/ttys013`.
+	FieldTerminalName
 )

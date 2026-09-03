@@ -105,6 +105,14 @@ func (s Shell) field(f PromptField) string {
 		return s.Style.Version
 	case FieldVersionFull:
 		return s.Style.VersionFull
+	case FieldHistoryNumber:
+		return itoa(s.counted().history + 1)
+	case FieldCommandNumber:
+		return itoa(s.counted().command + 1)
+	case FieldJobCount:
+		return itoa(s.liveJobs())
+	case FieldTerminalName:
+		return terminalName(s.In)
 	case FieldTime24:
 		return s.now().Format("15:04:05")
 	case FieldTime12:
@@ -199,4 +207,42 @@ func (s Shell) now() time.Time {
 		return s.Clock()
 	}
 	return time.Now()
+}
+
+// counted is the pair of running totals a prompt can draw, and is never nil
+// so that a Shell used without either loop still draws something.
+func (s Shell) counted() *counts {
+	if s.counts == nil {
+		return &counts{}
+	}
+	return s.counts
+}
+
+// liveJobs is how many jobs the shell is still looking after.
+//
+// A finished job is not one: it stays in the table until its notice has been
+// given, and counting it would say there is something running for exactly as
+// long as it takes to say that there is not.
+func (s Shell) liveJobs() int {
+	if s.Runner == nil {
+		return 0
+	}
+	n := 0
+	for _, j := range s.Runner.Jobs() {
+		if !j.Finished() {
+			n++
+		}
+	}
+	return n
+}
+
+// counts are the two running totals, held by pointer because the prompt is
+// drawn from a Shell taken by value and these change under it.
+type counts struct {
+	// history is how many lines are behind the one about to be typed,
+	// including those that came from the history file — the numbering
+	// carries across sessions, which is what makes it a *history* number.
+	history int
+	// command is how many commands this session has run, which does not.
+	command int
 }

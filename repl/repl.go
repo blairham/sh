@@ -52,6 +52,10 @@ type Shell struct {
 	// Clock is what a prompt with the time in it reads. Nil is the real one.
 	Clock func() time.Time
 
+	// counts are the running totals a prompt can draw. Set by the loops,
+	// which are the only things that know a line has been accepted.
+	counts *counts
+
 	// Name is what the shell calls itself, for a prompt that draws it —
 	// bash's `\s`. Empty draws nothing, which is what a caller that has not
 	// said gets.
@@ -105,6 +109,10 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	hist := s.historyFile()
 	ed.history = hist.load()
 	loaded := len(ed.history)
+	// A history number carries across sessions and a command number does
+	// not, so one of these starts where the file left off and the other at
+	// nothing.
+	s.counts = &counts{history: loaded}
 	defer func() {
 		if err := hist.save(ed.history[min(loaded, len(ed.history)):]); err != nil {
 			s.errf("%v\n", err)
@@ -125,13 +133,29 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		case err != nil:
 			return s.status(), err
 		}
+		// Counted here rather than per line read. A construct typed over
+		// four lines is one entry in the history and one command, which is
+		// what bash draws: `: x`, a for loop, `: y` numbered 1, 2, 3 and not
+		// 1, 5, 6. accept already keeps the history that way — it remembers
+		// the whole accumulated text as one line — and only the numbering
+		// disagreed with it.
+		blank := strings.TrimSpace(pending.String()+line) == ""
 		stmts, perr, ready := s.accept(&pending, ed.remember, line)
 		if !ready {
 			continue
 		}
+		if !blank {
+			s.counts.history++
+		}
 		if perr != nil {
+			// Remembered but not run, and the two numbers say so: measured,
+			// bash draws `!3 #2` at the prompt after a line that would not
+			// parse.
 			s.errf("%s", s.report(perr))
 			continue
+		}
+		if !blank {
+			s.counts.command++
 		}
 		done := s.run(ctx, state, stmts)
 		if sig.took() {
@@ -227,6 +251,9 @@ func (s Shell) reportFinishedJobs(continuing bool) {
 // output of `sh -i < script > out` is the commands' output and nothing else.
 func (s Shell) runPlain(ctx context.Context) (int, error) {
 	in := bufio.NewReader(s.In)
+	// No editor here and so no history file, but the prompt is the same
+	// prompt and may still draw the numbers.
+	s.counts = &counts{}
 	var pending strings.Builder
 	for {
 		s.errf("%s", s.beforeReading(&pending))
@@ -240,6 +267,7 @@ func (s Shell) runPlain(ctx context.Context) (int, error) {
 		}
 		line = strings.TrimSuffix(line, "\n")
 
+		blank := strings.TrimSpace(pending.String()+line) == ""
 		stmts, perr, ready := s.accept(&pending, nil, line)
 		if !ready {
 			// Nothing to run yet. accept returns no statements and no error
@@ -248,9 +276,15 @@ func (s Shell) runPlain(ctx context.Context) (int, error) {
 			// asserted in TestAcceptReturnsNothingUntilTheConstructIsDone.
 			continue
 		}
+		if !blank {
+			s.counts.history++
+		}
 		if perr != nil {
 			s.errf("%s", s.report(perr))
 			continue
+		}
+		if !blank {
+			s.counts.command++
 		}
 		if s.runStmts(ctx, stmts) {
 			return s.status(), nil

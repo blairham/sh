@@ -1184,6 +1184,12 @@ echo "st=$?"`,
 		Why: "three answers about which line a failed open is reported at, and they only differ when the redirect is not on the line its command began on. bash names the redirect's own line, dash and zsh name the line the command opened on, and ksh93 names the line before the redirect's — the same one-off in a loop, a brace group and a backslash continuation alike. Found on an installed script that opens a `while read` on line 5 and redirects it on line 11",
 	},
 	{
+		ID: "redir/failure-line-across-a-continuation", Category: "redirection",
+		LayoutSensitive: true,
+		Snippet:         "echo one\ncat \\\n< nosuchfile\necho \"st=$?\"",
+		Why:             "a simple command split by a backslash, with its redirect two physical lines below the command word. All four name the command's line, which is what shows that this axis only ever answers about a *compound* command — and reading the redirect's own position here gave bash the wrong line",
+	},
+	{
 		ID: "redir/failure-line-for-a-compound-on-one-line", Category: "redirection",
 		LayoutSensitive: true,
 		Snippet: `echo one

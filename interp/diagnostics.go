@@ -1401,21 +1401,21 @@ type RedirectLine uint8
 
 const (
 	// LineOfCommand is the line the command began on, which is where every
-	// other diagnostic about it is reported. dash and zsh.
-	LineOfCommand RedirectLine = iota
-	// LineOfRedirect is the line the redirect itself is written on. bash.
-	LineOfRedirect
-	// LineBeforeRedirect is the line before that. ksh93, in every shape
-	// measured.
-	LineBeforeRedirect
-	// LineBeforeRedirectWhenCompound names the line before the redirect's for
-	// a compound command and the command's own line for a simple one.
+	// other diagnostic about it is reported. dash and zsh, always.
 	//
-	// ksh93, and it took thirteen measurements to separate from
-	// LineBeforeRedirect: a simple `cat < missing` on line 2 says line 2, a
-	// continuation with `cat` on 3 and `< missing` on 4 says 3, and a `while`
-	// loop whose `done < missing` is on line 5 says 4. A one-line loop on
-	// line 2 says line 1 — which prints no line at all there, and is what
-	// made the simple case look like the compound one.
-	LineBeforeRedirectWhenCompound
+	// It is also what every dialect does for a *simple* command, so this axis
+	// only ever answers about a compound one. That took a command split by
+	// backslash continuations to see: with `cat` on line 2 and its
+	// `< missing` two lines below, all four name line 2, and reading the
+	// redirect's own position there gave bash line 4.
+	LineOfCommand RedirectLine = iota
+	// LineOfRedirect is the redirect's own line, and applies to a compound
+	// command: bash, whose `done < missing` on line 5 says 5 where the loop
+	// opened on line 2.
+	LineOfRedirect
+	// LineBeforeRedirect is the line before that, and also applies to a
+	// compound command: ksh93, which says 4 for that same loop — and says
+	// line 1 for a compound written entirely on line 2, which prints no line
+	// at all there.
+	LineBeforeRedirect
 )

@@ -1676,6 +1676,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `read/a-failing-read-still-assigns` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` |
 | `read/a-final-line-without-a-newline` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` |
 | `read/an-unterminated-last-line-is-dropped` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` |
+| `set/a-name-only-one-shell-has` | `<shell>: 1: set: Illegal option -o posix` *(status 2)* | `st=0` | `st=0` | `st=0` | `<shell>: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | `<shell>:set:1: no such option: posix` *(status 1)* |
+| `set/allexport-marks-what-follows` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` |
 | `cd/keeps-or-resolves-the-name-it-was-given` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` |
 | `cd/which-path-option-decides` | `PL kept~LP resolved` | `PL kept~LP resolved` | `PL kept~LP resolved` | `PL kept~LP resolved` | `PL kept~LP resolved` | `PL resolved~LP resolved` |
 | `type/a-function-and-its-body` | `f is a shell function` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function` | `f is a shell function from zsh` |
@@ -1715,6 +1717,19 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `read/an-unterminated-last-line-is-dropped` — the consequence of the status above, and the reason it is worth pinning rather than fixing: a file whose last line has no newline loses that line in every shell there is. Returning 0 instead would run it twice — once as the line, once as the empty read after it
   ```sh
   printf 'a\nb' | while read -r l; do printf "<%s>" "$l"; done; echo
+  ```
+- `set/a-name-only-one-shell-has` — which long option names a shell has is not one list: fourteen are unanimous and the rest belong to one, two or three of the panel. `posix` belongs to one, and the other three refuse it — each in its own words and with its own status. Turning it *off* is the direction that matters, because it is what the thirteenth line of Homebrew's own script does and what a shell without a posix mode can honestly grant
+  ```sh
+  set +o posix; echo "st=$?"
+  ```
+- `set/allexport-marks-what-follows` — an assignment is not an export until something says so, and `set -a` is the something. Unanimous both ways, and the second half is what makes it evidence: turning it off again has to stop it, or a shell that exported everything always would pass the first half
+  ```sh
+  set -a
+  FOO=bar
+  /bin/sh -c 'echo [$FOO]'
+  set +a
+  BAR=two
+  /bin/sh -c 'echo [$BAR]'
   ```
 - `cd/keeps-or-resolves-the-name-it-was-given` — the two names a directory has — the one it was reached by and the one it is at — and `cd` is where a shell chooses between them. Unanimous. The paths themselves are never printed because they are this machine's; what is compared is which of the two came back
   ```sh

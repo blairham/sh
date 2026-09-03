@@ -137,6 +137,7 @@ func Semantics() interp.Semantics {
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.CdRefusesUnknownOption = interp.Yes
 	s.CdLastPathOptionWins = interp.Yes
+	s.BadSetOptionNameFatal = interp.No
 
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.Yes
@@ -309,6 +310,23 @@ func Diagnostics() interp.Diagnostics {
 // "not found" there. It is the same function under a second name rather than a
 // second implementation, which is the only way the two cannot drift apart.
 func Apply(r *interp.Runner) {
+	// The `set -o` names this shell has and the others do not all have,
+	// measured by asking each of the four to turn every name off. This one
+	// has the most, and five of them belong to it alone.
+	r.AddSetOptions(
+		"braceexpand",
+		"errtrace",
+		"functrace",
+		"hashall",
+		"histexpand",
+		"history",
+		"interactive-comments",
+		"keyword",
+		"onecmd",
+		"physical",
+		"posix",
+		"privileged",
+	)
 	// The statuses of the last pipeline's elements. The core keeps the
 	// record and this names it; ksh93 and dash have no name for it at all.
 	r.SetPipelineStatus("PIPESTATUS")

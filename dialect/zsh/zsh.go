@@ -148,6 +148,7 @@ func Semantics() interp.Semantics {
 	s.ReportsACommandKilledBySignal = interp.No
 	s.CdRefusesUnknownOption = interp.No
 	s.CdLastPathOptionWins = interp.No
+	s.BadSetOptionNameFatal = interp.Yes
 
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.No
@@ -172,6 +173,10 @@ func Diagnostics() interp.Diagnostics {
 		// lower case in an 11-wide column. zsh never lists a finished job,
 		// so it needs no word for one.
 		JobLine: "[%[1]d]  %[2]s %-11[3]s%[4]s",
+		// The builtin's name is in the location here rather than in the
+		// sentence, which is this shell's rule for every message.
+		SetInvalidOptionName:       "no such option: %[1]s",
+		SetInvalidOptionNameStatus: 1,
 		// zsh knows `-f` — it means functions to its own typeset — so what
 		// it refuses is the combination, and it says so without naming the
 		// letter it names in every other refusal.
@@ -317,6 +322,15 @@ func Diagnostics() interp.Diagnostics {
 // is a dialect's answer, and it is the same function under a second name
 // rather than a second implementation.
 func Apply(r *interp.Runner) {
+	// The `set -o` names beyond the ones every shell has.
+	r.AddSetOptions(
+		"braceexpand",
+		"hashall",
+		"histexpand",
+		"onecmd",
+		"physical",
+		"privileged",
+	)
 	// The statuses of the last pipeline's elements. The core keeps the
 	// record and this names it; ksh93 and dash have no name for it at all.
 	r.SetPipelineStatus("pipestatus")

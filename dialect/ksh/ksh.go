@@ -142,6 +142,7 @@ func Semantics() interp.Semantics {
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.CdRefusesUnknownOption = interp.Yes
 	s.CdLastPathOptionWins = interp.Yes
+	s.BadSetOptionNameFatal = interp.Yes
 
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.No
@@ -177,11 +178,12 @@ func Diagnostics() interp.Diagnostics {
 		// The process id and the words, with a colon between them and no
 		// command after: this shell names the line and the process but does
 		// not say back what was running.
-		KilledCommandNotice: "%[1]d: %[2]s",
-		SignalDescriptions:  signalDescriptions(),
-		JobRunning:          " Running",
-		JobStopped:          "Stopped",
-		JobUnknownCommand:   "<command unknown>",
+		KilledCommandNotice:  "%[1]d: %[2]s",
+		SetInvalidOptionName: "set: %[1]s: bad option(s)",
+		SignalDescriptions:   signalDescriptions(),
+		JobRunning:           " Running",
+		JobStopped:           "Stopped",
+		JobUnknownCommand:    "<command unknown>",
 		// ksh93 lists a job that has already ended as "Running", and it is
 		// not a reaping race — it still says so after `wait`. Recorded as
 		// the word ksh uses rather than corrected, which would be inventing
@@ -286,6 +288,7 @@ func Diagnostics() interp.Diagnostics {
 		BuiltinBadNameKeepsValue: true,
 		BuiltinUsageUnprefixed:   true,
 		BuiltinUsage: map[string]string{
+			"set":      "Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
 			"export":   "Usage: export [-p] [name[=value]...]",
 			"readonly": "Usage: readonly [-p] [name[=value]...]",
 			"unset":    "Usage: unset [-nfv] name...",
@@ -337,6 +340,13 @@ func Diagnostics() interp.Diagnostics {
 // not, which makes the name a dialect's answer. It is the same function under
 // a second name rather than a second implementation.
 func Apply(r *interp.Runner) {
+	// The `set -o` names beyond the ones every shell has.
+	r.AddSetOptions(
+		"braceexpand",
+		"histexpand",
+		"keyword",
+		"privileged",
+	)
 	// ksh93 has a `builtin` of its own and it is a different command: it
 	// *registers* builtins rather than running one, so `builtin echo hi`
 	// there looks for a builtin called `hi`. Measured and not built, and

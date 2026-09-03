@@ -318,6 +318,14 @@ type Runner struct {
 	// Real shells report the line of the command that failed, so this is
 	// updated per statement rather than per token.
 	line int
+	// setOptionStatus is what the last refused `set -o` name reports, which
+	// is one of the four dialects' answers rather than a constant.
+	setOptionStatus int
+	// allexport marks every assignment for the environment: `set -a`.
+	allexport bool
+	// extraOptions are the `set -o` names this dialect has beyond the ones
+	// every shell has. Declared through AddSetOptions; see setoptions.go.
+	extraOptions map[string]bool
 	// lineBase is how far into the script the input being run starts.
 	//
 	// A command substitution's body is parsed on its own, so its positions
@@ -1484,6 +1492,14 @@ func (r *Runner) assign(a *syntax.Assign) {
 			value = old + value
 		}
 		r.setVar(a.Name, value)
+		if r.allexport {
+			// `set -a`: an assignment marks the name for the environment as
+			// well as setting it.
+			if r.exported == nil {
+				r.exported = map[string]bool{}
+			}
+			r.exported[a.Name] = true
+		}
 		// A scalar assignment replaces any array of the same name.
 		delete(r.Arrays, a.Name)
 	}

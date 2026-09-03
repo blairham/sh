@@ -139,7 +139,7 @@ func biSet(r *Runner, _ context.Context, args []string) int {
 			}
 			i++
 			if !r.setOption(args[i], on) {
-				return 2
+				return r.setOptionFailure()
 			}
 			continue
 		}
@@ -169,6 +169,9 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 			r.noclobber = on
 		case 'e':
 			r.errexit = on
+		case 'a':
+			// The letter for allexport, which POSIX gives and all four have.
+			r.allexport = on
 		case 'u':
 			r.nounset = on
 		case 'x':
@@ -194,20 +197,36 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 // The names are the same in every shell in the panel, which is what makes the
 // long form the one that needs no dialect: `set -o noglob` means the same
 // thing in all four where `set -f` does not.
+// badSetOptionName reports a long option name this shell does not have.
+//
+// The same shape as a bad option letter, and for the same reason: one of the
+// panel follows it with a usage line, one puts the builtin's name in the
+// location rather than in the sentence, and one answers 1 where the rest
+// answer 2.
+func (r *Runner) badSetOptionName(name string) bool {
+	d := r.diag()
+	r.diagf("%s\n", Wording(d.SetInvalidOptionName, "set: %[1]s: invalid option name", name))
+	if usage := d.BuiltinUsage["set"]; usage != "" {
+		if d.BuiltinUsageUnprefixed {
+			r.errf("%s\n", usage)
+		} else {
+			r.diagf("%s\n", usage)
+		}
+	}
+	status := orDefault(d.SetInvalidOptionNameStatus, 2)
+	r.setOptionStatus = status
+	if r.ask(r.sem().BadSetOptionNameFatal, "an unknown `set -o` name ending the script") {
+		r.status = status
+		r.fatalQuiet()
+	}
+	return false
+}
+
 func (r *Runner) setOption(name string, on bool) bool {
-	switch name {
-	case "errexit":
-		r.errexit = on
-	case "nounset":
-		r.nounset = on
-	case "xtrace":
-		r.xtrace = on
-	case "noclobber":
-		r.noclobber = on
-	case "noglob":
-		r.noglob = on
-	case "pipefail":
-		// The one name here that is not unanimous.
+	if name == "pipefail" {
+		// The one name with an axis of its own, because whether the shell
+		// has it was settled before this table existed and the answer is
+		// the same question in a different shape.
 		if r.ask(r.sem().PipefailOption, "`set -o pipefail`") {
 			r.pipefail = on
 			return true
@@ -217,14 +236,28 @@ func (r *Runner) setOption(name string, on bool) bool {
 			// same word would only obscure it.
 			return true
 		}
-		// A definite no: the name is not an option in this dialect, and is
-		// reported exactly as any other name this shell does not have.
-		fallthrough
-	default:
-		r.diagf("set: %s: invalid option name\n", name)
-		return false
+		return r.badSetOptionName(name)
 	}
-	return true
+	o, ok := r.lookupSetOption(name)
+	if !ok {
+		return r.badSetOptionName(name)
+	}
+	if o.apply != nil {
+		o.apply(r, on)
+		return true
+	}
+	if on == o.on {
+		// Already where it is being asked to be, so the request has been
+		// granted. This is what makes `set +o posix` work in a shell with no
+		// posix mode, rather than stopping a script over a state it already
+		// had.
+		return true
+	}
+	// A name this shell has and does not do. Refused out loud rather than
+	// accepted quietly, because accepting would be promising to behave
+	// differently afterwards.
+	r.diagf("set: %s: not implemented\n", name)
+	return false
 }
 
 func biUnset(r *Runner, _ context.Context, args []string) int {

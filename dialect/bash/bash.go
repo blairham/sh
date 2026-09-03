@@ -15,6 +15,9 @@ import (
 // Dialect is what bash 5 parses.
 func Dialect() syntax.Dialect {
 	d := syntax.Core()
+	// bash expands them interactively and needs `shopt -s expand_aliases`
+	// otherwise, which is not modeled yet.
+	d.ExpandAliases = false
 	d.CaseContinue = true
 	d.ParamCaseChange = true
 	d.ParamIndirection = true

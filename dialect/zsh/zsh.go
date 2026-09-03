@@ -15,6 +15,8 @@ import (
 // Dialect is what zsh parses.
 func Dialect() syntax.Dialect {
 	d := syntax.Core()
+	// zsh does not expand under `-c` even with the option set.
+	d.ExpandAliases = false
 	d.FunctionKeywordParens = true
 	// `}` is reserved wherever a word may stand here, which is what lets a
 	// brace group close without a terminator — and what makes `echo }` a

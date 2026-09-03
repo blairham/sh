@@ -125,6 +125,17 @@ type Dialect struct {
 	// the core.
 	ParamCaseChange bool
 
+	// ExpandAliases expands an alias in a *non-interactive* shell. True in
+	// dash and ksh93; bash needs `shopt -s expand_aliases` and zsh does not
+	// expand under `-c` at all. All four expand interactively, which is the
+	// front end's to know rather than this — it is what decides there is a
+	// person at the keyboard.
+	//
+	// Whether a word *is* expanded, and into what, is not a dialect question:
+	// every shell that expands agrees on the whole algorithm, so that is the
+	// core's behavior and lives in alias.go.
+	ExpandAliases bool
+
 	// ParamIndirection enables `${!x}` to *parse*. bash and ksh93 accept it;
 	// dash and zsh reject it outright.
 	//

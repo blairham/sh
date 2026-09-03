@@ -13,6 +13,8 @@ import (
 func Dialect() syntax.Dialect {
 	// dash is the POSIX shell language and nothing more.
 	d := syntax.POSIX()
+	// dash expands aliases in a script, with no option to turn on.
+	d.ExpandAliases = true
 	// Not a construct it adds but how it reads one it already has: a name
 	// followed by `(` is a function definition here, whether or not the `)`
 	// comes next, which is what decides the token a malformed one is blamed

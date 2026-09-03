@@ -2757,6 +2757,48 @@ echo after`,
 	},
 	// --- alias: the table and the two builtins -------------------------
 	{
+		ID: "alias/expands-a-command-word", Category: "alias",
+		Snippet: `alias a='echo hit'
+a`,
+		Why: "the headline of the expansion half. dash and ksh93 expand in a script; bash needs `shopt -s expand_aliases` and zsh will not under -c at all, so this is `hit` in two of the four and a command not found in the other two",
+	},
+	{
+		ID: "alias/an-alias-may-hold-a-keyword", Category: "alias",
+		// Does not parse under the bash dialect, and that is the point: bash
+		// does not expand in a script, so `iff` stays a word and the `fi`
+		// after it has nothing to close. Real bash says so too, which is what
+		// the case records.
+		SyntaxError: true,
+		Snippet: `alias iff='if true; then'
+iff echo yes; fi`,
+		Why: "the reason expansion belongs in the parser rather than in command lookup: the body supplies the `if` and the `then` that the grammar then reads. Nothing substituting at execution time can do this, because the shape of the command is settled by then",
+	},
+	{
+		ID: "alias/a-trailing-space-carries-on", Category: "alias",
+		Snippet: `alias a='echo ' b=BEE
+a b`,
+		Why: "a value ending in a space makes the *next* word eligible too, which is the rule behind `alias sudo='sudo '`. The space makes the word after the value eligible and not the value's own second word",
+	},
+	{
+		ID: "alias/a-self-reference-does-not-loop", Category: "alias",
+		Snippet: `alias echo='echo x'
+echo hi`,
+		Why: "an alias is not expanded twice in one command, which is what stops `alias echo='echo x'` from recurring forever — the second `echo` is an ordinary word and runs the builtin",
+	},
+	{
+		ID: "alias/not-on-the-line-that-defines-it", Category: "alias",
+		Snippet: `alias a='echo hit'; a
+echo "st=$?"`,
+		Why: "expansion happens when a line is *read*, and the whole line was read before the `alias` ran — so this is a command not found in every shell, including the two that expand",
+	},
+	{
+		ID: "alias/a-diagnostic-names-the-use-site", Category: "alias",
+		LayoutSensitive: true,
+		Snippet: `alias bad='nosuchcmd'
+bad`,
+		Why: "a command that came from an alias is reported at the line the *alias word* was written on, never a line inside the body. That is what makes a token-level splice honest: every position still points into the real input",
+	},
+	{
 		ID: "alias/defines-and-lists-one", Category: "alias",
 		Snippet: `alias a='echo x'; alias a`,
 		Why:     "the shape of a listing, and it is not unanimous: bash writes `alias ` in front so the line reads back as a command, and the other three write only the assignment",

@@ -1621,6 +1621,15 @@ echo "st=$?"`,
 		Why:     "`readonly` has to set the array before it locks the name, because locking first refuses the very assignment the command was given — the opposite order from `local`, which must make the name local before the array lands",
 	},
 	{
+		ID: "diag/a-command-after-an-operator", Category: "diagnostics",
+		LayoutSensitive: true,
+		Snippet: `echo one
+false ||
+nosuchcmd
+echo "st=$?"`,
+		Why: "a command written after `&&`, `||` or `|` at the end of a line is reported at its own line, not at the one the chain began on. Unanimous, so it is the core's behavior — and it was off by however many lines the chain had run for, which in a long `&&` chain is every line of it",
+	},
+	{
 		ID: "trap/a-bare-exit-in-an-exit-trap", Category: "traps",
 		Snippet: `trap "false; exit" 0; true
 echo unreachable`,

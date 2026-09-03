@@ -15,6 +15,12 @@ import (
 // It returns an exit status. Writing to r.Stdout and r.Stderr rather than to
 // the process's own streams is what makes it work inside a pipeline and under
 // a redirection, because those are what the runner points at the right place.
+//
+// args are the operands, without the name the command was called by. `greet a
+// b` gives {"a", "b"} and not {"greet", "a", "b"} — the same shape the
+// builtins in this package are written against, where args[0] is the first
+// thing after the name. Said here because guessing it the other way costs a
+// silently dropped argument rather than a compile error.
 type Builtin func(r *Runner, ctx context.Context, args []string) int
 
 // Register adds a builtin, replacing any of the same name.

@@ -47,6 +47,10 @@ func PromptStyle() repl.PromptStyle {
 			'd':  repl.FieldDate,
 			'v':  repl.FieldVersion,
 			'V':  repl.FieldVersionFull,
+			'!':  repl.FieldHistoryNumber,
+			'#':  repl.FieldCommandNumber,
+			'j':  repl.FieldJobCount,
+			'l':  repl.FieldTerminalName,
 			'\\': repl.FieldEscape,
 		},
 		// `\q` draws `\q`.

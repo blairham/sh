@@ -138,3 +138,55 @@ func TestAnOperandIsNotAPrefixAssignment(t *testing.T) {
 		})
 	}
 }
+
+// A `-` or `+` keeps the fields of whatever it came to, which is the whole
+// point of `"${a[@]+${a[@]}}"` — the standard way to expand a possibly-empty
+// array under `set -u` without collapsing it into one string.
+//
+// Reachable only once the parser stopped ending a subscript at the last `]` in
+// the word; before that this was a syntax error, so the joining went unseen.
+func TestASubstitutedWordKeepsItsFields(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		// The word is what it came to, and the word has fields of its own.
+		{"alternate, nested", `a=(x y); printf "[%s]" "${a[@]+${a[@]}}"`, "[x][y]"},
+		{"default, unset, nested", `b=(p q); printf "[%s]" "${n[@]-${b[@]}}"`, "[p][q]"},
+		// The *parameter* is what it came to, and it keeps its fields too.
+		{"default, set", `a=(x y); printf "[%s]" "${a[@]-${a[@]}}"`, "[x][y]"},
+		// A literal is one field however many words are in it, because
+		// nothing split it.
+		{"a literal stays one field", `a=(x); printf "[%s]" "${a[@]+p q}"`, "[p q]"},
+		{"one word is one field", `a=(x y); printf "[%s]" "${a[@]+Z}"`, "[Z]"},
+		// The parameter's own shape does not decide it: the fields come from
+		// the *word*, so a numeric subscript and a plain name get them too.
+		{"a numeric subscript, nested", `a=(x); b=(p q); printf "[%s]" "${a[0]+${b[@]}}"`, "[p][q]"},
+		{"a plain name, nested", `x=1; b=(p q); printf "[%s]" "${x+${b[@]}}"`, "[p][q]"},
+		// And a literal after either is still one field, for the same reason
+		// it is after `[@]` — nothing split it.
+		{"a numeric subscript, literal", `a=(x); printf "[%s]" "${a[0]+p q}"`, "[p q]"},
+		{"a plain name, literal", `x=1; printf "[%s]" "${x+p q}"`, "[p q]"},
+		// The colon extends the test and changes nothing about the fields.
+		{"with a colon", `a=(x y); printf "[%s]" "${a[@]:+${a[@]}}"`, "[x][y]"},
+		// Nothing to substitute is no field at all rather than an empty one.
+		{"unset yields nothing", `printf "[%s]" "${n[@]+${n[@]}}"`, "[]"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _ := run(t, c.src, nil)
+			if strings.TrimSpace(out) != c.want {
+				t.Errorf("said %q, want %q", strings.TrimSpace(out), c.want)
+			}
+		})
+	}
+	// And the fields are real ones: they arrive as separate arguments and as
+	// separate elements, which is what a joined string would silently break.
+	for _, c := range []struct{ name, src, want string }{
+		{"as arguments", `a=(x y); f(){ echo $#; }; f "${a[@]+${a[@]}}"`, "2"},
+		{"as array elements", `a=(x y); b=("${a[@]+${a[@]}}"); echo "${#b[@]}"`, "2"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _ := run(t, c.src, nil)
+			if strings.TrimSpace(out) != c.want {
+				t.Errorf("said %q, want %q", strings.TrimSpace(out), c.want)
+			}
+		})
+	}
+}

@@ -1621,6 +1621,11 @@ echo "st=$?"`,
 		Why:     "`readonly` has to set the array before it locks the name, because locking first refuses the very assignment the command was given — the opposite order from `local`, which must make the name local before the array lands",
 	},
 	{
+		ID: "param/an-expansion-inside-an-operand", Category: "parameter expansion",
+		Snippet: `a=(x y); printf "[%s]" "${a[@]+${a[@]}}"`,
+		Why:     "the standard way to expand a possibly-empty array under `set -u`, and where the wild sweep found that a subscript was ending at the *last* `]` in the word rather than its own — so the inner expansion's bracket closed the outer's subscript and the operator after it was unreadable. The simple `${a[@]+x}` always worked, which is why a real script had to find it",
+	},
+	{
 		ID: "param/array-indices", Category: "parameter expansion",
 		Snippet: `a=(p q r); for i in "${!a[@]}"; do printf "%s=%s " "$i" "${a[$i]}"; done`,
 		Why:     "`${!a[@]}` is the array's subscripts, not its elements — written as the loop that uses it, since iterating an array by index is the only reason the form exists and answering with the elements made that loop silently iterate the wrong thing",

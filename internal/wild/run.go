@@ -58,9 +58,12 @@ func (r RunResult) Match() bool {
 
 // RunReport is a whole run sweep.
 type RunReport struct {
-	Ran        int
-	Agreed     int
-	Timedout   int
+	Ran      int
+	Agreed   int
+	Timedout int
+	// Unstable counts scripts that do not produce the same thing twice, and
+	// so are not evidence about either shell.
+	Unstable   int
 	Mismatches []RunResult
 }
 
@@ -92,6 +95,24 @@ func RunSweep(ctx context.Context, paths []string, ours, reference string, timeo
 				rep.Agreed++
 				continue
 			}
+			if !repeats(ctx, reference, path, args, timeout, res) {
+				// The script is not the same twice, so the two shells were
+				// never going to agree and this says nothing about either.
+				//
+				// A third of what this sweep reported was this: eleven
+				// scripts whose output is a log line carrying a timestamp
+				// and a process id, and six that are killed by the timeout
+				// and named the process that died. Every one of them
+				// disagreed with the reference for the same reason the
+				// reference disagrees with itself.
+				//
+				// Counted rather than dropped, because "we cannot tell"
+				// deserves its own number: a sweep that quietly ignored
+				// these would be hiding the same thing in the other
+				// direction.
+				rep.Unstable++
+				continue
+			}
 			rep.Mismatches = append(rep.Mismatches, res)
 		}
 	}
@@ -99,6 +120,19 @@ func RunSweep(ctx context.Context, paths []string, ours, reference string, timeo
 		return rep.Mismatches[i].Path < rep.Mismatches[j].Path
 	})
 	return rep
+}
+
+// repeats reports whether the reference shell produces the same run twice.
+//
+// Asked only where the two shells differed, which is the only place the
+// answer changes anything and keeps the cost to one extra run per difference
+// rather than one per script.
+func repeats(ctx context.Context, reference, path string, args []string, timeout time.Duration, res RunResult) bool {
+	again, timedOut := runOnce(ctx, reference, path, args, timeout)
+	if timedOut {
+		return false
+	}
+	return normalise(again.out, reference, path) == res.Theirs && again.status == res.TheirStatus
 }
 
 type outcome struct {

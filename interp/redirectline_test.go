@@ -141,3 +141,21 @@ func TestASimpleCommandMayBeReportedWhereItBegan(t *testing.T) {
 		t.Errorf("said %q, want a simple command reported where it began", got)
 	}
 }
+
+// The moved line belongs to the *opening* and not to what the command then
+// does. A compound command whose redirect succeeds still reports its body
+// where the body is written.
+//
+// The existing check uses a separate statement afterwards, which sets the line
+// itself and so cannot see a missing restore. This one has the diagnostic come
+// from *inside* the command whose redirect moved the line.
+func TestTheMovedLineDoesNotOutlastTheOpening(t *testing.T) {
+	// The redirect is on line 4 and succeeds; the failing command is on 3.
+	got := redirLine(t, LineOfRedirect, "echo one\n{\n  nosuchcommand\n} > /dev/null\n")
+	if !strings.Contains(got, ":3:") {
+		t.Errorf("said %q, want the body reported on its own line 3", got)
+	}
+	if strings.Contains(got, ":4:") {
+		t.Errorf("said %q, want the redirect's line not to outlive the opening", got)
+	}
+}

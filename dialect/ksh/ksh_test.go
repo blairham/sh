@@ -114,6 +114,13 @@ func TestDiagnostics(t *testing.T) {
 	if got, want := ksh.Diagnostics().SyntaxStatus(), 3; got != want {
 		t.Errorf("syntax-error status = %d, want %d", got, want)
 	}
+	// A compound command's failed open is reported at the line *before* the
+	// redirect's: the same loop bash reports at 5 is 4 here, and a compound
+	// written entirely on line 2 is line 1 — which this dialect prints as no
+	// line at all.
+	if got, want := ksh.Diagnostics().RedirectFailureLine, interp.LineBeforeRedirect; got != want {
+		t.Errorf("RedirectFailureLine = %v, want %v", got, want)
+	}
 }
 
 // TestDerivesFromTheStandardNotFromASibling is the property the package

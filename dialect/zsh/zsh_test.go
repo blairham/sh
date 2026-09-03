@@ -106,6 +106,10 @@ func TestDiagnostics(t *testing.T) {
 	if got, want := zsh.Diagnostics().SyntaxStatus(), 1; got != want {
 		t.Errorf("syntax-error status = %d, want %d", got, want)
 	}
+	// The same answer dash gives: where the command began.
+	if got, want := zsh.Diagnostics().RedirectFailureLine, interp.LineOfCommand; got != want {
+		t.Errorf("RedirectFailureLine = %v, want %v", got, want)
+	}
 }
 
 // TestDerivesFromTheStandardNotFromASibling is the property the package

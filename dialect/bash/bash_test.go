@@ -100,6 +100,13 @@ func TestDiagnostics(t *testing.T) {
 	if got, want := bash.Diagnostics().SyntaxStatus(), 2; got != want {
 		t.Errorf("syntax-error status = %d, want %d", got, want)
 	}
+	// A compound command's failed open is reported at the redirect's own
+	// line here: a `while` loop opening on line 2 with `done < missing` on
+	// line 5 says 5. A *simple* command is the command's line in every
+	// dialect, so this answers only about the compound case.
+	if got, want := bash.Diagnostics().RedirectFailureLine, interp.LineOfRedirect; got != want {
+		t.Errorf("RedirectFailureLine = %v, want %v", got, want)
+	}
 }
 
 // TestDerivesFromTheStandardNotFromASibling is the property the package

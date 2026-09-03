@@ -29,17 +29,17 @@ func TestTheHistoryNumberAndTheCommandNumber(t *testing.T) {
 	}
 	// Both are the number the *next* line will have, so a prompt drawn
 	// before anything is typed says one more than has happened.
-	if got := s.escapes(`<!\! #\#>`); got != "<!4 #1>" {
+	if got := s.render(`<!\! #\#>`); got != "<!4 #1>" {
 		t.Errorf("drew %q, want <!4 #1>", got)
 	}
 	s.counts.history++
 	s.counts.command++
-	if got := s.escapes(`<!\! #\#>`); got != "<!5 #2>" {
+	if got := s.render(`<!\! #\#>`); got != "<!5 #2>" {
 		t.Errorf("drew %q, want <!5 #2>", got)
 	}
 	// Without either loop having run there is still a number to draw.
 	bare := Shell{Style: s.Style}
-	if got := bare.escapes(`<!\! #\#>`); got != "<!1 #1>" {
+	if got := bare.render(`<!\! #\#>`); got != "<!1 #1>" {
 		t.Errorf("drew %q, want <!1 #1>", got)
 	}
 }
@@ -161,12 +161,12 @@ func TestDrawingTheTerminalName(t *testing.T) {
 			Codes:  map[rune]PromptField{'l': FieldTerminalName},
 		},
 	}
-	if got := s.escapes(`<\l>`); got != "<null>" {
+	if got := s.render(`<\l>`); got != "<null>" {
 		t.Errorf("drew %q, want <null>", got)
 	}
 	// Asked once: the answer is kept for the session.
 	s.counts.tty = "changed"
-	if got := s.escapes(`<\l>`); got != "<changed>" {
+	if got := s.render(`<\l>`); got != "<changed>" {
 		t.Errorf("drew %q, want the kept answer", got)
 	}
 }

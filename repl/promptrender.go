@@ -19,17 +19,14 @@ import (
 // order also explains a thing that looks like a prompt feature and is not —
 // `\$` drawing a bare dollar in dash, which has no table at all, is what a
 // backslash does to a dollar during the expansion that follows.
-func (s Shell) escapes(text string) string {
-	return s.history(s.table(text))
-}
-
-// history reads the character that stands for the history number, in a pass
-// of its own after the table.
+// history reads the character that stands for the history number.
 //
-// After, because the order is measurable: ksh93 draws `\!` as the number,
-// which is its table dropping the backslash and this reading the `!` that was
-// left behind. Doing both in one pass would leave that `!` alone, since it
-// was written by the table rather than typed.
+// Last of the three passes, which is measurable rather than chosen. ksh93
+// draws `\!` as the number — its table drops the backslash and this reads the
+// `!` left behind, where one pass would have left it alone. And with `x='!'`
+// set, ksh93 draws `$x` as the number too, so this happens after expansion as
+// well: a `!` is read wherever it has come from, unlike a code in the table,
+// which is only read where it was typed.
 func (s Shell) history(text string) string {
 	if s.Style.History == 0 || text == "" {
 		return text

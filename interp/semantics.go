@@ -419,6 +419,17 @@ type Semantics struct {
 	// Only ever at a prompt: no shell announces one to a script.
 	AnnouncesBackgroundJob Answer
 
+	// ReportsACommandKilledBySignal says out loud that a signal ended a
+	// command, rather than leaving the status to carry it alone. True in
+	// bash, dash and ksh93; zsh says nothing — measured with a terminal as
+	// well as without one, so it is not the prompt-only rule that governs a
+	// background job's announcement.
+	//
+	// Not asked for the two signals nothing reports. ^C and a broken pipe
+	// are how a command is meant to end, and all four stay quiet about
+	// those, so there is no disagreement there to put to a dialect.
+	ReportsACommandKilledBySignal Answer
+
 	// JobsShowBackgroundCommand puts the command of a `&` job in a `jobs`
 	// listing. True in bash and zsh; dash prints an empty column there and
 	// ksh93 a placeholder.

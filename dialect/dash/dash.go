@@ -90,6 +90,7 @@ func Semantics() interp.Semantics {
 	// Whether `export -f` carries a function to a child.
 	s.ExportCarriesFunctions = interp.No
 	s.AnnouncesBackgroundJob = interp.No
+	s.ReportsACommandKilledBySignal = interp.Yes
 
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.No
@@ -116,8 +117,12 @@ func Diagnostics() interp.Diagnostics {
 		// The command column is empty for a `&` job because dash kept no
 		// text for one, which JobKeepsBackgroundCommand answers; a job dash
 		// stopped itself does print its command here.
-		JobLine:    "[%[1]d] %[2]s %-27[3]s%[4]s",
-		JobRunning: "Running",
+		JobLine: "[%[1]d] %[2]s %-27[3]s%[4]s",
+		// The words and nothing else — no process id, no command, and alone
+		// among this shell's messages, no name and no line in front of it.
+		KilledCommandNotice:           "%[2]s",
+		KilledCommandNoticeUnprefixed: true,
+		JobRunning:                    "Running",
 		// dash names the signal that stopped it rather than calling it
 		// stopped: `Suspended: 18`, where 18 is SIGTSTP.
 		JobStopped: "Suspended: %[1]d",

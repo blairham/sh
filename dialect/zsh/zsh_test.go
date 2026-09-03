@@ -88,6 +88,7 @@ func TestSemantics(t *testing.T) {
 		// Whether an unassigned subscript is an element.
 		{"ArraysAreSparse", s.ArraysAreSparse, interp.No},
 		{"AnnouncesBackgroundJob", s.AnnouncesBackgroundJob, interp.Yes},
+		{"ReportsACommandKilledBySignal", s.ReportsACommandKilledBySignal, interp.No},
 		// What `type` does: whether it follows the sentence with the
 		// function itself, and whether `--` ends its options.
 		{"TypePrintsFunctionBody", s.TypePrintsFunctionBody, interp.No},
@@ -477,5 +478,13 @@ func TestTheRefusalOfANonBuiltinNamesNoBuiltin(t *testing.T) {
 	}
 	if got := out.String(); !strings.Contains(got, ":shift:") {
 		t.Errorf("got %q, want the speaking builtin named", got)
+	}
+}
+
+// This shell says nothing at all about a signal that ended a command, so it
+// has no wording for one.
+func TestAKilledCommandIsNotSaidAtAll(t *testing.T) {
+	if got := zsh.Diagnostics().KilledCommandNotice; got != "" {
+		t.Errorf("KilledCommandNotice = %q, want nothing — this shell stays quiet", got)
 	}
 }

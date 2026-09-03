@@ -139,6 +139,7 @@ func Semantics() interp.Semantics {
 	s.ArraysAreSparse = interp.Yes
 	s.ExportCarriesFunctions = interp.No
 	s.AnnouncesBackgroundJob = interp.Yes
+	s.ReportsACommandKilledBySignal = interp.Yes
 
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.No
@@ -170,10 +171,15 @@ func Diagnostics() interp.Diagnostics {
 		// running one is ksh's own: a stopped job's `Stopped` starts a
 		// column earlier than a running job's `Running`, and the two lines
 		// end in the same place.
-		JobLine:           "[%[1]d] %[2]s %-25[3]s%[4]s",
-		JobRunning:        " Running",
-		JobStopped:        "Stopped",
-		JobUnknownCommand: "<command unknown>",
+		JobLine: "[%[1]d] %[2]s %-25[3]s%[4]s",
+		// The process id and the words, with a colon between them and no
+		// command after: this shell names the line and the process but does
+		// not say back what was running.
+		KilledCommandNotice: "%[1]d: %[2]s",
+		SignalDescriptions:  signalDescriptions(),
+		JobRunning:          " Running",
+		JobStopped:          "Stopped",
+		JobUnknownCommand:   "<command unknown>",
 		// ksh93 lists a job that has already ended as "Running", and it is
 		// not a reaping race — it still says so after `wait`. Recorded as
 		// the word ksh uses rather than corrected, which would be inventing

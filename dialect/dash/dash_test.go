@@ -119,6 +119,7 @@ func TestSemantics(t *testing.T) {
 		// has already ended appears in it at all. Both split the panel two
 		// and two, which is why both are fields.
 		{"AnnouncesBackgroundJob", s.AnnouncesBackgroundJob, interp.No},
+		{"ReportsACommandKilledBySignal", s.ReportsACommandKilledBySignal, interp.Yes},
 		// What `type` does: whether it follows the sentence with the
 		// function itself, and whether `--` ends its options.
 		{"TypePrintsFunctionBody", s.TypePrintsFunctionBody, interp.No},
@@ -385,5 +386,20 @@ func TestDashHasNeitherDeclarationName(t *testing.T) {
 		if status != 127 {
 			t.Errorf("%s: status %d, want 127 for a command dash does not have", name, status)
 		}
+	}
+}
+
+// The words for the signal and nothing else — no process id, no command, and
+// alone among everything this shell prints, no name and no line in front.
+func TestAKilledCommandIsSaidWithNoLocation(t *testing.T) {
+	dg := dash.Diagnostics()
+	if got, want := dg.KilledCommandNotice, "%[2]s"; got != want {
+		t.Errorf("KilledCommandNotice = %q, want %q", got, want)
+	}
+	if !dg.KilledCommandNoticeUnprefixed {
+		t.Error("this notice carries no location, unlike every other message here")
+	}
+	if dg.SignalDescriptions != nil {
+		t.Error("this shell takes the words for a signal from the machine")
 	}
 }

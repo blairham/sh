@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // escapes walks the prompt's text and draws each code in it.
@@ -133,6 +135,8 @@ func (s Shell) field(f PromptField) string {
 		return "\t"
 	case FieldEscape:
 		return string(s.Style.Escape)
+	case FieldOpenState:
+		return s.openState()
 	case FieldVersion:
 		return s.Style.Version
 	case FieldVersionFull:
@@ -271,6 +275,10 @@ func (s Shell) liveJobs() int {
 // counts are the two running totals, held by pointer because the prompt is
 // drawn from a Shell taken by value and these change under it.
 type counts struct {
+	// open is what the parser was still inside when the line so far ran out,
+	// for a continuation prompt that says what it is waiting for.
+	open []syntax.Open
+
 	// tty is the terminal's name once it has been looked for, and looked
 	// says it has been. Kept for the session rather than for the package: a
 	// prompt is drawn on every keystroke and the search reads a directory,
@@ -314,4 +322,32 @@ func (s Shell) terminalName() string {
 		c.tty, c.looked = lookupTerminal(s.In), true
 	}
 	return c.tty
+}
+
+// openState is what the shell is still inside, in this dialect's words.
+//
+// The parser says `if then` where zsh says `then`, and `then &&` where zsh
+// says `then cmdand`. The difference is not clause-versus-construct: a clause
+// stands in place of what it is inside and an operator follows it, and which
+// is which is what the dialect's table says.
+func (s Shell) openState() string {
+	open := s.counted().open
+	if len(open) == 0 || s.Style.OpenWords == nil {
+		return ""
+	}
+	var words []string
+	for _, o := range open {
+		w, ok := s.Style.OpenWords[o.Word]
+		if !ok || w.Text == "" {
+			// Not drawn at all, which is how a loop's `do` disappears while
+			// the loop it belongs to stays.
+			continue
+		}
+		if w.Replaces && len(words) > 0 {
+			words[len(words)-1] = w.Text
+			continue
+		}
+		words = append(words, w.Text)
+	}
+	return strings.Join(words, " ")
 }

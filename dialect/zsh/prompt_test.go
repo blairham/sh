@@ -55,8 +55,10 @@ func TestPromptDefaults(t *testing.T) {
 	if st.DefaultContinued != "%_> " {
 		t.Errorf("continuation = %q, want %%_> ", st.DefaultContinued)
 	}
-	if _, drawable := st.Codes['_']; drawable {
-		t.Error("%_ is in the table, so the comment explaining that it is not is stale")
+	// `%_` draws what the line is still inside, which is what makes the
+	// default continuation say `for> ` inside a for loop.
+	if st.Codes['_'] != repl.FieldOpenState {
+		t.Errorf("%%_ draws %v, want the open state", st.Codes['_'])
 	}
 }
 

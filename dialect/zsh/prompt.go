@@ -35,6 +35,7 @@ func PromptStyle() repl.PromptStyle {
 			't': repl.FieldTime12Padded,
 			'*': repl.FieldTime24,
 			'w': repl.FieldDateShort,
+			'_': repl.FieldOpenState,
 		},
 		// `%q` drew nothing at all.
 		Unknown: repl.DropBoth,
@@ -44,11 +45,36 @@ func PromptStyle() repl.PromptStyle {
 		// the privilege character, and continues with the construct being
 		// continued — `for> ` inside a for loop.
 		//
-		// `%_` is not in the table above, because what it draws is the parser's
-		// state and there is no way to ask for that yet. Until there is, an
-		// unknown code draws nothing and the continuation comes out as `> `,
-		// which is what it was before. The default is written as zsh writes it
-		// so that it starts working when the code does.
+		// `%_` draws what the line is still inside, so the continuation says
+		// `for> ` inside a for loop the way zsh does.
+		// What zsh calls each thing a line can still be inside, measured one
+		// construct at a time with PS2='[%_]'. A clause stands in place of
+		// the construct it is inside — `if` becomes `then` — and an operator
+		// follows it: `true &&` inside a `then` draws `then cmdand`. A
+		// loop's `do` is drawn as nothing at all, and the loop stays.
+		OpenWords: map[string]repl.OpenWord{
+			"for":      {Text: "for"},
+			"while":    {Text: "while"},
+			"until":    {Text: "until"},
+			"select":   {Text: "select"},
+			"case":     {Text: "case"},
+			"if":       {Text: "if"},
+			"then":     {Text: "then", Replaces: true},
+			"else":     {Text: "else", Replaces: true},
+			"elif":     {Text: "elif", Replaces: true},
+			"{":        {Text: "cursh"},
+			"function": {Text: "function"},
+			"(":        {Text: "subsh"},
+			"$(":       {Text: "cmdsubst"},
+			"`":        {Text: "bquote"},
+			"${":       {Text: "braceparam"},
+			"<<":       {Text: "heredoc"},
+			"'":        {Text: "quote"},
+			`"`:        {Text: "dquote"},
+			"|":        {Text: "pipe"},
+			"&&":       {Text: "cmdand"},
+			"||":       {Text: "cmdor"},
+		},
 		Default:          "%m%# ",
 		DefaultContinued: "%_> ",
 	}

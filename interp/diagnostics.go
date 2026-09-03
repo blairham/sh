@@ -994,6 +994,14 @@ const (
 	LocationLineWord
 	// LocationTightLine is `zsh:1: msg`.
 	LocationTightLine
+	// LocationLineWordAfterFirst is `ksh: line 2: msg`, and `ksh: msg` on
+	// line 1 — the line is named only once there is a line worth naming.
+	//
+	// ksh93's answer for `-c`, and only for `-c`: a script file names line 1
+	// like any other, which ScriptLocation already carries. Measuring only
+	// `sh -c 'one-liner'` cannot tell this from LocationNone, and that is how
+	// LocationNone got here.
+	LocationLineWordAfterFirst
 )
 
 // Wording renders one failure, using the dialect's format when it has one.
@@ -1256,6 +1264,11 @@ func (d Diagnostics) prefix(name, builtin string, line int) string {
 		name += ":" + builtin
 	}
 	switch d.Location {
+	case LocationLineWordAfterFirst:
+		if line <= 1 {
+			return name + ": "
+		}
+		return fmt.Sprintf("%s: line %d: ", name, line)
 	case LocationColonLine:
 		return fmt.Sprintf("%s: %d: ", name, line)
 	case LocationLineWord:
@@ -1395,4 +1408,14 @@ const (
 	// LineBeforeRedirect is the line before that. ksh93, in every shape
 	// measured.
 	LineBeforeRedirect
+	// LineBeforeRedirectWhenCompound names the line before the redirect's for
+	// a compound command and the command's own line for a simple one.
+	//
+	// ksh93, and it took thirteen measurements to separate from
+	// LineBeforeRedirect: a simple `cat < missing` on line 2 says line 2, a
+	// continuation with `cat` on 3 and `< missing` on 4 says 3, and a `while`
+	// loop whose `done < missing` is on line 5 says 4. A one-line loop on
+	// line 2 says line 1 — which prints no line at all there, and is what
+	// made the simple case look like the compound one.
+	LineBeforeRedirectWhenCompound
 )

@@ -78,10 +78,17 @@ func TestEachDialectWordsItsOwnFailures(t *testing.T) {
 
 // TestScriptDiagnosticsNameTheScript is behavior rather than wording: a shell
 // running a file reports the file, and ksh93 also changes how it names the
-// line — no location for -c, "line N" for a script.
+// line — under `-c` it names one only after the first, and a script names
+// line 1 like any other.
 func TestScriptDiagnosticsNameTheScript(t *testing.T) {
-	if got := ksh.Diagnostics().Report("s", 2, "m"); got != "s: m" {
-		t.Errorf("ksh -c: %q, want %q", got, "s: m")
+	if got := ksh.Diagnostics().Report("s", 2, "m"); got != "s: line 2: m" {
+		t.Errorf("ksh -c: %q, want %q", got, "s: line 2: m")
+	}
+	if got := ksh.Diagnostics().Report("s", 1, "m"); got != "s: m" {
+		t.Errorf("ksh -c line 1: %q, want %q", got, "s: m")
+	}
+	if got := ksh.Diagnostics().ForScript().Report("s", 1, "m"); got != "s: line 1: m" {
+		t.Errorf("ksh script line 1: %q, want %q — a script names its first line", got, "s: line 1: m")
 	}
 	if got := ksh.Diagnostics().ForScript().Report("s", 2, "m"); got != "s: line 2: m" {
 		t.Errorf("ksh script: %q, want %q", got, "s: line 2: m")

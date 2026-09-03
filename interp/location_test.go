@@ -18,8 +18,9 @@ import (
 )
 
 func TestLocationStylesAreMeasured(t *testing.T) {
-	// All four shells prefix a diagnostic differently, and one of them does
-	// not name the location at all.
+	// All four shells prefix a diagnostic differently, and one of them names
+	// the line only once there is one worth naming — ksh93 writes `ksh: msg`
+	// on line 1 and `ksh: line 2: msg` after it.
 	for _, tc := range []struct {
 		name string
 		diag Diagnostics
@@ -27,7 +28,7 @@ func TestLocationStylesAreMeasured(t *testing.T) {
 	}{
 		{"dash", dash.Diagnostics(), "mysh: 7: boom"},
 		{"bash", bash.Diagnostics(), "mysh: line 7: boom"},
-		{"ksh93", ksh.Diagnostics(), "mysh: boom"},
+		{"ksh93", ksh.Diagnostics(), "mysh: line 7: boom"},
 		{"zsh", zsh.Diagnostics(), "mysh:7: boom"},
 		// The zero value is the substrate's own: its name and nothing else.
 		{"core", Diagnostics{}, "mysh: boom"},
@@ -35,6 +36,11 @@ func TestLocationStylesAreMeasured(t *testing.T) {
 		if got := tc.diag.Report("mysh", 7, "boom"); got != tc.want {
 			t.Errorf("%s: %q, want %q", tc.name, got, tc.want)
 		}
+	}
+	// And ksh93 on line 1, which is the case that hid the rule: measuring
+	// only `sh -c 'one-liner'` cannot tell it from naming no line at all.
+	if got := ksh.Diagnostics().Report("mysh", 1, "boom"); got != "mysh: boom" {
+		t.Errorf("ksh93 line 1: %q, want %q", got, "mysh: boom")
 	}
 	// An empty name still produces something usable.
 	if got := (Diagnostics{}).Report("", 1, "boom"); got != "sh: boom" {

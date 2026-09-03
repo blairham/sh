@@ -444,7 +444,7 @@ func (r *Runner) clone() *Runner {
 // compound node carries its own list because a redirection on one applies to
 // everything inside it.
 func (r *Runner) withRedirs(ctx context.Context, rs []*syntax.Redirect, body func() error) error {
-	closers, err := r.applyRedirs(ctx, rs)
+	closers, err := r.applyRedirs(ctx, rs, true)
 	defer func() {
 		for _, c := range closers {
 			_ = c.Close()
@@ -931,7 +931,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		if len(c.Redirs) > 0 {
 			r.traceCommand(argv)
 
-			closers, err := r.applyRedirs(ctx, c.Redirs)
+			closers, err := r.applyRedirs(ctx, c.Redirs, false)
 			for _, cl := range closers {
 				_ = cl.Close()
 			}
@@ -950,7 +950,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 
 	r.traceCommand(argv)
 
-	closers, err := r.applyRedirs(ctx, c.Redirs)
+	closers, err := r.applyRedirs(ctx, c.Redirs, false)
 	defer func() {
 		if r.keepRedirs {
 			// `exec > log` is the one command whose redirections outlive it.

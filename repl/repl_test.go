@@ -88,22 +88,51 @@ func TestATrailingBackslashAsksForMore(t *testing.T) {
 	}
 }
 
-// A prompt comes from the parameter when one is set, and from the usual text
-// when it is not.
+// A prompt comes from the parameter when there is one, and from the usual
+// text when there is not.
+//
+// "When there is one" includes two cases this used to get wrong, and the panel
+// is unanimous on both. A PS1 inherited from the environment is used: a shell
+// started from another shell is handed its prompt that way, and reading only
+// the assigned variables printed the default over the top of it. And an empty
+// PS1 is a prompt of nothing rather than a missing one — `PS1=` is how a
+// person turns the prompt off, and falling back to the default made it the
+// one thing that could not be done.
 func TestPrompts(t *testing.T) {
-	s := Shell{Runner: newTestRunner(nil)}
-	if got := s.prompt("PS1", "$ "); got != "$ " {
-		t.Errorf("unset PS1 gave %q, want the default", got)
+	for _, tc := range []struct {
+		name string
+		vars map[string]string
+		env  []string
+		want string
+	}{
+		{"unset", nil, nil, "$ "},
+		{"assigned", map[string]string{"PS1": "sh> "}, nil, "sh> "},
+		{"empty is silence, not absence", map[string]string{"PS1": ""}, nil, ""},
+		{"inherited from the environment", nil, []string{"PS1=env> "}, "env> "},
+		{"inherited and empty", nil, []string{"PS1="}, ""},
+		{
+			"an assignment covers what was inherited",
+			map[string]string{"PS1": "mine> "},
+			[]string{"PS1=env> "},
+			"mine> ",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newTestRunner(tc.vars)
+			r.Env = tc.env
+			s := Shell{Runner: r}
+			if got := s.prompt("PS1", "$ "); got != tc.want {
+				t.Errorf("prompt = %q, want %q", got, tc.want)
+			}
+		})
 	}
-	s = Shell{Runner: newTestRunner(map[string]string{"PS1": "sh> "})}
-	if got := s.prompt("PS1", "$ "); got != "sh> " {
-		t.Errorf("set PS1 gave %q, want sh> ", got)
-	}
-	// An empty one is not a prompt, so the default stands rather than
-	// leaving the user with no marker at all.
-	s = Shell{Runner: newTestRunner(map[string]string{"PS1": ""})}
+}
+
+// And with no runner at all there is still a default to print.
+func TestAPromptWithoutARunner(t *testing.T) {
+	var s Shell
 	if got := s.prompt("PS1", "$ "); got != "$ " {
-		t.Errorf("empty PS1 gave %q, want the default", got)
+		t.Errorf("prompt = %q, want the default", got)
 	}
 }
 

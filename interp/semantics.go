@@ -419,6 +419,24 @@ type Semantics struct {
 	// Only ever at a prompt: no shell announces one to a script.
 	AnnouncesBackgroundJob Answer
 
+	// CdLastPathOptionWins lets the last of `cd -L` and `cd -P` decide.
+	// True in bash, dash and ksh93 — `cd -P -L` is logical there. zsh gives
+	// `-P` the answer wherever it appears, so both orders resolve.
+	//
+	// Asked only when both were given, because that is the only time the
+	// two rules differ.
+	CdLastPathOptionWins Answer
+
+	// CdRefusesUnknownOption refuses a letter `cd` does not have rather than
+	// reading the word as a directory. True in bash, dash and ksh93; zsh
+	// looks for somewhere called `-Q` instead, because its `cd` takes two
+	// operands — `cd old new` — and a leading dash word is the first of
+	// them there.
+	//
+	// Only about an *unknown* letter. `-L` and `-P` are options in all four
+	// and are not asked about.
+	CdRefusesUnknownOption Answer
+
 	// ReportsACommandKilledBySignal says out loud that a signal ended a
 	// command, rather than leaving the status to carry it alone. True in
 	// bash, dash and ksh93; zsh says nothing — measured with a terminal as

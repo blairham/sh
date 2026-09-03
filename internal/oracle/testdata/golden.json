@@ -16314,6 +16314,38 @@
         "TimedOut": false
       }
     },
+    "type/a-body-with-redirections-in-it": {
+      "bash": {
+        "Output": "f is a function~f () ~{ ~    echo hi 2\u003e\u00261 1\u003e\u00262 3\u003e /dev/null 0\u003e\u0026-~}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "f is a function~f () ~{ ~    echo hi 2\u003e\u00261 1\u003e\u00262 3\u003e /dev/null 0\u003e\u0026-~}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "f is a function~f () ~{ ~    echo hi 2\u003e\u00261 1\u003e\u00262 3\u003e /dev/null 0\u003e\u0026-~}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "f is a shell function",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "f is a function",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "f is a shell function from zsh",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "type/a-function-and-its-body": {
       "bash": {
         "Output": "f is a function~f () ~{ ~    echo hi~}",

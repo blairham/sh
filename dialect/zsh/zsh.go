@@ -219,13 +219,17 @@ func Diagnostics() interp.Diagnostics {
 		CdCannotChange:         "%[2]s: %[1]s",
 		PrintfBadVerb:          "%[2]s: invalid directive",
 		UmaskBadMask:           "bad umask",
-		UmaskBadOption:         "bad option: %[1]s",
-		UmaskBadOptionStatus:   1,
-		LetNoExpression:        "not enough arguments",
-		UlimitBadOption:        "bad option: -%[1]s",
-		UlimitBadNumber:        "invalid number: %[1]s",
-		UlimitBadOptionStatus:  1,
-		BuiltinBadOption:       "%[1]s: bad option: %[2]s",
+		// The builtin's name comes from the location here, as everywhere in
+		// zsh, so it is not in the wording.
+		UmaskBadSymbolicMode:     "bad symbolic mode permission: %[2]s",
+		UmaskBadSymbolicOperator: "bad symbolic mode operator: %[2]s",
+		UmaskBadOption:           "bad option: %[1]s",
+		UmaskBadOptionStatus:     1,
+		LetNoExpression:          "not enough arguments",
+		UlimitBadOption:          "bad option: -%[1]s",
+		UlimitBadNumber:          "invalid number: %[1]s",
+		UlimitBadOptionStatus:    1,
+		BuiltinBadOption:         "%[1]s: bad option: %[2]s",
 		// The builtin's name comes from the location, so it is not in these.
 		// The reason leads for `export` and `readonly` and trails for `unset`,
 		// which is why this is a map.

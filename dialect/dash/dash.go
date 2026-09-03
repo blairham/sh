@@ -183,10 +183,13 @@ func Diagnostics() interp.Diagnostics {
 		CdStatus:          2,
 		PrintfBadNumber:   "printf: %[1]s: expected numeric value",
 		// Every complaint about an argument is 2 here, as it is elsewhere.
-		PrintfBadVerbStatus:   2,
-		PrintfBadVerb:         "printf: %[2]s: invalid directive",
-		PrintfBadOption:       "printf: Illegal option %[1]s",
-		UmaskBadMask:          "umask: Illegal number: %[1]s",
+		PrintfBadVerbStatus: 2,
+		PrintfBadVerb:       "printf: %[2]s: invalid directive",
+		PrintfBadOption:     "printf: Illegal option %[1]s",
+		UmaskBadMask:        "umask: Illegal number: %[1]s",
+		// dash quotes the whole argument back and does not say what in it
+		// was wrong, so there is no operator wording to go with this.
+		UmaskBadSymbolicMode:  "umask: Illegal mode: %[1]s",
 		UmaskBadOption:        "umask: Illegal option %[1]s",
 		UmaskBadMaskStatus:    2,
 		UlimitBadOption:       "ulimit: Illegal option -%[1]s",

@@ -233,6 +233,7 @@ func Diagnostics() interp.Diagnostics {
 		PrintfBadOption:           "printf: %[1]s: unknown option",
 		PrintfBadOptionShowsUsage: true,
 		UmaskBadMask:              "umask: %[1]s: bad number",
+		UmaskBadSymbolicMode:      "umask: %[1]s: bad format",
 		UmaskBadOption:            "umask: %[1]s: unknown option",
 		UmaskUsage:                "Usage: umask [-S] [mask]",
 		UmaskUsageUnprefixed:      true,

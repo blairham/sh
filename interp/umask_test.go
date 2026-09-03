@@ -41,6 +41,28 @@ func umaskRun(t *testing.T, start int, tweak func(*Semantics), src string) (stri
 	return buf.String(), st, held
 }
 
+// umaskSymbolicRun is umaskRun with a Diagnostics of the caller's choosing,
+// for the complaints that differ between dialects.
+func umaskSymbolicRun(t *testing.T, start int, dg Diagnostics, src string) (string, int, int) {
+	t.Helper()
+	f, err := syntax.Parse(src, syntax.Core())
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	var buf bytes.Buffer
+	sem := permissive()
+	sem.UmaskPrintsFourDigits = Yes
+	sem.UmaskSetWithSPrints = No
+	held := start
+	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+	r.SetUmask = func(mask int) (int, error) { old := held; held = mask; return old, nil }
+	st, rerr := r.Run(context.Background(), f)
+	if rerr != nil {
+		t.Fatalf("run %q: %v", src, rerr)
+	}
+	return buf.String(), st, held
+}
+
 // Reading must not change it — which takes a set and a set-back, the system
 // call offering no way to ask.
 func TestUmaskReadingLeavesItAlone(t *testing.T) {

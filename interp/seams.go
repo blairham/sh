@@ -63,6 +63,12 @@ const (
 //
 // A nil Gate allows everything, so the zero value of a Runner is usable and
 // nothing has to opt in to being unsandboxed.
+//
+// Called from more than one goroutine. A background job runs on its own, and
+// so does each half of a pipeline, so a gate that keeps anything — a count, a
+// log, a set of paths already allowed — has to guard it. The first gate
+// written against this package was a closure appending to a slice, and it had
+// a data race the moment a script said `&`.
 type Gate interface {
 	Allow(ctx context.Context, a Action) Decision
 }
@@ -115,6 +121,9 @@ type Event struct {
 }
 
 // Sink receives events. A nil Sink discards them.
+//
+// Called from more than one goroutine, for the same reason a Gate is: what a
+// background job does is reported from the goroutine running it.
 type Sink interface {
 	Emit(ctx context.Context, e Event)
 }

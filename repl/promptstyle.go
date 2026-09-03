@@ -50,6 +50,23 @@ type PromptStyle struct {
 	//
 	// Empty draws nothing, for a dialect without the notion.
 	Privilege string
+
+	// Version and VersionFull are what FieldVersion and FieldVersionFull
+	// draw: bash's `\v` is 5.3 and its `\V` is 5.3.15. The strings are the
+	// dialect's own, because the version a dialect claims is part of what it
+	// claims to be — it is the same number its prelude puts in BASH_VERSION,
+	// and the two disagreeing would be a shell lying to one of two questions.
+	Version, VersionFull string
+
+	// Default and DefaultContinued are what this dialect prompts with when
+	// nothing has been assigned. They are read the same way an assigned value
+	// is, so a default may hold codes: bash's is `\s-\v\$ `, which is how
+	// it comes to say `bash-5.3$`.
+	//
+	// Empty means the dialect has not said, and the substrate's own `$ ` and
+	// `> ` stand. It does not mean a prompt of nothing — that is a thing only
+	// an assignment can ask for.
+	Default, DefaultContinued string
 }
 
 // UnknownCode is what becomes of an escape whose code is not in the table.
@@ -127,4 +144,8 @@ const (
 	// FieldEscape is the escape character itself, for the table row that
 	// spells it doubled.
 	FieldEscape
+	// FieldVersion and FieldVersionFull are the version the dialect claims,
+	// short and long. bash draws 5.3 for one and 5.3.15 for the other.
+	FieldVersion
+	FieldVersionFull
 )

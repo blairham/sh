@@ -19,6 +19,11 @@ import "github.com/blairham/sh/repl"
 func PromptStyle() repl.PromptStyle {
 	return repl.PromptStyle{
 		Expand: true,
+		// Measured with nothing assigned: real dash prompts `$ ` and continues
+		// with `> `, which is what the substrate does anyway. Stated rather than
+		// left empty so the dialect describes itself.
+		Default:          "$ ",
+		DefaultContinued: "> ",
 		// dash has no escape language. `\u` draws `\u`, and a `\$` drawing a
 		// bare dollar is expansion's doing rather than the prompt's.
 	}

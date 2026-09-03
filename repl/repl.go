@@ -191,9 +191,9 @@ func (s Shell) beforeReading(pending *strings.Builder) string {
 	continuing := pending.Len() > 0
 	s.reportFinishedJobs(continuing)
 	if continuing {
-		return s.prompt("PS2", "> ")
+		return s.prompt("PS2", or(s.Style.DefaultContinued, "> "))
 	}
-	return s.prompt("PS1", "$ ")
+	return s.prompt("PS1", or(s.Style.Default, "$ "))
 }
 
 // reportFinishedJobs says what ended while the last command was running.
@@ -440,4 +440,15 @@ func (s Shell) errf(format string, a ...any) {
 		return
 	}
 	_, _ = fmt.Fprintf(s.Err, format, a...)
+}
+
+// or is the first of two that has something in it.
+//
+// For a default a dialect may or may not have said anything about: an empty
+// one means it has not said, and the substrate's own text stands.
+func or(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }

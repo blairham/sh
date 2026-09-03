@@ -89,3 +89,82 @@ func TestAPromptIsExpandedAtEachDraw(t *testing.T) {
 		t.Errorf("prompts = %q, want [][1][2] — one per line, expanded each time", got)
 	}
 }
+
+// A dialect's default prompt is its own, and is read the same way an assigned
+// one is — so a default may hold codes.
+//
+// Measured with nothing assigned: real bash prompts `bash-5.3$ `, which is
+// `\s-\v\$ ` drawn; real zsh prompts with the host and a percent sign; dash
+// and ksh93 prompt `$ `.
+func TestTheDialectsDefaultPrompt(t *testing.T) {
+	bashish := Shell{
+		Runner: newTestRunner(nil),
+		Name:   "bash",
+		Style: PromptStyle{
+			Escape:  '\\',
+			Version: "5.3", Privilege: "$",
+			Codes: map[rune]PromptField{
+				's': FieldShellName, 'v': FieldVersion, '$': FieldPrivilege,
+			},
+			Default:          `\s-\v\$ `,
+			DefaultContinued: "> ",
+		},
+	}
+	// Through beforeReading, which is where the choice between the two
+	// prompts is made and so the only place the defaults are reached.
+	if got := drawn(bashish, false); got != "bash-5.3$ " {
+		t.Errorf("default = %q, want bash-5.3$ ", got)
+	}
+	if got := drawn(bashish, true); got != "> " {
+		t.Errorf("continuation = %q, want > ", got)
+	}
+
+	// With a continuation that is not the substrate's own text, so that the
+	// dialect being asked at all is what the answer depends on. bash's is
+	// `> ` and so is the fallback, which makes bash the one dialect whose
+	// continuation cannot grade this.
+	distinct := bashish
+	distinct.Style.DefaultContinued = `\s? `
+	if got := drawn(distinct, true); got != "bash? " {
+		t.Errorf("continuation = %q, want the dialect's own, drawn", got)
+	}
+
+	// An assignment still wins over it.
+	assigned := bashish
+	assigned.Runner = newTestRunner(map[string]string{"PS1": "mine> "})
+	if got := drawn(assigned, false); got != "mine> " {
+		t.Errorf("assigned = %q, want mine> ", got)
+	}
+
+	// A dialect that has not said anything gets the substrate's text. Empty
+	// means unsaid here, not a prompt of nothing — only an assignment can ask
+	// for that.
+	silent := Shell{Runner: newTestRunner(nil)}
+	if got := drawn(silent, false); got != "$ " {
+		t.Errorf("unsaid = %q, want the substrate's $ ", got)
+	}
+
+	// A code the table does not have degrades rather than refusing: zsh's
+	// default continuation is `%_> ` and `%_` is not drawable yet, so it
+	// comes out as `> ` until it is.
+	zshish := Shell{
+		Runner: newTestRunner(nil),
+		Style: PromptStyle{
+			Escape: '%', Unknown: DropBoth,
+			DefaultContinued: "%_> ",
+		},
+	}
+	if got := drawn(zshish, true); got != "> " {
+		t.Errorf("continuation = %q, want the missing code to drop out", got)
+	}
+}
+
+// drawn is the prompt this shell would print next, through the path that
+// chooses between the two of them.
+func drawn(s Shell, continuing bool) string {
+	var pending strings.Builder
+	if continuing {
+		pending.WriteString("for i in 1\n")
+	}
+	return s.beforeReading(&pending)
+}

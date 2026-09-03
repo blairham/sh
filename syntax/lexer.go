@@ -791,6 +791,34 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 	}
 
 	start := l.off
+	if kind == CommandSubst {
+		// Where the contents end is a question about the grammar, not about
+		// how many parentheses have been seen: a `case` arm's `)` closes
+		// nothing, so counting stops early and takes half an arm with it.
+		//
+		//	x=$(case a in a) echo yes;; esac)
+		//
+		// Every shell in the panel runs that. Counting made it a syntax
+		// error here — and worse, made it *parse into the wrong tree* where
+		// the leftovers happened to be a command, which is how two scripts
+		// on this machine parsed and could not be printed back.
+		//
+		// The contents of `$( )` are the contents of a subshell, so the
+		// answer is the one the parser already knows: read a list, and stop
+		// where it stops.
+		if end, ok := l.parseToClose(start); ok {
+			for l.off < end {
+				l.advance()
+			}
+			value := l.src[start:l.off]
+			l.advance() // the )
+			return Span{Kind: kind, Value: value, Quoting: q, Pos: open}
+		}
+		// Not something the parser could read — half a line at a prompt,
+		// most often. Counting is the older answer and is kept for it: it
+		// gets the common shapes right and reports the rest as unterminated,
+		// which is what an unfinished substitution is.
+	}
 	for depth > 0 {
 		if l.eof() {
 			l.incomplete = true
@@ -826,6 +854,22 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		end--
 	}
 	return Span{Kind: kind, Value: l.src[start:end], Quoting: q, Pos: open}
+}
+
+// parseToClose reads the contents of a command substitution and returns the
+// offset of the `)` that ends them.
+//
+// A parser of its own over the rest of the input, which is what makes this
+// answer the grammar's question rather than a counting one. It reports
+// failure rather than a guess: an unfinished substitution has no closing
+// parenthesis to find, and the caller has an older answer for that.
+func (l *Lexer) parseToClose(from int) (int, bool) {
+	sub := NewParser(l.src[from:], l.dialect)
+	sub.parseList()
+	if sub.err != nil || !sub.at(TokRightParen) {
+		return 0, false
+	}
+	return from + sub.tok.Pos.Offset, true
 }
 
 // procSubstKind says which end of the pipe the word will name.
@@ -896,7 +940,7 @@ func (l *Lexer) scanBackticks(q Quoting) Span {
 		if l.eof() {
 			l.incomplete = true
 			l.fail(open, "unterminated backquote substitution")
-			return Span{Kind: CommandSubst, Value: unescapeBackquoted(l.src[start:l.off]), Quoting: q, Pos: open}
+			return Span{Kind: CommandSubst, Backquoted: true, Value: unescapeBackquoted(l.src[start:l.off]), Quoting: q, Pos: open}
 		}
 		switch l.peek() {
 		case '\\':
@@ -907,7 +951,7 @@ func (l *Lexer) scanBackticks(q Quoting) Span {
 		case '`':
 			end := l.off
 			l.advance()
-			return Span{Kind: CommandSubst, Value: unescapeBackquoted(l.src[start:end]), Quoting: q, Pos: open}
+			return Span{Kind: CommandSubst, Backquoted: true, Value: unescapeBackquoted(l.src[start:end]), Quoting: q, Pos: open}
 		default:
 			l.advance()
 		}

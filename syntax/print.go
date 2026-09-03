@@ -708,6 +708,16 @@ func (p *printer) quoted(q Quoting, spans []Span) {
 func (p *printer) span(s Span) {
 	switch s.Kind {
 	case CommandSubst:
+		if s.Backquoted {
+			// Written back the way it was read, because the two spellings
+			// end differently: this one ends at its closing backquote, and
+			// the other where its contents end. A substitution holding a
+			// here-document whose delimiter never matches is terminated by
+			// the first and not by the second — which is a real script on
+			// this machine, and the last one that would not reprint.
+			p.str("`" + escapeBackquoted(s.Value) + "`")
+			return
+		}
 		// A space where the command starts with its own parenthesis: `$((`
 		// is arithmetic, so `$( (echo x) )` written without one is a
 		// different construct entirely. The same trap as a redirection whose
@@ -798,6 +808,26 @@ func (p *printer) literal(s Span) {
 		}
 		p.str(escapeBare(s.Value))
 	}
+}
+
+// escapeBackquoted puts back the one layer of backslashes the older
+// substitution form requires, which the lexer took off.
+//
+// The three characters POSIX gives a meaning to there, and no others: a
+// backslash before anything else is literal inside backquotes, so escaping it
+// would add a character rather than protect one.
+func escapeBackquoted(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; c {
+		case '$', '`', '\\':
+			b.WriteByte('\\')
+			b.WriteByte(c)
+		default:
+			b.WriteByte(c)
+		}
+	}
+	return b.String()
 }
 
 // escapeIn backslashes each of chars wherever it appears.

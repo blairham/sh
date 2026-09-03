@@ -1132,6 +1132,16 @@ var Corpus = []Case{
 		Why:     "the same question reached from the other side, and `unset a[i]` had been doing nothing at all: the subscript was read as part of the name, so a name that was never in the table was deleted from it. What the hole then looks like is the same axis",
 	},
 	{
+		ID: "subst/a-case-inside-a-substitution", Category: "expansion",
+		Snippet: `x=$(case a in a) echo yes;; esac); echo "[$x]"`,
+		Why:     "where a substitution ends is a question about the grammar and not about how many parentheses have been counted: an arm's `)` closes nothing, so counting stops early and takes half the arm with it. Unanimous, and the shape that made two installed scripts parse into a tree nobody wrote",
+	},
+	{
+		ID: "subst/a-substitution-inside-an-arm", Category: "expansion",
+		Snippet: `case a in a) echo "[$(echo inner)]";; esac`,
+		Why:     "the other nesting, which counting got right and which has to keep working: the parentheses here really do pair",
+	},
+	{
 		ID: "redir/open-failure-wording", Category: "redirection",
 		Snippet: `cat < nosuchfile; echo "st=$?"`,
 		Why:     "all four word a failed open differently and only two of them use a verb: bash prints the name then the OS string, dash puts `cannot open` in front, ksh93 puts the name first and brackets the reason after it, and zsh prints the reason first, lowercased. dash also writes its own text for this errno — `No such file`, where the OS says `No such file or directory`",

@@ -12,6 +12,7 @@ import (
 
 	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/repl"
 )
 
 // Deciding to prompt is part of reading the invocation, so it belongs to the
@@ -141,6 +142,34 @@ func TestOnlyAPromptReportsItsJobs(t *testing.T) {
 			t.Errorf("err = %q, want a script told nothing", errs)
 		}
 	})
+}
+
+// The dialect's prompt style has to reach the prompt.
+//
+// The whole arrangement rests on there being one front end: `./bash` and
+// `sh -dialect bash` are the same code with a different value, so a dialect's
+// answer that is never carried across is a difference between the two, which
+// AGENTS.md calls a driver bug by construction. Nothing was checking that this
+// one was carried — the repl tests set the field directly and the dialect
+// tests read it back, and both passed with the wire cut.
+func TestTheDialectsPromptStyleReachesThePrompt(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		style repl.PromptStyle
+		want  string
+	}{
+		{"expanded", repl.PromptStyle{Expand: true}, "[someone]"},
+		{"as it stands", repl.PromptStyle{}, "[$who]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sh := shell()
+			sh.PromptStyle = tc.style
+			_, errs, _ := runPipedShell(t, sh, "who=someone\nPS1='[$who]'\n:\n", "testsh", "-i")
+			if !strings.Contains(errs, tc.want) {
+				t.Errorf("prompts = %q, want one of them to be %q", errs, tc.want)
+			}
+		})
+	}
 }
 
 // `-s` is the explicit "read standard input" spelling, and standard input from

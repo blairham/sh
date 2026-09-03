@@ -573,6 +573,24 @@ type Diagnostics struct {
 	// is what the other two use for every signal.
 	SignalDescriptions map[syscall.Signal]string
 
+	// BackquotedSubstitutionRestartsLines counts a backquoted substitution's
+	// body from line one rather than from where it was written.
+	//
+	// dash alone, and only for backticks — its `$( … )` is numbered from the
+	// file like everyone else's, so this is not a shell that fails to track
+	// the offset but one that keeps two different answers for the two
+	// spellings of one construct:
+	//
+	//	                          bash  dash  ksh93  zsh
+	//	x=$(nosuchcmd) on line 4     4     4      4    4
+	//	x=`nosuchcmd`  on line 4     4     1      4    4
+	//
+	// Here rather than in Semantics because it is a question about where a
+	// message says something happened, which is what Location and
+	// RedirectFailureLine already are — and because a shell that refused to
+	// answer it would have to refuse to report the line at all.
+	BackquotedSubstitutionRestartsLines bool
+
 	// JobStarted announces a backgrounded job. Two verbs: the job number and
 	// the process id.
 	//

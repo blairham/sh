@@ -20,7 +20,8 @@ import (
 //
 // Trailing newlines are removed, which is the rule that makes `x=$(pwd)`
 // usable at all.
-func (r *Runner) commandSubst(ctx context.Context, src string) string {
+func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
+	src := span.Value
 	// An assignment with no command name reports what the substitutions in
 	// it reported, and reports success when there are none. Those are two
 	// different facts and neither can be read off the status afterwards —
@@ -48,6 +49,15 @@ func (r *Runner) commandSubst(ctx context.Context, src string) string {
 
 	var out bytes.Buffer
 	sub := r.clone()
+	// Where the body sits in the script, so that what it reports is reported
+	// where a reader can find it. The span's own line is the body's first,
+	// because a span starts at its opening delimiter — and it accumulates,
+	// so a substitution inside a substitution is still placed in the file
+	// rather than in whichever body most recently began.
+	sub.lineBase = r.lineBase + span.Pos.Line - 1
+	if span.Backquoted && r.diag().BackquotedSubstitutionRestartsLines {
+		sub.lineBase = 0
+	}
 	sub.Stdout = &out
 	if _, err := sub.Run(ctx, f); err != nil {
 		r.diagf("%v\n", err)

@@ -14298,6 +14298,70 @@
         "TimedOut": false
       }
     },
+    "subst/a-backquoted-body-is-placed-differently": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 4: nosuchcmd: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 4: nosuchcmd: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 3: nosuchcmd: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: nosuchcmd: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: line 4: nosuchcmd: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:4: command not found: nosuchcmd",
+        "Status": 127,
+        "TimedOut": false
+      }
+    },
+    "subst/a-body-is-placed-in-the-script": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 4: nosuchcmd: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 4: nosuchcmd: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 3: nosuchcmd: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 4: nosuchcmd: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: line 4: nosuchcmd: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:4: command not found: nosuchcmd",
+        "Status": 127,
+        "TimedOut": false
+      }
+    },
     "subst/a-case-inside-a-substitution": {
       "bash": {
         "Output": "[yes]",

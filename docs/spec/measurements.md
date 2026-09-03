@@ -1921,11 +1921,27 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
 | `exec/a-command-is-named-as-it-was-written` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` |
+| `subst/a-body-is-placed-in-the-script` | `<shell>: 4: nosuchcmd: not found` *(status 127)* | `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | `<shell>: line 3: nosuchcmd: command not found` *(status 127)* | `<shell>: line 4: nosuchcmd: not found` *(status 127)* | `<shell>:4: command not found: nosuchcmd` *(status 127)* |
+| `subst/a-backquoted-body-is-placed-differently` | `<shell>: 1: nosuchcmd: not found` *(status 127)* | `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | `<shell>: line 3: nosuchcmd: command not found` *(status 127)* | `<shell>: line 4: nosuchcmd: not found` *(status 127)* | `<shell>:4: command not found: nosuchcmd` *(status 127)* |
 | `signal/a-command-a-signal-ended` | `User defined signal N: N` | `<shell>: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'` | *(no output, status 0)* | `<shell>: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'` | `<shell>: N: User signal N` | *(no output, status 0)* |
 
 - `exec/a-command-is-named-as-it-was-written` — a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else
   ```sh
   basename --bad 2>&1 | head -1
+  ```
+- `subst/a-body-is-placed-in-the-script` — the body of a substitution is a program of its own and is read as one, so its lines count from the body rather than from the file — and every shell in the panel reports what happens inside it at the line it was *written* on. Unanimous for this spelling, which is what makes it the core's answer; the backquoted spelling is not, and one shell numbers that one from the top
+  ```sh
+  true
+  true
+  true
+  x=$(nosuchcmd)
+  ```
+- `subst/a-backquoted-body-is-placed-differently` — the same substitution written the older way, and three of the four number it exactly as they number the other spelling. dash numbers it from one instead, so it keeps two answers for two spellings of one construct — the only place in the panel where how a substitution is written changes where its contents are reported
+  ```sh
+  true
+  true
+  true
+  x=`nosuchcmd`
   ```
 - `signal/a-command-a-signal-ended` — the status carries the signal and nothing in the output says one was involved, so three of the four say it out loud — in three different shapes. One names the process and pads the words to a fixed column before writing the command back out, one names the process and stops, and one prints the words with no process, no command and no location at all, which is the only message it writes that way. The fourth says nothing, with a terminal or without. The digits are masked in the snippet because a process id is not the same twice, and the spaces with them because the padding is one column wide and a shorter process id would move it. The signal is one that ends a process without dumping core, so that running the corpus does not leave a `core` file behind on a machine where dumping is turned on
   ```sh

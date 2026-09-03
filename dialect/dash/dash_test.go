@@ -403,3 +403,12 @@ func TestAKilledCommandIsSaidWithNoLocation(t *testing.T) {
 		t.Error("this shell takes the words for a signal from the machine")
 	}
 }
+
+// This shell numbers a backquoted body from one and a `$( … )` body from the
+// file — two answers for the two spellings of one construct, and it is alone
+// in giving them.
+func TestABackquotedBodyIsNumberedFromOne(t *testing.T) {
+	if !dash.Diagnostics().BackquotedSubstitutionRestartsLines {
+		t.Error("a backquoted body is numbered from one here")
+	}
+}

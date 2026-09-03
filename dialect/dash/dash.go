@@ -120,9 +120,12 @@ func Diagnostics() interp.Diagnostics {
 		JobLine: "[%[1]d] %[2]s %-27[3]s%[4]s",
 		// The words and nothing else — no process id, no command, and alone
 		// among this shell's messages, no name and no line in front of it.
-		KilledCommandNotice:           "%[2]s",
-		KilledCommandNoticeUnprefixed: true,
-		JobRunning:                    "Running",
+		KilledCommandNotice: "%[2]s",
+		// Backticks alone: this shell numbers a `$( … )` body from the file
+		// like the other three, and a backquoted one from one.
+		BackquotedSubstitutionRestartsLines: true,
+		KilledCommandNoticeUnprefixed:       true,
+		JobRunning:                          "Running",
 		// dash names the signal that stopped it rather than calling it
 		// stopped: `Suspended: 18`, where 18 is SIGTSTP.
 		JobStopped: "Suspended: %[1]d",

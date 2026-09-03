@@ -180,6 +180,7 @@ func Diagnostics() interp.Diagnostics {
 		// command after: this shell names the line and the process but does
 		// not say back what was running.
 		KilledCommandNotice:  "%[1]d: %[2]s",
+		ParamNull:            "parameter null",
 		SetInvalidOptionName: "set: %[1]s: bad option(s)",
 		SignalDescriptions:   signalDescriptions(),
 		JobRunning:           " Running",

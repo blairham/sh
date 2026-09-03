@@ -625,6 +625,17 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		}
 		return r.joinWord(e.Arg)
 
+	case syntax.ParamError:
+		if fires {
+			// Fatal in all four, and with the same four statuses an unset
+			// parameter under `set -u` gets — so it goes through the same
+			// door rather than carrying a status of its own.
+			r.fatal("%s\n", Wording(r.diag().ParamErrorMessage, "%[1]s: %[2]s",
+				e.Name, r.paramErrorWord(e, set)))
+			return ""
+		}
+		return value
+
 	case syntax.ParamTrimPrefix, syntax.ParamTrimPrefixLong,
 		syntax.ParamTrimSuffix, syntax.ParamTrimSuffixLong:
 		return r.trimWith(value, r.patternOf(e.Arg), e.Op)
@@ -1194,6 +1205,33 @@ func escapeAll(in []string) []string {
 		out[i] = globEscape(s)
 	}
 	return out
+}
+
+// paramErrorWord is what `${x?}` complains with.
+//
+// The word given, if there is one — `${x?custom}` says `x: custom` in every
+// shell in the panel. Without one there is a default, and the default is
+// where they part company. Plain `?` is unanimous: the parameter is not set.
+// `:?` is four answers, because it covers two cases at once and each shell
+// decides differently how to say so — two of them have a phrase covering
+// both, one says only "not set" either way, and one tells them apart.
+func (r *Runner) paramErrorWord(e *syntax.ParamExpr, set bool) string {
+	if w := r.joinWord(e.Arg); w != "" {
+		return w
+	}
+	const notSet = "parameter not set"
+	if !e.Colon {
+		return notSet
+	}
+	d := r.diag()
+	if set && d.ParamNull != "" {
+		// There and empty, which one dialect distinguishes from absent.
+		return d.ParamNull
+	}
+	if d.ParamNullOrNotSet != "" {
+		return d.ParamNullOrNotSet
+	}
+	return notSet
 }
 
 // checkNounset reports an unset parameter under `set -u`.

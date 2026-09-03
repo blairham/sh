@@ -546,6 +546,27 @@ type Diagnostics struct {
 	// it and end the script, so there is nothing for them to word.
 	ReturnOutsideAFunction string
 
+	// ParamErrorMessage is what `${x?word}` says. Two verbs: the parameter
+	// and the word. The shape is unanimous — `x: word` — and only the
+	// default word below is not.
+	ParamErrorMessage string
+
+	// ParamNullOrNotSet is the word `${x:?}` uses when none was given. That
+	// form covers two cases at once and each shell says so differently:
+	//
+	//	bash   parameter null or not set
+	//	dash   parameter not set or null
+	//	ksh93  parameter null  (only when it is there and empty)
+	//	zsh    parameter not set
+	//
+	// Empty falls back to `parameter not set`, which is what plain `${x?}`
+	// says in all four and what zsh says for both forms.
+	ParamNullOrNotSet string
+
+	// ParamNull is the word for a parameter that is *there and empty*, where
+	// a shell tells that from one that is absent. ksh93 alone.
+	ParamNull string
+
 	// SetInvalidOptionName is a long `set -o` name this shell does not have.
 	// One verb: the name.
 	//

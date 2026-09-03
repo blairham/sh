@@ -17,6 +17,11 @@ func Dialect() syntax.Dialect {
 	d := syntax.Core()
 	// zsh does not expand under `-c` even with the option set.
 	d.ExpandAliases = false
+	// zsh has all five, like bash.
+	d.DeclarationUtilities = map[string]bool{
+		"declare": true, "typeset": true, "local": true,
+		"export": true, "readonly": true,
+	}
 	d.FunctionKeywordParens = true
 	// `}` is reserved wherever a word may stand here, which is what lets a
 	// brace group close without a terminator — and what makes `echo }` a

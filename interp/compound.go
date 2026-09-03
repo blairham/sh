@@ -382,6 +382,13 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 			delete(r.Vars, name)
 		}
 	}
+	for name, old := range sc.savedArrays {
+		if sc.arrayExisted[name] {
+			r.Arrays[name] = old
+		} else {
+			delete(r.Arrays, name)
+		}
+	}
 	r.scopes = r.scopes[:len(r.scopes)-1]
 	// zsh runs an EXIT trap set *inside* a function when the function
 	// returns, and then forgets it; the other three keep it for the end of

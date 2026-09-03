@@ -16,6 +16,12 @@ func Dialect() syntax.Dialect {
 	d := syntax.Core()
 	// ksh93 expands them in a script too.
 	d.ExpandAliases = true
+	// ksh93 has neither `local` nor `declare`, so `local a=(x)` is the same
+	// syntax error there that `echo a=(x)` is — the rule follows the name
+	// into the shell that has it.
+	d.DeclarationUtilities = map[string]bool{
+		"typeset": true, "export": true, "readonly": true,
+	}
 	d.ParamIndirection = true
 	// The measured ksh93 is 93u+ 2012, which has no `&>`. Later ksh93u+m
 	// does, twelve years apart under the same name — which is the divergence

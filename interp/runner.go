@@ -857,6 +857,16 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		}
 		argv = append(argv, r.expandWord(w)...)
 	}
+	// An array assignment written as an operand — `local a=(x y)` — reaches
+	// the utility as the bare name, and the array itself is applied once the
+	// utility has made the name local. Splitting it that way is what lets
+	// `local` do the one thing only it can do, which is decide the scope the
+	// assignment then lands in.
+	for _, a := range c.Assigns {
+		if a.Operand {
+			argv = append(argv, a.Name)
+		}
+	}
 	// A command whose expansion failed, or depended on an axis no dialect
 	// answered, does not run. Reporting and then running anyway would be the
 	// silent wrong answer this whole structure exists to avoid.
@@ -989,6 +999,10 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// the POSIX rule dash and ksh93 follow and bash and zsh do not. The
 		// dialect answers it, three lines down.
 		for _, a := range c.Assigns {
+			if a.Operand {
+				// An argument to the builtin, not a prefix to it.
+				continue
+			}
 			v := strings.Join(r.expandWord(a.Value), " ")
 			if specialBuiltins[argv[0]] &&
 				r.ask(r.sem().AssignmentPrefixPersistsOnSpecialBuiltin, "an assignment before a special builtin persisting") {
@@ -1000,8 +1014,20 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// than cleared: a builtin can run another one.
 		outer := r.inBuiltin
 		r.inBuiltin = argv[0]
+		// `readonly a=(x)` has to set the array *before* the name is locked,
+		// because locking it first refuses the very assignment the command
+		// was given. Every other declaration utility wants the opposite
+		// order: `local a=(x)` must make the name local first, or the array
+		// lands in the caller's scope.
+		locks := argv[0] == "readonly"
+		if locks {
+			r.assignOperands(c)
+		}
 		st := fn(r, ctx, argv[1:])
 		r.inBuiltin = outer
+		if st == 0 && !locks {
+			r.assignOperands(c)
+		}
 		// A builtin can consult an axis of its own — `echo` asks about
 		// backslash escapes — so the check is repeated after it runs as well
 		// as before, and its status is discarded when one went unanswered.
@@ -1024,6 +1050,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	// An assignment prefix applies to this command's environment only.
 	env := r.environ()
 	for _, a := range c.Assigns {
+		if a.Operand {
+			continue
+		}
 		env = append(env, a.Name+"="+strings.Join(r.expandWord(a.Value), " "))
 	}
 	return r.exec(ctx, argv, env)
@@ -1200,6 +1229,11 @@ func (r *Runner) environ() []string {
 type scope struct {
 	saved   map[string]string
 	existed map[string]bool
+	// savedArrays is the same for arrays, which are a second table: shadowing
+	// only Vars left `f() { local a; a=(x y); }` setting a *global* array,
+	// because nothing had saved the array of that name to put back.
+	savedArrays  map[string]Array
+	arrayExisted map[string]bool
 	// keyword records that the function was defined with the `function` word
 	// rather than with parentheses. ksh93 gives only those functions a local
 	// scope, so `typeset` needs to know which kind it is standing in.
@@ -1332,6 +1366,16 @@ func (r *Runner) getVar(name string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// assignOperands applies the array assignments a declaration utility was given
+// as operands, which the parser kept apart from the prefix ones.
+func (r *Runner) assignOperands(c *syntax.SimpleCmd) {
+	for _, a := range c.Assigns {
+		if a.Operand {
+			r.assign(a)
+		}
+	}
 }
 
 // assign performs one assignment, which is three different things wearing the

@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/blairham/sh/dialect/bash"
@@ -74,5 +75,42 @@ func TestEmptyArrayIsNotAFunctionDefinition(t *testing.T) {
 	}
 	if got, _ := run(t, `f() { printf fn; }; f`, nil); got != "fn" {
 		t.Errorf("function definitions still work: got %q", got)
+	}
+}
+
+// An array assignment given to `local` lands in the function's scope, which
+// takes shadowing the *array* table and not only the scalar one.
+//
+// Found by the wild sweep: `local -a x=()` is in three installed bats-core
+// files and did not parse at all. Making it parse then showed the second half
+// — the array outlived the function, because `local` had saved a scalar of
+// that name and nothing had saved the array.
+func TestALocalArrayStaysInTheFunction(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{"set as an operand", `f(){ local a=(x y); }; f; echo "[${a[1]}]"`, "[]"},
+		{"set after declaring", `f(){ local a; a=(x y); }; f; echo "[${a[1]}]"`, "[]"},
+		{"visible inside", `f(){ local a=(x y); echo "[${a[1]}]"; }; f`, "[y]"},
+		{"an outer array survives", `a=(g); f(){ local a=(x y); }; f; echo "[${a[0]}]"`, "[g]"},
+		{"appending stays local", `f(){ local a=(); a+=(x); }; f; echo "[${a[0]}]"`, "[]"},
+		{"nested scopes", `a=(g); f(){ local a=(f1); g; echo "[${a[0]}]"; }; g(){ local a=(g1); }; f`, "[f1]"},
+		// Without `local` it is global, which is what makes the above a
+		// statement about `local` rather than about arrays.
+		{"no local is still global", `f(){ b=(x y); }; f; echo "[${b[1]}]"`, "[y]"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _ := run(t, c.src, nil)
+			if strings.TrimSpace(out) != c.want {
+				t.Errorf("said %q, want %q", strings.TrimSpace(out), c.want)
+			}
+		})
+	}
+}
+
+// `readonly a=(x)` sets the array before it locks the name, because locking it
+// first would refuse the very assignment the command was given.
+func TestReadonlyTakesItsArrayBeforeLocking(t *testing.T) {
+	out, _ := run(t, `readonly a=(p q); echo "[${a[1]}]"`, nil)
+	if strings.TrimSpace(out) != "[q]" {
+		t.Errorf("said %q, want [q]", strings.TrimSpace(out))
 	}
 }

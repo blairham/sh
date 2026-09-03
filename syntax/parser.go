@@ -788,6 +788,13 @@ func (p *Parser) parseSimple() Command {
 				c.Assigns = append(c.Assigns, p.parseAssign(name))
 				continue
 			}
+			if a, consumed := p.declarationArray(c); consumed {
+				if a != nil {
+					c.Assigns = append(c.Assigns, a)
+				}
+				seenArg = true
+				continue
+			}
 			if p.dialect.TimesIsReserved && seenArg && len(c.Args) == 1 &&
 				c.Args[0].Literal() == "times" {
 				// A reserved word takes no arguments, so the word after it
@@ -887,6 +894,46 @@ func (p *Parser) parseAssign(name string) *Assign {
 		p.next()
 	}
 	return a
+}
+
+// declarationArray reads `name=(x y)` written as an operand of a utility that
+// takes assignments, and reports nil when this is not one.
+//
+// Only the array form. A scalar `local a=1` is an ordinary word and stays one:
+// it expands by rules of its own that expandAssignArg already implements, and
+// routing it here would change a path nothing asked to change. The array form
+// has no such path — it was a syntax error — which is the whole of what this
+// adds.
+//
+// The test for it is that the word ends at its `=`, because that is the only
+// shape a `(` can follow: `a=(x y)` reaches the parser as the word `a=` and
+// then a parenthesis, where `a=1` is one word. If no parenthesis turns out to
+// be there the word is handed back unchanged, so `local a=` is still an
+// ordinary operand.
+// consumed is separate from the assignment because the word is read either
+// way: `local a=` is an ordinary operand and is put back as one, and the
+// caller must not read it a second time.
+func (p *Parser) declarationArray(c *SimpleCmd) (a *Assign, consumed bool) {
+	if len(c.Args) == 0 || len(p.dialect.DeclarationUtilities) == 0 {
+		return nil, false
+	}
+	if !p.dialect.DeclarationUtilities[c.Args[0].Literal()] {
+		return nil, false
+	}
+	name, ok := p.isAssign(p.tok)
+	if !ok || !strings.HasSuffix(p.tok.Text, "=") {
+		return nil, false
+	}
+	tok := p.tok
+	a = p.parseAssign(name)
+	if a != nil && a.IsArray {
+		a.Operand = true
+		return a, true
+	}
+	// Not an array after all, so put the word back the way it came — read
+	// once, by this, and not again by the caller.
+	c.Args = append(c.Args, p.newWord(tok.Spans, tok.Pos, tok.End))
+	return nil, true
 }
 
 // looksLikeFuncDef reports whether the current word begins `name()`.

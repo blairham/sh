@@ -191,6 +191,18 @@ type Dialect struct {
 	// extended pattern — the same text, read by a different rule.
 	PatternAlternation bool
 
+	// DeclarationUtilities are the commands that may be given an array
+	// assignment as an operand: `local a=(x y)`, `typeset -a b=()`.
+	//
+	// A grammar question rather than a runtime one, and name-sensitive:
+	// `echo a=(x)` is a syntax error in bash and ksh93, so the parser has to
+	// know which names take the form. It differs by dialect because the
+	// utilities do — ksh93 has no `local` and no `declare`, and there
+	// `local a=(x)` is the same syntax error `echo a=(x)` is.
+	//
+	// Empty means none, which is dash: it has no array literal at all.
+	DeclarationUtilities map[string]bool
+
 	// ArrayLiteral enables `a=(x y)`. Absent from dash, where the `(` is a
 	// syntax error rather than a different construct — so unlike `&>`, this
 	// one is safe to be wrong about loudly.
@@ -266,9 +278,18 @@ func Core() Dialect {
 		// there was code to refuse it.
 		ProcessSubstitution: true,
 		ArrayLiteral:        true,
-		ArraySubscript:      true,
-		ParamSubstitution:   true,
-		ParamSubstring:      true,
+		// The utilities that take an array assignment as an operand. The
+		// same four the interpreter treats as declarations for the same
+		// reason: every shell in the panel that has them takes the form.
+		// `declare` is bash's and zsh's to add, and ksh93 takes `local`
+		// away, because the rule follows the name into the shell that has
+		// it.
+		DeclarationUtilities: map[string]bool{
+			"export": true, "readonly": true, "local": true, "typeset": true,
+		},
+		ArraySubscript:    true,
+		ParamSubstitution: true,
+		ParamSubstring:    true,
 
 		ArithIncDec:             true,
 		ArithComma:              true,

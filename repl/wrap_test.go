@@ -12,9 +12,14 @@ import (
 // wide.
 func typedAt(t *testing.T, cols int, keys string) string {
 	t.Helper()
+	return typedAtWith(t, cols, "$ ", keys)
+}
+
+func typedAtWith(t *testing.T, cols int, prompt, keys string) string {
+	t.Helper()
 	var out strings.Builder
 	e := &editor{in: strings.NewReader(keys), out: &out, width: func() int { return cols }}
-	if _, err := e.readLine("$ "); err != nil {
+	if _, err := e.readLine(prompt); err != nil {
 		t.Fatalf("readLine: %v", err)
 	}
 	return out.String()
@@ -69,10 +74,19 @@ func TestAShortLineStaysOnItsRow(t *testing.T) {
 // so a line ending exactly at the right-hand edge leaves the cursor on the
 // row it filled. Everything counted from there would be one row out.
 func TestALineEndingAtTheEdgeIsWrapped(t *testing.T) {
-	// "$ " plus eight characters is exactly ten columns.
-	out := typedAt(t, 10, "12345678\r")
-	if !strings.Contains(out, " \r") {
-		t.Errorf("want the wrap forced at the edge, got %q", out)
+	// A prompt with no space in it, so the space being looked for can only be
+	// the one that forces the wrap. With "$ " it would be found in the prompt
+	// itself and the test would pass whether the code did this or not.
+	const prompt = "#"
+	// One column of prompt and nine characters is exactly ten columns.
+	out := typedAtWith(t, 10, prompt, "123456789\r")
+	if !strings.Contains(out, "123456789 \r") {
+		t.Errorf("want the wrap forced past the last character, got %q", out)
+	}
+	// And a line one short of the edge does not force it.
+	short := typedAtWith(t, 10, prompt, "12345678\r")
+	if strings.Contains(short, "12345678 \r") {
+		t.Errorf("forced a wrap that was not needed: %q", short)
 	}
 }
 

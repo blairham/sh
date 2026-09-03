@@ -63,6 +63,9 @@ func (r *Runner) isBuiltinName(name string, takes NameOperands) bool {
 // word being judged as an assignment, and wrong here: all four shells refuse
 // `export " a "`, and trimming would have made it a name.
 func isPlainName(s string) bool {
+	// The one caller has already refused the empty operand — it has to, since
+	// an "every byte is a digit" loop accepts it — so this is belt and braces
+	// rather than the check that does the work.
 	if s == "" {
 		return false
 	}

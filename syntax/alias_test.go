@@ -83,6 +83,37 @@ func TestAliasExpansion(t *testing.T) {
 		{"an empty value leaves the rest", table("a", ""), "a echo hi", "echo hi"},
 		{"a value of only spaces leaves the rest", table("a", "  "), "a echo hi", "echo hi"},
 		{"a name that is not one is untouched", table("a", "echo"), "b hi", "b hi"},
+		{
+			// Quoting removes the alias, which is how a script reaches the
+			// real thing past one that shadows it.
+			"a quoted use is not expanded",
+			table("a", "echo hit"), `"a" hi`, `"a" hi`,
+		},
+		{
+			// And not even when the table holds that exact spelling. The
+			// lookup uses the word's source text, so without the quoting
+			// check this one would match — which is what makes the check
+			// load-bearing rather than decoration.
+			"a quoted word is not a candidate at all",
+			table(`"a"`, "echo hit"), `"a" hi`, `"a" hi`,
+		},
+		{
+			// Words only. An operator is not a candidate however the table
+			// is spelled, and nothing may make it one.
+			"an operator is never expanded",
+			table("&&", "NOPE", "b", "echo two"), "true && b", "true && echo two",
+		},
+		{
+			// A tab ends a value as a space does.
+			"a trailing tab carries on too",
+			table("a", "echo\t", "b", "BEE"), "a b", "echo BEE",
+		},
+		{
+			// The set that stops recursion is per command, so a name used
+			// twice on one line expands twice.
+			"each command gets a fresh set",
+			table("e", "echo"), "e one; e two", "echo one; echo two",
+		},
 		{"no table expands nothing", nil, "a hi", "a hi"},
 	} {
 		t.Run(c.name, func(t *testing.T) {

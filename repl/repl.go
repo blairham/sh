@@ -293,6 +293,13 @@ func (s Shell) accept(pending *strings.Builder, remember func(string), line stri
 	text := pending.String()
 
 	p := syntax.NewParser(text, s.Dialect)
+	// Unconditionally, unlike the script path: every shell in the panel
+	// expands aliases at a prompt, and the dialect's answer is only about a
+	// *non-interactive* one. This is the place that knows there is a person
+	// at the keyboard.
+	if s.Runner != nil {
+		p.Aliases = s.Runner.LookupAlias
+	}
 	stmts, err := collect(p)
 	// Incomplete rather than incomplete-and-failed: input can be unfinished
 	// without being wrong, and a here-document with no delimiter yet is

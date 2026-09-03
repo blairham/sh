@@ -24,6 +24,11 @@ func parses(t *testing.T, src string) bool {
 }
 
 func TestGrammar(t *testing.T) {
+	// Does not expand them in a script; the prompt is a different
+	// question and the front end answers it.
+	if got, want := zsh.Dialect().ExpandAliases, false; got != want {
+		t.Errorf("ExpandAliases = %v, want %v", got, want)
+	}
 	for _, tc := range []struct {
 		src  string
 		want bool

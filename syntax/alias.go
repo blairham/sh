@@ -58,7 +58,14 @@ func (p *Parser) expandAlias(done map[string]bool) {
 //
 // Unquoted words only: `"a"` is a command name and not an alias, unanimously.
 // A quoted word is not the same word, which is the rule that lets a script
-// call the real thing past an alias that shadows it.
+// call the real thing past an alias that shadows it. The lookup is by the
+// token's source text, quotes and all, so a table holding `"a"` would match a
+// quoted `"a"` without this — which is how the check is tested.
+//
+// The kind check is belt and braces: both callers are positions where a word
+// is the only thing that can be, so no operator ever reaches here. It says
+// what may be expanded rather than relying on where this happens to be
+// called from.
 func (p *Parser) aliasable() bool {
 	return p.Aliases != nil && p.tok.Kind == TokWord && !p.tok.IsQuoted() && p.tok.Text != ""
 }

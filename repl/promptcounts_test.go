@@ -295,10 +295,11 @@ func TestAFinishedJobIsNotCounted(t *testing.T) {
 	if len(jobs) == 0 {
 		t.Fatal("no job was started")
 	}
+	// Not asked while it runs: `sleep 0` can be over before the question is,
+	// and asserting that it is still going is asserting a race. It failed on
+	// Linux for exactly that reason. What this test is about is the other
+	// half — a job that has finished — and that is arranged by waiting.
 	s := Shell{Runner: r}
-	if got := s.liveJobs(); got != 1 {
-		t.Fatalf("live jobs = %d while it runs, want 1", got)
-	}
 	for _, j := range jobs {
 		j.Wait()
 	}

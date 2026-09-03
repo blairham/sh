@@ -130,6 +130,13 @@ func (r *Runner) runSourced(ctx context.Context, src string, s sourced) int {
 	// below never executes and this is the answer. An `if len(f.Stmts) == 0`
 	// guard stood here too and was dead — removing it changed no test, and
 	// removing this line failed two.
+	if s.catchReturn {
+		// Inside a sourced file there is something for a `return` to return
+		// from, which is the question one dialect asks before allowing one
+		// at all.
+		r.sourceDepth++
+		defer func() { r.sourceDepth-- }()
+	}
 	r.status = 0
 	for _, st := range f.Stmts {
 		if err := r.stmt(ctx, st); err != nil {

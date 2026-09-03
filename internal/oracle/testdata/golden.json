@@ -12954,6 +12954,70 @@
         "TimedOut": false
       }
     },
+    "return/inside-a-sourced-file": {
+      "bash": {
+        "Output": "st=7",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=7",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=7",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=7",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=7",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=7",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "return/with-nothing-to-return-from": {
+      "bash": {
+        "Output": "before~\u003cshell\u003e: line 1: return: can only `return' from a function or sourced script~after st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "before~\u003cshell\u003e: line 1: return: can only `return' from a function or sourced script",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "before~\u003cshell\u003e: line 0: return: can only `return' from a function or sourced script~after st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "before",
+        "Status": 7,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "before",
+        "Status": 7,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "before",
+        "Status": 7,
+        "TimedOut": false
+      }
+    },
     "select/an-unterminated-final-reply": {
       "bash": {
         "Output": "1) a~2) b~#? ~st=1",
@@ -17456,7 +17520,7 @@
         "TimedOut": false
       },
       "ksh93": {
-        "Output": "+ cat~+ echo a~a",
+        "Output": "+ echo a~+ cat~a",
         "Status": 0,
         "TimedOut": false
       },

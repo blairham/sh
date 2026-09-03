@@ -165,6 +165,9 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `expand/tilde-unquoted` | `abs` | `abs` | `abs` | `abs` | `abs` | `abs` |
 | `expand/tilde-quoted` | `literal` | `literal` | `literal` | `literal` | `literal` | `literal` |
 | `expand/tilde-in-assignment` | `abs` | `abs` | `abs` | `abs` | `abs` | `abs` |
+| `param/error-operator-on-an-unset-name` | `<script>: 1: V: parameter not set` *(status 2)* | `<script>: line 1: V: parameter not set` *(status 1)* | `<script>: line 1: V: parameter not set` *(status 1)* | `<script>: line 1: V: parameter null or not set` *(status 1)* | `<script>: line 1: V: parameter not set` *(status 1)* | `<script>:1: V: parameter not set` *(status 1)* |
+| `param/error-operator-default-word` | `<script>: 1: V: parameter not set or null` *(status 2)* | `<script>: line 1: V: parameter null or not set` *(status 1)* | `<script>: line 1: V: parameter null or not set` *(status 1)* | `<script>: line 1: V: parameter null or not set` *(status 1)* | `<script>: line 1: V: parameter null` *(status 1)* | `<script>:1: V: parameter not set` *(status 1)* |
+| `param/error-operator-on-a-name-that-is-set` | `[x][x][x]~after` | `[x][x][x]~after` | `[x][x][x]~after` | `[x][x][x]~after` | `[x][x][x]~after` | `[x][x][x]~after` |
 | `param/a-default-holding-a-space` | `[grep -E]~[a  b]` | `[grep -E]~[a  b]` | `[grep -E]~[a  b]` | `[grep -E]~[a  b]` | `[grep -E]~[a  b]` | `[grep -E]~[a  b]` |
 | `param/a-default-holding-a-hash` | `[a #b]` | `[a #b]` | `[a #b]` | `[a #b]` | `[a #b]` | `[a #b]` |
 | `shell/naming-itself-in-a-variable` | `anonymous` | `named` | `named` | `named` | `named` | `named` |
@@ -223,6 +226,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `expand/tilde-in-assignment` — assignment values are a tilde context, which is why PATH=~/bin works
   ```sh
   x=~; case $x in /*) echo abs;; *) echo literal;; esac
+  ```
+- `param/error-operator-on-an-unset-name` — the operator a script uses to say a variable is required. Unanimous in shape — the name, then the word — and unanimous in stopping the script, which is what the missing `after` records. The status is where they part: one answers 127 here and 1 or 2 everywhere else it stops
+  ```sh
+  unset V; echo "[${V?}]"; echo after
+  ```
+- `param/error-operator-default-word` — with no word given there is a default, and the colon form covers two cases at once — absent, and there but empty — so each shell has to decide how to say both. Two have a phrase for the pair and word it differently, one says only that it is not set, and one keeps a separate word for a parameter that is there and empty. Four answers to one question
+  ```sh
+  V=; echo "[${V:?}]"
+  ```
+- `param/error-operator-on-a-name-that-is-set` — the other side, and unanimous: with the parameter set the operator is not an error at all and expands to the value, word or no word. Recorded because the bug this pair was written for expanded it to nothing here while reporting nothing either — a case that only tested the failing side would have passed
+  ```sh
+  V=x; echo "[${V?}][${V:?}][${V?why}]"; echo after
   ```
 - `param/a-default-holding-a-space` — everything up to the closing brace belongs to the operand, blanks included — `${GREP:-grep -E}` is the usual spelling and losing the space turns it into a command nobody has. A run of them is one run and not one space, which is what says the text was kept rather than rebuilt
   ```sh
@@ -1358,7 +1373,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `xtrace/assignments-per-line-diverges` | `+ a=1 b=2` | `+ a=1~+ b=2` | `+ a=1~+ b=2` | `+ a=1~+ b=2` | `+ a=1~+ b=2` | `+<shell>:1> a=1 b=2 ` |
 | `xtrace/disabling-set-diverges` | `+ set +x~done` | `+ set +x~done` | `+ set +x~done` | `+ set +x~done` | `done` | `+<shell>:1> set +x~done` |
 | `xtrace/compound-header-diverges` | `+ echo 1~1~+ echo 2~2` | `+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2` | `+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2` | `+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2` | `+ echo 1~1~+ echo 2~2` | `+<shell>:1> i=1~+<shell>:1> echo 1~1~+<shell>:1> i=2~+<shell>:1> echo 2~2` |
-| `xtrace/pipeline-order-diverges` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+<shell>:1> echo a~+<shell>:1> cat~a` |
+| `xtrace/pipeline-order-diverges` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ cat~+ echo a~a` | `+<shell>:1> echo a~+<shell>:1> cat~a` |
 | `nounset/unset-variable-is-an-error` | `<script>: 2: NOPE: parameter not set` *(status 2)* | `<script>: line 2: NOPE: unbound variable` *(status 1)* | `<script>: line 2: NOPE: unbound variable` *(status 1)* | `<script>: line 2: NOPE: unbound variable` *(status 1)* | `<script>: line 2: NOPE: parameter not set` *(status 1)* | `<script>:2: NOPE: parameter not set` *(status 1)* |
 | `nounset/defaults-are-exempt` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` |
 | `nounset/empty-is-not-unset` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` |

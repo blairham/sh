@@ -1063,6 +1063,36 @@ var Corpus = []Case{
 		Why:     "a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else",
 	},
 	{
+		ID: "param/error-operator-on-an-unset-name", Category: "expansion",
+		// A script rather than -c: bash exits 127 for this when it was given
+		// its program as an argument and 1 when it read a file, which is a
+		// question about how the shell was started rather than about this
+		// operator.
+		Script:  true,
+		Snippet: `unset V; echo "[${V?}]"; echo after`,
+		Why:     "the operator a script uses to say a variable is required. Unanimous in shape — the name, then the word — and unanimous in stopping the script, which is what the missing `after` records. The status is where they part: one answers 127 here and 1 or 2 everywhere else it stops",
+	},
+	{
+		ID: "param/error-operator-default-word", Category: "expansion",
+		// A script rather than -c: bash exits 127 for this when it was given
+		// its program as an argument and 1 when it read a file, which is a
+		// question about how the shell was started rather than about this
+		// operator.
+		Script:  true,
+		Snippet: `V=; echo "[${V:?}]"`,
+		Why:     "with no word given there is a default, and the colon form covers two cases at once — absent, and there but empty — so each shell has to decide how to say both. Two have a phrase for the pair and word it differently, one says only that it is not set, and one keeps a separate word for a parameter that is there and empty. Four answers to one question",
+	},
+	{
+		ID: "param/error-operator-on-a-name-that-is-set", Category: "expansion",
+		// A script rather than -c: bash exits 127 for this when it was given
+		// its program as an argument and 1 when it read a file, which is a
+		// question about how the shell was started rather than about this
+		// operator.
+		Script:  true,
+		Snippet: `V=x; echo "[${V?}][${V:?}][${V?why}]"; echo after`,
+		Why:     "the other side, and unanimous: with the parameter set the operator is not an error at all and expands to the value, word or no word. Recorded because the bug this pair was written for expanded it to nothing here while reporting nothing either — a case that only tested the failing side would have passed",
+	},
+	{
 		ID: "return/with-nothing-to-return-from", Category: "builtins",
 		Snippet: `echo before; return 7; echo "after st=$?"`,
 		Why:     "a `return` outside both a function and a sourced file has nothing to return from, and the panel splits over what that means — not over the wording but over *where the script stops*. Three obey it and end there with the status given; one reports it, leaves 2 behind and runs the next command. A script whose last statement is such a `return` therefore ends two different ways with the same output, which is why the status is half the case",

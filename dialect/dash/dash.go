@@ -127,6 +127,7 @@ func Diagnostics() interp.Diagnostics {
 		KilledCommandNotice: "%[2]s",
 		// The operator is part of the sentence here: this shell writes `-o`
 		// whichever way it was asked.
+		ParamNullOrNotSet:    "parameter not set or null",
 		SetInvalidOptionName: "set: Illegal option -o %[1]s",
 		// Backticks alone: this shell numbers a `$( … )` body from the file
 		// like the other three, and a backquoted one from one.

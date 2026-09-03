@@ -10,5 +10,13 @@ import "github.com/blairham/sh/repl"
 // // Measured: real bash draws `^C` after the abandoned line and starts the next
 // prompt below it.
 func EditorStyle() repl.EditorStyle {
-	return repl.EditorStyle{Interrupt: "^C"}
+	return repl.EditorStyle{
+		Interrupt: "^C",
+		// Measured under a pty: a hundred matches is where it stops asking
+		// and starts asking, it counts the matches and not the rows, it does
+		// not echo the key that answered, and it rings the bell at anything
+		// that is not `y` or `n` rather than taking it as an answer.
+		ListQuery:                   "Display all %[1]d possibilities? (y or n)",
+		ListQueryAcceptsOnlyYesOrNo: true,
+	}
 }

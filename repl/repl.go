@@ -514,7 +514,10 @@ func (s Shell) newEditor() *editor {
 		in: s.In, out: s.Out, comp: s.completer(),
 		// What this dialect marks an abandoned line with, which is `^C` in
 		// two of the four and nothing in the other two.
-		interrupt: s.Editor.Interrupt,
+		interrupt:       s.Editor.Interrupt,
+		listQuery:       s.Editor.ListQuery,
+		listQueryEchoes: s.Editor.ListQueryEchoesTheKey,
+		listQueryStrict: s.Editor.ListQueryAcceptsOnlyYesOrNo,
 		// The width comes from the input, which is the terminal; the output
 		// may be a file the session was started with, and its size is not the
 		// screen's.

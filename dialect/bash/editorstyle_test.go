@@ -18,3 +18,18 @@ func TestEditorStyle(t *testing.T) {
 		t.Errorf("Interrupt = %q, want %q", got, want)
 	}
 }
+
+// The question this shell asks before printing a large listing, and how it
+// reads the answer. Measured under a pty.
+func TestEditorStyleAsksBeforeALargeListing(t *testing.T) {
+	s := bash.EditorStyle()
+	if got, want := s.ListQuery, "Display all %[1]d possibilities? (y or n)"; got != want {
+		t.Errorf("ListQuery = %q, want %q", got, want)
+	}
+	if !s.ListQueryAcceptsOnlyYesOrNo {
+		t.Error("this shell rings the bell at anything that is not y or n and asks again")
+	}
+	if s.ListQueryEchoesTheKey {
+		t.Error("this shell does not write the answering key back")
+	}
+}

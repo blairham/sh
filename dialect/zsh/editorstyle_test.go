@@ -18,3 +18,19 @@ func TestEditorStyle(t *testing.T) {
 		t.Errorf("Interrupt = %q, want %q", got, want)
 	}
 }
+
+// The question this shell asks before printing a large listing. It counts the
+// rows as well as the matches, echoes the key, and takes the first key it is
+// given as the answer.
+func TestEditorStyleAsksBeforeALargeListing(t *testing.T) {
+	s := zsh.EditorStyle()
+	if got, want := s.ListQuery, "zsh: do you wish to see all %[1]d possibilities (%[2]d lines)? "; got != want {
+		t.Errorf("ListQuery = %q, want %q", got, want)
+	}
+	if !s.ListQueryEchoesTheKey {
+		t.Error("this shell writes the answering key back")
+	}
+	if s.ListQueryAcceptsOnlyYesOrNo {
+		t.Error("this shell takes the first key, whatever it is")
+	}
+}

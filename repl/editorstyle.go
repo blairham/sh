@@ -31,4 +31,28 @@ type EditorStyle struct {
 	// Empty draws nothing, which is two of the four dialects' answer and
 	// also what a front end told nothing does.
 	Interrupt string
+
+	// ListQuery is what is asked before printing a large number of matches,
+	// instead of printing them. Two verbs: how many matches there are, and
+	// how many rows they would take.
+	//
+	//	bash   Display all 120 possibilities? (y or n)
+	//	zsh    zsh: do you wish to see all 120 possibilities (10 lines)?
+	//
+	// One of them counts the rows and the other does not, which is why both
+	// numbers are passed and a wording may ignore the second.
+	//
+	// Empty asks nothing and prints, which is what the two dialects with no
+	// line editor of their own have no answer about, and what a front end
+	// told nothing does.
+	ListQuery string
+
+	// ListQueryEchoesTheKey writes the key that answered the question back
+	// to the screen. zsh does; bash does not.
+	ListQueryEchoesTheKey bool
+
+	// ListQueryAcceptsOnlyYesOrNo keeps asking until one of them arrives,
+	// ringing the bell at anything else. bash does. zsh takes the first key
+	// whatever it is and treats everything but `y` as no.
+	ListQueryAcceptsOnlyYesOrNo bool
 }

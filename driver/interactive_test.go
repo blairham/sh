@@ -172,6 +172,21 @@ func TestTheDialectsPromptStyleReachesThePrompt(t *testing.T) {
 	}
 }
 
+// The shell's own name has to reach the prompt too, for the code that draws
+// it — and by its basename, since a shell invoked as ./build/bash calls itself
+// bash.
+func TestTheShellsNameReachesThePrompt(t *testing.T) {
+	sh := shell()
+	sh.PromptStyle = repl.PromptStyle{
+		Escape: '\\',
+		Codes:  map[rune]repl.PromptField{'s': repl.FieldShellName},
+	}
+	_, errs, _ := runPipedShell(t, sh, "PS1='[\\s]'\n:\n", "/somewhere/testsh", "-i")
+	if !strings.Contains(errs, "[testsh]") {
+		t.Errorf("prompts = %q, want the shell to name itself testsh", errs)
+	}
+}
+
 // `-s` is the explicit "read standard input" spelling, and standard input from
 // a terminal is a person: all four shells prompt for `sh -s` there and read a
 // script for `echo x | sh -s`.

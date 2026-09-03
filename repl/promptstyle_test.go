@@ -27,6 +27,7 @@ func TestAPromptIsExpandedWhenTheDialectSaysSo(t *testing.T) {
 		// before a space is a dollar: the fallback has to survive its own
 		// expansion or every shell without a PS1 draws a broken prompt.
 		{"the default survives it", PromptStyle{Expand: true}, "", ""},
+		{"and is drawn as it stands when nothing expands", PromptStyle{}, "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			vars := map[string]string{"who": "someone"}
@@ -42,6 +43,28 @@ func TestAPromptIsExpandedWhenTheDialectSaysSo(t *testing.T) {
 				t.Errorf("prompt = %q, want %q", got, want)
 			}
 		})
+	}
+}
+
+// The default text goes through the same treatment as a value read from the
+// parameter.
+//
+// `$ ` survives its own expansion, so today the two are indistinguishable and
+// a test written with it grades nothing. The decision still has to be graded,
+// because the defaults are on their way to being the dialect's — bash's is
+// `\s-\v\$ `, which is text that means something — and the moment they are,
+// a default that skipped expansion would be drawn wrong.
+func TestTheDefaultIsRenderedTheSameWay(t *testing.T) {
+	s := Shell{
+		Runner: newTestRunner(map[string]string{"who": "someone"}),
+		Style:  PromptStyle{Expand: true},
+	}
+	if got := s.prompt("PS1", "<$who> "); got != "<someone> " {
+		t.Errorf("default = %q, want it expanded like any other prompt", got)
+	}
+	plain := Shell{Runner: newTestRunner(map[string]string{"who": "someone"})}
+	if got := plain.prompt("PS1", "<$who> "); got != "<$who> " {
+		t.Errorf("default = %q, want it as it stands", got)
 	}
 }
 

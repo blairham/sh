@@ -56,7 +56,12 @@ func TestAnUnfinishedSubstitutionIsIncomplete(t *testing.T) {
 // holding a here-document whose delimiter never matches is terminated by the
 // first and not by the second — which is a real script on this machine.
 func TestTheOlderSpellingIsWrittenBackAsItself(t *testing.T) {
-	src := "x=`cat <<EOF\nbody\n EOF`\n"
+	// A here-document whose body holds a `)` and whose delimiter never
+	// matches, which is the shape /usr/local/bin/prlcopy has. Written back
+	// as `$( … )` the parenthesis in the body ends the substitution and
+	// what follows is not a command; written back as itself it is the text
+	// it was.
+	src := "x=`cat <<EOF\na)\n EOF`\n"
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatalf("parse: %v", err)

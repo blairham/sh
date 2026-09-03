@@ -26,6 +26,15 @@ func typed(t *testing.T, keys string) (string, string, error) {
 	return line, out.String(), err
 }
 
+// typedMarking is typed with a dialect's mark for an abandoned line.
+func typedMarking(t *testing.T, mark, keys string) (string, string, error) {
+	t.Helper()
+	var out strings.Builder
+	e := &editor{in: strings.NewReader(keys), out: &out, interrupt: mark}
+	line, err := e.readLine("$ ")
+	return line, out.String(), err
+}
+
 func TestTypingALine(t *testing.T) {
 	for _, c := range []struct{ keys, want string }{
 		{"echo hi\r", "echo hi"},
@@ -91,8 +100,17 @@ func TestInterruptAndEndOfInput(t *testing.T) {
 	if line != "" {
 		t.Errorf("^C kept %q, want the line abandoned", line)
 	}
-	if !strings.Contains(out, "^C") {
-		t.Errorf("^C drew %q, want it marked on the screen", out)
+	// No mark unless the dialect asks for one: two of the four draw `^C`
+	// after an abandoned line and two draw nothing, so the editor holds no
+	// answer of its own.
+	if strings.Contains(out, "^C") {
+		t.Errorf("^C drew %q, want no mark from an editor told of none", out)
+	}
+	if _, out, _ := typedMarking(t, "^C", "half a line\x03"); !strings.Contains(out, "^C") {
+		t.Errorf("drew %q, want the mark the dialect asked for", out)
+	}
+	if _, out, _ := typedMarking(t, "<int>", "half a line\x03"); !strings.Contains(out, "<int>") {
+		t.Errorf("drew %q, want the mark the dialect asked for", out)
 	}
 	if _, _, err := typed(t, "\x04"); !errors.Is(err, io.EOF) {
 		t.Errorf("^D on an empty line gave %v, want io.EOF", err)

@@ -49,6 +49,10 @@ type Shell struct {
 	// it is drawn. The zero value draws it as it stands.
 	Style PromptStyle
 
+	// Editor is what this dialect draws while a line is being typed. The
+	// zero value draws nothing of its own.
+	Editor EditorStyle
+
 	// Clock is what a prompt with the time in it reads. Nil is the real one.
 	Clock func() time.Time
 
@@ -102,13 +106,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	sig, stop := catchInterrupt()
 	defer stop()
 
-	ed := &editor{
-		in: s.In, out: s.Out, comp: s.completer(),
-		// The width comes from the input, which is the terminal; the output
-		// may be a file the session was started with, and its size is not the
-		// screen's.
-		width: func() int { return terminalWidth(s.In) },
-	}
+	ed := s.newEditor()
 	// Where to add what this session types. The count of what was already
 	// there is kept so only the new lines are written back: the rest are in
 	// the file already, and appending them again doubles it every time a
@@ -490,4 +488,23 @@ func (s Shell) take(pending *strings.Builder, remember func(string), line string
 	}
 	s.counted().accepted(blank, perr == nil)
 	return stmts, perr, true
+}
+
+// newEditor is the line editor this shell types into.
+//
+// A method rather than a literal in the loop so that what a dialect says
+// reaches the editor is something a test can look at: the editor itself is
+// only built where there is a terminal, and a dialect's answer dropped on the
+// way looks exactly like a dialect that did not answer.
+func (s Shell) newEditor() *editor {
+	return &editor{
+		in: s.In, out: s.Out, comp: s.completer(),
+		// What this dialect marks an abandoned line with, which is `^C` in
+		// two of the four and nothing in the other two.
+		interrupt: s.Editor.Interrupt,
+		// The width comes from the input, which is the terminal; the output
+		// may be a file the session was started with, and its size is not the
+		// screen's.
+		width: func() int { return terminalWidth(s.In) },
+	}
 }

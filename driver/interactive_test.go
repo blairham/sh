@@ -172,6 +172,29 @@ func TestTheDialectsPromptStyleReachesThePrompt(t *testing.T) {
 	}
 }
 
+// What a dialect says about the front end reaches the front end.
+//
+// The editor is only built where there is a terminal, so a test cannot get at
+// it through a run — and two mutations of this wiring survived everything
+// while it was written inline, because an answer dropped here looks exactly
+// like a dialect that did not answer.
+func TestTheDialectsAnswersReachTheFrontEnd(t *testing.T) {
+	sh := shell()
+	sh.Name = "testsh"
+	sh.PromptStyle = repl.PromptStyle{Expand: true, Escape: '%'}
+	sh.EditorStyle = repl.EditorStyle{Interrupt: "<int>"}
+	front := sh.FrontEndForTest(nil, "testsh", interp.Diagnostics{})
+	if front.Editor.Interrupt != "<int>" {
+		t.Errorf("Interrupt = %q, want it carried across", front.Editor.Interrupt)
+	}
+	if !front.Style.Expand || front.Style.Escape != '%' {
+		t.Errorf("Style = %+v, want it carried across", front.Style)
+	}
+	if front.Name != "testsh" {
+		t.Errorf("Name = %q, want testsh", front.Name)
+	}
+}
+
 // The shell's own name has to reach the prompt too, for the code that draws
 // it — and by its basename, since a shell invoked as ./build/bash calls itself
 // bash.

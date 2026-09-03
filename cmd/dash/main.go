@@ -31,6 +31,7 @@ func shell() driver.Shell {
 		Prelude:     dash.Prelude(),
 		Register:    dash.Apply,
 		PromptStyle: dash.PromptStyle(),
+		EditorStyle: dash.EditorStyle(),
 	}
 }
 

@@ -66,6 +66,10 @@ type Shell struct {
 	// what a shell without a dialect does.
 	PromptStyle repl.PromptStyle
 
+	// EditorStyle is what this dialect draws while a line is being typed —
+	// the mark on a line abandoned with ^C. The zero value draws nothing.
+	EditorStyle repl.EditorStyle
+
 	// Register adds or removes builtins — the part of a dialect that shell
 	// cannot express. Nil means the dialect needs none, which is the common
 	// case now that cd, pwd and read live in the core.

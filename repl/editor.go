@@ -54,6 +54,12 @@ type editor struct {
 	// which is what two of the four dialects do.
 	interrupt string
 
+	// What to ask before printing a large listing, and how to read the
+	// answer. See EditorStyle.
+	listQuery       string
+	listQueryEchoes bool
+	listQueryStrict bool
+
 	// width is how many columns the terminal has, asked each time it is
 	// needed; nil, or an answer of 0, means it will not say. row is which
 	// screen row the last draw left the cursor on, counted from the row the
@@ -133,7 +139,7 @@ func (e *editor) readLine(prompt string) (string, error) {
 			e.redraw(prompt)
 		case tab:
 			matches := e.complete(e.comp)
-			if len(matches) > 0 && wasTab {
+			if len(matches) > 0 && wasTab && e.confirmList(matches, prompt) {
 				e.list(matches, prompt)
 			}
 			e.redraw(prompt)

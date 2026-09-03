@@ -4,6 +4,7 @@
 package repl
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -232,4 +233,60 @@ func dirOrDot(dir string) string {
 		return "."
 	}
 	return dir
+}
+
+// listQueryThreshold is how many matches it takes before a shell asks rather
+// than printing.
+//
+// A hundred, measured in both shells that ask, and it is the count reaching
+// it rather than passing it: ninety-nine print and a hundred ask. The same
+// number in both, so it is not a dialect's answer — what to *say* is.
+const listQueryThreshold = 100
+
+// confirmList asks before printing a large number of matches, and reports
+// whether to print.
+//
+// Columns made a long listing four times shorter and did not stop it pushing
+// the prompt off the screen: a directory of a thousand files is still
+// hundreds of rows. Every shell with a line editor stops and asks first.
+//
+// The question is asked with the line still half-drawn — the answer is a
+// single key read here rather than at the top of the loop, and the line is
+// redrawn afterwards either way. It is the one place the editor reads a key
+// in the middle of drawing.
+func (e *editor) confirmList(matches []string, prompt string) bool {
+	if e.listQuery == "" || len(matches) < listQueryThreshold {
+		return true
+	}
+	e.endLine(prompt, "")
+	e.write(fmt.Sprintf(e.listQuery, len(matches), len(columns(matches, e.cols()))))
+	for {
+		var buf [1]byte
+		n, err := e.in.Read(buf[:])
+		if err != nil {
+			// Nothing more is coming, so there is nobody to print for.
+			return false
+		}
+		if n == 0 {
+			continue
+		}
+		c := buf[0]
+		if e.listQueryEchoes {
+			e.write(string(rune(c)))
+		}
+		switch {
+		case c == 'y' || c == 'Y':
+			e.write("\r\n")
+			return true
+		case c == 'n' || c == 'N', !e.listQueryStrict:
+			// Anything at all declines where a shell takes the first key it
+			// is given; only `n` does where one waits for an answer.
+			e.write("\r\n")
+			return false
+		default:
+			// Not an answer. The bell, and ask again — which is what waiting
+			// for one of two keys means.
+			e.write("\a")
+		}
+	}
 }

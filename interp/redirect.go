@@ -66,9 +66,9 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		if compound {
 			switch r.diag().RedirectFailureLine {
 			case LineOfRedirect:
-				r.line = rd.Pos().Line
+				r.line = r.lineOf(rd.Pos())
 			case LineBeforeRedirect:
-				if n := rd.Pos().Line; n > 1 {
+				if n := r.lineOf(rd.Pos()); n > 1 {
 					r.line = n - 1
 				} else {
 					r.line = n

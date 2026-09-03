@@ -318,6 +318,16 @@ type Runner struct {
 	// Real shells report the line of the command that failed, so this is
 	// updated per statement rather than per token.
 	line int
+	// lineBase is how far into the script the input being run starts.
+	//
+	// A command substitution's body is parsed on its own, so its positions
+	// count from one — the body is what was parsed, and a parser that
+	// claimed otherwise would be lying about the string it was handed. The
+	// script the body was *written* in did not start there, and every shell
+	// in the panel reports a command inside `$( … )` at its line in the
+	// file. So the offset is carried by whatever is running the body, which
+	// is the thing that knows where it came from.
+	lineBase int
 	// killed is the command being run, for the notice that a signal ended
 	// it — the only message that has to render a command rather than name
 	// one. Innermost wins, which is what the shell prints: a command inside
@@ -534,6 +544,11 @@ func (r *Runner) diagf(format string, args ...any) {
 	r.errf("%s%s", r.diag().prefix(r.name(), r.inBuiltin, r.line), msg)
 }
 
+// lineOf is where a node is in the script, rather than in the string that was
+// parsed to reach it. The two differ only inside a command substitution, and
+// they differ by however far into the script the substitution was written.
+func (r *Runner) lineOf(p syntax.Pos) int { return p.Line + r.lineBase }
+
 // name is what the shell calls itself in a diagnostic.
 func (r *Runner) name() string {
 	if r.Name == "" {
@@ -692,9 +707,6 @@ func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
 	if r.ctl != controlNone {
 		return nil
 	}
-	if st.Expr != nil {
-		r.line = st.Expr.Pos().Line
-	}
 	r.statusBefore = r.status
 	if st.Background {
 		return r.background(ctx, st)
@@ -817,7 +829,7 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		// crashing. Our own parser never produces one, so no test can see
 		// the difference; an embedder building a tree by hand can, and this
 		// package is a library.
-		r.line = c.Pos().Line
+		r.line = r.lineOf(c.Pos())
 		// And what the command *is*, for the one message that says a
 		// command back rather than naming it: a signal that ends one is
 		// reported with the command written out.

@@ -447,3 +447,11 @@ func TestAKilledCommandIsSaidInThisShellsOwnWords(t *testing.T) {
 		t.Errorf("words for KILL = %q, want %q", got, want)
 	}
 }
+
+// A substitution's body is numbered from the file, whichever way it is
+// written.
+func TestASubstitutionsBodyIsNumberedFromTheFile(t *testing.T) {
+	if ksh.Diagnostics().BackquotedSubstitutionRestartsLines {
+		t.Error("backquotes are numbered from the file here, like $( )")
+	}
+}

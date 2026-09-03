@@ -422,3 +422,11 @@ func TestAKilledCommandIsSaidBackInFull(t *testing.T) {
 		t.Error("this shell takes the words for a signal from the machine")
 	}
 }
+
+// A substitution's body is numbered from the file, whichever way it is
+// written.
+func TestASubstitutionsBodyIsNumberedFromTheFile(t *testing.T) {
+	if bash.Diagnostics().BackquotedSubstitutionRestartsLines {
+		t.Error("backquotes are numbered from the file here, like $( )")
+	}
+}

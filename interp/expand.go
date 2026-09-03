@@ -437,7 +437,7 @@ func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
 		v := r.expandParam(s.Param)
 		return r.expansionResult(v, unquoted, r.sem().SplitParamExpansion, "splitting an unquoted parameter expansion")
 	case syntax.CommandSubst:
-		v := r.commandSubst(r.ctx, s.Value)
+		v := r.commandSubst(r.ctx, s)
 		return r.expansionResult(v, unquoted, r.sem().SplitCommandSubstitution, "splitting an unquoted command substitution")
 	case syntax.ProcSubstIn, syntax.ProcSubstOut:
 		// A path, and a path is never split or globbed however it was

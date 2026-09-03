@@ -488,3 +488,11 @@ func TestAKilledCommandIsNotSaidAtAll(t *testing.T) {
 		t.Errorf("KilledCommandNotice = %q, want nothing — this shell stays quiet", got)
 	}
 }
+
+// A substitution's body is numbered from the file, whichever way it is
+// written.
+func TestASubstitutionsBodyIsNumberedFromTheFile(t *testing.T) {
+	if zsh.Diagnostics().BackquotedSubstitutionRestartsLines {
+		t.Error("backquotes are numbered from the file here, like $( )")
+	}
+}

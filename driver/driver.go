@@ -33,6 +33,7 @@ import (
 	"strings"
 
 	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/repl"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -59,6 +60,11 @@ type Shell struct {
 	// before the script, so its functions shadow builtins and external
 	// commands for the rest of the run.
 	Prelude string
+
+	// PromptStyle is what this dialect does to a prompt parameter's value
+	// before it is drawn. The zero value draws it as it stands, which is
+	// what a shell without a dialect does.
+	PromptStyle repl.PromptStyle
 
 	// Register adds or removes builtins — the part of a dialect that shell
 	// cannot express. Nil means the dialect needs none, which is the common

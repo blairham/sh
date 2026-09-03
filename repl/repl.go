@@ -43,6 +43,10 @@ type Shell struct {
 	// Report renders a parse failure the way this dialect does. Nil prints
 	// the error plainly, which is what a caller without a dialect gets.
 	Report func(err error) string
+
+	// Style is what this dialect does to a prompt parameter's value before
+	// it is drawn. The zero value draws it as it stands.
+	Style PromptStyle
 }
 
 // Run reads, evaluates and prints until the input ends.
@@ -335,9 +339,21 @@ func (s Shell) prompt(name, fallback string) string {
 		return fallback
 	}
 	if v, ok := s.Runner.GetVar(name); ok {
-		return v
+		return s.render(v)
 	}
-	return fallback
+	return s.render(fallback)
+}
+
+// render turns a prompt parameter's value into the text to draw.
+//
+// Each time it is drawn rather than once when it is set. That is the whole
+// point of expanding it: a prompt holding `$PWD` is expected to follow the
+// directory, and one holding a command substitution to run the command again.
+func (s Shell) render(value string) string {
+	if s.Style.Expand && value != "" {
+		return s.Runner.Expand(value)
+	}
+	return value
 }
 
 // historyFile is where this session reads and records its lines.

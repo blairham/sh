@@ -32,6 +32,7 @@ func shell() driver.Shell {
 		Diagnostics: ksh.Diagnostics(),
 		Prelude:     ksh.Prelude(),
 		Register:    ksh.Apply,
+		PromptStyle: ksh.PromptStyle(),
 	}
 }
 

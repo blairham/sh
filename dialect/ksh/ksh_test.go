@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/blairham/sh/dialect/ksh"
@@ -82,6 +83,7 @@ func TestSemantics(t *testing.T) {
 		// Whether an unassigned subscript is an element.
 		{"ArraysAreSparse", s.ArraysAreSparse, interp.Yes},
 		{"AnnouncesBackgroundJob", s.AnnouncesBackgroundJob, interp.Yes},
+		{"ReportsACommandKilledBySignal", s.ReportsACommandKilledBySignal, interp.Yes},
 		// What `type` does: whether it follows the sentence with the
 		// function itself, and whether `--` ends its options.
 		{"TypePrintsFunctionBody", s.TypePrintsFunctionBody, interp.No},
@@ -418,5 +420,30 @@ func TestAParseFailureIsNotPrefixedWithItsOwnLine(t *testing.T) {
 	// A runtime diagnostic in a script keeps its prefix.
 	if runtime := ksh.Diagnostics().ForScript().Report("s.sh", 2, "nosuchcmd: not found\n"); !strings.Contains(runtime, "line 2:") {
 		t.Errorf("got %q, want a runtime diagnostic still prefixed", runtime)
+	}
+}
+
+// This shell names the process and the signal but never says the command
+// back, and it carries its own words for the signal rather than the
+// machine's.
+func TestAKilledCommandIsSaidInThisShellsOwnWords(t *testing.T) {
+	dg := ksh.Diagnostics()
+	if got, want := dg.KilledCommandNotice, "%[1]d: %[2]s"; got != want {
+		t.Errorf("KilledCommandNotice = %q, want %q", got, want)
+	}
+	// The three the machine and this shell disagree about most plainly.
+	for sig, want := range map[syscall.Signal]string{
+		syscall.SIGSEGV: "Memory fault",
+		syscall.SIGABRT: "Abort",
+		syscall.SIGALRM: "Alarm call",
+	} {
+		if got := dg.SignalDescriptions[sig]; got != want {
+			t.Errorf("words for %v = %q, want %q", sig, got, want)
+		}
+	}
+	// And one they agree the words for, which is still listed — because the
+	// machine writes a number after them here and this shell never does.
+	if got, want := dg.SignalDescriptions[syscall.SIGKILL], "Killed"; got != want {
+		t.Errorf("words for KILL = %q, want %q", got, want)
 	}
 }

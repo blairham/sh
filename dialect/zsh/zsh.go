@@ -145,6 +145,7 @@ func Semantics() interp.Semantics {
 	s.ArraysAreSparse = interp.No
 	s.ExportCarriesFunctions = interp.No
 	s.AnnouncesBackgroundJob = interp.Yes
+	s.ReportsACommandKilledBySignal = interp.No
 
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.No

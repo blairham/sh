@@ -318,6 +318,11 @@ type Runner struct {
 	// Real shells report the line of the command that failed, so this is
 	// updated per statement rather than per token.
 	line int
+	// killed is the command being run, for the notice that a signal ended
+	// it — the only message that has to render a command rather than name
+	// one. Innermost wins, which is what the shell prints: a command inside
+	// a function is reported as itself and not as the call.
+	killed syntax.Command
 	// signals is the signal-trap machinery, behind a pointer because clone
 	// copies a Runner by value and a mutex cannot be copied — the race
 	// detector says so, and it is right: handlers belong to the process, not
@@ -813,6 +818,10 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		// the difference; an embedder building a tree by hand can, and this
 		// package is a library.
 		r.line = c.Pos().Line
+		// And what the command *is*, for the one message that says a
+		// command back rather than naming it: a signal that ends one is
+		// reported with the command written out.
+		r.killed = c
 	}
 	switch x := c.(type) {
 	case *syntax.SimpleCmd:
@@ -1172,6 +1181,9 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 		r.status = 0
 	case errors.As(err, &ee):
 		r.status = r.exitStatus(err)
+		if sig, killed := killedBy(err); killed {
+			r.reportKilled(sig, cmd.Process.Pid)
+		}
 	default:
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 		r.diagf("%s: %v\n", argv[0], err)
@@ -1227,6 +1239,12 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 	}
 	status, stopped := r.waitResult(w)
 	r.status = status
+	if w.Killed {
+		// Told the signal directly rather than through an error: this path
+		// exists because only the caller's own wait can see a command that
+		// *stopped*, and it reports what ended one just the same.
+		r.reportKilled(w.Signal, pid)
+	}
 	if stopped {
 		// Still there, so it becomes a job rather than a result. The prompt
 		// comes back and the command is waiting to be told to go on.

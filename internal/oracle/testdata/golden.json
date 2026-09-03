@@ -13818,6 +13818,38 @@
         "TimedOut": false
       }
     },
+    "signal/a-command-a-signal-ended": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "User defined signal N: N",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: N: User signal N",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "special/assigning-random-seeds-it": {
       "bash": {
         "Output": "produced",

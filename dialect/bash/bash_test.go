@@ -82,6 +82,7 @@ func TestSemantics(t *testing.T) {
 		// Whether an unassigned subscript is an element.
 		{"ArraysAreSparse", s.ArraysAreSparse, interp.Yes},
 		{"AnnouncesBackgroundJob", s.AnnouncesBackgroundJob, interp.Yes},
+		{"ReportsACommandKilledBySignal", s.ReportsACommandKilledBySignal, interp.Yes},
 		// What `type` does: whether it follows the sentence with the
 		// function itself, and whether `--` ends its options.
 		{"TypePrintsFunctionBody", s.TypePrintsFunctionBody, interp.Yes},
@@ -399,5 +400,25 @@ func TestPatternGroups(t *testing.T) {
 	}
 	if !bash.Dialect().ExtendedPatternInCondition {
 		t.Error("bash reads them inside `[[ ]]`")
+	}
+}
+
+// The notice a signal that ended a command gets, which this shell says with
+// all three of the things there are to say about one.
+func TestAKilledCommandIsSaidBackInFull(t *testing.T) {
+	dg := bash.Diagnostics()
+	if got, want := dg.KilledCommandNotice, "%5[1]d %-27[2]s%[3]s"; got != want {
+		t.Errorf("KilledCommandNotice = %q, want %q", got, want)
+	}
+	// The same twenty-seven-column field the `jobs` listing uses, which is
+	// why the two line up under each other.
+	if !strings.Contains(dg.JobLine, "%-27") {
+		t.Errorf("JobLine = %q, want it to use the same column as the notice", dg.JobLine)
+	}
+	if dg.KilledCommandNoticeUnprefixed {
+		t.Error("the notice is prefixed here, like every other message this shell prints")
+	}
+	if dg.SignalDescriptions != nil {
+		t.Error("this shell takes the words for a signal from the machine")
 	}
 }

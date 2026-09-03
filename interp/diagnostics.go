@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"syscall"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -537,6 +538,40 @@ type Diagnostics struct {
 	// differently. Empty leaves `-f` to the ordinary unknown-option path,
 	// which is what the other two want.
 	ExportFunctionOptionRefused string
+
+	// KilledCommandNotice is what a shell says when a signal ended a
+	// command. Three verbs: the process id, the words for the signal, and
+	// the command written back out.
+	//
+	// All three are used by one dialect and none by all of them, which is
+	// the whole shape of this message:
+	//
+	//	bash   <shell>: line 2: 52505 Killed: 9                  /bin/sh -c 'kill -KILL $$'
+	//	ksh93  <shell>: line 2: 52517: Killed
+	//	dash   Killed: 9
+	//
+	// bash pads the words to a fixed twenty-seven columns and writes the
+	// command straight after them — the padding is a constant and not the
+	// width of the widest signal, which is why the same column appears on a
+	// machine whose words are much shorter. dash prints the words alone,
+	// which is what KilledCommandNoticeUnprefixed is for.
+	KilledCommandNotice string
+
+	// KilledCommandNoticeUnprefixed writes that notice with no location in
+	// front of it. dash alone, and unlike every other message it prints:
+	// this one carries neither the shell's name nor the line.
+	KilledCommandNoticeUnprefixed bool
+
+	// SignalDescriptions are this shell's own words for a signal, for the
+	// ones it does not take from the machine.
+	//
+	// ksh93 alone. It says `Memory fault` where the host says `Segmentation
+	// fault`, `Abort` where the host says `Abort trap`, and carries no
+	// number after either — its table travels with the shell rather than
+	// with the platform, so it is written here rather than read from the
+	// host. A signal missing from it falls back to the host's words, which
+	// is what the other two use for every signal.
+	SignalDescriptions map[syscall.Signal]string
 
 	// JobStarted announces a backgrounded job. Two verbs: the job number and
 	// the process id.

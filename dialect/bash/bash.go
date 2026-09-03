@@ -134,6 +134,7 @@ func Semantics() interp.Semantics {
 	s.ArraysAreSparse = interp.Yes
 	s.ExportCarriesFunctions = interp.Yes
 	s.AnnouncesBackgroundJob = interp.Yes
+	s.ReportsACommandKilledBySignal = interp.Yes
 
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.Yes
@@ -157,7 +158,11 @@ func Diagnostics() interp.Diagnostics {
 		// Measured from a terminal: `[1]+` then two spaces, the state in a
 		// 27-wide column, then the command — with the `&` back on it while
 		// the job runs and gone once it has ended.
-		JobLine:                  "[%[1]d]%[2]s  %-27[3]s%[4]s",
+		JobLine: "[%[1]d]%[2]s  %-27[3]s%[4]s",
+		// The same twenty-seven-column state field the listing above uses,
+		// with the process id in front of it rather than the job number: one
+		// formatter, said in two places.
+		KilledCommandNotice:      "%5[1]d %-27[2]s%[3]s",
 		JobRunning:               "Running",
 		JobStopped:               "Stopped",
 		JobDone:                  "Done",

@@ -46,7 +46,27 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.C
 		return nil
 	}))
 
+	// Where a failed open is reported is the dialect's answer, and the three
+	// they give differ only when the redirect and its command are on
+	// different lines — `while read x` … `done < missing` is the shape, and
+	// an installed script is where it turned up: the loop opens on line 5
+	// and the redirect is on line 11.
+	//
+	// Restored afterwards, so the command itself is still reported where it
+	// was written: only the opening moves.
+	commandLine := r.line
+	defer func() { r.line = commandLine }()
 	for _, rd := range rs {
+		switch r.diag().RedirectFailureLine {
+		case LineOfRedirect:
+			r.line = rd.Pos().Line
+		case LineBeforeRedirect:
+			if n := rd.Pos().Line; n > 1 {
+				r.line = n - 1
+			}
+		default:
+			r.line = commandLine
+		}
 		fd := 1
 		if rd.N != nil {
 			if n, ok := atoi(rd.N.Literal()); ok {

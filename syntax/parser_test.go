@@ -441,12 +441,16 @@ func TestHeredocDashStripsTabsOnly(t *testing.T) {
 	// Spaces are not stripped, so a space-indented delimiter never matches and
 	// the heredoc runs to the end of input — unfinished, not wrong.
 	p := NewParser("cat <<-EOF\n    spaced\n    EOF\n", Core())
-	p.Parse()
-	if p.Err() == nil {
-		t.Fatal("want an error when the delimiter never matches")
+	f := p.Parse()
+	if err := p.Err(); err != nil {
+		t.Fatalf("unfinished is not wrong: %v", err)
 	}
 	if !p.Incomplete() {
-		t.Errorf("want Incomplete, got %v", p.Err())
+		t.Error("want Incomplete, so a prompt asks for another line")
+	}
+	body := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*SimpleCmd).Redirs[0].Heredoc.Literal()
+	if body != "    spaced\n    EOF\n" {
+		t.Errorf("body = %q, want everything to the end of input", body)
 	}
 }
 

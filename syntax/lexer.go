@@ -1140,11 +1140,17 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 	var body strings.Builder
 	for {
 		if l.eof() {
-			// Reaching the end without the delimiter is unfinished input
-			// rather than a syntax error: bash warns and carries on, and the
-			// others take it silently.
+			// Reaching the end without the delimiter is unfinished input and
+			// not a syntax error: every shell in the panel takes the body as
+			// everything to the end and runs the command, one of them with a
+			// warning and three in silence.
+			//
+			// Marked incomplete all the same, because *where* the input ended
+			// is a different question at a prompt: a here-document still open
+			// when the line ends should ask for another line rather than run
+			// with what it has. The parser reports both, and each front end
+			// reads the one it needs.
 			l.incomplete = true
-			l.fail(start, "here-document delimited by end of input, wanted %q", delim)
 			break
 		}
 		line, done := l.heredocLine(strip)

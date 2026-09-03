@@ -258,7 +258,11 @@ func (s Shell) accept(pending *strings.Builder, remember func(string), line stri
 
 	p := syntax.NewParser(text, s.Dialect)
 	stmts, err := collect(p)
-	if (err != nil && p.Incomplete()) || endsWithContinuation(text) {
+	// Incomplete rather than incomplete-and-failed: input can be unfinished
+	// without being wrong, and a here-document with no delimiter yet is
+	// exactly that — the parser takes what it has and says there may be
+	// more, which is an error to a script and a question to a prompt.
+	if p.Incomplete() || endsWithContinuation(text) {
 		return nil, nil, false
 	}
 	pending.Reset()

@@ -209,6 +209,24 @@ func TestNoNoticeInTheMiddleOfAConstruct(t *testing.T) {
 	}
 }
 
+// A here-document holds the line open. Unfinished input is not wrong input,
+// so the parser reports no error for it — and a prompt that waited only for
+// errors would have run the command with an empty body the moment the
+// operator's line ended.
+func TestAHereDocumentHoldsThePromptOpen(t *testing.T) {
+	var out strings.Builder
+	in := readerFile(t, "cat <<EOF\nbody\nEOF\necho after\n")
+	r := newTestRunner(nil)
+	r.Stdout = &out
+	s := Shell{Runner: r, In: in, Out: &out, Err: &strings.Builder{}}
+	if _, err := s.Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != "body\nafter\n" {
+		t.Errorf("out = %q, want the body read and then the next command", got)
+	}
+}
+
 // A final line with no newline is still a line. It is the last thing typed
 // before the input ends, and asking only whether the read failed loses it.
 func TestAFinalLineWithoutANewlineStillRuns(t *testing.T) {

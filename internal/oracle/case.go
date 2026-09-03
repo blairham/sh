@@ -1621,6 +1621,16 @@ echo "st=$?"`,
 		Why:     "`readonly` has to set the array before it locks the name, because locking first refuses the very assignment the command was given — the opposite order from `local`, which must make the name local before the array lands",
 	},
 	{
+		ID: "param/case-change-applies-its-pattern", Category: "parameter expansion",
+		Snippet: `x=abc; printf "[%s]" "${x^^[ab]}"`,
+		Why:     "the operator carries a pattern saying *which* characters to convert, matched one at a time — `ABc`, not `ABC`. Discarding it was a silent wrong answer in a feature already claimed: the script asked for a subset and got the whole string, with status 0. bash alone has the operator, so the other three refuse the word",
+	},
+	{
+		ID: "param/case-change-of-the-first-character", Category: "parameter expansion",
+		Snippet: `x=hello; printf "[%s][%s]" "${x^}" "${x^l}"`,
+		Why:     "the single form converts the first character and only when the pattern matches it, which is what tells it from the doubled one — `Hello` and then `hello`, where `${x^^l}` would be `heLLo`",
+	},
+	{
 		ID: "param/an-expansion-inside-an-operand", Category: "parameter expansion",
 		Snippet: `a=(x y); printf "[%s]" "${a[@]+${a[@]}}"`,
 		Why:     "the standard way to expand a possibly-empty array under `set -u`, and where the wild sweep found that a subscript was ending at the *last* `]` in the word rather than its own — so the inner expansion's bracket closed the outer's subscript and the operator after it was unreadable. The simple `${a[@]+x}` always worked, which is why a real script had to find it",

@@ -33,6 +33,16 @@ const (
 	ParamReplace
 	// ParamSubstring is `${x:off:len}`.
 	ParamSubstring
+	// ParamUpperFirst is `^`, ParamLowerFirst `,` and ParamToggleFirst `~`:
+	// the first character only, and only when it matches the operator's
+	// pattern. `${x^b}` on `abc` is `abc`, because the first character is
+	// not a `b`.
+	ParamUpperFirst
+	ParamLowerFirst
+	ParamToggleFirst
+	// ParamToggle is `~~`, which swaps the case of every character the
+	// pattern matches, as ParamUpper and ParamLower do in one direction.
+	ParamToggle
 	// ParamUpper is `^^` and ParamLower `,,`. bash alone, so they are
 	// rejected unless the dialect has them.
 	ParamUpper
@@ -61,6 +71,14 @@ func (o ParamOp) String() string {
 		return "/"
 	case ParamSubstring:
 		return ":"
+	case ParamUpperFirst:
+		return "^"
+	case ParamLowerFirst:
+		return ","
+	case ParamToggleFirst:
+		return "~"
+	case ParamToggle:
+		return "~~"
 	case ParamUpper:
 		return "^^"
 	case ParamLower:
@@ -275,14 +293,29 @@ func (p *Parser) scanParamOp(s string, e *ParamExpr) (ParamOp, string, bool) {
 			rest = rest[1:]
 		}
 		return ParamReplace, rest, true
-	case strings.HasPrefix(s, "^^"), strings.HasPrefix(s, ",,"):
+	case strings.HasPrefix(s, "^"), strings.HasPrefix(s, ","), strings.HasPrefix(s, "~"):
 		if !p.dialect.ParamCaseChange {
 			return 0, "", false
 		}
-		if s[0] == '^' {
-			return ParamUpper, s[2:], true
+		// Doubled is every character, single is the first — and what follows
+		// either is a *pattern* saying which characters count, so the rest is
+		// handed on rather than required to be empty.
+		if len(s) > 1 && s[1] == s[0] {
+			switch s[0] {
+			case '^':
+				return ParamUpper, s[2:], true
+			case ',':
+				return ParamLower, s[2:], true
+			}
+			return ParamToggle, s[2:], true
 		}
-		return ParamLower, s[2:], true
+		switch s[0] {
+		case '^':
+			return ParamUpperFirst, s[1:], true
+		case ',':
+			return ParamLowerFirst, s[1:], true
+		}
+		return ParamToggleFirst, s[1:], true
 	}
 	return 0, "", false
 }
@@ -319,8 +352,13 @@ func (p *Parser) fillParamArgs(e *ParamExpr, rest string, start Pos) {
 		} else {
 			e.Arg = p.wordFrom(rest, start)
 		}
-	case ParamUpper, ParamLower:
-		// Nothing follows in the forms this supports.
+	case ParamUpper, ParamLower, ParamToggle,
+		ParamUpperFirst, ParamLowerFirst, ParamToggleFirst:
+		// What follows is the pattern saying which characters to convert.
+		// Empty means every one of them, which is what `?` would say.
+		if rest != "" {
+			e.Arg = p.wordFrom(rest, start)
+		}
 	default:
 		if rest != "" {
 			e.Arg = p.wordFrom(rest, start)

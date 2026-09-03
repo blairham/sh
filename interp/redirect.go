@@ -129,6 +129,19 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect) ([]io.C
 		}
 		action := Action{Kind: ActionOpen, Path: path, Write: flags != os.O_RDONLY}
 		if !r.allowed(ctx, action) {
+			// A refused open is an open that did not happen, and the command
+			// must not run without it. Returning quietly let it run with the
+			// stream it was redirecting *away from*: `echo x > denied` wrote
+			// to the terminal and reported success, which is the shape of
+			// failure a gate exists to prevent — the write goes somewhere
+			// the script did not ask for and nothing says so.
+			//
+			// The status is the one any unopenable redirect gives, because
+			// that is what this is to the script. A caller that needs to tell
+			// a refusal from a failure has the event, which says which it
+			// was.
+			r.status = r.diag().redirectFailureStatus()
+			r.redirErr = true
 			return closers, nil
 		}
 

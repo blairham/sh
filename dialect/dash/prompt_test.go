@@ -24,3 +24,10 @@ func TestPromptCodes(t *testing.T) {
 		t.Errorf("Escape = %q with %d codes, want no escape language", st.Escape, len(st.Codes))
 	}
 }
+
+// A bare `!` is a bare `!` here: measured, only ksh93 reads it.
+func TestNoHistoryCharacter(t *testing.T) {
+	if got := dash.PromptStyle().History; got != 0 {
+		t.Errorf("History = %q, want none", got)
+	}
+}

@@ -381,11 +381,14 @@ func (s Shell) render(value string) string {
 	if value == "" {
 		return value
 	}
-	value = s.escapes(value)
+	// Three passes, in the order the panel draws them: the dialect's table of
+	// codes, then expansion, then the character that stands for the history
+	// number.
+	value = s.table(value)
 	if s.Style.Expand {
 		value = s.Runner.Expand(value)
 	}
-	return value
+	return s.history(value)
 }
 
 // historyFile is where this session reads and records its lines.

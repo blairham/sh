@@ -19,7 +19,39 @@ import (
 // order also explains a thing that looks like a prompt feature and is not —
 // `\$` drawing a bare dollar in dash, which has no table at all, is what a
 // backslash does to a dollar during the expansion that follows.
-func (s Shell) escapes(text string) string {
+// history reads the character that stands for the history number.
+//
+// Last of the three passes, which is measurable rather than chosen. ksh93
+// draws `\!` as the number — its table drops the backslash and this reads the
+// `!` left behind, where one pass would have left it alone. And with `x='!'`
+// set, ksh93 draws `$x` as the number too, so this happens after expansion as
+// well: a `!` is read wherever it has come from, unlike a code in the table,
+// which is only read where it was typed.
+func (s Shell) history(text string) string {
+	if s.Style.History == 0 || text == "" {
+		return text
+	}
+	var b strings.Builder
+	runes := []rune(text)
+	for i := 0; i < len(runes); i++ {
+		if runes[i] != s.Style.History {
+			b.WriteRune(runes[i])
+			continue
+		}
+		if i+1 < len(runes) && runes[i+1] == s.Style.History {
+			// Doubled is one of itself, which is the only way to put one in
+			// a prompt that reads them.
+			b.WriteRune(runes[i])
+			i++
+			continue
+		}
+		b.WriteString(s.field(FieldHistoryNumber))
+	}
+	return b.String()
+}
+
+// table draws each code in the prompt's text.
+func (s Shell) table(text string) string {
 	if s.Style.Escape == 0 || text == "" {
 		return text
 	}

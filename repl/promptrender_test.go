@@ -67,7 +67,7 @@ func TestWhatACodeDraws(t *testing.T) {
 		{`\e`, "Wed 2"},
 	} {
 		t.Run(tc.code, func(t *testing.T) {
-			if got := s.escapes(tc.code); got != tc.want {
+			if got := s.render(tc.code); got != tc.want {
 				t.Errorf("%s drew %q, want %q", tc.code, got, tc.want)
 			}
 		})
@@ -75,7 +75,7 @@ func TestWhatACodeDraws(t *testing.T) {
 	t.Run("the padded hour at ten", func(t *testing.T) {
 		ten := s
 		ten.Clock = at(t, 22, 9, 0)
-		if got := ten.escapes(`\p`); got != "10:09PM" {
+		if got := ten.render(`\p`); got != "10:09PM" {
 			t.Errorf("drew %q, want 10:09PM with no padding", got)
 		}
 	})
@@ -96,7 +96,7 @@ func TestACodeThatIsNotInTheTable(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s := Shell{Style: PromptStyle{Escape: '\\', Unknown: tc.unk}}
-			if got := s.escapes(`<\q>`); got != tc.want {
+			if got := s.render(`<\q>`); got != tc.want {
 				t.Errorf("drew %q, want %q", got, tc.want)
 			}
 		})
@@ -108,7 +108,7 @@ func TestACodeThatIsNotInTheTable(t *testing.T) {
 func TestAnEscapeAtTheEnd(t *testing.T) {
 	for _, unk := range []UnknownCode{KeepBoth, DropEscape, DropBoth} {
 		s := Shell{Style: PromptStyle{Escape: '\\', Unknown: unk}}
-		if got := s.escapes(`x\`); got != `x\` {
+		if got := s.render(`x\`); got != `x\` {
 			t.Errorf("Unknown %v drew %q, want the character itself", unk, got)
 		}
 	}
@@ -117,7 +117,7 @@ func TestAnEscapeAtTheEnd(t *testing.T) {
 // With no escape language the text is the text.
 func TestNoEscapeLanguage(t *testing.T) {
 	s := Shell{Style: PromptStyle{}}
-	if got := s.escapes(`<\u %n>`); got != `<\u %n>` {
+	if got := s.render(`<\u %n>`); got != `<\u %n>` {
 		t.Errorf("drew %q, want it untouched", got)
 	}
 }
@@ -156,5 +156,77 @@ func TestAbbreviatingTheHomeDirectory(t *testing.T) {
 		if got := abbreviate(tc.dir, tc.home); got != tc.want {
 			t.Errorf("abbreviate(%q, %q) = %q, want %q", tc.dir, tc.home, got, tc.want)
 		}
+	}
+}
+
+// A character that stands for the history number on its own.
+//
+// ksh93 alone has one, spelled `!`. Measured against it: `<!>` drew 1, 2 and
+// 3 on successive prompts, `<!!>` drew `<!>`, and `<a!b>` drew `<a1b>`. bash,
+// dash and zsh draw a bare `!` as a bare `!`.
+func TestTheCharacterThatStandsForTheHistoryNumber(t *testing.T) {
+	s := Shell{
+		Runner: newTestRunner(nil),
+		Style:  PromptStyle{History: '!', Escape: '\\', Unknown: DropEscape},
+		counts: &counts{history: 6},
+	}
+	for _, tc := range []struct{ in, want string }{
+		{"<!>", "<7>"},
+		{"<a!b>", "<a7b>"},
+		// Doubled is one of itself, which is the only way to put one in a
+		// prompt that reads them.
+		{"<!!>", "<!>"},
+		{"<!!!>", "<!7>"},
+		// Read after the table, not with it: ksh93 draws `\!` as the number,
+		// which is the backslash being dropped and the `!` left behind being
+		// read in the pass that follows. One pass would leave it alone.
+		{`<\!>`, "<7>"},
+		{`<\!!>`, "<!>"},
+	} {
+		t.Run(tc.in, func(t *testing.T) {
+			if got := s.render(tc.in); got != tc.want {
+				t.Errorf("drew %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// And with no such character the text is the text.
+func TestABareBangWithoutTheHabit(t *testing.T) {
+	s := Shell{Runner: newTestRunner(nil), counts: &counts{history: 6}}
+	if got := s.render("<!> <!!>"); got != "<!> <!!>" {
+		t.Errorf("drew %q, want it untouched", got)
+	}
+}
+
+// The bang is read after expansion, where a code in the table is read before
+// it.
+//
+// Measured against ksh93, which does both: with `x='!'` set, `PS1='<$x>'`
+// drew the history number, so a `!` is read wherever it has come from. A code
+// is not — `x='\u'` drew the two characters in bash, because the table had
+// already been read by the time the value arrived.
+func TestTheBangIsReadAfterExpansionAndTheTableBeforeIt(t *testing.T) {
+	s := Shell{
+		Runner: newTestRunner(map[string]string{"x": "!", "USER": "someone"}),
+		Style: PromptStyle{
+			Expand: true, History: '!', Escape: '\\',
+			Codes: map[rune]PromptField{'u': FieldUser},
+		},
+		counts: &counts{history: 6},
+	}
+	// A bang that arrives through expansion is still a bang.
+	if got := s.render("<$x>"); got != "<7>" {
+		t.Errorf("an expanded bang drew %q, want <7>", got)
+	}
+	// A code that arrives through expansion is text: the table has been and
+	// gone.
+	s.Runner.SetVar("y", `\u`)
+	if got := s.render("<$y>"); got != `<\u>` {
+		t.Errorf("an expanded code drew %q, want it left alone", got)
+	}
+	// And one written in the prompt is drawn.
+	if got := s.render(`<\u>`); got != "<someone>" {
+		t.Errorf("drew %q, want <someone>", got)
 	}
 }

@@ -44,6 +44,18 @@ type PromptStyle struct {
 	// three shells that have a language give three different answers.
 	Unknown UnknownCode
 
+	// History is a character that draws the history number on its own and
+	// itself when doubled. ksh93 spells it `!`, where `<!>` drew 1, 2, 3 on
+	// successive prompts and `<!!>` drew `<!>`; bash, dash and zsh draw a
+	// bare `!` as a bare `!`.
+	//
+	// Separate from Codes because it is not a code: nothing introduces it,
+	// and it is read in a second pass over what the table has already
+	// produced. That order is measurable — ksh93 draws `\!` as the number,
+	// which is the backslash being dropped by the table and the `!` left
+	// behind being read after.
+	History rune
+
 	// Privilege is what FieldPrivilege draws for an ordinary user. bash draws
 	// a dollar and zsh draws a percent, which is why the character is here
 	// rather than in the mechanism. Root is `#` in both.

@@ -59,3 +59,10 @@ func TestPromptDefaults(t *testing.T) {
 		t.Error("%_ is in the table, so the comment explaining that it is not is stale")
 	}
 }
+
+// A bare `!` is a bare `!` here: measured, only ksh93 reads it.
+func TestNoHistoryCharacter(t *testing.T) {
+	if got := zsh.PromptStyle().History; got != 0 {
+		t.Errorf("History = %q, want none", got)
+	}
+}

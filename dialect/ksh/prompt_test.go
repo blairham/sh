@@ -36,3 +36,10 @@ func TestPromptCodes(t *testing.T) {
 		t.Errorf("Codes = %v, want none — measured, \\u drew u", st.Codes)
 	}
 }
+
+// ksh93 alone reads a bare `!` as the history number.
+func TestPromptHistoryCharacter(t *testing.T) {
+	if got := ksh.PromptStyle().History; got != '!' {
+		t.Errorf("History = %q, want !", got)
+	}
+}

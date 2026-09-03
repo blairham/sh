@@ -466,6 +466,16 @@ type Semantics struct {
 	// ksh93 alone says yes, which is why a ksh93 script's transcript has the
 	// menu in it and no prompt.
 	SelectPromptNeedsTerminal Answer
+	// SelectTakesUnterminatedReply counts a final reply that has no trailing
+	// newline. zsh alone: `printf 2 | sh -c 'select x in a b; do ...'` picks
+	// `b` there, and bash and ksh93 ignore the line and end the loop with 1.
+	//
+	// The same question `read` answers, and the opposite outcome — the panel
+	// is unanimous for `read` and split here, so that one is the core's
+	// behavior and this one is an axis. Reachable only from a pipe or a file,
+	// since a terminal ends every line.
+	SelectTakesUnterminatedReply Answer
+
 	// SelectEofIsSuccess makes the input running out a success. zsh alone
 	// says yes; the other two report 1.
 	SelectEofIsSuccess Answer

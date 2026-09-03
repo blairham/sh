@@ -233,3 +233,55 @@ func TestSelectPromptNeedsTerminalIsAnAxis(t *testing.T) {
 		}
 	}
 }
+
+// A final reply with no trailing newline is a reply in one of the three and
+// not in the other two, so the substrate asks rather than doing what it has
+// always happened to do.
+//
+// Only reachable from a pipe or a file: a terminal ends every line.
+func TestAnUnterminatedFinalReplyIsAnAxis(t *testing.T) {
+	const src = `select x in a b; do echo "picked=$x"; break; done; echo "st=$?"`
+	// Taken: the reply chooses, the body runs, and the loop ends on its own
+	// terms rather than on the input running out.
+	out, _ := answering(t, src, "2", func(s *Semantics) {
+		s.SelectTakesUnterminatedReply = Yes
+	})
+	if !strings.Contains(out, "picked=b") {
+		t.Errorf("taken: said %q, want the reply to have chosen b", out)
+	}
+	// Ignored: the loop ends as though the input had simply run out, which is
+	// the same path an empty input takes.
+	out, _ = answering(t, src, "2", func(s *Semantics) {
+		s.SelectTakesUnterminatedReply = No
+		s.SelectEofIsSuccess = No
+	})
+	if strings.Contains(out, "picked=") {
+		t.Errorf("ignored: said %q, want the reply dropped", out)
+	}
+	if !strings.Contains(out, "st=1") {
+		t.Errorf("ignored: said %q, want the end-of-input status", out)
+	}
+}
+
+// The axis is asked only when there is an unterminated reply to ask about, so
+// a script whose input ends properly runs under a dialect that never answered.
+func TestTheUnterminatedReplyAxisIsAskedOnlyWhenItArises(t *testing.T) {
+	const src = `select x in a b; do echo "picked=$x"; break; done; echo "st=$?"`
+	unset := func(s *Semantics) { s.SelectTakesUnterminatedReply = Unspecified }
+	// A terminated reply never reaches the question.
+	if out, _ := answering(t, src, "2\n", unset); !strings.Contains(out, "picked=b") {
+		t.Errorf("said %q, want a terminated reply to work with no answer", out)
+	}
+	// Nor does an input that was empty to begin with.
+	if out, _ := answering(t, src, "", unset); strings.Contains(out, "no dialect was chosen") {
+		t.Errorf("said %q, want an empty input not to need the answer", out)
+	}
+	// An unterminated one does, and is refused rather than guessed.
+	out, errOut := answering(t, src, "2", unset)
+	if !strings.Contains(errOut, "no dialect was chosen") {
+		t.Errorf("said %q / %q, want the unspecified refusal", out, errOut)
+	}
+	if strings.Contains(out, "picked=") {
+		t.Errorf("said %q, want no choice made when the axis was refused", out)
+	}
+}

@@ -60,6 +60,7 @@ func TestSemantics(t *testing.T) {
 		{"ArrayScalarIsTheWholeArray", s.ArrayScalarIsTheWholeArray, interp.Yes},
 		{"SelectPromptNeedsTerminal", s.SelectPromptNeedsTerminal, interp.No},
 		{"SelectEofIsSuccess", s.SelectEofIsSuccess, interp.Yes},
+		{"SelectTakesUnterminatedReply", s.SelectTakesUnterminatedReply, interp.Yes},
 		{"SelectEofPrintsNewline", s.SelectEofPrintsNewline, interp.No},
 		{"SelectEofEndsPromptLine", s.SelectEofEndsPromptLine, interp.Yes},
 		{"SelectAssumesUnboundedWidth", s.SelectAssumesUnboundedWidth, interp.Yes},

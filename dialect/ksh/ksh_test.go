@@ -55,6 +55,7 @@ func TestSemantics(t *testing.T) {
 		{"ArrayScalarIsTheWholeArray", s.ArrayScalarIsTheWholeArray, interp.No},
 		{"SelectPromptNeedsTerminal", s.SelectPromptNeedsTerminal, interp.Yes},
 		{"SelectEofIsSuccess", s.SelectEofIsSuccess, interp.No},
+		{"SelectTakesUnterminatedReply", s.SelectTakesUnterminatedReply, interp.No},
 		{"SelectEofPrintsNewline", s.SelectEofPrintsNewline, interp.No},
 		{"SelectEofEndsPromptLine", s.SelectEofEndsPromptLine, interp.No},
 		// A menu that is always vertical never consults a width, so the

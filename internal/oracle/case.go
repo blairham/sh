@@ -2734,6 +2734,11 @@ echo after`,
 		Why:     "a mask that could not be read must not half-apply — every clause is parsed before any of it lands",
 	},
 	{
+		ID: "select/an-unterminated-final-reply", Category: "select",
+		Snippet: `printf 2 | { select x in a b; do echo "picked=$x"; break; done; }; echo "st=$?"`,
+		Why:     "a reply with no trailing newline is a reply in zsh and is not one in bash and ksh93, which end the loop with 1 instead. Written through a pipe because a terminal ends every line, so this is only reachable from a pipe or a file — and `read` answers the same question unanimously, which is why that one is the core's behavior and this one is an axis",
+	},
+	{
 		ID: "cmd/command-v-names-a-reserved-word", Category: "command lookup",
 		Snippet: `command -v if`,
 		Why:     "a word of the grammar is answered too, which is not obvious — it is not a command at all, and every shell in the panel still names it",

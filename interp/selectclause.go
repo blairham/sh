@@ -52,15 +52,23 @@ func (r *Runner) selectClause(ctx context.Context, c *syntax.SelectClause) error
 				show = false
 			}
 			r.selectPrompt()
-			// A final line with no newline is treated as a reply here, and
-			// the read after it is the one that ends the loop. That is what
-			// this has always done rather than what was decided: bash and
-			// ksh93 ignore such a reply and zsh takes it, so it is a conflict
-			// and wants an axis — issue #142. Asking for both answers keeps
-			// the existing behavior rather than changing it in passing.
 			line, atEOF := r.readLine(false)
-			if atEOF && line == "" {
+			switch {
+			case atEOF && line == "":
 				return r.selectEOF()
+			case atEOF:
+				// A final reply with no newline. bash and ksh93 ignore it
+				// and end the loop; zsh takes it. Asked here rather than
+				// once at the top, so a script whose input ends properly
+				// never needs the answer at all.
+				take := r.ask(r.sem().SelectTakesUnterminatedReply,
+					"an unterminated final reply to `select`")
+				if r.unspecified {
+					return nil
+				}
+				if !take {
+					return r.selectEOF()
+				}
 			}
 			if strings.TrimSpace(line) == "" {
 				// A blank reply reprints the menu and does not run the body,

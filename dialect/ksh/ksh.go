@@ -47,6 +47,7 @@ func Semantics() interp.Semantics {
 	s.SelectPromptNeedsTerminal = interp.Yes
 	s.SelectEofEndsPromptLine = interp.No
 	s.SelectEofIsSuccess = interp.No
+	s.SelectTakesUnterminatedReply = interp.No
 	s.SelectEofPrintsNewline = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	s.TypesetLocalNeedsKeywordFunction = interp.Yes

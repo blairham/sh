@@ -12,14 +12,14 @@ import (
 	"github.com/blairham/sh/syntax"
 )
 
-// Which line a failed open is reported at, when the redirect and the command
-// it belongs to are not on the same line.
+// Which line a failed open is reported at, for a *compound* command whose
+// redirect is not on the line it opened on.
 //
-// Three answers among four shells, measured on a loop, a brace group and a
-// command split by a backslash. bash names the redirect's own line, dash and
-// zsh name the line the command began on, and ksh93 names the line before the
-// redirect's in every shape — recorded as what it does rather than as what it
-// might mean.
+// Three answers among four shells: bash names the redirect's own line, dash
+// and zsh name the line the command began on, and ksh93 names the line before
+// the redirect's — recorded as what they do rather than as what they might
+// mean. A simple command is the command's line in all four, which is why the
+// axis speaks only about this case; see below.
 //
 // Found on an installed script: /opt/homebrew/bin/missing_codec_desc opens a
 // `while read` on line 5 and redirects it on line 11, and we said 5 where
@@ -35,8 +35,6 @@ func TestWhichLineAFailedOpenIsReportedAt(t *testing.T) {
 		{"the command's line", LineOfCommand, ":2:"},
 		{"the redirect's line", LineOfRedirect, ":5:"},
 		{"the line before it", LineBeforeRedirect, ":4:"},
-		// A compound command, so this steps back like LineBeforeRedirect.
-		{"the line before it, for a compound", LineBeforeRedirectWhenCompound, ":4:"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var errs strings.Builder
@@ -109,14 +107,13 @@ func redirLine(t *testing.T, at RedirectLine, src string) string {
 	return errs.String()
 }
 
-// One answer treats a simple command differently from a compound one: the
-// simple command is reported where it began and the compound one steps back a
-// line, whatever the layout.
+// A simple command is reported where it began, whatever this axis says.
 //
-// The loop shape above cannot tell that answer from LineBeforeRedirect,
-// because with the redirect already on a later line the two agree. These are
-// the shapes that separate them, and they are why the axis has a fourth value
-// rather than three.
+// All four dialects agree on that, which is why the axis only ever answers
+// about a compound command. It took a command split by backslash
+// continuations to see: with `cat` on line 2 and its redirect two physical
+// lines below, every shell names line 2, and reading the redirect's own
+// position gave bash line 4.
 func TestASimpleCommandMayBeReportedWhereItBegan(t *testing.T) {
 	for _, tc := range []struct {
 		name, src, want string
@@ -132,14 +129,33 @@ func TestASimpleCommandMayBeReportedWhereItBegan(t *testing.T) {
 		{"a compound command across lines", "echo one\n{\n  echo hi\n} < /nonexistent/x\n", ":3:"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := redirLine(t, LineBeforeRedirectWhenCompound, tc.src); !strings.Contains(got, tc.want) {
+			if got := redirLine(t, LineBeforeRedirect, tc.src); !strings.Contains(got, tc.want) {
 				t.Errorf("said %q, want the line %s", got, tc.want)
 			}
 		})
 	}
-	// And the plain "line before" answer steps back for a simple command too,
-	// which is the whole difference between the two values.
-	if got := redirLine(t, LineBeforeRedirect, "echo one\ncat < /nonexistent/x\n"); !strings.Contains(got, ":1:") {
-		t.Errorf("said %q, want LineBeforeRedirect to step back for a simple command too", got)
+	// And the other compound answer leaves a simple command alone too: every
+	// dialect reports a simple command where it began, whatever this axis
+	// says, which is why the axis only ever speaks about a compound one.
+	if got := redirLine(t, LineOfRedirect, "echo one\ncat \\\n< /nonexistent/x\n"); !strings.Contains(got, ":2:") {
+		t.Errorf("said %q, want a simple command reported where it began", got)
+	}
+}
+
+// The moved line belongs to the *opening* and not to what the command then
+// does. A compound command whose redirect succeeds still reports its body
+// where the body is written.
+//
+// The existing check uses a separate statement afterwards, which sets the line
+// itself and so cannot see a missing restore. This one has the diagnostic come
+// from *inside* the command whose redirect moved the line.
+func TestTheMovedLineDoesNotOutlastTheOpening(t *testing.T) {
+	// The redirect is on line 4 and succeeds; the failing command is on 3.
+	got := redirLine(t, LineOfRedirect, "echo one\n{\n  nosuchcommand\n} > /dev/null\n")
+	if !strings.Contains(got, ":3:") {
+		t.Errorf("said %q, want the body reported on its own line 3", got)
+	}
+	if strings.Contains(got, ":4:") {
+		t.Errorf("said %q, want the redirect's line not to outlive the opening", got)
 	}
 }

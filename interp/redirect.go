@@ -57,28 +57,23 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 	commandLine := r.line
 	defer func() { r.line = commandLine }()
 	for _, rd := range rs {
-		switch r.diag().RedirectFailureLine {
-		case LineOfRedirect:
-			r.line = rd.Pos().Line
-		case LineBeforeRedirect:
-			if n := rd.Pos().Line; n > 1 {
-				r.line = n - 1
+		// Every dialect reports a *simple* command at the line it began
+		// on — measured on a command split by backslashes, where the
+		// redirect is two physical lines below its command word and all
+		// four still name the command's. They differ only about a
+		// compound command, so the axis is asked only there.
+		r.line = commandLine
+		if compound {
+			switch r.diag().RedirectFailureLine {
+			case LineOfRedirect:
+				r.line = rd.Pos().Line
+			case LineBeforeRedirect:
+				if n := rd.Pos().Line; n > 1 {
+					r.line = n - 1
+				} else {
+					r.line = n
+				}
 			}
-		case LineBeforeRedirectWhenCompound:
-			// Only a compound command steps back a line. A simple one is
-			// reported where it began, which is why `cat \` on line 3 with
-			// its `< missing` on line 4 says 3 rather than either.
-			if !compound {
-				r.line = commandLine
-				break
-			}
-			if n := rd.Pos().Line; n > 1 {
-				r.line = n - 1
-			} else {
-				r.line = n
-			}
-		default:
-			r.line = commandLine
 		}
 		fd := 1
 		if rd.N != nil {

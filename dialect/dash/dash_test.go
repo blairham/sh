@@ -144,6 +144,10 @@ func TestDiagnostics(t *testing.T) {
 	if got, want := dash.Diagnostics().SyntaxStatus(), 2; got != want {
 		t.Errorf("syntax-error status = %d, want %d", got, want)
 	}
+	// A failed open is reported where the command began, compound or not.
+	if got, want := dash.Diagnostics().RedirectFailureLine, interp.LineOfCommand; got != want {
+		t.Errorf("RedirectFailureLine = %v, want %v", got, want)
+	}
 }
 
 // TestDerivesFromTheStandardNotFromASibling is the property the package

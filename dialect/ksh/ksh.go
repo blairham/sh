@@ -177,7 +177,7 @@ func Diagnostics() interp.Diagnostics {
 		// already says.
 		CannotOpen: "%[1]s: cannot open [%[2]s]",
 		// Measured: ksh93 reports a failed open at the line before the redirect.
-		RedirectFailureLine: interp.LineBeforeRedirectWhenCompound,
+		RedirectFailureLine: interp.LineBeforeRedirect,
 		// A target that expanded to nothing gets neither the reason nor the
 		// "create" wording, whichever direction the redirection was.
 		EmptyRedirectTarget:         "%[1]s: cannot open",

@@ -26,6 +26,422 @@
     }
   ],
   "results": {
+    "alias/a-diagnostic-names-the-use-site": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 2: bad: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 2: nosuchcmd: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 1: bad: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 2: nosuchcmd: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: line 2: nosuchcmd: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:2: command not found: bad",
+        "Status": 127,
+        "TimedOut": false
+      }
+    },
+    "alias/a-name-the-table-does-not-hold": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: alias: nope: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: alias: nope: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: alias: nope: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "alias: nope not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "nope: alias not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/a-self-reference-does-not-loop": {
+      "bash": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "x hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "x hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "x hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/a-trailing-space-carries-on": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 2: a: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "BEE",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 1: a: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "BEE",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "BEE",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:2: command not found: a",
+        "Status": 127,
+        "TimedOut": false
+      }
+    },
+    "alias/a-value-holding-a-quote": {
+      "bash": {
+        "Output": "alias q='it'\\''s'",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "q='it'\\''s'",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "alias q='it'\\''s'",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "q='it'\"'\"'s'",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "q=$'it\\'s'",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "q='it'\\''s'",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/a-value-that-needs-no-quotes": {
+      "bash": {
+        "Output": "alias b='ls'",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "b='ls'",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "alias b='ls'",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "b='ls'",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "b=ls",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "b=ls",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/an-alias-may-hold-a-keyword": {
+      "bash": {
+        "Output": "\u003cshell\u003e: -c: line 2: syntax error near unexpected token `fi'~\u003cshell\u003e: -c: line 2: `iff echo yes; fi'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "yes",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `fi'~\u003cshell\u003e: -c: line 1: `iff echo yes; fi'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "yes",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "yes",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:2: parse error near `fi'",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "alias/defines-and-lists-one": {
+      "bash": {
+        "Output": "alias a='echo x'",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "a='echo x'",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "alias a='echo x'",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "a='echo x'",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "a='echo x'",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "a='echo x'",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/expands-a-command-word": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 2: a: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "hit",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 1: a: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "hit",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "hit",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:2: command not found: a",
+        "Status": 127,
+        "TimedOut": false
+      }
+    },
+    "alias/not-on-the-line-that-defines-it": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: a: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: a: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: a: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: a: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: a: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: command not found: a~st=127",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/the-status-may-count-what-was-missing": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: alias: n1: not found~\u003cshell\u003e: line 1: alias: n2: not found~\u003cshell\u003e: line 1: alias: n3: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: alias: n1: not found~\u003cshell\u003e: line 1: alias: n2: not found~\u003cshell\u003e: line 1: alias: n3: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: alias: n1: not found~\u003cshell\u003e: line 0: alias: n2: not found~\u003cshell\u003e: line 0: alias: n3: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "alias: n1 not found~alias: n2 not found~alias: n3 not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "n1: alias not found~n2: alias not found~n3: alias not found~st=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/unalias-is-not-alias": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: unalias: nope: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: unalias: nope: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: unalias: nope: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "unalias: nope not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:unalias:1: no such hash table element: nope~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/unalias-removes-and-a-removes-all": {
+      "bash": {
+        "Output": "alias b='2'~\u003cshell\u003e: line 1: alias: b: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "b='2'~\u003cshell\u003e: line 1: alias: b: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "alias b='2'~\u003cshell\u003e: line 0: alias: b: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "b='2'~alias: b not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "b=2~b: alias not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "b=2~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "arith/a-bitwise-operator-on-a-float": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: 1.5 \u0026 1: arithmetic syntax error: invalid arithmetic operator (error token is \".5 \u0026 1\")",
@@ -1402,6 +1818,70 @@
         "TimedOut": false
       }
     },
+    "array/a-subscript-past-the-end": {
+      "bash": {
+        "Output": "n=2 all=[x y]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "n=2 all=[x y]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "n=2 all=[x y]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "n=2 all=[x y]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "n=5 all=[x    y]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "array/removing-one-element": {
+      "bash": {
+        "Output": "n=2 all=[p q]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "n=2 all=[p q]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "n=2 all=[p q]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "n=2 all=[p q]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "n=3 all=[p  r]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "axis/arith-error-status": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: 1/0: division by 0 (error token is \"0\")",
@@ -1654,6 +2134,166 @@
       },
       "zsh": {
         "Output": "\u003cshell\u003e:shift:1: shift count must be \u003c= $#~survived",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "builtin/an-option-it-does-have": {
+      "bash": {
+        "Output": "[unset]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[unset]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[unset]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[unset]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[unset]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[unset]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "builtin/an-option-it-does-not-have": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: export: -Q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]~st=2~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: export: -Q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: export: -Q: invalid option~export: usage: export [-nf] [name[=value] ...] or export -p~st=2~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: export: Illegal option -Q",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: export: -Q: unknown option~Usage: export [-p] [name[=value]...]",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:export:1: bad option: -Q~st=1~after",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "builtin/the-same-refusal-for-another-builtin": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: unset: -Q: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]~st=2~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: unset: -Q: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: unset: -Q: invalid option~unset: usage: unset [-f] [-v] [name ...]~st=2~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: unset: Illegal option -Q",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: unset: -Q: unknown option~Usage: unset [-nfv] name...",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:unset:1: bad option: -Q~st=1~after",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "callstack/a-function-knows-it-is-one": {
+      "bash": {
+        "Output": "[f] n=1~outside=[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[f] n=1~outside=[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[f] n=1~outside=[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[] n=0~outside=[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[] n=0~outside=[]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "callstack/nesting-is-innermost-first": {
+      "bash": {
+        "Output": "g f",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "g f",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "g f",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
         "Status": 0,
         "TimedOut": false
       }
@@ -2906,6 +3546,70 @@
         "TimedOut": false
       }
     },
+    "cond/a-newline-at-every-point": {
+      "bash": {
+        "Output": "yes",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "yes",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "yes",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 2: 1: not found~\u003cshell\u003e: 4: ]]: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "yes",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "yes",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/a-newline-continues-a-condition": {
+      "bash": {
+        "Output": "yes",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "yes",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "yes",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "yes",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "yes",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "cond/a-subshell-is-still-a-subshell": {
       "bash": {
         "Output": "subshell",
@@ -3706,6 +4410,102 @@
         "TimedOut": false
       }
     },
+    "decl/a-local-array-stays-local": {
+      "bash": {
+        "Output": "[g]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[g]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[g]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "decl/an-array-assignment-as-an-operand": {
+      "bash": {
+        "Output": "[y]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[y]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[y]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[y]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[x]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "decl/readonly-takes-its-array-first": {
+      "bash": {
+        "Output": "[q]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[q]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[q]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[q]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[p]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "declare/declare-is-the-second-name": {
       "bash": {
         "Output": "[1]",
@@ -4022,6 +4822,70 @@
       },
       "zsh": {
         "Output": "[]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "diag/a-command-after-an-operator": {
+      "bash": {
+        "Output": "one~\u003cshell\u003e: line 3: nosuchcmd: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "one~\u003cshell\u003e: line 3: nosuchcmd: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "one~\u003cshell\u003e: line 2: nosuchcmd: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "one~\u003cshell\u003e: 3: nosuchcmd: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "one~\u003cshell\u003e: line 3: nosuchcmd: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "one~\u003cshell\u003e:3: command not found: nosuchcmd~st=127",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "diag/a-line-worth-naming": {
+      "bash": {
+        "Output": "one~\u003cshell\u003e: line 2: nosuchcmd: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "one~\u003cshell\u003e: line 2: nosuchcmd: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "one~\u003cshell\u003e: line 1: nosuchcmd: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "one~\u003cshell\u003e: 2: nosuchcmd: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "one~\u003cshell\u003e: line 2: nosuchcmd: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "one~\u003cshell\u003e:2: command not found: nosuchcmd~st=127",
         "Status": 0,
         "TimedOut": false
       }
@@ -4790,6 +5654,38 @@
       },
       "zsh": {
         "Output": "(eval):1: parse error near `if'~REACHED st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "exec/a-command-is-named-as-it-was-written": {
+      "bash": {
+        "Output": "basename: illegal option -- -",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "basename: illegal option -- -",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "basename: illegal option -- -",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "basename: illegal option -- -",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "basename: illegal option -- -",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "basename: illegal option -- -",
         "Status": 0,
         "TimedOut": false
       }
@@ -5914,6 +6810,102 @@
         "TimedOut": false
       }
     },
+    "export/a-function-through-the-environment": {
+      "bash": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "0",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "export/a-name-that-is-not-a-function": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: export: nope: not a function~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: export: nope: not a function~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: export: nope: not a function~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: export: Illegal option -f",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: export: -f: unknown option~Usage: export [-p] [name[=value]...]",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:export:1: invalid option(s)~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "export/unset-f-removes-a-function": {
+      "bash": {
+        "Output": "st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=127",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "getopts/argument-attached-or-apart": {
       "bash": {
         "Output": "[b][val]~[b][val]",
@@ -6202,6 +7194,38 @@
         "TimedOut": false
       }
     },
+    "heredoc/a-body-that-runs-to-the-end": {
+      "bash": {
+        "Output": "[body]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[body]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[body]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[body]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[body]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[body]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "heredoc/a-continued-line-is-joined": {
       "bash": {
         "Output": "abcdef",
@@ -6230,6 +7254,38 @@
       },
       "zsh": {
         "Output": "abcdef",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "heredoc/a-delimiter-that-never-matches": {
+      "bash": {
+        "Output": "[a)~ EOF]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a)~ EOF]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[a)~ EOF]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a)~ EOF]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a)~ EOF]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a)~ EOF]",
         "Status": 0,
         "TimedOut": false
       }
@@ -6682,6 +7738,134 @@
         "TimedOut": false
       }
     },
+    "jobs/a-background-job-that-failed": {
+      "bash": {
+        "Output": "[1]+  Exit 1                     false",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[1]+  Done(1)                    false",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[1] + Done(1)                    ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[1] +  Running                 \u003ccommand unknown\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/a-finished-background-job": {
+      "bash": {
+        "Output": "[1]+  Done                       sleep 0.05~---",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[1]+  Done                       sleep 0.05~---",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "---",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[1] + Done                       ~---",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[1] +  Running                 \u003ccommand unknown\u003e~---",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "---",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/a-running-background-job": {
+      "bash": {
+        "Output": "[1]+  Running                    sleep 0.4 \u0026",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[1]+  Running                    sleep 0.4 \u0026",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[1]+  Running                 sleep 0.4 \u0026",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[1] + Running                    ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[1] +  Running                 \u003ccommand unknown\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[1]  + running    sleep 0.4",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/two-jobs-and-which-end-it-starts-from": {
+      "bash": {
+        "Output": "[1]-  Running                    sleep 0.4 \u0026~[2]+  Running                    sleep 0.4 \u0026",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[1]-  Running                    sleep 0.4 \u0026~[2]+  Running                    sleep 0.4 \u0026",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[1]-  Running                 sleep 0.4 \u0026~[2]+  Running                 sleep 0.4 \u0026",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[2] + Running                    ~[1] - Running                    ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[2] +  Running                 \u003ccommand unknown\u003e~[1] -  Running                 \u003ccommand unknown\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[1]  - running    sleep 0.4~[2]  + running    sleep 0.4",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "kill/every-target-failing": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: kill: (999998) - No such process~\u003cshell\u003e: line 1: kill: (999999) - No such process~st=1",
@@ -7130,6 +8314,454 @@
         "TimedOut": false
       }
     },
+    "let/evaluates-and-assigns": {
+      "bash": {
+        "Output": "5",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "5",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "5",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: let: not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "5",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "5",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "let/the-last-expression-decides": {
+      "bash": {
+        "Output": "st=0 a=0 b=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0 a=0 b=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0 a=0 b=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: let: not found~st=127 a= b=",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0 a=0 b=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0 a=0 b=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "let/with-nothing-to-evaluate": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: let: expression expected~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: let: expression expected~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: let: expression expected~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: let: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "Usage: let [ options ] [expr ...]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:let:1: not enough arguments~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "let/zero-is-a-failure": {
+      "bash": {
+        "Output": "a=0~b=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "a=0~b=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "a=0~b=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: let: not found~a=127~\u003cshell\u003e: 1: let: not found~b=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "a=0~b=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "a=0~b=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "name/a-lone-dash-is-an-operand": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: export: `-': not a valid identifier~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: export: `-': not a valid identifier",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: export: `-': not a valid identifier~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: export: -: bad variable name",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: export: -: is not an identifier",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "name/a-special-parameter-is-not-a-positional-one": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: export: `0': not a valid identifier~a=1~\u003cshell\u003e: line 1: export: `12': not a valid identifier~b=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: export: `0': not a valid identifier",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: export: `0': not a valid identifier~a=1~\u003cshell\u003e: line 0: export: `12': not a valid identifier~b=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: export: 0: bad variable name",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: export: 0: is not an identifier",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "a=0~\u003cshell\u003e:export:1: not an identifier: 12",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "name/bare-unset-is-not-unset-v": {
+      "bash": {
+        "Output": "a=0~\u003cshell\u003e: line 1: unset: `1x': not a valid identifier~b=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "a=0~\u003cshell\u003e: line 1: unset: `1x': not a valid identifier",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: unset: `1x': not a valid identifier~a=1~\u003cshell\u003e: line 0: unset: `1x': not a valid identifier~b=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: unset: 1x: bad variable name",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: unset: 1x: invalid variable name~a=1~\u003cshell\u003e: unset: 1x: invalid variable name~b=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:unset:1: 1x: invalid parameter name",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "name/every-bad-operand-is-reported": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: export: `1x': not a valid identifier~\u003cshell\u003e: line 1: export: `2y': not a valid identifier~[1][2]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: export: `1x': not a valid identifier",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: export: `1x': not a valid identifier~\u003cshell\u003e: line 0: export: `2y': not a valid identifier~[1][2]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: export: 1x: bad variable name",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: export: 1x: is not an identifier",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:export:1: not an identifier: 1x",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "name/export-refuses-an-operand-that-is-not-a-name": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: export: `1x': not a valid identifier~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: export: `1x': not a valid identifier",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: export: `1x': not a valid identifier~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: export: 1x: bad variable name",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: export: 1x: is not an identifier",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:export:1: not an identifier: 1x",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "name/readonly-may-be-worded-apart-from-export": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: readonly: `1x': not a valid identifier~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: readonly: `1x': not a valid identifier",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: readonly: `1x': not a valid identifier~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: readonly: 1x: bad variable name",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: readonly: 1x: invalid variable name",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:readonly:1: not an identifier: 1x",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "name/space-around-a-name-is-not-a-name": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: export: ` a ': not a valid identifier~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: export: ` a ': not a valid identifier",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: export: ` a ': not a valid identifier~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: export:  a : bad variable name",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: export:  a : is not an identifier",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:export:1: not valid in this context:  a ",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "name/the-operand-may-be-quoted-back-whole": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: export: `1x=v': not a valid identifier~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: export: `1x=v': not a valid identifier",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: export: `1x=v': not a valid identifier~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: export: 1x: bad variable name",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: export: 1x=v: is not an identifier",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:export:1: not an identifier: 1x",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "name/unset-is-not-export": {
+      "bash": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: unset: `1x': not a valid identifier~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: unset: 1x: bad variable name",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: unset: 1x: invalid variable name~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:unset:1: 1x: invalid parameter name",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "name/unset-takes-what-export-refuses": {
+      "bash": {
+        "Output": "a=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "a=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: unset: `12': not a valid identifier~a=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: unset: 12: bad variable name",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: unset: 12: invalid variable name~a=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "a=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "nounset/defaults-are-exempt": {
       "bash": {
         "Output": "[d][d][]~after",
@@ -7450,6 +9082,166 @@
         "TimedOut": false
       }
     },
+    "param/a-default-holding-a-hash": {
+      "bash": {
+        "Output": "[a #b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a #b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[a #b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a #b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a #b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a #b]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "param/a-default-holding-a-space": {
+      "bash": {
+        "Output": "[grep -E]~[a  b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[grep -E]~[a  b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[grep -E]~[a  b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[grep -E]~[a  b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[grep -E]~[a  b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[grep -E]~[a  b]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "param/a-missing-element-fires-the-default": {
+      "bash": {
+        "Output": "[hello][d]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[hello][d]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[hello][d]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[hello][d]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[d][d]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "param/an-expansion-inside-an-operand": {
+      "bash": {
+        "Output": "[x][y]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[x][y]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[x][y]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[x][y]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[x][y]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "param/an-operator-reaches-an-array-element": {
+      "bash": {
+        "Output": "[ello][heLlo][hell][ello]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[ello][heLlo][hell][ello]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[ello][heLlo][hell][ello]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[ello][heLlo][hell][ello]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[][][][]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "param/array-element-inherits-the-base": {
       "bash": {
         "Output": "[q][3]",
@@ -7478,6 +9270,102 @@
       },
       "zsh": {
         "Output": "[p][3]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "param/array-indices": {
+      "bash": {
+        "Output": "0=p 1=q 2=r ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "0=p 1=q 2=r ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "0=p 1=q 2=r ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "0=p 1=q 2=r ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: bad substitution",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "param/array-slice": {
+      "bash": {
+        "Output": "[q][r][s][q][r][r][s]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[q][r][s][q][r][r][s]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[q][r][s][q][r][r][s]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[q][r][s][q][r][r][s]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[q][r][s][q][r][r][s]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "param/array-slice-keeps-its-fields": {
+      "bash": {
+        "Output": "[a b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[a b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a b][c]",
         "Status": 0,
         "TimedOut": false
       }
@@ -7514,6 +9402,38 @@
         "TimedOut": false
       }
     },
+    "param/case-change-applies-its-pattern": {
+      "bash": {
+        "Output": "[ABc]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[ABc]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: ${x^^[ab]}: bad substitution",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: syntax error at line 1: `^' unexpected",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: bad substitution",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "param/case-change-is-bash-only": {
       "bash": {
         "Output": "[ABC][abc]",
@@ -7527,6 +9447,38 @@
       },
       "bash32": {
         "Output": "\u003cshell\u003e: ${x^^}: bad substitution",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: syntax error at line 1: `^' unexpected",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: bad substitution",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "param/case-change-of-the-first-character": {
+      "bash": {
+        "Output": "[Hello][hello]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[Hello][hello]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: ${x^}: bad substitution",
         "Status": 1,
         "TimedOut": false
       },
@@ -9338,6 +11290,134 @@
         "TimedOut": false
       }
     },
+    "pipefail/all-succeeding-is-zero": {
+      "bash": {
+        "Output": "st=0~st=7",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0~st=7",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0~st=7",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=0~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0~st=7",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0~st=7",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "pipefail/errexit-does-not-always-see-it": {
+      "bash": {
+        "Output": "",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "pipefail/last-failure-not-last-element": {
+      "bash": {
+        "Output": "st=4~st=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=4~st=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=4~st=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=0~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=4~st=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=4~st=3",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "pipefail/turned-off-again": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "pipestatus/a-bare-assignment": {
       "bash": {
         "Output": "[0]",
@@ -9690,6 +11770,102 @@
         "TimedOut": false
       }
     },
+    "printf/a-dash-word-is-an-option": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: printf: -q: invalid option~printf: usage: printf [-v var] format [arguments]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: printf: -q: invalid option~printf: usage: printf [-v var] format [arguments]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: printf: -q: invalid option~printf: usage: printf [-v var] format [arguments]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: printf: Illegal option -q~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: printf: -q: unknown option~Usage: printf [ options ] format [string ...]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "-qst=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/a-lone-dash-is-an-operand": {
+      "bash": {
+        "Output": "-",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "-",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "-",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "-",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "-",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "-",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/assigns-with-v": {
+      "bash": {
+        "Output": "[00042]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[00042]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[00042]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: printf: Illegal option -v~[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: printf: -v: unknown option~Usage: printf [ options ] format [string ...]~[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[00042]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "printf/b-escapes-and-s-does-not": {
       "bash": {
         "Output": "[a\tb][a\\tb]",
@@ -9782,6 +11958,38 @@
       },
       "zsh": {
         "Output": "[0]~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/double-dash-ends-the-options": {
+      "bash": {
+        "Output": "x",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "x",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "x",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "x",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "x",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "x",
         "Status": 0,
         "TimedOut": false
       }
@@ -9978,6 +12186,422 @@
         "TimedOut": false
       }
     },
+    "procsub/a-redirection-where-a-target-belongs": {
+      "bash": {
+        "Output": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `\u003c'~\u003cshell\u003e: -c: line 1: `cat \u003c \u003c x; echo \"st=$?\"'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `\u003c'~\u003cshell\u003e: -c: line 1: `cat \u003c \u003c x; echo \"st=$?\"'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `\u003c'~\u003cshell\u003e: -c: line 0: `cat \u003c \u003c x; echo \"st=$?\"'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: redirection unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: syntax error at line 1: `\u003c' unexpected",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: parse error near `\u003c'",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "procsub/feeds-a-loop": {
+      "bash": {
+        "Output": "[a]~[b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a]~[b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[a]~[b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: redirection unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a]~[b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a]~[b]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "procsub/reads-a-command-as-a-file": {
+      "bash": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "procsub/two-of-them-in-one-command": {
+      "bash": {
+        "Output": "same",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "same",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "same",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "same",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "same",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "read/a-failing-read-still-assigns": {
+      "bash": {
+        "Output": "st=1 l=[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=1 l=[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=1 l=[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=1 l=[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=1 l=[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=1 l=[]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "read/a-final-line-without-a-newline": {
+      "bash": {
+        "Output": "st=1 l=[x]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=1 l=[x]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=1 l=[x]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=1 l=[x]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=1 l=[x]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=1 l=[x]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "read/an-unterminated-last-line-is-dropped": {
+      "bash": {
+        "Output": "\u003ca\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003ca\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003ca\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003ca\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003ca\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003ca\u003e",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/a-quoted-target-with-a-space": {
+      "bash": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/a-target-holding-a-pattern": {
+      "bash": {
+        "Output": "nomatch-*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "nomatch-*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "nomatch-*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "nomatch-*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "nomatch-*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "nomatch-*",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/a-target-that-expands-to-nothing": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: $e: ambiguous redirect~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: $e: ambiguous redirect~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: $e: ambiguous redirect~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: cannot create : Directory nonexistent~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: : cannot open~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: no such file or directory: ~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/a-target-that-is-not-one-word": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: $e: ambiguous redirect~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: $e: ambiguous redirect~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/create-failure-reason-diverges": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: nodir/out: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: nodir/out: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: nodir/out: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: cannot create nodir/out: Directory nonexistent~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: nodir/out: cannot create [No such file or directory]~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: no such file or directory: nodir/out~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/create-failure-says-create": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: d: Is a directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: d: Is a directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: d: Is a directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: cannot create d: Is a directory~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: d: cannot create [Is a directory]~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: is a directory: d~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "redir/dup-to-stderr": {
       "bash": {
         "Output": "done",
@@ -10006,6 +12630,134 @@
       },
       "zsh": {
         "Output": "done",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/failure-does-not-run-the-command": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: nodir/out: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: nodir/out: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: nodir/out: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: cannot create nodir/out: Directory nonexistent~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: nodir/out: cannot create [No such file or directory]~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: no such file or directory: nodir/out~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/failure-line-across-a-continuation": {
+      "bash": {
+        "Output": "one~\u003cshell\u003e: line 2: nosuchfile: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "one~\u003cshell\u003e: line 2: nosuchfile: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "one~\u003cshell\u003e: line 2: nosuchfile: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "one~\u003cshell\u003e: 2: cannot open nosuchfile: No such file~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "one~\u003cshell\u003e: line 2: nosuchfile: cannot open [No such file or directory]~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "one~\u003cshell\u003e:2: no such file or directory: nosuchfile~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/failure-line-for-a-compound-on-one-line": {
+      "bash": {
+        "Output": "one~\u003cshell\u003e: line 2: nosuchfile: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "one~\u003cshell\u003e: line 2: nosuchfile: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "one~\u003cshell\u003e: line 1: nosuchfile: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "one~\u003cshell\u003e: 2: cannot open nosuchfile: No such file~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "one~\u003cshell\u003e: nosuchfile: cannot open [No such file or directory]~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "one~\u003cshell\u003e:2: no such file or directory: nosuchfile~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/failure-line-when-the-redirect-is-elsewhere": {
+      "bash": {
+        "Output": "one~\u003cshell\u003e: line 5: nosuchfile: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "one~\u003cshell\u003e: line 5: nosuchfile: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "one~\u003cshell\u003e: line 4: nosuchfile: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "one~\u003cshell\u003e: 2: cannot open nosuchfile: No such file~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "one~\u003cshell\u003e: line 4: nosuchfile: cannot open [No such file or directory]~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "one~\u003cshell\u003e:2: no such file or directory: nosuchfile~st=1",
         "Status": 0,
         "TimedOut": false
       }
@@ -10102,6 +12854,70 @@
       },
       "zsh": {
         "Output": "[x][x]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/open-failure-wording": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: nosuchfile: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: nosuchfile: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: nosuchfile: No such file or directory~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: cannot open nosuchfile: No such file~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: nosuchfile: cannot open [No such file or directory]~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: no such file or directory: nosuchfile~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "select/an-unterminated-final-reply": {
+      "bash": {
+        "Output": "1) a~2) b~#? ~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1) a~2) b~#? ~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1) a~2) b~#? ~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"do\" unexpected (expecting \"}\")",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1) a~2) b~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1) a  2) b  ~?# picked=b~st=0",
         "Status": 0,
         "TimedOut": false
       }
@@ -10458,6 +13274,70 @@
         "TimedOut": false
       }
     },
+    "set/o-at-the-end-of-a-bundle": {
+      "bash": {
+        "Output": "ok=0~*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "ok=0~*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "ok=0~*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "ok=0~*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "ok=0~*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "ok=0~*",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "set/o-in-a-bundle-turns-off-too": {
+      "bash": {
+        "Output": "*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: no matches found: *",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "shape/case-empty-body-and-no-match": {
       "bash": {
         "Output": "empty=0~nomatch=0",
@@ -10807,6 +13687,134 @@
       "zsh": {
         "Output": "\u003cshell\u003e:1: parse error near `fi'",
         "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "shell/a-version-gate": {
+      "bash": {
+        "Output": "five",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "five",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "other",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "none",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "none",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "none",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "shell/naming-itself-in-a-variable": {
+      "bash": {
+        "Output": "named",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "named",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "named",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "anonymous",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "named",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "named",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "signal-death/an-ordinary-failure-is-untouched": {
+      "bash": {
+        "Output": "st=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=3",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "signal-death/status-encodes-the-signal": {
+      "bash": {
+        "Output": "st=141~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=141~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=141~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=141~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=269~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=141~after",
+        "Status": 0,
         "TimedOut": false
       }
     },
@@ -11194,6 +14202,134 @@
         "TimedOut": false
       }
     },
+    "status/an-assignment-can-read-the-previous-status": {
+      "bash": {
+        "Output": "E=1 ?=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "E=1 ?=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "E=1 ?=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "E=1 ?=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "E=1 ?=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "E=1 ?=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "status/an-assignment-reports-its-substitution": {
+      "bash": {
+        "Output": "st=1~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=1~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=1~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=1~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=1~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=1~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "subst/a-case-inside-a-substitution": {
+      "bash": {
+        "Output": "[yes]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[yes]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `;;'~\u003cshell\u003e: -c: line 0: `x=$(case a in a) echo yes;; esac); echo \"[$x]\"'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[yes]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[yes]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[yes]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "subst/a-substitution-inside-an-arm": {
+      "bash": {
+        "Output": "[inner]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[inner]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[inner]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[inner]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[inner]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[inner]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "subst/arith-vs-subshell": {
       "bash": {
         "Output": "[3] [sub]",
@@ -11482,6 +14618,70 @@
         "TimedOut": false
       }
     },
+    "test/bracket-double-equal": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [: a: unexpected operator~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "test/bracket-names-the-bracket": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: [: b: binary operator expected~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: [: b: binary operator expected~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: [: b: binary operator expected~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [: a: unexpected operator~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: [: b: unknown operator~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: condition expected: b~st=2",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "test/bracket-wants-its-bracket": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: [: missing `]'~st=2",
@@ -11542,6 +14742,70 @@
       },
       "zsh": {
         "Output": "\u003cshell\u003e:1: condition expected: b~st=2",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "test/double-equal-is-equal": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: test: a: unexpected operator~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "test/double-equal-unequal": {
+      "bash": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: test: a: unexpected operator~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=1",
         "Status": 0,
         "TimedOut": false
       }
@@ -12474,6 +15738,38 @@
         "TimedOut": false
       }
     },
+    "trap/a-bare-exit-in-an-exit-trap": {
+      "bash": {
+        "Output": "unreachable",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "unreachable",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "unreachable",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "unreachable",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "unreachable",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "unreachable",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "trap/bad-signal-name": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: trap: NOPE: invalid signal specification~st=1",
@@ -12663,6 +15959,70 @@
       "zsh": {
         "Output": "bye",
         "Status": 7,
+        "TimedOut": false
+      }
+    },
+    "trap/number-and-name-are-one-trap": {
+      "bash": {
+        "Output": "two~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "two~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "two~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "two~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "two~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "two~after",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/numeric-signal-beyond-the-common-few": {
+      "bash": {
+        "Output": "caught~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "caught~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "caught~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "caught~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "caught~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "caught~after",
+        "Status": 0,
         "TimedOut": false
       }
     },
@@ -12918,6 +16278,742 @@
       },
       "zsh": {
         "Output": "sub~after~T",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "type/a-body-with-a-construct-in-it": {
+      "bash": {
+        "Output": "f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "f is a shell function",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "f is a function",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "f is a shell function from zsh",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "type/a-function-and-its-body": {
+      "bash": {
+        "Output": "f is a function~f () ~{ ~    echo hi~}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "f is a function~f () ~{ ~    echo hi~}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "f is a function~f () ~{ ~    echo hi~}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "f is a shell function",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "f is a function",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "f is a shell function from zsh",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "type/a-name-that-is-nothing": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: type: nope: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: type: nope: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: type: nope: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "nope: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: whence: nope: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "nope not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "type/several-names-and-a-double-dash": {
+      "bash": {
+        "Output": "cd is a shell builtin~ls is /bin/ls~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "cd is a shell builtin~ls is /bin/ls~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "cd is a shell builtin~ls is /bin/ls~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "--: not found~cd is a shell builtin~ls is /bin/ls~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "cd is a shell builtin~ls is a tracked alias for /bin/ls~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "cd is a shell builtin~ls is /bin/ls~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "type/what-a-name-would-run": {
+      "bash": {
+        "Output": "cd is a shell builtin~if is a shell keyword~ls is /bin/ls",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "cd is a shell builtin~if is a shell keyword~ls is /bin/ls",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "cd is a shell builtin~if is a shell keyword~ls is /bin/ls",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "cd is a shell builtin~if is a shell keyword~ls is /bin/ls",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "cd is a shell builtin~if is a keyword~ls is a tracked alias for /bin/ls",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "cd is a shell builtin~if is a reserved word~ls is /bin/ls",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "ulimit/a-limit-it-cannot-read": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: ulimit: abc: invalid number~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: ulimit: abc: invalid number~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: ulimit: abc: invalid number~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: ulimit: bad number~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: ulimit: abc: parameter not set~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:ulimit:1: invalid number: abc~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "ulimit/hard-and-soft": {
+      "bash": {
+        "Output": "unlimited~unlimited~unlimited",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "unlimited~unlimited~unlimited",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "unlimited~unlimited~unlimited",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "unlimited~unlimited~unlimited",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "unlimited~unlimited~unlimited",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "unlimited~unlimited~unlimited",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "ulimit/reads-the-file-size-limit": {
+      "bash": {
+        "Output": "unlimited~unlimited",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "unlimited~unlimited",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "unlimited~unlimited",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "unlimited~unlimited",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "unlimited~unlimited",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "unlimited~unlimited",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "ulimit/setting-then-reading": {
+      "bash": {
+        "Output": "3600~3600",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "3600~3600",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "3600~3600",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "3600~3600",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "3600~3600",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "3600~unlimited",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "ulimit/unlimited-is-a-word": {
+      "bash": {
+        "Output": "unlimited",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "unlimited",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "unlimited",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "unlimited",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "unlimited",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "unlimited",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "umask/a-bad-mode-is-not-a-bad-number": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: umask: `q': invalid symbolic mode character~st=1~0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: umask: `q': invalid symbolic mode character~st=1~0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: umask: `q': invalid symbolic mode character~st=1~0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: umask: Illegal mode: u=q~st=2~0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: umask: u=q: bad format~st=1~0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:umask:1: bad symbolic mode permission: q~st=1~022",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "umask/a-bad-number-is-not-a-bad-mode": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: umask: 1x: octal number out of range~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: umask: 1x: octal number out of range~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: umask: 1x: octal number out of range~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: umask: Illegal number: 1x~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: umask: 1x: bad number~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:umask:1: bad umask~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "umask/a-mask-it-cannot-read": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: umask: 9999: octal number out of range~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: umask: 9999: octal number out of range~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: umask: 9999: octal number out of range~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: umask: Illegal number: 9999~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: umask: 9999: bad number~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:umask:1: bad umask~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "umask/a-refused-mode-leaves-the-mask-alone": {
+      "bash": {
+        "Output": "0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "022",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "umask/dash-s-with-a-mask-echoes-in-bash": {
+      "bash": {
+        "Output": "u=rwx,g=,o=",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "u=rwx,g=,o=",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "u=rwx,g=,o=",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "umask/reads-the-mask": {
+      "bash": {
+        "Output": "0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "022",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "umask/setting-is-silent": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "umask/setting-then-reading": {
+      "bash": {
+        "Output": "0077~u=rwx,g=,o=",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "0077~u=rwx,g=,o=",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "0077~u=rwx,g=,o=",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "0077~u=rwx,g=,o=",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "0077~u=rwx,g=,o=",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "077~u=rwx,g=,o=",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "umask/symbolic-clauses-run-left-to-right": {
+      "bash": {
+        "Output": "0111",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "0111",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "0111",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "0111",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "0111",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "0111",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "umask/symbolic-is-unanimous": {
+      "bash": {
+        "Output": "u=rwx,g=rx,o=rx",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "u=rwx,g=rx,o=rx",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "u=rwx,g=rx,o=rx",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "u=rwx,g=rx,o=rx",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "u=rwx,g=rx,o=rx",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "u=rwx,g=rx,o=rx",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "umask/symbolic-omitted-who-is-all-three": {
+      "bash": {
+        "Output": "0222",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "0222",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "0222",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "0222",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "0222",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "0222",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "umask/symbolic-plus-and-minus-are-not-equals": {
+      "bash": {
+        "Output": "u=rwx,g=r,o=",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "u=rwx,g=r,o=",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "u=rwx,g=r,o=",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "u=rwx,g=r,o=",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "u=rwx,g=r,o=",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "u=rwx,g=r,o=",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "umask/symbolic-sets-the-mask": {
+      "bash": {
+        "Output": "0077",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "0077",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "0077",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "0077",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "0077",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "077",
         "Status": 0,
         "TimedOut": false
       }

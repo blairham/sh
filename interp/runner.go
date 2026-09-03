@@ -800,6 +800,15 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 }
 
 func (r *Runner) command(ctx context.Context, c syntax.Command) error {
+	// Where this command begins, not where the statement holding it did.
+	// `true &&` on one line and the command on the next is two commands and
+	// two lines, and every shell in the panel reports the second at its own
+	// — taking the statement's line named the operator's instead, so a
+	// not-found on line 12 of a `&&` chain was reported at the line the chain
+	// started on.
+	if c != nil {
+		r.line = c.Pos().Line
+	}
 	switch x := c.(type) {
 	case *syntax.SimpleCmd:
 		return r.simple(ctx, x)

@@ -133,3 +133,60 @@ func TestTheSnapshotIsOfWhenTheInputRanOut(t *testing.T) {
 		t.Errorf("open = %v, want if then", first)
 	}
 }
+
+// What the *lexer* was inside, which is a different mechanism from the
+// parser's stack and arrives at the same place.
+//
+// A word that never finished can end the input without the parser having
+// asked for anything, so the parser may never fail over it. The snapshot is
+// taken when the parser first sees that the lexer has run out, while the
+// constructs around it are still standing.
+func TestWhatTheLexerIsStillInside(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"echo 'x\n", "'"},
+		{"echo \"x\n", `"`},
+		{"cat <<EOF\n", "<<"},
+		{"echo $( :\n", "$("},
+		{"echo ${x\n", "${"},
+		{"echo `x\n", "`"},
+		{"echo $((1\n", "$(("},
+		// Innermost last: the quote is inside the construct, and the
+		// construct is what the line is inside.
+		{"if true\nthen\necho 'x\n", "if then '"},
+		{"for i in 1\ndo\ncat <<EOF\n", "for <<"},
+		// Nothing left open is nothing to say.
+		{"echo hi\n", ""},
+		{"echo 'x'\n", ""},
+	} {
+		t.Run(strings.ReplaceAll(tc.src, "\n", "\\n"), func(t *testing.T) {
+			p := syntax.NewParser(tc.src, syntax.Core())
+			p.Parse()
+			var got []string
+			for _, o := range p.Open() {
+				got = append(got, o.Word)
+			}
+			if strings.Join(got, " ") != tc.want {
+				t.Errorf("open = %q, want %q", strings.Join(got, " "), tc.want)
+			}
+		})
+	}
+}
+
+// One lexer inside another reports only the outer one, for now.
+//
+// A substitution is scanned by a parser of its own, so the quote inside
+// `echo $( echo 'x` belongs to a different lexer and does not reach this one.
+// What comes back is the substitution alone.
+//
+// Measured, zsh reports both — `cmdsubst quote` for that input and `dquote
+// cmdsubst` for the other order — so this is short of the panel rather than
+// different from it, and the first word is the one it agrees on. Carrying the
+// inner parser's answer out through the fallback path is its own change.
+func TestOneLexerInsideAnotherReportsTheOuter(t *testing.T) {
+	p := syntax.NewParser("echo $( echo 'x\n", syntax.Core())
+	p.Parse()
+	open := p.Open()
+	if len(open) != 1 || open[0].Word != "$(" {
+		t.Errorf("open = %v, want the substitution", open)
+	}
+}

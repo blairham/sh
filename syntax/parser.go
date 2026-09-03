@@ -87,6 +87,13 @@ func (p *Parser) next() {
 	if p.err == nil && p.lex.Err() != nil {
 		p.err = p.lex.Err()
 	}
+	if p.lex.Incomplete() {
+		// The lexer ran out inside a quote or an expansion. The parser may
+		// never fail over it — a word that never finished is still a word —
+		// so the snapshot has to be taken here, while the constructs around
+		// it are still on the stack. Taken once, like every other.
+		p.ranOut()
+	}
 }
 
 func (p *Parser) at(k Kind) bool { return p.tok.Kind == k }
@@ -193,9 +200,17 @@ func (p *Parser) ranOut() {
 // What a dialect calls them at a prompt is the dialect's business — one of
 // them says `for` where another would say the clause inside it.
 func (p *Parser) Open() []Open {
-	out := make([]Open, 0, len(p.openAtEnd))
+	out := make([]Open, 0, len(p.openAtEnd)+1)
 	for _, o := range p.openAtEnd {
 		out = append(out, Open{Word: o.word, Line: o.line, Construct: o.construct})
+	}
+	// The lexer's own, innermost: a quote or an expansion is inside whatever
+	// construct the parser had reached, and it is what the next line goes on
+	// with. It arrives even when the parser recorded nothing, because a word
+	// that never finished can end the input without the parser having asked
+	// for anything.
+	if w := p.lex.Open(); w != "" {
+		out = append(out, Open{Word: w})
 	}
 	return out
 }

@@ -230,6 +230,51 @@ func TestUnsetFKeepsItsOwnRule(t *testing.T) {
 	}
 }
 
+// An operand that is only spaces around a name is not a name — all four
+// refuse `export " a "`, and a name check that trimmed first would take it.
+func TestSurroundingSpaceIsNotTrimmedAway(t *testing.T) {
+	for _, operand := range []string{" a ", " a", "a ", " "} {
+		src := `export -- "` + operand + `"; echo "st=$?"`
+		if out, _ := nameRun(t, nil, Diagnostics{}, src); !strings.Contains(out, "st=1") {
+			t.Errorf("export %q: said %q, want it refused", operand, out)
+		}
+	}
+	// And a name is still a name.
+	if out, _ := nameRun(t, nil, Diagnostics{}, `export -- a; echo "st=$?"`); !strings.Contains(out, "st=0") {
+		t.Errorf("said %q, want a plain name taken", out)
+	}
+}
+
+// The empty operand is refused under every answer, including the one that
+// takes any run of digits — an empty string is not a run of digits, and
+// nothing but a test says so.
+func TestTheEmptyOperandIsNeverAName(t *testing.T) {
+	for _, takes := range []NameOperands{PlainNamesOnly, NamesAndSpecialParameters, NamesAndPositionals} {
+		out, _ := nameRun(t, func(s *Semantics) {
+			s.DeclarationNameOperands, s.UnsetNameOperands = takes, takes
+		}, Diagnostics{}, `unset -- ""; echo "st=$?"`)
+		if !strings.Contains(out, "st=1") {
+			t.Errorf("%v: said %q, want the empty operand refused", takes, out)
+		}
+	}
+}
+
+// Where a bad name ends the script it ends it at the *first* one: dash and zsh
+// print one line for `export 1x 2y` where bash prints two.
+func TestAFatalBadNameStopsAtTheFirst(t *testing.T) {
+	out, _ := nameRun(t, func(s *Semantics) { s.BadNameToDeclarationFatal = Yes },
+		Diagnostics{}, `export 1x 2y; echo after`)
+	if n := strings.Count(out, "not a valid identifier"); n != 1 {
+		t.Errorf("said %q, want one complaint, got %d", out, n)
+	}
+	if strings.Contains(out, "2y") {
+		t.Errorf("said %q, want the second operand never reached", out)
+	}
+	if strings.Contains(out, "after") {
+		t.Errorf("said %q, want the script stopped", out)
+	}
+}
+
 // A dialect may check nothing at all where it wants a name, and `unset -v`
 // still gets a name checked — which is the only thing that tells the loose
 // answer from no validation having been written.

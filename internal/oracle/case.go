@@ -2688,6 +2688,11 @@ echo after`,
 		Why:     "bash and ksh93 quote back `1x=v` as written; dash and zsh name `1x`, the part they judged",
 	},
 	{
+		ID: "name/space-around-a-name-is-not-a-name", Category: "builtin names",
+		Snippet: `export -- " a "; echo "st=$?"`,
+		Why:     "unanimous, and worth a case because the obvious implementation is not: the name check this reached for trims its input first, which is right for judging an assignment and wrong here, and made ` a ` a name",
+	},
+	{
 		ID: "name/bare-unset-is-not-unset-v", Category: "builtin names",
 		Snippet: `unset 1x; echo "a=$?"; unset -v 1x; echo "b=$?"`,
 		Why:     "bash 5.3's bare `unset` checks nothing and its `unset -v` checks a name, which is the sharpest line in this whole area — and bash 3.2 refuses both, so the panel's two bash columns disagree here on purpose. The other three check either way",

@@ -39,7 +39,7 @@ func (r *Runner) isBuiltinName(name string, takes NameOperands) bool {
 	if name == "" {
 		return false
 	}
-	if isNameLike(name) {
+	if isPlainName(name) {
 		return true
 	}
 	switch takes {
@@ -54,6 +54,26 @@ func (r *Runner) isBuiltinName(name string, takes NameOperands) bool {
 	r.status = 2
 	r.unspecified = true
 	return false
+}
+
+// isPlainName reports whether s is a name: a letter or `_`, then letters,
+// digits and `_`.
+//
+// Not isNameLike, which trims first — that is right where it is used, for a
+// word being judged as an assignment, and wrong here: all four shells refuse
+// `export " a "`, and trimming would have made it a name.
+func isPlainName(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '_' || isLetter(c) || (i > 0 && isDigit(c)) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // allDigits reports whether every byte is one, which is what tells a

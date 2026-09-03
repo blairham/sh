@@ -91,6 +91,8 @@ func Semantics() interp.Semantics {
 	s.ExportCarriesFunctions = interp.No
 	s.AnnouncesBackgroundJob = interp.No
 	s.ReportsACommandKilledBySignal = interp.Yes
+	s.CdRefusesUnknownOption = interp.Yes
+	s.CdLastPathOptionWins = interp.Yes
 
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.No

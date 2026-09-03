@@ -1676,6 +1676,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `read/a-failing-read-still-assigns` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` |
 | `read/a-final-line-without-a-newline` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` |
 | `read/an-unterminated-last-line-is-dropped` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` |
+| `cd/keeps-or-resolves-the-name-it-was-given` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` |
+| `cd/which-path-option-decides` | `PL kept~LP resolved` | `PL kept~LP resolved` | `PL kept~LP resolved` | `PL kept~LP resolved` | `PL kept~LP resolved` | `PL resolved~LP resolved` |
 | `type/a-function-and-its-body` | `f is a shell function` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function` | `f is a shell function from zsh` |
 | `type/a-body-with-a-construct-in-it` | `f is a shell function` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function` | `f is a shell function from zsh` |
 | `type/a-body-with-redirections-in-it` | `f is a shell function` | `f is a function~f () ~{ ~    echo hi 2>&1 1>&2 3> /dev/null 0>&-~}` | `f is a function~f () ~{ ~    echo hi 2>&1 1>&2 3> /dev/null 0>&-~}` | `f is a function~f () ~{ ~    echo hi 2>&1 1>&2 3> /dev/null 0>&-~}` | `f is a function` | `f is a shell function from zsh` |
@@ -1713,6 +1715,19 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `read/an-unterminated-last-line-is-dropped` — the consequence of the status above, and the reason it is worth pinning rather than fixing: a file whose last line has no newline loses that line in every shell there is. Returning 0 instead would run it twice — once as the line, once as the empty read after it
   ```sh
   printf 'a\nb' | while read -r l; do printf "<%s>" "$l"; done; echo
+  ```
+- `cd/keeps-or-resolves-the-name-it-was-given` — the two names a directory has — the one it was reached by and the one it is at — and `cd` is where a shell chooses between them. Unanimous. The paths themselves are never printed because they are this machine's; what is compared is which of the two came back
+  ```sh
+  mkdir -p real/sub && ln -s real link
+  case $(cd link/sub && pwd) in *link*) echo 'plain kept';; *) echo 'plain resolved';; esac
+  case $(cd -L link/sub && pwd) in *link*) echo 'L kept';; *) echo 'L resolved';; esac
+  case $(cd -P link/sub && pwd) in *link*) echo 'P kept';; *) echo 'P resolved';; esac
+  ```
+- `cd/which-path-option-decides` — given both, three of them let the last one win and zsh gives `-P` the answer wherever it stands, so the two orders agree in one shell and disagree in the other three. Written out rather than looped over a variable, because a loop would have measured word splitting instead — the variable stays one word in zsh and the case would have said nothing about `cd` at all
+  ```sh
+  mkdir -p real/sub && ln -s real link
+  case $(cd -P -L link/sub && pwd) in *link*) echo 'PL kept';; *) echo 'PL resolved';; esac
+  case $(cd -L -P link/sub && pwd) in *link*) echo 'LP kept';; *) echo 'LP resolved';; esac
   ```
 - `type/a-function-and-its-body` — one shell follows the sentence with the function itself, laid out its own way, and the other three stop at the sentence. What is printed is not what was typed — the shell has a tree by then — so this is the one place a shell has to say a command back
   ```sh

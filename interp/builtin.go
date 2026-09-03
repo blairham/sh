@@ -453,7 +453,62 @@ func expandEchoEscapes(s string) string {
 // state, every dialect needs it, and no shell function can say it. It lived
 // in cmd/bash while that binary was demonstrating Register, which was the
 // right place for a demonstration and the wrong one to leave it.
+// cdOptions reads `cd`'s leading options.
+//
+// `-L` and `-P` are the two, and they are unanimous: the default and `-L`
+// keep the name the directory was reached by, and `-P` resolves it. Measured
+// through a symlink, where all four print the link's path for the first two
+// and the real one for the third.
+//
+// A lone `-` is not an option — it is the previous directory — which the
+// length test leaves alone.
+func (r *Runner) cdOptions(args []string) (rest []string, physical bool, code int) {
+	sawLogical, sawPhysical := false, false
+	done := func(rest []string, code int) ([]string, bool, int) {
+		// Which of the two decides is a question only when both were given,
+		// and it is asked only then: with one of them the two rules agree,
+		// and a shell that refused an unambiguous `cd -P` would be refusing
+		// over a disagreement that is not in front of it.
+		if sawLogical && sawPhysical && !r.ask(r.sem().CdLastPathOptionWins, "which of `cd -L` and `cd -P` decides") {
+			return rest, sawPhysical, code
+		}
+		return rest, physical, code
+	}
+	for len(args) > 0 {
+		a := args[0]
+		if len(a) < 2 || a[0] != '-' {
+			break
+		}
+		if a == "--" {
+			return done(args[1:], 0)
+		}
+		for i := 1; i < len(a); i++ {
+			switch a[i] {
+			case 'L':
+				physical, sawLogical = false, true
+			case 'P':
+				physical, sawPhysical = true, true
+			default:
+				// The one place the panel splits: three of them refuse a
+				// letter `cd` does not have, and zsh reads the word as
+				// somewhere to go instead — `cd -Q` looks for a directory
+				// called `-Q` there.
+				if !r.ask(r.sem().CdRefusesUnknownOption, "an option `cd` does not have") {
+					return done(args, 0)
+				}
+				return nil, physical, r.badBuiltinOption("cd", "-"+string(a[i]))
+			}
+		}
+		args = args[1:]
+	}
+	return done(args, 0)
+}
+
 func biCd(r *Runner, _ context.Context, args []string) int {
+	args, physical, code := r.cdOptions(args)
+	if code != 0 {
+		return code
+	}
 	dir := ""
 	if len(args) > 0 {
 		dir = args[0]
@@ -486,6 +541,20 @@ func biCd(r *Runner, _ context.Context, args []string) int {
 	old := r.workDir()
 	if !filepath.IsAbs(dir) {
 		dir = filepath.Join(old, dir)
+	}
+	if physical {
+		// `-P` is where the directory *is*, rather than the name it was
+		// reached by. Every shell in the panel resolves the whole path and
+		// reports the resolved one from `pwd` afterwards, so this replaces
+		// the name rather than only checking it.
+		//
+		// A path that cannot be resolved is left as written: what to say
+		// about a directory that is not there is the question below, and it
+		// answers with what the operating system said rather than with
+		// anything this step could add.
+		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+			dir = resolved
+		}
 	}
 	info, err := os.Stat(dir)
 	if err == nil && !info.IsDir() {

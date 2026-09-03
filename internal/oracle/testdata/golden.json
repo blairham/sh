@@ -2330,6 +2330,38 @@
         "TimedOut": false
       }
     },
+    "cd/keeps-or-resolves-the-name-it-was-given": {
+      "bash": {
+        "Output": "plain kept~L kept~P resolved",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "plain kept~L kept~P resolved",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "plain kept~L kept~P resolved",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "plain kept~L kept~P resolved",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "plain kept~L kept~P resolved",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "plain kept~L kept~P resolved",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "cd/missing-directory-diverges": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: cd: /nope-xyz-abc: No such file or directory~st=1",
@@ -2422,6 +2454,38 @@
       },
       "zsh": {
         "Output": "\u003cshell\u003e:cd:1: not a directory: ./f~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cd/which-path-option-decides": {
+      "bash": {
+        "Output": "PL kept~LP resolved",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "PL kept~LP resolved",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "PL kept~LP resolved",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "PL kept~LP resolved",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "PL kept~LP resolved",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "PL resolved~LP resolved",
         "Status": 0,
         "TimedOut": false
       }

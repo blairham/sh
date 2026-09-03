@@ -922,6 +922,11 @@ func (p *Parser) declarationArray(c *SimpleCmd) (a *Assign, consumed bool) {
 	}
 	name, ok := p.isAssign(p.tok)
 	if !ok || !strings.HasSuffix(p.tok.Text, "=") {
+		// The suffix test is what keeps a scalar off this path rather than
+		// what makes it come out right — the fallback below would hand
+		// `local a=1` back unchanged anyway. It is here so the common case
+		// does not take a round trip through parseAssign to arrive where it
+		// started.
 		return nil, false
 	}
 	tok := p.tok

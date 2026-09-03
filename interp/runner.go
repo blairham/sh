@@ -1001,6 +1001,12 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		for _, a := range c.Assigns {
 			if a.Operand {
 				// An argument to the builtin, not a prefix to it.
+				//
+				// Belt and braces: this loop only writes when the dialect
+				// says a prefix persists on a *special* builtin, and the
+				// operand assignment that follows would overwrite it either
+				// way. It says which of the two kinds this is rather than
+				// leaving that to the order they happen to run in.
 				continue
 			}
 			v := strings.Join(r.expandWord(a.Value), " ")
@@ -1051,6 +1057,10 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	env := r.environ()
 	for _, a := range c.Assigns {
 		if a.Operand {
+			// Unreachable as things stand — every name that takes an operand
+			// assignment is a builtin, so no external command ever gets here
+			// with one. Kept so that the two kinds are told apart wherever
+			// assignments are read, rather than in some of the places.
 			continue
 		}
 		env = append(env, a.Name+"="+strings.Join(r.expandWord(a.Value), " "))

@@ -96,6 +96,11 @@ func TestALocalArrayStaysInTheFunction(t *testing.T) {
 		// Without `local` it is global, which is what makes the above a
 		// statement about `local` rather than about arrays.
 		{"no local is still global", `f(){ b=(x y); }; f; echo "[${b[1]}]"`, "[y]"},
+		// The saved array has to be a *copy*. An Array is a map, so keeping
+		// the value would keep a reference to the very table the function
+		// then writes into, and putting it back would put back the change.
+		{"an element written inside is put back", `a=(1 2); f(){ local a; a[0]=9; }; f; echo "[${a[0]}]"`, "[1]"},
+		{"and is visible while inside", `a=(1 2); f(){ local a; a[0]=9; echo "[${a[0]}]"; }; f`, "[9]"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			out, _ := run(t, c.src, nil)
@@ -112,5 +117,24 @@ func TestReadonlyTakesItsArrayBeforeLocking(t *testing.T) {
 	out, _ := run(t, `readonly a=(p q); echo "[${a[1]}]"`, nil)
 	if strings.TrimSpace(out) != "[q]" {
 		t.Errorf("said %q, want [q]", strings.TrimSpace(out))
+	}
+}
+
+// An operand is not a prefix, and the plain name proves it: a prefix
+// assignment of an array has no value to give, so treating one as a prefix
+// sets the scalar to the empty string and `$a` reads empty instead of the
+// first element.
+func TestAnOperandIsNotAPrefixAssignment(t *testing.T) {
+	for _, c := range []struct{ name, src string }{
+		{"readonly", `readonly a=(p q); echo "[$a]"`},
+		{"export", `export a=(p q); echo "[$a]"`},
+		{"typeset", `typeset a=(p q); echo "[$a]"`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _ := run(t, c.src, nil)
+			if strings.TrimSpace(out) != "[p]" {
+				t.Errorf("said %q, want [p]", strings.TrimSpace(out))
+			}
+		})
 	}
 }

@@ -4,6 +4,8 @@
 package repl
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -45,7 +47,9 @@ func TestTheHistoryNumberAndTheCommandNumber(t *testing.T) {
 func TestBothLoopsCountTheLines(t *testing.T) {
 	var out, errs strings.Builder
 	in := readerFile(t, "n=1\nn=2\n")
-	r := newTestRunner(map[string]string{"PS1": `<\!:\#>`})
+	r := newTestRunner(map[string]string{
+		"PS1": `<\!:\#>`, "HISTFILE": filepath.Join(t.TempDir(), "history"),
+	})
 	r.Stdout = &out
 	s := Shell{
 		Runner: r, In: in, Out: &out, Err: &errs,
@@ -103,7 +107,9 @@ func TestTheCountOfJobs(t *testing.T) {
 	// Long enough that both prompts see it running, short enough that it is
 	// gone soon after the test is.
 	in := readerFile(t, "sleep 2 &\n:\n")
-	r := newTestRunner(map[string]string{"PS1": `<\j>`})
+	r := newTestRunner(map[string]string{
+		"PS1": `<\j>`, "HISTFILE": filepath.Join(t.TempDir(), "history"),
+	})
 	r.Stdout = &out
 	r.JobControl = true
 	s := Shell{
@@ -126,11 +132,40 @@ func TestTheCountOfJobs(t *testing.T) {
 // prompt that draws it draws nothing rather than the file's own name — which
 // is `/dev/stdin` whatever is behind it.
 func TestTheTerminalNameOfSomethingThatIsNotOne(t *testing.T) {
-	if got := terminalName(nil); got != "" {
+	if got := lookupTerminal(nil); got != "" {
 		t.Errorf("nil gave %q, want nothing", got)
 	}
 	if got := lookupTerminal(readerFile(t, "x")); got != "" {
 		t.Errorf("a regular file gave %q, want nothing", got)
+	}
+}
+
+// And drawn through the code that asks for it, so that the answer reaching
+// the prompt is what is graded and not only the lookup.
+//
+// /dev/null is a character device with a device number like any other, which
+// is how a terminal's name can be looked up where there is no terminal.
+func TestDrawingTheTerminalName(t *testing.T) {
+	f, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Skipf("no %s: %v", os.DevNull, err)
+	}
+	t.Cleanup(func() { _ = f.Close() })
+	s := Shell{
+		In:     f,
+		counts: &counts{},
+		Style: PromptStyle{
+			Escape: '\\',
+			Codes:  map[rune]PromptField{'l': FieldTerminalName},
+		},
+	}
+	if got := s.escapes(`<\l>`); got != "<null>" {
+		t.Errorf("drew %q, want <null>", got)
+	}
+	// Asked once: the answer is kept for the session.
+	s.counts.tty = "changed"
+	if got := s.escapes(`<\l>`); got != "<changed>" {
+		t.Errorf("drew %q, want the kept answer", got)
 	}
 }
 
@@ -140,7 +175,14 @@ func prompts(t *testing.T, name, ps1, typed string) string {
 	t.Helper()
 	var out, errs strings.Builder
 	in := readerFile(t, typed)
-	r := newTestRunner(map[string]string{name: ps1, "PS2": ""})
+	r := newTestRunner(map[string]string{
+		name: ps1, "PS2": "",
+		// Pointed at a temporary file. The numbering starts where the
+		// history left off, so a test that did not say would count this
+		// machine's own history and would say something different on every
+		// machine — and would be reading the user's file to do it.
+		"HISTFILE": filepath.Join(t.TempDir(), "history"),
+	})
 	r.Stdout = &out
 	s := Shell{
 		Runner: r, In: in, Out: &out, Err: &errs,
@@ -160,3 +202,75 @@ func prompts(t *testing.T, name, ps1, typed string) string {
 }
 
 var promptRe = regexp.MustCompile(`<[0-9]+:[0-9]+>`)
+
+// What one accepted line does to the two numbers, asked of the one place that
+// decides it.
+//
+// Both loops call this. They used to each hold their own copy, and a mutation
+// of the terminal loop's copy survived every test here — because every test
+// here drives the other loop. The note on beforeReading warned about exactly
+// that, having already happened once.
+func TestWhatAnAcceptedLineCounts(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		blank, parsed bool
+		history, cmd  int
+	}{
+		{"a command", false, true, 1, 1},
+		{"a line that will not parse", false, false, 1, 0},
+		{"an empty line", true, true, 0, 0},
+		{"an empty line that would not parse either", true, false, 0, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var c counts
+			c.accepted(tc.blank, tc.parsed)
+			if c.history != tc.history || c.command != tc.cmd {
+				t.Errorf("history %d command %d, want %d and %d",
+					c.history, c.command, tc.history, tc.cmd)
+			}
+		})
+	}
+}
+
+// The numbering starts where the history file left off, in either loop.
+//
+// Measured: bash given `-i` on a pipe, with three lines in HISTFILE, draws
+// `!4 #1` at its first prompt — the history carries across sessions whether
+// or not there is an editor to recall it with.
+func TestTheNumberingStartsFromTheHistoryFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "history")
+	if err := os.WriteFile(path, []byte("old one\nold two\nold three\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errs strings.Builder
+	in := readerFile(t, ": one\n")
+	r := newTestRunner(map[string]string{"PS1": `<\!:\#>`, "PS2": "", "HISTFILE": path})
+	r.Stdout = &out
+	s := Shell{
+		Runner: r, In: in, Out: &out, Err: &errs,
+		Style: PromptStyle{
+			Escape: '\\',
+			Codes:  map[rune]PromptField{'!': FieldHistoryNumber, '#': FieldCommandNumber},
+		},
+	}
+	if _, err := s.Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if got := errs.String(); got != "<4:1><5:2>" {
+		t.Errorf("prompts = %q, want <4:1> then <5:2>", got)
+	}
+}
+
+// The terminal's name is found by its device number, so anything in /dev with
+// one can be looked up — which is how this is tested without a terminal.
+func TestLookingUpADeviceByItsNumber(t *testing.T) {
+	f, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Skipf("no %s: %v", os.DevNull, err)
+	}
+	t.Cleanup(func() { _ = f.Close() })
+	if got := lookupTerminal(f); got != "null" {
+		t.Errorf("looked up %s and got %q, want null", os.DevNull, got)
+	}
+}

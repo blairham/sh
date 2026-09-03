@@ -112,7 +112,7 @@ func (s Shell) field(f PromptField) string {
 	case FieldJobCount:
 		return itoa(s.liveJobs())
 	case FieldTerminalName:
-		return terminalName(s.In)
+		return s.terminalName()
 	case FieldTime24:
 		return s.now().Format("15:04:05")
 	case FieldTime12:
@@ -239,10 +239,47 @@ func (s Shell) liveJobs() int {
 // counts are the two running totals, held by pointer because the prompt is
 // drawn from a Shell taken by value and these change under it.
 type counts struct {
+	// tty is the terminal's name once it has been looked for, and looked
+	// says it has been. Kept for the session rather than for the package: a
+	// prompt is drawn on every keystroke and the search reads a directory,
+	// and state that outlives one shell is state a test cannot arrange.
+	tty    string
+	looked bool
+
 	// history is how many lines are behind the one about to be typed,
 	// including those that came from the history file — the numbering
 	// carries across sessions, which is what makes it a *history* number.
 	history int
 	// command is how many commands this session has run, which does not.
 	command int
+}
+
+// accepted records what one accepted line was.
+//
+// One method for both loops rather than the same three lines in each. The
+// note on beforeReading says why: the editor's copy of what happens between
+// lines is the one nothing exercised, and counting written twice went the
+// same way — a mutation of the terminal loop's copy survived every test,
+// because every test drives the other one.
+//
+// A blank line is neither an entry nor a command. A line that will not parse
+// is an entry and is not a command: measured, bash draws `!3 #2` at the
+// prompt after one.
+func (c *counts) accepted(blank, parsed bool) {
+	if blank {
+		return
+	}
+	c.history++
+	if parsed {
+		c.command++
+	}
+}
+
+// terminalName is the terminal's name, asked once per session.
+func (s Shell) terminalName() string {
+	c := s.counted()
+	if !c.looked {
+		c.tty, c.looked = lookupTerminal(s.In), true
+	}
+	return c.tty
 }

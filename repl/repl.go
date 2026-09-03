@@ -67,6 +67,13 @@ type Shell struct {
 // It returns the status of the last command, which is what the shell exits
 // with — the same thing a script's last command decides.
 func (s Shell) Run(ctx context.Context) (int, error) {
+	// What earlier sessions typed. Loaded before the two loops part company,
+	// because both of them number their prompts from where it left off:
+	// measured, bash given `-i` on a pipe with three lines in HISTFILE draws
+	// `!4 #1` at its first prompt, editor or no editor.
+	hist := s.historyFile()
+	earlier := hist.load()
+	s.counts = &counts{history: len(earlier)}
 	if !isTerminal(s.In) {
 		// A prompt without a terminal is not a mistake to refuse: every shell
 		// in the panel, given `-i` on a pipe, still prints a prompt and runs
@@ -102,17 +109,12 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		// screen's.
 		width: func() int { return terminalWidth(s.In) },
 	}
-	// What earlier sessions typed, and where to add what this one does. The
-	// count is kept so only the new lines are written back: the rest are
-	// already in the file, and appending them again doubles it every time a
+	// Where to add what this session types. The count of what was already
+	// there is kept so only the new lines are written back: the rest are in
+	// the file already, and appending them again doubles it every time a
 	// shell is opened.
-	hist := s.historyFile()
-	ed.history = hist.load()
-	loaded := len(ed.history)
-	// A history number carries across sessions and a command number does
-	// not, so one of these starts where the file left off and the other at
-	// nothing.
-	s.counts = &counts{history: loaded}
+	ed.history = earlier
+	loaded := len(earlier)
 	defer func() {
 		if err := hist.save(ed.history[min(loaded, len(ed.history)):]); err != nil {
 			s.errf("%v\n", err)
@@ -139,13 +141,9 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		// 1, 5, 6. accept already keeps the history that way — it remembers
 		// the whole accumulated text as one line — and only the numbering
 		// disagreed with it.
-		blank := strings.TrimSpace(pending.String()+line) == ""
-		stmts, perr, ready := s.accept(&pending, ed.remember, line)
+		stmts, perr, ready := s.take(&pending, ed.remember, line)
 		if !ready {
 			continue
-		}
-		if !blank {
-			s.counts.history++
 		}
 		if perr != nil {
 			// Remembered but not run, and the two numbers say so: measured,
@@ -153,9 +151,6 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			// parse.
 			s.errf("%s", s.report(perr))
 			continue
-		}
-		if !blank {
-			s.counts.command++
 		}
 		done := s.run(ctx, state, stmts)
 		if sig.took() {
@@ -251,9 +246,6 @@ func (s Shell) reportFinishedJobs(continuing bool) {
 // output of `sh -i < script > out` is the commands' output and nothing else.
 func (s Shell) runPlain(ctx context.Context) (int, error) {
 	in := bufio.NewReader(s.In)
-	// No editor here and so no history file, but the prompt is the same
-	// prompt and may still draw the numbers.
-	s.counts = &counts{}
 	var pending strings.Builder
 	for {
 		s.errf("%s", s.beforeReading(&pending))
@@ -267,24 +259,17 @@ func (s Shell) runPlain(ctx context.Context) (int, error) {
 		}
 		line = strings.TrimSuffix(line, "\n")
 
-		blank := strings.TrimSpace(pending.String()+line) == ""
-		stmts, perr, ready := s.accept(&pending, nil, line)
+		stmts, perr, ready := s.take(&pending, nil, line)
 		if !ready {
-			// Nothing to run yet. accept returns no statements and no error
-			// in that case, so this guard cannot change an outcome — it says
+			// Nothing to run yet. take returns no statements and no error in
+			// that case, so this guard cannot change an outcome — it says
 			// what the loop is doing, and the contract it relies on is
 			// asserted in TestAcceptReturnsNothingUntilTheConstructIsDone.
 			continue
 		}
-		if !blank {
-			s.counts.history++
-		}
 		if perr != nil {
 			s.errf("%s", s.report(perr))
 			continue
-		}
-		if !blank {
-			s.counts.command++
 		}
 		if s.runStmts(ctx, stmts) {
 			return s.status(), nil
@@ -485,4 +470,21 @@ func or(a, b string) string {
 		return a
 	}
 	return b
+}
+
+// take adds one line to what is pending and says what became of it: nothing
+// yet, something that would not parse, or statements to run.
+//
+// The counting is here because this is where the decision already is, and
+// because writing it in both loops is how the terminal one came to have a
+// copy that nothing exercised — which the note on beforeReading warned about,
+// having already happened once with what goes between lines.
+func (s Shell) take(pending *strings.Builder, remember func(string), line string) ([]*syntax.File, error, bool) {
+	blank := strings.TrimSpace(pending.String()+line) == ""
+	stmts, perr, ready := s.accept(pending, remember, line)
+	if !ready {
+		return nil, nil, false
+	}
+	s.counted().accepted(blank, perr == nil)
+	return stmts, perr, true
 }

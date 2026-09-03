@@ -48,6 +48,11 @@ func TestGrammar(t *testing.T) {
 }
 
 func TestSemantics(t *testing.T) {
+	// A bare `exit` in an EXIT trap reports the status the trap was entered
+	// with, not the trap's own last command.
+	if got, want := bash.Semantics().ExitInTrapReportsEarlierStatus, interp.Yes; got != want {
+		t.Errorf("ExitInTrapReportsEarlierStatus = %v, want %v", got, want)
+	}
 	s := bash.Semantics()
 	for _, tc := range []struct {
 		axis string

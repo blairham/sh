@@ -94,6 +94,10 @@ func TestSignalNamesHaveNoSIGPrefix(t *testing.T) {
 }
 
 func TestSemantics(t *testing.T) {
+	// The same answer bash gives.
+	if got, want := dash.Semantics().ExitInTrapReportsEarlierStatus, interp.Yes; got != want {
+		t.Errorf("ExitInTrapReportsEarlierStatus = %v, want %v", got, want)
+	}
 	s := dash.Semantics()
 	for _, tc := range []struct {
 		axis string

@@ -647,6 +647,8 @@ func (r *Runner) runExitTrap(ctx context.Context) {
 	// reports this rather than whatever the body's last command did.
 	r.inExitTrap, r.exitTrapEntryStatus = true, before
 	r.runTrapBody(ctx, body)
+	// Cleared for hygiene rather than for effect: the EXIT trap is the last
+	// thing a shell runs, so nothing reads this afterwards.
 	r.inExitTrap = false
 	if r.ctl != controlExit {
 		// The body ran to the end without exiting, so the script keeps the

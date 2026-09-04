@@ -442,6 +442,38 @@
         "TimedOut": false
       }
     },
+    "arith/a-base-above-sixteen": {
+      "bash": {
+        "Output": "35~35",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "35~35",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "35~35",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \"36#z\"",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "35~35",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "35~\u003cshell\u003e:1: invalid base (must be 2 to 36 inclusive): 64",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "arith/a-bitwise-operator-on-a-float": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: 1.5 \u0026 1: arithmetic syntax error: invalid arithmetic operator (error token is \".5 \u0026 1\")",
@@ -535,6 +567,38 @@
       "zsh": {
         "Output": "7",
         "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/a-digit-the-base-does-not-have": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: 2#12: value too great for base (error token is \"2#12\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: 2#12: value too great for base (error token is \"2#12\")",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: 2#12: value too great for base (error token is \"2#12\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \"2#12\"",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: 2#12: arithmetic syntax error",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: bad math expression: operator expected at `2'",
+        "Status": 1,
         "TimedOut": false
       }
     },
@@ -662,6 +726,38 @@
       },
       "zsh": {
         "Output": "8",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/a-name-shaped-value-is-chased": {
+      "bash": {
+        "Output": "3~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "3~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "3~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Illegal number: b",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "3~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "3~st=0",
         "Status": 0,
         "TimedOut": false
       }
@@ -950,6 +1046,38 @@
       },
       "zsh": {
         "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/an-empty-expression-diverges": {
+      "bash": {
+        "Output": "0~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "0~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "0~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: arithmetic expression: expecting primary: \" \"",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "0~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "0~st=0",
         "Status": 0,
         "TimedOut": false
       }
@@ -1722,6 +1850,38 @@
         "TimedOut": false
       }
     },
+    "arith/overflow-saturates-in-one-shell": {
+      "bash": {
+        "Output": "-9223372036854775808",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "-9223372036854775808",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "-9223372036854775808",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "-9223372036854775808",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "9223372036854775807",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "-9223372036854775808",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "arith/precedence-follows-c": {
       "bash": {
         "Output": "[7][9][2]",
@@ -1814,6 +1974,38 @@
       },
       "zsh": {
         "Output": "[2][3]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/the-error-names-what-was-consumed": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: 1+08: value too great for base (error token is \"08\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: 1+08: value too great for base (error token is \"08\")",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: 1+08: value too great for base (error token is \"08\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: arithmetic expression: expecting EOF: \"1+08\"",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "9~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "9~st=0",
         "Status": 0,
         "TimedOut": false
       }

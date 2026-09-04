@@ -1044,6 +1044,17 @@ type Semantics struct {
 	// ksh93 leave it at the shell's own path forever.
 	UnderscoreTracksTheLastArgument Answer
 
+	// ArithBaseAbove36 admits `37#…` through `64#…`, whose letters split
+	// into cases and whose last two digits are `@` and `_`. bash and ksh93
+	// take the full 64; zsh stops at 36 and says so.
+	ArithBaseAbove36 Answer
+	// ArithOverflowSaturates clamps integer overflow at the edge: ksh93
+	// holds max+1 at the maximum where the other shells wrap. Asked only
+	// when an overflow actually happened.
+	ArithOverflowSaturates Answer
+	// EmptyArithExpressionIsAnError refuses `$(( ))`: dash wants a primary
+	// and stops the script; the other three answer zero.
+	EmptyArithExpressionIsAnError Answer
 	// TildePlusMinusExpands turns `~+` into $PWD and `~-` into $OLDPWD,
 	// only while the variable is set — a fresh shell's `~-` stays literal.
 	// bash, ksh93 and zsh have the pair; dash keeps both as written. zsh
@@ -1682,6 +1693,11 @@ func PosixSemantics() Semantics {
 		SetHasTraceLetters:              No,
 		TildePlusMinusExpands:           No,
 		UnderscoreTracksTheLastArgument: No,
+		// The majority answers: full bases, wrapping overflow, zero for an
+		// empty expression.
+		ArithBaseAbove36:              Yes,
+		ArithOverflowSaturates:        No,
+		EmptyArithExpressionIsAnError: No,
 		// The standard says `times` takes no operands and does not say what to
 		// do with one; the two shells that follow it most closely ignore it.
 		TimesRejectsArguments: No,

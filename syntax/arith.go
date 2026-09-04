@@ -470,7 +470,11 @@ func (a *arithParser) number(start Pos) ArithExpr {
 	}
 	if a.off < len(a.src) && a.src[a.off] == '#' && a.dial.ArithExplicitBase {
 		a.off++
-		for a.off < len(a.src) && isNumByte(a.src[a.off]) {
+		// The digit set is the base-64 alphabet, not the hex one the scan
+		// above uses: `36#z` and `64#_` are numbers where the dialect has
+		// explicit bases, and which bases a dialect accepts is decided at
+		// conversion, where the number is actually read.
+		for a.off < len(a.src) && isBaseDigit(a.src[a.off]) {
 			a.off++
 		}
 	}
@@ -521,6 +525,13 @@ func (a *arithParser) floatTail(begin int) {
 func isBasedLiteral(text string) bool {
 	return strings.HasPrefix(text, "0x") || strings.HasPrefix(text, "0X") ||
 		strings.Contains(text, "#")
+}
+
+// isBaseDigit is the base-64 alphabet a `base#digits` literal may draw on:
+// 0-9, both letter cases, `@` and `_`.
+func isBaseDigit(c byte) bool {
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
+		(c >= 'A' && c <= 'Z') || c == '@' || c == '_'
 }
 
 func isNumByte(c byte) bool {

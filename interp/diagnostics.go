@@ -1170,6 +1170,18 @@ type Diagnostics struct {
 	// number. No verbs: it is a reason, not a message — ArithError wraps it
 	// with the expression and the offending token.
 	InvalidNumber string
+	// ArithErrorNamesThePrefix puts what the evaluator had consumed when
+	// the token failed in the report's leading position — `08+1` is blamed
+	// as `08`, `1+08` as `1+08` — rather than the whole expression.
+	ArithErrorNamesThePrefix bool
+
+	// ArithInvalidBase refuses a base the dialect does not go up to. One
+	// verb: the base as written.
+	ArithInvalidBase string
+	// ArithEmptyExpression is `$(( ))` in the dialect that wants a primary
+	// there. No verbs.
+	ArithEmptyExpression string
+
 	// DigitTooGreatForBase is the reason when a literal carries a digit its
 	// base does not allow, such as `08` read as octal. No verbs. It is not
 	// InvalidNumber because it is a different diagnosis, and bash words the

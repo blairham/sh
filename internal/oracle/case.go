@@ -2443,6 +2443,36 @@ echo unreachable`,
 		Why:     "the same split from the other side: an error where octal is read, a decimal digit where it is not",
 	},
 	{
+		ID: "arith/a-base-above-sixteen", Category: "arithmetic",
+		Snippet: `echo $((36#z)); echo $((64#z))`,
+		Why:     "base#digits runs 2 through 64 in bash and ksh93, with letters splitting into cases above 36; zsh stops at 36 and says so; dash has no bases at all",
+	},
+	{
+		ID: "arith/a-digit-the-base-does-not-have", Category: "arithmetic",
+		Snippet: `echo $((2#12)); echo "st=$?"`,
+		Why:     "the failure is unanimous and the sentence is not: bash calls it value too great for base, ksh93 an arithmetic syntax error at 1, zsh stops the number at the bad digit, dash never parsed a base",
+	},
+	{
+		ID: "arith/overflow-saturates-in-one-shell", Category: "arithmetic",
+		Snippet: `echo $((9223372036854775807 + 1))`,
+		Why:     "ksh93 clamps at the maximum where the other three wrap to the minimum",
+	},
+	{
+		ID: "arith/an-empty-expression-diverges", Category: "arithmetic",
+		Snippet: `echo $(( )); echo "st=$?"`,
+		Why:     "zero in three of the four; dash wants a primary and stops the script at 2",
+	},
+	{
+		ID: "arith/a-name-shaped-value-is-chased", Category: "arithmetic",
+		Snippet: `a=b; b=3; echo $((a)); echo "st=$?"`,
+		Why:     "bash, ksh93 and zsh resolve a value that names another variable until it is a number; dash calls b an illegal number and stops",
+	},
+	{
+		ID: "arith/the-error-names-what-was-consumed", Category: "arithmetic",
+		Snippet: `echo $((1+08)); echo "st=$?"`,
+		Why:     "bash's leading position is what the evaluator had consumed when the token failed — 1+08 blamed as 1+08 but 08+1 as 08 — where dash names the whole expression and the octal-tolerant shells answer 9",
+	},
+	{
 		ID: "arith/explicit-base", Category: "arithmetic",
 		Snippet: `printf "[%s]" "$((2#101))" "$((0x10))"`,
 		Why:     "hex is universal; the base#number form is absent from dash",

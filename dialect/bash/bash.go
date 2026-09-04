@@ -316,9 +316,10 @@ func Diagnostics() interp.Diagnostics {
 
 		// bash reserves its generic arithmetic wording for operands that are
 		// not literals, so a bad digit gets a reason of its own.
-		DigitTooGreatForBase: "value too great for base",
-		TraceQuoting:         interp.QuoteShell,
-		TraceForHeader:       interp.TraceForSource,
+		DigitTooGreatForBase:     "value too great for base",
+		ArithErrorNamesThePrefix: true,
+		TraceQuoting:             interp.QuoteShell,
+		TraceForHeader:           interp.TraceForSource,
 		// bash names the construct and the line it opened on, and nothing
 		// about what would have closed it.
 		EvalNaming:       interp.SourceBeforeLocation,

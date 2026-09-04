@@ -1845,6 +1845,12 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `arith/float-is-a-dialect-axis` | `<shell>: 1: arithmetic expression: expecting EOF: "1.5"` *(status 2)* | `<shell>: line 1: 1.5: arithmetic syntax error: invalid arithmetic operator (error token is ".5")` *(status 1)* | `<shell>: line 1: 1.5: arithmetic syntax error: invalid arithmetic operator (error token is ".5")` *(status 127)* | `<shell>: 1.5: syntax error: invalid arithmetic operator (error token is ".5")` *(status 1)* | `[1.5]` | `[1.5]` |
 | `arith/leading-zero-octal` | `[8][64]` | `[8][64]` | `[8][64]` | `[8][64]` | `[8][64]` | `[10][100]` |
 | `arith/invalid-octal-digit` | `<shell>: 1: arithmetic expression: expecting EOF: "08"` *(status 2)* | `<shell>: line 1: 08: value too great for base (error token is "08")` *(status 1)* | `<shell>: line 1: 08: value too great for base (error token is "08")` *(status 127)* | `<shell>: 08: value too great for base (error token is "08")` *(status 1)* | `[8]` | `[8]` |
+| `arith/a-base-above-sixteen` | `<shell>: 1: arithmetic expression: expecting EOF: "36#z"` *(status 2)* | `35~35` | `35~35` | `35~35` | `35~35` | `35~<shell>:1: invalid base (must be 2 to 36 inclusive): 64` *(status 1)* |
+| `arith/a-digit-the-base-does-not-have` | `<shell>: 1: arithmetic expression: expecting EOF: "2#12"` *(status 2)* | `<shell>: line 1: 2#12: value too great for base (error token is "2#12")` *(status 1)* | `<shell>: line 1: 2#12: value too great for base (error token is "2#12")` *(status 127)* | `<shell>: 2#12: value too great for base (error token is "2#12")` *(status 1)* | `<shell>: 2#12: arithmetic syntax error` *(status 1)* | `<shell>:1: bad math expression: operator expected at `2'` *(status 1)* |
+| `arith/overflow-saturates-in-one-shell` | `-9223372036854775808` | `-9223372036854775808` | `-9223372036854775808` | `-9223372036854775808` | `9223372036854775807` | `-9223372036854775808` |
+| `arith/an-empty-expression-diverges` | `<shell>: 1: arithmetic expression: expecting primary: " "` *(status 2)* | `0~st=0` | `0~st=0` | `0~st=0` | `0~st=0` | `0~st=0` |
+| `arith/a-name-shaped-value-is-chased` | `<shell>: 1: Illegal number: b` *(status 2)* | `3~st=0` | `3~st=0` | `3~st=0` | `3~st=0` | `3~st=0` |
+| `arith/the-error-names-what-was-consumed` | `<shell>: 1: arithmetic expression: expecting EOF: "1+08"` *(status 2)* | `<shell>: line 1: 1+08: value too great for base (error token is "08")` *(status 1)* | `<shell>: line 1: 1+08: value too great for base (error token is "08")` *(status 127)* | `<shell>: 1+08: value too great for base (error token is "08")` *(status 1)* | `9~st=0` | `9~st=0` |
 | `arith/explicit-base` | `<shell>: 1: arithmetic expression: expecting EOF: "2#101"` *(status 2)* | `[5][16]` | `[5][16]` | `[5][16]` | `[5][16]` | `[5][16]` |
 | `arith/comparison-yields-one-or-zero` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` |
 | `arith/logical-yields-one-not-an-operand` | `[1][1]` | `[1][1]` | `[1][1]` | `[1][1]` | `[1][1]` | `[1][1]` |
@@ -1928,6 +1934,30 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `arith/invalid-octal-digit` — the same split from the other side: an error where octal is read, a decimal digit where it is not
   ```sh
   printf "[%s]" "$((08))"
+  ```
+- `arith/a-base-above-sixteen` — base#digits runs 2 through 64 in bash and ksh93, with letters splitting into cases above 36; zsh stops at 36 and says so; dash has no bases at all
+  ```sh
+  echo $((36#z)); echo $((64#z))
+  ```
+- `arith/a-digit-the-base-does-not-have` — the failure is unanimous and the sentence is not: bash calls it value too great for base, ksh93 an arithmetic syntax error at 1, zsh stops the number at the bad digit, dash never parsed a base
+  ```sh
+  echo $((2#12)); echo "st=$?"
+  ```
+- `arith/overflow-saturates-in-one-shell` — ksh93 clamps at the maximum where the other three wrap to the minimum
+  ```sh
+  echo $((9223372036854775807 + 1))
+  ```
+- `arith/an-empty-expression-diverges` — zero in three of the four; dash wants a primary and stops the script at 2
+  ```sh
+  echo $(( )); echo "st=$?"
+  ```
+- `arith/a-name-shaped-value-is-chased` — bash, ksh93 and zsh resolve a value that names another variable until it is a number; dash calls b an illegal number and stops
+  ```sh
+  a=b; b=3; echo $((a)); echo "st=$?"
+  ```
+- `arith/the-error-names-what-was-consumed` — bash's leading position is what the evaluator had consumed when the token failed — 1+08 blamed as 1+08 but 08+1 as 08 — where dash names the whole expression and the octal-tolerant shells answer 9
+  ```sh
+  echo $((1+08)); echo "st=$?"
   ```
 - `arith/explicit-base` — hex is universal; the base#number form is absent from dash
   ```sh

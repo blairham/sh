@@ -579,6 +579,20 @@ func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
 		}
 		return globEscape(path), false
 	case syntax.ArithSubst:
+		// An empty expression is zero in three of the four and an error in
+		// dash, which wants a primary and stops the script. Asked only when
+		// the text really is empty.
+		if strings.TrimSpace(s.Value) == "" &&
+			r.ask(r.sem().EmptyArithExpressionIsAnError, "an empty arithmetic expression being an error") {
+			r.diagf("%s\n", Wording(r.diag().ArithEmptyExpression,
+				`arithmetic expression: expecting primary: ""`))
+			r.expandErr = true
+			return "", false
+		}
+		if r.unspecified {
+			r.expandErr = true
+			return "", false
+		}
 		tree, perr := r.arithTree(s.Arith, s.Value)
 		if perr != nil {
 			// A failure to *read* the expression, which can only happen once
@@ -604,8 +618,17 @@ func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
 			if ae.complete {
 				r.diagf("%s\n", err.Error())
 			} else {
+				expr := strings.TrimSpace(s.Value)
+				if r.diag().ArithErrorNamesThePrefix && token != "" {
+					// One dialect's leading position is what it had consumed
+					// when the token failed: `08+1` is blamed as `08` and
+					// `1+08` as `1+08`.
+					if i := strings.Index(expr, token); i >= 0 {
+						expr = expr[:i+len(token)]
+					}
+				}
 				r.diagf("%s\n", Wording(r.diag().ArithError, "%[2]s",
-					strings.TrimSpace(s.Value), err.Error(), token))
+					expr, err.Error(), token))
 			}
 			// The command must not run: `echo $((1/0))` fails in every shell
 			// in the panel rather than echoing an empty string.

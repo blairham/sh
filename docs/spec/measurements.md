@@ -1995,6 +1995,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `exec/a-command-is-named-as-it-was-written` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` |
 | `subst/a-body-is-placed-in-the-script` | `<shell>: 4: nosuchcmd: not found` *(status 127)* | `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | `<shell>: line 3: nosuchcmd: command not found` *(status 127)* | `<shell>: line 4: nosuchcmd: not found` *(status 127)* | `<shell>:4: command not found: nosuchcmd` *(status 127)* |
 | `subst/a-backquoted-body-is-placed-differently` | `<shell>: 1: nosuchcmd: not found` *(status 127)* | `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | `<shell>: line 3: nosuchcmd: command not found` *(status 127)* | `<shell>: line 4: nosuchcmd: not found` *(status 127)* | `<shell>:4: command not found: nosuchcmd` *(status 127)* |
+| `signal/an-interrupt-that-ended-a-child` | `after` | `after` | `after` | `after` | *(no output, status -1)* | `after` |
 | `signal/a-pipeline-element-that-is-not-the-last` | `User defined signal N: N~after` | `after` | `after` | `after` | `after` | `after` |
 | `signal/a-command-a-signal-ended` | `User defined signal N: N` | `<shell>: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'` | *(no output, status 0)* | `<shell>: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'` | `<shell>: N: User signal N` | *(no output, status 0)* |
 
@@ -2015,6 +2016,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   true
   true
   x=`nosuchcmd`
+  ```
+- `signal/an-interrupt-that-ended-a-child` — ^C is one of the two deaths nothing remarks on, and in one shell it is also the one that ends the script — silently, and with 128 plus the signal rather than the 256 plus it that the same shell reports for a command killed by one. The others run the next command. Only SIGINT does this: QUIT, TERM, HUP, USR1 and PIPE are all carried on from by all four
+  ```sh
+  /bin/sh -c 'kill -INT $$' 2>/dev/null; echo after
   ```
 - `signal/a-pipeline-element-that-is-not-the-last` — a signal ends an element whose status the pipeline does not take. Three of the panel pass over it entirely — the same command as the *last* element is remarked on by two of them — and dash says the same thing wherever the element stands. One against three, and the case next to this one is where the same signal is worth a sentence
   ```sh

@@ -34,6 +34,30 @@ func quietSignal(sig syscall.Signal) bool {
 // otherwise identical to the byte — so only a comparison that reads stderr
 // could see it.
 func (r *Runner) reportKilled(sig syscall.Signal, pid int) {
+	if sig == syscall.SIGINT {
+		// ^C reaching a child is the one death that ends the script in one
+		// dialect. Asked before the quiet signals below, because an
+		// interrupt is one of them: the shell that stops here says nothing
+		// while doing it.
+		status := r.status
+		if r.ask(r.sem().ChildInterruptEndsTheScript, "an interrupt that ended a child ending the script") {
+			// Not an exit with 130: the shell that does this *dies of the
+			// interrupt itself*, so a parent sees a process killed by a
+			// signal rather than one that exited. The golden record is what
+			// said so — it recorded an exit code of -1, which is what
+			// os/exec reports for a process a signal ended, where an exit
+			// with 130 would have recorded 130.
+			//
+			// The same road `kill` takes when a script signals its own
+			// shell: the status is set here because the driver may not get
+			// the chance, and the dying is the driver's to do.
+			r.signalDeath("INT", sig)
+			return
+		}
+		if r.unspecified {
+			r.status, r.unspecified = status, false
+		}
+	}
 	if quietSignal(sig) {
 		return
 	}

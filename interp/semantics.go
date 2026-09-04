@@ -482,6 +482,17 @@ type Semantics struct {
 	// and are not asked about.
 	CdRefusesUnknownOption Answer
 
+	// ChildInterruptEndsTheScript stops the script when a child was ended by
+	// an interrupt, instead of carrying on with the next command. True in
+	// ksh93 alone, and for SIGINT alone — measured across QUIT, TERM, HUP,
+	// USR1 and PIPE, every one of which it carries on from.
+	//
+	// It ends the whole script rather than the construct around it: from
+	// inside a loop, the loop and everything after it are abandoned too.
+	// The status is 128 plus the signal, which is not the same shell's
+	// answer for a command killed by one — that is 256 plus it.
+	ChildInterruptEndsTheScript Answer
+
 	// ReportsAnyKilledPipelineElement remarks on a signal that ended an
 	// element of a pipeline other than the last. True in dash alone.
 	//

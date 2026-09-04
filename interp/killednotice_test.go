@@ -324,3 +324,132 @@ func TestRefusingToRemarkOnAPipelineElementLeavesItsStatusAlone(t *testing.T) {
 		t.Errorf("got %q, want %q — the refusal must not become the element's status", out.String(), want)
 	}
 }
+
+// An interrupt that ended a child ends the script in one dialect.
+//
+// SIGINT alone — measured across QUIT, TERM, HUP, USR1 and PIPE, every one
+// of which every shell carries on from — and it ends the whole script rather
+// than the construct around it.
+//
+// Driven through the caller's own wait rather than by sending a real signal.
+// A child that kills itself with SIGINT is not reliable inside this test
+// binary: `trap ” INT` elsewhere in the package calls signal.Ignore for the
+// whole process, a child inherits that, and then it does not die at all —
+// which is the hazard trap_test.go already writes down. Delivery is covered
+// by the corpus, which runs the built shell as its own process.
+func TestAnInterruptThatEndedAChild(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		ends    Answer
+		src     string
+		carried bool
+		status  int
+	}{
+		{"carried on from", No, "/usr/bin/true\necho after\n", true, 0},
+		{"or the script ends there", Yes, "/usr/bin/true\necho after\n", false, 130},
+		{
+			// Not the loop, the script: what comes after the loop is
+			// abandoned too.
+			"and from inside a loop it is still the script", Yes,
+			"for i in 1 2 3; do\n/usr/bin/true\necho loop\ndone\necho after\n", false, 130,
+		},
+		{
+			"where the loop otherwise runs through", No,
+			"for i in 1 2 3; do\n/usr/bin/true\necho loop\ndone\necho after\n", true, 0,
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, st := interruptRun(t, c.src, c.ends, syscall.SIGINT, nil)
+			if carried := strings.Contains(out, "after"); carried != c.carried {
+				t.Errorf("out = %q; carried on = %v, want %v", out, carried, c.carried)
+			}
+			if st != c.status {
+				t.Errorf("status = %d, want %d", st, c.status)
+			}
+		})
+	}
+}
+
+// Only an interrupt. Every other signal is carried on from by every shell,
+// so the dialect that stops has nothing to say about them.
+func TestOnlyAnInterruptEndsTheScript(t *testing.T) {
+	for _, sig := range []syscall.Signal{
+		syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGUSR1, syscall.SIGPIPE,
+	} {
+		out, st := interruptRun(t, "/usr/bin/true\necho after\n", Yes, sig, nil)
+		if !strings.Contains(out, "after") {
+			t.Errorf("%v: out = %q, want the script to carry on", sig, out)
+		}
+		if st != 0 {
+			t.Errorf("%v: status = %d, want 0", sig, st)
+		}
+	}
+}
+
+// A shell with no answer refuses rather than guessing, and the refusal does
+// not become the status — the same rule the other two refusals here follow.
+func TestAnInterruptWithNoAnswerRecorded(t *testing.T) {
+	out, _ := interruptRun(t, "/usr/bin/true\necho \"st=$?\"\n", Unspecified, syscall.SIGINT, nil)
+	if !strings.Contains(out, "interrupt") || !strings.Contains(out, "disagree") {
+		t.Errorf("said %q, want the axis named", out)
+	}
+	if !strings.Contains(out, "st=130") {
+		t.Errorf("said %q, want the signal's status rather than the refusal's", out)
+	}
+}
+
+// The shell does not exit with 130 — it dies of the interrupt itself, so a
+// parent sees a process a signal ended rather than one that exited.
+//
+// The golden record is what said so: it recorded an exit code of -1 for the
+// dialect that does this, which is what os/exec reports for a process killed
+// by a signal. An exit with 130 would have recorded 130.
+func TestAnInterruptEndsTheShellBySignalRatherThanByExiting(t *testing.T) {
+	var got syscall.Signal
+	var asked bool
+	out, st := interruptRun(t, "/usr/bin/true\necho after\n", Yes, syscall.SIGINT,
+		func(sig syscall.Signal) error {
+			got, asked = sig, true
+			return nil
+		})
+	if !asked {
+		t.Fatalf("the shell exited instead of dying by the signal (out %q)", out)
+	}
+	if got != syscall.SIGINT {
+		t.Errorf("died by %v, want SIGINT", got)
+	}
+	// And the status is still set, because the driver may not get the chance
+	// before the kernel does.
+	if st != 128+int(syscall.SIGINT) {
+		t.Errorf("status = %d, want %d", st, 128+int(syscall.SIGINT))
+	}
+}
+
+func interruptRun(t *testing.T, src string, ends Answer, sig syscall.Signal, die func(syscall.Signal) error) (string, int) {
+	t.Helper()
+	var buf strings.Builder
+	sem := PosixSemantics()
+	sem.ChildInterruptEndsTheScript = ends
+	sem.ReportsACommandKilledBySignal = Yes
+	sem.SignalDeathStatusIsTwoFiftySix = No
+	r := &Runner{
+		Semantics: &sem, Diagnostics: &Diagnostics{Location: LocationTightLine},
+		Name: "sh", Stdout: &buf, Stderr: &buf,
+		// The caller's own wait, which is told the signal directly. No real
+		// one is sent, so nothing here depends on this process's signal
+		// dispositions.
+		WaitForCommand: func(int) (Wait, error) {
+			return Wait{Killed: true, Signal: sig}, nil
+		},
+		DieBySignal: die,
+	}
+	f, err := syntax.Parse(src, syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := r.Run(context.Background(), f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return buf.String(), st
+}

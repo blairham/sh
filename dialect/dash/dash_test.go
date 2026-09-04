@@ -121,6 +121,7 @@ func TestSemantics(t *testing.T) {
 		{"AnnouncesBackgroundJob", s.AnnouncesBackgroundJob, interp.No},
 		{"ReportsACommandKilledBySignal", s.ReportsACommandKilledBySignal, interp.Yes},
 		{"ReportsAnyKilledPipelineElement", s.ReportsAnyKilledPipelineElement, interp.Yes},
+		{"ChildInterruptEndsTheScript", s.ChildInterruptEndsTheScript, interp.No},
 		{"CdRefusesUnknownOption", s.CdRefusesUnknownOption, interp.Yes},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.Yes},
 		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.Yes},

@@ -252,6 +252,31 @@ var Corpus = []Case{
 		Why:     "brace expansion is absent from dash",
 	},
 	{
+		ID: "expand/brace-range-alphabetic", Category: "expansion",
+		Snippet: `echo {a..e}; echo {e..a}`,
+		Why:     "a letter range counts bytes either way — unanimous among the shells that expand braces at all",
+	},
+	{
+		ID: "expand/brace-range-stepped", Category: "expansion",
+		Snippet: `echo {1..10..3}`,
+		Why:     "a third number strides the range — unanimous among the shells that have ranges",
+	},
+	{
+		ID: "expand/brace-range-zero-padded", Category: "expansion",
+		Snippet: `echo {01..03}; echo {1..03}; echo {-03..3..3}`,
+		Why:     "a leading zero on either endpoint pads the whole range to the widest, zeros after the sign; ksh93 alone strips the padding",
+	},
+	{
+		ID: "expand/brace-range-step-sign-and-direction", Category: "expansion",
+		Snippet: `echo {10..1..3}; echo {1..10..-3}`,
+		Why:     "the endpoints decide the direction and the step contributes magnitude alone in bash and zsh; ksh93 honors the sign and stops after one element when it points the wrong way",
+	},
+	{
+		ID: "expand/brace-range-alpha-stepped", Category: "expansion",
+		Snippet: `echo {a..e..2}`,
+		Why:     "a stride over a letter range: bash and ksh93 expand it, zsh leaves the word alone",
+	},
+	{
 		ID: "expand/brace-before-param", Category: "expansion",
 		Snippet: `a=1; echo {$a,2}`,
 		Why:     "braces resolve before parameter expansion, so variable ranges cannot work",

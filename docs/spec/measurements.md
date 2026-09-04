@@ -161,6 +161,11 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `expand/glob-literal-pattern` | `[etc]` | `[etc]` | `[etc]` | `[etc]` | `[etc]` | `[etc]` |
 | `expand/glob-no-match` | `/zzz_no_such*` | `/zzz_no_such*` | `/zzz_no_such*` | `/zzz_no_such*` | `/zzz_no_such*` | `<shell>:1: no matches found: /zzz_no_such*` *(status 1)* |
 | `expand/brace` | `{1..3}` | `1 2 3` | `1 2 3` | `1 2 3` | `1 2 3` | `1 2 3` |
+| `expand/brace-range-alphabetic` | `{a..e}~{e..a}` | `a b c d e~e d c b a` | `a b c d e~e d c b a` | `a b c d e~e d c b a` | `a b c d e~e d c b a` | `a b c d e~e d c b a` |
+| `expand/brace-range-stepped` | `{1..10..3}` | `1 4 7 10` | `1 4 7 10` | `{1..10..3}` | `1 4 7 10` | `1 4 7 10` |
+| `expand/brace-range-zero-padded` | `{01..03}~{1..03}~{-03..3..3}` | `01 02 03~01 02 03~-03 000 003` | `01 02 03~01 02 03~-03 000 003` | `1 2 3~1 2 3~{-03..3..3}` | `1 2 3~1 2 3~-3 0 3` | `01 02 03~01 02 03~-03 000 003` |
+| `expand/brace-range-step-sign-and-direction` | `{10..1..3}~{1..10..-3}` | `10 7 4 1~1 4 7 10` | `10 7 4 1~1 4 7 10` | `{10..1..3}~{1..10..-3}` | `10~1` | `10 7 4 1~10 7 4 1` |
+| `expand/brace-range-alpha-stepped` | `{a..e..2}` | `a c e` | `a c e` | `{a..e..2}` | `a c e` | `{a..e..2}` |
 | `expand/brace-before-param` | `{1,2}` | `1 2` | `1 2` | `1 2` | `1 2` | `1 2` |
 | `expand/tilde-unquoted` | `abs` | `abs` | `abs` | `abs` | `abs` | `abs` |
 | `expand/tilde-quoted` | `literal` | `literal` | `literal` | `literal` | `literal` | `literal` |
@@ -216,6 +221,26 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `expand/brace` — brace expansion is absent from dash
   ```sh
   echo {1..3}
+  ```
+- `expand/brace-range-alphabetic` — a letter range counts bytes either way — unanimous among the shells that expand braces at all
+  ```sh
+  echo {a..e}; echo {e..a}
+  ```
+- `expand/brace-range-stepped` — a third number strides the range — unanimous among the shells that have ranges
+  ```sh
+  echo {1..10..3}
+  ```
+- `expand/brace-range-zero-padded` — a leading zero on either endpoint pads the whole range to the widest, zeros after the sign; ksh93 alone strips the padding
+  ```sh
+  echo {01..03}; echo {1..03}; echo {-03..3..3}
+  ```
+- `expand/brace-range-step-sign-and-direction` — the endpoints decide the direction and the step contributes magnitude alone in bash and zsh; ksh93 honors the sign and stops after one element when it points the wrong way
+  ```sh
+  echo {10..1..3}; echo {1..10..-3}
+  ```
+- `expand/brace-range-alpha-stepped` — a stride over a letter range: bash and ksh93 expand it, zsh leaves the word alone
+  ```sh
+  echo {a..e..2}
   ```
 - `expand/brace-before-param` — braces resolve before parameter expansion, so variable ranges cannot work
   ```sh
@@ -1634,7 +1659,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `xtrace/assignments-per-line-diverges` | `+ a=1 b=2` | `+ a=1~+ b=2` | `+ a=1~+ b=2` | `+ a=1~+ b=2` | `+ a=1~+ b=2` | `+<shell>:1> a=1 b=2 ` |
 | `xtrace/disabling-set-diverges` | `+ set +x~done` | `+ set +x~done` | `+ set +x~done` | `+ set +x~done` | `done` | `+<shell>:1> set +x~done` |
 | `xtrace/compound-header-diverges` | `+ echo 1~1~+ echo 2~2` | `+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2` | `+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2` | `+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2` | `+ echo 1~1~+ echo 2~2` | `+<shell>:1> i=1~+<shell>:1> echo 1~1~+<shell>:1> i=2~+<shell>:1> echo 2~2` |
-| `xtrace/pipeline-order-diverges` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+<shell>:1> echo a~+<shell>:1> cat~a` |
+| `xtrace/pipeline-order-diverges` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ cat~+ echo a~a` | `+<shell>:1> echo a~+<shell>:1> cat~a` |
 | `nounset/unset-variable-is-an-error` | `<script>: 2: NOPE: parameter not set` *(status 2)* | `<script>: line 2: NOPE: unbound variable` *(status 1)* | `<script>: line 2: NOPE: unbound variable` *(status 1)* | `<script>: line 2: NOPE: unbound variable` *(status 1)* | `<script>: line 2: NOPE: parameter not set` *(status 1)* | `<script>:2: NOPE: parameter not set` *(status 1)* |
 | `nounset/defaults-are-exempt` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` |
 | `nounset/empty-is-not-unset` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` |

@@ -7802,6 +7802,166 @@
         "TimedOut": false
       }
     },
+    "expand/brace-range-alpha-stepped": {
+      "bash": {
+        "Output": "a c e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "a c e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "{a..e..2}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "{a..e..2}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "a c e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "{a..e..2}",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/brace-range-alphabetic": {
+      "bash": {
+        "Output": "a b c d e~e d c b a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "a b c d e~e d c b a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "a b c d e~e d c b a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "{a..e}~{e..a}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "a b c d e~e d c b a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "a b c d e~e d c b a",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/brace-range-step-sign-and-direction": {
+      "bash": {
+        "Output": "10 7 4 1~1 4 7 10",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "10 7 4 1~1 4 7 10",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "{10..1..3}~{1..10..-3}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "{10..1..3}~{1..10..-3}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "10~1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "10 7 4 1~10 7 4 1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/brace-range-stepped": {
+      "bash": {
+        "Output": "1 4 7 10",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1 4 7 10",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "{1..10..3}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "{1..10..3}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1 4 7 10",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1 4 7 10",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/brace-range-zero-padded": {
+      "bash": {
+        "Output": "01 02 03~01 02 03~-03 000 003",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "01 02 03~01 02 03~-03 000 003",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1 2 3~1 2 3~{-03..3..3}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "{01..03}~{1..03}~{-03..3..3}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1 2 3~1 2 3~-3 0 3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "01 02 03~01 02 03~-03 000 003",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "expand/glob-applies-to-expansion": {
       "bash": {
         "Output": "[etc]",
@@ -20080,7 +20240,7 @@
         "TimedOut": false
       },
       "ksh93": {
-        "Output": "+ echo a~+ cat~a",
+        "Output": "+ cat~+ echo a~a",
         "Status": 0,
         "TimedOut": false
       },

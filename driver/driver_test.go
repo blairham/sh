@@ -616,3 +616,61 @@ func TestTheFrontEndSaysWhenTheProgramWasAnArgument(t *testing.T) {
 		t.Errorf("a script file gave %d, want the ordinary fatal status", code)
 	}
 }
+
+// TestAHereDocumentWarningIsSaidOnce covers the front end's half: the parser
+// produces a remark as it reads, and the loop asks after every line, so
+// without a count of what has been shown the first remark would be repeated
+// for every line after it.
+func TestAHereDocumentWarningIsSaidOnce(t *testing.T) {
+	sh := shell()
+	sh.Diagnostics = interp.Diagnostics{
+		Location:          interp.LocationLineWord,
+		HereDocumentAtEOF: "warning: here-document at line %[1]d wanted `%[2]s'",
+	}
+	path := writeScript(t, "echo one\ncat <<X\nbody\n")
+	_, errs, _ := runArgs(t, sh, "testsh", path)
+	if n := strings.Count(errs, "warning:"); n != 1 {
+		t.Errorf("said it %d times, want once: %q", n, errs)
+	}
+	if !strings.Contains(errs, "line 3: warning: here-document at line 2") {
+		t.Errorf("stderr = %q, want it located where the input ran out and to name the other line", errs)
+	}
+}
+
+// TestADialectThatSaysNothingSaysNothing, which is how three of the four are
+// expressed: an empty wording rather than the front end knowing which shells
+// are quiet.
+func TestADialectThatSaysNothingSaysNothing(t *testing.T) {
+	sh := shell()
+	sh.Diagnostics = interp.Diagnostics{Location: interp.LocationLineWord}
+	path := writeScript(t, "cat <<X\nbody\n")
+	_, errs, _ := runArgs(t, sh, "testsh", path)
+	if errs != "" {
+		t.Errorf("stderr = %q, want silence", errs)
+	}
+}
+
+// TestTheWarningIsSaidBeforeAFatalError, which is measured: a here-document
+// with neither its delimiter nor its enclosing brace produces both, warning
+// first, and a front end that rendered remarks only on success would drop it.
+func TestTheWarningIsSaidBeforeAFatalError(t *testing.T) {
+	sh := shell()
+	sh.Diagnostics = interp.Diagnostics{
+		Location:          interp.LocationLineWord,
+		SyntaxError:       "syntax error: %[1]s",
+		HereDocumentAtEOF: "warning: here-document at line %[1]d wanted `%[2]s'",
+	}
+	path := writeScript(t, "f() { cat <<X\ny\n")
+	_, errs, code := runArgs(t, sh, "testsh", path)
+	warn := strings.Index(errs, "warning:")
+	fail := strings.Index(errs, "syntax error")
+	if warn < 0 || fail < 0 {
+		t.Fatalf("stderr = %q, want both the warning and the failure", errs)
+	}
+	if warn > fail {
+		t.Errorf("stderr = %q, want the warning first", errs)
+	}
+	if code == 0 {
+		t.Error("status = 0, want the parse failure to stand")
+	}
+}

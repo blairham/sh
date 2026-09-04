@@ -8250,6 +8250,70 @@
         "TimedOut": false
       }
     },
+    "heredoc/no-delimiter-and-a-warning": {
+      "bash": {
+        "Output": "\u003cscript\u003e: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `X')~body",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cscript\u003e: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `X')~body",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "body",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "body",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "body",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "body",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "heredoc/no-delimiter-and-no-body": {
+      "bash": {
+        "Output": "\u003cscript\u003e: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cscript\u003e: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "heredoc/quotes-in-the-body-are-literal": {
       "bash": {
         "Output": "don't say \"hi\"",

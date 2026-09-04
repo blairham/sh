@@ -284,6 +284,8 @@ func Diagnostics() interp.Diagnostics {
 		UlimitBadOption:             "ulimit: -%[1]s: invalid option",
 		UlimitBadNumber:             "ulimit: %[1]s: invalid number",
 		BuiltinBadOption:            "%[1]s: %[2]s: invalid option",
+		HereDocumentAtEOF: "warning: here-document at line %[1]d " +
+			"delimited by end-of-file (wanted `%[2]s')",
 		// bash names the builtin for its own two spellings and not for the
 		// two POSIX has: `declare: r: readonly variable` against a plain
 		// `r: readonly variable` from `export`.

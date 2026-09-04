@@ -28,7 +28,7 @@ func TestCorpusLexes(t *testing.T) {
 			if err := l.Err(); err != nil {
 				t.Fatalf("did not lex: %v\n  snippet: %s", err, c.Snippet)
 			}
-			if l.Incomplete() {
+			if l.Incomplete() && !c.Unfinished {
 				t.Fatalf("reported incomplete, but this snippet ran to completion in real shells\n  snippet: %s", c.Snippet)
 			}
 			if len(toks) == 0 || toks[len(toks)-1].Kind != syntax.TokEOF {
@@ -70,7 +70,7 @@ func TestCorpusParses(t *testing.T) {
 			if err := p.Err(); err != nil {
 				t.Fatalf("did not parse: %v\n  snippet: %s", err, c.Snippet)
 			}
-			if p.Incomplete() {
+			if p.Incomplete() && !c.Unfinished {
 				t.Fatalf("reported incomplete, but this ran to completion in real shells\n  snippet: %s", c.Snippet)
 			}
 			if len(f.Stmts) == 0 {

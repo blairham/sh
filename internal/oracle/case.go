@@ -70,6 +70,19 @@ type Case struct {
 	// measurement documents it. It is simply not evidence about anybody's
 	// conformance, so it is not graded and not checked for drift.
 	ReferenceRaces bool
+
+	// Unfinished marks a case whose input is legitimately *unfinished* even
+	// though it runs to completion — a here-document whose delimiter never
+	// arrives is the only shape so far.
+	//
+	// The parser reports both facts, and they are not the same one: the body
+	// is everything to the end and the command runs, which is what every
+	// shell does, and the input is still open in the sense a prompt cares
+	// about, which is why a terminal asks for another line rather than
+	// running with what it has. The corpus otherwise checks that a snippet
+	// which ran is not reported unfinished, and that check is right for
+	// every case but this shape.
+	Unfinished bool
 }
 
 // Corpus is the checked-in set. Every table in docs/spec should be derivable
@@ -1454,19 +1467,33 @@ var Corpus = []Case{
 		Why:     "the other nesting, which counting got right and which has to keep working: the parentheses here really do pair",
 	},
 	{
+		ID: "heredoc/no-delimiter-and-a-warning", Category: "redirection",
+		Script:     true,
+		Unfinished: true,
+		Snippet:    "cat <<X\nbody\n",
+		Why:        "one shell remarks on a here-document whose delimiter never arrived and three say nothing. The remark is located where the input ran out and names the line the here-document began on, which is two different lines and the reason a parse-time remark carries two positions",
+	},
+	{
+		ID: "heredoc/no-delimiter-and-no-body", Category: "redirection",
+		Script:     true,
+		Unfinished: true,
+		Snippet:    "cat <<X\n",
+		Why:        "the same with nothing between: the remark then names the here-document's own line in both places, which is what says the location is the last line that had something on it rather than one past the end",
+	},
+	{
 		ID: "heredoc/a-body-that-runs-to-the-end", Category: "redirection",
-		Snippet: `{ x=$(cat <<EOF
+		Snippet: `x=$(cat <<EOF
 body
 EOF
-); } 2>/dev/null; echo "[$x]"`,
-		Why: "a delimiter that does arrive, as the control for the one below it",
+); echo "[$x]"`,
+		Why: "a delimiter that does arrive, as the control for the one below it — and with standard error no longer discarded, that nobody warns when it does",
 	},
 	{
 		ID: "heredoc/a-delimiter-that-never-matches", Category: "redirection",
 		Snippet: `{ x=` + "`" + `cat <<EOF
 a)
  EOF` + "`" + `; } 2>/dev/null; echo "[$x]"`,
-		Why: "the terminator has a leading space, so it is not the delimiter and the body runs to the end of the input. Every shell takes it and runs the command — this made it a syntax error. Standard error is discarded because one shell warns about it and three say nothing, and the warning is a wording rather than the behavior this pins",
+		Why: "the terminator has a leading space, so it is not the delimiter and the body runs to the end of the input. Every shell takes it and runs the command — this made it a syntax error. Standard error is still discarded here, and the reason changed: the warning about it is now produced, but this body is inside a backquoted substitution, which the one shell that warns re-parses while carrying its line counter on from the outer input — so a three-line script is remarked on at line 5. The two cases above pin the warning where the lines are the file's own",
 	},
 	{
 		ID: "redir/open-failure-wording", Category: "redirection",

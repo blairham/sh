@@ -430,6 +430,11 @@ func (sh Shell) run(in source) int {
 			// prompt when it did not come from a terminal. The whole
 			// diagnostic is the dialect's: its wording, whether it names
 			// where the script came from, and whether it echoes the line.
+			// Before the error, and whether or not there is one: a remark
+			// can accompany a fatal failure, which is measured — a here
+			// document with neither its delimiter nor its enclosing `}`
+			// produces both, warning first.
+			sh.sayRemarks(dg, name, p, 0)
 			sh.errf("%s", dg.ParseDiagnostic(name, input, err, src))
 			return dg.StatusForParseError(err)
 		}
@@ -467,8 +472,12 @@ func (sh Shell) run(in source) int {
 // through Finish rather than around it.
 func (sh Shell) execute(r *interp.Runner, p *syntax.Parser, in source) int {
 	ctx := context.Background()
+	shown := 0
 	for {
 		line, ok := p.NextLine()
+		// Said as soon as it is known and before anything the line does,
+		// which is where the one shell that remarks puts it.
+		shown = sh.sayRemarks(in.dg, in.name, p, shown)
 		if !ok {
 			break
 		}
@@ -507,4 +516,20 @@ func (sh Shell) source(r *interp.Runner, name string) int {
 		return usageStatus
 	}
 	return 0
+}
+
+// sayRemarks writes what the parser had to say about input it accepted
+// anyway, and reports how many have been written.
+//
+// The count is carried because a parser produces these as it reads, and the
+// loop asks after every line: without it the first remark would be repeated
+// for every line after the one that raised it.
+func (sh Shell) sayRemarks(dg interp.Diagnostics, name string, p *syntax.Parser, shown int) int {
+	rs := p.Remarks()
+	for _, rk := range rs[min(shown, len(rs)):] {
+		if msg := dg.Remark(rk); msg != "" {
+			sh.errf("%s", dg.Report(name, rk.Pos.Line, msg+"\n"))
+		}
+	}
+	return len(rs)
 }

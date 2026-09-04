@@ -327,6 +327,15 @@ type Diagnostics struct {
 	// question as whether it refuses.
 	UmaskWhoAloneIsANumericComplaint bool
 
+	// HereDocumentAtEOF is what a shell says about a here-document whose
+	// delimiter never arrived, taking the line it began on and the delimiter
+	// that was wanted. Empty means nothing is said, which is three of the
+	// four — silence is the answer here rather than a missing wording.
+	//
+	// The remark is located where the input ran out and names the other line
+	// inside itself, which is why it takes a line as a verb at all.
+	HereDocumentAtEOF string
+
 	// UmaskBadOption is an option `umask` does not have. One verb.
 	UmaskBadOption string
 
@@ -1373,6 +1382,19 @@ func (d Diagnostics) ParseFailure(err error) string {
 			escapeToken(se.LastToken), se.Pos.Line)
 	}
 	return Wording(d.SyntaxError, "%s", se.Msg)
+}
+
+// Remark renders something the parser had to say about input it accepted
+// anyway, or empty for a dialect that says nothing about it.
+//
+// Empty is the common answer: of the four, only one remarks on anything at
+// parse time and only about one thing. Silence is expressed by having no
+// wording rather than by the front end knowing which shells are quiet.
+func (d Diagnostics) Remark(r syntax.Remark) string {
+	if r.Kind != syntax.RemarkHeredocAtEOF || d.HereDocumentAtEOF == "" {
+		return ""
+	}
+	return Wording(d.HereDocumentAtEOF, "", r.At.Line, r.Token)
 }
 
 // ForScript returns the diagnostics a script read from a file should use.

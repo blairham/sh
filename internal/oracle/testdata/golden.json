@@ -15066,6 +15066,38 @@
         "TimedOut": false
       }
     },
+    "read/a-backslash-escapes-and-is-removed": {
+      "bash": {
+        "Output": "[atb]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[atb]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[atb]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[atb]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[atb]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[atb]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "read/a-bad-letter-in-a-bundle-is-named-alone": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: read: -x: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~st=2~after",
@@ -15190,6 +15222,38 @@
       },
       "zsh": {
         "Output": "st=1 l=[x]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "read/an-escaped-separator-does-not-split": {
+      "bash": {
+        "Output": "[a b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[a b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[a b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a b][c]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a b][c]",
         "Status": 0,
         "TimedOut": false
       }

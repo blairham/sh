@@ -524,6 +524,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `read/fields-into-an-array` | `<shell>: 1: read: Illegal option -a~<shell>: 1: Bad substitution` *(status 2)* | `[b]` | `[b]` | `[b]` | `<shell>: read: -a: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]~[]` | `<shell>:read:1: bad option: -a~[]` |
 | `read/until-a-delimiter` | `<shell>: 1: read: Illegal option -d~[]` | `[a]` | `[a]` | `[a]` | `[a]` | `[a]` |
 | `read/a-count-of-characters` | `<shell>: 1: read: Illegal option -n~[]` | `[abc]` | `[abc]` | `[abc]` | `[abc]` | `[]` |
+| `read/a-backslash-escapes-and-is-removed` | `[atb]` | `[atb]` | `[atb]` | `[atb]` | `[atb]` | `[atb]` |
+| `read/an-escaped-separator-does-not-split` | `[a b][c]` | `[a b][c]` | `[a b][c]` | `[a b][c]` | `[a b][c]` | `[a b][c]` |
 | `read/silent-still-reads` | `<shell>: 1: read: Illegal option -s~v=` | `v=secret` | `v=secret` | `v=secret` | `v=secret` | `v=secret` |
 | `name/unset-f-on-a-name-no-function-could-have` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>: unset: 1x: invalid function name~st=1` | `<shell>:unset:1: no such hash table element: 1x~st=1` |
 | `name/unset-f-on-a-name-that-is-merely-undefined` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>:unset:1: no such hash table element: nosuch~st=1` |
@@ -635,6 +637,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `read/a-count-of-characters` — -n takes a count in bash and ksh93 and three characters arrive; zsh reads the same -n as a bare flag for its completion widgets, so the count becomes the name read into and v stays empty — one spelling, two shapes
   ```sh
   printf 'abcdef' | { read -n 3 v; echo "[$v]"; }
+  ```
+- `read/a-backslash-escapes-and-is-removed` — without -r a backslash removes the special meaning of the character after it and is itself removed — a literal backslash-t reads as `atb`, unanimously. We kept the backslash (#320), which -r mode and the line continuation both being right had hidden
+  ```sh
+  printf 'a\\tb\n' | { read v; echo "[$v]"; }
+  ```
+- `read/an-escaped-separator-does-not-split` — the subtle half of the escape: an escaped IFS character is data, so `a\ b` is one field in all four shells. The escape has to reach the splitter — after a pre-pass that removes the backslashes, an escaped space and a separating one are the same byte
+  ```sh
+  printf 'a\\ b c\n' | { read x y; echo "[$x][$y]"; }
   ```
 - `read/silent-still-reads` — -s is about a terminal's echo and there is no terminal here, so it must parse, read and stay quiet: skipping the word unread is how a password gets echoed, and refusing it fails a script that works everywhere else (#321). dash alone has no -s
   ```sh

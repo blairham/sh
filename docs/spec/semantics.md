@@ -1654,6 +1654,26 @@ whose argument follows it. Measured (oracle runs, 2026-09-04, bash 5.3 and
     zsh    rsnAd:t:u:        plus -e -E -k -q -z -c -l -p, unimplemented
     dash   r                 (and -p PROMPT, not yet modeled)
 
+Before any letter, the backslash. Without `-r` it removes the special
+meaning of the character after it and is itself removed, and the four
+shells agree on the whole matrix (oracle runs, 2026-09-04):
+
+- An ordinary character keeps only itself: `a\tb` — a literal backslash,
+  then a t — reads as `atb`.
+- An escaped IFS character is data and does not split: `a\ b c` into
+  `read x y` is `[a b][c]`, and with `IFS=:`, `a\:b:c` is `[a:b][c]`.
+  An escaped *leading* space is not trimmed either — `\ a b` gives
+  `[ a][b]` — so the escape has to reach the splitter, not vanish in a
+  pre-pass that leaves an escaped space indistinguishable from a
+  separating one.
+- An escaped backslash is one literal backslash: `a\\b` reads as `a\b`.
+- A backslash-newline vanishes whole — the line continuation.
+- A backslash the input ends on escapes nothing and is dropped: `a\`
+  with no newline assigns `a`, status 1 as any unterminated line.
+
+With `-r` every backslash is ordinary: it stays, and a backslashed
+separator still splits (`a\ b c` is `[a\][b c]`).
+
 The letters themselves diverge before the behaviors do:
 
 - **The array.** bash's `-a` takes the array's name as the option's argument
@@ -1671,7 +1691,10 @@ The letters themselves diverge before the behaviors do:
   ksh93 and zsh fold the escaped delimiter pair away entirely and keep a
   backslash-newline (both not modeled — the substrate follows bash here).
 - **The counts.** `-n N` reads at most N characters, the delimiter still
-  ending it early, and the text splits as any read's does. `-N N` reads
+  ending it early, and the text splits as any read's does. Without -r the
+  count is of characters as *delivered* in bash — `a\tbcd` under `-n 3` is
+  `atb`, four raw characters read — where ksh93 counts raw bytes and keeps
+  the backslash (`a\t`, not modeled — the substrate follows bash here). `-N N` reads
   exactly N: delimiter ordinary, backslash ordinary, the text handed to
   the first name whole and the rest cleared. zsh has neither count: its
   `-N` is a bad option and its `-n` is a bare flag for completion widgets

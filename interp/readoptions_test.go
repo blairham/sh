@@ -20,11 +20,9 @@ import (
 // TestReadKeepsItsOwnOption is the control: `-r` is the one option this shell
 // implements, and it has to keep working now that the others are refused.
 //
-// A backslash at the end of a line is where it shows. A backslash *inside* a
-// line is not: `read v` on `a\b` gives `ab` in the shell this follows and
-// `a\b` here, because unescaping has to happen while the fields are split —
-// an escaped space does not end a field there — and this splits first. A
-// separate gap, measured, and not one `-r` can hide.
+// A backslash at the end of a line is where it shows: without -r the line
+// continues, with it the backslash survives and the line ends. The backslash
+// *inside* a line is TestReadWithoutRawRemovesTheBackslash.
 func TestReadKeepsItsOwnOption(t *testing.T) {
 	joined, _ := run(t, "printf 'a\\\\\nb\n' | { read v; echo \"[$v]\"; }", nil)
 	if !strings.Contains(joined, "[ab]") {
@@ -33,6 +31,65 @@ func TestReadKeepsItsOwnOption(t *testing.T) {
 	kept, _ := run(t, "printf 'a\\\\\nb\n' | { read -r v; echo \"[$v]\"; }", nil)
 	if !strings.Contains(kept, `[a\]`) {
 		t.Errorf("read -r: got %q, want the backslash kept and the line ended", kept)
+	}
+}
+
+// TestReadWithoutRawRemovesTheBackslash: without -r a backslash removes the
+// special meaning of the character after it and is itself removed — measured,
+// unanimous across the panel (#320). The subtle half is the separator: an
+// escaped IFS character is data and does not split, which is why the escape
+// positions ride into the splitter as a mask instead of the processing being
+// a pre-pass over the string — after the pre-pass, an escaped space and a
+// separating one would be the same byte.
+func TestReadWithoutRawRemovesTheBackslash(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{
+			"an ordinary character keeps only itself",
+			`printf 'a\\tb\n' | { read v; echo "[$v]"; }`, "[atb]",
+		},
+		{
+			"an escaped separator does not split",
+			`printf 'a\\ b c\n' | { read x y; echo "[$x][$y]"; }`, "[a b][c]",
+		},
+		{
+			"an escaped non-whitespace separator does not split",
+			`printf 'a\\:b:c\n' | { IFS=: read x y; echo "[$x][$y]"; }`, "[a:b][c]",
+		},
+		{
+			"an escaped backslash is one literal backslash",
+			`printf 'a\\\\b\n' | { read v; echo "[$v]"; }`, `[a\b]`,
+		},
+		{
+			"an escaped leading space is not trimmed",
+			`printf '\\ a b\n' | { read x y; echo "[$x][$y]"; }`, "[ a][b]",
+		},
+		{
+			"an escaped space still ends at a real one",
+			`printf 'a\\  b\n' | { read x y; echo "[$x][$y]"; }`, "[a ][b]",
+		},
+		{
+			"a backslash the input ends on is dropped",
+			`printf 'a\\' | { read v; echo "st=$? [$v]"; }`, "st=1 [a]",
+		},
+		{
+			"the count is of delivered characters",
+			`printf 'a\\tbcd\n' | { read -n 3 v; echo "[$v]"; }`, "[atb]",
+		},
+		{
+			"raw keeps every backslash",
+			`printf 'a\\tb\n' | { read -r v; echo "[$v]"; }`, `[a\tb]`,
+		},
+		{
+			"raw splits on a backslashed separator",
+			`printf 'a\\ b c\n' | { read -r x y; echo "[$x][$y]"; }`, `[a\][b c]`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, tc.src, nil)
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
 	}
 }
 

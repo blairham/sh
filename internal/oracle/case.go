@@ -2191,6 +2191,22 @@ echo "st=$?"`,
 		Why:     "bash indirects, dash and zsh reject, and ksh93 yields x — not an error there, a different meaning, which is the &> failure mode inside an expansion",
 	},
 	{
+		ID: "param/expansion-flags-are-one-dialects", Category: "parameter expansion",
+		Snippet: `x=abc; echo ${(U)x}`,
+		Why:     "the parenthesized expansion flags are zsh's alone: it uppercases where bash and dash call the expansion a bad substitution at run time and ksh93 refuses it while reading — the same three-way split every unreadable expansion follows",
+	},
+	{
+		ID: "param/expansion-flags-split-and-join", Category: "parameter expansion",
+		Snippet: `x=a:b:c; printf "[%s]" ${(s.:.)x}; a=(1 2); printf "<%s>" "${(j.,.)a}"`,
+		Why:     "the s flag splits a scalar at its separator into real fields and j joins an array with its own — string-to-list and list-to-string, which no operator the other shells have can say",
+	},
+	{
+		ID: "param/prompt-percent-names-the-script", Category: "parameter expansion",
+		Snippet: `echo ${(%):-%x}`,
+		Script:  true,
+		Why:     "the wild idiom for a file's own path — /opt/homebrew's ruby-lsp-activate.sh opens with it: the %-flag prompt escape %x names the file being read, and the empty parameter with a :- is how a bare string reaches the flags at all",
+	},
+	{
 		ID: "param/array-element-inherits-the-base", Category: "parameter expansion",
 		Snippet: `a=(p q r); printf "[%s]" "${a[1]}" "${#a[@]}"`,
 		Why:     "array subscripting inherits the 0-versus-1 base axis",

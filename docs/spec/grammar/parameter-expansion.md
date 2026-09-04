@@ -244,6 +244,116 @@ Citation: oracle runs against bash 5.3.15, ksh93u+ 2012-08-01, zsh 5.9.2
 and dash on 2026-09-04; the corpus rows under `param/transform-…` pin the
 panel's answers.
 
+## Parenthesized expansion flags — zsh only
+
+`${(flags)name}` opens with a parenthesized flag group before the parameter.
+zsh alone parses it; the other three treat the whole expansion as a bad
+substitution — bash and dash at run time when the expansion is reached, ksh93
+while reading (`` `x}' unexpected ``), which is the same split the
+`BadSubstitutionAtParseTime` flag already records. Found in the wild:
+`/opt/homebrew`'s `ruby-lsp-activate.sh` opens with `${(%):-%x}`, the idiom
+for "the path of the file being sourced", so a parser without the construct
+refuses the file.
+
+All measurements below are of zsh 5.9.2 (Homebrew, arm64). The zsh manual
+(`zshexpn(1)`, Rules) confirms the ordering observed.
+
+### The flags in scope, measured
+
+| flag | meaning | probe | result |
+| --- | --- | --- | --- |
+| `(U)` / `(L)` | upper- / lowercase every letter | `x=abC; ${(U)x}` | `ABC` |
+| `(q)` | quote with backslashes | `x='a b$c'\''; ${(q)x}` | `a\ b\$c\'` |
+| `(qq)` | quote in single quotes | `x="a b"; ${(qq)x}` | `'a b'` |
+| `(qqq)` | quote in double quotes | `x="a b"; ${(qqq)x}` | `"a b"` |
+| `(qqqq)` | quote as `$'…'` | `x="a b"; ${(qqqq)x}` | `$'a b'` |
+| `(f)` | split at newlines | `x=$'a\nb'; ${(f)x}` | two words `a`, `b` |
+| `(s:sep:)` | split at sep | `x=a:b:c; ${(s.:.)x}` | `a`, `b`, `c` |
+| `(j:sep:)` | join with sep | `a=(x y z); ${(j.,.)a}` | `x,y,z` |
+| `(@)` | keep array fields in `"…"` | `a=(x "y z" ""); "${(@)a}"` | 3 fields, empty kept |
+| `(P)` | value is a further name | `y=hello; x=y; ${(P)x}` | `hello` |
+| `(k)` | keys of an associative array | `typeset -A m=(k1 v1); ${(k)m}` | `k1` |
+| `(v)` | with `(k)`: key and value pairs | `${(kv)m}` | `k1 v1` interleaved |
+| `(%)` | expand prompt `%` escapes | `${(%):-%x}` | see below |
+
+Details, each measured:
+
+- **Order of application.** Operators run before flags: `${(U)x:-def}` on an
+  unset `x` is `DEF`, `${(U)x#h}` on `hello` is `ELLO`, `${(U)u:=def}`
+  assigns `def` and substitutes `DEF`. `(P)` is the exception and runs
+  *first*: `${(P)x:-def}` with `x=y` and `y=val` is `val`, and with the
+  target unset the default fires on the resolved value. The manual's rule
+  list agrees: name replacement (4), double-quoted joining (5), modifiers
+  (7), forced joining (10), splitting (11), case (12), prompt escapes (13),
+  quoting (14).
+- **Arrays are elementwise.** `a=(ab cd); ${(U)a}` is `AB CD`; `${(q)a}` on
+  `("x y" z)` is `x\ y z`. In double quotes without `(@)` the elements are
+  first joined with the first character of `$IFS` (rule 5); `"${(@U)a}"`
+  and `"${(U)@}"` keep one field per element — `$@` and an `[@]` subscript
+  keep their fields without needing `(@)`.
+- **Splitting forces fields even inside quotes.** `"${(s.:.)x}"` on `a::b`
+  is two fields; only `"${(@s.:.)x}"` keeps the empty one as a third. An
+  unquoted result always drops empty words. `(f)` on an empty value is no
+  field unquoted and one empty field as `"${(@f)x}"`. `(s)` on an array
+  joins with `$IFS`'s first character before splitting (rule 10):
+  `a=(a:b c:d); ${(s.:.)a}` is `a`, `b c`, `d`. An empty separator
+  `(s::)` splits into characters. Separator delimiters may be any
+  punctuation — `(s.:.)`, `(s:,:)` — or the matched pairs `()`, `[]`,
+  `{}`, `<>`; the separator may be several characters.
+- **`(q)` in detail.** Backslash-escapes space and `` ` ``, `$`, `"`, `'`,
+  `\`, `*`, `?`, `[`, `]`, `(`, `)`, `{`, `}`, `<`, `>`, `|`, `;`, `&`,
+  `~`, `#`, `^`, `=`; leaves `!`, `%`, `:`, `,`, `.`, `/`, `@`, `-`, `_`,
+  `+` and alphanumerics alone; renders each control or non-UTF-8 byte as
+  its own `$'…'` segment — `$'\n'`, `$'\t'`, `$'\a'`, `$'\b'`, `$'\f'`,
+  `$'\r'`, `$'\v'` by name, anything else as three-digit octal like
+  `$'\033'`. An empty value is `''`. `(qq)` wraps in single quotes with
+  `'` written as `'\''`, unconditionally — `plain` becomes `'plain'`.
+  `(qqq)` wraps in double quotes escaping `\`, `` ` ``, `"`, `$`.
+  `(qqqq)` wraps in `$'…'` escaping `'`, `\`, `!` and control bytes as in
+  `(q)`. Multibyte UTF-8 passes through every form.
+- **`(k)`/`(v)` order.** zsh yields hash order, which it does not promise;
+  this implementation yields sorted key order, the same deterministic
+  answer `${m[@]}` already gives. `(k)` on anything that is not an
+  associative array is a no-op, and `(v)` matters only beside `(k)`.
+- **`(%)` prompt escapes.** `%x` and `%N` both name the file being read:
+  under `-c` the shell's own name (`zsh`), in a script the script's path,
+  in a sourced file the sourced file's path. Inside a function `%N` is the
+  function's name while `%x` stays the defining file. `%%` is a literal
+  `%`. The escapes apply to the value — `x="%x"; ${(%)x}` expands — and
+  elementwise on arrays. zsh implements its whole prompt language here
+  (`%M` the host, `%~` the directory, `%D` the date); this implementation
+  carries only `%x`, `%N` and `%%`, and refuses anything else loudly
+  rather than answering wrong.
+- **An empty name is legal once flags are present.** `${(U)}` is an empty
+  string, and `${(%):-%x}` — the wild idiom — has no name at all: the `:-`
+  fires and the flags apply to the substituted word. `${()x}` with empty
+  parens is `${x}`.
+- **An unrecognized flag is a runtime error**, not a parse one: `zsh:1:
+  error in flags near position 4 in '${(Y)x}'`, status 1, and the line is
+  abandoned; inside a branch never taken it is never diagnosed
+  (`if false; then : ${(!)x}; fi` runs clean). The position is 1-based and
+  counts from the `$`. A missing closing parenthesis is diagnosed the same
+  way at the first character that is not a flag: `${(Ux}` errors at
+  position 5.
+
+### What this implementation refuses
+
+Flags zsh has and this slice does not — `(A)` (array assignment), sorting
+`(o)`/`(O)`, `(t)`, `(z)`, `(e)`, `(D)`, padding, and the rest of the
+alphabet, plus the `q-`/`q+` variants and `(qqq…)` beyond four — are
+refused at run time naming the flag, with the same fatal shape as an
+unrecognized one. Refusing loudly is the honest answer where imitating
+would answer wrong.
+
+### Grammar
+
+The group is read only when the dialect's `ParamExpansionFlags` is on;
+elsewhere `${(…)…}` follows the bad-substitution split above — deferred to
+run time via the `Bad` node everywhere but the parse-time dialect. The
+parsed node carries the flag letters in order plus the two separators
+(`SplitSep`, `JoinSep`); the printer writes the span back raw, so the
+construct round-trips.
+
 ## Dialect flags
 
     ParamSubstitution      ${x/pat/rep} and its anchored forms
@@ -251,10 +361,12 @@ panel's answers.
     ParamCaseChange        ${x^^} ${x,,}     — bash only
     ParamIndirection       ${!x}             — bash only, and not an error elsewhere
     ParamTransformations   ${x@Q} and its letter family — bash only
+    ParamExpansionFlags    ${(U)x}           — zsh only
 
-All false for `posix`. `ParamCaseChange`, `ParamIndirection` and
-`ParamTransformations` are false for `core`, because a construct one shell
-in the panel supports is not a common denominator.
+All false for `posix`. `ParamCaseChange`, `ParamIndirection`,
+`ParamTransformations` and `ParamExpansionFlags` are false for `core`,
+because a construct one shell in the panel supports is not a common
+denominator.
 
 ## What this does not cover
 

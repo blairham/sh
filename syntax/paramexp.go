@@ -140,6 +140,27 @@ type ParamExpr struct {
 	// nothing expands it, and `${x@$op}` is a bad substitution.
 	Transform byte
 
+	// HasFlags marks a parenthesized flag group at the front of the
+	// expansion — `${(U)x}` — which one dialect's grammar has and the rest
+	// call a bad substitution. It is a marker of its own because the group
+	// may legally be empty: `${()x}` is `${x}`.
+	HasFlags bool
+	// Flags is the group's letters, in written order, with any separator
+	// arguments stripped: `${(Uq)x}` carries "Uq" and `${(s.:.)x}` "s".
+	Flags string
+	// SplitSep and JoinSep are the arguments of the `s` and `j` flags. An
+	// empty SplitSep with an `s` in Flags is meaningful — it splits into
+	// characters — which HasFlags plus the letter already distinguish from
+	// no `s` at all.
+	SplitSep string
+	JoinSep  string
+	// FlagsErrPos is the 1-based position, counted from the `$`, of the
+	// first character the flag group could not read, and 0 when it read
+	// cleanly. The error is the interpreter's to report — reached in a
+	// branch never taken, it is no error at all, which is measured — so the
+	// node carries the position and Src carries the text.
+	FlagsErrPos int
+
 	// Bad marks an expansion whose operator the grammar did not recognize,
 	// in a dialect that diagnoses that when the expansion is reached rather
 	// than when it is read. Src holds the inside of the braces for the
@@ -166,6 +187,29 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 	e := &ParamExpr{Start: start, Stop: start}
 	s := src
 
+	if strings.HasPrefix(s, "(") {
+		if !p.dialect.ParamExpansionFlags {
+			// The whole expansion is a bad substitution to a grammar without
+			// the group, and *when* that is said follows the same split every
+			// other unreadable expansion follows: one dialect refuses while
+			// reading, the rest defer to the run — measured, a flag group in
+			// a branch never taken is never diagnosed there.
+			if p.dialect.BadSubstitutionAtParseTime {
+				p.failKind(ErrBadSubstitution, "unknown operator in ${%s}", src)
+				if pe, isErr := p.err.(*Error); isErr {
+					pe.Token = "("
+				}
+				return e
+			}
+			e.Bad, e.Src = true, src
+			return e
+		}
+		s = p.scanParamFlags(e, src)
+		if e.FlagsErrPos > 0 {
+			return e
+		}
+	}
+
 	switch {
 	case strings.HasPrefix(s, "#") && len(s) > 1:
 		e.Length = true
@@ -185,10 +229,12 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 	}
 
 	e.Name, s = scanParamName(s)
-	if e.Name == "" {
+	if e.Name == "" && !e.HasFlags {
 		p.failKind(ErrBadSubstitution, "expected a parameter name in ${%s}", src)
 		return e
 	}
+	// With a flag group the name may be empty — `${(U)}` is an empty string
+	// and `${(%):-%x}` is all operator — so an operator may still follow.
 
 	// `${!name@}` and `${!name*}` are the names beginning with name, not a
 	// value at all. Only after `!`, and only when the whole rest is the one
@@ -236,6 +282,100 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 	e.Op = op
 	p.fillParamArgs(e, rest, start)
 	return e
+}
+
+// paramFlagArgs says how many delimited arguments a flag letter may read:
+// the separators of `s` and `j`, and the argument groups of the padding and
+// grouping flags — scanned so the group's closing parenthesis is still
+// found, even though the interpreter refuses the flags themselves.
+var paramFlagArgs = map[byte]int{
+	's': 1, 'j': 1, 'g': 1, 'I': 1, 'Z': 1, '_': 1, 'l': 3, 'r': 3,
+}
+
+// paramFlagChars is every character the flag group may carry, taken from the
+// vendor manual's inventory. Reading the full alphabet and refusing the
+// unimplemented members at run time keeps the two failure shapes apart: a
+// character outside this set is an "error in flags" with a position, which
+// is measured, and a letter inside it that this interpreter does not carry
+// is refused by name.
+const paramFlagChars = "#%@AabcCDefFgiIjklLmMnNoOpPqQrRsStuUvVwWXxzZ0~^=*BE-+_"
+
+// scanParamFlags reads the parenthesized group src opens with, filling the
+// flag fields, and returns the text after the closing parenthesis.
+//
+// On a character it cannot read it records the 1-based position counted
+// from the `$` — position 4 is the first character inside the parentheses —
+// because the report belongs to the run and not to the read: a bad flag in
+// a branch never taken is diagnosed nowhere, which is measured. Running out
+// of text before the closing parenthesis is the same failure at the
+// position just past the end, which is also measured: `${(Ux}` errors at 5.
+func (p *Parser) scanParamFlags(e *ParamExpr, src string) string {
+	e.HasFlags = true
+	e.Src = src
+	i := 1
+	for i < len(src) {
+		c := src[i]
+		if c == ')' {
+			return src[i+1:]
+		}
+		if strings.IndexByte(paramFlagChars, c) < 0 {
+			e.FlagsErrPos = i + 3
+			return ""
+		}
+		e.Flags += string(c)
+		i++
+		argMax := paramFlagArgs[c]
+		var open byte
+		for n := 0; n < argMax && i < len(src); n++ {
+			if n == 0 {
+				if src[i] == ')' {
+					// An argument-taking flag with no argument: the group
+					// cannot mean anything, and the failure points at the
+					// parenthesis that arrived instead.
+					e.FlagsErrPos = i + 3
+					return ""
+				}
+				open = src[i]
+			} else if src[i] != open {
+				// The optional later arguments arrive only behind the same
+				// delimiter again.
+				break
+			}
+			closing := matchingFlagDelimiter(open)
+			j := strings.IndexByte(src[i+1:], closing)
+			if j < 0 {
+				e.FlagsErrPos = i + 3
+				return ""
+			}
+			arg := src[i+1 : i+1+j]
+			switch c {
+			case 's':
+				e.SplitSep = arg
+			case 'j':
+				e.JoinSep = arg
+			}
+			i += j + 2
+		}
+	}
+	e.FlagsErrPos = len(src) + 2
+	return ""
+}
+
+// matchingFlagDelimiter is the character that closes a flag argument: the
+// partner for the four matched pairs, and the same character again for
+// everything else.
+func matchingFlagDelimiter(open byte) byte {
+	switch open {
+	case '(':
+		return ')'
+	case '[':
+		return ']'
+	case '{':
+		return '}'
+	case '<':
+		return '>'
+	}
+	return open
 }
 
 // scanParamName reads the parameter, which is either a name or one of the

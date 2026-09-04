@@ -2306,6 +2306,9 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `param/substring` | `<shell>: 1: Bad substitution` *(status 2)* | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` |
 | `param/case-change-is-bash-only` | `<shell>: 1: Bad substitution` *(status 2)* | `[ABC][abc]` | `[ABC][abc]` | `<shell>: ${x^^}: bad substitution` *(status 1)* | `<shell>: syntax error at line 1: `^' unexpected` *(status 3)* | `<shell>:1: bad substitution` *(status 1)* |
 | `param/indirection-diverges-four-ways` | `<shell>: 1: Bad substitution` *(status 2)* | `[V]` | `[V]` | `[V]` | `[x]` | `<shell>:1: bad substitution` *(status 1)* |
+| `param/expansion-flags-are-one-dialects` | `<shell>: 1: Bad substitution` *(status 2)* | `<shell>: line 1: ${(U)x}: bad substitution` *(status 1)* | `<shell>: line 1: ${(U)x}: bad substitution` *(status 127)* | `<shell>: ${(U)x}: bad substitution` *(status 1)* | `<shell>: syntax error at line 1: `x}' unexpected` *(status 3)* | `ABC` |
+| `param/expansion-flags-split-and-join` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `<shell>: line 1: ${(s.:.)x}: bad substitution` *(status 1)* | `<shell>: line 1: ${(s.:.)x}: bad substitution` *(status 127)* | `<shell>: ${(s.:.)x}: bad substitution` *(status 1)* | `<shell>: syntax error at line 1: `x}' unexpected` *(status 3)* | `[a][b][c]<1,2>` |
+| `param/prompt-percent-names-the-script` | `<script>: 1: Bad substitution` *(status 2)* | `<script>: line 1: ${(%):-%x}: bad substitution` *(status 1)* | `<script>: line 1: ${(%):-%x}: bad substitution` *(status 1)* | `<script>: line 1: ${(%):-%x}: bad substitution` *(status 1)* | `<script>: line 1: syntax error at line 1: `:-%x}' unexpected` *(status 3)* | `<script>` |
 | `param/array-element-inherits-the-base` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[q][3]` | `[q][3]` | `[q][3]` | `[q][3]` | `[p][3]` |
 | `param/an-operator-reaches-an-array-element` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[ello][heLlo][hell][ello]` | `[ello][heLlo][hell][ello]` | `[ello][heLlo][hell][ello]` | `[ello][heLlo][hell][ello]` | `[][][][]` |
 | `param/a-missing-element-fires-the-default` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[hello][d]` | `[hello][d]` | `[hello][d]` | `[hello][d]` | `[d][d]` |
@@ -2415,6 +2418,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `param/indirection-diverges-four-ways` — bash indirects, dash and zsh reject, and ksh93 yields x — not an error there, a different meaning, which is the &> failure mode inside an expansion
   ```sh
   x=y; y=V; printf "[%s]" "${!x}"
+  ```
+- `param/expansion-flags-are-one-dialects` — the parenthesized expansion flags are zsh's alone: it uppercases where bash and dash call the expansion a bad substitution at run time and ksh93 refuses it while reading — the same three-way split every unreadable expansion follows
+  ```sh
+  x=abc; echo ${(U)x}
+  ```
+- `param/expansion-flags-split-and-join` — the s flag splits a scalar at its separator into real fields and j joins an array with its own — string-to-list and list-to-string, which no operator the other shells have can say
+  ```sh
+  x=a:b:c; printf "[%s]" ${(s.:.)x}; a=(1 2); printf "<%s>" "${(j.,.)a}"
+  ```
+- `param/prompt-percent-names-the-script` — the wild idiom for a file's own path — /opt/homebrew's ruby-lsp-activate.sh opens with it: the %-flag prompt escape %x names the file being read, and the empty parameter with a :- is how a bare string reaches the flags at all
+  ```sh
+  echo ${(%):-%x}
   ```
 - `param/array-element-inherits-the-base` — array subscripting inherits the 0-versus-1 base axis
   ```sh

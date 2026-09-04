@@ -11578,6 +11578,38 @@
         "TimedOut": false
       }
     },
+    "opt/set-n-reads-and-never-runs": {
+      "bash": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "opt/set-o-noglob-is-unanimous": {
       "bash": {
         "Output": "*.txt",

@@ -2070,6 +2070,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `status/an-assignment-can-read-the-previous-status` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` |
 | `status/an-assignment-reports-its-substitution` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` |
 | `errexit/assignment-takes-the-substitution` | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* |
+| `opt/set-n-reads-and-never-runs` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `opt/set-f-turns-off-pathname-expansion` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `a.txt b.txt` |
 | `opt/set-o-noglob-is-unanimous` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` |
 | `opt/noglob-does-not-stop-matching` | `match` | `match` | `match` | `match` | `match` | `match` |
@@ -2189,6 +2190,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `errexit/assignment-takes-the-substitution` — an assignment reports what the substitution reported, so this ends the script where `echo "$(false)"` does not
   ```sh
   set -e; x=$(false); echo reached
+  ```
+- `opt/set-n-reads-and-never-runs` — the syntax-check option: nothing after it runs — not even the set +n that would turn it off — and the shell still exits 0. It printed a refusal and ran everything anyway, which is the worst of the three possible behaviors
+  ```sh
+  set -n; echo nope; set +n; echo plusn; echo "st=$?"
   ```
 - `opt/set-f-turns-off-pathname-expansion` — `-f` is the short spelling of noglob in three of the four; zsh spells that option the long way only and uses `-f` for something else entirely, so the pattern still expands there
   ```sh

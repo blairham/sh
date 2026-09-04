@@ -337,6 +337,10 @@ type Runner struct {
 	// and removes them the way it would in bash — nothing here completes.
 	completions map[string]string
 
+	// noexec is `set -n`: read, never run, never unset — even the `set +n`
+	// that would clear it is a command.
+	noexec bool
+
 	// fds are the descriptors beyond the three named streams — what
 	// `exec 6>&1` saves and `>&6` finds again. Values are the io.Reader or
 	// io.Writer the descriptor stood for when it was made, which is what
@@ -1218,6 +1222,12 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 }
 
 func (r *Runner) command(ctx context.Context, c syntax.Command) error {
+	if r.noexec {
+		// `set -n` — commands are read and never executed, and nothing turns
+		// it back off: even `set +n` is a command. Syntax errors still
+		// surface, because they happen on the way in, not here.
+		return nil
+	}
 	// Where this command begins, not where the statement holding it did.
 	// `true &&` on one line and the command on the next is two commands and
 	// two lines, and every shell in the panel reports the second at its own

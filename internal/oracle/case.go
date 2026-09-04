@@ -1031,6 +1031,26 @@ var Corpus = []Case{
 		Why:     "traps are set rather than accumulated, and `trap -` removes",
 	},
 	{
+		ID: "trap/err-fires-on-failure", Category: "traps and exit",
+		Snippet: `trap 'echo "E=$?"' ERR; false; echo "after=$?"`,
+		Why:     "ERR fires on a failing command with `set -e` nowhere in sight, sees the failing status, and leaves it for the script — dash alone refuses the name, with its ordinary bad-trap words",
+	},
+	{
+		ID: "trap/err-under-errexit", Category: "traps and exit",
+		Snippet: `set -e; trap 'echo ERR' ERR; false`,
+		Why:     "the reason the condition exists: the trap runs first and errexit then stops the script with the failure's own status, so a script can say where it died",
+	},
+	{
+		ID: "trap/debug-fires-before-each-command", Category: "traps and exit",
+		Snippet: `trap 'echo D' DEBUG; echo a; echo b`,
+		Why:     "DEBUG runs before each simple command rather than after — the D precedes what it announces — and dash refuses the name like any other word that is no signal",
+	},
+	{
+		ID: "trap/return-fires-when-a-sourced-file-ends", Category: "traps and exit",
+		Snippet: `trap 'echo R' RETURN; echo 'echo insource' > lib.sh; . ./lib.sh; echo after`,
+		Why:     "RETURN is one shell's alone — three of the four refuse it as a bad signal — and where it exists a sourced file fires it on the way out, wherever the trap was set",
+	},
+	{
 		ID: "trap/subshell-does-not-refire", Category: "traps and exit",
 		Snippet: `trap 'echo T' EXIT; (echo sub); x=$(echo cs); echo after`,
 		Why:     "the trap fires once for the script: neither a subshell nor a command substitution repeats it",

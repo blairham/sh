@@ -145,6 +145,17 @@ func Semantics() interp.Semantics {
 	s.TrapListsSignalsWithL = interp.No
 	// The one dialect that refuses `trap EXIT`, and the refusal is fatal.
 	s.TrapOneArgumentIsACondition = interp.No
+	// ERR and DEBUG but not RETURN. Both follow the script into functions;
+	// only DEBUG follows it into a subshell — measured, a command
+	// substitution there captures the DEBUG handler's output and not the
+	// ERR handler's.
+	s.TrapHasErrCondition = interp.Yes
+	s.TrapHasDebugCondition = interp.Yes
+	s.TrapHasReturnCondition = interp.No
+	s.ErrTrapRunsInsideFunctions = interp.Yes
+	s.ErrTrapRunsInSubshells = interp.No
+	s.DebugTrapRunsInsideCalls = interp.Yes
+	s.DebugTrapRunsInSubshells = interp.Yes
 	s.UmaskPrintsFourDigits = interp.Yes
 	s.UmaskSetWithSPrints = interp.No
 	s.UlimitBlockIsKilobyte = interp.No

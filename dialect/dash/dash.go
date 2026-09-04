@@ -66,6 +66,13 @@ func Semantics() interp.Semantics {
 	s.TrapOneArgumentIsACondition = interp.Yes
 	s.TrapReportsAnUnknownSingleCondition = interp.Yes
 	s.TrapSingleUnknownConditionIsUsage = interp.No
+	// The sole holdout on the pseudo-conditions: `trap … ERR` is refused
+	// with the same words any word that names no signal gets, and DEBUG
+	// and RETURN with it. Measured, and the refusal does not end the
+	// script — the status is 1 and the next command runs.
+	s.TrapHasErrCondition = interp.No
+	s.TrapHasDebugCondition = interp.No
+	s.TrapHasReturnCondition = interp.No
 	s.UmaskPrintsFourDigits = interp.Yes
 	// dash parses no options for `alias`, so `-p` is a name there.
 	s.AliasParsesOptions = interp.No

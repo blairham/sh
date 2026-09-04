@@ -391,6 +391,10 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 	r.funcLine = fn.Pos().Line
 	r.pushFrame(Frame{File: r.funcFiles[fn.Name], Name: fn.Name})
 	defer r.popFrame()
+	// This call's own serial, because the RETURN trap fires for the one
+	// function whose body set it and for nobody else — not a caller, and
+	// not a sibling entered after it returned.
+	frameSerial := r.currentFrameSerial()
 	r.depth++
 	// A scope the function's locals unwind into.
 	sc := &scope{saved: map[string]string{}, existed: map[string]bool{}, keyword: fn.Keyword}
@@ -451,6 +455,10 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 		}
 	}
 	r.Params, r.inFunc, r.funcLine = saved, savedIn, savedLine
+	// The RETURN trap, if this call's own body set one. After the locals
+	// and parameters are back — the action runs in the caller — and before
+	// controlReturn is cleared, so an explicit `return` still fires it.
+	r.runReturnTrap(ctx, frameSerial)
 	if r.ctl == controlReturn {
 		r.ctl = controlNone
 	}

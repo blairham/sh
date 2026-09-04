@@ -102,6 +102,16 @@ func TestSemantics(t *testing.T) {
 		{"JobsShowBackgroundCommand", s.JobsShowBackgroundCommand, interp.No},
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.Yes},
 		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.Yes},
+		// ERR and DEBUG but not RETURN. The subshell answers differ on
+		// purpose: a command substitution here captures the DEBUG
+		// handler's output and not the ERR handler's.
+		{"TrapHasErrCondition", s.TrapHasErrCondition, interp.Yes},
+		{"TrapHasDebugCondition", s.TrapHasDebugCondition, interp.Yes},
+		{"TrapHasReturnCondition", s.TrapHasReturnCondition, interp.No},
+		{"ErrTrapRunsInsideFunctions", s.ErrTrapRunsInsideFunctions, interp.Yes},
+		{"ErrTrapRunsInSubshells", s.ErrTrapRunsInSubshells, interp.No},
+		{"DebugTrapRunsInsideCalls", s.DebugTrapRunsInsideCalls, interp.Yes},
+		{"DebugTrapRunsInSubshells", s.DebugTrapRunsInSubshells, interp.Yes},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)

@@ -1207,6 +1207,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `trap/exit-sees-the-last-status` | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* | `st=1` *(status 1)* |
 | `trap/exit-trap-can-override-the-status` | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* | `bye` *(status 7)* |
 | `trap/second-trap-replaces` | `body~two` | `body~two` | `body~two` | `body~two` | `body~two` | `body~two` |
+| `trap/err-fires-on-failure` | `trap: ERR: bad trap~after=1` | `E=1~after=1` | `E=1~after=1` | `E=1~after=1` | `E=1~after=1` | `E=1~after=1` |
+| `trap/err-under-errexit` | `trap: ERR: bad trap` *(status 1)* | `ERR` *(status 1)* | `ERR` *(status 1)* | `ERR` *(status 1)* | `ERR` *(status 1)* | `ERR` *(status 1)* |
+| `trap/debug-fires-before-each-command` | `trap: DEBUG: bad trap~a~b` | `D~a~D~b` | `D~a~D~b` | `D~a~D~b` | `D~a~D~b` | `D~a~D~b` |
+| `trap/return-fires-when-a-sourced-file-ends` | `trap: RETURN: bad trap~insource~after` | `insource~R~after` | `insource~R~after` | `insource~R~after` | `<shell>: trap: RETURN: bad trap~insource~after` | `<shell>:trap:1: undefined signal: RETURN~insource~after` |
 | `trap/subshell-does-not-refire` | `sub~after~T` | `sub~after~T` | `sub~after~T` | `sub~after~T` | `sub~after~T` | `sub~after~T` |
 | `trap/set-in-a-function-diverges` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~TRAP~between` |
 | `exit/status-and-wrapping` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` |
@@ -1362,6 +1366,22 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `trap/second-trap-replaces` — traps are set rather than accumulated, and `trap -` removes
   ```sh
   trap 'echo one' EXIT; trap 'echo two' EXIT; echo body
+  ```
+- `trap/err-fires-on-failure` — ERR fires on a failing command with `set -e` nowhere in sight, sees the failing status, and leaves it for the script — dash alone refuses the name, with its ordinary bad-trap words
+  ```sh
+  trap 'echo "E=$?"' ERR; false; echo "after=$?"
+  ```
+- `trap/err-under-errexit` — the reason the condition exists: the trap runs first and errexit then stops the script with the failure's own status, so a script can say where it died
+  ```sh
+  set -e; trap 'echo ERR' ERR; false
+  ```
+- `trap/debug-fires-before-each-command` — DEBUG runs before each simple command rather than after — the D precedes what it announces — and dash refuses the name like any other word that is no signal
+  ```sh
+  trap 'echo D' DEBUG; echo a; echo b
+  ```
+- `trap/return-fires-when-a-sourced-file-ends` — RETURN is one shell's alone — three of the four refuse it as a bad signal — and where it exists a sourced file fires it on the way out, wherever the trap was set
+  ```sh
+  trap 'echo R' RETURN; echo 'echo insource' > lib.sh; . ./lib.sh; echo after
   ```
 - `trap/subshell-does-not-refire` — the trap fires once for the script: neither a subshell nor a command substitution repeats it
   ```sh

@@ -28,6 +28,11 @@ type Frame struct {
 
 	// Line is the line this frame was entered from, in the frame below it.
 	Line int
+
+	// serial numbers this frame among every frame ever pushed, so a
+	// sibling entered later at the same depth is still a different frame —
+	// which is the distinction the RETURN trap turns on.
+	serial int
 }
 
 // CallStack is the frames a shell is currently inside, innermost first, with
@@ -70,6 +75,8 @@ func (r *Runner) SetScriptFile(path string) { r.scriptFile = path }
 // pushFrame enters a function or a sourced file.
 func (r *Runner) pushFrame(f Frame) {
 	f.Line = r.line
+	r.frameSerial++
+	f.serial = r.frameSerial
 	if f.File == "" {
 		// A function defined where nothing was read from a file — `-c`, or
 		// standard input — belongs to whatever the shell calls itself, which

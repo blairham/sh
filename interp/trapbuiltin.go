@@ -119,10 +119,24 @@ func (r *Runner) printTraps(conds []string, bare bool) int {
 		for _, name := range sortedKeys(r.sigs().traps) {
 			r.printf("trap -- %s %s\n", r.quotedTrapAction(r.sigs().traps[name]), r.printedSignalName(name))
 		}
+		// The pseudo-conditions come after the signals, which is where all
+		// three shells that have any put them.
+		for _, name := range []string{"DEBUG", "ERR", "RETURN"} {
+			if action := *r.pseudoTrapSlot(name); action != nil {
+				r.printf("trap -- %s %s\n", r.quotedTrapAction(*action), name)
+			}
+		}
 		return 0
 	}
 	for _, c := range conds {
+		// Only a refusal this lookup raised stops the listing: the bare
+		// question just above may have gone unanswered too, and that did
+		// not stop the printing before pseudo-conditions could refuse.
+		asked := r.unspecified
 		action, name, _, ok := r.trapFor(c)
+		if r.unspecified && !asked {
+			return r.status
+		}
 		if !ok {
 			msg := Wording(r.diag().TrapBadSignal, "trap: %[1]s: bad trap", c)
 			if r.diag().TrapBadSignalUnprefixed {
@@ -146,9 +160,20 @@ func (r *Runner) printTraps(conds []string, bare bool) int {
 
 // trapFor is what a condition is currently trapped to, and whether the
 // condition is one this shell knows at all.
+//
+// A caller must check r.unspecified afterwards: whether a dialect has a
+// pseudo-condition is an axis, and "no dialect was chosen" is neither of
+// this function's two answers.
 func (r *Runner) trapFor(cond string) (*string, string, syscall.Signal, bool) {
 	if strings.EqualFold(cond, "EXIT") || cond == "0" {
 		return r.exitTrap, "EXIT", 0, true
+	}
+	asked := r.unspecified
+	if name, ok := r.pseudoCondition(cond); ok {
+		return *r.pseudoTrapSlot(name), name, 0, true
+	}
+	if r.unspecified && !asked {
+		return nil, "", 0, false
 	}
 	name, sig, kind := r.canonicalSignal(cond)
 	if kind == signalUnknown {
@@ -179,11 +204,18 @@ func (r *Runner) trapSingleArgument(cond string) int {
 		return r.status
 	}
 	_, name, sig, ok := r.trapFor(cond)
+	if r.unspecified {
+		return r.status
+	}
 	if !ok {
 		return r.trapUnknownSingleCondition(cond)
 	}
 	if name == "EXIT" {
 		r.exitTrap = nil
+		return 0
+	}
+	if slot := r.pseudoTrapSlot(name); slot != nil {
+		*slot = nil
 		return 0
 	}
 	r.trapSignal(name, sig, nil)
@@ -285,9 +317,10 @@ func (r *Runner) quotedTrapAction(action string) string {
 
 // printedSignalName is how this dialect spells a signal when printing what
 // is trapped: bash writes SIGINT where the other three write INT. EXIT is
-// not a signal and never takes the prefix in any of them.
+// not a signal and never takes the prefix in any of them — and neither do
+// the pseudo-conditions, in the one dialect that prefixes at all.
 func (r *Runner) printedSignalName(name string) string {
-	if name == "EXIT" {
+	if name == "EXIT" || r.pseudoTrapSlot(name) != nil {
 		return name
 	}
 	return r.diag().TrapPrintsSignalPrefix + name

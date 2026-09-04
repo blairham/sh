@@ -138,6 +138,11 @@ func TestSemantics(t *testing.T) {
 		{"JobsShowBackgroundCommand", s.JobsShowBackgroundCommand, interp.No},
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.Yes},
 		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.Yes},
+		// The sole holdout on the pseudo-conditions: ERR, DEBUG and RETURN
+		// are refused as the unknown words they are here.
+		{"TrapHasErrCondition", s.TrapHasErrCondition, interp.No},
+		{"TrapHasDebugCondition", s.TrapHasDebugCondition, interp.No},
+		{"TrapHasReturnCondition", s.TrapHasReturnCondition, interp.No},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)

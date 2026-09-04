@@ -139,6 +139,16 @@ func Semantics() interp.Semantics {
 	s.TrapParsesOptions = interp.No
 	s.TrapOneArgumentIsACondition = interp.Yes
 	s.TrapReportsAnUnknownSingleCondition = interp.No
+	// ERR and DEBUG but not RETURN, and both follow the script everywhere:
+	// into functions, and — alone in the panel — into subshells and command
+	// substitutions, where the handler's output is captured with the rest.
+	s.TrapHasErrCondition = interp.Yes
+	s.TrapHasDebugCondition = interp.Yes
+	s.TrapHasReturnCondition = interp.No
+	s.ErrTrapRunsInsideFunctions = interp.Yes
+	s.ErrTrapRunsInSubshells = interp.Yes
+	s.DebugTrapRunsInsideCalls = interp.Yes
+	s.DebugTrapRunsInSubshells = interp.Yes
 	s.UmaskPrintsFourDigits = interp.No
 	s.UmaskSetWithSPrints = interp.No
 	s.UlimitBlockIsKilobyte = interp.No

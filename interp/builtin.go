@@ -75,6 +75,9 @@ func biReturn(r *Runner, _ context.Context, args []string) int {
 			return 2
 		}
 	}
+	// What `$?` was as `return` began, which is what the RETURN trap's
+	// action sees — the argument below is for the caller, not the trap.
+	r.returnSeenStatus = r.status
 	r.ctl = controlReturn
 	if len(args) > 0 {
 		if n, ok := atoi(args[0]); ok {
@@ -988,11 +991,11 @@ func biExit(r *Runner, _ context.Context, args []string) int {
 	return r.status
 }
 
-// biTrap sets what runs when the shell ends.
+// biTrap sets what runs when a condition arises: EXIT, a signal, or one of
+// the pseudo-conditions a dialect has (ERR, DEBUG, RETURN — pseudotrap.go).
 //
-// Only EXIT is implemented. The other conditions need signal delivery, and
-// accepting `trap … INT` without ever firing it would be the silent wrong
-// answer this package exists to avoid — so it is refused and says so.
+// A signal nobody can catch is refused rather than accepted and never fired,
+// because the silent wrong answer is the one this package exists to avoid.
 func biTrap(r *Runner, _ context.Context, args []string) int {
 	args, done := r.trapOptions(args)
 	if done != trapKeepGoing {
@@ -1013,15 +1016,27 @@ func biTrap(r *Runner, _ context.Context, args []string) int {
 	// Every condition is checked before any is acted on, so a bad one does
 	// not leave half the request applied.
 	type target struct {
-		name string
-		sig  syscall.Signal
-		exit bool
+		name   string
+		pseudo string
+		sig    syscall.Signal
+		exit   bool
 	}
 	targets := make([]target, 0, len(conds))
 	for _, c := range conds {
 		if strings.EqualFold(c, "EXIT") || c == "0" {
 			targets = append(targets, target{exit: true})
 			continue
+		}
+		// The pseudo-conditions come before the signal table because they
+		// are not in it: a dialect that has ERR takes the word here, and one
+		// that does not falls through and refuses it as the unknown name it
+		// is there.
+		if name, ok := r.pseudoCondition(c); ok {
+			targets = append(targets, target{pseudo: name})
+			continue
+		}
+		if r.unspecified {
+			return r.status
 		}
 		name, sig, kind := r.canonicalSignal(c)
 		switch kind {
@@ -1046,6 +1061,8 @@ func biTrap(r *Runner, _ context.Context, args []string) int {
 	}
 	for _, tg := range targets {
 		switch {
+		case tg.pseudo != "":
+			r.setPseudoTrap(tg.pseudo, body)
 		case tg.exit:
 			if body == "-" {
 				r.exitTrap = nil

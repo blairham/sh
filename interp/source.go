@@ -265,11 +265,17 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 	r.pushFrame(Frame{File: path, Name: "source"})
 	defer r.popFrame()
 
-	return r.runSourced(ctx, string(b), sourced{
+	st := r.runSourced(ctx, string(b), sourced{
 		label:        path,
 		syntaxStatus: r.diag().sourcedSyntaxStatus(),
 		catchReturn:  true,
 	})
+	// The RETURN trap fires as a sourced file finishes — wherever the trap
+	// was set, which is the half of the rule functions do not share. The
+	// action sees the file's status, and an `exit` of its own wins.
+	r.status = st
+	r.runReturnTrap(ctx, sourcedFrame)
+	return r.status
 }
 
 // dotFailed reports a file `.` could not read.

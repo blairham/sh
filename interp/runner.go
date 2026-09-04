@@ -437,6 +437,44 @@ type Runner struct {
 	// alone needs: there a trap set inside a function fires when the
 	// function returns rather than when the script ends.
 	trapDepth int
+
+	// errTrap, debugTrap and returnTrap are the pseudo-conditions: not
+	// signals, so nothing about them touches os/signal, and not EXIT, so
+	// none of them waits for the script to end. nil is "not set" and a
+	// pointer to "" is "ignored", the same three states a signal trap has.
+	// See pseudotrap.go for when each fires.
+	errTrap    *string
+	debugTrap  *string
+	returnTrap *string
+	// errTrapFrame and debugTrapFrame are the function frame each trap was
+	// set in, zero for the top level. The dialect that does not carry
+	// these traps into functions suppresses them only inside a function
+	// frame that is not the one that set them — measured: a trap set
+	// inside a function fires there and at the top level afterwards, and
+	// not inside a sibling's body, though the sibling's *call* still
+	// fires DEBUG, because the call is a command outside it.
+	errTrapFrame   int
+	debugTrapFrame int
+	// returnTrapFrame is the serial of the call frame the RETURN trap was
+	// set in, zero for the top level. A function fires the trap only when
+	// its own body set it — a sibling called afterwards does not, which is
+	// what the serial distinguishes that a depth cannot.
+	returnTrapFrame int
+	// frameSerial numbers every frame ever pushed, so two frames at the
+	// same depth are still two frames.
+	frameSerial int
+	// inErrTrap, inDebugTrap and inReturnTrap guard each trap against
+	// running itself: a failing command inside the ERR action fires
+	// nothing, which is measured, and a DEBUG action that fired DEBUG
+	// would never finish.
+	inErrTrap    bool
+	inDebugTrap  bool
+	inReturnTrap bool
+	// returnSeenStatus is `$?` as it was when `return` began. The RETURN
+	// trap's body sees this rather than the argument the `return` carried
+	// — measured: `f(){ trap 'echo R=$?' RETURN; return 3; }; f` prints
+	// R=0 and then reports 3.
+	returnSeenStatus int
 	// inSubshell marks a runner that stands for a subshell or a command
 	// substitution. Measured: the EXIT trap fires once, at the end of the
 	// main script, and not in either of those — so the copy must know it is
@@ -1018,7 +1056,7 @@ func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {
 	if _, isChain := st.Expr.(*syntax.BinaryExpr); !isChain && !lastIsNegated(st.Expr) {
 		// A chain judges itself, inside expr, because only its final operand
 		// counts and only when that operand actually ran.
-		r.checkErrExit()
+		r.checkErrExit(ctx)
 	}
 	return nil
 }
@@ -1039,20 +1077,33 @@ func lastIsNegated(e syntax.Expr) bool {
 	return false
 }
 
-// checkErrExit ends the script when `set -e` is on and the statement failed.
+// checkErrExit judges a statement that failed: the ERR trap fires here, and
+// `set -e` then ends the script.
 //
 // One place, after a whole statement, because that is the granularity the
 // shells use: `false | true` does not fire and `true | false` does, and both
-// are one statement whose status is the pipeline's.
-func (r *Runner) checkErrExit() {
-	if !r.errexit || r.tested != 0 || r.status == 0 || r.ctl != controlNone {
+// are one statement whose status is the pipeline's. The ERR trap shares the
+// gate — measured, a failure inside an `if` condition, an `&&` operand or a
+// `!` fires neither — and fires whether or not `set -e` is on, which is also
+// measured and unanimous among the shells that have the condition. When both
+// apply, the trap runs first and the script then stops, in that order.
+func (r *Runner) checkErrExit(ctx context.Context) {
+	if r.tested != 0 || r.status == 0 || r.ctl != controlNone {
+		return
+	}
+	pipefailOnly := r.pipefailRaised
+	r.runErrTrap(ctx)
+	if !r.errexit || r.ctl != controlNone {
+		// Either nothing more to do, or the trap's own action already ended
+		// the script — its `exit` wins, and judging the statement again
+		// would overwrite the status that action chose.
 		return
 	}
 	// Asked only here, where the answer decides something. A pipeline whose
 	// failure came only from pipefail is a failure one shell does not stop
 	// for — but with `set -e` off, or with the statement's failure already
 	// accounted for, nothing turns on it and the core must not refuse.
-	if r.pipefailRaised &&
+	if pipefailOnly &&
 		!r.ask(r.sem().ErrexitSeesPipefailFailure, "`set -e` stopping for a failure only pipefail saw") {
 		return
 	}
@@ -1087,7 +1138,7 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 			return err
 		}
 		if !lastIsNegated(x.Y) {
-			r.checkErrExit()
+			r.checkErrExit(ctx)
 		}
 		return nil
 	case *syntax.Pipeline:
@@ -1180,6 +1231,14 @@ func (r *Runner) unsupported(what string) error {
 }
 
 func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
+	// The DEBUG trap fires here, before anything about the command is even
+	// expanded — a simple command is its unit, measured: compound headings
+	// fire nothing and each command inside one fires its own. An action
+	// that exits takes the command it was about to precede with it.
+	r.runDebugTrap(ctx)
+	if r.ctl != controlNone {
+		return nil
+	}
 	r.unspecified, r.expandErr, r.assignFailed = false, false, false
 	// Whatever this command's process substitutions opened is closed when the
 	// command is done, whether it turned out to be a builtin, a function or

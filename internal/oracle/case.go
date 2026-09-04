@@ -2181,6 +2181,28 @@ echo "st=$?"`,
 		Why:     "the @ family is deferred to run time by every shell in the panel — including ksh93, which refuses every *other* unrecognized operator while reading. The second defect of the sweep that found the family",
 	},
 	{
+		ID: "param/an-array-length-without-a-subscript", Category: "parameter expansion",
+		Snippet: `a=(hello by z); echo "${#a[@]} ${#a}"`,
+		Why:     "zsh counts the elements for a bare ${#a}; bash and ksh93 measure element zero — probed with distinct lengths, because (one two three) hides the difference behind a three",
+	},
+	{
+		ID: "param/an-empty-array-quoted-at", Category: "parameter expansion",
+		Snippet: `a=(); set -- "${a[@]}"; echo "n=$#"`,
+		Why:     "ksh93 hands the quotes one empty field where bash and zsh hand none — the reason careful scripts write \"${a[@]+\"${a[@]}\"}\"",
+	},
+	{
+		ID: "param/a-negative-substring-length", Category: "parameter expansion",
+		Snippet: `x=abcdef; echo "[${x:1:-2}]"`,
+		Why:     "bash and zsh count a negative length from the end; ksh93 answers with nothing at all",
+	},
+	{
+		ID: "special/lineno-in-a-function-diverges", Category: "parameters",
+		Script:          true,
+		LayoutSensitive: true,
+		Snippet:         "f(){\necho $LINENO\n}\nf\n",
+		Why:             "zsh numbers a function's lines from the line the function was written on; the other three count from the file",
+	},
+	{
 		ID: "param/substring", Category: "parameter expansion",
 		Snippet: `x=abcdef; printf "[%s]" "${x:1:3}" "${x:2}"`,
 		Why:     "offset with and without a length; absent from dash",

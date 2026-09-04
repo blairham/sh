@@ -355,3 +355,15 @@ func (r *Runner) subscriptText(w *syntax.Word) string {
 	}
 	return strings.TrimSpace(r.joinWord(w))
 }
+
+// arrayElementCount reports how many elements a name holds and whether it is
+// an array at all, either kind.
+func (r *Runner) arrayElementCount(name string) (int, bool) {
+	if a, ok := r.Arrays[name]; ok {
+		return len(r.readArray(a)), true
+	}
+	if m, ok := r.AssocArrays[name]; ok {
+		return len(m), true
+	}
+	return 0, false
+}

@@ -487,6 +487,13 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 				return splitFields(joined, ifs, set), true
 			}
 			if s.Quoting != syntax.Unquoted {
+				if len(elems) == 0 && e.Op == syntax.ParamNone &&
+					r.ask(r.sem().EmptyArrayAtIsOneEmptyField, `a quoted "${a[@]}" of an empty array`) {
+					// One dialect hands the quotes a field to keep: an empty
+					// array is one empty argument there, which is the reason
+					// careful scripts write "${a[@]+"${a[@]}"}".
+					return []string{""}, true
+				}
 				return escapeAll(elems), true
 			}
 			var out []string
@@ -771,6 +778,17 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		// supplies only the value.
 		if e.Name == "@" || e.Name == "*" {
 			return itoa(r.specialLength())
+		}
+		if n, isArr := r.arrayElementCount(e.Name); isArr && n != 1 &&
+			r.ask(r.sem().ArrayLengthWithoutSubscriptIsCount, "`${#a}` of an array counting elements") {
+			// One dialect counts the elements where the others measure the
+			// scalar the bare name yields. Asked only where the two
+			// readings differ — a one-element array is its element either
+			// way.
+			return itoa(n)
+		}
+		if r.unspecified {
+			return ""
 		}
 		return itoa(len(value))
 	}
@@ -1204,6 +1222,11 @@ func substring(value string, off int, lenWord *syntax.Word, r *Runner) string {
 	}
 	n := r.numOf(lenWord)
 	if n < 0 {
+		if r.ask(r.sem().SubstringNegativeLengthIsEmpty, "a negative substring length") {
+			// One dialect answers a negative length with nothing at all;
+			// the others count it from the end.
+			return ""
+		}
 		// A negative length is an offset from the end.
 		n = len(value) + n - off
 	}

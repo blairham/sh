@@ -181,6 +181,7 @@ func Diagnostics() interp.Diagnostics {
 		BadSubstitution:          "Bad substitution",
 		// The builtin in front, which its plain form does not have.
 		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: is read only",
+		ReadonlyRefusalNamesBuiltin:   map[string]bool{"export": true, "readonly": true},
 		ReadonlyVariable:              "%s: is read only",
 		InvalidNumber:                 "Illegal number: %s",
 		NumericArgument:               "%[1]s: Illegal number: %[2]s",

@@ -276,7 +276,12 @@ func Diagnostics() interp.Diagnostics {
 		UlimitBadOption:             "ulimit: -%[1]s: invalid option",
 		UlimitBadNumber:             "ulimit: %[1]s: invalid number",
 		BuiltinBadOption:            "%[1]s: %[2]s: invalid option",
-		TrapPrintsSignalPrefix:      "SIG",
+		// bash names the builtin for its own two spellings and not for the
+		// two POSIX has: `declare: r: readonly variable` against a plain
+		// `r: readonly variable` from `export`.
+		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: readonly variable",
+		ReadonlyRefusalNamesBuiltin:   map[string]bool{"declare": true, "typeset": true},
+		TrapPrintsSignalPrefix:        "SIG",
 		// One wording for all three, and the operand quoted back exactly as
 		// given: `export 1x=v` says `1x=v', not `1x'.
 		BuiltinBadName: map[string]string{

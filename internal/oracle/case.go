@@ -397,6 +397,18 @@ var Corpus = []Case{
 		Why:     "ksh93 leaves the line out on line 1 of a command string, in the bracketed style too",
 	},
 	{
+		ID: "axis/readonly-refusal-names-the-builtin", Category: "diagnostics",
+		Script:  true,
+		Snippet: "readonly r=1\ndeclare r=2\necho end",
+		Why:     "bash names the builtin for its own two spellings of a declaration and not for the two POSIX has, which is the case below",
+	},
+	{
+		ID: "axis/readonly-refusal-does-not-name-export", Category: "diagnostics",
+		Script:  true,
+		Snippet: "readonly r=1\nexport r=2\necho end",
+		Why:     "the other half: the same refusal from `export` carries no builtin name in bash, where dash names both of the two it has",
+	},
+	{
 		ID: "axis/readonly-reassign-status", Category: "semantics axes",
 		Script:  true,
 		Snippet: "readonly r=1\nr=2\necho st=$?",

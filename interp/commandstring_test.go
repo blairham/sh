@@ -243,11 +243,15 @@ func TestWhatADeclarationSaysAboutAReadonlyName(t *testing.T) {
 			"x: is read only", "export",
 		},
 		{
-			// One dialect puts the builtin in front of the name.
+			// One dialect puts the builtin in front of the name, and which
+			// builtins do is a set of its own: the wording alone is not
+			// enough, because another dialect uses it for two of its four
+			// declaration spellings and not the other two.
 			"or one that names the builtin",
 			Diagnostics{
 				ReadonlyVariable:              "%[1]s: is read only",
 				ReadonlyVariableInDeclaration: "%[2]s: %[1]s: is read only",
+				ReadonlyRefusalNamesBuiltin:   map[string]bool{"export": true},
 			},
 			"export: x: is read only", "",
 		},

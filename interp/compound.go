@@ -315,31 +315,38 @@ func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 			if err := r.runList(ctx, item.Body); err != nil {
 				return err
 			}
-			switch item.Term {
-			case syntax.TokSemiAmp:
-				// Fall through to the next body without testing its pattern.
-				if i+1 < len(c.Items) {
-					if err := r.runList(ctx, c.Items[i+1].Body); err != nil {
-						return err
+			// The matched body has run; from here the terminators drive,
+			// and every arm reached is honored in turn. `;;` stops. `;&`
+			// runs the next body without testing its pattern. `;;&` keeps
+			// testing the *later* patterns, which is the narrower thing it
+			// means and the reason it is a separate operator rather than a
+			// spelling of `;&`. Honoring only the matched arm's terminator
+			// ran one extra body and stopped, so a three-link `;&` chain
+			// dropped its third body and a `;&` into a `;;&` never went
+			// back to matching.
+			at := i
+			for {
+				switch c.Items[at].Term {
+				case syntax.TokSemiAmp:
+					at++
+					if at == len(c.Items) {
+						return nil
 					}
+				case syntax.TokDSemiAmp:
+					at++
+					for at < len(c.Items) && !r.caseItemMatches(c.Items[at], subject) {
+						at++
+					}
+					if at == len(c.Items) {
+						return nil
+					}
+				default:
+					return nil
 				}
-			case syntax.TokDSemiAmp:
-				// Keep testing the *later* patterns, which is the narrower
-				// thing `;;&` means and the reason it is a separate operator
-				// rather than a spelling of `;&`.
-				for _, later := range c.Items[i+1:] {
-					if !r.caseItemMatches(later, subject) {
-						continue
-					}
-					if err := r.runList(ctx, later.Body); err != nil {
-						return err
-					}
-					if later.Term != syntax.TokDSemiAmp {
-						break
-					}
+				if err := r.runList(ctx, c.Items[at].Body); err != nil {
+					return err
 				}
 			}
-			return nil
 		}
 		return nil
 	})

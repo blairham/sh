@@ -83,6 +83,8 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskWhoAloneSetsIt = interp.No
 	s.SymbolicMaskTakesTheSetuidLetter = interp.Yes
 	s.SymbolicMaskTakesTheStickyLetter = interp.No
+	s.ShiftReadsOptions = interp.No
+	s.ShiftCountIsArithmetic = interp.No
 	s.TrapBodyRunsWhatParsed = interp.Yes
 	s.ReportsAKilledCommandInACommandSubstitution = interp.Yes
 	s.UmaskSetWithSPrints = interp.No
@@ -260,6 +262,7 @@ func Diagnostics() interp.Diagnostics {
 		UlimitBadNumber:       "ulimit: bad number",
 		UlimitBadNumberStatus: 2,
 		BuiltinBadOption:      "%[1]s: Illegal option %[2]s",
+		ShiftBadNumber:        "shift: Illegal number: %[1]s",
 		WaitBadJob:            "wait: Illegal number: %[1]s",
 		WaitBadJobStatus:      2,
 		LocalOutsideAFunction: "local: not in a function",

@@ -705,6 +705,24 @@ type Semantics struct {
 	// Two fields because the two letters are not answered together.
 	SymbolicMaskTakesTheStickyLetter Answer
 
+	// ShiftReadsOptions reads a leading `-` word that is not a number as an
+	// option rather than as the count.
+	//
+	// ksh93 and zsh do, and refuse it as one; bash and dash read it as the
+	// count and complain about the number. Same input, two different kinds
+	// of complaint — and both are fatal in the dialects where a special
+	// builtin's failure is, which `shift` is.
+	ShiftReadsOptions Answer
+
+	// ShiftCountIsArithmetic reads `shift`'s operand as an expression rather
+	// than as a plain number: `shift 1+1` moves two and `shift n` moves
+	// whatever n holds.
+	//
+	// ksh93 and zsh do. An unset name is zero in an expression, so
+	// `shift abc` shifts nothing and succeeds there, where bash and dash
+	// call it a number they cannot read.
+	ShiftCountIsArithmetic Answer
+
 	// ReportsAKilledCommandInACommandSubstitution remarks on a command that
 	// a signal ended inside `$(…)`.
 	//

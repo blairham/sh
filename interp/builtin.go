@@ -27,7 +27,6 @@ var builtins = map[string]Builtin{
 	"set":      biSet,
 	"unset":    biUnset,
 	"export":   biExport,
-	"shift":    biShift,
 	"echo":     biEcho,
 	"cd":       biCd,
 	"pwd":      biPwd,
@@ -412,6 +411,23 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 	return status
 }
 
+// Registered here rather than in the table above: `shift` reads its count as
+// an expression in two dialects, which reaches the evaluator, which reaches
+// the runner, which reaches the table — a cycle Go refuses to order. Two
+// other builtins are registered this way for the same kind of reason.
+func init() { builtins["shift"] = biShift }
+
+// firstOptionLetter is the letter a bundle of single-letter options is
+// refused by: the dashes are stripped and the first rune after them taken, so
+// `--help` is `h`.
+func firstOptionLetter(operand string) string {
+	letters := strings.TrimLeft(operand, "-")
+	if letters == "" {
+		return operand
+	}
+	return string([]rune(letters)[0])
+}
+
 // biShift drops the first n positional parameters.
 //
 // Shifting past the end is where the panel splits: fatal in dash and ksh93,
@@ -451,12 +467,9 @@ func hasOption(args []string, letter byte) bool {
 func biShift(r *Runner, _ context.Context, args []string) int {
 	n := 1
 	if len(args) > 0 {
-		v, ok := atoi(args[0])
-		if !ok {
-			r.diagf("shift: %s: numeric argument required\n", args[0])
-			return 2
+		if st, done := r.shiftCount(args[0], &n); done {
+			return st
 		}
-		n = v
 	}
 	if n > len(r.Params) {
 		// Fatal in dash and ksh93, survivable in bash and zsh.
@@ -477,6 +490,67 @@ func biShift(r *Runner, _ context.Context, args []string) int {
 	}
 	r.Params = r.Params[n:]
 	return 0
+}
+
+// shiftCount reads the operand, reporting whether the builtin is finished.
+//
+// A leading `-` that is not a number splits the panel in two. ksh93 and zsh
+// read it as an *option* and refuse it as one — `-x: unknown option` with a
+// usage line, `bad option: -x` — while bash and dash read it as the count and
+// complain about the number. Same input, two different kinds of complaint.
+//
+// Both refusals end the script in the two dialects where a special builtin's
+// failure is fatal, and `shift` is a special builtin, so that rule is the one
+// already in place rather than a new one.
+func (r *Runner) shiftCount(operand string, n *int) (int, bool) {
+	if len(operand) > 1 && operand[0] == '-' && !allDigits(operand[1:]) {
+		if r.ask(r.sem().ShiftReadsOptions, "`shift -x` read as an option rather than as a count") {
+			// The *first letter*, not the whole word: a leading `-` word is
+			// a bundle of single-letter options, so `shift --help` is
+			// refused as `-h` — the dashes are stripped and the first
+			// letter after them is the one named. printf's options already
+			// follow the same rule, measured the same way.
+			return r.badBuiltinOption("shift", "-"+firstOptionLetter(operand)), true
+		}
+		if r.unspecified {
+			return r.status, true
+		}
+	}
+	if v, ok := atoi(operand); ok {
+		// A plain number, which both readings agree on. Nothing is asked:
+		// `shift 2` is two everywhere and needs no dialect.
+		*n = v
+		return 0, false
+	}
+	if r.ask(r.sem().ShiftCountIsArithmetic, "`shift n` reading its count as an expression") {
+		// An expression rather than a number: `shift 1+1` moves two and
+		// `shift n` moves whatever n holds. An unset name is zero there, so
+		// `shift abc` shifts nothing and succeeds, where the dialects that
+		// want a number call it one they cannot read.
+		tree, perr := r.arithTree(nil, operand)
+		if perr != nil {
+			r.diagf("shift: %v\n", perr)
+			return 2, true
+		}
+		v, err := r.evalArith(tree)
+		if err != nil {
+			return r.status, true
+		}
+		*n = v
+		return 0, false
+	}
+	if r.unspecified {
+		return r.status, true
+	}
+	d := r.diag()
+	r.diagf("%s\n", Wording(d.ShiftBadNumber, "shift: %[1]s: numeric argument required", operand))
+	status := orDefault(d.BuiltinBadOptionStatus, 2)
+	if r.ask(r.sem().BadOptionToSpecialBuiltinFatal, "a special builtin's bad operand ending the script") {
+		r.status = status
+		r.fatalQuiet()
+		return r.status, true
+	}
+	return status, true
 }
 
 // biEcho writes its arguments separated by spaces.

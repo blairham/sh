@@ -15258,6 +15258,102 @@
         "TimedOut": false
       }
     },
+    "shift/a-count-that-is-a-name": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: shift: nosuchname: numeric argument required~[a b c] st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: shift: nosuchname: numeric argument required",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: shift: nosuchname: numeric argument required",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: shift: Illegal number: nosuchname",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a b c] st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a b c] st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "shift/a-count-that-is-an-expression": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: shift: 1+1: numeric argument required~[a b c] st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: shift: 1+1: numeric argument required",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: shift: 1+1: numeric argument required",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: shift: Illegal number: 1+1",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[c] st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[c] st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "shift/a-leading-dash-that-is-not-a-number": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: shift: -x: numeric argument required~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: shift: -x: numeric argument required",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: shift: -x: numeric argument required",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: shift: Illegal number: -x",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: shift: -x: unknown option~Usage: shift [ options ] [n]",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:shift:1: bad option: -x~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "signal-death/an-ordinary-failure-is-untouched": {
       "bash": {
         "Output": "st=3",

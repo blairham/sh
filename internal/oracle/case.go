@@ -3123,6 +3123,21 @@ echo after`,
 	},
 	// --- umask: the symbolic spelling ----------------------------------
 	{
+		ID: "shift/a-leading-dash-that-is-not-a-number", Category: "builtins",
+		Snippet: `shift -x; echo "st=$?"`,
+		Why:     "two of the four read it as an *option* and refuse it as one; the other two read it as the count and complain about the number. Same input, two kinds of complaint — and both end the script where a special builtin's failure is fatal",
+	},
+	{
+		ID: "shift/a-count-that-is-an-expression", Category: "builtins",
+		Snippet: `set -- a b c; shift 1+1; echo "[$*] st=$?"`,
+		Why:     "two of the four evaluate the count as an expression and move two; the other two want a plain number and say so",
+	},
+	{
+		ID: "shift/a-count-that-is-a-name", Category: "builtins",
+		Snippet: `set -- a b c; shift nosuchname; echo "[$*] st=$?"`,
+		Why:     "the same reading with an unset name, which is zero in an expression — so the two that evaluate shift nothing and succeed where the other two refuse it",
+	},
+	{
 		ID: "wait/an-operand-that-is-neither", Category: "builtins",
 		Snippet: `wait nosuchjob; echo "st=$?"`,
 		Why:     "an operand naming neither a process nor a job: four wordings and no two alike, and three statuses — one quotes it and names both things it could have been, one calls it an illegal number, one lists what it would have taken, and one calls it a job that was not found and reports the 127 of a command that is not there",

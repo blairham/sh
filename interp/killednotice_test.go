@@ -310,7 +310,7 @@ func TestRefusingToRemarkOnAPipelineElementLeavesItsStatusAlone(t *testing.T) {
 	out := &strings.Builder{}
 	r := &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{Location: LocationTightLine},
-		Name: "sh", Stdout: out, Stderr: &errs,
+		Name: "sh", Stdout: out, Stderr: &errs, Env: testPATH(),
 	}
 	f, err := syntax.Parse("set -o pipefail\n/bin/sh -c 'kill -USR1 $$' | cat\necho \"st=$?\"\n", syntax.Core())
 	if err != nil {

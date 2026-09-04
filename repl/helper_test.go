@@ -20,5 +20,9 @@ func newTestRunner(vars map[string]string) *interp.Runner {
 	if _, ok := vars["HISTFILE"]; !ok {
 		vars["HISTFILE"] = ""
 	}
-	return &interp.Runner{Semantics: &sem, Vars: vars}
+	// A nil Env is genuinely empty — interp never falls back to the process
+	// environment — so the externals these tests reach (sleep, cat) get a
+	// PATH handed in, from the two directories every supported platform
+	// keeps the basics in.
+	return &interp.Runner{Semantics: &sem, Vars: vars, Env: []string{"PATH=/usr/bin:/bin"}}
 }

@@ -4,7 +4,6 @@
 package interp
 
 import (
-	"os"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -99,11 +98,9 @@ func (r *Runner) importFunctions() {
 	if r.funcExportPrefix == "" && r.funcExportSuffix == "" {
 		return
 	}
-	base := r.Env
-	if base == nil {
-		base = os.Environ()
-	}
-	for _, kv := range base {
+	// r.Env and never os.Environ: what functions arrived is decided by the
+	// environment the embedder handed this Runner, not by the process's.
+	for _, kv := range r.Env {
 		key, value, ok := strings.Cut(kv, "=")
 		if !ok || !strings.HasPrefix(key, r.funcExportPrefix) || !strings.HasSuffix(key, r.funcExportSuffix) {
 			continue

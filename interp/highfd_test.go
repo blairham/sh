@@ -26,7 +26,7 @@ func redirRunAt(t *testing.T, dir, src string) (string, int, error) {
 	var buf bytes.Buffer
 	sem := permissive()
 	dg := Diagnostics{}
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Dir: dir, Name: "testsh"}
+	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Dir: dir, Name: "testsh", Env: testPATH()}
 	st, rerr := r.Run(context.Background(), f)
 	return buf.String(), st, rerr
 }

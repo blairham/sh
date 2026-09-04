@@ -23,7 +23,7 @@ func deathRun(t *testing.T, a Answer, src string) (string, int) {
 	sem := permissive()
 	sem.SignalDeathStatusIsTwoFiftySix = a
 	dg := Diagnostics{}
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh", Env: testPATH()}
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)

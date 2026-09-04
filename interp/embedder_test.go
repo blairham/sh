@@ -182,6 +182,66 @@ func TestTheWorkingDirectoryHandedIn(t *testing.T) {
 	}
 }
 
+// Two Runners in one process each keep their own working directory.
+//
+// This is the scenario the purity rule protects: a host program embedding two
+// shells. The working directory is per Runner rather than per process, so one
+// shell's globs, $PWD and `cd` never see or move the other's — which is why
+// the core's `cd` sets r.Dir and nothing here ever asks os.Getwd.
+func TestTwoRunnersDoNotShareAWorkingDirectory(t *testing.T) {
+	dirA, dirB := t.TempDir(), t.TempDir()
+	for dir, name := range map[string]string{dirA: "alpha.txt", dirB: "beta.txt"} {
+		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(dirB, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var outA, outB strings.Builder
+	semA, semB := PosixSemantics(), PosixSemantics()
+	a := &Runner{Semantics: &semA, Dir: dirA, Stdout: &outA, Stderr: &strings.Builder{}}
+	b := &Runner{Semantics: &semB, Dir: dirB, Stdout: &outB, Stderr: &strings.Builder{}}
+
+	embed(t, a, "echo *.txt; echo $PWD")
+	embed(t, b, "echo *.txt; echo $PWD")
+	if got, want := outA.String(), "alpha.txt\n"+dirA+"\n"; got != want {
+		t.Errorf("first runner saw %q, want %q", got, want)
+	}
+	if got, want := outB.String(), "beta.txt\n"+dirB+"\n"; got != want {
+		t.Errorf("second runner saw %q, want %q", got, want)
+	}
+
+	// One shell moves; the other must not feel it.
+	outA.Reset()
+	embed(t, b, "cd sub")
+	embed(t, a, "echo *.txt; pwd")
+	if got, want := outA.String(), "alpha.txt\n"+dirA+"\n"; got != want {
+		t.Errorf("after the other runner's cd, got %q, want %q", got, want)
+	}
+	if b.Dir != filepath.Join(dirB, "sub") {
+		t.Errorf("the runner that moved is at %q, want %q", b.Dir, filepath.Join(dirB, "sub"))
+	}
+}
+
+// A Runner handed no directory stays relative.
+//
+// Empty Dir does not mean "wherever the process is, resolved now" — that
+// answer is process-wide and asking for it is how two Runners come to share a
+// cwd. It means paths stay as written and the operating system resolves each
+// use, so `pwd` and $PWD report `.`. A caller that wants absolute answers
+// hands one in; driver does.
+func TestNoDirectoryHandedInStaysRelative(t *testing.T) {
+	var out strings.Builder
+	sem := PosixSemantics()
+	r := &Runner{Semantics: &sem, Stdout: &out, Stderr: &strings.Builder{}}
+	embed(t, r, "pwd; echo $PWD")
+	if got := out.String(); got != ".\n.\n" {
+		t.Errorf("out = %q, want %q", got, ".\n.\n")
+	}
+}
+
 // The environment a caller hands in is the environment, and export adds to it.
 func TestTheEnvironmentHandedIn(t *testing.T) {
 	var out strings.Builder

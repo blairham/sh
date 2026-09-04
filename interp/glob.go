@@ -4,7 +4,6 @@
 package interp
 
 import (
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -366,12 +365,19 @@ func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool) []s
 	return out
 }
 
+// workDir is where relative paths start: r.Dir, or `.` when nothing set one.
+//
+// Never os.Getwd. The process's directory is one answer shared by every
+// Runner in the program, and asking for it here is how two embedded shells
+// end up fighting over one cwd — the PATH lesson again, this time for
+// directories. `.` keeps everything relative and lets the operating system
+// resolve each use against wherever the process is, which is the only
+// reading of "no directory was handed in" that stays true when the process
+// moves. A shell binary wants the absolute answer, and driver — the binary,
+// where process-wide questions belong — seeds Dir at construction.
 func (r *Runner) workDir() string {
 	if r.Dir != "" {
 		return r.Dir
-	}
-	if wd, err := os.Getwd(); err == nil {
-		return wd
 	}
 	return "."
 }

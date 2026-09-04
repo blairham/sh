@@ -44,6 +44,7 @@ func newDialect(t *testing.T, out *bytes.Buffer) *interp.Runner {
 	r := &interp.Runner{
 		Stdout: out, Stderr: out,
 		Semantics: &sem, Dialect: &dial, Name: "mysh",
+		Env: testPATH(),
 	}
 
 	// 2. Register what shell cannot express. `cd` has to change the working

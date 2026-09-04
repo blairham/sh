@@ -33,6 +33,48 @@ var rlimitOf = map[interp.Resource]int{
 // for agrees on, and the ones missing from it — locked memory, resident set,
 // process count — are spelled differently or not at all from one Unix to the
 // next.
+//
+// # Open files is read faithfully and is still not what a child gets
+//
+// The Go runtime raises this process's RLIMIT_NOFILE soft limit before any
+// code here runs, and os/exec hands children the value the process had
+// *before* it did. So `ulimit -n` reports what this process runs under, which
+// is not the limit the commands it runs will run under — backwards for a
+// shell, whose whole reason for having the builtin is to say what its
+// commands get.
+//
+// Measured on both platforms, and it is worse on Linux. In a container
+// started with soft 1024 and hard 1048576: the Go process reads 1048575, a
+// `/bin/sh` child sees 1024, and a non-Go `/bin/sh` in the same container
+// sees 1024. With soft and hard already equal there is nothing to raise and
+// nothing goes wrong, which is how a casual check misses it.
+//
+// Four ways out were measured and three do not exist:
+//
+//   - Recording it at startup is impossible. The raise happens in a syscall
+//     package init, before anything here runs.
+//   - Recovering it afterwards has no portable form. The runtime's copy is
+//     unexported, /proc/self/limits reports the raised value, and a Go child
+//     re-raises its own — only a *non-Go* child sees the original, which is
+//     why this went unnoticed and which costs a process per call to ask.
+//   - Calling Setrlimit at startup so the two agree does work, and is the
+//     wrong thing: on Linux it would hand every child 1048575 in place of
+//     1024, which is exactly what a low soft limit exists to prevent. Go's
+//     own syscall/rlimit.go says so — some systems set an artificially low
+//     soft limit for code that uses select and its hard-coded maximum
+//     descriptor. Silently raising a child's limit a thousandfold breaks
+//     programs that run fine under bash.
+//
+// So it is reported as read and written down here. The runtime leaves a tell
+// for anyone who needs to detect the situation: it sets Cur to Max-1, so
+// `Cur == Max-1` means the value is an artifact rather than anybody's real
+// limit. That is enough to notice and not enough to recover, which is the
+// whole of why this stands.
+//
+// The *set* path is unaffected and correct: Setrlimit stores nothing in the
+// runtime's copy, so `ulimit -n 256` gives children 256. Only reading is
+// wrong, and only for this one resource — every other matched the panel
+// exactly, and so did this one's hard limit.
 func getRlimit(res interp.Resource) (int64, int64, error) {
 	id, ok := rlimitOf[res]
 	if !ok {

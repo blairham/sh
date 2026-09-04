@@ -78,6 +78,18 @@ type Semantics struct {
 	// axis produces.
 	EchoInterpretsEscapes Answer
 
+	// BuiltinWriteErrorFailsTheCommand makes a builtin whose output write
+	// failed — into a descriptor closed with `>&-`, most plainly — report
+	// status 1. True in bash, dash and ksh93; zsh keeps the builtin's own
+	// status and quietly loses the text.
+	//
+	// Whether anything is *said* about it is the dialect's wording —
+	// Diagnostics.BuiltinWriteError — not a second axis: bash and dash
+	// complain, ksh93 fails silently, and zsh has nothing to word because it
+	// does not fail. Asked only when a write has actually failed, so `echo
+	// hi` on an open stream needs no dialect.
+	BuiltinWriteErrorFailsTheCommand Answer
+
 	// LengthOfSpecialIsCount makes `${#@}` the number of positional
 	// parameters. False in dash, which gives the length of the joined
 	// string. The first axis measured where dash stands alone, and a silent
@@ -1329,8 +1341,12 @@ func PosixSemantics() Semantics {
 		GlobNoMatchIsError:                       No,
 		AssignmentPrefixPersistsOnSpecialBuiltin: Yes,
 		EchoInterpretsEscapes:                    No,
-		LengthOfSpecialIsCount:                   Yes,
-		ArithLeadingZeroIsOctal:                  Yes,
+		// POSIX has `echo` and `printf` exit greater than zero when "an
+		// error occurred", and a write that went nowhere is one; dash
+		// complies. zsh is the holdout, keeping status 0.
+		BuiltinWriteErrorFailsTheCommand: Yes,
+		LengthOfSpecialIsCount:           Yes,
+		ArithLeadingZeroIsOctal:          Yes,
 		// dash is the panel's POSIX-faithful member and the only one
 		// exiting 2, so the POSIX preset follows it. The standard itself
 		// requires only "greater than zero", which decides nothing.

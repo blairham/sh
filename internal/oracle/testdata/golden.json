@@ -14682,6 +14682,38 @@
         "TimedOut": false
       }
     },
+    "redir/a-group-writing-to-a-closed-descriptor": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: echo: write error: Bad file descriptor~\u003cshell\u003e: line 1: echo: write error: Bad file descriptor~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: echo: write error: Bad file descriptor~\u003cshell\u003e: line 1: echo: write error: Bad file descriptor~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: echo: write error: Bad file descriptor~\u003cshell\u003e: line 0: echo: write error: Bad file descriptor~a~b~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: echo: echo: I/O error~\u003cshell\u003e: 1: echo: echo: I/O error~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: write error: bad file descriptor~\u003cshell\u003e:1: write error: bad file descriptor~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "redir/a-quoted-target-with-a-space": {
       "bash": {
         "Output": "hi",
@@ -14801,6 +14833,38 @@
       },
       "ksh93": {
         "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/a-write-to-a-closed-descriptor-fails": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: echo: write error: Bad file descriptor~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: echo: write error: Bad file descriptor~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: echo: write error: Bad file descriptor~hi~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: echo: echo: I/O error~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=1",
         "Status": 0,
         "TimedOut": false
       },

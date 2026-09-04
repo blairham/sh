@@ -593,7 +593,17 @@ func biEcho(r *Runner, _ context.Context, args []string) int {
 	if newline {
 		out += "\n"
 	}
-	_, _ = r.stdout().Write([]byte(out))
+	if out == "" {
+		// `echo -n` has nothing to write, and nothing cannot fail to be
+		// written: it succeeds even on a closed descriptor, everywhere
+		// measured.
+		return 0
+	}
+	// Recorded, not returned: whether a write that went nowhere fails the
+	// command is the dispatcher's question, answered once for every builtin.
+	if _, err := r.stdout().Write([]byte(out)); err != nil {
+		r.writeFailed = err
+	}
 	return 0
 }
 

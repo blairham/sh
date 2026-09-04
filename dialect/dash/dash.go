@@ -219,6 +219,11 @@ func Diagnostics() interp.Diagnostics {
 		// A verb, and a different one for each direction.
 		CannotOpen:   "cannot open %[1]s: %[2]s",
 		CannotCreate: "cannot create %[1]s: %[2]s",
+		// The name twice — `dash: 1: echo: echo: I/O error` — and its own
+		// fixed reason whatever the errno was, so the format never mentions
+		// %[2]s. Measured on echo, printf, pwd and type: the doubling is the
+		// builtin's, not the location's.
+		BuiltinWriteError: "%[1]s: %[1]s: I/O error",
 		// Its own text for ENOENT, and a different one each way: a read that
 		// finds nothing is "No such file", a write that cannot make one is
 		// "Directory nonexistent". The OS says "No such file or directory"

@@ -38,6 +38,14 @@ func (r *Runner) reportKilled(sig syscall.Signal, pid int) {
 		return
 	}
 	status := r.status
+	if r.midPipeline && !r.ask(r.sem().ReportsAnyKilledPipelineElement, "a signal ending a pipeline element that is not the last") {
+		// Asked before the question of whether this shell reports at all,
+		// because a shell that says nothing never reaches either — and the
+		// refusal must not become the status here for the same reason it
+		// must not below.
+		r.status, r.unspecified = status, false
+		return
+	}
 	if !r.ask(r.sem().ReportsACommandKilledBySignal, "a command killed by a signal being reported") {
 		// A refusal here is a refusal to *say* something, and the status is
 		// not this question's to touch: `$?` after a killed command is what

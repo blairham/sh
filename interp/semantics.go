@@ -482,6 +482,18 @@ type Semantics struct {
 	// and are not asked about.
 	CdRefusesUnknownOption Answer
 
+	// ReportsAnyKilledPipelineElement remarks on a signal that ended an
+	// element of a pipeline other than the last. True in dash alone.
+	//
+	// bash and ksh93 report only the element whose status the pipeline
+	// takes: `sh -c 'kill -ABRT $$' | cat` is silent in both, and the same
+	// command as the *last* element is not. dash says the same thing
+	// wherever the element stands.
+	//
+	// Unreachable in zsh, which says nothing about a killed command at all,
+	// so the question never arises there.
+	ReportsAnyKilledPipelineElement Answer
+
 	// ReportsACommandKilledBySignal says out loud that a signal ended a
 	// command, rather than leaving the status to carry it alone. True in
 	// bash, dash and ksh93; zsh says nothing — measured with a terminal as

@@ -89,6 +89,7 @@ func TestSemantics(t *testing.T) {
 		{"ArraysAreSparse", s.ArraysAreSparse, interp.No},
 		{"AnnouncesBackgroundJob", s.AnnouncesBackgroundJob, interp.Yes},
 		{"ReportsACommandKilledBySignal", s.ReportsACommandKilledBySignal, interp.No},
+		{"ReportsAnyKilledPipelineElement", s.ReportsAnyKilledPipelineElement, interp.No},
 		{"CdRefusesUnknownOption", s.CdRefusesUnknownOption, interp.No},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.No},
 		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.Yes},

@@ -196,6 +196,9 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline) error {
 		sub.Stderr = sharedErr
 		sub.Stdout = sharedOut
 		if i != n-1 {
+			// Not the element whose status the pipeline reports, which is
+			// what decides whether a signal that ends it is remarked on.
+			sub.midPipeline = true
 			// Only the last element is the job. A backgrounded pipeline is
 			// one job with one pid, and bash and zsh both report the *last*
 			// element's — `sleep 1 | cat &` sets `$!` to the `cat`. Every

@@ -14234,6 +14234,38 @@
         "TimedOut": false
       }
     },
+    "signal/a-pipeline-element-that-is-not-the-last": {
+      "bash": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "User defined signal N: N~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "special/assigning-random-seeds-it": {
       "bash": {
         "Output": "produced",

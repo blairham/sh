@@ -145,6 +145,8 @@ func Semantics() interp.Semantics {
 	s.BadSetOptionNameFatal = interp.Yes
 	s.ReturnOutsideAFunctionIsRefused = interp.No
 	s.LoneDashIsAnOption = interp.No
+	s.UnsetFunctionChecksTheName = interp.Yes
+	s.UnsetFunctionReportsMissing = interp.No
 
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.No
@@ -182,6 +184,7 @@ func Diagnostics() interp.Diagnostics {
 		// not say back what was running.
 		KilledCommandNotice:  "%[1]d: %[2]s",
 		ParamNull:            "parameter null",
+		UnsetBadFunctionName: "unset: %[1]s: invalid function name",
 		SetInvalidOptionName: "set: %[1]s: bad option(s)",
 		SignalDescriptions:   signalDescriptions(),
 		JobRunning:           " Running",

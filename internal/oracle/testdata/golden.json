@@ -14746,6 +14746,38 @@
         "TimedOut": false
       }
     },
+    "read/a-count-of-characters": {
+      "bash": {
+        "Output": "[abc]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[abc]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[abc]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: read: Illegal option -n~[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[abc]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "read/a-failing-read-still-assigns": {
       "bash": {
         "Output": "st=1 l=[]",
@@ -14842,6 +14874,38 @@
         "TimedOut": false
       }
     },
+    "read/fields-into-an-array": {
+      "bash": {
+        "Output": "[b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: read: Illegal option -a~\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: read: -a: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]~[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:read:1: bad option: -a~[]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "read/options-cluster-in-one-word": {
       "bash": {
         "Output": "[x\\]",
@@ -14870,6 +14934,70 @@
       },
       "zsh": {
         "Output": "[x\\]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "read/silent-still-reads": {
+      "bash": {
+        "Output": "v=secret",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "v=secret",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "v=secret",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: read: Illegal option -s~v=",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "v=secret",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "v=secret",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "read/until-a-delimiter": {
+      "bash": {
+        "Output": "[a]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[a]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: read: Illegal option -d~[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a]",
         "Status": 0,
         "TimedOut": false
       }

@@ -94,6 +94,13 @@ func Semantics() interp.Semantics {
 	s.EchoLastEscapeFlagWins = interp.Yes
 	s.EchoExpandsHexEscapes = interp.Yes
 	s.EchoExpandsEscEscape = interp.Yes
+	// read takes -r and -s plus the argument letters: -a names the array in
+	// the option's argument, -d a delimiter, -n and -N the two counts, -t a
+	// timeout and -u a descriptor. A short -n keeps its text and reports 1;
+	// a short -N keeps its text too.
+	s.ReadOptions = "rsa:d:n:N:t:u:"
+	s.ReadPartialCountSucceeds = interp.No
+	s.ReadExactCountKeepsPartial = interp.Yes
 	// A directory the PATH search walked past leaves no trace: with nothing
 	// runnable anywhere, bash says the name was never found at all.
 	s.DirectoryOnPathIsACandidate = interp.No
@@ -333,12 +340,19 @@ func Diagnostics() interp.Diagnostics {
 		WaitNotOurChild:             "wait: pid %[1]d is not a child of this shell",
 		UnimplementedOptionLetters: map[string]string{
 			// Options these builtins have here and this shell does not.
-			// `read -s` is the one that matters most: ignoring it would
-			// echo what was meant to be hidden.
 			"wait": "nfp",
-			"read": "Eersadinput",
+			// What is left of read's letters: readline editing, the text -i
+			// seeds it with, and the -p prompt — all about a terminal this
+			// runner does not hold.
+			"read": "Eeip",
 			"type": "afptP",
 		},
+		// bash's own words for the two -u failures it can meet here; the
+		// non-number wordings per letter are not modeled yet, so those fall
+		// back to the substrate's.
+		ReadBadFileDescriptor: "read: %[1]s: invalid file descriptor: Bad file descriptor",
+		// 128 plus SIGALRM, the signal a timeout is.
+		ReadTimeoutStatus: 142,
 		HereDocumentAtEOF: "warning: here-document at line %[1]d " +
 			"delimited by end-of-file (wanted `%[2]s')",
 		// bash names the builtin for its own two spellings and not for the

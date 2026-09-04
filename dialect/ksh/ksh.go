@@ -106,6 +106,13 @@ func Semantics() interp.Semantics {
 	// \x does not.
 	s.EchoOptions = "ne"
 	s.EchoExpandsEscEscape = interp.Yes
+	// read takes -r and -s plus -A, whose array is the first operand where
+	// bash's -a takes it as the option's argument, and the same -d, -n, -N,
+	// -t and -u. A short -n is a success here; a short -N reports 1 and
+	// leaves the variable empty.
+	s.ReadOptions = "rsAd:n:N:t:u:"
+	s.ReadPartialCountSucceeds = interp.Yes
+	s.ReadExactCountKeepsPartial = interp.No
 	// typeset in a keyword function hides the caller's value, as bash's
 	// local does.
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes
@@ -362,9 +369,15 @@ func Diagnostics() interp.Diagnostics {
 			// ksh93 answers --version on most builtins, and has its own
 			// letters for these two.
 			"wait": "-",
-			"read": "-ACprsSvdutnN",
+			// What is left of read's letters: compound -C, the -p coprocess,
+			// -S's csv splitting and -v's default text.
+			"read": "-CpSv",
 			"type": "-afpqv",
 		},
+		// ksh93's one sentence for a dead -u descriptor, the number not
+		// named; the non-number wordings per letter are not modeled yet, so
+		// those fall back to the substrate's.
+		ReadBadFileDescriptor: "read: bad file unit number [Bad file descriptor]",
 		// Two wordings, split between `export` and the other two, and the
 		// operand quoted back as given.
 		BuiltinBadName: map[string]string{

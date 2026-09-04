@@ -376,6 +376,12 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 	if s.Kind != syntax.ParamExp || s.Param == nil {
 		return nil, false
 	}
+	// A flag group changes what the whole expansion yields — how many
+	// fields, joined with what — so a node that carries one is answered by
+	// its own pipeline, before any of the shapes below are considered.
+	if fields, ok := r.expandFlagged(s); ok {
+		return fields, true
+	}
 	e := s.Param
 	// `${!prefix@}` and `${!prefix*}` yield the *names* that begin with the
 	// prefix, and the two spellings differ exactly as `$@` and `$*` do.
@@ -670,6 +676,17 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		r.diagf("%s\n", Wording(w, "${%[1]s}: bad substitution", e.Src))
 		r.expandErr = true
 		return ""
+	}
+	if e.HasFlags {
+		// Normally intercepted in expandAt; reached directly where a single
+		// word must result — a pattern operand, say — which is the manual's
+		// final rule: the words are rejoined with the first character of
+		// IFS.
+		words, _, ok := r.flaggedWords(e, false)
+		if !ok {
+			return ""
+		}
+		return strings.Join(words, ifsFirst(r.ifs()))
 	}
 	// An array subscript supplies a value too, and the operators apply to it
 	// exactly as they do to a variable. That is what the comment said before

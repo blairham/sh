@@ -1129,6 +1129,12 @@ type Diagnostics struct {
 	// `${x@j}: bad substitution` when reached. Empty falls back to
 	// BadSubstitution, which is a runtime wording everywhere else.
 	BadSubstitutionAtRun string
+	// ExpansionFlagsError is a character a parenthesized expansion-flag
+	// group could not carry, reported when the expansion is reached. Two
+	// verbs: the 1-based position counted from the `$`, and the whole
+	// `${…}` text. Only the dialect whose grammar has the group can reach
+	// it, and that dialect's own wording is the fallback.
+	ExpansionFlagsError string
 	// NotFound is a command name that resolved to nothing. One verb: the
 	// name.
 	NotFound string

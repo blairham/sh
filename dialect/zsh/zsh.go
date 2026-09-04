@@ -32,6 +32,10 @@ func Dialect() syntax.Dialect {
 	// A bare `(a|b)` inside a pattern word, which makes `@(abc|xyz)` a
 	// literal `@` followed by a group here rather than an extended pattern.
 	d.PatternAlternation = true
+	// The parenthesized flag group an expansion may open with — `${(U)x}`,
+	// `${(%):-%x}` — which is this dialect's alone: the other three call
+	// the whole expansion a bad substitution.
+	d.ParamExpansionFlags = true
 	return d
 }
 
@@ -305,7 +309,10 @@ func Diagnostics() interp.Diagnostics {
 		SelectPrompt:             "?# ",
 		Location:                 interp.LocationTightLine,
 		BadSubstitution:          "bad substitution",
-		BadPattern:               "bad pattern: %s",
+		// The position is 1-based and counts from the `$`: `${(Y)x}` errors
+		// at 4, and a group that runs out of text errors just past the end.
+		ExpansionFlagsError: "error in flags near position %[1]d in '%[2]s'",
+		BadPattern:          "bad pattern: %s",
 		BuiltinBadSubscript: map[string]string{
 			"export":   "%[3]s: assignment to invalid subscript range",
 			"readonly": "%[2]s: can't create readonly array elements",

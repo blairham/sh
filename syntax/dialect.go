@@ -211,6 +211,18 @@ type Dialect struct {
 	// core's behavior and lives in alias.go.
 	ExpandAliases bool
 
+	// ParamExpansionFlags enables the parenthesized flag group that may open
+	// an expansion: `${(U)x}`, `${(s.:.)x}`, `${(%):-%x}`. One shell in the
+	// panel parses it; to the rest the whole expansion is a bad substitution,
+	// which BadSubstitutionAtParseTime already splits into a parse-time
+	// refusal for one dialect and a deferred runtime error for the others.
+	//
+	// The flag also relaxes the name: `${(%):-%x}` — found in the wild as
+	// the idiom for "the path of the file being sourced" — has no parameter
+	// at all, only flags and an operator, so an empty name is legal exactly
+	// when a flag group was read.
+	ParamExpansionFlags bool
+
 	// ParamIndirection enables `${!x}` to *parse*. bash and ksh93 accept it;
 	// dash and zsh reject it outright.
 	//

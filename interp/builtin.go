@@ -403,6 +403,12 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 		}
 		r.exported[name] = true
 	}
+	if r.assignFailed && status == 0 {
+		// A name it refused to assign is the builtin's failure, not just a
+		// remark: the dialect that reports a readonly reassignment and
+		// carries on leaves 1 in `$?` for `export x=2` as much as for `x=2`.
+		return 1
+	}
 	return status
 }
 
@@ -809,6 +815,10 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 			}
 		}
 		r.markReadonly(name)
+	}
+	if r.assignFailed && status == 0 {
+		// See biExport.
+		return 1
 	}
 	return status
 }

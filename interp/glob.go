@@ -157,7 +157,7 @@ func (r *Runner) glob(field string) []string {
 			r.globMissed = true
 			return nil
 		}
-		sort.Strings(next)
+		sortMatches(next)
 		dirs = next
 		if i < len(parts)-1 {
 			// Only directories can be descended into.
@@ -187,9 +187,44 @@ func (r *Runner) glob(field string) []string {
 		}
 		out = append(out, d)
 	}
-	sort.Strings(out)
+	sortMatches(out)
 	return out
 }
+
+// sortMatches puts a glob's matches in order, which is byte order — and that
+// is a decision rather than the absence of one.
+//
+// **In the C locale it is unanimous.** All four shells give
+// `1digit Apple Cherry _under banana date` for a directory holding those
+// names, on macOS and on Linux alike, and that is what this produces. Both
+// sweeps here run under LC_ALL=C, so it is also the only ordering the corpus
+// can record.
+//
+// **Outside it, three of the four collate and dash never does.** That much is
+// a clean axis. What cannot be done is the collation itself, and the reason
+// is worth keeping next to the code so it is not attempted again:
+//
+//   - The platforms disagree. Same shells, same locale name, opposite
+//     answers: macOS gives `_under 1digit Apple banana Cherry date` and glibc
+//     gives `1digit Apple banana Cherry date _under`. No single table is
+//     right on both.
+//   - A dependency does not settle it. golang.org/x/text/collate implements
+//     CLDR, which is close to glibc and not to macOS — so taking this
+//     library's first direct dependency would buy a third answer, and be
+//     wrong on the platform the panel is measured on.
+//   - An approximation is not close enough, and this was tried rather than
+//     assumed. "Digits before letters, letters case-insensitively" gets the
+//     obvious cases right and is still wrong twice over on an ordinary
+//     directory: macOS orders `_` before `-`, which needs the real
+//     punctuation weights, and sorts `Ápple` next to `Apple` and `éclair`
+//     next to `date`, which needs base-letter folding. Both come from the
+//     full table and neither can be derived from what the standard library
+//     ships.
+//
+// So the shell sorts by byte, which is right in the C locale, right for one
+// dialect everywhere, and wrong for three outside it — knowingly, and in a
+// place that says so.
+func sortMatches(names []string) { sort.Strings(names) }
 
 // matchIn lists the entries of dir matching one pattern component.
 func matchIn(dir, pattern string, o patternOpts) []string {

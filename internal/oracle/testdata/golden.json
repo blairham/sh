@@ -8218,6 +8218,38 @@
         "TimedOut": false
       }
     },
+    "glob/matches-are-in-order": {
+      "bash": {
+        "Output": "1digit Apple Cherry _under banana",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1digit Apple Cherry _under banana",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1digit Apple Cherry _under banana",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "1digit Apple Cherry _under banana",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1digit Apple Cherry _under banana",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1digit Apple Cherry _under banana",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "heredoc/a-backslash-escapes-three-things": {
       "bash": {
         "Output": "$x \\ \\n \\' \\\"",

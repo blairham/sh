@@ -951,7 +951,24 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 	if end > start && l.src[end-1] == '}' {
 		end--
 	}
+	if l.dialect.CurrentShellSubstitution && start < len(l.src) && isBraceCommandStart(l.src[start]) {
+		// `${ cmd;}` is a command and `${x}` is a parameter, and the space
+		// is the whole of the difference — which is why it is decided here,
+		// on the character after the brace, rather than by trying to read
+		// what follows as a name and failing.
+		//
+		// The body is taken exactly as the parameter form takes it: a `}`
+		// inside quotes does not close either, and both nest.
+		return Span{Kind: CommandSubst, CurrentShell: true, Value: l.src[start:end], Quoting: q, Pos: open}
+	}
 	return Span{Kind: ParamExp, Value: l.src[start:end], Quoting: q, Pos: open}
+}
+
+// isBraceCommandStart reports whether what follows `${` makes it a command
+// rather than a parameter. Measured: a space, a tab and a newline all do, and
+// nothing else can — a parameter name may not begin with any of them.
+func isBraceCommandStart(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\n'
 }
 
 // scanBackticks reads ` … `, the older command substitution. It nests only

@@ -1146,6 +1146,16 @@ var Corpus = []Case{
 		Why:     "given both, three of them let the last one win and zsh gives `-P` the answer wherever it stands, so the two orders agree in one shell and disagree in the other three. Written out rather than looped over a variable, because a loop would have measured word splitting instead — the variable stays one word in zsh and the case would have said nothing about `cd` at all",
 	},
 	{
+		ID: "subst/a-body-that-runs-in-the-current-shell", Category: "commands",
+		Snippet: `x=0; y=${ x=1; echo hi;}; echo "[$x][$y]"`,
+		Why:     "a third spelling of command substitution, and the only one that does not run in a subshell — so what it assigns survives, which is the whole reason it exists. Two of the panel have it, one of them only since 5.3, and the other two call it a bad substitution. The `x=0` before it and the `[$x]` after are what tell it from `$( … )`, which would leave the nought",
+	},
+	{
+		ID: "subst/the-subshell-form-loses-what-it-assigns", Category: "commands",
+		Snippet: `x=0; y=$(x=1; echo hi); echo "[$x][$y]"`,
+		Why:     "the same script with the older spelling, and unanimous: the assignment is lost. Recorded beside the case above because the pair is the difference — either alone says nothing about which shell the body ran in",
+	},
+	{
 		ID: "subst/a-body-is-placed-in-the-script", Category: "commands",
 		Snippet: "true\ntrue\ntrue\nx=$(nosuchcmd)\n",
 		Why:     "the body of a substitution is a program of its own and is read as one, so its lines count from the body rather than from the file — and every shell in the panel reports what happens inside it at the line it was *written* on. Unanimous for this spelling, which is what makes it the core's answer; the backquoted spelling is not, and one shell numbers that one from the top",

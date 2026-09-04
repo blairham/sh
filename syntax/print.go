@@ -791,6 +791,15 @@ func (p *printer) quoted(q Quoting, spans []Span) {
 func (p *printer) span(s Span) {
 	switch s.Kind {
 	case CommandSubst:
+		if s.CurrentShell {
+			// The third spelling, written back as it was read: the space
+			// after the brace is what makes it a command rather than a
+			// parameter, and it is already the first byte of the body.
+			p.str("${")
+			p.str(s.Value)
+			p.str("}")
+			return
+		}
 		if s.Backquoted {
 			// Written back the way it was read, because the two spellings
 			// end differently: this one ends at its closing backquote, and

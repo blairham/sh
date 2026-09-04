@@ -1993,6 +1993,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
 | `exec/a-command-is-named-as-it-was-written` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` | `basename: illegal option -- -` |
+| `subst/a-body-that-runs-in-the-current-shell` | `<shell>: 1: Bad substitution` *(status 2)* | `[1][hi]` | `[1][hi]` | `<shell>: ${ x=1; echo hi;}: bad substitution` *(status 1)* | `[1][hi]` | `<shell>:1: bad substitution` *(status 1)* |
+| `subst/the-subshell-form-loses-what-it-assigns` | `[0][hi]` | `[0][hi]` | `[0][hi]` | `[0][hi]` | `[0][hi]` | `[0][hi]` |
 | `subst/a-body-is-placed-in-the-script` | `<shell>: 4: nosuchcmd: not found` *(status 127)* | `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | `<shell>: line 3: nosuchcmd: command not found` *(status 127)* | `<shell>: line 4: nosuchcmd: not found` *(status 127)* | `<shell>:4: command not found: nosuchcmd` *(status 127)* |
 | `subst/a-backquoted-body-is-placed-differently` | `<shell>: 1: nosuchcmd: not found` *(status 127)* | `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | `<shell>: line 3: nosuchcmd: command not found` *(status 127)* | `<shell>: line 4: nosuchcmd: not found` *(status 127)* | `<shell>:4: command not found: nosuchcmd` *(status 127)* |
 | `signal/an-interrupt-that-ended-a-child` | `after` | `after` | `after` | `after` | *(no output, status -1)* | `after` |
@@ -2002,6 +2004,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `exec/a-command-is-named-as-it-was-written` — a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else
   ```sh
   basename --bad 2>&1 | head -1
+  ```
+- `subst/a-body-that-runs-in-the-current-shell` — a third spelling of command substitution, and the only one that does not run in a subshell — so what it assigns survives, which is the whole reason it exists. Two of the panel have it, one of them only since 5.3, and the other two call it a bad substitution. The `x=0` before it and the `[$x]` after are what tell it from `$( … )`, which would leave the nought
+  ```sh
+  x=0; y=${ x=1; echo hi;}; echo "[$x][$y]"
+  ```
+- `subst/the-subshell-form-loses-what-it-assigns` — the same script with the older spelling, and unanimous: the assignment is lost. Recorded beside the case above because the pair is the difference — either alone says nothing about which shell the body ran in
+  ```sh
+  x=0; y=$(x=1; echo hi); echo "[$x][$y]"
   ```
 - `subst/a-body-is-placed-in-the-script` — the body of a substitution is a program of its own and is read as one, so its lines count from the body rather than from the file — and every shell in the panel reports what happens inside it at the line it was *written* on. Unanimous for this spelling, which is what makes it the core's answer; the backquoted spelling is not, and one shell numbers that one from the top
   ```sh

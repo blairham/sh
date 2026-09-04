@@ -1096,6 +1096,14 @@ type Diagnostics struct {
 	// zsh name none, including ksh93's own `typeset`.
 	ReadonlyRefusalNamesBuiltin map[string]bool
 
+	// DeclareNoSuchVariable is what `declare -p` and `typeset -p` say about
+	// a name that is not there. One verb: the name. The message follows the
+	// builtin's name, so the prefix rules place it — `declare: nosuch: not
+	// found` against `no such variable: nosuch` behind a location that
+	// already names the builtin. Reached only where
+	// DeclarePrintReportsAMissingName said yes.
+	DeclareNoSuchVariable string
+
 	// ReadonlyVariable is an assignment to a readonly name. One verb: the
 	// name.
 	ReadonlyVariable string

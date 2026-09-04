@@ -690,6 +690,23 @@ type Semantics struct {
 	// makes it local in a function defined either way.
 	TypesetLocalNeedsKeywordFunction Answer
 
+	// DeclareListing is the shape of what `declare -p` and `typeset -p`
+	// write back. Three engines rather than two answers — see
+	// DeclarationListingForm.
+	DeclareListing DeclarationListingForm
+
+	// DeclareValueQuoting is how a listed declaration spells its value. A
+	// field of its own over the shared vocabulary because it does not follow
+	// the dialect's other listings: the engine that single-quotes its
+	// aliases and traps double-quotes its declarations.
+	DeclareValueQuoting ListingQuotingStyle
+
+	// DeclarePrintReportsAMissingName makes `typeset -p nosuch` say so and
+	// fail. bash and zsh report it (with their own wording — see
+	// Diagnostics.DeclareNoSuchVariable) and answer 1 even when other names
+	// listed fine; ksh93 prints nothing for the missing name and answers 0.
+	DeclarePrintReportsAMissingName Answer
+
 	// SelectLayout is how `select` draws its menu. Three engines rather than
 	// two answers, which is why it has its own type.
 	SelectLayout SelectMenuLayout

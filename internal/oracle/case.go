@@ -2859,6 +2859,21 @@ echo unreachable`,
 		Why:     "the declaration assigns and then freezes, so its own value survives and the next assignment does not — applying both at once would refuse the value it was given",
 	},
 	{
+		ID: "declare/print-a-scalar-back", Category: "declarations",
+		Snippet: `v='a b'; export e=E; typeset -p v e; echo "st=$?"`,
+		Why:     "`-p` writes a declaration back and the three shells with it produce three texts for identical state: one word `declare` with a `--` placeholder and double quotes, `typeset`/`export` with quoting only when needed, and a bare `v='a b'` with no command word at all",
+	},
+	{
+		ID: "declare/print-arrays-back", Category: "declarations",
+		Snippet: `arr=(x y); typeset -A m; m[k]='a b'; typeset -p arr m`,
+		Why:     "the array shapes move with the form: subscripts always, never, or only where the array has gaps — and the associative element's trailing space in one engine is real. One key only, because key order is promised by nobody",
+	},
+	{
+		ID: "declare/print-a-missing-name", Category: "declarations",
+		Snippet: `typeset -p nosuch; echo "st=$?"`,
+		Why:     "how scripts test whether a name is set: two shells report it in their own words and answer 1, one prints nothing at all and answers 0 — an axis, not a wording",
+	},
+	{
 		ID: "select/menu-and-choice", Category: "select",
 		Snippet: `select x in a b; do echo "got=$x rep=$REPLY"; break; done <<< "1"`,
 		Why:     "the base case, and the layouts diverge immediately: two lines in bash and ksh93, one in zsh — and the prompt is `#? ` in two, `?# ` in the third and absent in ksh93, which prints none unless the input is a terminal",

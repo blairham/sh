@@ -34,6 +34,7 @@ type declareFlags struct {
 	export   bool
 	assoc    bool
 	remove   bool
+	print    bool
 }
 
 func biDeclare(r *Runner, _ context.Context, args []string) int {
@@ -60,6 +61,10 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 				// recorded: it changes what a later subscript *means*, the
 				// way `-i` changes what a later assignment means.
 				f.assoc = true
+			case 'p':
+				// Print rather than declare. `+p` prints too — measured in
+				// both shells that spell the option at all.
+				f.print = true
 			case 'a':
 				// Accepted and recorded nowhere. An array here is dynamic,
 				// so `typeset -a arr` followed by `arr[0]=x` works without
@@ -75,6 +80,14 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 				return 2
 			}
 		}
+	}
+
+	if f.print {
+		// The other letters are accepted alongside `-p` and decide nothing:
+		// the shells that have them use an attribute letter to *filter* the
+		// full listing, which is not built. Refusing the combination would
+		// break the plain use to be honest about the rare one.
+		return r.declarePrint(args[i:])
 	}
 
 	for _, a := range args[i:] {

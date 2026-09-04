@@ -46,6 +46,12 @@ const (
 	// embedded quote as `'\''`, and reaches for `$'...'` only for a control
 	// character: zsh's `alias`.
 	ListingQuoteWhenNeededEscaped
+	// ListingQuoteAlwaysDouble always double-quotes, escaping an embedded
+	// backslash, backquote, dollar or double quote, and replaces the double
+	// quotes with `$'...'` when the value holds a control character: bash's
+	// `declare -p`, which is not the single-quoting style its `alias` and
+	// `trap` use.
+	ListingQuoteAlwaysDouble
 	// ListingQuoteWhenNeededPlain leaves a plain value bare and single-quotes
 	// everything else, reaching for `$'...'` never: zsh's `trap`.
 	//
@@ -68,6 +74,8 @@ func (a ListingQuotingStyle) String() string {
 		return "ListingQuoteWhenNeededDollar"
 	case ListingQuoteWhenNeededEscaped:
 		return "ListingQuoteWhenNeededEscaped"
+	case ListingQuoteAlwaysDouble:
+		return "ListingQuoteAlwaysDouble"
 	case ListingQuoteWhenNeededPlain:
 		return "ListingQuoteWhenNeededPlain"
 	}
@@ -106,6 +114,11 @@ func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) str
 			return v
 		}
 		return singleQuoted(v, `'\''`, true)
+	case ListingQuoteAlwaysDouble:
+		if hasControl(v) {
+			return dollarQuoted(v)
+		}
+		return doubleQuoted(v)
 	}
 	r.diagf("how %s spells a value: the shells disagree here and no dialect was chosen\n", what)
 	r.status = 2
@@ -157,6 +170,21 @@ func singleQuoted(v, escape string, trimEmptyTail bool) string {
 		return quoted[:len(quoted)-2]
 	}
 	return quoted
+}
+
+// doubleQuoted wraps in double quotes, escaping the four characters that are
+// live inside them: backslash, backquote, dollar and the quote itself.
+func doubleQuoted(v string) string {
+	var b strings.Builder
+	b.WriteByte('"')
+	for i := 0; i < len(v); i++ {
+		if c := v[i]; c == '\\' || c == '`' || c == '$' || c == '"' {
+			b.WriteByte('\\')
+		}
+		b.WriteByte(v[i])
+	}
+	b.WriteByte('"')
+	return b.String()
 }
 
 // dollarQuoted writes `$'...'`, the spelling that can carry a control

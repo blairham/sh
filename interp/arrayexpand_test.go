@@ -6,6 +6,10 @@ package interp_test
 import (
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/dialect/bash"
+	"github.com/blairham/sh/dialect/zsh"
+	. "github.com/blairham/sh/interp"
 )
 
 // An operator applies to a subscripted value exactly as it does to a variable.
@@ -106,5 +110,74 @@ func TestArrayIndices(t *testing.T) {
 	out, _ = runBash(t, `a=(p q r); echo "${a[@]}"`)
 	if got := strings.TrimSpace(out); got != "p q r" {
 		t.Errorf("got %q, want the elements", got)
+	}
+}
+
+// An operator on `${a[@]}` applies to every element. It applied to the first
+// alone — the elements were joined before the operator ran — so `${a[@]#a}`
+// on `(aa ab)` came back `a ab`, silently, with status 0. Unanimous in the
+// three shells with arrays, the anchored and case forms included.
+func TestAnOperatorDistributesOverTheElements(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`a=(aa ab); printf "[%s]" "${a[@]#a}"`, "[a][b]"},
+		{`a=(aa ab); printf "[%s]" "${a[@]##*a}"`, "[][b]"},
+		{`a=(aa ab); printf "[%s]" "${a[@]%a}"`, "[a][ab]"},
+		{`a=(aa ab); printf "[%s]" "${a[@]%%a*}"`, "[][]"},
+		{`a=(aa ab); printf "[%s]" "${a[@]/a/X}"`, "[Xa][Xb]"},
+		{`a=(aa ab); printf "[%s]" "${a[@]//a/X}"`, "[XX][Xb]"},
+		{`a=(a-b c-d); printf "[%s]" "${a[@]/#?/X}"`, "[X-b][X-d]"},
+		{`a=(aa AB); printf "[%s]" "${a[@]^^}"`, "[AA][AB]"},
+		{`a=(aa AB); printf "[%s]" "${a[@],,}"`, "[aa][ab]"},
+		// Each element stays a field of its own, spaces and all — the whole
+		// reason the operator cannot run on the elements joined.
+		{`a=("x y" "x z"); printf "[%s]" "${a[@]#x }"`, "[y][z]"},
+		// An associative array's values distribute the same way, in the key
+		// order this implementation keeps everywhere.
+		{`typeset -A m; m[x]=aa; m[y]=ab; printf "[%s]" "${m[@]#a}"`, "[a][b]"},
+		// `${#a[@]}` is still the count, not a trimmed anything.
+		{`a=(aa ab); printf "[%s]" "${#a[@]}"`, "[2]"},
+	} {
+		if out, _ := runBash(t, c.src); out != c.want {
+			t.Errorf("%s = %q, want %q", c.src, out, c.want)
+		}
+	}
+}
+
+// `${a[*]#p}` splits the panel: two shells trim each element and join what is
+// left, the third joins first and trims the joined string once — so which
+// string the operator sees is an axis, asked only on the star form.
+func TestTheStarFormOperatorIsAnAxis(t *testing.T) {
+	src := `a=(aa ab); printf "%s" "${a[*]#a}"`
+	if out, _ := run(t, src, withSem(bash.Semantics())); out != "a b" {
+		t.Errorf("distributing gave %q, want %q", out, "a b")
+	}
+	if out, _ := run(t, src, withSem(zsh.Semantics())); out != "a ab" {
+		t.Errorf("joining first gave %q, want %q", out, "a ab")
+	}
+	// The join is on the first character of IFS either way.
+	src = `a=(aa ab); IFS=-; printf "%s" "${a[*]/a/X}"`
+	if out, _ := run(t, src, withSem(bash.Semantics())); out != "Xa-Xb" {
+		t.Errorf("distributing gave %q, want %q", out, "Xa-Xb")
+	}
+	if out, _ := run(t, src, withSem(zsh.Semantics())); out != "Xa-ab" {
+		t.Errorf("joining first gave %q, want %q", out, "Xa-ab")
+	}
+}
+
+// Asked only where the two readings differ: a suffix trim that stops at the
+// last element reads the same both ways, so a shell with no answers still
+// gets it — and `${a[@]}` never asks, because every shell distributes there.
+func TestTheStarAxisIsAskedOnlyWhereTheReadingsDiffer(t *testing.T) {
+	out, st := run(t, `a=(aa ab); printf "%s" "${a[*]%b}"`, withSem(CoreSemantics()))
+	if out != "aa a" || st != 0 {
+		t.Errorf("got %q status %d, want %q and 0", out, st, "aa a")
+	}
+	out, st = run(t, `a=(aa ab); printf "[%s]" "${a[@]#a}"`, withSem(CoreSemantics()))
+	if out != "[a][b]" || st != 0 {
+		t.Errorf("got %q status %d, want no axis asked on the at form", out, st)
+	}
+	out, _ = run(t, `a=(aa ab); printf "%s" "${a[*]#a}"`, withSem(CoreSemantics()))
+	if !strings.Contains(out, "disagree") {
+		t.Errorf("got %q, want the star form refused without an answer", out)
 	}
 }

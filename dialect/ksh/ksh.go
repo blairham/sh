@@ -227,6 +227,8 @@ func Semantics() interp.Semantics {
 	// Whether `export -f` carries a function to a child.
 	// Whether an unassigned subscript is an element.
 	s.ArraysAreSparse = interp.Yes
+	// An operator on `${a[*]}` trims each element before the join here.
+	s.OperatorDistributesOverStarSubscript = interp.Yes
 	s.ExportCarriesFunctions = interp.No
 	s.AnnouncesBackgroundJob = interp.Yes
 	s.ReportsACommandKilledBySignal = interp.Yes

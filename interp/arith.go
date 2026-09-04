@@ -158,18 +158,19 @@ func (r *Runner) arithElement(x *syntax.ArithIndex) (arithNum, error) {
 		return intNum(0), err
 	}
 	// No check that the name is an array: an unset one yields nothing, and
-	// nothing is out of range for every subscript, so the bounds test below
-	// already answers it. A guard here would be a line no test could tell
-	// from its absence.
+	// nothing is out of range for every subscript, so the bounds test inside
+	// elemAt already answers it. A guard here would be a line no test could
+	// tell from its absence.
+	//
+	// A negative subscript counts back from the end here too — `$((a[-1]))`
+	// is the last element in all three shells with arrays — which elemAt
+	// answers the same way for `${a[-1]}`, so the two spellings cannot drift.
 	elems, _ := r.arrayElems(x.Name)
-	i := idx.asInt() - r.arrayBase()
-	if i < 0 || i >= len(elems) {
+	v, ok := r.elemAt(x.Name, elems, idx.asInt())
+	if !ok || strings.TrimSpace(v) == "" {
 		return intNum(0), nil
 	}
-	if strings.TrimSpace(elems[i]) == "" {
-		return intNum(0), nil
-	}
-	return r.parseArithNum(strings.TrimSpace(elems[i]))
+	return r.parseArithNum(strings.TrimSpace(v))
 }
 
 func (r *Runner) evalUnary(x *syntax.ArithUnary) (arithNum, error) {

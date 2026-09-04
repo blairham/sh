@@ -12058,6 +12058,38 @@
         "TimedOut": false
       }
     },
+    "param/a-negative-subscript-counts-from-the-end": {
+      "bash": {
+        "Output": "[30][20][10]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[30][20][10]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: a: bad array subscript~\u003cshell\u003e: a: bad array subscript~\u003cshell\u003e: a: bad array subscript~[][][0]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[30][20][10]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[30][20][10]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "param/an-expansion-inside-an-operand": {
       "bash": {
         "Output": "[x][y]",
@@ -12086,6 +12118,70 @@
       },
       "zsh": {
         "Output": "[x][y]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "param/an-operator-distributes-over-the-elements": {
+      "bash": {
+        "Output": "[a][b][][][XX][Xb]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[a][b][][][XX][Xb]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[a][b][][][XX][Xb]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[a][b][][][XX][Xb]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[a][b][][][XX][Xb]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "param/an-operator-on-the-star-subscript-diverges": {
+      "bash": {
+        "Output": "a b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "a b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "a b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "a b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "a ab",
         "Status": 0,
         "TimedOut": false
       }
@@ -12278,6 +12374,38 @@
       },
       "zsh": {
         "Output": "[V][V]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "param/assigning-through-a-negative-subscript": {
+      "bash": {
+        "Output": "one two X",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "one two X",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: a[-1]: bad array subscript",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "one two X",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "one two X",
         "Status": 0,
         "TimedOut": false
       }

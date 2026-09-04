@@ -73,6 +73,23 @@ type Semantics struct {
 	// do not.
 	AssignmentPrefixPersistsOnSpecialBuiltin Answer
 
+	// EchoOptions is the set of letters `echo` reads as options: `n` for
+	// every shell measured, `e` everywhere but dash, `E` in bash and zsh
+	// alone. A word carrying any other letter is not an option at all — the
+	// whole word becomes an operand, which is unanimous and is why `echo
+	// -nq hi` prints `-nq hi` in all four. Empty means `n`.
+	EchoOptions string
+	// EchoLastEscapeFlagWins decides `echo -e -E`: bash lets the last flag
+	// win and prints the backslashes, zsh lets -e win whatever the order.
+	// Reached only when -e came first — the other order agrees everywhere —
+	// and only in a dialect whose EchoOptions has both letters.
+	EchoLastEscapeFlagWins Answer
+	// EchoExpandsHexEscapes admits `\xHH` alongside the XSI set: bash and
+	// zsh do, dash and ksh93 print it as written.
+	EchoExpandsHexEscapes Answer
+	// EchoExpandsEscEscape admits `\e` and `\E` for the escape character:
+	// everyone with escapes but dash, whose set is the XSI list alone.
+	EchoExpandsEscEscape Answer
 	// EchoInterpretsEscapes expands backslash escapes in `echo` without -e.
 	// True in dash and zsh, false in bash and ksh93 — a grouping no other
 	// axis produces.
@@ -1345,8 +1362,13 @@ func PosixSemantics() Semantics {
 		// error occurred", and a write that went nowhere is one; dash
 		// complies. zsh is the holdout, keeping status 0.
 		BuiltinWriteErrorFailsTheCommand: Yes,
-		LengthOfSpecialIsCount:           Yes,
-		ArithLeadingZeroIsOctal:          Yes,
+		// The XSI echo: -n alone, no \x, no \e. The letters the dialects
+		// add are theirs to add.
+		EchoOptions:             "n",
+		EchoExpandsHexEscapes:   No,
+		EchoExpandsEscEscape:    No,
+		LengthOfSpecialIsCount:  Yes,
+		ArithLeadingZeroIsOctal: Yes,
 		// dash is the panel's POSIX-faithful member and the only one
 		// exiting 2, so the POSIX preset follows it. The standard itself
 		// requires only "greater than zero", which decides nothing.

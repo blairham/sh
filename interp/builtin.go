@@ -578,8 +578,37 @@ func (r *Runner) shiftCount(operand string, n *int) (int, bool) {
 // decision — the dialect will decide once the interpreter carries one.
 func biEcho(r *Runner, _ context.Context, args []string) int {
 	newline := true
-	for len(args) > 0 && args[0] == "-n" {
-		newline = false
+	letters := r.sem().EchoOptions
+	if letters == "" {
+		letters = "n"
+	}
+	// -1 is -E, +1 is -e, 0 is the dialect's default. A word carrying any
+	// letter outside the dialect's set is not an option at all — the whole
+	// word becomes an operand, which is unanimous: `echo -nq hi` prints
+	// `-nq hi` in all four shells.
+	forced := 0
+	for len(args) > 0 {
+		a := args[0]
+		if len(a) < 2 || a[0] != '-' || strings.ContainsFunc(a[1:], func(c rune) bool {
+			return !strings.ContainsRune(letters, c)
+		}) {
+			break
+		}
+		for i := 1; i < len(a); i++ {
+			switch a[i] {
+			case 'n':
+				newline = false
+			case 'e':
+				forced = 1
+			case 'E':
+				// `-E -e` expands everywhere; only `-e -E` splits the
+				// panel, so the question waits for that order.
+				if forced != 1 ||
+					r.ask(r.sem().EchoLastEscapeFlagWins, "which of `echo -e -E` decides") {
+					forced = -1
+				}
+			}
+		}
 		args = args[1:]
 	}
 	out := strings.Join(args, " ")
@@ -587,8 +616,23 @@ func biEcho(r *Runner, _ context.Context, args []string) int {
 	// not. A grouping no other axis produces.
 	// Asked only when the text could differ either way, so `echo hi` needs no
 	// dialect and `echo 'a\tb'` does.
-	if strings.ContainsRune(out, '\\') && r.ask(r.sem().EchoInterpretsEscapes, "echo interpreting backslash escapes") {
-		out = expandEchoEscapes(out)
+	expand := forced == 1
+	if forced == 0 {
+		expand = strings.ContainsRune(out, '\\') &&
+			r.ask(r.sem().EchoInterpretsEscapes, "echo interpreting backslash escapes")
+	}
+	if expand && strings.ContainsRune(out, '\\') {
+		// The two set extensions are asked only when their escapes appear.
+		hex := strings.Contains(out, `\x`) &&
+			r.ask(r.sem().EchoExpandsHexEscapes, "echo expanding \\xHH")
+		esc := (strings.Contains(out, `\e`) || strings.Contains(out, `\E`)) &&
+			r.ask(r.sem().EchoExpandsEscEscape, "echo expanding \\e")
+		var stopped bool
+		out, stopped = expandEchoEscapes(out, hex, esc)
+		if stopped {
+			// `\c` ends the output, newline included.
+			newline = false
+		}
 	}
 	if newline {
 		out += "\n"
@@ -607,9 +651,26 @@ func biEcho(r *Runner, _ context.Context, args []string) int {
 	return 0
 }
 
+func isHexDigit(c byte) bool {
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+}
+
+func hexValue(c byte) int {
+	switch {
+	case c >= '0' && c <= '9':
+		return int(c - '0')
+	case c >= 'a' && c <= 'f':
+		return int(c-'a') + 10
+	default:
+		return int(c-'A') + 10
+	}
+}
+
 // expandEchoEscapes interprets the escapes `echo` expands where the dialect
-// says it does.
-func expandEchoEscapes(s string) string {
+// says it does: the XSI set, with `\xHH` and `\e` admitted per dialect.
+// stopped reports a `\c`, which discards the rest of the output and the
+// closing newline with it.
+func expandEchoEscapes(s string, hex, esc bool) (expanded string, stopped bool) {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
 		if s[i] != '\\' || i+1 >= len(s) {
@@ -618,20 +679,64 @@ func expandEchoEscapes(s string) string {
 		}
 		i++
 		switch s[i] {
+		case 'a':
+			b.WriteByte('\a')
+		case 'b':
+			b.WriteByte('\b')
+		case 'c':
+			return b.String(), true
+		case 'f':
+			b.WriteByte('\f')
 		case 'n':
 			b.WriteByte('\n')
-		case 't':
-			b.WriteByte('\t')
 		case 'r':
 			b.WriteByte('\r')
+		case 't':
+			b.WriteByte('\t')
+		case 'v':
+			b.WriteByte('\v')
 		case '\\':
 			b.WriteByte('\\')
+		case 'e', 'E':
+			if !esc {
+				b.WriteByte('\\')
+				b.WriteByte(s[i])
+				break
+			}
+			b.WriteByte(0x1b)
+		case '0':
+			// `\0` and up to three octal digits after it.
+			n, j := 0, i+1
+			for j < len(s) && j <= i+3 && s[j] >= '0' && s[j] <= '7' {
+				n = n*8 + int(s[j]-'0')
+				j++
+			}
+			b.WriteByte(byte(n))
+			i = j - 1
+		case 'x':
+			if !hex {
+				b.WriteByte('\\')
+				b.WriteByte(s[i])
+				break
+			}
+			n, j := 0, i+1
+			for j < len(s) && j <= i+2 && isHexDigit(s[j]) {
+				n = n*16 + hexValue(s[j])
+				j++
+			}
+			if j == i+1 {
+				// `\x` with no digits stays as written.
+				b.WriteString(`\x`)
+				break
+			}
+			b.WriteByte(byte(n))
+			i = j - 1
 		default:
 			b.WriteByte('\\')
 			b.WriteByte(s[i])
 		}
 	}
-	return b.String()
+	return b.String(), false
 }
 
 // biCd changes the shell's working directory.

@@ -101,6 +101,11 @@ func Semantics() interp.Semantics {
 	s.GlobNoMatchIsError = interp.Yes
 	s.AssignmentPrefixPersistsOnSpecialBuiltin = interp.No
 	s.EchoInterpretsEscapes = interp.Yes
+	// echo reads -n, -e and -E, and -e wins over -E whatever the order.
+	s.EchoOptions = "neE"
+	s.EchoLastEscapeFlagWins = interp.No
+	s.EchoExpandsHexEscapes = interp.Yes
+	s.EchoExpandsEscEscape = interp.Yes
 	s.ArithLeadingZeroIsOctal = interp.No
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes

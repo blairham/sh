@@ -450,6 +450,35 @@ func (r *Runner) setFd(fd int, v any) {
 	r.fds[fd] = v
 }
 
+// builtinWriteStatus folds a failed output write into a builtin's status.
+//
+// The write already happened and already failed — into a descriptor closed
+// with `>&-`, most plainly — so there is nothing to undo; the question is
+// whether the command is said to have worked. Three of the panel say no and
+// report 1, and two of those say so on stderr; zsh keeps the builtin's own
+// status and quietly loses the text. So the status is a semantics axis and
+// the message is the dialect's wording, empty where nothing is said.
+//
+// A builtin that already failed keeps its own status: the write's 1 only
+// replaces a success, never a complaint the builtin had already made.
+func (r *Runner) builtinWriteStatus(name string, st int) int {
+	err := r.writeFailed
+	r.writeFailed = nil
+	if err == nil || r.unspecified {
+		return st
+	}
+	if !r.ask(r.sem().BuiltinWriteErrorFailsTheCommand, "a builtin's failed write failing the command") {
+		return st
+	}
+	if w := r.diag().BuiltinWriteError; w != "" {
+		r.diagf("%s\n", fmt.Sprintf(w, name, r.diag().reasonText(reason(err))))
+	}
+	if st == 0 {
+		st = 1
+	}
+	return st
+}
+
 // closedFd is a descriptor that has been closed with `>&-`. Reading or writing
 // it fails the way the kernel would.
 type closedFd struct{}

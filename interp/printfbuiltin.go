@@ -163,7 +163,7 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, bool) {
 	// a shell that complains half way through has already printed the half
 	// before it, and ksh93's `[` arrives before its complaint about what
 	// followed.
-	b := printfWriter{w: r.stdout()}
+	b := printfWriter{w: r.stdout(), r: r}
 	if !r.printfWritesThrough() {
 		// Held until the end, so a complaint reaches the reader first — which
 		// is what three of the four do, their output still being in a buffer
@@ -493,6 +493,7 @@ func (r *Runner) expandPrintfEscape(s string) (string, int, bool) {
 // depending on which the dialect does.
 type printfWriter struct {
 	w    io.Writer
+	r    *Runner
 	hold *strings.Builder
 }
 
@@ -504,16 +505,28 @@ func (p printfWriter) WriteString(s string) {
 		p.hold.WriteString(s)
 		return
 	}
-	_, _ = io.WriteString(p.w, s)
+	p.write(s)
 }
 
 // writeByte is not WriteByte: that name carries an error return by
-// convention, and this writer has nowhere to report one.
+// convention, and this writer reports one the way every builtin's output
+// does — on the runner, for the dispatcher to fold in.
 func (p printfWriter) writeByte(c byte) { p.WriteString(string(c)) }
 
 func (p printfWriter) flush() {
 	if p.hold != nil {
-		_, _ = io.WriteString(p.w, p.hold.String())
+		p.write(p.hold.String())
+	}
+}
+
+func (p printfWriter) write(s string) {
+	if s == "" {
+		// Nothing to write cannot fail to be written: `printf '' >&-`
+		// succeeds in every shell measured.
+		return
+	}
+	if _, err := io.WriteString(p.w, s); err != nil {
+		p.r.writeFailed = err
 	}
 }
 

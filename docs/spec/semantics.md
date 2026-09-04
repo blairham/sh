@@ -1574,3 +1574,45 @@ survives only for a word that begins with `--`: `export --foo` is
 `--foo: unknown option` there, against bash's `--: invalid option` and zsh's
 `bad option: -o` — zsh skipped the dashes, took `f` as one of export's own
 letters, and stopped on the `o` it does not know.
+
+## A write that failed is not a command that worked
+
+`echo hi >&-` closes the descriptor before the builtin writes, so the write
+fails with EBADF. Whether the *command* then fails is a disagreement, and
+what is said about it is a wording. Measured (oracle run, 2026-09-04):
+
+    echo hi >&-; echo $?
+      bash   echo: write error: Bad file descriptor   then 1
+      dash   echo: echo: I/O error                    then 1
+      ksh93  (silent)                                 then 1
+      zsh    (silent)                                 then 0
+
+`printf x >&-`, `pwd >&-` and `type type >&-` answer the same way in bash
+and dash, with the failing builtin's own name in the message — so the
+wording is per dialect and takes the builtin as a verb, not one string per
+builtin. `command echo hi >&-` and `builtin echo hi >&-` name `echo`, the
+builtin that wrote, not the wrapper.
+
+The failure is per command, never fatal: `echo a >&-; echo ok` prints `ok`
+everywhere. A stream closed for good behaves the same, once per builtin
+that writes — `exec >&-; echo a; echo b` complains twice in bash and dash —
+and a group redirect is the same again: `{ echo a; echo b; } >&-` fails
+each write and the group reports the last one. An external command needs
+none of this: `/bin/echo hi >&-` fails in its own process, printing its own
+`echo: fflush: Bad file descriptor`, in all four shells alike.
+
+So the split is one axis — does a builtin whose output write failed report
+1 — true in bash, dash and ksh93, false in zsh, and POSIX sides with the
+three: `echo` and `printf` each promise a status greater than zero when "an
+error occurred" (POSIX XCU, EXIT STATUS), and a write that went nowhere is
+one. The message is a Diagnostics wording,
+`BuiltinWriteError`, empty where nothing is said: ksh93 fails silently, and
+zsh does not fail at all. zsh does print `write error: bad file descriptor`
+— status still 0 — when the closed stream came from `exec >&-` or a group
+redirect rather than from the simple command's own; that wording-without-
+failure is measured, recorded here, and not reproduced.
+
+Two corners deliberately not modeled beyond the record: ksh93's `pwd >&-`
+reports 0 where its `echo hi >&-` reports 1, so its answer is per builtin
+in a way one axis does not carry; and zsh's exec-closed message above. Both
+are visible in the corpus if a case ever asks.

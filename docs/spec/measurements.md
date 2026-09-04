@@ -2284,6 +2284,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `redir/failure-does-not-run-the-command` | `<shell>: 1: cannot create nodir/out: Directory nonexistent~st=2` | `<shell>: line 1: nodir/out: No such file or directory~st=1` | `<shell>: line 1: nodir/out: No such file or directory~st=1` | `<shell>: nodir/out: No such file or directory~st=1` | `<shell>: nodir/out: cannot create [No such file or directory]~st=1` | `<shell>:1: no such file or directory: nodir/out~st=1` |
 | `redir/dup-to-stderr` | `done` | `done` | `done` | `done` | `done` | `done` |
 | `redir/exec-saves-a-stream` | `through~st=0` | `through~st=0` | `through~st=0` | `through~st=0` | `through~st=0` | `through~st=0` |
+| `redir/a-write-to-a-closed-descriptor-fails` | `<shell>: 1: echo: echo: I/O error~st=1` | `<shell>: line 1: echo: write error: Bad file descriptor~st=1` | `<shell>: line 1: echo: write error: Bad file descriptor~st=1` | `<shell>: line 0: echo: write error: Bad file descriptor~hi~st=1` | `st=1` | `st=0` |
+| `redir/a-group-writing-to-a-closed-descriptor` | `<shell>: 1: echo: echo: I/O error~<shell>: 1: echo: echo: I/O error~st=1` | `<shell>: line 1: echo: write error: Bad file descriptor~<shell>: line 1: echo: write error: Bad file descriptor~st=1` | `<shell>: line 1: echo: write error: Bad file descriptor~<shell>: line 1: echo: write error: Bad file descriptor~st=1` | `<shell>: line 0: echo: write error: Bad file descriptor~<shell>: line 0: echo: write error: Bad file descriptor~a~b~st=1` | `st=1` | `<shell>:1: write error: bad file descriptor~<shell>:1: write error: bad file descriptor~st=0` |
 | `redir/exec-opens-a-high-descriptor` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` |
 | `redir/a-dup-prefix-is-that-commands-alone` | `<shell>: 1: 6: Bad file descriptor~st=2` | `<shell>: line 1: 6: Bad file descriptor~st=1` | `<shell>: line 1: 6: Bad file descriptor~st=1` | `<shell>: 6: Bad file descriptor~st=1` | `<shell>: 6: cannot open [Bad file descriptor]~st=1` | `<shell>:1: 6: bad file descriptor~st=1` |
 | `redir/merge-then-file` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` |
@@ -2394,6 +2396,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `redir/exec-saves-a-stream` — the saved-stdout idiom every configure script uses: `exec 6>&1` keeps the stream, `>&6` finds it again, `6>&-` lets it go
   ```sh
   exec 6>&1; echo through >&6; exec 6>&-; echo "st=$?"
+  ```
+- `redir/a-write-to-a-closed-descriptor-fails` — `>&-` closes stdout before the builtin writes, and a write that went nowhere is not a command that worked: three shells report 1 — two of them with a message naming the builtin, ksh93 silently — and zsh alone keeps 0 and quietly loses the text
+  ```sh
+  echo hi >&-; echo "st=$?"
+  ```
+- `redir/a-group-writing-to-a-closed-descriptor` — the failure is per write, never fatal: each echo inside the group fails on its own — bash and dash complain twice — and the group reports the last one. zsh says `write error` here where it said nothing for a simple command's own `>&-`, and still answers 0
+  ```sh
+  { echo a; echo b; } >&-; echo "st=$?"
   ```
 - `redir/exec-opens-a-high-descriptor` — `exec 3>file` holds the file on a descriptor of its own — stdout stays where it was, and only what is aimed at 3 reaches the file
   ```sh

@@ -47,6 +47,12 @@ func Semantics() interp.Semantics {
 	// standard input alike — letters from zsh's own single-letter option
 	// namespace, which shares almost nothing with the other shells'.
 	s.DefaultOptionLetters = "569X"
+	// The panel's holdout: `echo hi >&-` is status 0 here and 1 in the other
+	// three — the text is quietly lost and nothing is said about a simple
+	// command's own closed stream. What zsh prints when the stream was
+	// closed by `exec >&-` instead — a `write error` with the status still 0
+	// — is measured in docs/spec/semantics.md and not reproduced.
+	s.BuiltinWriteErrorFailsTheCommand = interp.No
 	s.ArithIntegerOperatorRefusesFloat = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.Yes
 	s.AssignmentUpdatesPipelineStatus = interp.No

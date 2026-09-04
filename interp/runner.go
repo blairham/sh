@@ -356,6 +356,14 @@ type Runner struct {
 	// not run: a redirect that could not be applied would otherwise send its
 	// output to the terminal, which is the loudest possible wrong answer.
 	redirErr bool
+	// writeFailed records a builtin's output write that failed — into a
+	// descriptor closed with `>&-`, most plainly. The write already
+	// happened and went nowhere, so there is nothing to retry; the question
+	// left is whether the command is said to have worked, and that is the
+	// dispatcher's to fold in once the builtin returns. Cleared before each
+	// builtin runs, so a failure is only ever read by the builtin it
+	// belongs to.
+	writeFailed error
 	// line is where execution currently is, for diagnostics that name it.
 	// Real shells report the line of the command that failed, so this is
 	// updated per statement rather than per token.
@@ -656,8 +664,14 @@ func (r *Runner) stderr() io.Writer {
 // there is nowhere better to report a failure to report, and a shell whose
 // stderr is closed should still run the command.
 // printf writes to the shell's output stream.
+//
+// A failed write is recorded rather than returned, because none of the
+// builtins writing through here could do anything with it at the site: the
+// dispatcher folds it into the command's status once the builtin returns.
 func (r *Runner) printf(format string, args ...any) {
-	_, _ = fmt.Fprintf(r.stdout(), format, args...)
+	if _, err := fmt.Fprintf(r.stdout(), format, args...); err != nil {
+		r.writeFailed = err
+	}
 }
 
 func (r *Runner) errf(format string, args ...any) {
@@ -1464,7 +1478,9 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		if locks {
 			r.assignOperands(c)
 		}
+		r.writeFailed = nil
 		st := fn(r, ctx, argv[1:])
+		st = r.builtinWriteStatus(argv[0], st)
 		r.inBuiltin = outer
 		if st == 0 && !locks {
 			r.assignOperands(c)

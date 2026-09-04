@@ -1206,6 +1206,21 @@ type Diagnostics struct {
 	// is what makes this a different question from FatalErrorStatusIsOne.
 	RedirectFailureStatus int
 
+	// BuiltinWriteError is a builtin whose output write failed — into a
+	// descriptor closed with `>&-`, most plainly. Two verbs, positional:
+	// %[1]s is the builtin's name and %[2]s the reason.
+	//
+	//	bash   echo: write error: Bad file descriptor
+	//	dash   echo: echo: I/O error
+	//
+	// dash opens with the name twice and fixes the reason as "I/O error"
+	// whatever the errno was, so its format uses %[1]s in both places and
+	// never mentions %[2]s. Empty means nothing is said, which is the other
+	// two and the substrate's own: ksh93 fails silently, and zsh does not
+	// fail at all — the status is the semantics axis's answer either way,
+	// so silence here is a wording rather than a behavior.
+	BuiltinWriteError string
+
 	// DirectoryNotFound is FileNotFound for a write rather than a read.
 	//
 	// dash alone again, and a different string from its own FileNotFound:

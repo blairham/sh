@@ -241,6 +241,11 @@ func Diagnostics() interp.Diagnostics {
 		// No verb at all: the name, then the OS string. Same either way —
 		// bash does not distinguish opening from creating.
 		CannotOpen: "%[1]s: %[2]s",
+		// A builtin whose write went nowhere: `echo hi >&-` is
+		// `echo: write error: Bad file descriptor`, and the same shape with
+		// printf, pwd or type in front — the builtin is a verb, not a set of
+		// messages.
+		BuiltinWriteError: "%[1]s: write error: %[2]s",
 		// Measured: bash reports a failed open at the redirect's own line.
 		RedirectFailureLine:     interp.LineOfRedirect,
 		CannotCreate:            "%[1]s: %[2]s",

@@ -1680,6 +1680,16 @@ echo "st=$?"`,
 		Why:     "the saved-stdout idiom every configure script uses: `exec 6>&1` keeps the stream, `>&6` finds it again, `6>&-` lets it go",
 	},
 	{
+		ID: "redir/a-write-to-a-closed-descriptor-fails", Category: "redirection",
+		Snippet: `echo hi >&-; echo "st=$?"`,
+		Why:     "`>&-` closes stdout before the builtin writes, and a write that went nowhere is not a command that worked: three shells report 1 — two of them with a message naming the builtin, ksh93 silently — and zsh alone keeps 0 and quietly loses the text",
+	},
+	{
+		ID: "redir/a-group-writing-to-a-closed-descriptor", Category: "redirection",
+		Snippet: `{ echo a; echo b; } >&-; echo "st=$?"`,
+		Why:     "the failure is per write, never fatal: each echo inside the group fails on its own — bash and dash complain twice — and the group reports the last one. zsh says `write error` here where it said nothing for a simple command's own `>&-`, and still answers 0",
+	},
+	{
 		ID: "redir/exec-opens-a-high-descriptor", Category: "redirection",
 		Snippet: `exec 3>f; echo hi; echo aside >&3; exec 3>&-; cat f`,
 		Why:     "`exec 3>file` holds the file on a descriptor of its own — stdout stays where it was, and only what is aimed at 3 reaches the file",

@@ -74,7 +74,8 @@ func Semantics() interp.Semantics {
 	s.UnaliasReportsNotFound = interp.Yes
 	s.AliasNotFoundStatusCounts = interp.No
 	s.UnaliasAllRefusesOperands = interp.No
-	s.AliasQuoting = interp.AliasQuoteAlwaysDoubled
+	s.AliasQuoting = interp.ListingQuoteAlwaysDoubled
+	s.TrapQuoting = interp.ListingQuoteAlwaysDoubled
 	s.UmaskSetWithSPrints = interp.No
 	s.UlimitBlockIsKilobyte = interp.No
 	s.UlimitHasResidentSet = interp.Yes

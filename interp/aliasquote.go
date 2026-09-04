@@ -5,11 +5,16 @@ package interp
 
 import "strings"
 
-// How `alias` spells the value it lists back.
+// How a shell spells a value it lists back — an alias's replacement, a
+// trap's action.
 //
 // Four engines, and no two agree. The listing is meant to be text the shell
 // could read again, so each one quotes whatever its own parser would need —
 // which is why this is a policy rather than one function with flags.
+//
+// The style is shared; which style a builtin uses is not. zsh spells an alias
+// holding a tab as `$'a\tb'` and a trap holding one as `'a<tab>b'`, so the
+// two are separate fields over the same vocabulary.
 //
 //	value        bash              dash                ksh93          zsh
 //	ls           'ls'              'ls'                ls             ls
@@ -22,76 +27,96 @@ import "strings"
 // and reopening with a double-quoted quote; and two reach for `$'...'` when the
 // value holds a control character.
 
-// AliasQuotingStyle is how a dialect spells an alias value in a listing.
-type AliasQuotingStyle int
+// ListingQuotingStyle is how a dialect spells a value it lists back.
+type ListingQuotingStyle int
 
 const (
-	// AliasQuotingUnspecified is no answer, and is refused like any other.
-	AliasQuotingUnspecified AliasQuotingStyle = iota
-	// AliasQuoteAlwaysEscaped always single-quotes and writes an embedded
+	// ListingQuotingUnspecified is no answer, and is refused like any other.
+	ListingQuotingUnspecified ListingQuotingStyle = iota
+	// ListingQuoteAlwaysEscaped always single-quotes and writes an embedded
 	// quote as `'\''`: bash.
-	AliasQuoteAlwaysEscaped
-	// AliasQuoteAlwaysDoubled always single-quotes and writes an embedded
+	ListingQuoteAlwaysEscaped
+	// ListingQuoteAlwaysDoubled always single-quotes and writes an embedded
 	// quote as `'"'"'`: dash.
-	AliasQuoteAlwaysDoubled
-	// AliasQuoteWhenNeededDollar leaves a plain value bare and reaches for
+	ListingQuoteAlwaysDoubled
+	// ListingQuoteWhenNeededDollar leaves a plain value bare and reaches for
 	// `$'...'` where a quote or a control character appears: ksh93.
-	AliasQuoteWhenNeededDollar
-	// AliasQuoteWhenNeededEscaped leaves a plain value bare, writes an
+	ListingQuoteWhenNeededDollar
+	// ListingQuoteWhenNeededEscaped leaves a plain value bare, writes an
 	// embedded quote as `'\''`, and reaches for `$'...'` only for a control
-	// character: zsh.
-	AliasQuoteWhenNeededEscaped
+	// character: zsh's `alias`.
+	ListingQuoteWhenNeededEscaped
+	// ListingQuoteWhenNeededPlain leaves a plain value bare and single-quotes
+	// everything else, reaching for `$'...'` never: zsh's `trap`.
+	//
+	// zsh arrives at that output a different way — it parses the action when
+	// the trap is set, refuses one it cannot parse, and lists the parse back
+	// rather than the text it was given, so `a<tab>b` lists as `a b`. For an
+	// action that is an ordinary command the two agree, which is every
+	// action in the corpus. Where they do not, this is the closer of the two
+	// answers available, and re-printing the parse is its own question.
+	ListingQuoteWhenNeededPlain
 )
 
-func (a AliasQuotingStyle) String() string {
+func (a ListingQuotingStyle) String() string {
 	switch a {
-	case AliasQuoteAlwaysEscaped:
-		return "AliasQuoteAlwaysEscaped"
-	case AliasQuoteAlwaysDoubled:
-		return "AliasQuoteAlwaysDoubled"
-	case AliasQuoteWhenNeededDollar:
-		return "AliasQuoteWhenNeededDollar"
-	case AliasQuoteWhenNeededEscaped:
-		return "AliasQuoteWhenNeededEscaped"
+	case ListingQuoteAlwaysEscaped:
+		return "ListingQuoteAlwaysEscaped"
+	case ListingQuoteAlwaysDoubled:
+		return "ListingQuoteAlwaysDoubled"
+	case ListingQuoteWhenNeededDollar:
+		return "ListingQuoteWhenNeededDollar"
+	case ListingQuoteWhenNeededEscaped:
+		return "ListingQuoteWhenNeededEscaped"
+	case ListingQuoteWhenNeededPlain:
+		return "ListingQuoteWhenNeededPlain"
 	}
-	return "AliasQuotingUnspecified"
+	return "ListingQuotingUnspecified"
 }
 
-// quoteAliasValue spells a value the way this dialect's `alias` lists it.
-func (r *Runner) quoteAliasValue(v string) string {
-	switch r.sem().AliasQuoting {
-	case AliasQuoteAlwaysEscaped:
+// quoteListedValue spells a value the way this dialect lists it back, in the
+// style the calling builtin uses. What is being listed is named so the
+// refusal can say which question went unanswered.
+func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) string {
+	switch style {
+	case ListingQuoteAlwaysEscaped:
 		return singleQuoted(v, `'\''`, false)
-	case AliasQuoteAlwaysDoubled:
+	case ListingQuoteAlwaysDoubled:
 		return singleQuoted(v, `'"'"'`, true)
-	case AliasQuoteWhenNeededDollar:
+	case ListingQuoteWhenNeededDollar:
 		switch {
 		case hasControl(v):
 			return dollarQuoted(v)
 		case strings.ContainsRune(v, '\''):
 			return dollarQuoted(v)
-		case aliasValueIsBare(v):
+		case listedValueIsBare(v):
 			return v
 		}
 		return singleQuoted(v, `'\''`, true)
-	case AliasQuoteWhenNeededEscaped:
+	case ListingQuoteWhenNeededEscaped:
 		switch {
 		case hasControl(v):
 			return dollarQuoted(v)
-		case aliasValueIsBare(v):
+		case listedValueIsBare(v):
+			return v
+		}
+		return singleQuoted(v, `'\''`, true)
+	case ListingQuoteWhenNeededPlain:
+		if listedValueIsBare(v) {
 			return v
 		}
 		return singleQuoted(v, `'\''`, true)
 	}
-	r.diagf("how `alias` spells a value: the shells disagree here and no dialect was chosen\n")
+	r.diagf("how %s spells a value: the shells disagree here and no dialect was chosen\n", what)
 	r.status = 2
 	r.unspecified = true
 	return v
 }
 
-// aliasValueIsBare reports whether a value can be listed with no quotes at
-// all, which the two that ask only do for a value made of ordinary characters.
-func aliasValueIsBare(v string) bool {
+// listedValueIsBare reports whether a value can be listed with no quotes at
+// all, which the styles that ask only do for a value made of ordinary
+// characters.
+func listedValueIsBare(v string) bool {
 	if v == "" {
 		return false
 	}

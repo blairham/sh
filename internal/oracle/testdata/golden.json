@@ -2458,6 +2458,38 @@
         "TimedOut": false
       }
     },
+    "axis/trap-prints-a-bare-action": {
+      "bash": {
+        "Output": "trap -- ':' SIGINT~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "trap -- ':' SIGINT~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "trap -- ':' SIGINT~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "trap -- ':' INT~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "trap -- : INT~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "trap -- : INT~end",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "axis/trap-prints-a-quoted-action": {
       "bash": {
         "Output": "trap -- 'echo hi' SIGINT~end",

@@ -189,5 +189,5 @@ func (r *Runner) aliasLine(name string, forcePrefix bool) string {
 		// none, which is what makes the option worth having there.
 		prefix = "alias "
 	}
-	return prefix + name + "=" + r.quoteAliasValue(r.aliases[name])
+	return prefix + name + "=" + r.quoteListedValue(r.sem().AliasQuoting, "`alias`", r.aliases[name])
 }

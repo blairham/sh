@@ -54,7 +54,8 @@ func Semantics() interp.Semantics {
 	s.UnaliasReportsNotFound = interp.Yes
 	s.AliasNotFoundStatusCounts = interp.No
 	s.UnaliasAllRefusesOperands = interp.Yes
-	s.AliasQuoting = interp.AliasQuoteWhenNeededEscaped
+	s.AliasQuoting = interp.ListingQuoteWhenNeededEscaped
+	s.TrapQuoting = interp.ListingQuoteWhenNeededPlain
 	s.SelectAssumesUnboundedWidth = interp.Yes
 	s.SelectEofEndsPromptLine = interp.Yes
 	s.SelectEofIsSuccess = interp.Yes

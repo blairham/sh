@@ -379,6 +379,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
+| `axis/trap-prints-a-bare-action` | `trap -- ':' INT~end` | `trap -- ':' SIGINT~end` | `trap -- ':' SIGINT~end` | `trap -- ':' SIGINT~end` | `trap -- : INT~end` | `trap -- : INT~end` |
 | `axis/trap-prints-a-quoted-action` | `trap -- 'echo hi' INT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' INT~end` | `trap -- 'echo hi' INT~end` |
 | `axis/builtin-names-the-place` | `<script>: 2: cd: can't cd to /no/such/dir-xyz~done` | `<script>: line 2: cd: /no/such/dir-xyz: No such file or directory~done` | `<script>: line 2: cd: /no/such/dir-xyz: No such file or directory~done` | `<script>: line 2: cd: /no/such/dir-xyz: No such file or directory~done` | `<script>[2]: cd: /no/such/dir-xyz: [No such file or directory]~done` | `<script>:cd:2: no such file or directory: /no/such/dir-xyz~done` |
 | `axis/shell-names-the-place` | `<script>: 2: nosuchcmd-xyz: not found~done` | `<script>: line 2: nosuchcmd-xyz: command not found~done` | `<script>: line 2: nosuchcmd-xyz: command not found~done` | `<script>: line 2: nosuchcmd-xyz: command not found~done` | `<script>: line 2: nosuchcmd-xyz: not found~done` | `<script>:2: command not found: nosuchcmd-xyz~done` |
@@ -388,6 +389,12 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `diag/a-line-worth-naming` | `one~<shell>: 2: nosuchcmd: not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 1: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: not found~st=127` | `one~<shell>:2: command not found: nosuchcmd~st=127` |
 | `diag/a-command-after-an-operator` | `one~<shell>: 3: nosuchcmd: not found~st=127` | `one~<shell>: line 3: nosuchcmd: command not found~st=127` | `one~<shell>: line 3: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 3: nosuchcmd: not found~st=127` | `one~<shell>:3: command not found: nosuchcmd~st=127` |
 
+- `axis/trap-prints-a-bare-action` — a one-word action: bash and dash quote it anyway, ksh93 and zsh leave it bare
+  ```sh
+  trap : INT
+  trap
+  echo end
+  ```
 - `axis/trap-prints-a-quoted-action` — a multi-word action, which all four quote the same way — a bare one does not, and that is its own question
   ```sh
   trap 'echo hi' INT

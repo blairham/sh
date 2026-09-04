@@ -112,10 +112,10 @@ func (r *Runner) printTraps(conds []string, bare bool) int {
 			return 0
 		}
 		if r.exitTrap != nil {
-			r.printf("trap -- %s EXIT\n", singleQuote(*r.exitTrap))
+			r.printf("trap -- %s EXIT\n", r.quotedTrapAction(*r.exitTrap))
 		}
 		for _, name := range sortedKeys(r.sigs().traps) {
-			r.printf("trap -- %s %s\n", singleQuote(r.sigs().traps[name]), r.printedSignalName(name))
+			r.printf("trap -- %s %s\n", r.quotedTrapAction(r.sigs().traps[name]), r.printedSignalName(name))
 		}
 		return 0
 	}
@@ -137,7 +137,7 @@ func (r *Runner) printTraps(conds []string, bare bool) int {
 			r.printf("%s\n", *action)
 			continue
 		}
-		r.printf("trap -- %s %s\n", singleQuote(*action), r.printedSignalName(name))
+		r.printf("trap -- %s %s\n", r.quotedTrapAction(*action), r.printedSignalName(name))
 	}
 	return 0
 }
@@ -231,6 +231,13 @@ func (r *Runner) trapUnknownSingleCondition(cond string) int {
 		r.diagf("%s\n", msg)
 	}
 	return 1
+}
+
+// quotedTrapAction spells an action the way this dialect's `trap` lists it,
+// which is not always the way its `alias` does: zsh writes a tab as `$'a\tb'`
+// in an alias and as a plainly quoted `'a<tab>b'` in a trap.
+func (r *Runner) quotedTrapAction(action string) string {
+	return r.quoteListedValue(r.sem().TrapQuoting, "`trap`", action)
 }
 
 // printedSignalName is how this dialect spells a signal when printing what

@@ -29,7 +29,7 @@ func aliasRunArgs(t *testing.T, tweak func(*Semantics), dg Diagnostics, src stri
 	sem.UnaliasReportsNotFound = Yes
 	sem.AliasNotFoundStatusCounts = No
 	sem.UnaliasAllRefusesOperands = No
-	sem.AliasQuoting = AliasQuoteAlwaysEscaped
+	sem.AliasQuoting = ListingQuoteAlwaysEscaped
 	sem.BadOptionToSpecialBuiltinFatal = No
 	if tweak != nil {
 		tweak(&sem)
@@ -298,7 +298,7 @@ func TestUnaliasWithNothingToRemove(t *testing.T) {
 // The value goes in through a positional parameter rather than through the
 // source, so a value holding quotes or a tab is stored exactly as written here
 // and the test is about the *spelling* rather than about the parser.
-func aliasRunWithValue(t *testing.T, style AliasQuotingStyle, value string) (string, int) {
+func aliasRunWithValue(t *testing.T, style ListingQuotingStyle, value string) (string, int) {
 	t.Helper()
 	out, st := aliasRunArgs(t, func(s *Semantics) { s.AliasQuoting = style }, Diagnostics{},
 		`alias a="$1"; alias a`, value)

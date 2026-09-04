@@ -4282,6 +4282,38 @@
         "TimedOut": false
       }
     },
+    "cmd/function-body-simple-command": {
+      "bash": {
+        "Output": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `echo'~\u003cshell\u003e: -c: line 1: `f() echo hi; f'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `echo'~\u003cshell\u003e: -c: line 1: `f() echo hi; f'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `echo'~\u003cshell\u003e: -c: line 0: `f() echo hi; f'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "cmd/function-keyword-and-parens": {
       "bash": {
         "Output": "both",

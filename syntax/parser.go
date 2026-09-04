@@ -1027,6 +1027,16 @@ func (p *Parser) parseFuncPosix() Command {
 	p.funcBody = true
 	if fn.Body = p.parseCommand(); fn.Body == nil {
 		p.fail("expected a body for function %q", fn.Name)
+		return fn
+	}
+	if p.dialect.FuncBodyMustBeCompound {
+		if sc, isSimple := fn.Body.(*SimpleCmd); isSimple {
+			token := "newline"
+			if len(sc.Args) > 0 {
+				token = sc.Args[0].Literal()
+			}
+			p.fail("syntax error near unexpected token `%s'", token)
+		}
 	}
 	return fn
 }

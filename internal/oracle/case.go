@@ -1916,6 +1916,12 @@ echo "st=$?"`,
 		Why:     ";;& keeps testing later patterns and is bash-only — lumping it with ;& would put a bash construct in the core",
 	},
 	{
+		ID: "cmd/function-body-simple-command", Category: "command language",
+		SyntaxError: true,
+		Snippet:     `f() echo hi; f`,
+		Why:         "bash alone wants a compound body after the parens; dash, ksh93 and zsh take the simple command as a one-command body and run it — being more permissive than bash here is the dangerous direction only for scripts aimed at bash",
+	},
+	{
 		ID: "cmd/function-name-with-a-dash", Category: "command language",
 		Snippet: `f-g(){ echo ok; }; f-g; echo after`,
 		Why:     "four answers: bash and zsh define and run it, dash refuses the name at parse time, ksh93 parses and stops the script at the definition",

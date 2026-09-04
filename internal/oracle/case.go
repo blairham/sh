@@ -913,6 +913,11 @@ var Corpus = []Case{
 		Why:     "the whole point of -u, and the baseline the exemptions are measured against",
 	},
 	{
+		ID: "nounset/unset-variable-from-a-command-string", Category: "expansion",
+		Snippet: "set -u\necho \"$NOPE\"\n",
+		Why:     "the same two lines as the case above, given as an argument instead of read from a file. Three of the panel answer the same either way; one answers 127 here and 1 there, which is a fact about how the shell was started rather than about the expansion — and only the pair can show it",
+	},
+	{
 		ID: "nounset/defaults-are-exempt", Category: "shell options",
 		Script:  true,
 		Snippet: "set -u\necho \"[${NOPE:-d}][${NOPE-d}][${NOPE+a}]\"\necho after\n",

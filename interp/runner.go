@@ -291,6 +291,15 @@ type Runner struct {
 	// that ends such an element is announced by one dialect and passed over
 	// by the rest.
 	midPipeline bool
+	// CommandString says the program came from an argument — `-c` — rather
+	// than from a file or from standard input.
+	//
+	// Set by the front end, because that is what reads the invocation. One
+	// dialect answers a failed expansion with a different status depending
+	// on it, and on nothing else: the same two lines exit 127 given with
+	// `-c` and 1 read from a file.
+	CommandString bool
+
 	// inFunc is the name of the function being run, for `$0`.
 	inFunc string
 	// funcLine is the line the function being run was written on, which one
@@ -591,6 +600,22 @@ func (r *Runner) locationPrefix() string {
 	}
 	// Nothing to count, so nothing is written: `f: ` and not `f:0: `.
 	return d.prefixWithoutLine(r.inFunc, r.inBuiltin)
+}
+
+// fatalExpansion ends the script because a parameter could not be expanded —
+// an unset one under `set -u`, or one `${x?}` was asked about.
+//
+// Its own status because one dialect answers it differently from every other
+// way it stops, and differently again depending on how the shell was
+// started: `bash -c 'set -u; echo $NOPE'` exits 127 and the same two lines
+// in a file exit 1. Measured across eight other ways bash stops, none of
+// which cares how it was invoked.
+func (r *Runner) fatalExpansion(format string, args ...any) {
+	r.diagf(format, args...)
+	r.fatalQuiet()
+	if n := r.diag().UnsetParameterStatusFromCommandString; n != 0 && r.CommandString {
+		r.status = n
+	}
 }
 
 // name is what the shell calls itself in a diagnostic.

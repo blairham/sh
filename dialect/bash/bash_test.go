@@ -360,6 +360,31 @@ func TestPipelineStatusName(t *testing.T) {
 	}
 }
 
+// TestRegexMatchName: the core records what `=~` captures and a dialect names
+// it. bash's name is BASH_REMATCH: the whole match at 0, then the groups —
+// and a failed match empties it rather than leaving the capture before last.
+func TestRegexMatchName(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`[[ abcd =~ (b)(c) ]]; echo "[${BASH_REMATCH[0]}|${BASH_REMATCH[1]}|${BASH_REMATCH[2]}]"`, "[bc|b|c]"},
+		{`[[ ab =~ a ]]; [[ ab =~ q ]]; echo "n=${#BASH_REMATCH[@]}"`, "n=0"},
+	} {
+		f, err := syntax.Parse(tc.src, bash.Dialect())
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		s, d := bash.Semantics(), bash.Diagnostics()
+		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+		bash.Apply(r)
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+		if strings.TrimSpace(out.String()) != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.src, out.String(), tc.want)
+		}
+	}
+}
+
 // TestAParseFailureNamesItsOriginAndEchoesTheLine: bash decorates a parse
 // failure twice over, and neither part appears on a runtime diagnostic about
 // the same input.

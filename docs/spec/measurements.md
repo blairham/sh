@@ -2768,6 +2768,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `cond/numeric-versus-string-comparison` | `<shell>: 1: [[: not found~<shell>: 1: [[: not found~ string-lt` | `numeric string-lt` | `numeric string-lt` | `numeric string-lt` | `numeric string-lt` | `numeric string-lt` |
 | `cond/regex-match` | `<shell>: 1: [[: not found~no-regex` | `regex` | `regex` | `regex` | `regex` | `regex` |
 | `cond/quoted-regex-diverges` | `<shell>: 1: [[: not found~literal` | `literal` | `literal` | `literal` | `still-regex` | `still-regex` |
+| `cond/regex-captures-are-recorded` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[bc\|b\|c]` | `[bc\|b\|c]` | `[bc\|b\|c]` | `[\|\|]` | `[\|\|]` |
+| `cond/regex-failure-empties-the-record` | `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: Bad substitution` *(status 2)* | `n=0` | `n=0` | `n=0` | `n=0` | `n=0` |
 | `cond/logical-and-grouping` | `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `grouped` | `grouped` | `grouped` | `grouped` | `grouped` |
 | `cond/andand-binds-tighter-than-oror` | `<shell>: 1: [[: not found~<shell>: 1: -n: not found~false` | `true` | `true` | `true` | `true` | `true` |
 | `cond/command-language-is-the-other-way` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
@@ -2808,6 +2810,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `cond/quoted-regex-diverges` — bash treats a quoted right operand as a literal string where ksh93 and zsh keep it a regex, so quoting a regex is not portable in either direction
   ```sh
   [[ abc =~ "^a.c$" ]] && echo still-regex || echo literal
+  ```
+- `cond/regex-captures-are-recorded` — a successful =~ records the whole match at 0 and the groups after it, under bash's name for the record; ksh93 and zsh keep their captures under names of their own and leave this one unset
+  ```sh
+  [[ abcd =~ (b)(c) ]]; echo "[${BASH_REMATCH[0]}|${BASH_REMATCH[1]}|${BASH_REMATCH[2]}]"
+  ```
+- `cond/regex-failure-empties-the-record` — a failed match empties the record rather than leaving the capture before last, so a script that forgets to check the status reads nothing instead of stale groups
+  ```sh
+  [[ ab =~ a ]]; [[ ab =~ q ]]; echo "n=${#BASH_REMATCH[@]}"
   ```
 - `cond/logical-and-grouping` — && and || join conditions and ( ) groups them rather than starting a subshell, so the parser needs its own production for the inside
   ```sh

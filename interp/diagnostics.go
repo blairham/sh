@@ -354,6 +354,13 @@ type Diagnostics struct {
 	// either way, so silence here is a wording rather than a behavior.
 	WaitNotOurChild string
 
+	// WaitOptionLetters are the option letters this dialect's `wait` has and
+	// this shell does not implement — bash's `n`, `f` and `p`. They are said
+	// to be missing rather than refused as unknown, because refusing one the
+	// shell really has is a different and worse answer than not having it
+	// yet.
+	WaitOptionLetters string
+
 	// ShiftBadNumber is an operand to `shift` that is not one, taking the
 	// word. Only reached in a dialect that reads the operand as a count
 	// rather than as an option: bash names it and asks for a number, dash

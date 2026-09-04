@@ -3138,6 +3138,16 @@ echo after`,
 		Why:     "the same reading with an unset name, which is zero in an expression — so the two that evaluate shift nothing and succeed where the other two refuse it",
 	},
 	{
+		ID: "wait/a-leading-dash", Category: "builtins",
+		Snippet: `wait -x; echo "st=$?"`,
+		Why:     "three of the four read it as an option and refuse it in the words their bad options already use; zsh has none and answers with the job it could not find. And none of them ends the script over it, which is the tell that `wait` is not a special builtin however much its neighbors are",
+	},
+	{
+		ID: "wait/dash-dash-ends-the-options", Category: "builtins",
+		Snippet: `wait --; echo "st=$?"`,
+		Why:     "unanimous, and the control for the case above: the same leading dashes that are refused as an option are taken as the end of them",
+	},
+	{
 		ID: "wait/an-operand-that-is-neither", Category: "builtins",
 		Snippet: `wait nosuchjob; echo "st=$?"`,
 		Why:     "an operand naming neither a process nor a job: four wordings and no two alike, and three statuses — one quotes it and names both things it could have been, one calls it an illegal number, one lists what it would have taken, and one calls it a job that was not found and reports the 127 of a command that is not there",

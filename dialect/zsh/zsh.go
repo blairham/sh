@@ -66,6 +66,7 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskTakesTheSetuidLetter = interp.No
 	s.SymbolicMaskTakesTheStickyLetter = interp.No
 	s.ShiftReadsOptions = interp.Yes
+	s.WaitReadsOptions = interp.No
 	s.ShiftCountIsArithmetic = interp.Yes
 	// No by construction rather than by measurement: zsh has already parsed
 	// the whole action by the time a trap fires, so it never runs part of a

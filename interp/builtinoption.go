@@ -78,7 +78,13 @@ func (r *Runner) badBuiltinOption(name, opt string) int {
 		}
 	}
 	status := orDefault(d.BuiltinBadOptionStatus, 2)
-	if r.ask(r.sem().BadOptionToSpecialBuiltinFatal, "a special builtin's bad option ending the script") {
+	// Only for a builtin POSIX marks special, which is what the rule is
+	// about: `wait` is not one, and the two dialects that end a script over
+	// `export -q` print the same complaint for `wait -x` and carry on. Every
+	// caller of this was special until `wait` was not, so the check had
+	// never been reached and was wrong the moment it was.
+	if specialBuiltins[name] &&
+		r.ask(r.sem().BadOptionToSpecialBuiltinFatal, "a special builtin's bad option ending the script") {
 		r.status = status
 		r.fatalQuiet()
 	}

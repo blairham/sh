@@ -68,6 +68,7 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskTakesTheSetuidLetter = interp.Yes
 	s.SymbolicMaskTakesTheStickyLetter = interp.Yes
 	s.ShiftReadsOptions = interp.No
+	s.WaitReadsOptions = interp.Yes
 	s.ShiftCountIsArithmetic = interp.No
 	s.TrapBodyRunsWhatParsed = interp.Yes
 	s.ReportsAKilledCommandInACommandSubstitution = interp.No
@@ -289,6 +290,7 @@ func Diagnostics() interp.Diagnostics {
 		WaitBadJob:                  "wait: `%[1]s': not a pid or valid job spec",
 		WaitBadJobStatus:            1,
 		WaitNotOurChild:             "wait: pid %[1]d is not a child of this shell",
+		WaitOptionLetters:           "nfp",
 		HereDocumentAtEOF: "warning: here-document at line %[1]d " +
 			"delimited by end-of-file (wanted `%[2]s')",
 		// bash names the builtin for its own two spellings and not for the
@@ -310,6 +312,7 @@ func Diagnostics() interp.Diagnostics {
 			"export":   "export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
 			"readonly": "readonly: usage: readonly [-aAf] [name[=value] ...] or readonly -p",
 			"trap":     "trap: usage: trap [-Plp] [[action] signal_spec ...]",
+			"wait":     "wait: usage: wait [-fn] [-p var] [id ...]",
 			"unset":    "unset: usage: unset [-f] [-v] [-n] [name ...]",
 		},
 		PrintfUsage:            "printf: usage: printf [-v var] format [arguments]",

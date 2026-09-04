@@ -1779,6 +1779,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `shift/a-leading-dash-that-is-not-a-number` | `<shell>: 1: shift: Illegal number: -x` *(status 2)* | `<shell>: line 1: shift: -x: numeric argument required~st=2` | `<shell>: line 1: shift: -x: numeric argument required` *(status 2)* | `<shell>: line 0: shift: -x: numeric argument required` *(status 1)* | `<shell>: shift: -x: unknown option~Usage: shift [ options ] [n]` *(status 2)* | `<shell>:shift:1: bad option: -x~st=1` |
 | `shift/a-count-that-is-an-expression` | `<shell>: 1: shift: Illegal number: 1+1` *(status 2)* | `<shell>: line 1: shift: 1+1: numeric argument required~[a b c] st=2` | `<shell>: line 1: shift: 1+1: numeric argument required` *(status 2)* | `<shell>: line 0: shift: 1+1: numeric argument required` *(status 1)* | `[c] st=0` | `[c] st=0` |
 | `shift/a-count-that-is-a-name` | `<shell>: 1: shift: Illegal number: nosuchname` *(status 2)* | `<shell>: line 1: shift: nosuchname: numeric argument required~[a b c] st=2` | `<shell>: line 1: shift: nosuchname: numeric argument required` *(status 2)* | `<shell>: line 0: shift: nosuchname: numeric argument required` *(status 1)* | `[a b c] st=0` | `[a b c] st=0` |
+| `wait/a-leading-dash` | `<shell>: 1: wait: Illegal option -x~st=2` | `<shell>: line 1: wait: -x: invalid option~wait: usage: wait [-fn] [-p var] [id ...]~st=2` | `<shell>: line 1: wait: -x: invalid option~wait: usage: wait [-fn] [-p var] [id ...]~st=2` | `<shell>: line 0: wait: -x: invalid option~wait: usage: wait [n]~st=2` | `<shell>: wait: -x: unknown option~Usage: wait [ options ] [job ...]~st=2` | `<shell>:wait:1: job not found: -x~st=127` |
+| `wait/dash-dash-ends-the-options` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `wait/an-operand-that-is-neither` | `<shell>: 1: wait: Illegal number: nosuchjob~st=2` | `<shell>: line 1: wait: `nosuchjob': not a pid or valid job spec~st=1` | `<shell>: line 1: wait: `nosuchjob': not a pid or valid job spec~st=1` | `<shell>: line 0: wait: `nosuchjob': not a pid or valid job spec~st=1` | `<shell>: wait: nosuchjob: Arguments must be %job, process ids, or job pool names~st=1` | `<shell>:wait:1: job not found: nosuchjob~st=127` |
 | `wait/a-pid-that-is-not-ours` | `st=127` | `<shell>: line 1: wait: pid 999999 is not a child of this shell~st=127` | `<shell>: line 1: wait: pid 999999 is not a child of this shell~st=127` | `<shell>: wait: pid 999999 is not a child of this shell~st=127` | `st=127` | `<shell>:wait:1: pid 999999 is not a child of this shell~st=127` |
 | `enable/a-letter-one-shell-does-not-have` | `<shell>: 1: enable: not found~st=127` | `st=0` | `st=0` | `st=0` | `<shell>: enable: not found~st=127` | `<shell>:enable:1: bad option: -n~st=1` |
@@ -1916,6 +1918,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `shift/a-count-that-is-a-name` — the same reading with an unset name, which is zero in an expression — so the two that evaluate shift nothing and succeed where the other two refuse it
   ```sh
   set -- a b c; shift nosuchname; echo "[$*] st=$?"
+  ```
+- `wait/a-leading-dash` — three of the four read it as an option and refuse it in the words their bad options already use; zsh has none and answers with the job it could not find. And none of them ends the script over it, which is the tell that `wait` is not a special builtin however much its neighbors are
+  ```sh
+  wait -x; echo "st=$?"
+  ```
+- `wait/dash-dash-ends-the-options` — unanimous, and the control for the case above: the same leading dashes that are refused as an option are taken as the end of them
+  ```sh
+  wait --; echo "st=$?"
   ```
 - `wait/an-operand-that-is-neither` — an operand naming neither a process nor a job: four wordings and no two alike, and three statuses — one quotes it and names both things it could have been, one calls it an illegal number, one lists what it would have taken, and one calls it a job that was not found and reports the 127 of a command that is not there
   ```sh

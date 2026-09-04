@@ -108,3 +108,22 @@ func TestTheUsageLineFollowsWhereTheDialectPrintsOne(t *testing.T) {
 		t.Errorf("said %q, want no usage line", out)
 	}
 }
+
+// TestOnlyASpecialBuiltinEndsTheScriptOverABadOption. Every caller of this
+// path was a special builtin until `wait` was not, so the check had never
+// been reached — and was wrong the moment it was.
+func TestOnlyASpecialBuiltinEndsTheScriptOverABadOption(t *testing.T) {
+	fatal := func(s *Semantics) { s.BadOptionToSpecialBuiltinFatal = Yes }
+
+	// `export` is special: the script ends.
+	out, _ := optRun(t, fatal, Diagnostics{}, `export -q; echo after`)
+	if strings.Contains(out, "after") {
+		t.Errorf("a special builtin: got %q, want the script to stop", out)
+	}
+
+	// `wait` is not, and the same answer must not end it.
+	out, _ = optRun(t, fatal, Diagnostics{}, `wait -x; echo after`)
+	if !strings.Contains(out, "after") {
+		t.Errorf("a builtin that is not special: got %q, want the script to carry on", out)
+	}
+}

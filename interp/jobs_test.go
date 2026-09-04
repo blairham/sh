@@ -154,3 +154,89 @@ func TestWaitingOnAChildWeDoHaveReportsItsStatus(t *testing.T) {
 		}
 	}
 }
+
+// TestWaitReadsOptionsOrDoesNot is the axis, and both answers are a real
+// dialect's: three refuse a leading `-` word as an option and one takes it as
+// a job it cannot find.
+func TestWaitReadsOptionsOrDoesNot(t *testing.T) {
+	reads := func(r *Runner) {
+		sem := PosixSemantics()
+		sem.WaitReadsOptions = Yes
+		sem.BadOptionToSpecialBuiltinFatal = Yes
+		dg := Diagnostics{BuiltinBadOption: "wait: %[2]s: invalid option"}
+		r.Semantics, r.Diagnostics = &sem, &dg
+	}
+	out, _ := run(t, `wait -x; printf "st=%s" "$?"`, reads)
+	if !strings.Contains(out, "invalid option") {
+		t.Errorf("reads options: got %q, want it refused as one", out)
+	}
+	// And not fatal, however the dialect answers the special-builtin rule:
+	// `wait` is not one, so that rule is not this builtin's to follow.
+	if !strings.Contains(out, "st=") {
+		t.Errorf("reads options: got %q, want the script to carry on", out)
+	}
+
+	asJob := func(r *Runner) {
+		sem := PosixSemantics()
+		sem.WaitReadsOptions = No
+		dg := Diagnostics{WaitBadJob: "wait: job not found: %[1]s", WaitBadJobStatus: 127}
+		r.Semantics, r.Diagnostics = &sem, &dg
+	}
+	out, _ = run(t, `wait -x; printf "st=%s" "$?"`, asJob)
+	if !strings.Contains(out, "job not found: -x") || !strings.Contains(out, "st=127") {
+		t.Errorf("as a job: got %q", out)
+	}
+}
+
+// TestDashDashEndsWaitsOptions, which is unanimous and is the control: the
+// same leading dashes that are refused as an option end them here.
+func TestDashDashEndsWaitsOptions(t *testing.T) {
+	out, _ := run(t, `wait --; printf "st=%s" "$?"`, func(r *Runner) {
+		sem := PosixSemantics()
+		sem.WaitReadsOptions = Yes
+		r.Semantics = &sem
+	})
+	if !strings.Contains(out, "st=0") {
+		t.Errorf("got %q, want -- taken as the end of the options", out)
+	}
+}
+
+// TestAnOptionTheDialectHasIsSaidToBeMissing rather than refused as unknown:
+// refusing one the shell really has is a different and worse answer than not
+// having it yet.
+func TestAnOptionTheDialectHasIsSaidToBeMissing(t *testing.T) {
+	out, _ := run(t, `wait -n; printf "st=%s" "$?"`, func(r *Runner) {
+		sem := PosixSemantics()
+		sem.WaitReadsOptions = Yes
+		dg := Diagnostics{
+			BuiltinBadOption:  "wait: %[2]s: invalid option",
+			WaitOptionLetters: "nfp",
+		}
+		r.Semantics, r.Diagnostics = &sem, &dg
+	})
+	if !strings.Contains(out, "not implemented yet") {
+		t.Errorf("got %q, want it said to be missing", out)
+	}
+	if strings.Contains(out, "invalid option") {
+		t.Errorf("got %q, want it not called unknown", out)
+	}
+}
+
+// TestWaitRefusesABundleByItsFirstLetter, which is what makes `wait
+// --version` come back as `--`: a leading `-` word is a bundle of
+// single-letter options, and only the first is named. The same rule printf's
+// options here already follow.
+func TestWaitRefusesABundleByItsFirstLetter(t *testing.T) {
+	out, _ := run(t, `wait --version`, func(r *Runner) {
+		sem := PosixSemantics()
+		sem.WaitReadsOptions = Yes
+		dg := Diagnostics{BuiltinBadOption: "wait: %[2]s: invalid option"}
+		r.Semantics, r.Diagnostics = &sem, &dg
+	})
+	if !strings.Contains(out, "--: invalid option") {
+		t.Errorf("got %q, want the first letter of the bundle named", out)
+	}
+	if strings.Contains(out, "--version: invalid") {
+		t.Errorf("got %q, want the whole word not named", out)
+	}
+}

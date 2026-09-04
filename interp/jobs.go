@@ -199,6 +199,10 @@ func (r *Runner) FinishedJobNotices() []string {
 // With no arguments it waits for all of them and reports 0, which is what
 // every shell in the panel does regardless of how the jobs exited.
 func biWait(r *Runner, _ context.Context, args []string) int {
+	args, code := r.waitOptions(args)
+	if code != 0 {
+		return code
+	}
 	if len(args) == 0 {
 		for _, j := range r.jobs {
 			j.Wait()
@@ -230,6 +234,46 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 		}
 	}
 	return last
+}
+
+// waitOptions reads the leading options, in the three dialects that have any.
+//
+// zsh has none: `wait -x` is a job spec there and comes back as a job that
+// was not found, which is what this did for everybody. The other three refuse
+// an option they do not know, in the words and with the usage line their bad
+// options already use.
+//
+// Ending them at `--` is unanimous. The letters the three *do* have — bash's
+// -n, -f and -p, ksh93's --version — are not implemented here, and say so
+// rather than being taken as a job and reported as missing.
+func (r *Runner) waitOptions(args []string) ([]string, int) {
+	// One step rather than a loop: every option here is the whole of what
+	// this builtin was asked, so nothing is read twice. `--` hands back what
+	// follows it and the rest return.
+	if len(args) > 0 {
+		a := args[0]
+		if len(a) < 2 || a[0] != '-' {
+			return args, 0
+		}
+		if a == "--" {
+			return args[1:], 0
+		}
+		if !r.ask(r.sem().WaitReadsOptions, "`wait -x` read as an option rather than as a job") {
+			return args, 0
+		}
+		if r.unspecified {
+			return nil, 2
+		}
+		// The first letter, the way printf's options are read here: a
+		// leading `-` word is a bundle, so bash refuses `--version` as `--`.
+		letter := "-" + string([]rune(a[1:])[0])
+		if strings.Contains(r.diag().WaitOptionLetters, letter[1:]) {
+			r.diagf("wait: %s is not implemented yet\n", a)
+			return nil, 2
+		}
+		return nil, r.badBuiltinOption("wait", letter)
+	}
+	return args, 0
 }
 
 // waitBadJob is an operand that names neither a process nor a job.

@@ -230,6 +230,13 @@ type Diagnostics struct {
 	// registered for. One verb: the name.
 	CompleteNoSpec string
 
+	// FunctionNameInvalid refuses to define a function whose name carries
+	// punctuation, in the dialect that refuses one. One verb: the name.
+	FunctionNameInvalid string
+	// FunctionNameDiscipline replaces it when the name carries a dot, which
+	// is a discipline function to the shell that says this.
+	FunctionNameDiscipline string
+
 	// DirectoryOnPathStatus is what a PATH search whose only match was a
 	// directory reports, in a dialect that keeps the directory as its
 	// answer. dash says 127 — the message names the candidate and the

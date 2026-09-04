@@ -20,6 +20,9 @@ func Dialect() syntax.Dialect {
 	// comes next, which is what decides the token a malformed one is blamed
 	// on.
 	d.FuncDefAtParen = true
+	// And having committed, it checks: a name with punctuation is refused
+	// once the parens close — `Bad function name`.
+	d.FunctionNamePunctuation = false
 	// One operator may stand where a case pattern belongs, opening an arm
 	// that matches nothing — measured by running it, not inferred from the
 	// error it causes elsewhere.

@@ -1906,6 +1906,16 @@ echo "st=$?"`,
 		Why:     ";;& keeps testing later patterns and is bash-only — lumping it with ;& would put a bash construct in the core",
 	},
 	{
+		ID: "cmd/function-name-with-a-dash", Category: "command language",
+		Snippet: `f-g(){ echo ok; }; f-g; echo after`,
+		Why:     "four answers: bash and zsh define and run it, dash refuses the name at parse time, ksh93 parses and stops the script at the definition",
+	},
+	{
+		ID: "cmd/function-name-with-a-dot", Category: "command language",
+		Snippet: `a.b(){ echo ok; }; a.b; echo after`,
+		Why:     "the dot is its own sentence in ksh93 — an invalid discipline function — and the same split everywhere else",
+	},
+	{
 		ID: "cmd/function-posix-form", Category: "command language",
 		Snippet: `f() { echo posix; }; f`,
 		Why:     "the universal definition form",

@@ -1018,6 +1018,11 @@ type Semantics struct {
 	// /usr/bin/cd.
 	HashSearchesPathAlone Answer
 
+	// PunctuatedFunctionNameIsRefused stops the script when a function
+	// whose name carries `-` or `.` is defined. ksh93 alone: bash and zsh
+	// define and run it, and dash never parses the definition at all.
+	PunctuatedFunctionNameIsRefused Answer
+
 	// DirectoryOnPathIsACandidate keeps a directory the PATH search found as
 	// the failed candidate when no later entry runs, so the report names the
 	// directory rather than saying the command was never found.
@@ -1632,6 +1637,8 @@ func PosixSemantics() Semantics {
 		// counts builtins and functions too, and reports a missing name.
 		HashReportsAMissingName: Yes,
 		HashSearchesPathAlone:   No,
+		// POSIX has no such names; refusal is one shell's own answer.
+		PunctuatedFunctionNameIsRefused: No,
 		// The standard says `times` takes no operands and does not say what to
 		// do with one; the two shells that follow it most closely ignore it.
 		TimesRejectsArguments: No,

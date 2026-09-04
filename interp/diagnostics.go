@@ -360,6 +360,20 @@ type Diagnostics struct {
 	// calls it an illegal one.
 	ShiftBadNumber string
 
+	// BuiltinBadSubscript is what a declaration says about a subscripted
+	// operand it will not take, per builtin. Three verbs: %[1]s the builtin,
+	// %[2]s the whole operand, %[3]s the name before the subscript.
+	//
+	// Empty means the dialect says what it says about any other bad name,
+	// which is two of the three that refuse it. The third has two complaints
+	// of its own — one about the subscript naming the base, one about array
+	// elements naming the operand — and they are not its bad-name wording.
+	BuiltinBadSubscript map[string]string
+	// SubscriptRefusalNamesBuiltin is which of those name the builtin in the
+	// *location*. One does and one does not, in the same shell, which is why
+	// this is a set rather than following NamesBuiltinInLocation.
+	SubscriptRefusalNamesBuiltin map[string]bool
+
 	// UmaskBadOption is an option `umask` does not have. One verb.
 	UmaskBadOption string
 

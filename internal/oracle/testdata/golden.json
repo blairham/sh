@@ -2106,6 +2106,38 @@
         "TimedOut": false
       }
     },
+    "axis/export-a-subscripted-operand": {
+      "bash": {
+        "Output": "\u003cscript\u003e: line 1: export: `a[0]': not a valid identifier~st=1~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cscript\u003e: line 1: export: `a[0]': not a valid identifier~st=1~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cscript\u003e: line 1: export: `a[0]': not a valid identifier~st=1~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cscript\u003e: 1: export: a[0]: bad variable name",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cscript\u003e:1: a: assignment to invalid subscript range",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "axis/local-builtin": {
       "bash": {
         "Output": "1",
@@ -2231,6 +2263,38 @@
       "zsh": {
         "Output": "[x]",
         "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/readonly-a-subscripted-operand": {
+      "bash": {
+        "Output": "\u003cscript\u003e: line 1: readonly: `a[0]': not a valid identifier~st=1~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cscript\u003e: line 1: readonly: `a[0]': not a valid identifier~st=1~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cscript\u003e: line 1: readonly: `a[0]': not a valid identifier~st=1~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cscript\u003e: 1: readonly: a[0]: bad variable name",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cscript\u003e:readonly:1: a[0]: can't create readonly array elements",
+        "Status": 1,
         "TimedOut": false
       }
     },

@@ -386,3 +386,109 @@ func TestAnOperandWithNoSubscriptAsksNothing(t *testing.T) {
 		t.Errorf("said %q, want nothing asked", out)
 	}
 }
+
+// TestADialectCanHaveItsOwnComplaintAboutASubscript, which is not its
+// bad-name wording: two of the three that refuse a subscripted operand say
+// what they say about any bad name, and the third has two messages of its
+// own — one per builtin.
+func TestADialectCanHaveItsOwnComplaintAboutASubscript(t *testing.T) {
+	set := func(s *Semantics) {
+		s.DeclarationTakesASubscript = No
+		s.BadNameToDeclarationFatal = No
+	}
+	dg := Diagnostics{
+		BuiltinBadName: map[string]string{"export": "export: %[2]s: not a name"},
+		BuiltinBadSubscript: map[string]string{
+			"export":   "%[3]s: about the subscript",
+			"readonly": "%[2]s: about the element",
+		},
+	}
+
+	// The base name, not the operand — which is the point of the third verb.
+	out, _ := nameRun(t, set, dg, `export "a[0]"`)
+	if !strings.Contains(out, "a: about the subscript") {
+		t.Errorf("export: said %q, want the subscript complaint naming the base", out)
+	}
+	if strings.Contains(out, "not a name") {
+		t.Errorf("export: said %q, want its own complaint and not the bad-name one", out)
+	}
+
+	// A different one for the other builtin, naming the whole operand.
+	out, _ = nameRun(t, set, dg, `readonly "a[0]"`)
+	if !strings.Contains(out, "a[0]: about the element") {
+		t.Errorf("readonly: said %q, want the other complaint", out)
+	}
+
+	// And an operand that is bad for an ordinary reason still gets the
+	// ordinary wording, which is what keeps this from swallowing that path.
+	out, _ = nameRun(t, set, dg, `export 1x`)
+	if !strings.Contains(out, "not a name") {
+		t.Errorf("a plain bad name: said %q, want the bad-name wording", out)
+	}
+}
+
+// TestNoComplaintOfItsOwnMeansTheOrdinaryOne, which is two of the three and
+// is why they needed no new text at all.
+func TestNoComplaintOfItsOwnMeansTheOrdinaryOne(t *testing.T) {
+	set := func(s *Semantics) {
+		s.DeclarationTakesASubscript = No
+		s.BadNameToDeclarationFatal = No
+	}
+	out, _ := nameRun(t, set, Diagnostics{}, `export "a[0]"`)
+	if !strings.Contains(out, "not a valid identifier") {
+		t.Errorf("said %q, want the ordinary bad-name wording", out)
+	}
+}
+
+// TestWhichSubscriptComplaintNamesTheBuiltin is a set because one shell
+// answers it two ways: its message about the subscript carries no builtin in
+// the location and its message about array elements does.
+func TestWhichSubscriptComplaintNamesTheBuiltin(t *testing.T) {
+	set := func(s *Semantics) {
+		s.DeclarationTakesASubscript = No
+		s.BadNameToDeclarationFatal = No
+	}
+	dg := Diagnostics{
+		Location:               LocationTightLine,
+		NamesBuiltinInLocation: true,
+		BuiltinBadSubscript: map[string]string{
+			"export":   "%[3]s: about the subscript",
+			"readonly": "%[2]s: about the element",
+		},
+		SubscriptRefusalNamesBuiltin: map[string]bool{"readonly": true},
+	}
+
+	out, _ := nameRun(t, set, dg, `export "a[0]"`)
+	if strings.Contains(out, ":export:") {
+		t.Errorf("export: said %q, want no builtin in the location", out)
+	}
+	out, _ = nameRun(t, set, dg, `readonly "a[0]"`)
+	if !strings.Contains(out, ":readonly:") {
+		t.Errorf("readonly: said %q, want the builtin in the location", out)
+	}
+}
+
+// TestASubscriptRefusalCanEndTheScript, under the same rule any bad name to a
+// special builtin gets — the wording being the dialect's own does not make
+// the fatality a different question.
+func TestASubscriptRefusalCanEndTheScript(t *testing.T) {
+	dg := Diagnostics{BuiltinBadSubscript: map[string]string{"export": "%[3]s: no"}}
+
+	fatal := func(s *Semantics) {
+		s.DeclarationTakesASubscript = No
+		s.BadNameToDeclarationFatal = Yes
+	}
+	out, _ := nameRun(t, fatal, dg, `export "a[0]"; echo after`)
+	if strings.Contains(out, "after") {
+		t.Errorf("got %q, want the script to stop", out)
+	}
+
+	carry := func(s *Semantics) {
+		s.DeclarationTakesASubscript = No
+		s.BadNameToDeclarationFatal = No
+	}
+	out, _ = nameRun(t, carry, dg, `export "a[0]"; echo after`)
+	if !strings.Contains(out, "after") {
+		t.Errorf("got %q, want the script to carry on", out)
+	}
+}

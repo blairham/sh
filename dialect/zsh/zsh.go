@@ -153,7 +153,7 @@ func Semantics() interp.Semantics {
 	s.BadNameToUnsetFatal = interp.Yes
 	s.DeclarationNameOperands = interp.NamesAndSpecialParameters
 	s.UnsetNameOperands = interp.NamesAndPositionals
-	s.DeclarationTakesASubscript = interp.Yes
+	s.DeclarationTakesASubscript = interp.No
 	s.UnsetTakesASubscript = interp.Yes
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
@@ -238,10 +238,15 @@ func Diagnostics() interp.Diagnostics {
 		Location:                 interp.LocationTightLine,
 		BadSubstitution:          "bad substitution",
 		BadPattern:               "bad pattern: %s",
-		ReadonlyVariable:         "read-only variable: %s",
-		TraceQuoting:             interp.QuoteShell,
-		TraceStyle:               interp.TraceNameLine,
-		TraceForHeader:           interp.TraceForAssign,
+		BuiltinBadSubscript: map[string]string{
+			"export":   "%[3]s: assignment to invalid subscript range",
+			"readonly": "%[2]s: can't create readonly array elements",
+		},
+		SubscriptRefusalNamesBuiltin: map[string]bool{"readonly": true},
+		ReadonlyVariable:             "read-only variable: %s",
+		TraceQuoting:                 interp.QuoteShell,
+		TraceStyle:                   interp.TraceNameLine,
+		TraceForHeader:               interp.TraceForAssign,
 		// zsh names the last token it read and nothing else.
 		EvalNaming:       interp.SourceReplacesShell,
 		SourceFileNaming: interp.SourceReplacesShell,

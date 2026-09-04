@@ -1026,6 +1026,13 @@ type Semantics struct {
 	// /usr/bin/cd.
 	HashSearchesPathAlone Answer
 
+	// TildePlusMinusExpands turns `~+` into $PWD and `~-` into $OLDPWD,
+	// only while the variable is set — a fresh shell's `~-` stays literal.
+	// bash, ksh93 and zsh have the pair; dash keeps both as written. zsh
+	// alone still answers `~-` after `unset OLDPWD`, from directory state
+	// of its own this runner does not keep — recorded, not reproduced.
+	TildePlusMinusExpands Answer
+
 	// SetHasTraceLetters gives `set` the -E and -T letters, which carry
 	// the ERR trap (and DEBUG with RETURN) into functions and subshells the
 	// dialect otherwise bounds them out of. bash alone: dash and ksh93
@@ -1655,6 +1662,7 @@ func PosixSemantics() Semantics {
 		// POSIX has no such names; refusal is one shell's own answer.
 		PunctuatedFunctionNameIsRefused: No,
 		SetHasTraceLetters:              No,
+		TildePlusMinusExpands:           No,
 		// The standard says `times` takes no operands and does not say what to
 		// do with one; the two shells that follow it most closely ignore it.
 		TimesRejectsArguments: No,

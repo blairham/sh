@@ -170,6 +170,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `expand/tilde-unquoted` | `abs` | `abs` | `abs` | `abs` | `abs` | `abs` |
 | `expand/tilde-quoted` | `literal` | `literal` | `literal` | `literal` | `literal` | `literal` |
 | `expand/tilde-in-assignment` | `abs` | `abs` | `abs` | `abs` | `abs` | `abs` |
+| `expand/tilde-plus-and-minus` | `~+ ~-~~-` | `/ /tmp~~-` | `/ /tmp~~-` | `/ /tmp~~-` | `/ /tmp~~-` | `/ /tmp~/tmp` |
 | `expand/tilde-after-a-colon-in-an-assignment` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` |
 | `expand/tilde-into-an-expansion-diverges` | `a:~/x` | `a:~/x` | `a:~/x` | `a:~/x` | `a:~/x` | `a:H/x` |
 | `nounset/unset-variable-from-a-command-string` | `<shell>: 2: NOPE: parameter not set` *(status 2)* | `<shell>: line 2: NOPE: unbound variable` *(status 127)* | `<shell>: line 2: NOPE: unbound variable` *(status 127)* | `<shell>: line 1: NOPE: unbound variable` *(status 127)* | `<shell>: line 2: NOPE: parameter not set` *(status 1)* | `<shell>:2: NOPE: parameter not set` *(status 1)* |
@@ -259,6 +260,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `expand/tilde-in-assignment` — assignment values are a tilde context, which is why PATH=~/bin works
   ```sh
   x=~; case $x in /*) echo abs;; *) echo literal;; esac
+  ```
+- `expand/tilde-plus-and-minus` — ~+ is $PWD and ~- is $OLDPWD in three of the four — dash keeps both as written — and only while the variable is set, except zsh, which still answers from directory state of its own
+  ```sh
+  cd /tmp; cd /; echo ~+ ~- | sed "s|/private||g"; unset OLDPWD; echo ~-
   ```
 - `expand/tilde-after-a-colon-in-an-assignment` — the context adds a tilde after each unquoted colon — PATH=~/bin:~/sbin — and quoting turns it back off; unanimous
   ```sh

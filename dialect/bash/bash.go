@@ -76,6 +76,7 @@ func Semantics() interp.Semantics {
 	s.TypesetLocalNeedsKeywordFunction = interp.No
 	s.ReadonlyReassignmentFatal = interp.No
 	s.ReadonlyReassignmentFatalFromCommandString = interp.Yes
+	s.ReadonlyReassignmentByDeclarationFatal = interp.No
 	s.BuiltinSyntaxErrorFatal = interp.No
 	s.DotMissingFileFatal = interp.No
 	s.DotPassesArguments = interp.Yes

@@ -547,6 +547,16 @@ type Semantics struct {
 	// ShiftPastEndFatal ends a non-interactive shell when `shift` runs off
 	// the end. True in dash and ksh93.
 	ShiftPastEndFatal Answer
+	// ReadonlyReassignmentByDeclarationFatal ends the script when a
+	// declaration utility assigns to a readonly name — `export x=2`,
+	// `typeset x=2`. True in dash, ksh93 and zsh; bash reports it and
+	// carries on.
+	//
+	// A different set of shells from the plain assignment above, which is
+	// what makes it a question of its own: bash stops for `x=2` given as an
+	// argument and never stops for this one.
+	ReadonlyReassignmentByDeclarationFatal Answer
+
 	// ReadonlyReassignmentFatalFromCommandString is the same question for a
 	// shell whose program came from an argument rather than from a file.
 	//
@@ -1063,6 +1073,7 @@ func PosixSemantics() Semantics {
 		ShiftPastEndFatal:                          Yes,
 		ReadonlyReassignmentFatal:                  Yes,
 		ReadonlyReassignmentFatalFromCommandString: Yes,
+		ReadonlyReassignmentByDeclarationFatal:     Yes,
 		ArrayBaseIsZero:                            Yes,
 		DollarZeroInFunctionIsFunctionName:         No,
 		// A special builtin's failure is fatal to a non-interactive shell,

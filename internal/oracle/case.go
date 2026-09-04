@@ -913,6 +913,11 @@ var Corpus = []Case{
 		Why:     "the whole point of -u, and the baseline the exemptions are measured against",
 	},
 	{
+		ID: "readonly/reassignment-by-a-declaration", Category: "builtins",
+		Snippet: "readonly x=1; export x=2; echo after",
+		Why:     "the same refusal reached through a declaration utility rather than by an assignment standing alone, and a different set of shells stops for it — three here, where a plain assignment stops all four. So which of the two ways the name was set decides, and one shell answers the two oppositely: it stops for the plain form given as an argument and never stops for this one",
+	},
+	{
 		ID: "readonly/reassignment-from-a-command-string", Category: "builtins",
 		Snippet: "readonly x=1; x=2; echo after",
 		Why:     "an assignment to a name that cannot take one, given as an argument rather than read from a file. All four stop here — and one of them does not when the same three lines come from a file, which the case recorded elsewhere shows. So a readonly reassignment is fatal in three shells always and in the fourth by invocation, which is the second thing found to work that way after an expansion that failed",

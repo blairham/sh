@@ -393,7 +393,13 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 		}
 		name, value, hasValue := strings.Cut(a, "=")
 		if hasValue {
-			r.setVar(name, value)
+			r.setVarAs(name, value, assignedByDeclaration)
+			if r.ctl == controlExit {
+				// The assignment ended the script, so the builtin has
+				// nothing left to report — and returning its own status
+				// would put back the one the failure set.
+				return r.status
+			}
 		}
 		r.exported[name] = true
 	}
@@ -792,7 +798,11 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 	for _, a := range args {
 		name, value, hasValue := strings.Cut(a, "=")
 		if hasValue {
-			r.setVar(name, value)
+			r.setVarAs(name, value, assignedByDeclaration)
+			if r.ctl == controlExit {
+				// See biExport.
+				return r.status
+			}
 		}
 		r.markReadonly(name)
 	}

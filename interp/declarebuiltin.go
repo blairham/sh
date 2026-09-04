@@ -85,7 +85,11 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 		r.shadowTypeset(name)
 		switch {
 		case hasValue:
-			r.setVar(name, value)
+			r.setVarAs(name, value, assignedByDeclaration)
+			if r.ctl == controlExit {
+				// See biExport: the failure's status is the one that stands.
+				return r.status
+			}
 		default:
 			r.declareEmpty(name)
 		}

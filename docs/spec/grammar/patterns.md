@@ -97,6 +97,49 @@ the pattern and simply does not match. Three behaviors again.
 
 Vector field: `ExtendedPatterns` (default false, true for `ksh`).
 
+## Run-time switches over the language
+
+bash lets a script move some of these rules at run time, through `shopt`
+— a builtin of bash's alone: dash, ksh93 and zsh all answer it with
+"command not found" (measured; the `shopt/` corpus cases record it).
+Measured against bash 5.3, each option below does exactly this and
+nothing beside it:
+
+| option | measured effect |
+| --- | --- |
+| `nullglob` | a pattern matching no file expands to **nothing**: `echo zz*zz` prints an empty line, and a command whose every word vanishes runs nothing with status 0 |
+| `dotglob` | metacharacters match a leading period; `.` and `..` are still never produced |
+| `nocaseglob` | pathname expansion folds case — `a*` finds `Apple` — and `case`/`[[ ]]` stay exact |
+| `nocasematch` | `case` and `[[ ]]` fold case — `case A in a)` matches — and pathname expansion and `${x#pat}` stay exact |
+| `globstar` | `**` standing alone as a component matches zero or more directory levels: `**/f` finds `f`, `d/f` and `d/e/f`; a trailing `d/**` lists `d/` itself and then everything beneath it; hidden entries are neither listed nor descended into without `dotglob`; a symbolic link is listed and never followed; `a**` and a quoted `**` are ordinary patterns |
+| `extglob` | the quantified groups above are read **everywhere**, and read at parse time |
+
+`extglob` is the odd one, because it changes the grammar. bash parses a
+line before running any of it, so the option takes effect on the *next*
+line: `shopt -s extglob; echo @(x)` on one line is a syntax error and
+the same two commands on two lines work, in both directions (measured,
+bash 5.3 `-c` with embedded newlines). Inside `[[ ]]` bash reads the
+groups whether or not `extglob` is on — which is the
+`ExtendedPatternInCondition` flag — and with it on, a group arriving
+from an expansion matches as a group in `case` too.
+
+The listing and statuses of the builtin itself: `shopt name` prints the
+name padded to twenty columns, a tab, then `on` or `off`, with status 0
+only if every named option is on; `-q` is that status with no output;
+`-p` prints `shopt -s name` / `shopt -u name`, status as a query; `-s` /
+`-u` with no names list what is on / off; an unknown name is
+`shopt: name: invalid shell option name`, status 1, and the known names
+around it are still switched; `-s` with `-u` is refused, status 1; an
+unknown flag prints a usage line, status 2.
+
+These are run-time states rather than semantics axes, which is why the
+core holds them as `interp.MatchOption` values and only the bash dialect
+maps names onto them. `failglob` is recorded here and deliberately not
+implemented: its miss aborts the rest of the current *line* and then
+carries on (measured: `shopt -s failglob` then `echo zz*zz; echo after`
+on one line prints neither, and `echo after` on the next line prints),
+which is a control-flow shape nothing else needs yet.
+
 ## What this does not cover
 
 Collating symbols and equivalence classes (`[[.a.]]`, `[[=a=]]`), which

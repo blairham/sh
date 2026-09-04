@@ -93,11 +93,16 @@ func (r *Runner) expandOneWord(w *syntax.Word) []string {
 	}
 
 	// Pathname expansion is the last stage, and it acts on whole fields: a
-	// pattern that matches nothing is passed through unchanged.
+	// pattern that matches nothing is passed through unchanged — unless the
+	// run-time option deletes it, which is what the second result reports.
 	out := make([]string, 0, len(fields))
 	for _, f := range fields {
-		if matches := r.glob(f); len(matches) > 0 {
+		matches, dropped := r.glob(f)
+		if len(matches) > 0 {
 			out = append(out, matches...)
+			continue
+		}
+		if dropped {
 			continue
 		}
 		out = append(out, globUnescape(f))
@@ -184,8 +189,12 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields []string, pla
 	}
 	out := make([]string, 0, len(fields))
 	for _, f := range fields {
-		if matches := r.glob(f); len(matches) > 0 {
+		matches, dropped := r.glob(f)
+		if len(matches) > 0 {
 			out = append(out, matches...)
+			continue
+		}
+		if dropped {
 			continue
 		}
 		out = append(out, globUnescape(f))

@@ -478,6 +478,11 @@ type Runner struct {
 	// and not expansion.
 	noglob bool
 
+	// matchOptions is the run-time pattern behaviors a dialect's builtin has
+	// switched on, one bit per MatchOption. A plain value so a subshell's
+	// clone carries the state and its changes stay its own.
+	matchOptions uint8
+
 	// pipefail is `set -o pipefail`: a pipeline reports its last *failing*
 	// element instead of its last one. Not every dialect has the option, so
 	// the field is only ever set through an axis.

@@ -1099,6 +1099,35 @@ var Corpus = []Case{
 		Why:     "the whole point of -u, and the baseline the exemptions are measured against",
 	},
 	{
+		ID: "shopt/nullglob-empties-a-miss", Category: "shell options",
+		Snippet: `shopt -s nullglob 2>/dev/null; echo zz*zz; echo done`,
+		Why: "the builtin is bash's alone, so the miss becomes an empty line there " +
+			"and the pattern stands literal in the three shells where `shopt` is " +
+			"not a command — the error is discarded and the divergence is the point",
+	},
+	{
+		ID: "shopt/globstar-crosses-directories", Category: "shell options",
+		Snippet: `shopt -s globstar 2>/dev/null; mkdir -p d/e; touch d/e/f; echo **/f`,
+		Why: "with the option, `**` alone as a component crosses directory levels " +
+			"in bash; zsh crosses natively without any option, and dash and ksh93 " +
+			"read `**` as `*` and leave the unmatched pattern standing",
+	},
+	{
+		ID: "shopt/nocasematch-folds-case", Category: "shell options",
+		Snippet: `shopt -s nocasematch 2>/dev/null; case A in a) echo hit;; *) echo exact;; esac`,
+		Why: "the option folds `case` and `[[ ]]` matching in bash and nothing " +
+			"else has it: the other three keep matching exact because the command " +
+			"that would have changed it was never theirs",
+	},
+	{
+		ID: "shopt/query-answers-by-status", Category: "shell options",
+		Snippet: `shopt -q nullglob 2>/dev/null; echo q=$?; ` +
+			`shopt -s nullglob 2>/dev/null; shopt -q nullglob 2>/dev/null; echo q=$?`,
+		Why: "-q answers by status alone — 1 while the option is off and 0 once " +
+			"-s has set it; the shells without the builtin answer 127 twice, " +
+			"which records what a probing script would see there",
+	},
+	{
 		ID: "readonly/reassignment-by-a-declaration", Category: "builtins",
 		Snippet: "readonly x=1; export x=2; echo after",
 		Why:     "the same refusal reached through a declaration utility rather than by an assignment standing alone, and a different set of shells stops for it — three here, where a plain assignment stops all four. So which of the two ways the name was set decides, and one shell answers the two oppositely: it stops for the plain form given as an argument and never stops for this one",

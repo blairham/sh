@@ -105,13 +105,17 @@ func closesBracket(s string, i int) bool {
 // restriction, because they have no filesystem and no components.
 //
 // A pattern matching nothing is passed through unchanged, which is what dash,
-// bash and ksh93 do; zsh reports an error, and that is a recorded axis.
-func (r *Runner) glob(field string) []string {
+// bash and ksh93 do by default; zsh reports an error, and that is a recorded
+// axis. The second result is the run-time exception: with
+// UnmatchedPatternIsEmpty on, a miss deletes the word, and true says so —
+// distinct from a nil match list, which means the field was never a pattern
+// or should stand as written.
+func (r *Runner) glob(field string) ([]string, bool) {
 	if r.noglob {
 		// `set -f`. Only the filesystem half is switched off: a pattern in a
 		// `case` arm or after `==` still matches, which is measured and is
 		// why this is here rather than in the matcher.
-		return nil
+		return nil, false
 	}
 	if r.sem().UnterminatedBracket == BracketBadPattern &&
 		field != "[" && hasUnterminatedBracket(field) {
@@ -121,10 +125,10 @@ func (r *Runner) glob(field string) []string {
 		// `a[` is not, so the rule is the whole field rather than where the
 		// bracket sits in it.
 		r.fatalPattern(field, 1)
-		return nil
+		return nil, false
 	}
 	if !hasUnescapedMeta(field) {
-		return nil
+		return nil, false
 	}
 	defer func() {
 		if r.globMissed && r.ask(r.sem().GlobNoMatchIsError, "an unmatched pattern being an error") {
@@ -135,27 +139,63 @@ func (r *Runner) glob(field string) []string {
 		}
 		r.globMissed = false
 	}()
+	// A miss is a miss wherever it is noticed, and what it means is decided
+	// once: the word is deleted if the option says so, kept otherwise.
+	missed := func() ([]string, bool) {
+		r.globMissed = true
+		return nil, r.MatchOption(UnmatchedPatternIsEmpty)
+	}
+	seeHidden := r.MatchOption(PatternsMatchHidden)
+	starstar := r.MatchOption(StarStarCrossesDirectories)
 	parts := strings.Split(field, "/")
 
 	// An absolute pattern starts at the root; a relative one at the working
 	// directory, which is the shell's rather than the process's.
-	dirs := []string{r.workDir()}
+	base := r.workDir()
+	dirs := []string{base}
 	prefix := ""
 	if parts[0] == "" {
 		dirs, prefix, parts = []string{"/"}, "/", parts[1:]
 	}
+
+	// The directories `**` matched zero levels deep, when it was the last
+	// component: the one shell with the option reports those with a trailing
+	// slash — `d/**` lists `d/` ahead of what is inside it.
+	var selfDirs map[string]bool
+	crossed := false
 
 	for i, part := range parts {
 		if part == "" {
 			continue
 		}
 		var next []string
-		for _, dir := range dirs {
-			next = append(next, matchIn(dir, part, r.patternOpts(part))...)
+		if starstar && part == "**" {
+			// The component is the directory itself and everything beneath
+			// it. Exactly `**`: anything more — `a**`, an escaped star — is
+			// an ordinary component, where adjacent stars collapse to one.
+			crossed = true
+			last := lastComponent(parts, i)
+			for _, dir := range dirs {
+				next = append(next, dir)
+				if last {
+					if selfDirs == nil {
+						selfDirs = map[string]bool{}
+					}
+					selfDirs[dir] = true
+				}
+				next = appendDescendants(next, dir, seeHidden)
+			}
+			sortMatches(next)
+			next = compactSorted(next)
+		} else {
+			o := r.patternOpts(part)
+			o.fold = r.MatchOption(GlobFoldsCase)
+			for _, dir := range dirs {
+				next = append(next, matchIn(dir, part, o, seeHidden)...)
+			}
 		}
 		if len(next) == 0 {
-			r.globMissed = true
-			return nil
+			return missed()
 		}
 		sortMatches(next)
 		dirs = next
@@ -169,25 +209,91 @@ func (r *Runner) glob(field string) []string {
 			}
 			dirs = kept
 			if len(dirs) == 0 {
-				r.globMissed = true
-				return nil
+				return missed()
 			}
 		}
 	}
 
 	// Results are reported the way the pattern was written: relative if it
 	// was relative, so `echo *` lists names and not paths.
-	base := r.workDir()
 	out := make([]string, 0, len(dirs))
 	for _, d := range dirs {
+		self := selfDirs[d]
 		if prefix == "" {
 			if rel, err := filepath.Rel(base, d); err == nil {
 				d = rel
 			}
 		}
+		if d == "." {
+			// The starting point itself, which only a zero-level `**` can
+			// produce, and which the shell with the option leaves out: `**`
+			// lists what is beneath the directory, never the directory.
+			continue
+		}
+		if self {
+			d += "/"
+		}
 		out = append(out, d)
 	}
 	sortMatches(out)
+	if crossed {
+		out = compactSorted(out)
+	}
+	if len(out) == 0 {
+		// Everything matched was the starting point itself — `**` over an
+		// empty directory — which is no match at all.
+		return missed()
+	}
+	return out, false
+}
+
+// lastComponent reports whether nothing but trailing slashes follows parts[i].
+func lastComponent(parts []string, i int) bool {
+	for _, p := range parts[i+1:] {
+		if p != "" {
+			return false
+		}
+	}
+	return true
+}
+
+// appendDescendants adds everything beneath dir, however deep: files and
+// directories both, because whether only directories survive is the caller's
+// question — the same split the main loop already makes.
+//
+// Hidden names are skipped, and skipped for descent too, unless the option
+// says otherwise. A symbolic link is listed and never followed: following one
+// is how a walk finds the same file twice and a looped link forever.
+func appendDescendants(out []string, dir string, seeHidden bool) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return out
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if !seeHidden && strings.HasPrefix(name, ".") {
+			continue
+		}
+		path := filepath.Join(dir, name)
+		out = append(out, path)
+		if e.IsDir() {
+			out = appendDescendants(out, path, seeHidden)
+		}
+	}
+	return out
+}
+
+// compactSorted removes adjacent duplicates, which is all the duplicates a
+// sorted list has. Only `**` can produce one: two components can expand to
+// the same directory by different routes.
+func compactSorted(names []string) []string {
+	out := names[:0]
+	for i, n := range names {
+		if i > 0 && n == names[i-1] {
+			continue
+		}
+		out = append(out, n)
+	}
 	return out
 }
 
@@ -226,14 +332,16 @@ func (r *Runner) glob(field string) []string {
 // place that says so.
 func sortMatches(names []string) { sort.Strings(names) }
 
-// matchIn lists the entries of dir matching one pattern component.
-func matchIn(dir, pattern string, o patternOpts) []string {
+// matchIn lists the entries of dir matching one pattern component. seeHidden
+// lifts the leading-period rule, which is the run-time option's doing and not
+// the pattern's.
+func matchIn(dir, pattern string, o patternOpts, seeHidden bool) []string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
 	}
 	literal := globUnescape(pattern)
-	hidden := strings.HasPrefix(literal, ".")
+	hidden := seeHidden || strings.HasPrefix(literal, ".")
 
 	var out []string
 	for _, e := range entries {

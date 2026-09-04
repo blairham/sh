@@ -1661,6 +1661,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `xtrace/compound-header-diverges` | `+ echo 1~1~+ echo 2~2` | `+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2` | `+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2` | `+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2` | `+ echo 1~1~+ echo 2~2` | `+<shell>:1> i=1~+<shell>:1> echo 1~1~+<shell>:1> i=2~+<shell>:1> echo 2~2` |
 | `xtrace/pipeline-order-diverges` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ cat~+ echo a~a` | `+<shell>:1> echo a~+<shell>:1> cat~a` |
 | `nounset/unset-variable-is-an-error` | `<script>: 2: NOPE: parameter not set` *(status 2)* | `<script>: line 2: NOPE: unbound variable` *(status 1)* | `<script>: line 2: NOPE: unbound variable` *(status 1)* | `<script>: line 2: NOPE: unbound variable` *(status 1)* | `<script>: line 2: NOPE: parameter not set` *(status 1)* | `<script>:2: NOPE: parameter not set` *(status 1)* |
+| `shopt/nullglob-empties-a-miss` | `zz*zz~done` | `~done` | `~done` | `~done` | `zz*zz~done` | `<shell>:1: no matches found: zz*zz` *(status 1)* |
+| `shopt/globstar-crosses-directories` | `**/f` | `d/e/f` | `d/e/f` | `**/f` | `**/f` | `d/e/f` |
+| `shopt/nocasematch-folds-case` | `exact` | `hit` | `hit` | `hit` | `exact` | `exact` |
+| `shopt/query-answers-by-status` | `q=127~q=127` | `q=1~q=0` | `q=1~q=0` | `q=1~q=0` | `q=127~q=127` | `q=127~q=127` |
 | `nounset/defaults-are-exempt` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` |
 | `nounset/empty-is-not-unset` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` |
 | `nounset/no-parameters-is-not-unset` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` |
@@ -1716,6 +1720,22 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   set -u
   echo "[$NOPE]"
   echo after
+  ```
+- `shopt/nullglob-empties-a-miss` — the builtin is bash's alone, so the miss becomes an empty line there and the pattern stands literal in the three shells where `shopt` is not a command — the error is discarded and the divergence is the point
+  ```sh
+  shopt -s nullglob 2>/dev/null; echo zz*zz; echo done
+  ```
+- `shopt/globstar-crosses-directories` — with the option, `**` alone as a component crosses directory levels in bash; zsh crosses natively without any option, and dash and ksh93 read `**` as `*` and leave the unmatched pattern standing
+  ```sh
+  shopt -s globstar 2>/dev/null; mkdir -p d/e; touch d/e/f; echo **/f
+  ```
+- `shopt/nocasematch-folds-case` — the option folds `case` and `[[ ]]` matching in bash and nothing else has it: the other three keep matching exact because the command that would have changed it was never theirs
+  ```sh
+  shopt -s nocasematch 2>/dev/null; case A in a) echo hit;; *) echo exact;; esac
+  ```
+- `shopt/query-answers-by-status` — -q answers by status alone — 1 while the option is off and 0 once -s has set it; the shells without the builtin answer 127 twice, which records what a probing script would see there
+  ```sh
+  shopt -q nullglob 2>/dev/null; echo q=$?; shopt -s nullglob 2>/dev/null; shopt -q nullglob 2>/dev/null; echo q=$?
   ```
 - `nounset/defaults-are-exempt` — a form that supplies a value, or asks whether one is set, is not a use of an unset one
   ```sh

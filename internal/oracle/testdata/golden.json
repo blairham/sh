@@ -16154,6 +16154,134 @@
         "TimedOut": false
       }
     },
+    "shopt/globstar-crosses-directories": {
+      "bash": {
+        "Output": "d/e/f",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "d/e/f",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "**/f",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "**/f",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "**/f",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "d/e/f",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "shopt/nocasematch-folds-case": {
+      "bash": {
+        "Output": "hit",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "hit",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "hit",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "exact",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "exact",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "exact",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "shopt/nullglob-empties-a-miss": {
+      "bash": {
+        "Output": "~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "zz*zz~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "zz*zz~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: no matches found: zz*zz",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "shopt/query-answers-by-status": {
+      "bash": {
+        "Output": "q=1~q=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "q=1~q=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "q=1~q=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "q=127~q=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "q=127~q=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "q=127~q=127",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "signal-death/an-ordinary-failure-is-untouched": {
       "bash": {
         "Output": "st=3",

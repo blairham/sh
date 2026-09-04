@@ -1,0 +1,85 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+package interp
+
+// MatchOption is a pattern-matching behavior a script can switch at run time.
+//
+// These are not axes. An axis is a fixed disagreement between dialects about
+// one piece of syntax; these are states one shell lets a script move between
+// while it runs, through a builtin the dialect registers. The core holds the
+// state because the core is what consults it — pathname expansion and the
+// matcher live here — while which names a script may use, and through which
+// builtin, is entirely the dialect's.
+//
+// Each option is named for what it does rather than for any shell's spelling
+// of it, because the spellings differ where the behaviors do not: two shells
+// in the panel can empty an unmatched pattern, under different names.
+type MatchOption int
+
+const (
+	// UnmatchedPatternIsEmpty expands a pattern that matches no file to
+	// nothing at all, rather than leaving the pattern in place.
+	UnmatchedPatternIsEmpty MatchOption = iota
+
+	// PatternsMatchHidden lets metacharacters match a leading period, so `*`
+	// sees names that begin with one. `.` and `..` are never matched; the
+	// directory listing the expansion walks does not contain them.
+	PatternsMatchHidden
+
+	// GlobFoldsCase makes pathname expansion compare letters without case.
+	// Only pathname expansion: `case` and `[[ ]]` have a switch of their own,
+	// because the shell that has both keeps them independent.
+	GlobFoldsCase
+
+	// MatchFoldsCase makes `case` and `[[ ]]` patterns compare letters
+	// without case. It does not reach pathname expansion or the pattern
+	// operators of parameter expansion, which is measured: with it on,
+	// `case A in a)` matches and `${x#a}` still leaves `ABC` alone.
+	MatchFoldsCase
+
+	// StarStarCrossesDirectories reads `**` standing alone as a pattern
+	// component as the directory itself and everything beneath it, however
+	// deep. Anything else about the component — `a**`, a quoted star — makes
+	// it an ordinary pattern, where adjacent stars collapse to one.
+	StarStarCrossesDirectories
+
+	// QuantifiedGroupsEverywhere reads `@(a|b)` and the other quantified
+	// groups in every pattern, not only where the dialect's grammar already
+	// has them. This one reaches the parser: whether `(` belongs to a group
+	// is decided during tokenization, so setting it moves the runner to a
+	// dialect whose ExtendedPattern is on, and input parsed after that —
+	// `eval`, a sourced file, and the front end's next line — follows. See
+	// syntax.Parser.SetDialect for the front end's half.
+	QuantifiedGroupsEverywhere
+)
+
+// SetMatchOption switches one of the behaviors on or off.
+//
+// The grammar-reaching option copies the dialect rather than writing through
+// the shared pointer: a subshell is a cloned runner holding the same Dialect,
+// and a script must not change the grammar of the shell that spawned it.
+func (r *Runner) SetMatchOption(o MatchOption, on bool) {
+	if o == QuantifiedGroupsEverywhere {
+		d := r.dialect()
+		if d.ExtendedPattern != on {
+			d.ExtendedPattern = on
+			r.Dialect = &d
+		}
+		return
+	}
+	if on {
+		r.matchOptions |= 1 << uint(o)
+		return
+	}
+	r.matchOptions &^= 1 << uint(o)
+}
+
+// MatchOption reports whether one of the behaviors is on, so the builtin that
+// switches them can also answer questions about them.
+func (r *Runner) MatchOption(o MatchOption) bool {
+	if o == QuantifiedGroupsEverywhere {
+		return r.dialect().ExtendedPattern
+	}
+	return r.matchOptions&(1<<uint(o)) != 0
+}

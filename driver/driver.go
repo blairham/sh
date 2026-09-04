@@ -473,7 +473,17 @@ func (sh Shell) run(in source) int {
 func (sh Shell) execute(r *interp.Runner, p *syntax.Parser, in source) int {
 	ctx := context.Background()
 	shown := 0
+	// A builtin can change the grammar for the lines after it — a run-time
+	// option can decide whether a quantified group is a group. The runner
+	// says so by replacing its Dialect, never by writing through it, so a
+	// changed pointer is the whole signal; the front end is the only place
+	// the runner and the parser meet, exactly as it is for aliases.
+	dialect := r.Dialect
 	for {
+		if r.Dialect != dialect && r.Dialect != nil {
+			dialect = r.Dialect
+			p.SetDialect(*dialect)
+		}
 		line, ok := p.NextLine()
 		// Said as soon as it is known and before anything the line does,
 		// which is where the one shell that remarks puts it.

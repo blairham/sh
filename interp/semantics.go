@@ -719,6 +719,23 @@ type Semantics struct {
 	// `wait -x` with the job it could not find.
 	WaitReadsOptions Answer
 
+	// CommandRejectsUnknownOption refuses a leading `-` word that is not one
+	// of `command`'s own options, rather than taking it as the command.
+	//
+	// All four read `-v` and `-p`. bash and dash refuse anything else;
+	// ksh93 and zsh stop reading options there, so `command -x ls` is
+	// `command not found: -x`. The same shape printf already has.
+	CommandRejectsUnknownOption Answer
+
+	// GetoptsRejectsUnknownOption is the same question for `getopts`, which
+	// has no options at all here — so any leading `-` word is the one being
+	// asked about, and it would otherwise be the optstring.
+	//
+	// bash alone refuses it: `getopts -a x` is `-a: invalid option` there and
+	// an optstring of `-a` in dash and zsh. ksh93 has `-a` for real, and is
+	// left reading none for the same reason as above.
+	GetoptsRejectsUnknownOption Answer
+
 	// ShiftCountIsArithmetic reads `shift`'s operand as an expression rather
 	// than as a plain number: `shift 1+1` moves two and `shift n` moves
 	// whatever n holds.
@@ -1298,6 +1315,11 @@ func PosixSemantics() Semantics {
 		// And it names where the failure was, not where the trap fired,
 		// which is what three of the four do.
 		TrapParseFailureNamesWhereItFired: No,
+		// POSIX gives `command` -p and -v and gives `getopts` none, so a
+		// leading `-` word is an option to the first and the optstring to
+		// the second.
+		CommandRejectsUnknownOption: Yes,
+		GetoptsRejectsUnknownOption: No,
 		// POSIX gives `umask` chmod's symbolic mode: a who list, then one
 		// or more actions, each an operator and its permissions. So several
 		// operators in a clause are allowed, an omitted who means all three,

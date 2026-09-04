@@ -122,3 +122,79 @@ func TestBuiltinRunsOnlyABuiltin(t *testing.T) {
 		}
 	}
 }
+
+// TestAnOptionCommandDoesNotHaveIsRefusedOrRun. All four read -v and -p;
+// what splits them is anything else, and both answers are a real dialect's.
+func TestAnOptionCommandDoesNotHaveIsRefusedOrRun(t *testing.T) {
+	answer := func(a Answer) func(*Runner) {
+		return func(r *Runner) {
+			s := *r.Semantics
+			s.CommandRejectsUnknownOption = a
+			r.Semantics = &s
+			dg := Diagnostics{BuiltinBadOption: "command: %[2]s: invalid option"}
+			r.Diagnostics = &dg
+		}
+	}
+
+	out, _ := run(t, `command -x echo hi`, answer(Yes))
+	if !strings.Contains(out, "-x: invalid option") {
+		t.Errorf("refused: got %q, want it named as an option", out)
+	}
+	if strings.Contains(out, "hi") {
+		t.Errorf("refused: got %q, want the command not to have run", out)
+	}
+
+	// Taken as the command instead, which is the other half — and which is
+	// why this is not simply "read the options".
+	out, _ = run(t, `command -x echo hi`, answer(No))
+	if strings.Contains(out, "invalid option") {
+		t.Errorf("run: got %q, want no option complaint", out)
+	}
+
+	// And the options it does have are read either way, which is the part a
+	// single "reads options" flag got wrong.
+	for _, a := range []Answer{Yes, No} {
+		out, _ = run(t, `command -v echo`, answer(a))
+		if !strings.Contains(out, "echo") {
+			t.Errorf("%v: got %q, want -v read whatever the answer", a, out)
+		}
+	}
+}
+
+// TestABundleGivenToCommandIsNamedByItsFirstLetter, so `--version` comes back
+// as `--` — the rule printf's options here already follow.
+func TestABundleGivenToCommandIsNamedByItsFirstLetter(t *testing.T) {
+	out, _ := run(t, `command --version`, func(r *Runner) {
+		s := *r.Semantics
+		s.CommandRejectsUnknownOption = Yes
+		r.Semantics = &s
+		dg := Diagnostics{BuiltinBadOption: "command: %[2]s: invalid option"}
+		r.Diagnostics = &dg
+	})
+	if !strings.Contains(out, "--: invalid option") {
+		t.Errorf("got %q, want the first letter of the bundle", out)
+	}
+	if strings.Contains(out, "--version: invalid") {
+		t.Errorf("got %q, want the whole word not named", out)
+	}
+}
+
+// TestWhatCommandRunsReportsAsItself, not as the builtin: the dialect that
+// names a builtin in the location says `sh:1: command not found: -x` and not
+// `sh:command:1:`, which is the rule `.` and `eval` already follow.
+func TestWhatCommandRunsReportsAsItself(t *testing.T) {
+	out, _ := run(t, `command nosuchcmd-xyz`, func(r *Runner) {
+		s := *r.Semantics
+		s.CommandRejectsUnknownOption = Yes
+		r.Semantics = &s
+		dg := Diagnostics{
+			Location:               LocationTightLine,
+			NamesBuiltinInLocation: true,
+			PathNotFound:           "command not found: %[1]s",
+		}
+		r.Diagnostics = &dg
+	})
+	if strings.Contains(out, ":command:") {
+		t.Errorf("got %q, want the builtin not named in the location", out)
+	}
+}

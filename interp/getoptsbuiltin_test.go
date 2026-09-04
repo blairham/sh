@@ -132,3 +132,64 @@ func TestGetoptsAssignmentRestartsWordIsAnAxis(t *testing.T) {
 		})
 	}
 }
+
+// TestALeadingDashIsTheOptstringOrAnOption. `getopts` has no options at all
+// here, so any leading `-` word is the question — and only one dialect
+// refuses it, where the others take it as the optstring.
+func TestALeadingDashIsTheOptstringOrAnOption(t *testing.T) {
+	refuse := func(r *Runner) {
+		s := *r.Semantics
+		s.GetoptsRejectsUnknownOption = Yes
+		r.Semantics = &s
+		dg := Diagnostics{BuiltinBadOption: "getopts: %[2]s: invalid option"}
+		r.Diagnostics = &dg
+	}
+	out, _ := run(t, `getopts -a x`, refuse)
+	if !strings.Contains(out, "-a: invalid option") {
+		t.Errorf("refused: got %q", out)
+	}
+	// A bundle is named by its first letter here too.
+	out, _ = run(t, `getopts --version x`, refuse)
+	if !strings.Contains(out, "--: invalid option") {
+		t.Errorf("bundle: got %q, want the first letter named", out)
+	}
+
+	take := func(r *Runner) {
+		s := *r.Semantics
+		s.GetoptsRejectsUnknownOption = No
+		r.Semantics = &s
+	}
+	out, _ = run(t, `getopts -a x`, take)
+	if strings.Contains(out, "invalid option") {
+		t.Errorf("taken as the optstring: got %q, want no option complaint", out)
+	}
+}
+
+// TestAnOrdinaryGetoptsAsksNothing, so a shell with no answer still parses
+// options — the question is only about a leading dash.
+func TestAnOrdinaryGetoptsAsksNothing(t *testing.T) {
+	out, _ := run(t, `set -- -a; getopts ab o; echo "[$o]"`, func(r *Runner) {
+		s := CoreSemantics()
+		r.Semantics = &s
+	})
+	if !strings.Contains(out, "[a]") {
+		t.Errorf("got %q, want an ordinary use to need no answer", out)
+	}
+	if strings.Contains(out, "refused as an option") {
+		t.Errorf("got %q, want the leading-dash question not asked", out)
+	}
+}
+
+// TestDashDashEndsGetoptsOptions, so `getopts -- ab o` reads `ab` as the
+// optstring rather than refusing it — the control for the case above, and
+// the shape a script uses when its optstring might begin with a dash.
+func TestDashDashEndsGetoptsOptions(t *testing.T) {
+	out, _ := run(t, `set -- -a; getopts -- ab o; echo "[$o]"`, func(r *Runner) {
+		s := *r.Semantics
+		s.GetoptsRejectsUnknownOption = Yes
+		r.Semantics = &s
+	})
+	if !strings.Contains(out, "[a]") {
+		t.Errorf("got %q, want -- taken as the end of the options", out)
+	}
+}

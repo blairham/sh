@@ -4,10 +4,13 @@
 package interp_test
 
 import (
+	"bytes"
+	"context"
 	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // The bug: a symbolic mask was read as an octal one, failed, and was reported
@@ -162,5 +165,182 @@ func TestWhatDashSPrintsCanBeGivenBack(t *testing.T) {
 		if _, _, held := umaskRun(t, 0o777, nil, "umask -- "+spelled); held != mask {
 			t.Errorf("umask -S of %04o said %q, which reads back as %04o", mask, spelled, held)
 		}
+	}
+}
+
+// The corners of the symbolic mask, where the panel does not agree. Each is
+// asked only when the input reaches it, so an ordinary `u=rw` needs no
+// answer from anybody — which is what these check as much as the answers.
+
+// TestASecondOperatorInAClauseIsAsked covers both answers, and the "no" side
+// leaves the mask alone rather than half-applying the first operator.
+func TestASecondOperatorInAClauseIsAsked(t *testing.T) {
+	out, _, held := umaskRun(t, 0o022, nil, `umask u+rw-x; umask`)
+	if held != 0o122 {
+		t.Errorf("mask %#o, want %#o with both operators applied (%q)", held, 0o122, out)
+	}
+
+	one := func(s *Semantics) { s.SymbolicMaskTakesMoreThanOneOperator = No }
+	out, _, held = umaskRun(t, 0o022, one, `umask u+rw-x; umask`)
+	if held != 0o022 {
+		t.Errorf("mask %#o, want it left alone (%q)", held, out)
+	}
+	if !strings.Contains(out, "-") {
+		t.Errorf("said %q, want the second operator named", out)
+	}
+}
+
+// TestSettingWithNoWhoIsAsked, and the dialect that refuses it names a
+// character that is not in the input — which is measured, not a mistake.
+func TestSettingWithNoWhoIsAsked(t *testing.T) {
+	_, _, held := umaskRun(t, 0o022, nil, `umask -- =w`)
+	if held != 0o555 {
+		t.Errorf("mask %#o, want %#o", held, 0o555)
+	}
+
+	need := func(s *Semantics) { s.SymbolicMaskSetsWithoutAWho = No }
+	out, _, held := umaskRun(t, 0o022, need, `umask -- =w`)
+	if held != 0o022 {
+		t.Errorf("mask %#o, want it left alone (%q)", held, out)
+	}
+	if out == "" {
+		t.Error("said nothing, want a complaint")
+	}
+}
+
+// TestAWhoWithNoOperatorIsAsked: one dialect reads it as `=`, and one of the
+// two that refuse it reaches for the complaint about a number instead.
+func TestAWhoWithNoOperatorIsAsked(t *testing.T) {
+	sets := func(s *Semantics) { s.SymbolicMaskWhoAloneSetsIt = Yes }
+	_, _, held := umaskRun(t, 0o022, sets, `umask g`)
+	if held != 0o072 {
+		t.Errorf("mask %#o, want %#o — the group denied everything", held, 0o072)
+	}
+
+	out, _, held := umaskRun(t, 0o022, nil, `umask g`)
+	if held != 0o022 {
+		t.Errorf("mask %#o, want it left alone (%q)", held, out)
+	}
+	if out == "" {
+		t.Error("said nothing, want a complaint")
+	}
+}
+
+// TestTheSetuidAndStickyLettersAreTwoQuestions, because one dialect takes
+// the first and refuses the second.
+func TestTheSetuidAndStickyLettersAreTwoQuestions(t *testing.T) {
+	_, _, held := umaskRun(t, 0o077, nil, `umask u=rs`)
+	if held != 0o377 {
+		t.Errorf("mask %#o, want %#o with `s` taken and worth nothing", held, 0o377)
+	}
+
+	noS := func(s *Semantics) { s.SymbolicMaskTakesTheSetuidLetter = No }
+	out, _, held := umaskRun(t, 0o077, noS, `umask u=rs`)
+	if held != 0o077 || !strings.Contains(out, "s") {
+		t.Errorf("mask %#o out %q, want `s` refused and the mask left alone", held, out)
+	}
+
+	// And refusing `s` does not refuse `t`, nor the other way round.
+	noT := func(s *Semantics) { s.SymbolicMaskTakesTheStickyLetter = No }
+	if _, _, held := umaskRun(t, 0o077, noT, `umask u=rs`); held != 0o377 {
+		t.Errorf("mask %#o, want `s` still taken when only `t` is refused", held)
+	}
+	if _, _, held := umaskRun(t, 0o077, noS, `umask u=rt`); held != 0o377 {
+		t.Errorf("mask %#o, want `t` still taken when only `s` is refused", held)
+	}
+}
+
+// TestAnOrdinaryClauseAsksNothing is the property that keeps these axes from
+// reaching every script: a mask nobody disagrees about is read without any
+// of them being consulted, so a shell with no answers still works.
+func TestAnOrdinaryClauseAsksNothing(t *testing.T) {
+	f, err := syntax.Parse(`umask u=rw,g=r,o=`, syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	sem := CoreSemantics()
+	dg := Diagnostics{}
+	held := 0o022
+	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+	r.SetUmask = func(mask int) (int, error) { old := held; held = mask; return old, nil }
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	if buf.String() != "" {
+		t.Errorf("said %q, want an ordinary clause to need no answer", buf.String())
+	}
+	// u=rw,g=r,o= allows 0640, so the mask is its complement.
+	if held != 0o137 {
+		t.Errorf("mask %#o, want %#o", held, 0o137)
+	}
+}
+
+// TestTheCharacterNamedForASetWithNoWho records the oddest of these corners:
+// the dialect that refuses `umask -- =w` names `/`, which is nowhere in the
+// input. Written down because it reads like a bug in this implementation
+// otherwise — it is what the shell says.
+func TestTheCharacterNamedForASetWithNoWho(t *testing.T) {
+	f, err := syntax.Parse(`umask -- =w`, syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	sem := permissive()
+	sem.SymbolicMaskSetsWithoutAWho = No
+	dg := Diagnostics{UmaskBadSymbolicOperator: "umask: bad symbolic mode operator: %[2]s"}
+	held := 0o022
+	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+	r.SetUmask = func(mask int) (int, error) { old := held; held = mask; return old, nil }
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "operator: /") {
+		t.Errorf("said %q, want the character the dialect names", buf.String())
+	}
+	if held != 0o022 {
+		t.Errorf("mask %#o, want it left alone", held)
+	}
+}
+
+// TestAWhoWithNoOperatorCanReachForTheNumericComplaint: one dialect answers
+// `umask g` with the wording it gives a number it could not read, and
+// answers a bad *character* with a symbolic one — so which complaint it
+// reaches for is not the same question as whether it refuses.
+func TestAWhoWithNoOperatorCanReachForTheNumericComplaint(t *testing.T) {
+	run := func(src string, numeric bool) string {
+		t.Helper()
+		f, err := syntax.Parse(src, syntax.Core())
+		if err != nil {
+			t.Fatal(err)
+		}
+		var buf bytes.Buffer
+		sem := permissive()
+		sem.SymbolicMaskWhoAloneSetsIt = No
+		dg := Diagnostics{
+			UmaskBadMask:                     "umask: bad umask",
+			UmaskBadSymbolicMode:             "umask: bad symbolic mode permission: %[2]s",
+			UmaskBadSymbolicOperator:         "umask: bad symbolic mode operator: %[2]s",
+			UmaskWhoAloneIsANumericComplaint: numeric,
+		}
+		held := 0o022
+		r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+		r.SetUmask = func(mask int) (int, error) { old := held; held = mask; return old, nil }
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+		return buf.String()
+	}
+
+	if got := run(`umask g`, true); !strings.Contains(got, "bad umask") {
+		t.Errorf("said %q, want the numeric complaint", got)
+	}
+	if got := run(`umask g`, false); !strings.Contains(got, "bad symbolic mode operator") {
+		t.Errorf("said %q, want the symbolic complaint", got)
+	}
+	// And the flag reaches only that corner: a bad character still gets the
+	// symbolic wording in the dialect that answers `umask g` numerically.
+	if got := run(`umask u=q`, true); !strings.Contains(got, "bad symbolic") {
+		t.Errorf("said %q, want a bad character worded symbolically", got)
 	}
 }

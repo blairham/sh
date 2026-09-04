@@ -69,6 +69,11 @@ func Semantics() interp.Semantics {
 	s.TrapQuoting = interp.ListingQuoteWhenNeededDollar
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.Yes
+	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes
+	s.SymbolicMaskSetsWithoutAWho = interp.Yes
+	s.SymbolicMaskWhoAloneSetsIt = interp.Yes
+	s.SymbolicMaskTakesTheSetuidLetter = interp.Yes
+	s.SymbolicMaskTakesTheStickyLetter = interp.Yes
 	s.TrapBodyRunsWhatParsed = interp.No
 	s.ReportsAKilledCommandInACommandSubstitution = interp.Yes
 	s.TrapBodyLine = interp.TrapBodyLineOffsetFromWhereItFired

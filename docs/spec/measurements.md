@@ -3283,6 +3283,11 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
+| `umask/symbolic-two-operators-in-one-clause` | `0122` | `0122` | `0122` | `<shell>: line 0: umask: `-': invalid symbolic mode character~0022` | `0122` | `<shell>:umask:1: bad symbolic mode permission: -~022` |
+| `umask/symbolic-set-with-no-who` | `0555` | `0555` | `0555` | `0555` | `0555` | `<shell>:umask:1: bad symbolic mode operator: /~022` |
+| `umask/symbolic-a-who-with-no-operator` | `<shell>: 1: umask: Illegal mode: g~0022` | `<shell>: line 1: umask: ` ': invalid symbolic mode operator~0022` | `<shell>: line 1: umask: ` ': invalid symbolic mode operator~0022` | `<shell>: line 0: umask: ` ': invalid symbolic mode operator~0022` | `0072` | `<shell>:umask:1: bad umask~022` |
+| `umask/symbolic-the-setuid-letter` | `0322` | `0322` | `0322` | `<shell>: line 0: umask: `s': invalid symbolic mode character~0022` | `0322` | `<shell>:umask:1: bad symbolic mode permission: s~022` |
+| `umask/symbolic-the-sticky-letter` | `<shell>: 1: umask: Illegal mode: u=rt~0022` | `0322` | `0322` | `<shell>: line 0: umask: `t': invalid symbolic mode character~0022` | `0322` | `<shell>:umask:1: bad symbolic mode permission: t~022` |
 | `umask/symbolic-sets-the-mask` | `0077` | `0077` | `0077` | `0077` | `0077` | `077` |
 | `umask/symbolic-omitted-who-is-all-three` | `0222` | `0222` | `0222` | `0222` | `0222` | `0222` |
 | `umask/symbolic-clauses-run-left-to-right` | `0111` | `0111` | `0111` | `0111` | `0111` | `0111` |
@@ -3291,6 +3296,26 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `umask/a-bad-mode-is-not-a-bad-number` | `<shell>: 1: umask: Illegal mode: u=q~st=2~0022` | `<shell>: line 1: umask: `q': invalid symbolic mode character~st=1~0022` | `<shell>: line 1: umask: `q': invalid symbolic mode character~st=1~0022` | `<shell>: line 0: umask: `q': invalid symbolic mode character~st=1~0022` | `<shell>: umask: u=q: bad format~st=1~0022` | `<shell>:umask:1: bad symbolic mode permission: q~st=1~022` |
 | `umask/a-refused-mode-leaves-the-mask-alone` | `0022` | `0022` | `0022` | `0022` | `0022` | `022` |
 
+- `umask/symbolic-two-operators-in-one-clause` — three of the four apply each operator in turn; zsh takes one per clause and names the second
+  ```sh
+  umask 022; umask u+rw-x; umask
+  ```
+- `umask/symbolic-set-with-no-who` — an omitted who before `=` means all three in three of the four. zsh wants one, and names a character that is not in the input at all
+  ```sh
+  umask 022; umask -- =w; umask
+  ```
+- `umask/symbolic-a-who-with-no-operator` — four answers: ksh93 reads it as `g=`, bash and dash refuse it in their own words, and zsh answers with the complaint it gives a number it could not read
+  ```sh
+  umask 022; umask g; umask
+  ```
+- `umask/symbolic-the-setuid-letter` — `s` changes no bit a umask has, and three of the four take it anyway. zsh refuses it
+  ```sh
+  umask 022; umask u=rs; umask
+  ```
+- `umask/symbolic-the-sticky-letter` — the same for `t`, and a different set of shells: dash takes `s` and refuses this one, which is why the two letters are not one question
+  ```sh
+  umask 022; umask u=rt; umask
+  ```
 - `umask/symbolic-sets-the-mask` — the form the issue was filed on and the one scripts write. Unanimous — all four accept it and all four give 0077, which is what made accepting only octal a plain gap rather than a dialect question
   ```sh
   umask 022; umask u=rwx,g=,o=; umask

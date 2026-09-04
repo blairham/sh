@@ -27,6 +27,9 @@ type Lexer struct {
 
 	err        error
 	incomplete bool
+	// remarks are what the parser has to say about input it accepted anyway.
+	// See Remark.
+	remarks []Remark
 
 	// openWord is what the input was inside when it ran out — a quote, an
 	// expansion, a here-document. The first one wins: a quote inside a
@@ -144,6 +147,15 @@ func (l *Lexer) Next() Token {
 	start := l.pos()
 
 	if l.eof() {
+		if len(l.pending) > 0 {
+			// Input that ends without a newline still has a here-document
+			// waiting, and what it never got is an *empty* body rather than
+			// no body: `sh -c 'cat <<X'` runs cat with nothing on its input
+			// in every shell. Reading them here is also what records the
+			// remark about the delimiter that never arrived, which was
+			// otherwise missing for exactly this shape.
+			l.readHeredocs()
+		}
 		return Token{Kind: TokEOF, Pos: start, End: start}
 	}
 
@@ -1179,6 +1191,13 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 	strip := r.Op == TokDLessDash
 	delim := r.Word.Literal()
 	start := l.pos()
+	// Where the last line of the body began, which is where the input ran
+	// out as far as the one shell that remarks on this is concerned. Not
+	// l.pos() at the end: a body whose last line ends in a newline leaves
+	// the lexer at the start of the line *after* it, and the warning names
+	// the last line that had something on it. A body with no lines at all
+	// names the here-document's own line, which is measured.
+	lastLine := r.OpPos
 	var body strings.Builder
 	for {
 		if l.eof() {
@@ -1193,12 +1212,22 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 			// with what it has. The parser reports both, and each front end
 			// reads the one it needs.
 			l.ranOut("<<")
+			// Said out loud by one shell and passed over by three, so it is
+			// recorded here and worded — or not — by the front end.
+			l.remarks = append(l.remarks, Remark{
+				Kind:  RemarkHeredocAtEOF,
+				Pos:   lastLine,
+				At:    r.OpPos,
+				Token: delim,
+			})
 			break
 		}
+		linePos := l.pos()
 		line, done := l.heredocLine(strip)
 		if done == delim {
 			break
 		}
+		lastLine = linePos
 		body.WriteString(line)
 	}
 

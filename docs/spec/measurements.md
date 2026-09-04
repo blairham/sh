@@ -2062,6 +2062,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `redir/a-target-that-expands-to-nothing` | `<shell>: 1: cannot create : Directory nonexistent~st=2` | `<shell>: line 1: $e: ambiguous redirect~st=1` | `<shell>: line 1: $e: ambiguous redirect~st=1` | `<shell>: $e: ambiguous redirect~st=1` | `<shell>: : cannot open~st=1` | `<shell>:1: no such file or directory: ~st=1` |
 | `redir/a-target-holding-a-pattern` | `nomatch-*` | `nomatch-*` | `nomatch-*` | `nomatch-*` | `nomatch-*` | `nomatch-*` |
 | `redir/a-quoted-target-with-a-space` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
+| `heredoc/no-delimiter-and-a-warning` | `body` | `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `X')~body` | `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `X')~body` | `body` | `body` | `body` |
+| `heredoc/no-delimiter-and-no-body` | *(no output, status 0)* | `<script>: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | `<script>: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `heredoc/a-body-that-runs-to-the-end` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` |
 | `heredoc/a-delimiter-that-never-matches` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` |
 | `redir/open-failure-wording` | `<shell>: 1: cannot open nosuchfile: No such file~st=2` | `<shell>: line 1: nosuchfile: No such file or directory~st=1` | `<shell>: line 1: nosuchfile: No such file or directory~st=1` | `<shell>: nosuchfile: No such file or directory~st=1` | `<shell>: nosuchfile: cannot open [No such file or directory]~st=1` | `<shell>:1: no such file or directory: nosuchfile~st=1` |
@@ -2113,14 +2115,23 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   e="a b"; echo hi > "$e"; cat "a b"; rm -f "a b"
   ```
-- `heredoc/a-body-that-runs-to-the-end` — a delimiter that does arrive, as the control for the one below it
+- `heredoc/no-delimiter-and-a-warning` — one shell remarks on a here-document whose delimiter never arrived and three say nothing. The remark is located where the input ran out and names the line the here-document began on, which is two different lines and the reason a parse-time remark carries two positions
   ```sh
-  { x=$(cat <<EOF
+  cat <<X
+  body
+  ```
+- `heredoc/no-delimiter-and-no-body` — the same with nothing between: the remark then names the here-document's own line in both places, which is what says the location is the last line that had something on it rather than one past the end
+  ```sh
+  cat <<X
+  ```
+- `heredoc/a-body-that-runs-to-the-end` — a delimiter that does arrive, as the control for the one below it — and with standard error no longer discarded, that nobody warns when it does
+  ```sh
+  x=$(cat <<EOF
   body
   EOF
-  ); } 2>/dev/null; echo "[$x]"
+  ); echo "[$x]"
   ```
-- `heredoc/a-delimiter-that-never-matches` — the terminator has a leading space, so it is not the delimiter and the body runs to the end of the input. Every shell takes it and runs the command — this made it a syntax error. Standard error is discarded because one shell warns about it and three say nothing, and the warning is a wording rather than the behavior this pins
+- `heredoc/a-delimiter-that-never-matches` — the terminator has a leading space, so it is not the delimiter and the body runs to the end of the input. Every shell takes it and runs the command — this made it a syntax error. Standard error is still discarded here, and the reason changed: the warning about it is now produced, but this body is inside a backquoted substitution, which the one shell that warns re-parses while carrying its line counter on from the outer input — so a three-line script is remarked on at line 5. The two cases above pin the warning where the lines are the file's own
   ```sh
   { x=`cat <<EOF
   a)

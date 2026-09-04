@@ -493,6 +493,9 @@ func Apply(r *interp.Runner) {
 	// No `compgen` here; it is bash's alone.
 	r.Unregister("compgen")
 	r.Unregister("complete")
+	// And neither `mapfile` nor its other name; both are bash's alone.
+	r.Unregister("mapfile")
+	r.Unregister("readarray")
 	// This shell has no `enable`.
 	r.Unregister("enable")
 	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })

@@ -3027,6 +3027,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `path/non-executable-is-skipped` | `from-b` | `from-b` | `from-b` | `from-b` | `from-b` | `from-b` |
 | `path/unrunnable-is-126-not-127` | `<shell>: 1: ./ne: Permission denied~st=126` | `<shell>: line 1: ./ne: Permission denied~st=126` | `<shell>: line 1: ./ne: Permission denied~st=126` | `<shell>: ./ne: Permission denied~st=126` | `<shell>: ./ne: cannot execute [Permission denied]~st=126` | `<shell>:1: permission denied: ./ne~st=126` |
 | `path/directory-as-a-command` | `<shell>: 1: ./adir: Permission denied~st=126` | `<shell>: line 1: ./adir: Is a directory~st=126` | `<shell>: line 1: ./adir: Is a directory~st=126` | `<shell>: ./adir: is a directory~st=126` | `<shell>: ./adir: cannot execute [Is a directory]~st=126` | `<shell>:1: permission denied: ./adir~st=126` |
+| `path/directory-on-path-is-walked-past` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` |
+| `path/directory-on-path-alone-diverges` | `<shell>: 1: target: Permission denied~st=127` | `<shell>: line 1: target: command not found~st=127` | `<shell>: line 1: target: command not found~st=127` | `<shell>: target: command not found~st=127` | `<shell>: target: cannot execute [Is a directory]~st=126` | `<shell>:1: permission denied: target~st=126` |
 | `path/missing-path-is-not-a-missing-name` | `<shell>: 1: ./nope: not found~st=127` | `<shell>: line 1: ./nope: No such file or directory~st=127` | `<shell>: line 1: ./nope: No such file or directory~st=127` | `<shell>: ./nope: No such file or directory~st=127` | `<shell>: ./nope: not found~st=127` | `<shell>:1: no such file or directory: ./nope~st=127` |
 | `cmd/command-v-names-a-builtin` | `echo` | `echo` | `echo` | `echo` | `echo` | `echo` |
 | `cmd/command-v-names-an-external-by-path` | `/bin/ls` | `/bin/ls` | `/bin/ls` | `/bin/ls` | `/bin/ls` | `/bin/ls` |
@@ -3066,6 +3068,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `path/directory-as-a-command` — 126 as well, and the reason diverges: bash and ksh93 check for a directory and say so, dash and zsh report the permission error execve returns
   ```sh
   mkdir -p adir; ./adir; echo "st=$?"
+  ```
+- `path/directory-on-path-is-walked-past` — a directory whose name matches the command does not stop the PATH search — the shim-directory-early-on-PATH arrangement every version manager relies on
+  ```sh
+  mkdir -p first/target real; printf '#!/bin/sh\necho ran\n' > real/target; chmod +x real/target; PATH=$PWD/first:$PWD/real; target; echo "st=$?"
+  ```
+- `path/directory-on-path-alone-diverges` — when the directory was the only match the panel splits three ways: bash says never found (127), dash names it and still says 127, ksh93 and zsh name it at 126
+  ```sh
+  mkdir -p only/target; PATH=$PWD/only; target; echo "st=$?"
   ```
 - `path/missing-path-is-not-a-missing-name` — a path that is not there and a bare name PATH never had are both 127 and are worded differently in three of the four
   ```sh

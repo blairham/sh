@@ -218,6 +218,11 @@ type Diagnostics struct {
 	// CdStatus is what that reports. dash says 2 and the other three say 1.
 	// Zero means the substrate's own, 1.
 	CdStatus int
+	// DirectoryOnPathStatus is what a PATH search whose only match was a
+	// directory reports, in a dialect that keeps the directory as its
+	// answer. dash says 127 — the message names the candidate and the
+	// status says not found — where ksh93 and zsh say 126. Zero means 126.
+	DirectoryOnPathStatus int
 	// CdHomeNotSet is `cd` with no operand and no HOME. One verb: the name.
 	// Only the two dialects that treat it as an error say anything.
 	CdHomeNotSet string

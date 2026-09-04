@@ -893,6 +893,18 @@ type Semantics struct {
 	// shell searches the current directory for it.
 	EmptyPathIsTheCurrentDirectory Answer
 
+	// DirectoryOnPathIsACandidate keeps a directory the PATH search found as
+	// the failed candidate when no later entry runs, so the report names the
+	// directory rather than saying the command was never found.
+	//
+	// Every shell measured continues the search past the directory — that is
+	// unanimous, and is what makes a shim directory early on PATH work at
+	// all. They part ways only when nothing later matches: bash reports the
+	// name as not found at all (status 127), where dash, ksh93 and zsh
+	// report the directory they could not run. dash alone keeps 127 for the
+	// status even then, which is DirectoryOnPathStatus's question.
+	DirectoryOnPathIsACandidate Answer
+
 	// ExecTakesOptions lets `exec` read options of its own, such as
 	// `-a name` to choose the argv[0] the command sees. True in bash, ksh93
 	// and zsh; false in dash, where a leading `-a` is the name of a command
@@ -1362,6 +1374,9 @@ func PosixSemantics() Semantics {
 		// makes no exception for the whole variable being empty, so the
 		// preset follows the text and the majority together.
 		EmptyPathIsTheCurrentDirectory: Yes,
+		// The standard's 126 is for a command that was found and cannot be
+		// executed; a directory qualifies, and three of the four report it.
+		DirectoryOnPathIsACandidate: Yes,
 		// The standard says `times` takes no operands and does not say what to
 		// do with one; the two shells that follow it most closely ignore it.
 		TimesRejectsArguments: No,

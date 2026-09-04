@@ -304,6 +304,9 @@ func Diagnostics() interp.Diagnostics {
 		// dash hands the path to execve rather than checking first, so a
 		// directory comes back as a permission error.
 		DirectoryReason: "Permission denied",
+		// And when that directory was the PATH search's only match, dash
+		// names it in the message and still numbers the failure 127.
+		DirectoryOnPathStatus: 127,
 	}
 }
 

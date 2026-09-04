@@ -41,6 +41,9 @@ type pathError struct {
 	resolved string
 	// missing distinguishes "no such command" from "found it, cannot run it".
 	missing bool
+	// onPathDirectory marks a search whose only match was a directory, which
+	// one dialect numbers 127 while still naming the candidate.
+	onPathDirectory bool
 	// err is the underlying failure, for the reason text and for a Gate's
 	// event stream.
 	err error
@@ -84,8 +87,10 @@ func (r *Runner) lookPath(name string) (string, error) {
 
 	// A file that exists and will not run is remembered rather than returned:
 	// a later entry may still have a good one, and only if none does is this
-	// the answer.
-	var denied *pathError
+	// the answer. A directory of the matching name is remembered apart from
+	// it, because whether a directory counts as a candidate at all is the
+	// one part of this search the panel disagrees on.
+	var denied, dirDenied *pathError
 	path, _ := r.getVar("PATH")
 	for _, dir := range r.pathElements(path) {
 		if dir == "" {
@@ -96,12 +101,24 @@ func (r *Runner) lookPath(name string) (string, error) {
 		if err == nil {
 			return candidate, nil
 		}
-		if !errors.Is(err, os.ErrNotExist) && denied == nil {
+		switch {
+		case errors.Is(err, errIsDirectory):
+			if dirDenied == nil {
+				dirDenied = &pathError{
+					name: name, resolved: candidate,
+					onPathDirectory: true, err: err,
+				}
+			}
+		case !errors.Is(err, os.ErrNotExist) && denied == nil:
 			denied = &pathError{name: name, resolved: candidate, err: err}
 		}
 	}
 	if denied != nil {
 		return "", denied
+	}
+	if dirDenied != nil &&
+		r.ask(r.sem().DirectoryOnPathIsACandidate, "a directory found on PATH standing as the failed candidate") {
+		return "", dirDenied
 	}
 	return "", &pathError{name: name, missing: true, err: errNotFound}
 }
@@ -231,6 +248,11 @@ func (r *Runner) cannotRun(err error, how naming) int {
 		}
 		r.diagf("%s\n", Wording(orElse(how.cannotExecute, r.diag().CannotExecute),
 			"%[1]s: %[2]s", name, r.diag().reasonText(why)))
+		if pe.onPathDirectory && r.diag().DirectoryOnPathStatus != 0 {
+			// One dialect names the directory it found and then numbers the
+			// failure as if it had found nothing.
+			return r.diag().DirectoryOnPathStatus
+		}
 		return 126
 	}
 

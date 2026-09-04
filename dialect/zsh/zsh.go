@@ -109,6 +109,12 @@ func Semantics() interp.Semantics {
 	s.EchoLastEscapeFlagWins = interp.No
 	s.EchoExpandsHexEscapes = interp.Yes
 	s.EchoExpandsEscEscape = interp.Yes
+	// read takes -r and -s, -A with the array as the first operand, and the
+	// same -d, -t and -u as the others — but no counts: -N is a bad option
+	// here and -n is a flag it reads and, outside completion widgets, acts
+	// on not at all. zsh's -t may also stand alone as a poll; that spelling
+	// is not modeled, so here it reads the word after it as its seconds.
+	s.ReadOptions = "rsnAd:t:u:"
 	s.ArithLeadingZeroIsOctal = interp.No
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes
@@ -277,10 +283,18 @@ func Diagnostics() interp.Diagnostics {
 			"readonly": "%[2]s: can't create readonly array elements",
 		},
 		SubscriptRefusalNamesBuiltin: map[string]bool{"readonly": true},
-		ReadonlyVariable:             "read-only variable: %s",
-		TraceQuoting:                 interp.QuoteShell,
-		TraceStyle:                   interp.TraceNameLine,
-		TraceForHeader:               interp.TraceForAssign,
+		UnimplementedOptionLetters: map[string]string{
+			// read's letters about a terminal or the line editor — raw -k
+			// keys, -q's one keystroke, -e/-E echoing, -z and the zle pair
+			// -c/-l — plus -p, the coprocess. zsh's read also says nothing
+			// at all about a dead -u descriptor and reports 1, which is why
+			// no ReadBadFileDescriptor wording appears here.
+			"read": "kqeEzclp",
+		},
+		ReadonlyVariable: "read-only variable: %s",
+		TraceQuoting:     interp.QuoteShell,
+		TraceStyle:       interp.TraceNameLine,
+		TraceForHeader:   interp.TraceForAssign,
 		// zsh names the last token it read and nothing else.
 		EvalNaming:       interp.SourceReplacesShell,
 		SourceFileNaming: interp.SourceReplacesShell,

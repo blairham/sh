@@ -1340,6 +1340,26 @@ var Corpus = []Case{
 		Why:     "the complaint about a bundle names the letter the walk stopped on, never the word it rode in on: `-x` in all four, including the dialect recorded as whole-word naming from `export -Q`, where the letter and the word are the same thing. Four wordings, zsh reporting 1 to everyone else's 2, and all four carry on — `read` is not a special builtin, so nobody's fatality rule reaches it",
 	},
 	{
+		ID: "read/fields-into-an-array", Category: "builtins",
+		Snippet: `echo "a b c" | { read -a arr; echo "[${arr[1]}]"; }`,
+		Why:     "the letter is the dialect's before the behavior is: bash's -a puts the fields in the named array, ksh93 spells the option -A and refuses -a with its usage, zsh refuses it in one line, and dash refuses the option and then the subscript too",
+	},
+	{
+		ID: "read/until-a-delimiter", Category: "builtins",
+		Snippet: `printf 'a:b c\n' | { read -d : v; echo "[$v]"; }`,
+		Why:     "-d renames the delimiter: the three shells with the letter stop at the colon and leave the rest unread — the newline they would have stopped at now ordinary input — and dash refuses the option",
+	},
+	{
+		ID: "read/a-count-of-characters", Category: "builtins",
+		Snippet: `printf 'abcdef' | { read -n 3 v; echo "[$v]"; }`,
+		Why:     "-n takes a count in bash and ksh93 and three characters arrive; zsh reads the same -n as a bare flag for its completion widgets, so the count becomes the name read into and v stays empty — one spelling, two shapes",
+	},
+	{
+		ID: "read/silent-still-reads", Category: "builtins",
+		Snippet: `printf 'secret\n' | { read -s v; echo "v=$v"; }`,
+		Why:     "-s is about a terminal's echo and there is no terminal here, so it must parse, read and stay quiet: skipping the word unread is how a password gets echoed, and refusing it fails a script that works everywhere else (#321). dash alone has no -s",
+	},
+	{
 		ID: "redir/a-target-that-is-not-one-word", Category: "redirection",
 		Snippet: `e="a b"; echo hi > $e; echo "st=$?"`,
 		Why:     "a redirection target is expanded and then, in three of the four, neither split nor matched — so `> $e` writes to a file called `a b`. bash expands it as an ordinary word and refuses anything that is not exactly one, naming the target *as written*. Doing bash's expansion and taking the first field is the answer nobody gives, and it wrote to `a`",

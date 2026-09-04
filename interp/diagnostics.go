@@ -368,6 +368,21 @@ type Diagnostics struct {
 	// which of the two happened.
 	UnimplementedOptionLetters map[string]string
 
+	// ReadBadNumber is a count, timeout or descriptor argument to `read`
+	// that is not a number, taking the word. The panel has a wording per
+	// shell per letter; this is one for all of them, and a dialect that
+	// wants the measured ones letter by letter is a refinement this field
+	// does not block.
+	ReadBadNumber string
+	// ReadBadFileDescriptor is `read -u` on a descriptor this shell holds
+	// nothing open at, taking the number as given. Empty means nothing is
+	// said — one shell in the panel reports 1 in silence — so this path has
+	// no fallback wording.
+	ReadBadFileDescriptor string
+	// ReadTimeoutStatus is what an expired `read -t` reports. bash says 128
+	// plus SIGALRM's number; ksh93 and zsh say 1. Zero means 1.
+	ReadTimeoutStatus int
+
 	// ShiftBadNumber is an operand to `shift` that is not one, taking the
 	// word. Only reached in a dialect that reads the operand as a count
 	// rather than as an option: bash names it and asks for a number, dash

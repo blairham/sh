@@ -1575,6 +1575,66 @@ survives only for a word that begins with `--`: `export --foo` is
 `bad option: -o` — zsh skipped the dashes, took `f` as one of export's own
 letters, and stopped on the `o` it does not know.
 
+## read's options are the dialect's letters
+
+`Semantics.ReadOptions`, in the getopts spelling — a `:` after a letter
+whose argument follows it. Measured (oracle runs, 2026-09-04, bash 5.3 and
+3.2 agreeing throughout except where 3.2 lacks a letter):
+
+    bash   rsa:d:n:N:t:u:    plus -e -E -i -p, unimplemented here
+    ksh93  rsAd:n:N:t:u:     plus -C -p -S -v and --version, unimplemented
+    zsh    rsnAd:t:u:        plus -e -E -k -q -z -c -l -p, unimplemented
+    dash   r                 (and -p PROMPT, not yet modeled)
+
+The letters themselves diverge before the behaviors do:
+
+- **The array.** bash's `-a` takes the array's name as the option's argument
+  (`read -aarr` works) and leaves later operands untouched — `x=keep`
+  survives `read -a arr x`. ksh93 and zsh spell it `-A` with no argument:
+  the first operand names the array, and ksh93 clears the names after it
+  (`x=` after `read -A arr x`), where zsh refuses a second one outright
+  (not modeled). Fields replace the whole array in all three.
+- **The delimiter.** `-d :` stops the read at the colon and makes the
+  newline ordinary input; only the argument's first character speaks
+  (`-d xy` stops at `x`). An empty argument means NUL in bash and zsh;
+  ksh93 reads through a NUL instead (not modeled — it takes a NUL in the
+  input to see). Without -r, bash keeps an escaped delimiter as data
+  (`a\:b` to `:` is `a:b`) and still folds a backslash-newline away;
+  ksh93 and zsh fold the escaped delimiter pair away entirely and keep a
+  backslash-newline (both not modeled — the substrate follows bash here).
+- **The counts.** `-n N` reads at most N characters, the delimiter still
+  ending it early, and the text splits as any read's does. `-N N` reads
+  exactly N: delimiter ordinary, backslash ordinary, the text handed to
+  the first name whole and the rest cleared. zsh has neither count: its
+  `-N` is a bad option and its `-n` is a bare flag for completion widgets
+  that changes nothing here — so a count after it is read *into*, which is
+  why `read -n 3 v` leaves v empty there.
+- **Ends short of the count.** `printf 'ab' | read -n 3 v` is st=1 in bash
+  and st=0 in ksh93, both keeping `ab` — `ReadPartialCountSucceeds`.
+  The same input under `-N 5` reports 1 in both, bash keeping `ab` and
+  ksh93 assigning nothing — `ReadExactCountKeepsPartial`. Wholly empty
+  input is st=1 with nothing assigned everywhere.
+- **Silence.** `printf 'x\n' | read -s v` reads x, prints nothing and
+  reports 0 in bash, ksh93 and zsh: away from a terminal `-s` is a no-op
+  that must still parse. dash refuses it.
+- **The timeout.** `-t SECS`, fractions allowed; input already waiting is
+  read as if the flag were absent. Expiry clears the variables and reports
+  142 in bash (128 plus SIGALRM) and 1 in ksh93 and zsh —
+  `Diagnostics.ReadTimeoutStatus`. bash's `-t 0` polls for waiting input
+  without reading; the substrate reports the timeout there instead, a
+  deferred difference. zsh's `-t` may stand alone as a poll; modeled as
+  argument-taking. ksh93 reads a non-numeric timeout as none at all (not
+  modeled).
+- **The descriptor.** `-u FD` reads from the shell's own table — `exec
+  5<file; read -u 5 v` — with 0 the standard input. A number nothing is
+  open at is status 1 three ways: bash says `9: invalid file descriptor:
+  Bad file descriptor`, ksh93 `bad file unit number [Bad file descriptor]`,
+  zsh nothing at all — `Diagnostics.ReadBadFileDescriptor`, where an empty
+  wording is the answer, not a gap.
+- **A word where a number belongs** (`-n bogus`, `-t bogus`, `-u bogus`) is
+  refused with one substrate wording and status 1; the panel words it per
+  shell per letter (bash's `-n` case matches the substrate's), deferred.
+
 ## A write that failed is not a command that worked
 
 `echo hi >&-` closes the descriptor before the builtin writes, so the write

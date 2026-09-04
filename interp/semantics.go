@@ -95,6 +95,26 @@ type Semantics struct {
 	// axis produces.
 	EchoInterpretsEscapes Answer
 
+	// ReadOptions is the set of letters `read` takes, a `:` after a letter
+	// marking one whose argument follows it — the getopts convention, the
+	// same one the shared option reader speaks. The letters are the
+	// dialect's own: bash spells the array option `-a` and takes the array's
+	// name as the option's argument, ksh93 and zsh spell it `-A` and take
+	// the name as the first operand, and zsh reads `-n` as a flag where bash
+	// and ksh93 read a count after it. Empty means `r`, the one letter POSIX
+	// gives the builtin.
+	ReadOptions string
+	// ReadPartialCountSucceeds decides `read -n N` when the input ends
+	// after some but fewer than N characters: ksh93 calls the read a
+	// success and bash reports 1, both keeping what arrived. Asked only
+	// there — a full count, a delimiter, or a wholly empty input answers
+	// the same way everywhere.
+	ReadPartialCountSucceeds Answer
+	// ReadExactCountKeepsPartial decides what `read -N N` leaves behind
+	// when the input ends short: bash assigns the partial text and ksh93
+	// assigns nothing, both reporting 1. Asked only on that partial text.
+	ReadExactCountKeepsPartial Answer
+
 	// BuiltinWriteErrorFailsTheCommand makes a builtin whose output write
 	// failed — into a descriptor closed with `>&-`, most plainly — report
 	// status 1. True in bash, dash and ksh93; zsh keeps the builtin's own
@@ -1370,9 +1390,13 @@ func PosixSemantics() Semantics {
 		BuiltinWriteErrorFailsTheCommand: Yes,
 		// The XSI echo: -n alone, no \x, no \e. The letters the dialects
 		// add are theirs to add.
-		EchoOptions:             "n",
-		EchoExpandsHexEscapes:   No,
-		EchoExpandsEscEscape:    No,
+		EchoOptions:           "n",
+		EchoExpandsHexEscapes: No,
+		EchoExpandsEscEscape:  No,
+		// The POSIX read: -r alone. The counts, delimiters and descriptors
+		// the dialects add are theirs to add, and the two count axes are
+		// unreachable without the letters that raise them.
+		ReadOptions:             "r",
 		LengthOfSpecialIsCount:  Yes,
 		ArithLeadingZeroIsOctal: Yes,
 		// dash is the panel's POSIX-faithful member and the only one

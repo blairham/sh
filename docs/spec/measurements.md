@@ -521,6 +521,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `read/an-unterminated-last-line-is-dropped` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` |
 | `read/options-cluster-in-one-word` | `[x\]` | `[x\]` | `[x\]` | `[x\]` | `[x\]` | `[x\]` |
 | `read/a-bad-letter-in-a-bundle-is-named-alone` | `<shell>: 1: read: Illegal option -x~st=2~after` | `<shell>: line 1: read: -x: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~st=2~after` | `<shell>: line 1: read: -x: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~st=2~after` | `<shell>: line 0: read: -x: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]~st=2~after` | `<shell>: read: -x: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]~st=2~after` | `<shell>:read:1: bad option: -x~st=1~after` |
+| `read/fields-into-an-array` | `<shell>: 1: read: Illegal option -a~<shell>: 1: Bad substitution` *(status 2)* | `[b]` | `[b]` | `[b]` | `<shell>: read: -a: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]~[]` | `<shell>:read:1: bad option: -a~[]` |
+| `read/until-a-delimiter` | `<shell>: 1: read: Illegal option -d~[]` | `[a]` | `[a]` | `[a]` | `[a]` | `[a]` |
+| `read/a-count-of-characters` | `<shell>: 1: read: Illegal option -n~[]` | `[abc]` | `[abc]` | `[abc]` | `[abc]` | `[]` |
+| `read/silent-still-reads` | `<shell>: 1: read: Illegal option -s~v=` | `v=secret` | `v=secret` | `v=secret` | `v=secret` | `v=secret` |
 | `name/unset-f-on-a-name-no-function-could-have` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>: unset: 1x: invalid function name~st=1` | `<shell>:unset:1: no such hash table element: 1x~st=1` |
 | `name/unset-f-on-a-name-that-is-merely-undefined` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>:unset:1: no such hash table element: nosuch~st=1` |
 | `name/a-lone-dash-given-to-a-builtin` | `unalias: - not found~st=1` | `<shell>: line 1: unalias: -: not found~st=1` | `<shell>: line 1: unalias: -: not found~st=1` | `<shell>: line 0: unalias: -: not found~st=1` | `st=1` | `<shell>:unalias:1: not enough arguments~st=1` |
@@ -610,6 +614,22 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `read/a-bad-letter-in-a-bundle-is-named-alone` — the complaint about a bundle names the letter the walk stopped on, never the word it rode in on: `-x` in all four, including the dialect recorded as whole-word naming from `export -Q`, where the letter and the word are the same thing. Four wordings, zsh reporting 1 to everyone else's 2, and all four carry on — `read` is not a special builtin, so nobody's fatality rule reaches it
   ```sh
   read -rx v </dev/null; echo "st=$?"; echo after
+  ```
+- `read/fields-into-an-array` — the letter is the dialect's before the behavior is: bash's -a puts the fields in the named array, ksh93 spells the option -A and refuses -a with its usage, zsh refuses it in one line, and dash refuses the option and then the subscript too
+  ```sh
+  echo "a b c" | { read -a arr; echo "[${arr[1]}]"; }
+  ```
+- `read/until-a-delimiter` — -d renames the delimiter: the three shells with the letter stop at the colon and leave the rest unread — the newline they would have stopped at now ordinary input — and dash refuses the option
+  ```sh
+  printf 'a:b c\n' | { read -d : v; echo "[$v]"; }
+  ```
+- `read/a-count-of-characters` — -n takes a count in bash and ksh93 and three characters arrive; zsh reads the same -n as a bare flag for its completion widgets, so the count becomes the name read into and v stays empty — one spelling, two shapes
+  ```sh
+  printf 'abcdef' | { read -n 3 v; echo "[$v]"; }
+  ```
+- `read/silent-still-reads` — -s is about a terminal's echo and there is no terminal here, so it must parse, read and stay quiet: skipping the word unread is how a password gets echoed, and refusing it fails a script that works everywhere else (#321). dash alone has no -s
+  ```sh
+  printf 'secret\n' | { read -s v; echo "v=$v"; }
   ```
 - `name/unset-f-on-a-name-no-function-could-have` — two of the panel are quiet here and two are not, and the two that speak are not answering the same question — one is judging the name, which `1x` could never be, and the other is reporting that its table holds nothing under it. The case next to this one is what tells them apart
   ```sh

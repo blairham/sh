@@ -6,12 +6,14 @@ package interp
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // builtins are commands the shell runs itself.
@@ -920,7 +922,7 @@ func biPwd(r *Runner, _ context.Context, args []string) int {
 //
 // Without -r a backslash escapes the character after it, including a newline,
 // which is why -r is what scripts should use and rarely do.
-func biRead(r *Runner, _ context.Context, args []string) int {
+func biRead(r *Runner, ctx context.Context, args []string) int {
 	// Every leading `-` word was skipped here, whatever it was — so
 	// `read -s v` echoed what was meant to be hidden and `read -n 1 v` read
 	// a whole line, both without a word said. All four refuse an option they
@@ -930,17 +932,115 @@ func biRead(r *Runner, _ context.Context, args []string) int {
 	// Through the shared reader, because options bundle: `read -ra arr` is
 	// `-r -a arr` in every shell, and reading whole words here refused the
 	// bundle wholesale — `-ra is not implemented yet` — with the letter this
-	// builtin does implement inside it (#347).
-	args, opts, code := r.builtinOptions("read", args, "r")
+	// builtin does implement inside it (#347). The letters are the
+	// dialect's: `n` takes a count in the two shells that count and is a
+	// flag in the one where it decorates completion, so even the shape of
+	// the optstring is an answer rather than a constant.
+	letters := r.sem().ReadOptions
+	if letters == "" {
+		letters = "r"
+	}
+	args, opts, optArg, code := r.builtinOptionsArg("read", args, letters)
 	if code != 0 {
 		return code
 	}
 	raw := strings.Contains(opts, "r")
-	if len(args) == 0 {
-		args = []string{"REPLY"}
+	// -s is parsed and deliberately does nothing more: silence is about a
+	// terminal's echo, and this runner never echoes what it reads. Parsing
+	// it is the point — measured, `printf x | read -s v` reads x and prints
+	// nothing in every shell that has the letter, terminal or none, and
+	// skipping the word instead once let a password echo (#321).
+
+	// The stream: standard input, or the descriptor -u names — resolved
+	// against the shell's own table, where `exec 5<file` put it.
+	in := r.In()
+	if word, ok := optArg['u']; ok {
+		fd, numeric := atoi(word)
+		if !numeric || fd < 0 {
+			return r.readBadNumber(word)
+		}
+		rd, open := r.readerForFd(fd)
+		if !open {
+			// Three answers with one status: bash and ksh93 complain in
+			// their own words and zsh says nothing, so an empty wording is
+			// the dialect's answer rather than a gap to paper over.
+			if w := r.diag().ReadBadFileDescriptor; w != "" {
+				// Through Wording for the format handling alone — the
+				// fallback is never reached, because an empty wording is an
+				// answer here: one shell reports this failure in silence.
+				r.diagf("%s\n", Wording(w, w, word))
+			}
+			return 1
+		}
+		in = rd
 	}
 
-	line, atEOF := r.readLine(raw)
+	// The delimiter: a newline unless -d renamed it. The argument's first
+	// character speaks — `read -d xy` stops at the x in every shell with
+	// the letter — and an empty argument means NUL in the two measured
+	// saying so. (ksh93 reads through a NUL instead; seeing that difference
+	// takes a NUL in the input, which is also what it takes to care.)
+	delim := byte('\n')
+	if word, ok := optArg['d']; ok {
+		delim = 0
+		if word != "" {
+			delim = word[0]
+		}
+	}
+
+	// The counts: -n reads at most N characters, still stopping at the
+	// delimiter; -N reads exactly N, the delimiter ordinary, backslash
+	// ordinary, and the text handed over whole rather than split.
+	count, exact := -1, false
+	if word, ok := optArg['n']; ok {
+		n, numeric := atoi(word)
+		if !numeric || n < 0 {
+			return r.readBadNumber(word)
+		}
+		count = n
+	}
+	if word, ok := optArg['N']; ok {
+		n, numeric := atoi(word)
+		if !numeric || n < 0 {
+			return r.readBadNumber(word)
+		}
+		count, exact = n, true
+	}
+
+	// The array: bash's -a names it in the option's argument and ignores
+	// any operands after it; ksh93 and zsh spell it -A and take the name as
+	// the first operand, clearing the names that follow. The letters
+	// differ, so the behaviors can ride them without an axis.
+	array := ""
+	if name, ok := optArg['a']; ok {
+		array = name
+	}
+	if strings.Contains(opts, "A") {
+		array = "REPLY"
+		if len(args) > 0 {
+			array, args = args[0], args[1:]
+		}
+	}
+
+	// The timeout, if the dialect has the letter: seconds, fractions
+	// allowed. Zero and expiry land in the same place — nothing read in the
+	// time given — and what that reports is the dialect's number.
+	timeout, timed := time.Duration(-1), false
+	if word, ok := optArg['t']; ok {
+		secs, err := strconv.ParseFloat(word, 64)
+		if err != nil || secs < 0 {
+			return r.readBadNumber(word)
+		}
+		timeout, timed = time.Duration(secs*float64(time.Second)), true
+	}
+
+	next := directByteSource(in)
+	if timed {
+		var stop func()
+		next, stop = r.timedByteSource(ctx, in, timeout)
+		defer stop()
+	}
+	text, end := readSegment(next, raw, delim, count, exact)
 
 	// A `read` that fails still assigns. All four shells clear the variables
 	// at end of input rather than leaving what was there, and the reason is
@@ -948,11 +1048,74 @@ func biRead(r *Runner, _ context.Context, args []string) int {
 	// stale value after the loop reads as the last line rather than as
 	// nothing. Assigning happens before the status is decided, not instead
 	// of it.
+	status := 0
+	switch end {
+	case endTimeout:
+		text = ""
+		status = orDefault(r.diag().ReadTimeoutStatus, 1)
+	case endEOF:
+		status = 1
+		switch {
+		case exact:
+			// Both shells with the letter report the short read; whether
+			// the partial text survives into the variable splits them.
+			if text != "" && !r.ask(r.sem().ReadExactCountKeepsPartial,
+				"a short `read -N` keeping what did arrive") {
+				text = ""
+			}
+		case count >= 0 && text != "":
+			// A full count and a wholly empty input answer the same way
+			// everywhere; only the partial fill asks.
+			if r.ask(r.sem().ReadPartialCountSucceeds,
+				"a short `read -n` counting as a success") {
+				status = 0
+			}
+		}
+	}
 
+	if len(args) == 0 && array == "" {
+		args = []string{"REPLY"}
+	}
+	// Only the -A spelling touches the operands after the array: it took its
+	// name from among them and clears the rest, where bash's -a leaves the
+	// names after its argument exactly as they were — both measured with
+	// `x=keep`.
+	clearRest := strings.Contains(opts, "A")
+	if exact {
+		// -N hands the text over whole: `read -N 5 x y` on `a b c` puts all
+		// five characters in x and nothing in y, measured in both shells
+		// with the letter.
+		if array != "" {
+			r.setArray(array, exactElems(text))
+			if clearRest {
+				for _, name := range args {
+					r.setVar(name, "")
+				}
+			}
+			return status
+		}
+		for i, name := range args {
+			v := ""
+			if i == 0 {
+				v = text
+			}
+			r.setVar(name, v)
+		}
+		return status
+	}
+	ifs, set := r.ifs()
+	fields := splitFields(text, ifs, set)
+	if array != "" {
+		r.setArray(array, fields)
+		if clearRest {
+			for _, name := range args {
+				r.setVar(name, "")
+			}
+		}
+		return status
+	}
 	// The last variable takes the whole remainder, which is what makes
 	// `read a b` put "c d" in b for input "a c d".
-	ifs, set := r.ifs()
-	fields := splitFields(line, ifs, set)
 	for i, name := range args {
 		switch {
 		case i >= len(fields):
@@ -963,10 +1126,189 @@ func biRead(r *Runner, _ context.Context, args []string) int {
 			r.setVar(name, fields[i])
 		}
 	}
-	if atEOF {
-		return 1
+	return status
+}
+
+// readBadNumber is a count, timeout or descriptor argument that is not a
+// number. The panel words this per shell per letter; one substrate wording
+// carries the fact until a dialect measures its own.
+func (r *Runner) readBadNumber(word string) int {
+	r.diagf("%s\n", Wording(r.diag().ReadBadNumber, "read: %[1]s: invalid number", word))
+	return 1
+}
+
+// readerForFd is the stream `read -u` names: standard input by its number,
+// anything past the named three from the shell's own table — which holds
+// what a redirection resolved to, exactly the "copied as it is now" a real
+// descriptor duplication means. A number nothing is open at, or one held by
+// something that cannot be read, is not a stream.
+func (r *Runner) readerForFd(fd int) (io.Reader, bool) {
+	if fd == 0 {
+		return r.stdin(), true
 	}
-	return 0
+	if v, held := r.fds[fd]; held {
+		rd, ok := v.(io.Reader)
+		return rd, ok
+	}
+	return nil, false
+}
+
+// exactElems is what `read -N` gives an array: the raw text as one element,
+// or none at all when nothing survived.
+func exactElems(text string) []string {
+	if text == "" {
+		return nil
+	}
+	return []string{text}
+}
+
+// How a readSegment ended: at the delimiter, at a satisfied count, at the
+// end of the input, or out of time. Only the last two mark a failure, and
+// they mark different ones.
+const (
+	endDelim = iota
+	endCount
+	endEOF
+	endTimeout
+)
+
+// A byte and how it arrived. evEOF and evTimeout carry no byte.
+const (
+	evByte = iota
+	evEOF
+	evTimeout
+)
+
+// directByteSource reads the stream a byte at a time, in the calling
+// goroutine — the path every read without a deadline takes.
+func directByteSource(in io.Reader) func() (byte, int) {
+	var ch [1]byte
+	return func() (byte, int) {
+		n, err := in.Read(ch[:])
+		if n == 0 || err != nil {
+			return 0, evEOF
+		}
+		return ch[0], evByte
+	}
+}
+
+// timedByteSource reads the stream a byte at a time until the deadline. The
+// reads happen on their own goroutine — an io.Reader cannot be told to stop
+// waiting — and each is made only when asked for, so a satisfied read never
+// reads ahead into input a later `read` should get. A read still in flight
+// when the deadline passes is abandoned; if its byte ever arrives it is
+// lost, which is the cost of a timeout over a plain pipe and is confined to
+// the stream the timeout was used on. stop releases the goroutine and must
+// be called once the segment is read.
+func (r *Runner) timedByteSource(ctx context.Context, in io.Reader, timeout time.Duration) (next func() (byte, int), stop func()) {
+	if timeout <= 0 {
+		// Out of time before the first byte: `read -t 0` lands here, so it
+		// reports the timeout rather than polling. bash answers the poll
+		// with whether input is waiting, which a blocking reader cannot say
+		// without the read this path exists to avoid — a measured, deferred
+		// difference.
+		return func() (byte, int) { return 0, evTimeout }, func() {}
+	}
+	tctx, cancel := context.WithTimeout(ctx, timeout)
+	type event struct {
+		b   byte
+		eof bool
+	}
+	req := make(chan struct{})
+	// Buffered by one, so a byte or an end-of-file arriving after the
+	// deadline parks in the channel instead of parking the goroutine: the
+	// sender loops back to a closed req and exits.
+	resp := make(chan event, 1)
+	go func() {
+		var ch [1]byte
+		for range req {
+			n, err := in.Read(ch[:])
+			if n == 0 || err != nil {
+				resp <- event{eof: true}
+				return
+			}
+			resp <- event{b: ch[0]}
+		}
+	}()
+	done := false
+	next = func() (byte, int) {
+		if done {
+			return 0, evEOF
+		}
+		req <- struct{}{}
+		select {
+		case ev := <-resp:
+			if ev.eof {
+				done = true
+				return 0, evEOF
+			}
+			return ev.b, evByte
+		case <-tctx.Done():
+			done = true
+			return 0, evTimeout
+		}
+	}
+	stop = func() {
+		cancel()
+		close(req)
+	}
+	return next, stop
+}
+
+// readSegment reads until the delimiter, the count, or the end of the input,
+// honoring the backslash unless raw: an escaped delimiter is data with the
+// backslash dropped, and an escaped newline vanishes whole — the line
+// continuation — whatever the delimiter is. With exact set the count is the
+// only stop: the delimiter and the backslash are ordinary bytes, which is
+// what makes `read -N` the way to take input exactly as it came.
+//
+// count limits the characters as delivered, after a continuation has folded
+// its two away; negative means unlimited. See docs/spec/semantics.md,
+// "read's options are the dialect's letters".
+func readSegment(next func() (byte, int), raw bool, delim byte, count int, exact bool) (text string, end int) {
+	var b strings.Builder
+	for {
+		if count >= 0 && b.Len() >= count {
+			return b.String(), endCount
+		}
+		c, ev := next()
+		switch ev {
+		case evEOF:
+			return b.String(), endEOF
+		case evTimeout:
+			return b.String(), endTimeout
+		}
+		if exact {
+			b.WriteByte(c)
+			continue
+		}
+		escaped := !raw && strings.HasSuffix(b.String(), "\\")
+		if c == delim {
+			if !escaped {
+				return b.String(), endDelim
+			}
+			s := strings.TrimSuffix(b.String(), "\\")
+			b.Reset()
+			b.WriteString(s)
+			if delim != '\n' {
+				// An escaped delimiter is data — `a\:b` read to `:` is
+				// `a:b` — where an escaped newline is a continuation and
+				// leaves nothing.
+				b.WriteByte(delim)
+			}
+			continue
+		}
+		if c == '\n' && escaped {
+			// The continuation holds under -d too: a backslash-newline
+			// vanishes whole even when the newline is no longer the
+			// delimiter.
+			s := strings.TrimSuffix(b.String(), "\\")
+			b.Reset()
+			b.WriteString(s)
+			continue
+		}
+		b.WriteByte(c)
+	}
 }
 
 // readLine reads one line, honoring a line continuation unless raw, and says
@@ -978,27 +1320,8 @@ func biRead(r *Runner, _ context.Context, args []string) int {
 // last unterminated line twice — once as the line, once as the empty read
 // after it.
 func (r *Runner) readLine(raw bool) (line string, atEOF bool) {
-	var b strings.Builder
-	var ch [1]byte
-	in := r.In()
-	for {
-		n, err := in.Read(ch[:])
-		if n == 0 || err != nil {
-			return b.String(), true
-		}
-		c := ch[0]
-		if c == '\n' {
-			s := b.String()
-			// A trailing backslash continues onto the next line, unless -r.
-			if !raw && strings.HasSuffix(s, "\\") {
-				b.Reset()
-				b.WriteString(strings.TrimSuffix(s, "\\"))
-				continue
-			}
-			return s, false
-		}
-		b.WriteByte(c)
-	}
+	text, end := readSegment(directByteSource(r.In()), raw, '\n', -1, false)
+	return text, end == endEOF
 }
 
 // biLocal makes variables local to the running function.

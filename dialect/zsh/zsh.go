@@ -448,6 +448,7 @@ func Apply(r *interp.Runner) {
 	registerEnable(r)
 	// No `compgen` here; it is bash's alone.
 	r.Unregister("compgen")
+	r.Unregister("complete")
 	// The `set -o` names beyond the ones every shell has.
 	r.AddSetOptions(
 		"braceexpand",

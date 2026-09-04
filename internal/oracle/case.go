@@ -2713,6 +2713,16 @@ echo unreachable`,
 		Why:     "zsh hashes only what PATH holds, so a builtin is 'no such command' there; measured with shift because macOS ships /usr/bin/cd",
 	},
 	{
+		ID: "complete/registers-in-a-script", Category: "builtins",
+		Snippet: `complete -W "a b" foo; echo "st=$?"; complete -p foo`,
+		Why:     "every bash_completion.d file runs in a non-interactive shell and must register at status 0 and read itself back; the other three have no such command and die at 127, which is what broke carapace here",
+	},
+	{
+		ID: "complete/removes-and-misses", Category: "builtins",
+		Snippet: `complete -W x foo; complete -r foo; echo "r=$?"; complete -p foo; echo "p=$?"`,
+		Why:     "-r takes a spec away and naming an unregistered command is an error at 1, in the shell that has the builtin",
+	},
+	{
 		ID: "path/directory-on-path-is-walked-past", Category: "command lookup",
 		Snippet: `mkdir -p first/target real; printf '#!/bin/sh\necho ran\n' > real/target; chmod +x real/target; PATH=$PWD/first:$PWD/real; target; echo "st=$?"`,
 		Why:     "a directory whose name matches the command does not stop the PATH search — the shim-directory-early-on-PATH arrangement every version manager relies on",

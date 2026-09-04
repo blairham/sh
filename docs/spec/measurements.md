@@ -549,6 +549,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `hash/bare-and-r-succeed-everywhere` | `st=0~r=0` | `hash: hash table empty~st=0~r=0` | `st=0~r=0` | `hash: hash table empty~st=0~r=0` | `st=0~r=0` | `st=0~r=0` |
 | `hash/a-missing-name-diverges` | `<shell>: 1: hash: nosuchcmd-xyz: not found~st=1` | `<shell>: line 1: hash: nosuchcmd-xyz: not found~st=1` | `<shell>: line 1: hash: nosuchcmd-xyz: not found~st=1` | `<shell>: line 0: hash: nosuchcmd-xyz: not found~st=1` | `st=0` | `<shell>:hash:1: no such command: nosuchcmd-xyz~st=1` |
 | `hash/a-builtin-counts-except-in-zsh` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>:hash:1: no such command: shift~st=1` |
+| `complete/registers-in-a-script` | `<shell>: 1: complete: not found~st=127~<shell>: 1: complete: not found` *(status 127)* | `st=0~complete -W 'a b' foo` | `st=0~complete -W 'a b' foo` | `st=0~complete -W 'a b' foo` | `<shell>: complete: not found~st=127~<shell>: complete: not found` *(status 127)* | `<shell>:1: command not found: complete~st=127~<shell>:1: command not found: complete` *(status 127)* |
+| `complete/removes-and-misses` | `<shell>: 1: complete: not found~<shell>: 1: complete: not found~r=127~<shell>: 1: complete: not found~p=127` | `r=0~<shell>: line 1: complete: foo: no completion specification~p=1` | `r=0~<shell>: line 1: complete: foo: no completion specification~p=1` | `r=0~<shell>: line 0: complete: foo: no completion specification~p=1` | `<shell>: complete: not found~<shell>: complete: not found~r=127~<shell>: complete: not found~p=127` | `<shell>:1: command not found: complete~<shell>:1: command not found: complete~r=127~<shell>:1: command not found: complete~p=127` |
 | `shift/a-leading-dash-that-is-not-a-number` | `<shell>: 1: shift: Illegal number: -x` *(status 2)* | `<shell>: line 1: shift: -x: numeric argument required~st=2` | `<shell>: line 1: shift: -x: numeric argument required` *(status 2)* | `<shell>: line 0: shift: -x: numeric argument required` *(status 1)* | `<shell>: shift: -x: unknown option~Usage: shift [ options ] [n]` *(status 2)* | `<shell>:shift:1: bad option: -x~st=1` |
 | `shift/a-count-that-is-an-expression` | `<shell>: 1: shift: Illegal number: 1+1` *(status 2)* | `<shell>: line 1: shift: 1+1: numeric argument required~[a b c] st=2` | `<shell>: line 1: shift: 1+1: numeric argument required` *(status 2)* | `<shell>: line 0: shift: 1+1: numeric argument required` *(status 1)* | `[c] st=0` | `[c] st=0` |
 | `shift/a-count-that-is-a-name` | `<shell>: 1: shift: Illegal number: nosuchname` *(status 2)* | `<shell>: line 1: shift: nosuchname: numeric argument required~[a b c] st=2` | `<shell>: line 1: shift: nosuchname: numeric argument required` *(status 2)* | `<shell>: line 0: shift: nosuchname: numeric argument required` *(status 1)* | `[a b c] st=0` | `[a b c] st=0` |
@@ -743,6 +745,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `hash/a-builtin-counts-except-in-zsh` — zsh hashes only what PATH holds, so a builtin is 'no such command' there; measured with shift because macOS ships /usr/bin/cd
   ```sh
   hash shift; echo "st=$?"
+  ```
+- `complete/registers-in-a-script` — every bash_completion.d file runs in a non-interactive shell and must register at status 0 and read itself back; the other three have no such command and die at 127, which is what broke carapace here
+  ```sh
+  complete -W "a b" foo; echo "st=$?"; complete -p foo
+  ```
+- `complete/removes-and-misses` — -r takes a spec away and naming an unregistered command is an error at 1, in the shell that has the builtin
+  ```sh
+  complete -W x foo; complete -r foo; echo "r=$?"; complete -p foo; echo "p=$?"
   ```
 - `shift/a-leading-dash-that-is-not-a-number` — two of the four read it as an *option* and refuse it as one; the other two read it as the count and complain about the number. Same input, two kinds of complaint — and both end the script where a special builtin's failure is fatal
   ```sh

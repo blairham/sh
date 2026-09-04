@@ -1606,6 +1606,11 @@ type scope struct {
 	// because nothing had saved the array of that name to put back.
 	savedArrays  map[string]Array
 	arrayExisted map[string]bool
+	// removedBefore is whether `unset` had already hidden the name when it
+	// was shadowed, so a hiding `local` can be undone without resurrecting
+	// an environment value the script had taken away — or forgetting one it
+	// had not.
+	removedBefore map[string]bool
 	// keyword records that the function was defined with the `function` word
 	// rather than with parentheses. ksh93 gives only those functions a local
 	// scope, so `typeset` needs to know which kind it is standing in.

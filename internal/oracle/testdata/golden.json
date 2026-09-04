@@ -5818,6 +5818,70 @@
         "TimedOut": false
       }
     },
+    "declare/valueless-local-with-an-outer-value": {
+      "bash": {
+        "Output": "[UNSET]~after=[out]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[UNSET]~after=[out]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[UNSET]~after=[out]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[out]~after=[out]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cscript\u003e: line 2: local: not found~[out]~after=[out]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[]~after=[out]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/valueless-typeset-with-an-outer-value": {
+      "bash": {
+        "Output": "[UNSET]~after=[out]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[UNSET]~after=[out]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[UNSET]~after=[out]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cscript\u003e: 2: Syntax error: \"}\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[UNSET]~after=[out]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[]~after=[out]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "diag/a-command-after-an-operator": {
       "bash": {
         "Output": "one~\u003cshell\u003e: line 3: nosuchcmd: command not found~st=127",

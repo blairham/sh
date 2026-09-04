@@ -170,7 +170,36 @@ func (r *Runner) integerValue(text string) (string, bool) {
 func (r *Runner) declareEmpty(name string) {
 	if r.ask(r.sem().DeclaredNameWithoutValueIsEmpty, "a declaration without a value setting the name") {
 		r.setVar(name, "")
+		return
 	}
+	if r.unspecified {
+		return
+	}
+	// The name exists unset here — but whether the *outer* value still shows
+	// through is a second disagreement, and it only arises where a shadow
+	// was actually taken: `declare u` at the top level leaves the global
+	// alone in every shell measured.
+	if len(r.scopes) == 0 {
+		return
+	}
+	if _, shadowed := r.scopes[len(r.scopes)-1].saved[name]; !shadowed {
+		return
+	}
+	if r.ask(r.sem().ValuelessDeclarationHidesTheOuterValue, "a declaration without a value hiding the outer value") {
+		r.hideVar(name)
+	}
+}
+
+// hideVar takes a name out of view entirely — the tables and the environment
+// fallback alike — so `${name-UNSET}` fires its default. The caller's shadow
+// is what brings the outer value back.
+func (r *Runner) hideVar(name string) {
+	delete(r.Vars, name)
+	delete(r.Arrays, name)
+	if r.removed == nil {
+		r.removed = map[string]bool{}
+	}
+	r.removed[name] = true
 }
 
 // shadowTypeset is shadow for `typeset`, which unlike `local` does not always
@@ -202,6 +231,10 @@ func (r *Runner) shadow(name string) {
 		old, existed := r.Vars[name]
 		sc.saved[name] = old
 		sc.existed[name] = existed
+		if sc.removedBefore == nil {
+			sc.removedBefore = map[string]bool{}
+		}
+		sc.removedBefore[name] = r.removed[name]
 	}
 	// Arrays live in a table of their own, so a name has to be saved from
 	// both. Saving only the scalar left `f() { local a; a=(x y); }` writing a

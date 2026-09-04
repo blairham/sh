@@ -84,3 +84,41 @@ func TestInsideAFunctionTheAxisIsNotAsked(t *testing.T) {
 		t.Errorf("stderr %q status %d, want neither", errs, st)
 	}
 }
+
+// TestAValuelessLocalHidingTheOuterValueIsAnAxis — bash's `local u` makes the
+// outer value invisible, dash's leaves it showing through until the first
+// assignment, and a dialect that declares the name *empty* never reaches the
+// question at all.
+func TestAValuelessLocalHidingTheOuterValueIsAnAxis(t *testing.T) {
+	src := `v=out
+f() { local v; echo "[${v-UNSET}]"; }
+f
+echo "after=[$v]"`
+	for _, tc := range []struct {
+		name string
+		set  func(*Semantics)
+		want string
+	}{
+		{"hides the outer value", func(s *Semantics) {
+			s.DeclaredNameWithoutValueIsEmpty = No
+			s.ValuelessDeclarationHidesTheOuterValue = Yes
+		}, "[UNSET]"},
+		{"leaves it showing through", func(s *Semantics) {
+			s.DeclaredNameWithoutValueIsEmpty = No
+			s.ValuelessDeclarationHidesTheOuterValue = No
+		}, "[out]"},
+		{"declares it empty instead", func(s *Semantics) {
+			s.DeclaredNameWithoutValueIsEmpty = Yes
+		}, "[]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, errs, _ := trapRun(t, src, tc.set, Diagnostics{})
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("stdout = %q (stderr %q), want %q inside the function", out, errs, tc.want)
+			}
+			if !strings.Contains(out, "after=[out]") {
+				t.Errorf("stdout = %q, want the caller's value back afterward", out)
+			}
+		})
+	}
+}

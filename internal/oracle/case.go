@@ -327,6 +327,12 @@ var Corpus = []Case{
 		Why:     "bash prints its usage, dash names the word, ksh93 refuses the form, zsh says nothing",
 	},
 	{
+		ID: "axis/trap-prints-a-bare-action", Category: "diagnostics",
+		Script:  true,
+		Snippet: "trap : INT\ntrap\necho end",
+		Why:     "a one-word action: bash and dash quote it anyway, ksh93 and zsh leave it bare",
+	},
+	{
 		ID: "axis/trap-prints-a-quoted-action", Category: "diagnostics",
 		Script:  true,
 		Snippet: "trap 'echo hi' INT\ntrap\necho end",

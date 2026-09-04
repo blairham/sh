@@ -30,6 +30,9 @@ func trapRun(t *testing.T, src string, set func(*Semantics), dg Diagnostics) (st
 	sem.TrapOneArgumentIsACondition = Yes
 	sem.TrapReportsAnUnknownSingleCondition = Yes
 	sem.TrapSingleUnknownConditionIsUsage = No
+	// A spelling for the tests that are not about spelling. The ones that
+	// are override it.
+	sem.TrapQuoting = ListingQuoteAlwaysEscaped
 	if set != nil {
 		set(&sem)
 	}
@@ -282,5 +285,73 @@ func TestOneArgumentPutsEXITBackToo(t *testing.T) {
 	}
 	if !strings.Contains(out, "end") {
 		t.Errorf("stdout = %q, want the script to carry on", out)
+	}
+}
+
+// TestATrapActionIsSpelledTheWayThisDialectListsValues, which is not always
+// the way its aliases are spelled: the style is shared vocabulary and the
+// choice of style is per builtin.
+func TestATrapActionIsSpelledTheWayThisDialectListsValues(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		style ListingQuotingStyle
+		want  string
+	}{
+		{"always quoted", ListingQuoteAlwaysEscaped, "trap -- ':' INT"},
+		{"always quoted, doubled", ListingQuoteAlwaysDoubled, "trap -- ':' INT"},
+		{"bare when it can be", ListingQuoteWhenNeededDollar, "trap -- : INT"},
+		{"bare, and no dollar form", ListingQuoteWhenNeededPlain, "trap -- : INT"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			set := func(s *Semantics) { s.TrapPrintsWithP = Yes; s.TrapQuoting = tc.style }
+			out, _, _ := trapRun(t, "trap : INT\ntrap -p", set, Diagnostics{})
+			if strings.TrimSpace(out) != tc.want {
+				t.Errorf("stdout = %q, want %q", strings.TrimSpace(out), tc.want)
+			}
+		})
+	}
+}
+
+// TestTheTwoStylesThatQuoteAlwaysDifferOnAnEmbeddedQuote, which is the only
+// thing that tells them apart — and the reason a one-word action cannot.
+func TestTheTwoStylesThatQuoteAlwaysDifferOnAnEmbeddedQuote(t *testing.T) {
+	run := func(style ListingQuotingStyle) string {
+		set := func(s *Semantics) { s.TrapPrintsWithP = Yes; s.TrapQuoting = style }
+		out, _, _ := trapRun(t, "trap \"echo it's\" INT\ntrap -p", set, Diagnostics{})
+		return strings.TrimSpace(out)
+	}
+	escaped, doubled := run(ListingQuoteAlwaysEscaped), run(ListingQuoteAlwaysDoubled)
+	if !strings.Contains(escaped, `it'\''s`) {
+		t.Errorf("escaped = %q, want the backslash spelling", escaped)
+	}
+	if !strings.Contains(doubled, `it'"'"'s`) {
+		t.Errorf("doubled = %q, want the double-quoted spelling", doubled)
+	}
+	if escaped == doubled {
+		t.Error("the two styles produced the same text, so neither is being chosen")
+	}
+
+	// And the style that reaches for `$'...'` does, where the plain one
+	// never does — the difference zsh's two builtins showed.
+	dollar := run(ListingQuoteWhenNeededDollar)
+	if !strings.HasPrefix(dollar, "trap -- $'") {
+		t.Errorf("dollar = %q, want the dollar form", dollar)
+	}
+	if plain := run(ListingQuoteWhenNeededPlain); strings.Contains(plain, "$'") {
+		t.Errorf("plain = %q, want no dollar form", plain)
+	}
+}
+
+// TestATrapAndAnAliasAreAskedSeparately is the whole reason for the second
+// field: one dialect answers the two differently.
+func TestATrapAndAnAliasAreAskedSeparately(t *testing.T) {
+	set := func(s *Semantics) {
+		s.TrapPrintsWithP = Yes
+		s.TrapQuoting = ListingQuoteWhenNeededPlain
+		s.AliasQuoting = ListingQuoteAlwaysEscaped
+	}
+	out, _, _ := trapRun(t, "trap : INT\ntrap -p", set, Diagnostics{})
+	if strings.Contains(out, "':'") {
+		t.Errorf("stdout = %q, want trap to use its own answer, not the alias one", out)
 	}
 }

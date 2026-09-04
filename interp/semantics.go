@@ -636,8 +636,14 @@ type Semantics struct {
 	UnaliasAllRefusesOperands Answer
 
 	// AliasQuoting is how a value is spelled in a listing — four engines, no
-	// two alike. See AliasQuotingStyle.
-	AliasQuoting AliasQuotingStyle
+	// two alike. See ListingQuotingStyle.
+	AliasQuoting ListingQuotingStyle
+
+	// TrapQuoting is that same question asked of `trap`, and it is a
+	// separate field because one dialect answers the two differently: zsh
+	// writes an alias holding a tab as `$'a\tb'` and a trap holding one as
+	// a plainly quoted `'a<tab>b'`.
+	TrapQuoting ListingQuotingStyle
 	// SelectPromptNeedsTerminal withholds PS3 unless the input is a terminal.
 	// ksh93 alone says yes, which is why a ksh93 script's transcript has the
 	// menu in it and no prompt.

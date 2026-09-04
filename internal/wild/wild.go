@@ -45,6 +45,13 @@ type Report struct {
 	Scanned  int
 	Parsed   int
 	NotShell int
+	// Skipped counts, by reason, the files the sweep refused to open because
+	// CLEANROOM.md forbids reading them — another shell's own distribution,
+	// another project's test data. They are counted so the report stays
+	// honest, and never listed, because printing a path invites the reader
+	// to open it. Skipped files are not part of Scanned: without opening
+	// them, whether they are shell scripts at all is unknowable.
+	Skipped  map[string]int
 	Failures []Result
 }
 
@@ -63,7 +70,9 @@ var DefaultDirs = []string{
 // reference also refuses says nothing about us.
 func Sweep(ctx context.Context, dirs []string, dialect syntax.Dialect, reference string) Report {
 	var rep Report
-	for _, path := range Find(dirs) {
+	paths, skipped := Find(dirs)
+	rep.Skipped = skipped
+	for _, path := range paths {
 		rep.Scanned++
 		src, err := os.ReadFile(path)
 		if err != nil {
@@ -83,9 +92,19 @@ func Sweep(ctx context.Context, dirs []string, dialect syntax.Dialect, reference
 	return rep
 }
 
-// Find is every readable regular file in dirs whose first line names a shell.
-func Find(dirs []string) []string {
-	var out []string
+// Find is every readable regular file in dirs whose first line names a
+// shell, plus a count, by reason, of the files it declined to open because
+// CLEANROOM.md forbids reading them.
+//
+// The denial happens before the shebang is read — reading the shebang is
+// reading the file — so a skipped count is of regular files, not of shell
+// scripts: whether a file nobody may open is a script is unknowable, and
+// counting all of them is the honest answer.
+func Find(dirs []string) (paths []string, skipped map[string]int) {
+	skipped = map[string]int{}
+	// The tree the sweep runs from is this project's own, so its testdata is
+	// never mistaken for someone else's.
+	own, _ := os.Getwd()
 	seen := map[string]bool{}
 	for _, dir := range dirs {
 		entries, err := os.ReadDir(dir)
@@ -94,15 +113,23 @@ func Find(dirs []string) []string {
 		}
 		for _, e := range entries {
 			path := filepath.Join(dir, e.Name())
-			if seen[path] || !isShellScript(path) {
+			if seen[path] {
 				continue
 			}
 			seen[path] = true
-			out = append(out, path)
+			if reason := Denied(path, own); reason != "" {
+				if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
+					skipped[reason]++
+				}
+				continue
+			}
+			if isShellScript(path) {
+				paths = append(paths, path)
+			}
 		}
 	}
-	sort.Strings(out)
-	return out
+	sort.Strings(paths)
+	return paths, skipped
 }
 
 // isShellScript reads the shebang. A symbolic link is followed, which is how

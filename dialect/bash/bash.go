@@ -75,6 +75,7 @@ func Semantics() interp.Semantics {
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	s.TypesetLocalNeedsKeywordFunction = interp.No
 	s.ReadonlyReassignmentFatal = interp.No
+	s.ReadonlyReassignmentFatalFromCommandString = interp.Yes
 	s.BuiltinSyntaxErrorFatal = interp.No
 	s.DotMissingFileFatal = interp.No
 	s.DotPassesArguments = interp.Yes

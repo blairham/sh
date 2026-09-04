@@ -1399,11 +1399,37 @@ func (r *Runner) fatal(format string, args ...any) {
 	r.fatalQuiet()
 }
 
-func (r *Runner) setVar(name, value string) {
+func (r *Runner) setVar(name, value string) { r.setVarAs(name, value, assignedAnyhow) }
+
+// assignForm says how an assignment was written, which one dialect answers a
+// readonly reassignment by.
+type assignForm uint8
+
+const (
+	// assignedAnyhow is every other way a name is set: through a builtin,
+	// as a prefix to a command, by `read`, by the shell itself.
+	assignedAnyhow assignForm = iota
+	// assignedAlone is an assignment standing as a command of its own —
+	// `x=2` on a line, and not `export x=2` or `x=2 cmd`.
+	assignedAlone
+)
+
+// setVarAs sets a variable, knowing how the assignment was written.
+func (r *Runner) setVarAs(name, value string, form assignForm) {
 	if r.readonly[name] {
 		// Fatal everywhere but bash, measured with a plain assignment in a
 		// script — which is the contaminated-probe case oracle.md records.
-		if r.ask(r.sem().ReadonlyReassignmentFatal, "a readonly reassignment being fatal") {
+		//
+		// And in bash it is fatal after all when the program came from an
+		// argument: `bash -c 'readonly x=1; x=2; echo after'` stops and
+		// exits 1, where the same three lines in a file print `after` and
+		// exit 0. Only for an assignment standing alone — `export x=2` and
+		// `x=2 cmd` are not fatal there either way.
+		fatal := r.sem().ReadonlyReassignmentFatal
+		if form == assignedAlone && r.CommandString {
+			fatal = r.sem().ReadonlyReassignmentFatalFromCommandString
+		}
+		if r.ask(fatal, "a readonly reassignment being fatal") {
 			r.fatal("%s\n", Wording(r.diag().ReadonlyVariable, "%s: readonly variable", name))
 			return
 		}
@@ -1552,7 +1578,7 @@ func (r *Runner) assign(a *syntax.Assign) {
 			old, _ := r.getVar(a.Name)
 			value = old + value
 		}
-		r.setVar(a.Name, value)
+		r.setVarAs(a.Name, value, assignedAlone)
 		if r.allexport {
 			// `set -a`: an assignment marks the name for the environment as
 			// well as setting it.

@@ -547,6 +547,18 @@ type Semantics struct {
 	// ShiftPastEndFatal ends a non-interactive shell when `shift` runs off
 	// the end. True in dash and ksh93.
 	ShiftPastEndFatal Answer
+	// ReadonlyReassignmentFatalFromCommandString is the same question for a
+	// shell whose program came from an argument rather than from a file.
+	//
+	// One dialect answers the two differently: `bash -c 'readonly x=1;
+	// x=2; echo after'` stops and exits 1, and the same three lines in a
+	// file print `after` and exit 0. The other three are fatal either way.
+	//
+	// Asked only for an assignment standing as a command of its own. The
+	// dialect that splits is not fatal for `export x=2` or `x=2 cmd` by
+	// either route, so those keep the answer above.
+	ReadonlyReassignmentFatalFromCommandString Answer
+
 	// ReadonlyReassignmentFatal ends the script when a readonly variable is
 	// assigned. True everywhere but bash, measured with a plain assignment in
 	// a script file — adding a redirect makes it a command and reverses the
@@ -1044,14 +1056,15 @@ func PosixSemantics() Semantics {
 		UlimitSetsBothLimits: Yes,
 		// POSIX defines a pipeline's status as its last command's, and
 		// offers nothing to change it.
-		PipefailOption:                     No,
-		ArithInvalidOctalDigitIsError:      Yes,
-		RegexQuotingMakesLiteral:           No,
-		LastPipelineElementInCurrentShell:  No,
-		ShiftPastEndFatal:                  Yes,
-		ReadonlyReassignmentFatal:          Yes,
-		ArrayBaseIsZero:                    Yes,
-		DollarZeroInFunctionIsFunctionName: No,
+		PipefailOption:                             No,
+		ArithInvalidOctalDigitIsError:              Yes,
+		RegexQuotingMakesLiteral:                   No,
+		LastPipelineElementInCurrentShell:          No,
+		ShiftPastEndFatal:                          Yes,
+		ReadonlyReassignmentFatal:                  Yes,
+		ReadonlyReassignmentFatalFromCommandString: Yes,
+		ArrayBaseIsZero:                            Yes,
+		DollarZeroInFunctionIsFunctionName:         No,
 		// A special builtin's failure is fatal to a non-interactive shell,
 		// which the standard states outright. dash is the only member of the
 		// panel that still does it, and the preset follows the standard

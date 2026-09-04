@@ -315,6 +315,18 @@ var Corpus = []Case{
 		Why:     "the same body on a signal: ksh93 counts it from where it fired and zsh names only where it fired",
 	},
 	{
+		ID: "axis/trap-body-will-not-parse", Category: "semantics axes",
+		Script:  true,
+		Snippet: "trap 'if' EXIT\necho after",
+		Why:     "each dialect words it its own way, dash ends the script over it, and zsh refused the trap when it was set",
+	},
+	{
+		ID: "axis/trap-body-runs-what-parsed", Category: "semantics axes",
+		Script:  true,
+		Snippet: "echo one\ntrap 'echo a\nif' EXIT\necho end",
+		Why:     "bash and dash run the line that parsed before complaining; ksh93 reads the body whole and runs none of it",
+	},
+	{
 		ID: "axis/trap-action-read-when-set", Category: "semantics axes",
 		Script:  true,
 		Snippet: "trap 'if' INT\necho after",

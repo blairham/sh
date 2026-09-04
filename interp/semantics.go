@@ -656,6 +656,18 @@ type Semantics struct {
 	// complains at all, because the trap never fires.
 	TrapActionIsParsedWhenSet Answer
 
+	// TrapBodyRunsWhatParsed runs each line of a trap's body as it parses,
+	// so the part before a syntax error has already run by the time the
+	// error is reported.
+	//
+	// bash and dash do — `trap "echo a
+	// if" EXIT` prints `a` and then complains. ksh93 reads the whole body
+	// first and prints nothing. zsh answers no by construction rather than
+	// by measurement: it reads the action when the trap is set, so by the
+	// time a trap fires the whole body has parsed and there is no partial
+	// run to have. The two answers cannot be told apart there.
+	TrapBodyRunsWhatParsed Answer
+
 	TrapBodyLine TrapBodyLineStyle
 
 	// ExitTrapFiresPastTheEnd counts the EXIT trap as having fired on the
@@ -1191,6 +1203,11 @@ func PosixSemantics() Semantics {
 		// condition arises, so the text is not read until then. Three of
 		// the four agree; zsh reads it as the trap is set.
 		TrapActionIsParsedWhenSet: No,
+		// A shell runs what it has read rather than reading everything
+		// first, which is unanimous for a script and is the same reading
+		// applied to a trap's body. ksh93 is the one that reads a trap
+		// body whole.
+		TrapBodyRunsWhatParsed: Yes,
 		// POSIX gives all three a *name*, and neither a special parameter
 		// nor a positional one is a name — a positional has `shift` to
 		// remove it.

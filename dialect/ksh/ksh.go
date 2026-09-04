@@ -68,6 +68,7 @@ func Semantics() interp.Semantics {
 	s.AliasQuoting = interp.ListingQuoteWhenNeededDollar
 	s.TrapQuoting = interp.ListingQuoteWhenNeededDollar
 	s.TrapActionIsParsedWhenSet = interp.No
+	s.TrapBodyRunsWhatParsed = interp.No
 	s.TrapBodyLine = interp.TrapBodyLineOffsetFromWhereItFired
 	s.ExitTrapFiresPastTheEnd = interp.No
 	s.SelectEofEndsPromptLine = interp.No

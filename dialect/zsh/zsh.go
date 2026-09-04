@@ -58,6 +58,11 @@ func Semantics() interp.Semantics {
 	s.TrapQuoting = interp.ListingQuoteWhenNeededPlain
 	s.TrapBodyLine = interp.TrapBodyLineWhereItFired
 	s.TrapActionIsParsedWhenSet = interp.Yes
+	// No by construction rather than by measurement: zsh has already parsed
+	// the whole action by the time a trap fires, so it never runs part of a
+	// body whose rest will not parse. The two answers cannot be told apart
+	// here, and this is the one that describes what zsh did.
+	s.TrapBodyRunsWhatParsed = interp.No
 	s.ExitTrapFiresPastTheEnd = interp.Yes
 	s.SelectAssumesUnboundedWidth = interp.Yes
 	s.SelectEofEndsPromptLine = interp.Yes

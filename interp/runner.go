@@ -782,23 +782,97 @@ func (r *Runner) runExitTrap(ctx context.Context) {
 
 // runTrapBody parses and runs a trap's text, which is re-parsed at fire time
 // because that is when a shell reads it.
+//
+// Whether the part that parsed runs before the failure is reported is a
+// question: bash and dash read a line at a time, so `trap "echo a
+// if" EXIT` prints `a` and then complains, and ksh93 reads the whole body
+// first and prints nothing. zsh never reaches this — it reads the action
+// when the trap is set and refuses one that will not parse.
 func (r *Runner) runTrapBody(ctx context.Context, body string) {
 	defer r.enterTrapBody()()
 	p := syntax.NewParser(body, r.dialect())
-	f := p.Parse()
-	if err := p.Err(); err != nil {
-		r.diagf("trap: %v\n", err)
-		r.status = r.diag().SyntaxStatus()
+	if r.ask(r.sem().TrapBodyRunsWhatParsed, "a trap body running the part of it that parsed") {
+		r.runTrapBodyByLine(ctx, p, body)
 		return
 	}
+	if r.unspecified {
+		return
+	}
+	f := p.Parse()
+	if err := p.Err(); err != nil {
+		r.reportTrapParseFailure(err, body)
+		return
+	}
+	r.runTrapStmts(ctx, f)
+}
+
+// runTrapBodyByLine runs each line as it parses, the way a shell reading its
+// input runs what it has read. The line is the unit, not the statement, which
+// is what NextLine already answers.
+func (r *Runner) runTrapBodyByLine(ctx context.Context, p *syntax.Parser, body string) {
+	for {
+		f, ok := p.NextLine()
+		if f != nil && !r.runTrapStmts(ctx, f) {
+			return
+		}
+		if err := p.Err(); err != nil {
+			r.reportTrapParseFailure(err, body)
+			return
+		}
+		if !ok {
+			return
+		}
+	}
+}
+
+// runTrapStmts runs one parsed chunk of a trap body, reporting whether to
+// carry on.
+//
+// The control-flow check is a fast exit rather than the thing that stops an
+// `exit` inside a body: stmt refuses to run anything once control flow is
+// set, so a mutation of either check is equivalent. Kept because iterating
+// the rest of the body — and, in the by-line path, parsing it — to do nothing
+// is work for no reason.
+func (r *Runner) runTrapStmts(ctx context.Context, f *syntax.File) bool {
 	for _, st := range f.Stmts {
 		if err := r.stmt(ctx, st); err != nil {
 			r.diagf("trap: %v\n", err)
-			return
+			return false
 		}
 		if r.ctl != controlNone {
-			return
+			return false
 		}
+	}
+	return true
+}
+
+// reportTrapParseFailure is what a trap body that will not parse produces.
+//
+// The same rendering a script's parse failure gets, because it is the same
+// failure in text that arrived another way, and the lines it names are the
+// body's adjusted by whatever enterTrapBody decided. Where the text came from
+// is passed the way the front end passes `-c`, so the one dialect that names
+// its input names this too and the three that do not are unaffected — a fixed
+// string rather than a wording, for the same reason `-c` is one.
+//
+// Fatal under the rule a parse failure inside `.` or `eval` already gets:
+// POSIX makes a special builtin's failure fatal to a non-interactive shell,
+// and `trap` is one. The text arrives later than theirs but it is still text
+// handed to a special builtin, and the panel answers it the same way here as
+// there — dash ends the script, the other three carry on.
+func (r *Runner) reportTrapParseFailure(err error, body string) {
+	where := "trap"
+	if r.inExitTrap {
+		where = "exit trap"
+	}
+	r.errf("%s", r.diag().ParseDiagnostic(r.name(), where, err, body))
+	// No status of its own where the failure is not fatal: measured, a
+	// signal trap whose body will not parse leaves `$?` at 0 in both
+	// dialects that carry on. Setting the parse status here was invisible
+	// because the fatal path overwrites it and the EXIT path puts the old
+	// one back — a mutation that dropped it changed nothing.
+	if r.ask(r.sem().BuiltinSyntaxErrorFatal, "a parse failure inside a special builtin being fatal") {
+		r.fatalQuiet()
 	}
 }
 

@@ -518,6 +518,9 @@ func TestALineIsTheUnit(t *testing.T) {
 // an abort, so a trap set by a line that ran still fires. Unanimous.
 func TestTheExitTrapFiresAfterAParseFailure(t *testing.T) {
 	sh := shell()
+	// The trap body is read the way a script is, which is the substrate's
+	// own answer and the one three of the four give.
+	sh.Semantics.TrapBodyRunsWhatParsed = interp.Yes
 	sh.Diagnostics = interp.Diagnostics{Location: interp.LocationLineWord, SyntaxUnexpected: `unexpected %[1]s`}
 
 	path := writeScript(t, "trap 'echo bye' EXIT\necho one\n{ fi; }\n")

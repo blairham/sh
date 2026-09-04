@@ -39,6 +39,8 @@ func Semantics() interp.Semantics {
 	// starts blank however it is invoked, save the route letter `s` on
 	// standard input, which no dialect models.
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
+	// $(( )) with nothing in it wants a primary and stops the script.
+	s.EmptyArithExpressionIsAnError = interp.Yes
 	s.ExportListing = interp.DeclareListingCommandWord
 	s.ReadonlyListing = interp.DeclareListingCommandWord
 	// dash single-quotes every listed value; it has no declare, so this

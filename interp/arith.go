@@ -331,11 +331,12 @@ func (sh *Runner) apply(op string, l, r arithNum) (arithNum, error) {
 	}
 	switch op {
 	case "+":
-		return intNum(l.i + r.i), nil
+		return sh.saturating(l.i+r.i, overflowedAdd(l.i, r.i)), nil
 	case "-":
-		return intNum(l.i - r.i), nil
+		return sh.saturating(l.i-r.i, overflowedAdd(l.i, -r.i) && r.i != minInt),
+			nil
 	case "*":
-		return intNum(l.i * r.i), nil
+		return sh.saturating(l.i*r.i, overflowedMul(l.i, r.i)), nil
 	case "/", "%":
 		if r.i == 0 {
 			return intNum(0), arithError{msg: Wording(sh.diag().DivisionByZero, "division by zero")}
@@ -358,6 +359,39 @@ func (sh *Runner) apply(op string, l, r arithNum) (arithNum, error) {
 		return sh.intPow(l.i, r.i)
 	}
 	return intNum(0), arithError{msg: "unknown operator " + op}
+}
+
+const (
+	maxInt = int(^uint(0) >> 1)
+	minInt = -maxInt - 1
+)
+
+// saturating answers an integer operation, clamping at the edge where the
+// dialect does: ksh93 holds 9223372036854775807 + 1 at the maximum where the
+// other shells wrap around, and the axis is asked only when an overflow
+// actually happened.
+func (sh *Runner) saturating(wrapped int, overflowed bool) arithNum {
+	if !overflowed ||
+		!sh.ask(sh.sem().ArithOverflowSaturates, "integer overflow clamping at the edge") {
+		return intNum(wrapped)
+	}
+	if wrapped < 0 {
+		return intNum(maxInt)
+	}
+	return intNum(minInt)
+}
+
+func overflowedAdd(a, b int) bool {
+	sum := a + b
+	return (a > 0 && b > 0 && sum < 0) || (a < 0 && b < 0 && sum >= 0)
+}
+
+func overflowedMul(a, b int) bool {
+	if a == 0 || b == 0 {
+		return false
+	}
+	p := a * b
+	return p/b != a
 }
 
 // intPow is `**` on integers.
@@ -545,7 +579,14 @@ func (r *Runner) parseArithNum(s string) (arithNum, error) {
 		// float literal here either — which is why this reads the dialect
 		// rather than an axis: one question, asked in the two places that
 		// need it, rather than two fields that could disagree.
-		return intNum(0), arithError{msg: r.wordInvalidNumber(s), token: s}
+		msg := r.wordInvalidNumber(s)
+		if w := r.diag().DigitTooGreatForBase; w != "" {
+			// The dialect that calls every unreadable literal the same
+			// thing says it here too: `1e3` fails with the octal digit's
+			// own sentence.
+			msg = w
+		}
+		return intNum(0), arithError{msg: msg, token: s}
 	}
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
@@ -654,7 +695,20 @@ func (r *Runner) parseNum(s string) (int, error) {
 		if berr != nil || b < 2 || b > 64 {
 			return 0, arithError{msg: "invalid base: " + base}
 		}
-		n, err = strconv.ParseInt(digits, b, 64)
+		if b > 36 && !r.ask(r.sem().ArithBaseAbove36, "a base above 36") {
+			if r.unspecified {
+				return 0, arithError{msg: "a base above 36: the shells disagree here and no dialect was chosen"}
+			}
+			// One dialect stops at 36 and says so, naming the base.
+			return 0, arithError{msg: Wording(r.diag().ArithInvalidBase,
+				"invalid base: %[1]s", base)}
+		}
+		var bad bool
+		n, bad = parseBaseDigits(digits, b)
+		if bad {
+			err = strconv.ErrSyntax
+			badDigit = true
+		}
 	case strings.HasPrefix(s, "0x"), strings.HasPrefix(s, "0X"):
 		n, err = strconv.ParseInt(s[2:], 16, 64)
 	case len(s) > 1 && s[0] == '0' && !strings.ContainsAny(s, "xX#") && r.octalLeadingZero():
@@ -676,12 +730,56 @@ func (r *Runner) parseNum(s string) (int, error) {
 				token: s,
 			}
 		}
-		return 0, arithError{msg: r.wordInvalidNumber(s), token: s, complete: true}
+		msg := r.wordInvalidNumber(s)
+		if w := r.diag().DigitTooGreatForBase; w != "" {
+			// One dialect calls every unreadable literal the same thing —
+			// `1e3` and `2#12` fail with the octal digit's own sentence.
+			msg = w
+		}
+		return 0, arithError{msg: msg, token: s, complete: msg != r.diag().DigitTooGreatForBase}
 	}
 	if neg {
 		n = -n
 	}
 	return int(n), nil
+}
+
+// parseBaseDigits reads digits in a base up to 64: 0-9, then letters — one
+// case as good as the other through 36, and apart above it, where a-z is
+// 10..35, A-Z 36..61, `@` 62 and `_` 63. The second result reports a digit
+// the base does not have, which each dialect words its own way.
+func parseBaseDigits(digits string, base int) (int64, bool) {
+	if digits == "" {
+		return 0, true
+	}
+	var n int64
+	for i := 0; i < len(digits); i++ {
+		c := digits[i]
+		var v int
+		switch {
+		case c >= '0' && c <= '9':
+			v = int(c - '0')
+		case c >= 'a' && c <= 'z':
+			v = int(c-'a') + 10
+		case c >= 'A' && c <= 'Z':
+			if base <= 36 {
+				v = int(c-'A') + 10
+			} else {
+				v = int(c-'A') + 36
+			}
+		case c == '@':
+			v = 62
+		case c == '_':
+			v = 63
+		default:
+			return 0, true
+		}
+		if v >= base {
+			return 0, true
+		}
+		n = n*int64(base) + int64(v)
+	}
+	return n, false
 }
 
 // octalLeadingZero is the dialect answer, and the quietest divergence
@@ -735,10 +833,6 @@ func (r *Runner) arithTree(tree syntax.ArithExpr, text string) (syntax.ArithExpr
 	if tree != nil {
 		return tree, nil
 	}
-	// No guard for empty text: the parser reads it as no expression at all,
-	// with no error, and the evaluator answers zero for a nil tree — which is
-	// what `$(( ))` is. A check here would be a line no test could tell from
-	// its absence.
 	p := syntax.NewParser("", r.dialect())
 	out := p.ParseArithFor(r.expandArithText(text), syntax.Pos{})
 	if err := p.Err(); err != nil {

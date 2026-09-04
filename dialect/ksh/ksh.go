@@ -118,6 +118,10 @@ func Semantics() interp.Semantics {
 	s.TildePlusMinusExpands = interp.Yes
 	// A defined f-g stops the script; a.b is an invalid discipline function.
 	s.PunctuatedFunctionNameIsRefused = interp.Yes
+	// max+1 stays at the maximum, and a value that names another variable
+	// is chased until it is a number.
+	s.ArithOverflowSaturates = interp.Yes
+	s.ArithNameValueRecurses = interp.Yes
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	// echo reads -n and -e; a word carrying -E is an operand. \e expands,
 	// \x does not.
@@ -333,6 +337,8 @@ func Diagnostics() interp.Diagnostics {
 		SourceFileIsTheBuiltin: true,
 		ArithOperandExpected:   "more tokens expected",
 		ArithOperatorExpected:  "arithmetic syntax error",
+		// A digit the base does not have is the same sentence.
+		DigitTooGreatForBase: "arithmetic syntax error",
 		// ksh93 does not call this a bad substitution: it is a syntax error
 		// naming the character it could not read.
 		BadSubstitution: "syntax error at line %[2]d: `%[1]s' unexpected",

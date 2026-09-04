@@ -109,22 +109,71 @@ func (r *Runner) printsBareWithConditions(conds []string) bool {
 // A condition that is not trapped prints nothing and is not an error, which
 // is how `trap -p EXIT` reports "nothing there" in both dialects that have it.
 func (r *Runner) printTraps(conds []string, bare bool) int {
+	// The listing a subshell inherited, where this dialect still shows it —
+	// nil at the top level, in a subshell that has modified a trap, and in
+	// the dialects that reset the listing with the traps.
+	kept, refused := r.keptTrapListing()
+	if refused {
+		return r.status
+	}
 	if len(conds) == 0 {
 		if bare {
+			return 0
+		}
+		if kept != nil {
+			for _, e := range kept {
+				action, refusedExit := r.keptTrapAction(kept, e.cond)
+				if refusedExit {
+					return r.status
+				}
+				if action == nil {
+					continue
+				}
+				r.printf("trap -- %s %s\n", r.quotedTrapAction(*action), r.printedSignalName(e.cond))
+			}
 			return 0
 		}
 		if r.exitTrap != nil {
 			r.printf("trap -- %s EXIT\n", r.quotedTrapAction(*r.exitTrap))
 		}
-		for _, name := range sortedKeys(r.sigs().traps) {
-			r.printf("trap -- %s %s\n", r.quotedTrapAction(r.sigs().traps[name]), r.printedSignalName(name))
+		// hideInherited is asked once, and only when an inherited ignore is
+		// about to print — a listing with none never asks.
+		hideInherited, askedHide := false, false
+		for _, name := range sortedKeys(r.trapTable()) {
+			if r.inheritedIgnored[name] {
+				if !askedHide {
+					hideInherited = r.ask(r.sem().SubshellHidesInheritedIgnoredTraps,
+						"the listing hiding an ignored signal a subshell inherited")
+					if r.unspecified {
+						return r.status
+					}
+					askedHide = true
+				}
+				if hideInherited {
+					continue
+				}
+			}
+			r.printf("trap -- %s %s\n", r.quotedTrapAction(r.trapTable()[name]), r.printedSignalName(name))
 		}
 		// The pseudo-conditions come after the signals, which is where all
-		// three shells that have any put them.
+		// three shells that have any put them. An inherited one is listed
+		// only where it still fires, which is what the subshell axes for
+		// each already answer.
 		for _, name := range []string{"DEBUG", "ERR", "RETURN"} {
-			if action := *r.pseudoTrapSlot(name); action != nil {
-				r.printf("trap -- %s %s\n", r.quotedTrapAction(*action), name)
+			action := *r.pseudoTrapSlot(name)
+			if action == nil {
+				continue
 			}
+			if r.pseudoTrapInherited(name) {
+				listed, refusedPseudo := r.inheritedPseudoListed(name)
+				if refusedPseudo {
+					return r.status
+				}
+				if !listed {
+					continue
+				}
+			}
+			r.printf("trap -- %s %s\n", r.quotedTrapAction(*action), name)
 		}
 		return 0
 	}
@@ -145,6 +194,16 @@ func (r *Runner) printTraps(conds []string, bare bool) int {
 				r.diagf("%s\n", msg)
 			}
 			return 1
+		}
+		if kept != nil {
+			// The kept listing is what a named condition reports too:
+			// measured, `(trap -p USR1)` in the shell that keeps the
+			// listing prints the parent's trap the plain `(trap)` shows.
+			var refusedExit bool
+			action, refusedExit = r.keptTrapAction(kept, name)
+			if refusedExit {
+				return r.status
+			}
 		}
 		if action == nil {
 			continue
@@ -179,7 +238,7 @@ func (r *Runner) trapFor(cond string) (*string, string, syscall.Signal, bool) {
 	if kind == signalUnknown {
 		return nil, "", 0, false
 	}
-	if action, ok := r.sigs().traps[name]; ok {
+	if action, ok := r.trapTable()[name]; ok {
 		return &action, name, sig, true
 	}
 	return nil, name, sig, true
@@ -210,12 +269,16 @@ func (r *Runner) trapSingleArgument(cond string) int {
 	if !ok {
 		return r.trapUnknownSingleCondition(cond)
 	}
+	// A reset is a modification like any other, so a listing this subshell
+	// inherited stops standing in for its own state.
+	r.trapsModified()
 	if name == "EXIT" {
 		r.exitTrap = nil
 		return 0
 	}
 	if slot := r.pseudoTrapSlot(name); slot != nil {
 		*slot = nil
+		r.clearPseudoInherited(name)
 		return 0
 	}
 	r.trapSignal(name, sig, nil)

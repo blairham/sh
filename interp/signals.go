@@ -75,6 +75,14 @@ type signalState struct {
 	// pending is what the shell already knows has arrived, ahead of the
 	// runtime telling it. Only `kill` puts anything here — see selfSignaled.
 	pending []string
+	// died and diedSig record a fatal signal a *subshell* aimed at the
+	// process. The process is the top-level shell, so the death is the
+	// parent's to die: the subshell that sent it carries on — measured,
+	// `(kill -INT $$; echo s); echo done` prints s and not done in dash and
+	// zsh — and the parent stops when it next looks, which is where a real
+	// parent blocked in wait would be ended by the kernel.
+	died    string
+	diedSig syscall.Signal
 }
 
 // sigs returns the shared state, creating it on first use.
@@ -132,6 +140,23 @@ func (r *Runner) canonicalSignal(s string) (string, syscall.Signal, signalWord) 
 // signal — which are different things: an ignored signal does not kill the
 // shell and does not run anything.
 func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
+	if r.traps != nil {
+		// A subshell is a pretend process: its trap table is its own, and
+		// the real handlers stay the top-level shell's. Nothing here may
+		// touch os/signal — a subshell's `trap '' INT` outliving the
+		// subshell as a process-wide ignore would be the parent inheriting
+		// from the child.
+		if body == nil {
+			delete(r.traps, name)
+		} else {
+			r.traps[name] = *body
+		}
+		// Set on this side of the boundary now, whatever it was before: the
+		// dialect that hides an inherited ignore lists one the subshell
+		// makes itself.
+		delete(r.inheritedIgnored, name)
+		return
+	}
 	s := r.sigs()
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -177,6 +202,34 @@ func (r *Runner) selfSignaled(name string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.pending = append(s.pending, name)
+}
+
+// recordSharedDeath notes a fatal signal a subshell sent the process, for
+// the top-level runner to die of. First one wins: a process killed twice
+// died of the first.
+func (r *Runner) recordSharedDeath(name string, sig syscall.Signal) {
+	s := r.sigs()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.died == "" {
+		s.died, s.diedSig = name, sig
+	}
+}
+
+// takeSharedDeath reports a death a subshell has already caused, once.
+func (r *Runner) takeSharedDeath() (string, syscall.Signal, bool) {
+	s := r.signals
+	if s == nil {
+		return "", 0, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.died == "" {
+		return "", 0, false
+	}
+	name, sig := s.died, s.diedSig
+	s.died, s.diedSig = "", 0
+	return name, sig, true
 }
 
 // takePending reports the arrivals the handler has not run yet.
@@ -228,6 +281,21 @@ func signalName(s os.Signal) (string, bool) {
 // the *handler* sees is an axis — zsh shows the one from before the command
 // that triggered it, the other three the one that command produced.
 func (r *Runner) runPendingTraps(ctx context.Context) {
+	if r.inSubshell {
+		// A subshell is a pretend child process: a signal aimed at `$$` is
+		// aimed at the shell at the top, so what has arrived is the
+		// parent's to handle once the subshell is done — measured, `trap
+		// 'echo x' USR1; (kill -USR1 $$; echo sub)` prints sub before x in
+		// bash, dash and zsh. Draining here would run the parent's handler
+		// in the child, or worse, lose the arrival to a runner about to be
+		// discarded.
+		return
+	}
+	if name, sig, died := r.takeSharedDeath(); died {
+		// A subshell killed the process, and the process is this shell.
+		r.signalDeath(name, sig)
+		return
+	}
 	for _, name := range r.takePending() {
 		s := r.sigs()
 		s.mu.Lock()

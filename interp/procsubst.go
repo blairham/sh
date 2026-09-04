@@ -59,6 +59,11 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 	}
 
 	sub := r.clone()
+	// The one boundary no shell's `trap` sees across: even the dialect that
+	// keeps the parent's listing everywhere else lists nothing in
+	// `<(trap)` — measured, `cat <(trap)` prints nothing in all three
+	// shells that have the construct.
+	sub.trapsModified()
 	// A substitution runs beside the command that names it, so it shares the
 	// caller's streams the way a background job does — and needs the same
 	// guard for the same reason: an io.Writer carries no promise of being

@@ -1098,6 +1098,21 @@ var Corpus = []Case{
 		Why:     "the trap fires once for the script: neither a subshell nor a command substitution repeats it",
 	},
 	{
+		ID: "trap/subshell-resets-a-handled-trap", Category: "traps and exit",
+		Snippet: `trap 'echo x' USR1; (trap); echo done`,
+		Why:     "a subshell starts with a handled trap back at its default, unanimously — what differs is the listing: bash and ksh93 still show the trap they will not fire, dash and zsh show nothing",
+	},
+	{
+		ID: "trap/subshell-keeps-an-ignored-one", Category: "traps and exit",
+		Snippet: `trap '' USR2; (trap); echo done`,
+		Why:     "an ignored signal crosses the fork still ignored, and three of the four list it in the subshell; zsh keeps the ignore working and hides it from the listing",
+	},
+	{
+		ID: "trap/listing-in-a-pipeline-element", Category: "traps and exit",
+		Snippet: `trap 'echo x' USR1; trap | cat; echo done`,
+		Why:     "a pipeline element is a subshell environment with an inheritance rule of its own: bash and zsh keep the parent's listing there, dash and ksh93 print nothing — the shape issue #339 measured, orthogonal to which end of the pipeline forks",
+	},
+	{
 		ID: "trap/set-in-a-function-diverges", Category: "traps and exit",
 		Script:  true,
 		Snippet: "f() { trap 'echo TRAP' EXIT; echo enter; }\nf\necho between\n",

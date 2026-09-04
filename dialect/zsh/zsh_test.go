@@ -122,6 +122,14 @@ func TestSemantics(t *testing.T) {
 		{"ErrTrapRunsInSubshells", s.ErrTrapRunsInSubshells, interp.Yes},
 		{"DebugTrapRunsInsideCalls", s.DebugTrapRunsInsideCalls, interp.Yes},
 		{"DebugTrapRunsInSubshells", s.DebugTrapRunsInSubshells, interp.Yes},
+		// The subshell listing shows nothing inherited — not even an ignore
+		// that is still working — while a pipeline element keeps the signal
+		// listing and still drops the EXIT trap from it.
+		{"SubshellKeepsTrapListing", s.SubshellKeepsTrapListing, interp.No},
+		{"PipelineElementKeepsTrapListing", s.PipelineElementKeepsTrapListing, interp.Yes},
+		{"BackgroundJobKeepsTrapListing", s.BackgroundJobKeepsTrapListing, interp.No},
+		{"KeptTrapListingIncludesExit", s.KeptTrapListingIncludesExit, interp.No},
+		{"SubshellHidesInheritedIgnoredTraps", s.SubshellHidesInheritedIgnoredTraps, interp.Yes},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)

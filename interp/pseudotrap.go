@@ -85,6 +85,10 @@ func (r *Runner) pseudoTrapSlot(name string) **string {
 // inheritance rules, and treats `-` as the reset it is everywhere.
 func (r *Runner) setPseudoTrap(name, body string) {
 	slot := r.pseudoTrapSlot(name)
+	// Whatever happens next happened on this side of any subshell boundary,
+	// so the trap is this runner's own: it fires and lists like one set at
+	// the top level.
+	r.clearPseudoInherited(name)
 	if body == "-" {
 		*slot = nil
 		return
@@ -135,7 +139,10 @@ func (r *Runner) runErrTrap(ctx context.Context) {
 		!r.ask(r.sem().ErrTrapRunsInsideFunctions, "the ERR trap inside a function it was not set in") {
 		return
 	}
-	if r.inSubshell &&
+	// Inherited, not merely inside a subshell: a trap the subshell set for
+	// itself fires everywhere — measured, `(trap 'echo err' ERR; false)`
+	// prints err in every shell that has the condition.
+	if r.errTrapInherited &&
 		!r.ask(r.sem().ErrTrapRunsInSubshells, "the ERR trap inside a subshell") {
 		return
 	}
@@ -164,7 +171,7 @@ func (r *Runner) runDebugTrap(ctx context.Context) {
 		!r.ask(r.sem().DebugTrapRunsInsideCalls, "the DEBUG trap inside a call it was not set in") {
 		return
 	}
-	if r.inSubshell &&
+	if r.debugTrapInherited &&
 		!r.ask(r.sem().DebugTrapRunsInSubshells, "the DEBUG trap inside a subshell") {
 		return
 	}
@@ -178,15 +185,16 @@ func (r *Runner) runDebugTrap(ctx context.Context) {
 // serial is the frame that is ending: a function passes its own, because
 // only the function whose body set the trap fires it, and a sourced file
 // passes sourcedFrame, because a sourced file fires it wherever it was set.
-// Nothing fires in a subshell, and nothing fires on the way out of an
-// `exit` — the EXIT trap owns that ending.
+// An inherited trap fires in no subshell — though one a subshell's own
+// function bodies set fires there like anywhere else — and nothing fires on
+// the way out of an `exit`: the EXIT trap owns that ending.
 //
 // The action sees the status `return` was handed rather than the one it
 // set: measured, a `return 3` fires the trap with `$?` still naming the
 // command before it, and the 3 is what the caller then reports.
 func (r *Runner) runReturnTrap(ctx context.Context, serial int) {
 	body := r.returnTrap
-	if body == nil || *body == "" || r.inReturnTrap || r.inSubshell {
+	if body == nil || *body == "" || r.inReturnTrap || r.returnTrapInherited {
 		return
 	}
 	if serial != sourcedFrame && r.returnTrapFrame != serial {

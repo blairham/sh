@@ -175,6 +175,16 @@ func Semantics() interp.Semantics {
 	s.ErrTrapRunsInSubshells = interp.No
 	s.DebugTrapRunsInsideCalls = interp.No
 	s.DebugTrapRunsInSubshells = interp.No
+	// The shell that keeps the parent's trap listing across every boundary
+	// but a process substitution — `(trap)`, `$(trap)`, `trap | cat` and
+	// `trap &` all print what the parent had, EXIT trap included, though a
+	// handled signal no longer fires there. Measured: `trap 'echo x' USR1;
+	// (kill -USR1 $BASHPID; echo alive)` dies of the default action while
+	// `(trap)` still lists the trap.
+	s.SubshellKeepsTrapListing = interp.Yes
+	s.PipelineElementKeepsTrapListing = interp.Yes
+	s.BackgroundJobKeepsTrapListing = interp.Yes
+	s.KeptTrapListingIncludesExit = interp.Yes
 	s.UlimitBlockIsKilobyte = interp.Yes
 	s.UlimitHasResidentSet = interp.Yes
 	s.UlimitHasProcessCount = interp.Yes

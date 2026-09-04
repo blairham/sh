@@ -1490,6 +1490,9 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `trap/debug-fires-before-each-command` | `trap: DEBUG: bad trap~a~b` | `D~a~D~b` | `D~a~D~b` | `D~a~D~b` | `D~a~D~b` | `D~a~D~b` |
 | `trap/return-fires-when-a-sourced-file-ends` | `trap: RETURN: bad trap~insource~after` | `insource~R~after` | `insource~R~after` | `insource~R~after` | `<shell>: trap: RETURN: bad trap~insource~after` | `<shell>:trap:1: undefined signal: RETURN~insource~after` |
 | `trap/subshell-does-not-refire` | `sub~after~T` | `sub~after~T` | `sub~after~T` | `sub~after~T` | `sub~after~T` | `sub~after~T` |
+| `trap/subshell-resets-a-handled-trap` | `done` | `trap -- 'echo x' SIGUSR1~done` | `trap -- 'echo x' USR1~done` | `done` | `trap -- 'echo x' USR1~done` | `done` |
+| `trap/subshell-keeps-an-ignored-one` | `trap -- '' USR2~done` | `trap -- '' SIGUSR2~done` | `trap -- '' USR2~done` | `trap -- '' SIGUSR2~done` | `trap -- '' USR2~done` | `done` |
+| `trap/listing-in-a-pipeline-element` | `done` | `trap -- 'echo x' SIGUSR1~done` | `trap -- 'echo x' USR1~done` | `done` | `done` | `trap -- 'echo x' USR1~done` |
 | `trap/set-in-a-function-diverges` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~between~TRAP` | `enter~TRAP~between` |
 | `exit/status-and-wrapping` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` | `[44]~[1]` |
 | `exit/bad-argument-diverges` | `<shell>: 1: exit: Illegal number: -1~[2]~<shell>: 1: exit: Illegal number: abc~[2]` | `[255]~<shell>: line 1: exit: abc: numeric argument required~[2]` | `[255]~<shell>: line 1: exit: abc: numeric argument required~[2]` | `[255]~<shell>: line 0: exit: abc: numeric argument required~[255]` | `[255]~[0]` | `[255]~[0]` |
@@ -1664,6 +1667,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `trap/subshell-does-not-refire` — the trap fires once for the script: neither a subshell nor a command substitution repeats it
   ```sh
   trap 'echo T' EXIT; (echo sub); x=$(echo cs); echo after
+  ```
+- `trap/subshell-resets-a-handled-trap` — a subshell starts with a handled trap back at its default, unanimously — what differs is the listing: bash and ksh93 still show the trap they will not fire, dash and zsh show nothing
+  ```sh
+  trap 'echo x' USR1; (trap); echo done
+  ```
+- `trap/subshell-keeps-an-ignored-one` — an ignored signal crosses the fork still ignored, and three of the four list it in the subshell; zsh keeps the ignore working and hides it from the listing
+  ```sh
+  trap '' USR2; (trap); echo done
+  ```
+- `trap/listing-in-a-pipeline-element` — a pipeline element is a subshell environment with an inheritance rule of its own: bash and zsh keep the parent's listing there, dash and ksh93 print nothing — the shape issue #339 measured, orthogonal to which end of the pipeline forks
+  ```sh
+  trap 'echo x' USR1; trap | cat; echo done
   ```
 - `trap/set-in-a-function-diverges` — zsh runs a trap set inside a function when the function returns; dash, bash and ksh93 keep it for the end of the script
   ```sh

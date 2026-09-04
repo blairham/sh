@@ -76,6 +76,16 @@ func Semantics() interp.Semantics {
 	s.TrapHasErrCondition = interp.No
 	s.TrapHasDebugCondition = interp.No
 	s.TrapHasReturnCondition = interp.No
+	// A subshell's listing shows only what survived the entry — the ignored
+	// signals — in every boundary measured: `(trap)`, `$(trap)`, a pipeline
+	// element and a background job all print nothing for a handled trap and
+	// `trap -- '' INT` for an ignored one. The POSIX answer, restated here
+	// because it was measured rather than assumed. Whether a kept listing
+	// includes EXIT is left unanswered: nothing is ever kept to ask it of.
+	s.SubshellKeepsTrapListing = interp.No
+	s.PipelineElementKeepsTrapListing = interp.No
+	s.BackgroundJobKeepsTrapListing = interp.No
+	s.SubshellHidesInheritedIgnoredTraps = interp.No
 	s.UmaskPrintsFourDigits = interp.Yes
 	// dash parses no options for `alias`, so `-p` is a name there.
 	s.AliasParsesOptions = interp.No

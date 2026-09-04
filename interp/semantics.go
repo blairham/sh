@@ -1179,6 +1179,46 @@ type Semantics struct {
 	// carries DEBUG into the child and not ERR.
 	DebugTrapRunsInSubshells Answer
 
+	// A subshell starts with the parent's handled traps back at their
+	// defaults and only an ignored signal still ignored — POSIX, and
+	// unanimous in the working state. What `trap` *lists* in the child is
+	// where the panel splits, and it splits by the kind of boundary, so the
+	// question is asked once per kind rather than once. The listing survives
+	// until the child modifies a trap, at which point every shell that kept
+	// it shows the child's own state instead — `(trap '' USR2; trap)` lists
+	// USR2 and nothing the parent had.
+
+	// SubshellKeepsTrapListing makes `trap` inside `( … )` or `$( … )` still
+	// list the traps the parent had, though a handled one no longer fires —
+	// the save=$(trap) idiom POSIX carves out, extended to the compound.
+	// bash and ksh93; dash and zsh list only what survived the entry.
+	SubshellKeepsTrapListing Answer
+
+	// PipelineElementKeepsTrapListing is the same question asked of a
+	// pipeline element that runs in a subshell environment, and the panel
+	// pairs off the other way: bash and zsh keep the listing there, ksh93
+	// and dash do not. `trap 'echo x' USR1; trap | cat` prints the trap in
+	// bash and zsh and nothing in the other two — the shape issue #339
+	// measured.
+	PipelineElementKeepsTrapListing Answer
+
+	// BackgroundJobKeepsTrapListing asks it of `… &`. bash alone: the other
+	// three list nothing the parent had there.
+	BackgroundJobKeepsTrapListing Answer
+
+	// KeptTrapListingIncludesExit says a kept listing shows the parent's
+	// EXIT trap alongside the signals. bash and ksh93 list it; zsh keeps a
+	// pipeline element's listing and still drops EXIT from it. Unanswerable
+	// where nothing is kept, so dash never reaches the question.
+	KeptTrapListingIncludesExit Answer
+
+	// SubshellHidesInheritedIgnoredTraps drops an *inherited* ignore from
+	// the child's listing while the signal stays ignored in fact: zsh, where
+	// `trap '' INT; (trap)` prints nothing and `(kill -INT $$; echo alive)`
+	// still prints alive. The other three list what POSIX says is still a
+	// current trap. An ignore the child sets itself is listed everywhere.
+	SubshellHidesInheritedIgnoredTraps Answer
+
 	// LocalOutsideAFunctionIsAnError refuses `local x=2` written where there
 	// is no function to be local to.
 	//
@@ -1490,6 +1530,16 @@ func PosixSemantics() Semantics {
 		TrapHasErrCondition:    No,
 		TrapHasDebugCondition:  No,
 		TrapHasReturnCondition: No,
+		// POSIX resets a subshell's handled traps to their defaults, so the
+		// listing shows what survived: the ignored signals, which the
+		// standard still counts as traps in effect. The allowance for
+		// save=$(trap) is a may, not a shall, and the preset follows the
+		// rule rather than the allowance. KeptTrapListingIncludesExit is
+		// left unanswered because a listing that is never kept never asks.
+		SubshellKeepsTrapListing:           No,
+		PipelineElementKeepsTrapListing:    No,
+		BackgroundJobKeepsTrapListing:      No,
+		SubshellHidesInheritedIgnoredTraps: No,
 		// POSIX gives `command` -p and -v and gives `getopts` none, so a
 		// leading `-` word is an option to the first and the optstring to
 		// the second.

@@ -214,31 +214,97 @@ func sliceSpans(spans []syntax.Span, from, to cursor) []syntax.Span {
 	return out
 }
 
-// braceRange expands `{n..m}`, counting either way.
+// braceRange expands `{n..m}` and `{a..z}`, counting either way, with an
+// optional `..step` whose magnitude is taken and whose sign is not — the
+// direction belongs to the endpoints, and `{1..10..-3}` climbs anyway. A
+// step of zero means one, so a typo cannot hang the shell.
+//
+// Endpoints written with leading zeros pad the whole range to the widest
+// endpoint: `{01..03}` is `01 02 03`, and `{-03..3..3}` is `-03 000 003`,
+// with the zeros going after the sign. ksh93 alone strips the padding and
+// honors a step's sign; the majority answer is taken here, and the corpus
+// records the divergence.
 func braceRange(body string) ([]string, bool) {
-	lo, hi, ok := strings.Cut(body, "..")
+	lo, rest, ok := strings.Cut(body, "..")
 	if !ok {
 		return nil, false
 	}
+	hi, stepText, hasStep := strings.Cut(rest, "..")
+	step := 1
+	if hasStep {
+		n, err := strconv.Atoi(stepText)
+		if err != nil {
+			return nil, false
+		}
+		if n < 0 {
+			n = -n
+		}
+		if n != 0 {
+			step = n
+		}
+	}
+
+	if len(lo) == 1 && len(hi) == 1 && isRangeLetter(lo[0]) && isRangeLetter(hi[0]) {
+		// A letter range walks bytes, which is also what makes `{a..C}`
+		// produce the punctuation between the cases — measured, not chosen.
+		var out []string
+		from, to := int(lo[0]), int(hi[0])
+		dir := 1
+		if to < from {
+			dir = -1
+		}
+		for i := from; (dir > 0 && i <= to) || (dir < 0 && i >= to); i += dir * step {
+			out = append(out, string(rune(i)))
+		}
+		return out, true
+	}
+
 	from, err1 := strconv.Atoi(lo)
 	to, err2 := strconv.Atoi(hi)
 	if err1 != nil || err2 != nil {
 		return nil, false
 	}
-	step := 1
+	width := 0
+	if paddedEndpoint(lo) || paddedEndpoint(hi) {
+		width = max(len(lo), len(hi))
+	}
+	dir := 1
 	if to < from {
-		step = -1
+		dir = -1
 	}
 	var out []string
-	for i := from; ; i += step {
-		out = append(out, strconv.Itoa(i))
-		if i == to {
-			break
-		}
+	for i := from; (dir > 0 && i <= to) || (dir < 0 && i >= to); i += dir * step {
+		out = append(out, padNumber(i, width))
 		// A range is bounded so a typo cannot hang the shell.
 		if len(out) > 10000 {
 			return nil, false
 		}
 	}
 	return out, true
+}
+
+// isRangeLetter reports whether a byte can stand as a letter endpoint.
+func isRangeLetter(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+// paddedEndpoint reports whether an endpoint was written with leading zeros,
+// which is what turns the whole range on to padding.
+func paddedEndpoint(s string) bool {
+	s = strings.TrimPrefix(s, "-")
+	s = strings.TrimPrefix(s, "+")
+	return len(s) > 1 && s[0] == '0'
+}
+
+// padNumber renders n at the given total width, zeros after the sign.
+func padNumber(n, width int) string {
+	s := strconv.Itoa(n)
+	if len(s) >= width {
+		return s
+	}
+	sign := ""
+	if s[0] == '-' {
+		sign, s = "-", s[1:]
+	}
+	return sign + strings.Repeat("0", width-len(sign)-len(s)) + s
 }

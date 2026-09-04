@@ -115,3 +115,45 @@ func braceRun(t *testing.T, src string) string {
 	}
 	return buf.String()
 }
+
+// TestBraceRanges — the alphabetic, stepped and zero-padded forms, whose
+// absence left all three as literal text. The answers here are the majority
+// of the shells that expand braces; the corpus records where they part ways.
+func TestBraceRanges(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`echo {a..e}`, "a b c d e"},
+		{`echo {e..a}`, "e d c b a"},
+		{`echo {a..e..2}`, "a c e"},
+		{`echo {1..10..3}`, "1 4 7 10"},
+		{`echo {10..1..3}`, "10 7 4 1"},
+		{`echo {1..10..-3}`, "1 4 7 10"},
+		{`echo {01..03}`, "01 02 03"},
+		{`echo {1..03}`, "01 02 03"},
+		{`echo {-03..3..3}`, "-03 000 003"},
+		{`echo {1..5..0}`, "1 2 3 4 5"},
+		{`echo {1..5}`, "1 2 3 4 5"},
+		{`echo {a,b}c`, "ac bc"},
+		{`echo {a}`, "{a}"},
+		{`echo {a..5}`, "{a..5}"},
+		{`echo {a..bc}`, "{a..bc}"},
+	} {
+		var buf strings.Builder
+		sem := PosixSemantics()
+		sem.BraceExpansion = Yes
+		d := syntax.Core()
+		r := &Runner{
+			Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dialect: &d,
+			Stdout: &buf, Stderr: &buf,
+		}
+		f, err := syntax.Parse(tc.src, d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.TrimSpace(buf.String()); got != tc.want {
+			t.Errorf("%s = %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}

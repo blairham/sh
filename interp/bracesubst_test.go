@@ -117,8 +117,9 @@ func braceRun(t *testing.T, src string) string {
 }
 
 // TestBraceRanges — the alphabetic, stepped and zero-padded forms, whose
-// absence left all three as literal text. The answers here are the majority
-// of the shells that expand braces; the corpus records where they part ways.
+// absence left all three as literal text. The rows that reach a measured
+// disagreement answer it by name — BraceRangePadsToEndpointWidth and the
+// step-sign pair — with bash's answers; the axis tests hold the others.
 func TestBraceRanges(t *testing.T) {
 	for _, tc := range []struct{ src, want string }{
 		{`echo {a..e}`, "a b c d e"},
@@ -140,6 +141,9 @@ func TestBraceRanges(t *testing.T) {
 		var buf strings.Builder
 		sem := PosixSemantics()
 		sem.BraceExpansion = Yes
+		sem.BraceRangePadsToEndpointWidth = Yes
+		sem.BraceRangeStepSignHonored = No
+		sem.BraceRangeNegativeStepReverses = No
 		d := syntax.Core()
 		r := &Runner{
 			Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dialect: &d,

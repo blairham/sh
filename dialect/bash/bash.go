@@ -138,6 +138,12 @@ func Semantics() interp.Semantics {
 	s.ArithNegativeExponentIsError = interp.Yes
 	s.IndirectionYieldsName = interp.No
 	s.BraceExpansion = interp.Yes
+	// `{01..3}` is `01 02 03`; `{10..1..3}` is `10 7 4 1` and `{1..10..-3}`
+	// climbs anyway — the endpoints decide the direction and a step
+	// contributes magnitude alone, so `{3..1..-1}` stays `3 2 1`.
+	s.BraceRangePadsToEndpointWidth = interp.Yes
+	s.BraceRangeStepSignHonored = interp.No
+	s.BraceRangeNegativeStepReverses = interp.No
 	s.BracketCaretNegates = interp.Yes
 	s.RegexQuotingMakesLiteral = interp.Yes
 	s.ShiftPastEndFatal = interp.No

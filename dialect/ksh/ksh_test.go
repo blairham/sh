@@ -77,6 +77,12 @@ func TestSemantics(t *testing.T) {
 		{"DeclaredNameWithoutValueIsEmpty", s.DeclaredNameWithoutValueIsEmpty, interp.No},
 		{"TypesetLocalNeedsKeywordFunction", s.TypesetLocalNeedsKeywordFunction, interp.Yes},
 		{"IndirectionYieldsName", s.IndirectionYieldsName, interp.Yes},
+		// The brace-range answers: `{01..3}` is `1 2 3`, `{10..1..3}` is
+		// `10` and `{1..10..-3}` is `1`, and `{3..1..-1}` keeps the
+		// endpoints' order as `3 2 1`.
+		{"BraceRangePadsToEndpointWidth", s.BraceRangePadsToEndpointWidth, interp.No},
+		{"BraceRangeStepSignHonored", s.BraceRangeStepSignHonored, interp.Yes},
+		{"BraceRangeNegativeStepReverses", s.BraceRangeNegativeStepReverses, interp.No},
 		{"ArithInvalidOctalDigitIsError", s.ArithInvalidOctalDigitIsError, interp.No},
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.Yes},
 		{"ArithIntegerOperatorRefusesFloat", s.ArithIntegerOperatorRefusesFloat, interp.Yes},
@@ -379,6 +385,36 @@ func TestKshHasOnlyTheOlderDeclarationName(t *testing.T) {
 		}
 		if !strings.Contains(out.String(), tc.want) {
 			t.Errorf("%s: got %q, want it to contain %q", tc.name, out.String(), tc.want)
+		}
+	}
+}
+
+// TestBraceRangeAnswers: the range corners that are ksh93's alone — an
+// endpoint's zeros are stripped rather than padding the range, and a written
+// step's sign is taken at its word, so a sign pointing away from the far
+// endpoint leaves the range one element long.
+func TestBraceRangeAnswers(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`echo {01..3}`, "1 2 3"},
+		{`echo {-03..3..3}`, "-3 0 3"},
+		{`echo {10..1..3}`, "10"},
+		{`echo {1..10..-3}`, "1"},
+		{`echo {a..e..-1}`, "a"},
+		{`echo {3..1..-1}`, "3 2 1"},
+	} {
+		f, err := syntax.Parse(tc.src, ksh.Dialect())
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		s, d := ksh.Semantics(), ksh.Diagnostics()
+		r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+		ksh.Apply(r)
+		if _, err := r.Run(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.TrimSpace(out.String()); got != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.src, got, tc.want)
 		}
 	}
 }

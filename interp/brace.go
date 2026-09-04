@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -25,7 +26,7 @@ import (
 // Only unquoted literal spans take part. `"{a,b}"` is one word, because
 // quoting is what decides whether text is syntax — the same rule that decides
 // whether a `*` is a pattern.
-func braceExpand(w *syntax.Word) []*syntax.Word {
+func (r *Runner) braceExpand(w *syntax.Word) []*syntax.Word {
 	if w == nil {
 		return nil
 	}
@@ -37,7 +38,7 @@ func braceExpand(w *syntax.Word) []*syntax.Word {
 	if !ok {
 		return []*syntax.Word{w}
 	}
-	alts, ok := alternativesAcross(w.Spans, open, close)
+	alts, ok := r.alternativesAcross(w.Spans, open, close)
 	if !ok {
 		return []*syntax.Word{w}
 	}
@@ -51,7 +52,7 @@ func braceExpand(w *syntax.Word) []*syntax.Word {
 		spans = append(spans, alt...)
 		spans = append(spans, after...)
 		// Recur, so `{a,b}{c,d}` and nested braces both work.
-		out = append(out, braceExpand(&syntax.Word{Spans: spans, Start: w.Start, Stop: w.Stop})...)
+		out = append(out, r.braceExpand(&syntax.Word{Spans: spans, Start: w.Start, Stop: w.Stop})...)
 	}
 	return out
 }
@@ -118,9 +119,9 @@ func matchBraceAcross(spans []syntax.Span, open cursor) (cursor, bool) {
 
 // alternativesAcross splits the body between open and close on top-level
 // commas, returning each alternative as its own span list.
-func alternativesAcross(spans []syntax.Span, open, close cursor) ([][]syntax.Span, bool) {
-	if r, ok := rangeAcross(spans, open, close); ok {
-		return r, true
+func (r *Runner) alternativesAcross(spans []syntax.Span, open, close cursor) ([][]syntax.Span, bool) {
+	if alts, ok := r.rangeAcross(spans, open, close); ok {
+		return alts, true
 	}
 	var out [][]syntax.Span
 	depth := 0
@@ -163,12 +164,12 @@ func alternativesAcross(spans []syntax.Span, open, close cursor) ([][]syntax.Spa
 // rangeAcross expands `{n..m}`, which only makes sense when the whole body is
 // literal — a range with a variable endpoint cannot work in any shell,
 // because braces resolve before the variable exists.
-func rangeAcross(spans []syntax.Span, open, close cursor) ([][]syntax.Span, bool) {
+func (r *Runner) rangeAcross(spans []syntax.Span, open, close cursor) ([][]syntax.Span, bool) {
 	if open.span != close.span {
 		return nil, false
 	}
 	body := spans[open.span].Value[open.off+1 : close.off]
-	alts, ok := braceRange(body)
+	alts, ok := r.braceRange(body)
 	if !ok {
 		return nil, false
 	}
@@ -215,27 +216,29 @@ func sliceSpans(spans []syntax.Span, from, to cursor) []syntax.Span {
 }
 
 // braceRange expands `{n..m}` and `{a..z}`, counting either way, with an
-// optional `..step` whose magnitude is taken and whose sign is not — the
-// direction belongs to the endpoints, and `{1..10..-3}` climbs anyway. A
-// step of zero means one, so a typo cannot hang the shell.
+// optional `..step`. A step of zero means one, so a typo cannot hang the
+// shell.
 //
-// Endpoints written with leading zeros pad the whole range to the widest
-// endpoint: `{01..03}` is `01 02 03`, and `{-03..3..3}` is `-03 000 003`,
-// with the zeros going after the sign. ksh93 alone strips the padding and
-// honors a step's sign; the majority answer is taken here, and the corpus
-// records the divergence.
-func braceRange(body string) ([]string, bool) {
+// The shells that expand braces at all disagree twice inside a range, and
+// each disagreement is a named axis asked where it is reached: whether an
+// endpoint's leading zeros pad the range (BraceRangePadsToEndpointWidth),
+// and what a written step's sign means (BraceRangeStepSignHonored, then
+// BraceRangeNegativeStepReverses). The corpus cases behind the answers are
+// `expand/brace-range-zero-padded` and the step-sign pair.
+func (r *Runner) braceRange(body string) ([]string, bool) {
 	lo, rest, ok := strings.Cut(body, "..")
 	if !ok {
 		return nil, false
 	}
 	hi, stepText, hasStep := strings.Cut(rest, "..")
 	step := 1
+	negStep := false
 	if hasStep {
 		n, err := strconv.Atoi(stepText)
 		if err != nil {
 			return nil, false
 		}
+		negStep = n < 0
 		if n < 0 {
 			n = -n
 		}
@@ -247,16 +250,8 @@ func braceRange(body string) ([]string, bool) {
 	if len(lo) == 1 && len(hi) == 1 && isRangeLetter(lo[0]) && isRangeLetter(hi[0]) {
 		// A letter range walks bytes, which is also what makes `{a..C}`
 		// produce the punctuation between the cases — measured, not chosen.
-		var out []string
-		from, to := int(lo[0]), int(hi[0])
-		dir := 1
-		if to < from {
-			dir = -1
-		}
-		for i := from; (dir > 0 && i <= to) || (dir < 0 && i >= to); i += dir * step {
-			out = append(out, string(rune(i)))
-		}
-		return out, true
+		return r.walkRange(int(lo[0]), int(hi[0]), step, hasStep, negStep,
+			func(i int) string { return string(rune(i)) })
 	}
 
 	from, err1 := strconv.Atoi(lo)
@@ -266,21 +261,63 @@ func braceRange(body string) ([]string, bool) {
 	}
 	width := 0
 	if paddedEndpoint(lo) || paddedEndpoint(hi) {
-		width = max(len(lo), len(hi))
+		if r.askRange(r.sem().BraceRangePadsToEndpointWidth, "an endpoint's leading zeros padding the range") {
+			width = max(len(lo), len(hi))
+		} else if r.unspecified {
+			return nil, false
+		}
+	}
+	return r.walkRange(from, to, step, hasStep, negStep,
+		func(i int) string { return padNumber(i, width) })
+}
+
+// walkRange produces a range's elements from one endpoint to the other. The
+// endpoints decide the direction and the step contributes magnitude alone —
+// except where a written sign says otherwise, which is a measured
+// disagreement asked here rather than resolved by a constant.
+func (r *Runner) walkRange(from, to, step int, hasStep, negStep bool, render func(int) string) ([]string, bool) {
+	desc := to < from
+	if hasStep && negStep != desc &&
+		r.askRange(r.sem().BraceRangeStepSignHonored, "a step's sign overriding the endpoints' direction") {
+		// The walk leaves the first endpoint the way the sign says, which
+		// here is away from the far one, so the range holds one element.
+		return []string{render(from)}, true
+	}
+	if r.unspecified {
+		return nil, false
 	}
 	dir := 1
-	if to < from {
+	if desc {
 		dir = -1
 	}
 	var out []string
 	for i := from; (dir > 0 && i <= to) || (dir < 0 && i >= to); i += dir * step {
-		out = append(out, padNumber(i, width))
+		out = append(out, render(i))
 		// A range is bounded so a typo cannot hang the shell.
 		if len(out) > 10000 {
 			return nil, false
 		}
 	}
+	if hasStep && negStep &&
+		r.askRange(r.sem().BraceRangeNegativeStepReverses, "a negative step reversing the range") {
+		slices.Reverse(out)
+	}
+	if r.unspecified {
+		return nil, false
+	}
 	return out, true
+}
+
+// askRange asks a brace-range axis, but only in a dialect whose braces
+// expand at all. When BraceExpansion is off or unanswered, whatever a range
+// produced is put back or refused by that outer axis, so a range that will
+// never be used must not be the thing that refuses the script — dash prints
+// `{01..3}` as written and is never asked what the zeros mean.
+func (r *Runner) askRange(a Answer, axis string) bool {
+	if r.sem().BraceExpansion != Yes {
+		return false
+	}
+	return r.ask(a, axis)
 }
 
 // isRangeLetter reports whether a byte can stand as a letter endpoint.

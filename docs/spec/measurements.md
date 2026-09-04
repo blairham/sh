@@ -165,6 +165,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `expand/brace-range-stepped` | `{1..10..3}` | `1 4 7 10` | `1 4 7 10` | `{1..10..3}` | `1 4 7 10` | `1 4 7 10` |
 | `expand/brace-range-zero-padded` | `{01..03}~{1..03}~{-03..3..3}` | `01 02 03~01 02 03~-03 000 003` | `01 02 03~01 02 03~-03 000 003` | `1 2 3~1 2 3~{-03..3..3}` | `1 2 3~1 2 3~-3 0 3` | `01 02 03~01 02 03~-03 000 003` |
 | `expand/brace-range-step-sign-and-direction` | `{10..1..3}~{1..10..-3}` | `10 7 4 1~1 4 7 10` | `10 7 4 1~1 4 7 10` | `{10..1..3}~{1..10..-3}` | `10~1` | `10 7 4 1~10 7 4 1` |
+| `expand/brace-range-negative-step-reversal` | `{3..1..-1}~{1..10..-4}` | `3 2 1~1 5 9` | `3 2 1~1 5 9` | `{3..1..-1}~{1..10..-4}` | `3 2 1~1` | `1 2 3~9 5 1` |
 | `expand/brace-range-alpha-stepped` | `{a..e..2}` | `a c e` | `a c e` | `{a..e..2}` | `a c e` | `{a..e..2}` |
 | `expand/brace-before-param` | `{1,2}` | `1 2` | `1 2` | `1 2` | `1 2` | `1 2` |
 | `expand/tilde-unquoted` | `abs` | `abs` | `abs` | `abs` | `abs` | `abs` |
@@ -237,9 +238,13 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   echo {01..03}; echo {1..03}; echo {-03..3..3}
   ```
-- `expand/brace-range-step-sign-and-direction` — the endpoints decide the direction and the step contributes magnitude alone in bash and zsh; ksh93 honors the sign and stops after one element when it points the wrong way
+- `expand/brace-range-step-sign-and-direction` — the endpoints decide the direction and the step contributes magnitude alone in bash; ksh93 honors the sign and stops after one element when it points the wrong way; zsh ignores a positive sign like bash but a negative one reverses its result
   ```sh
   echo {10..1..3}; echo {1..10..-3}
+  ```
+- `expand/brace-range-negative-step-reversal` — the corners that separate the three step-sign models: a negative sign agreeing with the endpoints changes nothing in bash and ksh93 but still reverses zsh; and zsh reverses the walk rather than swapping the endpoints — 9 5 1, bash's 1 5 9 backwards, not 10 6 2
+  ```sh
+  echo {3..1..-1}; echo {1..10..-4}
   ```
 - `expand/brace-range-alpha-stepped` — a stride over a letter range: bash and ksh93 expand it, zsh leaves the word alone
   ```sh

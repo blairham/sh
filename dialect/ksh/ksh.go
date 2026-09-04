@@ -160,6 +160,13 @@ func Semantics() interp.Semantics {
 	s.ArithInvalidOctalDigitIsError = interp.No
 	s.IndirectionYieldsName = interp.Yes
 	s.BraceExpansion = interp.Yes
+	// The one shell that strips a range endpoint's zeros — `{01..3}` is
+	// `1 2 3` — and takes a written step's sign at its word, so `{10..1..3}`
+	// is `10` alone and `{1..10..-3}` is `1`. A negative step that agrees
+	// with the endpoints keeps their order: `{3..1..-1}` is `3 2 1`.
+	s.BraceRangePadsToEndpointWidth = interp.No
+	s.BraceRangeStepSignHonored = interp.Yes
+	s.BraceRangeNegativeStepReverses = interp.No
 	s.BracketCaretNegates = interp.Yes
 	s.LastPipelineElementInCurrentShell = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral

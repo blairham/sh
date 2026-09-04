@@ -28,8 +28,11 @@ func (r *Runner) expandWord(w *syntax.Word) []string {
 		return nil
 	}
 	// Brace expansion comes first and can turn one word into several, so it
-	// wraps the rest rather than being a stage inside it.
-	if words := braceExpand(w); len(words) > 1 &&
+	// wraps the rest rather than being a stage inside it. One word back can
+	// still be an expansion — `{1..1}` is `1`, and a range whose honored
+	// step sign points away from the far endpoint holds one element — so
+	// the test is whether the word changed, not whether it multiplied.
+	if words := r.braceExpand(w); (len(words) > 1 || len(words) == 1 && words[0] != w) &&
 		r.ask(r.sem().BraceExpansion, "brace expansion") {
 		var out []string
 		for _, bw := range words {

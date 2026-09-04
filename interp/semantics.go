@@ -581,6 +581,18 @@ type Semantics struct {
 	// `${u-UNSET}` is empty there and UNSET in bash and ksh93 — the name
 	// exists in all three, but only zsh considers it set.
 	DeclaredNameWithoutValueIsEmpty Answer
+	// ValuelessDeclarationHidesTheOuterValue makes `local u` in a function
+	// hide any outer `u` — the local exists unset, so `${u-UNSET}` fires the
+	// default even when the caller had a value. Reached only when
+	// DeclaredNameWithoutValueIsEmpty said no: a name declared *empty* hides
+	// the outer value by having one of its own.
+	//
+	// bash hides it, and so does ksh93's `typeset` in a keyword function;
+	// dash leaves the caller's value showing through until the first
+	// assignment. This is the shape used to declare a local before
+	// assigning it conditionally, so the difference is silent: the function
+	// reads the caller's value where it expected nothing.
+	ValuelessDeclarationHidesTheOuterValue Answer
 	// TypesetLocalNeedsKeywordFunction restricts `typeset`'s local scope to
 	// functions defined with the `function` word. ksh93 says yes: in
 	// `f() { typeset x=1; }` the assignment reaches the caller's `x`, and in
@@ -1315,6 +1327,9 @@ func PosixSemantics() Semantics {
 		// three of the four do — the substrate keeps the answer it had
 		// before the question was one.
 		LocalOutsideAFunctionIsAnError: Yes,
+		// The standard has no `local`; dash is the closest reading, and it
+		// leaves the outer value visible until the first assignment.
+		ValuelessDeclarationHidesTheOuterValue: No,
 		// POSIX has `trap` save the action and execute it when the
 		// condition arises, so the text is not read until then. Three of
 		// the four agree; zsh reads it as the trap is set.

@@ -2560,6 +2560,18 @@ echo unreachable`,
 		Why:     "zsh alone considers a name declared without a value to be set, so `${u-UNSET}` is empty there and UNSET elsewhere; ksh93 has no `local` at all",
 	},
 	{
+		ID: "declare/valueless-local-with-an-outer-value", Category: "declarations",
+		Script:  true,
+		Snippet: "u=out\nf() { local u; echo \"[${u-UNSET}]\"; }\nf\necho \"after=[$u]\"\n",
+		Why:     "whether the local hides the caller's value: bash says UNSET, dash lets `out` show through until the first assignment, zsh declares it empty — the declare-then-assign-conditionally shape makes the difference silent",
+	},
+	{
+		ID: "declare/valueless-typeset-with-an-outer-value", Category: "declarations",
+		Script:  true,
+		Snippet: "u=out\nfunction f { typeset u; echo \"[${u-UNSET}]\"; }\nf\necho \"after=[$u]\"\n",
+		Why:     "the same question through `typeset` in a keyword function, which is the form ksh93 gives a scope: ksh93 hides the value as bash's local does",
+	},
+	{
 		ID: "declare/integer-attribute-evaluates-a-later-assignment", Category: "declarations",
 		Snippet: `typeset -i n; n=5+2; echo "[$n]"`,
 		Why:     "the attribute belongs to the name, so an ordinary assignment made afterwards is an expression — which is the whole point of it",

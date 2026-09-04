@@ -3115,6 +3115,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `declare/local-in-a-posix-function` | `<script>: 2: typeset: not found~[outer]` | `[outer]` | `[outer]` | `[outer]` | `[inner]` | `[outer]` |
 | `declare/local-in-a-keyword-function` | `<script>: 2: Syntax error: "}" unexpected` *(status 2)* | `[outer]` | `[outer]` | `[outer]` | `[outer]` | `[outer]` |
 | `declare/valueless-local` | `[UNSET]` | `[UNSET]` | `[UNSET]` | `[]` | `<script>: line 1: local: not found~[UNSET]` | `[]` |
+| `declare/valueless-local-with-an-outer-value` | `[out]~after=[out]` | `[UNSET]~after=[out]` | `[UNSET]~after=[out]` | `[UNSET]~after=[out]` | `<script>: line 2: local: not found~[out]~after=[out]` | `[]~after=[out]` |
+| `declare/valueless-typeset-with-an-outer-value` | `<script>: 2: Syntax error: "}" unexpected` *(status 2)* | `[UNSET]~after=[out]` | `[UNSET]~after=[out]` | `[UNSET]~after=[out]` | `[UNSET]~after=[out]` | `[]~after=[out]` |
 | `declare/integer-attribute-evaluates-a-later-assignment` | `<shell>: 1: typeset: not found~[5+2]` | `[7]` | `[7]` | `[7]` | `[7]` | `[7]` |
 | `declare/integer-attribute-on-the-declaration` | `<shell>: 1: typeset: not found~[]` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` |
 | `declare/integer-attribute-removed` | `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found~[5+2]` | `[5+2]` | `[5+2]` | `[5+2]` | `[5+2]` | `[5+2]` |
@@ -3147,6 +3149,20 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   f() { local u; echo "[${u-UNSET}]"; }
   f
+  ```
+- `declare/valueless-local-with-an-outer-value` — whether the local hides the caller's value: bash says UNSET, dash lets `out` show through until the first assignment, zsh declares it empty — the declare-then-assign-conditionally shape makes the difference silent
+  ```sh
+  u=out
+  f() { local u; echo "[${u-UNSET}]"; }
+  f
+  echo "after=[$u]"
+  ```
+- `declare/valueless-typeset-with-an-outer-value` — the same question through `typeset` in a keyword function, which is the form ksh93 gives a scope: ksh93 hides the value as bash's local does
+  ```sh
+  u=out
+  function f { typeset u; echo "[${u-UNSET}]"; }
+  f
+  echo "after=[$u]"
   ```
 - `declare/integer-attribute-evaluates-a-later-assignment` — the attribute belongs to the name, so an ordinary assignment made afterwards is an expression — which is the whole point of it
   ```sh

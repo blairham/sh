@@ -91,6 +91,8 @@ func Semantics() interp.Semantics {
 	s.RegexQuotingMakesLiteral = interp.Yes
 	s.ShiftPastEndFatal = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
+	// `local u` hides the caller's `u` — the local exists unset.
+	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes
 	s.TypesetLocalNeedsKeywordFunction = interp.No
 	s.ReadonlyReassignmentFatal = interp.No
 	s.ReadonlyReassignmentFatalFromCommandString = interp.Yes

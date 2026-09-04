@@ -418,6 +418,15 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 			delete(r.Arrays, name)
 		}
 	}
+	// And whether `unset` had hidden the name, which a hiding `local` set
+	// for the function's duration: put back what was true at the shadow.
+	for name, was := range sc.removedBefore {
+		if was {
+			r.removed[name] = true
+		} else {
+			delete(r.removed, name)
+		}
+	}
 	r.scopes = r.scopes[:len(r.scopes)-1]
 	// zsh runs an EXIT trap set *inside* a function when the function
 	// returns, and then forgets it; the other three keep it for the end of

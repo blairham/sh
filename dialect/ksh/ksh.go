@@ -88,6 +88,9 @@ func Semantics() interp.Semantics {
 	s.SelectTakesUnterminatedReply = interp.No
 	s.SelectEofPrintsNewline = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
+	// typeset in a keyword function hides the caller's value, as bash's
+	// local does.
+	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes
 	s.TypesetLocalNeedsKeywordFunction = interp.Yes
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.ArithInvalidOctalDigitIsError = interp.No

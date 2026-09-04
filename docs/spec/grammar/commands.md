@@ -44,6 +44,52 @@ A pipeline's status is its **last** command's:
     false | true ; echo $?  →  0
     true | false ; echo $?  →  1
 
+## `time` prefixes a pipeline
+
+`time` is a reserved word, not a command. It times a **whole pipeline**
+and writes its report to the **shell's** standard error, which is why
+
+    time true 2>&1 | wc -l   →  0   in bash, ksh93 and zsh
+
+counts nothing: the redirection belongs to an element inside the
+pipeline, and the report lands outside it. dash has no such word at all —
+`time` there is an ordinary name that finds `/usr/bin/time` or nothing,
+and the same snippet counts 1 because the external's report went through
+the pipe. (Measured 2026-09-04, bash 5.3.15 / ksh 93u+ 2012 / zsh 5.9.2 /
+dash on macOS.)
+
+Where it stands is measured, not assumed:
+
+- **Only at the start of a pipeline** — before the elements, and on
+  either side of `!`: `time ! true` and `! time true` both parse and both
+  report, with status 1 from the negation. bash and ksh93 print the
+  report for both; zsh prints nothing for either, because nothing forked
+  (see semantics.md — its report is per element and only for elements
+  that fork).
+- **Not in the middle of one**: `echo hi | time wc -c` is not a parse
+  error anywhere, but bash and dash resolve `time` from PATH there and
+  run the external. (ksh93 and zsh read the word as the keyword even
+  there, which is a divergence this grammar does not add: the common
+  ground is keyword-at-the-front, ordinary-word elsewhere.)
+- **After an assignment prefix it is a word**: `FOO=1 time true` runs the
+  external, exactly as any reserved word stops being one once the command
+  has begun.
+
+`time -p` switches the report to the POSIX format — `real 0.00`,
+`user 0.00`, `sys 0.00`, one space, two decimals, no leading blank line —
+identically in bash and ksh93. zsh does not read `-p` at all: it becomes
+the first word of the timed pipeline, and `time -p true` there is
+`command not found: -p` with the pipeline still timed. So the flag is a
+separate grammar question from the keyword and is not core.
+
+A bare `time`, with no pipeline, parses and reports in all three shells
+that have the keyword (what it reports diverges — see semantics.md), and
+resets the status to 0: `false; time; echo $?` prints 0 in all three.
+A bare `time` directly followed by `|` is a syntax error in bash.
+
+The status of a timed pipeline is the pipeline's own: `time false`
+reports 1 in all three.
+
 ## Simple commands
 
 A simple command is any interleaving of three things: variable

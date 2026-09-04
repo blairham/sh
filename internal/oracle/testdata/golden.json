@@ -19482,6 +19482,70 @@
         "TimedOut": false
       }
     },
+    "time/report-format-is-per-dialect": {
+      "bash": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "0",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "time/report-lands-outside-the-pipeline": {
+      "bash": {
+        "Output": "       0~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "       0~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "       0~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "       1~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "       0~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "       0~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "times/argument-diverges": {
       "bash": {
         "Output": "NmN.Ns NmN.Ns~NmN.Ns NmN.Ns~st=0",

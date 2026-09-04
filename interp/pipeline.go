@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -122,7 +123,10 @@ func (r *Runner) lockedStdin() io.Reader {
 // from anyone and the core does not refuse it. That is the same rule the
 // `[^…]` axis uses: ask about the construct in front of you, not about every
 // construct that shares a code path.
-func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline) error {
+// timing, when non-nil, collects each element's wall time and external CPU
+// for a `time` clause whose layout reports per element. One slot per element,
+// already sized by the caller, so the goroutines write disjoint slots.
+func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pipelineTiming) error {
 	n := len(p.Cmds)
 	readers := make([]*os.File, n)
 	writers := make([]*os.File, n)
@@ -221,6 +225,11 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline) error {
 			// A pipe end is this element's alone, so it needs no guard.
 			sub.Stdout = writers[i]
 		}
+		if timing != nil {
+			// The element's externals bill its own slot, wherever inside
+			// it they run — the clone hands the pointer down.
+			sub.elemCPU = &timing.elems[i].cpu
+		}
 		subs[i] = sub
 	}
 
@@ -228,7 +237,11 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline) error {
 		wg.Add(1)
 		go func(i int, cmd syntax.Command) {
 			defer wg.Done()
+			start := time.Now()
 			errs[i] = subs[i].command(ctx, cmd)
+			if timing != nil {
+				timing.elems[i].wall = time.Since(start)
+			}
 			statuses[i] = subs[i].status
 			// An element that never reached a trace point must still let the
 			// next one print, or the pipeline deadlocks on its own logging.
@@ -254,16 +267,25 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline) error {
 			defer func() { r.traceWait, r.traceDone, r.traceOnce = nil, nil, nil }()
 		}
 		savedIn, savedOut, savedErr := r.Stdin, r.Stdout, r.Stderr
+		savedCPU := r.elemCPU
 		if readers[i] != nil {
 			r.Stdin = readers[i]
 		}
 		r.Stdout, r.Stderr = sharedOut, sharedErr
+		if timing != nil {
+			r.elemCPU = &timing.elems[i].cpu
+		}
 		// No naming needed here: this element runs on the shell itself
 		// rather than on a copy, so the dispatch records it the way it
 		// records any other command. Verified by mutation, not assumed.
+		start := time.Now()
 		errs[i] = r.command(ctx, p.Cmds[i])
+		if timing != nil {
+			timing.elems[i].wall = time.Since(start)
+		}
 		statuses[i] = r.status
 		r.Stdin, r.Stdout, r.Stderr = savedIn, savedOut, savedErr
+		r.elemCPU = savedCPU
 		if readers[i] != nil {
 			_ = readers[i].Close()
 		}

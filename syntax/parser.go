@@ -552,12 +552,22 @@ func (p *Parser) parseAndOr() Expr {
 
 // parsePipeline reads commands joined by `|`, with an optional leading `!`
 // that negates the whole pipeline rather than its first command.
+//
+// `time` is read here rather than in parseCommand because that is what it
+// binds: the whole pipeline, on either side of the `!` — `time ! true` and
+// `! time true` both parse, and both report.
 func (p *Parser) parsePipeline() Expr {
+	if p.dialect.TimeKeyword && p.atWord("time") {
+		return p.parseTime(false, Pos{})
+	}
 	pl := &Pipeline{}
 	if p.atWord("!") {
 		pl.Negated = true
 		pl.Bang = p.tok.Pos
 		p.next()
+		if p.dialect.TimeKeyword && p.atWord("time") {
+			return p.parseTime(true, pl.Bang)
+		}
 	}
 	// A bar is recorded while the command after it is being looked for, so
 	// that input ending there is describable as a pipeline waiting for its
@@ -588,6 +598,28 @@ func (p *Parser) parsePipeline() Expr {
 		p.next()
 		p.skipNewlines()
 	}
+}
+
+// parseTime reads `time [-p] [pipeline]`, the keyword already at hand.
+//
+// The pipeline is read by parsePipeline itself, so `time` takes everything a
+// pipeline takes — the bars, an inner `!`, even another `time` — and nothing
+// more: an `&&` past it belongs to the caller. A bare `time` is legitimate
+// and reports on nothing, but a bare `time` followed by `|` is a pipe with no
+// first element, which is the syntax error bash makes of it.
+func (p *Parser) parseTime(negated bool, bang Pos) Expr {
+	tc := &TimeClause{Negated: negated, Bang: bang, Time: p.tok.Pos, Stop: p.tok.End}
+	p.next()
+	if p.dialect.TimePosixFlag && p.atWord("-p") {
+		tc.Posix, tc.PosixPos = true, p.tok.Pos
+		tc.Stop = p.tok.End
+		p.next()
+	}
+	tc.Pipeline = p.parsePipeline()
+	if tc.Pipeline == nil && p.at(TokPipe) {
+		p.failUnexpected("")
+	}
+	return tc
 }
 
 // parseCommand dispatches on what begins the command.

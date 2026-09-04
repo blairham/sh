@@ -128,6 +128,22 @@ type Diagnostics struct {
 	// pair.
 	DirectoryReason string
 
+	// TimeLayout is how the `time` keyword arranges its report. Zero is the
+	// substrate's own: a blank line, then labeled `real`, `user` and `sys`
+	// lines in the minutes-and-seconds form — the shape bash and ksh93
+	// share, apart in only their decimals.
+	TimeLayout TimeLayout
+	// TimeDecimals is how many decimal places that report's seconds carry:
+	// bash 3, ksh93 2. Zero means the substrate's own, which is 3. The
+	// per-command layout does not read it — its line fixes its own widths.
+	TimeDecimals int
+	// TimeBare is what a `time` with no pipeline reports. The three shells
+	// that have the keyword give three answers: bash reports a run of
+	// nothing, ksh93 the shell's own user and sys with no real, zsh a
+	// `shell` and a `children` line. Zero is the first, which is also the
+	// substrate's own.
+	TimeBare TimeBareLayout
+
 	// TimesLayout is how `times` arranges what it prints. Zero is the
 	// substrate's own, which is the two-line self-then-children shape dash,
 	// bash and zsh share.
@@ -1819,6 +1835,14 @@ func (d Diagnostics) redirectFailureStatus() int {
 		return 1
 	}
 	return d.RedirectFailureStatus
+}
+
+// timeDecimals is TimeDecimals with the substrate's own answer for zero.
+func (d Diagnostics) timeDecimals() int {
+	if d.TimeDecimals == 0 {
+		return 3
+	}
+	return d.TimeDecimals
 }
 
 // timesDecimals is TimesDecimals with the substrate's own answer for zero.

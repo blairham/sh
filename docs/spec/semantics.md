@@ -69,6 +69,11 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | `times` layout | self/children | self/children | **user/sys, labeled** | self/children |
 | `times` decimal places | **6** | **3** | 2 | 2 |
 | `times` with an argument | ignored | ignored | **syntax error** | **refused** |
+| `time` keyword | **absent** | yes | yes | yes |
+| `time` report layout | *n/a* | real/user/sys | real/user/sys | **one line per forked element** |
+| `time` decimal places | *n/a* | **3** | 2 | 2 |
+| `time -p` | *n/a* | POSIX format | POSIX format | **not read: a word of the pipeline** |
+| bare `time` reports | *n/a* | a run of nothing | **shell user/sys, no real** | **shell and children lines** |
 | a diagnostic names the builtin | no | no | no | **in the location** |
 | a failed `exec` runs the EXIT trap | yes | yes | **no** | **no** |
 | `exec` reads options of its own | **no** | yes | yes | yes |
@@ -98,6 +103,19 @@ Probes, for reproduction:
     empty PATH       PATH=; ./x-in-cwd-by-name       → runs, runs, NOT FOUND, runs
     times shape      times | sed -E 's/[0-9]+/N/g'    → 2x2, 2x2, labeled user/sys, 2x2
     times argument   times foo; echo $?              → 0, 0, syntax error 3, refused 1
+    time keyword     time true 2>&1 | wc -l          → 1 (external's report piped), 0, 0, 0
+    time layout      time true 2>err; cat err        → n/a, \n+real/user/sys 0m0.000s, same 0m0.00s, NOTHING (no fork)
+    time per element time /usr/bin/true 2>err        → n/a, real/user/sys, real/user/sys, "/usr/bin/true  0.00s user 0.00s system N% cpu 0.001 total"
+    time -p          time -p /usr/bin/true           → n/a, "real 0.00\nuser 0.00\nsys 0.00", same, "command not found: -p" and the line still printed
+    bare time        false; time; echo $?            → n/a, zeros report st=0, user/sys of the shell st=0, shell+children lines st=0
+
+The `time` report always lands on the **shell's** stderr: the layout rows
+above were measured with the redirection *outside* the construct
+(`{ time true; } 2>err`), and zsh's per-element line carries the element
+as written — `true 2>&1  0.00s user …` for `time true 2>&1 | wc -l`, one
+line per element, because each element of a multi-element pipeline forks
+there. An element that does not fork (a lone builtin, a `{ }` group even
+around an external) reports nothing at all in zsh.
     builtin in prefix shift 5                        → sh: 1: shift: …, …, …, zsh:shift:1: …
     exec trap        trap T EXIT; exec nosuch        → T, T, silent, silent
     exec options     exec -a n sh -c 'echo $0'       → not found, n, n, n

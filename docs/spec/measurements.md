@@ -3417,6 +3417,22 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   times foo 2>&1 | sed -E "s/[0-9]+/N/g"; echo "st=$?"
   ```
 
+## time
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `time/report-lands-outside-the-pipeline` | `       1~st=0` | `       0~st=0` | `       0~st=0` | `       0~st=0` | `       0~st=0` | `       0~st=0` |
+| `time/report-format-is-per-dialect` | `1` | `1` | `1` | `1` | `1` | `0` *(status 1)* |
+
+- `time/report-lands-outside-the-pipeline` — `time` is a reserved word timing the whole pipeline, and its report goes to the *shell's* stderr — the `2>&1` belongs to an element inside the pipeline, so `wc` counts 0 in every shell that has the keyword. dash has no keyword at all: `time` resolves to /usr/bin/time there, whose report the element's own redirect does catch, and the count is 1. The outer redirect silences the reports themselves, which are numbers no record could hold
+  ```sh
+  (time true 2>&1 | wc -l) 2>/dev/null; echo "st=$?"
+  ```
+- `time/report-format-is-per-dialect` — the report redirected from *outside* the construct, reduced to whether it says `real`: bash and ksh93 print a real/user/sys block — apart only in decimals — so 1; zsh reports per pipeline element and only for one that forked, and a lone builtin forks nothing, so 0 lines and 0; dash's /usr/bin/time prints one line whose words include `real`, so 1 — three shapes under one count
+  ```sh
+  { time true; } 2>&1 | grep -c real
+  ```
+
 ## command lookup
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |

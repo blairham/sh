@@ -3,7 +3,10 @@
 
 package interp
 
-import "syscall"
+import (
+	"syscall"
+	"time"
+)
 
 // How a command ended.
 //
@@ -23,6 +26,14 @@ type Wait struct {
 	// it exited and Status is the answer.
 	Killed  bool
 	Stopped bool
+
+	// User and System are the CPU the command spent, from the wait that
+	// reaped it — wait4 hands them back beside the status, and a waiter
+	// that reaps the child is the only place they can still be read. Zero
+	// when the waiter did not ask, or when the command merely stopped and
+	// has not been reaped at all. The `time` keyword's per-element report
+	// is what reads them.
+	User, System time.Duration
 }
 
 // waitResult turns a Wait into the status a script sees, and reports whether

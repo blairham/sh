@@ -679,6 +679,32 @@ type Semantics struct {
 	// reaches a parse failure at fire time.
 	TrapParseFailureNamesWhereItFired Answer
 
+	// SymbolicMaskTakesMoreThanOneOperator lets one `umask` clause turn on
+	// several: `umask u+rw-x` is 0122 from 022 in three of the four. zsh
+	// takes a single operator per clause and names the second one.
+	SymbolicMaskTakesMoreThanOneOperator Answer
+
+	// SymbolicMaskSetsWithoutAWho takes `umask -- =w`, where `=` has no who
+	// before it and means all three groups. Three of the four do; zsh wants
+	// one, and names a character that is not in the input when it does not
+	// get one.
+	SymbolicMaskSetsWithoutAWho Answer
+
+	// SymbolicMaskWhoAloneSetsIt reads `umask g` as `umask g=`, denying that
+	// group everything. ksh93 alone. bash and dash refuse it, and zsh
+	// answers it with the complaint it gives a number it could not read.
+	SymbolicMaskWhoAloneSetsIt Answer
+
+	// SymbolicMaskTakesTheSetuidLetter accepts `s` in a clause, which
+	// changes no bits — a umask has no setuid bit to deny — and is accepted
+	// by three of the four all the same. zsh refuses it.
+	SymbolicMaskTakesTheSetuidLetter Answer
+
+	// SymbolicMaskTakesTheStickyLetter is the same question about `t`, and a
+	// different set of shells: bash and ksh93 take it, dash and zsh do not.
+	// Two fields because the two letters are not answered together.
+	SymbolicMaskTakesTheStickyLetter Answer
+
 	// ReportsAKilledCommandInACommandSubstitution remarks on a command that
 	// a signal ended inside `$(…)`.
 	//
@@ -1234,6 +1260,17 @@ func PosixSemantics() Semantics {
 		// And it names where the failure was, not where the trap fired,
 		// which is what three of the four do.
 		TrapParseFailureNamesWhereItFired: No,
+		// POSIX gives `umask` chmod's symbolic mode: a who list, then one
+		// or more actions, each an operator and its permissions. So several
+		// operators in a clause are allowed, an omitted who means all three,
+		// `s` and `t` are permission characters like any other — and a who
+		// with no action at all, or a letter that is neither, is not a
+		// symbolic mode. The preset follows the grammar.
+		SymbolicMaskTakesMoreThanOneOperator: Yes,
+		SymbolicMaskSetsWithoutAWho:          Yes,
+		SymbolicMaskWhoAloneSetsIt:           No,
+		SymbolicMaskTakesTheSetuidLetter:     Yes,
+		SymbolicMaskTakesTheStickyLetter:     Yes,
 		// POSIX gives all three a *name*, and neither a special parameter
 		// nor a positional one is a name — a positional has `shift` to
 		// remove it.

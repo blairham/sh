@@ -127,18 +127,27 @@ func (r *Runner) readMask(arg string) (mask, code int) {
 		r.diagf("umask: %v\n", err)
 		return 0, 1
 	}
-	n, bad, operator, ok := parseSymbolicUmask(arg, current)
+	n, fail, ok := r.parseSymbolicUmask(arg, current)
 	if !ok {
+		if r.unspecified {
+			return 0, r.status
+		}
 		wording := d.UmaskBadSymbolicMode
 		// Two of the four say which kind of character it was — an operator
 		// where `+-=` was wanted, a permission where `rwx` was. The other two
 		// name the whole argument and do not distinguish, which is why an
 		// empty entry here falls back rather than printing nothing.
-		if operator && d.UmaskBadSymbolicOperator != "" {
+		if fail.operator && d.UmaskBadSymbolicOperator != "" {
 			wording = d.UmaskBadSymbolicOperator
 		}
+		if fail.numeric {
+			// One dialect answers this corner with the complaint it gives a
+			// number it could not read, so the symbolic wording is not used
+			// at all.
+			wording = d.UmaskBadMask
+		}
 		r.diagf("%s\n", Wording(wording,
-			"umask: %[1]s: invalid symbolic mode", arg, string(bad)))
+			"umask: %[1]s: invalid symbolic mode", arg, string(fail.bad)))
 		return 0, orDefault(d.UmaskBadMaskStatus, 1)
 	}
 	return n, 0
@@ -169,11 +178,26 @@ func parseUmask(s string) (int, bool) {
 // umaskPermissionBits are the characters a clause may name, and what each is
 // worth in one group.
 //
-// `s` and `t` are taken and are worth nothing: a umask has no setuid or
-// sticky bit to deny, and bash and ksh93 both accept `u=rs` and apply the
-// `r`. dash takes `s` and refuses `t`, and zsh refuses both — a corner that
-// changes no bits either way.
+// `s` and `t` are worth nothing — a umask has no setuid or sticky bit to deny
+// — and whether they are *accepted* is a dialect's answer: bash and ksh93
+// take both, dash takes `s` and refuses `t`, and zsh refuses both.
 var umaskPermissionBits = map[byte]int{'r': 4, 'w': 2, 'x': 1, 's': 0, 't': 0}
+
+// maskFailure is what went wrong reading a symbolic mask, in the terms the
+// dialects word it with.
+type maskFailure struct {
+	// bad is the character to name. Zero is a character that is not there,
+	// which one dialect names anyway — `umask g` is `umask: `\x00': invalid
+	// symbolic mode operator` in bash, with a null byte between the quotes.
+	bad byte
+	// operator says the character was where an operator was wanted rather
+	// than where a permission was, which two of the four tell apart.
+	operator bool
+	// numeric asks for the octal complaint instead. One dialect answers a
+	// who with no operator with `bad umask` — the message it gives a number
+	// it could not read — rather than with a symbolic complaint.
+	numeric bool
+}
 
 // parseSymbolicUmask reads `u=rwx,g=,o=` and applies it to the mask in force.
 //
@@ -185,8 +209,9 @@ var umaskPermissionBits = map[byte]int{'r': 4, 'w': 2, 'x': 1, 's': 0, 't': 0}
 // means all three: `umask 022; umask -- -w` gives 222 in all four, which is
 // the whole `a` set and not just the owner.
 //
-// bad and operator name what went wrong for the two dialects that say so.
-func parseSymbolicUmask(s string, current int) (mask int, bad byte, operator, ok bool) {
+// The corners are asked about only when the input reaches them, so an
+// ordinary `u=rw` needs no answer from anybody.
+func (r *Runner) parseSymbolicUmask(s string, current int) (mask int, fail maskFailure, ok bool) {
 	allowed := ^current & 0o777
 	for _, clause := range strings.Split(s, ",") {
 		i := 0
@@ -206,29 +231,63 @@ func parseSymbolicUmask(s string, current int) (mask int, bad byte, operator, ok
 			}
 		}
 	ops:
-		if who == 0 {
+		named := who != 0
+		if !named {
 			who = 0o777
 		}
-		// At least one operator, and more than one is allowed: `u+rw-x` is
-		// 0122 from 022 in three of the four. zsh takes a single operator per
-		// clause and refuses the rest.
 		if i == len(clause) {
-			return 0, 0, true, false
+			// A who and nothing to do with it. ksh93 reads it as `=`, which
+			// makes `umask g` deny the group everything; bash and dash
+			// refuse it, and zsh answers with its complaint about a number.
+			if r.ask(r.sem().SymbolicMaskWhoAloneSetsIt, "`umask g` reading as `umask g=`") {
+				allowed = allowed &^ who
+				continue
+			}
+			if r.unspecified {
+				return 0, maskFailure{}, false
+			}
+			return 0, maskFailure{operator: true, numeric: r.diag().UmaskWhoAloneIsANumericComplaint}, false
 		}
-		for i < len(clause) {
+		for round := 0; i < len(clause); round++ {
 			op := clause[i]
-			if op != '+' && op != '-' && op != '=' {
-				return 0, op, true, false
+			if !isMaskOperator(op) {
+				return 0, maskFailure{bad: op, operator: true}, false
+			}
+			if round == 1 && !r.ask(r.sem().SymbolicMaskTakesMoreThanOneOperator, "a second operator in one `umask` clause") {
+				if r.unspecified {
+					return 0, maskFailure{}, false
+				}
+				return 0, maskFailure{bad: op}, false
+			}
+			if r.unspecified {
+				return 0, maskFailure{}, false
+			}
+			if op == '=' && !named {
+				// `umask -- =w` sets every group, in three of the four. zsh
+				// wants a who before `=` and names a character that is not
+				// in the input at all when it does not get one.
+				if !r.ask(r.sem().SymbolicMaskSetsWithoutAWho, "`umask =w` with no who before the `=`") {
+					if r.unspecified {
+						return 0, maskFailure{}, false
+					}
+					return 0, maskFailure{bad: '/', operator: true}, false
+				}
+				if r.unspecified {
+					return 0, maskFailure{}, false
+				}
 			}
 			i++
 			perms := 0
 			for ; i < len(clause); i++ {
 				bit, isPerm := umaskPermissionBits[clause[i]]
 				if !isPerm {
-					if clause[i] == '+' || clause[i] == '-' || clause[i] == '=' {
+					if isMaskOperator(clause[i]) {
 						break
 					}
-					return 0, clause[i], false, false
+					return 0, maskFailure{bad: clause[i]}, false
+				}
+				if refused, stop := r.maskLetterRefused(clause[i]); stop {
+					return 0, refused, false
 				}
 				perms |= bit<<6 | bit<<3 | bit
 			}
@@ -242,7 +301,33 @@ func parseSymbolicUmask(s string, current int) (mask int, bad byte, operator, ok
 			}
 		}
 	}
-	return ^allowed & 0o777, 0, false, true
+	return ^allowed & 0o777, maskFailure{}, true
+}
+
+// isMaskOperator reports whether a character is one of the three a clause
+// turns on.
+func isMaskOperator(c byte) bool { return c == '+' || c == '-' || c == '=' }
+
+// maskLetterRefused answers `s` and `t`, which change no bits and are not
+// taken everywhere: bash and ksh93 take both, dash takes `s` and refuses `t`,
+// zsh refuses both. Asked only when one of the two appears.
+func (r *Runner) maskLetterRefused(c byte) (maskFailure, bool) {
+	switch c {
+	case 's':
+		if r.ask(r.sem().SymbolicMaskTakesTheSetuidLetter, "`s` in a `umask` clause") {
+			return maskFailure{}, r.unspecified
+		}
+	case 't':
+		if r.ask(r.sem().SymbolicMaskTakesTheStickyLetter, "`t` in a `umask` clause") {
+			return maskFailure{}, r.unspecified
+		}
+	default:
+		return maskFailure{}, false
+	}
+	if r.unspecified {
+		return maskFailure{}, true
+	}
+	return maskFailure{bad: c}, true
 }
 
 // symbolicUmask spells a mask the way `umask -S` does: the permissions it

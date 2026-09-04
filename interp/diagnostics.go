@@ -320,6 +320,12 @@ type Diagnostics struct {
 	// Empty means the dialect says the same thing to both, which is dash and
 	// ksh93 — they name the argument and never reach the question.
 	UmaskBadSymbolicOperator string
+	// UmaskWhoAloneIsANumericComplaint answers `umask g` with the wording a
+	// number it could not read gets, rather than with a symbolic one. zsh
+	// alone, which says `bad umask` there and `bad symbolic mode operator:
+	// X` for `umask X` — so which complaint it reaches for is not the same
+	// question as whether it refuses.
+	UmaskWhoAloneIsANumericComplaint bool
 
 	// UmaskBadOption is an option `umask` does not have. One verb.
 	UmaskBadOption string

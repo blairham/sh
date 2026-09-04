@@ -18522,6 +18522,38 @@
         "TimedOut": false
       }
     },
+    "umask/symbolic-a-who-with-no-operator": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: umask: `\u0000': invalid symbolic mode operator~0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: umask: `\u0000': invalid symbolic mode operator~0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: umask: `\u0000': invalid symbolic mode operator~0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: umask: Illegal mode: g~0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "0072",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:umask:1: bad umask~022",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "umask/symbolic-clauses-run-left-to-right": {
       "bash": {
         "Output": "0111",
@@ -18650,6 +18682,38 @@
         "TimedOut": false
       }
     },
+    "umask/symbolic-set-with-no-who": {
+      "bash": {
+        "Output": "0555",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "0555",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "0555",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "0555",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "0555",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:umask:1: bad symbolic mode operator: /~022",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "umask/symbolic-sets-the-mask": {
       "bash": {
         "Output": "0077",
@@ -18678,6 +18742,102 @@
       },
       "zsh": {
         "Output": "077",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "umask/symbolic-the-setuid-letter": {
+      "bash": {
+        "Output": "0322",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "0322",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: umask: `s': invalid symbolic mode character~0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "0322",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "0322",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:umask:1: bad symbolic mode permission: s~022",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "umask/symbolic-the-sticky-letter": {
+      "bash": {
+        "Output": "0322",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "0322",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: umask: `t': invalid symbolic mode character~0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: umask: Illegal mode: u=rt~0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "0322",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:umask:1: bad symbolic mode permission: t~022",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "umask/symbolic-two-operators-in-one-clause": {
+      "bash": {
+        "Output": "0122",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "0122",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: umask: `-': invalid symbolic mode character~0022",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "0122",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "0122",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:umask:1: bad symbolic mode permission: -~022",
         "Status": 0,
         "TimedOut": false
       }

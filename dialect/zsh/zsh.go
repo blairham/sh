@@ -58,6 +58,13 @@ func Semantics() interp.Semantics {
 	s.TrapQuoting = interp.ListingQuoteWhenNeededPlain
 	s.TrapBodyLine = interp.TrapBodyLineWhereItFired
 	s.TrapActionIsParsedWhenSet = interp.Yes
+	// The strict end of the symbolic mask: one operator per clause, a who
+	// before `=`, and neither `s` nor `t`.
+	s.SymbolicMaskTakesMoreThanOneOperator = interp.No
+	s.SymbolicMaskSetsWithoutAWho = interp.No
+	s.SymbolicMaskWhoAloneSetsIt = interp.No
+	s.SymbolicMaskTakesTheSetuidLetter = interp.No
+	s.SymbolicMaskTakesTheStickyLetter = interp.No
 	// No by construction rather than by measurement: zsh has already parsed
 	// the whole action by the time a trap fires, so it never runs part of a
 	// body whose rest will not parse. The two answers cannot be told apart
@@ -280,16 +287,17 @@ func Diagnostics() interp.Diagnostics {
 		UnaliasNoOperandStatus: 1,
 		// The builtin's name comes from the location here, as everywhere in
 		// zsh, so it is not in the wording.
-		UmaskBadSymbolicMode:     "bad symbolic mode permission: %[2]s",
-		UmaskBadSymbolicOperator: "bad symbolic mode operator: %[2]s",
-		UmaskBadOption:           "bad option: %[1]s",
-		UmaskBadOptionStatus:     1,
-		LetNoExpression:          "not enough arguments",
-		UlimitBadOption:          "bad option: -%[1]s",
-		UlimitBadNumber:          "invalid number: %[1]s",
-		UlimitBadOptionStatus:    1,
-		BuiltinBadOption:         "%[1]s: bad option: %[2]s",
-		TrapCouldNotParse:        "couldn't parse trap command",
+		UmaskBadSymbolicMode:             "bad symbolic mode permission: %[2]s",
+		UmaskBadSymbolicOperator:         "bad symbolic mode operator: %[2]s",
+		UmaskBadOption:                   "bad option: %[1]s",
+		UmaskBadOptionStatus:             1,
+		LetNoExpression:                  "not enough arguments",
+		UlimitBadOption:                  "bad option: -%[1]s",
+		UlimitBadNumber:                  "invalid number: %[1]s",
+		UlimitBadOptionStatus:            1,
+		BuiltinBadOption:                 "%[1]s: bad option: %[2]s",
+		TrapCouldNotParse:                "couldn't parse trap command",
+		UmaskWhoAloneIsANumericComplaint: true,
 		// The builtin's name comes from the location, so it is not in these.
 		// The reason leads for `export` and `readonly` and trails for `unset`,
 		// which is why this is a map.

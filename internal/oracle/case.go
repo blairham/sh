@@ -3096,6 +3096,31 @@ echo after`,
 	},
 	// --- umask: the symbolic spelling ----------------------------------
 	{
+		ID: "umask/symbolic-two-operators-in-one-clause", Category: "umask",
+		Snippet: "umask 022; umask u+rw-x; umask",
+		Why:     "three of the four apply each operator in turn; zsh takes one per clause and names the second",
+	},
+	{
+		ID: "umask/symbolic-set-with-no-who", Category: "umask",
+		Snippet: "umask 022; umask -- =w; umask",
+		Why:     "an omitted who before `=` means all three in three of the four. zsh wants one, and names a character that is not in the input at all",
+	},
+	{
+		ID: "umask/symbolic-a-who-with-no-operator", Category: "umask",
+		Snippet: "umask 022; umask g; umask",
+		Why:     "four answers: ksh93 reads it as `g=`, bash and dash refuse it in their own words, and zsh answers with the complaint it gives a number it could not read",
+	},
+	{
+		ID: "umask/symbolic-the-setuid-letter", Category: "umask",
+		Snippet: "umask 022; umask u=rs; umask",
+		Why:     "`s` changes no bit a umask has, and three of the four take it anyway. zsh refuses it",
+	},
+	{
+		ID: "umask/symbolic-the-sticky-letter", Category: "umask",
+		Snippet: "umask 022; umask u=rt; umask",
+		Why:     "the same for `t`, and a different set of shells: dash takes `s` and refuses this one, which is why the two letters are not one question",
+	},
+	{
 		ID: "umask/symbolic-sets-the-mask", Category: "umask",
 		Snippet: `umask 022; umask u=rwx,g=,o=; umask`,
 		Why:     "the form the issue was filed on and the one scripts write. Unanimous — all four accept it and all four give 0077, which is what made accepting only octal a plain gap rather than a dialect question",

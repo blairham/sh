@@ -14266,6 +14266,38 @@
         "TimedOut": false
       }
     },
+    "signal/a-command-ended-by-a-terminate": {
+      "bash": {
+        "Output": "Terminated: N /bin/sh -c 'kill -TERM $$'",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line N: N Terminated: N /bin/sh -c 'kill -TERM $$'",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "Terminated: N",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: N: Terminated",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "signal/a-pipeline-element-that-is-not-the-last": {
       "bash": {
         "Output": "after",

@@ -453,3 +453,81 @@ func interruptRun(t *testing.T, src string, ends Answer, sig syscall.Signal, die
 	}
 	return buf.String(), st
 }
+
+// One signal in one shell is written with neither the location nor the
+// process id — the words and the command alone.
+//
+// Reproduced rather than endorsed: bash 3.2 writes the full prefix for
+// SIGTERM as it does for every other signal, and no other shell in the panel
+// treats it apart, so this looks like a regression. The dialect is bash 5.3,
+// and that is what bash 5.3 does.
+func TestOneSignalMayBeWrittenBare(t *testing.T) {
+	dg := func() Diagnostics {
+		return Diagnostics{
+			Location:                            LocationTightLine,
+			KilledCommandNotice:                 "%5[1]d %-27[2]s%[3]s",
+			KilledCommandNoticeBareForTerminate: "%-27[1]s%[2]s",
+			SignalDescriptions: map[syscall.Signal]string{
+				syscall.SIGTERM: "Boom",
+				syscall.SIGUSR1: "Bang",
+			},
+		}
+	}
+	for _, c := range []struct {
+		name  string
+		sig   syscall.Signal
+		bare  bool
+		words string
+	}{
+		{"the one that is", syscall.SIGTERM, true, "Boom"},
+		{"and one that is not", syscall.SIGUSR1, false, "Bang"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := killedWatched(t, dg(), c.sig)
+			if !strings.Contains(got, c.words) {
+				t.Fatalf("said %q, want the words for the signal", got)
+			}
+			// The location and the process id go together: either the notice
+			// carries both or it carries neither.
+			if located := strings.Contains(got, "sh:"); located == c.bare {
+				t.Errorf("said %q; located = %v, want %v", got, located, !c.bare)
+			}
+			if bare := !strings.HasPrefix(got, "sh:"); bare != c.bare {
+				t.Errorf("said %q; bare = %v, want %v", got, bare, c.bare)
+			}
+		})
+	}
+	// And with no answer recorded the ordinary notice stands, which is what
+	// the other three dialects want.
+	d := dg()
+	d.KilledCommandNoticeBareForTerminate = ""
+	if got := killedWatched(t, d, syscall.SIGTERM); !strings.HasPrefix(got, "sh:") {
+		t.Errorf("said %q, want the ordinary notice without an answer here", got)
+	}
+}
+
+// killedWatched reports a command ended by sig, through the caller's own wait
+// so that no real signal is involved.
+func killedWatched(t *testing.T, dg Diagnostics, sig syscall.Signal) string {
+	t.Helper()
+	var errs strings.Builder
+	sem := PosixSemantics()
+	sem.ReportsACommandKilledBySignal = Yes
+	sem.ChildInterruptEndsTheScript = No
+	sem.SignalDeathStatusIsTwoFiftySix = No
+	r := &Runner{
+		Semantics: &sem, Diagnostics: &dg, Name: "sh",
+		Stdout: &strings.Builder{}, Stderr: &errs,
+		WaitForCommand: func(int) (Wait, error) {
+			return Wait{Killed: true, Signal: sig}, nil
+		},
+	}
+	f, err := syntax.Parse("/usr/bin/true\n", syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	return errs.String()
+}

@@ -622,6 +622,18 @@ type Diagnostics struct {
 	// which is what KilledCommandNoticeUnprefixed is for.
 	KilledCommandNotice string
 
+	// KilledCommandNoticeBareForTerminate replaces the notice when the
+	// signal was SIGTERM, and is written with no location and no process id
+	// — the words and the command alone. Two verbs: the words, the command.
+	//
+	// bash 5.3 alone, and for that one signal alone out of the nine this was
+	// measured over. bash 3.2 writes the full prefix there, and no other
+	// shell in the panel treats SIGTERM apart, so this looks like a
+	// regression rather than a decision. Reproduced because the dialect is
+	// bash 5.3; empty leaves the ordinary notice standing, which is what
+	// every other dialect wants.
+	KilledCommandNoticeBareForTerminate string
+
 	// KilledCommandNoticeUnprefixed writes that notice with no location in
 	// front of it. dash alone, and unlike every other message it prints:
 	// this one carries neither the shell's name nor the line.

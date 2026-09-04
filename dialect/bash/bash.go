@@ -176,12 +176,14 @@ func Diagnostics() interp.Diagnostics {
 		// The same twenty-seven-column state field the listing above uses,
 		// with the process id in front of it rather than the job number: one
 		// formatter, said in two places.
-		KilledCommandNotice:      "%5[1]d %-27[2]s%[3]s",
-		JobRunning:               "Running",
-		JobStopped:               "Stopped",
-		JobDone:                  "Done",
-		JobExited:                "Exit %[1]d",
-		JobRunningShowsAmpersand: true,
+		KilledCommandNotice: "%5[1]d %-27[2]s%[3]s",
+		// SIGTERM alone, and 5.3 alone: no location and no process id.
+		KilledCommandNoticeBareForTerminate: "%-27[1]s%[2]s",
+		JobRunning:                          "Running",
+		JobStopped:                          "Stopped",
+		JobDone:                             "Done",
+		JobExited:                           "Exit %[1]d",
+		JobRunningShowsAmpersand:            true,
 		// No verb at all: the name, then the OS string. Same either way —
 		// bash does not distinguish opening from creating.
 		CannotOpen: "%[1]s: %[2]s",

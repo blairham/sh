@@ -221,3 +221,26 @@ func TestTheMissingListIsCheckedAgainstTheOffendingLetterOnly(t *testing.T) {
 		t.Errorf("got %q, want the named letter refused rather than the word searched", out)
 	}
 }
+
+// TestWholeWordNamingIsOnlyForDoubleDashWords: the whole-word answer to
+// BadOptionNaming applies to a word that begins with `--` and to nothing
+// else. A single-dash bundle names the letter the walk stopped on, the same
+// as everyone — measured with `read -rx`, which every shell in the panel
+// answers with `-x` and never with `-rx`.
+func TestWholeWordNamingIsOnlyForDoubleDashWords(t *testing.T) {
+	dg := Diagnostics{
+		BadOptionNaming:  BadOptionWholeWord,
+		BuiltinBadOption: "%[1]s: %[2]s: bad",
+	}
+	noFatal := func(s *Semantics) { s.BadOptionToSpecialBuiltinFatal = No }
+
+	out, _ := optRun(t, noFatal, dg, `unset -vQ x`)
+	if !strings.Contains(out, "unset: -Q: bad") {
+		t.Errorf("a bundle: got %q, want the letter named alone", out)
+	}
+
+	out, _ = optRun(t, noFatal, dg, `unset --version`)
+	if !strings.Contains(out, "unset: --version: bad") {
+		t.Errorf("a -- word: got %q, want the word kept whole", out)
+	}
+}

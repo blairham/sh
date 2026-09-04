@@ -1763,6 +1763,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `read/a-failing-read-still-assigns` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` |
 | `read/a-final-line-without-a-newline` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` |
 | `read/an-unterminated-last-line-is-dropped` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` |
+| `read/options-cluster-in-one-word` | `[x\]` | `[x\]` | `[x\]` | `[x\]` | `[x\]` | `[x\]` |
+| `read/a-bad-letter-in-a-bundle-is-named-alone` | `<shell>: 1: read: Illegal option -x~st=2~after` | `<shell>: line 1: read: -x: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~st=2~after` | `<shell>: line 1: read: -x: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~st=2~after` | `<shell>: line 0: read: -x: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]~st=2~after` | `<shell>: read: -x: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]~st=2~after` | `<shell>:read:1: bad option: -x~st=1~after` |
 | `name/unset-f-on-a-name-no-function-could-have` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>: unset: 1x: invalid function name~st=1` | `<shell>:unset:1: no such hash table element: 1x~st=1` |
 | `name/unset-f-on-a-name-that-is-merely-undefined` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>:unset:1: no such hash table element: nosuch~st=1` |
 | `name/a-lone-dash-given-to-a-builtin` | `unalias: - not found~st=1` | `<shell>: line 1: unalias: -: not found~st=1` | `<shell>: line 1: unalias: -: not found~st=1` | `<shell>: line 0: unalias: -: not found~st=1` | `st=1` | `<shell>:unalias:1: not enough arguments~st=1` |
@@ -1827,6 +1829,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `read/an-unterminated-last-line-is-dropped` — the consequence of the status above, and the reason it is worth pinning rather than fixing: a file whose last line has no newline loses that line in every shell there is. Returning 0 instead would run it twice — once as the line, once as the empty read after it
   ```sh
   printf 'a\nb' | while read -r l; do printf "<%s>" "$l"; done; echo
+  ```
+- `read/options-cluster-in-one-word` — `-rr` is two options in one word — the POSIX guideline every shell follows, and the reason `read -ra arr` means `-r -a arr`. Two of the same letter so the case needs only the one option everybody implements: the bundle is read letter by letter, the raw flag holds, and the backslash survives its line. Reading whole words refused the bundle outright (#347)
+  ```sh
+  printf 'x\\\ny\n' | { read -rr v; echo "[$v]"; }
+  ```
+- `read/a-bad-letter-in-a-bundle-is-named-alone` — the complaint about a bundle names the letter the walk stopped on, never the word it rode in on: `-x` in all four, including the dialect recorded as whole-word naming from `export -Q`, where the letter and the word are the same thing. Four wordings, zsh reporting 1 to everyone else's 2, and all four carry on — `read` is not a special builtin, so nobody's fatality rule reaches it
+  ```sh
+  read -rx v </dev/null; echo "st=$?"; echo after
   ```
 - `name/unset-f-on-a-name-no-function-could-have` — two of the panel are quiet here and two are not, and the two that speak are not answering the same question — one is judging the name, which `1x` could never be, and the other is reporting that its table holds nothing under it. The case next to this one is what tells them apart
   ```sh

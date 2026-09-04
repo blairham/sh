@@ -774,23 +774,16 @@ func biRead(r *Runner, _ context.Context, args []string) int {
 	// a whole line, both without a word said. All four refuse an option they
 	// do not have, and the ones they *do* have and this shell does not are
 	// named as missing rather than as unknown.
-	raw := false
-	for len(args) > 0 {
-		a := args[0]
-		if len(a) < 2 || a[0] != '-' {
-			break
-		}
-		if a == "--" {
-			args = args[1:]
-			break
-		}
-		if a == "-r" {
-			raw = true
-			args = args[1:]
-			continue
-		}
-		return r.refuseOption("read", a, "r")
+	//
+	// Through the shared reader, because options bundle: `read -ra arr` is
+	// `-r -a arr` in every shell, and reading whole words here refused the
+	// bundle wholesale — `-ra is not implemented yet` — with the letter this
+	// builtin does implement inside it (#347).
+	args, opts, code := r.builtinOptions("read", args, "r")
+	if code != 0 {
+		return code
 	}
+	raw := strings.Contains(opts, "r")
 	if len(args) == 0 {
 		args = []string{"REPLY"}
 	}

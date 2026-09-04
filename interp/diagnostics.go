@@ -451,7 +451,7 @@ type Diagnostics struct {
 	// BadOptionNaming is which part of a leading `-` word a complaint about
 	// it names. Three answers, and `--version` tells them apart:
 	//
-	//	bash, dash   --            the character after the first dash
+	//	bash, dash   --            the first letter it cannot use
 	//	ksh93        --version     the whole word as written
 	//	zsh          -v            the first letter it does not know, with
 	//	                           every leading dash skipped first
@@ -460,6 +460,11 @@ type Diagnostics struct {
 	// there, not `-v`, because `v` is one of unset's own options and is
 	// consumed before an unknown letter is reached. That is the tell that it
 	// walks the bundle rather than naming a piece of the word.
+	//
+	// A single-dash bundle sharpens the second answer: `read -rx` is `-x` in
+	// ksh93 too — every shell walks the bundle and names the letter it
+	// stopped on — so the whole word survives only for a word that begins
+	// with `--`, which is where the three rules diverge at all.
 	BadOptionNaming BadOptionName
 
 	BuiltinBadOptionStatus int
@@ -1293,10 +1298,14 @@ const (
 type BadOptionName int
 
 const (
-	// BadOptionFirstCharacter names the character after the first dash, so
-	// `--version` is `--`. bash and dash, and the substrate's own.
+	// BadOptionFirstCharacter names the first letter the builtin cannot use,
+	// dashes not skipped — so `--version` is `--`, and `read -rx` is `-x`
+	// because `r` is an option it has. bash and dash, and the substrate's
+	// own.
 	BadOptionFirstCharacter BadOptionName = iota
-	// BadOptionWholeWord names the word as written: `--version`. ksh93.
+	// BadOptionWholeWord names a `--` word as written: `--version`. A
+	// single-dash bundle still names the letter — `read -rx` is `-x` here
+	// too. ksh93.
 	BadOptionWholeWord
 	// BadOptionFirstUnknownLetter skips every leading dash and names the
 	// first letter the builtin does not know: `--version` is `-v`, and `-e`

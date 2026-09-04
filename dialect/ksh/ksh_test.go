@@ -58,6 +58,10 @@ func TestSemantics(t *testing.T) {
 		want interp.Answer
 	}{
 		{"SetFTurnsOffGlobbing", s.SetFTurnsOffGlobbing, interp.Yes},
+		// The file comparisons side with bash on a missing file and with
+		// zsh on a non-numeric -t operand.
+		{"MissingFileIsOlder", s.MissingFileIsOlder, interp.Yes},
+		{"TerminalTestRequiresANumber", s.TerminalTestRequiresANumber, interp.No},
 		// ksh93 has no name for the pipeline status, so neither axis
 		// arises; the scalar view of an array does.
 		{"AssignmentUpdatesPipelineStatus", s.AssignmentUpdatesPipelineStatus, interp.Unspecified},

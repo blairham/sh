@@ -3272,6 +3272,13 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `cond/logical-and-grouping` | `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `grouped` | `grouped` | `grouped` | `grouped` | `grouped` |
 | `cond/andand-binds-tighter-than-oror` | `<shell>: 1: [[: not found~<shell>: 1: -n: not found~false` | `true` | `true` | `true` | `true` | `true` |
 | `cond/command-language-is-the-other-way` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
+| `cond/file-kind-operators` | `<shell>: 1: [[: not found~<shell>: 1: [[: not found~plain~<shell>: 1: [[: not found~<shell>: 1: [[: not found~notblock~<shell>: 1: [[: not found~notsocket` | `fifo~plain~chardev~notblock~notsocket` | `fifo~plain~chardev~notblock~notsocket` | `fifo~plain~chardev~notblock~notsocket` | `fifo~plain~chardev~notblock~notsocket` | `fifo~plain~chardev~notblock~notsocket` |
+| `cond/permission-bit-operators` | `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: -u: not found~<shell>: 1: -k: not found~plain` | `setgid~setuid~sticky~plain` | `setgid~setuid~sticky~plain` | `setgid~setuid~sticky~plain` | `setgid~setuid~sticky~plain` | `setgid~setuid~sticky~plain` |
+| `cond/newer-older-and-equal-times` | `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found~neither` | `newer~older~neither` | `newer~older~neither` | `newer~older~neither` | `newer~older~neither` | `newer~older~neither` |
+| `cond/a-missing-file-is-older-diverges` | `<shell>: 1: [[: not found~nt=127~<shell>: 1: [[: not found~ot=127~<shell>: 1: [[: not found~mirror=127` | `nt=0~ot=0~mirror=1` | `nt=0~ot=0~mirror=1` | `nt=0~ot=0~mirror=1` | `nt=0~ot=0~mirror=1` | `nt=1~ot=1~mirror=1` |
+| `cond/same-file-is-identity` | `<shell>: 1: [[: not found~<shell>: 1: [[: not found~distinct` | `linked~distinct` | `linked~distinct` | `linked~distinct` | `linked~distinct` | `linked~distinct` |
+| `cond/terminal-test-closed-descriptors` | `<shell>: 1: [[: not found~t0=127~<shell>: 1: [[: not found~t1=127~<shell>: 1: [[: not found~t99=127` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` |
+| `cond/terminal-test-non-number-diverges` | `<shell>: 1: [[: not found~st=127` | `<shell>: line 1: [[: x: integer expected~st=2` | `<shell>: line 1: [[: x: integer expected~st=2` | `st=1` | `st=1` | `st=1` |
 | `cond/a-group-in-a-regex` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `y` | `y` | `y` | `y` | `y` |
 | `cond/a-group-starting-a-regex` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `y` | `y` | `y` | `y` | `y` |
 | `cond/nested-groups-in-a-regex` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `y` | `y` | `y` | `y` | `y` |
@@ -3329,6 +3336,34 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `cond/command-language-is-the-other-way` — the contrast that makes the previous case a finding rather than a curiosity
   ```sh
   true || true && false; echo "st=$?"
+  ```
+- `cond/file-kind-operators` — -p, -S, -b and -c classify a file by what it is rather than by its bits, unanimously in the three shells that have the construct — these parsed and then died at run time with `unsupported test`
+  ```sh
+  mkfifo p; touch f; [[ -p p ]] && echo fifo; [[ -p f ]] || echo plain; [[ -c /dev/null ]] && echo chardev; [[ -b /dev/null ]] || echo notblock; [[ -S f ]] || echo notsocket
+  ```
+- `cond/permission-bit-operators` — -g, -u and -k read the setgid, setuid and sticky bits — unanimous, and octal modes rather than symbolic ones so the umask has no say
+  ```sh
+  touch f; chmod 2600 f; [[ -g f ]] && echo setgid; chmod 4600 f; [[ -u f ]] && echo setuid; chmod 1600 f; [[ -k f ]] && echo sticky; chmod 600 f; [[ -g f || -u f || -k f ]] || echo plain
+  ```
+- `cond/newer-older-and-equal-times` — -nt and -ot compare modification times, pinned with touch -t rather than a sleep — and equal times are neither newer nor older, which a <= in either direction would get wrong
+  ```sh
+  touch -t 202001010000 old; touch -t 202101010000 new; [[ new -nt old ]] && echo newer; [[ old -ot new ]] && echo older; touch -t 202001010000 twin; [[ old -nt twin ]] || [[ old -ot twin ]] || echo neither
+  ```
+- `cond/a-missing-file-is-older-diverges` — the one disagreement in the comparisons: bash and ksh93 count a file that does not exist as older than any file that does, zsh wants both to exist — the MissingFileIsOlder axis. The mirror is unanimous: a missing file is never *newer* anywhere
+  ```sh
+  touch f; [[ f -nt missing ]]; echo "nt=$?"; [[ missing -ot f ]]; echo "ot=$?"; [[ missing -nt f ]]; echo "mirror=$?"
+  ```
+- `cond/same-file-is-identity` — -ef is identity rather than equality: a hard link to the file compares equal and a file with the same content does not
+  ```sh
+  touch a c; ln a b; [[ a -ef b ]] && echo linked; [[ a -ef c ]] || echo distinct
+  ```
+- `cond/terminal-test-closed-descriptors` — -t asks whether a descriptor is a terminal, and under the harness none is: stdin is /dev/null and stdout a pipe, so every answer is a quiet false — which is also the honest permanent answer for a runner whose streams are io.Writers
+  ```sh
+  [[ -t 0 ]]; echo "t0=$?"; [[ -t 1 ]]; echo "t1=$?"; [[ -t 99 ]]; echo "t99=$?"
+  ```
+- `cond/terminal-test-non-number-diverges` — a -t operand that is not a number: bash names an integer at status 2 where ksh93 and zsh answer a plain false at 1 — and bash 3.2 answers 1 too, so the complaint is younger than the operator. The TerminalTestRequiresANumber axis
+  ```sh
+  [[ -t x ]]; echo "st=$?"
   ```
 - `cond/a-group-in-a-regex` — the parentheses belong to the regular expression rather than to the shell, so the word does not end at one — which the lexer has to be told, since where a word ends is settled before any parser sees a token
   ```sh
@@ -3524,6 +3559,9 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `test/bracket-double-equal` | `<shell>: 1: [: a: unexpected operator~st=2` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `test/bracket-names-the-bracket` | `<shell>: 1: [: a: unexpected operator~st=2` | `<shell>: line 1: [: b: binary operator expected~st=2` | `<shell>: line 1: [: b: binary operator expected~st=2` | `<shell>: line 0: [: b: binary operator expected~st=2` | `<shell>: [: b: unknown operator~st=2` | `<shell>:1: condition expected: b~st=2` |
 | `test/double-equal-unequal` | `<shell>: 1: test: a: unexpected operator~st=2` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
+| `test/file-comparisons` | `nt=0~ot=0~ef=0` | `nt=0~ot=0~ef=0` | `nt=0~ot=0~ef=0` | `nt=0~ot=0~ef=0` | `nt=0~ot=0~ef=0` | `nt=0~ot=0~ef=0` |
+| `test/a-missing-file-is-older-diverges` | `nt=1~ot=1` | `nt=0~ot=0` | `nt=0~ot=0` | `nt=0~ot=0` | `nt=0~ot=0` | `nt=1~ot=1` |
+| `test/terminal-test-non-number-diverges` | `<shell>: 1: test: Illegal number: x~st=2~closed=1` | `<shell>: line 1: test: x: integer expected~st=2~closed=1` | `<shell>: line 1: test: x: integer expected~st=2~closed=1` | `st=1~closed=1` | `st=1~closed=1` | `st=1~closed=1` |
 
 - `test/argument-count-decides` — POSIX defines `test` by argument count before grammar, which is why `test -f` alone is *true*: one argument is a string, and `-f` is a non-empty one. Two arguments make the same word an operator
   ```sh
@@ -3576,6 +3614,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `test/double-equal-unequal` — the same operator answering false, which is 1 — distinct from the 2 that dash reports for the same words, so the status alone tells the two readings apart
   ```sh
   test a "==" b; echo "st=$?"
+  ```
+- `test/file-comparisons` — -nt, -ot and -ef are in every shell in the panel — dash included, whose lack of `[[ ]]` does not extend to the builtin — and with both files present all five agree
+  ```sh
+  touch -t 202001010000 old; touch -t 202101010000 new; test new -nt old; echo "nt=$?"; test old -ot new; echo "ot=$?"; touch a; ln a b; test a -ef b; echo "ef=$?"
+  ```
+- `test/a-missing-file-is-older-diverges` — the MissingFileIsOlder axis on the builtin's surface, where dash joins in: bash and ksh93 answer true, dash and zsh want both files to exist — the same split each shell shows in its `[[ ]]`, so it is one axis and not two
+  ```sh
+  touch f; test f -nt missing; echo "nt=$?"; test missing -ot f; echo "ot=$?"
+  ```
+- `test/terminal-test-non-number-diverges` — the TerminalTestRequiresANumber axis: bash and dash refuse the operand with their integer wordings at 2, ksh93 and zsh answer a plain false at 1 — while a numeric descriptor that is simply not a terminal is a quiet 1 everywhere
+  ```sh
+  test -t x; echo "st=$?"; test -t 99; echo "closed=$?"
   ```
 
 ## times

@@ -59,7 +59,7 @@ func (r *Runner) runTest(name string, args []string) int {
 	if err != nil {
 		var te *testError
 		if errors.As(err, &te) {
-			if te.kind == errIntegerExpected &&
+			if te.kind == errIntegerExpected && !te.decided &&
 				r.ask(r.sem().TestIntegerRefusalIsSilent, "`[ a -eq 1 ]` failing in silence") {
 				// One dialect answers a non-number where a number belongs
 				// with a plain false — no sentence, and 1 rather than the
@@ -106,6 +106,13 @@ func (r *Runner) runTest(name string, args []string) int {
 type testError struct {
 	kind    testErrorKind
 	operand string
+	// decided marks an error an axis has already chosen to raise, so the
+	// silence gate below must not ask a second axis whether to voice it.
+	// The `-t` refusal is the case: it exists only where
+	// TerminalTestRequiresANumber said yes, and routing it through
+	// TestIntegerRefusalIsSilent would ask about a sentence no shell that
+	// answers the first axis loudly ever silences.
+	decided bool
 }
 
 type testErrorKind int
@@ -338,6 +345,11 @@ func (r *Runner) unaryTest(op, operand string) (bool, error) {
 		// A terminal test on a descriptor this shell may not even own. Never
 		// true here: the streams are io.Writers, which is the honest answer
 		// for a library rather than a guess about the process's descriptors.
+		// An operand that is not a number is a question of its own first.
+		if _, err := strconv.Atoi(strings.TrimSpace(operand)); err != nil &&
+			r.ask(r.sem().TerminalTestRequiresANumber, "`test -t x` refusing a non-number") {
+			return false, &testError{kind: errIntegerExpected, operand: operand, decided: true}
+		}
 		return false, nil
 	}
 	if !isTestUnary(op) {
@@ -348,10 +360,12 @@ func (r *Runner) unaryTest(op, operand string) (bool, error) {
 
 // fileTest answers the operators that ask the filesystem something.
 //
-// Shared in spirit with `[[ ]]`, which asks the same questions of an operand
-// it obtained differently. Kept separate because the two disagree about
-// everything *else* — `=` above all — and a shared entry point would invite
-// sharing the parts that must not be.
+// Shared with `[[ ]]`, which asks the same questions of an operand it
+// obtained differently: the answers are unanimous across the panel and
+// identical between the two constructs, so the code is one. Only the file
+// questions are shared — the constructs disagree about everything *else*,
+// `=` above all, and a shared entry point would invite sharing the parts
+// that must not be.
 func (r *Runner) fileTest(op, operand string) bool {
 	path := r.atDir(operand)
 	// Through the gate, like every stat; a denied one is err != nil here,
@@ -393,6 +407,46 @@ func (r *Runner) fileTest(op, operand string) bool {
 	return false
 }
 
+// compareFiles is `a -nt b`, `a -ot b` and `a -ef b` — the binary file
+// comparisons, shared with `[[ ]]` exactly as fileTest is.
+//
+// Newer and older compare modification times when both files exist, which is
+// unanimous; so is equal times answering false to both. When one side is
+// missing the panel splits: bash and ksh93 count a missing file as older than
+// any file that does exist, dash and zsh answer false unless both exist — the
+// MissingFileIsOlder axis, asked only there. The mirrored cases ask nothing:
+// a file that does not exist is never *newer*, in any shell measured.
+//
+// Both stats go through the gate, like every stat: a denied path answers as
+// a missing one, which the axis and the false branches below already read
+// as absence — the documented deny semantics for ActionStat.
+func (r *Runner) compareFiles(op, left, right string) (bool, error) {
+	li, lerr := r.stat(r.atDir(left))
+	ri, rerr := r.stat(r.atDir(right))
+	switch op {
+	case "-nt":
+		if lerr != nil {
+			return false, nil
+		}
+		if rerr != nil {
+			return r.ask(r.sem().MissingFileIsOlder, "`f -nt missing` when f exists"), nil
+		}
+		return li.ModTime().After(ri.ModTime()), nil
+	case "-ot":
+		if rerr != nil {
+			return false, nil
+		}
+		if lerr != nil {
+			return r.ask(r.sem().MissingFileIsOlder, "`missing -ot f` when f exists"), nil
+		}
+		return li.ModTime().Before(ri.ModTime()), nil
+	}
+	// -ef: the same file by identity rather than by name — a hard link, or a
+	// symlink followed to it, compares equal; two files with identical
+	// content do not, and a missing file is the same as no file.
+	return lerr == nil && rerr == nil && os.SameFile(li, ri), nil
+}
+
 // binaryTest is `a OP b`. The third return says whether the middle word was an
 // operator at all, which is what lets the caller fall back to another reading
 // rather than guessing.
@@ -416,6 +470,11 @@ func (r *Runner) binaryTest(left, op, right string) (bool, error, bool) {
 		return left == right, nil, true
 	case "!=":
 		return left != right, nil, true
+	case "-nt", "-ot", "-ef":
+		// In `test` as in `[[ ]]`, and in every shell in the panel — dash
+		// included, whose lack of `[[ ]]` does not extend to these.
+		ok, err := r.compareFiles(op, left, right)
+		return ok, err, true
 	case "-eq", "-ne", "-lt", "-le", "-gt", "-ge":
 		l, lerr := strconv.Atoi(strings.TrimSpace(left))
 		rv, rerr := strconv.Atoi(strings.TrimSpace(right))

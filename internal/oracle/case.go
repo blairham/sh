@@ -2650,6 +2650,41 @@ echo unreachable`,
 		Snippet: `true || true && false; echo "st=$?"`,
 		Why:     "the contrast that makes the previous case a finding rather than a curiosity",
 	},
+	{
+		ID: "cond/file-kind-operators", Category: "conditions",
+		Snippet: `mkfifo p; touch f; [[ -p p ]] && echo fifo; [[ -p f ]] || echo plain; [[ -c /dev/null ]] && echo chardev; [[ -b /dev/null ]] || echo notblock; [[ -S f ]] || echo notsocket`,
+		Why:     "-p, -S, -b and -c classify a file by what it is rather than by its bits, unanimously in the three shells that have the construct — these parsed and then died at run time with `unsupported test`",
+	},
+	{
+		ID: "cond/permission-bit-operators", Category: "conditions",
+		Snippet: `touch f; chmod 2600 f; [[ -g f ]] && echo setgid; chmod 4600 f; [[ -u f ]] && echo setuid; chmod 1600 f; [[ -k f ]] && echo sticky; chmod 600 f; [[ -g f || -u f || -k f ]] || echo plain`,
+		Why:     "-g, -u and -k read the setgid, setuid and sticky bits — unanimous, and octal modes rather than symbolic ones so the umask has no say",
+	},
+	{
+		ID: "cond/newer-older-and-equal-times", Category: "conditions",
+		Snippet: `touch -t 202001010000 old; touch -t 202101010000 new; [[ new -nt old ]] && echo newer; [[ old -ot new ]] && echo older; touch -t 202001010000 twin; [[ old -nt twin ]] || [[ old -ot twin ]] || echo neither`,
+		Why:     "-nt and -ot compare modification times, pinned with touch -t rather than a sleep — and equal times are neither newer nor older, which a <= in either direction would get wrong",
+	},
+	{
+		ID: "cond/a-missing-file-is-older-diverges", Category: "conditions",
+		Snippet: `touch f; [[ f -nt missing ]]; echo "nt=$?"; [[ missing -ot f ]]; echo "ot=$?"; [[ missing -nt f ]]; echo "mirror=$?"`,
+		Why:     "the one disagreement in the comparisons: bash and ksh93 count a file that does not exist as older than any file that does, zsh wants both to exist — the MissingFileIsOlder axis. The mirror is unanimous: a missing file is never *newer* anywhere",
+	},
+	{
+		ID: "cond/same-file-is-identity", Category: "conditions",
+		Snippet: `touch a c; ln a b; [[ a -ef b ]] && echo linked; [[ a -ef c ]] || echo distinct`,
+		Why:     "-ef is identity rather than equality: a hard link to the file compares equal and a file with the same content does not",
+	},
+	{
+		ID: "cond/terminal-test-closed-descriptors", Category: "conditions",
+		Snippet: `[[ -t 0 ]]; echo "t0=$?"; [[ -t 1 ]]; echo "t1=$?"; [[ -t 99 ]]; echo "t99=$?"`,
+		Why:     "-t asks whether a descriptor is a terminal, and under the harness none is: stdin is /dev/null and stdout a pipe, so every answer is a quiet false — which is also the honest permanent answer for a runner whose streams are io.Writers",
+	},
+	{
+		ID: "cond/terminal-test-non-number-diverges", Category: "conditions",
+		Snippet: `[[ -t x ]]; echo "st=$?"`,
+		Why:     "a -t operand that is not a number: bash names an integer at status 2 where ksh93 and zsh answer a plain false at 1 — and bash 3.2 answers 1 too, so the complaint is younger than the operator. The TerminalTestRequiresANumber axis",
+	},
 
 	// --- eval and . : the special builtins that run text in this shell ---
 	{
@@ -2806,6 +2841,21 @@ echo unreachable`,
 		ID: "test/double-equal-unequal", Category: "test",
 		Snippet: `test a "==" b; echo "st=$?"`,
 		Why:     "the same operator answering false, which is 1 — distinct from the 2 that dash reports for the same words, so the status alone tells the two readings apart",
+	},
+	{
+		ID: "test/file-comparisons", Category: "test",
+		Snippet: `touch -t 202001010000 old; touch -t 202101010000 new; test new -nt old; echo "nt=$?"; test old -ot new; echo "ot=$?"; touch a; ln a b; test a -ef b; echo "ef=$?"`,
+		Why:     "-nt, -ot and -ef are in every shell in the panel — dash included, whose lack of `[[ ]]` does not extend to the builtin — and with both files present all five agree",
+	},
+	{
+		ID: "test/a-missing-file-is-older-diverges", Category: "test",
+		Snippet: `touch f; test f -nt missing; echo "nt=$?"; test missing -ot f; echo "ot=$?"`,
+		Why:     "the MissingFileIsOlder axis on the builtin's surface, where dash joins in: bash and ksh93 answer true, dash and zsh want both files to exist — the same split each shell shows in its `[[ ]]`, so it is one axis and not two",
+	},
+	{
+		ID: "test/terminal-test-non-number-diverges", Category: "test",
+		Snippet: `test -t x; echo "st=$?"; test -t 99; echo "closed=$?"`,
+		Why:     "the TerminalTestRequiresANumber axis: bash and dash refuse the operand with their integer wordings at 2, ksh93 and zsh answer a plain false at 1 — while a numeric descriptor that is simply not a terminal is a quiet 1 everywhere",
 	},
 
 	// --- times: the last special builtin, and the most divergent for its size

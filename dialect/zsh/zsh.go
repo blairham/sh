@@ -164,6 +164,10 @@ func Semantics() interp.Semantics {
 	s.ExecFailureRunsExitTrap = interp.No
 	s.ExecTakesOptions = interp.Yes
 	s.TestAcceptsDoubleEqual = interp.Yes
+	// `-nt` and `-ot` want both files to exist, and `-t x` is a plain
+	// false rather than an integer complaint.
+	s.MissingFileIsOlder = interp.No
+	s.TerminalTestRequiresANumber = interp.No
 	s.PipefailOption = interp.Yes
 	s.ErrexitSeesPipefailFailure = interp.Yes
 	// Alone in refusing an argument to `times`; dash and bash ignore it.

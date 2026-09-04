@@ -76,6 +76,10 @@ func TestSemantics(t *testing.T) {
 		{"IndirectionYieldsName", s.IndirectionYieldsName, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.No},
 		{"RegexQuotingMakesLiteral", s.RegexQuotingMakesLiteral, interp.Yes},
+		// The file comparisons: a missing file counts as older, and a -t
+		// operand that is not a number draws the integer complaint.
+		{"MissingFileIsOlder", s.MissingFileIsOlder, interp.Yes},
+		{"TerminalTestRequiresANumber", s.TerminalTestRequiresANumber, interp.Yes},
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.Yes},
 		// A `jobs` listing: which end it starts from, and whether a job that
 		// has already ended appears in it at all. Both split the panel two

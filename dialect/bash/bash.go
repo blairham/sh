@@ -158,6 +158,8 @@ func Semantics() interp.Semantics {
 	s.ExecFailureRunsExitTrap = interp.Yes
 	s.ExecTakesOptions = interp.Yes
 	s.TestAcceptsDoubleEqual = interp.Yes
+	// `f -nt missing` holds when f exists, in `test` and `[[ ]]` alike.
+	s.MissingFileIsOlder = interp.Yes
 	s.UmaskPrintsFourDigits = interp.Yes
 	s.UmaskSetWithSPrints = interp.Yes
 	s.PipefailOption = interp.Yes

@@ -476,3 +476,12 @@ func TestASubstitutionsBodyIsNumberedFromTheFile(t *testing.T) {
 		t.Error("backquotes are numbered from the file here, like $( )")
 	}
 }
+
+// The letters `$-` starts with, measured from a script file; ksh93's route
+// letters (`c` under -c, `s` reading a command string or standard input) are
+// the front end's and deliberately absent.
+func TestDollarDashStartupLetters(t *testing.T) {
+	if got, want := ksh.Semantics().DefaultOptionLetters, "hB"; got != want {
+		t.Errorf("DefaultOptionLetters = %q, want %q", got, want)
+	}
+}

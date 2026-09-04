@@ -60,6 +60,7 @@ func TestSemantics(t *testing.T) {
 		want interp.Answer
 	}{
 		{"SetFTurnsOffGlobbing", s.SetFTurnsOffGlobbing, interp.Yes},
+		{"NoglobLetterIsF", s.NoglobLetterIsF, interp.Yes},
 		{"AssignmentUpdatesPipelineStatus", s.AssignmentUpdatesPipelineStatus, interp.Yes},
 		{"UnsetEndsTheProducedPipelineStatus", s.UnsetEndsTheProducedPipelineStatus, interp.No},
 		{"ArrayScalarIsTheWholeArray", s.ArrayScalarIsTheWholeArray, interp.No},
@@ -550,5 +551,14 @@ func TestDeclareReportsARefusedName(t *testing.T) {
 	out, _ := runBash(t, t.TempDir(), "readonly r=1\ndeclare r=2\necho st=$?\n")
 	if !strings.Contains(out, "st=1\n") {
 		t.Errorf("output = %q, want the refusal to fail the builtin", out)
+	}
+}
+
+// The letters `$-` starts with, measured identical under -c, a script file
+// and standard input; the route letters (`c`, `s`, `i`) are the front end's
+// and deliberately absent.
+func TestDollarDashStartupLetters(t *testing.T) {
+	if got, want := bash.Semantics().DefaultOptionLetters, "hB"; got != want {
+		t.Errorf("DefaultOptionLetters = %q, want %q", got, want)
 	}
 }

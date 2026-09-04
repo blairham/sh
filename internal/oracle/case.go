@@ -3128,6 +3128,21 @@ echo unreachable`,
 		Why:     "the option reaches the result of an expansion too, which is the same stage by a different route",
 	},
 	{
+		ID: "opt/dollar-dash-shows-a-letter-the-script-set", Category: "shell options",
+		Snippet: `set -e; case $- in *e*) echo has-e;; *) echo no-e;; esac`,
+		Why:     "`case $- in *e*)` is the standard errexit check, and asking for a letter the script itself set is the deterministic question: the whole string differs per shell — a different baseline in each, and no two order the letters alike — but every one of them shows `e` here",
+	},
+	{
+		ID: "opt/dollar-dash-drops-a-letter-turned-back-off", Category: "shell options",
+		Snippet: `set -e; set +e; case $- in *e*) echo has-e;; *) echo no-e;; esac`,
+		Why:     "the parameter is produced when it is read rather than stored at startup, and this is the half that proves it: a letter present a moment ago is gone once `set +` takes the option off",
+	},
+	{
+		ID: "opt/dollar-dash-noglob-letter-diverges", Category: "shell options",
+		Snippet: `set -o noglob; case $- in *f*) echo lower;; *F*) echo upper;; *) echo neither;; esac`,
+		Why:     "the letter itself is an axis: POSIX names `f` and three of the four report it, while zsh reports the capital — `-F` being its own short spelling of noglob, the same split `set -f` measures from the writing side",
+	},
+	{
 		ID: "arith/an-array-element-in-an-expression", Category: "arithmetic",
 		Snippet: `a=(3 4 5); echo $(( a[1] ))`,
 		Why:     "written without a `$`, so it is read as part of the expression rather than substituted into it — and it counts from the dialect's own base, which is why the same text is 4 in two shells and 3 in the third",

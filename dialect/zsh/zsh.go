@@ -40,6 +40,13 @@ func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.No
+	// The reading side of the same option: zsh's short spelling of noglob
+	// is `-F`, and that capital is what its `$-` reports.
+	s.NoglobLetterIsF = interp.No
+	// Measured: `echo $-` reports `569X` under -c, a script file and
+	// standard input alike — letters from zsh's own single-letter option
+	// namespace, which shares almost nothing with the other shells'.
+	s.DefaultOptionLetters = "569X"
 	s.ArithIntegerOperatorRefusesFloat = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.Yes
 	s.AssignmentUpdatesPipelineStatus = interp.No

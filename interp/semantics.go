@@ -350,6 +350,26 @@ type Semantics struct {
 	// so `set -f; echo *.txt` lists the files.
 	SetFTurnsOffGlobbing Answer
 
+	// NoglobLetterIsF puts `f` in `$-` while noglob is on, which is the
+	// letter POSIX gives it and what bash, dash and ksh93 report. False in
+	// zsh, which reports the capital: `-F` is the short option that means
+	// noglob there, `-f` being about startup files — the same split
+	// SetFTurnsOffGlobbing records, seen from the reading side.
+	NoglobLetterIsF Answer
+
+	// DefaultOptionLetters is what `$-` starts with before the script has
+	// set anything: the single-letter options a shell turns on at startup.
+	// Measured identical under `-c`, a script file and standard input —
+	// bash and ksh93 report `hB`, zsh `569X`, dash nothing at all.
+	//
+	// The letters that describe the invocation route rather than an option
+	// a script could set — `c` for a command string, `s` for standard
+	// input, `i` for interactive — are not modeled: they are the front
+	// end's to know, not the same on any two shells, and no deterministic
+	// assertion can be written against them. A script's own `case $- in
+	// *e*)` never depends on them.
+	DefaultOptionLetters string
+
 	// ArithIntegerOperatorRefusesFloat rejects a float where only an integer
 	// will do — `7 % 2.5`, `1.5 & 1`, a shift. ksh93 says yes and refuses;
 	// zsh says no and truncates. It does not arise in a shell without floats,
@@ -1352,7 +1372,10 @@ func PosixSemantics() Semantics {
 		UlimitSetsBothLimits: Yes,
 		// POSIX defines a pipeline's status as its last command's, and
 		// offers nothing to change it.
-		PipefailOption:                             No,
+		PipefailOption: No,
+		// POSIX names the noglob letter itself: `set -f`, reported in `$-`
+		// as `f`. Only zsh answers otherwise.
+		NoglobLetterIsF:                            Yes,
 		ArithInvalidOctalDigitIsError:              Yes,
 		RegexQuotingMakesLiteral:                   No,
 		LastPipelineElementInCurrentShell:          No,

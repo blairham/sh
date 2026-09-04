@@ -428,3 +428,12 @@ func TestABackquotedBodyIsNumberedFromOne(t *testing.T) {
 		t.Error("a backquoted body is numbered from one here")
 	}
 }
+
+// `$-` starts empty here, measured under -c and a script file alike — the
+// only letter dash ever adds by itself is the route letter `s` on standard
+// input, which no dialect models.
+func TestDollarDashStartupLetters(t *testing.T) {
+	if got := dash.Semantics().DefaultOptionLetters; got != "" {
+		t.Errorf("DefaultOptionLetters = %q, want empty", got)
+	}
+}

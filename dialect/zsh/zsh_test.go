@@ -67,6 +67,9 @@ func TestSemantics(t *testing.T) {
 		want interp.Answer
 	}{
 		{"SetFTurnsOffGlobbing", s.SetFTurnsOffGlobbing, interp.No},
+		// The reading side of the split above: `$-` reports noglob as the
+		// capital, because `-F` is zsh's own short spelling of it.
+		{"NoglobLetterIsF", s.NoglobLetterIsF, interp.No},
 		{"ArithIntegerOperatorRefusesFloat", s.ArithIntegerOperatorRefusesFloat, interp.No},
 		{"AssignmentUpdatesPipelineStatus", s.AssignmentUpdatesPipelineStatus, interp.No},
 		{"UnsetEndsTheProducedPipelineStatus", s.UnsetEndsTheProducedPipelineStatus, interp.Yes},
@@ -545,5 +548,14 @@ func TestASubstitutionsBodyIsNumberedFromTheFile(t *testing.T) {
 func TestDiagnosticsNameTheFunction(t *testing.T) {
 	if !zsh.Diagnostics().LocationNamesTheFunction {
 		t.Error("a message from inside a function is named for the function here")
+	}
+}
+
+// The letters `$-` starts with, measured identical under -c, a script file
+// and standard input — drawn from zsh's own single-letter option namespace,
+// which shares almost nothing with the other shells'.
+func TestDollarDashStartupLetters(t *testing.T) {
+	if got, want := zsh.Semantics().DefaultOptionLetters, "569X"; got != want {
+		t.Errorf("DefaultOptionLetters = %q, want %q", got, want)
 	}
 }

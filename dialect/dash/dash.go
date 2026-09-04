@@ -32,6 +32,9 @@ func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
 	s.CommandNotFoundStatusIsNotFound = interp.Yes
 	s.SetFTurnsOffGlobbing = interp.Yes
+	// DefaultOptionLetters stays empty on purpose: measured, dash's `$-`
+	// starts blank however it is invoked, save the route letter `s` on
+	// standard input, which no dialect models.
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	s.EchoInterpretsEscapes = interp.Yes
 	s.LengthOfSpecialIsCount = interp.No

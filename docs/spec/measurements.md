@@ -1712,6 +1712,9 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `opt/noglob-does-not-stop-matching` | `match` | `match` | `match` | `match` | `match` | `match` |
 | `opt/an-option-can-be-turned-back-off` | `a.txt` | `a.txt` | `a.txt` | `a.txt` | `a.txt` | `a.txt` |
 | `opt/an-expansions-result-is-not-globbed-under-noglob` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` |
+| `opt/dollar-dash-shows-a-letter-the-script-set` | `has-e` | `has-e` | `has-e` | `has-e` | `has-e` | `has-e` |
+| `opt/dollar-dash-drops-a-letter-turned-back-off` | `no-e` | `no-e` | `no-e` | `no-e` | `no-e` | `no-e` |
+| `opt/dollar-dash-noglob-letter-diverges` | `lower` | `lower` | `lower` | `lower` | `lower` | `upper` |
 
 - `xtrace/traces-each-command` — the structure is unanimous: every simple command goes to stderr, expanded, before it runs
   ```sh
@@ -1843,6 +1846,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `opt/an-expansions-result-is-not-globbed-under-noglob` — the option reaches the result of an expansion too, which is the same stage by a different route
   ```sh
   touch a.txt b.txt; set -o noglob; x=*.txt; echo $x
+  ```
+- `opt/dollar-dash-shows-a-letter-the-script-set` — `case $- in *e*)` is the standard errexit check, and asking for a letter the script itself set is the deterministic question: the whole string differs per shell — a different baseline in each, and no two order the letters alike — but every one of them shows `e` here
+  ```sh
+  set -e; case $- in *e*) echo has-e;; *) echo no-e;; esac
+  ```
+- `opt/dollar-dash-drops-a-letter-turned-back-off` — the parameter is produced when it is read rather than stored at startup, and this is the half that proves it: a letter present a moment ago is gone once `set +` takes the option off
+  ```sh
+  set -e; set +e; case $- in *e*) echo has-e;; *) echo no-e;; esac
+  ```
+- `opt/dollar-dash-noglob-letter-diverges` — the letter itself is an axis: POSIX names `f` and three of the four report it, while zsh reports the capital — `-F` being its own short spelling of noglob, the same split `set -f` measures from the writing side
+  ```sh
+  set -o noglob; case $- in *f*) echo lower;; *F*) echo upper;; *) echo neither;; esac
   ```
 
 ## builtins

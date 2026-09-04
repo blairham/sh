@@ -76,6 +76,9 @@ func Semantics() interp.Semantics {
 	// — values in the alias style, keys in the trap one.
 	s.DeclareListing = interp.DeclareListingExportSpelled
 	s.DeclareValueQuoting = interp.ListingQuoteWhenNeededEscaped
+	s.ExportListing = interp.DeclareListingCommandWord
+	// readonly -p speaks typeset here, not readonly.
+	s.ReadonlyListing = interp.DeclareListingExportSpelled
 	s.DeclarePrintReportsAMissingName = interp.Yes
 	s.TrapBodyLine = interp.TrapBodyLineWhereItFired
 	s.TrapActionIsParsedWhenSet = interp.Yes

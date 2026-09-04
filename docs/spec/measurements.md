@@ -546,6 +546,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `export/unset-f-removes-a-function` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` |
 | `export/a-function-through-the-environment` | *(no output, status 2)* | `1` | `1` | `1` | *(no output, status 2)* | `0` *(status 1)* |
 | `export/a-name-that-is-not-a-function` | `<shell>: 1: export: Illegal option -f` *(status 2)* | `<shell>: line 1: export: nope: not a function~st=1` | `<shell>: line 1: export: nope: not a function~st=1` | `<shell>: line 0: export: nope: not a function~st=1` | `<shell>: export: -f: unknown option~Usage: export [-p] [name[=value]...]` *(status 2)* | `<shell>:export:1: invalid option(s)~st=1` |
+| `export/p-names-what-is-exported` | `1` | `1` | `1` | `1` | `1` | `1` |
+| `readonly/p-names-what-is-readonly` | `1` | `1` | `1` | `1` | `1` | `1` |
 | `hash/bare-and-r-succeed-everywhere` | `st=0~r=0` | `hash: hash table empty~st=0~r=0` | `st=0~r=0` | `hash: hash table empty~st=0~r=0` | `st=0~r=0` | `st=0~r=0` |
 | `hash/a-missing-name-diverges` | `<shell>: 1: hash: nosuchcmd-xyz: not found~st=1` | `<shell>: line 1: hash: nosuchcmd-xyz: not found~st=1` | `<shell>: line 1: hash: nosuchcmd-xyz: not found~st=1` | `<shell>: line 0: hash: nosuchcmd-xyz: not found~st=1` | `st=0` | `<shell>:hash:1: no such command: nosuchcmd-xyz~st=1` |
 | `hash/a-builtin-counts-except-in-zsh` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>:hash:1: no such command: shift~st=1` |
@@ -733,6 +735,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `export/a-name-that-is-not-a-function` — a name that is not a function now will not become one by being exported. The shells that have the option refuse it and the ones that do not read `-f` as something else entirely, which is the more interesting half
   ```sh
   export -f nope; echo "st=$?"
+  ```
+- `export/p-names-what-is-exported` — the listing must name the exported variable in one of the two spellings the shells use — the grep finds either, and found neither before
+  ```sh
+  export V=1; export -p | grep -c -E "^(declare -x|export) V="
+  ```
+- `readonly/p-names-what-is-readonly` — the same question through readonly -p, whose spelling zsh alone moves to typeset -r
+  ```sh
+  readonly R=2; readonly -p | grep -c -E "R="
   ```
 - `hash/bare-and-r-succeed-everywhere` — scripts call both defensively; every shell answers 0, and bash alone announces its empty table — on standard output
   ```sh

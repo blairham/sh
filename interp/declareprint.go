@@ -46,6 +46,10 @@ const (
 	// a bare `v=1` with no command word at all. Indexed elements carry
 	// subscripts only when the array has gaps.
 	DeclareListingBareAssignments
+	// DeclareListingCommandWord repeats the listing builtin's own word and
+	// nothing else: `export -p` writes `export V='1'` and `readonly -p`
+	// writes `readonly R='2'`, with no flag cluster — the word is the flag.
+	DeclareListingCommandWord
 )
 
 func (f DeclarationListingForm) String() string {
@@ -56,6 +60,8 @@ func (f DeclarationListingForm) String() string {
 		return "DeclareListingExportSpelled"
 	case DeclareListingBareAssignments:
 		return "DeclareListingBareAssignments"
+	case DeclareListingCommandWord:
+		return "DeclareListingCommandWord"
 	}
 	return "DeclarationListingUnspecified"
 }
@@ -164,7 +170,13 @@ func (r *Runner) declarableNames() []string {
 // declarePrint is the `-p` of `declare` and `typeset`: the named
 // declarations, or every one the runner knows when no name is given.
 func (r *Runner) declarePrint(names []string) int {
-	form := r.sem().DeclareListing
+	return r.declarePrintForm(names, r.sem().DeclareListing, nil)
+}
+
+// declarePrintForm lists declarations in the given form, walking only the
+// names the filter admits when no operands narrow it — which is how
+// `export -p` lists the exported names alone.
+func (r *Runner) declarePrintForm(names []string, form DeclarationListingForm, keep func(declaration) bool) int {
 	if form == DeclarationListingUnspecified {
 		r.diagf("how a declaration is listed back: the shells disagree here and no dialect was chosen\n")
 		r.status = 2
@@ -172,11 +184,16 @@ func (r *Runner) declarePrint(names []string) int {
 		return 2
 	}
 	status := 0
+	filtered := false
 	if len(names) == 0 {
 		names = r.declarableNames()
+		filtered = keep != nil
 	}
 	for _, name := range names {
 		d, known := r.declarationOf(name)
+		if known && filtered && !keep(d) {
+			continue
+		}
 		if !known {
 			// A missing name is reported or passed over in silence, and the
 			// silence is measured rather than a shortcut: one shell prints
@@ -202,8 +219,19 @@ func (r *Runner) listedDeclaration(form DeclarationListingForm, d declaration) s
 		return r.exportSpelledDeclaration(d)
 	case DeclareListingBareAssignments:
 		return r.bareAssignmentDeclaration(d)
+	case DeclareListingCommandWord:
+		return r.commandWordDeclaration(d)
 	}
 	return r.clusteredDeclaration(d)
+}
+
+// commandWordDeclaration is DeclareListingCommandWord — see the constant.
+func (r *Runner) commandWordDeclaration(d declaration) string {
+	head := r.inBuiltin + " " + d.name
+	if d.hasValue {
+		return head + "=" + r.declareQuoted(d.value)
+	}
+	return head
 }
 
 // declareQuoted spells one listed value in the dialect's declaration style,

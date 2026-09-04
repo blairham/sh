@@ -8922,6 +8922,38 @@
         "TimedOut": false
       }
     },
+    "export/p-names-what-is-exported": {
+      "bash": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "export/unset-f-removes-a-function": {
       "bash": {
         "Output": "st=127",
@@ -15318,6 +15350,38 @@
       },
       "zsh": {
         "Output": "[a]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "readonly/p-names-what-is-readonly": {
+      "bash": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1",
         "Status": 0,
         "TimedOut": false
       }

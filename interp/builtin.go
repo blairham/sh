@@ -393,15 +393,17 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 	if strings.ContainsRune(opts, 'f') {
 		return r.exportFuncs(args)
 	}
+	if strings.ContainsRune(opts, 'p') {
+		// The listing: exported names alone, in the dialect's shape. An
+		// operand narrows it to that name's declaration.
+		return r.declarePrintForm(args, r.sem().ExportListing,
+			func(d declaration) bool { return d.exported })
+	}
 	args, status := r.builtinNames("export", args, false)
 	if r.ctl == controlExit {
 		return status
 	}
 	for _, a := range args {
-		if strings.ContainsRune(opts, 'p') {
-			r.diagf("export: -p is not implemented yet\n")
-			return 2
-		}
 		name, value, hasValue := strings.Cut(a, "=")
 		if hasValue {
 			r.setVarAs(name, value, assignedByDeclaration)
@@ -1354,9 +1356,14 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 
 // biReadonly marks variables immutable.
 func biReadonly(r *Runner, _ context.Context, args []string) int {
-	args, _, code := r.builtinOptions("readonly", args, "paAf")
+	args, opts, code := r.builtinOptions("readonly", args, "paAf")
 	if code != 0 {
 		return code
+	}
+	if strings.ContainsRune(opts, 'p') && len(args) == 0 {
+		// The listing: readonly names alone, in the dialect's shape.
+		return r.declarePrintForm(nil, r.sem().ReadonlyListing,
+			func(d declaration) bool { return d.readonly })
 	}
 	args, status := r.builtinNames("readonly", args, false)
 	if r.ctl == controlExit {

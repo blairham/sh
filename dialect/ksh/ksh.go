@@ -86,6 +86,8 @@ func Semantics() interp.Semantics {
 	// silence, status 0, which is measured rather than a shortcut.
 	s.DeclareListing = interp.DeclareListingBareAssignments
 	s.DeclareValueQuoting = interp.ListingQuoteWhenNeededDollar
+	s.ExportListing = interp.DeclareListingCommandWord
+	s.ReadonlyListing = interp.DeclareListingCommandWord
 	s.DeclarePrintReportsAMissingName = interp.No
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.Yes

@@ -39,6 +39,11 @@ func Semantics() interp.Semantics {
 	// starts blank however it is invoked, save the route letter `s` on
 	// standard input, which no dialect models.
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
+	s.ExportListing = interp.DeclareListingCommandWord
+	s.ReadonlyListing = interp.DeclareListingCommandWord
+	// dash single-quotes every listed value; it has no declare, so this
+	// style exists for the two -p listings alone.
+	s.DeclareValueQuoting = interp.ListingQuoteAlwaysEscaped
 	s.EchoInterpretsEscapes = interp.Yes
 	s.LengthOfSpecialIsCount = interp.No
 	s.UnterminatedBracket = interp.BracketNoMatch

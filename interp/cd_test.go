@@ -5,6 +5,7 @@ package interp_test
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -121,5 +122,39 @@ func TestUnsetRemovesAnEnvironmentName(t *testing.T) {
 	out, _ = run(t, `unset GONE; export GONE=again; env`, func(r *Runner) { r.Env = env })
 	if !strings.Contains(out, "GONE=again") {
 		t.Errorf("the child should see the new value: %q", out)
+	}
+}
+
+// TestPwdPathOptions — `pwd -P` reports where the directory is, a plain
+// `pwd` the name it was reached by, and the last of `-L -P` decides. All
+// three are unanimous across the panel.
+func TestPwdPathOptions(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "a", "b"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join("a", "b"), filepath.Join(dir, "l")); err != nil {
+		t.Fatal(err)
+	}
+	sem := CoreSemantics()
+	for _, tc := range []struct {
+		src  string
+		want string
+	}{
+		{`cd l; pwd`, "/l"},
+		{`cd l; pwd -P`, "/a/b"},
+		{`cd l; pwd -L -P`, "/a/b"},
+		{`cd l; pwd -P -L`, "/l"},
+	} {
+		out, st := run(t, tc.src, func(r *Runner) {
+			r.Semantics, r.Dir = &sem, dir
+		})
+		if st != 0 {
+			t.Errorf("%s: status %d (output %q)", tc.src, st, out)
+			continue
+		}
+		if !strings.HasSuffix(strings.TrimSpace(out), tc.want) {
+			t.Errorf("%s = %q, want suffix %q", tc.src, strings.TrimSpace(out), tc.want)
+		}
 	}
 }

@@ -1774,6 +1774,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `set/allexport-marks-what-follows` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` |
 | `cd/keeps-or-resolves-the-name-it-was-given` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` |
 | `cd/which-path-option-decides` | `PL kept~LP resolved` | `PL kept~LP resolved` | `PL kept~LP resolved` | `PL kept~LP resolved` | `PL kept~LP resolved` | `PL resolved~LP resolved` |
+| `cd/pwd-p-resolves-symlinks` | `1~1` | `1~1` | `1~1` | `1~1` | `1~1` | `1~1` |
 | `type/a-function-and-its-body` | `f is a shell function` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function` | `f is a shell function from zsh` |
 | `type/a-body-with-a-construct-in-it` | `f is a shell function` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function` | `f is a shell function from zsh` |
 | `type/a-body-with-redirections-in-it` | `f is a shell function` | `f is a function~f () ~{ ~    echo hi 2>&1 1>&2 3> /dev/null 0>&-~}` | `f is a function~f () ~{ ~    echo hi 2>&1 1>&2 3> /dev/null 0>&-~}` | `f is a function~f () ~{ ~    echo hi 2>&1 1>&2 3> /dev/null 0>&-~}` | `f is a function` | `f is a shell function from zsh` |
@@ -1885,6 +1886,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   mkdir -p real/sub && ln -s real link
   case $(cd -P -L link/sub && pwd) in *link*) echo 'PL kept';; *) echo 'PL resolved';; esac
   case $(cd -L -P link/sub && pwd) in *link*) echo 'LP kept';; *) echo 'LP resolved';; esac
+  ```
+- `cd/pwd-p-resolves-symlinks` — `pwd -P` reports where the directory is with symlinks resolved, and a plain `pwd` keeps the name it was reached by — both unanimous, and `pwd -L -P` (not shown) lets the last option win in all four as well
+  ```sh
+  mkdir -p a/b; ln -s a/b l; cd l; pwd -P | grep -c "/a/b$"; pwd | grep -c "/l$"
   ```
 - `type/a-function-and-its-body` — one shell follows the sentence with the function itself, laid out its own way, and the other three stop at the sentence. What is printed is not what was typed — the shell has a tree by then — so this is the one place a shell has to say a command back
   ```sh

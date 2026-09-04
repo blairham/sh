@@ -130,7 +130,7 @@ func MainArgs(sh Shell, argv []string) int {
 		//
 		// With whatever parameters the invocation supplied: `sh -s one two`
 		// sets `$1` at a prompt in all four.
-		return sh.interactive(argv, in.params)
+		return sh.interactive(argv, in.params, in.opts)
 	}
 	return sh.run(in)
 }
@@ -229,6 +229,12 @@ type source struct {
 	// the rest as parameters; and reading standard input leaves `$0` as the
 	// shell and makes every operand a parameter.
 	params []string
+	// opts are the set options the invocation asked for — `sh -e`, `+x`,
+	// `-o pipefail` — held as text until the runner they apply to exists.
+	// They are `set` options, not the front end's own: every shell in the
+	// panel hands them to the same machinery `set` uses, which is why `$-`
+	// reflects them and `set +e` can undo them.
+	opts []optionSpec
 	// interactive says there is nothing to run and a person at a keyboard,
 	// so the shell should prompt rather than read a script. It travels on
 	// the source because deciding it is part of reading the invocation:
@@ -244,83 +250,172 @@ type source struct {
 	dg         interp.Diagnostics
 }
 
+// optionSpec is one run of set options the invocation asked for: the letters
+// of `-eu`, or the name after `-o`. Text rather than applied state, because
+// the runner the options belong to does not exist while the argument vector
+// is being read.
+type optionSpec struct {
+	// spec is the option letters, or the long name where isName is set.
+	spec string
+	// isName says spec is a `-o`/`+o` name rather than letters, which an
+	// empty spec cannot: `sh -o ''` names an option called nothing, and
+	// three of the panel refuse it rather than ignoring it.
+	isName bool
+	// on is `-` rather than `+`. Both signs work on every option, which is
+	// measured and unanimous: `sh +x script` is how xtrace is kept *off*
+	// regardless of what the parent had.
+	on bool
+}
+
+// invocation is the state the option loop accumulates: how to read the words
+// that are not operands, gathered before anything decides what to run.
+type invocation struct {
+	// forcePrompt is `-i`: a prompt even where standard input is not a
+	// terminal, which is how a shell is driven by something that is not a
+	// person — a test, or a program feeding it lines.
+	forcePrompt bool
+	// fromStdin is `-s`: the script arrives on standard input and every
+	// operand is a parameter, none of them a path. An option like any
+	// other, not a terminator — measured, all four shells still read
+	// options after it: `sh -s -e arg` sets errexit and makes `arg` `$1`.
+	fromStdin bool
+	opts      []optionSpec
+}
+
 func (sh Shell) input(argv []string) (source, error) {
 	args := argv
 	if len(args) > 0 {
 		args = args[1:]
 	}
 
-	// `-i` asks for a prompt even where standard input is not a terminal,
-	// which is how a shell is driven by something that is not a person: a
-	// test, or a program feeding it lines.
-	forcePrompt := false
+	var inv invocation
 
 	// Hand-parsed rather than with the flag package, because a shell's
 	// conventions are not Go's: options stop at the first operand, `-c` takes
-	// either the rest of its word or the next argument, and the words after
-	// the command must not be claimed as more flags.
+	// either the rest of its word or the next argument, a `+` turns an
+	// option off, and the words after a command string must not be claimed
+	// as more flags.
 	for len(args) > 0 {
 		a := args[0]
 		switch {
-		case a == "-i":
-			// An option like any other rather than a mode, because it can be
-			// given with the rest: `sh -i script.sh` still runs the script.
-			forcePrompt = true
-			args = args[1:]
-			continue
-		case a == "--":
-			return sh.operands(args[1:], forcePrompt)
-		case a == "-c":
-			if len(args) < 2 {
-				return source{}, errors.New("-c requires an argument")
+		case a == "--", a == "-":
+			// Both end the options. A lone `-` does not mean "read standard
+			// input": every shell in the panel treats `sh - a b` as running
+			// the script `a`, and only a `-` with nothing after it falls
+			// through to standard input.
+			return sh.operands(args[1:], inv)
+		case len(a) >= 2 && (a[0] == '-' || a[0] == '+'):
+			rest, src, done, err := sh.optionWord(a, args[1:], &inv)
+			if err != nil {
+				return source{}, err
 			}
-			// Anything after the command word is a positional parameter
-			// rather than another option. Nothing here sets them yet; taking
-			// them at all is what keeps that a gap rather than a misparse.
-			return commandSource(sh, args[1], args[2:]), nil
-		case strings.HasPrefix(a, "-c") && len(a) > 2:
-			// `-c'echo hi'` as a single word, which getopt allows.
-			return commandSource(sh, a[2:], args[1:]), nil
-		case a == "-s":
-			// The explicit "read standard input" spelling, and standard
-			// input from a terminal is a person: all four prompt for `sh -s`
-			// there and read a script for `echo x | sh -s`. Reading it as a
-			// script either way meant waiting for an end-of-file nobody was
-			// going to type, which does not look like a shell waiting for a
-			// decision — it looks like a hang.
-			//
-			// Every operand after `-s` is a parameter and none of them is
-			// `$0`, at a prompt as much as in a script: all four answer
-			// `sh -s one two` with `$1` set.
-			if forcePrompt || Interactively(sh, false) {
-				return source{interactive: true, name: sh.Name, params: args[1:], dg: sh.Diagnostics}, nil
+			if done {
+				return src, nil
 			}
-			s, err := readAll(sh.Stdin)
-			return source{src: s, name: sh.Name, params: args[1:], dg: sh.Diagnostics.ForStdin()}, err
-		case a == "-":
-			// A lone `-` ends the options, exactly as `--` does. It does not
-			// mean "read standard input": every shell in the panel treats
-			// `sh - a b` as running the script `a`, and only a `-` with
-			// nothing after it falls through to standard input.
-			return sh.operands(args[1:], forcePrompt)
-		case !strings.HasPrefix(a, "-"):
-			return sh.operands(args, forcePrompt)
+			args = rest
 		default:
-			return source{}, fmt.Errorf("unknown option %q", a)
+			return sh.operands(args, inv)
 		}
 	}
-	return sh.operands(args, forcePrompt)
+	return sh.operands(nil, inv)
+}
+
+// optionWord reads one word of options — a single letter, a bundle, either
+// sign — recording what it finds on inv. It returns the arguments still to
+// read, or the source itself when a letter ends the loop the way `-c` does.
+//
+// The letters this front end owns are the ones that say where the script
+// comes from — `c`, `i`, `s` — and they bundle with the rest: `sh -ec cmd`
+// is unanimous across the panel. Every other letter is a `set` option and
+// stays text here; whether the shell has it is the dialect's question,
+// answered by the same machinery `set` uses once the runner exists.
+func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []string, src source, done bool, err error) {
+	on := a[0] == '-'
+	body := a[1:]
+	letters := ""
+	flush := func() {
+		if letters != "" {
+			inv.opts = append(inv.opts, optionSpec{spec: letters, on: on})
+			letters = ""
+		}
+	}
+	for k := 0; k < len(body); k++ {
+		switch ch := body[k]; {
+		case ch == 'c' && on:
+			// The command string: the rest of this word if there is any —
+			// `-c'echo hi'` as a single word, which getopt allows — and the
+			// next argument otherwise. Anything after the command word is a
+			// positional parameter rather than another option. The letters
+			// before it in a bundle still count: `sh -ec cmd` is errexit
+			// and a command, in all four shells.
+			flush()
+			if cmd := body[k+1:]; cmd != "" {
+				s := commandSource(sh, cmd, args)
+				s.opts = inv.opts
+				return nil, s, true, nil
+			}
+			if len(args) < 1 {
+				return nil, source{}, false, errors.New("-c requires an argument")
+			}
+			s := commandSource(sh, args[0], args[1:])
+			s.opts = inv.opts
+			return nil, s, true, nil
+		case ch == 'i' && on:
+			inv.forcePrompt = true
+		case ch == 's' && on:
+			inv.fromStdin = true
+		case ch == 'o':
+			// The long spelling, whose name is the next word — read at the
+			// end of a bundle exactly as `set` reads it, so `sh -euo
+			// pipefail script` works the way the line at the top of so many
+			// scripts does. Elsewhere in a word it is refused: measured,
+			// the panel splits over `-oNAME` — zsh and ksh93 read the rest
+			// of the word as the name, bash and dash read it as more
+			// letters — so the core takes neither side.
+			if k != len(body)-1 {
+				return nil, source{}, false, fmt.Errorf("unknown option %q", a)
+			}
+			flush()
+			if len(args) < 1 {
+				// Refused rather than listed. With no name at all three of
+				// the four print the option table and read on; zsh refuses
+				// with "string expected after -o". A listing at invocation
+				// is not worth the machinery until something needs it, and
+				// refusing is the honest half of a split panel.
+				return nil, source{}, false, fmt.Errorf("%s requires an argument", a)
+			}
+			inv.opts = append(inv.opts, optionSpec{spec: args[0], isName: true, on: on})
+			return args[1:], source{}, false, nil
+		default:
+			// A set option's letter, ours to carry and the dialect's to
+			// judge. An unknown one is refused before anything runs, just
+			// not here: the front end has no option table of its own, so
+			// `sh -Q` is refused by the runner the way `set -Q` would be.
+			letters += string(ch)
+		}
+	}
+	flush()
+	return args, source{}, false, nil
 }
 
 // operands handles what is left once the options are gone: a script path, or
 // nothing at all, which means standard input.
-func (sh Shell) operands(args []string, forcePrompt bool) (source, error) {
-	if len(args) == 0 {
-		if forcePrompt || Interactively(sh, false) {
+func (sh Shell) operands(args []string, inv invocation) (source, error) {
+	if inv.fromStdin || len(args) == 0 {
+		// Standard input, and standard input from a terminal is a person:
+		// all four prompt for `sh -s` there and read a script for `echo x |
+		// sh -s`. Reading it as a script either way meant waiting for an
+		// end-of-file nobody was going to type, which does not look like a
+		// shell waiting for a decision — it looks like a hang.
+		//
+		// With `-s` every operand is a parameter and none of them is `$0`,
+		// at a prompt as much as in a script: all four answer `sh -s one
+		// two` with `$1` set. Without it there are no operands at all.
+		if inv.forcePrompt || Interactively(sh, false) {
 			// Nothing to run and someone at a keyboard. Asked before
 			// reading, not after: reading standard input from a terminal
 			// waits for an end-of-file that a person has not typed yet.
-			return source{interactive: true, name: sh.Name, dg: sh.Diagnostics}, nil
+			return source{interactive: true, name: sh.Name, params: args, dg: sh.Diagnostics, opts: inv.opts}, nil
 		}
 		// sh.Stdin, not os.Stdin: a Runner's streams are its own, and a
 		// front end that reaches past them is not usable by anything that
@@ -328,7 +423,7 @@ func (sh Shell) operands(args []string, forcePrompt bool) (source, error) {
 		// a test for the standard-input path silently reads the *test
 		// binary's* input and passes whatever it is given.
 		src, err := readAll(sh.Stdin)
-		return source{src: src, name: sh.Name, dg: sh.Diagnostics.ForStdin()}, err
+		return source{src: src, name: sh.Name, params: args, dg: sh.Diagnostics.ForStdin(), opts: inv.opts}, err
 	}
 	path := args[0]
 	b, err := os.ReadFile(path)
@@ -340,7 +435,7 @@ func (sh Shell) operands(args []string, forcePrompt bool) (source, error) {
 	// changes how it names the line.
 	return source{
 		src: string(b), name: path, file: path,
-		params: args[1:], dg: sh.Diagnostics.ForScript(),
+		params: args[1:], dg: sh.Diagnostics.ForScript(), opts: inv.opts,
 	}, nil
 }
 
@@ -465,8 +560,37 @@ func (sh Shell) run(in source) int {
 			return code
 		}
 	}
+	// The invocation's own options, in effect before the script's first line
+	// the way the panel has them — `sh -e script.sh` fails on the first
+	// failing command, and `$-` says so from the start. After the prelude,
+	// which is the dialect's plumbing rather than the user's text: tracing
+	// it under `-x` or killing it under `-e` would be reporting on machinery
+	// nobody wrote.
+	if code, ok := sh.applyOptions(r, in.opts); !ok {
+		return code
+	}
 
 	return sh.execute(r, p, in)
+}
+
+// applyOptions installs the set options the invocation named, once the
+// runner they apply to exists. A refusal — an unknown letter, a name the
+// dialect does not have — has already been reported by the same machinery
+// `set` uses, and stops the shell before anything runs, which is measured
+// and unanimous.
+func (sh Shell) applyOptions(r *interp.Runner, opts []optionSpec) (int, bool) {
+	for _, o := range opts {
+		if o.isName {
+			if code := r.SetNamedOption(o.spec, o.on); code != 0 {
+				return code, false
+			}
+			continue
+		}
+		if !r.SetOptionLetters(o.spec, o.on) {
+			return usageStatus, false
+		}
+	}
+	return 0, true
 }
 
 // execute reads and runs the script a line at a time.

@@ -22,11 +22,11 @@ func Interactive(sh Shell) int { return InteractiveArgs(sh, os.Args) }
 // InteractiveArgs is Interactive with the argument vector given rather than
 // taken from the process, which is what makes it testable without a
 // subprocess — the same split as Main and MainArgs, and for the same reason.
-func InteractiveArgs(sh Shell, argv []string) int { return sh.interactive(argv, nil) }
+func InteractiveArgs(sh Shell, argv []string) int { return sh.interactive(argv, nil, nil) }
 
-// interactive is InteractiveArgs with the positional parameters the invocation
-// supplied, which only the front end reading it knows.
-func (sh Shell) interactive(argv, params []string) int {
+// interactive is InteractiveArgs with the positional parameters and the set
+// options the invocation supplied, which only the front end reading it knows.
+func (sh Shell) interactive(argv, params []string, opts []optionSpec) int {
 	sh = sh.withDefaults(argv)
 	dg := sh.Diagnostics
 	name := sh.Name
@@ -40,6 +40,13 @@ func (sh Shell) interactive(argv, params []string) int {
 		if code := sh.source(r, name); code != 0 {
 			return code
 		}
+	}
+	// The invocation's options come before the startup files, which is
+	// where the panel has them: what `-x` traces includes what the rc file
+	// does. And a refused one ends the shell before it prompts — `sh -Q`
+	// with a terminal is an error, not a session.
+	if code, ok := sh.applyOptions(r, opts); !ok {
+		return code
 	}
 	// The prelude is the dialect's own; these are the user's, and come after
 	// it so a person's settings win over the shell's defaults.

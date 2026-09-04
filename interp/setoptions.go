@@ -96,6 +96,48 @@ var extraSetOptions = map[string]setOption{
 	"privileged": {},
 }
 
+// SetOptionLetters applies a run of single-letter options — `e` and `ux`
+// from `-e` and `+ux` — exactly as `set` reads them, reporting whether every
+// letter was one this shell has. A refusal has already been said on the
+// runner's error stream.
+//
+// Exported for the front end: every shell in the panel accepts its `set`
+// options at invocation too — `sh -e script.sh` is an everyday spelling —
+// and routing them through the same machinery is what keeps `sh -f` and
+// `set -f` the same question with the same dialect answer.
+func (r *Runner) SetOptionLetters(letters string, on bool) bool {
+	// No script line has run yet; a dialect prelude may have. bash reports
+	// an invocation option's failure at "line 0", and a diagnostic naming
+	// the prelude's last line would point somewhere nobody wrote.
+	r.line = 0
+	ok := r.setLetters(letters, on)
+	if r.unspecified {
+		// A letter that hangs on an axis no dialect answered — `-f` under
+		// core — has been refused out loud. Inside a script the run loop
+		// reads this flag; at invocation the caller only gets the bool, so
+		// it is folded in here and cleared the way the run loop clears it.
+		r.unspecified = false
+		return false
+	}
+	return ok
+}
+
+// SetNamedOption applies one long option — `-o pipefail`, `+o allexport` —
+// exactly as `set -o` reads it, returning 0 or the status the dialect gives
+// a name it refuses. Exported for the front end, with SetOptionLetters.
+func (r *Runner) SetNamedOption(name string, on bool) int {
+	r.line = 0
+	ok := r.setOption(name, on)
+	if r.unspecified {
+		r.unspecified = false
+		return 2
+	}
+	if !ok {
+		return r.setOptionFailure()
+	}
+	return 0
+}
+
 // AddSetOptions declares the `set -o` names this shell has beyond the ones
 // they all share.
 //

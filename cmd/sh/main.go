@@ -16,12 +16,21 @@
 //
 //	sh                           # a prompt, if stdin is a terminal
 //	sh -c 'echo hi'              # run a command
-//	sh script.sh                 # run a script
+//	sh script.sh a b             # run a script, with $1 and $2 set
 //	sh < script.sh               # or on stdin
 //	sh -dialect bash -c '…'      # be bash where the shells differ
 //	sh -i                        # a prompt even where stdin is not a terminal
+//	sh -e script.sh              # any set option, exactly as `set` reads them
 //	sh -tokens 'echo hi'         # dump the token stream
 //	sh -parse 'a && b'           # dump the syntax tree
+//
+// Everything a shell reads at invocation — `-c`, a script path and its
+// positional parameters, `-s`, a lone `-`, set options like `-e` — is read
+// by the shared front end in driver, exactly as the dialect binaries read
+// it. Only the flags no shell has — -tokens, -parse and -dialect — are this
+// binary's own, and they come first on the line: the first word that is not
+// one of them belongs to the shell, so a script's own arguments can never be
+// mistaken for them.
 //
 // With nothing to run and a terminal on stdin it prompts: a line editor with
 // history that survives the session, Tab completion of commands and files,
@@ -31,9 +40,8 @@
 package main
 
 import (
-	"flag"
+	"errors"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 
@@ -46,134 +54,90 @@ import (
 	"github.com/blairham/sh/syntax"
 )
 
-const (
-	exitOK      = 0
-	exitFailure = 2
-)
+const exitFailure = 2
 
 func main() {
-	var (
-		tokens      = flag.Bool("tokens", false, "print the token stream and exit")
-		parse       = flag.Bool("parse", false, "print the syntax tree and exit")
-		command     = flag.String("c", "", "run the given command")
-		file        = flag.String("f", "", "read from this file instead of an argument")
-		dialect     = flag.String("dialect", "core", "core, posix, bash, zsh, ksh or dash")
-		interactive = flag.Bool("i", false, "read commands from a terminal, even if stdin is not one")
-	)
-	flag.Parse()
-
-	sh, err := pickDialect(*dialect)
+	own, rest, err := readOwnFlags(os.Args[1:])
 	if err != nil {
 		fail(err)
 	}
-	sh.Name = shellName()
-
-	src, err := source(*file, flag.Args())
+	sh, err := pickDialect(own.dialect)
 	if err != nil {
 		fail(err)
 	}
-
-	os.Exit(dispatch(sh, options{
-		tokens: *tokens, parse: *parse, command: *command,
-		commandGiven: *command != "", file: *file, interactive: *interactive,
-	}, src, flag.Args()))
+	// The fallback for an argv with nothing in it; driver names the shell by
+	// argv[0] the way every dialect binary is named.
+	sh.Name = "sh"
+	if own.tokens || own.parse {
+		dump := dumpTree
+		if own.tokens {
+			dump = dumpTokens
+		}
+		if err := dump(strings.Join(rest, " "), sh.Dialect); err != nil {
+			fail(err)
+		}
+		os.Exit(0)
+	}
+	// Everything else is a shell invocation, and the shared front end reads
+	// it — this binary was the fifth copy of that logic once, and the copy
+	// is what dropped a script's positional parameters, claimed `-f` for
+	// "read this file" where every shell means noglob, and opened a file
+	// named `-`.
+	argv := append([]string{os.Args[0]}, rest...)
+	os.Exit(driver.MainArgs(sh, argv))
 }
 
-// options is what this front end reads that a shell's own conventions do not
-// cover — a token dump, a tree dump, and which dialect to be.
-type options struct {
+// ownFlags are the flags no shell has, so the shared front end must never
+// see them: which dialect to be, and the two dump modes.
+type ownFlags struct {
 	tokens, parse bool
-	command       string
-	// commandGiven, because `-c ''` is a command string and an empty one:
-	// running nothing is not the same as having named nothing to run.
-	commandGiven bool
-	file         string
-	interactive  bool
+	dialect       string
 }
 
-// dispatch decides what to run, and returns the status rather than exiting so
-// that a test can call it.
+// readOwnFlags strips this binary's flags from the front of the line,
+// leaving everything a shell would read.
 //
-// Separate from main because the wiring is what went wrong: `-c` reached past
-// driver's own and lost the operands with it, and nothing here could say so.
-func dispatch(sh driver.Shell, o options, src string, args []string) int {
-	switch {
-	case o.tokens:
-		if err := dumpTokens(src, sh.Dialect); err != nil {
-			fail(err)
+// Only from the front: the scan stops at the first word that is not one of
+// ours, so `sh script.sh -dialect` hands the script a parameter named
+// `-dialect` rather than eating it, and `-c '…' -tokens` leaves the operand
+// alone. The forms are the ones the flag package accepted — one dash or two,
+// the value attached with `=` or as the next word.
+func readOwnFlags(args []string) (own ownFlags, rest []string, err error) {
+	own.dialect = "core"
+	i := 0
+	for i < len(args) {
+		a := args[i]
+		if !strings.HasPrefix(a, "-") {
+			break
 		}
-		return exitOK
-	case o.parse:
-		if err := dumpTree(src, sh.Dialect); err != nil {
-			fail(err)
+		name, val, hasVal := strings.Cut(strings.TrimLeft(a[1:], "-"), "=")
+		switch name {
+		case "tokens":
+			own.tokens = true
+		case "parse":
+			own.parse = true
+		case "dialect":
+			if !hasVal {
+				if i+1 >= len(args) {
+					return own, nil, errors.New("-dialect requires an argument")
+				}
+				i++
+				val = args[i]
+			}
+			own.dialect = val
+		default:
+			// Not ours — a set option, `-c`, an operand after `--` — so the
+			// shell's own reading starts here.
+			return own, args[i:], nil
 		}
-		return exitOK
-	case o.commandGiven:
-		// Through driver's own `-c`, not past it: the label in a parse
-		// failure's location, the dialect that parses the string whole, and
-		// the operands that become `$0` and the parameters all belong to it.
-		return driver.RunCommand(sh, o.command, args)
-	case len(args) > 0:
-		// A bare argument is a script to run, which is how a shell is
-		// normally invoked and how the corpus runs the cases that depend on
-		// being read from a file rather than from -c.
-		return runPath(sh, args[0])
-	case o.file != "":
-		// -f names a file, and its help text says so, but until the run path
-		// moved into driver only -tokens and -parse ever read it: `sh -f x.sh`
-		// fell through to "nothing to do". It reads it as a script, which is
-		// what it always claimed to do.
-		return runPath(sh, o.file)
-	case o.interactive || driver.Interactively(sh, false):
-		// Nothing to run was named and the input is a terminal, so this is
-		// someone at a keyboard rather than a script arriving on stdin.
-		return driver.Interactive(sh)
-	default:
-		// Not a terminal and nothing named: the script is on stdin, which is
-		// how `curl … | sh` and `sh < script` arrive.
-		return runStdin(sh)
+		i++
 	}
-}
-
-// runStdin runs a script arriving on standard input.
-//
-// Named `-` the way a shell names input it did not open itself, rather than
-// with a path there is none of.
-func runStdin(sh driver.Shell) int {
-	b, err := io.ReadAll(os.Stdin)
-	if err != nil {
-		fail(err)
-	}
-	return driver.RunStdin(sh, string(b))
-}
-
-// runPath runs a file, which is not the same as running its contents: a shell
-// names the *script* in `$0` and in every diagnostic, not itself, and ksh93
-// also changes how it names the line.
-func runPath(sh driver.Shell, path string) int {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		fail(err)
-	}
-	return driver.RunScript(sh, string(b), path)
+	return own, args[i:], nil
 }
 
 func fail(err error) {
 	fmt.Fprintln(os.Stderr, "sh:", err)
 	os.Exit(exitFailure)
-}
-
-// shellName is what `$0` reports and what a diagnostic names itself with.
-//
-// Real shells use the path they were invoked by — dash says "/bin/dash: 1: …"
-// — so a hardcoded "sh" was wrong twice: in `$0` inside a function, and at the
-// start of every diagnostic. driver does the same for a binary that hands it
-// the argument vector; this one parses its own flags, so it answers here.
-func shellName() string {
-	if len(os.Args) > 0 && os.Args[0] != "" {
-		return os.Args[0]
-	}
-	return "sh"
 }
 
 // pickDialect resolves a name to a shell.
@@ -232,17 +196,6 @@ func pickDialect(name string) (driver.Shell, error) {
 	}
 	return driver.Shell{},
 		fmt.Errorf("unknown dialect %q: want core, posix, bash, zsh, ksh or dash", name)
-}
-
-func source(file string, args []string) (string, error) {
-	if file != "" {
-		b, err := os.ReadFile(file)
-		return string(b), err
-	}
-	if len(args) > 0 {
-		return strings.Join(args, " "), nil
-	}
-	return "", nil
 }
 
 // dumpTokens prints one token per line: position, kind, and for a word its

@@ -155,12 +155,190 @@ func TestArgumentForms(t *testing.T) {
 
 func TestAnUnknownOptionIsRefusedRatherThanIgnored(t *testing.T) {
 	// A shell that silently drops an option it does not understand lets a
-	// script believe it asked for something.
-	_, errs, code := runArgs(t, shell(), "testsh", "-Q", "-c", "echo hi")
+	// script believe it asked for something. A *known* option is a `set`
+	// option now, so the refusal comes from the same machinery `set` uses —
+	// and it still stops the shell before anything runs.
+	out, errs, code := runArgs(t, shell(), "testsh", "-Q", "-c", "echo hi")
 	if code == 0 {
 		t.Fatal("an unknown option should not succeed")
 	}
 	if !strings.Contains(errs, "-Q") {
+		t.Errorf("stderr = %q, want it to name the option it refused", errs)
+	}
+	if out != "" {
+		t.Errorf("stdout = %q, want the command never to have run", out)
+	}
+}
+
+// TestSetOptionsAtInvocationReachEveryRoute is the gap the front end had: it
+// knew `-i`, `-c`, `-s` and nothing else, so `sh -e script.sh` — an everyday
+// invocation, and how the wild-run sweep invokes everything — exited 2 with
+// `unknown option`. All four panel shells hand invocation options to the
+// `set` machinery, whatever the route.
+func TestSetOptionsAtInvocationReachEveryRoute(t *testing.T) {
+	// Under errexit the `false` ends the script, so `alive` never prints.
+	const src = "false\necho alive\n"
+
+	out, _, code := runArgs(t, shell(), "testsh", "-e", "-c", src)
+	if code == 0 || out != "" {
+		t.Errorf("-c gave %q status %d, want errexit to end it silently", out, code)
+	}
+
+	out, _, code = runArgs(t, shell(), "testsh", "-e", writeScript(t, src))
+	if code == 0 || out != "" {
+		t.Errorf("a script gave %q status %d, want errexit to end it silently", out, code)
+	}
+
+	f, err := os.Open(writeScript(t, src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	sh := shell()
+	sh.Stdin = f
+	out, _, code = runArgs(t, sh, "testsh", "-e")
+	if code == 0 || out != "" {
+		t.Errorf("standard input gave %q status %d, want errexit to end it silently", out, code)
+	}
+}
+
+// TestDollarDashReflectsInvocationOptions: `case $- in *e*)` is the standard
+// errexit check, and an option set at invocation has to be visible to it —
+// the letters are the same state `set` reads and writes, not a note the
+// front end kept to itself.
+func TestDollarDashReflectsInvocationOptions(t *testing.T) {
+	out, errs, code := runArgs(t, shell(), "testsh", "-eu", "-c", `echo "$-"`)
+	if code != 0 {
+		t.Fatalf("status %d, stderr %q", code, errs)
+	}
+	for _, letter := range []string{"e", "u"} {
+		if !strings.Contains(out, letter) {
+			t.Errorf("$- = %q, want %q in it", strings.TrimSpace(out), letter)
+		}
+	}
+
+	// And `set +e` can undo what the invocation set, because they are the
+	// same option and not two.
+	out, _, code = runArgs(t, shell(), "testsh", "-e", "-c", "set +e\nfalse\necho alive\n")
+	if code != 0 || strings.TrimSpace(out) != "alive" {
+		t.Errorf("got %q status %d, want `set +e` to undo the invocation's -e", out, code)
+	}
+}
+
+// TestOptionFormsAtInvocation: the spellings the panel is unanimous on —
+// single letters, bundles, the `+` sign, `-o name` and `+o name`, `o` ending
+// a bundle the way `set -euo pipefail` writes it, and letters bundled with
+// `-c` itself.
+func TestOptionFormsAtInvocation(t *testing.T) {
+	const alive = "false\necho alive\n"
+	for _, tc := range []struct {
+		name  string
+		argv  []string
+		alive bool
+	}{
+		{"a single letter", []string{"testsh", "-e", "-c", alive}, false},
+		{"a bundle", []string{"testsh", "-ue", "-c", alive}, false},
+		{"a plus turns one off", []string{"testsh", "-e", "+e", "-c", alive}, true},
+		{"-o and its name", []string{"testsh", "-o", "errexit", "-c", alive}, false},
+		{"+o and its name", []string{"testsh", "-e", "+o", "errexit", "-c", alive}, true},
+		{"o ending a bundle", []string{"testsh", "-uo", "errexit", "-c", alive}, false},
+		{"a letter bundled with -c", []string{"testsh", "-ec", alive}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, errs, code := runArgs(t, shell(), tc.argv...)
+			got := strings.Contains(out, "alive")
+			if got != tc.alive {
+				t.Errorf("output %q status %d (stderr %q), want alive=%v", out, code, errs, tc.alive)
+			}
+		})
+	}
+}
+
+// TestOptionsStopAtTheFirstOperand: a word after the script's path belongs
+// to the script however it is spelled. Unanimous — `sh script.sh -e` hands
+// the script `-e` and sets nothing.
+func TestOptionsStopAtTheFirstOperand(t *testing.T) {
+	path := writeScript(t, "echo \"1=[$1]\"\nfalse\necho alive\n")
+	out, errs, code := runArgs(t, shell(), "testsh", path, "-e")
+	if errs != "" || code != 0 {
+		t.Fatalf("status %d, stderr %q", code, errs)
+	}
+	if want := "1=[-e]\nalive\n"; out != want {
+		t.Errorf("got %q, want %q — the -e is a parameter, not an option", out, want)
+	}
+}
+
+// TestOptionsAreStillReadAfterDashS: `-s` is an option, not a terminator.
+// Measured, all four: `sh -s -e arg` sets errexit and makes `arg` the first
+// parameter; only an operand ends the options.
+func TestOptionsAreStillReadAfterDashS(t *testing.T) {
+	f, err := os.Open(writeScript(t, "echo \"1=[$1]\"\nfalse\necho alive\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	sh := shell()
+	sh.Stdin = f
+	out, errs, code := runArgs(t, sh, "testsh", "-s", "-e", "arg")
+	if code == 0 {
+		t.Fatalf("status 0, want errexit to have ended the script (stderr %q)", errs)
+	}
+	if want := "1=[arg]\n"; out != want {
+		t.Errorf("got %q, want %q — the word after the options is a parameter", out, want)
+	}
+}
+
+// TestVerboseEchoesFromTheFirstLine: `-v` is the option whose behavior lives
+// in the front end — the raw text is echoed as it is read — so it is the one
+// that would stay silent if the invocation's options were applied anywhere
+// but before the script.
+func TestVerboseEchoesFromTheFirstLine(t *testing.T) {
+	_, errs, code := runArgs(t, shell(), "testsh", "-v", "-c", "echo hi")
+	if code != 0 {
+		t.Fatalf("status %d", code)
+	}
+	if !strings.Contains(errs, "echo hi") {
+		t.Errorf("stderr = %q, want the source echoed back", errs)
+	}
+}
+
+// TestDashOWantsAName pins the refusals around `-o`, and both are decisions:
+//
+//   - `-o` with nothing after it: three of the panel print the option table
+//     and read on, one refuses with "string expected after -o". A split
+//     panel, and a listing at invocation is not worth the machinery until
+//     something needs it, so the front end refuses.
+//   - `-oNAME` in one word: two of the panel read NAME as the option's name,
+//     two read it as more single-letter options. The core takes neither side
+//     of a disagreement, so the word is refused whole.
+func TestDashOWantsAName(t *testing.T) {
+	_, errs, code := runArgs(t, shell(), "testsh", "-o")
+	if code == 0 {
+		t.Fatal("-o with nothing after it should not succeed")
+	}
+	if !strings.Contains(errs, "-o") {
+		t.Errorf("stderr = %q, want it to say what was wrong", errs)
+	}
+
+	out, errs, code := runArgs(t, shell(), "testsh", "-oerrexit", "-c", "echo hi")
+	if code == 0 || out != "" {
+		t.Errorf("-oNAME gave %q status %d, want it refused whole", out, code)
+	}
+	if !strings.Contains(errs, "-oerrexit") {
+		t.Errorf("stderr = %q, want the word it refused", errs)
+	}
+}
+
+// TestABadOptionNameIsRefusedBeforeAnythingRuns: the name after `-o` is the
+// dialect's to judge, exactly as it is for `set -o`, and a refused one stops
+// the shell with the refusal on stderr rather than running the script
+// anyway.
+func TestABadOptionNameIsRefusedBeforeAnythingRuns(t *testing.T) {
+	out, errs, code := runArgs(t, shell(), "testsh", "-o", "nosuchoption", "-c", "echo never")
+	if code == 0 || out != "" {
+		t.Errorf("got %q status %d, want nothing run", out, code)
+	}
+	if !strings.Contains(errs, "nosuchoption") {
 		t.Errorf("stderr = %q, want it to name the option it refused", errs)
 	}
 }

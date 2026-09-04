@@ -170,6 +170,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `expand/tilde-unquoted` | `abs` | `abs` | `abs` | `abs` | `abs` | `abs` |
 | `expand/tilde-quoted` | `literal` | `literal` | `literal` | `literal` | `literal` | `literal` |
 | `expand/tilde-in-assignment` | `abs` | `abs` | `abs` | `abs` | `abs` | `abs` |
+| `expand/tilde-after-a-colon-in-an-assignment` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` | `a:H/b:H~:~/q` |
+| `expand/tilde-into-an-expansion-diverges` | `a:~/x` | `a:~/x` | `a:~/x` | `a:~/x` | `a:~/x` | `a:H/x` |
 | `nounset/unset-variable-from-a-command-string` | `<shell>: 2: NOPE: parameter not set` *(status 2)* | `<shell>: line 2: NOPE: unbound variable` *(status 127)* | `<shell>: line 2: NOPE: unbound variable` *(status 127)* | `<shell>: line 1: NOPE: unbound variable` *(status 127)* | `<shell>: line 2: NOPE: parameter not set` *(status 1)* | `<shell>:2: NOPE: parameter not set` *(status 1)* |
 | `param/error-operator-on-an-unset-name` | `<script>: 1: V: parameter not set` *(status 2)* | `<script>: line 1: V: parameter not set` *(status 1)* | `<script>: line 1: V: parameter not set` *(status 1)* | `<script>: line 1: V: parameter null or not set` *(status 1)* | `<script>: line 1: V: parameter not set` *(status 1)* | `<script>:1: V: parameter not set` *(status 1)* |
 | `param/error-operator-default-word` | `<script>: 1: V: parameter not set or null` *(status 2)* | `<script>: line 1: V: parameter null or not set` *(status 1)* | `<script>: line 1: V: parameter null or not set` *(status 1)* | `<script>: line 1: V: parameter null or not set` *(status 1)* | `<script>: line 1: V: parameter null` *(status 1)* | `<script>:1: V: parameter not set` *(status 1)* |
@@ -257,6 +259,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `expand/tilde-in-assignment` — assignment values are a tilde context, which is why PATH=~/bin works
   ```sh
   x=~; case $x in /*) echo abs;; *) echo literal;; esac
+  ```
+- `expand/tilde-after-a-colon-in-an-assignment` — the context adds a tilde after each unquoted colon — PATH=~/bin:~/sbin — and quoting turns it back off; unanimous
+  ```sh
+  v=a:~/b:~; echo "$v" | sed "s|$HOME|H|g"; w=":~/q"; echo "$w"
+  ```
+- `expand/tilde-into-an-expansion-diverges` — a tilde whose segment runs into an expansion stays literal in three of the four; zsh alone expands it and then appends the value
+  ```sh
+  u=/x; v=a:~$u; echo "$v" | sed "s|$HOME|H|g"
   ```
 - `nounset/unset-variable-from-a-command-string` — the same two lines as the case above, given as an argument instead of read from a file. Three of the panel answer the same either way; one answers 127 here and 1 there, which is a fact about how the shell was started rather than about the expansion — and only the pair can show it
   ```sh

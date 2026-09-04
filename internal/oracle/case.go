@@ -296,6 +296,16 @@ var Corpus = []Case{
 		Snippet: `x=~; case $x in /*) echo abs;; *) echo literal;; esac`,
 		Why:     "assignment values are a tilde context, which is why PATH=~/bin works",
 	},
+	{
+		ID: "expand/tilde-after-a-colon-in-an-assignment", Category: "expansion",
+		Snippet: `v=a:~/b:~; echo "$v" | sed "s|$HOME|H|g"; w=":~/q"; echo "$w"`,
+		Why:     "the context adds a tilde after each unquoted colon — PATH=~/bin:~/sbin — and quoting turns it back off; unanimous",
+	},
+	{
+		ID: "expand/tilde-into-an-expansion-diverges", Category: "expansion",
+		Snippet: `u=/x; v=a:~$u; echo "$v" | sed "s|$HOME|H|g"`,
+		Why:     "a tilde whose segment runs into an expansion stays literal in three of the four; zsh alone expands it and then appends the value",
+	},
 
 	// --- semantics axes --------------------------------------------------
 	{

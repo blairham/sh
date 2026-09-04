@@ -8474,6 +8474,38 @@
         "TimedOut": false
       }
     },
+    "expand/tilde-after-a-colon-in-an-assignment": {
+      "bash": {
+        "Output": "a:H/b:H~:~/q",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "a:H/b:H~:~/q",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "a:H/b:H~:~/q",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "a:H/b:H~:~/q",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "a:H/b:H~:~/q",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "a:H/b:H~:~/q",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "expand/tilde-in-assignment": {
       "bash": {
         "Output": "abs",
@@ -8502,6 +8534,38 @@
       },
       "zsh": {
         "Output": "abs",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/tilde-into-an-expansion-diverges": {
+      "bash": {
+        "Output": "a:~/x",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "a:~/x",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "a:~/x",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "a:~/x",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "a:~/x",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "a:H/x",
         "Status": 0,
         "TimedOut": false
       }

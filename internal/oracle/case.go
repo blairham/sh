@@ -2708,6 +2708,16 @@ echo unreachable`,
 		Why:     "126 as well, and the reason diverges: bash and ksh93 check for a directory and say so, dash and zsh report the permission error execve returns",
 	},
 	{
+		ID: "export/p-names-what-is-exported", Category: "builtins",
+		Snippet: `export V=1; export -p | grep -c -E "^(declare -x|export) V="`,
+		Why:     "the listing must name the exported variable in one of the two spellings the shells use — the grep finds either, and found neither before",
+	},
+	{
+		ID: "readonly/p-names-what-is-readonly", Category: "builtins",
+		Snippet: `readonly R=2; readonly -p | grep -c -E "R="`,
+		Why:     "the same question through readonly -p, whose spelling zsh alone moves to typeset -r",
+	},
+	{
 		ID: "hash/bare-and-r-succeed-everywhere", Category: "builtins",
 		Snippet: `hash; echo "st=$?"; hash -r; echo "r=$?"`,
 		Why:     "scripts call both defensively; every shell answers 0, and bash alone announces its empty table — on standard output",

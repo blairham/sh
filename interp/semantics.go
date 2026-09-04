@@ -701,6 +701,14 @@ type Semantics struct {
 	// aliases and traps double-quotes its declarations.
 	DeclareValueQuoting ListingQuotingStyle
 
+	// ExportListing is the shape `export -p` writes: bash spells each name
+	// as a clustered declaration (`declare -x V="1"`), and the other three
+	// repeat the command word (`export V='1'`).
+	ExportListing DeclarationListingForm
+	// ReadonlyListing is the same question from `readonly -p`, where zsh
+	// parts ways with its own export listing and writes `typeset -r R=2`.
+	ReadonlyListing DeclarationListingForm
+
 	// DeclarePrintReportsAMissingName makes `typeset -p nosuch` say so and
 	// fail. bash and zsh report it (with their own wording — see
 	// Diagnostics.DeclareNoSuchVariable) and answer 1 even when other names

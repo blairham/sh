@@ -72,6 +72,8 @@ func Semantics() interp.Semantics {
 	// single-quoting listings above.
 	s.DeclareListing = interp.DeclareListingClustered
 	s.DeclareValueQuoting = interp.ListingQuoteAlwaysDouble
+	s.ExportListing = interp.DeclareListingClustered
+	s.ReadonlyListing = interp.DeclareListingClustered
 	s.DeclarePrintReportsAMissingName = interp.Yes
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.No

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"strings"
@@ -324,6 +325,14 @@ type Runner struct {
 	// is `exec > log` and nothing else. The dispatcher clears it after acting
 	// on it, so it cannot leak into the next command.
 	keepRedirs bool
+	// fds are the descriptors beyond the three named streams — what
+	// `exec 6>&1` saves and `>&6` finds again. Values are the io.Reader or
+	// io.Writer the descriptor stood for when it was made, which is what
+	// "copied as it is now" means. The table is the shell's own bookkeeping:
+	// a child process sees the stream a redirection resolved to, not the
+	// number, so a script that hands a bare descriptor number to a child for
+	// the child's own use is not served by this.
+	fds map[int]any
 	// custom holds builtins registered by a shell built on this package. A
 	// nil value is an explicit removal.
 	custom map[string]Builtin
@@ -528,6 +537,10 @@ func (r *Runner) clone() *Runner {
 		c.Arrays[k] = copied
 	}
 	c.Params = append([]string(nil), r.Params...)
+	// The table is copied, the streams in it are shared: a subshell's
+	// `exec 7>&1` must not appear in the parent, and its writes through a
+	// descriptor the parent made must still land where the parent pointed it.
+	c.fds = maps.Clone(r.fds)
 	return &c
 }
 

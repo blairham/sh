@@ -31,26 +31,81 @@ func redirRunAt(t *testing.T, dir, src string) (string, int, error) {
 	return buf.String(), st, rerr
 }
 
-// The bug: the descriptor was dropped and the redirection applied to stdout,
-// so `exec 3>out` opened the file, said nothing, exited 0 — and sent every
-// later write into it. A side channel took the script's whole output with it.
-func TestAnUnaddressableDescriptorIsRefused(t *testing.T) {
+// The original bug: the descriptor was dropped and the redirection applied to
+// stdout, so `exec 3>out` opened the file, said nothing, exited 0 — and sent
+// every later write into it. Then it was refused outright. Now the table
+// holds it, and the two halves that matter are that stdout is untouched and
+// that `>&3` finds the file.
+func TestAHighDescriptorOpensIntoTheTable(t *testing.T) {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "out.txt")
-	got, _, err := redirRunAt(t, dir, "exec 3>"+out+"\necho hi\necho done")
-	if err == nil {
-		t.Fatalf("ran without complaint: %q", got)
+	got, _, err := redirRunAt(t, dir, "exec 3>"+out+"\necho hi\necho aside >&3\nexec 3>&-\necho done")
+	if err != nil {
+		t.Fatalf("refused: %v", err)
 	}
-	if !strings.Contains(err.Error(), "3") {
-		t.Errorf("refusal does not name the descriptor: %v", err)
+	// The point of the original bug: stdout must not have gone into the file.
+	if !strings.Contains(got, "hi") || !strings.Contains(got, "done") {
+		t.Errorf("stdout = %q, want the script's own output on it", got)
 	}
-	// The point of the bug, not just the message: stdout must not have gone
-	// into the file.
-	if b, rerr := os.ReadFile(out); rerr == nil && len(b) > 0 {
-		t.Errorf("the file caught stdout: %q", b)
+	b, rerr := os.ReadFile(out)
+	if rerr != nil {
+		t.Fatal(rerr)
 	}
-	if strings.Contains(got, "hi") {
-		t.Errorf("the script kept running past a redirection it could not make: %q", got)
+	if string(b) != "aside\n" {
+		t.Errorf("the file holds %q, want only what was aimed at fd 3", b)
+	}
+}
+
+// The saved-stream idiom every configure script uses: save stdout, redirect
+// through the saved copy, close it.
+func TestASavedStreamIsFoundAgain(t *testing.T) {
+	dir := t.TempDir()
+	got, st, err := redirRunAt(t, dir, `exec 6>&1
+echo through >&6
+{ echo grouped; } >&6
+exec 6>&-
+echo "st=$?"`)
+	if err != nil {
+		t.Fatalf("refused: %v", err)
+	}
+	for _, want := range []string{"through", "grouped", "st=0"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("stdout = %q (status %d), missing %q", got, st, want)
+		}
+	}
+}
+
+// A dup that is a prefix to one command is that command's alone.
+func TestAPerCommandDupIsTakenBackAfterward(t *testing.T) {
+	got, _, err := redirRunAt(t, t.TempDir(), `true 6>&1; echo hi >&6; echo "st=$?"`)
+	if err != nil {
+		t.Fatalf("refused: %v", err)
+	}
+	if !strings.Contains(got, "bad file descriptor") || !strings.Contains(got, "st=1") {
+		t.Errorf("output = %q, want the descriptor gone once the command ended", got)
+	}
+}
+
+// A subshell's table is its own: what it saves the parent never sees.
+func TestASubshellsDescriptorsStayInTheSubshell(t *testing.T) {
+	got, _, err := redirRunAt(t, t.TempDir(), `(exec 7>&1); echo hi >&7; echo "st=$?"`)
+	if err != nil {
+		t.Fatalf("refused: %v", err)
+	}
+	if !strings.Contains(got, "bad file descriptor") || !strings.Contains(got, "st=1") {
+		t.Errorf("output = %q, want the parent unaware of the subshell's descriptor", got)
+	}
+}
+
+// Reading through a saved input descriptor, which is the `exec 5<&0` half.
+func TestASavedInputStreamReadsAgain(t *testing.T) {
+	dir := t.TempDir()
+	got, _, err := redirRunAt(t, dir, `exec 5<&0; echo "st=$?"`)
+	if err != nil {
+		t.Fatalf("refused: %v", err)
+	}
+	if !strings.Contains(got, "st=0") {
+		t.Errorf("output = %q, want the save to succeed", got)
 	}
 }
 

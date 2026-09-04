@@ -96,14 +96,17 @@ func TestDupFromStdin(t *testing.T) {
 	}
 }
 
-func TestUnaddressableDescriptorIsRefused(t *testing.T) {
-	// Three named streams, no descriptor table. Saying so beats accepting
-	// `3>&1` and quietly doing nothing with it.
-	_, errOut, st := runSplit(t, `echo hi 3>&1`)
-	if st == 0 || !strings.Contains(errOut, "bad file descriptor") {
-		t.Errorf("status %d, stderr %q", st, errOut)
+func TestAHighDescriptorDupIsKept(t *testing.T) {
+	// `3>&1` used to be refused for want of a descriptor table; now the
+	// table holds it and the command runs untouched.
+	out, errOut, st := runSplit(t, `echo hi 3>&1`)
+	if st != 0 || out != "hi\n" {
+		t.Errorf("status %d, stdout %q, stderr %q", st, out, errOut)
 	}
-	_, errOut, st = runSplit(t, `echo hi >&9`)
+}
+
+func TestDuplicatingFromANeverOpenedDescriptorIsRefused(t *testing.T) {
+	_, errOut, st := runSplit(t, `echo hi >&9`)
 	if st == 0 || !strings.Contains(errOut, "bad file descriptor") {
 		t.Errorf("status %d, stderr %q", st, errOut)
 	}

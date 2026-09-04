@@ -49,9 +49,17 @@ func (r *Runner) builtinOptions(name string, args []string, known string) (rest 
 		if a == "--" {
 			return args[1:], opts, 0
 		}
-		for i := 1; i < len(a); i++ {
+		// Where the letters start. One dialect skips every leading dash
+		// before reading the bundle; see BadOptionNaming.
+		start := 1
+		if r.diag().BadOptionNaming == BadOptionFirstUnknownLetter {
+			for start < len(a) && a[start] == '-' {
+				start++
+			}
+		}
+		for i := start; i < len(a); i++ {
 			if !strings.ContainsRune(known, rune(a[i])) {
-				return nil, opts, r.badBuiltinOption(name, "-"+string(a[i]))
+				return nil, opts, r.badBuiltinOption(name, r.badOptionName(a, a[i]))
 			}
 			opts += string(a[i])
 		}
@@ -67,6 +75,14 @@ func (r *Runner) builtinOptions(name string, args []string, known string) (rest 
 // while dash and ksh93 stop the script there, which is the POSIX rule about a
 // special builtin. It is a different question from BuiltinSyntaxErrorFatal,
 // whose answers are yes for dash alone.
+// badOptionName spells the part of a leading `-` word a complaint names.
+func (r *Runner) badOptionName(word string, letter byte) string {
+	if r.diag().BadOptionNaming == BadOptionWholeWord {
+		return word
+	}
+	return "-" + string(letter)
+}
+
 func (r *Runner) badBuiltinOption(name, opt string) int {
 	d := r.diag()
 	r.diagf("%s\n", Wording(d.BuiltinBadOption, "%[1]s: %[2]s: invalid option", name, opt))

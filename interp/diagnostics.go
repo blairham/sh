@@ -391,6 +391,14 @@ type Diagnostics struct {
 	// plus SIGALRM's number; ksh93 and zsh say 1. Zero means 1.
 	ReadTimeoutStatus int
 
+	// BuiltinComplaintName is the name a builtin's complaints call it, by
+	// the name it was invoked as, for a dialect whose complaint names a
+	// different one. ksh93's `type` is `whence -v` and its refusals say so:
+	// `type -t echo` there answers `whence: -t: unknown option`, with
+	// `whence`'s usage line under it. Lookups keyed by builtin —
+	// UnimplementedOptionLetters, BuiltinUsage — still use the invoked
+	// name; only the wording changes.
+	BuiltinComplaintName map[string]string
 	// ShiftBadNumber is an operand to `shift` that is not one, taking the
 	// word. Only reached in a dialect that reads the operand as a count
 	// rather than as an option: bash names it and asks for a number, dash

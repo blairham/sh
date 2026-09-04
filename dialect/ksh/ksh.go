@@ -235,6 +235,9 @@ func Semantics() interp.Semantics {
 	// Whether `type --` ends the options.
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.Yes
+	// No `-t` here: the letter is refused the way `whence` refuses any
+	// option it does not have, usage line and all.
+	s.TypeNamesTheKindWithDashT = interp.No
 
 	return s
 }
@@ -388,6 +391,10 @@ func Diagnostics() interp.Diagnostics {
 		// named; the non-number wordings per letter are not modeled yet, so
 		// those fall back to the substrate's.
 		ReadBadFileDescriptor: "read: bad file unit number [Bad file descriptor]",
+		// ksh93's `type` is `whence -v`, and a refused option says so —
+		// measured with `type -t echo`, whose complaint and usage line both
+		// name `whence`.
+		BuiltinComplaintName: map[string]string{"type": "whence"},
 		// Two wordings, split between `export` and the other two, and the
 		// operand quoted back as given.
 		BuiltinBadName: map[string]string{
@@ -403,7 +410,9 @@ func Diagnostics() interp.Diagnostics {
 			"readonly": "Usage: readonly [-p] [name[=value]...]",
 			"read": "Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]\n" +
 				"            [var?prompt] [var ...]",
-			"trap":  "Usage: trap [-p] [action condition ...]",
+			"trap": "Usage: trap [-p] [action condition ...]",
+			// Two spaces before the ellipsis, as written.
+			"type":  "Usage: whence [-afpqv] name  ...",
 			"wait":  "Usage: wait [ options ] [job ...]",
 			"jobs":  "Usage: jobs [ options ] [job ...]",
 			"shift": "Usage: shift [ options ] [n]",

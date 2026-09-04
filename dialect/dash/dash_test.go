@@ -135,6 +135,7 @@ func TestSemantics(t *testing.T) {
 		// function itself, and whether `--` ends its options.
 		{"TypePrintsFunctionBody", s.TypePrintsFunctionBody, interp.No},
 		{"TypeEndsOptionsWithDashDash", s.TypeEndsOptionsWithDashDash, interp.No},
+		{"TypeNamesTheKindWithDashT", s.TypeNamesTheKindWithDashT, interp.No},
 		{"JobsShowBackgroundCommand", s.JobsShowBackgroundCommand, interp.No},
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.Yes},
 		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.Yes},

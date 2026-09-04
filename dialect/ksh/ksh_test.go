@@ -99,6 +99,7 @@ func TestSemantics(t *testing.T) {
 		// function itself, and whether `--` ends its options.
 		{"TypePrintsFunctionBody", s.TypePrintsFunctionBody, interp.No},
 		{"TypeEndsOptionsWithDashDash", s.TypeEndsOptionsWithDashDash, interp.Yes},
+		{"TypeNamesTheKindWithDashT", s.TypeNamesTheKindWithDashT, interp.No},
 		{"JobsShowBackgroundCommand", s.JobsShowBackgroundCommand, interp.No},
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.Yes},
 		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.Yes},
@@ -134,6 +135,14 @@ func TestDiagnostics(t *testing.T) {
 	}
 	if got, want := ksh.Diagnostics().TypeExternal, "%[1]s is a tracked alias for %[2]s"; got != want {
 		t.Errorf("TypeExternal = %q, want %q", got, want)
+	}
+	// `type` is `whence -v` here, and a refused option says so — the
+	// complaint and the usage line under it both name `whence`.
+	if got, want := ksh.Diagnostics().BuiltinComplaintName["type"], "whence"; got != want {
+		t.Errorf("BuiltinComplaintName[type] = %q, want %q", got, want)
+	}
+	if got, want := ksh.Diagnostics().BuiltinUsage["type"], "Usage: whence [-afpqv] name  ..."; got != want {
+		t.Errorf("BuiltinUsage[type] = %q, want %q", got, want)
 	}
 	// ksh93 lists a job that has already ended as "Running" — not a reaping
 	// race, it still says so after `wait`. The word ksh uses, rather than

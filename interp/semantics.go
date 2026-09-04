@@ -472,6 +472,15 @@ type Semantics struct {
 	// a name there and gets answered as one before the real names are.
 	TypeEndsOptionsWithDashDash Answer
 
+	// TypeNamesTheKindWithDashT gives `type` its `-t`, which answers one
+	// bare word per name — keyword, function, builtin or file — and prints
+	// nothing at all for a name it cannot account for, only the failing
+	// status. The scripted form of the question: a word to compare against
+	// rather than a sentence to parse. True in bash alone; ksh93 and zsh
+	// refuse the letter the way they refuse any option they do not have,
+	// and dash reads it as a name like the rest of its operands.
+	TypeNamesTheKindWithDashT Answer
+
 	// ArraysAreSparse makes an unassigned subscript no element at all, so
 	// `a=(x); a[5]=y` is an array of two. True in bash and ksh93; zsh reads
 	// the whole extent and finds the gap empty, giving five.

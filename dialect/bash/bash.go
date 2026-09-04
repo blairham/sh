@@ -235,6 +235,9 @@ func Semantics() interp.Semantics {
 	// Whether `type --` ends the options.
 	s.TypePrintsFunctionBody = interp.Yes
 	s.TypeEndsOptionsWithDashDash = interp.Yes
+	// The one shell in the panel with `-t` at all: one bare word per name,
+	// and silence with status 1 for a name that is nothing.
+	s.TypeNamesTheKindWithDashT = interp.Yes
 
 	return s
 }
@@ -356,7 +359,7 @@ func Diagnostics() interp.Diagnostics {
 			// seeds it with, and the -p prompt — all about a terminal this
 			// runner does not hold.
 			"read": "Eeip",
-			"type": "afptP",
+			"type": "afpP",
 		},
 		// bash's own words for the two -u failures it can meet here; the
 		// non-number wordings per letter are not modeled yet, so those fall
@@ -387,6 +390,7 @@ func Diagnostics() interp.Diagnostics {
 				"[-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
 			"readonly": "readonly: usage: readonly [-aAf] [name[=value] ...] or readonly -p",
 			"trap":     "trap: usage: trap [-Plp] [[action] signal_spec ...]",
+			"type":     "type: usage: type [-afptP] name [name ...]",
 			"wait":     "wait: usage: wait [-fn] [-p var] [id ...]",
 			"unset":    "unset: usage: unset [-f] [-v] [-n] [name ...]",
 		},

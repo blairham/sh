@@ -298,6 +298,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `axis/shift-past-end` | `<shell>: 1: shift: can't shift that many` *(status 2)* | `survived` | `<shell>: line 1: shift: 5: shift count out of range~survived` | `survived` | `<shell>: shift: 5: bad number` *(status 1)* | `<shell>:shift:1: shift count must be <= $#~survived` |
 | `axis/local-outside-a-function` | `<script>: 1: local: not in a function` *(status 2)* | `<script>: line 1: local: can only be used in a function~x=~end` | `<script>: line 1: local: can only be used in a function~x=~end` | `<script>: line 1: local: can only be used in a function~x=~end` | `<script>: line 1: local: not found~x=~end` | `x=2~end` |
 | `axis/local-inside-a-function` | `in=2~out=` | `in=2~out=` | `in=2~out=` | `in=2~out=` | `<script>: line 1: local: not found~in=~out=` | `in=2~out=` |
+| `axis/trap-action-read-when-set` | `after` | `after` | `after` | `after` | `after` | `<script>:1: parse error near `if'~<script>:trap:1: couldn't parse trap command~after` |
 | `axis/trap-bad-option` | `<script>: 1: trap: Illegal option -Q` *(status 2)* | `<script>: line 1: trap: -Q: invalid option~trap: usage: trap [-Plp] [[action] signal_spec ...]~end` | `<script>: line 1: trap: -Q: invalid option~trap: usage: trap [-Plp] [[action] signal_spec ...]~end` | `<script>: line 1: trap: -Q: invalid option~trap: usage: trap [-lp] [arg signal_spec ...]~end` | `<script>[1]: trap: -Q: unknown option~Usage: trap [-p] [action condition ...]` *(status 2)* | `end` |
 | `axis/trap-print-p` | `<script>: 2: trap: Illegal option -p` *(status 2)* | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' INT~end` | `end` |
 | `axis/trap-one-argument` | `end` | `end` | `end` | `end` | `<script>[2]: trap: condition(s) required` *(status 1)* | `end` |
@@ -340,6 +341,11 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   f() { local x=2; echo in=$x; }
   f
   echo out=$x
+  ```
+- `axis/trap-action-read-when-set` — zsh reads the action now and refuses the trap; the other three store the text, and on INT never parse it at all
+  ```sh
+  trap 'if' INT
+  echo after
   ```
 - `axis/trap-bad-option` — three read a leading dash as an option and refuse this one; zsh takes it as the action. INT rather than EXIT so the trap zsh sets never fires
   ```sh

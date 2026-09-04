@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"syscall"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // trapOutcome is what reading trap's options decided: either a status to
@@ -231,6 +233,47 @@ func (r *Runner) trapUnknownSingleCondition(cond string) int {
 		r.diagf("%s\n", msg)
 	}
 	return 1
+}
+
+// trapActionRefused parses the action now, in the dialect that reads it when
+// the trap is set rather than when it fires.
+//
+// Three of the four store the text and parse it at fire time, so `trap "if"
+// EXIT` is accepted and complains at the end — and `trap "if" INT` is
+// accepted and never complains at all, because the trap never fires. zsh
+// parses it here, refuses the trap, and says so twice: the parse failure in
+// the action's own lines, and then that the action could not be read, on the
+// line the `trap` command is written on.
+//
+// Checked before the conditions, because that dialect says nothing about a
+// bad condition when the action will not parse. `trap - INT` needs no guard
+// of its own: `-` is an ordinary word and parses, so a reset is never
+// refused — verified by mutation rather than assumed.
+func (r *Runner) trapActionRefused(body string) (int, bool) {
+	// Parsed before the question is asked, so the question is only ever
+	// asked about an action that will not parse — which is the only case
+	// the dialects answer differently. A trap whose action is fine is set
+	// the same way everywhere and nobody is asked anything.
+	p := syntax.NewParser(body, r.dialect())
+	p.Parse()
+	err := p.Err()
+	if err == nil {
+		return 0, false
+	}
+	if !r.ask(r.sem().TrapActionIsParsedWhenSet, "a trap's action being read when the trap is set") {
+		if r.unspecified {
+			return r.status, true
+		}
+		return 0, false
+	}
+	if r.unspecified {
+		return r.status, true
+	}
+	// The action's own lines, rendered the way a script's parse failure is:
+	// it is the same failure, in text that arrived another way.
+	r.errf("%s", r.diag().ParseDiagnostic(r.name(), "", err, body))
+	r.diagf("%s\n", Wording(r.diag().TrapCouldNotParse, "couldn't read the action"))
+	return 1, true
 }
 
 // quotedTrapAction spells an action the way this dialect's `trap` lists it,

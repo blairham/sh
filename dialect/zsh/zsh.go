@@ -57,6 +57,7 @@ func Semantics() interp.Semantics {
 	s.AliasQuoting = interp.ListingQuoteWhenNeededEscaped
 	s.TrapQuoting = interp.ListingQuoteWhenNeededPlain
 	s.TrapBodyLine = interp.TrapBodyLineWhereItFired
+	s.TrapActionIsParsedWhenSet = interp.Yes
 	s.ExitTrapFiresPastTheEnd = interp.Yes
 	s.SelectAssumesUnboundedWidth = interp.Yes
 	s.SelectEofEndsPromptLine = interp.Yes
@@ -283,6 +284,7 @@ func Diagnostics() interp.Diagnostics {
 		UlimitBadNumber:          "invalid number: %[1]s",
 		UlimitBadOptionStatus:    1,
 		BuiltinBadOption:         "%[1]s: bad option: %[2]s",
+		TrapCouldNotParse:        "couldn't parse trap command",
 		// The builtin's name comes from the location, so it is not in these.
 		// The reason leads for `export` and `readonly` and trails for `unset`,
 		// which is why this is a map.

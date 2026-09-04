@@ -315,6 +315,12 @@ var Corpus = []Case{
 		Why:     "the same body on a signal: ksh93 counts it from where it fired and zsh names only where it fired",
 	},
 	{
+		ID: "axis/trap-action-read-when-set", Category: "semantics axes",
+		Script:  true,
+		Snippet: "trap 'if' INT\necho after",
+		Why:     "zsh reads the action now and refuses the trap; the other three store the text, and on INT never parse it at all",
+	},
+	{
 		ID: "axis/trap-bad-option", Category: "semantics axes",
 		Script:  true,
 		Snippet: "trap -Q INT\necho end",

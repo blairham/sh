@@ -9210,6 +9210,38 @@
         "TimedOut": false
       }
     },
+    "expansion/an-operator-where-the-name-belongs": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: ${%x}: bad substitution",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: ${%x}: bad substitution",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: ${%x}: bad substitution",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: syntax error at line 1: `%' unexpected",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "export/a-function-through-the-environment": {
       "bash": {
         "Output": "1",
@@ -17434,6 +17466,38 @@
         "TimedOut": false
       }
     },
+    "redir/noclobber-names-its-refusal": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: f: cannot overwrite existing file~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: f: cannot overwrite existing file~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: f: cannot overwrite existing file~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: cannot create f: File exists~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: f: file already exists [File exists]~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: file exists: f~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "redir/open-failure-wording": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: nosuchfile: No such file or directory~st=1",
@@ -18614,6 +18678,38 @@
       },
       "zsh": {
         "Output": "\u003cshell\u003e:shift:1: bad option: -x~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "shift/an-operand-that-was-never-given": {
+      "bash": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: shift: shift count out of range~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: shift: can't shift that many",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: shift: (null): bad number",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:shift:1: shift count must be \u003c= $#~st=1",
         "Status": 0,
         "TimedOut": false
       }
@@ -19895,6 +19991,102 @@
       "zsh": {
         "Output": "[0][hi]",
         "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "syntax/a-brace-opened-inside-a-quote": {
+      "bash": {
+        "Output": "\u003cshell\u003e: -c: line 1: unexpected EOF while looking for matching `\"'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: -c: line 1: unexpected EOF while looking for matching `\"'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: -c: line 0: unexpected EOF while looking for matching `\"'~\u003cshell\u003e: -c: line 1: syntax error: unexpected end of file",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: Unterminated quoted string",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: syntax error at line 1: `\"' unexpected",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: unmatched \"",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "syntax/an-unmatched-command-substitution": {
+      "bash": {
+        "Output": "\u003cshell\u003e: -c: line 2: unexpected EOF while looking for matching `)'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: -c: line 2: unexpected EOF while looking for matching `)'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: -c: line 0: unexpected EOF while looking for matching `)'~\u003cshell\u003e: -c: line 1: syntax error: unexpected end of file",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: end of file unexpected (expecting \")\")",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: syntax error at line 1: `(' unmatched",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: parse error near `$(echo'",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "syntax/an-unmatched-double-quote": {
+      "bash": {
+        "Output": "\u003cshell\u003e: -c: line 1: unexpected EOF while looking for matching `\"'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: -c: line 1: unexpected EOF while looking for matching `\"'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: -c: line 0: unexpected EOF while looking for matching `\"'~\u003cshell\u003e: -c: line 1: syntax error: unexpected end of file",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: Unterminated quoted string",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "abc",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: unmatched \"",
+        "Status": 1,
         "TimedOut": false
       }
     },

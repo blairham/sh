@@ -306,6 +306,7 @@ func Diagnostics() interp.Diagnostics {
 		// Measured: bash reports a failed open at the redirect's own line.
 		RedirectFailureLine:     interp.LineOfRedirect,
 		CannotCreate:            "%[1]s: %[2]s",
+		NoclobberRefusal:        "%[1]s: cannot overwrite existing file",
 		NamesTheInputInLocation: true,
 		EchoesTheOffendingLine:  true,
 		SelectPrompt:            "#? ",
@@ -345,10 +346,17 @@ func Diagnostics() interp.Diagnostics {
 		SyntaxUnexpected:            "syntax error near unexpected token `%[1]s'",
 		// A parse failure by every other measure, and 1 rather than this
 		// dialect's syntax-error status.
-		ForNameStatus:     1,
-		ForName:           "`%[1]s': not a valid identifier",
-		Unterminated:      "syntax error: unexpected end of file from `%[1]s' command on line %[2]d",
-		SyntaxErrorStatus: 2,
+		ForNameStatus: 1,
+		ForName:       "`%[1]s': not a valid identifier",
+		Unterminated:  "syntax error: unexpected end of file from `%[1]s' command on line %[2]d",
+		// One sentence for every unmatched delimiter, always naming the
+		// closer — only the line it lands on differs by construct.
+		UnmatchedQuote:            "unexpected EOF while looking for matching `%[2]s'",
+		UnmatchedCmdSubst:         "unexpected EOF while looking for matching `%[2]s'",
+		UnmatchedBraceSubst:       "unexpected EOF while looking for matching `%[2]s'",
+		UnmatchedReportedAtOpener: true,
+		CmdSubstUnmatchedAtEnd:    true,
+		SyntaxErrorStatus:         2,
 		// Measured: `.` of a file it cannot open reports 1 and carries on,
 		// where a missing operand is 2 — two numbers for what reads like one
 		// failure, which is why they are two fields.

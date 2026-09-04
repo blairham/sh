@@ -57,6 +57,9 @@ func Dialect() syntax.Dialect {
 	// `time -p`, the POSIX report format, which bash also reads and zsh
 	// does not.
 	d.TimePosixFlag = true
+	// The end of input closes a quote here: `echo "abc` prints abc, and the
+	// old backquote form behaves the same way. The substitutions do not.
+	d.CloseQuotesAtEOF = true
 	return d
 }
 
@@ -328,6 +331,7 @@ func Diagnostics() interp.Diagnostics {
 		// "create" wording, whichever direction the redirection was.
 		EmptyRedirectTarget:         "%[1]s: cannot open",
 		CannotCreate:                "%[1]s: cannot create [%[2]s]",
+		NoclobberRefusal:            "%[1]s: file already exists [%[2]s]",
 		ArithFailureStatus:          1,
 		ArithInfinity:               "inf",
 		ArithNotANumber:             "nan",
@@ -341,7 +345,8 @@ func Diagnostics() interp.Diagnostics {
 		ScriptBuiltinLocation:       interp.LocationBracketLine,
 		ParseFailureNamesItsOwnLine: true,
 		ReadonlyVariable:            "%s: is read only",
-		ShiftTooMany:                "shift: %d: bad number",
+		ShiftTooMany:                "shift: %[2]s: bad number",
+		StdinBuiltinLocation:        interp.LocationBracketLine,
 		ArithError:                  "%[1]s: %[2]s",
 		DivisionByZero:              "divide by zero",
 		// ksh93 names the innermost keyword still awaiting a partner: `if`
@@ -366,10 +371,17 @@ func Diagnostics() interp.Diagnostics {
 		SyntaxUnexpected:       "syntax error at line %[3]d: `%[1]s' unexpected",
 		// A parse failure by every other measure, and 1 rather than this
 		// dialect's syntax-error status.
-		ForNameStatus:     1,
-		ForName:           "%[1]s: invalid variable name",
-		Unterminated:      "syntax error at line %[6]d: `%[3]s' unmatched",
-		SyntaxErrorStatus: 3,
+		ForNameStatus: 1,
+		ForName:       "%[1]s: invalid variable name",
+		Unterminated:  "syntax error at line %[6]d: `%[3]s' unmatched",
+		// Only the substitutions can go unmatched here — a quote the input
+		// runs out inside is closed and run, which is the grammar flag.
+		// The `"` case is a `${` that began inside a double quote, and it
+		// is worded as the quote character standing where it should not.
+		UnmatchedQuote:      "syntax error at line %[4]d: `%[1]s' unexpected",
+		UnmatchedCmdSubst:   "syntax error at line %[4]d: `(' unmatched",
+		UnmatchedBraceSubst: "%[3]s{: bad substitution",
+		SyntaxErrorStatus:   3,
 		// The status is never reached — a file `.` cannot open ends the script
 		// here — but the wording is, and it names the operand and the reason in
 		// brackets rather than after a colon.
@@ -396,7 +408,7 @@ func Diagnostics() interp.Diagnostics {
 		// One message for both, where bash names which variable was missing.
 		CdHomeNotSet:              "cd: bad directory",
 		CdOldpwdNotSet:            "cd: bad directory",
-		PrintfBadVerb:             "printf: %[1]s: unknown format specifier",
+		PrintfBadVerb:             "printf: %[3]s: unknown format specifier",
 		PrintfBadOption:           "printf: %[1]s: unknown option",
 		TrapConditionRequired:     "trap: condition(s) required",
 		PrintfBadOptionShowsUsage: true,

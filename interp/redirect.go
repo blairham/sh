@@ -274,6 +274,14 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			if creating {
 				format, fallback = r.diag().CannotCreate, "cannot create %[1]s: %[2]s"
 			}
+			if r.noclobber && rd.Op == syntax.TokGreat && errors.Is(err, fs.ErrExist) &&
+				r.diag().NoclobberRefusal != "" {
+				// Half the panel has a sentence for this one refusal — the
+				// file `set -C` would not overwrite — and the other half
+				// words it as any other failed create, which is what an
+				// empty wording leaves in place.
+				format = r.diag().NoclobberRefusal
+			}
 			if name == "" && r.diag().EmptyRedirectTarget != "" {
 				// One dialect says something shorter for a name that is not
 				// there, and says it the same way in both directions.

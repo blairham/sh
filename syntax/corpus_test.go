@@ -26,6 +26,13 @@ func TestCorpusLexes(t *testing.T) {
 			toks := l.Tokens()
 
 			if err := l.Err(); err != nil {
+				// A snippet the reference shells reject may be rejected at
+				// the lexer as readily as at the parser — input that runs out
+				// inside a quote is the plain case — and the corpus records
+				// both. TestCorpusParses makes the same allowance.
+				if c.SyntaxError {
+					return
+				}
 				t.Fatalf("did not lex: %v\n  snippet: %s", err, c.Snippet)
 			}
 			if l.Incomplete() && !c.Unfinished {

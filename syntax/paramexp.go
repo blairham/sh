@@ -230,7 +230,20 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 
 	e.Name, s = scanParamName(s)
 	if e.Name == "" && !e.HasFlags {
+		if !p.dialect.BadSubstitutionAtParseTime {
+			// The majority defers an unreadable expansion to the run, the
+			// same way an unknown operator is deferred: a `${%x}` in a
+			// branch never taken is not an error at all.
+			e.Bad, e.Src = true, src
+			return e
+		}
 		p.failKind(ErrBadSubstitution, "expected a parameter name in ${%s}", src)
+		if pe, isErr := p.err.(*Error); isErr && s != "" {
+			// The character standing where the name belonged, for the one
+			// dialect that words this as a syntax error naming the token —
+			// left empty, it printed `' unexpected.
+			pe.Token = firstRune(s)
+		}
 		return e
 	}
 	// With a flag group the name may be empty — `${(U)}` is an empty string

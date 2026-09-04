@@ -205,7 +205,7 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, bool) {
 				continue
 			}
 			if verb == 0 {
-				return used, r.printfBadVerb(format[:i], badVerbName(format, i)), true
+				return used, r.printfBadVerb(format[:i], badVerbName(format, i), format[i:]), true
 			}
 			text, code, stop := r.printfVerb(spec, verb, next)
 			if code != 0 {
@@ -299,7 +299,7 @@ func (r *Runner) printfQuote(spec, arg string) (string, int, bool) {
 	case PrintfQuoteAbsent:
 		// A conversion the shell does not have stops the output where it is,
 		// as any other unknown one does.
-		return "", r.printfBadVerb("%q", "q"), true
+		return "", r.printfBadVerb("%q", "q", ""), true
 	}
 	return "", r.status, true
 }
@@ -380,16 +380,19 @@ const (
 
 // printfBadVerb reports a conversion this shell does not have.
 //
-// Two verbs, because the panel does not agree on what to name: %[1]s is the
-// character *after* the one it could not read, which bash and ksh93 report,
-// and %[2]s is the conversion as written, which dash and zsh report. `%z]` is
-// "]" to the first pair and "%z" to the second.
-func (r *Runner) printfBadVerb(conversion, next string) int {
+// Three verbs, because the panel does not agree on what to name: %[1]s is
+// the character *after* the one it could not read, which bash reports;
+// %[2]s is the conversion as written, which dash and zsh report; and %[3]s
+// is the rest of the format after the conversion with its escapes already
+// expanded, which is ksh93's answer — for `%z\n` it names a newline, so its
+// complaint really does end in two colons on two lines.
+func (r *Runner) printfBadVerb(conversion, next, rest string) int {
 	d := r.diag()
 	if i := strings.LastIndexByte(conversion, '%'); i >= 0 {
 		conversion = conversion[i:]
 	}
-	r.diagf("%s\n", Wording(d.PrintfBadVerb, "printf: %[2]s: invalid directive", next, conversion))
+	rest, _, _ = r.expandPrintfEscapes(rest)
+	r.diagf("%s\n", Wording(d.PrintfBadVerb, "printf: %[2]s: invalid directive", next, conversion, rest))
 	return orDefault(d.PrintfBadVerbStatus, 1)
 }
 
@@ -400,7 +403,7 @@ func (r *Runner) printfReport(kind printfErrorKind, operand string) int {
 		r.diagf("%s\n", Wording(d.PrintfBadNumber, "printf: %[1]s: invalid number", operand))
 		return orDefault(d.PrintfBadNumberStatus, 1)
 	case printfBadVerb:
-		return r.printfBadVerb(operand, operand)
+		return r.printfBadVerb(operand, operand, "")
 	}
 	usage := Wording(d.PrintfUsage, "printf: usage: printf format [arguments]")
 	if d.PrintfUsageUnprefixed {

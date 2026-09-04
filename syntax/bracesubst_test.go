@@ -55,14 +55,34 @@ func TestABracedCommandSubstitutionIsToldByTheSpace(t *testing.T) {
 }
 
 // Without the dialect flag it is not a substitution at all: the parser looks
-// for a parameter name, does not find one, and refuses — which is what the
-// two shells without this construct then word as a bad substitution.
-func TestWithoutTheFlagItIsRefused(t *testing.T) {
-	_, err := syntax.Parse("echo ${ echo one;}", syntax.Core())
-	if err == nil {
-		t.Fatal("parsed, want a parameter name to be expected")
+// for a parameter name and does not find one. What happens then follows the
+// same split every unreadable expansion does — the majority defer the failure
+// to the run, where the two shells without this construct word it as a bad
+// substitution, and only a dialect that refuses while reading says so at parse
+// time.
+func TestWithoutTheFlagItIsNotASubstitution(t *testing.T) {
+	// The deferring majority: it parses, marked bad, and is diagnosed only
+	// if the expansion is ever reached.
+	f, err := syntax.Parse("echo ${ echo one;}", syntax.Core())
+	if err != nil {
+		t.Fatalf("refused at parse, want the failure deferred: %v", err)
 	}
-	if !strings.Contains(err.Error(), "parameter name") {
+	var bad bool
+	for _, sp := range f.Stmts[0].Expr.(*syntax.Pipeline).Cmds[0].(*syntax.SimpleCmd).Args[1].Spans {
+		if sp.Kind == syntax.ParamExp && sp.Param != nil && sp.Param.Bad {
+			bad = true
+		}
+	}
+	if !bad {
+		t.Error("read a clean parameter expansion, want it marked bad")
+	}
+
+	// The reading dialect refuses at parse and names what it found.
+	d := syntax.Core()
+	d.BadSubstitutionAtParseTime = true
+	if _, err := syntax.Parse("echo ${ echo one;}", d); err == nil {
+		t.Fatal("parsed, want a parameter name to be expected")
+	} else if !strings.Contains(err.Error(), "parameter name") {
 		t.Errorf("said %q, want it to be about a parameter name", err)
 	}
 }

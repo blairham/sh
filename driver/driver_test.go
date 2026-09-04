@@ -215,7 +215,9 @@ func TestTheDialectWordsItsOwnSyntaxError(t *testing.T) {
 		// others gets the substrate's sentence for the rest.
 		{"a token in the wrong place", "echo )", "Bespoke surprise at )"},
 		{"input that ran out", "if", "Bespoke unfinished if on line 1"},
-		{"something else entirely", "echo ${", "Bespoke syntax complaint"},
+		// `${` and the plain quotes have kinds of their own now, so the
+		// catch-all is reached through a construct nobody has worded yet.
+		{"something else entirely", "echo $'abc", "Bespoke syntax complaint"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, errs, code := runArgs(t, sh, "testsh", "-c", tc.src)

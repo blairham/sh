@@ -505,3 +505,11 @@ func TestASubstitutionsBodyIsNumberedFromTheFile(t *testing.T) {
 		t.Error("backquotes are numbered from the file here, like $( )")
 	}
 }
+
+// This shell names the function a message came from rather than the file,
+// and counts the line within it.
+func TestDiagnosticsNameTheFunction(t *testing.T) {
+	if !zsh.Diagnostics().LocationNamesTheFunction {
+		t.Error("a message from inside a function is named for the function here")
+	}
+}

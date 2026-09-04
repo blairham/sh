@@ -184,6 +184,7 @@ func Diagnostics() interp.Diagnostics {
 		// About its table rather than about the function, and the builtin
 		// is named in the location as it is for every message here.
 		UnsetFunctionNotFound:      "no such hash table element: %[1]s",
+		LocationNamesTheFunction:   true,
 		SetInvalidOptionName:       "no such option: %[1]s",
 		SetInvalidOptionNameStatus: 1,
 		// zsh knows `-f` — it means functions to its own typeset — so what

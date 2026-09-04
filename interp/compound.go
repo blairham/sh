@@ -358,8 +358,11 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 		r.status = 1
 		return nil
 	}
-	saved, savedIn := r.Params, r.inFunc
+	saved, savedIn, savedLine := r.Params, r.inFunc, r.funcLine
 	r.Params, r.inFunc = args, fn.Name
+	// Where the function was written, so a dialect that numbers a message
+	// from the function rather than from the file can subtract it.
+	r.funcLine = fn.Pos().Line
 	r.pushFrame(Frame{File: r.funcFiles[fn.Name], Name: fn.Name})
 	defer r.popFrame()
 	r.depth++
@@ -405,7 +408,7 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 			r.ctl = ctl
 		}
 	}
-	r.Params, r.inFunc = saved, savedIn
+	r.Params, r.inFunc, r.funcLine = saved, savedIn, savedLine
 	if r.ctl == controlReturn {
 		r.ctl = controlNone
 	}

@@ -8506,6 +8506,38 @@
         "TimedOut": false
       }
     },
+    "location/a-message-from-inside-a-function": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 2: nosuchcmd: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 2: nosuchcmd: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 1: nosuchcmd: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 2: nosuchcmd: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: line 2: nosuchcmd: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "f:1: command not found: nosuchcmd",
+        "Status": 127,
+        "TimedOut": false
+      }
+    },
     "name/a-lone-dash-given-to-a-builtin": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: unalias: -: not found~st=1",

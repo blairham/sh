@@ -903,7 +903,10 @@ func biCd(r *Runner, _ context.Context, args []string) int {
 			dir = resolved
 		}
 	}
-	info, err := os.Stat(dir)
+	// Through the gate. A denied stat surfaces as the missing-directory
+	// error below, so `cd` into a path the policy hides fails the way `cd`
+	// into a path that is not there does — same sentence, same status.
+	info, err := r.stat(dir)
 	if err == nil && !info.IsDir() {
 		err = &os.PathError{Op: "cd", Path: dir, Err: syscall.ENOTDIR}
 	}
@@ -954,7 +957,9 @@ func (r *Runner) searchCdpath(operand string) (found, via string) {
 		if !filepath.IsAbs(abs) {
 			abs = filepath.Join(r.workDir(), abs)
 		}
-		if st, err := os.Stat(abs); err == nil && st.IsDir() {
+		// Through the gate; an entry the policy hides is walked past the
+		// way an entry with no such directory is.
+		if st, err := r.stat(abs); err == nil && st.IsDir() {
 			return abs, entry
 		}
 	}

@@ -230,10 +230,22 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 	if err != nil {
 		return r.dotFailed(args[0], err)
 	}
+	// The read is an open to the gate, exactly as the same syscall behind a
+	// `<` redirect is: `.` pulls a file into the interpreter and then runs
+	// it, which is the re-entry the seams exist for. A denial is routed
+	// through the unreadable-file diagnostic rather than allowed()'s generic
+	// refusal, so a file the policy withholds is reported the way a file the
+	// kernel withholds is — same wording shape, same fatality axis.
+	action := Action{Kind: ActionOpen, Path: path}
+	if r.openQuietlyDenied(action) {
+		return r.dotFailed(args[0], errRefused)
+	}
 	b, err := os.ReadFile(path)
 	if err != nil {
+		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})
 		return r.dotFailed(args[0], err)
 	}
+	r.emit(ctx, Event{Kind: EventAccess, Action: action})
 
 	// Arguments after the file become its positional parameters, and are put
 	// back afterwards. dash is the exception: it ignores them, so a script
@@ -357,12 +369,12 @@ func (r *Runner) resolveDotPath(name string) (display, path string, err error) {
 			dir = "."
 		}
 		joined := filepath.Join(dir, name)
-		if candidate := r.atDir(joined); readableFile(candidate) {
+		if candidate := r.atDir(joined); r.readableFile(candidate) {
 			return joined, candidate, nil
 		}
 	}
 	if r.ask(r.sem().DotFallsBackToCurrentDirectory, "`.` looking in the current directory after PATH misses") {
-		if candidate := r.atDir(name); readableFile(candidate) {
+		if candidate := r.atDir(name); r.readableFile(candidate) {
 			return name, candidate, nil
 		}
 	}
@@ -387,8 +399,10 @@ func (r *Runner) atDir(path string) string {
 
 // readableFile reports whether a path is something `.` could read, which
 // excludes a directory: `. /tmp` is not a source file in any shell that
-// reports it at all.
-func readableFile(path string) bool {
-	st, err := os.Stat(path)
+// reports it at all. A method so the probe passes the gate; a candidate the
+// policy hides is passed over like a candidate that is not there, and a name
+// whose every candidate is hidden ends at the not-found diagnostic.
+func (r *Runner) readableFile(path string) bool {
+	st, err := r.stat(path)
 	return err == nil && !st.IsDir()
 }

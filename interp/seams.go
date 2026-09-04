@@ -25,13 +25,44 @@ type ActionKind uint8
 const (
 	// ActionExec runs a program.
 	ActionExec ActionKind = iota
-	// ActionOpen opens a file for a redirection.
+	// ActionOpen opens a file: a redirection's target, the file `.` reads,
+	// the shell's own end of a process substitution's pipe.
+	//
+	// Not every file the interpreter touches is an open the gate sees. The
+	// scaffolding a process substitution stands on — the temporary directory
+	// made for its pipes, the mkfifo that creates one, their removal — is
+	// deliberately outside the boundary: those paths are chosen by the
+	// interpreter, never by the script, and gating them would let a policy
+	// refuse the mechanism while believing it refused an access. The access
+	// is the open of the pipe, and that is what passes the gate.
 	ActionOpen
+	// ActionStat asks whether a path exists and what it is: a `test -f`, a
+	// `[[ -d ]]`, `cd`'s check of where it is going, each candidate a PATH
+	// or CDPATH search tries, glob descent deciding what is a directory,
+	// `.`'s search for a readable file.
+	//
+	// A denied stat answers as a missing path does, quietly: the file tests
+	// go false, glob drops the candidate, a search walks on, and `cd` fails
+	// the way it fails for a directory that is not there. No diagnostic and
+	// no status of its own, because to the construct asking, a path the
+	// policy hides is a path that does not exist.
+	ActionStat
+	// ActionReadDir lists a directory: glob descending into it, `**`
+	// enumerating what is beneath it.
+	//
+	// A denied read yields no entries, quietly — the directory reads as
+	// empty, exactly as it does when the process may not list it.
+	ActionReadDir
 )
 
 func (k ActionKind) String() string {
-	if k == ActionOpen {
+	switch k {
+	case ActionOpen:
 		return "open"
+	case ActionStat:
+		return "stat"
+	case ActionReadDir:
+		return "read-dir"
 	}
 	return "exec"
 }
@@ -92,6 +123,16 @@ const (
 	// EventError carries a failure that was not an exit status — a program
 	// that could not be found, a file that could not be opened.
 	EventError
+	// EventAccess records a file action that went ahead: an open, a stat, a
+	// directory read — Action.Kind says which. Without it a Sink held every
+	// file the shell failed to open and none it opened, which is backwards
+	// for an audit trail.
+	//
+	// For an open it follows the successful open. For a stat or a directory
+	// read it records the probe itself, whichever answer came back: an
+	// existence probe is the auditable act whether or not the file exists,
+	// and "not there" is an answer rather than a failure.
+	EventAccess
 )
 
 func (k EventKind) String() string {
@@ -102,6 +143,8 @@ func (k EventKind) String() string {
 		return "denied"
 	case EventError:
 		return "error"
+	case EventAccess:
+		return "access"
 	}
 	return "command-start"
 }
@@ -111,6 +154,12 @@ func (k EventKind) String() string {
 // It is structured rather than a formatted line because its consumers are not
 // people: an agent protocol streams it, an AI assistant assembles context from
 // it, an audit trail stores it. Formatting is the caller's business.
+//
+// What a command wrote is deliberately not carried. The streams are the
+// caller's own io.Writers already, handed to the Runner before anything ran,
+// so a consumer that wants output taps the writer it supplied — copying every
+// byte through the event path as well would buy a second copy of what the
+// caller already holds.
 type Event struct {
 	Kind   EventKind
 	Action Action
@@ -118,6 +167,13 @@ type Event struct {
 	Status int
 	// Err is the failure, for EventError.
 	Err error
+	// Line is where in the source the action came from — the line a
+	// diagnostic about it would name.
+	Line int
+	// File is the file that line is in: the sourced file while one runs,
+	// the script otherwise, and empty when the input was a command string
+	// or standard input.
+	File string
 }
 
 // Sink receives events. A nil Sink discards them.

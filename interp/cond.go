@@ -79,7 +79,11 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 		return s == "", nil
 	}
 
-	info, err := os.Stat(s)
+	// Through the gate, like every stat: a file test is an existence oracle,
+	// and a policy that cannot see it cannot refuse it. A denied stat falls
+	// out as err != nil, so the tests below answer false with no special
+	// case — the documented deny semantics for ActionStat.
+	info, err := r.stat(s)
 	switch x.Op {
 	case "-e":
 		return err == nil, nil
@@ -104,7 +108,7 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 		}
 		return info.Mode().Perm()&bit != 0, nil
 	case "-L", "-h":
-		li, lerr := os.Lstat(s)
+		li, lerr := r.lstat(s)
 		return lerr == nil && li.Mode()&os.ModeSymlink != 0, nil
 	}
 	return false, arithError{msg: "unsupported test " + x.Op}

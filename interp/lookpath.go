@@ -76,7 +76,7 @@ var errNotFound = errors.New("not found")
 func (r *Runner) lookPath(name string) (string, error) {
 	if strings.ContainsRune(name, '/') {
 		full := r.absolute(name)
-		if err := runnable(full); err != nil {
+		if err := r.runnable(full); err != nil {
 			return "", &pathError{
 				name: name, resolved: full,
 				missing: errors.Is(err, os.ErrNotExist), err: err,
@@ -97,7 +97,7 @@ func (r *Runner) lookPath(name string) (string, error) {
 			dir = "."
 		}
 		candidate := r.absolute(filepath.Join(dir, name))
-		err := runnable(candidate)
+		err := r.runnable(candidate)
 		if err == nil {
 			return candidate, nil
 		}
@@ -170,8 +170,16 @@ func (r *Runner) absolute(path string) string {
 // A directory is its own answer rather than a permission error, because two
 // dialects print "Is a directory" where the other two report the EACCES that
 // execve actually returns. Deciding here keeps that a wording question.
-func runnable(path string) error {
-	st, err := os.Stat(path)
+//
+// A method rather than a function so the probe passes the gate: a PATH
+// search stats a candidate in every directory PATH names, which was a walk
+// no policy could see. A denied stat reads as the candidate not existing, so
+// the search moves on and a name whose every candidate is hidden is
+// "command not found" — the deny short-circuits before anything is probed
+// further, and the exec gate is still consulted after the search with
+// whatever the search resolved.
+func (r *Runner) runnable(path string) error {
+	st, err := r.stat(path)
 	if err != nil {
 		return err
 	}

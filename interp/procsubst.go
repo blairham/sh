@@ -57,6 +57,19 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 		r.expandErr = true
 		return "", false
 	}
+	// The shell's own end of the pipe is an open, and the gate is asked here
+	// — on the calling goroutine, before anything is spawned — rather than
+	// beside the blocking open below, so a denial never races anything and
+	// aborts the substitution the way a refused redirect aborts its command:
+	// before the inner command exists. The scaffolding around the open — the
+	// temporary directory, the mkfifo, their removal — is deliberately not
+	// gated; ActionOpen's comment in seams.go is the decision.
+	action := Action{Kind: ActionOpen, Path: path, Write: kind != syntax.ProcSubstOut}
+	if !r.allowed(ctx, action) {
+		_ = os.Remove(path)
+		r.expandErr = true
+		return "", false
+	}
 
 	sub := r.clone()
 	// The one boundary no shell's `trap` sees across: even the dialect that
@@ -95,6 +108,9 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 			return
 		}
 		defer func() { _ = end.Close() }()
+		// Through the clone, which this goroutine owns: the record of the
+		// open that the gate already allowed, emitted where it happened.
+		sub.emit(ctx, Event{Kind: EventAccess, Action: action})
 		if kind == syntax.ProcSubstOut {
 			sub.Stdin = end
 		} else {

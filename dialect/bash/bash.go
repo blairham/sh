@@ -284,6 +284,9 @@ func Diagnostics() interp.Diagnostics {
 		UlimitBadOption:             "ulimit: -%[1]s: invalid option",
 		UlimitBadNumber:             "ulimit: %[1]s: invalid number",
 		BuiltinBadOption:            "%[1]s: %[2]s: invalid option",
+		WaitBadJob:                  "wait: `%[1]s': not a pid or valid job spec",
+		WaitBadJobStatus:            1,
+		WaitNotOurChild:             "wait: pid %[1]d is not a child of this shell",
 		HereDocumentAtEOF: "warning: here-document at line %[1]d " +
 			"delimited by end-of-file (wanted `%[2]s')",
 		// bash names the builtin for its own two spellings and not for the

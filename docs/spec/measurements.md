@@ -1757,6 +1757,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `export/unset-f-removes-a-function` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` |
 | `export/a-function-through-the-environment` | *(no output, status 2)* | `1` | `1` | `1` | *(no output, status 2)* | `0` *(status 1)* |
 | `export/a-name-that-is-not-a-function` | `<shell>: 1: export: Illegal option -f` *(status 2)* | `<shell>: line 1: export: nope: not a function~st=1` | `<shell>: line 1: export: nope: not a function~st=1` | `<shell>: line 0: export: nope: not a function~st=1` | `<shell>: export: -f: unknown option~Usage: export [-p] [name[=value]...]` *(status 2)* | `<shell>:export:1: invalid option(s)~st=1` |
+| `wait/an-operand-that-is-neither` | `<shell>: 1: wait: Illegal number: nosuchjob~st=2` | `<shell>: line 1: wait: `nosuchjob': not a pid or valid job spec~st=1` | `<shell>: line 1: wait: `nosuchjob': not a pid or valid job spec~st=1` | `<shell>: line 0: wait: `nosuchjob': not a pid or valid job spec~st=1` | `<shell>: wait: nosuchjob: Arguments must be %job, process ids, or job pool names~st=1` | `<shell>:wait:1: job not found: nosuchjob~st=127` |
+| `wait/a-pid-that-is-not-ours` | `st=127` | `<shell>: line 1: wait: pid 999999 is not a child of this shell~st=127` | `<shell>: line 1: wait: pid 999999 is not a child of this shell~st=127` | `<shell>: wait: pid 999999 is not a child of this shell~st=127` | `st=127` | `<shell>:wait:1: pid 999999 is not a child of this shell~st=127` |
 | `enable/a-letter-one-shell-does-not-have` | `<shell>: 1: enable: not found~st=127` | `st=0` | `st=0` | `st=0` | `<shell>: enable: not found~st=127` | `<shell>:enable:1: bad option: -n~st=1` |
 | `enable/a-name-that-is-not-a-builtin` | `<shell>: 1: disable: not found~st=127` | `<shell>: line 1: disable: command not found~st=127` | `<shell>: line 1: disable: command not found~st=127` | `<shell>: disable: command not found~st=127` | `<shell>: disable: not found~st=127` | `<shell>:disable:1: no such hash table element: nosuchthing~st=1` |
 | `enable/switching-one-off-and-back-on` | `st=127` | `st=0` | `st=0` | `st=0` | `st=127` | `st=0` |
@@ -1880,6 +1882,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `export/a-name-that-is-not-a-function` — a name that is not a function now will not become one by being exported. The shells that have the option refuse it and the ones that do not read `-f` as something else entirely, which is the more interesting half
   ```sh
   export -f nope; echo "st=$?"
+  ```
+- `wait/an-operand-that-is-neither` — an operand naming neither a process nor a job: four wordings and no two alike, and three statuses — one quotes it and names both things it could have been, one calls it an illegal number, one lists what it would have taken, and one calls it a job that was not found and reports the 127 of a command that is not there
+  ```sh
+  wait nosuchjob; echo "st=$?"
+  ```
+- `wait/a-pid-that-is-not-ours` — a number that could be a process and is not one of this shell's children. Unanimous on 127, and two of the four say so out loud — so silence here is a wording rather than a behavior
+  ```sh
+  wait 999999; echo "st=$?"
   ```
 - `enable/a-letter-one-shell-does-not-have` — `enable` is two different builtins: one takes -n to switch a name off, one has no -n at all and reads its options as the *table* to act on. The other two have no `enable`, so the same line is four answers
   ```sh

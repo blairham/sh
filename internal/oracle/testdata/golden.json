@@ -19066,6 +19066,70 @@
         "TimedOut": false
       }
     },
+    "wait/a-pid-that-is-not-ours": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: wait: pid 999999 is not a child of this shell~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: wait: pid 999999 is not a child of this shell~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: wait: pid 999999 is not a child of this shell~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:wait:1: pid 999999 is not a child of this shell~st=127",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "wait/an-operand-that-is-neither": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: wait: `nosuchjob': not a pid or valid job spec~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: wait: `nosuchjob': not a pid or valid job spec~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: wait: `nosuchjob': not a pid or valid job spec~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: wait: Illegal number: nosuchjob~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: wait: nosuchjob: Arguments must be %job, process ids, or job pool names~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:wait:1: job not found: nosuchjob~st=127",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "xtrace/assignments-per-line-diverges": {
       "bash": {
         "Output": "+ a=1~+ b=2",

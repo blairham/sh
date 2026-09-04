@@ -336,6 +336,24 @@ type Diagnostics struct {
 	// inside itself, which is why it takes a line as a verb at all.
 	HereDocumentAtEOF string
 
+	// WaitBadJob is an operand to `wait` that names neither a process nor a
+	// job, taking the word. Four wordings across the panel and no two alike:
+	// one quotes it and names both things it could have been, one calls it an
+	// illegal number, one lists what it would have taken, and one calls it a
+	// job that was not found.
+	WaitBadJob string
+	// WaitBadJobStatus is what that reports. Zero means the substrate's own,
+	// which is 2. Three answers: 1, 2, and the 127 of a command that is not
+	// there — which is what the dialect saying "job not found" takes the
+	// operand to have been.
+	WaitBadJobStatus int
+
+	// WaitNotOurChild is a number that is a plausible process id and is not
+	// one of this shell's children, taking the number. Empty means nothing
+	// is said, which is two of the four — the status is 127 in all of them
+	// either way, so silence here is a wording rather than a behavior.
+	WaitNotOurChild string
+
 	// UmaskBadOption is an option `umask` does not have. One verb.
 	UmaskBadOption string
 

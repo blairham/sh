@@ -591,3 +591,25 @@ func TestExitStopsTheReading(t *testing.T) {
 		t.Errorf("status %d, want 3 from the exit", code)
 	}
 }
+
+// The front end tells the interpreter where the program came from, which one
+// dialect answers a failed expansion by.
+//
+// Here rather than in interp, because it is the *invocation* that is being
+// asserted: the interpreter's half is tested by setting the flag directly,
+// and nothing there can see whether the front end sets it right.
+func TestTheFrontEndSaysWhenTheProgramWasAnArgument(t *testing.T) {
+	sh := shell()
+	sh.Semantics = interp.PosixSemantics()
+	sh.Semantics.FatalErrorStatusIsOne = interp.Yes
+	// A status this dialect gives only when the program came from `-c`.
+	sh.Diagnostics.UnsetParameterStatusFromCommandString = 127
+
+	const src = "set -u\necho \"$NOPE\"\n"
+	if _, _, code := runArgs(t, sh, "testsh", "-c", src); code != 127 {
+		t.Errorf("-c gave %d, want 127", code)
+	}
+	if _, _, code := runArgs(t, sh, "testsh", writeScript(t, src)); code != 1 {
+		t.Errorf("a script file gave %d, want the ordinary fatal status", code)
+	}
+}

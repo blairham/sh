@@ -366,12 +366,15 @@ func readAll(r io.Reader) (string, error) {
 // about every hook: an interactive shell that could not `exec`, or whose
 // `umask` did nothing, would be a different shell from the one that runs the
 // same lines from a file.
-func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics) *interp.Runner {
+func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, commandString bool) *interp.Runner {
 	r := &interp.Runner{
-		Dialect:     &sh.Dialect,
-		Semantics:   &sh.Semantics,
-		Diagnostics: &dg,
-		Name:        name,
+		// Where the program came from, which one dialect answers a failed
+		// expansion by.
+		CommandString: commandString,
+		Dialect:       &sh.Dialect,
+		Semantics:     &sh.Semantics,
+		Diagnostics:   &dg,
+		Name:          name,
 		// `$1` onward. A nil slice and an empty one mean the same thing to
 		// the interpreter, so nothing distinguishes "no operands" from
 		// "operands that were all consumed as the name".
@@ -433,7 +436,7 @@ func (sh Shell) run(in source) int {
 		p = syntax.NewParser(src, sh.Dialect)
 	}
 
-	r := sh.newRunner(name, in.params, dg)
+	r := sh.newRunner(name, in.params, dg, input == "-c")
 	r.SetScriptFile(in.file)
 	// Aliases are expanded when a line is *parsed*, and the table is the
 	// runner's, so the front end is the only place the two can be joined.

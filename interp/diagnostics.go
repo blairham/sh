@@ -556,6 +556,16 @@ type Diagnostics struct {
 	// with every message.
 	UnsetFunctionNotFound string
 
+	// UnsetParameterStatusFromCommandString is what a shell exits with when
+	// a parameter could not be expanded *and the program came from an
+	// argument* — `-c` — rather than from a file or standard input.
+	//
+	// bash alone, and only there: 127 given with `-c`, 1 from a file or from
+	// standard input, for `set -u` and `${x?}` alike. Measured over eight
+	// other ways it stops, none of which differs by invocation. Zero leaves
+	// the dialect's ordinary fatal status standing either way.
+	UnsetParameterStatusFromCommandString int
+
 	// ParamErrorMessage is what `${x?word}` says. Two verbs: the parameter
 	// and the word. The shape is unanimous — `x: word` — and only the
 	// default word below is not.

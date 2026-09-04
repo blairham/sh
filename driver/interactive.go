@@ -30,7 +30,8 @@ func (sh Shell) interactive(argv, params []string) int {
 	sh = sh.withDefaults(argv)
 	dg := sh.Diagnostics
 	name := sh.Name
-	r := sh.newRunner(name, params, dg)
+	// A prompt is not a command string, whatever else it is.
+	r := sh.newRunner(name, params, dg, false)
 	// A prompt has someone to tell about its jobs, and a script does not:
 	// no shell in the panel announces a background job to `sh -c`, and a
 	// Runner embedded in another program has nobody to announce one to.

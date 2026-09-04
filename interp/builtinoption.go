@@ -117,13 +117,17 @@ func optionLetter(known string, c byte) (takesArg, ok bool) {
 }
 
 // optionNeedsArgument is an argument-taking letter whose bundle ended the
-// argument list. Every shell refuses it — with a status of 2 except zsh — and
-// the wording is the substrate's own, like the not-implemented one below: no
-// letter a builtin here implements takes an argument yet, so no dialect has
-// been measured saying it as itself.
+// argument list. Every shell refuses it the way it refuses an option it does
+// not have — the dialect's own words, the bad-option status, and in the two
+// shells that print a usage line after a bad option, the same usage line
+// here. Measured with `read -d` and `read -p`, the letters that made the
+// path reachable at all.
 func (r *Runner) optionNeedsArgument(builtin string, letter byte) int {
-	r.diagf("%s: -%c: option requires an argument\n", builtin, letter)
-	return 2
+	d := r.diag()
+	r.diagf("%s\n", Wording(d.OptionNeedsArgument, "%[1]s: -%[2]s: option requires an argument",
+		r.builtinComplaintName(builtin), string(letter)))
+	r.builtinUsageLine(builtin)
+	return orDefault(d.BuiltinBadOptionStatus, 2)
 }
 
 // badBuiltinOption reports it, and ends the script where the dialect says a
@@ -194,13 +198,7 @@ func (r *Runner) badBuiltinOption(name, opt string) int {
 	d := r.diag()
 	r.diagf("%s\n", Wording(d.BuiltinBadOption, "%[1]s: %[2]s: invalid option",
 		r.builtinComplaintName(name), opt))
-	if usage := d.BuiltinUsage[name]; usage != "" {
-		if d.BuiltinUsageUnprefixed {
-			r.errf("%s\n", usage)
-		} else {
-			r.diagf("%s\n", usage)
-		}
-	}
+	r.builtinUsageLine(name)
 	status := orDefault(d.BuiltinBadOptionStatus, 2)
 	// Only for a builtin POSIX marks special, which is what the rule is
 	// about: `wait` is not one, and the two dialects that end a script over
@@ -213,4 +211,19 @@ func (r *Runner) badBuiltinOption(name, opt string) int {
 		r.fatalQuiet()
 	}
 	return status
+}
+
+// builtinUsageLine writes the usage line a refusal is followed by, where the
+// dialect has one for this builtin — bare or located, its choice.
+func (r *Runner) builtinUsageLine(name string) {
+	d := r.diag()
+	usage := d.BuiltinUsage[name]
+	if usage == "" {
+		return
+	}
+	if d.BuiltinUsageUnprefixed {
+		r.errf("%s\n", usage)
+	} else {
+		r.diagf("%s\n", usage)
+	}
 }

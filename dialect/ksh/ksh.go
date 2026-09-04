@@ -140,9 +140,12 @@ func Semantics() interp.Semantics {
 	s.EchoExpandsEscEscape = interp.Yes
 	// read takes -r and -s plus -A, whose array is the first operand where
 	// bash's -a takes it as the option's argument, and the same -d, -n, -N,
-	// -t and -u. A short -n is a success here; a short -N reports 1 and
-	// leaves the variable empty.
-	s.ReadOptions = "rsAd:n:N:t:u:"
+	// -t and -u. -p is a bare flag naming the coprocess as the source —
+	// not bash's prompt — and there is no coprocess to name: ksh93's `|&`
+	// is not in this grammar, so the letter always answers `no query
+	// process` and 1, the variables untouched. A short -n is a success
+	// here; a short -N reports 1 and leaves the variable empty.
+	s.ReadOptions = "rspAd:n:N:t:u:"
 	s.ReadPartialCountSucceeds = interp.Yes
 	s.ReadExactCountKeepsPartial = interp.No
 	// typeset in a keyword function hides the caller's value, as bash's
@@ -437,15 +440,20 @@ func Diagnostics() interp.Diagnostics {
 			// ksh93 answers --version on most builtins, and has its own
 			// letters for these two.
 			"wait": "-",
-			// What is left of read's letters: compound -C, the -p coprocess,
-			// -S's csv splitting and -v's default text.
-			"read": "-CpSv",
+			// What is left of read's letters: compound -C, -S's csv
+			// splitting and -v's default text. The -p coprocess is
+			// implemented as its measured refusal — see ReadNoCoprocess.
+			"read": "-CSv",
 			"type": "-afpqv",
 		},
 		// ksh93's one sentence for a dead -u descriptor, the number not
 		// named; the non-number wordings per letter are not modeled yet, so
 		// those fall back to the substrate's.
 		ReadBadFileDescriptor: "read: bad file unit number [Bad file descriptor]",
+		// ksh93 calls the coprocess the query process, and `read -p` with
+		// none running says so — the only reachable answer here, this
+		// grammar having no `|&`.
+		ReadNoCoprocess: "read: no query process",
 		// ksh93's `type` is `whence -v`, and a refused option says so —
 		// measured with `type -t echo`, whose complaint and usage line both
 		// name `whence`.

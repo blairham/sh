@@ -532,6 +532,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `read/a-backslash-escapes-and-is-removed` | `[atb]` | `[atb]` | `[atb]` | `[atb]` | `[atb]` | `[atb]` |
 | `read/an-escaped-separator-does-not-split` | `[a b][c]` | `[a b][c]` | `[a b][c]` | `[a b][c]` | `[a b][c]` | `[a b][c]` |
 | `read/silent-still-reads` | `<shell>: 1: read: Illegal option -s~v=` | `v=secret` | `v=secret` | `v=secret` | `v=secret` | `v=secret` |
+| `read/a-prompt-or-a-coprocess` | `st=0 v=[data]` | `st=0 v=[data]` | `st=0 v=[data]` | `st=0 v=[data]` | `<shell>: read: no query process~st=1 v=[keep]` | `<shell>:read:1: -p: no coprocess~st=1 v=[keep]` |
+| `read/a-prompt-that-never-arrives` | `<shell>: 1: read: No arg for -p option~st=2` | `<shell>: line 1: read: -p: option requires an argument~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~st=2` | `<shell>: line 1: read: -p: option requires an argument~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~st=2` | `<shell>: line 0: read: -p: option requires an argument~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]~st=2` | `<shell>: read: no query process~st=1` | `<shell>:read:1: -p: no coprocess~st=1` |
 | `name/unset-f-on-a-name-no-function-could-have` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>: unset: 1x: invalid function name~st=1` | `<shell>:unset:1: no such hash table element: 1x~st=1` |
 | `name/unset-f-on-a-name-that-is-merely-undefined` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>:unset:1: no such hash table element: nosuch~st=1` |
 | `name/a-lone-dash-given-to-a-builtin` | `unalias: - not found~st=1` | `<shell>: line 1: unalias: -: not found~st=1` | `<shell>: line 1: unalias: -: not found~st=1` | `<shell>: line 0: unalias: -: not found~st=1` | `st=1` | `<shell>:unalias:1: not enough arguments~st=1` |
@@ -663,6 +665,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `read/silent-still-reads` — -s is about a terminal's echo and there is no terminal here, so it must parse, read and stay quiet: skipping the word unread is how a password gets echoed, and refusing it fails a script that works everywhere else (#321). dash alone has no -s
   ```sh
   printf 'secret\n' | { read -s v; echo "v=$v"; }
+  ```
+- `read/a-prompt-or-a-coprocess` — one letter, two shapes (#422): bash and dash take a prompt as -p's argument and show it only to a terminal, so the word is consumed, nothing is printed, and the pipe is read as though the flag were absent; ksh93 and zsh read -p as the coprocess and, with none running, refuse — 1, their own words, and v still holding `keep`, because the read failed before reaching any input. The optstring carries the split the way it does for -n
+  ```sh
+  printf 'data\n' | { v=keep; read -p PR0MPT v; echo "st=$? v=[$v]"; }
+  ```
+- `read/a-prompt-that-never-arrives` — the same word missing means three different things: bash wants -p's argument and says so with its usage, status 2; dash wants it too and says `No arg for -p option`; ksh93 and zsh never wanted one — their -p is the coprocess flag, so this is the no-coprocess refusal again at 1. A letter's arity is part of the dialect's answer, not just its spelling
+  ```sh
+  read -p </dev/null; echo "st=$?"
   ```
 - `name/unset-f-on-a-name-no-function-could-have` — two of the panel are quiet here and two are not, and the two that speak are not answering the same question — one is judging the name, which `1x` could never be, and the other is reporting that its table holds nothing under it. The case next to this one is what tells them apart
   ```sh

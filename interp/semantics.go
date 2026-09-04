@@ -101,8 +101,10 @@ type Semantics struct {
 	// dialect's own: bash spells the array option `-a` and takes the array's
 	// name as the option's argument, ksh93 and zsh spell it `-A` and take
 	// the name as the first operand, and zsh reads `-n` as a flag where bash
-	// and ksh93 read a count after it. Empty means `r`, the one letter POSIX
-	// gives the builtin.
+	// and ksh93 read a count after it. `-p` splits the same way: `p:` takes
+	// a prompt for the terminal in bash and dash, a bare `p` names the
+	// coprocess as the source in ksh93 and zsh. Empty means `r`, the one
+	// letter POSIX gives the builtin.
 	ReadOptions string
 	// ReadPartialCountSucceeds decides `read -n N` when the input ends
 	// after some but fewer than N characters: ksh93 calls the read a

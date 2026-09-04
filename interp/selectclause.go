@@ -6,6 +6,7 @@ package interp
 import (
 	"context"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"strconv"
@@ -145,18 +146,34 @@ func (r *Runner) selectEOF() error {
 }
 
 // stdinIsTerminal reports whether the shell's input is a terminal.
+func (r *Runner) stdinIsTerminal() bool { return inputIsTerminal(r.Stdin) }
+
+// inputIsTerminal reports whether a stream a builtin is about to read is a
+// terminal — `select`'s prompt asks about the shell's input, `read -p`'s
+// about whatever -u resolved to.
 //
-// A character device is the test, which is what a Runner can answer about its
-// own Stdin without asking the process anything: an embedded Runner may have
-// been handed a pipe while the program around it sits on a terminal, and the
-// question here is about the shell's input and not the program's.
-func (r *Runner) stdinIsTerminal() bool {
-	f, ok := r.Stdin.(*os.File)
+// A character device is the test, which is what a Runner can answer about
+// its own streams without asking the process anything: an embedded Runner
+// may have been handed a pipe while the program around it sits on a
+// terminal, and the question here is about the shell's input and not the
+// program's.
+func inputIsTerminal(in io.Reader) bool {
+	f, ok := in.(*os.File)
 	if !ok {
 		return false
 	}
 	info, err := f.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
+	if err != nil || info.Mode()&os.ModeCharDevice == 0 {
+		return false
+	}
+	// The null device is a character device too, and it is the one a script
+	// meets constantly — `read -p X v </dev/null`, and every child handed a
+	// silenced stdin. It is nobody's terminal, and bash measured through
+	// one prints no prompt.
+	if null, err := os.Stat(os.DevNull); err == nil && os.SameFile(info, null) {
+		return false
+	}
+	return true
 }
 
 // selectMenu lays the items out the way the dialect does.

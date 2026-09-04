@@ -1630,11 +1630,21 @@ records for programs and holds for builtins too:
 So an argument-taking letter ends its bundle: what follows it in the word is
 the argument, and when nothing follows, the next word is. An argument that
 never arrives — the bundle ends the argument list — is refused in all four,
-with a status of 2 except in zsh:
+the way a bad option is: the same status (2, except zsh's 1) and, in the two
+shells that follow a bad option with a usage line, the same usage line here.
+Measured with `read -d` and `read -p` (2026-09-04):
 
     bash: read: -d: option requires an argument   (status 2, then usage)
+    dash: read: No arg for -p option              (status 2; -d is not dash's)
     ksh:  read: -d: delim argument expected       (status 2, then usage)
     zsh:  argument expected: -d                   (status 1)
+
+`Diagnostics.OptionNeedsArgument` carries the sentence — dash's and zsh's
+are modeled, bash's is the fallback the substrate already said — and the
+status rides `BuiltinBadOptionStatus`, which is the measurement: no shell
+gives the two refusals different numbers. ksh93 names the argument it
+wanted per letter (`delim` above), which one string per dialect does not
+carry; it keeps the fallback.
 
 ### The complaint names the letter, not the bundle
 
@@ -1667,10 +1677,10 @@ letters, and stopped on the `o` it does not know.
 whose argument follows it. Measured (oracle runs, 2026-09-04, bash 5.3 and
 3.2 agreeing throughout except where 3.2 lacks a letter):
 
-    bash   rsa:d:n:N:t:u:    plus -e -E -i -p, unimplemented here
-    ksh93  rsAd:n:N:t:u:     plus -C -p -S -v and --version, unimplemented
-    zsh    rsnAd:t:u:        plus -e -E -k -q -z -c -l -p, unimplemented
-    dash   r                 (and -p PROMPT, not yet modeled)
+    bash   rsa:d:n:N:p:t:u:    plus -e -E -i, unimplemented here
+    ksh93  rspAd:n:N:t:u:      plus -C -S -v and --version, unimplemented
+    zsh    rsnpAd:t:u:         plus -e -E -k -q -z -c -l, unimplemented
+    dash   rp:
 
 Before any letter, the backslash. Without `-r` it removes the special
 meaning of the character after it and is itself removed, and the four
@@ -1726,6 +1736,26 @@ The letters themselves diverge before the behaviors do:
 - **Silence.** `printf 'x\n' | read -s v` reads x, prints nothing and
   reports 0 in bash, ksh93 and zsh: away from a terminal `-s` is a no-op
   that must still parse. dash refuses it.
+- **The prompt, or the coprocess.** `-p` is one letter with two arities
+  (#422, measured 2026-09-04). In bash — 5.3 and 3.2 alike — and dash it
+  takes a prompt as its argument, written to standard error with no
+  newline, and only when the stream being read is a terminal: a pipe or a
+  file gets no prompt and reads exactly as though the flag were absent,
+  and the test follows `-u` — bash with a terminal on stdin and `-u 5` on
+  a file prints nothing. In ksh93 and zsh the same letter is a bare flag
+  naming the coprocess as the source; neither's coprocess construct
+  (`|&`, zsh's `coproc`) is in this grammar, so the only reachable answer
+  is the measured refusal — `read: no query process` in ksh93, `-p: no
+  coprocess` in zsh, status 1 in both, and the variables left exactly as
+  they were: the read failed before reaching any input, so the
+  clear-on-EOF rule never fires. The optstring's shape carries the split
+  the way it does for `-n`; the refusal's words are
+  `Diagnostics.ReadNoCoprocess`. "Is a terminal" is the substrate's usual
+  approximation — a character device, now excepting the null device,
+  which every harness-fed child holds and bash measurably does not prompt
+  through. A character device that is neither a terminal nor `/dev/null`
+  (say `/dev/zero`) is taken for one; real shells ask isatty and are not
+  fooled, a difference accepted knowingly.
 - **The timeout.** `-t SECS`, fractions allowed; input already waiting is
   read as if the flag were absent. Expiry clears the variables and reports
   142 in bash (128 plus SIGALRM) and 1 in ksh93 and zsh —

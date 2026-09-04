@@ -110,16 +110,16 @@ func TestReadRefusesAnOptionItDoesNotHave(t *testing.T) {
 }
 
 // TestReadSaysWhenAnOptionIsMerelyMissing, which is the answer for the ones
-// the dialect really has — the -p prompt, now that the letters this shell
-// does implement are read rather than refused.
+// the dialect really has — the -e line editing, now that the letters this
+// shell does implement are read rather than refused.
 func TestReadSaysWhenAnOptionIsMerelyMissing(t *testing.T) {
-	out, _ := run(t, `read -p v </dev/null`, func(r *Runner) {
+	out, _ := run(t, `read -e v </dev/null`, func(r *Runner) {
 		s := *r.Semantics
 		s.BadOptionToSpecialBuiltinFatal = No
 		r.Semantics = &s
 		dg := Diagnostics{
 			BuiltinBadOption:           "read: %[2]s: bad",
-			UnimplementedOptionLetters: map[string]string{"read": "p"},
+			UnimplementedOptionLetters: map[string]string{"read": "e"},
 		}
 		r.Diagnostics = &dg
 	})
@@ -140,24 +140,24 @@ func TestReadSplitsAClusteredBundle(t *testing.T) {
 }
 
 // TestAMissingOptionInABundleIsNamedAlone: the half of #347 that shows for a
-// letter still missing — the -p prompt, since #321 filled the rest in.
-// `read -rp` is `-r -p`, and the complaint is about `-p` — the missing
-// letter — not about a word `-rp` that no shell would refuse.
+// letter still missing — the -e line editing, since #321 and #422 filled the
+// rest in. `read -re` is `-r -e`, and the complaint is about `-e` — the
+// missing letter — not about a word `-re` that no shell would refuse.
 func TestAMissingOptionInABundleIsNamedAlone(t *testing.T) {
-	out, _ := run(t, `read -rp v </dev/null`, func(r *Runner) {
+	out, _ := run(t, `read -re v </dev/null`, func(r *Runner) {
 		s := *r.Semantics
 		s.BadOptionToSpecialBuiltinFatal = No
 		r.Semantics = &s
 		dg := Diagnostics{
 			BuiltinBadOption:           "read: %[2]s: bad",
-			UnimplementedOptionLetters: map[string]string{"read": "p"},
+			UnimplementedOptionLetters: map[string]string{"read": "e"},
 		}
 		r.Diagnostics = &dg
 	})
-	if !strings.Contains(out, "-p is not implemented yet") {
-		t.Errorf("got %q, want -p said to be missing", out)
+	if !strings.Contains(out, "-e is not implemented yet") {
+		t.Errorf("got %q, want -e said to be missing", out)
 	}
-	if strings.Contains(out, "-rp") {
+	if strings.Contains(out, "-re") {
 		t.Errorf("got %q, want the letter named without the bundle", out)
 	}
 }
@@ -449,5 +449,144 @@ func TestReadCountLetterAsAFlag(t *testing.T) {
 	})
 	if !strings.Contains(out, "[abc]") {
 		t.Errorf("got %q, want -n read as a flag and the operand read into", out)
+	}
+}
+
+// The -p tests are #422. The letter has two shapes, and the optstring
+// carries the difference the way it does for -n: `p:` takes a prompt, a
+// bare `p` names the coprocess as the source.
+
+// TestReadPromptIsSilentOffATerminal: with `p:` in ReadOptions the prompt is
+// parsed and withheld — a pipe is not a terminal — and the read itself is
+// unchanged. Measured in both shells with the shape: a piped `read -p` prints
+// nothing anywhere and still reads.
+func TestReadPromptIsSilentOffATerminal(t *testing.T) {
+	var stderr strings.Builder
+	out, _ := run(t, `printf 'data\n' | { read -p "PR> " v; echo "st=$? [$v]"; }`, func(r *Runner) {
+		r.Stderr = &stderr
+	})
+	if !strings.Contains(out, "st=0 [data]") {
+		t.Errorf("got %q, want the line read as though -p were absent", out)
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr %q, want no prompt for input that is not a terminal", stderr.String())
+	}
+}
+
+// TestReadPromptGoesToTheTerminalsStderr: the positive half, as close as a
+// test can sit to a terminal without stealing a keystroke from a real one —
+// a character device on the input. The prompt goes to standard error, no
+// newline, before anything is read, and never to standard output.
+func TestReadPromptGoesToTheTerminalsStderr(t *testing.T) {
+	// /dev/zero passes the same test a terminal does — a character device
+	// that is not the null device — and hands the read a byte immediately,
+	// where /dev/tty would block on, or worse eat, a developer's keystroke.
+	zero, err := os.Open("/dev/zero")
+	if err != nil {
+		t.Skipf("no /dev/zero: %v", err)
+	}
+	t.Cleanup(func() { _ = zero.Close() })
+	var stdout, stderr strings.Builder
+	run(t, `read -n 1 -p "PR> " v`, func(r *Runner) {
+		r.Stdin, r.Stdout, r.Stderr = zero, &stdout, &stderr
+	})
+	if got := stderr.String(); got != "PR> " {
+		t.Errorf("stderr %q, want the prompt alone, no newline", got)
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout %q, want the prompt kept off standard output", stdout.String())
+	}
+}
+
+// TestReadPromptFollowsTheDescriptor: the terminal test is on the stream
+// being read, not on standard input — measured from both sides in bash, a
+// terminal on stdin printing nothing while -u reads a file.
+func TestReadPromptFollowsTheDescriptor(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "in.txt")
+	if err := os.WriteFile(path, []byte("filed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var stderr strings.Builder
+	out, _ := run(t, `exec 5<`+path+`; read -u 5 -p "PR> " v; echo "[$v]"`, func(r *Runner) {
+		r.Stderr = &stderr
+	})
+	if !strings.Contains(out, "[filed]") {
+		t.Errorf("got %q, want the -u descriptor read", out)
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr %q, want no prompt for a file", stderr.String())
+	}
+}
+
+// TestReadPromptSeesThroughTheNullDevice: /dev/null is a character device,
+// and it is nobody's terminal — the harness shape every corpus case runs
+// under. Measured: bash prints no prompt through it.
+func TestReadPromptSeesThroughTheNullDevice(t *testing.T) {
+	null, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = null.Close() })
+	var stderr strings.Builder
+	run(t, `read -p "PR> " v`, func(r *Runner) {
+		r.Stdin = null
+		r.Stderr = &stderr
+	})
+	if stderr.Len() != 0 {
+		t.Errorf("stderr %q, want the null device not taken for a terminal", stderr.String())
+	}
+}
+
+// TestReadCoprocessLetterRefusesWithoutOne is the other shape: a bare `p` in
+// ReadOptions names the coprocess as the source, there is never one here,
+// and the measured answer is the dialect's words, status 1, and — the half
+// that separates this from a read that failed at its input — the variables
+// left exactly as they were.
+func TestReadCoprocessLetterRefusesWithoutOne(t *testing.T) {
+	var stderr strings.Builder
+	out, st := run(t, `v=keep; printf 'x\n' | read -p v; echo "st=$? v=[$v]"`, func(r *Runner) {
+		r.Stderr = &stderr
+		s := *r.Semantics
+		s.ReadOptions = "rsnpAd:t:u:"
+		r.Semantics = &s
+		dg := Diagnostics{ReadNoCoprocess: "read: -p: nothing to ask"}
+		r.Diagnostics = &dg
+	})
+	if !strings.Contains(out, "st=1 v=[keep]") {
+		t.Errorf("got %q, want status 1 and the variable untouched", out)
+	}
+	if !strings.Contains(stderr.String(), "-p: nothing to ask") {
+		t.Errorf("stderr %q, want the dialect's own words", stderr.String())
+	}
+	if st != 0 {
+		t.Errorf("status %d, want 0 — the failure is the read's, not the script's", st)
+	}
+}
+
+// TestOptionNeedsArgumentSpeaksTheDialect: a letter whose argument never
+// arrives is refused in the dialect's words and with its bad-option status,
+// followed by the same usage line a bad option gets — measured with `read -p`
+// in the two shells whose -p takes one, and with `read -d` around the panel.
+func TestOptionNeedsArgumentSpeaksTheDialect(t *testing.T) {
+	var stderr strings.Builder
+	out, _ := run(t, `read -p </dev/null; echo "st=$?"`, func(r *Runner) {
+		r.Stderr = &stderr
+		dg := Diagnostics{
+			OptionNeedsArgument:    "%[1]s: nothing after -%[2]s",
+			BuiltinBadOptionStatus: 3,
+			BuiltinUsage:           map[string]string{"read": "usage: read things"},
+			BuiltinUsageUnprefixed: true,
+		}
+		r.Diagnostics = &dg
+	})
+	if !strings.Contains(out, "st=3") {
+		t.Errorf("got %q, want the dialect's bad-option status", out)
+	}
+	if !strings.Contains(stderr.String(), "read: nothing after -p") {
+		t.Errorf("stderr %q, want the dialect's wording", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "usage: read things") {
+		t.Errorf("stderr %q, want the usage line after the complaint", stderr.String())
 	}
 }

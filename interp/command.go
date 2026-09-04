@@ -28,26 +28,62 @@ func init() {
 }
 
 // biCommand runs a command with functions bypassed, or reports what one is.
-func biCommand(r *Runner, ctx context.Context, args []string) int {
-	verbose := false
-	for len(args) > 0 && strings.HasPrefix(args[0], "-") && args[0] != "--" {
-		switch args[0] {
-		case "-v":
-			verbose = true
-		case "-p":
-			// "Use a default PATH". Ours is already the Runner's rather than
-			// the process's, and inventing a second one would be a guess
-			// about this machine — so it is accepted and changes nothing,
-			// which is what it means for a shell that never had the
-			// developer's PATH to begin with.
-		default:
-			r.diagf("command: %s: invalid option\n", args[0])
-			return 2
+// commandOptionLetters reports the letters in a bundle when every one of
+// them is an option `command` has, so a word is either wholly understood or
+// wholly a question for the dialect.
+func commandOptionLetters(word string) (string, bool) {
+	letters := word[1:]
+	for i := range len(letters) {
+		if letters[i] != 'v' && letters[i] != 'p' {
+			return "", false
 		}
-		args = args[1:]
 	}
-	if len(args) > 0 && args[0] == "--" {
-		args = args[1:]
+	return letters, letters != ""
+}
+
+func biCommand(r *Runner, ctx context.Context, args []string) int {
+	// Through the shared reader rather than a loop of its own, which is what
+	// this had. That loop named the whole word — `command --version` came
+	// back as `--version: invalid option` where every shell names `--`,
+	// because a leading `-` word is a bundle and only its first letter is
+	// refused — and it used neither the dialect's wording nor its status.
+	//
+	// `-p` means "use a default PATH". Ours is already the Runner's rather
+	// than the process's, and inventing a second would be a guess about this
+	// machine, so it is accepted and changes nothing — which is what it
+	// means for a shell that never had the developer's PATH to begin with.
+	// `-v` and `-p` are read by all four. What splits them is a leading `-`
+	// word that is *not* one of those: bash and dash refuse it as an option,
+	// and ksh93 and zsh stop reading options and take it as the command, so
+	// `command -x ls` is `command not found: -x` there.
+	//
+	// `-p` means "use a default PATH". Ours is already the Runner's rather
+	// than the process's, and inventing a second would be a guess about this
+	// machine, so it is accepted and changes nothing.
+	verbose := false
+	for len(args) > 0 {
+		a := args[0]
+		if len(a) < 2 || a[0] != '-' {
+			break
+		}
+		if a == "--" {
+			args = args[1:]
+			break
+		}
+		if letters, ok := commandOptionLetters(a); ok {
+			verbose = verbose || strings.ContainsRune(letters, 'v')
+			args = args[1:]
+			continue
+		}
+		if !r.ask(r.sem().CommandRejectsUnknownOption, "`command -x` refused as an option rather than run as the command") {
+			break
+		}
+		if r.unspecified {
+			return r.status
+		}
+		// The first letter of the bundle, which is why `--version` comes
+		// back as `--`.
+		return r.badBuiltinOption("command", "-"+string([]rune(a[1:])[0]))
 	}
 	if len(args) == 0 {
 		return 0
@@ -55,6 +91,13 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 	if verbose {
 		return r.reportWhatRuns(args[0])
 	}
+	// What the command reports is the *command's*, not this builtin's. The
+	// dialect that names a builtin in the location says
+	// `sh:1: command not found: -x` and not `sh:command:1:` — the same rule
+	// `.` and `eval` follow for the text they run, and for the same reason.
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
 	return r.runWithoutFunctions(ctx, args)
 }
 

@@ -69,6 +69,8 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskTakesTheStickyLetter = interp.Yes
 	s.ShiftReadsOptions = interp.No
 	s.WaitReadsOptions = interp.Yes
+	s.CommandRejectsUnknownOption = interp.Yes
+	s.GetoptsRejectsUnknownOption = interp.Yes
 	s.ShiftCountIsArithmetic = interp.No
 	s.TrapBodyRunsWhatParsed = interp.Yes
 	s.ReportsAKilledCommandInACommandSubstitution = interp.No

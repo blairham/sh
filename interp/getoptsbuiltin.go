@@ -40,6 +40,27 @@ func init() {
 }
 
 func biGetopts(r *Runner, _ context.Context, args []string) int {
+	// It has no options of its own, and a leading `-` word is refused as one
+	// rather than taken as the optstring: `getopts -a x` is `-a: invalid
+	// option` in the shell this follows, not an optstring of `-a`. Measured,
+	// and it is why this reads them at all when it has none to find.
+	// A leading `-` word is the only thing worth asking about, and only one
+	// dialect refuses it: `getopts -a x` is `-a: invalid option` there and
+	// an optstring of `-a` in the other three. An ordinary `getopts ab o`
+	// reaches no question at all, which is what keeps this off the path
+	// every use of it takes.
+	if len(args) > 0 && len(args[0]) > 1 && args[0][0] == '-' {
+		if args[0] == "--" {
+			args = args[1:]
+		} else if r.ask(r.sem().GetoptsRejectsUnknownOption, "`getopts -a` refused as an option rather than read as the optstring") {
+			if r.unspecified {
+				return r.status
+			}
+			return r.badBuiltinOption("getopts", "-"+string([]rune(args[0][1:])[0]))
+		} else if r.unspecified {
+			return r.status
+		}
+	}
 	if len(args) < 2 {
 		r.diagf("getopts: usage: getopts optstring name [arg]\n")
 		return 2

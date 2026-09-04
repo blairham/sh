@@ -414,6 +414,11 @@ type Runner struct {
 	// main script, and not in either of those — so the copy must know it is
 	// a copy.
 	inSubshell bool
+	// inCommandSubst narrows that to a command substitution, which one
+	// dialect treats differently from a subshell written out: bash says
+	// nothing about a command killed inside `$(…)` and does report one
+	// killed inside `( … )`.
+	inCommandSubst bool
 	// traceWait and traceDone order the trace lines of a pipeline without
 	// ordering the pipeline itself: an element waits for the one before it
 	// to have printed, then prints, then releases the next. Only the
@@ -1010,7 +1015,16 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		// And what the command *is*, for the one message that says a
 		// command back rather than naming it: a signal that ends one is
 		// reported with the command written out.
-		r.killed = c
+		//
+		// Not updated inside a copy, because the *job* is what that message
+		// names and the copy is running one. Measured: the dialect that
+		// prints the command back says `( cmd )` for a subshell and `cmd`
+		// for a group, a function body or an `if` — and only the subshell
+		// is a job of its own. The Subshell node is recorded here, on the
+		// way in, and the copy inherits it.
+		if !r.inSubshell {
+			r.killed = c
+		}
 	}
 	switch x := c.(type) {
 	case *syntax.SimpleCmd:

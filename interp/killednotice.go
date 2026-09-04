@@ -78,6 +78,11 @@ func (r *Runner) reportKilled(sig syscall.Signal, pid int) {
 		r.status, r.unspecified = status, false
 		return
 	}
+	if r.inCommandSubst && !r.ask(r.sem().ReportsAKilledCommandInACommandSubstitution,
+		"a command killed inside a command substitution being reported") {
+		r.status, r.unspecified = status, false
+		return
+	}
 	dg := r.diag()
 	if sig == syscall.SIGTERM && dg.KilledCommandNoticeBareForTerminate != "" {
 		// One signal, in one shell, written with neither the location nor

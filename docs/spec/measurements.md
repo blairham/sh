@@ -2170,6 +2170,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `signal/an-interrupt-that-ended-a-child` | `after` | `after` | `after` | `after` | *(no output, status -1)* | `after` |
 | `signal/a-command-ended-by-a-terminate` | `Terminated: N` | `Terminated: N /bin/sh -c 'kill -TERM $$'` | *(no output, status 0)* | `<shell>: line N: N Terminated: N /bin/sh -c 'kill -TERM $$'` | `<shell>: N: Terminated` | *(no output, status 0)* |
 | `signal/a-pipeline-element-that-is-not-the-last` | `User defined signal N: N~after` | `after` | `after` | `after` | `after` | `after` |
+| `signal/a-command-a-signal-ended-in-a-group` | `User defined signal N: N~after` | `<shell>: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'~after` | `after` | `<shell>: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'~after` | `<shell>: N: User signal N~after` | `after` |
+| `signal/a-command-a-signal-ended-in-a-substitution` | `User defined signal N: N~after` | `after` | `after` | `after` | `<shell>: N: User signal N~after` | `after` |
 | `signal/a-command-a-signal-ended` | `User defined signal N: N` | `<shell>: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'` | *(no output, status 0)* | `<shell>: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'` | `<shell>: N: User signal N` | *(no output, status 0)* |
 
 - `exec/a-command-is-named-as-it-was-written` — a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else
@@ -2210,6 +2212,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `signal/a-pipeline-element-that-is-not-the-last` — a signal ends an element whose status the pipeline does not take. Three of the panel pass over it entirely — the same command as the *last* element is remarked on by two of them — and dash says the same thing wherever the element stands. One against three, and the case next to this one is where the same signal is worth a sentence
   ```sh
   { /bin/sh -c 'kill -USR1 $$' | cat; } 2>e.txt
+  sed -E "s/ [0-9]+/ N/g; s/  +/ /g" e.txt
+  echo after
+  ```
+- `signal/a-command-a-signal-ended-in-a-group` — a group is not a job, so the shell that writes the command back out names the command and not the group. The subshell that *is* one cannot be recorded here: its notice is written by the parent shell after the redirect inside the script has ended, so no snippet can capture it and the process id in it is not the same twice. That half is held by a test instead
+  ```sh
+  { { /bin/sh -c 'kill -USR1 $$'; }; } 2>e.txt
+  sed -E "s/ [0-9]+/ N/g; s/  +/ /g" e.txt
+  echo after
+  ```
+- `signal/a-command-a-signal-ended-in-a-substitution` — one shell remarks on a command a signal ended inside `( … )` and says nothing about the same command inside `$(…)`, so the two are separate questions rather than one about copies. The other two that remark on it at all do so wherever it happened
+  ```sh
+  { x=$(/bin/sh -c 'kill -USR1 $$'); } 2>e.txt
   sed -E "s/ [0-9]+/ N/g; s/  +/ /g" e.txt
   echo after
   ```

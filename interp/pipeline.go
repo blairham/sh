@@ -187,6 +187,9 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline) error {
 	subs := make([]*Runner, last)
 	for i := 0; i < last; i++ {
 		sub := r.clone()
+		// Each element is its own job component, so the copy running it
+		// names it rather than inheriting whatever the shell last ran.
+		sub.killed = p.Cmds[i]
 		if gates != nil {
 			if i > 0 {
 				sub.traceWait = gates[i-1]
@@ -251,6 +254,9 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline) error {
 			r.Stdin = readers[i]
 		}
 		r.Stdout, r.Stderr = sharedOut, sharedErr
+		// No naming needed here: this element runs on the shell itself
+		// rather than on a copy, so the dispatch records it the way it
+		// records any other command. Verified by mutation, not assumed.
 		errs[i] = r.command(ctx, p.Cmds[i])
 		statuses[i] = r.status
 		r.Stdin, r.Stdout, r.Stderr = savedIn, savedOut, savedErr

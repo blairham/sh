@@ -1710,6 +1710,11 @@ echo "st=$?"`,
 		Why:     "the saved-stdout idiom every configure script uses: `exec 6>&1` keeps the stream, `>&6` finds it again, `6>&-` lets it go",
 	},
 	{
+		ID: "redir/read-write-opens-without-truncating", Category: "redirection",
+		Snippet: `printf 'keep\n' > f; exec 3<> f; exec 3>&-; cat f; exec 4<> made; echo "st=$?"; ls made`,
+		Why:     "`<>` opens for reading and writing, creates a file that is not there, and never truncates one that is — unanimous, and the reason lock and state files use it",
+	},
+	{
 		ID: "redir/a-write-to-a-closed-descriptor-fails", Category: "redirection",
 		Snippet: `echo hi >&-; echo "st=$?"`,
 		Why:     "`>&-` closes stdout before the builtin writes, and a write that went nowhere is not a command that worked: three shells report 1 — two of them with a message naming the builtin, ksh93 silently — and zsh alone keeps 0 and quietly loses the text",

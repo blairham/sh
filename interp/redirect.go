@@ -153,6 +153,12 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			flags = os.O_WRONLY | os.O_CREATE | os.O_APPEND
 		case syntax.TokLess:
 			flags = os.O_RDONLY
+		case syntax.TokLessGreat:
+			// `<>` opens for reading and writing, creating the file and
+			// never truncating it — `exec 3<> state` keeps what the file
+			// held. Unanimous and POSIX, and with no descriptor number it
+			// is standard input, exactly as a plain `<` is.
+			flags = os.O_RDWR | os.O_CREATE
 		case syntax.TokAmpGreat, syntax.TokAmpDGreat:
 			// Both streams to one file.
 			flags = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
@@ -163,7 +169,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		default:
 			return closers, fmt.Errorf("not implemented yet: the %s redirection", rd.Op)
 		}
-		if rd.N == nil && flags == os.O_RDONLY {
+		if rd.N == nil && (flags == os.O_RDONLY || rd.Op == syntax.TokLessGreat) {
 			fd = 0
 		}
 

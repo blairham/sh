@@ -15578,6 +15578,38 @@
         "TimedOut": false
       }
     },
+    "redir/read-write-opens-without-truncating": {
+      "bash": {
+        "Output": "keep~st=0~made",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "keep~st=0~made",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "keep~st=0~made",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "keep~st=0~made",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "keep~st=0~made",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "keep~st=0~made",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "return/inside-a-sourced-file": {
       "bash": {
         "Output": "st=7",

@@ -5,9 +5,13 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -114,41 +118,70 @@ func TestDetailDistinguishesSubstitutionsFromText(t *testing.T) {
 	}
 }
 
-// The wiring is what went wrong, so the wiring is what this tests: `-c`
-// reached past driver's own and lost the operands with it, and nothing in
-// this package could say so.
-//
-// `dispatch` returns a status rather than exiting for exactly that reason.
-func TestDispatchGivesTheCommandStringItsOperands(t *testing.T) {
-	sh, _ := pickDialect("bash")
-	var out bytes.Buffer
-	sh.Stdout, sh.Stderr = &out, &out
-	sh.Name = "testsh"
-
-	code := dispatch(sh, options{
-		command: `echo "0=$0 1=$1 n=$#"`, commandGiven: true,
-	}, "", []string{"zero", "one", "two"})
-	if code != 0 {
-		t.Fatalf("status %d: %s", code, out.String())
-	}
-	if got, want := strings.TrimSpace(out.String()), "0=zero 1=one n=2"; got != want {
-		t.Errorf("out = %q, want %q", got, want)
+// The boundary is what this front end still owns: its flags are read from
+// the front of the line and stop at the first word that is not one of them,
+// so nothing a shell reads — options, operands, a script's parameters — can
+// be eaten as a -dialect or a -tokens.
+func TestReadOwnFlagsStopsAtTheShellsFirstWord(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		args    []string
+		dialect string
+		rest    []string
+	}{
+		{"dialect then a command", []string{"-dialect", "bash", "-c", "echo hi"}, "bash", []string{"-c", "echo hi"}},
+		{"dialect attached with =", []string{"-dialect=zsh", "x.sh", "a"}, "zsh", []string{"x.sh", "a"}},
+		{"two dashes, as the flag package read it", []string{"--dialect", "ksh", "-e", "x.sh"}, "ksh", []string{"-e", "x.sh"}},
+		{"nothing of ours", []string{"-e", "-c", "echo hi"}, "core", []string{"-e", "-c", "echo hi"}},
+		{
+			// A script's own parameter spelled like our flag is the
+			// script's: the scan ended at the path.
+			"a parameter that looks like a flag",
+			[]string{"x.sh", "-dialect"},
+			"core",
+			[]string{"x.sh", "-dialect"},
+		},
+		{"a lone dash is the shell's", []string{"-", "x.sh"}, "core", []string{"-", "x.sh"}},
+		{"-- is the shell's", []string{"--", "-c"}, "core", []string{"--", "-c"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			own, rest, err := readOwnFlags(tc.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if own.dialect != tc.dialect {
+				t.Errorf("dialect = %q, want %q", own.dialect, tc.dialect)
+			}
+			if !slices.Equal(rest, tc.rest) {
+				t.Errorf("rest = %q, want %q", rest, tc.rest)
+			}
+		})
 	}
 }
 
-// An empty `-c` is a command string and an empty one: running nothing is not
-// the same as having named nothing to run, which is why the option carries
-// whether it was given rather than whether it is empty.
-func TestDispatchTellsAnEmptyCommandFromNone(t *testing.T) {
-	sh, _ := pickDialect("bash")
+func TestReadOwnFlagsWantsADialectName(t *testing.T) {
+	if _, _, err := readOwnFlags([]string{"-dialect"}); err == nil {
+		t.Error("-dialect with nothing after it must be refused, not defaulted")
+	}
+}
+
+// The shell this binary hands the shared front end runs a script the way the
+// dialect binaries do — parameters included, which is the half the fifth
+// copy of the invocation logic dropped.
+func TestTheSharedFrontEndCarriesTheScriptsParameters(t *testing.T) {
+	sh, _ := pickDialect("core")
 	var out bytes.Buffer
 	sh.Stdout, sh.Stderr = &out, &out
 	sh.Name = "testsh"
 
-	if code := dispatch(sh, options{command: "", commandGiven: true}, "", nil); code != 0 {
-		t.Errorf("status %d for an empty command string, want it to run and do nothing", code)
+	path := filepath.Join(t.TempDir(), "args.sh")
+	if err := os.WriteFile(path, []byte("echo \"n=$# 1=[$1] 2=[$2]\"\n"), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	if out.Len() != 0 {
-		t.Errorf("out = %q, want nothing", out.String())
+	if code := driver.MainArgs(sh, []string{"testsh", path, "a", "b"}); code != 0 {
+		t.Fatalf("status %d: %s", code, out.String())
+	}
+	if got, want := strings.TrimSpace(out.String()), "n=2 1=[a] 2=[b]"; got != want {
+		t.Errorf("out = %q, want %q", got, want)
 	}
 }

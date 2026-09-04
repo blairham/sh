@@ -355,6 +355,9 @@ func Apply(r *interp.Runner) {
 	// No `compgen` here; it is bash's alone.
 	r.Unregister("compgen")
 	r.Unregister("complete")
+	// And neither `mapfile` nor its other name; both are bash's alone.
+	r.Unregister("mapfile")
+	r.Unregister("readarray")
 	// dash has neither `typeset` nor `declare`. The core provides `typeset`
 	// because three of the four do; the one that does not takes it away, the
 	// same way ksh93 takes `local` away.

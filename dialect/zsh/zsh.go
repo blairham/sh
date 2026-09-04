@@ -452,6 +452,9 @@ func Apply(r *interp.Runner) {
 	// No `compgen` here; it is bash's alone.
 	r.Unregister("compgen")
 	r.Unregister("complete")
+	// And neither `mapfile` nor its other name; both are bash's alone.
+	r.Unregister("mapfile")
+	r.Unregister("readarray")
 	// The `set -o` names beyond the ones every shell has.
 	r.AddSetOptions(
 		"braceexpand",

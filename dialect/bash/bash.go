@@ -372,6 +372,11 @@ func Diagnostics() interp.Diagnostics {
 			// runner does not hold.
 			"read": "Eeip",
 			"type": "afpP",
+			// The callbacks: -C runs a command every -c elements, which is
+			// about progress display and is deferred rather than parsed and
+			// ignored — under either of the command's two names.
+			"mapfile":   "Cc",
+			"readarray": "Cc",
 		},
 		// bash's own words for the two -u failures it can meet here; the
 		// non-number wordings per letter are not modeled yet, so those fall
@@ -403,6 +408,10 @@ func Diagnostics() interp.Diagnostics {
 			"export": "export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
 			"read": "read: usage: read [-Eers] [-a array] [-d delim] [-i text] " +
 				"[-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
+			"mapfile": "mapfile: usage: mapfile [-d delim] [-n count] [-O origin] [-s count] " +
+				"[-t] [-u fd] [-C callback] [-c quantum] [array]",
+			"readarray": "readarray: usage: readarray [-d delim] [-n count] [-O origin] [-s count] " +
+				"[-t] [-u fd] [-C callback] [-c quantum] [array]",
 			"readonly": "readonly: usage: readonly [-aAf] [name[=value] ...] or readonly -p",
 			"trap":     "trap: usage: trap [-Plp] [[action] signal_spec ...]",
 			"type":     "type: usage: type [-afptP] name [name ...]",

@@ -2759,6 +2759,21 @@ echo unreachable`,
 		Why:     "-r takes a spec away and naming an unregistered command is an error at 1, in the shell that has the builtin",
 	},
 	{
+		ID: "mapfile/reads-lines-into-an-array", Category: "builtins",
+		Snippet: `printf 'a\nb\n' | { mapfile -t arr; echo "${arr[1]}"; }`,
+		Why:     "mapfile -t is the idiomatic subshell-free file-to-array read; bash alone has the command, and the array lands in the shell that called it",
+	},
+	{
+		ID: "mapfile/defaults-to-MAPFILE-and-keeps-the-newline", Category: "builtins",
+		Snippet: `printf 'a\nb' | { mapfile; printf '[%s]%s' "${MAPFILE[1]}" "${#MAPFILE[@]}"; }`,
+		Why:     "with no operand the elements land in MAPFILE, each keeping its delimiter, and a final line the stream never terminated is still an element",
+	},
+	{
+		ID: "readarray/is-mapfile-under-another-name", Category: "builtins",
+		Snippet: `arr=(0); printf '1\n2\n3\n4\n' | { readarray -t -s 1 -n 2 -O 1 arr; echo "${arr[0]} ${arr[1]} ${arr[2]} ${#arr[@]}"; }`,
+		Why:     "the synonym takes the same letters — skip, cap, and an origin that writes into the array it finds rather than replacing it",
+	},
+	{
 		ID: "path/directory-on-path-is-walked-past", Category: "command lookup",
 		Snippet: `mkdir -p first/target real; printf '#!/bin/sh\necho ran\n' > real/target; chmod +x real/target; PATH=$PWD/first:$PWD/real; target; echo "st=$?"`,
 		Why:     "a directory whose name matches the command does not stop the PATH search — the shim-directory-early-on-PATH arrangement every version manager relies on",

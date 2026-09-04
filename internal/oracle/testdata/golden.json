@@ -8506,6 +8506,38 @@
         "TimedOut": false
       }
     },
+    "name/a-lone-dash-given-to-a-builtin": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: unalias: -: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: unalias: -: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: unalias: -: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "unalias: - not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:unalias:1: not enough arguments~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "name/a-lone-dash-is-an-operand": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: export: `-': not a valid identifier~st=1",

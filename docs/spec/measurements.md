@@ -1691,6 +1691,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `read/a-failing-read-still-assigns` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` |
 | `read/a-final-line-without-a-newline` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` |
 | `read/an-unterminated-last-line-is-dropped` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` |
+| `name/a-lone-dash-given-to-a-builtin` | `unalias: - not found~st=1` | `<shell>: line 1: unalias: -: not found~st=1` | `<shell>: line 1: unalias: -: not found~st=1` | `<shell>: line 0: unalias: -: not found~st=1` | `st=1` | `<shell>:unalias:1: not enough arguments~st=1` |
 | `return/with-nothing-to-return-from` | `before` *(status 7)* | `before~<shell>: line 1: return: can only `return' from a function or sourced script~after st=2` | `before~<shell>: line 1: return: can only `return' from a function or sourced script` *(status 2)* | `before~<shell>: line 0: return: can only `return' from a function or sourced script~after st=1` | `before` *(status 7)* | `before` *(status 7)* |
 | `return/inside-a-sourced-file` | `st=7` | `st=7` | `st=7` | `st=7` | `st=7` | `st=7` |
 | `set/a-name-only-one-shell-has` | `<shell>: 1: set: Illegal option -o posix` *(status 2)* | `st=0` | `st=0` | `st=0` | `<shell>: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | `<shell>:set:1: no such option: posix` *(status 1)* |
@@ -1734,6 +1735,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `read/an-unterminated-last-line-is-dropped` — the consequence of the status above, and the reason it is worth pinning rather than fixing: a file whose last line has no newline loses that line in every shell there is. Returning 0 instead would run it twice — once as the line, once as the empty read after it
   ```sh
   printf 'a\nb' | while read -r l; do printf "<%s>" "$l"; done; echo
+  ```
+- `name/a-lone-dash-given-to-a-builtin` — a `-` on its own is an operand in three of the panel and an option in zsh, which eats it. `unalias` is where that shows: the three complain about an alias called `-`, each in its own words, and the fourth complains that it was given nothing to unalias at all. `unset -` looks the same in bash for a different reason — its bare form validates no operand — which is why the case is not written with that one
+  ```sh
+  unalias -; echo "st=$?"
   ```
 - `return/with-nothing-to-return-from` — a `return` outside both a function and a sourced file has nothing to return from, and the panel splits over what that means — not over the wording but over *where the script stops*. Three obey it and end there with the status given; one reports it, leaves 2 behind and runs the next command. A script whose last statement is such a `return` therefore ends two different ways with the same output, which is why the status is half the case
   ```sh

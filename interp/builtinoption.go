@@ -29,11 +29,21 @@ import "strings"
 func (r *Runner) builtinOptions(name string, args []string, known string) (rest []string, opts string, code int) {
 	for len(args) > 0 {
 		a := args[0]
+		if a == "-" {
+			// A lone `-` is an operand in three of the four — a *name*,
+			// which they then reject as an invalid identifier — and an
+			// option in zsh, which eats it and leaves the builtin with one
+			// operand fewer.
+			if r.ask(r.sem().LoneDashIsAnOption, "a lone `-` given to a builtin") {
+				args = args[1:]
+				continue
+			}
+			if r.unspecified {
+				return nil, opts, 2
+			}
+			break
+		}
 		if len(a) < 2 || a[0] != '-' {
-			// A lone `-` is an operand — a *name*, which three of the four
-			// then reject as an invalid identifier. Now that operand
-			// validation exists the rule is observable from outside, and
-			// `unset -` naming the dash is what holds it.
 			break
 		}
 		if a == "--" {

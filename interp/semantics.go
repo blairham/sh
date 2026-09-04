@@ -419,6 +419,16 @@ type Semantics struct {
 	// Only ever at a prompt: no shell announces one to a script.
 	AnnouncesBackgroundJob Answer
 
+	// LoneDashIsAnOption eats a `-` given to a builtin on its own instead of
+	// passing it on as an operand. True in zsh alone.
+	//
+	// Only visible once something looks at the operands. `unset -` is quiet
+	// in bash because its bare form validates nothing, not because the dash
+	// was eaten — `unset -v -`, which does validate, names the dash there.
+	// zsh reports `not enough arguments` instead, because after the dash is
+	// eaten there is nothing left to unset.
+	LoneDashIsAnOption Answer
+
 	// ReturnOutsideAFunctionIsRefused reports a `return` that has nothing to
 	// return from and carries on, instead of ending the script with the
 	// status it was given. True in bash alone.

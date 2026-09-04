@@ -14,8 +14,13 @@ import "testing"
 // in ksh93 — all three took the dash as a name — and zsh listed the
 // environment. Every one of them treated it as something other than an option,
 // and the moment operand validation arrives, eating it would be wrong.
+// A lone `-` is kept as an operand where the dialect says so, which is three
+// of the four. That it is an *answer* rather than the rule is #204: zsh eats
+// it, and this test named the dash as a settled fact until then.
 func TestBuiltinOptionsKeepsALoneDash(t *testing.T) {
-	r := &Runner{}
+	sem := PosixSemantics()
+	sem.LoneDashIsAnOption = No
+	r := &Runner{Semantics: &sem}
 	for _, c := range []struct {
 		args []string
 		rest []string

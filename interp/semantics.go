@@ -1053,6 +1053,57 @@ type Semantics struct {
 	// names the word the same way it does anywhere else.
 	TrapSingleUnknownConditionIsUsage Answer
 
+	// TrapHasErrCondition makes `trap … ERR` a condition rather than a
+	// misspelled signal: the action runs after every command that fails
+	// where `set -e` would judge it — with or without `set -e` on, which is
+	// measured rather than assumed. dash alone refuses the name, with the
+	// same words it refuses any other word that names no signal.
+	TrapHasErrCondition Answer
+
+	// TrapHasDebugCondition makes `trap … DEBUG` run the action before each
+	// simple command. dash alone refuses the name.
+	TrapHasDebugCondition Answer
+
+	// TrapHasReturnCondition makes `trap … RETURN` a condition that fires
+	// when a sourced file finishes, and when a function whose own body set
+	// the trap returns. bash alone; the other three refuse the name the way
+	// they refuse any word that names no signal.
+	TrapHasReturnCondition Answer
+
+	// ErrTrapRunsInsideFunctions fires the ERR trap for a failure inside a
+	// function the trap was not set in. bash does not — there a function
+	// does not inherit the ERR trap, so only the call itself is judged
+	// where the trap can see it. ksh93 and zsh fire it inside too.
+	//
+	// The suppression is per *frame*, not per depth, which is measured: a
+	// trap set inside a function fires in that function and at the top
+	// level after it returns, and does not fire inside a sibling function
+	// entered afterwards, though the sibling's own failing call still does.
+	ErrTrapRunsInsideFunctions Answer
+
+	// ErrTrapRunsInSubshells fires the ERR trap for a failure inside a
+	// subshell or a command substitution. zsh alone: `trap 'echo E' ERR;
+	// x=$(false; echo hi)` captures an E there and nowhere else. bash and
+	// ksh93 reset the trap on the way into the child, the way they reset
+	// every trap that is not ignored.
+	ErrTrapRunsInSubshells Answer
+
+	// DebugTrapRunsInsideCalls fires the DEBUG trap before commands inside
+	// a function or a sourced file the trap was not set in. bash does not;
+	// ksh93 and zsh do. Not the ERR axis under another name, and not only
+	// because bash controls the two with different options: a sourced file
+	// bounds DEBUG there and does not bound ERR — measured, with a
+	// top-level trap of each, `false` inside a dotted file fires ERR and
+	// the commands of the same file fire no DEBUG.
+	DebugTrapRunsInsideCalls Answer
+
+	// DebugTrapRunsInSubshells fires the DEBUG trap inside a subshell or a
+	// command substitution. ksh93 and zsh do — a command substitution there
+	// captures the handler's output into the variable — and bash does not,
+	// which is a grouping ErrTrapRunsInSubshells does not have: ksh93
+	// carries DEBUG into the child and not ERR.
+	DebugTrapRunsInSubshells Answer
+
 	// LocalOutsideAFunctionIsAnError refuses `local x=2` written where there
 	// is no function to be local to.
 	//
@@ -1342,6 +1393,12 @@ func PosixSemantics() Semantics {
 		// And it names where the failure was, not where the trap fired,
 		// which is what three of the four do.
 		TrapParseFailureNamesWhereItFired: No,
+		// POSIX gives `trap` the signals and EXIT, and nothing else — ERR,
+		// DEBUG and RETURN are conditions the shells added. dash still
+		// refuses all three.
+		TrapHasErrCondition:    No,
+		TrapHasDebugCondition:  No,
+		TrapHasReturnCondition: No,
 		// POSIX gives `command` -p and -v and gives `getopts` none, so a
 		// leading `-` word is an option to the first and the optstring to
 		// the second.

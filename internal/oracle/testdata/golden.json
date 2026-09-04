@@ -18714,6 +18714,38 @@
         "TimedOut": false
       }
     },
+    "trap/debug-fires-before-each-command": {
+      "bash": {
+        "Output": "D~a~D~b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "D~a~D~b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "D~a~D~b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "trap: DEBUG: bad trap~a~b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "D~a~D~b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "D~a~D~b",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "trap/default-signal-terminates": {
       "bash": {
         "Output": "",
@@ -18775,6 +18807,70 @@
       "zsh": {
         "Output": "after",
         "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/err-fires-on-failure": {
+      "bash": {
+        "Output": "E=1~after=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "E=1~after=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "E=1~after=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "trap: ERR: bad trap~after=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "E=1~after=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "E=1~after=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/err-under-errexit": {
+      "bash": {
+        "Output": "ERR",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "ERR",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "ERR",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "trap: ERR: bad trap",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "ERR",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "ERR",
+        "Status": 1,
         "TimedOut": false
       }
     },
@@ -18999,6 +19095,38 @@
       "zsh": {
         "Output": "",
         "Status": -1,
+        "TimedOut": false
+      }
+    },
+    "trap/return-fires-when-a-sourced-file-ends": {
+      "bash": {
+        "Output": "insource~R~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "insource~R~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "insource~R~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "trap: RETURN: bad trap~insource~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: trap: RETURN: bad trap~insource~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:trap:1: undefined signal: RETURN~insource~after",
+        "Status": 0,
         "TimedOut": false
       }
     },

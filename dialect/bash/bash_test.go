@@ -101,6 +101,16 @@ func TestSemantics(t *testing.T) {
 		{"JobsShowBackgroundCommand", s.JobsShowBackgroundCommand, interp.Yes},
 		{"JobsListNewestFirst", s.JobsListNewestFirst, interp.No},
 		{"JobsListFinishedJobs", s.JobsListFinishedJobs, interp.Yes},
+		// All three pseudo-conditions, RETURN being this shell's alone —
+		// and none of them follows the script into a call or a subshell
+		// it was not set in.
+		{"TrapHasErrCondition", s.TrapHasErrCondition, interp.Yes},
+		{"TrapHasDebugCondition", s.TrapHasDebugCondition, interp.Yes},
+		{"TrapHasReturnCondition", s.TrapHasReturnCondition, interp.Yes},
+		{"ErrTrapRunsInsideFunctions", s.ErrTrapRunsInsideFunctions, interp.No},
+		{"ErrTrapRunsInSubshells", s.ErrTrapRunsInSubshells, interp.No},
+		{"DebugTrapRunsInsideCalls", s.DebugTrapRunsInsideCalls, interp.No},
+		{"DebugTrapRunsInSubshells", s.DebugTrapRunsInSubshells, interp.No},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)

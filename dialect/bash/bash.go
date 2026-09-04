@@ -140,6 +140,17 @@ func Semantics() interp.Semantics {
 	s.TrapOneArgumentIsACondition = interp.Yes
 	s.TrapReportsAnUnknownSingleCondition = interp.Yes
 	s.TrapSingleUnknownConditionIsUsage = interp.Yes
+	// All three pseudo-conditions, RETURN being this shell's alone. None of
+	// them follows the script into a function it was not set in, or into a
+	// subshell — measured: `trap 'echo E' ERR; f(){ false; :; }; f` prints
+	// nothing, and a command substitution captures no handler output.
+	s.TrapHasErrCondition = interp.Yes
+	s.TrapHasDebugCondition = interp.Yes
+	s.TrapHasReturnCondition = interp.Yes
+	s.ErrTrapRunsInsideFunctions = interp.No
+	s.ErrTrapRunsInSubshells = interp.No
+	s.DebugTrapRunsInsideCalls = interp.No
+	s.DebugTrapRunsInSubshells = interp.No
 	s.UlimitBlockIsKilobyte = interp.Yes
 	s.UlimitHasResidentSet = interp.Yes
 	s.UlimitHasProcessCount = interp.Yes

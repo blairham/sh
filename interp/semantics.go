@@ -1026,6 +1026,13 @@ type Semantics struct {
 	// /usr/bin/cd.
 	HashSearchesPathAlone Answer
 
+	// SetHasTraceLetters gives `set` the -E and -T letters, which carry
+	// the ERR trap (and DEBUG with RETURN) into functions and subshells the
+	// dialect otherwise bounds them out of. bash alone: dash and ksh93
+	// refuse the letters, and zsh spells different options with them, so
+	// only a refusal is honest elsewhere.
+	SetHasTraceLetters Answer
+
 	// PunctuatedFunctionNameIsRefused stops the script when a function
 	// whose name carries `-` or `.` is defined. ksh93 alone: bash and zsh
 	// define and run it, and dash never parses the definition at all.
@@ -1647,6 +1654,7 @@ func PosixSemantics() Semantics {
 		HashSearchesPathAlone:   No,
 		// POSIX has no such names; refusal is one shell's own answer.
 		PunctuatedFunctionNameIsRefused: No,
+		SetHasTraceLetters:              No,
 		// The standard says `times` takes no operands and does not say what to
 		// do with one; the two shells that follow it most closely ignore it.
 		TimesRejectsArguments: No,

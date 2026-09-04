@@ -337,6 +337,14 @@ type Runner struct {
 	// and removes them the way it would in bash — nothing here completes.
 	completions map[string]string
 
+	// verbose is `set -v`: each line is written back as it is read, which
+	// the front end does — it is the one holding the raw text.
+	verbose bool
+	// errtrace is `set -E`: the ERR trap carries into functions the dialect
+	// would otherwise bound it out of.
+	errtrace bool
+	// functrace is `set -T`: the same carriage for DEBUG and RETURN.
+	functrace bool
 	// noexec is `set -n`: read, never run, never unset — even the `set +n`
 	// that would clear it is a command.
 	noexec bool
@@ -670,6 +678,9 @@ func (r *Runner) withRedirs(ctx context.Context, rs []*syntax.Redirect, body fun
 	}
 	return body()
 }
+
+// Verbose reports `set -v`, for the front end that holds the raw lines.
+func (r *Runner) Verbose() bool { return r.verbose }
 
 // ExitStatus reports the status of the last command.
 func (r *Runner) ExitStatus() int { return r.status }

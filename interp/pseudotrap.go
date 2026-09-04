@@ -135,7 +135,7 @@ func (r *Runner) runErrTrap(ctx context.Context) {
 	if body == nil || *body == "" || r.inErrTrap {
 		return
 	}
-	if cur := r.currentFunctionFrameSerial(); cur != 0 && cur != r.errTrapFrame &&
+	if cur := r.currentFunctionFrameSerial(); cur != 0 && cur != r.errTrapFrame && !r.errtrace &&
 		!r.ask(r.sem().ErrTrapRunsInsideFunctions, "the ERR trap inside a function it was not set in") {
 		return
 	}
@@ -167,7 +167,7 @@ func (r *Runner) runDebugTrap(ctx context.Context) {
 	if body == nil || *body == "" || r.inDebugTrap {
 		return
 	}
-	if cur := r.currentFrameSerial(); cur != 0 && cur != r.debugTrapFrame &&
+	if cur := r.currentFrameSerial(); cur != 0 && cur != r.debugTrapFrame && !r.functrace &&
 		!r.ask(r.sem().DebugTrapRunsInsideCalls, "the DEBUG trap inside a call it was not set in") {
 		return
 	}
@@ -197,7 +197,7 @@ func (r *Runner) runReturnTrap(ctx context.Context, serial int) {
 	if body == nil || *body == "" || r.inReturnTrap || r.returnTrapInherited {
 		return
 	}
-	if serial != sourcedFrame && r.returnTrapFrame != serial {
+	if serial != sourcedFrame && r.returnTrapFrame != serial && !r.functrace {
 		return
 	}
 	if r.ctl != controlNone && r.ctl != controlReturn {

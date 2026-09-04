@@ -472,7 +472,7 @@ func (sh Shell) run(in source) int {
 // through Finish rather than around it.
 func (sh Shell) execute(r *interp.Runner, p *syntax.Parser, in source) int {
 	ctx := context.Background()
-	shown := 0
+	shown, echoed := 0, 0
 	// A builtin can change the grammar for the lines after it — a run-time
 	// option can decide whether a quantified group is a group. The runner
 	// says so by replacing its Dialect, never by writing through it, so a
@@ -498,6 +498,18 @@ func (sh Shell) execute(r *interp.Runner, p *syntax.Parser, in source) int {
 			r.Finish(ctx)
 			return in.dg.StatusForParseError(err)
 		}
+		if r.Verbose() {
+			// `set -v` — the input written back as it is read. The front end
+			// is the one holding the raw text, which is why the echo lives
+			// here: the runner only says whether the option is on. Echoed up
+			// to the line the parser has consumed, so a here-document's body
+			// goes out with the line that owns it, and never twice.
+			echoed = sh.sayVerbose(in.src, line.Last.Line, echoed)
+		} else {
+			// Lines read while the option is off are spent, not saved: the
+			// line that says `set -v` is not echoed by the shell it turns on.
+			echoed = line.Last.Line
+		}
 		if err := r.RunPart(ctx, line); err != nil {
 			// Refused rather than silently doing nothing: a shell that
 			// quietly skips what it cannot do is worse than one that says so.
@@ -509,6 +521,19 @@ func (sh Shell) execute(r *interp.Runner, p *syntax.Parser, in source) int {
 		}
 	}
 	return r.Finish(ctx)
+}
+
+// sayVerbose writes the physical lines up to and including upTo, resuming
+// after the last one already written, and reports how far it got.
+func (sh Shell) sayVerbose(src string, upTo, echoed int) int {
+	if upTo <= echoed {
+		return echoed
+	}
+	lines := strings.Split(src, "\n")
+	for i := echoed; i < upTo && i < len(lines); i++ {
+		sh.errf("%s\n", lines[i])
+	}
+	return upTo
 }
 
 // source runs the prelude on an existing runner, which is how a prelude is

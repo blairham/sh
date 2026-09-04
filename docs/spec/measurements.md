@@ -2070,6 +2070,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `status/an-assignment-can-read-the-previous-status` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` | `E=1 ?=0` |
 | `status/an-assignment-reports-its-substitution` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` | `st=1~st=0` |
 | `errexit/assignment-takes-the-substitution` | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* |
+| `opt/set-v-echoes-lines-as-read` | `echo a~a~echo b~b` | `echo a~a~echo b~b` | `echo a~a~echo b~b` | `echo a~a~echo b~b` | `echo a~a~echo b~~b` | `echo a~a~echo b~b` |
+| `opt/set-e-carries-the-err-trap` | `trap: ERR: bad trap~done` | `ERR~ERR~done` | `ERR~ERR~done` | `ERR~ERR~done` | *(no output, status 2)* | `ERR~done` |
 | `opt/set-n-reads-and-never-runs` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `opt/set-f-turns-off-pathname-expansion` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `a.txt b.txt` |
 | `opt/set-o-noglob-is-unanimous` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` |
@@ -2190,6 +2192,16 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `errexit/assignment-takes-the-substitution` — an assignment reports what the substitution reported, so this ends the script where `echo "$(false)"` does not
   ```sh
   set -e; x=$(false); echo reached
+  ```
+- `opt/set-v-echoes-lines-as-read` — the verbose option writes each line back as it is read — not the line that turned it on, which was spent before it took effect. Unanimous, and reachable only from a file: a -c string is read whole before it runs
+  ```sh
+  set -v
+  echo a
+  echo b
+  ```
+- `opt/set-e-carries-the-err-trap` — set -E makes the ERR trap fire inside functions too — two firings where plain bash has one; dash and ksh93 refuse the letter and zsh means a different option by it
+  ```sh
+  set -E 2>/dev/null || exit 7; trap "echo ERR" ERR; f(){ false; }; f; echo done
   ```
 - `opt/set-n-reads-and-never-runs` — the syntax-check option: nothing after it runs — not even the set +n that would turn it off — and the shell still exits 0. It printed a refusal and ran everything anyway, which is the worst of the three possible behaviors
   ```sh

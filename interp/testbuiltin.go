@@ -59,6 +59,16 @@ func (r *Runner) runTest(name string, args []string) int {
 	if err != nil {
 		var te *testError
 		if errors.As(err, &te) {
+			if te.kind == errIntegerExpected &&
+				r.ask(r.sem().TestIntegerRefusalIsSilent, "`[ a -eq 1 ]` failing in silence") {
+				// One dialect answers a non-number where a number belongs
+				// with a plain false — no sentence, and 1 rather than the
+				// not-an-expression 2.
+				return 1
+			}
+			if r.unspecified {
+				return 2
+			}
 			if te.kind == errBinaryExpected {
 				// An expression that never parsed is not the builtin's
 				// complaint. The one dialect that names a builtin in the

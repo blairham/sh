@@ -418,13 +418,32 @@ func (r *Runner) killStatus(sent, failed int) int {
 // than recorded as a fact about a machine.
 func (r *Runner) killList(args []string) int {
 	if len(args) == 0 {
-		names := make([]string, len(knownSignals))
 		byNumber := append([]signalEntry{}, knownSignals...)
 		sort.Slice(byNumber, func(i, j int) bool { return byNumber[i].Sig < byNumber[j].Sig })
+		names := make([]string, len(byNumber))
 		for i, k := range byNumber {
 			names[i] = k.Name
 		}
-		_, _ = fmt.Fprintln(r.stdout(), strings.Join(names, "\n"))
+		// Four shells, four shapes; the constant says whose this is.
+		switch r.diag().KillListing {
+		case KillListingNumbered:
+			var b strings.Builder
+			for i, k := range byNumber {
+				fmt.Fprintf(&b, "%2d) SIG%s", int(k.Sig), k.Name)
+				if (i+1)%5 == 0 || i == len(byNumber)-1 {
+					b.WriteByte('\n')
+				} else {
+					b.WriteByte('\t')
+				}
+			}
+			r.printf("%s", b.String())
+		case KillListingSpaceJoined:
+			r.printf("%s\n", strings.Join(names, " "))
+		case KillListingZeroFirst:
+			r.printf("0\n%s\n", strings.Join(names, "\n"))
+		default:
+			r.printf("%s\n", strings.Join(names, "\n"))
+		}
 		return 0
 	}
 	for _, a := range args {

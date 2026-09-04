@@ -5,6 +5,8 @@
 package ksh
 
 import (
+	"context"
+	"fmt"
 	"strconv"
 
 	"github.com/blairham/sh/interp"
@@ -125,6 +127,8 @@ func Semantics() interp.Semantics {
 	// length is nothing at all.
 	s.EmptyArrayAtIsOneEmptyField = interp.Yes
 	s.SubstringNegativeLengthIsEmpty = interp.Yes
+	// [ a -eq 1 ] is a plain false here, no sentence, status 1.
+	s.TestIntegerRefusalIsSilent = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	// echo reads -n and -e; a word carrying -E is an operand. \e expands,
@@ -474,6 +478,9 @@ func Diagnostics() interp.Diagnostics {
 		TestTooManyArguments:      "%[2]s: too many arguments",
 		TestOperandExpected:       "%[2]s: argument expected",
 		TestMissingBracket:        "[: ']' missing",
+		OptionListingHeader:       "Current option settings",
+		OptionListingWidth:        25,
+		PlusOListsActive:          true,
 		// Labeled lines, one figure each, and no children's times at all —
 		// genuinely less information than the other three report.
 		TimesLayout:   interp.TimesUserAndSystem,
@@ -511,11 +518,26 @@ func Apply(r *interp.Runner) {
 		"privileged",
 	)
 	// ksh93 has a `builtin` of its own and it is a different command: it
-	// *registers* builtins rather than running one, so `builtin echo hi`
-	// there looks for a builtin called `hi`. Measured and not built, and
-	// taking the name away is more honest than leaving bash's meaning under
-	// it.
-	r.Unregister("builtin")
+	// *registers* builtins rather than running one. With no operands it
+	// lists the table; each operand is a name to add, and one that is not
+	// already a builtin here is not found, at 1 — with the builtin's own
+	// name as the whole prefix, measured.
+	r.Register("builtin", func(rr *interp.Runner, _ context.Context, args []string) int {
+		if len(args) == 0 {
+			for _, name := range rr.BuiltinNames() {
+				_, _ = fmt.Fprintln(rr.Stdout, name)
+			}
+			return 0
+		}
+		status := 0
+		for _, name := range args {
+			if _, ok := rr.Builtin(name); !ok {
+				_, _ = fmt.Fprintf(rr.Stderr, "builtin: %s: not found\n", name)
+				status = 1
+			}
+		}
+		return status
+	})
 	// No `compgen` here; it is bash's alone.
 	r.Unregister("compgen")
 	r.Unregister("complete")

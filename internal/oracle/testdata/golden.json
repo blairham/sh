@@ -3514,6 +3514,38 @@
         "TimedOut": false
       }
     },
+    "builtin/ksh93s-registers-names": {
+      "bash": {
+        "Output": "hi~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "hi~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "hi~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: builtin: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "builtin: hi: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "hi~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "builtin/the-same-refusal-for-another-builtin": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: unset: -Q: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]~st=2~after",
@@ -9242,6 +9274,38 @@
         "TimedOut": false
       }
     },
+    "fc/with-no-history": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: hist: 1-0: invalid range~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:fc:1: no such event: 1~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "getopts/argument-attached-or-apart": {
       "bash": {
         "Output": "[b][val]~[b][val]",
@@ -10778,6 +10842,38 @@
         "TimedOut": false
       }
     },
+    "kill/the-listing-has-four-shapes": {
+      "bash": {
+        "Output": " 1) SIGHUP\t 2) SIGINT\t 3) SIGQUIT\t 4) SIGILL\t 5) SIGTRAP",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "HUP INT QUIT ILL TRAP ABRT EMT FPE KILL BUS SEGV SYS PIPE ALRM TERM URG STOP TSTP CONT CHLD TTIN TTOU IO XCPU XFSZ VTALRM PROF WINCH INFO USR1 USR2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": " 1) SIGHUP\t 2) SIGINT\t 3) SIGQUIT\t 4) SIGILL",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "HUP",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "HUP INT QUIT ILL TRAP ABRT EMT FPE KILL BUS SEGV SYS PIPE ALRM TERM URG STOP TSTP CONT CHLD TTIN TTOU IO XCPU XFSZ VTALRM PROF WINCH INFO USR1 USR2",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "kill/unknown-signal-after-s": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: kill: Q: invalid signal specification~st=1",
@@ -12026,6 +12122,38 @@
         "TimedOut": false
       }
     },
+    "opt/set-o-lists-the-table": {
+      "bash": {
+        "Output": "errexit        \toff",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "errexit        \toff",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "errexit        \toff",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "errexit         off",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "errexit                  off",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "errexit               off",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "opt/set-o-noglob-is-unanimous": {
       "bash": {
         "Output": "*.txt",
@@ -12054,6 +12182,38 @@
       },
       "zsh": {
         "Output": "*.txt",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "opt/set-plus-o-writes-input-back": {
+      "bash": {
+        "Output": "set +o allexport",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "set +o allexport",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "set +o allexport",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "set +o errexit",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "set --default --braceexpand --multiline --trackall --viraw",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "set +o noaliases",
         "Status": 0,
         "TimedOut": false
       }
@@ -16346,6 +16506,38 @@
         "TimedOut": false
       }
     },
+    "read/with-no-variable-diverges": {
+      "bash": {
+        "Output": "r=0 REPLY=[x]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "r=0 REPLY=[x]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "r=0 REPLY=[x]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: read: arg count~r=2 REPLY=[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "r=0 REPLY=[x]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "r=0 REPLY=[x]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "readarray/is-mapfile-under-another-name": {
       "bash": {
         "Output": "0 2 3 3",
@@ -19542,6 +19734,38 @@
       },
       "zsh": {
         "Output": "\u003cshell\u003e:test:1: unknown condition: -Q~st=2",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "test/a-non-number-where-one-belongs": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: [: a: integer expected~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: [: a: integer expected~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: [: a: integer expression expected~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [: Illegal number: a~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:[:1: integer expression expected: a~st=2",
         "Status": 0,
         "TimedOut": false
       }

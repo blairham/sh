@@ -1175,6 +1175,30 @@ type Diagnostics struct {
 	// as `08`, `1+08` as `1+08` — rather than the whole expression.
 	ArithErrorNamesThePrefix bool
 
+	// FcNoSuchEvent is `fc` with no history, in the dialect that reports
+	// it. No verbs.
+	FcNoSuchEvent string
+
+	// OptionListingHeader opens `set -o`'s table where the dialect has one:
+	// dash and ksh93 write "Current option settings" first.
+	OptionListingHeader string
+	// OptionListingWidth pads the name column: bash 15, dash 16, ksh93 25,
+	// zsh 22. Zero means bash's.
+	OptionListingWidth int
+	// OptionListingTabbed puts a tab between the name and the state, which
+	// bash alone does.
+	OptionListingTabbed bool
+	// PlusOListsActive makes `set +o` one line naming only what is on, the
+	// --default form ksh93 writes, instead of re-inputtable per-option
+	// lines.
+	PlusOListsActive bool
+	// KillListing is the shape of `kill -l` with no operands.
+	KillListing KillListingForm
+
+	// ReadArgCount is a bare `read` in the dialect that wants a name. No
+	// verbs.
+	ReadArgCount string
+
 	// ArithInvalidBase refuses a base the dialect does not go up to. One
 	// verb: the base as written.
 	ArithInvalidBase string
@@ -1915,4 +1939,19 @@ const (
 	// line 1 for a compound written entirely on line 2, which prints no line
 	// at all there.
 	LineBeforeRedirect
+)
+
+// KillListingForm is the shape of `kill -l` with no operands.
+type KillListingForm int
+
+const (
+	// KillListingPerLine is one name per line — ksh93's shape.
+	KillListingPerLine KillListingForm = iota
+	// KillListingNumbered is bash's: ` N) SIGNAME`, tab-separated, five to
+	// a row.
+	KillListingNumbered
+	// KillListingSpaceJoined is zsh's single space-joined line.
+	KillListingSpaceJoined
+	// KillListingZeroFirst is dash's: a 0, then one name per line.
+	KillListingZeroFirst
 )

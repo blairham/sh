@@ -318,8 +318,12 @@ func Diagnostics() interp.Diagnostics {
 		// not literals, so a bad digit gets a reason of its own.
 		DigitTooGreatForBase:     "value too great for base",
 		ArithErrorNamesThePrefix: true,
-		TraceQuoting:             interp.QuoteShell,
-		TraceForHeader:           interp.TraceForSource,
+		// set -o pads to fifteen and tabs; kill -l numbers five to a row.
+		OptionListingWidth:  15,
+		OptionListingTabbed: true,
+		KillListing:         interp.KillListingNumbered,
+		TraceQuoting:        interp.QuoteShell,
+		TraceForHeader:      interp.TraceForSource,
 		// bash names the construct and the line it opened on, and nothing
 		// about what would have closed it.
 		EvalNaming:       interp.SourceBeforeLocation,

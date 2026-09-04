@@ -3474,6 +3474,41 @@ echo unreachable`,
 		Why:     "`-f` is the short spelling of noglob in three of the four; zsh spells that option the long way only and uses `-f` for something else entirely, so the pattern still expands there",
 	},
 	{
+		ID: "opt/set-o-lists-the-table", Category: "shell options",
+		Snippet: `set -o | grep errexit | head -1`,
+		Why:     "with no name, -o lists every option and its state — four column layouts, two with a header; the grep keeps the row every shell has",
+	},
+	{
+		ID: "opt/set-plus-o-writes-input-back", Category: "shell options",
+		Snippet: `set +o | head -1`,
+		Why:     "+o writes re-inputtable set commands in three shells; ksh93's one line names only what is on, --default first",
+	},
+	{
+		ID: "kill/the-listing-has-four-shapes", Category: "builtins",
+		Snippet: `kill -l | head -1`,
+		Why:     "bash numbers five to a row, zsh space-joins one line, ksh93 goes one per line, dash opens with a 0",
+	},
+	{
+		ID: "test/a-non-number-where-one-belongs", Category: "builtins",
+		Snippet: `[ a -eq 1 ]; echo "st=$?"`,
+		Why:     "three complain at 2; ksh93 is a plain false at 1 with no sentence",
+	},
+	{
+		ID: "read/with-no-variable-diverges", Category: "builtins",
+		Snippet: `echo x | { read; echo "r=$? REPLY=[$REPLY]"; }`,
+		Why:     "three fill REPLY at 0; dash wants a name — read: arg count, status 2, REPLY untouched",
+	},
+	{
+		ID: "builtin/ksh93s-registers-names", Category: "builtins",
+		Snippet: `builtin echo hi; echo "st=$?"`,
+		Why:     "bash and zsh run the builtin with its arguments; ksh93's command of the same name registers builtins, so hi is a name it cannot find, at 1; dash has no such command",
+	},
+	{
+		ID: "fc/with-no-history", Category: "builtins",
+		Snippet: `fc -l; echo "st=$?"`,
+		Why:     "the name must exist — builtin fc was reporting something untrue — and with no history bash and dash answer silence at 0, zsh no-such-event at 1, and ksh93 reads a history file this shell keeps no equivalent of",
+	},
+	{
 		ID: "opt/set-o-noglob-is-unanimous", Category: "shell options",
 		Snippet: `touch a.txt b.txt; set -o noglob; echo *.txt`,
 		Why:     "the long name means the same thing in all four, which is what makes it the spelling that needs no dialect — and the pair with the case above is the whole of the axis",

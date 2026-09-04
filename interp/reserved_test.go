@@ -85,17 +85,26 @@ func TestAMissingBuiltinIsNotLookedForOnPath(t *testing.T) {
 }
 
 // `fc` is the one of the ten that is not reserved: dash answers
-// `command -v fc` with /usr/bin/fc, so it really is an external there and
-// reserving it would be inventing a rule the panel does not have.
+// `command -v fc` with /usr/bin/fc, so it really is an external there —
+// which its dialect says by unregistering the builtin the core now carries.
+// With the builtin in place it wins, as builtins do; taken away, the search
+// reaches PATH, and nothing refuses the name in between.
 func TestFcIsNotReserved(t *testing.T) {
 	dir := t.TempDir()
 	shadow(t, dir, "fc", "echo ran-the-external")
-	out, _, err := reservedRun(t, dir, "fc", nil)
+	out, st, err := reservedRun(t, dir, "fc -l", nil)
 	if err != nil {
 		t.Fatalf("fc was refused: %v", err)
 	}
+	if st != 0 || strings.Contains(out, "ran-the-external") {
+		t.Errorf("said %q status %d, want the builtin to have answered", out, st)
+	}
+	out, _, err = reservedRun(t, dir, "fc", func(r *Runner) { r.Unregister("fc") })
+	if err != nil {
+		t.Fatalf("fc was refused without the builtin: %v", err)
+	}
 	if !strings.Contains(out, "ran-the-external") {
-		t.Errorf("said %q, want the external to have run", out)
+		t.Errorf("said %q, want the external to have run where the dialect took the builtin away", out)
 	}
 }
 

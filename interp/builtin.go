@@ -153,8 +153,10 @@ func biSet(r *Runner, _ context.Context, args []string) int {
 				return 2
 			}
 			if i+1 >= len(args) {
-				r.diagf("set: -o needs an option name\n")
-				return 2
+				// With no name to set, `-o` lists the options and `+o`
+				// writes them back as input — four shapes, each the
+				// dialect's own.
+				return r.listOptions(!on)
 			}
 			i++
 			if !r.setOption(args[i], on) {
@@ -1102,6 +1104,14 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	}
 
 	if len(args) == 0 && array == "" {
+		// Three shells set REPLY; dash wants a variable name and says so.
+		if r.ask(r.sem().ReadRequiresAVariableName, "a bare `read` with no variable") {
+			r.diagf("%s\n", Wording(r.diag().ReadArgCount, "read: arg count"))
+			return 2
+		}
+		if r.unspecified {
+			return 2
+		}
 		args = []string{"REPLY"}
 	}
 	// Only the -A spelling touches the operands after the array: it took its

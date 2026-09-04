@@ -874,6 +874,20 @@ func (r *Runner) changeCase(value string, e *syntax.ParamExpr) string {
 	case syntax.ParamToggle, syntax.ParamToggleFirst:
 		convert = toggleCase
 	}
+	if r.localeIsC() {
+		// In the C locale only ASCII letters are letters, so `${x^^}` on
+		// café is CAFé — measured, and the policy docs/spec/semantics.md
+		// records: an explicit C or POSIX locale narrows case to ASCII, and
+		// anything else, unset included, is Unicode-aware, which is also
+		// what bash stripped of every locale variable does.
+		ascii := convert
+		convert = func(c rune) rune {
+			if c < 0x80 {
+				return ascii(c)
+			}
+			return c
+		}
+	}
 	first := e.Op == syntax.ParamUpperFirst ||
 		e.Op == syntax.ParamLowerFirst ||
 		e.Op == syntax.ParamToggleFirst
@@ -890,6 +904,19 @@ func (r *Runner) changeCase(value string, e *syntax.ParamExpr) string {
 		b.WriteRune(c)
 	}
 	return b.String()
+}
+
+// localeIsC reports an explicit C or POSIX locale, read the way POSIX ranks
+// the variables: LC_ALL over LC_CTYPE over LANG. Unset is not C here —
+// measured, a shell stripped of every locale variable still cases beyond
+// ASCII — so only asking for C narrows anything.
+func (r *Runner) localeIsC() bool {
+	for _, name := range []string{"LC_ALL", "LC_CTYPE", "LANG"} {
+		if v, ok := r.getVar(name); ok && v != "" {
+			return v == "C" || v == "POSIX"
+		}
+	}
+	return false
 }
 
 // toggleCase swaps a letter's case and leaves anything else alone.

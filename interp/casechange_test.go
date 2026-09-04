@@ -4,8 +4,14 @@
 package interp_test
 
 import (
+	"bytes"
+	"context"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/dialect/bash"
+	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // The case-change operators carry a *pattern* saying which characters to
@@ -58,6 +64,45 @@ func TestCaseChangeAppliesItsPattern(t *testing.T) {
 			out, _ := runBash(t, c.src)
 			if strings.TrimSpace(out) != c.want {
 				t.Errorf("said %q, want %q", strings.TrimSpace(out), c.want)
+			}
+		})
+	}
+}
+
+// TestCaseConversionConsultsTheLocale — the policy docs/spec/semantics.md
+// records: an explicit C or POSIX locale narrows case to ASCII, anything
+// else, unset included, is Unicode-aware. LC_ALL outranks LC_CTYPE outranks
+// LANG.
+func TestCaseConversionConsultsTheLocale(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		vars map[string]string
+		want string
+	}{
+		{"explicit C is ASCII alone", map[string]string{"LC_ALL": "C"}, "CAFé"},
+		{"POSIX is the same narrowing", map[string]string{"LANG": "POSIX"}, "CAFé"},
+		{"a UTF-8 locale cases beyond it", map[string]string{"LC_ALL": "en_US.UTF-8"}, "CAFÉ"},
+		{"unset is not C", nil, "CAFÉ"},
+		{"LC_ALL outranks LANG", map[string]string{"LC_ALL": "en_US.UTF-8", "LANG": "C"}, "CAFÉ"},
+		{"LC_CTYPE outranks LANG", map[string]string{"LC_CTYPE": "C", "LANG": "en_US.UTF-8"}, "CAFé"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := syntax.Parse(`x=café; echo "${x^^}"`, bash.Dialect())
+			if err != nil {
+				t.Fatal(err)
+			}
+			var buf bytes.Buffer
+			sem := bash.Semantics()
+			vars := map[string]string{}
+			for k, v := range tc.vars {
+				vars[k] = v
+			}
+			r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Vars: vars, Env: []string{}}
+			if _, rerr := r.Run(context.Background(), f); rerr != nil {
+				t.Fatal(rerr)
+			}
+			if got := strings.TrimSpace(buf.String()); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
 			}
 		})
 	}

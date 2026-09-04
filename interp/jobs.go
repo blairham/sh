@@ -264,14 +264,9 @@ func (r *Runner) waitOptions(args []string) ([]string, int) {
 		if r.unspecified {
 			return nil, 2
 		}
-		// The first letter, the way printf's options are read here: a
-		// leading `-` word is a bundle, so bash refuses `--version` as `--`.
-		letter := "-" + string([]rune(a[1:])[0])
-		if strings.Contains(r.diag().WaitOptionLetters, letter[1:]) {
-			r.diagf("wait: %s is not implemented yet\n", a)
-			return nil, 2
-		}
-		return nil, r.badBuiltinOption("wait", letter)
+		// `wait` has no options this shell implements, so every letter is
+		// either one the dialect has and we lack, or unknown.
+		return nil, r.refuseOption("wait", a, "")
 	}
 	return args, 0
 }

@@ -56,7 +56,7 @@ func biGetopts(r *Runner, _ context.Context, args []string) int {
 			if r.unspecified {
 				return r.status
 			}
-			return r.badBuiltinOption("getopts", "-"+string([]rune(args[0][1:])[0]))
+			return r.refuseOption("getopts", args[0], "")
 		} else if r.unspecified {
 			return r.status
 		}

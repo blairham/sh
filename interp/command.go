@@ -81,9 +81,7 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 		if r.unspecified {
 			return r.status
 		}
-		// The first letter of the bundle, which is why `--version` comes
-		// back as `--`.
-		return r.badBuiltinOption("command", "-"+string([]rune(a[1:])[0]))
+		return r.refuseOption("command", a, "vp")
 	}
 	if len(args) == 0 {
 		return 0

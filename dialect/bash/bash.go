@@ -292,7 +292,14 @@ func Diagnostics() interp.Diagnostics {
 		WaitBadJob:                  "wait: `%[1]s': not a pid or valid job spec",
 		WaitBadJobStatus:            1,
 		WaitNotOurChild:             "wait: pid %[1]d is not a child of this shell",
-		WaitOptionLetters:           "nfp",
+		UnimplementedOptionLetters: map[string]string{
+			// Options these builtins have here and this shell does not.
+			// `read -s` is the one that matters most: ignoring it would
+			// echo what was meant to be hidden.
+			"wait": "nfp",
+			"read": "Eersadinput",
+			"type": "afptP",
+		},
 		HereDocumentAtEOF: "warning: here-document at line %[1]d " +
 			"delimited by end-of-file (wanted `%[2]s')",
 		// bash names the builtin for its own two spellings and not for the

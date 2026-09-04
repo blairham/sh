@@ -769,12 +769,27 @@ func biPwd(r *Runner, _ context.Context, _ []string) int {
 // Without -r a backslash escapes the character after it, including a newline,
 // which is why -r is what scripts should use and rarely do.
 func biRead(r *Runner, _ context.Context, args []string) int {
+	// Every leading `-` word was skipped here, whatever it was — so
+	// `read -s v` echoed what was meant to be hidden and `read -n 1 v` read
+	// a whole line, both without a word said. All four refuse an option they
+	// do not have, and the ones they *do* have and this shell does not are
+	// named as missing rather than as unknown.
 	raw := false
-	for len(args) > 0 && strings.HasPrefix(args[0], "-") {
-		if args[0] == "-r" {
-			raw = true
+	for len(args) > 0 {
+		a := args[0]
+		if len(a) < 2 || a[0] != '-' {
+			break
 		}
-		args = args[1:]
+		if a == "--" {
+			args = args[1:]
+			break
+		}
+		if a == "-r" {
+			raw = true
+			args = args[1:]
+			continue
+		}
+		return r.refuseOption("read", a, "r")
 	}
 	if len(args) == 0 {
 		args = []string{"REPLY"}

@@ -41,7 +41,7 @@ func (r *Runner) typeOperands(args []string) ([]string, int) {
 	// Asked only where there is a `--` to decide about. `type ls` is the
 	// same in all four, and refusing it over a question nothing turned on
 	// would be refusing to answer.
-	if len(args) == 0 || args[0] != "--" {
+	if len(args) == 0 || len(args[0]) < 2 || args[0][0] != '-' {
 		return args, 0
 	}
 	if !r.ask(r.sem().TypeEndsOptionsWithDashDash, "`type --` ending the options") {
@@ -51,7 +51,14 @@ func (r *Runner) typeOperands(args []string) ([]string, int) {
 		// No options anywhere, so every operand is a name — `--` included.
 		return args, 0
 	}
-	return args[1:], 0
+	if args[0] == "--" {
+		return args[1:], 0
+	}
+	// A leading `-` word that is not `--` is an option, and this shell has
+	// none of them: the ones the dialect really has are named as missing and
+	// anything else is refused as unknown. Skipping it silently made
+	// `type -t ls` answer about a name called `-t` and then about ls.
+	return nil, r.refuseOption("type", args[0], "")
 }
 
 // typeOne accounts for one name, and reports a status if it could not.

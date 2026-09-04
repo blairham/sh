@@ -59,7 +59,7 @@ func (r *Runner) builtinOptions(name string, args []string, known string) (rest 
 		}
 		for i := start; i < len(a); i++ {
 			if !strings.ContainsRune(known, rune(a[i])) {
-				return nil, opts, r.badBuiltinOption(name, r.badOptionName(a, a[i]))
+				return nil, opts, r.refuseOption(name, a, known)
 			}
 			opts += string(a[i])
 		}
@@ -75,12 +75,44 @@ func (r *Runner) builtinOptions(name string, args []string, known string) (rest 
 // while dash and ksh93 stop the script there, which is the POSIX rule about a
 // special builtin. It is a different question from BuiltinSyntaxErrorFatal,
 // whose answers are yes for dash alone.
-// badOptionName spells the part of a leading `-` word a complaint names.
-func (r *Runner) badOptionName(word string, letter byte) string {
-	if r.diag().BadOptionNaming == BadOptionWholeWord {
-		return word
+// refuseOption is what a builtin says about a leading `-` word it cannot use,
+// given the letters it does understand.
+//
+// One place, because three things have to agree: which letter is the
+// offending one, whether the dialect names that letter or the whole word, and
+// whether the dialect *has* the option and this shell simply does not.
+func (r *Runner) refuseOption(builtin, word, known string) int {
+	letter, name := r.badOption(word, known)
+	if has := r.diag().UnimplementedOptionLetters[builtin]; has != "" &&
+		strings.IndexByte(has, letter) >= 0 {
+		// An option the dialect really has. Saying it is unknown would be a
+		// different and worse answer than saying it is missing.
+		r.diagf("%s: %s is not implemented yet\n", builtin, word)
+		return 2
 	}
-	return "-" + string(letter)
+	return r.badBuiltinOption(builtin, name)
+}
+
+// badOption picks the offending letter and how to spell it. See
+// Diagnostics.BadOptionNaming.
+func (r *Runner) badOption(word, known string) (byte, string) {
+	start := 1
+	if r.diag().BadOptionNaming == BadOptionFirstUnknownLetter {
+		for start < len(word) && word[start] == '-' {
+			start++
+		}
+	}
+	letter := byte('-')
+	for i := start; i < len(word); i++ {
+		if strings.IndexByte(known, word[i]) < 0 {
+			letter = word[i]
+			break
+		}
+	}
+	if r.diag().BadOptionNaming == BadOptionWholeWord {
+		return letter, word
+	}
+	return letter, "-" + string(letter)
 }
 
 func (r *Runner) badBuiltinOption(name, opt string) int {

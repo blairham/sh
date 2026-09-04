@@ -323,7 +323,13 @@ func Diagnostics() interp.Diagnostics {
 		WaitBadJob:                "wait: %[1]s: Arguments must be %%job, process ids, or job pool names",
 		WaitBadJobStatus:          1,
 		// ksh93 has `--version` here, which this shell does not.
-		WaitOptionLetters: "-",
+		UnimplementedOptionLetters: map[string]string{
+			// ksh93 answers --version on most builtins, and has its own
+			// letters for these two.
+			"wait": "-",
+			"read": "-ACprsSvdutnN",
+			"type": "-afpqv",
+		},
 		// Two wordings, split between `export` and the other two, and the
 		// operand quoted back as given.
 		BuiltinBadName: map[string]string{

@@ -32,7 +32,11 @@ func TestFatalErrorsAbandonTheScript(t *testing.T) {
 	}{
 		{
 			"readonly reassignment",
-			`readonly r=1; r=2; echo after`,
+			// `echo after` on its own line on purpose. The dialect that
+			// survives this abandons the rest of the *line* the refusal was
+			// on, so with all three on one line nothing after it runs there
+			// either and the two sides of this test stop differing.
+			"readonly r=1; r=2\necho after",
 			PosixSemantics(), 2, bash.Semantics(),
 		},
 		{

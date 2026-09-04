@@ -53,7 +53,9 @@ func TestReadonlyAttributeAllowsItsOwnValue(t *testing.T) {
 	if strings.TrimSpace(out) != "[1]" {
 		t.Errorf("got %q, want the value the declaration was given", out)
 	}
-	out, _ = run(t, `typeset -r c=1; c=2; echo "[$c]"`, nil)
+	// The echo on its own line: a refused assignment abandons the rest of
+	// the line it is on, so on one line there would be nothing to look at.
+	out, _ = run(t, "typeset -r c=1; c=2\necho \"[$c]\"", nil)
 	if !strings.Contains(out, "[1]") {
 		t.Errorf("a later assignment got through: %q", out)
 	}

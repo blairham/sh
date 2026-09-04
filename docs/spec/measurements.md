@@ -305,6 +305,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `axis/trap-print-p` | `<script>: 2: trap: Illegal option -p` *(status 2)* | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' INT~end` | `end` |
 | `axis/trap-one-argument` | `end` | `end` | `end` | `end` | `<script>[2]: trap: condition(s) required` *(status 1)* | `end` |
 | `axis/trap-one-argument-unknown` | `trap: notacondition: bad trap~end` | `trap: usage: trap [-Plp] [[action] signal_spec ...]~end` | `trap: usage: trap [-Plp] [[action] signal_spec ...]~end` | `trap: usage: trap [-lp] [arg signal_spec ...]~end` | `<script>[1]: trap: condition(s) required` *(status 1)* | `end` |
+| `axis/readonly-reassign-abandons-the-line` | `<script>: 2: r: is read only` *(status 2)* | `<script>: line 2: r: readonly variable~two` | `<script>: line 2: r: readonly variable~two` | `<script>: line 2: r: readonly variable~two` | `<script>: line 2: r: is read only` *(status 1)* | `<script>:2: read-only variable: r` *(status 1)* |
+| `axis/readonly-reassign-abandons-a-loop` | `<script>: 2: r: is read only` *(status 2)* | `<script>: line 2: r: readonly variable~two` | `<script>: line 2: r: readonly variable~two` | `<script>: line 2: r: readonly variable~two` | `<script>: line 2: r: is read only` *(status 1)* | `<script>:2: read-only variable: r` *(status 1)* |
 | `axis/readonly-reassign-status` | `<script>: 2: r: is read only` *(status 2)* | `<script>: line 2: r: readonly variable~st=1` | `<script>: line 2: r: readonly variable~st=1` | `<script>: line 2: r: readonly variable~st=1` | `<script>: line 2: r: is read only` *(status 1)* | `<script>:2: read-only variable: r` *(status 1)* |
 | `axis/readonly-reassign-declaration-status` | `<script>: 2: export: r: is read only` *(status 2)* | `<script>: line 2: r: readonly variable~st=1` | `<script>: line 2: r: readonly variable~st=1` | `<script>: line 2: r: readonly variable~st=1` | `<script>: line 2: r: is read only` *(status 1)* | `<script>:2: read-only variable: r` *(status 1)* |
 | `axis/readonly-reassign` | `<script>: 2: r: is read only` *(status 2)* | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: is read only` *(status 1)* | `<script>:2: read-only variable: r` *(status 1)* |
@@ -385,6 +387,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   trap notacondition
   echo end
+  ```
+- `axis/readonly-reassign-abandons-the-line` — the dialect that is not stopped by this still gives up the rest of the line: `one` never prints and `two` does
+  ```sh
+  readonly r=1
+  r=2; echo one
+  echo two
+  ```
+- `axis/readonly-reassign-abandons-a-loop` — and gives up whatever encloses it — the loop stops on its first round, where a plain failure would have carried on to the second
+  ```sh
+  readonly r=1
+  for i in 1 2; do r=2; echo one; done
+  echo two
   ```
 - `axis/readonly-reassign-status` — the refusal leaves 1 behind in the dialect that carries on from it — the three that end the script never reach the line that would show it
   ```sh

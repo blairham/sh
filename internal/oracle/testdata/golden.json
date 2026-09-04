@@ -10778,6 +10778,102 @@
         "TimedOut": false
       }
     },
+    "opt/dollar-dash-drops-a-letter-turned-back-off": {
+      "bash": {
+        "Output": "no-e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "no-e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "no-e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "no-e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "no-e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "no-e",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "opt/dollar-dash-noglob-letter-diverges": {
+      "bash": {
+        "Output": "lower",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "lower",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "lower",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "lower",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "lower",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "upper",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "opt/dollar-dash-shows-a-letter-the-script-set": {
+      "bash": {
+        "Output": "has-e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "has-e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "has-e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "has-e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "has-e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "has-e",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "opt/noglob-does-not-stop-matching": {
       "bash": {
         "Output": "match",

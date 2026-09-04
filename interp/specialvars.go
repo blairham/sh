@@ -13,7 +13,7 @@ import (
 
 // The parameters a shell provides without a script setting them.
 //
-// Three of them are unanimous across the panel and belong here; the rest are
+// Four of them are unanimous across the panel and belong here; the rest are
 // not, and belong to whichever dialects have them. Which *variables* a shell
 // provides is the same kind of question as which builtins it has — neither
 // grammar nor a conflict about meaning — so it is answered through the same
@@ -23,9 +23,10 @@ import (
 // script began `if [ $UID -ne 0 ]`, and with UID unset that is `[ -ne 0 ]` —
 // which is not the same test and does not fail in the same way.
 //
-// Two of the three have to be produced when they are read rather than stored:
-// LINENO is wherever execution has reached, and a stored copy would be the
-// line the shell started on. That is what Dynamic is for.
+// Two of the four have to be produced when they are read rather than stored:
+// LINENO is wherever execution has reached, and `$-` is whatever `set` has
+// done by the time it is read — a stored copy of either would describe the
+// line, and the options, the shell started with. That is what Dynamic is for.
 
 // ensureSpecials gives the unanimous parameters their values.
 //
@@ -46,6 +47,52 @@ func (r *Runner) ensureSpecials() {
 	if _, ok := r.Dynamic["LINENO"]; !ok {
 		r.Dynamic["LINENO"] = func(r *Runner) string { return strconv.Itoa(r.line) }
 	}
+	if _, ok := r.Dynamic["-"]; !ok {
+		r.Dynamic["-"] = (*Runner).optionLetters
+	}
+}
+
+// optionLetters is `$-`: the single-letter options currently in effect.
+//
+// Produced when it is read for the same reason LINENO is — it changes with
+// every `set`, and a stored copy would be the options the shell started with.
+// Scripts branch on it: `case $- in *e*)` is the standard errexit check, and
+// while this expanded to nothing both arms of that test silently took the
+// wrong branch.
+//
+// The string is the dialect's startup letters followed by a letter for each
+// option this runner tracks and has on. Presence is the contract, not order:
+// measured, no two shells in the panel order the merged string the same way —
+// one even appends in the order the script set them — so a script can ask
+// whether a letter is present and nothing more, and ours come out in a fixed
+// order of their own. pipefail earns no letter anywhere, which is unanimous
+// and so needs no axis; the noglob letter is the one the shells disagree on.
+func (r *Runner) optionLetters() string {
+	var b strings.Builder
+	b.WriteString(r.sem().DefaultOptionLetters)
+	if r.allexport {
+		b.WriteByte('a')
+	}
+	if r.errexit {
+		b.WriteByte('e')
+	}
+	if r.noglob {
+		if r.ask(r.sem().NoglobLetterIsF, "which letter `$-` shows for noglob") {
+			b.WriteByte('f')
+		} else {
+			b.WriteByte('F')
+		}
+	}
+	if r.nounset {
+		b.WriteByte('u')
+	}
+	if r.xtrace {
+		b.WriteByte('x')
+	}
+	if r.noclobber {
+		b.WriteByte('C')
+	}
+	return b.String()
 }
 
 // setVarQuietly assigns without going through the readonly check or the

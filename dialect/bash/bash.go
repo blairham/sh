@@ -51,6 +51,10 @@ func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
+	// Measured: `echo $-` reports `hB` — hashall and braceexpand — under
+	// -c, a script file and standard input alike, before the route letters
+	// the semantics field deliberately leaves out.
+	s.DefaultOptionLetters = "hB"
 	s.ArrayScalarIsTheWholeArray = interp.No
 	s.AssignmentUpdatesPipelineStatus = interp.Yes
 	s.UnsetEndsTheProducedPipelineStatus = interp.No

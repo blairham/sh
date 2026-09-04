@@ -56,6 +56,72 @@ func TestAssigningAProducedParameterReachesItsProducer(t *testing.T) {
 	}
 }
 
+// `$-` is the set of single-letter options in effect, produced when it is
+// read: a letter appears while `set -` has its option on and is gone once
+// `set +` takes it off. While this expanded to nothing, `case $- in *e*)` —
+// the standard errexit check — silently took the wrong branch.
+func TestDollarDashReflectsTheLiveOptionState(t *testing.T) {
+	sem := CoreSemantics()
+	setup := func(r *Runner) { r.Semantics = &sem }
+
+	// The idiom the parameter exists for.
+	if out, _ := run(t, `set -e; case $- in *e*) echo has-e;; *) echo no-e;; esac`, setup); out != "has-e\n" {
+		t.Errorf("errexit check got %q, want has-e", out)
+	}
+	// Each tracked option contributes its letter, and turning one off takes
+	// exactly that letter away. Order within our own letters is fixed;
+	// presence is the contract.
+	out, _ := run(t, `set -a; set -e; set -u; set -C; echo "[$-]"; set +e; echo "[$-]"; set +a; set +u; set +C; echo "[$-]"`, setup)
+	if out != "[aeuC]\n[auC]\n[]\n" {
+		t.Errorf("got %q, want the letters to track the options", out)
+	}
+	// xtrace's letter, asserted by presence because the trace itself shares
+	// the buffer.
+	if out, _ := run(t, `set -x; case $- in *x*) echo has-x;; *) echo no-x;; esac`, nil); !strings.Contains(out, "has-x") || strings.Contains(out, "no-x") {
+		t.Errorf("xtrace check got %q, want has-x", out)
+	}
+	// pipefail earns no letter, which is unanimous across the panel.
+	psem := CoreSemantics()
+	psem.PipefailOption = Yes
+	if out, _ := run(t, `set -o pipefail; echo "[$-]"`, func(r *Runner) { r.Semantics = &psem }); out != "[]\n" {
+		t.Errorf("pipefail got %q, want no letter", out)
+	}
+}
+
+// The letters a shell turns on at startup are the dialect's to declare, and
+// the substrate prefixes whatever it was given — the value here is made up,
+// because which real shell reports what is asserted in dialect/.
+func TestDollarDashStartsWithTheDialectsDefaultLetters(t *testing.T) {
+	sem := CoreSemantics()
+	sem.DefaultOptionLetters = "789Z"
+	out, _ := run(t, `echo "[$-]"; set -e; echo "[$-]"`, func(r *Runner) { r.Semantics = &sem })
+	if out != "[789Z]\n[789Ze]\n" {
+		t.Errorf("got %q, want the default letters first and the live ones after", out)
+	}
+}
+
+// Which letter noglob shows is an axis: POSIX names `f`, and one shell in the
+// panel reports the capital because that is its own short spelling.
+func TestNoglobLetterFollowsTheAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		isF  Answer
+		want string
+	}{
+		{"lowercase", Yes, "[f]\n"},
+		{"uppercase", No, "[F]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := CoreSemantics()
+			sem.NoglobLetterIsF = tc.isF
+			out, _ := run(t, `set -o noglob; echo "[$-]"`, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
 // A parameter a dialect does not provide stays absent, which is what makes
 // `${RANDOM-}` a usable test for having it.
 func TestAnUnprovidedParameterIsAbsent(t *testing.T) {

@@ -668,6 +668,18 @@ type Semantics struct {
 	// run to have. The two answers cannot be told apart there.
 	TrapBodyRunsWhatParsed Answer
 
+	// ReportsAKilledCommandInACommandSubstitution remarks on a command that
+	// a signal ended inside `$(…)`.
+	//
+	// bash does not, and does remark on the same command inside `( … )`, so
+	// this is not the subshell question in another spelling. dash and ksh93
+	// report it wherever it happened; zsh remarks on none of them and never
+	// reaches this.
+	//
+	// Asked only inside a substitution, so the three dialects that answer
+	// the wider question the same way everywhere are not asked twice.
+	ReportsAKilledCommandInACommandSubstitution Answer
+
 	TrapBodyLine TrapBodyLineStyle
 
 	// ExitTrapFiresPastTheEnd counts the EXIT trap as having fired on the

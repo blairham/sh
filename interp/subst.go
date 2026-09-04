@@ -55,6 +55,7 @@ func (r *Runner) commandSubst(ctx context.Context, span syntax.Span) string {
 
 	var out bytes.Buffer
 	sub := r.clone()
+	sub.inCommandSubst = true
 	// Where the body sits in the script, so that what it reports is reported
 	// where a reader can find it. The span's own line is the body's first,
 	// because a span starts at its opening delimiter — and it accumulates,

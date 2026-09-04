@@ -78,6 +78,7 @@ func Semantics() interp.Semantics {
 	s.TrapQuoting = interp.ListingQuoteAlwaysDoubled
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapBodyRunsWhatParsed = interp.Yes
+	s.ReportsAKilledCommandInACommandSubstitution = interp.Yes
 	s.UmaskSetWithSPrints = interp.No
 	s.UlimitBlockIsKilobyte = interp.No
 	s.UlimitHasResidentSet = interp.Yes

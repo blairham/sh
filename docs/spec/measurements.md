@@ -1119,6 +1119,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `cmd/for-status-empty-list` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `cmd/case-fallthrough` | `<shell>: 1: Syntax error: "&" unexpected` *(status 2)* | `one~two` | `one~two` | `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in a) echo one;& b) echo two;; esac'` *(status 2)* | `one~two` | `one~two` |
 | `cmd/case-continue-matching` | `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `one~two` | `one~two` | `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in a) echo one;;& a) echo two;; esac'` *(status 2)* | `<shell>: syntax error at line 1: `&' unexpected` *(status 3)* | `<shell>:1: parse error near `&'` *(status 1)* |
+| `cmd/function-name-with-a-dash` | `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `ok~after` | `ok~after` | `ok~after` | `<shell>: f-g: invalid function name` *(status 1)* | `ok~after` |
+| `cmd/function-name-with-a-dot` | `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `ok~after` | `ok~after` | `ok~after` | `<shell>: a.b: invalid discipline function` *(status 1)* | `ok~after` |
 | `cmd/function-posix-form` | `posix` | `posix` | `posix` | `posix` | `posix` | `posix` |
 | `cmd/function-keyword-form` | `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `kw` | `kw` | `kw` | `kw` | `kw` |
 | `cmd/function-keyword-and-parens` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `both` | `both` | `both` | `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `both` |
@@ -1221,6 +1223,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `cmd/case-continue-matching` — ;;& keeps testing later patterns and is bash-only — lumping it with ;& would put a bash construct in the core
   ```sh
   case a in a) echo one;;& a) echo two;; esac
+  ```
+- `cmd/function-name-with-a-dash` — four answers: bash and zsh define and run it, dash refuses the name at parse time, ksh93 parses and stops the script at the definition
+  ```sh
+  f-g(){ echo ok; }; f-g; echo after
+  ```
+- `cmd/function-name-with-a-dot` — the dot is its own sentence in ksh93 — an invalid discipline function — and the same split everywhere else
+  ```sh
+  a.b(){ echo ok; }; a.b; echo after
   ```
 - `cmd/function-posix-form` — the universal definition form
   ```sh

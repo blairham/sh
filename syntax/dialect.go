@@ -80,6 +80,15 @@ type Dialect struct {
 	// function called `[[` to a shell without `[[`.
 	FuncDefAtParen bool
 
+	// FunctionNamePunctuation lets a POSIX-form or keyword-form function
+	// name carry `-` and `.` — `f-g()` and `a.b()` — which bash, ksh93 and
+	// zsh all parse. dash refuses the name outright (`Bad function name`),
+	// and what a shell that parsed one *does* with it is the interpreter's
+	// question: ksh93 refuses at definition time. bash's commit-at-paren
+	// reading accepts still more (`f+x()`, `@weird()`), which that flag
+	// already covers without this one.
+	FunctionNamePunctuation bool
+
 	// TimesIsReserved makes `times` a reserved word rather than a builtin,
 	// so a word after it is a syntax error rather than an argument it
 	// ignores. ksh93 alone, and the only place in the panel where *which*
@@ -323,9 +332,10 @@ func Core() Dialect {
 		DeclarationUtilities: map[string]bool{
 			"export": true, "readonly": true, "local": true, "typeset": true,
 		},
-		ArraySubscript:    true,
-		ParamSubstitution: true,
-		ParamSubstring:    true,
+		ArraySubscript:          true,
+		FunctionNamePunctuation: true,
+		ParamSubstitution:       true,
+		ParamSubstring:          true,
 
 		ArithIncDec:             true,
 		ArithComma:              true,

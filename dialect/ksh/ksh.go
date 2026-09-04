@@ -110,6 +110,8 @@ func Semantics() interp.Semantics {
 	// hash is an alias for `alias -t` here, and a name that resolves to
 	// nothing is a silent success.
 	s.HashReportsAMissingName = interp.No
+	// A defined f-g stops the script; a.b is an invalid discipline function.
+	s.PunctuatedFunctionNameIsRefused = interp.Yes
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	// echo reads -n and -e; a word carrying -E is an operand. \e expands,
 	// \x does not.
@@ -325,8 +327,10 @@ func Diagnostics() interp.Diagnostics {
 		ArithOperatorExpected:  "arithmetic syntax error",
 		// ksh93 does not call this a bad substitution: it is a syntax error
 		// naming the character it could not read.
-		BadSubstitution:  "syntax error at line %[2]d: `%[1]s' unexpected",
-		SyntaxUnexpected: "syntax error at line %[3]d: `%[1]s' unexpected",
+		BadSubstitution:        "syntax error at line %[2]d: `%[1]s' unexpected",
+		FunctionNameInvalid:    "%[1]s: invalid function name",
+		FunctionNameDiscipline: "%[1]s: invalid discipline function",
+		SyntaxUnexpected:       "syntax error at line %[3]d: `%[1]s' unexpected",
 		// A parse failure by every other measure, and 1 rather than this
 		// dialect's syntax-error status.
 		ForNameStatus:     1,

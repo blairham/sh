@@ -767,6 +767,28 @@ func (p *Parser) isAssign(t Token) (string, bool) {
 // isName reports whether s is a shell name: the production the grammar spells
 // `name`, which POSIX defines as an identifier. `for 1 in …` is rejected by
 // every shell for this reason.
+// isFuncName is isName with the punctuation a dialect's function names may
+// carry: `-` and `.`, per the flag. `=` stays excluded everywhere — an array
+// assignment is a parenthesis after a word too.
+func isFuncName(s string, punctuation bool) bool {
+	if isName(s) {
+		return true
+	}
+	if !punctuation || s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		ok := c == '_' || c == '-' || c == '.' ||
+			(c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9')
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
 func isName(s string) bool {
 	if s == "" {
 		return false
@@ -974,10 +996,11 @@ func (p *Parser) looksLikeFuncDef() bool {
 		// array is a parenthesis after a word too.
 		return !strings.Contains(p.tok.Literal(), "=") && p.lex.peekIsLeftParen()
 	}
-	// A function name is a name, so it cannot contain `=`. Without this,
-	// `a=()` — an empty array — was read as a definition of a function
-	// called `a=`, because a parenthesis pair follows either way.
-	if !isName(p.tok.Literal()) {
+	// A function name is a name — plus the punctuation the dialect allows —
+	// so it cannot contain `=`. Without this, `a=()` — an empty array — was
+	// read as a definition of a function called `a=`, because a parenthesis
+	// pair follows either way.
+	if !isFuncName(p.tok.Literal(), p.dialect.FunctionNamePunctuation) {
 		return false
 	}
 	return p.lex.peekIsFuncParens()
@@ -992,6 +1015,14 @@ func (p *Parser) parseFuncPosix() Command {
 		return fn
 	}
 	p.next()
+	// The dialect that commits at the paren without allowing punctuation
+	// checks the name once the parens close: dash's `f-g() { :; }` is
+	// `Bad function name`, said only after `[[ ( -n x ) ]]`-shaped text has
+	// already reached its own unexpected-word diagnosis above.
+	if p.dialect.FuncDefAtParen && !p.dialect.FunctionNamePunctuation && !isName(fn.Name) {
+		p.fail("Bad function name")
+		return fn
+	}
 	p.skipNewlines()
 	p.funcBody = true
 	if fn.Body = p.parseCommand(); fn.Body == nil {
@@ -1003,7 +1034,7 @@ func (p *Parser) parseFuncPosix() Command {
 func (p *Parser) parseFuncKeyword() Command {
 	fn := &FuncDecl{Keyword: true, Start: p.tok.Pos}
 	p.next()
-	if p.tok.Kind != TokWord || !isName(p.tok.Literal()) {
+	if p.tok.Kind != TokWord || !isFuncName(p.tok.Literal(), p.dialect.FunctionNamePunctuation) {
 		p.fail("expected a name after `function`")
 		return fn
 	}

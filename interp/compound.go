@@ -356,7 +356,38 @@ func (r *Runner) caseItemMatches(item *syntax.CaseItem, subject string) bool {
 	return false
 }
 
+// isPlainFuncName reports a name POSIX would call one — the shape every
+// dialect defines without a word.
+func isPlainFuncName(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		ok := c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(i > 0 && c >= '0' && c <= '9')
+		if !ok {
+			return false
+		}
+	}
+	return s != ""
+}
+
 func (r *Runner) funcDecl(c *syntax.FuncDecl) error {
+	// A name the grammar admitted may still be one this dialect refuses to
+	// define: ksh93 parses `f-g()` and stops the script at the definition,
+	// with a different sentence for a dot — a discipline function is its own
+	// concept there and `a.b` does not name one.
+	if !isPlainFuncName(c.Name) &&
+		r.ask(r.sem().PunctuatedFunctionNameIsRefused, "a function name carrying punctuation being refused") {
+		wording, fallback := r.diag().FunctionNameInvalid, "%[1]s: invalid function name"
+		if strings.ContainsRune(c.Name, '.') && r.diag().FunctionNameDiscipline != "" {
+			wording, fallback = r.diag().FunctionNameDiscipline, "%[1]s: invalid discipline function"
+		}
+		r.fatal("%s\n", Wording(wording, fallback, c.Name))
+		return nil
+	}
+	if r.unspecified {
+		r.status = 2
+		return nil
+	}
 	if r.funcs == nil {
 		r.funcs = map[string]*syntax.FuncDecl{}
 	}

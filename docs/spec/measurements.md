@@ -492,6 +492,244 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   unset 'a[0]'; echo "st=$?"; echo after
   ```
 
+## builtins
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `echo/dash-e-and-capital-e` | `-e a	b~-E c	d` | `a	b~c\td` | `a	b~c\td` | `a	b~c\td` | `a	b~-E c\td` | `a	b~c\td` |
+| `echo/backslash-c-stops-the-output` | `pdone` | `p\cq~done` | `p\cq~done` | `p\cq~done` | `p\cq~done` | `pdone` |
+| `echo/hex-escape-diverges` | `-e A\x41B` | `AAB` | `AAB` | `AAB` | `A\x41B` | `AAB` |
+| `echo/the-order-of-e-and-capital-e` | `-e -E m	n` | `m\tn` | `m\tn` | `m\tn` | `-E m	n` | `m	n` |
+| `readonly/reassignment-by-a-declaration` | `<shell>: 1: export: x: is read only` *(status 2)* | `<shell>: line 1: x: readonly variable~after` | `<shell>: line 1: x: readonly variable` *(status 1)* | `<shell>: x: readonly variable~after` | `<shell>: x: is read only` *(status 1)* | `<shell>:1: read-only variable: x` *(status 1)* |
+| `readonly/reassignment-from-a-command-string` | `<shell>: 1: x: is read only` *(status 2)* | `<shell>: line 1: x: readonly variable` *(status 1)* | `<shell>: line 1: x: readonly variable` *(status 127)* | `<shell>: x: readonly variable` *(status 1)* | `<shell>: x: is read only` *(status 1)* | `<shell>:1: read-only variable: x` *(status 1)* |
+| `jobs/a-running-background-job` | `[1] + Running                    ` | `[1]+  Running                    sleep 0.4 &` | `[1]+  Running                    sleep 0.4 &` | `[1]+  Running                 sleep 0.4 &` | `[1] +  Running                 <command unknown>` | `[1]  + running    sleep 0.4` |
+| `jobs/a-finished-background-job` | `[1] + Done                       ~---` | `[1]+  Done                       sleep 0.05~---` | `[1]+  Done                       sleep 0.05~---` | `---` | `[1] +  Running                 <command unknown>~---` | `---` |
+| `jobs/a-background-job-that-failed` | `[1] + Done(1)                    ` | `[1]+  Exit 1                     false` | `[1]+  Done(1)                    false` | *(no output, status 0)* | `[1] +  Running                 <command unknown>` | *(no output, status 0)* |
+| `jobs/two-jobs-and-which-end-it-starts-from` | `[2] + Running                    ~[1] - Running                    ` | `[1]-  Running                    sleep 0.4 &~[2]+  Running                    sleep 0.4 &` | `[1]-  Running                    sleep 0.4 &~[2]+  Running                    sleep 0.4 &` | `[1]-  Running                 sleep 0.4 &~[2]+  Running                 sleep 0.4 &` | `[2] +  Running                 <command unknown>~[1] -  Running                 <command unknown>` | `[1]  - running    sleep 0.4~[2]  + running    sleep 0.4` |
+| `read/a-failing-read-still-assigns` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` |
+| `read/a-final-line-without-a-newline` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` |
+| `read/an-unterminated-last-line-is-dropped` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` |
+| `read/options-cluster-in-one-word` | `[x\]` | `[x\]` | `[x\]` | `[x\]` | `[x\]` | `[x\]` |
+| `read/a-bad-letter-in-a-bundle-is-named-alone` | `<shell>: 1: read: Illegal option -x~st=2~after` | `<shell>: line 1: read: -x: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~st=2~after` | `<shell>: line 1: read: -x: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~st=2~after` | `<shell>: line 0: read: -x: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]~st=2~after` | `<shell>: read: -x: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]~st=2~after` | `<shell>:read:1: bad option: -x~st=1~after` |
+| `name/unset-f-on-a-name-no-function-could-have` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>: unset: 1x: invalid function name~st=1` | `<shell>:unset:1: no such hash table element: 1x~st=1` |
+| `name/unset-f-on-a-name-that-is-merely-undefined` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>:unset:1: no such hash table element: nosuch~st=1` |
+| `name/a-lone-dash-given-to-a-builtin` | `unalias: - not found~st=1` | `<shell>: line 1: unalias: -: not found~st=1` | `<shell>: line 1: unalias: -: not found~st=1` | `<shell>: line 0: unalias: -: not found~st=1` | `st=1` | `<shell>:unalias:1: not enough arguments~st=1` |
+| `return/with-nothing-to-return-from` | `before` *(status 7)* | `before~<shell>: line 1: return: can only `return' from a function or sourced script~after st=2` | `before~<shell>: line 1: return: can only `return' from a function or sourced script` *(status 2)* | `before~<shell>: line 0: return: can only `return' from a function or sourced script~after st=1` | `before` *(status 7)* | `before` *(status 7)* |
+| `return/inside-a-sourced-file` | `st=7` | `st=7` | `st=7` | `st=7` | `st=7` | `st=7` |
+| `set/a-name-only-one-shell-has` | `<shell>: 1: set: Illegal option -o posix` *(status 2)* | `st=0` | `st=0` | `st=0` | `<shell>: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | `<shell>:set:1: no such option: posix` *(status 1)* |
+| `set/allexport-marks-what-follows` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` |
+| `cd/keeps-or-resolves-the-name-it-was-given` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` |
+| `cd/which-path-option-decides` | `PL kept~LP resolved` | `PL kept~LP resolved` | `PL kept~LP resolved` | `PL kept~LP resolved` | `PL kept~LP resolved` | `PL resolved~LP resolved` |
+| `cd/pwd-p-resolves-symlinks` | `1~1` | `1~1` | `1~1` | `1~1` | `1~1` | `1~1` |
+| `type/a-function-and-its-body` | `f is a shell function` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function` | `f is a shell function from zsh` |
+| `type/a-body-with-a-construct-in-it` | `f is a shell function` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function` | `f is a shell function from zsh` |
+| `type/a-body-with-redirections-in-it` | `f is a shell function` | `f is a function~f () ~{ ~    echo hi 2>&1 1>&2 3> /dev/null 0>&-~}` | `f is a function~f () ~{ ~    echo hi 2>&1 1>&2 3> /dev/null 0>&-~}` | `f is a function~f () ~{ ~    echo hi 2>&1 1>&2 3> /dev/null 0>&-~}` | `f is a function` | `f is a shell function from zsh` |
+| `type/what-a-name-would-run` | `cd is a shell builtin~if is a shell keyword~ls is /bin/ls` | `cd is a shell builtin~if is a shell keyword~ls is /bin/ls` | `cd is a shell builtin~if is a shell keyword~ls is /bin/ls` | `cd is a shell builtin~if is a shell keyword~ls is /bin/ls` | `cd is a shell builtin~if is a keyword~ls is a tracked alias for /bin/ls` | `cd is a shell builtin~if is a reserved word~ls is /bin/ls` |
+| `type/a-name-that-is-nothing` | `nope: not found~st=127` | `<shell>: line 1: type: nope: not found~st=1` | `<shell>: line 1: type: nope: not found~st=1` | `<shell>: line 0: type: nope: not found~st=1` | `<shell>: whence: nope: not found~st=1` | `nope not found~st=1` |
+| `type/several-names-and-a-double-dash` | `--: not found~cd is a shell builtin~ls is /bin/ls~st=127` | `cd is a shell builtin~ls is /bin/ls~st=0` | `cd is a shell builtin~ls is /bin/ls~st=0` | `cd is a shell builtin~ls is /bin/ls~st=0` | `cd is a shell builtin~ls is a tracked alias for /bin/ls~st=0` | `cd is a shell builtin~ls is /bin/ls~st=0` |
+| `export/unset-f-removes-a-function` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` |
+| `export/a-function-through-the-environment` | *(no output, status 2)* | `1` | `1` | `1` | *(no output, status 2)* | `0` *(status 1)* |
+| `export/a-name-that-is-not-a-function` | `<shell>: 1: export: Illegal option -f` *(status 2)* | `<shell>: line 1: export: nope: not a function~st=1` | `<shell>: line 1: export: nope: not a function~st=1` | `<shell>: line 0: export: nope: not a function~st=1` | `<shell>: export: -f: unknown option~Usage: export [-p] [name[=value]...]` *(status 2)* | `<shell>:export:1: invalid option(s)~st=1` |
+| `shift/a-leading-dash-that-is-not-a-number` | `<shell>: 1: shift: Illegal number: -x` *(status 2)* | `<shell>: line 1: shift: -x: numeric argument required~st=2` | `<shell>: line 1: shift: -x: numeric argument required` *(status 2)* | `<shell>: line 0: shift: -x: numeric argument required` *(status 1)* | `<shell>: shift: -x: unknown option~Usage: shift [ options ] [n]` *(status 2)* | `<shell>:shift:1: bad option: -x~st=1` |
+| `shift/a-count-that-is-an-expression` | `<shell>: 1: shift: Illegal number: 1+1` *(status 2)* | `<shell>: line 1: shift: 1+1: numeric argument required~[a b c] st=2` | `<shell>: line 1: shift: 1+1: numeric argument required` *(status 2)* | `<shell>: line 0: shift: 1+1: numeric argument required` *(status 1)* | `[c] st=0` | `[c] st=0` |
+| `shift/a-count-that-is-a-name` | `<shell>: 1: shift: Illegal number: nosuchname` *(status 2)* | `<shell>: line 1: shift: nosuchname: numeric argument required~[a b c] st=2` | `<shell>: line 1: shift: nosuchname: numeric argument required` *(status 2)* | `<shell>: line 0: shift: nosuchname: numeric argument required` *(status 1)* | `[a b c] st=0` | `[a b c] st=0` |
+| `wait/a-leading-dash` | `<shell>: 1: wait: Illegal option -x~st=2` | `<shell>: line 1: wait: -x: invalid option~wait: usage: wait [-fn] [-p var] [id ...]~st=2` | `<shell>: line 1: wait: -x: invalid option~wait: usage: wait [-fn] [-p var] [id ...]~st=2` | `<shell>: line 0: wait: -x: invalid option~wait: usage: wait [n]~st=2` | `<shell>: wait: -x: unknown option~Usage: wait [ options ] [job ...]~st=2` | `<shell>:wait:1: job not found: -x~st=127` |
+| `wait/dash-dash-ends-the-options` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `wait/an-operand-that-is-neither` | `<shell>: 1: wait: Illegal number: nosuchjob~st=2` | `<shell>: line 1: wait: `nosuchjob': not a pid or valid job spec~st=1` | `<shell>: line 1: wait: `nosuchjob': not a pid or valid job spec~st=1` | `<shell>: line 0: wait: `nosuchjob': not a pid or valid job spec~st=1` | `<shell>: wait: nosuchjob: Arguments must be %job, process ids, or job pool names~st=1` | `<shell>:wait:1: job not found: nosuchjob~st=127` |
+| `wait/a-pid-that-is-not-ours` | `st=127` | `<shell>: line 1: wait: pid 999999 is not a child of this shell~st=127` | `<shell>: line 1: wait: pid 999999 is not a child of this shell~st=127` | `<shell>: wait: pid 999999 is not a child of this shell~st=127` | `st=127` | `<shell>:wait:1: pid 999999 is not a child of this shell~st=127` |
+| `enable/a-letter-one-shell-does-not-have` | `<shell>: 1: enable: not found~st=127` | `st=0` | `st=0` | `st=0` | `<shell>: enable: not found~st=127` | `<shell>:enable:1: bad option: -n~st=1` |
+| `enable/a-name-that-is-not-a-builtin` | `<shell>: 1: disable: not found~st=127` | `<shell>: line 1: disable: command not found~st=127` | `<shell>: line 1: disable: command not found~st=127` | `<shell>: disable: command not found~st=127` | `<shell>: disable: not found~st=127` | `<shell>:disable:1: no such hash table element: nosuchthing~st=1` |
+| `enable/switching-one-off-and-back-on` | `st=127` | `st=0` | `st=0` | `st=0` | `st=127` | `st=0` |
+
+- `echo/dash-e-and-capital-e` — -e turns escapes on where the shell has the letter and -E off where it has that one: dash has neither and prints them, ksh93 has only -e
+  ```sh
+  echo -e 'a\tb'; echo -E 'c\td'
+  ```
+- `echo/backslash-c-stops-the-output` — \c discards the rest of the output and the newline with it, wherever escapes are live — by default in dash and zsh, not at all without -e in bash and ksh93
+  ```sh
+  echo 'p\cq'; echo done
+  ```
+- `echo/hex-escape-diverges` — \xHH is bash and zsh on top of the XSI set: ksh93 leaves it as written even under -e, and dash has no -e at all
+  ```sh
+  echo -e 'A\x41B'
+  ```
+- `echo/the-order-of-e-and-capital-e` — -e then -E: bash lets the last flag win and prints the backslash, zsh lets -e win and expands — the other order agrees everywhere and asks nothing
+  ```sh
+  echo -e -E 'm\tn'
+  ```
+- `readonly/reassignment-by-a-declaration` — the same refusal reached through a declaration utility rather than by an assignment standing alone, and a different set of shells stops for it — three here, where a plain assignment stops all four. So which of the two ways the name was set decides, and one shell answers the two oppositely: it stops for the plain form given as an argument and never stops for this one
+  ```sh
+  readonly x=1; export x=2; echo after
+  ```
+- `readonly/reassignment-from-a-command-string` — an assignment to a name that cannot take one, given as an argument rather than read from a file. All four stop here — and one of them does not when the same three lines come from a file, which the case recorded elsewhere shows. So a readonly reassignment is fatal in three shells always and in the fourth by invocation, which is the second thing found to work that way after an expansion that failed
+  ```sh
+  readonly x=1; x=2; echo after
+  ```
+- `jobs/a-running-background-job` — one line of a `jobs` listing, and four shells write it four ways — the marker spacing, the width of the state column, the case of the word, and whether the command is there at all. dash shows an empty column and ksh93 `<command unknown>`, because neither kept the text; bash puts the `&` back on
+  ```sh
+  sleep 0.4 & jobs
+  ```
+- `jobs/a-finished-background-job` — reported once and then forgotten, in every shell that reports it at all — the second listing is empty. zsh never mentions it and ksh93 still calls it Running, which is not a reaping race: it says so after `wait` too
+  ```sh
+  sleep 0.05 & sleep 0.5; jobs; echo "---"; jobs
+  ```
+- `jobs/a-background-job-that-failed` — the status reaches the listing, and the two shells that say so disagree about how: `Exit 1` against `Done(1)`
+  ```sh
+  false & sleep 0.3; jobs
+  ```
+- `jobs/two-jobs-and-which-end-it-starts-from` — dash and ksh93 print the most recent first and bash and zsh the oldest, and the number stays with the job either way — `%2` has to mean the same thing at both ends. Also where the `+` and `-` markers become visible
+  ```sh
+  sleep 0.4 & sleep 0.4 & jobs
+  ```
+- `read/a-failing-read-still-assigns` — end of input clears the variables rather than leaving what was there, which is what stops `while read -r l` from leaving the last line behind for the code after the loop. Unanimous across the panel, so it is the core's answer and not an axis
+  ```sh
+  l=keep; read -r l </dev/null; echo "st=$? l=[$l]"
+  ```
+- `read/a-final-line-without-a-newline` — both answers at once: there is a line, and there will not be another. Every shell assigns it *and* reports failure, which reads as a contradiction until the loop below explains it
+  ```sh
+  printf 'x' | { read -r l; echo "st=$? l=[$l]"; }
+  ```
+- `read/an-unterminated-last-line-is-dropped` — the consequence of the status above, and the reason it is worth pinning rather than fixing: a file whose last line has no newline loses that line in every shell there is. Returning 0 instead would run it twice — once as the line, once as the empty read after it
+  ```sh
+  printf 'a\nb' | while read -r l; do printf "<%s>" "$l"; done; echo
+  ```
+- `read/options-cluster-in-one-word` — `-rr` is two options in one word — the POSIX guideline every shell follows, and the reason `read -ra arr` means `-r -a arr`. Two of the same letter so the case needs only the one option everybody implements: the bundle is read letter by letter, the raw flag holds, and the backslash survives its line. Reading whole words refused the bundle outright (#347)
+  ```sh
+  printf 'x\\\ny\n' | { read -rr v; echo "[$v]"; }
+  ```
+- `read/a-bad-letter-in-a-bundle-is-named-alone` — the complaint about a bundle names the letter the walk stopped on, never the word it rode in on: `-x` in all four, including the dialect recorded as whole-word naming from `export -Q`, where the letter and the word are the same thing. Four wordings, zsh reporting 1 to everyone else's 2, and all four carry on — `read` is not a special builtin, so nobody's fatality rule reaches it
+  ```sh
+  read -rx v </dev/null; echo "st=$?"; echo after
+  ```
+- `name/unset-f-on-a-name-no-function-could-have` — two of the panel are quiet here and two are not, and the two that speak are not answering the same question — one is judging the name, which `1x` could never be, and the other is reporting that its table holds nothing under it. The case next to this one is what tells them apart
+  ```sh
+  unset -f 1x; echo "st=$?"
+  ```
+- `name/unset-f-on-a-name-that-is-merely-undefined` — a name a function could perfectly well have, and none does. Only one of the panel says anything, and it is not the one that complained about `1x` — so the two questions are independent and each needs its own answer. Three quiet and one not, where the case above is two and two
+  ```sh
+  unset -f nosuch; echo "st=$?"
+  ```
+- `name/a-lone-dash-given-to-a-builtin` — a `-` on its own is an operand in three of the panel and an option in zsh, which eats it. `unalias` is where that shows: the three complain about an alias called `-`, each in its own words, and the fourth complains that it was given nothing to unalias at all. `unset -` looks the same in bash for a different reason — its bare form validates no operand — which is why the case is not written with that one
+  ```sh
+  unalias -; echo "st=$?"
+  ```
+- `return/with-nothing-to-return-from` — a `return` outside both a function and a sourced file has nothing to return from, and the panel splits over what that means — not over the wording but over *where the script stops*. Three obey it and end there with the status given; one reports it, leaves 2 behind and runs the next command. A script whose last statement is such a `return` therefore ends two different ways with the same output, which is why the status is half the case
+  ```sh
+  echo before; return 7; echo "after st=$?"
+  ```
+- `return/inside-a-sourced-file` — the other side of the same question, and unanimous: a sourced file is something to return *from*, so all four obey it and it becomes the source's status. Recorded next to the case above because together they say the disagreement is about having nothing to return from rather than about `return` itself
+  ```sh
+  printf 'return 7\n' > s.sh
+  . ./s.sh
+  echo "st=$?"
+  ```
+- `set/a-name-only-one-shell-has` — which long option names a shell has is not one list: fourteen are unanimous and the rest belong to one, two or three of the panel. `posix` belongs to one, and the other three refuse it — each in its own words and with its own status. Turning it *off* is the direction that matters, because it is what the thirteenth line of Homebrew's own script does and what a shell without a posix mode can honestly grant
+  ```sh
+  set +o posix; echo "st=$?"
+  ```
+- `set/allexport-marks-what-follows` — an assignment is not an export until something says so, and `set -a` is the something. Unanimous both ways, and the second half is what makes it evidence: turning it off again has to stop it, or a shell that exported everything always would pass the first half
+  ```sh
+  set -a
+  FOO=bar
+  /bin/sh -c 'echo [$FOO]'
+  set +a
+  BAR=two
+  /bin/sh -c 'echo [$BAR]'
+  ```
+- `cd/keeps-or-resolves-the-name-it-was-given` — the two names a directory has — the one it was reached by and the one it is at — and `cd` is where a shell chooses between them. Unanimous. The paths themselves are never printed because they are this machine's; what is compared is which of the two came back
+  ```sh
+  mkdir -p real/sub && ln -s real link
+  case $(cd link/sub && pwd) in *link*) echo 'plain kept';; *) echo 'plain resolved';; esac
+  case $(cd -L link/sub && pwd) in *link*) echo 'L kept';; *) echo 'L resolved';; esac
+  case $(cd -P link/sub && pwd) in *link*) echo 'P kept';; *) echo 'P resolved';; esac
+  ```
+- `cd/which-path-option-decides` — given both, three of them let the last one win and zsh gives `-P` the answer wherever it stands, so the two orders agree in one shell and disagree in the other three. Written out rather than looped over a variable, because a loop would have measured word splitting instead — the variable stays one word in zsh and the case would have said nothing about `cd` at all
+  ```sh
+  mkdir -p real/sub && ln -s real link
+  case $(cd -P -L link/sub && pwd) in *link*) echo 'PL kept';; *) echo 'PL resolved';; esac
+  case $(cd -L -P link/sub && pwd) in *link*) echo 'LP kept';; *) echo 'LP resolved';; esac
+  ```
+- `cd/pwd-p-resolves-symlinks` — `pwd -P` reports where the directory is with symlinks resolved, and a plain `pwd` keeps the name it was reached by — both unanimous, and `pwd -L -P` (not shown) lets the last option win in all four as well
+  ```sh
+  mkdir -p a/b; ln -s a/b l; cd l; pwd -P | grep -c "/a/b$"; pwd | grep -c "/l$"
+  ```
+- `type/a-function-and-its-body` — one shell follows the sentence with the function itself, laid out its own way, and the other three stop at the sentence. What is printed is not what was typed — the shell has a tree by then — so this is the one place a shell has to say a command back
+  ```sh
+  f(){ echo hi; }; type f
+  ```
+- `type/a-body-with-a-construct-in-it` — the layout is per construct and not one rule: a `then` stays on the line of its `if` where a `do` moves to a line of its own, and a body closed by a keyword ends with a `;` where one closed by a brace does not
+  ```sh
+  f(){ if true; then echo y; fi; }; type f
+  ```
+- `type/a-body-with-redirections-in-it` — the one shell that says a body back writes a redirection two ways, and the tree it prints from has forgotten which was typed. A file target takes a space after the operator and keeps only the descriptor that was written; a dup is written tight and has the descriptor it acts on filled in, so `>&2` comes back as `1>&2` and a close comes back as `>&-` whichever operator asked for it
+  ```sh
+  f(){ echo hi 2>&1 >&2 3>/dev/null <&-; }; type f
+  ```
+- `type/what-a-name-would-run` — the same lookup `command -v` does, said in a sentence for a person to read — and every part of the sentence is worded differently: a keyword is `a shell keyword`, `a keyword` or `a reserved word`, and one shell reports an external as a tracked alias for the path
+  ```sh
+  type cd; type if; type ls
+  ```
+- `type/a-name-that-is-nothing` — four wordings and two statuses, and two of the four write this line with no shell name in front of it where every other message they print carries one. The status is a plain failure in three and a missing command's 127 in the fourth
+  ```sh
+  type nope; echo "st=$?"
+  ```
+- `type/several-names-and-a-double-dash` — `--` ends the options in three of them and is a name in the fourth, which has no options for `type` at all — so it answers about `--` first and then about the names, and reports the failure
+  ```sh
+  type -- cd ls; echo "st=$?"
+  ```
+- `export/unset-f-removes-a-function` — unanimous, and it was read and then ignored here: the option was accepted, the function survived being unset, and it went on answering to its name. Plain `unset f` is a different question and the shells split on it
+  ```sh
+  f(){ echo F; }; unset -f f; f 2>/dev/null; echo "st=$?"
+  ```
+- `export/a-function-through-the-environment` — one shell carries a function to its children and the other three have no way to: there is nothing but a string in an environment, so the source goes in and is parsed again at the other end. The count rather than the text, because what the entry holds is a shell's own spelling of a body
+  ```sh
+  f(){ echo carried; }; export -f f 2>/dev/null; env | grep -c '^BASH_FUNC'
+  ```
+- `export/a-name-that-is-not-a-function` — a name that is not a function now will not become one by being exported. The shells that have the option refuse it and the ones that do not read `-f` as something else entirely, which is the more interesting half
+  ```sh
+  export -f nope; echo "st=$?"
+  ```
+- `shift/a-leading-dash-that-is-not-a-number` — two of the four read it as an *option* and refuse it as one; the other two read it as the count and complain about the number. Same input, two kinds of complaint — and both end the script where a special builtin's failure is fatal
+  ```sh
+  shift -x; echo "st=$?"
+  ```
+- `shift/a-count-that-is-an-expression` — two of the four evaluate the count as an expression and move two; the other two want a plain number and say so
+  ```sh
+  set -- a b c; shift 1+1; echo "[$*] st=$?"
+  ```
+- `shift/a-count-that-is-a-name` — the same reading with an unset name, which is zero in an expression — so the two that evaluate shift nothing and succeed where the other two refuse it
+  ```sh
+  set -- a b c; shift nosuchname; echo "[$*] st=$?"
+  ```
+- `wait/a-leading-dash` — three of the four read it as an option and refuse it in the words their bad options already use; zsh has none and answers with the job it could not find. And none of them ends the script over it, which is the tell that `wait` is not a special builtin however much its neighbors are
+  ```sh
+  wait -x; echo "st=$?"
+  ```
+- `wait/dash-dash-ends-the-options` — unanimous, and the control for the case above: the same leading dashes that are refused as an option are taken as the end of them
+  ```sh
+  wait --; echo "st=$?"
+  ```
+- `wait/an-operand-that-is-neither` — an operand naming neither a process nor a job: four wordings and no two alike, and three statuses — one quotes it and names both things it could have been, one calls it an illegal number, one lists what it would have taken, and one calls it a job that was not found and reports the 127 of a command that is not there
+  ```sh
+  wait nosuchjob; echo "st=$?"
+  ```
+- `wait/a-pid-that-is-not-ours` — a number that could be a process and is not one of this shell's children. Unanimous on 127, and two of the four say so out loud — so silence here is a wording rather than a behavior
+  ```sh
+  wait 999999; echo "st=$?"
+  ```
+- `enable/a-letter-one-shell-does-not-have` — `enable` is two different builtins: one takes -n to switch a name off, one has no -n at all and reads its options as the *table* to act on. The other two have no `enable`, so the same line is four answers
+  ```sh
+  enable -n cd; echo "st=$?"
+  ```
+- `enable/a-name-that-is-not-a-builtin` — `disable` exists in one shell only, and there it complains about a hash table element rather than about a command — where the other three have no such builtin and say so
+  ```sh
+  disable nosuchthing; echo "st=$?"
+  ```
+- `enable/switching-one-off-and-back-on` — switching a builtin off is not forgetting it: the name comes back with the same builtin behind it. Standard error is discarded because three of the four have neither word and their complaint is about a missing command, which the case above pins
+  ```sh
+  disable cd 2>/dev/null; enable cd 2>/dev/null; echo "st=$?"
+  ```
+
 ## diagnostics
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
@@ -1858,224 +2096,6 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `opt/dollar-dash-noglob-letter-diverges` — the letter itself is an axis: POSIX names `f` and three of the four report it, while zsh reports the capital — `-F` being its own short spelling of noglob, the same split `set -f` measures from the writing side
   ```sh
   set -o noglob; case $- in *f*) echo lower;; *F*) echo upper;; *) echo neither;; esac
-  ```
-
-## builtins
-
-| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
-| --- | --- | --- | --- | --- | --- | --- |
-| `readonly/reassignment-by-a-declaration` | `<shell>: 1: export: x: is read only` *(status 2)* | `<shell>: line 1: x: readonly variable~after` | `<shell>: line 1: x: readonly variable` *(status 1)* | `<shell>: x: readonly variable~after` | `<shell>: x: is read only` *(status 1)* | `<shell>:1: read-only variable: x` *(status 1)* |
-| `readonly/reassignment-from-a-command-string` | `<shell>: 1: x: is read only` *(status 2)* | `<shell>: line 1: x: readonly variable` *(status 1)* | `<shell>: line 1: x: readonly variable` *(status 127)* | `<shell>: x: readonly variable` *(status 1)* | `<shell>: x: is read only` *(status 1)* | `<shell>:1: read-only variable: x` *(status 1)* |
-| `jobs/a-running-background-job` | `[1] + Running                    ` | `[1]+  Running                    sleep 0.4 &` | `[1]+  Running                    sleep 0.4 &` | `[1]+  Running                 sleep 0.4 &` | `[1] +  Running                 <command unknown>` | `[1]  + running    sleep 0.4` |
-| `jobs/a-finished-background-job` | `[1] + Done                       ~---` | `[1]+  Done                       sleep 0.05~---` | `[1]+  Done                       sleep 0.05~---` | `---` | `[1] +  Running                 <command unknown>~---` | `---` |
-| `jobs/a-background-job-that-failed` | `[1] + Done(1)                    ` | `[1]+  Exit 1                     false` | `[1]+  Done(1)                    false` | *(no output, status 0)* | `[1] +  Running                 <command unknown>` | *(no output, status 0)* |
-| `jobs/two-jobs-and-which-end-it-starts-from` | `[2] + Running                    ~[1] - Running                    ` | `[1]-  Running                    sleep 0.4 &~[2]+  Running                    sleep 0.4 &` | `[1]-  Running                    sleep 0.4 &~[2]+  Running                    sleep 0.4 &` | `[1]-  Running                 sleep 0.4 &~[2]+  Running                 sleep 0.4 &` | `[2] +  Running                 <command unknown>~[1] -  Running                 <command unknown>` | `[1]  - running    sleep 0.4~[2]  + running    sleep 0.4` |
-| `read/a-failing-read-still-assigns` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` |
-| `read/a-final-line-without-a-newline` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` |
-| `read/an-unterminated-last-line-is-dropped` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` |
-| `read/options-cluster-in-one-word` | `[x\]` | `[x\]` | `[x\]` | `[x\]` | `[x\]` | `[x\]` |
-| `read/a-bad-letter-in-a-bundle-is-named-alone` | `<shell>: 1: read: Illegal option -x~st=2~after` | `<shell>: line 1: read: -x: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~st=2~after` | `<shell>: line 1: read: -x: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~st=2~after` | `<shell>: line 0: read: -x: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]~st=2~after` | `<shell>: read: -x: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]~st=2~after` | `<shell>:read:1: bad option: -x~st=1~after` |
-| `name/unset-f-on-a-name-no-function-could-have` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>: unset: 1x: invalid function name~st=1` | `<shell>:unset:1: no such hash table element: 1x~st=1` |
-| `name/unset-f-on-a-name-that-is-merely-undefined` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>:unset:1: no such hash table element: nosuch~st=1` |
-| `name/a-lone-dash-given-to-a-builtin` | `unalias: - not found~st=1` | `<shell>: line 1: unalias: -: not found~st=1` | `<shell>: line 1: unalias: -: not found~st=1` | `<shell>: line 0: unalias: -: not found~st=1` | `st=1` | `<shell>:unalias:1: not enough arguments~st=1` |
-| `return/with-nothing-to-return-from` | `before` *(status 7)* | `before~<shell>: line 1: return: can only `return' from a function or sourced script~after st=2` | `before~<shell>: line 1: return: can only `return' from a function or sourced script` *(status 2)* | `before~<shell>: line 0: return: can only `return' from a function or sourced script~after st=1` | `before` *(status 7)* | `before` *(status 7)* |
-| `return/inside-a-sourced-file` | `st=7` | `st=7` | `st=7` | `st=7` | `st=7` | `st=7` |
-| `set/a-name-only-one-shell-has` | `<shell>: 1: set: Illegal option -o posix` *(status 2)* | `st=0` | `st=0` | `st=0` | `<shell>: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | `<shell>:set:1: no such option: posix` *(status 1)* |
-| `set/allexport-marks-what-follows` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` | `[bar]~[]` |
-| `cd/keeps-or-resolves-the-name-it-was-given` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` | `plain kept~L kept~P resolved` |
-| `cd/which-path-option-decides` | `PL kept~LP resolved` | `PL kept~LP resolved` | `PL kept~LP resolved` | `PL kept~LP resolved` | `PL kept~LP resolved` | `PL resolved~LP resolved` |
-| `cd/pwd-p-resolves-symlinks` | `1~1` | `1~1` | `1~1` | `1~1` | `1~1` | `1~1` |
-| `type/a-function-and-its-body` | `f is a shell function` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function~f () ~{ ~    echo hi~}` | `f is a function` | `f is a shell function from zsh` |
-| `type/a-body-with-a-construct-in-it` | `f is a shell function` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}` | `f is a function` | `f is a shell function from zsh` |
-| `type/a-body-with-redirections-in-it` | `f is a shell function` | `f is a function~f () ~{ ~    echo hi 2>&1 1>&2 3> /dev/null 0>&-~}` | `f is a function~f () ~{ ~    echo hi 2>&1 1>&2 3> /dev/null 0>&-~}` | `f is a function~f () ~{ ~    echo hi 2>&1 1>&2 3> /dev/null 0>&-~}` | `f is a function` | `f is a shell function from zsh` |
-| `type/what-a-name-would-run` | `cd is a shell builtin~if is a shell keyword~ls is /bin/ls` | `cd is a shell builtin~if is a shell keyword~ls is /bin/ls` | `cd is a shell builtin~if is a shell keyword~ls is /bin/ls` | `cd is a shell builtin~if is a shell keyword~ls is /bin/ls` | `cd is a shell builtin~if is a keyword~ls is a tracked alias for /bin/ls` | `cd is a shell builtin~if is a reserved word~ls is /bin/ls` |
-| `type/a-name-that-is-nothing` | `nope: not found~st=127` | `<shell>: line 1: type: nope: not found~st=1` | `<shell>: line 1: type: nope: not found~st=1` | `<shell>: line 0: type: nope: not found~st=1` | `<shell>: whence: nope: not found~st=1` | `nope not found~st=1` |
-| `type/several-names-and-a-double-dash` | `--: not found~cd is a shell builtin~ls is /bin/ls~st=127` | `cd is a shell builtin~ls is /bin/ls~st=0` | `cd is a shell builtin~ls is /bin/ls~st=0` | `cd is a shell builtin~ls is /bin/ls~st=0` | `cd is a shell builtin~ls is a tracked alias for /bin/ls~st=0` | `cd is a shell builtin~ls is /bin/ls~st=0` |
-| `export/unset-f-removes-a-function` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` |
-| `export/a-function-through-the-environment` | *(no output, status 2)* | `1` | `1` | `1` | *(no output, status 2)* | `0` *(status 1)* |
-| `export/a-name-that-is-not-a-function` | `<shell>: 1: export: Illegal option -f` *(status 2)* | `<shell>: line 1: export: nope: not a function~st=1` | `<shell>: line 1: export: nope: not a function~st=1` | `<shell>: line 0: export: nope: not a function~st=1` | `<shell>: export: -f: unknown option~Usage: export [-p] [name[=value]...]` *(status 2)* | `<shell>:export:1: invalid option(s)~st=1` |
-| `shift/a-leading-dash-that-is-not-a-number` | `<shell>: 1: shift: Illegal number: -x` *(status 2)* | `<shell>: line 1: shift: -x: numeric argument required~st=2` | `<shell>: line 1: shift: -x: numeric argument required` *(status 2)* | `<shell>: line 0: shift: -x: numeric argument required` *(status 1)* | `<shell>: shift: -x: unknown option~Usage: shift [ options ] [n]` *(status 2)* | `<shell>:shift:1: bad option: -x~st=1` |
-| `shift/a-count-that-is-an-expression` | `<shell>: 1: shift: Illegal number: 1+1` *(status 2)* | `<shell>: line 1: shift: 1+1: numeric argument required~[a b c] st=2` | `<shell>: line 1: shift: 1+1: numeric argument required` *(status 2)* | `<shell>: line 0: shift: 1+1: numeric argument required` *(status 1)* | `[c] st=0` | `[c] st=0` |
-| `shift/a-count-that-is-a-name` | `<shell>: 1: shift: Illegal number: nosuchname` *(status 2)* | `<shell>: line 1: shift: nosuchname: numeric argument required~[a b c] st=2` | `<shell>: line 1: shift: nosuchname: numeric argument required` *(status 2)* | `<shell>: line 0: shift: nosuchname: numeric argument required` *(status 1)* | `[a b c] st=0` | `[a b c] st=0` |
-| `wait/a-leading-dash` | `<shell>: 1: wait: Illegal option -x~st=2` | `<shell>: line 1: wait: -x: invalid option~wait: usage: wait [-fn] [-p var] [id ...]~st=2` | `<shell>: line 1: wait: -x: invalid option~wait: usage: wait [-fn] [-p var] [id ...]~st=2` | `<shell>: line 0: wait: -x: invalid option~wait: usage: wait [n]~st=2` | `<shell>: wait: -x: unknown option~Usage: wait [ options ] [job ...]~st=2` | `<shell>:wait:1: job not found: -x~st=127` |
-| `wait/dash-dash-ends-the-options` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
-| `wait/an-operand-that-is-neither` | `<shell>: 1: wait: Illegal number: nosuchjob~st=2` | `<shell>: line 1: wait: `nosuchjob': not a pid or valid job spec~st=1` | `<shell>: line 1: wait: `nosuchjob': not a pid or valid job spec~st=1` | `<shell>: line 0: wait: `nosuchjob': not a pid or valid job spec~st=1` | `<shell>: wait: nosuchjob: Arguments must be %job, process ids, or job pool names~st=1` | `<shell>:wait:1: job not found: nosuchjob~st=127` |
-| `wait/a-pid-that-is-not-ours` | `st=127` | `<shell>: line 1: wait: pid 999999 is not a child of this shell~st=127` | `<shell>: line 1: wait: pid 999999 is not a child of this shell~st=127` | `<shell>: wait: pid 999999 is not a child of this shell~st=127` | `st=127` | `<shell>:wait:1: pid 999999 is not a child of this shell~st=127` |
-| `enable/a-letter-one-shell-does-not-have` | `<shell>: 1: enable: not found~st=127` | `st=0` | `st=0` | `st=0` | `<shell>: enable: not found~st=127` | `<shell>:enable:1: bad option: -n~st=1` |
-| `enable/a-name-that-is-not-a-builtin` | `<shell>: 1: disable: not found~st=127` | `<shell>: line 1: disable: command not found~st=127` | `<shell>: line 1: disable: command not found~st=127` | `<shell>: disable: command not found~st=127` | `<shell>: disable: not found~st=127` | `<shell>:disable:1: no such hash table element: nosuchthing~st=1` |
-| `enable/switching-one-off-and-back-on` | `st=127` | `st=0` | `st=0` | `st=0` | `st=127` | `st=0` |
-
-- `readonly/reassignment-by-a-declaration` — the same refusal reached through a declaration utility rather than by an assignment standing alone, and a different set of shells stops for it — three here, where a plain assignment stops all four. So which of the two ways the name was set decides, and one shell answers the two oppositely: it stops for the plain form given as an argument and never stops for this one
-  ```sh
-  readonly x=1; export x=2; echo after
-  ```
-- `readonly/reassignment-from-a-command-string` — an assignment to a name that cannot take one, given as an argument rather than read from a file. All four stop here — and one of them does not when the same three lines come from a file, which the case recorded elsewhere shows. So a readonly reassignment is fatal in three shells always and in the fourth by invocation, which is the second thing found to work that way after an expansion that failed
-  ```sh
-  readonly x=1; x=2; echo after
-  ```
-- `jobs/a-running-background-job` — one line of a `jobs` listing, and four shells write it four ways — the marker spacing, the width of the state column, the case of the word, and whether the command is there at all. dash shows an empty column and ksh93 `<command unknown>`, because neither kept the text; bash puts the `&` back on
-  ```sh
-  sleep 0.4 & jobs
-  ```
-- `jobs/a-finished-background-job` — reported once and then forgotten, in every shell that reports it at all — the second listing is empty. zsh never mentions it and ksh93 still calls it Running, which is not a reaping race: it says so after `wait` too
-  ```sh
-  sleep 0.05 & sleep 0.5; jobs; echo "---"; jobs
-  ```
-- `jobs/a-background-job-that-failed` — the status reaches the listing, and the two shells that say so disagree about how: `Exit 1` against `Done(1)`
-  ```sh
-  false & sleep 0.3; jobs
-  ```
-- `jobs/two-jobs-and-which-end-it-starts-from` — dash and ksh93 print the most recent first and bash and zsh the oldest, and the number stays with the job either way — `%2` has to mean the same thing at both ends. Also where the `+` and `-` markers become visible
-  ```sh
-  sleep 0.4 & sleep 0.4 & jobs
-  ```
-- `read/a-failing-read-still-assigns` — end of input clears the variables rather than leaving what was there, which is what stops `while read -r l` from leaving the last line behind for the code after the loop. Unanimous across the panel, so it is the core's answer and not an axis
-  ```sh
-  l=keep; read -r l </dev/null; echo "st=$? l=[$l]"
-  ```
-- `read/a-final-line-without-a-newline` — both answers at once: there is a line, and there will not be another. Every shell assigns it *and* reports failure, which reads as a contradiction until the loop below explains it
-  ```sh
-  printf 'x' | { read -r l; echo "st=$? l=[$l]"; }
-  ```
-- `read/an-unterminated-last-line-is-dropped` — the consequence of the status above, and the reason it is worth pinning rather than fixing: a file whose last line has no newline loses that line in every shell there is. Returning 0 instead would run it twice — once as the line, once as the empty read after it
-  ```sh
-  printf 'a\nb' | while read -r l; do printf "<%s>" "$l"; done; echo
-  ```
-- `read/options-cluster-in-one-word` — `-rr` is two options in one word — the POSIX guideline every shell follows, and the reason `read -ra arr` means `-r -a arr`. Two of the same letter so the case needs only the one option everybody implements: the bundle is read letter by letter, the raw flag holds, and the backslash survives its line. Reading whole words refused the bundle outright (#347)
-  ```sh
-  printf 'x\\\ny\n' | { read -rr v; echo "[$v]"; }
-  ```
-- `read/a-bad-letter-in-a-bundle-is-named-alone` — the complaint about a bundle names the letter the walk stopped on, never the word it rode in on: `-x` in all four, including the dialect recorded as whole-word naming from `export -Q`, where the letter and the word are the same thing. Four wordings, zsh reporting 1 to everyone else's 2, and all four carry on — `read` is not a special builtin, so nobody's fatality rule reaches it
-  ```sh
-  read -rx v </dev/null; echo "st=$?"; echo after
-  ```
-- `name/unset-f-on-a-name-no-function-could-have` — two of the panel are quiet here and two are not, and the two that speak are not answering the same question — one is judging the name, which `1x` could never be, and the other is reporting that its table holds nothing under it. The case next to this one is what tells them apart
-  ```sh
-  unset -f 1x; echo "st=$?"
-  ```
-- `name/unset-f-on-a-name-that-is-merely-undefined` — a name a function could perfectly well have, and none does. Only one of the panel says anything, and it is not the one that complained about `1x` — so the two questions are independent and each needs its own answer. Three quiet and one not, where the case above is two and two
-  ```sh
-  unset -f nosuch; echo "st=$?"
-  ```
-- `name/a-lone-dash-given-to-a-builtin` — a `-` on its own is an operand in three of the panel and an option in zsh, which eats it. `unalias` is where that shows: the three complain about an alias called `-`, each in its own words, and the fourth complains that it was given nothing to unalias at all. `unset -` looks the same in bash for a different reason — its bare form validates no operand — which is why the case is not written with that one
-  ```sh
-  unalias -; echo "st=$?"
-  ```
-- `return/with-nothing-to-return-from` — a `return` outside both a function and a sourced file has nothing to return from, and the panel splits over what that means — not over the wording but over *where the script stops*. Three obey it and end there with the status given; one reports it, leaves 2 behind and runs the next command. A script whose last statement is such a `return` therefore ends two different ways with the same output, which is why the status is half the case
-  ```sh
-  echo before; return 7; echo "after st=$?"
-  ```
-- `return/inside-a-sourced-file` — the other side of the same question, and unanimous: a sourced file is something to return *from*, so all four obey it and it becomes the source's status. Recorded next to the case above because together they say the disagreement is about having nothing to return from rather than about `return` itself
-  ```sh
-  printf 'return 7\n' > s.sh
-  . ./s.sh
-  echo "st=$?"
-  ```
-- `set/a-name-only-one-shell-has` — which long option names a shell has is not one list: fourteen are unanimous and the rest belong to one, two or three of the panel. `posix` belongs to one, and the other three refuse it — each in its own words and with its own status. Turning it *off* is the direction that matters, because it is what the thirteenth line of Homebrew's own script does and what a shell without a posix mode can honestly grant
-  ```sh
-  set +o posix; echo "st=$?"
-  ```
-- `set/allexport-marks-what-follows` — an assignment is not an export until something says so, and `set -a` is the something. Unanimous both ways, and the second half is what makes it evidence: turning it off again has to stop it, or a shell that exported everything always would pass the first half
-  ```sh
-  set -a
-  FOO=bar
-  /bin/sh -c 'echo [$FOO]'
-  set +a
-  BAR=two
-  /bin/sh -c 'echo [$BAR]'
-  ```
-- `cd/keeps-or-resolves-the-name-it-was-given` — the two names a directory has — the one it was reached by and the one it is at — and `cd` is where a shell chooses between them. Unanimous. The paths themselves are never printed because they are this machine's; what is compared is which of the two came back
-  ```sh
-  mkdir -p real/sub && ln -s real link
-  case $(cd link/sub && pwd) in *link*) echo 'plain kept';; *) echo 'plain resolved';; esac
-  case $(cd -L link/sub && pwd) in *link*) echo 'L kept';; *) echo 'L resolved';; esac
-  case $(cd -P link/sub && pwd) in *link*) echo 'P kept';; *) echo 'P resolved';; esac
-  ```
-- `cd/which-path-option-decides` — given both, three of them let the last one win and zsh gives `-P` the answer wherever it stands, so the two orders agree in one shell and disagree in the other three. Written out rather than looped over a variable, because a loop would have measured word splitting instead — the variable stays one word in zsh and the case would have said nothing about `cd` at all
-  ```sh
-  mkdir -p real/sub && ln -s real link
-  case $(cd -P -L link/sub && pwd) in *link*) echo 'PL kept';; *) echo 'PL resolved';; esac
-  case $(cd -L -P link/sub && pwd) in *link*) echo 'LP kept';; *) echo 'LP resolved';; esac
-  ```
-- `cd/pwd-p-resolves-symlinks` — `pwd -P` reports where the directory is with symlinks resolved, and a plain `pwd` keeps the name it was reached by — both unanimous, and `pwd -L -P` (not shown) lets the last option win in all four as well
-  ```sh
-  mkdir -p a/b; ln -s a/b l; cd l; pwd -P | grep -c "/a/b$"; pwd | grep -c "/l$"
-  ```
-- `type/a-function-and-its-body` — one shell follows the sentence with the function itself, laid out its own way, and the other three stop at the sentence. What is printed is not what was typed — the shell has a tree by then — so this is the one place a shell has to say a command back
-  ```sh
-  f(){ echo hi; }; type f
-  ```
-- `type/a-body-with-a-construct-in-it` — the layout is per construct and not one rule: a `then` stays on the line of its `if` where a `do` moves to a line of its own, and a body closed by a keyword ends with a `;` where one closed by a brace does not
-  ```sh
-  f(){ if true; then echo y; fi; }; type f
-  ```
-- `type/a-body-with-redirections-in-it` — the one shell that says a body back writes a redirection two ways, and the tree it prints from has forgotten which was typed. A file target takes a space after the operator and keeps only the descriptor that was written; a dup is written tight and has the descriptor it acts on filled in, so `>&2` comes back as `1>&2` and a close comes back as `>&-` whichever operator asked for it
-  ```sh
-  f(){ echo hi 2>&1 >&2 3>/dev/null <&-; }; type f
-  ```
-- `type/what-a-name-would-run` — the same lookup `command -v` does, said in a sentence for a person to read — and every part of the sentence is worded differently: a keyword is `a shell keyword`, `a keyword` or `a reserved word`, and one shell reports an external as a tracked alias for the path
-  ```sh
-  type cd; type if; type ls
-  ```
-- `type/a-name-that-is-nothing` — four wordings and two statuses, and two of the four write this line with no shell name in front of it where every other message they print carries one. The status is a plain failure in three and a missing command's 127 in the fourth
-  ```sh
-  type nope; echo "st=$?"
-  ```
-- `type/several-names-and-a-double-dash` — `--` ends the options in three of them and is a name in the fourth, which has no options for `type` at all — so it answers about `--` first and then about the names, and reports the failure
-  ```sh
-  type -- cd ls; echo "st=$?"
-  ```
-- `export/unset-f-removes-a-function` — unanimous, and it was read and then ignored here: the option was accepted, the function survived being unset, and it went on answering to its name. Plain `unset f` is a different question and the shells split on it
-  ```sh
-  f(){ echo F; }; unset -f f; f 2>/dev/null; echo "st=$?"
-  ```
-- `export/a-function-through-the-environment` — one shell carries a function to its children and the other three have no way to: there is nothing but a string in an environment, so the source goes in and is parsed again at the other end. The count rather than the text, because what the entry holds is a shell's own spelling of a body
-  ```sh
-  f(){ echo carried; }; export -f f 2>/dev/null; env | grep -c '^BASH_FUNC'
-  ```
-- `export/a-name-that-is-not-a-function` — a name that is not a function now will not become one by being exported. The shells that have the option refuse it and the ones that do not read `-f` as something else entirely, which is the more interesting half
-  ```sh
-  export -f nope; echo "st=$?"
-  ```
-- `shift/a-leading-dash-that-is-not-a-number` — two of the four read it as an *option* and refuse it as one; the other two read it as the count and complain about the number. Same input, two kinds of complaint — and both end the script where a special builtin's failure is fatal
-  ```sh
-  shift -x; echo "st=$?"
-  ```
-- `shift/a-count-that-is-an-expression` — two of the four evaluate the count as an expression and move two; the other two want a plain number and say so
-  ```sh
-  set -- a b c; shift 1+1; echo "[$*] st=$?"
-  ```
-- `shift/a-count-that-is-a-name` — the same reading with an unset name, which is zero in an expression — so the two that evaluate shift nothing and succeed where the other two refuse it
-  ```sh
-  set -- a b c; shift nosuchname; echo "[$*] st=$?"
-  ```
-- `wait/a-leading-dash` — three of the four read it as an option and refuse it in the words their bad options already use; zsh has none and answers with the job it could not find. And none of them ends the script over it, which is the tell that `wait` is not a special builtin however much its neighbors are
-  ```sh
-  wait -x; echo "st=$?"
-  ```
-- `wait/dash-dash-ends-the-options` — unanimous, and the control for the case above: the same leading dashes that are refused as an option are taken as the end of them
-  ```sh
-  wait --; echo "st=$?"
-  ```
-- `wait/an-operand-that-is-neither` — an operand naming neither a process nor a job: four wordings and no two alike, and three statuses — one quotes it and names both things it could have been, one calls it an illegal number, one lists what it would have taken, and one calls it a job that was not found and reports the 127 of a command that is not there
-  ```sh
-  wait nosuchjob; echo "st=$?"
-  ```
-- `wait/a-pid-that-is-not-ours` — a number that could be a process and is not one of this shell's children. Unanimous on 127, and two of the four say so out loud — so silence here is a wording rather than a behavior
-  ```sh
-  wait 999999; echo "st=$?"
-  ```
-- `enable/a-letter-one-shell-does-not-have` — `enable` is two different builtins: one takes -n to switch a name off, one has no -n at all and reads its options as the *table* to act on. The other two have no `enable`, so the same line is four answers
-  ```sh
-  enable -n cd; echo "st=$?"
-  ```
-- `enable/a-name-that-is-not-a-builtin` — `disable` exists in one shell only, and there it complains about a hash table element rather than about a command — where the other three have no such builtin and say so
-  ```sh
-  disable nosuchthing; echo "st=$?"
-  ```
-- `enable/switching-one-off-and-back-on` — switching a builtin off is not forgetting it: the name comes back with the same builtin behind it. Standard error is discarded because three of the four have neither word and their complaint is about a missing command, which the case above pins
-  ```sh
-  disable cd 2>/dev/null; enable cd 2>/dev/null; echo "st=$?"
   ```
 
 ## parameter expansion

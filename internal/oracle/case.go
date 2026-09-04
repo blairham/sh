@@ -309,6 +309,26 @@ var Corpus = []Case{
 		Why:     "dash and zsh expand escapes in echo; bash and ksh do not — a grouping no ladder predicts",
 	},
 	{
+		ID: "echo/dash-e-and-capital-e", Category: "builtins",
+		Snippet: `echo -e 'a\tb'; echo -E 'c\td'`,
+		Why:     "-e turns escapes on where the shell has the letter and -E off where it has that one: dash has neither and prints them, ksh93 has only -e",
+	},
+	{
+		ID: "echo/backslash-c-stops-the-output", Category: "builtins",
+		Snippet: `echo 'p\cq'; echo done`,
+		Why:     "\\c discards the rest of the output and the newline with it, wherever escapes are live — by default in dash and zsh, not at all without -e in bash and ksh93",
+	},
+	{
+		ID: "echo/hex-escape-diverges", Category: "builtins",
+		Snippet: `echo -e 'A\x41B'`,
+		Why:     "\\xHH is bash and zsh on top of the XSI set: ksh93 leaves it as written even under -e, and dash has no -e at all",
+	},
+	{
+		ID: "echo/the-order-of-e-and-capital-e", Category: "builtins",
+		Snippet: `echo -e -E 'm\tn'`,
+		Why:     "-e then -E: bash lets the last flag win and prints the backslash, zsh lets -e win and expands — the other order agrees everywhere and asks nothing",
+	},
+	{
 		ID: "axis/pipeline-last-element", Category: "semantics axes",
 		Snippet: `echo x | read v; echo "[$v]"`,
 		Why:     "ksh and zsh run the last pipeline element in the current shell; dash and bash use a subshell",

@@ -99,6 +99,10 @@ func Semantics() interp.Semantics {
 	s.SelectTakesUnterminatedReply = interp.No
 	s.SelectEofPrintsNewline = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
+	// echo reads -n and -e; a word carrying -E is an operand. \e expands,
+	// \x does not.
+	s.EchoOptions = "ne"
+	s.EchoExpandsEscEscape = interp.Yes
 	// typeset in a keyword function hides the caller's value, as bash's
 	// local does.
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes

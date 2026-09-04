@@ -88,6 +88,12 @@ func Semantics() interp.Semantics {
 	s.SelectTakesUnterminatedReply = interp.No
 	s.SelectEofPrintsNewline = interp.Yes
 	s.AssignmentPrefixPersistsOnSpecialBuiltin = interp.No
+	// echo reads -n, -e and -E, the last of -e/-E deciding, with the hex
+	// and ESC escapes on top of the XSI set.
+	s.EchoOptions = "neE"
+	s.EchoLastEscapeFlagWins = interp.Yes
+	s.EchoExpandsHexEscapes = interp.Yes
+	s.EchoExpandsEscEscape = interp.Yes
 	// A directory the PATH search walked past leaves no trace: with nothing
 	// runnable anywhere, bash says the name was never found at all.
 	s.DirectoryOnPathIsACandidate = interp.No

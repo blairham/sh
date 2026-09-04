@@ -3163,6 +3163,18 @@ echo after`,
 		Why:     "switching a builtin off is not forgetting it: the name comes back with the same builtin behind it. Standard error is discarded because three of the four have neither word and their complaint is about a missing command, which the case above pins",
 	},
 	{
+		ID: "axis/export-a-subscripted-operand", Category: "semantics axes",
+		Script:  true,
+		Snippet: "export 'a[0]'\necho \"st=$?\"\necho after",
+		Why:     "ksh93 takes it, bash and dash refuse it in the words they give any bad name, and zsh has a complaint of its own about the subscript — naming the base rather than the operand, and without naming the builtin in the location where its other messages do",
+	},
+	{
+		ID: "axis/readonly-a-subscripted-operand", Category: "semantics axes",
+		Script:  true,
+		Snippet: "readonly 'a[0]'\necho \"st=$?\"\necho after",
+		Why:     "the same operand through the other declaration, where the one shell with its own complaint has a *second* one — about array elements, naming the whole operand, and this time naming the builtin in the location. Two messages in one shell is why which of them names the builtin is a set",
+	},
+	{
 		ID: "axis/unset-a-subscripted-operand", Category: "semantics axes",
 		Snippet: "unset 'a[0]'; echo \"st=$?\"; echo after",
 		Why:     "three of the four take a subscript as naming an element; dash has no arrays and refuses it in the words it gives any bad name, which is fatal there",

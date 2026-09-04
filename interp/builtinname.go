@@ -144,6 +144,11 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 			if r.unspecified {
 				return nil, 2
 			}
+			status = r.badSubscriptOperand(builtin, a, name, fatal)
+			if r.ctl == controlExit {
+				return nil, status
+			}
+			continue
 		} else if r.isBuiltinName(name, takes) {
 			rest = append(rest, a)
 			continue
@@ -157,6 +162,40 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 		}
 	}
 	return rest, status
+}
+
+// badSubscriptOperand reports a subscripted operand the dialect will not take.
+//
+// Two of the three that refuse it say what they say about any bad name, so
+// they need nothing here and fall through to badBuiltinName. The third has a
+// complaint of its own per builtin — one about the subscript, naming the base,
+// and one about array elements, naming the whole operand — and does not name
+// the builtin in the location for the first of them where it does for the
+// second. That is the same shape as which declarations name themselves in a
+// readonly refusal, and it is a set for the same reason.
+func (r *Runner) badSubscriptOperand(builtin, operand, name string, fatal Answer) int {
+	d := r.diag()
+	wording := d.BuiltinBadSubscript[builtin]
+	if wording == "" {
+		return r.badBuiltinName(builtin, operand, name, fatal)
+	}
+	base, _, _ := r.subscriptOperand(name)
+	if !d.SubscriptRefusalNamesBuiltin[builtin] {
+		// The location does not name the builtin for this one, where it does
+		// for the other — put aside for the report and given back, the way a
+		// readonly reassignment already does it.
+		outer := r.inBuiltin
+		r.inBuiltin = ""
+		defer func() { r.inBuiltin = outer }()
+	}
+	r.diagf("%s\n", Wording(wording, "", builtin, operand, base))
+	status := orDefault(d.BuiltinBadNameStatus, 1)
+	if r.ask(fatal, "a bad name to a special builtin ending the script") {
+		r.status = status
+		r.fatalQuiet()
+		return r.status
+	}
+	return status
 }
 
 // badBuiltinName reports it, and ends the script where the dialect says so.

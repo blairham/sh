@@ -311,6 +311,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `axis/readonly-reassign-declaration-status` | `<script>: 2: export: r: is read only` *(status 2)* | `<script>: line 2: r: readonly variable~st=1` | `<script>: line 2: r: readonly variable~st=1` | `<script>: line 2: r: readonly variable~st=1` | `<script>: line 2: r: is read only` *(status 1)* | `<script>:2: read-only variable: r` *(status 1)* |
 | `axis/readonly-reassign` | `<script>: 2: r: is read only` *(status 2)* | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: is read only` *(status 1)* | `<script>:2: read-only variable: r` *(status 1)* |
 | `axis/arith-error-status` | `<shell>: 1: arithmetic expression: division by zero: "1/0"` *(status 2)* | `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 1)* | `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 127)* | `<shell>: 1/0: division by 0 (error token is "0")` *(status 1)* | `<shell>: 1/0: divide by zero` *(status 1)* | `<shell>:1: division by zero` *(status 1)* |
+| `axis/export-a-subscripted-operand` | `<script>: 1: export: a[0]: bad variable name` *(status 2)* | `<script>: line 1: export: `a[0]': not a valid identifier~st=1~after` | `<script>: line 1: export: `a[0]': not a valid identifier~st=1~after` | `<script>: line 1: export: `a[0]': not a valid identifier~st=1~after` | `st=0~after` | `<script>:1: a: assignment to invalid subscript range` *(status 1)* |
+| `axis/readonly-a-subscripted-operand` | `<script>: 1: readonly: a[0]: bad variable name` *(status 2)* | `<script>: line 1: readonly: `a[0]': not a valid identifier~st=1~after` | `<script>: line 1: readonly: `a[0]': not a valid identifier~st=1~after` | `<script>: line 1: readonly: `a[0]': not a valid identifier~st=1~after` | `st=0~after` | `<script>:readonly:1: a[0]: can't create readonly array elements` *(status 1)* |
 | `axis/unset-a-subscripted-operand` | `<shell>: 1: unset: a[0]: bad variable name` *(status 2)* | `st=0~after` | `st=0~after` | `st=0~after` | `st=0~after` | `st=0~after` |
 
 - `axis/array-base` — zsh indexes arrays from 1; dash has no arrays at all
@@ -422,6 +424,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `axis/arith-error-status` — dash exits 2 where bash, ksh93 and zsh exit 1; found by a test disagreeing with the conformance run, not by the sweep
   ```sh
   echo $((1/0)); echo "st=$?"
+  ```
+- `axis/export-a-subscripted-operand` — ksh93 takes it, bash and dash refuse it in the words they give any bad name, and zsh has a complaint of its own about the subscript — naming the base rather than the operand, and without naming the builtin in the location where its other messages do
+  ```sh
+  export 'a[0]'
+  echo "st=$?"
+  echo after
+  ```
+- `axis/readonly-a-subscripted-operand` — the same operand through the other declaration, where the one shell with its own complaint has a *second* one — about array elements, naming the whole operand, and this time naming the builtin in the location. Two messages in one shell is why which of them names the builtin is a set
+  ```sh
+  readonly 'a[0]'
+  echo "st=$?"
+  echo after
   ```
 - `axis/unset-a-subscripted-operand` — three of the four take a subscript as naming an element; dash has no arrays and refuses it in the words it gives any bad name, which is fatal there
   ```sh

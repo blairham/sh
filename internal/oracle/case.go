@@ -2452,6 +2452,16 @@ echo unreachable`,
 		Why:     "126 as well, and the reason diverges: bash and ksh93 check for a directory and say so, dash and zsh report the permission error execve returns",
 	},
 	{
+		ID: "path/directory-on-path-is-walked-past", Category: "command lookup",
+		Snippet: `mkdir -p first/target real; printf '#!/bin/sh\necho ran\n' > real/target; chmod +x real/target; PATH=$PWD/first:$PWD/real; target; echo "st=$?"`,
+		Why:     "a directory whose name matches the command does not stop the PATH search — the shim-directory-early-on-PATH arrangement every version manager relies on",
+	},
+	{
+		ID: "path/directory-on-path-alone-diverges", Category: "command lookup",
+		Snippet: `mkdir -p only/target; PATH=$PWD/only; target; echo "st=$?"`,
+		Why:     "when the directory was the only match the panel splits three ways: bash says never found (127), dash names it and still says 127, ksh93 and zsh name it at 126",
+	},
+	{
 		ID: "path/missing-path-is-not-a-missing-name", Category: "command lookup",
 		Snippet: `./nope; echo "st=$?"`,
 		Why:     "a path that is not there and a bare name PATH never had are both 127 and are worded differently in three of the four",

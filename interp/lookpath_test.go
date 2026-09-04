@@ -286,6 +286,57 @@ func TestTwoRunnersDoNotShareOnePath(t *testing.T) {
 // The command has to be in the runner's *own* directory to tell the answers
 // apart. Anywhere else and all four report not-found, which is how a corpus
 // case and then a unit test both missed it and "fixed" working code.
+// TestADirectoryAsTheOnlyMatchIsAnAxis — the search walks past a directory
+// unanimously (TestADirectoryIsSkippedToo), but when the directory was all
+// PATH had, the panel splits: report the name as never found, or keep the
+// directory as the failed candidate — and among the keepers, which status.
+func TestADirectoryAsTheOnlyMatchIsAnAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		axis       Answer
+		status     int
+		wantStatus int
+		named      bool
+	}{
+		{"skipped silently, never found", No, 0, 127, false},
+		{"kept as the candidate", Yes, 0, 126, true},
+		{"kept, with the not-found status", Yes, 127, 127, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			a := filepath.Join(dir, "a")
+			if err := os.MkdirAll(filepath.Join(a, "dirmatch"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+			f, err := syntax.Parse(`dirmatch`, syntax.Core())
+			if err != nil {
+				t.Fatal(err)
+			}
+			var buf bytes.Buffer
+			sem := permissive()
+			sem.DirectoryOnPathIsACandidate = tc.axis
+			dg := Diagnostics{DirectoryOnPathStatus: tc.status}
+			r := &Runner{
+				Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
+				Dir: dir, Name: "testsh",
+				Vars: map[string]string{"PATH": a},
+				Env:  []string{"PATH=" + a},
+			}
+			st, rerr := r.Run(context.Background(), f)
+			if rerr != nil {
+				t.Fatal(rerr)
+			}
+			if st != tc.wantStatus {
+				t.Errorf("status = %d, want %d (output %q)", st, tc.wantStatus, buf.String())
+			}
+			if named := strings.Contains(buf.String(), "directory"); named != tc.named {
+				t.Errorf("names the directory = %v, want %v (output %q)", named, tc.named, buf.String())
+			}
+		})
+	}
+}
+
 func TestAnEmptyPathIsAnAxis(t *testing.T) {
 	for _, tc := range []struct {
 		name  string

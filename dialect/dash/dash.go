@@ -81,6 +81,8 @@ func Semantics() interp.Semantics {
 	s.UlimitHasProcessCount = interp.No
 	s.UlimitSetsBothLimits = interp.Yes
 	s.BadOptionToSpecialBuiltinFatal = interp.Yes
+	s.LocalOutsideAFunctionIsAnError = interp.Yes
+	s.LocalOutsideAFunctionIsFatal = interp.Yes
 	// A special builtin's failure is fatal, and a bad name is one — for all
 	// three of them.
 	s.BadNameToDeclarationFatal = interp.Yes
@@ -245,6 +247,7 @@ func Diagnostics() interp.Diagnostics {
 		UlimitBadNumber:       "ulimit: bad number",
 		UlimitBadNumberStatus: 2,
 		BuiltinBadOption:      "%[1]s: Illegal option %[2]s",
+		LocalOutsideAFunction: "local: not in a function",
 		// One wording for all three, naming the part in front of any `=`.
 		BuiltinBadName: map[string]string{
 			"export":   "%[1]s: %[2]s: bad variable name",

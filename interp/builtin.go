@@ -770,11 +770,15 @@ func (r *Runner) readLine(raw bool) (line string, atEOF bool) {
 // which of them to put back.
 func biLocal(r *Runner, _ context.Context, args []string) int {
 	if len(r.scopes) == 0 {
-		r.diagf("local: can only be used in a function\n")
-		return 1
+		if st, stop := r.localOutsideAFunction(); stop {
+			return st
+		}
 	}
 	for _, a := range args {
 		name, value, hasValue := strings.Cut(a, "=")
+		// shadow does nothing when there is no scope to save into, which is
+		// the dialect that took this as a global: there is nothing to put
+		// back, and it becomes a plain assignment.
 		r.shadow(name)
 		if hasValue {
 			r.setVar(name, value)

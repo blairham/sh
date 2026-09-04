@@ -900,6 +900,18 @@ type Semantics struct {
 	// names the word the same way it does anywhere else.
 	TrapSingleUnknownConditionIsUsage Answer
 
+	// LocalOutsideAFunctionIsAnError refuses `local x=2` written where there
+	// is no function to be local to.
+	//
+	// bash and dash refuse it, zsh takes it and sets a global instead. ksh93
+	// has no `local` at all, so it never reaches the question.
+	LocalOutsideAFunctionIsAnError Answer
+
+	// LocalOutsideAFunctionIsFatal ends the script rather than carrying on
+	// after that refusal. dash does; bash says the same thing and runs the
+	// next command.
+	LocalOutsideAFunctionIsFatal Answer
+
 	// UmaskPrintsFourDigits writes the mask as four digits, always — `0022`
 	// against zsh's `022`. True in bash, dash and ksh93.
 	//
@@ -1143,6 +1155,10 @@ func PosixSemantics() Semantics {
 		// makes no exception for `unset`.
 		BadNameToDeclarationFatal: Yes,
 		BadNameToUnsetFatal:       Yes,
+		// `local` needs a function to be local to, and saying so is what
+		// three of the four do — the substrate keeps the answer it had
+		// before the question was one.
+		LocalOutsideAFunctionIsAnError: Yes,
 		// POSIX gives all three a *name*, and neither a special parameter
 		// nor a positional one is a name — a positional has `shift` to
 		// remove it.

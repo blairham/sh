@@ -417,7 +417,8 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 	// element dropped, which is no field at all. The corpus caught that.
 	if e.Index != nil && !e.Length &&
 		(e.Op == syntax.ParamNone ||
-			((e.Op == syntax.ParamSubstring || elementOp(e.Op) || r.yieldsTheArray(e)) &&
+			((e.Op == syntax.ParamSubstring || e.Op == syntax.ParamTransform ||
+				elementOp(e.Op) || r.yieldsTheArray(e)) &&
 				wholeArraySubscript(r.subscriptText(e.Index)))) {
 		if elems, ok := r.arraySubscript(e); ok {
 			if e.Indirect {
@@ -432,6 +433,13 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 			}
 			if e.Op == syntax.ParamSubstring {
 				elems = sliceElems(elems, r.numOf(e.Arg), e.Arg2, r)
+			}
+			if e.Op == syntax.ParamTransform {
+				// `"${a[@]@Q}"` is one transformed word per element — the
+				// transformation distributes, measured, and the `[*]` join
+				// below then applies to what came out rather than to what
+				// went in.
+				elems = r.transformElems(e, elems)
 			}
 			ifs, set := r.ifs()
 			if elementOp(e.Op) {
@@ -481,6 +489,30 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 			}
 			return out, true
 		}
+	}
+	// `${@@Q}` and `${*@Q}`: a transformation distributes over the positional
+	// parameters exactly as it does over a whole array — one word per
+	// parameter for `@`, joined for `*`. Measured with zero parameters too:
+	// zero fields, the same answer `"$@"` gives.
+	if (e.Name == "@" || e.Name == "*") && e.Op == syntax.ParamTransform &&
+		e.Index == nil && !e.Length && !e.Indirect {
+		elems := r.transformElems(e, r.Params)
+		ifs, set := r.ifs()
+		if e.Name == "*" {
+			joined := strings.Join(elems, ifsFirst(ifs, set))
+			if s.Quoting != syntax.Unquoted {
+				return []string{globEscape(joined)}, true
+			}
+			return splitFields(joined, ifs, set), true
+		}
+		if s.Quoting != syntax.Unquoted {
+			return escapeAll(elems), true
+		}
+		var out []string
+		for _, el := range elems {
+			out = append(out, splitFields(el, ifs, set)...)
+		}
+		return out, true
 	}
 	if e.Name != "@" || e.Op != syntax.ParamNone || e.Length {
 		return nil, false
@@ -628,9 +660,14 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		// dialect: diagnosed only now that the expansion is reached, the way
 		// bash, dash and zsh treat a bad substitution. The fallback wording
 		// is the one dialect that names the construct; the others' own
-		// wordings carry no verb at all.
-		r.diagf("%s\n", Wording(r.diag().BadSubstitution,
-			"${%[1]s}: bad substitution", e.Src))
+		// wordings carry no verb at all — except the dialect whose
+		// BadSubstitution is a parse-time syntax error, which words the
+		// deferred report separately.
+		w := r.diag().BadSubstitutionAtRun
+		if w == "" {
+			w = r.diag().BadSubstitution
+		}
+		r.diagf("%s\n", Wording(w, "${%[1]s}: bad substitution", e.Src))
 		r.expandErr = true
 		return ""
 	}
@@ -669,6 +706,11 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		r.checkNounset(e)
 	}
 
+	// The name the operators see: the parameter's own, until an indirection
+	// replaces it — `${!y@a}` reports the attributes of the *target*,
+	// measured, so the transformations that read attributes need the name
+	// the value came from rather than the one written.
+	name := e.Name
 	if e.Indirect {
 		// `${!x}` reads x, then reads *that* as a name — in bash. ksh93
 		// parses the same text and yields the name itself, so the grammar
@@ -679,7 +721,8 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		if !set || value == "" {
 			return ""
 		}
-		value, set = r.getVar(value)
+		name = value
+		value, set = r.getVar(name)
 	}
 
 	if e.Length {
@@ -752,6 +795,9 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	case syntax.ParamUpper, syntax.ParamLower, syntax.ParamToggle,
 		syntax.ParamUpperFirst, syntax.ParamLowerFirst, syntax.ParamToggleFirst:
 		return r.changeCase(value, e)
+
+	case syntax.ParamTransform:
+		return r.transformParam(e, name, value, set)
 	}
 	// Anything else is left empty rather than guessed at.
 	return ""

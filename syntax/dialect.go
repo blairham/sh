@@ -171,6 +171,18 @@ type Dialect struct {
 	// the core.
 	ParamCaseChange bool
 
+	// ParamTransformations enables `${x@Q}` and the rest of the letter
+	// family — Q E P A a K k L U u — which transform the value rather than
+	// test or edit it. **bash alone**: dash and zsh call the construct a bad
+	// substitution when the expansion is reached, and so does ksh93, whose
+	// refusal of every *other* unrecognized operator while reading makes the
+	// `@` family its one deferred bad substitution. Off for the core.
+	//
+	// The letter set is fixed. `${x@}`, `${x@QQ}` and `${x@Z}` are bad
+	// substitutions in the shell that has the form, so where the flag is on
+	// they stay exactly what they are where it is off.
+	ParamTransformations bool
+
 	// ExpandAliases expands an alias in a *non-interactive* shell. True in
 	// dash and ksh93; bash needs `shopt -s expand_aliases` and zsh does not
 	// expand under `-c` at all. All four expand interactively, which is the

@@ -1110,6 +1110,9 @@ type Diagnostics struct {
 	// ArithInvalidFloatOperation is the refusal when a float reaches an
 	// operator defined only on integers. One verb: %[1]s the operator.
 	ArithInvalidFloatOperation string
+	// ArithNegativeExponent is the refusal when `**` meets an exponent
+	// below zero in a dialect whose answer is an error rather than a float.
+	ArithNegativeExponent string
 
 	// SelectPrompt is what `select` asks with when PS3 is unset. No verbs.
 	// bash and ksh93 write `#? ` and zsh writes the same two characters the

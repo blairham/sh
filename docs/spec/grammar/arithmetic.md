@@ -65,6 +65,7 @@ Precedence follows C, highest first. Measured spot-checks are unanimous:
 
     ++  --                    increment, decrement   (not POSIX; absent from dash)
     +   -   ~   !             unary
+    **                        exponentiation        (not POSIX; absent from dash)
     *   /   %                 multiplicative
     +   -                     additive
     <<  >>                    shifts
@@ -95,6 +96,42 @@ detail.
 
 Vector fields: `ArithIncDec` and `ArithComma`, both default true, both
 false for `posix`.
+
+## Exponentiation
+
+`**` is the one operator C does not supply, so nothing about it follows
+from the citation above — all of it is measured. bash, ksh93 and zsh have
+it; dash rejects it, blaming the second `*` as a missing operand.
+
+| probe | dash | bash | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `$((2**10))` | error | 1024 | 1024 | 1024 |
+| `$((2**3**2))` | error | 512 | 512 | 512 |
+| `$((-2**2))` | error | 4 | 4 | 4 |
+| `$((2*3**2))` | error | 18 | 18 | 18 |
+| `$((2**-1))` | error | **error**: exponent less than 0 | **0.5** | **0.5** |
+| `$((9**0.5))` | error | error | 3 | 3. |
+
+So, in every shell that has it: **right-associative** — `2**3**2` is 2⁹,
+not 8² — and it binds **between `*` and unary**, so `2*3**2` is 18 and a
+prefix sign belongs to the base: `-2**2` is (−2)², which is 4, where C's
+`pow`-style reading would give −4. `0**0` is 1, unanimously among the
+three.
+
+**A negative exponent has no integer answer and splits the shells that
+parse it**: bash stops the expression with `exponent less than 0`, status
+1; ksh93 and zsh answer with a float, 0.5, exactly as they do for `1/2.0`.
+Where the dialect has floats the operator is a float operation like any
+other — `9**0.5` is 3 — and bash, having no floats, rejects `0.5` as a
+literal before the operator is reached.
+
+Overflow is under "what this does not cover" below: bash and zsh wrap at
+the word size where ksh93 slides into float, which is the shells' general
+disagreement about integer width rather than anything `**` adds.
+
+Vector fields: `ArithExponent` (grammar, default true, false for `posix`)
+and `ArithNegativeExponentIsError` (semantics — unanswered where the
+grammar has no `**`).
 
 ## Errors
 

@@ -405,6 +405,12 @@ type Semantics struct {
 	// which is why bash and dash leave it unanswered.
 	ArithIntegerOperatorRefusesFloat Answer
 
+	// ArithNegativeExponentIsError refuses `2**-1` rather than answering
+	// with a float. bash says yes and stops the expression; ksh93 and zsh
+	// say no and answer 0.5. It does not arise where the grammar has no
+	// `**`, which is why dash leaves it unanswered.
+	ArithNegativeExponentIsError Answer
+
 	// RegexQuotingMakesLiteral treats a quoted right operand of `=~` as a
 	// literal string. True in bash alone; ksh93 and zsh keep it a regex, so
 	// quoting a regex is unportable in either direction.

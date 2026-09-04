@@ -47,6 +47,13 @@ func arithToken(e syntax.ArithExpr) string {
 		return x.Text
 	case *syntax.ArithVar:
 		return x.Name
+	case *syntax.ArithUnary:
+		// A signed operand is blamed on its leaf: `2**-1` names the `1`,
+		// which is measured — the shell that names error tokens reads the
+		// sign as part of the expression and stops on the literal.
+		if !x.Postfix {
+			return arithToken(x.X)
+		}
 	}
 	return ""
 }
@@ -346,8 +353,36 @@ func (sh *Runner) apply(op string, l, r arithNum) (arithNum, error) {
 		return intNum(l.i ^ r.i), nil
 	case "|":
 		return intNum(l.i | r.i), nil
+	case "**":
+		return sh.intPow(l.i, r.i)
 	}
 	return intNum(0), arithError{msg: "unknown operator " + op}
+}
+
+// intPow is `**` on integers.
+//
+// A negative exponent cannot yield an integer, and the shells that parse the
+// operator split on what to do about it: one refuses, two answer with a
+// float — `2**-1` is 0.5 there — so the axis is asked, and only when the
+// exponent really is negative, because `2**3` means the same thing in all of
+// them. Overflow wraps, which is what both integer-arithmetic shells do and
+// what squaring modulo the word size preserves; the spec records overflow as
+// unportable by construction, so nothing finer is promised.
+func (sh *Runner) intPow(base, exp int) (arithNum, error) {
+	if exp < 0 {
+		if sh.ask(sh.sem().ArithNegativeExponentIsError, "a negative exponent") {
+			return intNum(0), arithError{msg: Wording(sh.diag().ArithNegativeExponent, "exponent less than 0")}
+		}
+		return floatNum(math.Pow(float64(base), float64(exp))), nil
+	}
+	v := 1
+	for b := base; exp > 0; exp >>= 1 {
+		if exp&1 == 1 {
+			v *= b
+		}
+		b *= b
+	}
+	return intNum(v), nil
 }
 
 // compare answers the operators that yield a truth rather than a number. They
@@ -406,6 +441,12 @@ func (sh *Runner) applyFloat(op string, l, r arithNum) (arithNum, error) {
 		return floatNum(a * b), nil
 	case "/":
 		return floatNum(a / b), nil
+	case "**":
+		// Exponentiation is a float operation in both shells that have
+		// floats — `9**0.5` is 3 — so no integer-only refusal arises, and a
+		// negative exponent is unremarkable here: the answer was already
+		// going to be a float.
+		return floatNum(math.Pow(a, b)), nil
 	case "%":
 		// A remainder is a float operation in one of the two shells with
 		// floats — `7 % 2.5` is 2 there — and refused outright in the other,

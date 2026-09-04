@@ -99,6 +99,9 @@ func Semantics() interp.Semantics {
 	s.DirectoryOnPathIsACandidate = interp.No
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes
+	// bash has no floats, so `2**-1` has no integer answer and stops the
+	// expression; the two shells with floats answer 0.5 instead.
+	s.ArithNegativeExponentIsError = interp.Yes
 	s.IndirectionYieldsName = interp.No
 	s.BraceExpansion = interp.Yes
 	s.BracketCaretNegates = interp.Yes
@@ -265,6 +268,7 @@ func Diagnostics() interp.Diagnostics {
 		NumericArgument:         "%[1]s: %[2]s: numeric argument required",
 		ArithError:              `%[1]s: %[2]s (error token is "%[3]s")`,
 		DivisionByZero:          "division by 0",
+		ArithNegativeExponent:   "exponent less than 0",
 
 		// bash reserves its generic arithmetic wording for operands that are
 		// not literals, so a bad digit gets a reason of its own.

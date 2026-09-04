@@ -1306,6 +1306,70 @@
         "TimedOut": false
       }
     },
+    "arith/exponent-absent-from-dash": {
+      "bash": {
+        "Output": "[1024]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[1024]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[1024]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: arithmetic expression: expecting primary: \"2**10\"",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[1024]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[1024]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/exponent-binds-right-and-below-unary": {
+      "bash": {
+        "Output": "[512][4]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[512][4]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[512][4]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: arithmetic expression: expecting primary: \"2**3**2\"",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[512][4]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[512][4]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "arith/float-is-a-dialect-axis": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: 1.5: arithmetic syntax error: invalid arithmetic operator (error token is \".5\")",
@@ -1558,6 +1622,38 @@
       },
       "zsh": {
         "Output": "[1][1]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/negative-exponent-diverges": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: 2**-1: exponent less than 0 (error token is \"1\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: 2**-1: exponent less than 0 (error token is \"1\")",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: 2**-1: exponent less than 0 (error token is \"1\")",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: arithmetic expression: expecting primary: \"2**-1\"",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[0.5]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[0.5]",
         "Status": 0,
         "TimedOut": false
       }

@@ -297,7 +297,7 @@ func (a *arithParser) ternary() ArithExpr {
 
 func (a *arithParser) binary(level int) ArithExpr {
 	if level >= len(arithLevels) {
-		return a.unary()
+		return a.power()
 	}
 	x := a.binary(level + 1)
 	if x == nil {
@@ -341,7 +341,32 @@ func (a *arithParser) longerOperator(cand string) bool {
 	}
 	// `x =` after an operator candidate like `<` is fine; only compound
 	// assignment matters, and those are caught above.
-	return false
+	//
+	// `**` is here only when the dialect has it: where it does not, the
+	// first `*` is a multiplication and the second fails as an operand,
+	// which is how the shell without the operator reports it.
+	return cand == "*" && a.dial.ArithExponent && a.has("**")
+}
+
+// power is `**`, when the dialect has it. Measured across the three shells
+// that parse it: tighter than `*` (`2*3**2` is 18) and looser than unary
+// (`-2**2` is 4 — the sign is part of the base), and right-associative
+// (`2**3**2` is 512), which the recursion on the right encodes.
+func (a *arithParser) power() ArithExpr {
+	x := a.unary()
+	if x == nil {
+		return nil
+	}
+	a.space()
+	if !a.dial.ArithExponent || !a.take("**") {
+		return x
+	}
+	y := a.power()
+	if y == nil {
+		a.failArith(ErrArithOperand, "**")
+		return x
+	}
+	return &ArithBinary{Op: "**", X: x, Y: y}
 }
 
 func (a *arithParser) unary() ArithExpr {

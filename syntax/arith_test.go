@@ -150,10 +150,35 @@ func TestArithTernaryAndUnary(t *testing.T) {
 	}
 }
 
+// Exponentiation is measured rather than assumed, because it does not follow
+// C — C has no `**`. In every shell that has the operator, `2*3**2` is 18 and
+// `2**3*2` is 16, so it binds between `*` and unary; `-2**2` is 4, so a
+// prefix sign belongs to the base; and `2**3**2` is 512, so it associates to
+// the right.
+func TestArithExponentPrecedenceAndAssociativity(t *testing.T) {
+	tests := []struct{ src, want string }{
+		{`2**10`, `(2 ** 10)`},
+		{`2 ** 3`, `(2 ** 3)`},
+		{`2**3**2`, `(2 ** (3 ** 2))`},
+		{`-2**2`, `((-2) ** 2)`},
+		{`2*3**2`, `(2 * (3 ** 2))`},
+		{`2**3*2`, `((2 ** 3) * 2)`},
+		{`1<<2**2`, `(1 << (2 ** 2))`},
+		{`2**-1`, `(2 ** (-1))`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.src, func(t *testing.T) {
+			if got := arith(parseArithOf(t, tc.src, Core())); got != tc.want {
+				t.Errorf("got %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestArithDialectGates(t *testing.T) {
 	// dash has none of these, so posix must refuse them rather than accept
 	// something it cannot mean.
-	for _, src := range []string{`x++`, `1,2`, `2#101`} {
+	for _, src := range []string{`x++`, `1,2`, `2#101`, `2**3`} {
 		if _, err := Parse("echo $(("+src+"))", POSIX()); err == nil {
 			t.Errorf("%s: posix accepted a construct dash does not have", src)
 		}

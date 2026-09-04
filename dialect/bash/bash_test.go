@@ -489,3 +489,11 @@ func TestSetOptionNamesBashHas(t *testing.T) {
 		})
 	}
 }
+
+// The one signal this shell writes bare, with neither the location nor the
+// process id. Reproduced because the dialect is 5.3; 3.2 writes the prefix.
+func TestTerminateIsWrittenBare(t *testing.T) {
+	if got, want := bash.Diagnostics().KilledCommandNoticeBareForTerminate, "%-27[1]s%[2]s"; got != want {
+		t.Errorf("KilledCommandNoticeBareForTerminate = %q, want %q", got, want)
+	}
+}

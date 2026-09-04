@@ -79,6 +79,20 @@ func (r *Runner) reportKilled(sig syscall.Signal, pid int) {
 		return
 	}
 	dg := r.diag()
+	if sig == syscall.SIGTERM && dg.KilledCommandNoticeBareForTerminate != "" {
+		// One signal, in one shell, written with neither the location nor
+		// the process id — just the words and the command.
+		//
+		// Almost certainly a regression rather than a decision: bash 3.2
+		// writes the full prefix for SIGTERM as it does for every other
+		// signal, and no other shell in the panel treats it apart. It is
+		// reproduced because this dialect is bash 5.3 and that is what bash
+		// 5.3 does; if it is fixed upstream the drift check is what will
+		// say so.
+		r.errf("%s\n", Wording(dg.KilledCommandNoticeBareForTerminate, "%-27[1]s%[2]s",
+			r.signalDescription(sig), r.killedCommandText()))
+		return
+	}
 	// Three verbs, and the dialects use one, two and all three of them.
 	notice := Wording(dg.KilledCommandNotice, "%5[1]d %-27[2]s%[3]s",
 		pid, r.signalDescription(sig), r.killedCommandText())

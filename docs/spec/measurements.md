@@ -298,6 +298,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `axis/shift-past-end` | `<shell>: 1: shift: can't shift that many` *(status 2)* | `survived` | `<shell>: line 1: shift: 5: shift count out of range~survived` | `survived` | `<shell>: shift: 5: bad number` *(status 1)* | `<shell>:shift:1: shift count must be <= $#~survived` |
 | `axis/local-outside-a-function` | `<script>: 1: local: not in a function` *(status 2)* | `<script>: line 1: local: can only be used in a function~x=~end` | `<script>: line 1: local: can only be used in a function~x=~end` | `<script>: line 1: local: can only be used in a function~x=~end` | `<script>: line 1: local: not found~x=~end` | `x=2~end` |
 | `axis/local-inside-a-function` | `in=2~out=` | `in=2~out=` | `in=2~out=` | `in=2~out=` | `<script>: line 1: local: not found~in=~out=` | `in=2~out=` |
+| `axis/trap-body-will-not-parse` | `after~<script>: 1: Syntax error: end of file unexpected (expecting "then")` *(status 2)* | `after~<script>: exit trap: line 2: syntax error: unexpected end of file from `if' command on line 1` | `after~<script>: exit trap: line 2: syntax error: unexpected end of file from `if' command on line 1` | `after~<script>: exit trap: line 4: syntax error: unexpected end of file` | `after~<script>: syntax error at line 1: `if' unmatched` | `<script>:1: parse error near `if'~<script>:trap:1: couldn't parse trap command~after` |
+| `axis/trap-body-runs-what-parsed` | `one~end~a~<script>: 2: Syntax error: end of file unexpected (expecting "then")` *(status 2)* | `one~end~a~<script>: exit trap: line 3: syntax error: unexpected end of file from `if' command on line 2` | `one~end~a~<script>: exit trap: line 3: syntax error: unexpected end of file from `if' command on line 2` | `one~end~a~<script>: exit trap: line 7: syntax error: unexpected end of file` | `one~end~<script>: syntax error at line 2: `if' unmatched` | `one~<script>:2: parse error near `if'~<script>:trap:2: couldn't parse trap command~end` |
 | `axis/trap-action-read-when-set` | `after` | `after` | `after` | `after` | `after` | `<script>:1: parse error near `if'~<script>:trap:1: couldn't parse trap command~after` |
 | `axis/trap-bad-option` | `<script>: 1: trap: Illegal option -Q` *(status 2)* | `<script>: line 1: trap: -Q: invalid option~trap: usage: trap [-Plp] [[action] signal_spec ...]~end` | `<script>: line 1: trap: -Q: invalid option~trap: usage: trap [-Plp] [[action] signal_spec ...]~end` | `<script>: line 1: trap: -Q: invalid option~trap: usage: trap [-lp] [arg signal_spec ...]~end` | `<script>[1]: trap: -Q: unknown option~Usage: trap [-p] [action condition ...]` *(status 2)* | `end` |
 | `axis/trap-print-p` | `<script>: 2: trap: Illegal option -p` *(status 2)* | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' INT~end` | `end` |
@@ -341,6 +343,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   f() { local x=2; echo in=$x; }
   f
   echo out=$x
+  ```
+- `axis/trap-body-will-not-parse` — each dialect words it its own way, dash ends the script over it, and zsh refused the trap when it was set
+  ```sh
+  trap 'if' EXIT
+  echo after
+  ```
+- `axis/trap-body-runs-what-parsed` — bash and dash run the line that parsed before complaining; ksh93 reads the body whole and runs none of it
+  ```sh
+  echo one
+  trap 'echo a
+  if' EXIT
+  echo end
   ```
 - `axis/trap-action-read-when-set` — zsh reads the action now and refuses the trap; the other three store the text, and on INT never parse it at all
   ```sh

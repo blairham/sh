@@ -412,3 +412,141 @@ func TestPuttingAConditionBackIsNotAnAction(t *testing.T) {
 		t.Errorf("stdout = %q, want the condition put back", out)
 	}
 }
+
+// TestATrapBodyThatWillNotParseIsReportedLikeAScriptsIs, which is what it is:
+// the same failure, in text that arrived another way.
+func TestATrapBodyThatWillNotParseIsReportedLikeAScriptsIs(t *testing.T) {
+	set := func(s *Semantics) {
+		s.TrapActionIsParsedWhenSet = No
+		s.TrapBodyRunsWhatParsed = No
+		s.BuiltinSyntaxErrorFatal = No
+	}
+	dg := Diagnostics{Location: LocationLineWord, SyntaxError: "syntax error: %[1]s"}
+	_, errs, _ := trapRun(t, "trap 'if' EXIT\necho after", set, dg)
+	if !strings.Contains(errs, "syntax error: ") {
+		t.Errorf("stderr = %q, want the parse failure worded like a script's", errs)
+	}
+	if !strings.Contains(errs, "line 1: ") {
+		t.Errorf("stderr = %q, want it located the way a script's is", errs)
+	}
+	if strings.Contains(errs, "trap: 1:") {
+		t.Errorf("stderr = %q, want no raw parser position", errs)
+	}
+}
+
+// TestWhereTheTextCameFromIsNamedWhereTheDialectNamesIt reuses the mechanism
+// the front end uses for `-c`, so the dialect that names its input names this
+// too and the three that do not are unaffected.
+func TestWhereTheTextCameFromIsNamedWhereTheDialectNamesIt(t *testing.T) {
+	set := func(s *Semantics) {
+		s.TrapActionIsParsedWhenSet = No
+		s.TrapBodyRunsWhatParsed = No
+		s.BuiltinSyntaxErrorFatal = No
+	}
+	named := Diagnostics{Location: LocationLineWord, NamesTheInputInLocation: true}
+	_, errs, _ := trapRun(t, "trap 'if' EXIT", set, named)
+	if !strings.Contains(errs, "exit trap:") {
+		t.Errorf("named: stderr = %q, want the trap named", errs)
+	}
+
+	// A signal trap is named differently, and the dialect that names neither
+	// gets neither.
+	_, errs, _ = trapRun(t, "trap 'if' INT\nkill -INT $$", set, named)
+	if !strings.Contains(errs, "trap:") || strings.Contains(errs, "exit trap:") {
+		t.Errorf("signal: stderr = %q, want the other label", errs)
+	}
+
+	plain := Diagnostics{Location: LocationLineWord}
+	_, errs, _ = trapRun(t, "trap 'if' EXIT", set, plain)
+	if strings.Contains(errs, "exit trap:") {
+		t.Errorf("unnamed: stderr = %q, want no label", errs)
+	}
+}
+
+// TestABodyCanRunWhatParsedBeforeItComplains is the axis, and both answers
+// are a real dialect's.
+func TestABodyCanRunWhatParsedBeforeItComplains(t *testing.T) {
+	base := func(s *Semantics) { s.TrapActionIsParsedWhenSet = No; s.BuiltinSyntaxErrorFatal = No }
+	src := "trap 'echo a\nif' EXIT\necho end"
+
+	runs := func(s *Semantics) { base(s); s.TrapBodyRunsWhatParsed = Yes }
+	out, errs, _ := trapRun(t, src, runs, Diagnostics{Location: LocationLineWord})
+	if !strings.Contains(out, "a") {
+		t.Errorf("runs what parsed: stdout = %q, want the first line to have run", out)
+	}
+	if errs == "" {
+		t.Error("runs what parsed: want the failure still reported")
+	}
+
+	whole := func(s *Semantics) { base(s); s.TrapBodyRunsWhatParsed = No }
+	out, errs, _ = trapRun(t, src, whole, Diagnostics{Location: LocationLineWord})
+	if strings.Contains(out, "a") {
+		t.Errorf("reads it whole: stdout = %q, want none of the body to have run", out)
+	}
+	if errs == "" {
+		t.Error("reads it whole: want the failure reported")
+	}
+}
+
+// TestABodyThatParsesRunsWholeEitherWay, because the two answers differ only
+// where there is a failure to stop at — a mutation that swaps them must not
+// change an ordinary trap.
+func TestABodyThatParsesRunsWholeEitherWay(t *testing.T) {
+	for _, answer := range []Answer{Yes, No} {
+		set := func(s *Semantics) { s.TrapBodyRunsWhatParsed = answer }
+		out, errs, _ := trapRun(t, "trap 'echo a\necho b' EXIT\necho end", set, Diagnostics{})
+		if !strings.Contains(out, "a") || !strings.Contains(out, "b") {
+			t.Errorf("%v: stdout = %q, want the whole body to have run", answer, out)
+		}
+		if errs != "" {
+			t.Errorf("%v: stderr = %q, want nothing said", answer, errs)
+		}
+	}
+}
+
+// TestAParseFailureInATrapBodyCanEndTheScript, under the rule a parse failure
+// inside `.` or `eval` already gets.
+func TestAParseFailureInATrapBodyCanEndTheScript(t *testing.T) {
+	fatal := func(s *Semantics) {
+		s.TrapActionIsParsedWhenSet = No
+		s.TrapBodyRunsWhatParsed = Yes
+		s.BuiltinSyntaxErrorFatal = Yes
+	}
+	out, _, st := trapRun(t, "trap 'if' INT\nkill -INT $$\necho after", fatal,
+		Diagnostics{Location: LocationLineWord})
+	if strings.Contains(out, "after") {
+		t.Errorf("stdout = %q, want the script to end there", out)
+	}
+	if st == 0 {
+		t.Error("status = 0, want the failure to carry one")
+	}
+
+	carry := func(s *Semantics) {
+		s.TrapActionIsParsedWhenSet = No
+		s.TrapBodyRunsWhatParsed = Yes
+		s.BuiltinSyntaxErrorFatal = No
+	}
+	out, _, _ = trapRun(t, "trap 'if' INT\nkill -INT $$\necho after", carry,
+		Diagnostics{Location: LocationLineWord})
+	if !strings.Contains(out, "after") {
+		t.Errorf("stdout = %q, want the script to carry on", out)
+	}
+}
+
+// TestControlFlowStopsATrapBodyReadALineAtATime: `exit` inside a body ends it
+// there, and reading a line at a time must not carry on to the next line
+// after it. Measured — `trap "exit 3\necho never" EXIT` exits 3 and never
+// prints, in every dialect that has an EXIT trap at all.
+func TestControlFlowStopsATrapBodyReadALineAtATime(t *testing.T) {
+	byLine := func(s *Semantics) { s.TrapBodyRunsWhatParsed = Yes }
+	out, _, st := trapRun(t, "trap 'exit 3\necho never' EXIT\necho end", byLine, Diagnostics{})
+	if strings.Contains(out, "never") {
+		t.Errorf("stdout = %q, want the body to stop at the exit", out)
+	}
+	if !strings.Contains(out, "end") {
+		t.Errorf("stdout = %q, want the script itself to have run", out)
+	}
+	if st != 3 {
+		t.Errorf("status = %d, want the status the body exited with", st)
+	}
+}

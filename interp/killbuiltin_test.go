@@ -42,6 +42,7 @@ func killSem() Semantics {
 	s.KillStatus = KillStatusAnyFailure
 	s.KillListAcceptsName = Yes
 	s.ExitTrapRunsOnSignalDeath = Yes
+	s.TrapBodyRunsWhatParsed = Yes
 	s.SIGPrefixAccepted = Yes
 	return s
 }

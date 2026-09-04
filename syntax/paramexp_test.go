@@ -235,3 +235,17 @@ func TestPrefixNamesNeedIndirection(t *testing.T) {
 		t.Error("want a refusal where the dialect has no `${!x}`")
 	}
 }
+
+// TestBangWithAnOperatorIsTheParameter — `${!:+set}` is `$!` with `:+`
+// applied; only a `!` that could begin a name is indirection.
+func TestBangWithAnOperatorIsTheParameter(t *testing.T) {
+	for _, src := range []string{`echo "${!:+set}"`, `echo "${!-none}"`, `echo "${!}"`} {
+		e := firstParam(t, src, everyFlag())
+		if e.Indirect || e.Name != "!" {
+			t.Errorf("%s: name=%q indirect=%v, want the special parameter", src, e.Name, e.Indirect)
+		}
+	}
+	if e := firstParam(t, `echo "${!a}"`, everyFlag()); !e.Indirect {
+		t.Error("`${!a}` lost its indirection")
+	}
+}

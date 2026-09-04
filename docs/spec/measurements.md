@@ -2281,6 +2281,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `param/length-of-a-value` | `[4]` | `[4]` | `[4]` | `[4]` | `[4]` | `[4]` |
 | `param/length-of-special-diverges` | `[5][5]` | `[3][3]` | `[3][3]` | `[3][3]` | `[3][3]` | `[3][3]` |
 | `param/substitution` | `<shell>: 1: Bad substitution` *(status 2)* | `[a+b-c][a+b+c]` | `[a+b-c][a+b+c]` | `[a+b-c][a+b+c]` | `[a+b-c][a+b+c]` | `[a+b-c][a+b+c]` |
+| `param/bang-with-an-operator-is-the-parameter` | `set` | `set` | `set` | `set` | `set` | `set` |
 | `param/a-bad-operator-in-a-branch-never-taken` | `ok` | `ok` | `ok` | `ok` | `<shell>: syntax error at line 1: ` ' unexpected` *(status 3)* | `ok` |
 | `param/a-bad-operator-reached` | `<shell>: 1: Bad substitution` *(status 2)* | `<shell>: line 1: ${foo ~}: bad substitution` *(status 1)* | `<shell>: line 1: ${foo ~}: bad substitution` *(status 127)* | `<shell>: ${foo ~}: bad substitution` *(status 1)* | `<shell>: syntax error at line 1: ` ' unexpected` *(status 3)* | `<shell>:1: bad substitution` *(status 1)* |
 | `param/substitution-anchored` | `<shell>: 1: Bad substitution` *(status 2)* | `[X-b][a-Y]` | `[X-b][a-Y]` | `[X-b][a-Y]` | `[X-b][a-Y]` | `[X-b][a-Y]` |
@@ -2352,6 +2353,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `param/substitution` — replace first versus replace every; absent from dash
   ```sh
   x=a-b-c; printf "[%s]" "${x/-/+}" "${x//-/+}"
+  ```
+- `param/bang-with-an-operator-is-the-parameter` — a `!` with an operator right after it is $! — not the start of an indirection that then has no name. All four shells print set
+  ```sh
+  true & echo "${!:+set}"
   ```
 - `param/a-bad-operator-in-a-branch-never-taken` — a bad substitution is a runtime error in bash, dash and zsh — an expansion never reached is never diagnosed. ksh93 alone refuses it while reading, which makes this an axis; Terraform templates rely on the runtime answer
   ```sh

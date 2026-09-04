@@ -12218,6 +12218,38 @@
         "TimedOut": false
       }
     },
+    "param/bang-with-an-operator-is-the-parameter": {
+      "bash": {
+        "Output": "set",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "set",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "set",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "set",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "set",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "set",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "param/case-change-applies-its-pattern": {
       "bash": {
         "Output": "[ABc]",

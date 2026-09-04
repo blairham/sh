@@ -1519,6 +1519,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
+| `readonly/reassignment-by-a-declaration` | `<shell>: 1: export: x: is read only` *(status 2)* | `<shell>: line 1: x: readonly variable~after` | `<shell>: line 1: x: readonly variable` *(status 1)* | `<shell>: x: readonly variable~after` | `<shell>: x: is read only` *(status 1)* | `<shell>:1: read-only variable: x` *(status 1)* |
 | `readonly/reassignment-from-a-command-string` | `<shell>: 1: x: is read only` *(status 2)* | `<shell>: line 1: x: readonly variable` *(status 1)* | `<shell>: line 1: x: readonly variable` *(status 127)* | `<shell>: x: readonly variable` *(status 1)* | `<shell>: x: is read only` *(status 1)* | `<shell>:1: read-only variable: x` *(status 1)* |
 | `jobs/a-running-background-job` | `[1] + Running                    ` | `[1]+  Running                    sleep 0.4 &` | `[1]+  Running                    sleep 0.4 &` | `[1]+  Running                 sleep 0.4 &` | `[1] +  Running                 <command unknown>` | `[1]  + running    sleep 0.4` |
 | `jobs/a-finished-background-job` | `[1] + Done                       ~---` | `[1]+  Done                       sleep 0.05~---` | `[1]+  Done                       sleep 0.05~---` | `---` | `[1] +  Running                 <command unknown>~---` | `---` |
@@ -1546,6 +1547,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `export/a-function-through-the-environment` | *(no output, status 2)* | `1` | `1` | `1` | *(no output, status 2)* | `0` *(status 1)* |
 | `export/a-name-that-is-not-a-function` | `<shell>: 1: export: Illegal option -f` *(status 2)* | `<shell>: line 1: export: nope: not a function~st=1` | `<shell>: line 1: export: nope: not a function~st=1` | `<shell>: line 0: export: nope: not a function~st=1` | `<shell>: export: -f: unknown option~Usage: export [-p] [name[=value]...]` *(status 2)* | `<shell>:export:1: invalid option(s)~st=1` |
 
+- `readonly/reassignment-by-a-declaration` — the same refusal reached through a declaration utility rather than by an assignment standing alone, and a different set of shells stops for it — three here, where a plain assignment stops all four. So which of the two ways the name was set decides, and one shell answers the two oppositely: it stops for the plain form given as an argument and never stops for this one
+  ```sh
+  readonly x=1; export x=2; echo after
+  ```
 - `readonly/reassignment-from-a-command-string` — an assignment to a name that cannot take one, given as an argument rather than read from a file. All four stop here — and one of them does not when the same three lines come from a file, which the case recorded elsewhere shows. So a readonly reassignment is fatal in three shells always and in the fourth by invocation, which is the second thing found to work that way after an expansion that failed
   ```sh
   readonly x=1; x=2; echo after

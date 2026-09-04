@@ -1412,6 +1412,9 @@ const (
 	// assignedAlone is an assignment standing as a command of its own —
 	// `x=2` on a line, and not `export x=2` or `x=2 cmd`.
 	assignedAlone
+	// assignedByDeclaration is an assignment made through a declaration
+	// utility — `export x=2`, `typeset x=2`, `readonly x=2`.
+	assignedByDeclaration
 )
 
 // setVarAs sets a variable, knowing how the assignment was written.
@@ -1425,15 +1428,36 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 		// exits 1, where the same three lines in a file print `after` and
 		// exit 0. Only for an assignment standing alone — `export x=2` and
 		// `x=2 cmd` are not fatal there either way.
+		// Two arguments only where the wording asks for two: a format with
+		// no explicit indexes and a spare argument becomes "%!(EXTRA …)",
+		// which is what Wording's own note is about.
+		msg := Wording(r.diag().ReadonlyVariable, "%s: readonly variable", name)
+		if form == assignedByDeclaration && r.diag().ReadonlyVariableInDeclaration != "" {
+			msg = Wording(r.diag().ReadonlyVariableInDeclaration, "", name, r.inBuiltin)
+		}
+		// The builtin has been taken for the wording above where a dialect
+		// wants it, and this message does not carry it in the *location* in
+		// the dialect that puts it there for everything else: zsh writes
+		// `zsh:1: read-only variable: x` from inside `export`, not
+		// `zsh:export:1:`. So it is put aside for the report and given back.
+		outer := r.inBuiltin
+		r.inBuiltin = ""
+		defer func() { r.inBuiltin = outer }()
 		fatal := r.sem().ReadonlyReassignmentFatal
-		if form == assignedAlone && r.CommandString {
+		switch {
+		case form == assignedAlone && r.CommandString:
 			fatal = r.sem().ReadonlyReassignmentFatalFromCommandString
+		case form == assignedByDeclaration:
+			// A third answer, and a different set of shells from either of
+			// the two above: `export x=2` stops dash, ksh93 and zsh, and
+			// bash reports it and carries on — by both invocation routes.
+			fatal = r.sem().ReadonlyReassignmentByDeclarationFatal
 		}
 		if r.ask(fatal, "a readonly reassignment being fatal") {
-			r.fatal("%s\n", Wording(r.diag().ReadonlyVariable, "%s: readonly variable", name))
+			r.fatal("%s\n", msg)
 			return
 		}
-		r.diagf("%s\n", Wording(r.diag().ReadonlyVariable, "%s: readonly variable", name))
+		r.diagf("%s\n", msg)
 		r.status = 1
 		return
 	}

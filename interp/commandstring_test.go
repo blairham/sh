@@ -131,6 +131,9 @@ func TestOnlyAnAssignmentStandingAloneAsksTheOtherQuestion(t *testing.T) {
 	sem := PosixSemantics()
 	sem.ReadonlyReassignmentFatal = No
 	sem.ReadonlyReassignmentFatalFromCommandString = Yes
+	// A declaration has a question of its own, and this test is about the
+	// command-string one not reaching it — so that one says carry on.
+	sem.ReadonlyReassignmentByDeclarationFatal = No
 	sem.FatalErrorStatusIsOne = Yes
 	r := &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
@@ -148,5 +151,140 @@ func TestOnlyAnAssignmentStandingAloneAsksTheOtherQuestion(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "after") {
 		t.Errorf("said %q, want the ordinary answer for a name set some other way", buf.String())
+	}
+}
+
+// A declaration utility assigning to a readonly name is a third question:
+// a different set of shells from either of the other two, and the same
+// answer by both invocation routes.
+func TestAReadonlyReassignmentByADeclaration(t *testing.T) {
+	for _, src := range []string{
+		"readonly x=1\nexport x=2\necho after\n",
+		"readonly x=1\ntypeset x=2\necho after\n",
+		"readonly x=1\nreadonly x=2\necho after\n",
+	} {
+		for _, c := range []struct {
+			name          string
+			byDeclaration Answer
+			commandString bool
+			carried       bool
+		}{
+			{"fatal, from a file", Yes, false, false},
+			{"fatal, from an argument", Yes, true, false},
+			{"not fatal, from a file", No, false, true},
+			{"and not from an argument either", No, true, true},
+		} {
+			t.Run(c.name, func(t *testing.T) {
+				var buf strings.Builder
+				sem := PosixSemantics()
+				// The other two answers say nothing about this one, so they
+				// are set the other way round to prove it.
+				sem.ReadonlyReassignmentFatal = No
+				sem.ReadonlyReassignmentFatalFromCommandString = No
+				sem.ReadonlyReassignmentByDeclarationFatal = c.byDeclaration
+				sem.FatalErrorStatusIsOne = Yes
+				r := &Runner{
+					Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
+					CommandString: c.commandString, Stdout: &buf, Stderr: &buf,
+				}
+				f, err := syntax.Parse(src, syntax.Core())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := r.Run(context.Background(), f); err != nil {
+					t.Fatal(err)
+				}
+				if carried := strings.Contains(buf.String(), "after"); carried != c.carried {
+					t.Errorf("%q said %q; carried on = %v, want %v", src, buf.String(), carried, c.carried)
+				}
+			})
+		}
+	}
+}
+
+// And where it is fatal the status is the failure's, not the builtin's own —
+// which is the half a builtin that returns a status of its own can undo.
+func TestADeclarationYieldsTheFailuresStatus(t *testing.T) {
+	var buf strings.Builder
+	sem := PosixSemantics()
+	sem.ReadonlyReassignmentByDeclarationFatal = Yes
+	sem.FatalErrorStatusIsOne = No // so the failure's status is 2, not 0 or 1
+	r := &Runner{
+		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
+		Stdout: &buf, Stderr: &buf,
+	}
+	f, err := syntax.Parse("readonly x=1\nexport x=2\necho after\n", syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, err := r.Run(context.Background(), f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st != 2 {
+		t.Errorf("status = %d, want the failure's 2 rather than the builtin's own", st)
+	}
+}
+
+// What a declaration says, which is not what a plain assignment says in
+// every dialect — and where the builtin's name goes.
+func TestWhatADeclarationSaysAboutAReadonlyName(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		dg   Diagnostics
+		want string
+		gone string
+	}{
+		{
+			// Without a wording of its own the plain one stands, which is
+			// three of the panel.
+			"the plain wording by default",
+			Diagnostics{ReadonlyVariable: "%[1]s: is read only"},
+			"x: is read only", "export",
+		},
+		{
+			// One dialect puts the builtin in front of the name.
+			"or one that names the builtin",
+			Diagnostics{
+				ReadonlyVariable:              "%[1]s: is read only",
+				ReadonlyVariableInDeclaration: "%[2]s: %[1]s: is read only",
+			},
+			"export: x: is read only", "",
+		},
+		{
+			// And the dialect that names the builtin in the *location* for
+			// everything else does not name it here.
+			"and never in the location",
+			Diagnostics{
+				Location:               LocationTightLine,
+				NamesBuiltinInLocation: true,
+				ReadonlyVariable:       "read-only variable: %[1]s",
+			},
+			"sh:2: read-only variable: x", "sh:export",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var buf strings.Builder
+			sem := PosixSemantics()
+			sem.ReadonlyReassignmentByDeclarationFatal = No
+			dg := c.dg
+			r := &Runner{
+				Semantics: &sem, Diagnostics: &dg, Name: "sh",
+				Stdout: &strings.Builder{}, Stderr: &buf,
+			}
+			f, err := syntax.Parse("readonly x=1\nexport x=2\n", syntax.Core())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := r.Run(context.Background(), f); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(buf.String(), c.want) {
+				t.Errorf("said %q, want %q in it", buf.String(), c.want)
+			}
+			if c.gone != "" && strings.Contains(buf.String(), c.gone) {
+				t.Errorf("said %q, want %q not in it", buf.String(), c.gone)
+			}
+		})
 	}
 }

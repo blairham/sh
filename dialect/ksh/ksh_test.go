@@ -92,6 +92,7 @@ func TestSemantics(t *testing.T) {
 		{"ReturnOutsideAFunctionIsRefused", s.ReturnOutsideAFunctionIsRefused, interp.No},
 		{"LoneDashIsAnOption", s.LoneDashIsAnOption, interp.No},
 		{"ReadonlyReassignmentFatalFromCommandString", s.ReadonlyReassignmentFatalFromCommandString, interp.Yes},
+		{"ReadonlyReassignmentByDeclarationFatal", s.ReadonlyReassignmentByDeclarationFatal, interp.Yes},
 		{"UnsetFunctionChecksTheName", s.UnsetFunctionChecksTheName, interp.Yes},
 		{"UnsetFunctionReportsMissing", s.UnsetFunctionReportsMissing, interp.No},
 		// What `type` does: whether it follows the sentence with the

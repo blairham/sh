@@ -942,6 +942,14 @@ type Diagnostics struct {
 	// NotFound is a command name that resolved to nothing. One verb: the
 	// name.
 	NotFound string
+	// ReadonlyVariableInDeclaration replaces it when the assignment was made
+	// through a declaration utility. Two verbs: the name and the builtin.
+	//
+	// dash alone puts the builtin in front — `export: x: is read only` —
+	// where its plain form says only the name. Empty leaves the wording
+	// below standing for both, which is what the other three want here.
+	ReadonlyVariableInDeclaration string
+
 	// ReadonlyVariable is an assignment to a readonly name. One verb: the
 	// name.
 	ReadonlyVariable string

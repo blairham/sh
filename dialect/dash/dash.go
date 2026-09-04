@@ -164,12 +164,14 @@ func Diagnostics() interp.Diagnostics {
 		Unterminated:             "Syntax error: end of file unexpected (expecting \"%[4]s\")",
 		SyntaxError:              "Syntax error: %s",
 		BadSubstitution:          "Bad substitution",
-		ReadonlyVariable:         "%s: is read only",
-		InvalidNumber:            "Illegal number: %s",
-		NumericArgument:          "%[1]s: Illegal number: %[2]s",
-		ArithError:               "arithmetic expression: %[2]s: \"%[1]s\"",
-		FileNotFound:             "No such file",
-		TestNamesFirstOperand:    true,
+		// The builtin in front, which its plain form does not have.
+		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: is read only",
+		ReadonlyVariable:              "%s: is read only",
+		InvalidNumber:                 "Illegal number: %s",
+		NumericArgument:               "%[1]s: Illegal number: %[2]s",
+		ArithError:                    "arithmetic expression: %[2]s: \"%[1]s\"",
+		FileNotFound:                  "No such file",
+		TestNamesFirstOperand:         true,
 		// 2 rather than the 1 the other three report, for a read and a write
 		// alike. Not fatal — the script carries on — so this is a different
 		// question from FatalErrorStatusIsOne, which is about a failure that

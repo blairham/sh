@@ -323,7 +323,9 @@ func Diagnostics() interp.Diagnostics {
 		BuiltinBadNameKeepsValue: true,
 		BuiltinUsageUnprefixed:   true,
 		BuiltinUsage: map[string]string{
-			"export":   "export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
+			"export": "export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
+			"read": "read: usage: read [-Eers] [-a array] [-d delim] [-i text] " +
+				"[-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
 			"readonly": "readonly: usage: readonly [-aAf] [name[=value] ...] or readonly -p",
 			"trap":     "trap: usage: trap [-Plp] [[action] signal_spec ...]",
 			"wait":     "wait: usage: wait [-fn] [-p var] [id ...]",

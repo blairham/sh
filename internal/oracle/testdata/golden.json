@@ -13946,6 +13946,38 @@
         "TimedOut": false
       }
     },
+    "read/a-bad-letter-in-a-bundle-is-named-alone": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: read: -x: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~st=2~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: read: -x: invalid option~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~st=2~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: read: -x: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]~st=2~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: read: Illegal option -x~st=2~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: read: -x: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]~st=2~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:read:1: bad option: -x~st=1~after",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "read/a-failing-read-still-assigns": {
       "bash": {
         "Output": "st=1 l=[]",
@@ -14038,6 +14070,38 @@
       },
       "zsh": {
         "Output": "\u003ca\u003e",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "read/options-cluster-in-one-word": {
+      "bash": {
+        "Output": "[x\\]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[x\\]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[x\\]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[x\\]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[x\\]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[x\\]",
         "Status": 0,
         "TimedOut": false
       }

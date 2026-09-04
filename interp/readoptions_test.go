@@ -67,6 +67,56 @@ func TestReadSaysWhenAnOptionIsMerelyMissing(t *testing.T) {
 	}
 }
 
+// TestReadSplitsAClusteredBundle: `-rr` is two options in one word, both of
+// them the letter this shell implements. Reading the word whole refused it —
+// the bundle was not `-r`, so it went to the refusal path with an option the
+// builtin has inside it (#347).
+func TestReadSplitsAClusteredBundle(t *testing.T) {
+	out, _ := run(t, "printf 'x\\\\\ny\n' | { read -rr v; echo \"[$v]\"; }", nil)
+	if !strings.Contains(out, `[x\]`) {
+		t.Errorf("read -rr: got %q, want the bundle read as two -r flags", out)
+	}
+}
+
+// TestAMissingOptionInABundleIsNamedAlone: the half of #347 that shows while
+// `-a` is unimplemented (#321). `read -ra` is `-r -a`, and the complaint is
+// about `-a` — the missing letter — not about a word `-ra` that no shell
+// would refuse.
+func TestAMissingOptionInABundleIsNamedAlone(t *testing.T) {
+	out, _ := run(t, `read -ra arr </dev/null`, func(r *Runner) {
+		s := *r.Semantics
+		s.BadOptionToSpecialBuiltinFatal = No
+		r.Semantics = &s
+		dg := Diagnostics{
+			BuiltinBadOption:           "read: %[2]s: bad",
+			UnimplementedOptionLetters: map[string]string{"read": "a"},
+		}
+		r.Diagnostics = &dg
+	})
+	if !strings.Contains(out, "-a is not implemented yet") {
+		t.Errorf("got %q, want -a said to be missing", out)
+	}
+	if strings.Contains(out, "-ra") {
+		t.Errorf("got %q, want the letter named without the bundle", out)
+	}
+}
+
+// TestAnUnknownOptionInABundleIsNamedAlone is the same rule on the refusal
+// path: the shells walk the bundle and stop at the letter they cannot use, so
+// the complaint names that letter and not the word it rode in on.
+func TestAnUnknownOptionInABundleIsNamedAlone(t *testing.T) {
+	out, _ := run(t, `read -rq v </dev/null`, func(r *Runner) {
+		s := *r.Semantics
+		s.BadOptionToSpecialBuiltinFatal = No
+		r.Semantics = &s
+		dg := Diagnostics{BuiltinBadOption: "read: %[2]s: bad"}
+		r.Diagnostics = &dg
+	})
+	if !strings.Contains(out, "read: -q: bad") {
+		t.Errorf("got %q, want the offending letter named alone", out)
+	}
+}
+
 // TestDashDashEndsReadsOptions, so a variable named like an option can still
 // be read into.
 func TestDashDashEndsReadsOptions(t *testing.T) {

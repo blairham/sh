@@ -1470,3 +1470,71 @@ The 30 disagreements `make wild-run` attributed to `builtin` are the
 those are builtins this shell does not have, and most are interactive. The
 error moves from "builtin: command not found" to naming the one that is
 missing, which is a better answer to the same unfinished question.
+
+## A bundle of option letters is one word and several options
+
+`read -ra arr` means `read -r -a arr` in every shell there is. The rule is
+POSIX's own — the Utility Syntax Guidelines say option letters group behind
+one dash — and it is unanimous, which makes it the substrate's answer rather
+than an axis. Measured, with `read` because its `-r` is the letter every
+shell shares:
+
+    printf 'x\\\ny\n' | $sh -c 'read -rr v; echo "[$v]"'
+    dash bash bash3.2 ksh93 zsh    → [x\]    (status 0)
+
+Two `r`s in one word, and all five read the bundle letter by letter and
+honor the raw flag twice. dash proves the split from the other side:
+`read -rp v` there is `arg count` — it split `-rp`, took `p`, and came up a
+variable short — where a shell reading whole words would have refused the
+word itself.
+
+This shell refused the bundle wholesale: `read -ra arr` was `-ra is not
+implemented yet`, one unknown word, even though `-r` is implemented and `-a`
+is the only missing half. `set -euo pipefail` worked all along because `set`
+has an option reader of its own, which is what said the splitting existed
+and was not shared. Found in the wild — Homebrew's `rustc_wrapper` shim uses
+`read -ra` (#347).
+
+### A letter that takes an argument takes the rest of the word, or the next one
+
+Both spellings are the same option everywhere, which `getopts` already
+records for programs and holds for builtins too:
+
+    printf 'a:b c\n' | bash -c 'read -rd : v; echo "[$v]"'   → [a]
+    printf 'a:b c\n' | bash -c 'read -rd: v; echo "[$v]"'    → [a]
+    printf 'x\n'     | dash -c 'read -pfoo v; echo "[$v]"'   → [x]
+    printf 'q r\n'   | ksh  -c 'read -rd" " v; echo "[$v]"'  → [q]
+
+So an argument-taking letter ends its bundle: what follows it in the word is
+the argument, and when nothing follows, the next word is. An argument that
+never arrives — the bundle ends the argument list — is refused in all four,
+with a status of 2 except in zsh:
+
+    bash: read: -d: option requires an argument   (status 2, then usage)
+    ksh:  read: -d: delim argument expected       (status 2, then usage)
+    zsh:  argument expected: -d                   (status 1)
+
+### The complaint names the letter, not the bundle
+
+A bad letter in a bundle is named alone, in all four — the shells walk the
+word and stop at the letter they cannot use, so the bundle it rode in on is
+not in the message:
+
+    $sh -c 'read -rx v </dev/null; echo "st=$?"; echo after'
+    dash   dash: 1: read: Illegal option -x            st=2  after
+    bash   bash: line 1: read: -x: invalid option      st=2  after  (usage between)
+    ksh93  ksh: read: -x: unknown option               st=2  after  (usage between)
+    zsh    zsh:read:1: bad option: -x                  st=1  after
+
+All four then carry on — `read` is not a special builtin, so nobody's
+fatality rule reaches it.
+
+This measurement sharpens `BadOptionNaming`. ksh93 was recorded as naming
+the whole word from `export -Q`, where the word and the letter are the same
+thing; the bundle tells them apart, and ksh93 names the letter — `-x` above,
+and `-f` then `-Q` for `export -fQ`, one complaint per bad letter, a
+divergence noted under `printf` and still not modeled. The whole word
+survives only for a word that begins with `--`: `export --foo` is
+`--foo: unknown option` there, against bash's `--: invalid option` and zsh's
+`bad option: -o` — zsh skipped the dashes, took `f` as one of export's own
+letters, and stopped on the `o` it does not know.

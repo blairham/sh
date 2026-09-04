@@ -1063,6 +1063,11 @@ var Corpus = []Case{
 		Why:     "a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else",
 	},
 	{
+		ID: "name/a-lone-dash-given-to-a-builtin", Category: "builtins",
+		Snippet: `unalias -; echo "st=$?"`,
+		Why:     "a `-` on its own is an operand in three of the panel and an option in zsh, which eats it. `unalias` is where that shows: the three complain about an alias called `-`, each in its own words, and the fourth complains that it was given nothing to unalias at all. `unset -` looks the same in bash for a different reason — its bare form validates no operand — which is why the case is not written with that one",
+	},
+	{
 		ID: "param/error-operator-on-an-unset-name", Category: "expansion",
 		// A script rather than -c: bash exits 127 for this when it was given
 		// its program as an argument and 1 when it read a file, which is a

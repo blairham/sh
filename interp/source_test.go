@@ -55,6 +55,9 @@ func permissive() Semantics {
 	s.DotWithNoOperandIsAnError = Yes
 	s.DotPassesArguments = Yes
 	s.DotFallsBackToCurrentDirectory = No
+	// The majority answer, so a test that is not about the lone dash gets
+	// the operand three of the four would pass on.
+	s.LoneDashIsAnOption = No
 	return s
 }
 

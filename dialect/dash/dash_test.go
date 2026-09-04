@@ -124,6 +124,7 @@ func TestSemantics(t *testing.T) {
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.Yes},
 		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.Yes},
 		{"ReturnOutsideAFunctionIsRefused", s.ReturnOutsideAFunctionIsRefused, interp.No},
+		{"LoneDashIsAnOption", s.LoneDashIsAnOption, interp.No},
 		// What `type` does: whether it follows the sentence with the
 		// function itself, and whether `--` ends its options.
 		{"TypePrintsFunctionBody", s.TypePrintsFunctionBody, interp.No},

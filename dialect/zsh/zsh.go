@@ -150,6 +150,7 @@ func Semantics() interp.Semantics {
 	s.CdLastPathOptionWins = interp.No
 	s.BadSetOptionNameFatal = interp.Yes
 	s.ReturnOutsideAFunctionIsRefused = interp.No
+	s.LoneDashIsAnOption = interp.Yes
 
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.No

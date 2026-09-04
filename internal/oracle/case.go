@@ -1554,6 +1554,21 @@ echo "st=$?"`,
 		Why:     "`>&2` sends to stderr, so discarding stderr discards it — the check that the duplication happened rather than the word being an argument",
 	},
 	{
+		ID: "redir/exec-saves-a-stream", Category: "redirection",
+		Snippet: `exec 6>&1; echo through >&6; exec 6>&-; echo "st=$?"`,
+		Why:     "the saved-stdout idiom every configure script uses: `exec 6>&1` keeps the stream, `>&6` finds it again, `6>&-` lets it go",
+	},
+	{
+		ID: "redir/exec-opens-a-high-descriptor", Category: "redirection",
+		Snippet: `exec 3>f; echo hi; echo aside >&3; exec 3>&-; cat f`,
+		Why:     "`exec 3>file` holds the file on a descriptor of its own — stdout stays where it was, and only what is aimed at 3 reaches the file",
+	},
+	{
+		ID: "redir/a-dup-prefix-is-that-commands-alone", Category: "redirection",
+		Snippet: `true 6>&1; echo hi >&6; echo "st=$?"`,
+		Why:     "a duplication prefixed to one command does not outlive it — only `exec`'s do",
+	},
+	{
 		ID: "redir/merge-then-file", Category: "redirection",
 		Snippet: `{ echo out; echo err >&2; } >f 2>&1; printf "[%s]" "$(cat f)"`,
 		Why:     "both streams reach the file: stdout is redirected first, then stderr is pointed at where stdout now goes",

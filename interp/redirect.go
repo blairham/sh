@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,9 +25,9 @@ import (
 // sandbox that only gates execution has not gated the thing that writes to
 // the filesystem.
 //
-// This slice handles the plain file redirections. Descriptor duplication,
-// here-strings and here-document bodies are not here yet; the parser produces
-// them and this refuses them rather than ignoring them.
+// File redirections, descriptor duplication, here-strings and here-document
+// bodies are all here; what the shell cannot express is refused rather than
+// ignored.
 func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compound bool) ([]io.Closer, error) {
 	r.redirErr = false
 	if len(rs) == 0 {
@@ -45,6 +46,23 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		r.Stdout, r.Stdin, r.Stderr = savedOut, savedIn, savedErr
 		return nil
 	}))
+	// The descriptor table is restored the same way the streams are, and by
+	// the same mechanism that lets `exec`'s outlive the command: copy on the
+	// first write, and a closer that puts the original back. `exec` skips
+	// every closer, so what it wrote stays written.
+	fdsTouched := false
+	saveFds := func() {
+		if fdsTouched {
+			return
+		}
+		fdsTouched = true
+		saved := r.fds
+		r.fds = maps.Clone(r.fds)
+		closers = append(closers, closerFunc(func() error {
+			r.fds = saved
+			return nil
+		}))
+	}
 
 	// Where a failed open is reported is the dialect's answer, and the three
 	// they give differ only when the redirect and its command are on
@@ -98,6 +116,9 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		if rd.Op == syntax.TokGreatAmp || rd.Op == syntax.TokLessAmp {
 			if rd.N == nil && rd.Op == syntax.TokLessAmp {
 				fd = 0
+			}
+			if fd > 2 {
+				saveFds()
 			}
 			if err := r.dupFd(fd, name); err != nil {
 				r.diagf("%v\n", err)
@@ -212,20 +233,12 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		case 2:
 			r.Stderr = r.eachTarget(2, f, opened)
 		default:
-			// A descriptor this shell cannot address is refused, not rounded
-			// down to one it can. `default` used to land on stdout, so
-			//
-			//	exec 3>out.txt
-			//
-			// opened the file, said nothing, exited 0 — and sent every later
-			// `echo` into it, because the 3 was dropped and the redirection
-			// applied to stdout. A side channel took the script's whole
-			// output with it.
-			//
-			// Three named streams is what this shell has; see dupFd, which
-			// says the same thing about `>&N`. Saying so is better than
-			// quietly meaning something else.
-			return closers, fmt.Errorf("not implemented yet: redirecting file descriptor %d, which needs a descriptor table", fd)
+			// A descriptor beyond the three named streams goes into the
+			// table, where `>&N` finds it. `default` used to land on stdout,
+			// so `exec 3>out.txt` sent every later `echo` into the file —
+			// then it was refused outright, and now the number is kept.
+			saveFds()
+			r.setFd(fd, f)
 		}
 	}
 	return closers, nil
@@ -367,9 +380,10 @@ func (d Diagnostics) openReason(err error, creating bool) string {
 
 // dupFd points one descriptor at another, or closes it.
 //
-// Only 0, 1 and 2 are addressable. A shell with an `exec 3>file` would need a
-// descriptor table; this has three named streams, and saying so is better than
-// accepting `3>&1` and quietly doing nothing with it.
+// 0, 1 and 2 are the named streams; everything above them lives in the
+// descriptor table, which is what makes `exec 6>&1; echo hi >&6` work. A
+// caller redirecting into the table must call the applyRedirs save first,
+// so the write can be taken back when the command ends.
 func (r *Runner) dupFd(fd int, target string) error {
 	if target == "-" {
 		switch fd {
@@ -377,8 +391,12 @@ func (r *Runner) dupFd(fd int, target string) error {
 			r.Stdin = closedFd{}
 		case 2:
 			r.Stderr = closedFd{}
-		default:
+		case 1:
 			r.Stdout = closedFd{}
+		default:
+			// Closing a descriptor that was never open is not an error in
+			// any shell measured, so neither is deleting a missing entry.
+			delete(r.fds, fd)
 		}
 		return nil
 	}
@@ -395,7 +413,11 @@ func (r *Runner) dupFd(fd int, target string) error {
 	case 2:
 		src = r.stderr()
 	default:
-		return fmt.Errorf("%d: bad file descriptor", m)
+		v, held := r.fds[m]
+		if !held {
+			return fmt.Errorf("%d: bad file descriptor", m)
+		}
+		src = v
 	}
 	switch fd {
 	case 0:
@@ -415,9 +437,17 @@ func (r *Runner) dupFd(fd int, target string) error {
 			r.Stdout = w
 		}
 	default:
-		return fmt.Errorf("%d: bad file descriptor", fd)
+		r.setFd(fd, src)
 	}
 	return nil
+}
+
+// setFd records a descriptor beyond the named three.
+func (r *Runner) setFd(fd int, v any) {
+	if r.fds == nil {
+		r.fds = map[int]any{}
+	}
+	r.fds[fd] = v
 }
 
 // closedFd is a descriptor that has been closed with `>&-`. Reading or writing

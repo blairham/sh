@@ -2148,6 +2148,9 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `redir/create-failure-reason-diverges` | `<shell>: 1: cannot create nodir/out: Directory nonexistent~st=2` | `<shell>: line 1: nodir/out: No such file or directory~st=1` | `<shell>: line 1: nodir/out: No such file or directory~st=1` | `<shell>: nodir/out: No such file or directory~st=1` | `<shell>: nodir/out: cannot create [No such file or directory]~st=1` | `<shell>:1: no such file or directory: nodir/out~st=1` |
 | `redir/failure-does-not-run-the-command` | `<shell>: 1: cannot create nodir/out: Directory nonexistent~st=2` | `<shell>: line 1: nodir/out: No such file or directory~st=1` | `<shell>: line 1: nodir/out: No such file or directory~st=1` | `<shell>: nodir/out: No such file or directory~st=1` | `<shell>: nodir/out: cannot create [No such file or directory]~st=1` | `<shell>:1: no such file or directory: nodir/out~st=1` |
 | `redir/dup-to-stderr` | `done` | `done` | `done` | `done` | `done` | `done` |
+| `redir/exec-saves-a-stream` | `through~st=0` | `through~st=0` | `through~st=0` | `through~st=0` | `through~st=0` | `through~st=0` |
+| `redir/exec-opens-a-high-descriptor` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` |
+| `redir/a-dup-prefix-is-that-commands-alone` | `<shell>: 1: 6: Bad file descriptor~st=2` | `<shell>: line 1: 6: Bad file descriptor~st=1` | `<shell>: line 1: 6: Bad file descriptor~st=1` | `<shell>: 6: Bad file descriptor~st=1` | `<shell>: 6: cannot open [Bad file descriptor]~st=1` | `<shell>:1: 6: bad file descriptor~st=1` |
 | `redir/merge-then-file` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` |
 | `redir/file-then-merge` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` |
 | `redir/multios-is-zsh-only` | `[][x]` | `[][x]` | `[][x]` | `[][x]` | `[][x]` | `[x][x]` |
@@ -2252,6 +2255,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `redir/dup-to-stderr` — `>&2` sends to stderr, so discarding stderr discards it — the check that the duplication happened rather than the word being an argument
   ```sh
   { echo hi >&2; } 2>/dev/null; echo done
+  ```
+- `redir/exec-saves-a-stream` — the saved-stdout idiom every configure script uses: `exec 6>&1` keeps the stream, `>&6` finds it again, `6>&-` lets it go
+  ```sh
+  exec 6>&1; echo through >&6; exec 6>&-; echo "st=$?"
+  ```
+- `redir/exec-opens-a-high-descriptor` — `exec 3>file` holds the file on a descriptor of its own — stdout stays where it was, and only what is aimed at 3 reaches the file
+  ```sh
+  exec 3>f; echo hi; echo aside >&3; exec 3>&-; cat f
+  ```
+- `redir/a-dup-prefix-is-that-commands-alone` — a duplication prefixed to one command does not outlive it — only `exec`'s do
+  ```sh
+  true 6>&1; echo hi >&6; echo "st=$?"
   ```
 - `redir/merge-then-file` — both streams reach the file: stdout is redirected first, then stderr is pointed at where stdout now goes
   ```sh

@@ -93,6 +93,19 @@ func allDigits(s string) bool {
 
 // nameRules gives the two answers that split by builtin rather than by
 // dialect, in one place rather than at each of the three call sites.
+// takesASubscript answers whether `a[0]` is a name to this builtin.
+//
+// Two questions rather than one, because the answer is per builtin as much
+// as per dialect: bash takes it for `unset` and refuses it for `export` and
+// `readonly`, and the two builtins sit on different name strictnesses in
+// every shell, so no rule over that strictness gives all four.
+func (r *Runner) takesASubscript(builtin string) bool {
+	if builtin == "unset" {
+		return r.ask(r.sem().UnsetTakesASubscript, "`unset a[0]` naming an array element")
+	}
+	return r.ask(r.sem().DeclarationTakesASubscript, "`export a[0]` naming an array element")
+}
+
 func (r *Runner) nameRules(builtin string) (fatal Answer, takes NameOperands) {
 	if builtin == "unset" {
 		return r.sem().BadNameToUnsetFatal, r.sem().UnsetNameOperands
@@ -108,10 +121,10 @@ func (r *Runner) nameRules(builtin string) (fatal Answer, takes NameOperands) {
 // never reaches the second, which falls out of the fatality rather than
 // needing a rule of its own.
 //
-// A subscripted operand is left alone. `export a[0]` splits the panel four
-// ways — bash and dash refuse it, ksh93 takes it, and zsh answers with a
-// complaint about the subscript rather than the name — and that is a question
-// about arrays, not about what a name is.
+// Whether a subscripted operand is a name is its own question, and it is
+// answered per builtin as well as per dialect: bash refuses `export a[0]`
+// and takes `unset a[0]`, ksh93 takes both, dash refuses both. Asked only
+// when an operand has a subscript, so nothing else is affected.
 func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bool) (rest []string, status int) {
 	fatal, takes := r.nameRules(builtin)
 	// `unset -v` asks for a variable by name, and gets a name checked even
@@ -123,7 +136,15 @@ func (r *Runner) builtinNames(builtin string, args []string, explicitVariable bo
 	}
 	for _, a := range args {
 		name, _, _ := strings.Cut(a, "=")
-		if _, _, subscripted := r.subscriptOperand(name); subscripted || r.isBuiltinName(name, takes) {
+		if _, _, subscripted := r.subscriptOperand(name); subscripted {
+			if r.takesASubscript(builtin) {
+				rest = append(rest, a)
+				continue
+			}
+			if r.unspecified {
+				return nil, 2
+			}
+		} else if r.isBuiltinName(name, takes) {
 			rest = append(rest, a)
 			continue
 		}

@@ -2938,6 +2938,38 @@
         "TimedOut": false
       }
     },
+    "axis/unset-a-subscripted-operand": {
+      "bash": {
+        "Output": "st=0~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: unset: a[0]: bad variable name",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0~after",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "builtin/an-option-it-does-have": {
       "bash": {
         "Output": "[unset]",

@@ -148,6 +148,8 @@ func Semantics() interp.Semantics {
 	s.BadNameToUnsetFatal = interp.No
 	s.DeclarationNameOperands = interp.PlainNamesOnly
 	s.UnsetNameOperands = interp.PlainNamesOnly
+	s.DeclarationTakesASubscript = interp.Yes
+	s.UnsetTakesASubscript = interp.Yes
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.Yes

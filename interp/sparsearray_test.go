@@ -80,6 +80,9 @@ func TestTheGapQuestionIsAskedOnlyWhereThereIsOne(t *testing.T) {
 				// about the gap and not about the base or the scalar view.
 				sem.ArrayBaseIsZero = Yes
 				sem.ArrayScalarIsTheWholeArray = No
+				// `unset a[0]` names an element here, which is the thing
+				// under test rather than a question this asks.
+				sem.UnsetTakesASubscript = Yes
 				r.Semantics = &sem
 			})
 			if got := strings.Contains(out, "no element at all"); got != tc.refuses {
@@ -114,6 +117,7 @@ func TestUnsettingUsesTheDialectsOwnSubscript(t *testing.T) {
 	out, st := run(t, `a=(p q r); unset "a[2]"; echo "[${a[@]}]"`, func(r *Runner) {
 		sem := CoreSemantics()
 		sem.ArraysAreSparse = No
+		sem.UnsetTakesASubscript = Yes
 		// Counted from one, so `a[2]` is the middle element and not the last.
 		sem.ArrayBaseIsZero = No
 		sem.ArrayScalarIsTheWholeArray = No
@@ -143,6 +147,7 @@ func arrays(t *testing.T, src string, sparse Answer) string {
 	sem.ArraysAreSparse = sparse
 	sem.ArrayBaseIsZero = Yes
 	sem.ArrayScalarIsTheWholeArray = No
+	sem.UnsetTakesASubscript = Yes
 	sem.IndirectionYieldsName = No
 	r := &Runner{Semantics: &sem, Dialect: &d, Stdout: &out, Stderr: &out}
 	if _, err := r.Run(context.Background(), f); err != nil {

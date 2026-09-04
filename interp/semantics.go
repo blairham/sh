@@ -1086,6 +1086,21 @@ type Semantics struct {
 	// bash 5.3 checks a name for `export` and nothing at all for `unset`. One
 	// field could not say either.
 	UnsetNameOperands NameOperands
+
+	// DeclarationTakesASubscript accepts `export a[0]` and `readonly a[0]`,
+	// naming an element rather than a variable. ksh93 does; bash and dash
+	// refuse it in the words they give any other bad name.
+	//
+	// A separate question from the name strictness above, because the answer
+	// is per builtin: bash refuses it here and takes it for `unset`, and the
+	// two builtins sit on different strictnesses in every shell, so no rule
+	// over that strictness gives all four.
+	DeclarationTakesASubscript Answer
+
+	// UnsetTakesASubscript is the same question asked of `unset`, where the
+	// answers are not the same: bash, ksh93 and zsh take it and dash refuses
+	// it.
+	UnsetTakesASubscript Answer
 }
 
 // NameOperands is what a builtin takes where it wants a name.
@@ -1274,10 +1289,17 @@ func PosixSemantics() Semantics {
 		// POSIX gives all three a *name*, and neither a special parameter
 		// nor a positional one is a name — a positional has `shift` to
 		// remove it.
-		DeclarationNameOperands:   PlainNamesOnly,
-		UnsetNameOperands:         PlainNamesOnly,
-		DotMissingFileFatal:       Yes,
-		DotWithNoOperandIsAnError: Yes,
+		DeclarationNameOperands: PlainNamesOnly,
+		UnsetNameOperands:       PlainNamesOnly,
+		// The core has arrays — they are in the common denominator even
+		// though POSIX has none — so `unset a[0]` names an element and
+		// removes it, which is what three of the four do and the only part
+		// of this anybody writes. A *declaration* still names a variable
+		// rather than an element, which is bash's and dash's answer.
+		DeclarationTakesASubscript: No,
+		UnsetTakesASubscript:       Yes,
+		DotMissingFileFatal:        Yes,
+		DotWithNoOperandIsAnError:  Yes,
 		// The standard gives `.` a filename and nothing else; passing
 		// positional parameters to a sourced file is an extension three of
 		// the four grew. And it reads the file from PATH, with no mention of

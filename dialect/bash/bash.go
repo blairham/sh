@@ -39,6 +39,9 @@ func Dialect() syntax.Dialect {
 	// A name followed by `(` is a function definition here, whether or not
 	// the `)` comes next.
 	d.FuncDefAtParen = true
+	// And having committed, the body must be compound: `f() echo hi` is a
+	// syntax error here and a one-command function in the other three.
+	d.FuncBodyMustBeCompound = true
 	// And inside `[[ ]]`, which is the only place bash reads them.
 	d.ExtendedPatternInCondition = true
 	// A bare `|` in a `=~` operand belongs to the regular expression.

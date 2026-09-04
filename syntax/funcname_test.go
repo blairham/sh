@@ -49,3 +49,23 @@ func TestPunctuatedFunctionNamesFollowTheFlag(t *testing.T) {
 		t.Error("POSIX accepted a name it does not have")
 	}
 }
+
+// TestASimpleCommandBodyFollowsTheFlag — one grammar refuses `f() echo hi`
+// and three read it as a one-command body; the flag says which this is.
+func TestASimpleCommandBodyFollowsTheFlag(t *testing.T) {
+	strict := Core()
+	strict.FuncBodyMustBeCompound = true
+	if _, err := Parse(`f() echo hi`, strict); err == nil {
+		t.Error("the refusing grammar accepted a simple body")
+	} else if !strings.Contains(err.Error(), "echo") {
+		t.Errorf("refusal = %v, want the token named", err)
+	}
+	for _, src := range []string{`f() { echo hi; }`, `f() if true; then :; fi`, `f() ( : )`} {
+		if _, err := Parse(src, strict); err != nil {
+			t.Errorf("%s: a compound body refused: %v", src, err)
+		}
+	}
+	if _, err := Parse(`f() echo hi; f`, Core()); err != nil {
+		t.Errorf("the accepting grammar refused: %v", err)
+	}
+}

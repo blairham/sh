@@ -1139,6 +1139,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `cmd/for-status-empty-list` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `cmd/case-fallthrough` | `<shell>: 1: Syntax error: "&" unexpected` *(status 2)* | `one~two` | `one~two` | `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in a) echo one;& b) echo two;; esac'` *(status 2)* | `one~two` | `one~two` |
 | `cmd/case-continue-matching` | `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `one~two` | `one~two` | `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in a) echo one;;& a) echo two;; esac'` *(status 2)* | `<shell>: syntax error at line 1: `&' unexpected` *(status 3)* | `<shell>:1: parse error near `&'` *(status 1)* |
+| `cmd/function-body-simple-command` | `hi` | `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `f() echo hi; f'` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `f() echo hi; f'` *(status 2)* | `<shell>: -c: line 0: syntax error near unexpected token `echo'~<shell>: -c: line 0: `f() echo hi; f'` *(status 2)* | `hi` | `hi` |
 | `cmd/function-name-with-a-dash` | `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `ok~after` | `ok~after` | `ok~after` | `<shell>: f-g: invalid function name` *(status 1)* | `ok~after` |
 | `cmd/function-name-with-a-dot` | `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `ok~after` | `ok~after` | `ok~after` | `<shell>: a.b: invalid discipline function` *(status 1)* | `ok~after` |
 | `cmd/function-posix-form` | `posix` | `posix` | `posix` | `posix` | `posix` | `posix` |
@@ -1243,6 +1244,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `cmd/case-continue-matching` — ;;& keeps testing later patterns and is bash-only — lumping it with ;& would put a bash construct in the core
   ```sh
   case a in a) echo one;;& a) echo two;; esac
+  ```
+- `cmd/function-body-simple-command` — bash alone wants a compound body after the parens; dash, ksh93 and zsh take the simple command as a one-command body and run it — being more permissive than bash here is the dangerous direction only for scripts aimed at bash
+  ```sh
+  f() echo hi; f
   ```
 - `cmd/function-name-with-a-dash` — four answers: bash and zsh define and run it, dash refuses the name at parse time, ksh93 parses and stops the script at the definition
   ```sh

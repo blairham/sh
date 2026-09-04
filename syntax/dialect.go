@@ -80,6 +80,13 @@ type Dialect struct {
 	// function called `[[` to a shell without `[[`.
 	FuncDefAtParen bool
 
+	// FuncBodyMustBeCompound refuses `f() echo hi`: bash alone wants a
+	// compound command after the parens, where dash, ksh93 and zsh take a
+	// simple command as a one-command body and run it. The keyword form is
+	// not this flag's question — its shapes differ per shell in ways the
+	// POSIX form's do not.
+	FuncBodyMustBeCompound bool
+
 	// FunctionNamePunctuation lets a POSIX-form or keyword-form function
 	// name carry `-` and `.` — `f-g()` and `a.b()` — which bash, ksh93 and
 	// zsh all parse. dash refuses the name outright (`Bad function name`),

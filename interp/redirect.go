@@ -296,6 +296,10 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			r.redirErr = true
 			return closers, nil
 		}
+		// The open that happened, not only the one that failed: an audit
+		// trail fed by the error path alone held every file the shell could
+		// not open and none it could.
+		r.emit(ctx, Event{Kind: EventAccess, Action: action})
 		if !persists {
 			// A descriptor that outlives the command must not be closed
 			// when it ends, which is the same exemption `exec` already has

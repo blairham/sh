@@ -52,11 +52,21 @@ two primitives serve all three:
 Every action that leaves the interpreter's own memory passes both:
 process execution, file open, file stat, directory read, and each
 redirect. That set is the syscall-shaped surface of a shell, and it is
-the complete boundary.
+the complete boundary. The one exemption is deliberate and documented on
+the action vocabulary itself: the scaffolding a process substitution
+stands on — the temporary directory made for its pipes, the mkfifo, their
+removal — is the interpreter's own plumbing on paths the script never
+chooses, and gating it would let a policy refuse the mechanism while
+believing it refused an access. The access is the open of the pipe, and
+that is gated.
 
 **What lives here and what does not.** The substrate owns the gate, the
 event stream, and the structured representation of an error — what
-failed, its status, its output, its position in the source. It does not
+failed, its status, its position in the source. What a command *wrote* is
+deliberately not copied into that record: the streams are the caller's
+own io.Writers, handed over before anything ran, so a consumer that wants
+output taps the writer it supplied rather than receiving a second copy of
+what it already holds. The substrate does not
 own OS sandbox backends, protocol transports, or model providers. A
 library that imports an AI SDK is a library nobody adopts; the seams are
 here, the implementations sit above.

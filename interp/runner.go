@@ -839,9 +839,17 @@ func (r *Runner) name() string {
 }
 
 func (r *Runner) emit(ctx context.Context, e Event) {
-	if r.Events != nil {
-		r.Events.Emit(ctx, e)
+	if r.Events == nil {
+		return
 	}
+	// Every event carries where it came from, filled in one place so no
+	// site can forget: the line a diagnostic about the action would name,
+	// and the file that line is in. Safe from the goroutines events are
+	// emitted on, because each one runs a clone of its own — the same
+	// arrangement diagf already relies on.
+	e.Line = r.line
+	e.File = r.currentFile()
+	r.Events.Emit(ctx, e)
 }
 
 // allowed consults the gate. A refusal is reported and becomes a failing

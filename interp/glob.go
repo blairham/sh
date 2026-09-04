@@ -183,7 +183,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 					}
 					selfDirs[dir] = true
 				}
-				next = appendDescendants(next, dir, seeHidden)
+				next = r.appendDescendants(next, dir, seeHidden)
 			}
 			sortMatches(next)
 			next = compactSorted(next)
@@ -191,7 +191,7 @@ func (r *Runner) glob(field string) ([]string, bool) {
 			o := r.patternOpts(part)
 			o.fold = r.MatchOption(GlobFoldsCase)
 			for _, dir := range dirs {
-				next = append(next, matchIn(dir, part, o, seeHidden)...)
+				next = append(next, r.matchIn(dir, part, o, seeHidden)...)
 			}
 		}
 		if len(next) == 0 {
@@ -201,9 +201,12 @@ func (r *Runner) glob(field string) ([]string, bool) {
 		dirs = next
 		if i < len(parts)-1 {
 			// Only directories can be descended into.
+			// Through the gate, like every stat: a match the policy hides
+			// is not descended into, the same as a match that is no
+			// directory.
 			var kept []string
 			for _, d := range dirs {
-				if info, err := os.Stat(d); err == nil && info.IsDir() {
+				if info, err := r.stat(d); err == nil && info.IsDir() {
 					kept = append(kept, d)
 				}
 			}
@@ -264,8 +267,12 @@ func lastComponent(parts []string, i int) bool {
 // Hidden names are skipped, and skipped for descent too, unless the option
 // says otherwise. A symbolic link is listed and never followed: following one
 // is how a walk finds the same file twice and a looped link forever.
-func appendDescendants(out []string, dir string, seeHidden bool) []string {
-	entries, err := os.ReadDir(dir)
+//
+// A method so each directory read passes the gate — `echo /**` enumerates
+// whatever it can reach, which is exactly the walk a policy wants to see. A
+// denied directory reads as empty and the walk goes no deeper there.
+func (r *Runner) appendDescendants(out []string, dir string, seeHidden bool) []string {
+	entries, err := r.readDir(dir)
 	if err != nil {
 		return out
 	}
@@ -277,7 +284,7 @@ func appendDescendants(out []string, dir string, seeHidden bool) []string {
 		path := filepath.Join(dir, name)
 		out = append(out, path)
 		if e.IsDir() {
-			out = appendDescendants(out, path, seeHidden)
+			out = r.appendDescendants(out, path, seeHidden)
 		}
 	}
 	return out
@@ -334,9 +341,10 @@ func sortMatches(names []string) { sort.Strings(names) }
 
 // matchIn lists the entries of dir matching one pattern component. seeHidden
 // lifts the leading-period rule, which is the run-time option's doing and not
-// the pattern's.
-func matchIn(dir, pattern string, o patternOpts, seeHidden bool) []string {
-	entries, err := os.ReadDir(dir)
+// the pattern's. A method so the listing passes the gate; a denied directory
+// matches nothing, as an unreadable one does.
+func (r *Runner) matchIn(dir, pattern string, o patternOpts, seeHidden bool) []string {
+	entries, err := r.readDir(dir)
 	if err != nil {
 		return nil
 	}

@@ -158,18 +158,22 @@ func TestGateRefusesAndTheShellCarriesOn(t *testing.T) {
 	// External commands, deliberately: `true` and `echo` are builtins and do
 	// not leave the process, so the gate does not see them — which is what
 	// TestBuiltinsAreNotGated asserts from the other side.
+	// Only the execs are counted: resolving each command stats its path, and
+	// those probes pass the gate as actions of their own kind.
 	var seen []Action
 	out, st := run(t, `/usr/bin/false; /bin/echo after`, func(r *Runner) {
 		r.Gate = GateFunc(func(_ context.Context, a Action) Decision {
-			seen = append(seen, a)
-			if strings.HasSuffix(a.Path, "false") {
+			if a.Kind == ActionExec {
+				seen = append(seen, a)
+			}
+			if a.Kind == ActionExec && strings.HasSuffix(a.Path, "false") {
 				return Deny
 			}
 			return Allow
 		})
 	})
 	if len(seen) != 2 {
-		t.Fatalf("the gate saw %d actions, want 2", len(seen))
+		t.Fatalf("the gate saw %d execs, want 2", len(seen))
 	}
 	if !strings.Contains(out, "refused") {
 		t.Errorf("a refusal must be reported, got %q", out)
@@ -203,9 +207,15 @@ func TestGateSeesRedirectionsToo(t *testing.T) {
 }
 
 func TestEventsDescribeWhatHappened(t *testing.T) {
+	// Only the exec's own events: resolving the command stats its path, and
+	// that probe is recorded as an access event of its own.
 	var kinds []EventKind
 	_, _ = run(t, `/usr/bin/true`, func(r *Runner) {
-		r.Events = SinkFunc(func(_ context.Context, e Event) { kinds = append(kinds, e.Kind) })
+		r.Events = SinkFunc(func(_ context.Context, e Event) {
+			if e.Action.Kind == ActionExec {
+				kinds = append(kinds, e.Kind)
+			}
+		})
 	})
 	if len(kinds) != 2 || kinds[0] != EventCommandStart || kinds[1] != EventCommandEnd {
 		t.Errorf("events = %v, want a start then an end", kinds)

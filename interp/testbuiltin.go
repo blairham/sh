@@ -354,7 +354,9 @@ func (r *Runner) unaryTest(op, operand string) (bool, error) {
 // sharing the parts that must not be.
 func (r *Runner) fileTest(op, operand string) bool {
 	path := r.atDir(operand)
-	info, err := os.Stat(path)
+	// Through the gate, like every stat; a denied one is err != nil here,
+	// so every test below reads it as the file not existing.
+	info, err := r.stat(path)
 	switch op {
 	case "-e":
 		return err == nil
@@ -385,7 +387,7 @@ func (r *Runner) fileTest(op, operand string) bool {
 	case "-k":
 		return err == nil && info.Mode()&os.ModeSticky != 0
 	case "-L", "-h":
-		li, lerr := os.Lstat(path)
+		li, lerr := r.lstat(path)
 		return lerr == nil && li.Mode()&os.ModeSymlink != 0
 	}
 	return false

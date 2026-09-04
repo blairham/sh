@@ -1,9 +1,16 @@
-# sh
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img src="assets/logo.svg" alt="sh" width="400">
+  </picture>
+</p>
 
 A shell parser and interpreter in Go.
 
-**Status: specification phase.** No implementation code has been written
-yet, by design — see `CLEANROOM.md`.
+**Status: implemented and measured.** The core parser and interpreter are
+in place, and all four dialect binaries grade against the live shell
+panel — `make conformance`. Behavior still lands spec-first, per
+`CLEANROOM.md`.
 
 ## What makes this different
 

@@ -2682,6 +2682,38 @@
         "TimedOut": false
       }
     },
+    "axis/trap-body-parse-failure-location": {
+      "bash": {
+        "Output": "one~two~a~\u003cscript\u003e: trap: line 3: syntax error: unexpected end of file from `if' command on line 2~three",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "one~two~a~\u003cscript\u003e: trap: line 3: syntax error: unexpected end of file from `if' command on line 2~three",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "one~two~a~\u003cscript\u003e: trap: line 7: syntax error: unexpected end of file~three",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "one~two~a~\u003cscript\u003e: 2: Syntax error: end of file unexpected (expecting \"then\")",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "one~two~\u003cscript\u003e: line 5: syntax error at line 6: `if' unmatched~three",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "one~\u003cscript\u003e:2: parse error near `if'~\u003cscript\u003e:trap:2: couldn't parse trap command~two",
+        "Status": -1,
+        "TimedOut": false
+      }
+    },
     "axis/trap-body-runs-what-parsed": {
       "bash": {
         "Output": "one~end~a~\u003cscript\u003e: exit trap: line 3: syntax error: unexpected end of file from `if' command on line 2",

@@ -319,6 +319,7 @@ func Diagnostics() interp.Diagnostics {
 		UlimitBadOption:           "not supported",
 		UlimitBadNumber:           "ulimit: %[1]s: parameter not set",
 		BuiltinBadOption:          "%[1]s: %[2]s: unknown option",
+		BadOptionNaming:           interp.BadOptionWholeWord,
 		WaitBadJob:                "wait: %[1]s: Arguments must be %%job, process ids, or job pool names",
 		WaitBadJobStatus:          1,
 		// ksh93 has `--version` here, which this shell does not.
@@ -338,6 +339,7 @@ func Diagnostics() interp.Diagnostics {
 			"readonly": "Usage: readonly [-p] [name[=value]...]",
 			"trap":     "Usage: trap [-p] [action condition ...]",
 			"wait":     "Usage: wait [ options ] [job ...]",
+			"jobs":     "Usage: jobs [ options ] [job ...]",
 			"shift":    "Usage: shift [ options ] [n]",
 			"unset":    "Usage: unset [-nfv] name...",
 		},

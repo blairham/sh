@@ -441,6 +441,20 @@ type Diagnostics struct {
 
 	// BuiltinBadOptionStatus is what that reports where it is not fatal.
 	// Zero means the substrate's own, which is 2 — zsh says 1.
+	// BadOptionNaming is which part of a leading `-` word a complaint about
+	// it names. Three answers, and `--version` tells them apart:
+	//
+	//	bash, dash   --            the character after the first dash
+	//	ksh93        --version     the whole word as written
+	//	zsh          -v            the first letter it does not know, with
+	//	                           every leading dash skipped first
+	//
+	// zsh's is the one that needs saying twice: `unset --version` is `-e`
+	// there, not `-v`, because `v` is one of unset's own options and is
+	// consumed before an unknown letter is reached. That is the tell that it
+	// walks the bundle rather than naming a piece of the word.
+	BadOptionNaming BadOptionName
+
 	BuiltinBadOptionStatus int
 
 	// BuiltinBadName is what a builtin says about an operand that is not a
@@ -1266,6 +1280,32 @@ const (
 	// out — ksh93's answer for `-c`, where line 1 names no line at all.
 	LocationBracketLineAfterFirst
 )
+
+// BadOptionName is which part of a leading `-` word a bad-option complaint
+// names. See Diagnostics.BadOptionNaming.
+type BadOptionName int
+
+const (
+	// BadOptionFirstCharacter names the character after the first dash, so
+	// `--version` is `--`. bash and dash, and the substrate's own.
+	BadOptionFirstCharacter BadOptionName = iota
+	// BadOptionWholeWord names the word as written: `--version`. ksh93.
+	BadOptionWholeWord
+	// BadOptionFirstUnknownLetter skips every leading dash and names the
+	// first letter the builtin does not know: `--version` is `-v`, and `-e`
+	// where `v` is an option it has. zsh.
+	BadOptionFirstUnknownLetter
+)
+
+func (b BadOptionName) String() string {
+	switch b {
+	case BadOptionWholeWord:
+		return "BadOptionWholeWord"
+	case BadOptionFirstUnknownLetter:
+		return "BadOptionFirstUnknownLetter"
+	}
+	return "BadOptionFirstCharacter"
+}
 
 // Wording renders one failure, using the dialect's format when it has one.
 //

@@ -127,3 +127,57 @@ func TestOnlyASpecialBuiltinEndsTheScriptOverABadOption(t *testing.T) {
 		t.Errorf("a builtin that is not special: got %q, want the script to carry on", out)
 	}
 }
+
+// TestWhichPartOfABadOptionIsNamed is three answers to the same word, and
+// `--version` is what tells them apart.
+func TestWhichPartOfABadOptionIsNamed(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		naming BadOptionName
+		src    string
+		want   string
+	}{
+		{
+			// The character after the first dash, which is the substrate's
+			// own and two dialects'.
+			"the character after the first dash",
+			BadOptionFirstCharacter, `unset --version`, "unset: --: bad",
+		},
+		{
+			"the whole word",
+			BadOptionWholeWord, `unset --version`, "unset: --version: bad",
+		},
+		{
+			// Every dash skipped, then the first letter it does not know.
+			// `v` is one of unset's options, so it is consumed and `e` is
+			// the one named — which no rule about *the word* could give.
+			"the first letter it does not know",
+			BadOptionFirstUnknownLetter, `unset --version`, "unset: -e: bad",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dg := Diagnostics{
+				BuiltinBadOption: "%[1]s: %[2]s: bad",
+				BadOptionNaming:  tc.naming,
+			}
+			out, _ := optRun(t, func(s *Semantics) { s.BadNameToUnsetFatal = No }, dg, tc.src)
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("got %q, want %q in it", out, tc.want)
+			}
+		})
+	}
+}
+
+// TestASingleLetterIsNamedTheSameWayByAll, which is why this needed a word
+// with two dashes to measure at all: `-q` is `-q` under every rule.
+func TestASingleLetterIsNamedTheSameWayByAll(t *testing.T) {
+	for _, naming := range []BadOptionName{
+		BadOptionFirstCharacter, BadOptionWholeWord, BadOptionFirstUnknownLetter,
+	} {
+		dg := Diagnostics{BuiltinBadOption: "%[1]s: %[2]s: bad", BadOptionNaming: naming}
+		out, _ := optRun(t, func(s *Semantics) { s.BadNameToUnsetFatal = No }, dg, `unset -q x`)
+		if !strings.Contains(out, "unset: -q: bad") {
+			t.Errorf("%v: got %q, want -q named", naming, out)
+		}
+	}
+}

@@ -79,6 +79,15 @@ func (r *Runner) optionLetters() string {
 	if r.noexec {
 		b.WriteByte('n')
 	}
+	if r.verbose {
+		b.WriteByte('v')
+	}
+	if r.errtrace {
+		b.WriteByte('E')
+	}
+	if r.functrace {
+		b.WriteByte('T')
+	}
 	if r.noglob {
 		if r.ask(r.sem().NoglobLetterIsF, "which letter `$-` shows for noglob") {
 			b.WriteByte('f')

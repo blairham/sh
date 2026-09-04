@@ -3278,6 +3278,17 @@ echo unreachable`,
 		Why:     "the counter-case: without a `$` nothing is substituted and the name is resolved by the evaluator, which is a different rule with a different answer where a value is not a number",
 	},
 	{
+		ID: "opt/set-v-echoes-lines-as-read", Category: "shell options",
+		Script:  true,
+		Snippet: "set -v\necho a\necho b\n",
+		Why:     "the verbose option writes each line back as it is read — not the line that turned it on, which was spent before it took effect. Unanimous, and reachable only from a file: a -c string is read whole before it runs",
+	},
+	{
+		ID: "opt/set-e-carries-the-err-trap", Category: "shell options",
+		Snippet: `set -E 2>/dev/null || exit 7; trap "echo ERR" ERR; f(){ false; }; f; echo done`,
+		Why:     "set -E makes the ERR trap fire inside functions too — two firings where plain bash has one; dash and ksh93 refuse the letter and zsh means a different option by it",
+	},
+	{
 		ID: "opt/set-n-reads-and-never-runs", Category: "shell options",
 		Snippet: `set -n; echo nope; set +n; echo plusn; echo "st=$?"`,
 		Why:     "the syntax-check option: nothing after it runs — not even the set +n that would turn it off — and the shell still exits 0. It printed a refusal and ran everything anyway, which is the worst of the three possible behaviors",

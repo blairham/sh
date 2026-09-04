@@ -208,3 +208,32 @@ func TestSetNReadsAndNeverRuns(t *testing.T) {
 		t.Errorf("out=%q, want no letter without the option", out)
 	}
 }
+
+// TestSetTraceLettersAreAnAxis — -E carries the ERR trap into functions and
+// -T carries DEBUG and RETURN; only the dialect with the letters takes them.
+func TestSetTraceLettersAreAnAxis(t *testing.T) {
+	withE := func(r *Runner) {
+		sem := CoreSemantics()
+		sem.SetHasTraceLetters = Yes
+		sem.TrapHasErrCondition = Yes
+		sem.ErrTrapRunsInsideFunctions = No
+		sem.TrapBodyRunsWhatParsed = Yes
+		r.Semantics = &sem
+	}
+	out, _ := run(t, `set -E; trap "echo ERR" ERR; f(){ false; }; f; true`, withE)
+	if !strings.Contains(out, "ERR") {
+		t.Errorf("out=%q, want -E to carry the trap into the function", out)
+	}
+	out, _ = run(t, `trap "echo ERR" ERR; f(){ false; }; f; true`, withE)
+	if strings.Contains(out, "ERR\nERR") {
+		t.Errorf("out=%q, want the function firing bounded without -E", out)
+	}
+	out, _ = run(t, `set -T; echo "st=$?"`, func(r *Runner) {
+		sem := CoreSemantics()
+		sem.SetHasTraceLetters = No
+		r.Semantics = &sem
+	})
+	if !strings.Contains(out, "not implemented") || !strings.Contains(out, "st=2") {
+		t.Errorf("out=%q, want the dialect without the letters to refuse at 2", out)
+	}
+}

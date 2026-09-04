@@ -201,6 +201,26 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 			if on {
 				r.noexec = true
 			}
+		case 'v':
+			// POSIX, all four: write input back as it is read. The echoing
+			// itself lives in the front end, which holds the raw text.
+			r.verbose = on
+		case 'E', 'T':
+			// bash's trap-carriage letters. zsh spells different options
+			// with the same letters and dash and ksh93 have neither, so a
+			// wrong guess here would quietly mean something else.
+			if !r.ask(r.sem().SetHasTraceLetters, "`set -E` and `set -T` carrying traps into functions") {
+				if r.unspecified {
+					return false
+				}
+				r.diagf("set: -%c is not implemented\n", opt)
+				return false
+			}
+			if opt == 'E' {
+				r.errtrace = on
+			} else {
+				r.functrace = on
+			}
 		case 'f':
 			// Not universal: one shell spells this option the long way only
 			// and uses `-f` for something else, which does not touch

@@ -11546,6 +11546,38 @@
         "TimedOut": false
       }
     },
+    "opt/set-e-carries-the-err-trap": {
+      "bash": {
+        "Output": "ERR~ERR~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "ERR~ERR~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "ERR~ERR~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "trap: ERR: bad trap~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "ERR~done",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "opt/set-f-turns-off-pathname-expansion": {
       "bash": {
         "Output": "*.txt",
@@ -11638,6 +11670,38 @@
       },
       "zsh": {
         "Output": "*.txt",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "opt/set-v-echoes-lines-as-read": {
+      "bash": {
+        "Output": "echo a~a~echo b~b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "echo a~a~echo b~b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "echo a~a~echo b~b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "echo a~a~echo b~b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "echo a~a~echo b~~b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "echo a~a~echo b~b",
         "Status": 0,
         "TimedOut": false
       }

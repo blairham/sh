@@ -111,6 +111,8 @@ func Semantics() interp.Semantics {
 	// A directory the PATH search walked past leaves no trace: with nothing
 	// runnable anywhere, bash says the name was never found at all.
 	s.DirectoryOnPathIsACandidate = interp.No
+	// set -E and -T carry the traps set -Eeuo pipefail scripts rely on.
+	s.SetHasTraceLetters = interp.Yes
 	// hash counts builtins and functions and announces its empty table.
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes

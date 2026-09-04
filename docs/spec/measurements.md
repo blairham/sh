@@ -1090,6 +1090,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
 | `special/ifs-has-a-default` | ` \t \n ` | ` \t \n ` | ` \t \n ` | ` \t \n ` | ` \t \n ` | ` \t \n \0 ` |
+| `special/underscore-follows-the-last-argument` | `[]~[]` | `[two]~[]` | `[two]~[]` | `[two]~[]` | `[]~[]` | `[two]~[]` |
 | `special/lineno-is-where-you-are` | `1~1` | `1~1` | `1~1` | `0~0` | `1~1` | `1~1` |
 | `special/random-is-absent-from-dash` | `none` | `have` | `have` | `have` | `have` | `have` |
 | `special/uid-is-bash-and-zsh` | `none` | `have` | `have` | `have` | `none` | `have` |
@@ -1102,6 +1103,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `special/ifs-has-a-default` — space, tab and newline in three of them and a NUL as well in zsh — and read as bytes because whitespace is what it is made of. Splitting worked here while `$IFS` was empty, so a script could neither read it nor tell it had been changed
   ```sh
   printf '%s' "$IFS" | od -An -c | tr -s " "
+  ```
+- `special/underscore-follows-the-last-argument` — bash and zsh move $_ to the previous command's last argument and to empty after a bare assignment; dash and ksh93 leave it at the shell's own path forever
+  ```sh
+  echo one two >/dev/null; echo "[$_]"; x=5; echo "[$_]"
   ```
 - `special/lineno-is-where-you-are` — produced when it is read rather than stored, which is the whole of the distinction: a stored copy would be the line the shell started on
   ```sh

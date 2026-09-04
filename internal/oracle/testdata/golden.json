@@ -18490,6 +18490,38 @@
         "TimedOut": false
       }
     },
+    "special/underscore-follows-the-last-argument": {
+      "bash": {
+        "Output": "[two]~[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[two]~[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[two]~[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[]~[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[]~[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[two]~[]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "split/cmdsub-unquoted": {
       "bash": {
         "Output": "n=2",

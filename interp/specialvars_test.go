@@ -129,3 +129,33 @@ func TestAnUnprovidedParameterIsAbsent(t *testing.T) {
 		t.Errorf("got %q, want none", out)
 	}
 }
+
+// TestUnderscoreFollowsTheLastArgumentIsAnAxis — bash and zsh move $_ to the
+// previous simple command's last expanded argument; two shells never touch it.
+func TestUnderscoreFollowsTheLastArgumentIsAnAxis(t *testing.T) {
+	track := func(r *Runner) {
+		sem := CoreSemantics()
+		sem.UnderscoreTracksTheLastArgument = Yes
+		r.Semantics = &sem
+	}
+	out, _ := run(t, `echo one two >/dev/null; echo "[$_]"`, track)
+	if !strings.Contains(out, "[two]") {
+		t.Errorf("out=%q, want the last argument", out)
+	}
+	out, _ = run(t, `echo hi >/dev/null; x=5; echo "[$_]"`, track)
+	if !strings.Contains(out, "[]") {
+		t.Errorf("out=%q, want empty after a bare assignment", out)
+	}
+	out, _ = run(t, `w=expanded; echo "$w" >/dev/null; echo "[$_]"`, track)
+	if !strings.Contains(out, "[expanded]") {
+		t.Errorf("out=%q, want the expanded argument, not the written one", out)
+	}
+	out, _ = run(t, `echo one >/dev/null; echo "[$_]"`, func(r *Runner) {
+		sem := CoreSemantics()
+		sem.UnderscoreTracksTheLastArgument = No
+		r.Semantics = &sem
+	})
+	if strings.Contains(out, "[one]") {
+		t.Errorf("out=%q, want the axis off to leave $_ alone", out)
+	}
+}

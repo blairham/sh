@@ -119,6 +119,7 @@ func Semantics() interp.Semantics {
 	// such command" to it.
 	s.HashSearchesPathAlone = interp.Yes
 	s.TildePlusMinusExpands = interp.Yes
+	s.UnderscoreTracksTheLastArgument = interp.Yes
 	s.EchoInterpretsEscapes = interp.Yes
 	// echo reads -n, -e and -E, and -e wins over -E whatever the order.
 	s.EchoOptions = "neE"

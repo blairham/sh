@@ -1038,6 +1038,12 @@ type Semantics struct {
 	// /usr/bin/cd.
 	HashSearchesPathAlone Answer
 
+	// UnderscoreTracksTheLastArgument moves `$_` to the previous simple
+	// command's last expanded argument — the command word itself when it
+	// had none, and empty after a bare assignment. bash and zsh; dash and
+	// ksh93 leave it at the shell's own path forever.
+	UnderscoreTracksTheLastArgument Answer
+
 	// TildePlusMinusExpands turns `~+` into $PWD and `~-` into $OLDPWD,
 	// only while the variable is set — a fresh shell's `~-` stays literal.
 	// bash, ksh93 and zsh have the pair; dash keeps both as written. zsh
@@ -1675,6 +1681,7 @@ func PosixSemantics() Semantics {
 		PunctuatedFunctionNameIsRefused: No,
 		SetHasTraceLetters:              No,
 		TildePlusMinusExpands:           No,
+		UnderscoreTracksTheLastArgument: No,
 		// The standard says `times` takes no operands and does not say what to
 		// do with one; the two shells that follow it most closely ignore it.
 		TimesRejectsArguments: No,

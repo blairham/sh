@@ -129,6 +129,10 @@ func TestSemantics(t *testing.T) {
 		{"CdRefusesUnknownOption", s.CdRefusesUnknownOption, interp.Yes},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.Yes},
 		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.Yes},
+		// The one shell that refuses the -h letter, and one of the two that
+		// tie `set -m` to the tty — declined in a remark, not an error.
+		{"SetHasTheHLetter", s.SetHasTheHLetter, interp.No},
+		{"MonitorNeedsATerminal", s.MonitorNeedsATerminal, interp.Yes},
 		{"ReturnOutsideAFunctionIsRefused", s.ReturnOutsideAFunctionIsRefused, interp.No},
 		{"LoneDashIsAnOption", s.LoneDashIsAnOption, interp.No},
 		{"ReadonlyReassignmentFatalFromCommandString", s.ReadonlyReassignmentFatalFromCommandString, interp.Yes},
@@ -185,6 +189,15 @@ func TestDiagnostics(t *testing.T) {
 	// A failed open is reported where the command began, compound or not.
 	if got, want := dash.Diagnostics().RedirectFailureLine, interp.LineOfCommand; got != want {
 		t.Errorf("RedirectFailureLine = %v, want %v", got, want)
+	}
+	// A denied `set -m` is a remark with the option left off: the wording is
+	// fixed whichever spelling asked, and the zero status keeps it from
+	// being a failure at all.
+	if got, want := dash.Diagnostics().MonitorDenied, "set: can't access tty; job control turned off"; got != want {
+		t.Errorf("MonitorDenied = %q, want %q", got, want)
+	}
+	if got := dash.Diagnostics().MonitorDeniedStatus; got != 0 {
+		t.Errorf("MonitorDeniedStatus = %d, want 0 — a remark, not an error", got)
 	}
 }
 

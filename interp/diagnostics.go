@@ -797,6 +797,23 @@ type Diagnostics struct {
 	// is three of the four; zsh answers 1.
 	SetInvalidOptionNameStatus int
 
+	// MonitorDenied is `set -m` asked for by a shell the dialect says needs
+	// a terminal for it (Semantics.MonitorNeedsATerminal), in the dialect's
+	// words. One verb: the spelling the script used, `-m` or `monitor`,
+	// which is the piece zsh echoes back.
+	//
+	//	dash   set: can't access tty; job control turned off
+	//	zsh    set: can't change option: -m
+	//
+	// zsh's `set:` comes from the location, as everywhere else.
+	MonitorDenied string
+
+	// MonitorDeniedStatus is what that reports. Zero — dash's answer — means
+	// the denial is a remark rather than a failure: the option is left off
+	// and `set` still reports success. zsh answers 1, and fatally, the same
+	// way it treats any other `set` refusal.
+	MonitorDeniedStatus int
+
 	// KilledCommandNotice is what a shell says when a signal ended a
 	// command. Three verbs: the process id, the words for the signal, and
 	// the command written back out.

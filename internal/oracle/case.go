@@ -3564,6 +3564,42 @@ echo unreachable`,
 		Why:     "+o writes re-inputtable set commands in three shells; ksh93's one line names only what is on, --default first",
 	},
 	{
+		ID: "opt/set-o-noexec-reads-and-never-runs", Category: "shell options",
+		Snippet: "echo before\nset -o noexec\necho after\n",
+		Why:     "the long spelling of `set -n`, and it behaves identically in all four: everything after it is read and never run, and the script still ends at 0 — the same option under its other name, which was refused as unimplemented here while the letter worked",
+	},
+	{
+		ID: "opt/set-o-verbose-echoes-what-is-read", Category: "shell options",
+		Snippet: "echo before\nset -o verbose\necho after\n",
+		Why:     "the long spelling of `set -v`: input is written back to stderr as it is read, and never the line that turned it on. From a file all four agree; a -c string is read differently — bash echoes it where dash and zsh do not — so the case pins the route every script uses",
+		Script:  true,
+	},
+	{
+		ID: "opt/pipefail-appears-in-the-plus-o-listing", Category: "shell options",
+		Snippet: "set +o | grep -o pipefail | head -1\n",
+		Why:     "the option is in the listings of the shells that have it, off or on: bash and zsh write the re-inputtable `set +o pipefail` line even while it is off. ksh93's one `+o` line names only what is on, and dash has no such option, so both are silent here — the grep -o keeps the question about the name rather than about four line layouts",
+	},
+	{
+		ID: "opt/pipefail-turned-on-is-listed-on", Category: "shell options",
+		Snippet: "if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi\nset +o | grep -o pipefail | head -1\n",
+		Why:     "the other state: once on, ksh93's active-options line names it too, so all three shells with the option now answer and only dash stays silent",
+	},
+	{
+		ID: "opt/set-o-lists-a-pipefail-row", Category: "shell options",
+		Snippet: `set -o | grep pipefail`,
+		Why:     "the `set -o` table has a pipefail row wherever the option exists — three column widths, all saying off — and no row at all in dash, whose grep comes up empty at 1",
+	},
+	{
+		ID: "opt/set-m-in-a-script", Category: "shell options",
+		Snippet: "set -m\necho \"st=$?\"\necho done\n",
+		Why:     "job control in a shell with no terminal splits the panel three ways: bash and ksh93 grant it silently at 0, dash declines it in a remark — `can't access tty; job control turned off` — and still reports 0, and zsh refuses it outright at 1, fatally, so nothing after runs",
+	},
+	{
+		ID: "opt/set-o-monitor-is-the-same-request", Category: "shell options",
+		Snippet: "set -o monitor\necho \"st=$?\"\n",
+		Why:     "the long spelling gets each shell's same answer, and zsh's refusal echoes the spelling that asked — `monitor` here where the case above says `-m`",
+	},
+	{
 		ID: "kill/the-listing-has-four-shapes", Category: "builtins",
 		Snippet: `kill -l | head -1`,
 		Why:     "bash numbers five to a row, zsh space-joins one line, ksh93 goes one per line, dash opens with a 0",

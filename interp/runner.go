@@ -374,6 +374,27 @@ type Runner struct {
 	// noexec is `set -n`: read, never run, never unset — even the `set +n`
 	// that would clear it is a command.
 	noexec bool
+	// monitor is `set -m`. Background jobs already run in process groups of
+	// their own here (see setProcessGroup), so in a non-interactive shell
+	// what the option adds is the state itself: the listings and `$-`
+	// answer with it, and nothing is announced — measured, no shell in the
+	// panel tells a script about its jobs even with the option on. Whether
+	// a shell with no terminal grants the request at all is the dialect's
+	// (Semantics.MonitorNeedsATerminal). Distinct from JobControl, which is
+	// the front end saying there is a *person* to report jobs to.
+	monitor bool
+	// tracksCommands is command tracking — the option bash lists as hashall
+	// and ksh93 as trackall, `set -h` in both. It is permission to remember
+	// where commands were found, and a shell that searches afresh every
+	// time keeps the promise in either state, so the state is real here
+	// even though no cache hangs off it — the same honesty `hash` answers
+	// with an empty table.
+	tracksCommands bool
+	// histIgnoreDups is zsh's histignoredups, which its `set -h`
+	// abbreviates. It governs a history this shell does not keep, and with
+	// no history there are no duplicates to ignore, so either state is kept
+	// truthfully.
+	histIgnoreDups bool
 
 	// fds are the descriptors beyond the three named streams — what
 	// `exec 6>&1` saves and `>&6` finds again. Values are the io.Reader or

@@ -32,6 +32,12 @@ type setOption struct {
 	// is most of them.
 	apply func(r *Runner, on bool)
 
+	// try is apply for the one request a dialect can refuse: `set -m` needs
+	// a terminal in two of the panel. It is handed the spelling the script
+	// used — `-m` or `monitor` — because one dialect's refusal echoes it
+	// back, and reports whether the request was an error.
+	try func(r *Runner, on bool, spelling string) bool
+
 	// on is the state this shell is already in for a name it does not
 	// implement, so that asking for that state can succeed honestly.
 	//
@@ -53,15 +59,29 @@ var commonSetOptions = map[string]setOption{
 	"noglob":    {apply: func(r *Runner, on bool) { r.noglob = on }, get: func(r *Runner) bool { return r.noglob }},
 	"allexport": {apply: func(r *Runner, on bool) { r.allexport = on }, get: func(r *Runner) bool { return r.allexport }},
 
+	// noexec is one-way under both spellings: all four shells ignore turning
+	// it back off, and with it on the command that would do so never runs
+	// anyway.
+	"noexec": {
+		apply: func(r *Runner, on bool) {
+			if on {
+				r.noexec = true
+			}
+		},
+		get: func(r *Runner) bool { return r.noexec },
+	},
+	// verbose writes input back as it is read; the echoing itself lives in
+	// the front end, which holds the raw text.
+	"verbose": {apply: func(r *Runner, on bool) { r.verbose = on }, get: func(r *Runner) bool { return r.verbose }},
+	// monitor is the one request in the table a dialect can refuse, which
+	// is why it is a try rather than an apply.
+	"monitor": {try: (*Runner).setMonitor, get: func(r *Runner) bool { return r.monitor }},
+
 	// The rest of the unanimous names, none of which this shell has yet.
-	// Every one of them is off here: we do not stop before running, do not
-	// echo what we read, do not defer a job notice, do not hold the session
-	// open at end-of-file, and have no vi mode.
-	"noexec":    {},
-	"verbose":   {},
+	// Every one of them is off here: we do not defer a job notice, do not
+	// hold the session open at end-of-file, and have no vi mode.
 	"notify":    {},
 	"ignoreeof": {},
-	"monitor":   {},
 	"nolog":     {},
 	"vi":        {},
 	// The exception, and it is on: the line editor reads ^A, ^E and ^B,
@@ -84,16 +104,77 @@ var extraSetOptions = map[string]setOption{
 	// name asks for.
 	"interactive-comments": {on: true},
 
+	// pipefail is real — the pipeline code reads it — and its *existence* is
+	// an axis older than this table (see setOption), so applying it never
+	// reaches this entry. The entry is what puts it in the listings of the
+	// dialects that declare the name.
+	"pipefail": {get: func(r *Runner) bool { return r.pipefail }},
+
+	// Command tracking under its two names: bash calls it hashall — and zsh
+	// takes that name too — where ksh93 says trackall. One state behind
+	// both, kept honestly because it is permission to cache rather than a
+	// promise to; see the field.
+	"hashall": {
+		apply: func(r *Runner, on bool) { r.tracksCommands = on },
+		get:   func(r *Runner) bool { return r.tracksCommands },
+	},
+	"trackall": {
+		apply: func(r *Runner, on bool) { r.tracksCommands = on },
+		get:   func(r *Runner) bool { return r.tracksCommands },
+	},
+	// zsh's histignoredups, which its `set -h` abbreviates. It governs a
+	// history this shell does not keep, so either state is kept truthfully.
+	"histignoredups": {
+		apply: func(r *Runner, on bool) { r.histIgnoreDups = on },
+		get:   func(r *Runner) bool { return r.histIgnoreDups },
+	},
+
 	"posix":      {},
 	"errtrace":   {},
 	"functrace":  {},
 	"history":    {},
 	"histexpand": {},
-	"hashall":    {},
 	"keyword":    {},
 	"onecmd":     {},
 	"physical":   {},
 	"privileged": {},
+}
+
+// setMonitor is `set -m`, the one request in the table a dialect can refuse:
+// two of the panel tie job control to the terminal, and this runner only has
+// one when a front end said so (JobControl).
+//
+// Measured with no terminal, which is what a script has: bash and ksh93
+// grant it silently — background jobs already run in process groups of their
+// own here, so there is nothing further to promise — dash remarks `can't
+// access tty; job control turned off` and reports success with the option
+// left off, and zsh refuses at 1, fatally, echoing the spelling that asked.
+// Turning it *off* is granted everywhere.
+func (r *Runner) setMonitor(on bool, spelling string) bool {
+	if !on {
+		r.monitor = false
+		return true
+	}
+	if !r.JobControl && r.ask(r.sem().MonitorNeedsATerminal, "`set -m` in a shell with no terminal") {
+		d := r.diag()
+		r.diagf("%s\n", Wording(d.MonitorDenied, "set: cannot turn on job control without a terminal", spelling))
+		if d.MonitorDeniedStatus == 0 {
+			// A remark rather than a failure: the option is left off and
+			// `set` still reports success, which is dash's shape.
+			return true
+		}
+		r.setOptionStatus = d.MonitorDeniedStatus
+		if r.ask(r.sem().BadSetOptionNameFatal, "a refused `set -m` ending the script") {
+			r.status = d.MonitorDeniedStatus
+			r.fatalQuiet()
+		}
+		return false
+	}
+	if r.unspecified {
+		return false
+	}
+	r.monitor = true
+	return true
 }
 
 // SetOptionLetters applies a run of single-letter options — `e` and `ux`

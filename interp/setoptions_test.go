@@ -186,3 +186,25 @@ func runWorded(t *testing.T, src string, dg Diagnostics) string {
 	}
 	return buf.String()
 }
+
+// TestSetNReadsAndNeverRuns — `set -n` is the syntax-check option: commands
+// after it are read and never executed, nothing turns it back off, and the
+// script still ends at 0. All four shells agree.
+func TestSetNReadsAndNeverRuns(t *testing.T) {
+	out, st := run(t, `set -n; echo nope; set +n; echo plusn`, nil)
+	if out != "" || st != 0 {
+		t.Errorf("out=%q st=%d, want silence at 0", out, st)
+	}
+	// The subshell and the substitution inherit it.
+	out, _ = run(t, `set -n; (echo sub); echo $(echo inner)`, nil)
+	if out != "" {
+		t.Errorf("out=%q, want the option to reach every runner", out)
+	}
+	// And $- carries the letter while it is on... which nothing can observe
+	// from inside, so it is asserted from before: without -n the letter is
+	// absent.
+	out, _ = run(t, `case $- in *n*) echo has-n;; *) echo no-n;; esac`, nil)
+	if !strings.Contains(out, "no-n") {
+		t.Errorf("out=%q, want no letter without the option", out)
+	}
+}

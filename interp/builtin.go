@@ -195,6 +195,12 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 			r.nounset = on
 		case 'x':
 			r.xtrace = on
+		case 'n':
+			// One-way: all four shells ignore `set +n` once it is on — and
+			// with it on, the `set +n` never runs anyway.
+			if on {
+				r.noexec = true
+			}
 		case 'f':
 			// Not universal: one shell spells this option the long way only
 			// and uses `-f` for something else, which does not touch

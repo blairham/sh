@@ -3278,6 +3278,11 @@ echo unreachable`,
 		Why:     "the counter-case: without a `$` nothing is substituted and the name is resolved by the evaluator, which is a different rule with a different answer where a value is not a number",
 	},
 	{
+		ID: "opt/set-n-reads-and-never-runs", Category: "shell options",
+		Snippet: `set -n; echo nope; set +n; echo plusn; echo "st=$?"`,
+		Why:     "the syntax-check option: nothing after it runs — not even the set +n that would turn it off — and the shell still exits 0. It printed a refusal and ran everything anyway, which is the worst of the three possible behaviors",
+	},
+	{
 		ID: "opt/set-f-turns-off-pathname-expansion", Category: "shell options",
 		Snippet: `touch a.txt b.txt; set -f; echo *.txt`,
 		Why:     "`-f` is the short spelling of noglob in three of the four; zsh spells that option the long way only and uses `-f` for something else entirely, so the pattern still expands there",

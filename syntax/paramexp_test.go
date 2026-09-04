@@ -150,20 +150,22 @@ func TestParamSeparatorMustBeUnquoted(t *testing.T) {
 func TestParamDialectRefusesRatherThanGuesses(t *testing.T) {
 	// ${x^^} is bash alone and ${!x} means something else in ksh93, so a
 	// dialect without them has to refuse: picking either meaning would be
-	// wrong for half the panel.
-	for _, src := range []string{`echo ${x^^}`, `echo ${x,,}`, `echo ${!x}`} {
-		if _, err := Parse(src, Core()); err == nil {
-			t.Errorf("%s: core accepted a construct it does not have", src)
-		}
+	// wrong for half the panel. The refusal is *deferred* for an operator —
+	// the shells that lack one diagnose it only when the expansion is
+	// reached — where `${!x}` fails while reading, because the `!` reshapes
+	// what the name even is.
+	for _, src := range []string{`echo ${x^^}`, `echo ${x,,}`} {
+		mustDefer(t, src, Core(), "an operator the core does not have")
 		if _, err := Parse(src, everyFlag()); err != nil {
 			t.Errorf("%s: bash rejected it: %v", src, err)
 		}
 	}
-	// And the ones dash lacks are refused under posix.
+	if _, err := Parse(`echo ${!x}`, Core()); err == nil {
+		t.Error("`${!x}`: core accepted a construct it does not have")
+	}
+	// And the ones dash lacks are deferred under posix the same way.
 	for _, src := range []string{`echo ${x/a/b}`, `echo ${x:1:2}`} {
-		if _, err := Parse(src, POSIX()); err == nil {
-			t.Errorf("%s: posix accepted a construct dash does not have", src)
-		}
+		mustDefer(t, src, POSIX(), "an operator dash does not have")
 	}
 }
 
@@ -224,10 +226,9 @@ func TestPrefixNamesNeedIndirection(t *testing.T) {
 		}
 	}
 	// Without the `!` there is no prefix form at all: `@` there is where an
-	// operator belongs, and a bare one is not an operator this shell has.
-	if _, err := Parse(`echo ${FOO_@}`, ind); err == nil {
-		t.Error("`${FOO_@}` should not be read as a prefix form")
-	}
+	// operator belongs, and a bare one is not an operator this shell has —
+	// so the node is deferred for a runtime refusal, never read as a prefix.
+	mustDefer(t, `echo ${FOO_@}`, ind, "`${FOO_@}` without the `!`")
 	// And a dialect without the `!` refuses the whole family rather than
 	// reading it as something else.
 	if _, err := Parse(`echo ${!FOO_@}`, Core()); err == nil {

@@ -130,11 +130,33 @@ func TestSelectKeepsTheAbsentListDistinct(t *testing.T) {
 // the array literal because the two halves are separately reachable — a
 // subscript can be written for a variable that was never an array, and dash
 // rejects it there too. Without the flag `${a[@]}` on a plain variable read as
-// an array of one instead of failing.
+// an array of one instead of failing — it parses as a *deferred* bad
+// substitution, because dash diagnoses it only when the expansion is reached:
+// one inside a branch never taken prints nothing at all.
 func TestArraySubscriptIsADialectConstruct(t *testing.T) {
 	for _, src := range []string{`echo ${a[0]}`, `echo ${a[@]}`, `echo ${a[*]}`, `a=1; echo ${a[@]}`} {
 		mustParse(t, src, Core(), "a subscript in a dialect with arrays")
-		mustFail(t, src, POSIX(), "a subscript in a dialect without them")
+		mustDefer(t, src, POSIX(), "a subscript in a dialect without them")
+	}
+}
+
+// mustDefer asserts the source parses with the construct marked for a
+// runtime refusal rather than read as something else.
+func mustDefer(t *testing.T, src string, d Dialect, what string) {
+	t.Helper()
+	f, err := Parse(src, d)
+	if err != nil {
+		t.Errorf("%s: %q failed to parse: %v", what, src, err)
+		return
+	}
+	found := false
+	walkParams(f, func(e *ParamExpr) {
+		if e.Bad {
+			found = true
+		}
+	})
+	if !found {
+		t.Errorf("%s: %q parsed without a deferred refusal", what, src)
 	}
 }
 

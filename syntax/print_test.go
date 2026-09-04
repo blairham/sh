@@ -159,3 +159,31 @@ func TestPrintingADupRedirection(t *testing.T) {
 		})
 	}
 }
+
+// TestABackgroundStatementBeforeAClosingWord — the printer wrote the `&` and
+// then the `;` separator as well, so `f() { true & }` printed as
+// `f() { true &; }`, which parses nowhere. The one file of 1093 installed
+// scripts that failed the parse→print→reparse sweep reduced to this.
+func TestABackgroundStatementBeforeAClosingWord(t *testing.T) {
+	for _, src := range []string{
+		"f() { true & }",
+		"{ true & }",
+		"f() { if true; then true & fi; }",
+		"while true; do true & done",
+		"( true & )",
+		"f() { true & true; }",
+		"{ true & true & }",
+	} {
+		f, err := syntax.Parse(src, syntax.Core())
+		if err != nil {
+			t.Fatalf("parse %q: %v", src, err)
+		}
+		printed := syntax.Print(f)
+		if strings.Contains(printed, "&;") {
+			t.Errorf("%q printed as %q: `&;` parses nowhere", src, printed)
+		}
+		if _, err := syntax.Parse(printed, syntax.Core()); err != nil {
+			t.Errorf("%q printed as %q, which does not reparse: %v", src, printed, err)
+		}
+	}
+}

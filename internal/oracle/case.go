@@ -1370,6 +1370,16 @@ var Corpus = []Case{
 		Why:     "-n takes a count in bash and ksh93 and three characters arrive; zsh reads the same -n as a bare flag for its completion widgets, so the count becomes the name read into and v stays empty — one spelling, two shapes",
 	},
 	{
+		ID: "read/a-backslash-escapes-and-is-removed", Category: "builtins",
+		Snippet: `printf 'a\\tb\n' | { read v; echo "[$v]"; }`,
+		Why:     "without -r a backslash removes the special meaning of the character after it and is itself removed — a literal backslash-t reads as `atb`, unanimously. We kept the backslash (#320), which -r mode and the line continuation both being right had hidden",
+	},
+	{
+		ID: "read/an-escaped-separator-does-not-split", Category: "builtins",
+		Snippet: `printf 'a\\ b c\n' | { read x y; echo "[$x][$y]"; }`,
+		Why:     "the subtle half of the escape: an escaped IFS character is data, so `a\\ b` is one field in all four shells. The escape has to reach the splitter — after a pre-pass that removes the backslashes, an escaped space and a separating one are the same byte",
+	},
+	{
 		ID: "read/silent-still-reads", Category: "builtins",
 		Snippet: `printf 'secret\n' | { read -s v; echo "v=$v"; }`,
 		Why:     "-s is about a terminal's echo and there is no terminal here, so it must parse, read and stay quiet: skipping the word unread is how a password gets echoed, and refusing it fails a script that works everywhere else (#321). dash alone has no -s",

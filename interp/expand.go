@@ -1045,6 +1045,16 @@ func (r *Runner) ifs() (value string, set bool) {
 // field. A trailing separator is absorbed and a leading one is not, which is
 // the asymmetry a symmetric implementation gets wrong.
 func splitFields(s string, ifs string, ifsSet bool) []string {
+	return splitFieldsLiteral(s, nil, ifs, ifsSet)
+}
+
+// splitFieldsLiteral is splitFields with some bytes exempt from separating:
+// literal[i] true means s[i] is data whatever IFS says. `read` without -r
+// feeds it the positions its backslashes escaped, which is what keeps `a\ b`
+// one field — by the time the escapes are removed, an escaped space and a
+// separating one are the same byte, so only a mask can still tell them
+// apart. A nil mask exempts nothing.
+func splitFieldsLiteral(s string, literal []bool, ifs string, ifsSet bool) []string {
 	if ifsSet && ifs == "" {
 		// Set and empty disables the stage entirely, which is a different
 		// state from unset rather than a degree of it.
@@ -1057,19 +1067,23 @@ func splitFields(s string, ifs string, ifsSet bool) []string {
 		return nil
 	}
 
-	isWS := func(c byte) bool {
-		return strings.IndexByte(ifs, c) >= 0 && (c == ' ' || c == '\t' || c == '\n')
+	isWS := func(i int) bool {
+		c := s[i]
+		return (literal == nil || !literal[i]) &&
+			strings.IndexByte(ifs, c) >= 0 && (c == ' ' || c == '\t' || c == '\n')
 	}
-	isSep := func(c byte) bool { return strings.IndexByte(ifs, c) >= 0 }
+	isSep := func(i int) bool {
+		return (literal == nil || !literal[i]) && strings.IndexByte(ifs, s[i]) >= 0
+	}
 
 	var out []string
 	i := 0
-	for i < len(s) && isWS(s[i]) { // leading IFS whitespace is discarded
+	for i < len(s) && isWS(i) { // leading IFS whitespace is discarded
 		i++
 	}
 	for i < len(s) {
 		start := i
-		for i < len(s) && !isSep(s[i]) {
+		for i < len(s) && !isSep(i) {
 			i++
 		}
 		out = append(out, s[start:i])
@@ -1081,12 +1095,12 @@ func splitFields(s string, ifs string, ifsSet bool) []string {
 		// exactly that and then letting the loop read the next field is what
 		// makes two adjacent non-whitespace separators produce one empty
 		// field rather than two — the bug a hand-rolled version invites.
-		for i < len(s) && isWS(s[i]) {
+		for i < len(s) && isWS(i) {
 			i++
 		}
-		if i < len(s) && isSep(s[i]) {
+		if i < len(s) && isSep(i) {
 			i++
-			for i < len(s) && isWS(s[i]) {
+			for i < len(s) && isWS(i) {
 				i++
 			}
 		}

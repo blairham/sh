@@ -1042,7 +1042,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		next, stop = r.timedByteSource(ctx, in, timeout)
 		defer stop()
 	}
-	text, end := readSegment(next, raw, delim, count, exact)
+	text, lits, end := readSegment(next, raw, delim, count, exact)
 
 	// A `read` that fails still assigns. All four shells clear the variables
 	// at end of input rather than leaving what was there, and the reason is
@@ -1053,7 +1053,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	status := 0
 	switch end {
 	case endTimeout:
-		text = ""
+		text, lits = "", nil
 		status = orDefault(r.diag().ReadTimeoutStatus, 1)
 	case endEOF:
 		status = 1
@@ -1105,8 +1105,11 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 		}
 		return status
 	}
+	// Splitting sees the escapes: an escaped separator is data and does not
+	// split, which is why the mask rides along rather than the processing
+	// being a pre-pass over the string.
 	ifs, set := r.ifs()
-	fields := splitFields(text, ifs, set)
+	fields := splitFieldsLiteral(text, lits, ifs, set)
 	if array != "" {
 		r.setArray(array, fields)
 		if clearRest {
@@ -1258,62 +1261,84 @@ func (r *Runner) timedByteSource(ctx context.Context, in io.Reader, timeout time
 }
 
 // readSegment reads until the delimiter, the count, or the end of the input,
-// honoring the backslash unless raw: an escaped delimiter is data with the
-// backslash dropped, and an escaped newline vanishes whole — the line
-// continuation — whatever the delimiter is. With exact set the count is the
-// only stop: the delimiter and the backslash are ordinary bytes, which is
-// what makes `read -N` the way to take input exactly as it came.
+// honoring the backslash unless raw: it removes the special meaning of the
+// character after it and is itself removed — so `a\tb` (a literal backslash,
+// then a t) delivers `atb` — and an escaped newline vanishes whole, the line
+// continuation, whatever the delimiter is. An escaped delimiter is data with
+// the backslash dropped, and a backslash the input ends on escapes nothing
+// and is dropped too; both measured, unanimous (docs/spec/semantics.md,
+// "read's options are the dialect's letters"). With exact set the count is
+// the only stop: the delimiter and the backslash are ordinary bytes, which
+// is what makes `read -N` the way to take input exactly as it came.
 //
-// count limits the characters as delivered, after a continuation has folded
-// its two away; negative means unlimited. See docs/spec/semantics.md,
-// "read's options are the dialect's letters".
-func readSegment(next func() (byte, int), raw bool, delim byte, count int, exact bool) (text string, end int) {
+// literal marks the delivered bytes a backslash escaped, aligned with text,
+// nil when there were none. The caller's field splitter needs it because an
+// escaped separator does not split — by the time the escapes are gone, an
+// escaped space and a separating one are the same byte, so a mask has to
+// carry what the string no longer can.
+//
+// count limits the characters as delivered, after an escape or a
+// continuation has folded its backslash away; negative means unlimited.
+func readSegment(next func() (byte, int), raw bool, delim byte, count int, exact bool) (text string, literal []bool, end int) {
 	var b strings.Builder
+	var escapedAt []int // offsets in b whose byte arrived behind a backslash
+	pending := false    // a backslash read, its character not yet
 	for {
 		if count >= 0 && b.Len() >= count {
-			return b.String(), endCount
+			return b.String(), literalMask(escapedAt, b.Len()), endCount
 		}
 		c, ev := next()
 		switch ev {
 		case evEOF:
-			return b.String(), endEOF
+			// A pending backslash had nothing to escape and is dropped.
+			return b.String(), literalMask(escapedAt, b.Len()), endEOF
 		case evTimeout:
-			return b.String(), endTimeout
+			return b.String(), literalMask(escapedAt, b.Len()), endTimeout
 		}
 		if exact {
 			b.WriteByte(c)
 			continue
 		}
-		escaped := !raw && strings.HasSuffix(b.String(), "\\")
-		if c == delim {
-			if !escaped {
-				return b.String(), endDelim
+		if pending {
+			pending = false
+			if c == '\n' {
+				// The continuation: backslash and newline vanish whole,
+				// under -d too, where the newline is no longer the
+				// delimiter. An escaped *other* delimiter is the branch
+				// below — data, not a join.
+				continue
 			}
-			s := strings.TrimSuffix(b.String(), "\\")
-			b.Reset()
-			b.WriteString(s)
-			if delim != '\n' {
-				// An escaped delimiter is data — `a\:b` read to `:` is
-				// `a:b` — where an escaped newline is a continuation and
-				// leaves nothing.
-				b.WriteByte(delim)
-			}
+			// Escaped, so literal: the delimiter does not end the read
+			// here, and a separator marked this way must not split.
+			escapedAt = append(escapedAt, b.Len())
+			b.WriteByte(c)
 			continue
 		}
-		if c == '\n' && escaped {
-			// The continuation holds under -d too: a backslash-newline
-			// vanishes whole even when the newline is no longer the
-			// delimiter.
-			s := strings.TrimSuffix(b.String(), "\\")
-			b.Reset()
-			b.WriteString(s)
+		if !raw && c == '\\' {
+			pending = true
 			continue
+		}
+		if c == delim {
+			return b.String(), literalMask(escapedAt, b.Len()), endDelim
 		}
 		b.WriteByte(c)
 	}
 }
 
-// readLine reads one line, honoring a line continuation unless raw, and says
+// literalMask spreads escaped offsets into a mask aligned with the text, nil
+// when nothing was escaped — the common case, kept allocation-free.
+func literalMask(at []int, n int) []bool {
+	if len(at) == 0 {
+		return nil
+	}
+	m := make([]bool, n)
+	for _, i := range at {
+		m[i] = true
+	}
+	return m
+}
+
+// readLine reads one line, honoring the backslash unless raw, and says
 // whether the input ended.
 //
 // The two are separate answers because a final line with no newline is both:
@@ -1322,7 +1347,7 @@ func readSegment(next func() (byte, int), raw bool, delim byte, count int, exact
 // last unterminated line twice — once as the line, once as the empty read
 // after it.
 func (r *Runner) readLine(raw bool) (line string, atEOF bool) {
-	text, end := readSegment(directByteSource(r.In()), raw, '\n', -1, false)
+	text, _, end := readSegment(directByteSource(r.In()), raw, '\n', -1, false)
 	return text, end == endEOF
 }
 

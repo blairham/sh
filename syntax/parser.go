@@ -86,6 +86,24 @@ func Parse(src string, d Dialect) (*File, error) {
 // Err reports why parsing stopped, or nil.
 func (p *Parser) Err() error { return p.err }
 
+// SetDialect replaces the dialect for input that has not been read yet.
+//
+// A shell can change its own grammar while it runs: a builtin executed on one
+// line decides whether a quantified group is a group on the next. The parser
+// cannot know that — the builtin runs in an interpreter this package has never
+// heard of — so the front end, which is the only place the two meet, reads the
+// interpreter's answer between lines and hands it in here. The same joint as
+// Aliases, for the same reason.
+//
+// It applies to what has not been tokenized. The parser holds one token of
+// lookahead, so the very first token of the next line may have been read under
+// the old dialect; every construct a runtime toggle governs sits deeper in a
+// line than its first token, which is what makes the boundary safe.
+func (p *Parser) SetDialect(d Dialect) {
+	p.dialect = d
+	p.lex.dialect = d
+}
+
 // Incomplete reports whether the input ended part-way through a construct that
 // could still be finished. A prompt should ask for another line.
 func (p *Parser) Incomplete() bool { return p.incomplete || p.lex.Incomplete() }

@@ -89,6 +89,28 @@ type patternOpts struct {
 	// a field rather than a return value because matchHere recurses, and
 	// threading a second result through every branch obscured the matching.
 	bad *bool
+	// fold compares letters without case. Not a dialect answer but a
+	// run-time one — GlobFoldsCase and MatchFoldsCase — which is why the two
+	// call sites that honor an option set it and the rest leave it off: the
+	// shell with the options keeps parameter expansion exact either way.
+	fold bool
+}
+
+// eqByte compares two bytes, without case when fold says so. ASCII only,
+// which is what the matcher is throughout: it walks patterns by byte.
+func eqByte(a, b byte, fold bool) bool {
+	return a == b || (fold && swapCase(a) == b)
+}
+
+// swapCase is the other case of an ASCII letter, or the byte itself.
+func swapCase(c byte) byte {
+	switch {
+	case c >= 'a' && c <= 'z':
+		return c - 'a' + 'A'
+	case c >= 'A' && c <= 'Z':
+		return c - 'A' + 'a'
+	}
+	return c
 }
 
 func matchPattern(pattern, s string, o patternOpts) bool {
@@ -139,13 +161,13 @@ func matchHere(p, s string, o patternOpts) bool {
 			if len(p) < 2 {
 				return s == "\\"
 			}
-			if s == "" || s[0] != p[1] {
+			if s == "" || !eqByte(p[1], s[0], o.fold) {
 				return false
 			}
 			p, s = p[2:], s[1:]
 
 		default:
-			if s == "" || s[0] != p[0] {
+			if s == "" || !eqByte(p[0], s[0], o.fold) {
 				return false
 			}
 			p, s = p[1:], s[1:]
@@ -308,7 +330,8 @@ func matchBracket(p string, c byte, o patternOpts) (rest string, ok bool) {
 		if strings.HasPrefix(p[i:], "[:") {
 			end := strings.Index(p[i:], ":]")
 			if end >= 0 {
-				if inClass(p[i+2:i+end], c) {
+				if inClass(p[i+2:i+end], c) ||
+					(o.fold && inClass(p[i+2:i+end], swapCase(c))) {
 					matched = true
 				}
 				i += end + 2
@@ -319,13 +342,15 @@ func matchBracket(p string, c byte, o patternOpts) (rest string, ok bool) {
 		lo := p[i]
 		// A `-` is literal at the end, which is why `[a-]` matches a dash.
 		if i+2 < len(p) && p[i+1] == '-' && p[i+2] != ']' {
-			if c >= lo && c <= p[i+2] {
+			hi := p[i+2]
+			if (c >= lo && c <= hi) ||
+				(o.fold && swapCase(c) >= lo && swapCase(c) <= hi) {
 				matched = true
 			}
 			i += 3
 			continue
 		}
-		if c == lo {
+		if eqByte(lo, c, o.fold) {
 			matched = true
 		}
 		i++

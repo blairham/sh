@@ -423,6 +423,9 @@ func Apply(r *interp.Runner) {
 	if dot, ok := r.Builtin("."); ok {
 		r.Register("source", dot)
 	}
+	// The builtin this shell alone answers to; the other three say "command
+	// not found", so it is registered here rather than taken away there.
+	r.Register("shopt", biShopt)
 	// `declare` is `typeset` under a second name rather than a second
 	// implementation. ksh93 has only the older name and dash has neither, so
 	// which names exist is a dialect's answer and not an axis.

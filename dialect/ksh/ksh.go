@@ -222,6 +222,8 @@ func Diagnostics() interp.Diagnostics {
 		Location:                    interp.LocationLineWordAfterFirst,
 		TraceQuoting:                interp.QuoteDollar,
 		ScriptLocation:              interp.LocationLineWord,
+		BuiltinLocation:             interp.LocationBracketLineAfterFirst,
+		ScriptBuiltinLocation:       interp.LocationBracketLine,
 		ParseFailureNamesItsOwnLine: true,
 		ReadonlyVariable:            "%s: is read only",
 		ShiftTooMany:                "shift: %d: bad number",

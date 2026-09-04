@@ -1625,6 +1625,11 @@ echo "st=$?"`,
 		Why:     "except before a special builtin, where POSIX says it persists — dash and ksh93 comply, bash and zsh do not",
 	},
 	{
+		ID: "cmd/assignment-prefix-reaches-a-builtin", Category: "command language",
+		Snippet: `echo "a:b" | { IFS=: read x y; echo "[$x][$y]"; v="p q"; set -- $v; echo "n=$#"; }`,
+		Why:     "transient is not invisible: the prefix is in effect while the builtin runs — `IFS=: read` splits on the colon — and is taken back after, so the later unquoted expansion splits on whitespace again",
+	},
+	{
 		ID: "cmd/subshell-isolates-state", Category: "command language",
 		Snippet: `x=1; (x=2); echo "[$x]"`,
 		Why:     "( ) runs in a subshell, so assignments do not escape",

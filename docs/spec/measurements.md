@@ -750,6 +750,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `cmd/redirect-between-arguments` | `[one two]` | `[one two]` | `[one two]` | `[one two]` | `[one two]` | `[one two]` |
 | `cmd/assignment-prefix-is-transient` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` |
 | `cmd/assignment-prefix-special-builtin` | `[2]` | `[1]` | `[2]` | `[1]` | `[2]` | `[1]` |
+| `cmd/assignment-prefix-reaches-a-builtin` | `[a][b]~n=2` | `[a][b]~n=2` | `[a][b]~n=2` | `[a][b]~n=2` | `[a][b]~n=2` | `[a][b]~n=1` |
 | `cmd/subshell-isolates-state` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` |
 | `cmd/brace-group-shares-state` | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` |
 | `cmd/brace-group-needs-terminator` | `<shell>: 1: Syntax error: end of file unexpected (expecting "}")` *(status 2)* | `<shell>: -c: line 2: syntax error: unexpected end of file from `{' command on line 1` *(status 2)* | `<shell>: -c: line 2: syntax error: unexpected end of file from `{' command on line 1` *(status 2)* | `<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | `<shell>: syntax error at line 1: `{' unmatched` *(status 3)* | `a` |
@@ -818,6 +819,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `cmd/assignment-prefix-special-builtin` — except before a special builtin, where POSIX says it persists — dash and ksh93 comply, bash and zsh do not
   ```sh
   x=1; x=2 export y=3; echo "[$x]"
+  ```
+- `cmd/assignment-prefix-reaches-a-builtin` — transient is not invisible: the prefix is in effect while the builtin runs — `IFS=: read` splits on the colon — and is taken back after, so the later unquoted expansion splits on whitespace again
+  ```sh
+  echo "a:b" | { IFS=: read x y; echo "[$x][$y]"; v="p q"; set -- $v; echo "n=$#"; }
   ```
 - `cmd/subshell-isolates-state` — ( ) runs in a subshell, so assignments do not escape
   ```sh

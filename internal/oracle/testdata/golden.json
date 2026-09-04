@@ -2266,6 +2266,38 @@
         "TimedOut": false
       }
     },
+    "axis/redirect-opened-for-a-builtin": {
+      "bash": {
+        "Output": "\u003cscript\u003e: line 2: /nonexistent-dir-xyz/x: No such file or directory~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cscript\u003e: line 2: /nonexistent-dir-xyz/x: No such file or directory~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cscript\u003e: line 2: /nonexistent-dir-xyz/x: No such file or directory~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cscript\u003e: 2: cannot create /nonexistent-dir-xyz/x: Directory nonexistent~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cscript\u003e[2]: /nonexistent-dir-xyz/x: cannot create [No such file or directory]~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cscript\u003e:2: no such file or directory: /nonexistent-dir-xyz/x~end",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "axis/shell-names-the-place": {
       "bash": {
         "Output": "\u003cscript\u003e: line 2: nosuchcmd-xyz: command not found~done",

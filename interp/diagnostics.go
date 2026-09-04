@@ -1237,14 +1237,14 @@ func escapeToken(s string) string {
 func (d Diagnostics) SourceReport(naming SourceNaming, shell, source string, line int, msg string) string {
 	switch naming {
 	case SourceReplacesShell:
-		return d.prefix(source, "", line) + msg
+		return d.prefix(source, "", false, line) + msg
 	case SourceBeforeLocation:
 		if shell == "" {
 			shell = "sh"
 		}
 		return shell + ": " + source + ": " + d.locationOnly(line) + msg
 	}
-	return d.prefix(shell, "", line) + source + ": " + msg
+	return d.prefix(shell, "", false, line) + source + ": " + msg
 }
 
 // SourceNaming is where the name of borrowed text goes.
@@ -1378,7 +1378,7 @@ func (d Diagnostics) ForScript() Diagnostics {
 // and that happens before a Runner exists — whoever parsed the script has to
 // render it with the same answers the Runner would have used.
 func (d Diagnostics) Report(name string, line int, msg string) string {
-	return d.prefix(name, "", line) + msg
+	return d.prefix(name, "", false, line) + msg
 }
 
 // ReportFrom is Report for a parse failure, which one dialect prefixes with
@@ -1390,7 +1390,7 @@ func (d Diagnostics) ReportFrom(name, input string, line int, msg string) string
 	if input != "" && d.NamesTheInputInLocation {
 		name += ": " + input
 	}
-	return d.prefix(name, "", line) + msg
+	return d.prefix(name, "", false, line) + msg
 }
 
 // ParseDiagnostic is everything a shell prints for a failed parse: the located
@@ -1460,7 +1460,7 @@ func (d Diagnostics) prefixWithoutLine(name, builtin string) string {
 	return name + ": "
 }
 
-func (d Diagnostics) prefix(name, builtin string, line int) string {
+func (d Diagnostics) prefix(name, builtin string, byBuiltin bool, line int) string {
 	if name == "" {
 		name = "sh"
 	}
@@ -1472,7 +1472,7 @@ func (d Diagnostics) prefix(name, builtin string, line int) string {
 		name += ":" + builtin
 	}
 	style := d.Location
-	if builtin != "" && d.BuiltinLocation != LocationNone {
+	if byBuiltin && d.BuiltinLocation != LocationNone {
 		style = d.BuiltinLocation
 	}
 	switch style {

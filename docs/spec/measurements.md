@@ -383,6 +383,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `axis/trap-body-line-signal` | `two~a~<script>: 2: nosuchcmd-xyz: not found~three` | `two~a~<script>: line 2: nosuchcmd-xyz: command not found~three` | `two~a~<script>: line 2: nosuchcmd-xyz: command not found~three` | `two~a~<script>: line 5: nosuchcmd-xyz: command not found~three` | `two~a~<script>: line 5: nosuchcmd-xyz: not found~three` | `two~a~<script>:4: command not found: nosuchcmd-xyz~three` |
 | `axis/trap-prints-a-bare-action` | `trap -- ':' INT~end` | `trap -- ':' SIGINT~end` | `trap -- ':' SIGINT~end` | `trap -- ':' SIGINT~end` | `trap -- : INT~end` | `trap -- : INT~end` |
 | `axis/trap-prints-a-quoted-action` | `trap -- 'echo hi' INT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' INT~end` | `trap -- 'echo hi' INT~end` |
+| `axis/redirect-opened-for-a-builtin` | `<script>: 2: cannot create /nonexistent-dir-xyz/x: Directory nonexistent~end` | `<script>: line 2: /nonexistent-dir-xyz/x: No such file or directory~end` | `<script>: line 2: /nonexistent-dir-xyz/x: No such file or directory~end` | `<script>: line 2: /nonexistent-dir-xyz/x: No such file or directory~end` | `<script>[2]: /nonexistent-dir-xyz/x: cannot create [No such file or directory]~end` | `<script>:2: no such file or directory: /nonexistent-dir-xyz/x~end` |
 | `axis/builtin-names-the-place` | `<script>: 2: cd: can't cd to /no/such/dir-xyz~done` | `<script>: line 2: cd: /no/such/dir-xyz: No such file or directory~done` | `<script>: line 2: cd: /no/such/dir-xyz: No such file or directory~done` | `<script>: line 2: cd: /no/such/dir-xyz: No such file or directory~done` | `<script>[2]: cd: /no/such/dir-xyz: [No such file or directory]~done` | `<script>:cd:2: no such file or directory: /no/such/dir-xyz~done` |
 | `axis/shell-names-the-place` | `<script>: 2: nosuchcmd-xyz: not found~done` | `<script>: line 2: nosuchcmd-xyz: command not found~done` | `<script>: line 2: nosuchcmd-xyz: command not found~done` | `<script>: line 2: nosuchcmd-xyz: command not found~done` | `<script>: line 2: nosuchcmd-xyz: not found~done` | `<script>:2: command not found: nosuchcmd-xyz~done` |
 | `axis/builtin-names-the-place-command-string` | `<shell>: 2: shift: can't shift that many` *(status 2)* | *(no output, status 1)* | `<shell>: line 2: shift: 99: shift count out of range` *(status 1)* | *(no output, status 1)* | `<shell>[2]: shift: 99: bad number` *(status 1)* | `<shell>:shift:2: shift count must be <= $#` *(status 1)* |
@@ -416,6 +417,12 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   trap 'echo hi' INT
   trap
+  echo end
+  ```
+- `axis/redirect-opened-for-a-builtin` — ksh93 counts a redirection opened for a builtin as the builtin's own and brackets the line; zsh does not name the builtin for it
+  ```sh
+  true
+  echo hi > /nonexistent-dir-xyz/x
   echo end
   ```
 - `axis/builtin-names-the-place` — ksh93 brackets the line for a builtin's own complaint: script[2]: cd: ...

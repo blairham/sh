@@ -351,6 +351,12 @@ var Corpus = []Case{
 		Why:     "a multi-word action, which all four quote the same way — a bare one does not, and that is its own question",
 	},
 	{
+		ID: "axis/redirect-opened-for-a-builtin", Category: "diagnostics",
+		Script:  true,
+		Snippet: "true\necho hi > /nonexistent-dir-xyz/x\necho end",
+		Why:     "ksh93 counts a redirection opened for a builtin as the builtin's own and brackets the line; zsh does not name the builtin for it",
+	},
+	{
 		ID: "axis/builtin-names-the-place", Category: "diagnostics",
 		Script:  true,
 		Snippet: "true\ncd /no/such/dir-xyz\necho done",

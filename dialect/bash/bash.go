@@ -104,6 +104,7 @@ func Semantics() interp.Semantics {
 	// A directory the PATH search walked past leaves no trace: with nothing
 	// runnable anywhere, bash says the name was never found at all.
 	s.DirectoryOnPathIsACandidate = interp.No
+	// hash counts builtins and functions and announces its empty table.
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes
 	// bash has no floats, so `2**-1` has no integer answer and stops the
@@ -424,6 +425,8 @@ func Diagnostics() interp.Diagnostics {
 		// bash names the path it tried, absolute, where the other three
 		// report the operand as written.
 		NamesResolvedPath: true,
+		// A bare `hash` announces the table, on standard output.
+		HashEmptyTable: "hash: hash table empty",
 		// Two lines, which is bash rather than a mistake: it prints the
 		// complaint and then a usage line, and only the first carries the
 		// shell's own prefix.

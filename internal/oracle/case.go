@@ -2688,6 +2688,21 @@ echo unreachable`,
 		Why:     "126 as well, and the reason diverges: bash and ksh93 check for a directory and say so, dash and zsh report the permission error execve returns",
 	},
 	{
+		ID: "hash/bare-and-r-succeed-everywhere", Category: "builtins",
+		Snippet: `hash; echo "st=$?"; hash -r; echo "r=$?"`,
+		Why:     "scripts call both defensively; every shell answers 0, and bash alone announces its empty table — on standard output",
+	},
+	{
+		ID: "hash/a-missing-name-diverges", Category: "builtins",
+		Snippet: `hash nosuchcmd-xyz; echo "st=$?"`,
+		Why:     "three report the name and answer 1; ksh93's hash is alias -t and succeeds in silence",
+	},
+	{
+		ID: "hash/a-builtin-counts-except-in-zsh", Category: "builtins",
+		Snippet: `hash shift; echo "st=$?"`,
+		Why:     "zsh hashes only what PATH holds, so a builtin is 'no such command' there; measured with shift because macOS ships /usr/bin/cd",
+	},
+	{
 		ID: "path/directory-on-path-is-walked-past", Category: "command lookup",
 		Snippet: `mkdir -p first/target real; printf '#!/bin/sh\necho ran\n' > real/target; chmod +x real/target; PATH=$PWD/first:$PWD/real; target; echo "st=$?"`,
 		Why:     "a directory whose name matches the command does not stop the PATH search — the shim-directory-early-on-PATH arrangement every version manager relies on",

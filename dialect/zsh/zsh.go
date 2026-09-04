@@ -103,6 +103,9 @@ func Semantics() interp.Semantics {
 	s.GlobExpansionResults = interp.No
 	s.GlobNoMatchIsError = interp.Yes
 	s.AssignmentPrefixPersistsOnSpecialBuiltin = interp.No
+	// hash counts only what PATH holds: a builtin or a function is "no
+	// such command" to it.
+	s.HashSearchesPathAlone = interp.Yes
 	s.EchoInterpretsEscapes = interp.Yes
 	// echo reads -n, -e and -E, and -e wins over -E whatever the order.
 	s.EchoOptions = "neE"
@@ -418,6 +421,7 @@ func Diagnostics() interp.Diagnostics {
 		NamesBuiltinInLocation: true,
 		LowercaseReason:        true,
 		DirectoryReason:        "Permission denied",
+		HashNotFound:           "no such command: %[1]s",
 	}
 }
 

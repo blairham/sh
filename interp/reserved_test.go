@@ -62,12 +62,15 @@ func TestAMissingBuiltinIsNotLookedForOnPath(t *testing.T) {
 	// reports a reserved name's PATH hit, which TestTypeWillNotName covers.
 	// `alias` and `unalias` have left as well: they keep a table now, and a
 	// table kept in a child that then exits is the whole bug this guards.
+	// `hash` was the last to leave — every reserved name is a builtin now —
+	// so the guard is exercised the way a dialect reaches it: by removing
+	// the builtin, which is what Unregister is for.
 	for _, name := range []string{"hash"} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			// An external of the same name that would happily succeed.
 			shadow(t, dir, name, "echo ran-the-external")
-			out, _, err := reservedRun(t, dir, name+" 077", nil)
+			out, _, err := reservedRun(t, dir, name+" 077", func(r *Runner) { r.Unregister(name) })
 			if err == nil {
 				t.Fatalf("%s: ran without complaint, output %q", name, out)
 			}
@@ -152,15 +155,16 @@ func TestAFunctionStillShadowsAReservedName(t *testing.T) {
 // it, so reporting it would defeat the guard a careful script writes — and
 // that guard exists to avoid exactly the failure that follows it.
 //
-// Written with `hash` rather than `umask` or `ulimit`: both are builtins now, so it is
-// reported as one, which is the case TestCommandVReportsARegisteredReservedName
-// covers.
+// Written with `hash` unregistered, because every reserved name is a builtin
+// now; a dialect that removes one is how this path is reached, and the case
+// with the builtin present is TestCommandVReportsARegisteredReservedName's.
 func TestCommandVDoesNotAdvertiseAReservedExternal(t *testing.T) {
 	dir := t.TempDir()
 	shadow(t, dir, "hash", "echo ran-the-external")
 	shadow(t, dir, "ordinary", "echo ran-the-external")
 
-	out, _, err := reservedRun(t, dir, `command -v hash; echo "st=$?"`, nil)
+	unregister := func(r *Runner) { r.Unregister("hash") }
+	out, _, err := reservedRun(t, dir, `command -v hash; echo "st=$?"`, unregister)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +174,7 @@ func TestCommandVDoesNotAdvertiseAReservedExternal(t *testing.T) {
 	// The guard, end to end: it must take the other branch and carry on
 	// rather than passing and then dying.
 	out, _, err = reservedRun(t, dir,
-		"if command -v hash >/dev/null; then hash 077; else echo no-hash; fi\necho reached", nil)
+		"if command -v hash >/dev/null; then hash 077; else echo no-hash; fi\necho reached", unregister)
 	if err != nil {
 		t.Fatalf("the guard did not protect the script: %v", err)
 	}

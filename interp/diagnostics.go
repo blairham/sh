@@ -218,6 +218,14 @@ type Diagnostics struct {
 	// CdStatus is what that reports. dash says 2 and the other three say 1.
 	// Zero means the substrate's own, 1.
 	CdStatus int
+	// HashEmptyTable is what a bare `hash` says about the table this shell
+	// does not keep. bash announces it, on standard output; the other three
+	// print nothing, which the empty value means.
+	HashEmptyTable string
+	// HashNotFound is a hashed name that resolves to nothing. One verb: the
+	// name. Empty means the substrate's own wording.
+	HashNotFound string
+
 	// DirectoryOnPathStatus is what a PATH search whose only match was a
 	// directory reports, in a dialect that keeps the directory as its
 	// answer. dash says 127 — the message names the candidate and the

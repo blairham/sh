@@ -251,3 +251,104 @@ func TestTypeRefusesAnOptionItDoesNotHave(t *testing.T) {
 		t.Errorf("got %q, want no option complaint where there are no options", out)
 	}
 }
+
+// `-t` answers one bare word per name — the scripted form of the question,
+// a word to compare against rather than a sentence to parse. The word for an
+// external is `file` and never the path, which is what keeps it comparable.
+func TestTypeCanNameTheBareKind(t *testing.T) {
+	out, st := run(t, `f(){ :; }; type -t f; type -t cd; type -t if; type -t /bin/ls`,
+		func(r *Runner) {
+			sem := CoreSemantics()
+			sem.TypeEndsOptionsWithDashDash = Yes
+			sem.TypeNamesTheKindWithDashT = Yes
+			r.Semantics = &sem
+		})
+	if st != 0 {
+		t.Fatalf("status %d: %s", st, out)
+	}
+	if want := "function\nbuiltin\nkeyword\nfile\n"; out != want {
+		t.Errorf("out = %q, want %q", out, want)
+	}
+}
+
+// The kind of nothing is silence: no line, no diagnostic, only the failing
+// status — which is the half a script branches on.
+func TestTypeKindOfNothingIsSilentFailure(t *testing.T) {
+	out, st := run(t, `type -t a-name-that-is-nothing`, func(r *Runner) {
+		sem := CoreSemantics()
+		sem.TypeEndsOptionsWithDashDash = Yes
+		sem.TypeNamesTheKindWithDashT = Yes
+		r.Semantics = &sem
+	})
+	if out != "" {
+		t.Errorf("out = %q, want nothing at all", out)
+	}
+	if st != 1 {
+		t.Errorf("status %d, want 1", st)
+	}
+}
+
+// One name failing does not stop the rest under `-t` either, and the words
+// that are printed give no hint which name the failure was about.
+func TestTypeKindAnswersEveryNameAndReportsTheFailure(t *testing.T) {
+	out, st := run(t, `type -t nope cd`, func(r *Runner) {
+		sem := CoreSemantics()
+		sem.TypeEndsOptionsWithDashDash = Yes
+		sem.TypeNamesTheKindWithDashT = Yes
+		r.Semantics = &sem
+	})
+	if out != "builtin\n" {
+		t.Errorf("out = %q, want the found name's kind alone", out)
+	}
+	if st != 1 {
+		t.Errorf("status %d, want the failure reported", st)
+	}
+}
+
+// Where the axis says no, `-t` is an option the builtin does not have, and it
+// is refused rather than read as a name — in the dialect's own words.
+func TestTypeRefusesTheKindLetterWhereTheDialectLacksIt(t *testing.T) {
+	out, st := run(t, `type -t cd`, func(r *Runner) {
+		sem := CoreSemantics()
+		sem.TypeEndsOptionsWithDashDash = Yes
+		sem.TypeNamesTheKindWithDashT = No
+		r.Semantics = &sem
+		dg := Diagnostics{BuiltinBadOption: "%[1]s: %[2]s: bad option"}
+		r.Diagnostics = &dg
+	})
+	if !strings.Contains(out, "type: -t: bad option") {
+		t.Errorf("out = %q, want the letter refused", out)
+	}
+	if strings.Contains(out, "builtin") {
+		t.Errorf("out = %q, want no answer about the names", out)
+	}
+	if st != 2 {
+		t.Errorf("status %d, want 2", st)
+	}
+}
+
+// A dialect whose complaints call a builtin by another name — the measured
+// case is a `type` that is an alias for a lookup builtin — names it in the
+// refusal and in the usage line, while everything keyed by builtin stays
+// keyed by the invoked name.
+func TestBuiltinComplaintCanNameAnotherBuiltin(t *testing.T) {
+	out, _ := run(t, `type -x cd`, func(r *Runner) {
+		sem := CoreSemantics()
+		sem.TypeEndsOptionsWithDashDash = Yes
+		r.Semantics = &sem
+		dg := Diagnostics{
+			BuiltinBadOption:     "%[1]s: %[2]s: unknown option",
+			BuiltinComplaintName: map[string]string{"type": "lookup"},
+			BuiltinUsage:         map[string]string{"type": "Usage: lookup [-x] name"},
+		}
+		r.Diagnostics = &dg
+	})
+	for _, want := range []string{"lookup: -x: unknown option", "Usage: lookup [-x] name"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("out = %q, want it to contain %q", out, want)
+		}
+	}
+	if strings.Contains(out, "type: -x") {
+		t.Errorf("out = %q, want the complaint not to use the invoked name", out)
+	}
+}

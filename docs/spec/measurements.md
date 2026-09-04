@@ -541,6 +541,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `type/what-a-name-would-run` | `cd is a shell builtin~if is a shell keyword~ls is /bin/ls` | `cd is a shell builtin~if is a shell keyword~ls is /bin/ls` | `cd is a shell builtin~if is a shell keyword~ls is /bin/ls` | `cd is a shell builtin~if is a shell keyword~ls is /bin/ls` | `cd is a shell builtin~if is a keyword~ls is a tracked alias for /bin/ls` | `cd is a shell builtin~if is a reserved word~ls is /bin/ls` |
 | `type/a-name-that-is-nothing` | `nope: not found~st=127` | `<shell>: line 1: type: nope: not found~st=1` | `<shell>: line 1: type: nope: not found~st=1` | `<shell>: line 0: type: nope: not found~st=1` | `<shell>: whence: nope: not found~st=1` | `nope not found~st=1` |
 | `type/several-names-and-a-double-dash` | `--: not found~cd is a shell builtin~ls is /bin/ls~st=127` | `cd is a shell builtin~ls is /bin/ls~st=0` | `cd is a shell builtin~ls is /bin/ls~st=0` | `cd is a shell builtin~ls is /bin/ls~st=0` | `cd is a shell builtin~ls is a tracked alias for /bin/ls~st=0` | `cd is a shell builtin~ls is /bin/ls~st=0` |
+| `type/dash-t-names-the-kind` | `-t: not found~f is a shell function~-t: not found~cd is a shell builtin~-t: not found~if is a shell keyword~-t: not found~ls is /bin/ls~st=127` | `function~builtin~keyword~file~st=0` | `function~builtin~keyword~file~st=0` | `function~builtin~keyword~file~st=0` | `<shell>: whence: -t: unknown option~Usage: whence [-afpqv] name  ...~<shell>: whence: -t: unknown option~Usage: whence [-afpqv] name  ...~<shell>: whence: -t: unknown option~Usage: whence [-afpqv] name  ...~<shell>: whence: -t: unknown option~Usage: whence [-afpqv] name  ...~st=2` | `<shell>:type:1: bad option: -t~<shell>:type:1: bad option: -t~<shell>:type:1: bad option: -t~<shell>:type:1: bad option: -t~st=1` |
+| `type/dash-t-on-nothing-is-silent-failure` | `-t: not found~a-name-that-is-nothing: not found~st=127` | `st=1` | `st=1` | `st=1` | `<shell>: whence: -t: unknown option~Usage: whence [-afpqv] name  ...~st=2` | `<shell>:type:1: bad option: -t~st=1` |
 | `export/unset-f-removes-a-function` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` |
 | `export/a-function-through-the-environment` | *(no output, status 2)* | `1` | `1` | `1` | *(no output, status 2)* | `0` *(status 1)* |
 | `export/a-name-that-is-not-a-function` | `<shell>: 1: export: Illegal option -f` *(status 2)* | `<shell>: line 1: export: nope: not a function~st=1` | `<shell>: line 1: export: nope: not a function~st=1` | `<shell>: line 0: export: nope: not a function~st=1` | `<shell>: export: -f: unknown option~Usage: export [-p] [name[=value]...]` *(status 2)* | `<shell>:export:1: invalid option(s)~st=1` |
@@ -709,6 +711,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `type/several-names-and-a-double-dash` — `--` ends the options in three of them and is a name in the fourth, which has no options for `type` at all — so it answers about `--` first and then about the names, and reports the failure
   ```sh
   type -- cd ls; echo "st=$?"
+  ```
+- `type/dash-t-names-the-kind` — the scripted form of the question: one shell answers `-t` with one bare word per name — function, builtin, keyword, file, never the path — where its plain `type` writes sentences. The other three have no `-t` at all, and each declines its own way: two refuse the letter — one of them naming the builtin it aliases and printing that usage line — and one has no options here, so `-t` is a name and gets answered as one
+  ```sh
+  f(){ :; }; type -t f; type -t cd; type -t if; type -t ls; echo "st=$?"
+  ```
+- `type/dash-t-on-nothing-is-silent-failure` — the kind of nothing is silence: where plain `type` writes a not-found line, `-t` writes no line and no diagnostic, and the failing status is the whole of the answer — which is the half a script branches on, and exactly what prose-parsing was adopted to avoid
+  ```sh
+  type -t a-name-that-is-nothing; echo "st=$?"
   ```
 - `export/unset-f-removes-a-function` — unanimous, and it was read and then ignored here: the option was accepted, the function survived being unset, and it went on answering to its name. Plain `unset f` is a different question and the shells split on it
   ```sh

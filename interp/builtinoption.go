@@ -148,10 +148,20 @@ func (r *Runner) refuseOption(builtin, word, known string) int {
 		// named the way the dialect names a bad one, the letter rather than
 		// the bundle it rode in on: `read -ra` is about `-a`, because `-r`
 		// is not the missing half.
-		r.diagf("%s: %s is not implemented yet\n", builtin, name)
+		r.diagf("%s: %s is not implemented yet\n", r.builtinComplaintName(builtin), name)
 		return 2
 	}
 	return r.badBuiltinOption(builtin, name)
+}
+
+// builtinComplaintName is what a builtin's complaints call it, which is its
+// own name everywhere but where the dialect says otherwise — see
+// Diagnostics.BuiltinComplaintName.
+func (r *Runner) builtinComplaintName(builtin string) string {
+	if n := r.diag().BuiltinComplaintName[builtin]; n != "" {
+		return n
+	}
+	return builtin
 }
 
 // badOption picks the offending letter and how to spell it. See
@@ -182,7 +192,8 @@ func (r *Runner) badOption(word, known string) (byte, string) {
 
 func (r *Runner) badBuiltinOption(name, opt string) int {
 	d := r.diag()
-	r.diagf("%s\n", Wording(d.BuiltinBadOption, "%[1]s: %[2]s: invalid option", name, opt))
+	r.diagf("%s\n", Wording(d.BuiltinBadOption, "%[1]s: %[2]s: invalid option",
+		r.builtinComplaintName(name), opt))
 	if usage := d.BuiltinUsage[name]; usage != "" {
 		if d.BuiltinUsageUnprefixed {
 			r.errf("%s\n", usage)

@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"strings"
 
 	"github.com/blairham/sh/syntax"
 )
@@ -23,48 +24,90 @@ func biType(r *Runner, _ context.Context, args []string) int {
 	// all and reads it as a name, which is why this is asked rather than
 	// assumed: `type -- ls` prints `--: not found` there and then goes on to
 	// answer about `ls`.
-	names, code := r.typeOperands(args)
+	names, kind, code := r.typeOperands(args)
 	if code != 0 {
 		return code
 	}
 	status := 0
 	for _, name := range names {
-		if bad := r.typeOne(name); bad != 0 {
+		if bad := r.typeOne(name, kind); bad != 0 {
 			status = bad
 		}
 	}
 	return status
 }
 
-// typeOperands separates the options from the names.
-func (r *Runner) typeOperands(args []string) ([]string, int) {
+// typeOperands separates the options from the names, and says whether `-t`
+// asked for the bare kind instead of the sentence.
+func (r *Runner) typeOperands(args []string) (names []string, kind bool, code int) {
 	// Asked only where there is a `--` to decide about. `type ls` is the
 	// same in all four, and refusing it over a question nothing turned on
 	// would be refusing to answer.
 	if len(args) == 0 || len(args[0]) < 2 || args[0][0] != '-' {
-		return args, 0
+		return args, false, 0
 	}
 	if !r.ask(r.sem().TypeEndsOptionsWithDashDash, "`type --` ending the options") {
 		if r.unspecified {
-			return nil, 2
+			return nil, false, 2
 		}
 		// No options anywhere, so every operand is a name — `--` included.
-		return args, 0
+		return args, false, 0
 	}
 	if args[0] == "--" {
-		return args[1:], 0
+		return args[1:], false, 0
 	}
-	// A leading `-` word that is not `--` is an option, and this shell has
-	// none of them: the ones the dialect really has are named as missing and
-	// anything else is refused as unknown. Skipping it silently made
-	// `type -t ls` answer about a name called `-t` and then about ls.
-	return nil, r.refuseOption("type", args[0], "")
+	// `-t` is the one option implemented, so the letters this shell knows
+	// are `t` or nothing, and which is the dialect's answer. Asked only
+	// where a `t` rides in the option words: any other letter is refused
+	// identically whichever way the answer goes — the ones the dialect
+	// really has are named as missing and the rest as unknown — so the
+	// question would decide nothing there.
+	known := ""
+	if typeOptionWordsCarryT(args) {
+		if r.ask(r.sem().TypeNamesTheKindWithDashT, "`type -t` naming the bare kind") {
+			known = "t"
+		}
+		if r.unspecified {
+			return nil, false, 2
+		}
+	}
+	rest, opts, code := r.builtinOptions("type", args, known)
+	if code != 0 {
+		return nil, false, code
+	}
+	return rest, strings.ContainsRune(opts, 't'), 0
 }
 
-// typeOne accounts for one name, and reports a status if it could not.
-func (r *Runner) typeOne(name string) int {
+// typeOptionWordsCarryT says whether a `t` rides in the leading option words —
+// the words builtinOptions would read before the first operand.
+func typeOptionWordsCarryT(args []string) bool {
+	for _, a := range args {
+		if len(a) < 2 || a[0] != '-' || a == "--" {
+			return false
+		}
+		if strings.ContainsRune(a[1:], 't') {
+			return true
+		}
+	}
+	return false
+}
+
+// typeOne accounts for one name — as a sentence, or as `-t`'s bare kind —
+// and reports a status if it could not.
+//
+// The kinds are one dialect's words and every dialect's words at once: only
+// one shell in the panel has `-t` at all, so there is no second wording to
+// hold a field for. The measured shell also answers `alias`, which is out of
+// reach here for the same reason plain `type` never names one: whether
+// aliases expand is the parser's fact — see syntax.Dialect.ExpandAliases —
+// and the runner holds only the table.
+func (r *Runner) typeOne(name string, kind bool) int {
 	dg := r.diag()
 	if fn, ok := r.funcs[name]; ok {
+		if kind {
+			r.printf("function\n")
+			return 0
+		}
 		shows := r.ask(r.sem().TypePrintsFunctionBody, "`type` printing a function's body")
 		if r.unspecified {
 			return 2
@@ -80,10 +123,18 @@ func (r *Runner) typeOne(name string) int {
 		return 0
 	}
 	if _, ok := r.lookupBuiltin(name); ok {
+		if kind {
+			r.printf("builtin\n")
+			return 0
+		}
 		r.printf("%s\n", Wording(dg.TypeBuiltin, "%[1]s is a shell builtin", name))
 		return 0
 	}
 	if reservedWord(name) {
+		if kind {
+			r.printf("keyword\n")
+			return 0
+		}
 		r.printf("%s\n", Wording(dg.TypeKeyword, "%[1]s is a shell keyword", name))
 		return 0
 	}
@@ -92,9 +143,21 @@ func (r *Runner) typeOne(name string) int {
 	// saying where it is would be answering about the wrong thing.
 	if !r.reservedBuiltin(name) {
 		if path, err := r.lookPath(name); err == nil {
+			if kind {
+				// The kind and never the path, which is what keeps the word
+				// comparable on any machine.
+				r.printf("file\n")
+				return 0
+			}
 			r.printf("%s\n", Wording(dg.TypeExternal, "%[1]s is %[2]s", name, path))
 			return 0
 		}
+	}
+	if kind {
+		// Nothing at all for a name that is nothing — no line and no
+		// diagnostic, measured. The status is the whole of the answer,
+		// which is what makes `-t` scriptable in the first place.
+		return orDefault(dg.TypeNotFoundStatus, 1)
 	}
 	msg := Wording(dg.TypeNotFound, "type: %[1]s: not found", name)
 	if dg.TypeNotFoundUnprefixed {

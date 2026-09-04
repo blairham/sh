@@ -155,6 +155,10 @@ func Semantics() interp.Semantics {
 	// Whether `type --` ends the options.
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.No
+	// Unreachable behind the answer above — dash's `type` has no options at
+	// all, so `-t` is a name — but the axis is answered rather than left
+	// looking forgotten.
+	s.TypeNamesTheKindWithDashT = interp.No
 
 	return s
 }

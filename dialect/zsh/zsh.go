@@ -241,6 +241,9 @@ func Semantics() interp.Semantics {
 	// Whether `type --` ends the options.
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.Yes
+	// zsh's word-per-name option is `-w`, with its own vocabulary; `-t` is
+	// a bad option there.
+	s.TypeNamesTheKindWithDashT = interp.No
 
 	return s
 }

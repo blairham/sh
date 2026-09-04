@@ -20314,6 +20314,70 @@
         "TimedOut": false
       }
     },
+    "type/dash-t-names-the-kind": {
+      "bash": {
+        "Output": "function~builtin~keyword~file~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "function~builtin~keyword~file~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "function~builtin~keyword~file~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "-t: not found~f is a shell function~-t: not found~cd is a shell builtin~-t: not found~if is a shell keyword~-t: not found~ls is /bin/ls~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: whence: -t: unknown option~Usage: whence [-afpqv] name  ...~\u003cshell\u003e: whence: -t: unknown option~Usage: whence [-afpqv] name  ...~\u003cshell\u003e: whence: -t: unknown option~Usage: whence [-afpqv] name  ...~\u003cshell\u003e: whence: -t: unknown option~Usage: whence [-afpqv] name  ...~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:type:1: bad option: -t~\u003cshell\u003e:type:1: bad option: -t~\u003cshell\u003e:type:1: bad option: -t~\u003cshell\u003e:type:1: bad option: -t~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "type/dash-t-on-nothing-is-silent-failure": {
+      "bash": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "-t: not found~a-name-that-is-nothing: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: whence: -t: unknown option~Usage: whence [-afpqv] name  ...~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:type:1: bad option: -t~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "type/several-names-and-a-double-dash": {
       "bash": {
         "Output": "cd is a shell builtin~ls is /bin/ls~st=0",

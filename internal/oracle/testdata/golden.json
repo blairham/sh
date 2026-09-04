@@ -19258,6 +19258,38 @@
         "TimedOut": false
       }
     },
+    "wait/a-leading-dash": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: wait: -x: invalid option~wait: usage: wait [-fn] [-p var] [id ...]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: wait: -x: invalid option~wait: usage: wait [-fn] [-p var] [id ...]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: wait: -x: invalid option~wait: usage: wait [n]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: wait: Illegal option -x~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: wait: -x: unknown option~Usage: wait [ options ] [job ...]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:wait:1: job not found: -x~st=127",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "wait/a-pid-that-is-not-ours": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: wait: pid 999999 is not a child of this shell~st=127",
@@ -19318,6 +19350,38 @@
       },
       "zsh": {
         "Output": "\u003cshell\u003e:wait:1: job not found: nosuchjob~st=127",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "wait/dash-dash-ends-the-options": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
         "Status": 0,
         "TimedOut": false
       }

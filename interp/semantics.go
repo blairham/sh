@@ -714,6 +714,11 @@ type Semantics struct {
 	// builtin's failure is, which `shift` is.
 	ShiftReadsOptions Answer
 
+	// WaitReadsOptions reads a leading `-` word as an option rather than as
+	// a job to wait for. Three of the four do; zsh has none, and answers
+	// `wait -x` with the job it could not find.
+	WaitReadsOptions Answer
+
 	// ShiftCountIsArithmetic reads `shift`'s operand as an expression rather
 	// than as a plain number: `shift 1+1` moves two and `shift n` moves
 	// whatever n holds.

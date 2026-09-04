@@ -332,6 +332,11 @@ type Runner struct {
 	// is `exec > log` and nothing else. The dispatcher clears it after acting
 	// on it, so it cannot leak into the next command.
 	keepRedirs bool
+	// completions are the specs `complete` registered, kept verbatim so a
+	// bash_completion.d file run in a non-interactive shell registers, lists
+	// and removes them the way it would in bash — nothing here completes.
+	completions map[string]string
+
 	// fds are the descriptors beyond the three named streams — what
 	// `exec 6>&1` saves and `>&6` finds again. Values are the io.Reader or
 	// io.Writer the descriptor stood for when it was made, which is what
@@ -639,6 +644,7 @@ func (r *Runner) clone() *Runner {
 	// defaults — see trapsubshell.go for what crosses and what is only
 	// still visible.
 	c.inheritTraps(r)
+	c.completions = maps.Clone(r.completions)
 	return &c
 }
 

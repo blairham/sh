@@ -226,6 +226,10 @@ type Diagnostics struct {
 	// name. Empty means the substrate's own wording.
 	HashNotFound string
 
+	// CompleteNoSpec is `complete -p` or `-r` on a name nothing was
+	// registered for. One verb: the name.
+	CompleteNoSpec string
+
 	// DirectoryOnPathStatus is what a PATH search whose only match was a
 	// directory reports, in a dialect that keeps the directory as its
 	// answer. dash says 127 — the message names the candidate and the

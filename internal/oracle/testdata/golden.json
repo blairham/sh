@@ -4730,6 +4730,70 @@
         "TimedOut": false
       }
     },
+    "complete/registers-in-a-script": {
+      "bash": {
+        "Output": "st=0~complete -W 'a b' foo",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0~complete -W 'a b' foo",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0~complete -W 'a b' foo",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: complete: not found~st=127~\u003cshell\u003e: 1: complete: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: complete: not found~st=127~\u003cshell\u003e: complete: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: command not found: complete~st=127~\u003cshell\u003e:1: command not found: complete",
+        "Status": 127,
+        "TimedOut": false
+      }
+    },
+    "complete/removes-and-misses": {
+      "bash": {
+        "Output": "r=0~\u003cshell\u003e: line 1: complete: foo: no completion specification~p=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "r=0~\u003cshell\u003e: line 1: complete: foo: no completion specification~p=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "r=0~\u003cshell\u003e: line 0: complete: foo: no completion specification~p=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: complete: not found~\u003cshell\u003e: 1: complete: not found~r=127~\u003cshell\u003e: 1: complete: not found~p=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: complete: not found~\u003cshell\u003e: complete: not found~r=127~\u003cshell\u003e: complete: not found~p=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: command not found: complete~\u003cshell\u003e:1: command not found: complete~r=127~\u003cshell\u003e:1: command not found: complete~p=127",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "cond/a-group-in-a-regex": {
       "bash": {
         "Output": "y",

@@ -65,6 +65,8 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskWhoAloneSetsIt = interp.No
 	s.SymbolicMaskTakesTheSetuidLetter = interp.No
 	s.SymbolicMaskTakesTheStickyLetter = interp.No
+	s.ShiftReadsOptions = interp.Yes
+	s.ShiftCountIsArithmetic = interp.Yes
 	// No by construction rather than by measurement: zsh has already parsed
 	// the whole action by the time a trap fires, so it never runs part of a
 	// body whose rest will not parse. The two answers cannot be told apart

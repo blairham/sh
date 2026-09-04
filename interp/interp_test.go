@@ -459,3 +459,116 @@ func TestRegexModeEndsWithTheOperand(t *testing.T) {
 		}
 	}
 }
+
+// TestShiftReadsALeadingDashTwoWays. The same operand is an *option* in two
+// dialects and a count in the other two, and the two complaints are different
+// kinds of thing rather than two wordings of one.
+func TestShiftReadsALeadingDashTwoWays(t *testing.T) {
+	asOption := CoreSemantics()
+	asOption.ShiftReadsOptions = Yes
+	asOption.BadOptionToSpecialBuiltinFatal = No
+	out, _ := run(t, `shift -x; echo "st=$?"`, func(r *Runner) {
+		dg := Diagnostics{BuiltinBadOption: "shift: bad option: %[2]s", BuiltinBadOptionStatus: 1}
+		r.Semantics, r.Diagnostics = &asOption, &dg
+	})
+	if !strings.Contains(out, "bad option: -x") || !strings.Contains(out, "st=1") {
+		t.Errorf("as an option: got %q", out)
+	}
+
+	asCount := CoreSemantics()
+	asCount.ShiftReadsOptions = No
+	asCount.ShiftCountIsArithmetic = No
+	asCount.BadOptionToSpecialBuiltinFatal = No
+	out, _ = run(t, `shift -x; echo "st=$?"`, func(r *Runner) {
+		dg := Diagnostics{ShiftBadNumber: "shift: Illegal number: %[1]s"}
+		r.Semantics, r.Diagnostics = &asCount, &dg
+	})
+	if !strings.Contains(out, "Illegal number: -x") {
+		t.Errorf("as a count: got %q", out)
+	}
+}
+
+// TestABundleIsRefusedByItsFirstLetter, so `shift --help` is `-h` and not
+// `--help` — the dashes are stripped and the letter after them named.
+func TestABundleIsRefusedByItsFirstLetter(t *testing.T) {
+	sem := CoreSemantics()
+	sem.ShiftReadsOptions = Yes
+	sem.BadOptionToSpecialBuiltinFatal = No
+	out, _ := run(t, `shift --help`, func(r *Runner) {
+		dg := Diagnostics{BuiltinBadOption: "shift: bad option: %[2]s"}
+		r.Semantics, r.Diagnostics = &sem, &dg
+	})
+	if !strings.Contains(out, "bad option: -h") {
+		t.Errorf("got %q, want the first letter named", out)
+	}
+}
+
+// TestAShiftCountCanBeAnExpression, where an unset name is zero — which is
+// why one shape of this shifts nothing and succeeds rather than failing.
+func TestAShiftCountCanBeAnExpression(t *testing.T) {
+	sem := CoreSemantics()
+	sem.ShiftCountIsArithmetic = Yes
+	sem.ArrayBaseIsZero = Yes
+	for _, tc := range []struct{ src, want string }{
+		{`set -- a b c; shift 1+1; echo "[$*]"`, "[c]"},
+		{`n=2; set -- a b c; shift n; echo "[$*]"`, "[c]"},
+		{`set -- a b c; shift nosuchname; echo "[$*] st=$?"`, "[a b c] st=0"},
+	} {
+		out, _ := run(t, tc.src, func(r *Runner) {
+			dg := Diagnostics{}
+			r.Semantics, r.Diagnostics = &sem, &dg
+		})
+		if !strings.Contains(out, tc.want) {
+			t.Errorf("%s: got %q, want %q in it", tc.src, out, tc.want)
+		}
+	}
+}
+
+// TestAPlainNumberAsksNothing, which keeps the axis off the path every
+// ordinary `shift` takes: both readings agree on a number, so a shell with no
+// answers still shifts.
+func TestAPlainNumberAsksNothing(t *testing.T) {
+	sem := CoreSemantics()
+	out, _ := run(t, `set -- a b c; shift 2; echo "[$*]"`, func(r *Runner) {
+		dg := Diagnostics{}
+		r.Semantics, r.Diagnostics = &sem, &dg
+	})
+	if !strings.Contains(out, "[c]") {
+		t.Errorf("got %q, want an ordinary shift to need no answer", out)
+	}
+	if strings.Contains(out, "disagree") {
+		t.Errorf("got %q, want nothing asked", out)
+	}
+}
+
+// TestABadShiftOperandCanEndTheScript, under the rule a special builtin's
+// failure already gets — `shift` is one, and two of the four stop for it.
+func TestABadShiftOperandCanEndTheScript(t *testing.T) {
+	fatal := CoreSemantics()
+	fatal.ShiftReadsOptions = No
+	fatal.ShiftCountIsArithmetic = No
+	fatal.BadOptionToSpecialBuiltinFatal = Yes
+	fatal.FatalErrorStatusIsOne = No
+	out, st := run(t, `shift -x; echo after`, func(r *Runner) {
+		dg := Diagnostics{}
+		r.Semantics, r.Diagnostics = &fatal, &dg
+	})
+	if strings.Contains(out, "after") {
+		t.Errorf("got %q, want the script to stop", out)
+	}
+	if st == 0 {
+		t.Error("status = 0, want the failure to stand")
+	}
+
+	carry := CoreSemantics()
+	carry.ShiftReadsOptions = No
+	carry.ShiftCountIsArithmetic = No
+	carry.BadOptionToSpecialBuiltinFatal = No
+	out, _ = run(t, `shift -x; echo after`, func(r *Runner) {
+		dg := Diagnostics{}
+		r.Semantics, r.Diagnostics = &carry, &dg
+	})
+	if !strings.Contains(out, "after") {
+		t.Errorf("got %q, want the script to carry on", out)
+	}
+}

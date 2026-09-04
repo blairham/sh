@@ -74,6 +74,8 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskWhoAloneSetsIt = interp.Yes
 	s.SymbolicMaskTakesTheSetuidLetter = interp.Yes
 	s.SymbolicMaskTakesTheStickyLetter = interp.Yes
+	s.ShiftReadsOptions = interp.Yes
+	s.ShiftCountIsArithmetic = interp.Yes
 	s.TrapBodyRunsWhatParsed = interp.No
 	s.ReportsAKilledCommandInACommandSubstitution = interp.Yes
 	s.TrapBodyLine = interp.TrapBodyLineOffsetFromWhereItFired
@@ -330,6 +332,7 @@ func Diagnostics() interp.Diagnostics {
 			"export":   "Usage: export [-p] [name[=value]...]",
 			"readonly": "Usage: readonly [-p] [name[=value]...]",
 			"trap":     "Usage: trap [-p] [action condition ...]",
+			"shift":    "Usage: shift [ options ] [n]",
 			"unset":    "Usage: unset [-nfv] name...",
 		},
 		PrintfUsage:           "Usage: printf [ options ] format [string ...]",

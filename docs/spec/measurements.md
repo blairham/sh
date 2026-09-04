@@ -2300,6 +2300,9 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `param/a-bad-operator-in-a-branch-never-taken` | `ok` | `ok` | `ok` | `ok` | `<shell>: syntax error at line 1: ` ' unexpected` *(status 3)* | `ok` |
 | `param/a-bad-operator-reached` | `<shell>: 1: Bad substitution` *(status 2)* | `<shell>: line 1: ${foo ~}: bad substitution` *(status 1)* | `<shell>: line 1: ${foo ~}: bad substitution` *(status 127)* | `<shell>: ${foo ~}: bad substitution` *(status 1)* | `<shell>: syntax error at line 1: ` ' unexpected` *(status 3)* | `<shell>:1: bad substitution` *(status 1)* |
 | `param/substitution-anchored` | `<shell>: 1: Bad substitution` *(status 2)* | `[X-b][a-Y]` | `[X-b][a-Y]` | `[X-b][a-Y]` | `[X-b][a-Y]` | `[X-b][a-Y]` |
+| `param/transform-quotes-for-reuse` | `<shell>: 1: Bad substitution` *(status 2)* | `['a b'\''c']` | `['a b'\''c']` | `<shell>: ${x@Q}: bad substitution` *(status 1)* | `<shell>: "${x@Q}": bad substitution` *(status 1)* | `<shell>:1: bad substitution` *(status 1)* |
+| `param/transform-distributes-over-an-array` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `['one']['t w']` | `['one']['t w']` | `[one][t w]` | `<shell>: "${a[@]@Q}": bad substitution` *(status 1)* | `<shell>:1: bad substitution` *(status 1)* |
+| `param/transform-deferred-in-a-branch-never-taken` | `ok` | `ok` | `ok` | `ok` | `ok` | `ok` |
 | `param/substring` | `<shell>: 1: Bad substitution` *(status 2)* | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` |
 | `param/case-change-is-bash-only` | `<shell>: 1: Bad substitution` *(status 2)* | `[ABC][abc]` | `[ABC][abc]` | `<shell>: ${x^^}: bad substitution` *(status 1)* | `<shell>: syntax error at line 1: `^' unexpected` *(status 3)* | `<shell>:1: bad substitution` *(status 1)* |
 | `param/indirection-diverges-four-ways` | `<shell>: 1: Bad substitution` *(status 2)* | `[V]` | `[V]` | `[V]` | `[x]` | `<shell>:1: bad substitution` *(status 1)* |
@@ -2388,6 +2391,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `param/substitution-anchored` — anchored to the start and the end of the value
   ```sh
   x=a-b; printf "[%s]" "${x/#a/X}" "${x/%b/Y}"
+  ```
+- `param/transform-quotes-for-reuse` — bash alone has the @ transformations: single quotes with the quote spelled '\''; the other three call the construct a bad substitution at run time
+  ```sh
+  x="a b'c"; printf "[%s]" "${x@Q}"
+  ```
+- `param/transform-distributes-over-an-array` — a transformation distributes: one quoted word per element, not one word holding the joined array
+  ```sh
+  a=(one "t w"); printf "[%s]" "${a[@]@Q}"
+  ```
+- `param/transform-deferred-in-a-branch-never-taken` — the @ family is deferred to run time by every shell in the panel — including ksh93, which refuses every *other* unrecognized operator while reading. The second defect of the sweep that found the family
+  ```sh
+  if false; then echo "${x@Q}"; fi; echo ok
   ```
 - `param/substring` — offset with and without a length; absent from dash
   ```sh

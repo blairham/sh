@@ -47,6 +47,11 @@ const (
 	// rejected unless the dialect has them.
 	ParamUpper
 	ParamLower
+	// ParamTransform is `@` followed by one letter naming a transformation
+	// of the value — `${x@Q}` quotes it for reuse as input. The letter rides
+	// on [ParamExpr.Transform]; the set is fixed, and a letter outside it is
+	// a bad substitution rather than a shape of its own.
+	ParamTransform
 )
 
 func (o ParamOp) String() string {
@@ -83,9 +88,16 @@ func (o ParamOp) String() string {
 		return "^^"
 	case ParamLower:
 		return ",,"
+	case ParamTransform:
+		return "@"
 	}
 	return ""
 }
+
+// paramTransformLetters is the fixed set a `@` operator may carry. Measured on
+// bash 5.3, which has no others: `${x@Z}` is a bad substitution there exactly
+// as `${x@Q}` is in a dialect without the family.
+const paramTransformLetters = "QEPAaKkLUu"
 
 // ParamExpr is a parsed `${ … }`.
 type ParamExpr struct {
@@ -123,6 +135,10 @@ type ParamExpr struct {
 	All bool
 	// Anchor is '#' for `/#` or '%' for `/%`, and 0 otherwise.
 	Anchor byte
+	// Transform is ParamTransform's letter — one of Q E P A a K k L U u.
+	// It is a byte rather than a word because it is part of the operator:
+	// nothing expands it, and `${x@$op}` is a bad substitution.
+	Transform byte
 
 	// Bad marks an expansion whose operator the grammar did not recognize,
 	// in a dialect that diagnoses that when the expansion is reached rather
@@ -194,10 +210,17 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 
 	op, rest, ok := p.scanParamOp(s, e)
 	if !ok {
-		if !p.dialect.BadSubstitutionAtParseTime {
+		if !p.dialect.BadSubstitutionAtParseTime || s[0] == '@' {
 			// The majority defers: the node is kept, marked, and diagnosed
 			// only if the expansion is ever reached — an unrecognized
 			// operator in a branch never taken is not an error at all.
+			//
+			// The `@` family is deferred even by the one grammar that
+			// otherwise refuses while reading. Measured: ksh93 reads
+			// `${x@Q}` in a branch never taken without complaint and calls
+			// it `${x@Q}: bad substitution` only when the expansion is
+			// reached, while `${x^^}` in the same branch is a parse-time
+			// syntax error there.
 			e.Bad, e.Src = true, src
 			return e
 		}
@@ -311,6 +334,19 @@ func (p *Parser) scanParamOp(s string, e *ParamExpr) (ParamOp, string, bool) {
 			rest = rest[1:]
 		}
 		return ParamReplace, rest, true
+	case s[0] == '@':
+		if !p.dialect.ParamTransformations {
+			return 0, "", false
+		}
+		// One letter from the fixed set and nothing after it: `${x@}`,
+		// `${x@QQ}` and `${x@ Q}` are bad substitutions in the shell that
+		// has the family, measured, so the grammar refuses exactly what the
+		// runtime there refuses.
+		if len(s) != 2 || strings.IndexByte(paramTransformLetters, s[1]) < 0 {
+			return 0, "", false
+		}
+		e.Transform = s[1]
+		return ParamTransform, "", true
 	case strings.HasPrefix(s, "^"), strings.HasPrefix(s, ","), strings.HasPrefix(s, "~"):
 		if !p.dialect.ParamCaseChange {
 			return 0, "", false

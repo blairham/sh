@@ -26,6 +26,10 @@ func Dialect() syntax.Dialect {
 	}
 	d.CaseContinue = true
 	d.ParamCaseChange = true
+	// `${x@Q}` and the rest of the letter family, which no other shell in
+	// the panel has: the others report a bad substitution when the
+	// expansion is reached.
+	d.ParamTransformations = true
 	d.ParamIndirection = true
 	// `$"..."`, the locale-translatable string: with no catalog it is a
 	// plain double-quoted string with the `$` stripped. Not core, because

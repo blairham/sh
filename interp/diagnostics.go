@@ -1105,6 +1105,14 @@ type Diagnostics struct {
 	// BadSubstitution replaces a parse failure inside `${ }` entirely. No
 	// verbs: no shell in the panel says which operator was wrong.
 	BadSubstitution string
+	// BadSubstitutionAtRun words the *deferred* report — an expansion the
+	// grammar marked bad and the run then reached. One verb: the inside of
+	// the braces as written. Only a dialect whose parse-time wording is not
+	// a runtime one needs it: ksh93 refuses `${x ~}` while reading with a
+	// syntax error and reports the `@` family it defers as
+	// `${x@j}: bad substitution` when reached. Empty falls back to
+	// BadSubstitution, which is a runtime wording everywhere else.
+	BadSubstitutionAtRun string
 	// NotFound is a command name that resolved to nothing. One verb: the
 	// name.
 	NotFound string

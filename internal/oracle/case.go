@@ -2161,6 +2161,21 @@ echo "st=$?"`,
 		Why:     "anchored to the start and the end of the value",
 	},
 	{
+		ID: "param/transform-quotes-for-reuse", Category: "parameter expansion",
+		Snippet: `x="a b'c"; printf "[%s]" "${x@Q}"`,
+		Why:     "bash alone has the @ transformations: single quotes with the quote spelled '\\''; the other three call the construct a bad substitution at run time",
+	},
+	{
+		ID: "param/transform-distributes-over-an-array", Category: "parameter expansion",
+		Snippet: `a=(one "t w"); printf "[%s]" "${a[@]@Q}"`,
+		Why:     "a transformation distributes: one quoted word per element, not one word holding the joined array",
+	},
+	{
+		ID: "param/transform-deferred-in-a-branch-never-taken", Category: "parameter expansion",
+		Snippet: `if false; then echo "${x@Q}"; fi; echo ok`,
+		Why:     "the @ family is deferred to run time by every shell in the panel — including ksh93, which refuses every *other* unrecognized operator while reading. The second defect of the sweep that found the family",
+	},
+	{
 		ID: "param/substring", Category: "parameter expansion",
 		Snippet: `x=abcdef; printf "[%s]" "${x:1:3}" "${x:2}"`,
 		Why:     "offset with and without a length; absent from dash",

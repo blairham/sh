@@ -332,7 +332,12 @@ func Diagnostics() interp.Diagnostics {
 		ArithOperatorExpected:  "arithmetic syntax error",
 		// ksh93 does not call this a bad substitution: it is a syntax error
 		// naming the character it could not read.
-		BadSubstitution:        "syntax error at line %[2]d: `%[1]s' unexpected",
+		BadSubstitution: "syntax error at line %[2]d: `%[1]s' unexpected",
+		// Except for the `@` operator family, the one bad substitution ksh93
+		// defers to run time — measured, `${x@Q}` in a branch never taken is
+		// silent — and when reached it is reported as a bad substitution
+		// after all, not with the parse wording above.
+		BadSubstitutionAtRun:   "${%[1]s}: bad substitution",
 		FunctionNameInvalid:    "%[1]s: invalid function name",
 		FunctionNameDiscipline: "%[1]s: invalid discipline function",
 		SyntaxUnexpected:       "syntax error at line %[3]d: `%[1]s' unexpected",

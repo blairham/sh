@@ -177,16 +177,84 @@ zsh no).
 `${#a[@]}` is untouched by all of this: it is the count, and the length
 question is answered before any operator runs.
 
+## The `@` transformation family
+
+`${x@Q}` transforms the value rather than testing or editing it. The
+operator is `@` followed by **exactly one letter** from a fixed set —
+`${x@}`, `${x@QQ}` and `${x@ Q}` are all bad substitutions. **bash alone**
+(measured on bash 5.3): dash and zsh report a bad substitution at run
+time, and so does ksh93 — `${x@Q}: bad substitution`, status 1 — even
+though its *other* unrecognized operators are refused while reading. An
+`@` operator in a branch never taken is silent in all four, so the `@`
+family is deferred to run time everywhere, including the one shell that
+otherwise refuses at parse time.
+
+Measured on bash 5.3, all with the variable set unless said otherwise; an
+unset variable yields empty for every letter, with `set -u` complaining
+first as it would for `$x`:
+
+| letter | meaning | measured |
+| --- | --- | --- |
+| `Q` | value quoted for reuse as input | `a b'c` → `'a b'\''c'`; empty → `''` |
+| `E` | backslash escapes expanded, `$'…'` rules | `a\tb` → `a<TAB>b`; `\101` → `A` |
+| `P` | prompt expansion | `\u at \w` → the user and directory; plain text unchanged |
+| `A` | an assignment statement that reproduces the variable | below |
+| `a` | attribute letters | `declare -irx v=1` → `irx`; no attributes → empty |
+| `K` | keys and quoted values | below |
+| `k` | keys and values as separate words | below |
+| `L` | lower-case the whole value | `abC dEf` → `abc def` |
+| `U` | upper-case the whole value | `abC dEf` → `ABC DEF` |
+| `u` | upper-case the first character | `abC dEf` → `AbC dEf` |
+
+**`@Q` picks its quoting by content.** A value with no unprintable
+character is single-quoted, the quote itself spelled `'\''`, backslashes
+and `$` left alone: `has\backslash` → `'has\backslash'`. Any control
+character (or byte that is not character-shaped) switches the whole value
+to `$'…'`: `\a \b \t \n \v \f \r` by name, ESC as `\E`, `'` as `\'`,
+`\` as `\\`, `"` kept plain, anything else unprintable as three-digit
+octal **per byte** — DEL is `$'\177'`, U+0085 is `$'\302\205'`. Printable
+multibyte text stays as written: `café` → `'café'`.
+
+**Transformations distribute over a whole array.** `"${a[@]@Q}"` is one
+quoted word per element and `"${a[*]@Q}"` joins them; the same holds for
+`"${@@Q}"` and `"${*@Q}"` over the positional parameters, and for every
+letter. An empty or unset array is zero fields, status 0.
+
+**`@A` writes the statement that would recreate the variable.** A name
+with no attributes is `x='a b'` (the value `@Q`-quoted); attributes put
+`declare -irx v='1'` in front, the letters ordered `a A i r x`; a name
+whose value is unset drops the `='…'` half — `declare -A h` for an
+associative table read without a subscript. A positional parameter has no
+name to write and yields empty, while `"${@@A}"` yields the words
+`set -- 'one' 't w'`, one field each. On `"${a[@]@A}"` the fields are the
+words of the statement: `declare` `-a` `a=([0]="1" [1]="x y")` — the
+elements double-quoted, an associative table's list with a trailing space
+before the `)`.
+
+**`@K` and `@k` list keys and values; on anything but a stored array they
+are `@Q`.** `"${a[@]@K}"` is a *single* field, keys bare and values
+double-quoted (`\"` and `\\` escaped, `$'…'` when control characters
+force it): `0 "one" 1 "t w"` — an associative table's pairs each carry a
+trailing space instead of the joining space. `"${a[@]@k}"` is the same
+pairs as *separate* fields, values unquoted: `0` `one` `1` `t w`. A
+scalar, a scalar read as `${x[@]}`, and the positional parameters all
+answer with the `@Q` quoting and no keys at all.
+
+Citation: oracle runs against bash 5.3.15, ksh93u+ 2012-08-01, zsh 5.9.2
+and dash on 2026-09-04; the corpus rows under `param/transform-…` pin the
+panel's answers.
+
 ## Dialect flags
 
-    ParamSubstitution   ${x/pat/rep} and its anchored forms
-    ParamSubstring      ${x:off:len}
-    ParamCaseChange     ${x^^} ${x,,}     — bash only
-    ParamIndirection    ${!x}             — bash only, and not an error elsewhere
+    ParamSubstitution      ${x/pat/rep} and its anchored forms
+    ParamSubstring         ${x:off:len}
+    ParamCaseChange        ${x^^} ${x,,}     — bash only
+    ParamIndirection       ${!x}             — bash only, and not an error elsewhere
+    ParamTransformations   ${x@Q} and its letter family — bash only
 
-All false for `posix`. `ParamCaseChange` and `ParamIndirection` are false
-for `core`, because a construct one shell in the panel supports is not a
-common denominator.
+All false for `posix`. `ParamCaseChange`, `ParamIndirection` and
+`ParamTransformations` are false for `core`, because a construct one shell
+in the panel supports is not a common denominator.
 
 ## What this does not cover
 

@@ -1767,3 +1767,23 @@ Two corners deliberately not modeled beyond the record: ksh93's `pwd >&-`
 reports 0 where its `echo hi >&-` reports 1, so its answer is per builtin
 in a way one axis does not carry; and zsh's exec-closed message above. Both
 are visible in the corpus if a case ever asks.
+
+
+## Locale, decided as a policy
+
+The shell has a locale, and locale-sensitive operations consult it — read
+the way POSIX ranks the variables, `LC_ALL` over `LC_CTYPE` over `LANG`.
+An explicit `C` or `POSIX` narrows "letter" to ASCII; any other value,
+and no value at all, is Unicode-aware. The unset half is measured rather
+than assumed: bash stripped of every locale variable still uppercases
+`café` to `CAFÉ`, so unset is not C.
+
+Decided here once rather than one operator at a time, which is what issue
+#367 asked. Case conversion (`${x^^}` and family) follows it now; the
+character classes in globs, `[[ a < b ]]` and glob collation follow the
+same rule as each is brought to the measured behavior.
+
+The corpus cannot catch this class of difference — `internal/oracle` pins
+`LC_ALL=C` for every run so the record does not depend on the developer's
+environment — so the pinning lives in unit tests that set the variables
+per case.

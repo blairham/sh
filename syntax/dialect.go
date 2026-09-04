@@ -124,6 +124,18 @@ type Dialect struct {
 	// Absent from dash.
 	ParamSubstitution bool
 
+	// BadSubstitutionAtParseTime refuses a `${...}` with an unrecognized
+	// operator while reading the script, rather than when the expansion is
+	// reached. ksh93 alone diagnoses it at parse time; bash, dash and zsh
+	// treat a bad substitution as a runtime error, so one inside a branch
+	// that is never taken is never diagnosed at all. The zero value is the
+	// majority: defer to runtime.
+	//
+	// This is not a corner case in the wild — Terraform templates carry
+	// `${name ~}` interpolations bash never evaluates, and refusing them at
+	// parse time refuses the whole file.
+	BadSubstitutionAtParseTime bool
+
 	// ParamSubstring enables `${x:off:len}`. Absent from dash.
 	ParamSubstring bool
 

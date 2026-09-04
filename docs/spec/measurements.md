@@ -1614,7 +1614,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `xtrace/assignments-per-line-diverges` | `+ a=1 b=2` | `+ a=1~+ b=2` | `+ a=1~+ b=2` | `+ a=1~+ b=2` | `+ a=1~+ b=2` | `+<shell>:1> a=1 b=2 ` |
 | `xtrace/disabling-set-diverges` | `+ set +x~done` | `+ set +x~done` | `+ set +x~done` | `+ set +x~done` | `done` | `+<shell>:1> set +x~done` |
 | `xtrace/compound-header-diverges` | `+ echo 1~1~+ echo 2~2` | `+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2` | `+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2` | `+ for i in 1 2~+ echo 1~1~+ for i in 1 2~+ echo 2~2` | `+ echo 1~1~+ echo 2~2` | `+<shell>:1> i=1~+<shell>:1> echo 1~1~+<shell>:1> i=2~+<shell>:1> echo 2~2` |
-| `xtrace/pipeline-order-diverges` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ cat~+ echo a~a` | `+<shell>:1> echo a~+<shell>:1> cat~a` |
+| `xtrace/pipeline-order-diverges` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+ echo a~+ cat~a` | `+<shell>:1> echo a~+<shell>:1> cat~a` |
 | `nounset/unset-variable-is-an-error` | `<script>: 2: NOPE: parameter not set` *(status 2)* | `<script>: line 2: NOPE: unbound variable` *(status 1)* | `<script>: line 2: NOPE: unbound variable` *(status 1)* | `<script>: line 2: NOPE: unbound variable` *(status 1)* | `<script>: line 2: NOPE: parameter not set` *(status 1)* | `<script>:2: NOPE: parameter not set` *(status 1)* |
 | `nounset/defaults-are-exempt` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` |
 | `nounset/empty-is-not-unset` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` |
@@ -1969,6 +1969,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `param/length-of-a-value` | `[4]` | `[4]` | `[4]` | `[4]` | `[4]` | `[4]` |
 | `param/length-of-special-diverges` | `[5][5]` | `[3][3]` | `[3][3]` | `[3][3]` | `[3][3]` | `[3][3]` |
 | `param/substitution` | `<shell>: 1: Bad substitution` *(status 2)* | `[a+b-c][a+b+c]` | `[a+b-c][a+b+c]` | `[a+b-c][a+b+c]` | `[a+b-c][a+b+c]` | `[a+b-c][a+b+c]` |
+| `param/a-bad-operator-in-a-branch-never-taken` | `ok` | `ok` | `ok` | `ok` | `<shell>: syntax error at line 1: ` ' unexpected` *(status 3)* | `ok` |
+| `param/a-bad-operator-reached` | `<shell>: 1: Bad substitution` *(status 2)* | `<shell>: line 1: ${foo ~}: bad substitution` *(status 1)* | `<shell>: line 1: ${foo ~}: bad substitution` *(status 127)* | `<shell>: ${foo ~}: bad substitution` *(status 1)* | `<shell>: syntax error at line 1: ` ' unexpected` *(status 3)* | `<shell>:1: bad substitution` *(status 1)* |
 | `param/substitution-anchored` | `<shell>: 1: Bad substitution` *(status 2)* | `[X-b][a-Y]` | `[X-b][a-Y]` | `[X-b][a-Y]` | `[X-b][a-Y]` | `[X-b][a-Y]` |
 | `param/substring` | `<shell>: 1: Bad substitution` *(status 2)* | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` |
 | `param/case-change-is-bash-only` | `<shell>: 1: Bad substitution` *(status 2)* | `[ABC][abc]` | `[ABC][abc]` | `<shell>: ${x^^}: bad substitution` *(status 1)* | `<shell>: syntax error at line 1: `^' unexpected` *(status 3)* | `<shell>:1: bad substitution` *(status 1)* |
@@ -2038,6 +2040,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `param/substitution` — replace first versus replace every; absent from dash
   ```sh
   x=a-b-c; printf "[%s]" "${x/-/+}" "${x//-/+}"
+  ```
+- `param/a-bad-operator-in-a-branch-never-taken` — a bad substitution is a runtime error in bash, dash and zsh — an expansion never reached is never diagnosed. ksh93 alone refuses it while reading, which makes this an axis; Terraform templates rely on the runtime answer
+  ```sh
+  if false; then echo "${foo ~}"; fi; echo ok
+  ```
+- `param/a-bad-operator-reached` — and when it is reached: bash names the construct and abandons the line, dash and zsh say only that the substitution was bad, ksh93 never got this far
+  ```sh
+  echo "${foo ~}"; echo "st=$?"
   ```
 - `param/substitution-anchored` — anchored to the start and the end of the value
   ```sh

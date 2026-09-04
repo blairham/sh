@@ -34,7 +34,10 @@ func TestGrammar(t *testing.T) {
 		want bool
 	}{
 		{`case a in a) echo x;;& esac`, false},
-		{`echo ${x^^}`, false},
+		// An operator zsh does not have parses and fails at *expansion*
+		// time: `if false; then echo ${x^^}; fi; echo ok` prints ok in zsh,
+		// so the refusal cannot live in the grammar.
+		{`echo ${x^^}`, true},
 		{`echo ${!x}`, false},
 		// The array form is the one scripts reach for — iterating an array by
 		// index — and it takes a name and a subscript where the scalar takes

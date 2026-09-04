@@ -23,6 +23,9 @@ func Dialect() syntax.Dialect {
 		"typeset": true, "export": true, "readonly": true,
 	}
 	d.ParamIndirection = true
+	// ksh93 alone refuses an unrecognized ${...} operator while reading the
+	// script; the other three wait until the expansion is reached.
+	d.BadSubstitutionAtParseTime = true
 	// `${ cmd;}`, a command substitution that runs in the current shell
 	// so that what it assigns survives. The space after the brace is the
 	// whole of the grammar: `${x}` is a parameter and `${ x}` is not.

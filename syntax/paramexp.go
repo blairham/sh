@@ -124,6 +124,14 @@ type ParamExpr struct {
 	// Anchor is '#' for `/#` or '%' for `/%`, and 0 otherwise.
 	Anchor byte
 
+	// Bad marks an expansion whose operator the grammar did not recognize,
+	// in a dialect that diagnoses that when the expansion is reached rather
+	// than when it is read. Src holds the inside of the braces for the
+	// report; every other field on a Bad node is meaningless.
+	Bad bool
+	// Src is the raw text between the braces, kept for the diagnostic.
+	Src string
+
 	Start Pos
 	Stop  Pos
 }
@@ -183,6 +191,13 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 
 	op, rest, ok := p.scanParamOp(s, e)
 	if !ok {
+		if !p.dialect.BadSubstitutionAtParseTime {
+			// The majority defers: the node is kept, marked, and diagnosed
+			// only if the expansion is ever reached — an unrecognized
+			// operator in a branch never taken is not an error at all.
+			e.Bad, e.Src = true, src
+			return e
+		}
 		// The operator itself travels with the failure: one dialect does not
 		// call this a bad substitution at all, but a syntax error naming the
 		// character it could not read.

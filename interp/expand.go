@@ -531,6 +531,17 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	if e == nil {
 		return ""
 	}
+	if e.Bad {
+		// An operator the grammar did not recognize, deferred here by the
+		// dialect: diagnosed only now that the expansion is reached, the way
+		// bash, dash and zsh treat a bad substitution. The fallback wording
+		// is the one dialect that names the construct; the others' own
+		// wordings carry no verb at all.
+		r.diagf("%s\n", Wording(r.diag().BadSubstitution,
+			"${%[1]s}: bad substitution", e.Src))
+		r.expandErr = true
+		return ""
+	}
 	// An array subscript supplies a value too, and the operators apply to it
 	// exactly as they do to a variable. That is what the comment said before
 	// this function returned here instead: every operator was skipped, so

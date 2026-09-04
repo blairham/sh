@@ -1880,6 +1880,16 @@ echo "st=$?"`,
 		Why:     "replace first versus replace every; absent from dash",
 	},
 	{
+		ID: "param/a-bad-operator-in-a-branch-never-taken", Category: "parameter expansion",
+		Snippet: `if false; then echo "${foo ~}"; fi; echo ok`,
+		Why:     "a bad substitution is a runtime error in bash, dash and zsh — an expansion never reached is never diagnosed. ksh93 alone refuses it while reading, which makes this an axis; Terraform templates rely on the runtime answer",
+	},
+	{
+		ID: "param/a-bad-operator-reached", Category: "parameter expansion",
+		Snippet: `echo "${foo ~}"; echo "st=$?"`,
+		Why:     "and when it is reached: bash names the construct and abandons the line, dash and zsh say only that the substitution was bad, ksh93 never got this far",
+	},
+	{
 		ID: "param/substitution-anchored", Category: "parameter expansion",
 		Snippet: `x=a-b; printf "[%s]" "${x/#a/X}" "${x/%b/Y}"`,
 		Why:     "anchored to the start and the end of the value",

@@ -379,6 +379,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
+| `axis/trap-body-line-exit` | `one~two~a~<script>: 2: nosuchcmd-xyz: not found` | `one~two~a~<script>: line 2: nosuchcmd-xyz: command not found` | `one~two~a~<script>: line 2: nosuchcmd-xyz: command not found` | `one~two~a~<script>: line 6: nosuchcmd-xyz: command not found` | `one~two~a~<script>: line 2: nosuchcmd-xyz: not found` | `one~two~a~<script>:5: command not found: nosuchcmd-xyz` |
+| `axis/trap-body-line-signal` | `two~a~<script>: 2: nosuchcmd-xyz: not found~three` | `two~a~<script>: line 2: nosuchcmd-xyz: command not found~three` | `two~a~<script>: line 2: nosuchcmd-xyz: command not found~three` | `two~a~<script>: line 5: nosuchcmd-xyz: command not found~three` | `two~a~<script>: line 5: nosuchcmd-xyz: not found~three` | `two~a~<script>:4: command not found: nosuchcmd-xyz~three` |
 | `axis/trap-prints-a-bare-action` | `trap -- ':' INT~end` | `trap -- ':' SIGINT~end` | `trap -- ':' SIGINT~end` | `trap -- ':' SIGINT~end` | `trap -- : INT~end` | `trap -- : INT~end` |
 | `axis/trap-prints-a-quoted-action` | `trap -- 'echo hi' INT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' INT~end` | `trap -- 'echo hi' INT~end` |
 | `axis/builtin-names-the-place` | `<script>: 2: cd: can't cd to /no/such/dir-xyz~done` | `<script>: line 2: cd: /no/such/dir-xyz: No such file or directory~done` | `<script>: line 2: cd: /no/such/dir-xyz: No such file or directory~done` | `<script>: line 2: cd: /no/such/dir-xyz: No such file or directory~done` | `<script>[2]: cd: /no/such/dir-xyz: [No such file or directory]~done` | `<script>:cd:2: no such file or directory: /no/such/dir-xyz~done` |
@@ -389,6 +391,21 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `diag/a-line-worth-naming` | `one~<shell>: 2: nosuchcmd: not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 1: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: not found~st=127` | `one~<shell>:2: command not found: nosuchcmd~st=127` |
 | `diag/a-command-after-an-operator` | `one~<shell>: 3: nosuchcmd: not found~st=127` | `one~<shell>: line 3: nosuchcmd: command not found~st=127` | `one~<shell>: line 3: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 3: nosuchcmd: not found~st=127` | `one~<shell>:3: command not found: nosuchcmd~st=127` |
 
+- `axis/trap-body-line-exit` — a two-line EXIT body: bash, dash and ksh93 name its second line, zsh names the line after the script's last
+  ```sh
+  echo one
+  trap 'echo a
+  nosuchcmd-xyz' EXIT
+  echo two
+  ```
+- `axis/trap-body-line-signal` — the same body on a signal: ksh93 counts it from where it fired and zsh names only where it fired
+  ```sh
+  trap 'echo a
+  nosuchcmd-xyz' INT
+  echo two
+  kill -INT $$
+  echo three
+  ```
 - `axis/trap-prints-a-bare-action` — a one-word action: bash and dash quote it anyway, ksh93 and zsh leave it bare
   ```sh
   trap : INT

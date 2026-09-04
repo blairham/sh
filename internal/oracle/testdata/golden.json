@@ -2362,6 +2362,70 @@
         "TimedOut": false
       }
     },
+    "axis/trap-body-line-exit": {
+      "bash": {
+        "Output": "one~two~a~\u003cscript\u003e: line 2: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "one~two~a~\u003cscript\u003e: line 2: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "one~two~a~\u003cscript\u003e: line 6: nosuchcmd-xyz: command not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "one~two~a~\u003cscript\u003e: 2: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "one~two~a~\u003cscript\u003e: line 2: nosuchcmd-xyz: not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "one~two~a~\u003cscript\u003e:5: command not found: nosuchcmd-xyz",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/trap-body-line-signal": {
+      "bash": {
+        "Output": "two~a~\u003cscript\u003e: line 2: nosuchcmd-xyz: command not found~three",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "two~a~\u003cscript\u003e: line 2: nosuchcmd-xyz: command not found~three",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "two~a~\u003cscript\u003e: line 5: nosuchcmd-xyz: command not found~three",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "two~a~\u003cscript\u003e: 2: nosuchcmd-xyz: not found~three",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "two~a~\u003cscript\u003e: line 5: nosuchcmd-xyz: not found~three",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "two~a~\u003cscript\u003e:4: command not found: nosuchcmd-xyz~three",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "axis/trap-one-argument": {
       "bash": {
         "Output": "end",

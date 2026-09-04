@@ -2122,6 +2122,11 @@ echo "st=$?"`,
 		Why:     "replace first versus replace every; absent from dash",
 	},
 	{
+		ID: "param/bang-with-an-operator-is-the-parameter", Category: "parameter expansion",
+		Snippet: `true & echo "${!:+set}"`,
+		Why:     "a `!` with an operator right after it is $! — not the start of an indirection that then has no name. All four shells print set",
+	},
+	{
 		ID: "param/a-bad-operator-in-a-branch-never-taken", Category: "parameter expansion",
 		Snippet: `if false; then echo "${foo ~}"; fi; echo ok`,
 		Why:     "a bad substitution is a runtime error in bash, dash and zsh — an expansion never reached is never diagnosed. ksh93 alone refuses it while reading, which makes this an axis; Terraform templates rely on the runtime answer",

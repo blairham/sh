@@ -154,7 +154,10 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 	case strings.HasPrefix(s, "#") && len(s) > 1:
 		e.Length = true
 		s = s[1:]
-	case strings.HasPrefix(s, "!") && len(s) > 1:
+	case strings.HasPrefix(s, "!") && len(s) > 1 && !strings.ContainsAny(s[1:2], ":-+=?"):
+		// Only a `!` that could begin a name is indirection: with an
+		// operator right after it, the `!` is the parameter — `${!:+set}`
+		// is `$!` with `:+` applied, in all four shells.
 		if !p.dialect.ParamIndirection {
 			// Refused rather than guessed: ksh93 accepts this and means
 			// something else, so a dialect without it cannot pretend.

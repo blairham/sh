@@ -14266,6 +14266,38 @@
         "TimedOut": false
       }
     },
+    "signal/an-interrupt-that-ended-a-child": {
+      "bash": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": -1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "special/assigning-random-seeds-it": {
       "bash": {
         "Output": "produced",

@@ -176,6 +176,15 @@ func Semantics() interp.Semantics {
 	s.ErrTrapRunsInSubshells = interp.Yes
 	s.DebugTrapRunsInsideCalls = interp.Yes
 	s.DebugTrapRunsInSubshells = interp.Yes
+	// The listing least is kept of: `(trap)` and `$(trap)` show nothing the
+	// parent had — not even an ignored signal, though it stays ignored in
+	// fact and one the subshell sets itself is shown. A pipeline element is
+	// the exception and keeps the signal listing while still dropping the
+	// EXIT trap from it: `trap 'echo x' USR1; trap | cat` prints the trap
+	// and the same shape with an EXIT trap prints nothing. Measured, each.
+	s.PipelineElementKeepsTrapListing = interp.Yes
+	s.KeptTrapListingIncludesExit = interp.No
+	s.SubshellHidesInheritedIgnoredTraps = interp.Yes
 	s.UmaskPrintsFourDigits = interp.No
 	s.UmaskSetWithSPrints = interp.No
 	s.UlimitBlockIsKilobyte = interp.No

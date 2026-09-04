@@ -187,6 +187,10 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline) error {
 	subs := make([]*Runner, last)
 	for i := 0; i < last; i++ {
 		sub := r.clone()
+		// A pipeline element is a subshell whose trap listing survives in a
+		// different pair of shells than `( … )` does, so the boundary says
+		// what kind it is.
+		sub.retagTrapBoundary(trapContextPipeline)
 		// Each element is its own job component, so the copy running it
 		// names it rather than inheriting whatever the shell last ran.
 		sub.killed = p.Cmds[i]

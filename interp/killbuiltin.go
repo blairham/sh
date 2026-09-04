@@ -341,6 +341,17 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 		// is how a `bye` went missing from a case that expects one. The shell
 		// knows it is dying; the dying is the driver's to do, once there is
 		// nothing left to run.
+		if r.inSubshell {
+			// The process this pid names is the top-level shell, and a
+			// subshell is a pretend child of it: the parent dies and the
+			// sender does not — measured, `(kill -INT $$; echo s)` prints s
+			// and the parent stops after the subshell. Note that the
+			// *parent's* table decided trapped above, which is the same
+			// boundary: a trap the subshell set for itself catches nothing
+			// aimed at a pid it does not have.
+			r.recordSharedDeath(name, sig)
+			return nil
+		}
 		r.signalDeath(name, sig)
 	default:
 		// An ignored signal, and the ones whose default action suspends or

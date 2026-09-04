@@ -1497,6 +1497,10 @@ func biTrap(r *Runner, _ context.Context, args []string) int {
 		}
 		targets = append(targets, target{name: name, sig: sig})
 	}
+	// Setting, resetting or ignoring anything makes the trap state this
+	// runner's own: a listing it inherited from the shell around it is
+	// dropped rather than shown alongside — see trapsModified.
+	r.trapsModified()
 	for _, tg := range targets {
 		switch {
 		case tg.pseudo != "":

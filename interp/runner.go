@@ -483,6 +483,31 @@ type Runner struct {
 	// — measured: `f(){ trap 'echo R=$?' RETURN; return 3; }; f` prints
 	// R=0 and then reports 3.
 	returnSeenStatus int
+	// traps is this runner's own signal-trap table when it stands for a
+	// subshell, nil at the top level, where the table is the process's and
+	// lives on signalState. A subshell begins with only the parent's
+	// ignored signals — see inheritTraps in trapsubshell.go.
+	traps map[string]string
+	// inheritedIgnored marks the entries in traps that arrived across the
+	// subshell boundary rather than being set inside it, because one
+	// dialect lists an ignore it set and not one it inherited.
+	inheritedIgnored map[string]bool
+	// trapSnapshot is the listing the parent shell would have shown when
+	// this subshell began, kept for the dialects whose `trap` still shows
+	// it there, and dropped the moment this runner modifies any trap.
+	// trapContexts is the kind of each boundary the snapshot has crossed,
+	// innermost last, so the axes that decide whether it survived are asked
+	// when something lists rather than at every clone.
+	trapSnapshot []savedTrap
+	trapContexts []trapContext
+	// errTrapInherited, debugTrapInherited and returnTrapInherited say the
+	// pseudo-trap crossed a subshell boundary rather than being set on this
+	// side of it. Whether an inherited one still fires is the dialect's
+	// answer; one set inside the subshell fires everywhere, which is why
+	// the flag exists rather than asking inSubshell.
+	errTrapInherited    bool
+	debugTrapInherited  bool
+	returnTrapInherited bool
 	// inSubshell marks a runner that stands for a subshell or a command
 	// substitution. Measured: the EXIT trap fires once, at the end of the
 	// main script, and not in either of those — so the copy must know it is
@@ -610,6 +635,10 @@ func (r *Runner) clone() *Runner {
 	// `exec 7>&1` must not appear in the parent, and its writes through a
 	// descriptor the parent made must still land where the parent pointed it.
 	c.fds = maps.Clone(r.fds)
+	// A subshell begins with the parent's handled traps back at their
+	// defaults — see trapsubshell.go for what crosses and what is only
+	// still visible.
+	c.inheritTraps(r)
 	return &c
 }
 

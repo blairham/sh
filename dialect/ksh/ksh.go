@@ -178,6 +178,13 @@ func Semantics() interp.Semantics {
 	s.ErrTrapRunsInSubshells = interp.No
 	s.DebugTrapRunsInsideCalls = interp.Yes
 	s.DebugTrapRunsInSubshells = interp.Yes
+	// `(trap)` and `$(trap)` still list the parent's traps, EXIT included —
+	// measured, and the working state is still reset: `trap 'echo x' USR1;
+	// (trap)` prints the trap it will not fire. A pipeline element or a
+	// background job lists nothing: `trap | cat` is empty where `(trap)` is
+	// not, which is the split issue #339 measured.
+	s.SubshellKeepsTrapListing = interp.Yes
+	s.KeptTrapListingIncludesExit = interp.Yes
 	s.UmaskPrintsFourDigits = interp.Yes
 	s.UmaskSetWithSPrints = interp.No
 	s.UlimitBlockIsKilobyte = interp.No

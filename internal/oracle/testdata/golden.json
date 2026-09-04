@@ -19642,6 +19642,38 @@
         "TimedOut": false
       }
     },
+    "trap/listing-in-a-pipeline-element": {
+      "bash": {
+        "Output": "trap -- 'echo x' SIGUSR1~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "trap -- 'echo x' USR1~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "trap -- 'echo x' USR1~done",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "trap/number-and-name-are-one-trap": {
       "bash": {
         "Output": "two~after",
@@ -19990,6 +20022,70 @@
       },
       "zsh": {
         "Output": "sub~after~T",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/subshell-keeps-an-ignored-one": {
+      "bash": {
+        "Output": "trap -- '' SIGUSR2~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "trap -- '' USR2~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "trap -- '' SIGUSR2~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "trap -- '' USR2~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "trap -- '' USR2~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "done",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/subshell-resets-a-handled-trap": {
+      "bash": {
+        "Output": "trap -- 'echo x' SIGUSR1~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "trap -- 'echo x' USR1~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "trap -- 'echo x' USR1~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "done",
         "Status": 0,
         "TimedOut": false
       }

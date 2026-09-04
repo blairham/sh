@@ -143,6 +143,14 @@ func TestSemantics(t *testing.T) {
 		{"TrapHasErrCondition", s.TrapHasErrCondition, interp.No},
 		{"TrapHasDebugCondition", s.TrapHasDebugCondition, interp.No},
 		{"TrapHasReturnCondition", s.TrapHasReturnCondition, interp.No},
+		// A subshell lists only what survived the entry: the ignored
+		// signals, shown wherever they are asked about. Whether a kept
+		// listing includes EXIT stays unanswered — nothing is ever kept.
+		{"SubshellKeepsTrapListing", s.SubshellKeepsTrapListing, interp.No},
+		{"PipelineElementKeepsTrapListing", s.PipelineElementKeepsTrapListing, interp.No},
+		{"BackgroundJobKeepsTrapListing", s.BackgroundJobKeepsTrapListing, interp.No},
+		{"KeptTrapListingIncludesExit", s.KeptTrapListingIncludesExit, interp.Unspecified},
+		{"SubshellHidesInheritedIgnoredTraps", s.SubshellHidesInheritedIgnoredTraps, interp.No},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)

@@ -100,6 +100,9 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	}
 
 	sub := r.clone()
+	// A background job keeps the parent's trap listing in one shell fewer
+	// than a pipeline element does, so it is its own kind of boundary.
+	sub.retagTrapBoundary(trapContextBackground)
 	sub.bg = job
 	// A background job runs concurrently with everything after it, so it
 	// shares the caller's streams with the foreground. That is the pipeline

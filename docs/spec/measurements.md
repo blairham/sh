@@ -544,6 +544,9 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `export/unset-f-removes-a-function` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` |
 | `export/a-function-through-the-environment` | *(no output, status 2)* | `1` | `1` | `1` | *(no output, status 2)* | `0` *(status 1)* |
 | `export/a-name-that-is-not-a-function` | `<shell>: 1: export: Illegal option -f` *(status 2)* | `<shell>: line 1: export: nope: not a function~st=1` | `<shell>: line 1: export: nope: not a function~st=1` | `<shell>: line 0: export: nope: not a function~st=1` | `<shell>: export: -f: unknown option~Usage: export [-p] [name[=value]...]` *(status 2)* | `<shell>:export:1: invalid option(s)~st=1` |
+| `hash/bare-and-r-succeed-everywhere` | `st=0~r=0` | `hash: hash table empty~st=0~r=0` | `st=0~r=0` | `hash: hash table empty~st=0~r=0` | `st=0~r=0` | `st=0~r=0` |
+| `hash/a-missing-name-diverges` | `<shell>: 1: hash: nosuchcmd-xyz: not found~st=1` | `<shell>: line 1: hash: nosuchcmd-xyz: not found~st=1` | `<shell>: line 1: hash: nosuchcmd-xyz: not found~st=1` | `<shell>: line 0: hash: nosuchcmd-xyz: not found~st=1` | `st=0` | `<shell>:hash:1: no such command: nosuchcmd-xyz~st=1` |
+| `hash/a-builtin-counts-except-in-zsh` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>:hash:1: no such command: shift~st=1` |
 | `shift/a-leading-dash-that-is-not-a-number` | `<shell>: 1: shift: Illegal number: -x` *(status 2)* | `<shell>: line 1: shift: -x: numeric argument required~st=2` | `<shell>: line 1: shift: -x: numeric argument required` *(status 2)* | `<shell>: line 0: shift: -x: numeric argument required` *(status 1)* | `<shell>: shift: -x: unknown option~Usage: shift [ options ] [n]` *(status 2)* | `<shell>:shift:1: bad option: -x~st=1` |
 | `shift/a-count-that-is-an-expression` | `<shell>: 1: shift: Illegal number: 1+1` *(status 2)* | `<shell>: line 1: shift: 1+1: numeric argument required~[a b c] st=2` | `<shell>: line 1: shift: 1+1: numeric argument required` *(status 2)* | `<shell>: line 0: shift: 1+1: numeric argument required` *(status 1)* | `[c] st=0` | `[c] st=0` |
 | `shift/a-count-that-is-a-name` | `<shell>: 1: shift: Illegal number: nosuchname` *(status 2)* | `<shell>: line 1: shift: nosuchname: numeric argument required~[a b c] st=2` | `<shell>: line 1: shift: nosuchname: numeric argument required` *(status 2)* | `<shell>: line 0: shift: nosuchname: numeric argument required` *(status 1)* | `[a b c] st=0` | `[a b c] st=0` |
@@ -718,6 +721,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `export/a-name-that-is-not-a-function` — a name that is not a function now will not become one by being exported. The shells that have the option refuse it and the ones that do not read `-f` as something else entirely, which is the more interesting half
   ```sh
   export -f nope; echo "st=$?"
+  ```
+- `hash/bare-and-r-succeed-everywhere` — scripts call both defensively; every shell answers 0, and bash alone announces its empty table — on standard output
+  ```sh
+  hash; echo "st=$?"; hash -r; echo "r=$?"
+  ```
+- `hash/a-missing-name-diverges` — three report the name and answer 1; ksh93's hash is alias -t and succeeds in silence
+  ```sh
+  hash nosuchcmd-xyz; echo "st=$?"
+  ```
+- `hash/a-builtin-counts-except-in-zsh` — zsh hashes only what PATH holds, so a builtin is 'no such command' there; measured with shift because macOS ships /usr/bin/cd
+  ```sh
+  hash shift; echo "st=$?"
   ```
 - `shift/a-leading-dash-that-is-not-a-number` — two of the four read it as an *option* and refuse it as one; the other two read it as the count and complain about the number. Same input, two kinds of complaint — and both end the script where a special builtin's failure is fatal
   ```sh

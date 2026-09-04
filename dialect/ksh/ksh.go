@@ -101,6 +101,9 @@ func Semantics() interp.Semantics {
 	s.SelectEofIsSuccess = interp.No
 	s.SelectTakesUnterminatedReply = interp.No
 	s.SelectEofPrintsNewline = interp.No
+	// hash is an alias for `alias -t` here, and a name that resolves to
+	// nothing is a silent success.
+	s.HashReportsAMissingName = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	// echo reads -n and -e; a word carrying -E is an operand. \e expands,
 	// \x does not.

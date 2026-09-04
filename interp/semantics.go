@@ -980,6 +980,18 @@ type Semantics struct {
 	// shell searches the current directory for it.
 	EmptyPathIsTheCurrentDirectory Answer
 
+	// HashReportsAMissingName has `hash name` complain and answer 1 when
+	// the name resolves to nothing. bash, dash and zsh do; ksh93 — whose
+	// hash is an alias for `alias -t` — says nothing and reports success.
+	HashReportsAMissingName Answer
+
+	// HashSearchesPathAlone counts only what PATH holds: zsh answers
+	// `hash shift` with "no such command" where the other three accept a
+	// builtin or a function as hashable. Measured with `shift`, which no
+	// PATH carries — `cd` was the contaminated probe, macOS ships
+	// /usr/bin/cd.
+	HashSearchesPathAlone Answer
+
 	// DirectoryOnPathIsACandidate keeps a directory the PATH search found as
 	// the failed candidate when no later entry runs, so the report names the
 	// directory rather than saying the command was never found.
@@ -1590,6 +1602,10 @@ func PosixSemantics() Semantics {
 		// The standard's 126 is for a command that was found and cannot be
 		// executed; a directory qualifies, and three of the four report it.
 		DirectoryOnPathIsACandidate: Yes,
+		// POSIX's hash concerns utilities, and dash — its closest reading —
+		// counts builtins and functions too, and reports a missing name.
+		HashReportsAMissingName: Yes,
+		HashSearchesPathAlone:   No,
 		// The standard says `times` takes no operands and does not say what to
 		// do with one; the two shells that follow it most closely ignore it.
 		TimesRejectsArguments: No,

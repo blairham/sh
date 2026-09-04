@@ -55,7 +55,7 @@ func TestFindReadsTheShebang(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got := wild.Find([]string{dir, "/nonexistent-directory"})
+	got, _ := wild.Find([]string{dir, "/nonexistent-directory"})
 	if len(got) != len(want) {
 		t.Fatalf("found %d scripts, want %d: %v", len(got), len(want), got)
 	}

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 
@@ -51,6 +52,12 @@ func main() {
 
 	fmt.Printf("scripts found: %d   parsed: %d   refused by %s too: %d   failures: %d\n",
 		rep.Scanned, rep.Parsed, refName(*reference), rep.NotShell, len(rep.Failures))
+	// Skipped files are counted and never named: printing a path would
+	// invite the reader to open a file CLEANROOM.md forbids opening.
+	if len(rep.Skipped) > 0 {
+		fmt.Printf("skipped without reading: %s — CLEANROOM.md forbids opening these, so they are counted, never listed\n",
+			skipSummary(rep.Skipped))
+	}
 	if len(rep.Failures) > 0 {
 		fmt.Println("\nnot parsed:")
 		for _, f := range rep.Failures {
@@ -79,7 +86,8 @@ func runSweep(ours, reference string, dirs []string, parsed wild.Report, timeout
 		failed[f.Path] = true
 	}
 	var paths []string
-	for _, p := range wild.Find(dirs) {
+	found, _ := wild.Find(dirs)
+	for _, p := range found {
 		if !failed[p] {
 			paths = append(paths, p)
 		}
@@ -109,6 +117,21 @@ func show(out string, verbose bool) string {
 		out = out[:90] + " …"
 	}
 	return out
+}
+
+// skipSummary renders the skip counts as "N in <reason>, M in <reason>", in
+// a stable order.
+func skipSummary(skipped map[string]int) string {
+	reasons := make([]string, 0, len(skipped))
+	for r := range skipped {
+		reasons = append(reasons, r)
+	}
+	sort.Strings(reasons)
+	parts := make([]string, 0, len(reasons))
+	for _, r := range reasons {
+		parts = append(parts, fmt.Sprintf("%d in %s", skipped[r], r))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func refName(s string) string {

@@ -132,6 +132,31 @@ func (l *Lexer) advance() byte {
 	return c
 }
 
+// failUnmatched records input that ran out inside a quoted or substituted
+// region, carrying everything a dialect might name: the opener, its closer,
+// the text from the opener to the end of its line, and the line the input
+// ran out on in both conventions.
+func (l *Lexer) failUnmatched(open Pos, opener, closer, msg string) {
+	if l.err != nil {
+		return
+	}
+	near := l.src[open.Offset:]
+	if i := strings.IndexByte(near, '\n'); i >= 0 {
+		near = near[:i]
+	}
+	after := l.line
+	if len(l.src) > 0 && l.src[len(l.src)-1] != '\n' {
+		// The text stopped mid-line, so the end of it is the line after —
+		// the same convention the parser's unterminated() uses.
+		after++
+	}
+	l.err = &Error{
+		Pos: open, Kind: ErrUnmatched, Msg: msg,
+		Token: opener, Expected: closer, LastToken: near,
+		EndLine: after, EofLine: l.line,
+	}
+}
+
 func (l *Lexer) fail(p Pos, format string, args ...any) {
 	if l.err == nil {
 		l.err = fmt.Errorf("%s: %s", p, fmt.Sprintf(format, args...))
@@ -626,7 +651,13 @@ func (l *Lexer) scanSingle() (Span, bool) {
 	for {
 		if l.eof() {
 			l.ranOut("'")
-			l.fail(open, "unterminated single quote")
+			if l.dialect.CloseQuotesAtEOF {
+				// The end of input is as good as the closing mark here;
+				// what was read is the string. ranOut still marks the
+				// input incomplete, so a prompt continues the line.
+				return Span{Kind: Literal, Value: b.String(), Quoting: SingleQuoted, Pos: open}, true
+			}
+			l.failUnmatched(open, "'", "'", "unterminated single quote")
 			return Span{Kind: Literal, Value: b.String(), Quoting: SingleQuoted, Pos: open}, true
 		}
 		if l.peek() == '\'' {
@@ -744,7 +775,9 @@ func (l *Lexer) scanDouble() []Span {
 	for {
 		if l.eof() {
 			l.ranOut("\"")
-			l.fail(open, "unterminated double quote")
+			if !l.dialect.CloseQuotesAtEOF {
+				l.failUnmatched(open, "\"", "\"", "unterminated double quote")
+			}
 			flush()
 			return out
 		}
@@ -922,7 +955,11 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 	for depth > 0 {
 		if l.eof() {
 			l.ranOut(openingOf(kind))
-			l.fail(open, "unterminated %s", kind)
+			if kind == CommandSubst {
+				l.failUnmatched(open, "$(", ")", "unterminated command substitution")
+			} else {
+				l.fail(open, "unterminated %s", kind)
+			}
 			break
 		}
 		switch c := l.peek(); c {
@@ -999,7 +1036,15 @@ func (l *Lexer) scanBraces(q Quoting) Span {
 	for depth > 0 {
 		if l.eof() {
 			l.ranOut("${")
-			l.fail(open, "unterminated parameter expansion")
+			if q == DoubleQuoted {
+				// The `${` began inside a double quote, and three of the
+				// panel blame the quote for the whole thing — the fourth
+				// blames the quote character itself, which its wording of
+				// this same failure carries.
+				l.failUnmatched(open, "\"", "\"", "unterminated parameter expansion")
+			} else {
+				l.failUnmatched(open, "${", "}", "unterminated parameter expansion")
+			}
 			break
 		}
 		switch c := l.peek(); c {
@@ -1056,7 +1101,9 @@ func (l *Lexer) scanBackticks(q Quoting) Span {
 	for {
 		if l.eof() {
 			l.ranOut("`")
-			l.fail(open, "unterminated backquote substitution")
+			if !l.dialect.CloseQuotesAtEOF {
+				l.failUnmatched(open, "`", "`", "unterminated backquote substitution")
+			}
 			return Span{Kind: CommandSubst, Backquoted: true, Value: unescapeBackquoted(l.src[start:l.off]), Quoting: q, Pos: open}
 		}
 		switch l.peek() {

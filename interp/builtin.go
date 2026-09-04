@@ -515,7 +515,12 @@ func hasOption(args []string, letter byte) bool {
 
 func biShift(r *Runner, _ context.Context, args []string) int {
 	n := 1
+	// What the complaint names differs from what the shift does: one dialect
+	// reports the operand *as written*, and an operand that was never given
+	// is reported as `(null)` rather than as the default it stood in for.
+	operand := "(null)"
 	if len(args) > 0 {
+		operand = args[0]
 		if st, done := r.shiftCount(args[0], &n); done {
 			return st
 		}
@@ -525,7 +530,7 @@ func biShift(r *Runner, _ context.Context, args []string) int {
 		if r.ask(r.sem().ShiftPastEndFatal, "shift past the end being fatal") {
 			// controlReturn only unwound a function, so at the top level the
 			// script carried on past an error the shell calls fatal.
-			r.fatal("%s\n", Wording(r.diag().ShiftTooMany, "shift: can't shift that many", n))
+			r.fatal("%s\n", Wording(r.diag().ShiftTooMany, "shift: can't shift that many", n, operand))
 			return r.status
 		}
 		// Survivable, and still worth saying where the dialect says it: zsh
@@ -533,7 +538,7 @@ func biShift(r *Runner, _ context.Context, args []string) int {
 		// all. No fallback here for that reason — an empty wording is bash's
 		// answer rather than a dialect that has not been asked.
 		if w := r.diag().ShiftTooMany; w != "" {
-			r.diagf("%s\n", Wording(w, w, n))
+			r.diagf("%s\n", Wording(w, w, n, operand))
 		}
 		return 1
 	}

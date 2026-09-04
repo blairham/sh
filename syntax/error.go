@@ -59,6 +59,15 @@ const (
 	// instead — dash says "word unexpected" for an ordinary word and quotes
 	// a reserved word or an operator — so the class travels with it.
 	ErrUnexpected
+	// ErrUnmatched is input that ran out inside a quote, a command
+	// substitution or a `${`. Its own kind because the panel splits three
+	// ways over the same EOF: two dialects name the delimiter (one the
+	// opener, one the closer), one echoes the text near it, and one closes
+	// a quote quietly and runs what it got — which is a grammar flag, so
+	// the error never exists there. Token is the opener as written, `'`,
+	// `"`, a backquote, `$(` or `${`; Expected is what would have closed
+	// it; LastToken is the text from the opener to the end of its line.
+	ErrUnmatched
 	// ErrForName is a `for` whose variable is not a name. Its own kind
 	// because the panel does not word it as an unexpected token: three of the
 	// four say something about the *name* and only the fourth blames the
@@ -123,6 +132,10 @@ type Error struct {
 	// that line anyway, so the two agree there and differ only when the text
 	// stops mid-line.
 	EndLine int
+	// EofLine is the line the input actually ran out on, in the lexer's
+	// own count — the same point EndLine names in the next-line
+	// convention. Two dialects report this one for an unmatched quote.
+	EofLine int
 }
 
 func (e *Error) Error() string { return e.Pos.String() + ": " + e.Msg }

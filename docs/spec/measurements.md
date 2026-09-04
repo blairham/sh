@@ -578,6 +578,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `enable/a-letter-one-shell-does-not-have` | `<shell>: 1: enable: not found~st=127` | `st=0` | `st=0` | `st=0` | `<shell>: enable: not found~st=127` | `<shell>:enable:1: bad option: -n~st=1` |
 | `enable/a-name-that-is-not-a-builtin` | `<shell>: 1: disable: not found~st=127` | `<shell>: line 1: disable: command not found~st=127` | `<shell>: line 1: disable: command not found~st=127` | `<shell>: disable: command not found~st=127` | `<shell>: disable: not found~st=127` | `<shell>:disable:1: no such hash table element: nosuchthing~st=1` |
 | `enable/switching-one-off-and-back-on` | `st=127` | `st=0` | `st=0` | `st=0` | `st=127` | `st=0` |
+| `shift/an-operand-that-was-never-given` | `<shell>: 1: shift: can't shift that many` *(status 2)* | `st=1` | `<shell>: line 1: shift: shift count out of range~st=1` | `st=1` | `<shell>: shift: (null): bad number` *(status 1)* | `<shell>:shift:1: shift count must be <= $#~st=1` |
 
 - `echo/dash-e-and-capital-e` — -e turns escapes on where the shell has the letter and -E off where it has that one: dash has neither and prints them, ksh93 has only -e
   ```sh
@@ -859,6 +860,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   disable cd 2>/dev/null; enable cd 2>/dev/null; echo "st=$?"
   ```
+- `shift/an-operand-that-was-never-given` — past the end with no count written down, ksh93 reports `(null)` — the operand it did not get — where its complaint about `shift 99` names the 99; dash keeps one sentence for both and bash and zsh keep their usual answers
+  ```sh
+  shift; echo "st=$?"
+  ```
 
 ## diagnostics
 
@@ -881,6 +886,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `location/a-message-from-a-function-a-sourced-file-defined` | `<script>: 2: nosuchcmd-xyz: not found~st=127` | `./inc.sh: line 2: nosuchcmd-xyz: command not found~st=127` | `./inc.sh: line 2: nosuchcmd-xyz: command not found~st=127` | `./inc.sh: line 2: nosuchcmd-xyz: command not found~st=127` | `<script>: line 2: nosuchcmd-xyz: not found~st=127` | `f:1: command not found: nosuchcmd-xyz~st=127` |
 | `diag/a-line-worth-naming` | `one~<shell>: 2: nosuchcmd: not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 1: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: not found~st=127` | `one~<shell>:2: command not found: nosuchcmd~st=127` |
 | `diag/a-command-after-an-operator` | `one~<shell>: 3: nosuchcmd: not found~st=127` | `one~<shell>: line 3: nosuchcmd: command not found~st=127` | `one~<shell>: line 3: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 3: nosuchcmd: not found~st=127` | `one~<shell>:3: command not found: nosuchcmd~st=127` |
+| `syntax/an-unmatched-double-quote` | `<shell>: 1: Syntax error: Unterminated quoted string` *(status 2)* | `<shell>: -c: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | `<shell>: -c: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | `<shell>: -c: line 0: unexpected EOF while looking for matching `"'~<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | `abc` | `<shell>:1: unmatched "` *(status 1)* |
+| `syntax/an-unmatched-command-substitution` | `<shell>: 1: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | `<shell>: -c: line 2: unexpected EOF while looking for matching `)'` *(status 2)* | `<shell>: -c: line 2: unexpected EOF while looking for matching `)'` *(status 2)* | `<shell>: -c: line 0: unexpected EOF while looking for matching `)'~<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | `<shell>: syntax error at line 1: `(' unmatched` *(status 3)* | `<shell>:1: parse error near `$(echo'` *(status 1)* |
+| `syntax/a-brace-opened-inside-a-quote` | `<shell>: 1: Syntax error: Unterminated quoted string` *(status 2)* | `<shell>: -c: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | `<shell>: -c: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | `<shell>: -c: line 0: unexpected EOF while looking for matching `"'~<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | `<shell>: syntax error at line 1: `"' unexpected` *(status 3)* | `<shell>:1: unmatched "` *(status 1)* |
+| `expansion/an-operator-where-the-name-belongs` | `<shell>: 1: Bad substitution` *(status 2)* | `<shell>: line 1: ${%x}: bad substitution` *(status 1)* | `<shell>: line 1: ${%x}: bad substitution` *(status 127)* | `<shell>: ${%x}: bad substitution` *(status 1)* | `<shell>: syntax error at line 1: `%' unexpected` *(status 3)* | `~st=0` |
 
 - `axis/trap-body-line-exit` — a two-line EXIT body: bash, dash and ksh93 name its second line, zsh names the line after the script's last
   ```sh
@@ -990,6 +999,22 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   false ||
   nosuchcmd
   echo "st=$?"
+  ```
+- `syntax/an-unmatched-double-quote` — one end of file, three sentences and a silence: bash wants the matching mark, dash calls the string unterminated, zsh calls the opener unmatched — and ksh93 closes the quote, runs the command, and prints abc
+  ```sh
+  echo "abc
+  ```
+- `syntax/an-unmatched-command-substitution` — a substitution is not a quote even to the shell that closes quotes at end of input: all four refuse, naming the closer, the end of the file, the opener, and the nearby text respectively — and bash alone counts the line as the one after the input's last
+  ```sh
+  echo $(echo
+  ```
+- `syntax/a-brace-opened-inside-a-quote` — three of the panel blame the quote the `${` began inside; ksh93 blames the quote character itself, `"' unexpected — the one shape of unterminated input it refuses with the quote in it
+  ```sh
+  echo "${x"
+  ```
+- `expansion/an-operator-where-the-name-belongs` — an operator where the parameter name belongs: ksh93 refuses while reading and must name the `%` — the token used to come through blank there, ``' unexpected — while the other three defer and call it a bad substitution when the expansion is reached
+  ```sh
+  echo "${%x}"; echo "st=$?"
   ```
 
 ## tokenization
@@ -2657,6 +2682,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `redir/the-shell-picks-the-descriptor` | `<shell>: 1: exec: {fd}: not found` *(status 127)* | `hi` | `hi` | `<shell>: line 0: exec: {fd}: not found` *(status 127)* | `hi` | `hi` |
 | `redir/a-picked-descriptor-may-outlive-its-command` | `<shell>: 3: Syntax error: Bad fd number` *(status 2)* | `one~two` | `one~two` | `<shell>: line 1: $fd: ambiguous redirect~dead~one {fd}` | `one~<shell>[2]: 10: cannot open [Bad file descriptor]~dead` | `one~two` |
 | `redir/closing-through-a-name-that-holds-nothing` | `<shell>: 1: exec: {nofd}: not found` *(status 127)* | `<shell>: line 1: nofd: ambiguous redirect~st=1` | `<shell>: line 1: nofd: ambiguous redirect` *(status 1)* | `<shell>: line 0: exec: {nofd}: not found` *(status 127)* | `st=0` | `<shell>:1: parameter nofd does not contain a file descriptor~st=1` |
+| `redir/noclobber-names-its-refusal` | `<shell>: 1: cannot create f: File exists~st=2` | `<shell>: line 1: f: cannot overwrite existing file~st=1` | `<shell>: line 1: f: cannot overwrite existing file~st=1` | `<shell>: f: cannot overwrite existing file~st=1` | `<shell>: f: file already exists [File exists]~st=1` | `<shell>:1: file exists: f~st=1` |
 
 - `procsub/reads-a-command-as-a-file` — `<(cmd)` runs cmd and expands to a path its output can be read from — the last of the core language, and the clearest case of a dialect being a runtime switch: bash 3.2 has it as `bash` and loses it as `sh`. dash has it in neither guise and reports the `(` as unexpected
   ```sh
@@ -2837,6 +2863,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `redir/closing-through-a-name-that-holds-nothing` — bash calls it an ambiguous redirect and zsh says the parameter holds no descriptor, both with 1; ksh93 says nothing at all and reports success
   ```sh
   exec {nofd}>&-; echo "st=$?"
+  ```
+- `redir/noclobber-names-its-refusal` — the refusal is unanimous and the sentence is not: bash cannot overwrite an existing file, ksh93 says it already exists with the errno in brackets, dash and zsh word it as any other failed create
+  ```sh
+  set -C; echo a > f; echo b > f; echo "st=$?"
   ```
 
 ## commands

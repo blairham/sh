@@ -163,6 +163,14 @@ func RunCommand(sh Shell, src string, operands []string) int {
 	return sh.run(commandSource(sh, src, operands))
 }
 
+// RunStdin is Run for a script arriving on standard input, where there is
+// no $0 to name — two dialects change the shape of their prefixes on that
+// route rather than substituting a name.
+func RunStdin(sh Shell, src string) int {
+	sh = sh.withDefaults(nil)
+	return sh.run(source{src: src, name: sh.Name, dg: sh.Diagnostics.ForStdin()})
+}
+
 // RunScript is Run for input that came from a file, which selects the
 // script-form diagnostics and names the script rather than the shell.
 func RunScript(sh Shell, src, path string) int {
@@ -288,7 +296,7 @@ func (sh Shell) input(argv []string) (source, error) {
 				return source{interactive: true, name: sh.Name, params: args[1:], dg: sh.Diagnostics}, nil
 			}
 			s, err := readAll(sh.Stdin)
-			return source{src: s, name: sh.Name, params: args[1:], dg: sh.Diagnostics}, err
+			return source{src: s, name: sh.Name, params: args[1:], dg: sh.Diagnostics.ForStdin()}, err
 		case a == "-":
 			// A lone `-` ends the options, exactly as `--` does. It does not
 			// mean "read standard input": every shell in the panel treats
@@ -320,7 +328,7 @@ func (sh Shell) operands(args []string, forcePrompt bool) (source, error) {
 		// a test for the standard-input path silently reads the *test
 		// binary's* input and passes whatever it is given.
 		src, err := readAll(sh.Stdin)
-		return source{src: src, name: sh.Name, dg: sh.Diagnostics}, err
+		return source{src: src, name: sh.Name, dg: sh.Diagnostics.ForStdin()}, err
 	}
 	path := args[0]
 	b, err := os.ReadFile(path)

@@ -356,6 +356,12 @@ type Dialect struct {
 	// ordinary word.
 	FdVariableRedirections bool
 
+	// CloseQuotesAtEOF ends an unterminated `'`, `"` or backquote at the
+	// end of input as if the closing mark were there, instead of refusing
+	// to parse: `echo "abc` prints abc in the one shell that answers this
+	// way. `$(` and `${` are not quotes and still refuse.
+	CloseQuotesAtEOF bool
+
 	// Coproc is bash's `coproc [NAME] command`: the command runs in the
 	// background with a pipe on each of its named streams, and the shell
 	// keeps the near ends in an array. zsh spells a coprocess the same

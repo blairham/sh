@@ -3976,4 +3976,37 @@ out=$(CDPATH=./pool cd sub)
 		Snippet: `coproc cat; echo hi >&"${COPROC[1]}"; read -r l <&"${COPROC[0]}"; echo "$l"`,
 		Why:     "bash runs cat in the background with the pipe's near ends in COPROC and reads its own line back; the other three have no such keyword — even zsh, whose coprocess speaks `print -p` rather than an array",
 	},
+	{
+		ID: "syntax/an-unmatched-double-quote", Category: "diagnostics",
+		SyntaxError: true,
+		Snippet:     `echo "abc`,
+		Why:         "one end of file, three sentences and a silence: bash wants the matching mark, dash calls the string unterminated, zsh calls the opener unmatched — and ksh93 closes the quote, runs the command, and prints abc",
+	},
+	{
+		ID: "syntax/an-unmatched-command-substitution", Category: "diagnostics",
+		SyntaxError: true,
+		Snippet:     `echo $(echo`,
+		Why:         "a substitution is not a quote even to the shell that closes quotes at end of input: all four refuse, naming the closer, the end of the file, the opener, and the nearby text respectively — and bash alone counts the line as the one after the input's last",
+	},
+	{
+		ID: "syntax/a-brace-opened-inside-a-quote", Category: "diagnostics",
+		SyntaxError: true,
+		Snippet:     `echo "${x"`,
+		Why:         "three of the panel blame the quote the `${` began inside; ksh93 blames the quote character itself, `\"' unexpected — the one shape of unterminated input it refuses with the quote in it",
+	},
+	{
+		ID: "expansion/an-operator-where-the-name-belongs", Category: "diagnostics",
+		Snippet: `echo "${%x}"; echo "st=$?"`,
+		Why:     "an operator where the parameter name belongs: ksh93 refuses while reading and must name the `%` — the token used to come through blank there, ``' unexpected — while the other three defer and call it a bad substitution when the expansion is reached",
+	},
+	{
+		ID: "redir/noclobber-names-its-refusal", Category: "redirection",
+		Snippet: `set -C; echo a > f; echo b > f; echo "st=$?"`,
+		Why:     "the refusal is unanimous and the sentence is not: bash cannot overwrite an existing file, ksh93 says it already exists with the errno in brackets, dash and zsh word it as any other failed create",
+	},
+	{
+		ID: "shift/an-operand-that-was-never-given", Category: "builtins",
+		Snippet: `shift; echo "st=$?"`,
+		Why:     "past the end with no count written down, ksh93 reports `(null)` — the operand it did not get — where its complaint about `shift 99` names the 99; dash keeps one sentence for both and bash and zsh keep their usual answers",
+	},
 }

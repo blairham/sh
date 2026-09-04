@@ -226,6 +226,10 @@ func Diagnostics() interp.Diagnostics {
 		SyntaxRedirectUnexpected: "Syntax error: redirection unexpected",
 		ForName:                  "Syntax error: Bad for loop variable",
 		Unterminated:             "Syntax error: end of file unexpected (expecting \"%[4]s\")",
+		UnmatchedQuote:           "Syntax error: Unterminated quoted string",
+		UnmatchedBackquote:       "Syntax error: EOF in backquote substitution",
+		UnmatchedCmdSubst:        "Syntax error: end of file unexpected (expecting \")\")",
+		UnmatchedBraceSubst:      "Syntax error: Missing '}'",
 		SyntaxError:              "Syntax error: %s",
 		BadSubstitution:          "Bad substitution",
 		// The builtin in front, which its plain form does not have.

@@ -144,7 +144,7 @@ func runStdin(sh driver.Shell) int {
 	if err != nil {
 		fail(err)
 	}
-	return driver.Run(sh, string(b), sh.Name)
+	return driver.RunStdin(sh, string(b))
 }
 
 // runPath runs a file, which is not the same as running its contents: a shell

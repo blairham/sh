@@ -1051,6 +1051,37 @@ type Diagnostics struct {
 	// paren is unexpected — no wording can close the gap, and none is
 	// offered here.
 
+	// UnmatchedQuote is a quote the input ran out inside — five verbs,
+	// because each dialect names a different part of the same end of file:
+	// %[1]s the opener as written, %[2]s the closer that never came,
+	// %[3]s the text from the opener to the end of its line, %[4]d the
+	// line the opener is on, and %[5]d the line the input ran out on.
+	// Empty keeps the substrate's own sentence. The dialect that closes a
+	// quote at end of input and runs never reaches this — that is a
+	// grammar flag, not a wording.
+	UnmatchedQuote string
+	// UnmatchedBackquote is the same failure inside `` ` ``, for the one
+	// dialect that words the old substitution differently from a quote.
+	// Empty falls back to UnmatchedQuote.
+	UnmatchedBackquote string
+	// UnmatchedCmdSubst is `$(` the input ran out inside. Same verbs.
+	UnmatchedCmdSubst string
+	// UnmatchedBraceSubst is `${` the input ran out inside. Same verbs.
+	UnmatchedBraceSubst string
+	// UnmatchedReportedAtOpener puts an unmatched quote's diagnostic on
+	// the line the opener is on rather than the line the input ran out on.
+	UnmatchedReportedAtOpener bool
+	// CmdSubstUnmatchedAtEnd reports an unmatched `$(` at the line after
+	// the input's last, the way UnterminatedEndsOnNextLine does for an
+	// open `if` — one dialect answers the two constructs differently,
+	// which is why this is its own switch.
+	CmdSubstUnmatchedAtEnd bool
+
+	// NoclobberRefusal is the file `set -C` would not overwrite. Two
+	// verbs: %[1]s the name as written, %[2]s the errno reason. Empty
+	// where the dialect words it as any other failed create.
+	NoclobberRefusal string
+
 	// SyntaxError wraps a parse failure's own text. One verb: the text.
 	SyntaxError string
 
@@ -1411,6 +1442,15 @@ type Diagnostics struct {
 	// other dialect. A dialect wanting a builtin to name no place at all has
 	// never been measured and would need more than this field.
 	BuiltinLocation LocationStyle
+	// StdinLocation is Location for a script arriving on standard input,
+	// where there is no $0 to name — zsh drops the line and keeps only its
+	// name there. Zero means "the same as Location".
+	StdinLocation LocationStyle
+	// StdinBuiltinLocation is BuiltinLocation for the same route: zsh
+	// drops the prefix down to the builtin's own name, and ksh93 moves to
+	// `name[line]:` — a shape it uses nowhere else on this route.
+	StdinBuiltinLocation LocationStyle
+
 	// ScriptBuiltinLocation is BuiltinLocation for a script read from a
 	// file, the way ScriptLocation is Location for one. ksh93 names line 1
 	// in a file and not under `-c`, in both of its styles.
@@ -1452,6 +1492,16 @@ const (
 	// left out on line 1, the same way LocationLineWordAfterFirst leaves it
 	// out — ksh93's answer for `-c`, where line 1 names no line at all.
 	LocationBracketLineAfterFirst
+	// LocationNameOnly is the shell's name and nothing more: `zsh: msg`,
+	// with no line however deep in the input the failure was. Distinct from
+	// LocationNone so the Stdin fields can choose it — their zero already
+	// means "the same as Location".
+	LocationNameOnly
+	// LocationBuiltinNameOnly is the *builtin's* name alone: `shift: msg`,
+	// no shell and no line — zsh's answer for a builtin's complaint when
+	// the script arrived on standard input. A message the shell itself
+	// speaks falls back to the shell's name.
+	LocationBuiltinNameOnly
 )
 
 // BadOptionName is which part of a leading `-` word a bad-option complaint
@@ -1581,6 +1631,19 @@ func (d Diagnostics) ParseFailureLine(err error) int {
 	if !errors.As(err, &se) {
 		return 0
 	}
+	if se.Kind == syntax.ErrUnmatched {
+		if se.Token == "$(" {
+			if d.CmdSubstUnmatchedAtEnd && se.EndLine > 0 {
+				return se.EndLine
+			}
+		} else if d.UnmatchedReportedAtOpener {
+			return se.Pos.Line
+		}
+		if se.EofLine > 0 {
+			return se.EofLine
+		}
+		return se.Pos.Line
+	}
 	if d.UnterminatedEndsOnNextLine && se.EndLine > 0 {
 		return se.EndLine
 	}
@@ -1638,6 +1701,20 @@ func (d Diagnostics) ParseFailure(err error) string {
 			msg += Wording(d.SyntaxExpecting, "", se.Expected)
 		}
 		return msg
+	case syntax.ErrUnmatched:
+		form := d.UnmatchedQuote
+		switch se.Token {
+		case "`":
+			if d.UnmatchedBackquote != "" {
+				form = d.UnmatchedBackquote
+			}
+		case "$(":
+			form = d.UnmatchedCmdSubst
+		case "${":
+			form = d.UnmatchedBraceSubst
+		}
+		return Wording(form, se.Msg,
+			se.Token, se.Expected, se.LastToken, se.Pos.Line, se.EofLine)
 	case syntax.ErrUnterminated:
 		return Wording(d.Unterminated, "syntax error: unterminated %[1]s",
 			se.Construct, se.ConstructLine, se.Innermost, se.Expected,
@@ -1671,6 +1748,22 @@ func (d Diagnostics) ForScript() Diagnostics {
 	}
 	if d.ScriptBuiltinLocation != LocationNone {
 		d.BuiltinLocation = d.ScriptBuiltinLocation
+	}
+	return d
+}
+
+// ForStdin returns the diagnostics a script arriving on standard input
+// should use.
+//
+// There is no $0 to name on that route, and two of the four change shape
+// rather than substituting a name: zsh trims its prefixes and ksh93 brackets
+// the line. A property of the invocation, like ForScript.
+func (d Diagnostics) ForStdin() Diagnostics {
+	if d.StdinLocation != LocationNone {
+		d.Location = d.StdinLocation
+	}
+	if d.StdinBuiltinLocation != LocationNone {
+		d.BuiltinLocation = d.StdinBuiltinLocation
 	}
 	return d
 }
@@ -1767,6 +1860,10 @@ func (d Diagnostics) prefix(name, builtin string, byBuiltin bool, line int) stri
 	if name == "" {
 		name = "sh"
 	}
+	if byBuiltin && builtin != "" && d.BuiltinLocation == LocationBuiltinNameOnly {
+		// The builtin speaks for itself: no shell, no line.
+		return builtin + ": "
+	}
 	if builtin != "" && d.NamesBuiltinInLocation {
 		// One dialect names the builtin that is speaking, between the shell
 		// and the line. It rides on the shell's name rather than being a
@@ -1797,6 +1894,10 @@ func (d Diagnostics) prefix(name, builtin string, byBuiltin bool, line int) stri
 		return fmt.Sprintf("%s: line %d: ", name, line)
 	case LocationTightLine:
 		return fmt.Sprintf("%s:%d: ", name, line)
+	case LocationNameOnly, LocationBuiltinNameOnly:
+		// The second reaches here for a message the shell itself speaks,
+		// which keeps the shell's name the way the first always does.
+		return name + ": "
 	}
 	return name + ": "
 }

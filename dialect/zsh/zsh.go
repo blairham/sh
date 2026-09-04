@@ -362,6 +362,9 @@ func Diagnostics() interp.Diagnostics {
 		SyntaxUnexpected:             "parse error near `%[1]s'",
 		ForName:                      "parse error near `%[1]s'",
 		Unterminated:                 "parse error near `%[5]s'",
+		UnmatchedQuote:               "unmatched %[1]s",
+		UnmatchedCmdSubst:            "parse error near `%[3]s'",
+		UnmatchedBraceSubst:          "closing brace expected",
 		SyntaxErrorStatus:            1,
 		// zsh alone answers "a syntax error" differently depending on where it
 		// read the text: 1 from -c, 126 from a file `.` opened.
@@ -374,8 +377,10 @@ func Diagnostics() interp.Diagnostics {
 		// it — the reverse of the other three.
 		// zsh alone says something for a shift it survives; bash says
 		// nothing, and the two that speak up here treat it as fatal.
-		ShiftTooMany:  "shift count must be <= $#",
-		CannotExecute: "%[2]s: %[1]s",
+		ShiftTooMany:         "shift count must be <= $#",
+		StdinLocation:        interp.LocationNameOnly,
+		StdinBuiltinLocation: interp.LocationBuiltinNameOnly,
+		CannotExecute:        "%[2]s: %[1]s",
 		// zsh says "command not found" for a bare name it could not resolve,
 		// where the other three say "not found".
 		// zsh leads with the complaint and names the command after it, for a

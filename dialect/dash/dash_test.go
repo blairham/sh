@@ -105,6 +105,10 @@ func TestSemantics(t *testing.T) {
 		want interp.Answer
 	}{
 		{"SetFTurnsOffGlobbing", s.SetFTurnsOffGlobbing, interp.Yes},
+		// `test`'s file comparisons — dash has no `[[ ]]` but has these:
+		// both files must exist, and `-t x` is the Illegal number complaint.
+		{"MissingFileIsOlder", s.MissingFileIsOlder, interp.No},
+		{"TerminalTestRequiresANumber", s.TerminalTestRequiresANumber, interp.Yes},
 		{"DeclaredNameWithoutValueIsEmpty", s.DeclaredNameWithoutValueIsEmpty, interp.No},
 		// dash has no `typeset`, so TypesetLocalNeedsKeywordFunction is absent
 		// rather than false — the axis does not arise.

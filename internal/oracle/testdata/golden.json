@@ -5338,6 +5338,38 @@
         "TimedOut": false
       }
     },
+    "cond/a-missing-file-is-older-diverges": {
+      "bash": {
+        "Output": "nt=0~ot=0~mirror=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "nt=0~ot=0~mirror=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "nt=0~ot=0~mirror=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found~nt=127~\u003cshell\u003e: 1: [[: not found~ot=127~\u003cshell\u003e: 1: [[: not found~mirror=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "nt=0~ot=0~mirror=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "nt=1~ot=1~mirror=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "cond/a-newline-at-every-point": {
       "bash": {
         "Output": "yes",
@@ -5690,6 +5722,38 @@
         "TimedOut": false
       }
     },
+    "cond/file-kind-operators": {
+      "bash": {
+        "Output": "fifo~plain~chardev~notblock~notsocket",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "fifo~plain~chardev~notblock~notsocket",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "fifo~plain~chardev~notblock~notsocket",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~plain~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~notblock~\u003cshell\u003e: 1: [[: not found~notsocket",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "fifo~plain~chardev~notblock~notsocket",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "fifo~plain~chardev~notblock~notsocket",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "cond/logical-and-grouping": {
       "bash": {
         "Output": "grouped",
@@ -5750,6 +5814,38 @@
       },
       "zsh": {
         "Output": "y",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/newer-older-and-equal-times": {
+      "bash": {
+        "Output": "newer~older~neither",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "newer~older~neither",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "newer~older~neither",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~neither",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "newer~older~neither",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "newer~older~neither",
         "Status": 0,
         "TimedOut": false
       }
@@ -5878,6 +5974,38 @@
       },
       "zsh": {
         "Output": "var-is-literal",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/permission-bit-operators": {
+      "bash": {
+        "Output": "setgid~setuid~sticky~plain",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "setgid~setuid~sticky~plain",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "setgid~setuid~sticky~plain",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: -u: not found~\u003cshell\u003e: 1: -k: not found~plain",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "setgid~setuid~sticky~plain",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "setgid~setuid~sticky~plain",
         "Status": 0,
         "TimedOut": false
       }
@@ -6038,6 +6166,102 @@
       },
       "zsh": {
         "Output": "pattern quoted-literal",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/same-file-is-identity": {
+      "bash": {
+        "Output": "linked~distinct",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "linked~distinct",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "linked~distinct",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~distinct",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "linked~distinct",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "linked~distinct",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/terminal-test-closed-descriptors": {
+      "bash": {
+        "Output": "t0=1~t1=1~t99=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "t0=1~t1=1~t99=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "t0=1~t1=1~t99=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found~t0=127~\u003cshell\u003e: 1: [[: not found~t1=127~\u003cshell\u003e: 1: [[: not found~t99=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "t0=1~t1=1~t99=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "t0=1~t1=1~t99=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/terminal-test-non-number-diverges": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: [[: x: integer expected~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: [[: x: integer expected~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=1",
         "Status": 0,
         "TimedOut": false
       }
@@ -20282,6 +20506,38 @@
         "TimedOut": false
       }
     },
+    "test/a-missing-file-is-older-diverges": {
+      "bash": {
+        "Output": "nt=0~ot=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "nt=0~ot=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "nt=0~ot=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "nt=1~ot=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "nt=0~ot=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "nt=1~ot=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "test/a-non-number-where-one-belongs": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: [: a: integer expected~st=2",
@@ -20602,6 +20858,38 @@
         "TimedOut": false
       }
     },
+    "test/file-comparisons": {
+      "bash": {
+        "Output": "nt=0~ot=0~ef=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "nt=0~ot=0~ef=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "nt=0~ot=0~ef=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "nt=0~ot=0~ef=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "nt=0~ot=0~ef=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "nt=0~ot=0~ef=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "test/numeric-and-string-compare-differ": {
       "bash": {
         "Output": "numeric=0~string=1",
@@ -20662,6 +20950,38 @@
       },
       "zsh": {
         "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "test/terminal-test-non-number-diverges": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: test: x: integer expected~st=2~closed=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: test: x: integer expected~st=2~closed=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=1~closed=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: test: Illegal number: x~st=2~closed=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=1~closed=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=1~closed=1",
         "Status": 0,
         "TimedOut": false
       }

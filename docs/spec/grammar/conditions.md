@@ -87,9 +87,69 @@ Vector field: `RegexQuotingMakesLiteral` (default true, matching bash).
     -n s   -z s                     non-empty, empty
     -e f   -f f   -d f   -r f
     -w f   -x f   -s f              file tests
+    -L f   -h f                     symbolic link, both spellings
+    -b f   -c f   -p f   -S f       block, character, fifo, socket
+    -g f   -u f   -k f              setgid, setuid, sticky
+    -t fd                           the descriptor is a terminal
     !                               negation
     &&     ||                       conjunction, disjunction
     ( … )                           grouping
+
+The file-kind and permission-bit tests are unanimous across the three
+shells that have the construct, measured against a fifo, `/dev/null`,
+a block device, and files with each bit set — and they are the same
+questions `test` asks, so the two constructs share the code that asks
+them.
+
+`-t` is unanimous on every descriptor the harness can offer: stdin on
+`/dev/null`, stdout into a pipe, and a descriptor that was never open
+are all a quiet false. A runner whose streams are io.Writers gives that
+answer always — the honest one for a library, and the same one the
+panel gives a shell whose streams are pipes. The operand diverges when
+it is not a number at all:
+
+| probe | bash | bash 3.2 | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `[[ -t x ]]` | **`integer expected`, status 2** | 1 | 1 | 1 |
+| `test -t x` | **status 2** | 1 | 1 | 1 (dash: **status 2**) |
+
+bash refuses loudly — and bash 3.2 does not, so the complaint is
+younger than the operator. dash, which reaches the question only
+through `test`, refuses too with its `Illegal number` wording.
+
+Vector field: `TerminalTestRequiresANumber` (bash and dash yes, ksh93
+and zsh no), asked only for such an operand.
+
+## The file comparisons: `-nt`, `-ot`, `-ef`
+
+    [[ new -nt old ]]   →  true when new's mtime is later
+    [[ old -ot new ]]   →  the mirror
+    [[ a   -ef b   ]]   →  true when the two names are one file
+
+With both files present, all of it is unanimous — including that equal
+times are neither newer nor older, and that `-ef` is identity rather
+than equality: a hard link, or a symlink followed to the file, compares
+equal, and a second file with identical content does not.
+
+All three exist in `test` as well, in every shell in the panel — dash
+included, whose lack of `[[ ]]` does not extend to the builtin.
+
+A file that does not exist splits the panel, in both constructs the
+same way per shell:
+
+| probe (f exists) | bash | ksh93 | dash (`test`) | zsh |
+| --- | --- | --- | --- | --- |
+| `f -nt missing` | true | true | **false** | **false** |
+| `missing -ot f` | true | true | **false** | **false** |
+
+bash and ksh93 count a missing file as older than any file that does
+exist; dash and zsh want both files present. The mirrored cases ask
+nothing — `missing -nt f` and `f -ot missing` are false everywhere, a
+missing file never being *newer* — and so are the both-missing cases.
+
+Vector field: `MissingFileIsOlder` (bash and ksh93 yes, dash and zsh
+no). One axis for `test`, `[` and `[[ ]]` alike, because every shell
+answers its two constructs the same way.
 
 `&&` and `||` inside `[[ ]]` join *conditions*, not commands, and `( )`
 groups conditions rather than starting a subshell.
@@ -116,6 +176,8 @@ one for lists.
 
 ## What this does not cover
 
-`-v`, `-o`, and the file-comparison operators `-nt`, `-ot`, `-ef`, which
-exist in some of the panel and are not needed by anything here yet.
-Recorded so their absence is a decision.
+`-v` and `-o`, which test a variable and a shell option rather than a
+file and exist in some of the panel only. The parser refuses them along
+with everything else it does not list, which is the rule: an operator is
+either implemented or refused at parse, never parsed and then refused at
+run time. Recorded so their absence is a decision.

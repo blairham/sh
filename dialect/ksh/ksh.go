@@ -132,6 +132,10 @@ func Semantics() interp.Semantics {
 	s.SubstringNegativeLengthIsEmpty = interp.Yes
 	// [ a -eq 1 ] is a plain false here, no sentence, status 1.
 	s.TestIntegerRefusalIsSilent = interp.Yes
+	// `f -nt missing` holds when f exists, and `-t x` is a plain false
+	// rather than dash's and bash's integer complaint.
+	s.MissingFileIsOlder = interp.Yes
+	s.TerminalTestRequiresANumber = interp.No
 	s.ArithNameValueRecurses = interp.Yes
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	// echo reads -n and -e; a word carrying -E is an operand. \e expands,

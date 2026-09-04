@@ -91,7 +91,7 @@ var condUnaryOps = map[string]bool{
 	"-n": true, "-z": true,
 	"-e": true, "-f": true, "-d": true, "-s": true,
 	"-r": true, "-w": true, "-x": true,
-	"-b": true, "-c": true, "-p": true, "-L": true, "-h": true,
+	"-b": true, "-c": true, "-p": true, "-S": true, "-L": true, "-h": true,
 	"-g": true, "-u": true, "-k": true, "-t": true,
 }
 

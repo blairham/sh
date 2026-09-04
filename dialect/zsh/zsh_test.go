@@ -71,6 +71,11 @@ func TestSemantics(t *testing.T) {
 		// capital, because `-F` is zsh's own short spelling of it.
 		{"NoglobLetterIsF", s.NoglobLetterIsF, interp.No},
 		{"ArithIntegerOperatorRefusesFloat", s.ArithIntegerOperatorRefusesFloat, interp.No},
+		// The strict end of both file-comparison questions: -nt and -ot
+		// want both files to exist, and a non-numeric -t operand is a
+		// plain false.
+		{"MissingFileIsOlder", s.MissingFileIsOlder, interp.No},
+		{"TerminalTestRequiresANumber", s.TerminalTestRequiresANumber, interp.No},
 		{"AssignmentUpdatesPipelineStatus", s.AssignmentUpdatesPipelineStatus, interp.No},
 		{"UnsetEndsTheProducedPipelineStatus", s.UnsetEndsTheProducedPipelineStatus, interp.Yes},
 		{"ArrayScalarIsTheWholeArray", s.ArrayScalarIsTheWholeArray, interp.Yes},

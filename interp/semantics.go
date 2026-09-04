@@ -1075,6 +1075,24 @@ type Semantics struct {
 	// status 1 — ksh93; the other three complain at 2.
 	TestIntegerRefusalIsSilent Answer
 
+	// MissingFileIsOlder has `-nt` and `-ot` count a path that does not
+	// exist as older than any file that does, so `f -nt missing` and
+	// `missing -ot f` hold whenever f exists. bash and ksh93; dash and zsh
+	// answer false unless both files exist. Asked only there: with both
+	// files present the comparison is unanimous, and the mirrored cases —
+	// a missing file being *newer* — are false in every shell measured.
+	// One axis for `test`, `[` and `[[ ]]` alike, because every shell
+	// answers its two constructs the same way.
+	MissingFileIsOlder Answer
+
+	// TerminalTestRequiresANumber has `-t` refuse an operand that is not a
+	// number, at status 2 with the dialect's integer wording — bash and
+	// dash; ksh93 and zsh answer a silent false at 1, and so does the bash
+	// 3.2 that macOS ships. Asked only for such an operand: a numeric
+	// descriptor is answered false the same way everywhere a terminal is
+	// absent.
+	TerminalTestRequiresANumber Answer
+
 	// ReadRequiresAVariableName refuses a bare `read`: dash's "arg count"
 	// at 2, where the other three read into REPLY.
 	ReadRequiresAVariableName Answer
@@ -1750,7 +1768,13 @@ func PosixSemantics() Semantics {
 		UnderscoreTracksTheLastArgument: No,
 		// The majority answers: full bases, wrapping overflow, zero for an
 		// empty expression.
-		TestIntegerRefusalIsSilent:         No,
+		TestIntegerRefusalIsSilent: No,
+		// POSIX has no -nt or -ot at all; dash, its closest reading, wants
+		// both files to exist.
+		MissingFileIsOlder: No,
+		// POSIX gives -t a file descriptor, and dash refuses anything that
+		// is not a number.
+		TerminalTestRequiresANumber:        Yes,
 		FcEmptyHistoryIsAnError:            No,
 		JobControlAbsenceIsReportedFirst:   No,
 		CdpathAnnouncesTheDirectory:        Yes,

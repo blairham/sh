@@ -5,7 +5,6 @@ package interp
 
 import (
 	"context"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -77,39 +76,26 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 		return s != "", nil
 	case "-z":
 		return s == "", nil
-	}
-
-	// Through the gate, like every stat: a file test is an existence oracle,
-	// and a policy that cannot see it cannot refuse it. A denied stat falls
-	// out as err != nil, so the tests below answer false with no special
-	// case — the documented deny semantics for ActionStat.
-	info, err := r.stat(s)
-	switch x.Op {
-	case "-e":
-		return err == nil, nil
-	case "-f":
-		return err == nil && info.Mode().IsRegular(), nil
-	case "-d":
-		return err == nil && info.IsDir(), nil
-	case "-s":
-		return err == nil && info.Size() > 0, nil
-	case "-r", "-w", "-x":
-		if err != nil {
-			return false, nil
+	case "-t":
+		// A terminal test on a descriptor this shell may not even own.
+		// Never true here: the streams are io.Writers, which is the honest
+		// answer for a library rather than a guess about the process's
+		// descriptors — the same answer `test -t` gives. An operand that is
+		// not a number is a question of its own first.
+		if _, err := strconv.Atoi(strings.TrimSpace(s)); err != nil &&
+			r.ask(r.sem().TerminalTestRequiresANumber, "`[[ -t x ]]` refusing a non-number") {
+			return false, arithError{msg: Wording(r.diag().TestIntegerExpected,
+				"%[2]s: %[1]s: integer expected", s, "[[")}
 		}
-		var bit os.FileMode
-		switch x.Op {
-		case "-w":
-			bit = 0o200
-		case "-x":
-			bit = 0o100
-		default:
-			bit = 0o400
-		}
-		return info.Mode().Perm()&bit != 0, nil
-	case "-L", "-h":
-		li, lerr := r.lstat(s)
-		return lerr == nil && li.Mode()&os.ModeSymlink != 0, nil
+		return false, nil
+	case "-e", "-f", "-d", "-s", "-r", "-w", "-x",
+		"-b", "-c", "-p", "-S", "-g", "-u", "-k", "-L", "-h":
+		// The file questions are `test`'s, answered by the same code: the
+		// two constructs disagree about how an operand is obtained, never
+		// about what the filesystem says about it. fileTest stats through
+		// the gate, so a `[[ ]]` probe is as visible to a policy as the
+		// builtin's — a file test is an existence oracle either way.
+		return r.fileTest(x.Op, s), nil
 	}
 	return false, arithError{msg: "unsupported test " + x.Op}
 }
@@ -171,6 +157,9 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 			return !got, nil
 		}
 		return got, nil
+
+	case "-nt", "-ot", "-ef":
+		return r.compareFiles(x.Op, left, r.condOperand(x.Y))
 
 	case "<":
 		return left < r.condOperand(x.Y), nil

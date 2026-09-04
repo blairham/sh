@@ -127,6 +127,16 @@ func (r *Runner) In() io.Reader {
 }
 
 // SetVar sets a shell variable, creating the map if needed.
+// Diagnosef writes a diagnostic the way a builtin of this package would:
+// located the dialect's way, naming the shell — and the builtin, in the
+// dialect that puts it there.
+//
+// Writing to Err directly is the other thing, and it is what a builtin's
+// *output* uses. A complaint written that way carries no location, which is
+// how a registered builtin ends up saying less than the one beside it. This
+// is here because writing one found it missing.
+func (r *Runner) Diagnosef(format string, args ...any) { r.diagf(format, args...) }
+
 func (r *Runner) SetVar(name, value string) { r.setVar(name, value) }
 
 // GetVar reads a shell variable, falling back to the environment.
@@ -157,6 +167,49 @@ func (r *Runner) BuiltinNames() []string {
 		delete(seen, name)
 	}
 	return sortedNames(seen)
+}
+
+// SetBuiltinEnabled switches a builtin off, or back on.
+//
+// Off is not removal: the name is put aside and the word is then looked up on
+// PATH like any other, and switching it back on gets the same builtin. That
+// is what `enable -n` means in one dialect and what `disable` means in
+// another, and the difference between them is entirely in the builtin that
+// calls this.
+//
+// Unregister is the other thing, and they are not interchangeable: a dialect
+// that never had `let` removes it, and a script that switched `cd` off can
+// switch it back.
+func (r *Runner) SetBuiltinEnabled(name string, enabled bool) {
+	if enabled {
+		delete(r.disabledBuiltins, name)
+		return
+	}
+	if r.disabledBuiltins == nil {
+		r.disabledBuiltins = map[string]bool{}
+	}
+	r.disabledBuiltins[name] = true
+}
+
+// DisabledBuiltins is every name switched off, sorted. One dialect lists
+// exactly this when `disable` is given nothing to do.
+func (r *Runner) DisabledBuiltins() []string {
+	seen := make(map[string]bool, len(r.disabledBuiltins))
+	for name := range r.disabledBuiltins {
+		seen[name] = true
+	}
+	return sortedNames(seen)
+}
+
+// KnownBuiltin reports whether the name is a builtin at all, switched off or
+// not. A dialect needs it to tell "switched off" from "never existed", which
+// are different answers to `enable somename`.
+func (r *Runner) KnownBuiltin(name string) bool {
+	if fn, ok := r.custom[name]; ok {
+		return fn != nil
+	}
+	_, ok := builtins[name]
+	return ok
 }
 
 // FuncNames is every function this runner has defined, sorted.

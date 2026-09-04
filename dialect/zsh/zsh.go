@@ -362,7 +362,9 @@ func Apply(r *interp.Runner) {
 	// This shell has an `enable`, but a different one: it works on hash
 	// tables and takes none of bash's options — `enable -n` is a bad option
 	// there. Claiming a bash-shaped one would be worse than not having it.
-	r.Unregister("enable")
+	// Not removed but replaced: zsh has an `enable`, and it is a different
+	// builtin from the one the core carries. See enable.go.
+	registerEnable(r)
 	// No `compgen` here; it is bash's alone.
 	r.Unregister("compgen")
 	// The `set -o` names beyond the ones every shell has.

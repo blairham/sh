@@ -1757,6 +1757,9 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `export/unset-f-removes-a-function` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` |
 | `export/a-function-through-the-environment` | *(no output, status 2)* | `1` | `1` | `1` | *(no output, status 2)* | `0` *(status 1)* |
 | `export/a-name-that-is-not-a-function` | `<shell>: 1: export: Illegal option -f` *(status 2)* | `<shell>: line 1: export: nope: not a function~st=1` | `<shell>: line 1: export: nope: not a function~st=1` | `<shell>: line 0: export: nope: not a function~st=1` | `<shell>: export: -f: unknown option~Usage: export [-p] [name[=value]...]` *(status 2)* | `<shell>:export:1: invalid option(s)~st=1` |
+| `enable/a-letter-one-shell-does-not-have` | `<shell>: 1: enable: not found~st=127` | `st=0` | `st=0` | `st=0` | `<shell>: enable: not found~st=127` | `<shell>:enable:1: bad option: -n~st=1` |
+| `enable/a-name-that-is-not-a-builtin` | `<shell>: 1: disable: not found~st=127` | `<shell>: line 1: disable: command not found~st=127` | `<shell>: line 1: disable: command not found~st=127` | `<shell>: disable: command not found~st=127` | `<shell>: disable: not found~st=127` | `<shell>:disable:1: no such hash table element: nosuchthing~st=1` |
+| `enable/switching-one-off-and-back-on` | `st=127` | `st=0` | `st=0` | `st=0` | `st=127` | `st=0` |
 
 - `readonly/reassignment-by-a-declaration` — the same refusal reached through a declaration utility rather than by an assignment standing alone, and a different set of shells stops for it — three here, where a plain assignment stops all four. So which of the two ways the name was set decides, and one shell answers the two oppositely: it stops for the plain form given as an argument and never stops for this one
   ```sh
@@ -1877,6 +1880,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `export/a-name-that-is-not-a-function` — a name that is not a function now will not become one by being exported. The shells that have the option refuse it and the ones that do not read `-f` as something else entirely, which is the more interesting half
   ```sh
   export -f nope; echo "st=$?"
+  ```
+- `enable/a-letter-one-shell-does-not-have` — `enable` is two different builtins: one takes -n to switch a name off, one has no -n at all and reads its options as the *table* to act on. The other two have no `enable`, so the same line is four answers
+  ```sh
+  enable -n cd; echo "st=$?"
+  ```
+- `enable/a-name-that-is-not-a-builtin` — `disable` exists in one shell only, and there it complains about a hash table element rather than about a command — where the other three have no such builtin and say so
+  ```sh
+  disable nosuchthing; echo "st=$?"
+  ```
+- `enable/switching-one-off-and-back-on` — switching a builtin off is not forgetting it: the name comes back with the same builtin behind it. Standard error is discarded because three of the four have neither word and their complaint is about a missing command, which the case above pins
+  ```sh
+  disable cd 2>/dev/null; enable cd 2>/dev/null; echo "st=$?"
   ```
 
 ## parameter expansion

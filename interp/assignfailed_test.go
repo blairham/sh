@@ -96,3 +96,50 @@ func TestADeclarationReportsARefusedNameToo(t *testing.T) {
 		t.Errorf("output = %q, want a declaration that worked to report success", got)
 	}
 }
+
+// TestOnlySomeDeclarationsNameThemselves is why the naming is a set and not
+// a flag: one dialect names the builtin for two of its four declaration
+// spellings and not for the other two.
+func TestOnlySomeDeclarationsNameThemselves(t *testing.T) {
+	run := func(src string, names map[string]bool) string {
+		t.Helper()
+		f, err := syntax.Parse(src, syntax.Core())
+		if err != nil {
+			t.Fatalf("parse %q: %v", src, err)
+		}
+		sem := permissive()
+		sem.ReadonlyReassignmentByDeclarationFatal = No
+		var errs bytes.Buffer
+		dir := t.TempDir()
+		r := &Runner{
+			Stdout: &bytes.Buffer{}, Stderr: &errs, Semantics: &sem,
+			Diagnostics: &Diagnostics{
+				Location:                      LocationLineWord,
+				ReadonlyVariable:              "%s: readonly variable",
+				ReadonlyVariableInDeclaration: "%[2]s: %[1]s: readonly variable",
+				ReadonlyRefusalNamesBuiltin:   names,
+			},
+			Dir: dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
+		}
+		if _, rerr := r.Run(context.Background(), f); rerr != nil {
+			t.Fatalf("run %q: %v", src, rerr)
+		}
+		return errs.String()
+	}
+
+	named := map[string]bool{"readonly": true}
+	if got := run("readonly r=1\nreadonly r=2", named); !strings.Contains(got, "readonly: r: readonly variable") {
+		t.Errorf("in the set: %q, want the builtin named", got)
+	}
+	// The same wording is available and is not used, because this builtin is
+	// not in the set — which is the half a flag could not express.
+	if got := run("readonly r=1\nexport r=2", named); !strings.Contains(got, "line 2: r: readonly variable") {
+		t.Errorf("out of the set: %q, want the plain wording", got)
+	} else if strings.Contains(got, "export:") {
+		t.Errorf("out of the set: %q, want no builtin named", got)
+	}
+	// And an empty set names none of them, whatever the wording says.
+	if got := run("readonly r=1\nreadonly r=2", nil); strings.Contains(got, "readonly: r:") {
+		t.Errorf("empty set: %q, want no builtin named", got)
+	}
+}

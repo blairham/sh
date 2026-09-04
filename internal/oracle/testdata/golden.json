@@ -2330,6 +2330,70 @@
         "TimedOut": false
       }
     },
+    "axis/readonly-refusal-does-not-name-export": {
+      "bash": {
+        "Output": "\u003cscript\u003e: line 2: r: readonly variable~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cscript\u003e: line 2: r: readonly variable~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cscript\u003e: line 2: r: readonly variable~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cscript\u003e: 2: export: r: is read only",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cscript\u003e: line 2: r: is read only",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cscript\u003e:2: read-only variable: r",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "axis/readonly-refusal-names-the-builtin": {
+      "bash": {
+        "Output": "\u003cscript\u003e: line 2: declare: r: readonly variable~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cscript\u003e: line 2: declare: r: readonly variable~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cscript\u003e: line 2: declare: r: readonly variable~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cscript\u003e: 2: declare: not found~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cscript\u003e: line 2: declare: not found~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cscript\u003e:2: read-only variable: r",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "axis/redirect-opened-for-a-builtin": {
       "bash": {
         "Output": "\u003cscript\u003e: line 2: /nonexistent-dir-xyz/x: No such file or directory~end",

@@ -969,6 +969,15 @@ type Diagnostics struct {
 	// where its plain form says only the name. Empty leaves the wording
 	// below standing for both, which is what the other three want here.
 	ReadonlyVariableInDeclaration string
+	// ReadonlyRefusalNamesBuiltin is which declaration builtins use that
+	// wording. Empty means none, and the wording is then never reached.
+	//
+	// A set rather than a flag because one dialect answers it per builtin:
+	// bash writes `declare: r: readonly variable` and `typeset: …` and
+	// leaves the name out of `export: …` and `readonly: …`, which are the
+	// two spellings POSIX has. dash names both of the two it has. ksh93 and
+	// zsh name none, including ksh93's own `typeset`.
+	ReadonlyRefusalNamesBuiltin map[string]bool
 
 	// ReadonlyVariable is an assignment to a readonly name. One verb: the
 	// name.

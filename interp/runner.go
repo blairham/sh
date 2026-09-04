@@ -1575,7 +1575,8 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 		// no explicit indexes and a spare argument becomes "%!(EXTRA …)",
 		// which is what Wording's own note is about.
 		msg := Wording(r.diag().ReadonlyVariable, "%s: readonly variable", name)
-		if form == assignedByDeclaration && r.diag().ReadonlyVariableInDeclaration != "" {
+		if form == assignedByDeclaration && r.diag().ReadonlyVariableInDeclaration != "" &&
+			r.diag().ReadonlyRefusalNamesBuiltin[r.inBuiltin] {
 			msg = Wording(r.diag().ReadonlyVariableInDeclaration, "", name, r.inBuiltin)
 		}
 		// The builtin has been taken for the wording above where a dialect

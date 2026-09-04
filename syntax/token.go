@@ -202,6 +202,15 @@ type Span struct {
 	Param *ParamExpr
 	// Arith is the parsed form of an ArithSubst span, for the same reason.
 	Arith ArithExpr
+	// CurrentShell says a command substitution was written `${ cmd;}`, which
+	// runs in the shell that read it rather than in a subshell — so what it
+	// assigns survives, which is the only reason the spelling exists.
+	//
+	// A flag rather than a kind of its own for the same reason Backquoted is
+	// one: everything that *runs* a substitution treats the three alike, and
+	// only the reading, the writing back and the choice of shell differ.
+	CurrentShell bool
+
 	// Backquoted says a command substitution was written `` `like this` ``
 	// rather than as `$( … )`.
 	//

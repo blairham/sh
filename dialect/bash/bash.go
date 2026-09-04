@@ -27,6 +27,10 @@ func Dialect() syntax.Dialect {
 	d.CaseContinue = true
 	d.ParamCaseChange = true
 	d.ParamIndirection = true
+	// `${ cmd;}`, a command substitution that runs in the current shell
+	// so that what it assigns survives. The space after the brace is the
+	// whole of the grammar: `${x}` is a parameter and `${ x}` is not.
+	d.CurrentShellSubstitution = true
 	d.FunctionKeywordParens = true
 	// A name followed by `(` is a function definition here, whether or not
 	// the `)` comes next.

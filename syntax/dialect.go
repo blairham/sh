@@ -44,6 +44,14 @@ type Dialect struct {
 	// replacing. Absent from dash, where `x+=b` is a command called `x+=b`.
 	AppendAssign bool
 
+	// CurrentShellSubstitution reads `${ cmd;}` as a command substitution
+	// that runs in the current shell. bash 5.3 and ksh93 have it; dash and
+	// zsh call it a bad substitution.
+	//
+	// The space after the brace is load-bearing and is the whole of the
+	// grammar: `${x}` is a parameter and `${ x}` is a command.
+	CurrentShellSubstitution bool
+
 	// CasePatternAcceptsOperator lets an operator stand where a case pattern
 	// belongs, which produces an arm with no patterns at all.
 	//

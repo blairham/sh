@@ -1044,6 +1044,27 @@ type Semantics struct {
 	// ksh93 leave it at the shell's own path forever.
 	UnderscoreTracksTheLastArgument Answer
 
+	// FdVariableOutlivesTheCommand keeps a `{name}>f` descriptor open past
+	// the simple command that carried it — two of the three that have the
+	// grammar; ksh93 takes it back with the command's other redirections,
+	// so the number the variable holds is already dead.
+	FdVariableOutlivesTheCommand Answer
+
+	// FdVariableBadCloseIsAnError refuses `exec {name}>&-` when the name
+	// holds no descriptor number. ksh93 says nothing and reports success.
+	FdVariableBadCloseIsAnError Answer
+
+	// JobControlAbsenceIsReportedFirst refuses `bg` and `fg` before
+	// reading the operand when there is no job control — bash and zsh; dash
+	// and ksh93 read their operands and options first and complain about
+	// those.
+	JobControlAbsenceIsReportedFirst Answer
+
+	// CdpathAnnouncesTheDirectory prints where CDPATH sent a `cd`, when
+	// the winning entry was not a plain dot — three of the four; zsh moves
+	// in silence.
+	CdpathAnnouncesTheDirectory Answer
+
 	// FcEmptyHistoryIsAnError has `fc` report the event it cannot find —
 	// zsh; bash and dash answer a script with silence at 0.
 	FcEmptyHistoryIsAnError Answer
@@ -1729,6 +1750,10 @@ func PosixSemantics() Semantics {
 		// empty expression.
 		TestIntegerRefusalIsSilent:         No,
 		FcEmptyHistoryIsAnError:            No,
+		JobControlAbsenceIsReportedFirst:   No,
+		CdpathAnnouncesTheDirectory:        Yes,
+		FdVariableOutlivesTheCommand:       Yes,
+		FdVariableBadCloseIsAnError:        Yes,
 		ReadRequiresAVariableName:          No,
 		ArrayLengthWithoutSubscriptIsCount: No,
 		EmptyArrayAtIsOneEmptyField:        No,

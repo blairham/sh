@@ -173,6 +173,13 @@ func (l *Lexer) Next() Token {
 		return tok
 	}
 
+	// `{name}` under the same adjacency rule is a descriptor the shell will
+	// pick, with the variable receiving its number. The braces survive into
+	// the token so the interpreter can tell the two apart.
+	if tok, ok := l.tryFdVariable(); ok {
+		return tok
+	}
+
 	// `((` is an arithmetic command; `( (` is a subshell containing one. The
 	// distinction is purely textual, which is measured rather than assumed:
 	// `((echo nested))` is an arithmetic error in bash, ksh and zsh even with
@@ -270,6 +277,48 @@ func (l *Lexer) tryIONumber() (Token, bool) {
 		End:   l.pos(),
 		Text:  digits,
 		Spans: []Span{{Kind: Literal, Value: digits, Quoting: Unquoted, Pos: start}},
+	}, true
+}
+
+// tryFdVariable matches `{name}` followed with no gap by a redirection
+// operator, in a dialect where the shell picks the descriptor and the name
+// receives its number.
+//
+// The name must be one a variable could have; `{a,b}>f` has a comma and is a
+// word, which is what keeps this clear of brace expansion.
+func (l *Lexer) tryFdVariable() (Token, bool) {
+	if !l.dialect.FdVariableRedirections || l.peek() != '{' {
+		return Token{}, false
+	}
+	n := 1
+	for {
+		c := l.peekAt(n)
+		if c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+			(n > 1 && c >= '0' && c <= '9') {
+			n++
+			continue
+		}
+		break
+	}
+	if n == 1 || l.peekAt(n) != '}' {
+		return Token{}, false
+	}
+	// The same strict adjacency an IO number has: anything but a
+	// redirection after the brace and this is an ordinary word.
+	if c := l.peekAt(n + 1); c != '<' && c != '>' {
+		return Token{}, false
+	}
+	start := l.pos()
+	text := l.src[l.off : l.off+n+1]
+	for range n + 1 {
+		l.advance()
+	}
+	return Token{
+		Kind:  TokIONumber,
+		Pos:   start,
+		End:   l.pos(),
+		Text:  text,
+		Spans: []Span{{Kind: Literal, Value: text, Quoting: Unquoted, Pos: start}},
 	}, true
 }
 

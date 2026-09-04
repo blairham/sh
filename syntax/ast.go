@@ -411,6 +411,23 @@ func (c *SelectClause) Pos() Pos     { return c.Start }
 func (c *SelectClause) End() Pos     { return c.Stop }
 func (c *SelectClause) commandNode() {}
 
+// CoprocClause is `coproc [NAME] command`: the command runs in the
+// background with a pipe on each of its named streams, and the shell keeps
+// the near ends in the array the name names.
+type CoprocClause struct {
+	// Name is what the coprocess was called, or empty for the default. A
+	// name can only be written before a compound command: with a simple one
+	// the first word is the command itself.
+	Name   string
+	Cmd    Command
+	Coproc Pos
+	Stop   Pos
+}
+
+func (c *CoprocClause) Pos() Pos     { return c.Coproc }
+func (c *CoprocClause) End() Pos     { return c.Stop }
+func (c *CoprocClause) commandNode() {}
+
 // CaseClause is `case word in … esac`.
 type CaseClause struct {
 	Word  *Word

@@ -255,6 +255,17 @@ func biBg(r *Runner, _ context.Context, args []string) int {
 
 // resume finds the job `fg` or `bg` was asked about.
 func (r *Runner) resume(args []string, name string) (*Job, int) {
+	if !r.JobControl &&
+		r.ask(r.sem().JobControlAbsenceIsReportedFirst, "`bg` with no job control refusing before reading its operand") {
+		// Two shells notice there is no job control before looking at
+		// anything else, so the operand is never named — reporting it as a
+		// missing job would claim job control exists.
+		r.diagf("%s\n", Wording(r.diag().NoJobControl, "%[1]s: no job control", name))
+		return nil, 1
+	}
+	if r.unspecified {
+		return nil, 2
+	}
 	if len(args) == 0 {
 		if r.lastJob == nil {
 			r.diagf("%s\n", Wording(r.diag().NoSuchJob, "%[1]s: no current job", name))

@@ -1175,6 +1175,15 @@ type Diagnostics struct {
 	// as `08`, `1+08` as `1+08` — rather than the whole expression.
 	ArithErrorNamesThePrefix bool
 
+	// FdVariableWithoutADescriptor is `exec {name}>&-` when the name holds
+	// no descriptor number. One verb: the variable's name as written,
+	// braces stripped.
+	FdVariableWithoutADescriptor string
+
+	// NoJobControl is `bg` or `fg` in a shell with none, for the dialects
+	// that say so before anything else. One verb: the builtin's name.
+	NoJobControl string
+
 	// FcNoSuchEvent is `fc` with no history, in the dialect that reports
 	// it. No verbs.
 	FcNoSuchEvent string

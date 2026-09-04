@@ -94,8 +94,13 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			}
 		}
 		fd := 1
+		// `{name}>f` is the lexer's token with the braces kept, and means
+		// the shell picks the descriptor and the name receives its number.
+		fdVar := ""
 		if rd.N != nil {
-			if n, ok := atoi(rd.N.Literal()); ok {
+			if lit := rd.N.Literal(); len(lit) > 2 && lit[0] == '{' {
+				fdVar = lit[1 : len(lit)-1]
+			} else if n, ok := atoi(lit); ok {
 				fd = n
 			}
 		}
@@ -117,7 +122,48 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			if rd.N == nil && rd.Op == syntax.TokLessAmp {
 				fd = 0
 			}
-			if fd > 2 {
+			if fdVar != "" {
+				if name == "-" {
+					// `exec {name}>&-` closes the descriptor the variable
+					// holds. The close is for keeps — this path never joins
+					// the save — so the pipe or file behind it really ends,
+					// which is what lets a coprocess see its input finish.
+					v, okv := r.getVar(fdVar)
+					n, okn := atoi(v)
+					if !okv || !okn {
+						if r.ask(r.sem().FdVariableBadCloseIsAnError,
+							"closing through a variable that holds no descriptor") {
+							r.diagf("%s\n", Wording(r.diag().FdVariableWithoutADescriptor,
+								"%[1]s: ambiguous redirect", fdVar))
+							r.status = 1
+							r.redirErr = true
+							return closers, nil
+						}
+						if r.unspecified {
+							r.redirErr = true
+							return closers, nil
+						}
+						continue
+					}
+					if held, ok := r.fds[n]; ok {
+						delete(r.fds, n)
+						if c, ok := held.(io.Closer); ok {
+							_ = c.Close()
+						}
+					}
+					continue
+				}
+				// `exec {name}>&2` picks a fresh descriptor aimed where the
+				// target aims now, and the name receives its number.
+				fd = r.nextFreeFd()
+			}
+			persists := fdVar != "" &&
+				r.ask(r.sem().FdVariableOutlivesTheCommand, "a variable-named descriptor outliving its command")
+			if r.unspecified {
+				r.redirErr = true
+				return closers, nil
+			}
+			if fd > 2 && !persists {
 				saveFds()
 			}
 			if err := r.dupFd(fd, name); err != nil {
@@ -125,6 +171,9 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				r.status = 1
 				r.redirErr = true
 				return closers, nil
+			}
+			if fdVar != "" {
+				r.setVar(fdVar, itoa(fd))
 			}
 			continue
 		}
@@ -171,6 +220,19 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		}
 		if rd.N == nil && (flags == os.O_RDONLY || rd.Op == syntax.TokLessGreat) {
 			fd = 0
+		}
+		// The shell picks the descriptor: the next free number from ten up,
+		// clear of the single digits a script says `2>&1` about. Whether it
+		// outlives the command is the axis ksh93 answers alone.
+		persists := false
+		if fdVar != "" {
+			fd = r.nextFreeFd()
+			persists = r.ask(r.sem().FdVariableOutlivesTheCommand,
+				"a variable-named descriptor outliving its command")
+			if r.unspecified {
+				r.redirErr = true
+				return closers, nil
+			}
 		}
 
 		path := name
@@ -226,7 +288,12 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			r.redirErr = true
 			return closers, nil
 		}
-		closers = append(closers, f)
+		if !persists {
+			// A descriptor that outlives the command must not be closed
+			// when it ends, which is the same exemption `exec` already has
+			// — exec skips every closer.
+			closers = append(closers, f)
+		}
 
 		switch fd {
 		case -1:
@@ -243,8 +310,13 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			// table, where `>&N` finds it. `default` used to land on stdout,
 			// so `exec 3>out.txt` sent every later `echo` into the file —
 			// then it was refused outright, and now the number is kept.
-			saveFds()
+			if !persists {
+				saveFds()
+			}
 			r.setFd(fd, f)
+			if fdVar != "" {
+				r.setVar(fdVar, itoa(fd))
+			}
 		}
 	}
 	return closers, nil
@@ -446,6 +518,18 @@ func (r *Runner) dupFd(fd int, target string) error {
 		r.setFd(fd, src)
 	}
 	return nil
+}
+
+// nextFreeFd is the number the shell picks for `{name}>f`: the first free
+// entry from ten up, clear of the single digits a script addresses itself.
+func (r *Runner) nextFreeFd() int {
+	fd := 10
+	for {
+		if _, held := r.fds[fd]; !held {
+			return fd
+		}
+		fd++
+	}
 }
 
 // setFd records a descriptor beyond the named three.

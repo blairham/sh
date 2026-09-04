@@ -306,6 +306,12 @@ func (p *printer) command(c Command) {
 		// they all read.
 		p.str(x.Name + "() ")
 		p.command(x.Body)
+	case *CoprocClause:
+		p.str("coproc ")
+		if x.Name != "" {
+			p.str(x.Name + " ")
+		}
+		p.command(x.Cmd)
 	}
 }
 

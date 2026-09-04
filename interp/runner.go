@@ -1343,6 +1343,8 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		return r.selectClause(ctx, x)
 	case *syntax.ArithCmdClause:
 		return r.arithCmd(ctx, x)
+	case *syntax.CoprocClause:
+		return r.coprocClause(ctx, x)
 	}
 	return r.unsupported(fmt.Sprintf("%T", c))
 }

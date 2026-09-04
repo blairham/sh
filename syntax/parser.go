@@ -658,8 +658,84 @@ func (p *Parser) parseCommand() Command {
 		return p.withRedirs(p.parseTestClause())
 	case p.atWord("function") && p.dialect.FunctionKeyword:
 		return p.parseFuncKeyword()
+	case p.atWord("coproc") && p.dialect.Coproc:
+		return p.parseCoproc()
 	}
 	return p.parseSimple()
+}
+
+// parseCoproc reads `coproc [NAME] command`.
+//
+// The name is only a name when a compound command follows it — with a simple
+// command the first word is the command, which is why `coproc cat` runs cat
+// rather than defining a coprocess called cat that runs nothing.
+func (p *Parser) parseCoproc() Command {
+	c := &CoprocClause{Coproc: p.tok.Pos}
+	p.next()
+	if p.at(TokWord) && isPlainName(p.tokenLiteral()) && !stopWords[p.tokenLiteral()] {
+		w := p.word()
+		if p.startsCompoundCommand() {
+			c.Name = w.Literal()
+			c.Cmd = p.parseCommand()
+		} else {
+			// The word was the command after all, and the rest of the
+			// simple command is read from here.
+			sc, _ := p.parseSimple().(*SimpleCmd)
+			if sc == nil {
+				sc = &SimpleCmd{Start: w.Pos(), Stop: p.tok.Pos}
+			}
+			sc.Args = append([]*Word{w}, sc.Args...)
+			sc.Start = w.Pos()
+			c.Cmd = sc
+		}
+	} else {
+		c.Cmd = p.parseCommand()
+	}
+	if c.Cmd == nil && p.err == nil {
+		p.failUnexpected("")
+		return nil
+	}
+	if c.Cmd != nil {
+		c.Stop = c.Cmd.End()
+	}
+	return c
+}
+
+// startsCompoundCommand reports whether the current token opens a compound
+// command — the question `coproc NAME …` turns on.
+func (p *Parser) startsCompoundCommand() bool {
+	if p.at(TokLeftParen) || p.at(TokArithCmd) {
+		return true
+	}
+	if !p.at(TokWord) {
+		return false
+	}
+	switch p.tokenLiteral() {
+	case "{", "if", "while", "until", "for", "case", "select", "[[":
+		return true
+	}
+	return false
+}
+
+// isPlainName reports whether s could name a variable: letters, digits and
+// underscores, not starting with a digit.
+func isPlainName(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c == '_', c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z':
+		case c >= '0' && c <= '9':
+			if i == 0 {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // withRedirs attaches trailing redirections to a compound command, because a

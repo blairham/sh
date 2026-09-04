@@ -267,6 +267,12 @@ func Semantics() interp.Semantics {
 	// option it does not have, usage line and all.
 	s.TypeNamesTheKindWithDashT = interp.No
 
+	// A `{name}>f` descriptor goes back with the command's other
+	// redirections, and closing through a name that holds nothing is not
+	// worth a word here.
+	s.FdVariableOutlivesTheCommand = interp.No
+	s.FdVariableBadCloseIsAnError = interp.No
+
 	return s
 }
 

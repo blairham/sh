@@ -346,6 +346,22 @@ type Dialect struct {
 	// as `bash` and loses it as `sh`, from the same binary — see
 	// docs/spec/shell-matrix.md.
 	ProcessSubstitution bool
+
+	// FdVariableRedirections is `{name}>file` and its family: the shell
+	// picks the descriptor and the variable receives its number. Consumed
+	// by the lexer, because the adjacency to the operator is the whole
+	// grammar — `{fd}>f` names a descriptor and `{fd} >f` is a word.
+	//
+	// Three of the four have it; to dash the braces are part of an
+	// ordinary word.
+	FdVariableRedirections bool
+
+	// Coproc is bash's `coproc [NAME] command`: the command runs in the
+	// background with a pipe on each of its named streams, and the shell
+	// keeps the near ends in an array. zsh spells a coprocess the same
+	// way and plumbs it differently — through `print -p` and `read -p`
+	// rather than an array — and that model is not this flag.
+	Coproc bool
 }
 
 // Core is the common denominator of real shells: what dash, bash, ksh93 and
@@ -374,7 +390,10 @@ func Core() Dialect {
 		// the core — and docs/spec/core.md has named it as core since before
 		// there was code to refuse it.
 		ProcessSubstitution: true,
-		ArrayLiteral:        true,
+		// The same head count: bash, ksh93 and zsh all pick a descriptor
+		// for `exec {fd}>f` and set the variable; dash reads a word.
+		FdVariableRedirections: true,
+		ArrayLiteral:           true,
 		// The utilities that take an array assignment as an operand. The
 		// same four the interpreter treats as declarations for the same
 		// reason: every shell in the panel that has them takes the form.

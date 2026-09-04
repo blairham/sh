@@ -736,7 +736,11 @@ type Diagnostics struct {
 	// LocalOutsideAFunction is the refusal of `local` at the top level,
 	// taking nothing: bash says it can only be used in a function and dash
 	// says it is not in one.
-	LocalOutsideAFunction  string
+	LocalOutsideAFunction string
+	// TrapCouldNotParse follows the parse failure when a dialect reads a
+	// trap's action as the trap is set, taking nothing. zsh only, since zsh
+	// is the only dialect that reads it then.
+	TrapCouldNotParse      string
 	TrapPrintsSignalPrefix string
 	// TrapConditionRequired is the refusal of `trap EXIT`, taking nothing.
 	// ksh93 only, since ksh93 is the only dialect that refuses the form.

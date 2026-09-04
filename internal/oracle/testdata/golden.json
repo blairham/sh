@@ -2362,6 +2362,38 @@
         "TimedOut": false
       }
     },
+    "axis/trap-action-read-when-set": {
+      "bash": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cscript\u003e:1: parse error near `if'~\u003cscript\u003e:trap:1: couldn't parse trap command~after",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "axis/trap-bad-option": {
       "bash": {
         "Output": "\u003cscript\u003e: line 1: trap: -Q: invalid option~trap: usage: trap [-Plp] [[action] signal_spec ...]~end",

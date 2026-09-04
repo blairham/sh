@@ -647,6 +647,15 @@ type Semantics struct {
 
 	// TrapBodyLine is which lines a diagnostic from inside a trap's body
 	// names. See TrapBodyLineStyle.
+	// TrapActionIsParsedWhenSet reads a trap's action when the trap is set
+	// rather than when it fires, and refuses a trap whose action will not
+	// parse.
+	//
+	// zsh alone. The other three store the text: `trap "if" EXIT` is taken
+	// and complains at the end, and `trap "if" INT` is taken and never
+	// complains at all, because the trap never fires.
+	TrapActionIsParsedWhenSet Answer
+
 	TrapBodyLine TrapBodyLineStyle
 
 	// ExitTrapFiresPastTheEnd counts the EXIT trap as having fired on the
@@ -1178,6 +1187,10 @@ func PosixSemantics() Semantics {
 		// three of the four do — the substrate keeps the answer it had
 		// before the question was one.
 		LocalOutsideAFunctionIsAnError: Yes,
+		// POSIX has `trap` save the action and execute it when the
+		// condition arises, so the text is not read until then. Three of
+		// the four agree; zsh reads it as the trap is set.
+		TrapActionIsParsedWhenSet: No,
 		// POSIX gives all three a *name*, and neither a special parameter
 		// nor a positional one is a name — a positional has `shift` to
 		// remove it.

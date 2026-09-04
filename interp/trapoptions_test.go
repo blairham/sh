@@ -355,3 +355,60 @@ func TestATrapAndAnAliasAreAskedSeparately(t *testing.T) {
 		t.Errorf("stdout = %q, want trap to use its own answer, not the alias one", out)
 	}
 }
+
+// TestATrapActionCanBeReadWhenTheTrapIsSet is the axis, and the case that
+// shows it is a trap that never fires: a stored action is never parsed there,
+// so only the dialect that reads it now says anything at all.
+func TestATrapActionCanBeReadWhenTheTrapIsSet(t *testing.T) {
+	now := func(s *Semantics) { s.TrapActionIsParsedWhenSet = Yes; s.TrapPrintsWithP = Yes }
+	out, errs, _ := trapRun(t, "trap 'if' INT\ntrap -p\necho after", now,
+		Diagnostics{TrapCouldNotParse: "couldn't read it"})
+	if !strings.Contains(errs, "couldn't read it") {
+		t.Errorf("read now: stderr = %q, want the refusal", errs)
+	}
+	if strings.Contains(out, "trap --") {
+		t.Errorf("read now: stdout = %q, want the trap not to have been set", out)
+	}
+	if !strings.Contains(out, "after") {
+		t.Errorf("read now: stdout = %q, want the script to carry on", out)
+	}
+
+	later := func(s *Semantics) { s.TrapActionIsParsedWhenSet = No; s.TrapPrintsWithP = Yes }
+	out, errs, _ = trapRun(t, "trap 'if' INT\ntrap -p\necho after", later, Diagnostics{})
+	if errs != "" {
+		t.Errorf("stored: stderr = %q, want nothing said", errs)
+	}
+	if !strings.Contains(out, "trap --") {
+		t.Errorf("stored: stdout = %q, want the trap set", out)
+	}
+}
+
+// TestTheParseFailureNamesTheActionsOwnLines, which is not the line the trap
+// command is on: the two messages carry different numbers on purpose.
+func TestTheParseFailureNamesTheActionsOwnLines(t *testing.T) {
+	now := func(s *Semantics) { s.TrapActionIsParsedWhenSet = Yes }
+	_, errs, st := trapRun(t, "echo one\necho two\ntrap 'echo a\nif' INT", now,
+		Diagnostics{Location: LocationLineWord, TrapCouldNotParse: "couldn't read it"})
+	if !strings.Contains(errs, "line 2") {
+		t.Errorf("stderr = %q, want the action's own second line", errs)
+	}
+	if !strings.Contains(errs, "line 3: couldn't read it") {
+		t.Errorf("stderr = %q, want the refusal on the trap command's line", errs)
+	}
+	if st != 1 {
+		t.Errorf("status = %d, want 1", st)
+	}
+}
+
+// TestPuttingAConditionBackIsNotAnAction, so `trap - INT` is never parsed and
+// never refused — a mutation that parses it turns a reset into a failure.
+func TestPuttingAConditionBackIsNotAnAction(t *testing.T) {
+	now := func(s *Semantics) { s.TrapActionIsParsedWhenSet = Yes; s.TrapPrintsWithP = Yes }
+	out, errs, st := trapRun(t, "trap 'echo hi' INT\ntrap - INT\ntrap -p\necho after", now, Diagnostics{})
+	if errs != "" || st != 0 {
+		t.Errorf("stderr %q status %d, want neither", errs, st)
+	}
+	if strings.Contains(out, "trap --") {
+		t.Errorf("stdout = %q, want the condition put back", out)
+	}
+}

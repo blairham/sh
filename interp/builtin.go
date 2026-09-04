@@ -879,6 +879,11 @@ func biTrap(r *Runner, _ context.Context, args []string) int {
 	if len(conds) == 0 {
 		return r.trapSingleArgument(body)
 	}
+	// Before the conditions, because the dialect that reads the action now
+	// says nothing about a bad condition when the action will not parse.
+	if st, refused := r.trapActionRefused(body); refused {
+		return st
+	}
 	// Every condition is checked before any is acted on, so a bad one does
 	// not leave half the request applied.
 	type target struct {

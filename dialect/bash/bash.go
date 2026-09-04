@@ -60,6 +60,7 @@ func Semantics() interp.Semantics {
 	s.UnaliasAllRefusesOperands = interp.No
 	s.AliasQuoting = interp.ListingQuoteAlwaysEscaped
 	s.TrapQuoting = interp.ListingQuoteAlwaysEscaped
+	s.TrapActionIsParsedWhenSet = interp.No
 	s.SelectAssumesUnboundedWidth = interp.No
 	s.SelectEofEndsPromptLine = interp.No
 	s.SelectEofIsSuccess = interp.No

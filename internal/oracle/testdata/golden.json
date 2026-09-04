@@ -18202,6 +18202,70 @@
         "TimedOut": false
       }
     },
+    "token/dollar-double-expands-inside": {
+      "bash": {
+        "Output": "[hi world]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[hi world]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[hi world]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[$hi world]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[hi world]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[$hi world]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "token/dollar-double-is-a-translatable-string": {
+      "bash": {
+        "Output": "[hello]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[hello]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[hello]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[$hello]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[hello]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[$hello]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "token/dquote-backslash-escapes-quote": {
       "bash": {
         "Output": "[a\"b]",

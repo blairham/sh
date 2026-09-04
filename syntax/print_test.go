@@ -160,6 +160,47 @@ func TestPrintingADupRedirection(t *testing.T) {
 	}
 }
 
+// A translatable string prints as a plain double-quoted one.
+//
+// The `$` of `$"..."` contributes nothing to the tree — the spans are exactly
+// what a bare `"` produces — so the printed form drops it rather than record a
+// byte the tree holds no question for. The assertion is the round trip: the
+// printed source must parse to the same tree in the dialect that read the
+// original, and it does trivially, because it *is* the plain-quote spelling of
+// that tree. It also now parses identically in a dialect without the flag,
+// which the original did not.
+func TestPrintingATranslatableString(t *testing.T) {
+	d := syntax.Core()
+	d.DollarDoubleQuote = true
+	for _, tc := range []struct{ name, src, want string }{
+		{"the dollar is dropped", `echo $"a b"`, `echo "a b"`},
+		{"expansions inside survive", `echo $"hi $x"`, `echo "hi $x"`},
+		{"mid-word, like any quoting", `echo a$"b c"d`, `echo a"b c"d`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := syntax.Parse(tc.src, d)
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			printed := strings.TrimRight(syntax.Print(f), "\n")
+			if printed != tc.want {
+				t.Errorf("printing %q gave %q, want %q", tc.src, printed, tc.want)
+			}
+			// The round trip, in both dialects: the printed form must mean
+			// the same thing wherever it lands.
+			for _, rd := range []syntax.Dialect{d, syntax.Core()} {
+				second, err := syntax.Parse(printed, rd)
+				if err != nil {
+					t.Fatalf("printed form %q does not reparse: %v", printed, err)
+				}
+				if again := strings.TrimRight(syntax.Print(second), "\n"); again != printed {
+					t.Errorf("printing is not settled: once %q, twice %q", printed, again)
+				}
+			}
+		})
+	}
+}
+
 // TestABackgroundStatementBeforeAClosingWord — the printer wrote the `&` and
 // then the `;` separator as well, so `f() { true & }` printed as
 // `f() { true &; }`, which parses nowhere. The one file of 1093 installed

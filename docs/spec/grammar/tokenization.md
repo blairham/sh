@@ -48,6 +48,42 @@ dash.
 Quote removal happens at the *end* of expansion, not here. This stage
 records which spans were quoted and leaves the characters in place.
 
+### `$"..."` is a plain double-quoted string to half the panel
+
+`$"..."` marks a double-quoted string for locale translation. With no
+message catalog — the only condition the panel can measure — the
+shells that have the form strip the `$` and read an ordinary
+double-quoted string; the shells without it leave the `$` as a literal
+character in front of one. Measured 2026-09-04, same panel and machine
+as `shell-matrix.md`:
+
+| probe | dash | bash3.2 | bash5.3 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- |
+| `echo $"hello"` | `$hello` | `hello` | `hello` | `hello` | `$hello` |
+| `x=world; echo $"hi $x"` | `$hi world` | `hi world` | `hi world` | `hi world` | `$hi world` |
+
+Where the form exists it is `"..."` in every detail, not a third
+quoting rule. Measured in bash 5.3 and ksh93, against the plain-quote
+rows above:
+
+| probe | bash5.3 and ksh93 |
+| --- | --- |
+| `echo $"a\nb"` | `a\nb` — backslash kept, as in `"a\nb"` |
+| `echo $"a\"b"` | `a"b` — escapes the quote, as in `"a\"b"` |
+| `echo $"x$(echo y)z"` | `xyz` — substitutions expand |
+| `echo a$"b"c` | `abc` — mid-word, concatenates like any quoting |
+
+A here-document body is not a word, and `$"x"` in one stays literal in
+bash — the form exists only where a quote could open.
+
+So the `$` contributes nothing to the parsed tree: the spans of
+`$"..."` are exactly the spans of `"..."`, and only *whether the form
+parses that way* varies by shell. zsh is on the literal side, which
+keeps it out of the core.
+
+Vector field: `DollarDoubleQuote` (off in the core; the bash and ksh
+dialects set it).
+
 ## Token recognition
 
 POSIX §2.3 is a set of rules applied character by character. The three

@@ -581,6 +581,18 @@ var Corpus = []Case{
 		// recorded into the golden file.
 		Why: "the dangerous case: &> redirects both streams in bash and zsh, and is `&` then `>` in dash and ksh93 — no error, different meaning",
 	},
+	{
+		ID: "token/dollar-double-is-a-translatable-string", Category: "tokenization",
+		Snippet: `printf "[%s]" $"hello"`,
+		Why: "with no message catalog bash and ksh93 strip the `$` and read a plain double-quoted string; " +
+			"dash and zsh keep the `$` as a literal — no error, an extra byte, the &> failure mode again",
+	},
+	{
+		ID: "token/dollar-double-expands-inside", Category: "tokenization",
+		Snippet: `x=world; printf "[%s]" $"hi $x"`,
+		Why: "the translatable string is double quotes in every detail: expansions inside happen, " +
+			"and the quoting holds the result together as one field",
+	},
 	// --- the parameters a shell provides ----------------------------------
 	{
 		ID: "special/ifs-has-a-default", Category: "parameters",

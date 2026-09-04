@@ -14,6 +14,7 @@ ksh93 (`/bin/ksh`), zsh 5.9.2. macOS arm64, 2026-08-29.
 | `local` | yes | yes | yes | **no** | yes |
 | `typeset` | **no** | yes | yes | yes | yes |
 | `$'...'` | **no** | yes | yes | yes | yes |
+| `$"..."` | **no** | yes | yes | yes | **no** |
 | `+=` append | **no** | yes | yes | yes | yes |
 | `${x:1:2}` substring | **no** | yes | yes | yes | yes |
 | `${x/b/X}` substitution | **no** | yes | yes | yes | yes |

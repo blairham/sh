@@ -305,6 +305,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `axis/trap-print-p` | `<script>: 2: trap: Illegal option -p` *(status 2)* | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' INT~end` | `end` |
 | `axis/trap-one-argument` | `end` | `end` | `end` | `end` | `<script>[2]: trap: condition(s) required` *(status 1)* | `end` |
 | `axis/trap-one-argument-unknown` | `trap: notacondition: bad trap~end` | `trap: usage: trap [-Plp] [[action] signal_spec ...]~end` | `trap: usage: trap [-Plp] [[action] signal_spec ...]~end` | `trap: usage: trap [-lp] [arg signal_spec ...]~end` | `<script>[1]: trap: condition(s) required` *(status 1)* | `end` |
+| `axis/readonly-reassign-status` | `<script>: 2: r: is read only` *(status 2)* | `<script>: line 2: r: readonly variable~st=1` | `<script>: line 2: r: readonly variable~st=1` | `<script>: line 2: r: readonly variable~st=1` | `<script>: line 2: r: is read only` *(status 1)* | `<script>:2: read-only variable: r` *(status 1)* |
+| `axis/readonly-reassign-declaration-status` | `<script>: 2: export: r: is read only` *(status 2)* | `<script>: line 2: r: readonly variable~st=1` | `<script>: line 2: r: readonly variable~st=1` | `<script>: line 2: r: readonly variable~st=1` | `<script>: line 2: r: is read only` *(status 1)* | `<script>:2: read-only variable: r` *(status 1)* |
 | `axis/readonly-reassign` | `<script>: 2: r: is read only` *(status 2)* | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: is read only` *(status 1)* | `<script>:2: read-only variable: r` *(status 1)* |
 | `axis/arith-error-status` | `<shell>: 1: arithmetic expression: division by zero: "1/0"` *(status 2)* | `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 1)* | `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 127)* | `<shell>: 1/0: division by 0 (error token is "0")` *(status 1)* | `<shell>: 1/0: divide by zero` *(status 1)* | `<shell>:1: division by zero` *(status 1)* |
 
@@ -383,6 +385,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   trap notacondition
   echo end
+  ```
+- `axis/readonly-reassign-status` — the refusal leaves 1 behind in the dialect that carries on from it — the three that end the script never reach the line that would show it
+  ```sh
+  readonly r=1
+  r=2
+  echo st=$?
+  ```
+- `axis/readonly-reassign-declaration-status` — the same through a declaration, where the builtin's own status would otherwise report success for a name it refused to assign
+  ```sh
+  readonly r=1
+  export r=2
+  echo st=$?
   ```
 - `axis/readonly-reassign` — must be a plain assignment in a script: adding a redirect makes it a command and reverses the answer
   ```sh

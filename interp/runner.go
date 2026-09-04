@@ -391,6 +391,12 @@ type Runner struct {
 	// location does not name it for that message.
 	redirectForBuiltin string
 
+	// assignFailed marks an assignment that was refused rather than made,
+	// so the status it left is not zeroed by the assignment that follows
+	// it. `readonly x=1; x=2` reports and carries on in one dialect, and
+	// carrying on with a status of 0 said the refusal had not happened.
+	assignFailed bool
+
 	// linePin overrides the line a node reports, for the dialect that names
 	// where a trap fired rather than where in its body a failure was.
 	linePin int
@@ -1061,7 +1067,7 @@ func (r *Runner) unsupported(what string) error {
 }
 
 func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
-	r.unspecified, r.expandErr = false, false
+	r.unspecified, r.expandErr, r.assignFailed = false, false, false
 	// Whatever this command's process substitutions opened is closed when the
 	// command is done, whether it turned out to be a builtin, a function or
 	// something on PATH.
@@ -1166,11 +1172,16 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			// script stopped, and then reported success for having done so.
 			return nil
 		}
-		if !r.substRan && !r.expandErr {
+		if !r.substRan && !r.expandErr && !r.assignFailed {
 			// Nothing in them reported, so the assignment itself does, and
-			// an assignment that happens cannot fail. After the fatal check
-			// above, not before: an assignment that stopped the script has a
-			// status of its own and this would report success for it.
+			// an assignment that happens cannot fail. One that was *refused*
+			// did fail, which is what assignFailed carries: the dialect that
+			// reports a readonly reassignment and carries on leaves 1 in
+			// `$?`, and zeroing here said the refusal had not happened.
+			//
+			// After the fatal check above, not before: an assignment that
+			// stopped the script has a status of its own and this would
+			// report success for it.
 			r.status = 0
 		}
 		// `>b` with no command still opens the file, and truncates it if it
@@ -1590,7 +1601,7 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 			return
 		}
 		r.diagf("%s\n", msg)
-		r.status = 1
+		r.status, r.assignFailed = 1, true
 		return
 	}
 	if r.Vars == nil {

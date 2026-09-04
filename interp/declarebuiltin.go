@@ -97,6 +97,10 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 			r.markReadonly(name)
 		}
 	}
+	if r.assignFailed {
+		// See biExport.
+		return 1
+	}
 	return 0
 }
 

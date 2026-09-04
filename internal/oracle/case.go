@@ -397,6 +397,18 @@ var Corpus = []Case{
 		Why:     "ksh93 leaves the line out on line 1 of a command string, in the bracketed style too",
 	},
 	{
+		ID: "axis/readonly-reassign-status", Category: "semantics axes",
+		Script:  true,
+		Snippet: "readonly r=1\nr=2\necho st=$?",
+		Why:     "the refusal leaves 1 behind in the dialect that carries on from it — the three that end the script never reach the line that would show it",
+	},
+	{
+		ID: "axis/readonly-reassign-declaration-status", Category: "semantics axes",
+		Script:  true,
+		Snippet: "readonly r=1\nexport r=2\necho st=$?",
+		Why:     "the same through a declaration, where the builtin's own status would otherwise report success for a name it refused to assign",
+	},
+	{
 		ID: "axis/readonly-reassign", Category: "semantics axes",
 		Script:  true,
 		Snippet: "readonly r=1\nr=2\necho survived",

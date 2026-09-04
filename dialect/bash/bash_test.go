@@ -507,3 +507,13 @@ func TestAFailedExpansionFromACommandString(t *testing.T) {
 		t.Errorf("UnsetParameterStatusFromCommandString = %d, want %d", got, want)
 	}
 }
+
+// TestDeclareReportsARefusedName covers the third declaration spelling, which
+// only two dialects have: `declare r=2` against a readonly name returns 1
+// where the builtin's own success would have said nothing went wrong.
+func TestDeclareReportsARefusedName(t *testing.T) {
+	out, _ := runBash(t, t.TempDir(), "readonly r=1\ndeclare r=2\necho st=$?\n")
+	if !strings.Contains(out, "st=1\n") {
+		t.Errorf("output = %q, want the refusal to fail the builtin", out)
+	}
+}

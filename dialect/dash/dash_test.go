@@ -120,6 +120,7 @@ func TestSemantics(t *testing.T) {
 		// and two, which is why both are fields.
 		{"AnnouncesBackgroundJob", s.AnnouncesBackgroundJob, interp.No},
 		{"ReportsACommandKilledBySignal", s.ReportsACommandKilledBySignal, interp.Yes},
+		{"ReportsAnyKilledPipelineElement", s.ReportsAnyKilledPipelineElement, interp.Yes},
 		{"CdRefusesUnknownOption", s.CdRefusesUnknownOption, interp.Yes},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.Yes},
 		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.Yes},

@@ -286,6 +286,11 @@ type Runner struct {
 	// apart from custom so that switching one on again gets back whatever
 	// was registered rather than the core's.
 	disabledBuiltins map[string]bool
+	// midPipeline says this runner is an element of a pipeline whose status
+	// it does not decide — everything but the last. Kept because a signal
+	// that ends such an element is announced by one dialect and passed over
+	// by the rest.
+	midPipeline bool
 	// inFunc is the name of the function being run, for `$0`.
 	inFunc string
 	// sourceDepth is how many sourced files are running, which is the other

@@ -91,6 +91,7 @@ func Semantics() interp.Semantics {
 	s.ExportCarriesFunctions = interp.No
 	s.AnnouncesBackgroundJob = interp.No
 	s.ReportsACommandKilledBySignal = interp.Yes
+	s.ReportsAnyKilledPipelineElement = interp.Yes
 	s.CdRefusesUnknownOption = interp.Yes
 	s.CdLastPathOptionWins = interp.Yes
 	s.BadSetOptionNameFatal = interp.Yes

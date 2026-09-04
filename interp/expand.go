@@ -308,7 +308,53 @@ func (r *Runner) expandAssignValue(w *syntax.Word) string {
 		return ""
 	}
 	r.expandTilde(w)
+	r.expandColonTildes(w)
 	return strings.Join(r.expandWordNoSplit(w), "")
+}
+
+// expandColonTildes expands the tildes only an assignment has: one after each
+// unquoted colon, which is what makes `PATH=~/bin:~/sbin` and `M=a:~/b` work.
+// Unanimous across the panel.
+//
+// The same limits as the leading tilde: `~user` needs a user database this
+// package does not carry and is left as written, and so is a tilde whose
+// segment runs off the span into an expansion — `a:~$x` keeps its tilde in
+// three of the four shells, and the fourth's answer needs the expansion's
+// value, which does not exist yet.
+func (r *Runner) expandColonTildes(w *syntax.Word) {
+	home, ok := r.getVar("HOME")
+	if !ok {
+		return
+	}
+	for i := range w.Spans {
+		s := &w.Spans[i]
+		if s.Kind != syntax.Literal || s.Quoting != syntax.Unquoted {
+			continue
+		}
+		v := s.Value
+		if !strings.Contains(v, ":~") {
+			continue
+		}
+		var b strings.Builder
+		for j := 0; j < len(v); j++ {
+			b.WriteByte(v[j])
+			if v[j] != ':' || j+1 >= len(v) || v[j+1] != '~' {
+				continue
+			}
+			// The segment runs to the next slash or colon; hitting the end
+			// of the span only counts as an end when nothing follows it.
+			k := j + 2
+			for k < len(v) && v[k] != '/' && v[k] != ':' {
+				k++
+			}
+			terminated := k < len(v) || i == len(w.Spans)-1
+			if k == j+2 && terminated {
+				b.WriteString(home)
+				j = k - 1
+			}
+		}
+		s.Value = b.String()
+	}
 }
 
 // expandAt handles `$@`, the only expansion that produces several fields by

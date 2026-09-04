@@ -1433,6 +1433,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `cd/onto-a-file-is-a-different-reason` | `<shell>: 1: cd: can't cd to ./f~st=2` | `<shell>: line 1: cd: ./f: Not a directory~st=1` | `<shell>: line 1: cd: ./f: Not a directory~st=1` | `<shell>: line 0: cd: ./f: Not a directory~st=1` | `<shell>: cd: ./f: [Not a directory]~st=1` | `<shell>:cd:1: not a directory: ./f~st=1` |
 | `cd/no-home-diverges` | `st=0` | `<shell>: line 1: cd: HOME not set~st=1` | `<shell>: line 1: cd: HOME not set~st=1` | `<shell>: line 0: cd: HOME not set~st=1` | `<shell>: cd: bad directory~st=1` | `st=0` |
 | `cd/dash-announces-where-it-went` | `printed` | `printed` | `printed` | `printed` | `printed` | `silent` |
+| `cd/cdpath-may-announce-the-move` | `announced` | `announced` | `announced` | `announced` | `announced` | `silent` |
 
 - `cd/missing-directory-diverges` — four shapes and two statuses for one failure, and dash gives no reason at all — the one shell whose message cannot tell you why
   ```sh
@@ -1449,6 +1450,12 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `cd/dash-announces-where-it-went` — `cd -` prints where it went in three of the four; zsh alone moves silently, so a script that pipes it gets an extra line everywhere but there
   ```sh
   cd /; out=$(cd -); [ -n "$out" ] && echo printed || echo silent
+  ```
+- `cd/cdpath-may-announce-the-move` — a winning CDPATH entry that is not `.` makes three of the four print where they went; zsh moves in silence. Captured rather than shown, because the announced path is absolute and no two runs share one
+  ```sh
+  mkdir -p pool/sub
+  out=$(CDPATH=./pool cd sub)
+  [ -n "$out" ] && echo announced || echo silent
   ```
 
 ## printf
@@ -2647,6 +2654,9 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `heredoc/an-unquoted-body-expands` | `VAL VAL sub 3` | `VAL VAL sub 3` | `VAL VAL sub 3` | `VAL VAL sub 3` | `VAL VAL sub 3` | `VAL VAL sub 3` |
 | `heredoc/a-quoted-delimiter-takes-the-body-whole` | `don't $x \$x \\ "hi"` | `don't $x \$x \\ "hi"` | `don't $x \$x \\ "hi"` | `don't $x \$x \\ "hi"` | `don't $x \$x \\ "hi"` | `don't $x \$x \\ "hi"` |
 | `heredoc/a-continued-line-is-joined` | `abcdef` | `abcdef` | `abcdef` | `abcdef` | `abcdef` | `abcdef` |
+| `redir/the-shell-picks-the-descriptor` | `<shell>: 1: exec: {fd}: not found` *(status 127)* | `hi` | `hi` | `<shell>: line 0: exec: {fd}: not found` *(status 127)* | `hi` | `hi` |
+| `redir/a-picked-descriptor-may-outlive-its-command` | `<shell>: 3: Syntax error: Bad fd number` *(status 2)* | `one~two` | `one~two` | `<shell>: line 1: $fd: ambiguous redirect~dead~one {fd}` | `one~<shell>[2]: 10: cannot open [Bad file descriptor]~dead` | `one~two` |
+| `redir/closing-through-a-name-that-holds-nothing` | `<shell>: 1: exec: {nofd}: not found` *(status 127)* | `<shell>: line 1: nofd: ambiguous redirect~st=1` | `<shell>: line 1: nofd: ambiguous redirect` *(status 1)* | `<shell>: line 0: exec: {nofd}: not found` *(status 127)* | `st=0` | `<shell>:1: parameter nofd does not contain a file descriptor~st=1` |
 
 - `procsub/reads-a-command-as-a-file` — `<(cmd)` runs cmd and expands to a path its output can be read from — the last of the core language, and the clearest case of a dialect being a runtime switch: bash 3.2 has it as `bash` and loses it as `sh`. dash has it in neither guise and reports the `(` as unexpected
   ```sh
@@ -2814,6 +2824,20 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   def
   EOF
   ```
+- `redir/the-shell-picks-the-descriptor` — three of the four allocate a descriptor for `{fd}` and assign its number to the variable; to dash the braces are a command word and exec goes looking for it
+  ```sh
+  exec {fd}> f; echo hi >&$fd; exec {fd}>&-; cat f
+  ```
+- `redir/a-picked-descriptor-may-outlive-its-command` — bash and zsh keep the picked descriptor open past the simple command that carried it, so the second write lands in the file; ksh93 takes it back with the command's other redirections, and the number the variable still holds is already dead
+  ```sh
+  echo one {fd}>pf
+  echo two >&$fd 2>/dev/null || echo dead
+  cat pf
+  ```
+- `redir/closing-through-a-name-that-holds-nothing` — bash calls it an ambiguous redirect and zsh says the parameter holds no descriptor, both with 1; ksh93 says nothing at all and reports success
+  ```sh
+  exec {nofd}>&-; echo "st=$?"
+  ```
 
 ## commands
 
@@ -2830,6 +2854,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `signal/a-command-a-signal-ended-in-a-group` | `User defined signal N: N~after` | `<shell>: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'~after` | `after` | `<shell>: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'~after` | `<shell>: N: User signal N~after` | `after` |
 | `signal/a-command-a-signal-ended-in-a-substitution` | `User defined signal N: N~after` | `after` | `after` | `after` | `<shell>: N: User signal N~after` | `after` |
 | `signal/a-command-a-signal-ended` | `User defined signal N: N` | `<shell>: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'` | *(no output, status 0)* | `<shell>: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'` | `<shell>: N: User signal N` | *(no output, status 0)* |
+| `jobs/bg-with-no-job-control` | `<shell>: 1: bg: Illegal option --~st=2` | `<shell>: line 1: bg: no job control~st=1` | `<shell>: line 1: bg: no job control~st=1` | `<shell>: line 0: bg: no job control~st=1` | `<shell>: bg: --version: unknown option~Usage: bg [ options ] [job ...]~st=2` | `<shell>:bg:1: no job control in this shell.~st=1` |
+| `commands/coproc-is-one-dialect-s-keyword` | `<shell>: 1: coproc: not found~<shell>: 1: Bad substitution` *(status 2)* | `hi` | `hi` | `<shell>: coproc: command not found~<shell>: 1: Bad file descriptor~<shell>: 0: Bad file descriptor` | `<shell>: coproc: not found~<shell>: : cannot open~<shell>: : cannot open` | `<shell>:1: no such file or directory: ~<shell>:1: file number expected` *(status 1)* |
 
 - `exec/a-command-is-named-as-it-was-written` — a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else
   ```sh
@@ -2888,6 +2914,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   { /bin/sh -c 'kill -USR1 $$'; } 2>e.txt
   sed -E "s/ [0-9]+/ N/g; s/  +/ /g" e.txt
+  ```
+- `jobs/bg-with-no-job-control` — bash and zsh refuse before reading the operand — there is no job control under -c and they say so first; dash and ksh93 read the operand and complain about that instead
+  ```sh
+  bg --version; echo "st=$?"
+  ```
+- `commands/coproc-is-one-dialect-s-keyword` — bash runs cat in the background with the pipe's near ends in COPROC and reads its own line back; the other three have no such keyword — even zsh, whose coprocess speaks `print -p` rather than an array
+  ```sh
+  coproc cat; echo hi >&"${COPROC[1]}"; read -r l <&"${COPROC[0]}"; echo "$l"
   ```
 
 ## substitutions

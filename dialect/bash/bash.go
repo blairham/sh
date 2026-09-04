@@ -53,6 +53,9 @@ func Dialect() syntax.Dialect {
 	// `time -p`, the POSIX report format. bash and ksh93 read the flag;
 	// zsh leaves `-p` to the pipeline, which is why it is not core.
 	d.TimePosixFlag = true
+	// `coproc cat` with the near ends in COPROC. zsh's coprocess speaks
+	// `print -p` rather than an array and is a different feature.
+	d.Coproc = true
 	return d
 }
 
@@ -123,6 +126,7 @@ func Semantics() interp.Semantics {
 	s.DirectoryOnPathIsACandidate = interp.No
 	// set -E and -T carry the traps set -Eeuo pipefail scripts rely on.
 	s.SetHasTraceLetters = interp.Yes
+	s.JobControlAbsenceIsReportedFirst = interp.Yes
 	s.TildePlusMinusExpands = interp.Yes
 	s.UnderscoreTracksTheLastArgument = interp.Yes
 	// hash counts builtins and functions and announces its empty table.

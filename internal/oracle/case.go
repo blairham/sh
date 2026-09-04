@@ -3942,4 +3942,38 @@ bad`,
 		Snippet: `command -v if`,
 		Why:     "a word of the grammar is answered too, which is not obvious — it is not a command at all, and every shell in the panel still names it",
 	},
+	{
+		ID: "redir/the-shell-picks-the-descriptor", Category: "redirection",
+		Snippet: `exec {fd}> f; echo hi >&$fd; exec {fd}>&-; cat f`,
+		Why:     "three of the four allocate a descriptor for `{fd}` and assign its number to the variable; to dash the braces are a command word and exec goes looking for it",
+	},
+	{
+		ID: "redir/a-picked-descriptor-may-outlive-its-command", Category: "redirection",
+		Snippet: `echo one {fd}>pf
+echo two >&$fd 2>/dev/null || echo dead
+cat pf`,
+		Why: "bash and zsh keep the picked descriptor open past the simple command that carried it, so the second write lands in the file; ksh93 takes it back with the command's other redirections, and the number the variable still holds is already dead",
+	},
+	{
+		ID: "redir/closing-through-a-name-that-holds-nothing", Category: "redirection",
+		Snippet: `exec {nofd}>&-; echo "st=$?"`,
+		Why:     "bash calls it an ambiguous redirect and zsh says the parameter holds no descriptor, both with 1; ksh93 says nothing at all and reports success",
+	},
+	{
+		ID: "jobs/bg-with-no-job-control", Category: "commands",
+		Snippet: `bg --version; echo "st=$?"`,
+		Why:     "bash and zsh refuse before reading the operand — there is no job control under -c and they say so first; dash and ksh93 read the operand and complain about that instead",
+	},
+	{
+		ID: "cd/cdpath-may-announce-the-move", Category: "cd",
+		Snippet: `mkdir -p pool/sub
+out=$(CDPATH=./pool cd sub)
+[ -n "$out" ] && echo announced || echo silent`,
+		Why: "a winning CDPATH entry that is not `.` makes three of the four print where they went; zsh moves in silence. Captured rather than shown, because the announced path is absolute and no two runs share one",
+	},
+	{
+		ID: "commands/coproc-is-one-dialect-s-keyword", Category: "commands",
+		Snippet: `coproc cat; echo hi >&"${COPROC[1]}"; read -r l <&"${COPROC[0]}"; echo "$l"`,
+		Why:     "bash runs cat in the background with the pipe's near ends in COPROC and reads its own line back; the other three have no such keyword — even zsh, whose coprocess speaks `print -p` rather than an array",
+	},
 }

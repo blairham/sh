@@ -863,6 +863,24 @@ func biCd(r *Runner, _ context.Context, args []string) int {
 	}
 
 	old := r.workDir()
+	announced := false
+	if !filepath.IsAbs(dir) && !dash {
+		// CDPATH, searched for an operand that is not absolute and does not
+		// lead with a dot — `cd ./x` names a place, not a search. The entry
+		// that wins decides the announcement: a plain `.` moves quietly, and
+		// any other winner is printed — in three of the four; zsh moves in
+		// silence either way.
+		if found, viaPath := r.searchCdpath(dir); viaPath != "" {
+			if viaPath != "." &&
+				r.ask(r.sem().CdpathAnnouncesTheDirectory, "`cd` printing where CDPATH sent it") {
+				announced = true
+			}
+			if r.unspecified {
+				return 2
+			}
+			dir = found
+		}
+	}
 	if !filepath.IsAbs(dir) {
 		dir = filepath.Join(old, dir)
 	}
@@ -900,11 +918,42 @@ func biCd(r *Runner, _ context.Context, args []string) int {
 	r.Dir = dir
 	r.setVar("OLDPWD", old)
 	r.setVar("PWD", dir)
+	if announced {
+		r.printf("%s\n", dir)
+	}
 	if dash && r.ask(r.sem().CdDashPrintsTheDirectory, "`cd -` printing where it went") {
 		// Asked only for `cd -`, which is the only form any of them prints.
 		r.printf("%s\n", dir)
 	}
 	return 0
+}
+
+// searchCdpath walks CDPATH for a relative operand that does not lead with
+// a dot, returning the joined path of the first entry holding a directory of
+// that name and the entry that held it. All four shells search; who prints
+// afterwards is the axis at the call.
+func (r *Runner) searchCdpath(operand string) (found, via string) {
+	if strings.HasPrefix(operand, "./") || strings.HasPrefix(operand, "../") {
+		return "", ""
+	}
+	cdpath, ok := r.getVar("CDPATH")
+	if !ok || cdpath == "" {
+		return "", ""
+	}
+	for _, entry := range strings.Split(cdpath, string(filepath.ListSeparator)) {
+		if entry == "" {
+			entry = "."
+		}
+		candidate := entry + string(filepath.Separator) + operand
+		abs := candidate
+		if !filepath.IsAbs(abs) {
+			abs = filepath.Join(r.workDir(), abs)
+		}
+		if st, err := os.Stat(abs); err == nil && st.IsDir() {
+			return abs, entry
+		}
+	}
+	return "", ""
 }
 
 // cdNowhere is `cd` with nothing to go to: no HOME, or no OLDPWD.

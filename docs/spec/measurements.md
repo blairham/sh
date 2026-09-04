@@ -2308,6 +2308,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `param/a-missing-element-fires-the-default` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[hello][d]` | `[hello][d]` | `[hello][d]` | `[hello][d]` | `[d][d]` |
 | `param/array-slice` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[q][r][s][q][r][r][s]` | `[q][r][s][q][r][r][s]` | `[q][r][s][q][r][r][s]` | `[q][r][s][q][r][r][s]` | `[q][r][s][q][r][r][s]` |
 | `param/array-slice-keeps-its-fields` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[a b][c]` | `[a b][c]` | `[a b][c]` | `[a b][c]` | `[a b][c]` |
+| `param/a-negative-subscript-counts-from-the-end` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[30][20][10]` | `[30][20][10]` | `<shell>: a: bad array subscript~<shell>: a: bad array subscript~<shell>: a: bad array subscript~[][][0]` | `[30][20][10]` | `[30][20][10]` |
+| `param/assigning-through-a-negative-subscript` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `one two X` | `one two X` | `<shell>: a[-1]: bad array subscript` *(status 1)* | `one two X` | `one two X` |
+| `param/an-operator-distributes-over-the-elements` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[a][b][][][XX][Xb]` | `[a][b][][][XX][Xb]` | `[a][b][][][XX][Xb]` | `[a][b][][][XX][Xb]` | `[a][b][][][XX][Xb]` |
+| `param/an-operator-on-the-star-subscript-diverges` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `a b` | `a b` | `a b` | `a b` | `a ab` |
 | `decl/an-array-assignment-as-an-operand` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[y]` | `[y]` | `[y]` | `[y]` | `[x]` |
 | `decl/a-local-array-stays-local` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[g]` | `[g]` | `[g]` | `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `[]` |
 | `decl/readonly-takes-its-array-first` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[q]` | `[q]` | `[q]` | `[q]` | `[p]` |
@@ -2416,6 +2420,22 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `param/array-slice-keeps-its-fields` — the slice is a list, so an element holding a space stays one field — which is the whole reason this is not a substring of the joined text
   ```sh
   a=("a b" c d); printf "[%s]" "${a[@]:0:2}"
+  ```
+- `param/a-negative-subscript-counts-from-the-end` — a negative subscript is end-relative in bash, ksh93 and zsh — zsh included, whose positive subscripts count from 1 — so it does not inherit the base axis, in an expansion or in arithmetic. bash 3.2 predates the form and refuses it. We expanded it to nothing
+  ```sh
+  a=(10 20 30); printf "[%s]" "${a[-1]}" "${a[-2]}" "$((a[-3]))"
+  ```
+- `param/assigning-through-a-negative-subscript` — the write is end-relative exactly as the read is: `a[-1]=X` replaces the last element in bash, ksh93 and zsh; bash 3.2 predates the form and refuses it fatally
+  ```sh
+  a=(one two three); a[-1]=X; echo "${a[@]}"
+  ```
+- `param/an-operator-distributes-over-the-elements` — an operator on `${a[@]}` applies to every element and each stays a field — unanimous in the three with arrays. We joined the elements first, so the pattern reached the first alone and came back `a ab` with status 0
+  ```sh
+  a=(aa ab); printf "[%s]" "${a[@]#a}" "${a[@]%%a*}" "${a[@]//a/X}"
+  ```
+- `param/an-operator-on-the-star-subscript-diverges` — the star form is the axis the at form is not: bash and ksh93 trim each element and join what is left (`a b`), zsh joins first and trims the joined string once (`a ab`)
+  ```sh
+  a=(aa ab); echo "${a[*]#a}"
   ```
 - `decl/an-array-assignment-as-an-operand` — an array assignment written as an *operand* of a declaration utility, which is ordinary bash and did not parse at all — found by the wild sweep in three installed bats-core files. dash has no array literal so it is a syntax error there, and the subscript base makes the answer differ between the three that do
   ```sh

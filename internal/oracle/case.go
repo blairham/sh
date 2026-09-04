@@ -2201,6 +2201,26 @@ echo "st=$?"`,
 		Why:     "the slice is a list, so an element holding a space stays one field — which is the whole reason this is not a substring of the joined text",
 	},
 	{
+		ID: "param/a-negative-subscript-counts-from-the-end", Category: "parameter expansion",
+		Snippet: `a=(10 20 30); printf "[%s]" "${a[-1]}" "${a[-2]}" "$((a[-3]))"`,
+		Why:     "a negative subscript is end-relative in bash, ksh93 and zsh — zsh included, whose positive subscripts count from 1 — so it does not inherit the base axis, in an expansion or in arithmetic. bash 3.2 predates the form and refuses it. We expanded it to nothing",
+	},
+	{
+		ID: "param/assigning-through-a-negative-subscript", Category: "parameter expansion",
+		Snippet: `a=(one two three); a[-1]=X; echo "${a[@]}"`,
+		Why:     "the write is end-relative exactly as the read is: `a[-1]=X` replaces the last element in bash, ksh93 and zsh; bash 3.2 predates the form and refuses it fatally",
+	},
+	{
+		ID: "param/an-operator-distributes-over-the-elements", Category: "parameter expansion",
+		Snippet: `a=(aa ab); printf "[%s]" "${a[@]#a}" "${a[@]%%a*}" "${a[@]//a/X}"`,
+		Why:     "an operator on `${a[@]}` applies to every element and each stays a field — unanimous in the three with arrays. We joined the elements first, so the pattern reached the first alone and came back `a ab` with status 0",
+	},
+	{
+		ID: "param/an-operator-on-the-star-subscript-diverges", Category: "parameter expansion",
+		Snippet: `a=(aa ab); echo "${a[*]#a}"`,
+		Why:     "the star form is the axis the at form is not: bash and ksh93 trim each element and join what is left (`a b`), zsh joins first and trims the joined string once (`a ab`)",
+	},
+	{
 		ID: "cond/a-newline-continues-a-condition", Category: "pattern matching",
 		Snippet: `[[ 1 == 1 &&
 2 == 2 ]] && echo yes`,

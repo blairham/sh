@@ -490,6 +490,18 @@ type Semantics struct {
 	// every array there is.
 	ArraysAreSparse Answer
 
+	// OperatorDistributesOverStarSubscript applies an operator written on
+	// `${a[*]}` — a trim, a replacement, a case change — to each element
+	// before the join, so `${a[*]#a}` on `(aa ab)` is `a b`. True in bash and
+	// ksh93; zsh joins first and applies the operator to the joined string
+	// once, giving `a ab`.
+	//
+	// Only the star form is an axis. On `${a[@]}` every shell with arrays
+	// applies the operator to each element, and the two readings of `[*]`
+	// often agree — a suffix trim that stops at the last element, most
+	// patterns that match nothing — so this is asked only when they differ.
+	OperatorDistributesOverStarSubscript Answer
+
 	// ExportCarriesFunctions gives `export` its `-f`, which writes a
 	// function into a child's environment. True in bash alone: the other
 	// three have no way to carry a function at all, and each rejects the

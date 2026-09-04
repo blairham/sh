@@ -113,6 +113,70 @@ expansion, and the third measured instance of it.
 `${a[i]}` inherits the array-base axis from `semantics.md`: with
 `a=(p q r)`, `${a[1]}` is `q` in bash and ksh93 and `p` in zsh.
 
+## Negative subscripts
+
+A negative subscript counts back from the end, and does **not** inherit
+the base axis: with `a=(one two three)`, `${a[-1]}` is `three` in bash,
+ksh93 and zsh alike — zsh's positive subscripts count from 1 and its
+negative ones still match the other two. Measured (oracle run,
+`param/a-negative-subscript-counts-from-the-end`); bash 3.2 predates the
+form and refuses it.
+
+The same reading holds everywhere a subscript is written:
+
+- **assignment** — `a[-1]=X` replaces the last element, unanimous
+  (`param/assigning-through-a-negative-subscript`);
+- **arithmetic** — `$((a[-1]))` reads and `$((a[-2]=9))` writes the same
+  positions, unanimous;
+- **unset** — `unset "a[-1]"` removes the last element, unanimous.
+
+Against a **sparse** array the end is one past the highest *subscript*,
+not the element count: with subscripts 0 and 5, `${a[-1]}` is the element
+at 5 and `${a[-2]}` is the unassigned 4 — nothing — in bash and ksh93
+(measured; zsh's arrays are dense, so the two ends never differ there).
+
+An **associative** subscript is a key, never a position: `m[-1]` on a
+declared name stores and reads the two characters `-1`, unanimous in the
+three that declare them.
+
+Out of range past the start the shells disagree three ways — bash warns
+`bad array subscript` and expands to nothing (fatally, for a write), zsh
+is silent (and *prepends* on a write), ksh93 is fatal either way. This
+implementation reads nothing, and refuses the write with the same
+diagnostic any below-base subscript gets; the divergence is recorded
+rather than modeled, because none of it is behavior a script can rely on
+across shells.
+
+## An operator over the whole array
+
+An operator written on `${a[@]}` — a trim, a replacement, a case change —
+applies to **each element**, and each stays a field of its own. Measured
+with `a=(aa ab)`, unanimous in the three with arrays
+(`param/an-operator-distributes-over-the-elements`):
+
+| probe | fields |
+| --- | --- |
+| `${a[@]#a}` | `a` `b` |
+| `${a[@]%%a*}` | two empty fields |
+| `${a[@]//a/X}` | `XX` `Xb` |
+
+The operator's word is expanded **once**, not once per element: a command
+substitution in the pattern runs a single time (measured in all three).
+
+The star form is where they split
+(`param/an-operator-on-the-star-subscript-diverges`): bash and ksh93
+apply the operator to each element and join what is left on the first
+character of IFS (`${a[*]#a}` on `(aa ab)` is `a b`), zsh joins first and
+applies the operator to the joined string once (`a ab`). The two readings
+often agree — a suffix trim that stops inside the last element, a pattern
+that matches nothing — so the axis is asked only where they differ.
+
+Vector field: `OperatorDistributesOverStarSubscript` (bash and ksh93 yes,
+zsh no).
+
+`${#a[@]}` is untouched by all of this: it is the count, and the length
+question is answered before any operator runs.
+
 ## Dialect flags
 
     ParamSubstitution   ${x/pat/rep} and its anchored forms

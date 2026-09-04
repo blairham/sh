@@ -82,6 +82,7 @@ func TestSemantics(t *testing.T) {
 		// and two, which is why both are fields.
 		// Whether an unassigned subscript is an element.
 		{"ArraysAreSparse", s.ArraysAreSparse, interp.Yes},
+		{"OperatorDistributesOverStarSubscript", s.OperatorDistributesOverStarSubscript, interp.Yes},
 		{"AnnouncesBackgroundJob", s.AnnouncesBackgroundJob, interp.Yes},
 		{"ReportsACommandKilledBySignal", s.ReportsACommandKilledBySignal, interp.Yes},
 		{"ReportsAnyKilledPipelineElement", s.ReportsAnyKilledPipelineElement, interp.No},

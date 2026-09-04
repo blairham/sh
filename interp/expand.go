@@ -417,7 +417,7 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 	// element dropped, which is no field at all. The corpus caught that.
 	if e.Index != nil && !e.Length &&
 		(e.Op == syntax.ParamNone ||
-			((e.Op == syntax.ParamSubstring || r.yieldsTheArray(e)) &&
+			((e.Op == syntax.ParamSubstring || elementOp(e.Op) || r.yieldsTheArray(e)) &&
 				wholeArraySubscript(r.subscriptText(e.Index)))) {
 		if elems, ok := r.arraySubscript(e); ok {
 			if e.Indirect {
@@ -434,6 +434,32 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 				elems = sliceElems(elems, r.numOf(e.Arg), e.Arg2, r)
 			}
 			ifs, set := r.ifs()
+			if elementOp(e.Op) {
+				apply := r.elementOpApplier(e)
+				mapped := make([]string, len(elems))
+				for i, el := range elems {
+					mapped[i] = apply(el)
+				}
+				if r.subscriptText(e.Index) == "*" {
+					// `${a[*]#p}` splits the panel: two shells trim each
+					// element and join what is left, the third joins first
+					// and trims the joined string once. Asked only when the
+					// two readings actually differ — `${a[*]%b}` on `(aa ab)`
+					// is `aa a` either way, and needs no answer.
+					sep := ifsFirst(ifs, set)
+					perElement := strings.Join(mapped, sep)
+					joinedFirst := apply(strings.Join(elems, sep))
+					if perElement == joinedFirst ||
+						r.ask(r.sem().OperatorDistributesOverStarSubscript,
+							"an operator on `${a[*]}` applying to each element") {
+						elems = []string{perElement}
+					} else {
+						elems = []string{joinedFirst}
+					}
+				} else {
+					elems = mapped
+				}
+			}
 			if r.subscriptText(e.Index) == "*" {
 				// `[*]` is *one* field with the elements joined, where `[@]`
 				// is one field each — the same difference `"$*"` has from
@@ -761,6 +787,44 @@ func (r *Runner) assignSubscript(e *syntax.ParamExpr, v string) {
 // substring of a single value.
 func wholeArraySubscript(idx string) bool { return idx == "@" || idx == "*" }
 
+// elementOp reports the operators that apply to each element when the
+// subscript names the whole array: the trims, the replacements, and the case
+// changes. `${a[@]#p}` trims every element — unanimous in the three shells
+// with arrays, and applying it to the first alone was the silent bug this
+// names: `${a[@]#a}` on `(aa ab)` came back `a ab` with status 0.
+func elementOp(op syntax.ParamOp) bool {
+	switch op {
+	case syntax.ParamTrimPrefix, syntax.ParamTrimPrefixLong,
+		syntax.ParamTrimSuffix, syntax.ParamTrimSuffixLong,
+		syntax.ParamReplace,
+		syntax.ParamUpper, syntax.ParamLower, syntax.ParamToggle,
+		syntax.ParamUpperFirst, syntax.ParamLowerFirst, syntax.ParamToggleFirst:
+		return true
+	}
+	return false
+}
+
+// elementOpApplier expands the operator's words once and returns the operator
+// as a function over one value.
+//
+// Once, not once per element: `${a[@]#$(cmd)}` runs the command a single time
+// in every shell with arrays — measured — and re-expanding per element would
+// also re-fire whatever side effects the word carries.
+func (r *Runner) elementOpApplier(e *syntax.ParamExpr) func(string) string {
+	switch e.Op {
+	case syntax.ParamTrimPrefix, syntax.ParamTrimPrefixLong,
+		syntax.ParamTrimSuffix, syntax.ParamTrimSuffixLong:
+		pattern := r.patternOf(e.Arg)
+		return func(v string) string { return r.trimWith(v, pattern, e.Op) }
+	case syntax.ParamReplace:
+		pattern, with := r.patternOf(e.Arg), r.joinWord(e.Arg2)
+		return func(v string) string { return r.replaceWith(v, pattern, with, e) }
+	default:
+		pattern := r.patternOf(e.Arg)
+		return func(v string) string { return r.changeCaseWith(v, pattern, e) }
+	}
+}
+
 // arrayIndices is the subscripts of an array of n elements, as words.
 //
 // From 0, not from this dialect's array base. Both shells that have the form
@@ -875,6 +939,12 @@ func (r *Runner) numOf(w *syntax.Word) int {
 // single forms look only at the first character, and leave the string alone
 // when the pattern does not match it: `${x^b}` on `abc` is `abc`.
 func (r *Runner) changeCase(value string, e *syntax.ParamExpr) string {
+	return r.changeCaseWith(value, r.patternOf(e.Arg), e)
+}
+
+// changeCaseWith is changeCase with the pattern already expanded, so a caller
+// applying one operator to many values expands its word once.
+func (r *Runner) changeCaseWith(value, pattern string, e *syntax.ParamExpr) string {
 	if value == "" {
 		return value
 	}
@@ -903,7 +973,6 @@ func (r *Runner) changeCase(value string, e *syntax.ParamExpr) string {
 		e.Op == syntax.ParamLowerFirst ||
 		e.Op == syntax.ParamToggleFirst
 
-	pattern := r.patternOf(e.Arg)
 	o := r.patternOpts(pattern)
 	var b strings.Builder
 	for i, c := range value {

@@ -55,6 +55,13 @@ func (a Array) extent(base int) (from, to int) {
 	return base, subs[len(subs)-1]
 }
 
+// pastTheEnd is the position one past the highest subscript assigned — where
+// an append lands, and what a negative subscript counts back from.
+func (a Array) pastTheEnd() int {
+	_, hi := a.extent(0)
+	return hi + 1
+}
+
 // The subscripts stored are *positions*, counted from zero whatever the
 // dialect counts from. The base belongs at the edges — where a script writes
 // a subscript and where one is read back — and not in the store, because
@@ -93,19 +100,27 @@ func (r *Runner) storeArray(name string, a Array) {
 }
 
 // setArrayElem assigns one element. Any subscript at or above the base is
-// legal, whether or not anything below it has been assigned.
+// legal, whether or not anything below it has been assigned, and a negative
+// one counts back from the end.
 func (r *Runner) setArrayElem(name string, idx int, value string) {
-	// The subscript's meaning is the dialect's — `a[5]` is the sixth element
-	// in one shell and the fifth in another — so this is where the base is
-	// asked, at the edge where a script wrote a number.
-	pos := idx - r.arrayBase()
-	if pos < 0 {
-		r.diagf("%s[%d]: index out of range\n", name, idx)
-		return
-	}
 	a := r.Arrays[name]
 	if a == nil {
 		a = Array{}
+	}
+	// The subscript's meaning is the dialect's — `a[5]` is the sixth element
+	// in one shell and the fifth in another — so this is where the base is
+	// asked, at the edge where a script wrote a number. A negative subscript
+	// asks nothing: `a[-1]=x` replaces the last element in all three shells
+	// with arrays, the one whose subscripts count from 1 included, so the
+	// base plays no part in it. Measured against a sparse array, the end it
+	// counts from is one past the highest *subscript*, not the element count.
+	pos := idx - r.arrayBase()
+	if idx < 0 {
+		pos = a.pastTheEnd() + idx
+	}
+	if pos < 0 {
+		r.diagf("%s[%d]: index out of range\n", name, idx)
+		return
 	}
 	a[pos] = value
 	r.storeArray(name, a)
@@ -137,7 +152,13 @@ func (r *Runner) unsetArrayElem(name string, idx int) {
 	if !ok {
 		return
 	}
-	delete(a, idx-r.arrayBase())
+	pos := idx - r.arrayBase()
+	if idx < 0 {
+		// `unset "a[-1]"` removes the last element — the same end-relative
+		// reading every other subscript position takes, and just as unanimous.
+		pos = a.pastTheEnd() + idx
+	}
+	delete(a, pos)
 	r.storeArray(name, a)
 }
 
@@ -265,12 +286,57 @@ func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 		if err != nil {
 			return nil, true
 		}
-		i := n - r.arrayBase()
-		if i < 0 || i >= len(elems) {
-			return nil, true
+		if v, ok := r.elemAt(e.Name, elems, n); ok {
+			return []string{v}, true
 		}
-		return []string{elems[i]}, true
+		return nil, true
 	}
+}
+
+// elemAt answers a numeric subscript against the elements a dialect read.
+//
+// A subscript at or above the base counts from the base, which is the
+// dialect's. A negative one counts back from the end and asks nothing:
+// `${a[-1]}` is the last element in all three shells with arrays, the one
+// whose subscripts count from 1 included, so the base plays no part in it.
+//
+// Measured against a sparse array, the end is one past the highest
+// *subscript*, not the element count: with subscripts 0 and 5, `${a[-1]}` is
+// the element at 5 and `${a[-2]}` is the unassigned 4 — nothing — rather than
+// the element at 0. A subscript out of range in either direction is no
+// element at all, exactly as `${a[9]}` on three elements is.
+func (r *Runner) elemAt(name string, elems []string, n int) (string, bool) {
+	// When the sparse reading compacted a gap out of elems, a position can no
+	// longer be counted there; the store still holds every position. Only a
+	// *stored* array can be behind elems here — a produced one is read before
+	// the table, in the same order arrayElems reads them.
+	a, stored := r.Arrays[name]
+	if _, produced := r.pipelineStatuses(name); produced {
+		stored = false
+	}
+	compacted := stored && len(elems) != a.pastTheEnd()
+
+	var pos int
+	if n < 0 {
+		end := len(elems)
+		if compacted {
+			end = a.pastTheEnd()
+		}
+		pos = end + n
+	} else {
+		pos = n - r.arrayBase()
+	}
+	if pos < 0 {
+		return "", false
+	}
+	if compacted {
+		v, ok := a[pos]
+		return v, ok
+	}
+	if pos >= len(elems) {
+		return "", false
+	}
+	return elems[pos], true
 }
 
 // subscriptText reads a subscript without letting it expand as a pattern.

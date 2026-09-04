@@ -26,7 +26,7 @@ func traceOf(t *testing.T, src string, sem Semantics, diag Diagnostics) string {
 		t.Fatalf("parse %q: %v", src, err)
 	}
 	var out, errOut bytes.Buffer
-	r := &Runner{Stdout: &out, Stderr: &errOut, Semantics: &sem, Diagnostics: &diag, Name: "sh"}
+	r := &Runner{Stdout: &out, Stderr: &errOut, Semantics: &sem, Diagnostics: &diag, Name: "sh", Env: testPATH()}
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}

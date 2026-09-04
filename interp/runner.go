@@ -49,9 +49,22 @@ type Runner struct {
 	Name string
 	// exported names go into a command's environment; the rest do not.
 	exported map[string]bool
-	// Dir is the working directory; empty means the process's own.
+	// Dir is the working directory. Empty means relative: paths stay as
+	// written and the operating system resolves each use against wherever
+	// the process happens to be, and `pwd` and $PWD report `.`. The Runner
+	// never asks os.Getwd — the process has one answer and a program may
+	// hold many Runners, so borrowing it here is how two embedded shells
+	// come to share a cwd. A caller that wants absolute answers sets this;
+	// driver does, at construction, because a shell binary is the one place
+	// the process-wide question is the right one to ask.
 	Dir string
-	// Env is the environment passed to commands. Nil means the process's own.
+	// Env is the environment: what commands inherit, and what `$name` falls
+	// back to when no variable answers. Nil means empty, not the process's
+	// own — the Runner never reads os.Environ, for the reason Dir never
+	// falls back to os.Getwd: a script's view of the environment is whatever
+	// its embedder handed in, and process state is everyone's. driver seeds
+	// this from the process at construction, which is what makes the shell
+	// binaries inherit normally.
 	Env []string
 	// Dialect is what nested input — a command substitution, an `eval` — is
 	// parsed with. Nil means the core, not the zero value: the zero Dialect
@@ -1806,11 +1819,14 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 	return nil
 }
 
+// environ is the environment a command receives: r.Env, minus what `unset`
+// took away, plus exported names and carried functions. Never os.Environ —
+// the process environment is shared by every Runner in the program, and a
+// script's view of it must be whatever its embedder handed in, which for a
+// shell binary is driver seeding Env at construction. Nil Env is therefore
+// genuinely empty: nothing reaches a command but what the shell exported.
 func (r *Runner) environ() []string {
 	base := r.Env
-	if base == nil {
-		base = os.Environ()
-	}
 	out := make([]string, 0, len(base)+len(r.Vars))
 	for _, kv := range base {
 		if k, _, ok := strings.Cut(kv, "="); ok && r.removed[k] {

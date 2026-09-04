@@ -13,13 +13,50 @@ linters:
       # without anyone deciding to; this decides once, and the build says so
       # rather than a reviewer having to.
       locale: US
+    forbidigo:
+      # interp/ is a library and may not touch — or consult — process-wide
+      # state. A Runner is embedded in other programs, several to a process,
+      # and everything these calls read or write is shared by all of them:
+      # the answer belongs on the Runner (r.Dir, r.Env, r.Vars) or behind a
+      # hook the binary fills in (ReplaceProcess). AGENTS.md states the rule;
+      # this enforces it, because os.Getwd once sat in the glob path of every
+      # shipped binary with nothing to say so. Scoped to interp/ by the
+      # exclusions below; os.Getpid and friends are fine — a pid is per
+      # process but not *state*, and $$ needs it.
+      analyze-types: true
+      forbid:
+      - pattern: ^os\.Getwd$
+        msg: the working directory is r.Dir; driver seeds it at construction
+      - pattern: ^os\.Chdir$
+        msg: moves every Runner in the process; `cd` moves only r.Dir
+      - pattern: ^os\.(Getenv|LookupEnv|Environ)$
+        msg: the environment is r.Env and r.Vars; driver seeds Env at construction
+      - pattern: ^os\.(Setenv|Unsetenv|Clearenv)$
+        msg: writes state every Runner in the process shares; write r.Vars or r.Env
+      - pattern: ^syscall\.Exec$
+        msg: replacing the process is the binary's decision; use the ReplaceProcess hook
+      - pattern: ^exec\.LookPath$
+        msg: consults the process's PATH and cwd; the Runner owns both — use lookpath.go
   enable:
   - errcheck
+  - forbidigo
   - govet
   - ineffassign
   - staticcheck
   - unused
   - misspell
+  exclusions:
+    rules:
+    # The purity rule guards the library, so it applies where the library
+    # lives. driver and the binaries are the intended home of these calls,
+    # and interp's own tests are embedders — a test may legitimately read
+    # the real PATH to find the real /bin/echo.
+    - path-except: ^interp/
+      linters:
+      - forbidigo
+    - path: _test\.go$
+      linters:
+      - forbidigo
 
 formatters:
   enable:

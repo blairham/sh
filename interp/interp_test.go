@@ -44,6 +44,15 @@ func TestSurvivableShiftSpeaksOnlyWhereTheDialectHasWords(t *testing.T) {
 	}
 }
 
+// testPATH is the environment a test hands a Runner that reaches externals.
+//
+// Handed in rather than inherited, because there is nothing to inherit: a nil
+// Env is genuinely empty — the package never falls back to the process
+// environment — so `cat`, `sh` and `ls` need a PATH like everything else. The
+// two directories every supported platform keeps the basics in, not whatever
+// the developer's machine has accumulated.
+func testPATH() []string { return []string{"PATH=/usr/bin:/bin"} }
+
 func run(t *testing.T, src string, setup func(*Runner)) (out string, status int) {
 	t.Helper()
 	f, err := syntax.Parse(src, syntax.Core())
@@ -56,7 +65,7 @@ func run(t *testing.T, src string, setup func(*Runner)) (out string, status int)
 	// core and the core refuses anything the shells disagree about — which
 	// is exactly what these tests are full of.
 	bash := bash.Semantics()
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &bash}
+	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &bash, Env: testPATH()}
 	if setup != nil {
 		setup(r)
 	}

@@ -39,7 +39,7 @@ func execRun(t *testing.T, dir, src string, setup func(*Runner)) (string, int, *
 	dg := Diagnostics{}
 	r := &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
-		Dir: dir, Name: "testsh",
+		Dir: dir, Name: "testsh", Env: testPATH(),
 	}
 	if setup != nil {
 		setup(r)
@@ -176,7 +176,7 @@ func TestAFailedExecRunsTheExitTrapOnlyWhenTheDialectSaysSo(t *testing.T) {
 			dg := Diagnostics{}
 			r := &Runner{
 				Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
-				Dir: t.TempDir(), Name: "testsh",
+				Dir: t.TempDir(), Name: "testsh", Env: testPATH(),
 			}
 			if _, err := r.Run(context.Background(), f); err != nil {
 				t.Fatal(err)
@@ -311,7 +311,7 @@ func TestExecOptionsAreADialectQuestion(t *testing.T) {
 	dg := Diagnostics{}
 	r := &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
-		Dir: t.TempDir(), Name: "testsh",
+		Dir: t.TempDir(), Name: "testsh", Env: testPATH(),
 		ReplaceProcess: func(_ string, a, _ []string) error {
 			argv = a
 			return os.ErrPermission
@@ -336,7 +336,7 @@ func TestExecOptionsAreADialectQuestion(t *testing.T) {
 	dg2 := Diagnostics{}
 	r2 := &Runner{
 		Stdout: &buf2, Stderr: &buf2, Semantics: &sem2, Diagnostics: &dg2,
-		Dir: t.TempDir(), Name: "testsh",
+		Dir: t.TempDir(), Name: "testsh", Env: testPATH(),
 	}
 	st, err := r2.Run(context.Background(), f2)
 	if err != nil {

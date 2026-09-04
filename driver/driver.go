@@ -482,8 +482,21 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, c
 		// the interpreter, so nothing distinguishes "no operands" from
 		// "operands that were all consumed as the name".
 		Params: params,
+		// The process's environment, read here and not in interp: os.Environ
+		// answers for the whole process, and a library Runner must take the
+		// environment it is handed rather than reach for shared state. This
+		// binary *is* the process, so the read is made once, where it is
+		// visible — the same split as ReplaceProcess below.
+		Env:    os.Environ(),
 		Stdout: sh.Stdout,
 		Stderr: sh.Stderr,
+	}
+	if wd, err := os.Getwd(); err == nil {
+		// And where the process is, for the same reason: interp treats an
+		// empty Dir as "stay relative" and never calls os.Getwd itself. A
+		// failed Getwd — the directory was deleted under the process — leaves
+		// Dir empty, which is that relative reading and the best available.
+		r.Dir = wd
 	}
 	if !sh.KeepProcess {
 		// This is a shell, so `exec` may really replace it. interp will not

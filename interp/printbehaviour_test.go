@@ -74,7 +74,7 @@ func runUnderBash(t *testing.T, src string) (string, int) {
 		Semantics: &sem, Diagnostics: &dg,
 		Stdout: &out, Stderr: &out,
 		Stdin: strings.NewReader(""),
-		Name:  "sh", Dir: dir,
+		Name:  "sh", Dir: dir, Env: testPATH(),
 	}
 	bash.Apply(r)
 	status, rerr := r.Run(context.Background(), f)

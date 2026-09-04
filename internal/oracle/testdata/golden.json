@@ -16538,6 +16538,70 @@
         "TimedOut": false
       }
     },
+    "read/a-prompt-or-a-coprocess": {
+      "bash": {
+        "Output": "st=0 v=[data]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0 v=[data]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0 v=[data]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=0 v=[data]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: read: no query process~st=1 v=[keep]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:read:1: -p: no coprocess~st=1 v=[keep]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "read/a-prompt-that-never-arrives": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: read: -p: option requires an argument~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: read: -p: option requires an argument~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: read: -p: option requires an argument~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: read: No arg for -p option~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: read: no query process~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:read:1: -p: no coprocess~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "read/an-escaped-separator-does-not-split": {
       "bash": {
         "Output": "[a b][c]",

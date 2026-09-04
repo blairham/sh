@@ -43,6 +43,10 @@ func Semantics() interp.Semantics {
 	s.EmptyArithExpressionIsAnError = interp.Yes
 	// A bare read wants a name here, where the other three fill REPLY.
 	s.ReadRequiresAVariableName = interp.Yes
+	// read takes -r and, alone among its letters, bash's -p prompt — an
+	// argument, printed only to a terminal. The rest of bash's set (-s, the
+	// counts, -d, -t, -u) is refused as unknown here.
+	s.ReadOptions = "rp:"
 	s.ExportListing = interp.DeclareListingCommandWord
 	s.ReadonlyListing = interp.DeclareListingCommandWord
 	// dash single-quotes every listed value; it has no declare, so this
@@ -310,6 +314,9 @@ func Diagnostics() interp.Diagnostics {
 		UlimitBadNumber:       "ulimit: bad number",
 		UlimitBadNumberStatus: 2,
 		BuiltinBadOption:      "%[1]s: Illegal option %[2]s",
+		// The same sentence kill already had for its own missing argument,
+		// measured for the builtins' shared reader with `read -p`.
+		OptionNeedsArgument:   "%[1]s: No arg for -%[2]s option",
 		ShiftBadNumber:        "shift: Illegal number: %[1]s",
 		WaitBadJob:            "wait: Illegal number: %[1]s",
 		WaitBadJobStatus:      2,

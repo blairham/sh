@@ -417,6 +417,13 @@ type Diagnostics struct {
 	// ReadTimeoutStatus is what an expired `read -t` reports. bash says 128
 	// plus SIGALRM's number; ksh93 and zsh say 1. Zero means 1.
 	ReadTimeoutStatus int
+	// ReadNoCoprocess is `read -p` in a dialect whose -p takes no argument
+	// and names the coprocess as the source — there being none to read
+	// from. Both shells with that shape report 1 and leave the variables
+	// untouched; the words differ: ksh93 says `no query process`, zsh says
+	// `-p: no coprocess`. Reached always in those dialects here, because
+	// neither one's coprocess construct is in this grammar.
+	ReadNoCoprocess string
 
 	// BuiltinComplaintName is the name a builtin's complaints call it, by
 	// the name it was invoked as, for a dialect whose complaint names a
@@ -526,6 +533,20 @@ type Diagnostics struct {
 	BadOptionNaming BadOptionName
 
 	BuiltinBadOptionStatus int
+
+	// OptionNeedsArgument is an argument-taking letter whose bundle ended
+	// the argument list — `read -p` with nothing after it. Two verbs: the
+	// builtin's name and the letter without its dash. The status is
+	// BuiltinBadOptionStatus's, which is measured: every shell reports this
+	// the way it reports an option it does not have, 2 everywhere but zsh's
+	// 1, and bash and ksh93 print the same usage line after either.
+	//
+	// The fallback is bash's own wording — `read: -p: option requires an
+	// argument` — which the substrate had said before any dialect was
+	// measured saying it. ksh93 names the argument it wanted per letter
+	// (`-d: delim argument expected`), which one string per dialect does
+	// not carry; it keeps the fallback.
+	OptionNeedsArgument string
 
 	// BuiltinBadName is what a builtin says about an operand that is not a
 	// name, by builtin name. Two verbs: the builtin and the operand.

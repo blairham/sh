@@ -1040,6 +1040,17 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	// nothing in every shell that has the letter, terminal or none, and
 	// skipping the word instead once let a password echo (#321).
 
+	// -p rides the optstring's shape the way -n does: `p:` takes a prompt,
+	// handled once the stream is known, and a bare `p` names the coprocess
+	// as the source. Neither dialect with the bare letter can start one in
+	// this grammar, so the measured answer is the refusal — the dialect's
+	// words, status 1, and the variables untouched, which is the part that
+	// separates this from a read that reached its input and failed.
+	if _, ok := optArg['p']; !ok && strings.Contains(opts, "p") {
+		r.diagf("%s\n", Wording(r.diag().ReadNoCoprocess, "read: -p: no coprocess"))
+		return 1
+	}
+
 	// The stream: standard input, or the descriptor -u names — resolved
 	// against the shell's own table, where `exec 5<file` put it.
 	in := r.In()
@@ -1062,6 +1073,16 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			return 1
 		}
 		in = rd
+	}
+
+	// The prompt: written to standard error, no newline, and only when the
+	// stream being read is a terminal — both measured in both shells whose
+	// -p takes an argument, and the second half from both sides: a pipe gets
+	// no prompt, and neither does a -u descriptor on a file while the
+	// terminal sits untouched on standard input. Raw rather than through the
+	// diagnostic path, because a prompt carries no location in any shell.
+	if prompt, ok := optArg['p']; ok && inputIsTerminal(in) {
+		r.errf("%s", prompt)
 	}
 
 	// The delimiter: a newline unless -d renamed it. The argument's first

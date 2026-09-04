@@ -115,10 +115,11 @@ func Semantics() interp.Semantics {
 	s.EchoExpandsHexEscapes = interp.Yes
 	s.EchoExpandsEscEscape = interp.Yes
 	// read takes -r and -s plus the argument letters: -a names the array in
-	// the option's argument, -d a delimiter, -n and -N the two counts, -t a
-	// timeout and -u a descriptor. A short -n keeps its text and reports 1;
-	// a short -N keeps its text too.
-	s.ReadOptions = "rsa:d:n:N:t:u:"
+	// the option's argument, -d a delimiter, -n and -N the two counts, -p a
+	// prompt for when the input is a terminal, -t a timeout and -u a
+	// descriptor. A short -n keeps its text and reports 1; a short -N keeps
+	// its text too.
+	s.ReadOptions = "rsa:d:n:N:p:t:u:"
 	s.ReadPartialCountSucceeds = interp.No
 	s.ReadExactCountKeepsPartial = interp.Yes
 	// A directory the PATH search walked past leaves no trace: with nothing
@@ -400,10 +401,11 @@ func Diagnostics() interp.Diagnostics {
 		UnimplementedOptionLetters: map[string]string{
 			// Options these builtins have here and this shell does not.
 			"wait": "nfp",
-			// What is left of read's letters: readline editing, the text -i
-			// seeds it with, and the -p prompt — all about a terminal this
-			// runner does not hold.
-			"read": "Eeip",
+			// What is left of read's letters: readline editing and the text
+			// -i seeds it with — about a line editor this runner does not
+			// hold. The -p prompt is implemented: parsed always, printed
+			// only to a terminal, which is the measured whole of it.
+			"read": "Eei",
 			"type": "afpP",
 			// The callbacks: -C runs a command every -c elements, which is
 			// about progress display and is deferred rather than parsed and

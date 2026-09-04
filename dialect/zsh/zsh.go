@@ -139,9 +139,13 @@ func Semantics() interp.Semantics {
 	// read takes -r and -s, -A with the array as the first operand, and the
 	// same -d, -t and -u as the others — but no counts: -N is a bad option
 	// here and -n is a flag it reads and, outside completion widgets, acts
-	// on not at all. zsh's -t may also stand alone as a poll; that spelling
-	// is not modeled, so here it reads the word after it as its seconds.
-	s.ReadOptions = "rsnAd:t:u:"
+	// on not at all. -p is a bare flag too — the coprocess, not bash's
+	// prompt — and with zsh's `coproc` outside this grammar there is never
+	// one to read: the letter always answers `-p: no coprocess` and 1, the
+	// variables untouched. zsh's -t may also stand alone as a poll; that
+	// spelling is not modeled, so here it reads the word after it as its
+	// seconds.
+	s.ReadOptions = "rsnpAd:t:u:"
 	s.ArithLeadingZeroIsOctal = interp.No
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes
@@ -332,15 +336,24 @@ func Diagnostics() interp.Diagnostics {
 		UnimplementedOptionLetters: map[string]string{
 			// read's letters about a terminal or the line editor — raw -k
 			// keys, -q's one keystroke, -e/-E echoing, -z and the zle pair
-			// -c/-l — plus -p, the coprocess. zsh's read also says nothing
+			// -c/-l. The -p coprocess is implemented as its measured
+			// refusal — see ReadNoCoprocess. zsh's read also says nothing
 			// at all about a dead -u descriptor and reports 1, which is why
 			// no ReadBadFileDescriptor wording appears here.
-			"read": "kqeEzclp",
+			"read": "kqeEzcl",
 		},
-		ReadonlyVariable: "read-only variable: %s",
-		TraceQuoting:     interp.QuoteShell,
-		TraceStyle:       interp.TraceNameLine,
-		TraceForHeader:   interp.TraceForAssign,
+		// The builtin's name is stripped to the location prefix as ever:
+		// `zsh:read:1: -p: no coprocess`, measured with no coprocess to
+		// read, which is the only state this shell has.
+		ReadNoCoprocess: "read: -p: no coprocess",
+		// `zsh:read:1: argument expected: -d` — the letter after the
+		// sentence, unlike everyone else, and status 1 like every other
+		// option complaint here.
+		OptionNeedsArgument: "%[1]s: argument expected: -%[2]s",
+		ReadonlyVariable:    "read-only variable: %s",
+		TraceQuoting:        interp.QuoteShell,
+		TraceStyle:          interp.TraceNameLine,
+		TraceForHeader:      interp.TraceForAssign,
 		// zsh names the last token it read and nothing else.
 		EvalNaming:       interp.SourceReplacesShell,
 		SourceFileNaming: interp.SourceReplacesShell,

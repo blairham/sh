@@ -715,6 +715,24 @@ type Diagnostics struct {
 	// a shell tells that from one that is absent. ksh93 alone.
 	ParamNull string
 
+	// LocationNamesTheCurrentFile puts the file a failing line was read from
+	// where the shell's name would go: a sourced file while it runs, and the
+	// file a function was defined in when the function is called after the
+	// sourcing has finished — `./inc.sh: line 1: nosuch: command not found`
+	// rather than `outer.sh: line 1: …`. The name is the operand as the
+	// shell constructed it — `./inc.sh` as written, the joined path for a
+	// PATH hit — never the resolved absolute path.
+	//
+	// bash and zsh, and in zsh only outside a function, where
+	// LocationNamesTheFunction has not already replaced the name. dash and
+	// ksh93 keep the script's own name in both cases while still counting
+	// the sourced file's lines; while the sourced file runs each also labels
+	// it in its own place — dash writes the path after the location,
+	// `outer.sh: 3: ./inc.sh: …`, and ksh93 writes `.: line 3:` after a
+	// location pinned where the `.` was — which the corpus records rather
+	// than this field claiming it.
+	LocationNamesTheCurrentFile bool
+
 	// LocationNamesTheFunction puts the function a message came from where
 	// the file's name would go, and counts the line within the function
 	// rather than within the file. zsh alone.

@@ -103,13 +103,13 @@ func TestBorrowedTextReportsItsOwnLine(t *testing.T) {
 // are two questions, and a dialect may answer them differently.
 func TestBorrowedTextIsNamedWhereTheDialectNamesIt(t *testing.T) {
 	dir := t.TempDir()
-	// The name in the diagnostic is the path `.` resolved, which is absolute
-	// once the runner has a directory of its own. A shell reports the operand
-	// as written and its own directory is the process's, so the two coincide
-	// there and part here; where the name goes is what this is about either
-	// way.
-	path := write(t, dir, "p.sh", "if\n")
-	const src = ". ./p.sh"
+	// The name in the diagnostic is the operand as the shell constructed it —
+	// `./p.sh` as written here — never the absolute path it resolved to.
+	// Measured: `. ./bad.sh` from a script is reported as `./bad.sh` however
+	// deep the directory it really lives in.
+	write(t, dir, "p.sh", "if\n")
+	const path = "./p.sh"
+	const src = ". " + path
 
 	for _, tc := range []struct {
 		name string

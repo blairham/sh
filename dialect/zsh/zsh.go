@@ -324,6 +324,10 @@ func Diagnostics() interp.Diagnostics {
 		EvalNaming:       interp.SourceReplacesShell,
 		SourceFileNaming: interp.SourceReplacesShell,
 		EvalSourceName:   "(eval)",
+		// A runtime failure at the top level of a sourced file names the
+		// file — `./inc.sh:1: command not found: nosuch` — while one inside
+		// a function still names the function, which the answer above wins.
+		LocationNamesTheCurrentFile: true,
 		// zsh does not quote the expression, where the other three do.
 		ArithError:            "%[2]s",
 		ArithOperandExpected:  "bad math expression: operand expected at end of string",

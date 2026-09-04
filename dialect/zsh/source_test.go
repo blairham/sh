@@ -48,6 +48,30 @@ func TestSourceIsASynonymForDot(t *testing.T) {
 	}
 }
 
+// TestADiagnosticNamesTheSourcedFile: a failure at the top level of a sourced
+// file names the file as written — `./inc.sh:1: command not found: …` — while
+// one inside a function defined there still names the function, which is
+// zsh's pairing of the two location answers and the reason the function flag
+// wins.
+func TestADiagnosticNamesTheSourcedFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "inc.sh"),
+		[]byte("nosuchcmd-xyz\nf() {\n  nosuchcmd-xyz\n}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := runZsh(t, dir, ". ./inc.sh\nf\n")
+	lines := strings.SplitN(out, "\n", 3)
+	if got, want := lines[0], "./inc.sh:1: command not found: nosuchcmd-xyz"; got != want {
+		t.Errorf("while sourcing: said %q, want %q", got, want)
+	}
+	if len(lines) < 2 {
+		t.Fatalf("output = %q, want two diagnostics", out)
+	}
+	if got, want := lines[1], "f:1: command not found: nosuchcmd-xyz"; got != want {
+		t.Errorf("in the function: said %q, want %q", got, want)
+	}
+}
+
 // TestASyntaxErrorDependsOnWhereItWasRead is zsh's alone in the panel, and the
 // only reason SourcedSyntaxErrorStatus exists: the same unparseable text is 1
 // from -c and 126 from a file `.` opened. bash says 2 for both and ksh93 3 for

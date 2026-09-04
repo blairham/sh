@@ -72,6 +72,42 @@ func TestEvalAndDotAxes(t *testing.T) {
 	}
 }
 
+// TestADiagnosticNamesTheSourcedFile: a failure inside a sourced file names
+// that file rather than the script — `./inc.sh: line 1: …` — and the name is
+// the operand as written, not the absolute path it resolved to. A function
+// defined in the file and called after the sourcing has finished still names
+// the defining file.
+//
+// The whole first line rather than a substring: the shell's own name in its
+// place would still leave the message's tail intact, so Contains could not
+// tell the fixed shape from the broken one.
+func TestADiagnosticNamesTheSourcedFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "inc.sh"),
+		[]byte("nosuchcmd-xyz\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := runBash(t, dir, ". ./inc.sh\necho st=$?\n")
+	lines := strings.SplitN(out, "\n", 3)
+	if got, want := lines[0], "./inc.sh: line 1: nosuchcmd-xyz: command not found"; got != want {
+		t.Errorf("while sourcing: said %q, want %q", got, want)
+	}
+	if len(lines) < 2 || lines[1] != "st=127" {
+		t.Errorf("output = %q, want st=127", out)
+	}
+
+	// The defining file, remembered past the end of the sourcing.
+	if err := os.WriteFile(filepath.Join(dir, "def.sh"),
+		[]byte("f() {\n  nosuchcmd-xyz\n}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, _ = runBash(t, dir, ". ./def.sh\nf\n")
+	if got, want := strings.SplitN(out, "\n", 2)[0],
+		"./def.sh: line 2: nosuchcmd-xyz: command not found"; got != want {
+		t.Errorf("from a sourced function: said %q, want %q", got, want)
+	}
+}
+
 // TestAnUnparseableEvalIsSurvivable is the axis as behavior rather than as a
 // field, which is what stops the two drifting apart.
 func TestAnUnparseableEvalIsSurvivable(t *testing.T) {

@@ -852,6 +852,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `axis/readonly-refusal-names-the-builtin` | `<script>: 2: declare: not found~end` | `<script>: line 2: declare: r: readonly variable~end` | `<script>: line 2: declare: r: readonly variable~end` | `<script>: line 2: declare: r: readonly variable~end` | `<script>: line 2: declare: not found~end` | `<script>:2: read-only variable: r` *(status 1)* |
 | `axis/readonly-refusal-does-not-name-export` | `<script>: 2: export: r: is read only` *(status 2)* | `<script>: line 2: r: readonly variable~end` | `<script>: line 2: r: readonly variable~end` | `<script>: line 2: r: readonly variable~end` | `<script>: line 2: r: is read only` *(status 1)* | `<script>:2: read-only variable: r` *(status 1)* |
 | `location/a-message-from-inside-a-function` | `<shell>: 2: nosuchcmd: not found` *(status 127)* | `<shell>: line 2: nosuchcmd: command not found` *(status 127)* | `<shell>: line 2: nosuchcmd: command not found` *(status 127)* | `<shell>: line 1: nosuchcmd: command not found` *(status 127)* | `<shell>: line 2: nosuchcmd: not found` *(status 127)* | `f:1: command not found: nosuchcmd` *(status 127)* |
+| `location/a-message-from-inside-a-sourced-file` | `<script>: 1: ./inc.sh: nosuchcmd-xyz: not found~st=127` | `./inc.sh: line 1: nosuchcmd-xyz: command not found~st=127` | `./inc.sh: line 1: nosuchcmd-xyz: command not found~st=127` | `./inc.sh: line 1: nosuchcmd-xyz: command not found~st=127` | `<script>[2]: .: line 1: nosuchcmd-xyz: not found~st=127` | `./inc.sh:1: command not found: nosuchcmd-xyz~st=127` |
+| `location/a-message-from-a-function-a-sourced-file-defined` | `<script>: 2: nosuchcmd-xyz: not found~st=127` | `./inc.sh: line 2: nosuchcmd-xyz: command not found~st=127` | `./inc.sh: line 2: nosuchcmd-xyz: command not found~st=127` | `./inc.sh: line 2: nosuchcmd-xyz: command not found~st=127` | `<script>: line 2: nosuchcmd-xyz: not found~st=127` | `f:1: command not found: nosuchcmd-xyz~st=127` |
 | `diag/a-line-worth-naming` | `one~<shell>: 2: nosuchcmd: not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 1: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: not found~st=127` | `one~<shell>:2: command not found: nosuchcmd~st=127` |
 | `diag/a-command-after-an-operator` | `one~<shell>: 3: nosuchcmd: not found~st=127` | `one~<shell>: line 3: nosuchcmd: command not found~st=127` | `one~<shell>: line 3: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 3: nosuchcmd: not found~st=127` | `one~<shell>:3: command not found: nosuchcmd~st=127` |
 
@@ -937,6 +939,19 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   }
   true
   f
+  ```
+- `location/a-message-from-inside-a-sourced-file` — the line is the sourced file's in all four, and the name splits the panel: bash and zsh name the sourced file as written, where dash and ksh93 keep the script's own name — dash writing the file's path after the location and ksh93 naming `.` and pinning its outer line where the dot was
+  ```sh
+  printf 'nosuchcmd-xyz\n' > inc.sh
+  . ./inc.sh
+  echo st=$?
+  ```
+- `location/a-message-from-a-function-a-sourced-file-defined` — bash names the file the function was *defined* in, zsh names the function, and dash and ksh93 name the script — while all four count the defining file's lines, so three of the panel report a line the named file does not have
+  ```sh
+  printf 'f() {\n  nosuchcmd-xyz\n}\n' > inc.sh
+  . ./inc.sh
+  f
+  echo st=$?
   ```
 - `diag/a-line-worth-naming` — ksh93 names the line under `-c` only after the first: `ksh: nosuchcmd: not found` on line 1 and `ksh: line 2: nosuchcmd: not found` here. Every earlier measurement used a one-line `-c`, where naming no line and naming line 1 are the same output
   ```sh

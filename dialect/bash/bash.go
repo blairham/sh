@@ -61,6 +61,7 @@ func Semantics() interp.Semantics {
 	s.AliasQuoting = interp.ListingQuoteAlwaysEscaped
 	s.TrapQuoting = interp.ListingQuoteAlwaysEscaped
 	s.TrapActionIsParsedWhenSet = interp.No
+	s.TrapParseFailureNamesWhereItFired = interp.No
 	s.TrapBodyRunsWhatParsed = interp.Yes
 	s.ReportsAKilledCommandInACommandSubstitution = interp.No
 	s.SelectAssumesUnboundedWidth = interp.No

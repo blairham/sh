@@ -550,3 +550,98 @@ func TestControlFlowStopsATrapBodyReadALineAtATime(t *testing.T) {
 		t.Errorf("status = %d, want the status the body exited with", st)
 	}
 }
+
+// TestATrapBodysParseFailureCanNameWhereItFired is the axis, and the shape
+// that shows it carries two different numbers: the location names where the
+// trap fired and the failure itself is at the body's own line.
+func TestATrapBodysParseFailureCanNameWhereItFired(t *testing.T) {
+	base := func(s *Semantics) {
+		s.TrapActionIsParsedWhenSet = No
+		s.TrapBodyRunsWhatParsed = No
+		s.BuiltinSyntaxErrorFatal = No
+		s.TrapBodyLine = TrapBodyLineOffsetFromWhereItFired
+		s.ExitTrapFiresPastTheEnd = No
+	}
+	dg := Diagnostics{Location: LocationLineWord}
+	// The trap spans lines 1 and 2, so `kill` is on line 4 and that is where
+	// it fires. The body's second line is then 4 + 2 - 1 = 5.
+	src := "trap 'echo a\nif' INT\necho two\nkill -INT $$"
+
+	fired := func(s *Semantics) { base(s); s.TrapParseFailureNamesWhereItFired = Yes }
+	_, errs, _ := trapRun(t, src, fired, dg)
+	if !strings.HasPrefix(errs, "testsh: line 4: ") {
+		t.Errorf("stderr = %q, want the location to name where it fired", errs)
+	}
+
+	parse := func(s *Semantics) { base(s); s.TrapParseFailureNamesWhereItFired = No }
+	_, errs, _ = trapRun(t, src, parse, dg)
+	if !strings.HasPrefix(errs, "testsh: line 5: ") {
+		t.Errorf("stderr = %q, want the location to name the parse position", errs)
+	}
+}
+
+// TestTheFiringLineIsLeftOutOnTheFirstLine, which is what makes an EXIT
+// body's failure carry no line in the dialect that names one: an EXIT trap
+// counts as firing on line 1 there, and the line is left out when it is the
+// first — the same rule that dialect's other location style uses.
+func TestTheFiringLineIsLeftOutOnTheFirstLine(t *testing.T) {
+	fired := func(s *Semantics) {
+		s.TrapActionIsParsedWhenSet = No
+		s.TrapBodyRunsWhatParsed = No
+		s.BuiltinSyntaxErrorFatal = No
+		s.TrapBodyLine = TrapBodyLineOffsetFromWhereItFired
+		s.ExitTrapFiresPastTheEnd = No
+		s.TrapParseFailureNamesWhereItFired = Yes
+	}
+	dg := Diagnostics{Location: LocationLineWord}
+	_, errs, _ := trapRun(t, "echo one\ntrap 'echo a\nif' EXIT\necho two", fired, dg)
+	if !strings.HasPrefix(errs, "testsh: syntax") {
+		t.Errorf("stderr = %q, want the shell named and no line", errs)
+	}
+	if strings.Contains(errs, "line ") {
+		t.Errorf("stderr = %q, want no line at all", errs)
+	}
+}
+
+// TestEveryLineInAParseFailureMovesTogether.
+//
+// A trap body's failure is re-numbered to where the shell counts the body,
+// and the failure carries more than one line: where it gave out, where the
+// construct it was inside began, and where the input ran out. Moving one and
+// not the others would leave an error that contradicts itself — a construct
+// that began *after* the failure that closed it.
+//
+// No dialect shows this today: the one that re-numbers a trap body names
+// neither of the other two lines, and the one that names them never
+// re-numbers. The combination is legitimate all the same, and this is the
+// test that keeps the shift whole.
+func TestEveryLineInAParseFailureMovesTogether(t *testing.T) {
+	set := func(s *Semantics) {
+		s.TrapActionIsParsedWhenSet = No
+		s.TrapBodyRunsWhatParsed = No
+		s.BuiltinSyntaxErrorFatal = No
+		s.TrapBodyLine = TrapBodyLineOffsetFromWhereItFired
+		s.ExitTrapFiresPastTheEnd = No
+		s.TrapParseFailureNamesWhereItFired = No
+	}
+	dg := Diagnostics{
+		Location: LocationLineWord,
+		// %[2]d is where the construct began and %[6]d where it gave out.
+		Unterminated:               "unterminated %[1]s from line %[2]d, gave out on line %[6]d",
+		UnterminatedEndsOnNextLine: true,
+	}
+	// The trap is set on line 1 and fired from line 3, so the body's first
+	// line is counted as 3 and its second as 4.
+	_, errs, _ := trapRun(t, "trap 'if' INT\necho two\nkill -INT $$", set, dg)
+	if !strings.Contains(errs, "from line 3") {
+		t.Errorf("stderr = %q, want the construct's line moved with the rest", errs)
+	}
+	if strings.Contains(errs, "from line 1,") {
+		t.Errorf("stderr = %q, the construct's line was left behind", errs)
+	}
+	// And the end of input, which is the line the location is taken from
+	// when a dialect puts it there — one past the body's only line.
+	if !strings.HasPrefix(errs, "testsh: line 4: ") {
+		t.Errorf("stderr = %q, want the end of input moved too", errs)
+	}
+}

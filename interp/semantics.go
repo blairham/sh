@@ -668,6 +668,17 @@ type Semantics struct {
 	// run to have. The two answers cannot be told apart there.
 	TrapBodyRunsWhatParsed Answer
 
+	// TrapParseFailureNamesWhereItFired puts the runtime location in front
+	// of a trap body's parse failure — where the trap fired — rather than
+	// the line the parse gave out on.
+	//
+	// ksh93 alone, and the two are different numbers: a body set on line 2
+	// and fired from line 5 reports `w5.sh: line 5: syntax error at line 6`.
+	// bash and dash name the parse position in both places. zsh is not
+	// asked, because it reads the action when the trap is set and never
+	// reaches a parse failure at fire time.
+	TrapParseFailureNamesWhereItFired Answer
+
 	// ReportsAKilledCommandInACommandSubstitution remarks on a command that
 	// a signal ended inside `$(…)`.
 	//
@@ -1220,6 +1231,9 @@ func PosixSemantics() Semantics {
 		// applied to a trap's body. ksh93 is the one that reads a trap
 		// body whole.
 		TrapBodyRunsWhatParsed: Yes,
+		// And it names where the failure was, not where the trap fired,
+		// which is what three of the four do.
+		TrapParseFailureNamesWhereItFired: No,
 		// POSIX gives all three a *name*, and neither a special parameter
 		// nor a positional one is a name — a positional has `shift` to
 		// remove it.

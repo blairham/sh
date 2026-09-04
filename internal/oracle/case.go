@@ -309,6 +309,12 @@ var Corpus = []Case{
 		Why:     "a two-line EXIT body: bash, dash and ksh93 name its second line, zsh names the line after the script's last",
 	},
 	{
+		ID: "axis/trap-body-parse-failure-location", Category: "diagnostics",
+		Script:  true,
+		Snippet: "echo one\ntrap 'echo a\nif' USR1\necho two\nkill -USR1 $$\necho three",
+		Why:     "the two lines are different numbers in ksh93: the location names where the trap fired and the wording names where in the body the parse gave out. bash and dash name the parse position in both, and zsh refused the trap when it was set",
+	},
+	{
 		ID: "axis/trap-body-line-signal", Category: "diagnostics",
 		Script:  true,
 		Snippet: "trap 'echo a\nnosuchcmd-xyz' INT\necho two\nkill -INT $$\necho three",

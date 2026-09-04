@@ -898,11 +898,20 @@ func (r *Runner) runTrapStmts(ctx context.Context, f *syntax.File) bool {
 // handed to a special builtin, and the panel answers it the same way here as
 // there — dash ends the script, the other three carry on.
 func (r *Runner) reportTrapParseFailure(err error, body string) {
-	where := "trap"
-	if r.inExitTrap {
-		where = "exit trap"
+	// The body's lines, moved the way every other diagnostic from inside it
+	// is moved. A no-op in the two dialects that count a trap body from its
+	// own first line, and what makes the third name the same line here as it
+	// would for a command that failed in the same place.
+	err = shiftParseError(err, r.lineBase)
+	if r.ask(r.sem().TrapParseFailureNamesWhereItFired, "a trap body's parse failure naming where the trap fired") {
+		r.reportTrapParseFailureAtFiringLine(err, body)
+	} else if !r.unspecified {
+		where := "trap"
+		if r.inExitTrap {
+			where = "exit trap"
+		}
+		r.errf("%s", r.diag().ParseDiagnostic(r.name(), where, err, body))
 	}
-	r.errf("%s", r.diag().ParseDiagnostic(r.name(), where, err, body))
 	// No status of its own where the failure is not fatal: measured, a
 	// signal trap whose body will not parse leaves `$?` at 0 in both
 	// dialects that carry on. Setting the parse status here was invisible
@@ -911,6 +920,48 @@ func (r *Runner) reportTrapParseFailure(err error, body string) {
 	if r.ask(r.sem().BuiltinSyntaxErrorFatal, "a parse failure inside a special builtin being fatal") {
 		r.fatalQuiet()
 	}
+}
+
+// reportTrapParseFailureAtFiringLine writes the failure with the *runtime*
+// location in front of it rather than the parse one.
+//
+// ksh93 alone, and the two lines in it are different numbers on purpose:
+//
+//	trap "echo a
+//	if" USR1        set on line 2, fired from line 5
+//
+//	w5.sh: line 5: syntax error at line 6: `if' unmatched
+//
+// The location names where the trap fired and the wording names where in the
+// body the parse gave out. The line is left out when it is the first, which
+// is the same rule this dialect's other location style uses — and an EXIT
+// trap counts as firing on line 1, so an EXIT body's failure carries none.
+func (r *Runner) reportTrapParseFailureAtFiringLine(err error, body string) {
+	d := r.diag()
+	loc := d.prefixWithoutLine(r.name(), "")
+	if at := r.firedAt(); at > 1 {
+		loc = d.prefix(r.name(), "", false, at)
+	}
+	r.errf("%s%s\n", loc, d.ParseFailure(err))
+	r.errf("%s", d.echoLine(r.name(), "", d.ParseFailureLine(err), err, body))
+}
+
+// shiftParseError moves a parse failure's lines by an offset, so a failure in
+// text that was parsed on its own can name the lines the shell counts it at.
+func shiftParseError(err error, by int) error {
+	var se *syntax.Error
+	if by == 0 || !errors.As(err, &se) {
+		return err
+	}
+	moved := *se
+	moved.Pos.Line += by
+	if moved.ConstructLine > 0 {
+		moved.ConstructLine += by
+	}
+	if moved.EndLine > 0 {
+		moved.EndLine += by
+	}
+	return &moved
 }
 
 func (r *Runner) stmt(ctx context.Context, st *syntax.Stmt) error {

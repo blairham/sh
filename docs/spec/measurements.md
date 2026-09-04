@@ -428,6 +428,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
 | `axis/trap-body-line-exit` | `one~two~a~<script>: 2: nosuchcmd-xyz: not found` | `one~two~a~<script>: line 2: nosuchcmd-xyz: command not found` | `one~two~a~<script>: line 2: nosuchcmd-xyz: command not found` | `one~two~a~<script>: line 6: nosuchcmd-xyz: command not found` | `one~two~a~<script>: line 2: nosuchcmd-xyz: not found` | `one~two~a~<script>:5: command not found: nosuchcmd-xyz` |
+| `axis/trap-body-parse-failure-location` | `one~two~a~<script>: 2: Syntax error: end of file unexpected (expecting "then")` *(status 2)* | `one~two~a~<script>: trap: line 3: syntax error: unexpected end of file from `if' command on line 2~three` | `one~two~a~<script>: trap: line 3: syntax error: unexpected end of file from `if' command on line 2~three` | `one~two~a~<script>: trap: line 7: syntax error: unexpected end of file~three` | `one~two~<script>: line 5: syntax error at line 6: `if' unmatched~three` | `one~<script>:2: parse error near `if'~<script>:trap:2: couldn't parse trap command~two` *(status -1)* |
 | `axis/trap-body-line-signal` | `two~a~<script>: 2: nosuchcmd-xyz: not found~three` | `two~a~<script>: line 2: nosuchcmd-xyz: command not found~three` | `two~a~<script>: line 2: nosuchcmd-xyz: command not found~three` | `two~a~<script>: line 5: nosuchcmd-xyz: command not found~three` | `two~a~<script>: line 5: nosuchcmd-xyz: not found~three` | `two~a~<script>:4: command not found: nosuchcmd-xyz~three` |
 | `axis/trap-prints-a-bare-action` | `trap -- ':' INT~end` | `trap -- ':' SIGINT~end` | `trap -- ':' SIGINT~end` | `trap -- ':' SIGINT~end` | `trap -- : INT~end` | `trap -- : INT~end` |
 | `axis/trap-prints-a-quoted-action` | `trap -- 'echo hi' INT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' INT~end` | `trap -- 'echo hi' INT~end` |
@@ -448,6 +449,15 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   trap 'echo a
   nosuchcmd-xyz' EXIT
   echo two
+  ```
+- `axis/trap-body-parse-failure-location` — the two lines are different numbers in ksh93: the location names where the trap fired and the wording names where in the body the parse gave out. bash and dash name the parse position in both, and zsh refused the trap when it was set
+  ```sh
+  echo one
+  trap 'echo a
+  if' USR1
+  echo two
+  kill -USR1 $$
+  echo three
   ```
 - `axis/trap-body-line-signal` — the same body on a signal: ksh93 counts it from where it fired and zsh names only where it fired
   ```sh

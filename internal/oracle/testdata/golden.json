@@ -6138,6 +6138,102 @@
         "TimedOut": false
       }
     },
+    "enable/a-letter-one-shell-does-not-have": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: enable: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: enable: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:enable:1: bad option: -n~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "enable/a-name-that-is-not-a-builtin": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: disable: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: disable: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: disable: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: disable: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: disable: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:disable:1: no such hash table element: nosuchthing~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "enable/switching-one-off-and-back-on": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "errexit/assignment-takes-the-substitution": {
       "bash": {
         "Output": "",

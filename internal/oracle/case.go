@@ -3123,6 +3123,21 @@ echo after`,
 	},
 	// --- umask: the symbolic spelling ----------------------------------
 	{
+		ID: "enable/a-letter-one-shell-does-not-have", Category: "builtins",
+		Snippet: `enable -n cd; echo "st=$?"`,
+		Why:     "`enable` is two different builtins: one takes -n to switch a name off, one has no -n at all and reads its options as the *table* to act on. The other two have no `enable`, so the same line is four answers",
+	},
+	{
+		ID: "enable/a-name-that-is-not-a-builtin", Category: "builtins",
+		Snippet: `disable nosuchthing; echo "st=$?"`,
+		Why:     "`disable` exists in one shell only, and there it complains about a hash table element rather than about a command — where the other three have no such builtin and say so",
+	},
+	{
+		ID: "enable/switching-one-off-and-back-on", Category: "builtins",
+		Snippet: `disable cd 2>/dev/null; enable cd 2>/dev/null; echo "st=$?"`,
+		Why:     "switching a builtin off is not forgetting it: the name comes back with the same builtin behind it. Standard error is discarded because three of the four have neither word and their complaint is about a missing command, which the case above pins",
+	},
+	{
 		ID: "axis/unset-a-subscripted-operand", Category: "semantics axes",
 		Snippet: "unset 'a[0]'; echo \"st=$?\"; echo after",
 		Why:     "three of the four take a subscript as naming an element; dash has no arrays and refuses it in the words it gives any bad name, which is fatal there",

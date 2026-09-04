@@ -1334,26 +1334,27 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	// A builtin runs in this shell, which is the whole reason it is one:
 	// `set` and `shift` change state a child process could not.
 	if fn, ok := r.lookupBuiltin(argv[0]); ok {
-		// An assignment prefixed to a *special* builtin persists, which is
-		// the POSIX rule dash and ksh93 follow and bash and zsh do not. The
-		// dialect answers it, three lines down.
+		// An assignment prefixed to a builtin is visible to the builtin
+		// while it runs — `IFS=: read x y` splits on the colon — and is
+		// taken back afterward. The exception is a *special* builtin,
+		// where POSIX has the assignment persist; dash and ksh93 follow
+		// that and bash and zsh do not, so the dialect answers it.
+		var undo []savedVar
 		for _, a := range c.Assigns {
 			if a.Operand {
 				// An argument to the builtin, not a prefix to it.
-				//
-				// Belt and braces: this loop only writes when the dialect
-				// says a prefix persists on a *special* builtin, and the
-				// operand assignment that follows would overwrite it either
-				// way. It says which of the two kinds this is rather than
-				// leaving that to the order they happen to run in.
 				continue
 			}
 			v := strings.Join(r.expandWord(a.Value), " ")
-			if specialBuiltins[argv[0]] &&
-				r.ask(r.sem().AssignmentPrefixPersistsOnSpecialBuiltin, "an assignment before a special builtin persisting") {
-				r.setVar(a.Name, v)
+			if !specialBuiltins[argv[0]] || !r.ask(r.sem().AssignmentPrefixPersistsOnSpecialBuiltin, "an assignment before a special builtin persisting") {
+				old, present := r.Vars[a.Name]
+				undo = append(undo, savedVar{
+					name: a.Name, value: old, present: present, removed: r.removed[a.Name],
+				})
 			}
+			r.setVar(a.Name, v)
 		}
+		defer r.restoreVars(undo)
 		// The builtin is on the record for the duration, so a dialect that
 		// names it in a diagnostic's location can. Saved and put back rather
 		// than cleared: a builtin can run another one.
@@ -1621,6 +1622,33 @@ func (r *Runner) fatal(format string, args ...any) {
 }
 
 func (r *Runner) setVar(name, value string) { r.setVarAs(name, value, assignedAnyhow) }
+
+// savedVar is one variable's state before a transient assignment, held so the
+// assignment can be taken back: the value it had, whether it was set at all,
+// and whether `unset` had removed it from view.
+type savedVar struct {
+	name    string
+	value   string
+	present bool
+	removed bool
+}
+
+// restoreVars takes back transient assignments, most recent first.
+func (r *Runner) restoreVars(undo []savedVar) {
+	for i := len(undo) - 1; i >= 0; i-- {
+		u := undo[i]
+		if u.present {
+			r.Vars[u.name] = u.value
+		} else {
+			delete(r.Vars, u.name)
+		}
+		if u.removed {
+			r.removed[u.name] = true
+		} else {
+			delete(r.removed, u.name)
+		}
+	}
+}
 
 // assignForm says how an assignment was written, which one dialect answers a
 // readonly reassignment by.

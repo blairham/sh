@@ -125,6 +125,8 @@ func Semantics() interp.Semantics {
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.No
 	s.BadOptionToSpecialBuiltinFatal = interp.No
+	// zsh takes it and sets a global instead of refusing.
+	s.LocalOutsideAFunctionIsAnError = interp.No
 	// Fatal to all three, which is the one place zsh is stricter than bash
 	// about a builtin's failure. It refuses fewer operands, though, and the
 	// two sets it adds have only `0` in common: `export ?` is quiet and

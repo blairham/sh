@@ -2138,6 +2138,70 @@
         "TimedOut": false
       }
     },
+    "axis/local-inside-a-function": {
+      "bash": {
+        "Output": "in=2~out=",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "in=2~out=",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "in=2~out=",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "in=2~out=",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cscript\u003e: line 1: local: not found~in=~out=",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "in=2~out=",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/local-outside-a-function": {
+      "bash": {
+        "Output": "\u003cscript\u003e: line 1: local: can only be used in a function~x=~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cscript\u003e: line 1: local: can only be used in a function~x=~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cscript\u003e: line 1: local: can only be used in a function~x=~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cscript\u003e: 1: local: not in a function",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cscript\u003e: line 1: local: not found~x=~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "x=2~end",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "axis/pipeline-last-element": {
       "bash": {
         "Output": "[]",

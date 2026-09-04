@@ -733,6 +733,10 @@ type Diagnostics struct {
 	// what is trapped: bash writes `trap -- : SIGINT` where the other three
 	// write `INT`. Empty in three of the four, and never used for EXIT,
 	// which is not a signal.
+	// LocalOutsideAFunction is the refusal of `local` at the top level,
+	// taking nothing: bash says it can only be used in a function and dash
+	// says it is not in one.
+	LocalOutsideAFunction  string
 	TrapPrintsSignalPrefix string
 	// TrapConditionRequired is the refusal of `trap EXIT`, taking nothing.
 	// ksh93 only, since ksh93 is the only dialect that refuses the form.

@@ -125,6 +125,8 @@ func Semantics() interp.Semantics {
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.Yes
 	s.BadOptionToSpecialBuiltinFatal = interp.No
+	s.LocalOutsideAFunctionIsAnError = interp.Yes
+	s.LocalOutsideAFunctionIsFatal = interp.No
 	// bash reports every operand that is not a name, exports the ones that
 	// are, and carries on with a status of 1.
 	s.BadNameToDeclarationFatal = interp.No

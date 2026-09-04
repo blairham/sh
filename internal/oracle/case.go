@@ -291,6 +291,18 @@ var Corpus = []Case{
 		Why:     "fatal in dash and ksh, survivable in bash and zsh",
 	},
 	{
+		ID: "axis/local-outside-a-function", Category: "semantics axes",
+		Script:  true,
+		Snippet: "local x=2\necho x=$x\necho end",
+		Why:     "bash says so and carries on without setting it, dash says so and stops, ksh93 has no `local` at all, zsh sets a global",
+	},
+	{
+		ID: "axis/local-inside-a-function", Category: "semantics axes",
+		Script:  true,
+		Snippet: "f() { local x=2; echo in=$x; }\nf\necho out=$x",
+		Why:     "the control: where there is a function to be local to, three of the four agree and ksh93 still has no `local`",
+	},
+	{
 		ID: "axis/trap-bad-option", Category: "semantics axes",
 		Script:  true,
 		Snippet: "trap -Q INT\necho end",

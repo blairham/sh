@@ -436,9 +436,14 @@ func displayWidth(s string) int {
 			}
 			continue
 		}
-		_, size := utf8.DecodeRuneInString(s[i:])
+		r, size := utf8.DecodeRuneInString(s[i:])
 		i += size
-		n++
+		// Cells, not runes: a terminal draws `日` in two and a combining
+		// mark in none, and every calculation built on this — which row the
+		// cursor lands on, which row a redraw comes back up to, whether the
+		// line wrapped at all — is wrong by however many of those are to the
+		// left of it.
+		n += runeWidth(r)
 	}
 	return n
 }

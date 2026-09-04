@@ -218,3 +218,33 @@ func TestTypeCanStopAtTheSentence(t *testing.T) {
 		t.Errorf("out = %q, want the sentence alone", out)
 	}
 }
+
+// TestTypeRefusesAnOptionItDoesNotHave. Skipping a leading `-` word silently
+// made `type -t ls` answer about a name called `-t` and then about ls, which
+// is two wrong answers where one complaint was wanted.
+func TestTypeRefusesAnOptionItDoesNotHave(t *testing.T) {
+	out, _ := run(t, `type -x ls`, func(r *Runner) {
+		s := *r.Semantics
+		s.TypeEndsOptionsWithDashDash = Yes
+		r.Semantics = &s
+		dg := Diagnostics{BuiltinBadOption: "type: %[2]s: bad"}
+		r.Diagnostics = &dg
+	})
+	if !strings.Contains(out, "type: -x: bad") {
+		t.Errorf("got %q, want the option refused", out)
+	}
+	if strings.Contains(out, "not found") {
+		t.Errorf("got %q, want it not looked up as a name", out)
+	}
+
+	// The dialect with no options at all still reads it as a name, which is
+	// the answer the existing axis already carried.
+	out, _ = run(t, `type -x`, func(r *Runner) {
+		s := *r.Semantics
+		s.TypeEndsOptionsWithDashDash = No
+		r.Semantics = &s
+	})
+	if strings.Contains(out, "bad") {
+		t.Errorf("got %q, want no option complaint where there are no options", out)
+	}
+}

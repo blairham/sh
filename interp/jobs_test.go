@@ -209,8 +209,8 @@ func TestAnOptionTheDialectHasIsSaidToBeMissing(t *testing.T) {
 		sem := PosixSemantics()
 		sem.WaitReadsOptions = Yes
 		dg := Diagnostics{
-			BuiltinBadOption:  "wait: %[2]s: invalid option",
-			WaitOptionLetters: "nfp",
+			BuiltinBadOption:           "wait: %[2]s: invalid option",
+			UnimplementedOptionLetters: map[string]string{"wait": "nfp"},
 		}
 		r.Semantics, r.Diagnostics = &sem, &dg
 	})

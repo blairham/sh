@@ -181,3 +181,43 @@ func TestASingleLetterIsNamedTheSameWayByAll(t *testing.T) {
 		}
 	}
 }
+
+// TestAnOptionIsRefusedOrSaidToBeMissing, which are different answers to
+// different situations and must not be confused: one is "this shell has no
+// such option", the other is "this dialect has it and this shell does not".
+func TestAnOptionIsRefusedOrSaidToBeMissing(t *testing.T) {
+	dg := Diagnostics{
+		BuiltinBadOption:           "%[1]s: %[2]s: bad",
+		UnimplementedOptionLetters: map[string]string{"read": "s"},
+	}
+	noFatal := func(s *Semantics) { s.BadOptionToSpecialBuiltinFatal = No }
+
+	out, _ := optRun(t, noFatal, dg, `read -s v </dev/null`)
+	if !strings.Contains(out, "not implemented yet") {
+		t.Errorf("an option the dialect has: got %q", out)
+	}
+	if strings.Contains(out, "bad") {
+		t.Errorf("an option the dialect has: got %q, want it not called unknown", out)
+	}
+
+	out, _ = optRun(t, noFatal, dg, `read -q v </dev/null`)
+	if !strings.Contains(out, "read: -q: bad") {
+		t.Errorf("an option nobody has: got %q", out)
+	}
+}
+
+// TestTheMissingListIsCheckedAgainstTheOffendingLetterOnly. `--version`
+// contains `e`, `r` and `s`; if the list were checked against every letter in
+// the word rather than against the one being named, a word that happens to
+// contain a real option's letter would be called missing.
+func TestTheMissingListIsCheckedAgainstTheOffendingLetterOnly(t *testing.T) {
+	dg := Diagnostics{
+		BuiltinBadOption:           "%[1]s: %[2]s: bad",
+		UnimplementedOptionLetters: map[string]string{"read": "s"},
+	}
+	out, _ := optRun(t, func(s *Semantics) { s.BadOptionToSpecialBuiltinFatal = No },
+		dg, `read --version v </dev/null`)
+	if !strings.Contains(out, "read: --: bad") {
+		t.Errorf("got %q, want the named letter refused rather than the word searched", out)
+	}
+}

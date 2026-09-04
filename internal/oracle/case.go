@@ -3096,6 +3096,11 @@ echo after`,
 	},
 	// --- umask: the symbolic spelling ----------------------------------
 	{
+		ID: "axis/unset-a-subscripted-operand", Category: "semantics axes",
+		Snippet: "unset 'a[0]'; echo \"st=$?\"; echo after",
+		Why:     "three of the four take a subscript as naming an element; dash has no arrays and refuses it in the words it gives any bad name, which is fatal there",
+	},
+	{
 		ID: "umask/symbolic-two-operators-in-one-clause", Category: "umask",
 		Snippet: "umask 022; umask u+rw-x; umask",
 		Why:     "three of the four apply each operator in turn; zsh takes one per clause and names the second",

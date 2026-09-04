@@ -322,3 +322,67 @@ func TestNoDialectMeansNoAnswer(t *testing.T) {
 		t.Errorf("said %q, want the unspecified refusal", out)
 	}
 }
+
+// TestASubscriptedOperandIsAskedPerBuiltin is why this is two fields rather
+// than one: the same shell takes it for `unset` and refuses it for `export`.
+func TestASubscriptedOperandIsAskedPerBuiltin(t *testing.T) {
+	both := func(decl, unset Answer) func(*Semantics) {
+		return func(s *Semantics) {
+			s.DeclarationTakesASubscript = decl
+			s.UnsetTakesASubscript = unset
+			s.BadNameToDeclarationFatal = No
+			s.BadNameToUnsetFatal = No
+		}
+	}
+
+	// Refused for a declaration, taken for `unset` — bash's answer.
+	out, _ := nameRun(t, both(No, Yes), Diagnostics{}, `export "a[0]"; echo "st=$?"`)
+	if !strings.Contains(out, "st=1") {
+		t.Errorf("export: said %q, want it refused", out)
+	}
+	out, _ = nameRun(t, both(No, Yes), Diagnostics{}, `unset "a[0]"; echo "st=$?"`)
+	if !strings.Contains(out, "st=0") || strings.Contains(out, "not a valid") {
+		t.Errorf("unset: said %q, want it taken", out)
+	}
+
+	// And the other way round, which no shell does — but the fields are
+	// independent, and a test that only ever moved them together would pass
+	// with one field just as well.
+	out, _ = nameRun(t, both(Yes, No), Diagnostics{}, `export "a[0]"; echo "st=$?"`)
+	if !strings.Contains(out, "st=0") || strings.Contains(out, "not a valid") {
+		t.Errorf("export: said %q, want it taken", out)
+	}
+	out, _ = nameRun(t, both(Yes, No), Diagnostics{}, `unset "a[0]"; echo "st=$?"`)
+	if !strings.Contains(out, "st=1") {
+		t.Errorf("unset: said %q, want it refused", out)
+	}
+}
+
+// TestARefusedSubscriptUsesTheOrdinaryBadNameWording, which is why two of
+// the four need no new text for this at all: what they say about `export
+// a[0]` is what they say about `export 1x`.
+func TestARefusedSubscriptUsesTheOrdinaryBadNameWording(t *testing.T) {
+	set := func(s *Semantics) {
+		s.DeclarationTakesASubscript = No
+		s.BadNameToDeclarationFatal = No
+	}
+	out, _ := nameRun(t, set, Diagnostics{}, `export "a[0]"`)
+	if !strings.Contains(out, "a[0]") {
+		t.Errorf("said %q, want the operand named", out)
+	}
+	if !strings.Contains(out, "not a valid identifier") {
+		t.Errorf("said %q, want the ordinary bad-name wording", out)
+	}
+}
+
+// TestAnOperandWithNoSubscriptAsksNothing keeps the question off the path
+// every other operand takes.
+func TestAnOperandWithNoSubscriptAsksNothing(t *testing.T) {
+	out, _ := nameRun(t, nil, Diagnostics{}, `export ok=1; echo "[$ok]"`)
+	if !strings.Contains(out, "[1]") {
+		t.Errorf("said %q, want an ordinary operand to need no answer", out)
+	}
+	if strings.Contains(out, "disagree") {
+		t.Errorf("said %q, want nothing asked", out)
+	}
+}

@@ -311,6 +311,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `axis/readonly-reassign-declaration-status` | `<script>: 2: export: r: is read only` *(status 2)* | `<script>: line 2: r: readonly variable~st=1` | `<script>: line 2: r: readonly variable~st=1` | `<script>: line 2: r: readonly variable~st=1` | `<script>: line 2: r: is read only` *(status 1)* | `<script>:2: read-only variable: r` *(status 1)* |
 | `axis/readonly-reassign` | `<script>: 2: r: is read only` *(status 2)* | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: is read only` *(status 1)* | `<script>:2: read-only variable: r` *(status 1)* |
 | `axis/arith-error-status` | `<shell>: 1: arithmetic expression: division by zero: "1/0"` *(status 2)* | `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 1)* | `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 127)* | `<shell>: 1/0: division by 0 (error token is "0")` *(status 1)* | `<shell>: 1/0: divide by zero` *(status 1)* | `<shell>:1: division by zero` *(status 1)* |
+| `axis/unset-a-subscripted-operand` | `<shell>: 1: unset: a[0]: bad variable name` *(status 2)* | `st=0~after` | `st=0~after` | `st=0~after` | `st=0~after` | `st=0~after` |
 
 - `axis/array-base` — zsh indexes arrays from 1; dash has no arrays at all
   ```sh
@@ -421,6 +422,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `axis/arith-error-status` — dash exits 2 where bash, ksh93 and zsh exit 1; found by a test disagreeing with the conformance run, not by the sweep
   ```sh
   echo $((1/0)); echo "st=$?"
+  ```
+- `axis/unset-a-subscripted-operand` — three of the four take a subscript as naming an element; dash has no arrays and refuses it in the words it gives any bad name, which is fatal there
+  ```sh
+  unset 'a[0]'; echo "st=$?"; echo after
   ```
 
 ## diagnostics

@@ -146,6 +146,8 @@ func Semantics() interp.Semantics {
 	// `unset -- -` are all quiet — while `unset -v 1x` refuses. bash 3.2
 	// refused all of them, so the panel's two bash columns differ here.
 	s.UnsetNameOperands = interp.AnythingIsAName
+	s.DeclarationTakesASubscript = interp.No
+	s.UnsetTakesASubscript = interp.Yes
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No

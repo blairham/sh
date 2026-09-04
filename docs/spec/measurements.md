@@ -334,6 +334,61 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   echo $((1/0)); echo "st=$?"
   ```
 
+## diagnostics
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `axis/builtin-names-the-place` | `<script>: 2: cd: can't cd to /no/such/dir-xyz~done` | `<script>: line 2: cd: /no/such/dir-xyz: No such file or directory~done` | `<script>: line 2: cd: /no/such/dir-xyz: No such file or directory~done` | `<script>: line 2: cd: /no/such/dir-xyz: No such file or directory~done` | `<script>[2]: cd: /no/such/dir-xyz: [No such file or directory]~done` | `<script>:cd:2: no such file or directory: /no/such/dir-xyz~done` |
+| `axis/shell-names-the-place` | `<script>: 2: nosuchcmd-xyz: not found~done` | `<script>: line 2: nosuchcmd-xyz: command not found~done` | `<script>: line 2: nosuchcmd-xyz: command not found~done` | `<script>: line 2: nosuchcmd-xyz: command not found~done` | `<script>: line 2: nosuchcmd-xyz: not found~done` | `<script>:2: command not found: nosuchcmd-xyz~done` |
+| `axis/builtin-names-the-place-command-string` | `<shell>: 2: shift: can't shift that many` *(status 2)* | *(no output, status 1)* | `<shell>: line 2: shift: 99: shift count out of range` *(status 1)* | *(no output, status 1)* | `<shell>[2]: shift: 99: bad number` *(status 1)* | `<shell>:shift:2: shift count must be <= $#` *(status 1)* |
+| `axis/builtin-names-the-place-first-line` | `<shell>: 1: shift: can't shift that many` *(status 2)* | *(no output, status 1)* | `<shell>: line 1: shift: 99: shift count out of range` *(status 1)* | *(no output, status 1)* | `<shell>: shift: 99: bad number` *(status 1)* | `<shell>:shift:1: shift count must be <= $#` *(status 1)* |
+| `location/a-message-from-inside-a-function` | `<shell>: 2: nosuchcmd: not found` *(status 127)* | `<shell>: line 2: nosuchcmd: command not found` *(status 127)* | `<shell>: line 2: nosuchcmd: command not found` *(status 127)* | `<shell>: line 1: nosuchcmd: command not found` *(status 127)* | `<shell>: line 2: nosuchcmd: not found` *(status 127)* | `f:1: command not found: nosuchcmd` *(status 127)* |
+| `diag/a-line-worth-naming` | `one~<shell>: 2: nosuchcmd: not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 1: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: not found~st=127` | `one~<shell>:2: command not found: nosuchcmd~st=127` |
+| `diag/a-command-after-an-operator` | `one~<shell>: 3: nosuchcmd: not found~st=127` | `one~<shell>: line 3: nosuchcmd: command not found~st=127` | `one~<shell>: line 3: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 3: nosuchcmd: not found~st=127` | `one~<shell>:3: command not found: nosuchcmd~st=127` |
+
+- `axis/builtin-names-the-place` — ksh93 brackets the line for a builtin's own complaint: script[2]: cd: ...
+  ```sh
+  true
+  cd /no/such/dir-xyz
+  echo done
+  ```
+- `axis/shell-names-the-place` — the other half of the same script: not a builtin's complaint, so the word form
+  ```sh
+  true
+  nosuchcmd-xyz
+  echo done
+  ```
+- `axis/builtin-names-the-place-command-string` — and names it from line 2 on, which is where the bracketed style shows under -c
+  ```sh
+  true
+  shift 99
+  ```
+- `axis/builtin-names-the-place-first-line` — ksh93 leaves the line out on line 1 of a command string, in the bracketed style too
+  ```sh
+  shift 99
+  ```
+- `location/a-message-from-inside-a-function` — three of the panel name the file and count from the top of it wherever the message came from. zsh names the *function* instead and counts within it, so the same failure is reported at a line that is not the line it is on — which is the sort of thing that looks like an off-by-one until it is measured
+  ```sh
+  f() {
+    nosuchcmd
+  }
+  true
+  f
+  ```
+- `diag/a-line-worth-naming` — ksh93 names the line under `-c` only after the first: `ksh: nosuchcmd: not found` on line 1 and `ksh: line 2: nosuchcmd: not found` here. Every earlier measurement used a one-line `-c`, where naming no line and naming line 1 are the same output
+  ```sh
+  echo one
+  nosuchcmd
+  echo "st=$?"
+  ```
+- `diag/a-command-after-an-operator` — a command written after `&&`, `||` or `|` at the end of a line is reported at its own line, not at the one the chain began on. Unanimous, so it is the core's behavior — and it was off by however many lines the chain had run for, which in a long `&&` chain is every line of it
+  ```sh
+  echo one
+  false ||
+  nosuchcmd
+  echo "st=$?"
+  ```
+
 ## tokenization
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
@@ -2063,36 +2118,6 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   { /bin/sh -c 'kill -USR1 $$'; } 2>e.txt
   sed -E "s/ [0-9]+/ N/g; s/  +/ /g" e.txt
-  ```
-
-## diagnostics
-
-| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
-| --- | --- | --- | --- | --- | --- | --- |
-| `location/a-message-from-inside-a-function` | `<shell>: 2: nosuchcmd: not found` *(status 127)* | `<shell>: line 2: nosuchcmd: command not found` *(status 127)* | `<shell>: line 2: nosuchcmd: command not found` *(status 127)* | `<shell>: line 1: nosuchcmd: command not found` *(status 127)* | `<shell>: line 2: nosuchcmd: not found` *(status 127)* | `f:1: command not found: nosuchcmd` *(status 127)* |
-| `diag/a-line-worth-naming` | `one~<shell>: 2: nosuchcmd: not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 1: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: not found~st=127` | `one~<shell>:2: command not found: nosuchcmd~st=127` |
-| `diag/a-command-after-an-operator` | `one~<shell>: 3: nosuchcmd: not found~st=127` | `one~<shell>: line 3: nosuchcmd: command not found~st=127` | `one~<shell>: line 3: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 3: nosuchcmd: not found~st=127` | `one~<shell>:3: command not found: nosuchcmd~st=127` |
-
-- `location/a-message-from-inside-a-function` — three of the panel name the file and count from the top of it wherever the message came from. zsh names the *function* instead and counts within it, so the same failure is reported at a line that is not the line it is on — which is the sort of thing that looks like an off-by-one until it is measured
-  ```sh
-  f() {
-    nosuchcmd
-  }
-  true
-  f
-  ```
-- `diag/a-line-worth-naming` — ksh93 names the line under `-c` only after the first: `ksh: nosuchcmd: not found` on line 1 and `ksh: line 2: nosuchcmd: not found` here. Every earlier measurement used a one-line `-c`, where naming no line and naming line 1 are the same output
-  ```sh
-  echo one
-  nosuchcmd
-  echo "st=$?"
-  ```
-- `diag/a-command-after-an-operator` — a command written after `&&`, `||` or `|` at the end of a line is reported at its own line, not at the one the chain began on. Unanimous, so it is the core's behavior — and it was off by however many lines the chain had run for, which in a long `&&` chain is every line of it
-  ```sh
-  echo one
-  false ||
-  nosuchcmd
-  echo "st=$?"
   ```
 
 ## substitutions

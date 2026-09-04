@@ -291,6 +291,28 @@ var Corpus = []Case{
 		Why:     "fatal in dash and ksh, survivable in bash and zsh",
 	},
 	{
+		ID: "axis/builtin-names-the-place", Category: "diagnostics",
+		Script:  true,
+		Snippet: "true\ncd /no/such/dir-xyz\necho done",
+		Why:     "ksh93 brackets the line for a builtin's own complaint: script[2]: cd: ...",
+	},
+	{
+		ID: "axis/shell-names-the-place", Category: "diagnostics",
+		Script:  true,
+		Snippet: "true\nnosuchcmd-xyz\necho done",
+		Why:     "the other half of the same script: not a builtin's complaint, so the word form",
+	},
+	{
+		ID: "axis/builtin-names-the-place-command-string", Category: "diagnostics",
+		Snippet: "true\nshift 99",
+		Why:     "and names it from line 2 on, which is where the bracketed style shows under -c",
+	},
+	{
+		ID: "axis/builtin-names-the-place-first-line", Category: "diagnostics",
+		Snippet: "shift 99",
+		Why:     "ksh93 leaves the line out on line 1 of a command string, in the bracketed style too",
+	},
+	{
 		ID: "axis/readonly-reassign", Category: "semantics axes",
 		Script:  true,
 		Snippet: "readonly r=1\nr=2\necho survived",

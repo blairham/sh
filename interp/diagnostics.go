@@ -1123,6 +1123,22 @@ type Diagnostics struct {
 	// nothing else, which is what this printed before any of it was a
 	// dialect's answer.
 	Location LocationStyle
+	// BuiltinLocation is Location for a message a *builtin* is speaking,
+	// in a dialect that names the place two ways in the one script.
+	//
+	// ksh93 is the dialect: `script[1]: cd: ...` from a builtin against
+	// `script: line 1: nosuchcmd: not found` from everything else. The two
+	// are the same question asked about different speakers rather than one
+	// answer, which is why it is a second field and not a fifth style.
+	//
+	// LocationNone means the dialect names the place one way, which is every
+	// other dialect. A dialect wanting a builtin to name no place at all has
+	// never been measured and would need more than this field.
+	BuiltinLocation LocationStyle
+	// ScriptBuiltinLocation is BuiltinLocation for a script read from a
+	// file, the way ScriptLocation is Location for one. ksh93 names line 1
+	// in a file and not under `-c`, in both of its styles.
+	ScriptBuiltinLocation LocationStyle
 }
 
 // LocationStyle is one shell's way of saying where a diagnostic happened.
@@ -1150,6 +1166,16 @@ const (
 	// `sh -c 'one-liner'` cannot tell this from LocationNone, and that is how
 	// LocationNone got here.
 	LocationLineWordAfterFirst
+	// LocationBracketLine is `ksh: script[1]: msg` — the line in brackets,
+	// against the shell's name rather than after it.
+	//
+	// ksh93 uses it for the messages a *builtin* speaks, and the word form
+	// for everything else, which is what BuiltinLocation selects between.
+	LocationBracketLine
+	// LocationBracketLineAfterFirst is LocationBracketLine with the line
+	// left out on line 1, the same way LocationLineWordAfterFirst leaves it
+	// out — ksh93's answer for `-c`, where line 1 names no line at all.
+	LocationBracketLineAfterFirst
 )
 
 // Wording renders one failure, using the dialect's format when it has one.
@@ -1324,6 +1350,9 @@ func (d Diagnostics) ForScript() Diagnostics {
 	if d.ScriptLocation != LocationNone {
 		d.Location = d.ScriptLocation
 	}
+	if d.ScriptBuiltinLocation != LocationNone {
+		d.BuiltinLocation = d.ScriptBuiltinLocation
+	}
 	return d
 }
 
@@ -1426,12 +1455,23 @@ func (d Diagnostics) prefix(name, builtin string, line int) string {
 		// dialect already uses instead of replacing it.
 		name += ":" + builtin
 	}
-	switch d.Location {
+	style := d.Location
+	if builtin != "" && d.BuiltinLocation != LocationNone {
+		style = d.BuiltinLocation
+	}
+	switch style {
 	case LocationLineWordAfterFirst:
 		if line <= 1 {
 			return name + ": "
 		}
 		return fmt.Sprintf("%s: line %d: ", name, line)
+	case LocationBracketLine:
+		return fmt.Sprintf("%s[%d]: ", name, line)
+	case LocationBracketLineAfterFirst:
+		if line <= 1 {
+			return name + ": "
+		}
+		return fmt.Sprintf("%s[%d]: ", name, line)
 	case LocationColonLine:
 		return fmt.Sprintf("%s: %d: ", name, line)
 	case LocationLineWord:

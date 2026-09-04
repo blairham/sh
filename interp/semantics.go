@@ -644,6 +644,19 @@ type Semantics struct {
 	// writes an alias holding a tab as `$'a\tb'` and a trap holding one as
 	// a plainly quoted `'a<tab>b'`.
 	TrapQuoting ListingQuotingStyle
+
+	// TrapBodyLine is which lines a diagnostic from inside a trap's body
+	// names. See TrapBodyLineStyle.
+	TrapBodyLine TrapBodyLineStyle
+
+	// ExitTrapFiresPastTheEnd counts the EXIT trap as having fired on the
+	// line after the script's last, rather than on its first.
+	//
+	// Only asked by a dialect whose TrapBodyLine needs a firing line at all,
+	// and only for EXIT, which has no line of its own. zsh says yes: its
+	// EXIT trap reports the line the parser stopped at. ksh93 says no, which
+	// makes an EXIT body read like a small script of its own.
+	ExitTrapFiresPastTheEnd Answer
 	// SelectPromptNeedsTerminal withholds PS3 unless the input is a terminal.
 	// ksh93 alone says yes, which is why a ksh93 script's transcript has the
 	// menu in it and no prompt.

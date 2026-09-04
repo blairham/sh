@@ -303,6 +303,18 @@ var Corpus = []Case{
 		Why:     "the control: where there is a function to be local to, three of the four agree and ksh93 still has no `local`",
 	},
 	{
+		ID: "axis/trap-body-line-exit", Category: "diagnostics",
+		Script:  true,
+		Snippet: "echo one\ntrap 'echo a\nnosuchcmd-xyz' EXIT\necho two",
+		Why:     "a two-line EXIT body: bash, dash and ksh93 name its second line, zsh names the line after the script's last",
+	},
+	{
+		ID: "axis/trap-body-line-signal", Category: "diagnostics",
+		Script:  true,
+		Snippet: "trap 'echo a\nnosuchcmd-xyz' INT\necho two\nkill -INT $$\necho three",
+		Why:     "the same body on a signal: ksh93 counts it from where it fired and zsh names only where it fired",
+	},
+	{
 		ID: "axis/trap-bad-option", Category: "semantics axes",
 		Script:  true,
 		Snippet: "trap -Q INT\necho end",

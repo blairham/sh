@@ -383,6 +383,15 @@ type Runner struct {
 	inExitTrap          bool
 	exitTrapEntryStatus int
 
+	// linePin overrides the line a node reports, for the dialect that names
+	// where a trap fired rather than where in its body a failure was.
+	linePin int
+
+	// programEnd is the line after the script's last, which is where the
+	// shell has got to once the script has run — what one dialect calls the
+	// EXIT trap's line.
+	programEnd int
+
 	// exitTrap is the body of `trap … EXIT`, or nil when none is set. Only
 	// EXIT is stored: the other signals need delivery, which is a separate
 	// piece, and `trap` refuses them rather than accepting one and never
@@ -581,7 +590,14 @@ func (r *Runner) diagf(format string, args ...any) {
 // lineOf is where a node is in the script, rather than in the string that was
 // parsed to reach it. The two differ only inside a command substitution, and
 // they differ by however far into the script the substitution was written.
-func (r *Runner) lineOf(p syntax.Pos) int { return p.Line + r.lineBase }
+func (r *Runner) lineOf(p syntax.Pos) int {
+	if r.linePin != 0 {
+		// One dialect names where a trap fired for every line of its body,
+		// so the node's own line says nothing.
+		return r.linePin
+	}
+	return p.Line + r.lineBase
+}
 
 // locationPrefix is what goes in front of a diagnostic.
 //
@@ -667,6 +683,7 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	if r.started.IsZero() {
 		r.started = time.Now()
 	}
+	r.programEnd = f.End().Line + 1
 	for _, st := range f.Stmts {
 		if err := r.stmt(ctx, st); err != nil {
 			return err
@@ -750,6 +767,7 @@ func (r *Runner) runExitTrap(ctx context.Context) {
 // runTrapBody parses and runs a trap's text, which is re-parsed at fire time
 // because that is when a shell reads it.
 func (r *Runner) runTrapBody(ctx context.Context, body string) {
+	defer r.enterTrapBody()()
 	p := syntax.NewParser(body, r.dialect())
 	f := p.Parse()
 	if err := p.Err(); err != nil {

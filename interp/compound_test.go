@@ -93,6 +93,39 @@ func TestCaseMatching(t *testing.T) {
 	}
 }
 
+func TestCaseFallthroughFollowsEachArmsTerminator(t *testing.T) {
+	// A body reached by `;&` still owns its terminator: another `;&`
+	// keeps falling, `;;` stops, and the end of the item list stops.
+	// Honoring only the matched arm's terminator ran one extra body and
+	// returned, which dropped the third link of every chain.
+	tests := []struct{ name, src, want string }{
+		{"chain of three", `case a in a) echo 1;& b) echo 2;& c) echo 3;; esac`, "1\n2\n3\n"},
+		{"chain stops at double-semi", `case a in a) echo 1;& b) echo 2;; c) echo 3;; esac`, "1\n2\n"},
+		{"fall-through on the last arm", `case a in x) echo no;; a) echo last;& esac`, "last\n"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, _ := run(t, tc.src, nil); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+	// The status is the last body's, however the arm was reached.
+	if _, st := run(t, `case a in a) false;& b) true;& c) false;; esac`, nil); st != 1 {
+		t.Errorf("status = %d, want the last fallen-into body's 1", st)
+	}
+	// The two operators compose rather than alias: a fallen-into arm
+	// ending in the continue-matching terminator goes back to pattern
+	// testing, and a re-matched arm ending in fall-through falls again.
+	// That terminator is grammar the core lacks, hence the wider dialect.
+	if got, _ := runBash(t, `case a in a) echo 1;& b) echo 2;;& c) echo 3;; a) echo 4;; esac`); got != "1\n2\n4\n" {
+		t.Errorf("fall-through into continue-matching: got %q, want %q", got, "1\n2\n4\n")
+	}
+	if got, _ := runBash(t, `case a in a) echo 1;;& a) echo 2;& x) echo 3;; a) echo 4;; esac`); got != "1\n2\n3\n" {
+		t.Errorf("continue-matching into fall-through: got %q, want %q", got, "1\n2\n3\n")
+	}
+}
+
 func TestPipelines(t *testing.T) {
 	if got, _ := run(t, `echo hi | cat`, nil); got != "hi\n" {
 		t.Errorf("got %q", got)

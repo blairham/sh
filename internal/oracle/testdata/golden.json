@@ -4250,6 +4250,102 @@
         "TimedOut": false
       }
     },
+    "cmd/case-fallthrough-chain": {
+      "bash": {
+        "Output": "one~two~three",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "one~two~three",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `\u0026'~\u003cshell\u003e: -c: line 0: `case a in a) echo one;\u0026 b) echo two;\u0026 c) echo three;; esac'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"\u0026\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "one~two~three",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "one~two~three",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cmd/case-fallthrough-last-arm": {
+      "bash": {
+        "Output": "last",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "last",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `\u0026'~\u003cshell\u003e: -c: line 0: `case a in x) echo no;; a) echo last;\u0026 esac'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"\u0026\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "last",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "last",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cmd/case-fallthrough-then-continue-matching": {
+      "bash": {
+        "Output": "one~two~four",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "one~two~four",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `\u0026'~\u003cshell\u003e: -c: line 0: `case a in a) echo one;\u0026 b) echo two;;\u0026 c) echo three;; a) echo four;; esac'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"\u0026\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: syntax error at line 1: `\u0026' unexpected",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: parse error near `\u0026'",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "cmd/close-brace-as-an-ordinary-word": {
       "bash": {
         "Output": "}",

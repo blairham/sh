@@ -1237,6 +1237,9 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `cmd/for-status-empty-list` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `cmd/case-fallthrough` | `<shell>: 1: Syntax error: "&" unexpected` *(status 2)* | `one~two` | `one~two` | `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in a) echo one;& b) echo two;; esac'` *(status 2)* | `one~two` | `one~two` |
 | `cmd/case-continue-matching` | `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `one~two` | `one~two` | `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in a) echo one;;& a) echo two;; esac'` *(status 2)* | `<shell>: syntax error at line 1: `&' unexpected` *(status 3)* | `<shell>:1: parse error near `&'` *(status 1)* |
+| `cmd/case-fallthrough-chain` | `<shell>: 1: Syntax error: "&" unexpected` *(status 2)* | `one~two~three` | `one~two~three` | `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in a) echo one;& b) echo two;& c) echo three;; esac'` *(status 2)* | `one~two~three` | `one~two~three` |
+| `cmd/case-fallthrough-then-continue-matching` | `<shell>: 1: Syntax error: "&" unexpected` *(status 2)* | `one~two~four` | `one~two~four` | `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in a) echo one;& b) echo two;;& c) echo three;; a) echo four;; esac'` *(status 2)* | `<shell>: syntax error at line 1: `&' unexpected` *(status 3)* | `<shell>:1: parse error near `&'` *(status 1)* |
+| `cmd/case-fallthrough-last-arm` | `<shell>: 1: Syntax error: "&" unexpected` *(status 2)* | `last` | `last` | `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in x) echo no;; a) echo last;& esac'` *(status 2)* | `last` | `last` |
 | `cmd/function-body-simple-command` | `hi` | `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `f() echo hi; f'` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `f() echo hi; f'` *(status 2)* | `<shell>: -c: line 0: syntax error near unexpected token `echo'~<shell>: -c: line 0: `f() echo hi; f'` *(status 2)* | `hi` | `hi` |
 | `cmd/function-name-with-a-dash` | `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `ok~after` | `ok~after` | `ok~after` | `<shell>: f-g: invalid function name` *(status 1)* | `ok~after` |
 | `cmd/function-name-with-a-dot` | `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `ok~after` | `ok~after` | `ok~after` | `<shell>: a.b: invalid discipline function` *(status 1)* | `ok~after` |
@@ -1342,6 +1345,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `cmd/case-continue-matching` — ;;& keeps testing later patterns and is bash-only — lumping it with ;& would put a bash construct in the core
   ```sh
   case a in a) echo one;;& a) echo two;; esac
+  ```
+- `cmd/case-fallthrough-chain` — each arm reached by ;& has a terminator of its own to honor — honoring only the matched arm's ran one extra body and stopped
+  ```sh
+  case a in a) echo one;& b) echo two;& c) echo three;; esac
+  ```
+- `cmd/case-fallthrough-then-continue-matching` — a ;& into an arm ending in ;;& goes back to pattern testing, not to falling — the two operators compose rather than alias
+  ```sh
+  case a in a) echo one;& b) echo two;;& c) echo three;; a) echo four;; esac
+  ```
+- `cmd/case-fallthrough-last-arm` — ;& on the final arm has nothing to fall into and must end the case cleanly, not read past the item list
+  ```sh
+  case a in x) echo no;; a) echo last;& esac
   ```
 - `cmd/function-body-simple-command` — bash alone wants a compound body after the parens; dash, ksh93 and zsh take the simple command as a one-command body and run it — being more permissive than bash here is the dangerous direction only for scripts aimed at bash
   ```sh

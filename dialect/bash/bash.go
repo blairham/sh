@@ -311,14 +311,19 @@ func Diagnostics() interp.Diagnostics {
 		TraceForHeader:       interp.TraceForSource,
 		// bash names the construct and the line it opened on, and nothing
 		// about what would have closed it.
-		EvalNaming:                 interp.SourceBeforeLocation,
-		SourceFileNaming:           interp.SourceReplacesShell,
-		UnterminatedEndsOnNextLine: true,
-		ArithOperandExpected:       "arithmetic syntax error: operand expected",
-		ArithOperatorExpected:      "arithmetic syntax error in expression",
-		ArithBadOperator:           "arithmetic syntax error: invalid arithmetic operator",
-		ArithFailureStatus:         1,
-		SyntaxUnexpected:           "syntax error near unexpected token `%[1]s'",
+		EvalNaming:       interp.SourceBeforeLocation,
+		SourceFileNaming: interp.SourceReplacesShell,
+		// Runtime diagnostics move with the source too: a failure inside a
+		// sourced file, or inside a function defined in one, names that file
+		// as written — `./inc.sh: line 1: nosuch: command not found` — where
+		// dash and ksh93 keep the script's own name.
+		LocationNamesTheCurrentFile: true,
+		UnterminatedEndsOnNextLine:  true,
+		ArithOperandExpected:        "arithmetic syntax error: operand expected",
+		ArithOperatorExpected:       "arithmetic syntax error in expression",
+		ArithBadOperator:            "arithmetic syntax error: invalid arithmetic operator",
+		ArithFailureStatus:          1,
+		SyntaxUnexpected:            "syntax error near unexpected token `%[1]s'",
 		// A parse failure by every other measure, and 1 rather than this
 		// dialect's syntax-error status.
 		ForNameStatus:     1,

@@ -1433,6 +1433,25 @@ var Corpus = []Case{
 		Why:             "three of the panel name the file and count from the top of it wherever the message came from. zsh names the *function* instead and counts within it, so the same failure is reported at a line that is not the line it is on — which is the sort of thing that looks like an off-by-one until it is measured",
 	},
 	{
+		ID: "location/a-message-from-inside-a-sourced-file", Category: "diagnostics",
+		// A script rather than -c so the outer name is a file that could
+		// plausibly be named instead: the question is which file the location
+		// names, and under -c there is only one. The sourced file is written
+		// by the snippet itself, so its name — which is the point — is the
+		// same on every machine.
+		Script:  true,
+		Snippet: "printf 'nosuchcmd-xyz\\n' > inc.sh\n. ./inc.sh\necho st=$?",
+		Why:     "the line is the sourced file's in all four, and the name splits the panel: bash and zsh name the sourced file as written, where dash and ksh93 keep the script's own name — dash writing the file's path after the location and ksh93 naming `.` and pinning its outer line where the dot was",
+	},
+	{
+		ID: "location/a-message-from-a-function-a-sourced-file-defined", Category: "diagnostics",
+		// Called after the sourcing has finished, so nothing about the `.` is
+		// still on the stack — what is named is what the function remembered.
+		Script:  true,
+		Snippet: "printf 'f() {\\n  nosuchcmd-xyz\\n}\\n' > inc.sh\n. ./inc.sh\nf\necho st=$?",
+		Why:     "bash names the file the function was *defined* in, zsh names the function, and dash and ksh93 name the script — while all four count the defining file's lines, so three of the panel report a line the named file does not have",
+	},
+	{
 		ID: "name/a-lone-dash-given-to-a-builtin", Category: "builtins",
 		Snippet: `unalias -; echo "st=$?"`,
 		Why:     "a `-` on its own is an operand in three of the panel and an option in zsh, which eats it. `unalias` is where that shows: the three complain about an alias called `-`, each in its own words, and the fourth complains that it was given nothing to unalias at all. `unset -` looks the same in bash for a different reason — its bare form validates no operand — which is why the case is not written with that one",

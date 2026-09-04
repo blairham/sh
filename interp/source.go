@@ -226,7 +226,7 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 		return status
 	}
 
-	path, err := r.resolveDotPath(args[0])
+	display, path, err := r.resolveDotPath(args[0])
 	if err != nil {
 		return r.dotFailed(args[0], err)
 	}
@@ -261,12 +261,15 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 	// A frame of its own, because a sourced file is a place a script can be
 	// *in*: the functions it declares remember it, and a script asking where
 	// it is while being sourced means the file rather than whatever sourced
-	// it. Named for the builtin, which is what the shells put in the stack.
-	r.pushFrame(Frame{File: path, Name: "source"})
+	// it. Named for the builtin, which is what the shells put in the stack —
+	// and carrying the operand as the shell constructed it rather than the
+	// resolved path, which is the spelling diagnostics and the source stack
+	// were measured to use.
+	r.pushFrame(Frame{File: display, Name: "source"})
 	defer r.popFrame()
 
 	st := r.runSourced(ctx, string(b), sourced{
-		label:        path,
+		label:        display,
 		syntaxStatus: r.diag().sourcedSyntaxStatus(),
 		catchReturn:  true,
 	})
@@ -331,30 +334,39 @@ var errNotOnPath = errors.New("no such file or directory")
 // Only if PATH misses does the current directory come into it, and only in
 // bash: measured, `PATH=/usr/bin:/bin; . dotcwd.sh` finds the file in bash and
 // is "not found" in dash, ksh93 and zsh.
-// It returns the path to *read*, already resolved against this runner's
-// directory, because that is the only form the caller can safely open.
-func (r *Runner) resolveDotPath(name string) (string, error) {
+//
+// It returns two forms of the answer, because two callers want two different
+// things. path is the file to *read*, resolved against this runner's
+// directory, which is the only form the caller can safely open. display is
+// what a diagnostic and the call stack name, which is the path as the shell
+// constructed it and not where it resolved to: measured, `. ./inc.sh` is
+// reported as `./inc.sh`, a PATH hit as the joined `<dir>/inc.sh`, and the
+// current-directory fallback as the bare operand — the resolved absolute path
+// appears in none of them, and the shell asking its own source stack gets the
+// same spelling the diagnostics use.
+func (r *Runner) resolveDotPath(name string) (display, path string, err error) {
 	if strings.ContainsRune(name, filepath.Separator) {
-		return r.atDir(name), nil
+		return name, r.atDir(name), nil
 	}
-	path, _ := r.getVar("PATH")
-	for _, dir := range filepath.SplitList(path) {
+	pathVar, _ := r.getVar("PATH")
+	for _, dir := range filepath.SplitList(pathVar) {
 		if dir == "" {
 			// An empty PATH element means the current directory, which is a
 			// POSIX rule and is not the same as the bash fallback below: this
 			// one was asked for.
 			dir = "."
 		}
-		if candidate := r.atDir(filepath.Join(dir, name)); readableFile(candidate) {
-			return candidate, nil
+		joined := filepath.Join(dir, name)
+		if candidate := r.atDir(joined); readableFile(candidate) {
+			return joined, candidate, nil
 		}
 	}
 	if r.ask(r.sem().DotFallsBackToCurrentDirectory, "`.` looking in the current directory after PATH misses") {
 		if candidate := r.atDir(name); readableFile(candidate) {
-			return candidate, nil
+			return name, candidate, nil
 		}
 	}
-	return "", fmt.Errorf("%w", errNotOnPath)
+	return "", "", fmt.Errorf("%w", errNotOnPath)
 }
 
 // atDir resolves a relative path against *this runner's* directory rather than

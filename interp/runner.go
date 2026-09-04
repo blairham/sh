@@ -780,7 +780,19 @@ func (r *Runner) builtinIsSpeaking() bool {
 func (r *Runner) locationPrefix() string {
 	d := r.diag()
 	if r.inFunc == "" || !d.LocationNamesTheFunction {
-		return d.prefix(r.name(), r.inBuiltin, r.builtinIsSpeaking(), r.line)
+		name := r.name()
+		if d.LocationNamesTheCurrentFile {
+			// The file the failing line was read from: the sourced file while
+			// it runs, and the defining file inside a function called later.
+			// At the top level of a script the current file is the script,
+			// and under `-c` or standard input there is no file at all — the
+			// stack answers the shell's own name for both, so neither route
+			// changes here.
+			if f := r.currentFile(); f != "" {
+				name = f
+			}
+		}
+		return d.prefix(name, r.inBuiltin, r.builtinIsSpeaking(), r.line)
 	}
 	if n := r.line - r.funcLine; n > 0 {
 		return d.prefix(r.inFunc, r.inBuiltin, r.builtinIsSpeaking(), n)

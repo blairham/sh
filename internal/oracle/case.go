@@ -1472,6 +1472,26 @@ var Corpus = []Case{
 		Why:     "the same question reached from the other side, and `unset a[i]` had been doing nothing at all: the subscript was read as part of the name, so a name that was never in the table was deleted from it. What the hole then looks like is the same axis",
 	},
 	{
+		ID: "assoc/a-string-subscript", Category: "expansion",
+		Snippet: `typeset -A m; m[k]=v; echo "${m[k]}" "${!m[@]}"`,
+		Why:     "the declaration that turns a subscript from an expression into a key. bash and ksh93 store under the letter and answer it back; zsh has the arrays but rejects `${!m[@]}` outright; dash has none of it — the issue's own snippet, spelled with the name all three declarers share",
+	},
+	{
+		ID: "assoc/the-subscript-is-not-arithmetic", Category: "expansion",
+		Snippet: `typeset -A m; m[1+1]=x; echo "[${m[1+1]}]"`,
+		Why:     "the sharpest edge of the attribute: the same characters that name element 2 of an indexed array name the three-character key of a declared one, unanimously in the shells that have it — so the switch has to be thrown before the subscript is read, not after",
+	},
+	{
+		ID: "assoc/values-in-some-order", Category: "expansion",
+		Snippet: `typeset -A m; m[b]=2; m[a]=1; printf "%s\n" "${m[@]}" | sort | tr "\n" " "; echo "n=${#m[@]}"`,
+		Why:     "`${m[@]}` is one field per element and `${#m[@]}` counts them, exactly as for an indexed array. Sorted before comparing because no shell promises an order — bash's own moves between versions — and a case that depended on one would pin an accident",
+	},
+	{
+		ID: "assoc/a-compound-literal-and-unset", Category: "expansion",
+		Snippet: `typeset -A m; m=([a]=1 [b]=2); unset "m[a]"; echo "n=${#m[@]} b=${m[b]} a=${m[a]:-gone}"`,
+		Why:     "the `([k]=v …)` literal keys its elements rather than counting them, and `unset m[k]` takes one key rather than doing nothing — unanimous in the three that have the attribute, and the removed element is gone rather than empty",
+	},
+	{
 		ID: "subst/a-case-inside-a-substitution", Category: "expansion",
 		Snippet: `x=$(case a in a) echo yes;; esac); echo "[$x]"`,
 		Why:     "where a substitution ends is a question about the grammar and not about how many parentheses have been counted: an arm's `)` closes nothing, so counting stops early and takes half the arm with it. Unanimous, and the shape that made two installed scripts parse into a tree nobody wrote",

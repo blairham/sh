@@ -418,6 +418,13 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 			delete(r.Arrays, name)
 		}
 	}
+	for name, old := range sc.savedAssoc {
+		if sc.assocExisted[name] {
+			r.AssocArrays[name] = old
+		} else {
+			delete(r.AssocArrays, name)
+		}
+	}
 	// And whether `unset` had hidden the name, which a hiding `local` set
 	// for the function's duration: put back what was true at the shadow.
 	for name, was := range sc.removedBefore {

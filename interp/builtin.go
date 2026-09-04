@@ -756,8 +756,28 @@ func (r *Runner) cdNowhere(wording, fallback string) (int, bool) {
 	return orDefault(r.diag().CdStatus, 1), true
 }
 
-func biPwd(r *Runner, _ context.Context, _ []string) int {
-	_, _ = fmt.Fprintln(r.stdout(), r.workDir())
+func biPwd(r *Runner, _ context.Context, args []string) int {
+	// `-L` and `-P` with the last one deciding, which is unanimous —
+	// `pwd -L -P` is physical in all four shells. Operands are ignored by
+	// three of the four, which is what leaving them unread does.
+	_, opts, code := r.builtinOptions("pwd", args, "LP")
+	if code != 0 {
+		return code
+	}
+	physical := false
+	for _, o := range opts {
+		physical = o == 'P'
+	}
+	dir := r.workDir()
+	if physical {
+		// Where the directory *is*, not the name it was reached by. A path
+		// that cannot be resolved is printed as held, the same answer `cd
+		// -P` gives for one.
+		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+			dir = resolved
+		}
+	}
+	_, _ = fmt.Fprintln(r.stdout(), dir)
 	return 0
 }
 

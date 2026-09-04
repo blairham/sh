@@ -113,6 +113,11 @@ func Semantics() interp.Semantics {
 	s.CdDashPrintsTheDirectory = interp.No
 	s.PrintfAssignsWithV = interp.Yes
 	s.PrintfRejectsUnknownOption = interp.No
+	// zsh reads no options here: `trap -p` sets a trap whose action is the
+	// word `-p`, and the failure surfaces when it fires.
+	s.TrapParsesOptions = interp.No
+	s.TrapOneArgumentIsACondition = interp.Yes
+	s.TrapReportsAnUnknownSingleCondition = interp.No
 	s.UmaskPrintsFourDigits = interp.No
 	s.UmaskSetWithSPrints = interp.No
 	s.UlimitBlockIsKilobyte = interp.No

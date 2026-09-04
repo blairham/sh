@@ -296,6 +296,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `axis/dollar-zero-in-function` | `<shell>` | `<shell>` | `sh` | `<shell>` | `<shell>` | `f` |
 | `axis/local-builtin` | `1` | `1` | `1` | `1` | `<shell>: local: not found` | `1` |
 | `axis/shift-past-end` | `<shell>: 1: shift: can't shift that many` *(status 2)* | `survived` | `<shell>: line 1: shift: 5: shift count out of range~survived` | `survived` | `<shell>: shift: 5: bad number` *(status 1)* | `<shell>:shift:1: shift count must be <= $#~survived` |
+| `axis/trap-bad-option` | `<script>: 1: trap: Illegal option -Q` *(status 2)* | `<script>: line 1: trap: -Q: invalid option~trap: usage: trap [-Plp] [[action] signal_spec ...]~end` | `<script>: line 1: trap: -Q: invalid option~trap: usage: trap [-Plp] [[action] signal_spec ...]~end` | `<script>: line 1: trap: -Q: invalid option~trap: usage: trap [-lp] [arg signal_spec ...]~end` | `<script>[1]: trap: -Q: unknown option~Usage: trap [-p] [action condition ...]` *(status 2)* | `end` |
+| `axis/trap-print-p` | `<script>: 2: trap: Illegal option -p` *(status 2)* | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' INT~end` | `end` |
+| `axis/trap-one-argument` | `end` | `end` | `end` | `end` | `<script>[2]: trap: condition(s) required` *(status 1)* | `end` |
+| `axis/trap-one-argument-unknown` | `trap: notacondition: bad trap~end` | `trap: usage: trap [-Plp] [[action] signal_spec ...]~end` | `trap: usage: trap [-Plp] [[action] signal_spec ...]~end` | `trap: usage: trap [-lp] [arg signal_spec ...]~end` | `<script>[1]: trap: condition(s) required` *(status 1)* | `end` |
 | `axis/readonly-reassign` | `<script>: 2: r: is read only` *(status 2)* | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: readonly variable~survived` | `<script>: line 2: r: is read only` *(status 1)* | `<script>:2: read-only variable: r` *(status 1)* |
 | `axis/arith-error-status` | `<shell>: 1: arithmetic expression: division by zero: "1/0"` *(status 2)* | `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 1)* | `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 127)* | `<shell>: 1/0: division by 0 (error token is "0")` *(status 1)* | `<shell>: 1/0: divide by zero` *(status 1)* | `<shell>:1: division by zero` *(status 1)* |
 
@@ -323,6 +327,29 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   shift 5; echo survived
   ```
+- `axis/trap-bad-option` — three read a leading dash as an option and refuse this one; zsh takes it as the action. INT rather than EXIT so the trap zsh sets never fires
+  ```sh
+  trap -Q INT
+  echo end
+  ```
+- `axis/trap-print-p` — bash and ksh93 print the traps, dash refuses the letter, zsh sets a trap on a condition it does not know
+  ```sh
+  trap 'echo hi' INT
+  trap -p
+  echo end
+  ```
+- `axis/trap-one-argument` — `trap INT` puts INT back in three of the four; ksh93 refuses the form and the refusal ends the script
+  ```sh
+  trap 'echo hi' INT
+  trap INT
+  trap
+  echo end
+  ```
+- `axis/trap-one-argument-unknown` — bash prints its usage, dash names the word, ksh93 refuses the form, zsh says nothing
+  ```sh
+  trap notacondition
+  echo end
+  ```
 - `axis/readonly-reassign` — must be a plain assignment in a script: adding a redirect makes it a command and reverses the answer
   ```sh
   readonly r=1
@@ -338,6 +365,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
+| `axis/trap-prints-a-quoted-action` | `trap -- 'echo hi' INT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' INT~end` | `trap -- 'echo hi' INT~end` |
 | `axis/builtin-names-the-place` | `<script>: 2: cd: can't cd to /no/such/dir-xyz~done` | `<script>: line 2: cd: /no/such/dir-xyz: No such file or directory~done` | `<script>: line 2: cd: /no/such/dir-xyz: No such file or directory~done` | `<script>: line 2: cd: /no/such/dir-xyz: No such file or directory~done` | `<script>[2]: cd: /no/such/dir-xyz: [No such file or directory]~done` | `<script>:cd:2: no such file or directory: /no/such/dir-xyz~done` |
 | `axis/shell-names-the-place` | `<script>: 2: nosuchcmd-xyz: not found~done` | `<script>: line 2: nosuchcmd-xyz: command not found~done` | `<script>: line 2: nosuchcmd-xyz: command not found~done` | `<script>: line 2: nosuchcmd-xyz: command not found~done` | `<script>: line 2: nosuchcmd-xyz: not found~done` | `<script>:2: command not found: nosuchcmd-xyz~done` |
 | `axis/builtin-names-the-place-command-string` | `<shell>: 2: shift: can't shift that many` *(status 2)* | *(no output, status 1)* | `<shell>: line 2: shift: 99: shift count out of range` *(status 1)* | *(no output, status 1)* | `<shell>[2]: shift: 99: bad number` *(status 1)* | `<shell>:shift:2: shift count must be <= $#` *(status 1)* |
@@ -346,6 +374,12 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `diag/a-line-worth-naming` | `one~<shell>: 2: nosuchcmd: not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 1: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: not found~st=127` | `one~<shell>:2: command not found: nosuchcmd~st=127` |
 | `diag/a-command-after-an-operator` | `one~<shell>: 3: nosuchcmd: not found~st=127` | `one~<shell>: line 3: nosuchcmd: command not found~st=127` | `one~<shell>: line 3: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 3: nosuchcmd: not found~st=127` | `one~<shell>:3: command not found: nosuchcmd~st=127` |
 
+- `axis/trap-prints-a-quoted-action` — a multi-word action, which all four quote the same way — a bare one does not, and that is its own question
+  ```sh
+  trap 'echo hi' INT
+  trap
+  echo end
+  ```
 - `axis/builtin-names-the-place` — ksh93 brackets the line for a builtin's own complaint: script[2]: cd: ...
   ```sh
   true

@@ -864,19 +864,16 @@ func biExit(r *Runner, _ context.Context, args []string) int {
 // accepting `trap … INT` without ever firing it would be the silent wrong
 // answer this package exists to avoid — so it is refused and says so.
 func biTrap(r *Runner, _ context.Context, args []string) int {
+	args, done := r.trapOptions(args)
+	if done != trapKeepGoing {
+		return int(done)
+	}
 	if len(args) == 0 {
-		if r.exitTrap != nil {
-			r.printf("trap -- %s EXIT\n", singleQuote(*r.exitTrap))
-		}
-		for _, name := range sortedKeys(r.sigs().traps) {
-			r.printf("trap -- %s %s\n", singleQuote(r.sigs().traps[name]), name)
-		}
-		return 0
+		return r.printTraps(nil, false)
 	}
 	body, conds := args[0], args[1:]
 	if len(conds) == 0 {
-		r.diagf("trap: usage: trap action condition ...\n")
-		return 2
+		return r.trapSingleArgument(body)
 	}
 	// Every condition is checked before any is acted on, so a bad one does
 	// not leave half the request applied.

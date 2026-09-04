@@ -291,6 +291,36 @@ var Corpus = []Case{
 		Why:     "fatal in dash and ksh, survivable in bash and zsh",
 	},
 	{
+		ID: "axis/trap-bad-option", Category: "semantics axes",
+		Script:  true,
+		Snippet: "trap -Q INT\necho end",
+		Why:     "three read a leading dash as an option and refuse this one; zsh takes it as the action. INT rather than EXIT so the trap zsh sets never fires",
+	},
+	{
+		ID: "axis/trap-print-p", Category: "semantics axes",
+		Script:  true,
+		Snippet: "trap 'echo hi' INT\ntrap -p\necho end",
+		Why:     "bash and ksh93 print the traps, dash refuses the letter, zsh sets a trap on a condition it does not know",
+	},
+	{
+		ID: "axis/trap-one-argument", Category: "semantics axes",
+		Script:  true,
+		Snippet: "trap 'echo hi' INT\ntrap INT\ntrap\necho end",
+		Why:     "`trap INT` puts INT back in three of the four; ksh93 refuses the form and the refusal ends the script",
+	},
+	{
+		ID: "axis/trap-one-argument-unknown", Category: "semantics axes",
+		Script:  true,
+		Snippet: "trap notacondition\necho end",
+		Why:     "bash prints its usage, dash names the word, ksh93 refuses the form, zsh says nothing",
+	},
+	{
+		ID: "axis/trap-prints-a-quoted-action", Category: "diagnostics",
+		Script:  true,
+		Snippet: "trap 'echo hi' INT\ntrap\necho end",
+		Why:     "a multi-word action, which all four quote the same way — a bare one does not, and that is its own question",
+	},
+	{
 		ID: "axis/builtin-names-the-place", Category: "diagnostics",
 		Script:  true,
 		Snippet: "true\ncd /no/such/dir-xyz\necho done",

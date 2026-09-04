@@ -2266,6 +2266,166 @@
         "TimedOut": false
       }
     },
+    "axis/trap-bad-option": {
+      "bash": {
+        "Output": "\u003cscript\u003e: line 1: trap: -Q: invalid option~trap: usage: trap [-Plp] [[action] signal_spec ...]~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cscript\u003e: line 1: trap: -Q: invalid option~trap: usage: trap [-Plp] [[action] signal_spec ...]~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cscript\u003e: line 1: trap: -Q: invalid option~trap: usage: trap [-lp] [arg signal_spec ...]~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cscript\u003e: 1: trap: Illegal option -Q",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cscript\u003e[1]: trap: -Q: unknown option~Usage: trap [-p] [action condition ...]",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "end",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/trap-one-argument": {
+      "bash": {
+        "Output": "end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cscript\u003e[2]: trap: condition(s) required",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "end",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/trap-one-argument-unknown": {
+      "bash": {
+        "Output": "trap: usage: trap [-Plp] [[action] signal_spec ...]~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "trap: usage: trap [-Plp] [[action] signal_spec ...]~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "trap: usage: trap [-lp] [arg signal_spec ...]~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "trap: notacondition: bad trap~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cscript\u003e[1]: trap: condition(s) required",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "end",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/trap-print-p": {
+      "bash": {
+        "Output": "trap -- 'echo hi' SIGINT~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "trap -- 'echo hi' SIGINT~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "trap -- 'echo hi' SIGINT~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cscript\u003e: 2: trap: Illegal option -p",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "trap -- 'echo hi' INT~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "end",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "axis/trap-prints-a-quoted-action": {
+      "bash": {
+        "Output": "trap -- 'echo hi' SIGINT~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "trap -- 'echo hi' SIGINT~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "trap -- 'echo hi' SIGINT~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "trap -- 'echo hi' INT~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "trap -- 'echo hi' INT~end",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "trap -- 'echo hi' INT~end",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "builtin/an-option-it-does-have": {
       "bash": {
         "Output": "[unset]",

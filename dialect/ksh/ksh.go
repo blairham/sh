@@ -115,6 +115,13 @@ func Semantics() interp.Semantics {
 	s.CdDashPrintsTheDirectory = interp.Yes
 	s.PrintfAssignsWithV = interp.No
 	s.PrintfRejectsUnknownOption = interp.Yes
+	s.TrapParsesOptions = interp.Yes
+	s.TrapPrintsWithP = interp.Yes
+	s.TrapPrintsBareWithConditions = interp.Yes
+	s.TrapPrintsBareWithP = interp.No
+	s.TrapListsSignalsWithL = interp.No
+	// The one dialect that refuses `trap EXIT`, and the refusal is fatal.
+	s.TrapOneArgumentIsACondition = interp.No
 	s.UmaskPrintsFourDigits = interp.Yes
 	s.UmaskSetWithSPrints = interp.No
 	s.UlimitBlockIsKilobyte = interp.No
@@ -274,6 +281,7 @@ func Diagnostics() interp.Diagnostics {
 		CdOldpwdNotSet:            "cd: bad directory",
 		PrintfBadVerb:             "printf: %[1]s: unknown format specifier",
 		PrintfBadOption:           "printf: %[1]s: unknown option",
+		TrapConditionRequired:     "trap: condition(s) required",
 		PrintfBadOptionShowsUsage: true,
 		UmaskBadMask:              "umask: %[1]s: bad number",
 		// The name leads and the builtin follows it, which is the reverse of
@@ -305,6 +313,7 @@ func Diagnostics() interp.Diagnostics {
 			"set":      "Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
 			"export":   "Usage: export [-p] [name[=value]...]",
 			"readonly": "Usage: readonly [-p] [name[=value]...]",
+			"trap":     "Usage: trap [-p] [action condition ...]",
 			"unset":    "Usage: unset [-nfv] name...",
 		},
 		PrintfUsage:           "Usage: printf [ options ] format [string ...]",

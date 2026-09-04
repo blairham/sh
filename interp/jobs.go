@@ -210,16 +210,39 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 	for _, a := range args {
 		pid, ok := atoi(a)
 		if !ok {
-			r.diagf("wait: %s: not a pid\n", a)
-			return 2
+			return r.waitBadJob(a)
 		}
+		found := false
 		for _, j := range r.jobs {
 			if j.PID == pid {
 				last = j.Wait()
+				found = true
 			}
+		}
+		if !found {
+			// A number that is not one of this shell's children. Unanimous
+			// on the status — 127, the one a command that is not there
+			// reports — and two of the four say so out loud.
+			if w := r.diag().WaitNotOurChild; w != "" {
+				r.diagf("%s\n", Wording(w, "", pid))
+			}
+			last = 127
 		}
 	}
 	return last
+}
+
+// waitBadJob is an operand that names neither a process nor a job.
+//
+// Four wordings and three statuses, and none of them is the substrate's old
+// one: bash quotes the word and says it is neither a pid nor a job spec,
+// dash calls it an illegal number, ksh93 lists what it would have taken, and
+// zsh calls it a job that was not found and reports 127 — the status of a
+// command that is not there, which is what it takes the operand to have been.
+func (r *Runner) waitBadJob(operand string) int {
+	d := r.diag()
+	r.diagf("%s\n", Wording(d.WaitBadJob, "wait: %[1]s: not a pid", operand))
+	return orDefault(d.WaitBadJobStatus, 2)
 }
 
 // addStoppedJob records a foreground command that stopped rather than

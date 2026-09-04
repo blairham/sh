@@ -298,6 +298,9 @@ func Diagnostics() interp.Diagnostics {
 		UlimitBadNumber:                  "invalid number: %[1]s",
 		UlimitBadOptionStatus:            1,
 		BuiltinBadOption:                 "%[1]s: bad option: %[2]s",
+		WaitBadJob:                       "wait: job not found: %[1]s",
+		WaitBadJobStatus:                 127,
+		WaitNotOurChild:                  "wait: pid %[1]d is not a child of this shell",
 		TrapCouldNotParse:                "couldn't parse trap command",
 		UmaskWhoAloneIsANumericComplaint: true,
 		// The builtin's name comes from the location, so it is not in these.

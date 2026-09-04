@@ -314,6 +314,8 @@ func Diagnostics() interp.Diagnostics {
 		UlimitBadOption:           "not supported",
 		UlimitBadNumber:           "ulimit: %[1]s: parameter not set",
 		BuiltinBadOption:          "%[1]s: %[2]s: unknown option",
+		WaitBadJob:                "wait: %[1]s: Arguments must be %%job, process ids, or job pool names",
+		WaitBadJobStatus:          1,
 		// Two wordings, split between `export` and the other two, and the
 		// operand quoted back as given.
 		BuiltinBadName: map[string]string{

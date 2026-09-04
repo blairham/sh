@@ -3123,6 +3123,16 @@ echo after`,
 	},
 	// --- umask: the symbolic spelling ----------------------------------
 	{
+		ID: "wait/an-operand-that-is-neither", Category: "builtins",
+		Snippet: `wait nosuchjob; echo "st=$?"`,
+		Why:     "an operand naming neither a process nor a job: four wordings and no two alike, and three statuses — one quotes it and names both things it could have been, one calls it an illegal number, one lists what it would have taken, and one calls it a job that was not found and reports the 127 of a command that is not there",
+	},
+	{
+		ID: "wait/a-pid-that-is-not-ours", Category: "builtins",
+		Snippet: `wait 999999; echo "st=$?"`,
+		Why:     "a number that could be a process and is not one of this shell's children. Unanimous on 127, and two of the four say so out loud — so silence here is a wording rather than a behavior",
+	},
+	{
 		ID: "enable/a-letter-one-shell-does-not-have", Category: "builtins",
 		Snippet: `enable -n cd; echo "st=$?"`,
 		Why:     "`enable` is two different builtins: one takes -n to switch a name off, one has no -n at all and reads its options as the *table* to act on. The other two have no `enable`, so the same line is four answers",

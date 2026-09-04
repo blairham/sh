@@ -260,6 +260,8 @@ func Diagnostics() interp.Diagnostics {
 		UlimitBadNumber:       "ulimit: bad number",
 		UlimitBadNumberStatus: 2,
 		BuiltinBadOption:      "%[1]s: Illegal option %[2]s",
+		WaitBadJob:            "wait: Illegal number: %[1]s",
+		WaitBadJobStatus:      2,
 		LocalOutsideAFunction: "local: not in a function",
 		// One wording for all three, naming the part in front of any `=`.
 		BuiltinBadName: map[string]string{

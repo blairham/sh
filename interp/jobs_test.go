@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"syscall"
@@ -67,5 +68,89 @@ func TestBackgroundJobIsItsOwnProcessGroup(t *testing.T) {
 	ours, err := syscall.Getpgid(syscall.Getpid())
 	if err == nil && pgid == ours {
 		t.Errorf("the job shares this process's group (%d), so it is not a job", ours)
+	}
+}
+
+// TestAnOperandThatNamesNeitherAProcessNorAJob is four wordings and three
+// statuses, and none of them was the substrate's own.
+func TestAnOperandThatNamesNeitherAProcessNorAJob(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		dg     Diagnostics
+		want   string
+		status int
+	}{
+		{
+			"quoting it and naming both things it could have been",
+			Diagnostics{WaitBadJob: "wait: `%[1]s': not a pid or valid job spec", WaitBadJobStatus: 1},
+			"`nope': not a pid or valid job spec", 1,
+		},
+		{
+			"calling it an illegal number",
+			Diagnostics{WaitBadJob: "wait: Illegal number: %[1]s", WaitBadJobStatus: 2},
+			"Illegal number: nope", 2,
+		},
+		{
+			"calling it a job that was not found, with the status of a missing command",
+			Diagnostics{WaitBadJob: "wait: job not found: %[1]s", WaitBadJobStatus: 127},
+			"job not found: nope", 127,
+		},
+		{
+			// The zero value: the substrate's own words and its own status.
+			"saying nothing of its own",
+			Diagnostics{},
+			"nope: not a pid", 2,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := run(t, `wait nope; printf "st=%s" "$?"`, func(r *Runner) {
+				dg := tc.dg
+				r.Diagnostics = &dg
+			})
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("output = %q, want %q in it", out, tc.want)
+			}
+			if !strings.Contains(out, fmt.Sprintf("st=%d", tc.status)) {
+				t.Errorf("output = %q, want status %d", out, tc.status)
+			}
+			_ = st
+		})
+	}
+}
+
+// TestAPidThatIsNotOurChild is 127 in every dialect and said out loud in two,
+// so the wording is an answer and the status is not.
+func TestAPidThatIsNotOurChild(t *testing.T) {
+	spoken, _ := run(t, `wait 999999; printf "st=%s" "$?"`, func(r *Runner) {
+		r.Diagnostics = &Diagnostics{WaitNotOurChild: "wait: pid %[1]d is not a child of this shell"}
+	})
+	if !strings.Contains(spoken, "pid 999999 is not a child") {
+		t.Errorf("output = %q, want the complaint", spoken)
+	}
+	if !strings.Contains(spoken, "st=127") {
+		t.Errorf("output = %q, want 127", spoken)
+	}
+
+	silent, _ := run(t, `wait 999999; printf "st=%s" "$?"`, nil)
+	if strings.Contains(silent, "child") {
+		t.Errorf("output = %q, want nothing said", silent)
+	}
+	if !strings.Contains(silent, "st=127") {
+		t.Errorf("output = %q, want 127 even in silence", silent)
+	}
+}
+
+// TestWaitingOnAChildWeDoHaveReportsItsStatus is the other side of the
+// number that is not ours: `wait $!` on a real job reports what the job did,
+// and a rule that answered 127 for everything would look right on the case
+// above and be wrong on every ordinary use.
+func TestWaitingOnAChildWeDoHaveReportsItsStatus(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`/usr/bin/true & wait $!; printf "st=%s" "$?"`, "st=0"},
+		{`/usr/bin/false & wait $!; printf "st=%s" "$?"`, "st=1"},
+	} {
+		if got, _ := run(t, tc.src, nil); !strings.Contains(got, tc.want) {
+			t.Errorf("%s: got %q, want %q in it", tc.src, got, tc.want)
+		}
 	}
 }

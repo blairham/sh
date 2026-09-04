@@ -140,6 +140,8 @@ func Semantics() interp.Semantics {
 	s.BadSetOptionNameFatal = interp.No
 	s.ReturnOutsideAFunctionIsRefused = interp.Yes
 	s.LoneDashIsAnOption = interp.No
+	s.UnsetFunctionChecksTheName = interp.No
+	s.UnsetFunctionReportsMissing = interp.No
 
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.Yes

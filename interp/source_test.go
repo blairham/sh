@@ -58,6 +58,10 @@ func permissive() Semantics {
 	// The majority answer, so a test that is not about the lone dash gets
 	// the operand three of the four would pass on.
 	s.LoneDashIsAnOption = No
+	// Likewise for what `unset -f` says: three of the four say nothing
+	// about either question, so a test that is not about those gets silence.
+	s.UnsetFunctionChecksTheName = No
+	s.UnsetFunctionReportsMissing = No
 	return s
 }
 

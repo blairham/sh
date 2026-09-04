@@ -275,6 +275,31 @@ func (r *Runner) setOption(name string, on bool) bool {
 	return false
 }
 
+// unsetFunction removes one function, and reports what the dialect reports.
+//
+// Two questions, and the panel answers them independently — which is what
+// makes them two fields. ksh93 judges the *name*: `1x` could never be a
+// function name, and it says so whether or not a function exists. zsh
+// reports the *table*: it complains about any name it does not hold,
+// including a perfectly well formed one. bash and dash say nothing about
+// either, and unsetting a function that is there is quiet in all four.
+func (r *Runner) unsetFunction(name string) int {
+	d := r.diag()
+	if !isPlainName(name) && r.ask(r.sem().UnsetFunctionChecksTheName, "`unset -f` judging the name it was given") {
+		r.diagf("%s\n", Wording(d.UnsetBadFunctionName, "unset: %[1]s: invalid function name", name))
+		return 1
+	}
+	_, defined := r.funcs[name]
+	if !defined && r.ask(r.sem().UnsetFunctionReportsMissing, "`unset -f` naming a function that is not defined") {
+		r.diagf("%s\n", Wording(d.UnsetFunctionNotFound, "unset: %[1]s: not found", name))
+		return 1
+	}
+	delete(r.funcs, name)
+	delete(r.funcFiles, name)
+	delete(r.exportedFuncs, name)
+	return 0
+}
+
 func biUnset(r *Runner, _ context.Context, args []string) int {
 	args, opts, code := r.builtinOptions("unset", args, "vfn")
 	if code != 0 {
@@ -285,12 +310,13 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		// — and the option was read and then ignored, so a function survived
 		// being unset and went on answering to its name. The exported set
 		// goes with it: what is not a function cannot be carried as one.
+		status := 0
 		for _, name := range args {
-			delete(r.funcs, name)
-			delete(r.funcFiles, name)
-			delete(r.exportedFuncs, name)
+			if code := r.unsetFunction(name); code != 0 {
+				status = code
+			}
 		}
-		return 0
+		return status
 	}
 	// After `-f`, so that a function name keeps its own laxer rule: bash
 	// takes `unset -f 1x` without a word where it refuses `unset 1x`.

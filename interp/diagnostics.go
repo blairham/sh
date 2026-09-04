@@ -546,6 +546,16 @@ type Diagnostics struct {
 	// it and end the script, so there is nothing for them to word.
 	ReturnOutsideAFunction string
 
+	// UnsetBadFunctionName is what `unset -f` says about an operand that
+	// could not be a function name. One verb: the operand.
+	UnsetBadFunctionName string
+
+	// UnsetFunctionNotFound is what `unset -f` says about a name no function
+	// has. One verb: the name. zsh words it about its table rather than
+	// about the function, and puts the builtin in the location as it does
+	// with every message.
+	UnsetFunctionNotFound string
+
 	// ParamErrorMessage is what `${x?word}` says. Two verbs: the parameter
 	// and the word. The shape is unanimous — `x: word` — and only the
 	// default word below is not.

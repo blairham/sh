@@ -419,6 +419,22 @@ type Semantics struct {
 	// Only ever at a prompt: no shell announces one to a script.
 	AnnouncesBackgroundJob Answer
 
+	// UnsetFunctionChecksTheName judges the operand `unset -f` was given as
+	// a name, and refuses one that could not be a function name. True in
+	// ksh93 alone.
+	//
+	// Not the same question as the one below, and measured to be: ksh93
+	// refuses `1x` and is quiet about a well formed name that is not
+	// defined, where zsh is the other way round.
+	UnsetFunctionChecksTheName Answer
+
+	// UnsetFunctionReportsMissing complains when `unset -f` names a function
+	// that is not defined. True in zsh alone, which reports it about any
+	// name it does not hold, well formed or not.
+	//
+	// Unsetting a function that *is* there is quiet in all four.
+	UnsetFunctionReportsMissing Answer
+
 	// LoneDashIsAnOption eats a `-` given to a builtin on its own instead of
 	// passing it on as an operand. True in zsh alone.
 	//

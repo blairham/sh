@@ -151,6 +151,8 @@ func Semantics() interp.Semantics {
 	s.BadSetOptionNameFatal = interp.Yes
 	s.ReturnOutsideAFunctionIsRefused = interp.No
 	s.LoneDashIsAnOption = interp.Yes
+	s.UnsetFunctionChecksTheName = interp.No
+	s.UnsetFunctionReportsMissing = interp.Yes
 
 	// Whether a redirection target is expanded as an ordinary word.
 	s.RedirectTargetIsAnOrdinaryWord = interp.No
@@ -177,6 +179,9 @@ func Diagnostics() interp.Diagnostics {
 		JobLine: "[%[1]d]  %[2]s %-11[3]s%[4]s",
 		// The builtin's name is in the location here rather than in the
 		// sentence, which is this shell's rule for every message.
+		// About its table rather than about the function, and the builtin
+		// is named in the location as it is for every message here.
+		UnsetFunctionNotFound:      "no such hash table element: %[1]s",
 		SetInvalidOptionName:       "no such option: %[1]s",
 		SetInvalidOptionNameStatus: 1,
 		// zsh knows `-f` — it means functions to its own typeset — so what

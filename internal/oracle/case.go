@@ -3163,6 +3163,12 @@ echo after`,
 		Why:     "switching a builtin off is not forgetting it: the name comes back with the same builtin behind it. Standard error is discarded because three of the four have neither word and their complaint is about a missing command, which the case above pins",
 	},
 	{
+		ID: "glob/matches-are-in-order", Category: "expansion",
+		Script:  true,
+		Snippet: "mkdir -p g && cd g && : > Apple && : > banana && : > Cherry && : > _under && : > 1digit && echo *",
+		Why:     "byte order, which every shell in the panel gives under the LC_ALL=C both sweeps run in. Outside that locale three of the four collate and dash does not, and the two platforms disagree about where punctuation goes — none of which this can record, which is exactly why the ordering it does record is worth pinning",
+	},
+	{
 		ID: "axis/export-a-subscripted-operand", Category: "semantics axes",
 		Script:  true,
 		Snippet: "export 'a[0]'\necho \"st=$?\"\necho after",

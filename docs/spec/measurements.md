@@ -179,6 +179,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `array/removing-one-element` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=2 all=[p q]` | `n=2 all=[p q]` | `n=2 all=[p q]` | `n=2 all=[p q]` | `n=3 all=[p  r]` |
 | `subst/a-case-inside-a-substitution` | `[yes]` | `[yes]` | `[yes]` | `<shell>: -c: line 0: syntax error near unexpected token `;;'~<shell>: -c: line 0: `x=$(case a in a) echo yes;; esac); echo "[$x]"'` *(status 2)* | `[yes]` | `[yes]` |
 | `subst/a-substitution-inside-an-arm` | `[inner]` | `[inner]` | `[inner]` | `[inner]` | `[inner]` | `[inner]` |
+| `glob/matches-are-in-order` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` |
 
 - `expand/results-not-rescanned-quote` — a quote in expanded text is a literal quote
   ```sh
@@ -284,6 +285,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `subst/a-substitution-inside-an-arm` — the other nesting, which counting got right and which has to keep working: the parentheses here really do pair
   ```sh
   case a in a) echo "[$(echo inner)]";; esac
+  ```
+- `glob/matches-are-in-order` — byte order, which every shell in the panel gives under the LC_ALL=C both sweeps run in. Outside that locale three of the four collate and dash does not, and the two platforms disagree about where punctuation goes — none of which this can record, which is exactly why the ordering it does record is worth pinning
+  ```sh
+  mkdir -p g && cd g && : > Apple && : > banana && : > Cherry && : > _under && : > 1digit && echo *
   ```
 
 ## semantics axes

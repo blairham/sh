@@ -150,6 +150,13 @@ func Semantics() interp.Semantics {
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes
 	s.BraceExpansion = interp.Yes
+	// Pads like bash — `{01..3}` is `01 02 03` — but a negative step
+	// reverses the walk the endpoints chose: `{3..1..-1}` is `1 2 3` and
+	// `{1..10..-4}` is `9 5 1`, bash's `1 5 9` backwards rather than the
+	// `10 6 2` swapped endpoints would give.
+	s.BraceRangePadsToEndpointWidth = interp.Yes
+	s.BraceRangeStepSignHonored = interp.No
+	s.BraceRangeNegativeStepReverses = interp.Yes
 	s.BracketCaretNegates = interp.Yes
 	s.EqualsExpansion = interp.Yes
 	s.LastPipelineElementInCurrentShell = interp.Yes

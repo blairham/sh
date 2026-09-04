@@ -191,6 +191,33 @@ type Semantics struct {
 	// silent in the `&>` sense — `echo {1..3}` prints something either way,
 	// and nothing reports that one of them is not what was meant.
 	BraceExpansion Answer
+	// BraceRangePadsToEndpointWidth keeps the leading zeros of a range
+	// endpoint and pads every element to the widest endpoint, zeros after
+	// the sign: `{01..3}` is `01 02 03` and `{-03..3..3}` is `-03 000 003`.
+	// True in bash and zsh; ksh93 strips the padding and prints `1 2 3` and
+	// `-3 0 3`. Asked only when an endpoint is written with leading zeros,
+	// and only in a dialect whose braces expand at all — dash never reaches
+	// it.
+	BraceRangePadsToEndpointWidth Answer
+	// BraceRangeStepSignHonored takes a written step's sign at its word:
+	// the walk leaves the first endpoint in the direction the sign says, so
+	// a sign pointing away from the far endpoint ends the range after one
+	// element. ksh93's `{10..1..3}` is `10`, its `{1..10..-3}` is `1`, and
+	// letters answer the same way — `{a..e..-1}` is `a`. False in bash and
+	// zsh, where the endpoints decide the direction and the step
+	// contributes magnitude alone. Asked only when the sign and the
+	// endpoints disagree.
+	BraceRangeStepSignHonored Answer
+	// BraceRangeNegativeStepReverses hands a negative step's sign to the
+	// order of the result rather than to the walk: the range is walked
+	// endpoint to endpoint and then reversed, so zsh's `{3..1..-1}` is
+	// `1 2 3` and its `{1..10..-4}` is `9 5 1` — bash's `1 5 9` backwards,
+	// not the `10 6 2` that swapping the endpoints would give. True in
+	// zsh; false in bash, whose `{3..1..-1}` stays `3 2 1`, and in ksh93,
+	// which reaches the question only when the sign agrees with the
+	// endpoints and then keeps their order too. Asked only for a written
+	// negative step whose sign was not already honored.
+	BraceRangeNegativeStepReverses Answer
 	// EqualsExpansion replaces an unquoted word beginning with `=` by the
 	// path of the command named after it: `echo =ls` prints /bin/ls. zsh
 	// alone, and silent in the `&>` sense — the other three take the word
@@ -1609,8 +1636,10 @@ func PosixSemantics() Semantics {
 		// dash is the panel's POSIX-faithful member and the only one
 		// exiting 2, so the POSIX preset follows it. The standard itself
 		// requires only "greater than zero", which decides nothing.
-		FatalErrorStatusIsOne:          No,
-		ArithNameValueRecurses:         No,
+		FatalErrorStatusIsOne:  No,
+		ArithNameValueRecurses: No,
+		// The three brace-range axes are left unanswered: a brace that
+		// never expands never asks them.
 		BraceExpansion:                 No,
 		BracketCaretNegates:            No,
 		ExitTrapIsFunctionLocal:        No,

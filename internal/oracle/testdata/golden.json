@@ -9018,6 +9018,38 @@
         "TimedOut": false
       }
     },
+    "expand/brace-range-negative-step-reversal": {
+      "bash": {
+        "Output": "3 2 1~1 5 9",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "3 2 1~1 5 9",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "{3..1..-1}~{1..10..-4}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "{3..1..-1}~{1..10..-4}",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "3 2 1~1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1 2 3~9 5 1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "expand/brace-range-step-sign-and-direction": {
       "bash": {
         "Output": "10 7 4 1~1 4 7 10",

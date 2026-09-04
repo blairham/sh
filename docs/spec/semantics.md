@@ -35,6 +35,9 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | `set -f` turns off globbing | yes | yes | yes | **no** |
 | each assignment gets its own trace line | no | **yes** | **yes** | no |
 | brace expansion happens | **no** | yes | yes | yes |
+| a zero-padded endpoint pads the range | *n/a* | yes | **no** | yes |
+| a range step's sign is honored | *n/a* | no | **yes** | no |
+| a negative range step reverses the walk | *n/a* | no | no | **yes** |
 | arithmetic does floating point | no | no | **yes** | **yes** |
 | significant digits in a float | *n/a* | *n/a* | 15 | **17** |
 | a whole float keeps its point | *n/a* | *n/a* | no | **yes** |

@@ -269,7 +269,12 @@ var Corpus = []Case{
 	{
 		ID: "expand/brace-range-step-sign-and-direction", Category: "expansion",
 		Snippet: `echo {10..1..3}; echo {1..10..-3}`,
-		Why:     "the endpoints decide the direction and the step contributes magnitude alone in bash and zsh; ksh93 honors the sign and stops after one element when it points the wrong way",
+		Why:     "the endpoints decide the direction and the step contributes magnitude alone in bash; ksh93 honors the sign and stops after one element when it points the wrong way; zsh ignores a positive sign like bash but a negative one reverses its result",
+	},
+	{
+		ID: "expand/brace-range-negative-step-reversal", Category: "expansion",
+		Snippet: `echo {3..1..-1}; echo {1..10..-4}`,
+		Why:     "the corners that separate the three step-sign models: a negative sign agreeing with the endpoints changes nothing in bash and ksh93 but still reverses zsh; and zsh reverses the walk rather than swapping the endpoints — 9 5 1, bash's 1 5 9 backwards, not 10 6 2",
 	},
 	{
 		ID: "expand/brace-range-alpha-stepped", Category: "expansion",

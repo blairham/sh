@@ -293,6 +293,10 @@ type Runner struct {
 	midPipeline bool
 	// inFunc is the name of the function being run, for `$0`.
 	inFunc string
+	// funcLine is the line the function being run was written on, which one
+	// dialect counts a message's line from instead of from the top of the
+	// file.
+	funcLine int
 	// sourceDepth is how many sourced files are running, which is the other
 	// place a `return` has something to return from. A count rather than a
 	// flag because a sourced file may source another.
@@ -562,13 +566,32 @@ func (r *Runner) diagf(format string, args ...any) {
 		// as the sentence every other dialect prints.
 		msg = strings.TrimPrefix(msg, r.inBuiltin+": ")
 	}
-	r.errf("%s%s", r.diag().prefix(r.name(), r.inBuiltin, r.line), msg)
+	r.errf("%s%s", r.locationPrefix(), msg)
 }
 
 // lineOf is where a node is in the script, rather than in the string that was
 // parsed to reach it. The two differ only inside a command substitution, and
 // they differ by however far into the script the substitution was written.
 func (r *Runner) lineOf(p syntax.Pos) int { return p.Line + r.lineBase }
+
+// locationPrefix is what goes in front of a diagnostic.
+//
+// The shell's name and the line, except in the dialect that names the
+// *function* a message came from and counts the line within it. There the
+// file is not mentioned at all, and the count is the offset from the line
+// the function was written on — so a body on the same line as its `f() {`
+// is offset zero and the number is left out entirely.
+func (r *Runner) locationPrefix() string {
+	d := r.diag()
+	if r.inFunc == "" || !d.LocationNamesTheFunction {
+		return d.prefix(r.name(), r.inBuiltin, r.line)
+	}
+	if n := r.line - r.funcLine; n > 0 {
+		return d.prefix(r.inFunc, r.inBuiltin, n)
+	}
+	// Nothing to count, so nothing is written: `f: ` and not `f:0: `.
+	return d.prefixWithoutLine(r.inFunc, r.inBuiltin)
+}
 
 // name is what the shell calls itself in a diagnostic.
 func (r *Runner) name() string {

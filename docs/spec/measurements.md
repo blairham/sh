@@ -2037,9 +2037,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
+| `location/a-message-from-inside-a-function` | `<shell>: 2: nosuchcmd: not found` *(status 127)* | `<shell>: line 2: nosuchcmd: command not found` *(status 127)* | `<shell>: line 2: nosuchcmd: command not found` *(status 127)* | `<shell>: line 1: nosuchcmd: command not found` *(status 127)* | `<shell>: line 2: nosuchcmd: not found` *(status 127)* | `f:1: command not found: nosuchcmd` *(status 127)* |
 | `diag/a-line-worth-naming` | `one~<shell>: 2: nosuchcmd: not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 1: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: not found~st=127` | `one~<shell>:2: command not found: nosuchcmd~st=127` |
 | `diag/a-command-after-an-operator` | `one~<shell>: 3: nosuchcmd: not found~st=127` | `one~<shell>: line 3: nosuchcmd: command not found~st=127` | `one~<shell>: line 3: nosuchcmd: command not found~st=127` | `one~<shell>: line 2: nosuchcmd: command not found~st=127` | `one~<shell>: line 3: nosuchcmd: not found~st=127` | `one~<shell>:3: command not found: nosuchcmd~st=127` |
 
+- `location/a-message-from-inside-a-function` — three of the panel name the file and count from the top of it wherever the message came from. zsh names the *function* instead and counts within it, so the same failure is reported at a line that is not the line it is on — which is the sort of thing that looks like an off-by-one until it is measured
+  ```sh
+  f() {
+    nosuchcmd
+  }
+  true
+  f
+  ```
 - `diag/a-line-worth-naming` — ksh93 names the line under `-c` only after the first: `ksh: nosuchcmd: not found` on line 1 and `ksh: line 2: nosuchcmd: not found` here. Every earlier measurement used a one-line `-c`, where naming no line and naming line 1 are the same output
   ```sh
   echo one

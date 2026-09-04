@@ -1073,6 +1073,14 @@ var Corpus = []Case{
 		Why:     "a name a function could perfectly well have, and none does. Only one of the panel says anything, and it is not the one that complained about `1x` — so the two questions are independent and each needs its own answer. Three quiet and one not, where the case above is two and two",
 	},
 	{
+		ID: "location/a-message-from-inside-a-function", Category: "diagnostics",
+		// The answer is the line *within the function*, so reprinting the
+		// snippet onto different lines changes it.
+		LayoutSensitive: true,
+		Snippet:         "f() {\n  nosuchcmd\n}\ntrue\nf\n",
+		Why:             "three of the panel name the file and count from the top of it wherever the message came from. zsh names the *function* instead and counts within it, so the same failure is reported at a line that is not the line it is on — which is the sort of thing that looks like an off-by-one until it is measured",
+	},
+	{
 		ID: "name/a-lone-dash-given-to-a-builtin", Category: "builtins",
 		Snippet: `unalias -; echo "st=$?"`,
 		Why:     "a `-` on its own is an operand in three of the panel and an option in zsh, which eats it. `unalias` is where that shows: the three complain about an alias called `-`, each in its own words, and the fourth complains that it was given nothing to unalias at all. `unset -` looks the same in bash for a different reason — its bare form validates no operand — which is why the case is not written with that one",

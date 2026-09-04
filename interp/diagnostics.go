@@ -577,6 +577,15 @@ type Diagnostics struct {
 	// a shell tells that from one that is absent. ksh93 alone.
 	ParamNull string
 
+	// LocationNamesTheFunction puts the function a message came from where
+	// the file's name would go, and counts the line within the function
+	// rather than within the file. zsh alone.
+	//
+	// The count is the offset from the line the function was written on, so
+	// a body on the same line as its `f() {` is offset zero — and zsh leaves
+	// the number out entirely there rather than writing a nought.
+	LocationNamesTheFunction bool
+
 	// SetInvalidOptionName is a long `set -o` name this shell does not have.
 	// One verb: the name.
 	//
@@ -1361,6 +1370,21 @@ func (d Diagnostics) echoLine(name, input string, line int, err error, src strin
 }
 
 // prefix renders the start of a diagnostic for a shell called name at line.
+// prefixWithoutLine is the location with no line in it, which one dialect
+// writes when a message comes from the first line of a function.
+func (d Diagnostics) prefixWithoutLine(name, builtin string) string {
+	if name == "" {
+		name = "sh"
+	}
+	if builtin != "" && d.NamesBuiltinInLocation {
+		name += ":" + builtin
+	}
+	if d.Location == LocationNone {
+		return ""
+	}
+	return name + ": "
+}
+
 func (d Diagnostics) prefix(name, builtin string, line int) string {
 	if name == "" {
 		name = "sh"

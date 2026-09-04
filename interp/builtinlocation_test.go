@@ -109,3 +109,63 @@ func TestAScriptCanNameThePlaceDifferentlyAgain(t *testing.T) {
 		t.Errorf("as a script = %q, want line 1 in the word form", other)
 	}
 }
+
+// TestARedirectionOpenedForABuiltinCountsAsTheBuiltins is the half that
+// distinguishes the two dialects asking about builtins, and it is why the
+// question is "is a builtin speaking" rather than "is the builtin named".
+func TestARedirectionOpenedForABuiltinCountsAsTheBuiltins(t *testing.T) {
+	dg := Diagnostics{
+		Location:        LocationLineWord,
+		BuiltinLocation: LocationBracketLine,
+	}
+	dir := t.TempDir()
+
+	forBuiltin := prefixRun(t, dir, "echo hi > /nonexistent-dir-xyz/x", dg)
+	if !strings.HasPrefix(forBuiltin, "testsh[1]: ") {
+		t.Errorf("a builtin's redirection = %q, want the bracketed line", forBuiltin)
+	}
+
+	// An external command's redirection is not, which is the measurement
+	// that ruled out "any redirection" as the rule.
+	external := prefixRun(t, dir, "/bin/echo hi > /nonexistent-dir-xyz/x", dg)
+	if !strings.HasPrefix(external, "testsh: line 1: ") {
+		t.Errorf("an external command's redirection = %q, want the word form", external)
+	}
+	if strings.Contains(external, "[1]") {
+		t.Errorf("an external command's redirection = %q, bracketed style leaked", external)
+	}
+}
+
+// TestTheBuiltinIsStillNotNamedForItsRedirection is the other dialect's half
+// of the same message, and the reason the two are separate questions: the
+// dialect that writes the builtin's name into the location leaves it out
+// here, so answering "the builtin is speaking" by setting the name would
+// have been wrong for it.
+func TestTheBuiltinIsStillNotNamedForItsRedirection(t *testing.T) {
+	dg := Diagnostics{Location: LocationTightLine, NamesBuiltinInLocation: true}
+	out := prefixRun(t, t.TempDir(), "echo hi > /nonexistent-dir-xyz/x", dg)
+	if !strings.HasPrefix(out, "testsh:1:") {
+		t.Errorf("output = %q, want the plain location", out)
+	}
+	if strings.Contains(out, ":echo:") {
+		t.Errorf("output = %q, want the builtin not named", out)
+	}
+}
+
+// TestTheMarkerIsPutBackAfterTheRedirections, so the command that runs after
+// one does not inherit it — the redirection is open by then and the builtin
+// itself is on the record instead.
+func TestTheMarkerIsPutBackAfterTheRedirections(t *testing.T) {
+	dg := Diagnostics{
+		Location:        LocationLineWord,
+		BuiltinLocation: LocationBracketLine,
+	}
+	dir := t.TempDir()
+	out := prefixRun(t, dir, "echo hi > /dev/null\nnosuchcmd-xyz", dg)
+	if !strings.Contains(out, "testsh: line 2: ") {
+		t.Errorf("output = %q, want the next command to name the place its own way", out)
+	}
+	if strings.Contains(out, "[2]") {
+		t.Errorf("output = %q, the marker outlived the redirections", out)
+	}
+}

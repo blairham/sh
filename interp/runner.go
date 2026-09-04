@@ -383,6 +383,14 @@ type Runner struct {
 	inExitTrap          bool
 	exitTrapEntryStatus int
 
+	// redirectForBuiltin is the builtin whose redirections are being opened,
+	// which is not the same as the builtin speaking: one dialect names where
+	// a builtin's own complaint happened one way and everything else
+	// another, and counts a redirection opened *for* a builtin as the
+	// builtin's — while the dialect that writes the builtin's name into the
+	// location does not name it for that message.
+	redirectForBuiltin string
+
 	// linePin overrides the line a node reports, for the dialect that names
 	// where a trap fired rather than where in its body a failure was.
 	linePin int
@@ -599,6 +607,14 @@ func (r *Runner) lineOf(p syntax.Pos) int {
 	return p.Line + r.lineBase
 }
 
+// builtinIsSpeaking reports whether this diagnostic belongs to a builtin,
+// which includes a redirection opened for one. Separate from naming the
+// builtin, because the two dialects that ask want different answers for a
+// failed redirection: ksh93 counts it as the builtin's and zsh does not.
+func (r *Runner) builtinIsSpeaking() bool {
+	return r.inBuiltin != "" || r.redirectForBuiltin != ""
+}
+
 // locationPrefix is what goes in front of a diagnostic.
 //
 // The shell's name and the line, except in the dialect that names the
@@ -609,10 +625,10 @@ func (r *Runner) lineOf(p syntax.Pos) int {
 func (r *Runner) locationPrefix() string {
 	d := r.diag()
 	if r.inFunc == "" || !d.LocationNamesTheFunction {
-		return d.prefix(r.name(), r.inBuiltin, r.line)
+		return d.prefix(r.name(), r.inBuiltin, r.builtinIsSpeaking(), r.line)
 	}
 	if n := r.line - r.funcLine; n > 0 {
-		return d.prefix(r.inFunc, r.inBuiltin, n)
+		return d.prefix(r.inFunc, r.inBuiltin, r.builtinIsSpeaking(), n)
 	}
 	// Nothing to count, so nothing is written: `f: ` and not `f:0: `.
 	return d.prefixWithoutLine(r.inFunc, r.inBuiltin)
@@ -1096,7 +1112,17 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 
 	r.traceCommand(argv)
 
+	// On the record while the redirections are opened, so a dialect that
+	// counts a redirection opened for a builtin as the builtin's own can
+	// say so. Cleared before the builtin runs: from there on it is the
+	// builtin itself that is speaking.
+	if len(argv) > 0 {
+		if _, ok := r.lookupBuiltin(argv[0]); ok {
+			r.redirectForBuiltin = argv[0]
+		}
+	}
 	closers, err := r.applyRedirs(ctx, c.Redirs, false)
+	r.redirectForBuiltin = ""
 	defer func() {
 		if r.keepRedirs {
 			// `exec > log` is the one command whose redirections outlive it.

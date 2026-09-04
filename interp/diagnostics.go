@@ -726,6 +726,18 @@ type Diagnostics struct {
 	// the message rather than on the builtin.
 	TrapBadSignalUnprefixed bool
 
+	// TrapBarePrintNeedsCondition is `trap -P` with nothing to print, taking
+	// nothing. bash only, since bash is the only dialect with `-P`.
+	TrapBarePrintNeedsCondition string
+	// TrapPrintsSignalPrefix goes in front of a signal's name when printing
+	// what is trapped: bash writes `trap -- : SIGINT` where the other three
+	// write `INT`. Empty in three of the four, and never used for EXIT,
+	// which is not a signal.
+	TrapPrintsSignalPrefix string
+	// TrapConditionRequired is the refusal of `trap EXIT`, taking nothing.
+	// ksh93 only, since ksh93 is the only dialect that refuses the form.
+	TrapConditionRequired string
+
 	// KillNoSuchProcess is a target that is not there. One verb: the pid.
 	//
 	// The four are worth reading together, because they are the same fact

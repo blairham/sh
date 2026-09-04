@@ -112,6 +112,14 @@ func Semantics() interp.Semantics {
 	s.CdDashPrintsTheDirectory = interp.Yes
 	s.PrintfAssignsWithV = interp.Yes
 	s.PrintfRejectsUnknownOption = interp.Yes
+	s.TrapParsesOptions = interp.Yes
+	s.TrapPrintsWithP = interp.Yes
+	s.TrapPrintsBareWithConditions = interp.No
+	s.TrapPrintsBareWithP = interp.Yes
+	s.TrapListsSignalsWithL = interp.Yes
+	s.TrapOneArgumentIsACondition = interp.Yes
+	s.TrapReportsAnUnknownSingleCondition = interp.Yes
+	s.TrapSingleUnknownConditionIsUsage = interp.Yes
 	s.UlimitBlockIsKilobyte = interp.Yes
 	s.UlimitHasResidentSet = interp.Yes
 	s.UlimitHasProcessCount = interp.Yes
@@ -249,18 +257,20 @@ func Diagnostics() interp.Diagnostics {
 		GetoptsMissingArgument: "option requires an argument -- %[1]s",
 		// bash names itself and no line here, where it gives a line to
 		// everything else it says.
-		GetoptsNamesNoLine:        true,
-		CdCannotChange:            "cd: %[1]s: %[2]s",
-		CdHomeNotSet:              "cd: HOME not set",
-		CdOldpwdNotSet:            "cd: OLDPWD not set",
-		PrintfBadNumber:           "printf: %[1]s: invalid number",
-		PrintfBadVerb:             "printf: `%[1]s': invalid format character",
-		PrintfBadOption:           "printf: %[1]s: invalid option",
-		PrintfBadOptionShowsUsage: true,
-		LetNoExpression:           "let: expression expected",
-		UlimitBadOption:           "ulimit: -%[1]s: invalid option",
-		UlimitBadNumber:           "ulimit: %[1]s: invalid number",
-		BuiltinBadOption:          "%[1]s: %[2]s: invalid option",
+		GetoptsNamesNoLine:          true,
+		CdCannotChange:              "cd: %[1]s: %[2]s",
+		CdHomeNotSet:                "cd: HOME not set",
+		CdOldpwdNotSet:              "cd: OLDPWD not set",
+		PrintfBadNumber:             "printf: %[1]s: invalid number",
+		PrintfBadVerb:               "printf: `%[1]s': invalid format character",
+		PrintfBadOption:             "printf: %[1]s: invalid option",
+		TrapBarePrintNeedsCondition: "trap: -P requires at least one signal name",
+		PrintfBadOptionShowsUsage:   true,
+		LetNoExpression:             "let: expression expected",
+		UlimitBadOption:             "ulimit: -%[1]s: invalid option",
+		UlimitBadNumber:             "ulimit: %[1]s: invalid number",
+		BuiltinBadOption:            "%[1]s: %[2]s: invalid option",
+		TrapPrintsSignalPrefix:      "SIG",
 		// One wording for all three, and the operand quoted back exactly as
 		// given: `export 1x=v` says `1x=v', not `1x'.
 		BuiltinBadName: map[string]string{
@@ -273,6 +283,7 @@ func Diagnostics() interp.Diagnostics {
 		BuiltinUsage: map[string]string{
 			"export":   "export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
 			"readonly": "readonly: usage: readonly [-aAf] [name[=value] ...] or readonly -p",
+			"trap":     "trap: usage: trap [-Plp] [[action] signal_spec ...]",
 			"unset":    "unset: usage: unset [-f] [-v] [-n] [name ...]",
 		},
 		PrintfUsage:            "printf: usage: printf [-v var] format [arguments]",

@@ -845,6 +845,61 @@ type Semantics struct {
 	// in the other three.
 	PrintfRejectsUnknownOption Answer
 
+	// TrapParsesOptions reads a leading `-` word as an option rather than as
+	// the action to run.
+	//
+	// Three of the four do. zsh does not, so `trap -p` sets a trap whose
+	// action is the word `-p` and the failure surfaces later, when it fires
+	// — which is what this shell did for every dialect before there were
+	// options here at all.
+	//
+	// Asked of the letters a dialect knows as much as of the ones it does
+	// not, because zsh takes `-p` as the action just as it takes `-Q`. A
+	// lone `-` is trap's own word for "put it back" and is never an option,
+	// and `--` ends them in all four.
+	TrapParsesOptions Answer
+
+	// TrapPrintsWithP makes `trap -p` write the traps currently set, and
+	// `trap -p condition ...` only the named ones. bash and ksh93 have it;
+	// dash rejects the letter along with every other.
+	TrapPrintsWithP Answer
+
+	// TrapPrintsBareWithP makes `trap -P condition ...` write the action
+	// alone, with no `trap --` around it. bash only, and it is the one option
+	// that insists on an operand: printing all of them is `-p`'s job.
+	TrapPrintsBareWithP Answer
+
+	// TrapListsSignalsWithL makes `trap -l` list the signal names, the way
+	// `kill -l` does. bash only — ksh93 refuses the letter.
+	TrapListsSignalsWithL Answer
+
+	// TrapPrintsBareWithConditions makes `trap -p condition ...` write the
+	// action alone rather than the whole `trap -- action condition` line.
+	//
+	// ksh93 only, and it is why `-p` and bash's `-P` are two questions and
+	// not one: ksh93 reaches bash's `-P` output through `-p` with an operand,
+	// and has no `-P` at all.
+	TrapPrintsBareWithConditions Answer
+
+	// TrapOneArgumentIsACondition reads `trap EXIT` as "put EXIT back"
+	// rather than as an action with no condition to attach it to.
+	//
+	// Three of the four do, which makes `trap EXIT` the short spelling of
+	// `trap - EXIT`. ksh93 refuses the form and the refusal ends the script.
+	TrapOneArgumentIsACondition Answer
+
+	// TrapReportsAnUnknownSingleCondition complains when that one word turns
+	// out not to name a condition. zsh says nothing — and does complain about
+	// `trap : foo`, so this is the single-word form's own answer rather than
+	// zsh declining to check at all.
+	TrapReportsAnUnknownSingleCondition Answer
+
+	// TrapSingleUnknownConditionIsUsage prints the usage line rather than
+	// naming the word. bash does: with one word it cannot tell a misspelled
+	// condition from an action someone forgot to give a condition to. dash
+	// names the word the same way it does anywhere else.
+	TrapSingleUnknownConditionIsUsage Answer
+
 	// UmaskPrintsFourDigits writes the mask as four digits, always — `0022`
 	// against zsh's `022`. True in bash, dash and ksh93.
 	//

@@ -57,6 +57,15 @@ func Semantics() interp.Semantics {
 	s.CdDashPrintsTheDirectory = interp.Yes
 	s.PrintfAssignsWithV = interp.No
 	s.PrintfRejectsUnknownOption = interp.Yes
+	// dash has no options here at all, so every letter is refused.
+	s.TrapParsesOptions = interp.Yes
+	s.TrapPrintsWithP = interp.No
+	s.TrapPrintsBareWithConditions = interp.No
+	s.TrapPrintsBareWithP = interp.No
+	s.TrapListsSignalsWithL = interp.No
+	s.TrapOneArgumentIsACondition = interp.Yes
+	s.TrapReportsAnUnknownSingleCondition = interp.Yes
+	s.TrapSingleUnknownConditionIsUsage = interp.No
 	s.UmaskPrintsFourDigits = interp.Yes
 	// dash parses no options for `alias`, so `-p` is a name there.
 	s.AliasParsesOptions = interp.No

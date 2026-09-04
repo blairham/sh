@@ -54,6 +54,9 @@ func Semantics() interp.Semantics {
 	// — is measured in docs/spec/semantics.md and not reproduced.
 	s.BuiltinWriteErrorFailsTheCommand = interp.No
 	s.ArithIntegerOperatorRefusesFloat = interp.No
+	// A negative exponent is a float answer here, not a refusal: `2**-1`
+	// is 0.5.
+	s.ArithNegativeExponentIsError = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.Yes
 	s.AssignmentUpdatesPipelineStatus = interp.No
 	s.UnsetEndsTheProducedPipelineStatus = interp.Yes

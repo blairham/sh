@@ -1698,6 +1698,9 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `arith/ternary` | `[2][3]` | `[2][3]` | `[2][3]` | `[2][3]` | `[2][3]` | `[2][3]` |
 | `arith/increment-absent-from-dash` | `<shell>: 1: arithmetic expression: expecting primary: "x++"` *(status 2)* | `[1][2]` | `[1][2]` | `[1][2]` | `[1][2]` | `[1][2]` |
 | `arith/comma-absent-from-dash` | `<shell>: 1: arithmetic expression: expecting EOF: "1,2"` *(status 2)* | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` |
+| `arith/exponent-absent-from-dash` | `<shell>: 1: arithmetic expression: expecting primary: "2**10"` *(status 2)* | `[1024]` | `[1024]` | `[1024]` | `[1024]` | `[1024]` |
+| `arith/exponent-binds-right-and-below-unary` | `<shell>: 1: arithmetic expression: expecting primary: "2**3**2"` *(status 2)* | `[512][4]` | `[512][4]` | `[512][4]` | `[512][4]` | `[512][4]` |
+| `arith/negative-exponent-diverges` | `<shell>: 1: arithmetic expression: expecting primary: "2**-1"` *(status 2)* | `<shell>: line 1: 2**-1: exponent less than 0 (error token is "1")` *(status 1)* | `<shell>: line 1: 2**-1: exponent less than 0 (error token is "1")` *(status 127)* | `<shell>: 2**-1: exponent less than 0 (error token is "1")` *(status 1)* | `[0.5]` | `[0.5]` |
 | `arith/division-by-zero-is-a-runtime-error` | `<shell>: 1: arithmetic expression: division by zero: "1/0"` *(status 2)* | `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 1)* | `<shell>: line 1: 1/0: division by 0 (error token is "0")` *(status 127)* | `<shell>: 1/0: division by 0 (error token is "0")` *(status 1)* | `<shell>: 1/0: divide by zero` *(status 1)* | `<shell>:1: division by zero` *(status 1)* |
 | `arith/non-numeric-variable-diverges` | `<shell>: 1: Illegal number: abc` *(status 2)* | `[1]` | `[1]` | `[1]` | `<shell>: abc: parameter not set` *(status 1)* | `[1]` |
 | `arith/integer-division-stays-integer` | `1` | `1` | `1` | `1` | `1` | `1` |
@@ -1802,6 +1805,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `arith/comma-absent-from-dash` — the sequence operator, likewise
   ```sh
   printf "[%s]" "$((1,2))"
+  ```
+- `arith/exponent-absent-from-dash` — exponentiation is not POSIX — nor ISO C — and dash rejects it
+  ```sh
+  printf "[%s]" "$((2**10))"
+  ```
+- `arith/exponent-binds-right-and-below-unary` — ** associates to the right and a prefix sign belongs to the base, so 512 and 4 — neither follows from C, which has no such operator
+  ```sh
+  printf "[%s]" "$((2**3**2))" "$((-2**2))"
+  ```
+- `arith/negative-exponent-diverges` — no integer answer exists: bash refuses where ksh93 and zsh go float and answer 0.5
+  ```sh
+  printf "[%s]" "$((2**-1))"
   ```
 - `arith/division-by-zero-is-a-runtime-error` — unanimous, and a runtime error rather than a syntax one — the expression parses
   ```sh

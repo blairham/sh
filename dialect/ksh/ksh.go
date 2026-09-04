@@ -65,6 +65,9 @@ func Semantics() interp.Semantics {
 	// standard input — are the front end's and stay unmodeled.
 	s.DefaultOptionLetters = "hB"
 	s.ArithIntegerOperatorRefusesFloat = interp.Yes
+	// A negative exponent is a float answer here, not a refusal: `2**-1`
+	// is 0.5.
+	s.ArithNegativeExponentIsError = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.No
 	s.SelectLayout = interp.SelectMenuVertical
 	s.SelectPromptNeedsTerminal = interp.Yes

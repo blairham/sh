@@ -2312,6 +2312,21 @@ echo unreachable`,
 		Why:     "the sequence operator, likewise",
 	},
 	{
+		ID: "arith/exponent-absent-from-dash", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$((2**10))"`,
+		Why:     "exponentiation is not POSIX — nor ISO C — and dash rejects it",
+	},
+	{
+		ID: "arith/exponent-binds-right-and-below-unary", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$((2**3**2))" "$((-2**2))"`,
+		Why:     "** associates to the right and a prefix sign belongs to the base, so 512 and 4 — neither follows from C, which has no such operator",
+	},
+	{
+		ID: "arith/negative-exponent-diverges", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$((2**-1))"`,
+		Why:     "no integer answer exists: bash refuses where ksh93 and zsh go float and answer 0.5",
+	},
+	{
 		ID: "arith/division-by-zero-is-a-runtime-error", Category: "arithmetic",
 		Snippet: `printf "[%s]" "$((1/0))"`,
 		Why:     "unanimous, and a runtime error rather than a syntax one — the expression parses",

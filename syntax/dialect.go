@@ -185,6 +185,12 @@ type Dialect struct {
 	// ArithComma enables the sequence operator. Not POSIX; dash rejects it.
 	ArithComma bool
 
+	// ArithExponent enables `**`, exponentiation. Not POSIX — the operator
+	// is not in ISO C either — and dash rejects it; bash, ksh93 and zsh all
+	// have it. What a negative exponent means is not this flag's question:
+	// the shells that parse it disagree, and the semantics vector answers.
+	ArithExponent bool
+
 	// ArithExplicitBase enables the `base#digits` form. Absent from dash.
 	ArithExplicitBase bool
 
@@ -323,6 +329,7 @@ func Core() Dialect {
 
 		ArithIncDec:             true,
 		ArithComma:              true,
+		ArithExponent:           true,
 		ArithExplicitBase:       true,
 		ArithLeadingZeroIsOctal: true,
 	}

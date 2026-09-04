@@ -247,6 +247,12 @@ func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 	if e.Index == nil {
 		return nil, false
 	}
+	if a, ok := r.AssocArrays[e.Name]; ok {
+		// The attribute decides the subscript's reading before anything is
+		// looked up: a declared name takes it as a key, an undeclared one
+		// falls through to the numeric path below.
+		return r.assocSubscript(a, e), true
+	}
 	elems, ok := r.arrayElems(e.Name)
 	if !ok {
 		return nil, true

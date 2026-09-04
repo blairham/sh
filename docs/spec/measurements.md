@@ -177,6 +177,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `callstack/nesting-is-innermost-first` | `<shell>: 1: Bad substitution` *(status 2)* | `g f` | `g f` | `g f` | *(no output, status 0)* | *(no output, status 0)* |
 | `array/a-subscript-past-the-end` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=2 all=[x y]` | `n=2 all=[x y]` | `n=2 all=[x y]` | `n=2 all=[x y]` | `n=5 all=[x    y]` |
 | `array/removing-one-element` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=2 all=[p q]` | `n=2 all=[p q]` | `n=2 all=[p q]` | `n=2 all=[p q]` | `n=3 all=[p  r]` |
+| `assoc/a-string-subscript` | `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: Bad substitution` *(status 2)* | `v k` | `v k` | `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~v 0` | `v k` | `<shell>:1: bad substitution` *(status 1)* |
+| `assoc/the-subscript-is-not-arithmetic` | `<shell>: 1: typeset: not found~<shell>: 1: m[1+1]=x: not found~<shell>: 1: Bad substitution` *(status 2)* | `[x]` | `[x]` | `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~[x]` | `[x]` | `[x]` |
+| `assoc/values-in-some-order` | `<shell>: 1: typeset: not found~<shell>: 1: m[b]=2: not found~<shell>: 1: m[a]=1: not found~<shell>: 1: Bad substitution~<shell>: 1: Bad substitution` *(status 2)* | `1 2 n=2` | `1 2 n=2` | `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~1 n=1` | `1 2 n=2` | `1 2 n=2` |
+| `assoc/a-compound-literal-and-unset` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=1 b=2 a=gone` | `n=1 b=2 a=gone` | `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~n=0 b= a=gone` | `n=1 b=2 a=gone` | `n=1 b=2 a=gone` |
 | `subst/a-case-inside-a-substitution` | `[yes]` | `[yes]` | `[yes]` | `<shell>: -c: line 0: syntax error near unexpected token `;;'~<shell>: -c: line 0: `x=$(case a in a) echo yes;; esac); echo "[$x]"'` *(status 2)* | `[yes]` | `[yes]` |
 | `subst/a-substitution-inside-an-arm` | `[inner]` | `[inner]` | `[inner]` | `[inner]` | `[inner]` | `[inner]` |
 | `glob/matches-are-in-order` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` | `1digit Apple Cherry _under banana` |
@@ -277,6 +281,22 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `array/removing-one-element` — the same question reached from the other side, and `unset a[i]` had been doing nothing at all: the subscript was read as part of the name, so a name that was never in the table was deleted from it. What the hole then looks like is the same axis
   ```sh
   a=(p q r); unset "a[2]"; echo "n=${#a[@]} all=[${a[@]}]"
+  ```
+- `assoc/a-string-subscript` — the declaration that turns a subscript from an expression into a key. bash and ksh93 store under the letter and answer it back; zsh has the arrays but rejects `${!m[@]}` outright; dash has none of it — the issue's own snippet, spelled with the name all three declarers share
+  ```sh
+  typeset -A m; m[k]=v; echo "${m[k]}" "${!m[@]}"
+  ```
+- `assoc/the-subscript-is-not-arithmetic` — the sharpest edge of the attribute: the same characters that name element 2 of an indexed array name the three-character key of a declared one, unanimously in the shells that have it — so the switch has to be thrown before the subscript is read, not after
+  ```sh
+  typeset -A m; m[1+1]=x; echo "[${m[1+1]}]"
+  ```
+- `assoc/values-in-some-order` — `${m[@]}` is one field per element and `${#m[@]}` counts them, exactly as for an indexed array. Sorted before comparing because no shell promises an order — bash's own moves between versions — and a case that depended on one would pin an accident
+  ```sh
+  typeset -A m; m[b]=2; m[a]=1; printf "%s\n" "${m[@]}" | sort | tr "\n" " "; echo "n=${#m[@]}"
+  ```
+- `assoc/a-compound-literal-and-unset` — the `([k]=v …)` literal keys its elements rather than counting them, and `unset m[k]` takes one key rather than doing nothing — unanimous in the three that have the attribute, and the removed element is gone rather than empty
+  ```sh
+  typeset -A m; m=([a]=1 [b]=2); unset "m[a]"; echo "n=${#m[@]} b=${m[b]} a=${m[a]:-gone}"
   ```
 - `subst/a-case-inside-a-substitution` — where a substitution ends is a question about the grammar and not about how many parentheses have been counted: an arm's `)` closes nothing, so counting stops early and takes half the arm with it. Unanimous, and the shape that made two installed scripts parse into a tree nobody wrote
   ```sh

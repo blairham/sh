@@ -673,6 +673,16 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 // leaving it alone.
 func (r *Runner) assignSubscript(e *syntax.ParamExpr, v string) {
 	idx := r.subscriptText(e.Index)
+	if wholeArraySubscript(idx) {
+		// The rule above, made explicit for the associative path too — and
+		// re-measured there: one shell stores a literal `@` key and another
+		// hangs outright, which is nobody's answer to follow.
+		return
+	}
+	if r.assocDeclared(e.Name) {
+		r.setAssocElem(e.Name, idx, v)
+		return
+	}
 	n, err := r.parseNum(idx)
 	if err != nil {
 		return
@@ -700,6 +710,12 @@ func wholeArraySubscript(idx string) bool { return idx == "@" || idx == "*" }
 // subscriptsOf is what `${!a[@]}` yields: the subscripts of a stored array,
 // or a plain count for anything else that reads as one.
 func (r *Runner) subscriptsOf(name string, n int) []string {
+	if a, ok := r.AssocArrays[name]; ok {
+		// An associative array's subscripts are its keys — in key order,
+		// because the shells promise no order and sorted is the one this
+		// implementation keeps everywhere.
+		return a.keys()
+	}
 	if a, ok := r.Arrays[name]; ok {
 		keys := r.arrayKeys(a)
 		base := r.arrayBase()

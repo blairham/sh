@@ -34,6 +34,13 @@ type Runner struct {
 	// thing from Vars rather than a formatting of one: an element can hold a
 	// space without becoming two.
 	Arrays map[string]Array
+	// AssocArrays holds associative arrays — string keys, set apart from
+	// Arrays because the two kinds read a subscript differently: an indexed
+	// array evaluates it and an associative one takes it as written. A name
+	// in this table *is* the `declare -A` attribute; declaring puts an empty
+	// one here, which is how an assignment later knows which reading the
+	// subscript gets.
+	AssocArrays map[string]AssocArray
 	// Params holds the positional parameters, $1 first. `$0` is not one of
 	// them and is kept separate, because `shift` moves these and never
 	// touches that.
@@ -535,6 +542,14 @@ func (r *Runner) clone() *Runner {
 			copied[i] = e
 		}
 		c.Arrays[k] = copied
+	}
+	c.AssocArrays = make(map[string]AssocArray, len(r.AssocArrays))
+	for k, v := range r.AssocArrays {
+		copied := make(AssocArray, len(v))
+		for key, e := range v {
+			copied[key] = e
+		}
+		c.AssocArrays[k] = copied
 	}
 	c.Params = append([]string(nil), r.Params...)
 	// The table is copied, the streams in it are shared: a subshell's
@@ -1611,6 +1626,11 @@ type scope struct {
 	// an environment value the script had taken away — or forgetting one it
 	// had not.
 	removedBefore map[string]bool
+	// savedAssoc shadows the associative table the same way, attribute and
+	// all: what comes back on exit is whether the name was associative as
+	// much as what it held.
+	savedAssoc   map[string]AssocArray
+	assocExisted map[string]bool
 	// keyword records that the function was defined with the `function` word
 	// rather than with parentheses. ksh93 gives only those functions a local
 	// scope, so `typeset` needs to know which kind it is standing in.
@@ -1818,6 +1838,12 @@ func (r *Runner) getVar(name string) (string, bool) {
 		// element the two views differ and the dialect decides.
 		return r.arrayScalar(r.readArray(a)), true
 	}
+	if a, ok := r.AssocArrays[name]; ok && !r.removed[name] {
+		// The associative table answers alone rather than falling through:
+		// Vars may hold a scalar the name had before it was declared, and no
+		// shell reads that back once the attribute is on.
+		return r.assocScalar(a)
+	}
 	if v, ok := r.Vars[name]; ok {
 		return v, true
 	}
@@ -1849,6 +1875,10 @@ func (r *Runner) assignOperands(c *syntax.SimpleCmd) {
 // same syntax: a scalar, a whole array, or one element of one.
 func (r *Runner) assign(a *syntax.Assign) {
 	switch {
+	case a.IsArray && r.assocDeclared(a.Name):
+		// The attribute was declared, so the literal's elements are keyed
+		// rather than counted.
+		r.assignAssocLiteral(a.Name, a.Elems, a.Append)
 	case a.IsArray:
 		var elems []string
 		for _, w := range a.Elems {
@@ -1869,6 +1899,12 @@ func (r *Runner) assign(a *syntax.Assign) {
 			return
 		}
 		r.setArray(a.Name, elems)
+	case a.Index != nil && r.assocDeclared(a.Name):
+		// A declared name takes its subscript as a string, expanded and
+		// never evaluated: `m[1+1]=x` stores under the three characters.
+		// This is the switch the attribute exists to throw — the same text
+		// on an undeclared name falls through to the arithmetic reading.
+		r.setAssocElem(a.Name, r.subscriptText(a.Index), r.expandAssignValue(a.Value))
 	case a.Index != nil:
 		idx, err := r.parseNum(strings.TrimSpace(r.joinWord(a.Index)))
 		if err != nil {
@@ -1878,6 +1914,18 @@ func (r *Runner) assign(a *syntax.Assign) {
 		r.setArrayElem(a.Name, idx, r.expandAssignValue(a.Value))
 	default:
 		value := r.expandAssignValue(a.Value)
+		if r.assocDeclared(a.Name) {
+			// A scalar assignment to a declared name lands on the element
+			// whose key is `0`, keeping the rest — measured in the two
+			// shells that read a plain `$m` as that element; the whole-array
+			// shell replaces the table instead, which no script can watch
+			// for without also depending on the scalar axis itself.
+			if a.Append {
+				value = r.AssocArrays[a.Name]["0"] + value
+			}
+			r.setAssocElem(a.Name, "0", value)
+			return
+		}
 		if a.Append {
 			old, _ := r.getVar(a.Name)
 			value = old + value

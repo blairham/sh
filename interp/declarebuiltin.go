@@ -32,6 +32,7 @@ type declareFlags struct {
 	integer  bool
 	readonly bool
 	export   bool
+	assoc    bool
 	remove   bool
 }
 
@@ -54,6 +55,11 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 				f.readonly = true
 			case 'x':
 				f.export = true
+			case 'A':
+				// The associative attribute, and unlike `-a` it must be
+				// recorded: it changes what a later subscript *means*, the
+				// way `-i` changes what a later assignment means.
+				f.assoc = true
 			case 'a':
 				// Accepted and recorded nowhere. An array here is dynamic,
 				// so `typeset -a arr` followed by `arr[0]=x` works without
@@ -83,6 +89,14 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 		// among the three shells that have the name — subject to ksh93's
 		// rule about which functions have a scope at all.
 		r.shadowTypeset(name)
+		if f.assoc && !f.remove {
+			// After the shadow, so that `typeset -A` inside a function
+			// declares a local table and the caller's absence comes back
+			// when it returns. `+A` does nothing rather than removing: two
+			// of the three shells with the attribute refuse to take it off
+			// a name, the same shape `+r` already has.
+			r.markAssoc(name)
+		}
 		switch {
 		case hasValue:
 			r.setVarAs(name, value, assignedByDeclaration)
@@ -258,6 +272,26 @@ func (r *Runner) shadow(name string) {
 		}
 		sc.savedArrays[name] = old
 		sc.arrayExisted[name] = existed
+	}
+	// And a third table for the associative kind, for the same reason as the
+	// second — and here the *attribute* is what is being shadowed as much as
+	// the value: `typeset -A m` in a function must not leave the caller's
+	// `m` reading its subscripts as strings.
+	if _, seen := sc.assocExisted[name]; !seen {
+		old, existed := r.AssocArrays[name]
+		if sc.savedAssoc == nil {
+			sc.savedAssoc = map[string]AssocArray{}
+			sc.assocExisted = map[string]bool{}
+		}
+		if existed {
+			kept := make(AssocArray, len(old))
+			for k, v := range old {
+				kept[k] = v
+			}
+			old = kept
+		}
+		sc.savedAssoc[name] = old
+		sc.assocExisted[name] = existed
 	}
 }
 

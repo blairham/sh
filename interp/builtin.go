@@ -324,17 +324,24 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		return status
 	}
 	for _, name := range args {
-		if base, idx, ok := r.subscriptOperand(name); ok {
+		if base, sub, ok := r.subscriptOperand(name); ok {
 			// `unset a[1]` is about one element and not about the array.
 			// The subscript was read as part of the name, so the whole thing
 			// was deleted from a table it was never in and nothing happened
 			// at all.
-			r.unsetArrayElem(base, idx)
+			if r.assocDeclared(base) {
+				r.unsetAssocElem(base, sub)
+				continue
+			}
+			if idx, err := r.parseNum(sub); err == nil {
+				r.unsetArrayElem(base, idx)
+			}
 			continue
 		}
 		delete(r.Vars, name)
 		delete(r.exported, name)
 		delete(r.Arrays, name)
+		delete(r.AssocArrays, name)
 		// Recorded as well as deleted: a name that came from the environment
 		// is not in Vars to begin with, and deleting nothing left it visible
 		// to every lookup — `unset PATH` did not clear PATH.
@@ -437,17 +444,24 @@ func firstOptionLetter(operand string) string {
 //
 // Only for a name that really ends in one: `unset a` is the whole array and
 // `unset a[1]` is an element of it, and the two arrive as the same kind of
-// word.
-func (r *Runner) subscriptOperand(operand string) (string, int, bool) {
+// word. The subscript comes back as text because its reading is the base
+// name's to decide: numeric for an indexed array, any string at all for a
+// declared associative one — so `unset m[k]` is an element of `m` exactly
+// when `m` carries the attribute, and stays the bad name it always was when
+// it does not.
+func (r *Runner) subscriptOperand(operand string) (string, string, bool) {
 	open := strings.IndexByte(operand, '[')
 	if open <= 0 || !strings.HasSuffix(operand, "]") {
-		return "", 0, false
+		return "", "", false
 	}
-	idx, err := r.parseNum(strings.TrimSpace(operand[open+1 : len(operand)-1]))
-	if err != nil {
-		return "", 0, false
+	base := operand[:open]
+	sub := strings.TrimSpace(operand[open+1 : len(operand)-1])
+	if !r.assocDeclared(base) {
+		if _, err := r.parseNum(sub); err != nil {
+			return "", "", false
+		}
 	}
-	return operand[:open], idx, true
+	return base, sub, true
 }
 
 // hasOption reports whether the letter appears in the option words before the

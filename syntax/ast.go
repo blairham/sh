@@ -103,6 +103,49 @@ func (p *Pipeline) Pos() Pos {
 func (p *Pipeline) End() Pos  { return p.Cmds[len(p.Cmds)-1].End() }
 func (p *Pipeline) exprNode() {}
 
+// TimeClause is `time [-p] [pipeline]`: the pipeline runs whole and the shell
+// writes how long it took to its own standard error — which is why the report
+// of `time true 2>&1 | wc -l` is not counted: the redirection belongs to an
+// element inside the pipeline and the report lands outside it.
+//
+// It is an expression rather than a command because that is where it binds:
+// the whole pipeline and nothing past it. `time true && echo ok` times `true`
+// alone.
+type TimeClause struct {
+	// Negated records a `!` written before `time`, which negates the timed
+	// pipeline's status — `! time true` is 1 and still reports. A `!` after
+	// `time` is the pipeline's own and lives on it.
+	Negated bool
+	Bang    Pos
+	Time    Pos
+	// Posix is the `-p` flag, which switches the report to the POSIX format.
+	// Read only where [Dialect.TimePosixFlag] says so; elsewhere a `-p` is
+	// the first word of the pipeline.
+	Posix    bool
+	PosixPos Pos
+	// Pipeline is what is timed: a *Pipeline, another *TimeClause, or nil
+	// for a bare `time`, which runs nothing and still reports.
+	Pipeline Expr
+	// Stop is the end of the last keyword token, for a bare `time` that has
+	// no pipeline to end at.
+	Stop Pos
+}
+
+func (t *TimeClause) Pos() Pos {
+	if t.Negated {
+		return t.Bang
+	}
+	return t.Time
+}
+
+func (t *TimeClause) End() Pos {
+	if t.Pipeline != nil {
+		return t.Pipeline.End()
+	}
+	return t.Stop
+}
+func (t *TimeClause) exprNode() {}
+
 // Command is a simple command, a compound command, or a function definition.
 type Command interface {
 	Node

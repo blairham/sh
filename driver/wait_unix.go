@@ -8,6 +8,7 @@ package driver
 import (
 	"errors"
 	"syscall"
+	"time"
 
 	"github.com/blairham/sh/interp"
 )
@@ -27,7 +28,8 @@ import (
 func waitForCommand(pid int) (interp.Wait, error) {
 	for {
 		var ws syscall.WaitStatus
-		_, err := syscall.Wait4(pid, &ws, syscall.WUNTRACED, nil)
+		var ru syscall.Rusage
+		_, err := syscall.Wait4(pid, &ws, syscall.WUNTRACED, &ru)
 		if errors.Is(err, syscall.EINTR) {
 			// A signal arrived while waiting — the shell's own SIGTSTP or
 			// SIGINT handler, most often. That is not an answer about the
@@ -39,11 +41,19 @@ func waitForCommand(pid int) (interp.Wait, error) {
 		}
 		switch {
 		case ws.Stopped():
+			// Still there: nothing has been reaped, so there is no usage to
+			// report yet.
 			return interp.Wait{Signal: ws.StopSignal(), Stopped: true}, nil
 		case ws.Signaled():
-			return interp.Wait{Signal: ws.Signal(), Killed: true}, nil
+			return interp.Wait{
+				Signal: ws.Signal(), Killed: true,
+				User: time.Duration(ru.Utime.Nano()), System: time.Duration(ru.Stime.Nano()),
+			}, nil
 		default:
-			return interp.Wait{Status: ws.ExitStatus()}, nil
+			return interp.Wait{
+				Status: ws.ExitStatus(),
+				User:   time.Duration(ru.Utime.Nano()), System: time.Duration(ru.Stime.Nano()),
+			}, nil
 		}
 	}
 }

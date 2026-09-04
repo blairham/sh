@@ -96,6 +96,23 @@ type Dialect struct {
 	// already covers without this one.
 	FunctionNamePunctuation bool
 
+	// TimeKeyword makes `time` a reserved word at the start of a pipeline,
+	// timing the whole pipeline — `time true | wc -l` measures both elements
+	// — with the report going to the shell's own standard error. Absent from
+	// dash, where `time` is an ordinary name resolved from PATH.
+	//
+	// Only at the front: `echo hi | time wc -c` keeps `time` an ordinary
+	// word, which is what bash and dash do there. It sits on either side of
+	// `!`, and a bare `time` with no pipeline parses too.
+	TimeKeyword bool
+
+	// TimePosixFlag lets that keyword read `-p`, which switches the report
+	// to the POSIX line format. bash and ksh93 read it; zsh does not — there
+	// `-p` is the first word of the timed pipeline, a command that is not
+	// found — so it is not core, and where it is off the word is left to the
+	// pipeline exactly as zsh leaves it.
+	TimePosixFlag bool
+
 	// TimesIsReserved makes `times` a reserved word rather than a builtin,
 	// so a word after it is a syntax error rather than an argument it
 	// ignores. ksh93 alone, and the only place in the panel where *which*
@@ -337,6 +354,10 @@ func Core() Dialect {
 		ArithCommand:      true,
 		DoubleBracket:     true,
 		FunctionKeyword:   true,
+		// Every shell in the panel but dash times a pipeline with it. The
+		// `-p` flag is not here: zsh reads `-p` as a word of the pipeline,
+		// so the flag is bash's and ksh93's to add.
+		TimeKeyword: true,
 		// Every shell in the panel but dash has it, which is what puts it in
 		// the core — and docs/spec/core.md has named it as core since before
 		// there was code to refuse it.

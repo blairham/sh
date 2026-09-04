@@ -214,6 +214,18 @@ func (p *printer) expr(e Expr) {
 			}
 			p.command(c)
 		}
+	case *TimeClause:
+		if x.Negated {
+			p.str("! ")
+		}
+		p.str("time")
+		if x.Posix {
+			p.str(" -p")
+		}
+		if x.Pipeline != nil {
+			p.str(" ")
+			p.expr(x.Pipeline)
+		}
 	}
 }
 

@@ -50,6 +50,9 @@ func Dialect() syntax.Dialect {
 	d.ExtendedPatternInCondition = true
 	// A bare `|` in a `=~` operand belongs to the regular expression.
 	d.RegexTakesAlternation = true
+	// `time -p`, the POSIX report format. bash and ksh93 read the flag;
+	// zsh leaves `-p` to the pipeline, which is why it is not core.
+	d.TimePosixFlag = true
 	return d
 }
 
@@ -459,6 +462,9 @@ func Diagnostics() interp.Diagnostics {
 		KillUsageUnprefixed: true,
 		KillUsageStatus:     2,
 		TimesDecimals:       3,
+		// The `time` keyword's report: three decimals where ksh93 gives
+		// the same lines two.
+		TimeDecimals: 3,
 		// A path that is not there is the OS reason and does not name the
 		// builtin; a bare name off PATH does the reverse.
 		PathNotFound: "%[1]s: No such file or directory",

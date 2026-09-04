@@ -299,6 +299,15 @@ type Runner struct {
 	// that ends such an element is announced by one dialect and passed over
 	// by the rest.
 	midPipeline bool
+	// timedPipeline is set by a `time` clause whose layout reports per
+	// pipeline element, and consumed by the next pipeline dispatched — the
+	// clause's own body and nothing nested inside it.
+	timedPipeline *pipelineTiming
+	// elemCPU is where this runner's external commands add the CPU their
+	// processes used, while a per-element `time` report is collecting. Nil
+	// almost always; a clone inherits it, so a subshell inside a timed
+	// element still bills that element.
+	elemCPU *cpuAccum
 	// CommandString says the program came from an argument — `-c` — rather
 	// than from a file or from standard input.
 	//
@@ -1149,6 +1158,10 @@ func lastIsNegated(e syntax.Expr) bool {
 		return lastIsNegated(x.Y)
 	case *syntax.Pipeline:
 		return x.Negated
+	case *syntax.TimeClause:
+		// A bang on either side of `time` tests the status rather than
+		// requiring success: `set -e; time ! false` carries on.
+		return x.Negated || lastIsNegated(x.Pipeline)
 	}
 	return false
 }
@@ -1219,18 +1232,41 @@ func (r *Runner) expr(ctx context.Context, e syntax.Expr) error {
 		return nil
 	case *syntax.Pipeline:
 		return r.pipeline(ctx, x)
+	case *syntax.TimeClause:
+		return r.timeClause(ctx, x)
 	}
 	return r.unsupported(fmt.Sprintf("%T", e))
 }
 
 func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
+	// Consumed here so that only the timed clause's own body is measured
+	// per element — a pipeline nested anywhere inside one of its elements
+	// is that element's work, not a row of the report.
+	timing := r.timedPipeline
+	r.timedPipeline = nil
+	if timing != nil {
+		timing.grow(p.Cmds)
+	}
 	r.pipefailRaised = false
 	if len(p.Cmds) == 1 {
-		if err := r.command(ctx, p.Cmds[0]); err != nil {
+		if timing != nil {
+			// One element, run in the current shell like any other single
+			// command; the element's externals bill its slot for as long
+			// as it runs.
+			saved := r.elemCPU
+			r.elemCPU = &timing.elems[0].cpu
+			start := time.Now()
+			err := r.command(ctx, p.Cmds[0])
+			timing.elems[0].wall = time.Since(start)
+			r.elemCPU = saved
+			if err != nil {
+				return err
+			}
+		} else if err := r.command(ctx, p.Cmds[0]); err != nil {
 			return err
 		}
 		r.recordSingleStatus(p.Cmds[0])
-	} else if err := r.runPipeline(ctx, p); err != nil {
+	} else if err := r.runPipeline(ctx, p, timing); err != nil {
 		return err
 	}
 	if p.Negated {
@@ -1657,6 +1693,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	}
 
 	err := cmd.Run()
+	r.addChildTime(cmd.ProcessState)
 	var ee *exec.ExitError
 	switch {
 	case err == nil:
@@ -1718,6 +1755,14 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 		// is discarded because the child is already reaped — that *is* the
 		// arrangement — and the reaping is not what this call is for.
 		_ = cmd.Wait()
+		if cmd.ProcessState != nil {
+			r.addChildTime(cmd.ProcessState)
+		} else if r.elemCPU != nil {
+			// The caller's wait reaped the child, so os/exec never saw its
+			// end — but the wait that reaped it read its usage, and Wait
+			// carries the figures here.
+			r.elemCPU.add(w.User, w.System)
+		}
 	}
 	status, stopped := r.waitResult(w)
 	r.status = status

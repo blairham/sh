@@ -52,6 +52,9 @@ func Dialect() syntax.Dialect {
 	d.ExtendedPatternInCondition = true
 	// A bare `|` in a `=~` operand belongs to the regular expression.
 	d.RegexTakesAlternation = true
+	// `time -p`, the POSIX report format, which bash also reads and zsh
+	// does not.
+	d.TimePosixFlag = true
 	return d
 }
 
@@ -465,6 +468,11 @@ func Diagnostics() interp.Diagnostics {
 		// genuinely less information than the other three report.
 		TimesLayout:   interp.TimesUserAndSystem,
 		TimesDecimals: 2,
+		// The `time` keyword's report is bash's shape with two decimals —
+		// and a bare `time` reports the shell's own user and sys, no real,
+		// where bash reports a run of nothing.
+		TimeDecimals: 2,
+		TimeBare:     interp.TimeBareShellUserSys,
 	}
 }
 

@@ -65,7 +65,16 @@ func (r *Runner) ensureSpecials() {
 		r.setVarQuietly("PPID", strconv.Itoa(os.Getppid()))
 	}
 	if _, ok := r.Dynamic["LINENO"]; !ok {
-		r.Dynamic["LINENO"] = func(r *Runner) string { return strconv.Itoa(r.line) }
+		r.Dynamic["LINENO"] = func(r *Runner) string {
+			// One dialect numbers lines inside a function from the line the
+			// function was written on; the rest count from the file, which
+			// r.line already is. Asked only inside a function.
+			if r.inFunc != "" && r.funcLine > 0 &&
+				r.ask(r.sem().LinenoCountsFromTheFunction, "`$LINENO` inside a function counting from it") {
+				return strconv.Itoa(r.line - r.funcLine)
+			}
+			return strconv.Itoa(r.line)
+		}
 	}
 	if _, ok := r.Dynamic["-"]; !ok {
 		r.Dynamic["-"] = (*Runner).optionLetters

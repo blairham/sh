@@ -122,6 +122,10 @@ func Semantics() interp.Semantics {
 	s.UnderscoreTracksTheLastArgument = interp.Yes
 	// Bases stop at 36 here, and the refusal says so.
 	s.ArithBaseAbove36 = interp.No
+	// ${#a} of an array counts elements, and a function's $LINENO counts
+	// from the function.
+	s.ArrayLengthWithoutSubscriptIsCount = interp.Yes
+	s.LinenoCountsFromTheFunction = interp.Yes
 	s.EchoInterpretsEscapes = interp.Yes
 	// echo reads -n, -e and -E, and -e wins over -E whatever the order.
 	s.EchoOptions = "neE"

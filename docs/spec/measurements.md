@@ -1099,6 +1099,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `core/append-to-an-array` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` | `[one two three] 3` |
 | `core/array-star-joins` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` | `[one two]~[one-two]` |
 | `unset/takes-away-an-environment-name` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` | `[gone]` |
+| `special/lineno-in-a-function-diverges` | `2` | `2` | `2` | `2` | `2` | `1` |
 
 - `special/ifs-has-a-default` — space, tab and newline in three of them and a NUL as well in zsh — and read as bytes because whitespace is what it is made of. Splitting worked here while `$IFS` was empty, so a script could neither read it nor tell it had been changed
   ```sh
@@ -1139,6 +1140,13 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `unset/takes-away-an-environment-name` — a name that arrived in the environment rather than from an assignment is still a name `unset` removes — deleting it from the shell's own table is not enough, because a lookup reads both
   ```sh
   unset HOME; echo "[${HOME-gone}]"
+  ```
+- `special/lineno-in-a-function-diverges` — zsh numbers a function's lines from the line the function was written on; the other three count from the file
+  ```sh
+  f(){
+  echo $LINENO
+  }
+  f
   ```
 
 ## quoting
@@ -2338,6 +2346,9 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `param/transform-quotes-for-reuse` | `<shell>: 1: Bad substitution` *(status 2)* | `['a b'\''c']` | `['a b'\''c']` | `<shell>: ${x@Q}: bad substitution` *(status 1)* | `<shell>: "${x@Q}": bad substitution` *(status 1)* | `<shell>:1: bad substitution` *(status 1)* |
 | `param/transform-distributes-over-an-array` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `['one']['t w']` | `['one']['t w']` | `[one][t w]` | `<shell>: "${a[@]@Q}": bad substitution` *(status 1)* | `<shell>:1: bad substitution` *(status 1)* |
 | `param/transform-deferred-in-a-branch-never-taken` | `ok` | `ok` | `ok` | `ok` | `ok` | `ok` |
+| `param/an-array-length-without-a-subscript` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `3 5` | `3 5` | `3 5` | `3 5` | `3 3` |
+| `param/an-empty-array-quoted-at` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=0` | `n=0` | `n=0` | `n=1` | `n=0` |
+| `param/a-negative-substring-length` | `<shell>: 1: Bad substitution` *(status 2)* | `[bcd]` | `[bcd]` | `<shell>: -2: substring expression < 0` *(status 1)* | `[]` | `[bcd]` |
 | `param/substring` | `<shell>: 1: Bad substitution` *(status 2)* | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` |
 | `param/case-change-is-bash-only` | `<shell>: 1: Bad substitution` *(status 2)* | `[ABC][abc]` | `[ABC][abc]` | `<shell>: ${x^^}: bad substitution` *(status 1)* | `<shell>: syntax error at line 1: `^' unexpected` *(status 3)* | `<shell>:1: bad substitution` *(status 1)* |
 | `param/indirection-diverges-four-ways` | `<shell>: 1: Bad substitution` *(status 2)* | `[V]` | `[V]` | `[V]` | `[x]` | `<shell>:1: bad substitution` *(status 1)* |
@@ -2441,6 +2452,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `param/transform-deferred-in-a-branch-never-taken` — the @ family is deferred to run time by every shell in the panel — including ksh93, which refuses every *other* unrecognized operator while reading. The second defect of the sweep that found the family
   ```sh
   if false; then echo "${x@Q}"; fi; echo ok
+  ```
+- `param/an-array-length-without-a-subscript` — zsh counts the elements for a bare ${#a}; bash and ksh93 measure element zero — probed with distinct lengths, because (one two three) hides the difference behind a three
+  ```sh
+  a=(hello by z); echo "${#a[@]} ${#a}"
+  ```
+- `param/an-empty-array-quoted-at` — ksh93 hands the quotes one empty field where bash and zsh hand none — the reason careful scripts write "${a[@]+"${a[@]}"}"
+  ```sh
+  a=(); set -- "${a[@]}"; echo "n=$#"
+  ```
+- `param/a-negative-substring-length` — bash and zsh count a negative length from the end; ksh93 answers with nothing at all
+  ```sh
+  x=abcdef; echo "[${x:1:-2}]"
   ```
 - `param/substring` — offset with and without a length; absent from dash
   ```sh

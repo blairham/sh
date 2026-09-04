@@ -121,6 +121,10 @@ func Semantics() interp.Semantics {
 	// max+1 stays at the maximum, and a value that names another variable
 	// is chased until it is a number.
 	s.ArithOverflowSaturates = interp.Yes
+	// An empty "${a[@]}" is one empty argument, and a negative substring
+	// length is nothing at all.
+	s.EmptyArrayAtIsOneEmptyField = interp.Yes
+	s.SubstringNegativeLengthIsEmpty = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	// echo reads -n and -e; a word carrying -E is an operand. \e expands,

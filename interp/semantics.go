@@ -1044,6 +1044,26 @@ type Semantics struct {
 	// ksh93 leave it at the shell's own path forever.
 	UnderscoreTracksTheLastArgument Answer
 
+	// ArrayLengthWithoutSubscriptIsCount makes `${#a}` of an array the
+	// number of elements, which is zsh's reading; bash and ksh93 measure
+	// the element the bare name yields. Asked only where the two answers
+	// differ.
+	ArrayLengthWithoutSubscriptIsCount Answer
+
+	// EmptyArrayAtIsOneEmptyField hands a quoted "${a[@]}" of an empty
+	// array one empty field: ksh93 alone, and the reason careful scripts
+	// write "${a[@]+"${a[@]}"}".
+	EmptyArrayAtIsOneEmptyField Answer
+
+	// SubstringNegativeLengthIsEmpty answers `${x:1:-2}` with nothing at
+	// all: ksh93; bash and zsh count the negative length from the end.
+	SubstringNegativeLengthIsEmpty Answer
+
+	// LinenoCountsFromTheFunction numbers `$LINENO` inside a function from
+	// the line the function was written on: zsh; the other three count from
+	// the file.
+	LinenoCountsFromTheFunction Answer
+
 	// ArithBaseAbove36 admits `37#…` through `64#…`, whose letters split
 	// into cases and whose last two digits are `@` and `_`. bash and ksh93
 	// take the full 64; zsh stops at 36 and says so.
@@ -1695,9 +1715,13 @@ func PosixSemantics() Semantics {
 		UnderscoreTracksTheLastArgument: No,
 		// The majority answers: full bases, wrapping overflow, zero for an
 		// empty expression.
-		ArithBaseAbove36:              Yes,
-		ArithOverflowSaturates:        No,
-		EmptyArithExpressionIsAnError: No,
+		ArrayLengthWithoutSubscriptIsCount: No,
+		EmptyArrayAtIsOneEmptyField:        No,
+		SubstringNegativeLengthIsEmpty:     No,
+		LinenoCountsFromTheFunction:        No,
+		ArithBaseAbove36:                   Yes,
+		ArithOverflowSaturates:             No,
+		EmptyArithExpressionIsAnError:      No,
 		// The standard says `times` takes no operands and does not say what to
 		// do with one; the two shells that follow it most closely ignore it.
 		TimesRejectsArguments: No,

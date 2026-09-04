@@ -3,6 +3,8 @@
 
 package interp
 
+import "sort"
+
 // The long `set -o` names, which shells have which, and what this one does
 // about each.
 //
@@ -36,18 +38,20 @@ type setOption struct {
 	// Not a claim about what any *other* shell defaults to. bash has
 	// `hashall` on and we do not hash at all, so ours is off and a script
 	// turning it off gets what it asked for.
-	on bool
+	on bool // get reads the live state, for the listing; nil means the static
+	// `on` field is the whole answer.
+	get func(*Runner) bool
 }
 
 // commonSetOptions are the names every shell in the panel has. They are the
 // core's, and no dialect has to declare them.
 var commonSetOptions = map[string]setOption{
-	"errexit":   {apply: func(r *Runner, on bool) { r.errexit = on }},
-	"nounset":   {apply: func(r *Runner, on bool) { r.nounset = on }},
-	"xtrace":    {apply: func(r *Runner, on bool) { r.xtrace = on }},
-	"noclobber": {apply: func(r *Runner, on bool) { r.noclobber = on }},
-	"noglob":    {apply: func(r *Runner, on bool) { r.noglob = on }},
-	"allexport": {apply: func(r *Runner, on bool) { r.allexport = on }},
+	"errexit":   {apply: func(r *Runner, on bool) { r.errexit = on }, get: func(r *Runner) bool { return r.errexit }},
+	"nounset":   {apply: func(r *Runner, on bool) { r.nounset = on }, get: func(r *Runner) bool { return r.nounset }},
+	"xtrace":    {apply: func(r *Runner, on bool) { r.xtrace = on }, get: func(r *Runner) bool { return r.xtrace }},
+	"noclobber": {apply: func(r *Runner, on bool) { r.noclobber = on }, get: func(r *Runner) bool { return r.noclobber }},
+	"noglob":    {apply: func(r *Runner, on bool) { r.noglob = on }, get: func(r *Runner) bool { return r.noglob }},
+	"allexport": {apply: func(r *Runner, on bool) { r.allexport = on }, get: func(r *Runner) bool { return r.allexport }},
 
 	// The rest of the unanimous names, none of which this shell has yet.
 	// Every one of them is off here: we do not stop before running, do not
@@ -135,4 +139,76 @@ func (r *Runner) setOptionFailure() int {
 		return 2
 	}
 	return code
+}
+
+// optionState reads one option's current answer for the listings.
+func (o setOption) state(r *Runner) bool {
+	if o.get != nil {
+		return o.get(r)
+	}
+	return o.on
+}
+
+// listedOptionNames is every name this shell answers `set -o` with, sorted.
+func (r *Runner) listedOptionNames() []string {
+	names := make([]string, 0, len(commonSetOptions)+len(r.extraOptions))
+	for n := range commonSetOptions {
+		names = append(names, n)
+	}
+	for n := range r.extraOptions {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// listOptions is `set -o` with nothing after it: every option and its state,
+// in the dialect's columns — bash pads to fifteen and tabs, dash and ksh93
+// open with a header, and the widths are theirs. `set +o` instead writes
+// re-inputtable commands, except the dialect whose one line names only what
+// is on.
+func (r *Runner) listOptions(plus bool) int {
+	names := r.listedOptionNames()
+	if plus {
+		if r.diag().PlusOListsActive {
+			line := "set --default"
+			for _, n := range names {
+				o, _ := r.lookupSetOption(n)
+				if o.state(r) {
+					line += " --" + n
+				}
+			}
+			r.printf("%s\n", line)
+			return 0
+		}
+		for _, n := range names {
+			o, _ := r.lookupSetOption(n)
+			sign := "+"
+			if o.state(r) {
+				sign = "-"
+			}
+			r.printf("set %so %s\n", sign, n)
+		}
+		return 0
+	}
+	if h := r.diag().OptionListingHeader; h != "" {
+		r.printf("%s\n", h)
+	}
+	width := r.diag().OptionListingWidth
+	if width == 0 {
+		width = 15
+	}
+	sep := ""
+	if r.diag().OptionListingTabbed {
+		sep = "\t"
+	}
+	for _, n := range names {
+		o, _ := r.lookupSetOption(n)
+		state := "off"
+		if o.state(r) {
+			state = "on"
+		}
+		r.printf("%-*s%s%s\n", width, n, sep, state)
+	}
+	return 0
 }

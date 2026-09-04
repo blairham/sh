@@ -1044,6 +1044,18 @@ type Semantics struct {
 	// ksh93 leave it at the shell's own path forever.
 	UnderscoreTracksTheLastArgument Answer
 
+	// FcEmptyHistoryIsAnError has `fc` report the event it cannot find —
+	// zsh; bash and dash answer a script with silence at 0.
+	FcEmptyHistoryIsAnError Answer
+
+	// TestIntegerRefusalIsSilent has `[ a -eq 1 ]` fail with no sentence at
+	// status 1 — ksh93; the other three complain at 2.
+	TestIntegerRefusalIsSilent Answer
+
+	// ReadRequiresAVariableName refuses a bare `read`: dash's "arg count"
+	// at 2, where the other three read into REPLY.
+	ReadRequiresAVariableName Answer
+
 	// ArrayLengthWithoutSubscriptIsCount makes `${#a}` of an array the
 	// number of elements, which is zsh's reading; bash and ksh93 measure
 	// the element the bare name yields. Asked only where the two answers
@@ -1715,6 +1727,9 @@ func PosixSemantics() Semantics {
 		UnderscoreTracksTheLastArgument: No,
 		// The majority answers: full bases, wrapping overflow, zero for an
 		// empty expression.
+		TestIntegerRefusalIsSilent:         No,
+		FcEmptyHistoryIsAnError:            No,
+		ReadRequiresAVariableName:          No,
 		ArrayLengthWithoutSubscriptIsCount: No,
 		EmptyArrayAtIsOneEmptyField:        No,
 		SubstringNegativeLengthIsEmpty:     No,

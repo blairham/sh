@@ -41,6 +41,8 @@ func Semantics() interp.Semantics {
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	// $(( )) with nothing in it wants a primary and stops the script.
 	s.EmptyArithExpressionIsAnError = interp.Yes
+	// A bare read wants a name here, where the other three fill REPLY.
+	s.ReadRequiresAVariableName = interp.Yes
 	s.ExportListing = interp.DeclareListingCommandWord
 	s.ReadonlyListing = interp.DeclareListingCommandWord
 	// dash single-quotes every listed value; it has no declare, so this
@@ -342,7 +344,11 @@ func Diagnostics() interp.Diagnostics {
 		TimesDecimals: 6,
 		// dash hands the path to execve rather than checking first, so a
 		// directory comes back as a permission error.
-		DirectoryReason: "Permission denied",
+		DirectoryReason:     "Permission denied",
+		ReadArgCount:        "read: arg count",
+		OptionListingHeader: "Current option settings",
+		OptionListingWidth:  16,
+		KillListing:         interp.KillListingZeroFirst,
 		// And when that directory was the PATH search's only match, dash
 		// names it in the message and still numbers the failure 127.
 		DirectoryOnPathStatus: 127,
@@ -356,6 +362,8 @@ func Apply(r *interp.Runner) {
 	r.Unregister("builtin")
 	// No `compgen` here; it is bash's alone.
 	r.Unregister("compgen")
+	// fc really is an external here: `command -v fc` answers /usr/bin/fc.
+	r.Unregister("fc")
 	r.Unregister("complete")
 	// And neither `mapfile` nor its other name; both are bash's alone.
 	r.Unregister("mapfile")

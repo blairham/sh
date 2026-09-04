@@ -70,11 +70,16 @@ func TestOAtTheEndOfABundle(t *testing.T) {
 }
 
 // A bundle ending in `o` with nothing after it has no name to read.
-func TestABundleEndingInONeedsAName(t *testing.T) {
-	dir := t.TempDir()
-	out, st := setRun(t, dir, nil, "set -eo\necho unreached")
-	if st == 0 || !strings.Contains(out, "option name") {
-		t.Errorf("said %q status %d, want a complaint about the missing name", out, st)
+func TestABundleEndingInOListsTheOptions(t *testing.T) {
+	// `set -eo` with nothing after it applies the letters and then lists —
+	// measured in bash, dash and zsh alike; the old refusal ("-o needs an
+	// option name") was ours alone.
+	out, st := run(t, `set -eo; echo reached`, nil)
+	if st != 0 || !strings.Contains(out, "errexit") || !strings.Contains(out, "reached") {
+		t.Errorf("said %q status %d, want the listing and the script carrying on", out, st)
+	}
+	if !strings.Contains(out, "errexit         on") && !strings.Contains(out, "errexit        on") {
+		t.Errorf("said %q, want the letter applied before the listing", out)
 	}
 }
 

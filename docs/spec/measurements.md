@@ -563,6 +563,11 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `mapfile/reads-lines-into-an-array` | `<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution` *(status 2)* | `b` | `b` | `<shell>: mapfile: command not found` | `<shell>: mapfile: not found` | `<shell>:1: command not found: mapfile` |
 | `mapfile/defaults-to-MAPFILE-and-keeps-the-newline` | `<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution` *(status 2)* | `[b]2` | `[b]2` | `<shell>: mapfile: command not found~[]0` | `<shell>: mapfile: not found~[]0` | `<shell>:1: command not found: mapfile~[]0` |
 | `readarray/is-mapfile-under-another-name` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `0 2 3 3` | `0 2 3 3` | `<shell>: readarray: command not found~0   1` | `<shell>: readarray: not found~0   1` | `<shell>:1: command not found: readarray~ 0  1` |
+| `kill/the-listing-has-four-shapes` | `0` | ` 1) SIGHUP	 2) SIGINT	 3) SIGQUIT	 4) SIGILL	 5) SIGTRAP` | `HUP INT QUIT ILL TRAP ABRT EMT FPE KILL BUS SEGV SYS PIPE ALRM TERM URG STOP TSTP CONT CHLD TTIN TTOU IO XCPU XFSZ VTALRM PROF WINCH INFO USR1 USR2` | ` 1) SIGHUP	 2) SIGINT	 3) SIGQUIT	 4) SIGILL` | `HUP` | `HUP INT QUIT ILL TRAP ABRT EMT FPE KILL BUS SEGV SYS PIPE ALRM TERM URG STOP TSTP CONT CHLD TTIN TTOU IO XCPU XFSZ VTALRM PROF WINCH INFO USR1 USR2` |
+| `test/a-non-number-where-one-belongs` | `<shell>: 1: [: Illegal number: a~st=2` | `<shell>: line 1: [: a: integer expected~st=2` | `<shell>: line 1: [: a: integer expected~st=2` | `<shell>: line 0: [: a: integer expression expected~st=2` | `st=1` | `<shell>:[:1: integer expression expected: a~st=2` |
+| `read/with-no-variable-diverges` | `<shell>: 1: read: arg count~r=2 REPLY=[]` | `r=0 REPLY=[x]` | `r=0 REPLY=[x]` | `r=0 REPLY=[x]` | `r=0 REPLY=[x]` | `r=0 REPLY=[x]` |
+| `builtin/ksh93s-registers-names` | `<shell>: 1: builtin: not found~st=127` | `hi~st=0` | `hi~st=0` | `hi~st=0` | `builtin: hi: not found~st=1` | `hi~st=0` |
+| `fc/with-no-history` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>: hist: 1-0: invalid range~st=1` | `<shell>:fc:1: no such event: 1~st=1` |
 | `shift/a-leading-dash-that-is-not-a-number` | `<shell>: 1: shift: Illegal number: -x` *(status 2)* | `<shell>: line 1: shift: -x: numeric argument required~st=2` | `<shell>: line 1: shift: -x: numeric argument required` *(status 2)* | `<shell>: line 0: shift: -x: numeric argument required` *(status 1)* | `<shell>: shift: -x: unknown option~Usage: shift [ options ] [n]` *(status 2)* | `<shell>:shift:1: bad option: -x~st=1` |
 | `shift/a-count-that-is-an-expression` | `<shell>: 1: shift: Illegal number: 1+1` *(status 2)* | `<shell>: line 1: shift: 1+1: numeric argument required~[a b c] st=2` | `<shell>: line 1: shift: 1+1: numeric argument required` *(status 2)* | `<shell>: line 0: shift: 1+1: numeric argument required` *(status 1)* | `[c] st=0` | `[c] st=0` |
 | `shift/a-count-that-is-a-name` | `<shell>: 1: shift: Illegal number: nosuchname` *(status 2)* | `<shell>: line 1: shift: nosuchname: numeric argument required~[a b c] st=2` | `<shell>: line 1: shift: nosuchname: numeric argument required` *(status 2)* | `<shell>: line 0: shift: nosuchname: numeric argument required` *(status 1)* | `[a b c] st=0` | `[a b c] st=0` |
@@ -793,6 +798,26 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `readarray/is-mapfile-under-another-name` — the synonym takes the same letters — skip, cap, and an origin that writes into the array it finds rather than replacing it
   ```sh
   arr=(0); printf '1\n2\n3\n4\n' | { readarray -t -s 1 -n 2 -O 1 arr; echo "${arr[0]} ${arr[1]} ${arr[2]} ${#arr[@]}"; }
+  ```
+- `kill/the-listing-has-four-shapes` — bash numbers five to a row, zsh space-joins one line, ksh93 goes one per line, dash opens with a 0
+  ```sh
+  kill -l | head -1
+  ```
+- `test/a-non-number-where-one-belongs` — three complain at 2; ksh93 is a plain false at 1 with no sentence
+  ```sh
+  [ a -eq 1 ]; echo "st=$?"
+  ```
+- `read/with-no-variable-diverges` — three fill REPLY at 0; dash wants a name — read: arg count, status 2, REPLY untouched
+  ```sh
+  echo x | { read; echo "r=$? REPLY=[$REPLY]"; }
+  ```
+- `builtin/ksh93s-registers-names` — bash and zsh run the builtin with its arguments; ksh93's command of the same name registers builtins, so hi is a name it cannot find, at 1; dash has no such command
+  ```sh
+  builtin echo hi; echo "st=$?"
+  ```
+- `fc/with-no-history` — the name must exist — builtin fc was reporting something untrue — and with no history bash and dash answer silence at 0, zsh no-such-event at 1, and ksh93 reads a history file this shell keeps no equivalent of
+  ```sh
+  fc -l; echo "st=$?"
   ```
 - `shift/a-leading-dash-that-is-not-a-number` — two of the four read it as an *option* and refuse it as one; the other two read it as the count and complain about the number. Same input, two kinds of complaint — and both end the script where a special builtin's failure is fatal
   ```sh
@@ -2157,6 +2182,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `opt/set-e-carries-the-err-trap` | `trap: ERR: bad trap~done` | `ERR~ERR~done` | `ERR~ERR~done` | `ERR~ERR~done` | *(no output, status 2)* | `ERR~done` |
 | `opt/set-n-reads-and-never-runs` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `opt/set-f-turns-off-pathname-expansion` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `a.txt b.txt` |
+| `opt/set-o-lists-the-table` | `errexit         off` | `errexit        	off` | `errexit        	off` | `errexit        	off` | `errexit                  off` | `errexit               off` |
+| `opt/set-plus-o-writes-input-back` | `set +o errexit` | `set +o allexport` | `set +o allexport` | `set +o allexport` | `set --default --braceexpand --multiline --trackall --viraw` | `set +o noaliases` |
 | `opt/set-o-noglob-is-unanimous` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` |
 | `opt/noglob-does-not-stop-matching` | `match` | `match` | `match` | `match` | `match` | `match` |
 | `opt/an-option-can-be-turned-back-off` | `a.txt` | `a.txt` | `a.txt` | `a.txt` | `a.txt` | `a.txt` |
@@ -2293,6 +2320,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `opt/set-f-turns-off-pathname-expansion` — `-f` is the short spelling of noglob in three of the four; zsh spells that option the long way only and uses `-f` for something else entirely, so the pattern still expands there
   ```sh
   touch a.txt b.txt; set -f; echo *.txt
+  ```
+- `opt/set-o-lists-the-table` — with no name, -o lists every option and its state — four column layouts, two with a header; the grep keeps the row every shell has
+  ```sh
+  set -o | grep errexit | head -1
+  ```
+- `opt/set-plus-o-writes-input-back` — +o writes re-inputtable set commands in three shells; ksh93's one line names only what is on, --default first
+  ```sh
+  set +o | head -1
   ```
 - `opt/set-o-noglob-is-unanimous` — the long name means the same thing in all four, which is what makes it the spelling that needs no dialect — and the pair with the case above is the whole of the axis
   ```sh

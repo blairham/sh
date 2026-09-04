@@ -125,6 +125,7 @@ func Semantics() interp.Semantics {
 	// ${#a} of an array counts elements, and a function's $LINENO counts
 	// from the function.
 	s.ArrayLengthWithoutSubscriptIsCount = interp.Yes
+	s.FcEmptyHistoryIsAnError = interp.Yes
 	s.LinenoCountsFromTheFunction = interp.Yes
 	s.EchoInterpretsEscapes = interp.Yes
 	// echo reads -n, -e and -E, and -e wins over -E whatever the order.
@@ -348,6 +349,9 @@ func Diagnostics() interp.Diagnostics {
 		// zsh does not quote the expression, where the other three do.
 		ArithError:            "%[2]s",
 		ArithInvalidBase:      "invalid base (must be 2 to 36 inclusive): %[1]s",
+		OptionListingWidth:    22,
+		KillListing:           interp.KillListingSpaceJoined,
+		FcNoSuchEvent:         "no such event: 1",
 		ArithOperandExpected:  "bad math expression: operand expected at end of string",
 		ArithOperatorExpected: "bad math expression: operator expected at `%[1]s'",
 		SyntaxUnexpected:      "parse error near `%[1]s'",

@@ -81,6 +81,12 @@ func Semantics() interp.Semantics {
 	s.UnaliasAllRefusesOperands = interp.No
 	s.AliasQuoting = interp.ListingQuoteWhenNeededDollar
 	s.TrapQuoting = interp.ListingQuoteWhenNeededDollar
+	// `typeset -p` writes `typeset -x -r n=5` — separate flags — and a name
+	// with no attributes as a bare `v=1`; a missing name is passed over in
+	// silence, status 0, which is measured rather than a shortcut.
+	s.DeclareListing = interp.DeclareListingBareAssignments
+	s.DeclareValueQuoting = interp.ListingQuoteWhenNeededDollar
+	s.DeclarePrintReportsAMissingName = interp.No
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.Yes
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes

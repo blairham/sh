@@ -68,6 +68,11 @@ func Semantics() interp.Semantics {
 	s.UnaliasAllRefusesOperands = interp.No
 	s.AliasQuoting = interp.ListingQuoteAlwaysEscaped
 	s.TrapQuoting = interp.ListingQuoteAlwaysEscaped
+	// `declare -p` writes `declare -- v="1"` — double quotes, unlike the
+	// single-quoting listings above.
+	s.DeclareListing = interp.DeclareListingClustered
+	s.DeclareValueQuoting = interp.ListingQuoteAlwaysDouble
+	s.DeclarePrintReportsAMissingName = interp.Yes
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.No
 	s.SymbolicMaskTakesMoreThanOneOperator = interp.Yes
@@ -374,7 +379,10 @@ func Diagnostics() interp.Diagnostics {
 		// `r: readonly variable` from `export`.
 		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: readonly variable",
 		ReadonlyRefusalNamesBuiltin:   map[string]bool{"declare": true, "typeset": true},
-		TrapPrintsSignalPrefix:        "SIG",
+		// `declare -p nosuch` — the name it was invoked by is in front,
+		// which declarePrint writes, so the wording carries only the rest.
+		DeclareNoSuchVariable:  "%[1]s: not found",
+		TrapPrintsSignalPrefix: "SIG",
 		// One wording for all three, and the operand quoted back exactly as
 		// given: `export 1x=v` says `1x=v', not `1x'.
 		BuiltinBadName: map[string]string{

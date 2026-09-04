@@ -72,6 +72,11 @@ func Semantics() interp.Semantics {
 	s.UnaliasAllRefusesOperands = interp.Yes
 	s.AliasQuoting = interp.ListingQuoteWhenNeededEscaped
 	s.TrapQuoting = interp.ListingQuoteWhenNeededPlain
+	// `typeset -p` writes `typeset v=1`, an exported scalar as `export e=E`
+	// — values in the alias style, keys in the trap one.
+	s.DeclareListing = interp.DeclareListingExportSpelled
+	s.DeclareValueQuoting = interp.ListingQuoteWhenNeededEscaped
+	s.DeclarePrintReportsAMissingName = interp.Yes
 	s.TrapBodyLine = interp.TrapBodyLineWhereItFired
 	s.TrapActionIsParsedWhenSet = interp.Yes
 	// The strict end of the symbolic mask: one operator per clause, a who
@@ -266,6 +271,7 @@ func Diagnostics() interp.Diagnostics {
 		// About its table rather than about the function, and the builtin
 		// is named in the location as it is for every message here.
 		UnsetFunctionNotFound:      "no such hash table element: %[1]s",
+		DeclareNoSuchVariable:      "no such variable: %[1]s",
 		LocationNamesTheFunction:   true,
 		SetInvalidOptionName:       "no such option: %[1]s",
 		SetInvalidOptionNameStatus: 1,

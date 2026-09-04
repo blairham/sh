@@ -3387,6 +3387,9 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `declare/integer-attribute-removed` | `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found~[5+2]` | `[5+2]` | `[5+2]` | `[5+2]` | `[5+2]` | `[5+2]` |
 | `declare/integer-attribute-with-text` | `<shell>: 1: typeset: not found~[abc]` | `[0]` | `[0]` | `[0]` | `[0]` | `[0]` |
 | `declare/readonly-attribute-allows-its-own-value` | `<script>: 1: typeset: not found~[]~[2]` | `[1]~<script>: line 3: c: readonly variable~[1]` | `[1]~<script>: line 3: c: readonly variable~[1]` | `[1]~<script>: line 3: c: readonly variable~[1]` | `[1]~<script>: line 3: c: is read only` *(status 1)* | `[1]~<script>:3: read-only variable: c` *(status 1)* |
+| `declare/print-a-scalar-back` | `<shell>: 1: typeset: not found~st=127` | `declare -- v="a b"~declare -x e="E"~st=0` | `declare -- v="a b"~declare -x e="E"~st=0` | `declare -- v="a b"~declare -x e="E"~st=0` | `v='a b'~typeset -x e=E~st=0` | `typeset v='a b'~export e=E~st=0` |
+| `declare/print-arrays-back` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -a arr=([0]="x" [1]="y")~declare -A m=([k]="a b" )` | `declare -a arr=([0]="x" [1]="y")~declare -A m=([k]="a b" )` | `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~declare -a arr='([0]="x" [1]="y")'~declare -a m='([0]="a b")'` | `typeset -a arr=(x y)~typeset -A m=([k]='a b')` | `typeset -a arr=( x y )~typeset -A m=( [k]='a b' )` |
+| `declare/print-a-missing-name` | `<shell>: 1: typeset: not found~st=127` | `<shell>: line 1: typeset: nosuch: not found~st=1` | `<shell>: line 1: typeset: nosuch: not found~st=1` | `<shell>: line 0: typeset: nosuch: not found~st=1` | `st=0` | `<shell>:typeset:1: no such variable: nosuch~st=1` |
 
 - `declare/typeset-assigns` — `typeset` is the older of the two names and the one three of the four have; dash has neither and reports a command it cannot find
   ```sh
@@ -3451,6 +3454,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   echo "[$c]"
   c=2
   echo "[$c]"
+  ```
+- `declare/print-a-scalar-back` — `-p` writes a declaration back and the three shells with it produce three texts for identical state: one word `declare` with a `--` placeholder and double quotes, `typeset`/`export` with quoting only when needed, and a bare `v='a b'` with no command word at all
+  ```sh
+  v='a b'; export e=E; typeset -p v e; echo "st=$?"
+  ```
+- `declare/print-arrays-back` — the array shapes move with the form: subscripts always, never, or only where the array has gaps — and the associative element's trailing space in one engine is real. One key only, because key order is promised by nobody
+  ```sh
+  arr=(x y); typeset -A m; m[k]='a b'; typeset -p arr m
+  ```
+- `declare/print-a-missing-name` — how scripts test whether a name is set: two shells report it in their own words and answer 1, one prints nothing at all and answers 0 — an axis, not a wording
+  ```sh
+  typeset -p nosuch; echo "st=$?"
   ```
 
 ## select

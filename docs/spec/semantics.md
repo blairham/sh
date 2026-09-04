@@ -733,6 +733,74 @@ has only `typeset`, and dash has neither — and in dash `declare x=*` is an
 ordinary command with an ordinary globbed argument, so applying the rule
 to the name everywhere would be wrong in the shell that lacks it.
 
+## Listing a declaration back: `-p`
+
+Measured 2026-09-04, macOS arm64: bash 5.3.15, zsh 5.9.2, ksh93u+
+2012-08-01, via `typeset -p` and `declare -p` on the same states. `-p` is
+how scripts serialize state — the listing is meant to be input the same
+shell could read again — and the three shells that have it produce three
+different texts for identical state. dash has neither name, so `typeset`
+is "not found" there and no question arises.
+
+The same scalar, attribute and array states, side by side:
+
+    state                     bash                          ksh93                     zsh
+    v=1                       declare -- v="1"              v=1                       typeset v=1
+    v='a b'                   declare -- v="a b"            v='a b'                   typeset v='a b'
+    export e=E                declare -x e="E"              typeset -x e=E            export e=E
+    readonly r=R              declare -r r="R"              typeset -r r=R            typeset -r r=R
+    typeset -i n=5+2          declare -i n="7"              typeset -i n=7            typeset -i n=7
+    export n; -i; -r; n=5     declare -irx n="5"            typeset -x -r -i n=5      export -ir n=5
+    export v (unset)          declare -x v                  typeset -x v              export v=''
+    arr=(x y)                 declare -a arr=([0]="x" [1]="y")   typeset -a arr=(x y)      typeset -a arr=( x y )
+    arr=(x); arr[3]=z         declare -a arr=([0]="x" [3]="z")   typeset -a arr=([0]=x [3]=z)   typeset -a arr=( x '' z )
+    typeset -A m; m[k]=v      declare -A m=([k]="v" )       typeset -A m=([k]=v)      typeset -A m=( [k]=v )
+    typeset -A m (empty)      declare -A m                  typeset -A m=()           typeset -A m=( )
+
+Three forms, not one format with options:
+
+- **bash** opens every line with the word `declare` — even when invoked
+  as `typeset` — then one clustered flag word, with `--` standing where
+  there is no attribute. Flags cluster in the order `a A i r x`. Values
+  are always double-quoted, with `\`, `` ` ``, `$` and `"` escaped, and
+  `$'...'` replaces the double quotes when the value holds a control
+  character. Array elements always carry their subscript; each element of
+  an associative listing is followed by one space, so the text ends
+  `"v" )`; an associative array with no elements prints no value at all.
+  A key is bare when it is plain, double-quoted otherwise.
+- **ksh93** writes `typeset` with each flag a word of its own, in the
+  order `x r i` then the kind; a name with **no** attributes is a bare
+  `v=1` with no command word. Values quote in ksh93's usual listing
+  style (bare when plain, `$'...'` for quotes and control characters).
+  Indexed elements carry subscripts only when the array has gaps; an
+  empty associative array is `=()`. (An empty *indexed* array lists as
+  `typeset -C arr=()` — compound-typing noise this spec deliberately
+  does not follow; we keep `-a`.)
+- **zsh** writes `typeset`, except an exported *scalar*, which is spelled
+  `export` with the `x` dropped from the cluster (an exported array stays
+  `typeset -ax`). Flags cluster as in bash; no `--` placeholder. Values
+  quote in zsh's alias style (bare when plain, `'\''` for a quote,
+  `$'...'` for control characters); keys in its trap style (never
+  `$'...'`). Array values are wrapped `( x y )` with padding spaces and
+  carry no subscripts — zsh's arrays are dense, so a gap is an empty
+  element. An empty associative array is `( )`.
+
+A named variable that does not exist: bash `declare: nosuch: not found`,
+zsh `no such variable: nosuch` — both status 1, both after the builtin's
+own prefix rules, and both keep going through the remaining names. ksh93
+prints **nothing** for a missing name and exits 0, which is an axis, not
+a wording.
+
+With no names at all, all three list every variable, environment
+included. bash and zsh sort the listing; ksh93's order was not
+established. We sort.
+
+Associative keys have **no** promised order: the same three assignments
+list in three different orders across the panel, and bash's own order is
+its hash table's. We print keys sorted, the same choice `${m[@]}` reading
+already made, so a listing is deterministic; a corpus case must therefore
+not depend on the panel's key order — use one key, or sort downstream.
+
 ## The widest presentation difference in the panel
 
 `select` prints a menu, and no two shells draw it the same way. The same

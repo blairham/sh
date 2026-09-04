@@ -6042,6 +6042,102 @@
         "TimedOut": false
       }
     },
+    "declare/print-a-missing-name": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: typeset: nosuch: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: typeset: nosuch: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: typeset: nosuch: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: typeset: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:typeset:1: no such variable: nosuch~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/print-a-scalar-back": {
+      "bash": {
+        "Output": "declare -- v=\"a b\"~declare -x e=\"E\"~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "declare -- v=\"a b\"~declare -x e=\"E\"~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "declare -- v=\"a b\"~declare -x e=\"E\"~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: typeset: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "v='a b'~typeset -x e=E~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "typeset v='a b'~export e=E~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/print-arrays-back": {
+      "bash": {
+        "Output": "declare -a arr=([0]=\"x\" [1]=\"y\")~declare -A m=([k]=\"a b\" )",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "declare -a arr=([0]=\"x\" [1]=\"y\")~declare -A m=([k]=\"a b\" )",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~declare -a arr='([0]=\"x\" [1]=\"y\")'~declare -a m='([0]=\"a b\")'",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "typeset -a arr=(x y)~typeset -A m=([k]='a b')",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "typeset -a arr=( x y )~typeset -A m=( [k]='a b' )",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "declare/readonly-attribute-allows-its-own-value": {
       "bash": {
         "Output": "[1]~\u003cscript\u003e: line 3: c: readonly variable~[1]",

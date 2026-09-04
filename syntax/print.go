@@ -460,6 +460,15 @@ func (p *printer) terminate() {
 	if strings.HasSuffix(p.b.String(), "\n") {
 		return
 	}
+	// A backgrounded statement is already terminated — the rule separate
+	// applies between statements holds at the closing word too: `&` before
+	// `}` or `done` takes only a space, and `&;` parses nowhere. The suffix
+	// is unambiguous, because ` &` is written by the statement printer alone:
+	// a literal ampersand in a word arrives escaped or quoted.
+	if strings.HasSuffix(p.b.String(), " &") {
+		p.str(" ")
+		return
+	}
 	p.str("; ")
 }
 

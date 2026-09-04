@@ -41,6 +41,26 @@ func (r *Runner) ensureSpecials() {
 	if _, ok := r.Vars["IFS"]; !ok && !r.removed["IFS"] {
 		r.setVarQuietly("IFS", " \t\n")
 	}
+	if _, ok := r.Dynamic["_"]; !ok {
+		// Registered once, not every time: RunPart comes back through here
+		// while a process substitution's goroutine may be reading the shared
+		// table, and rewriting the same producer was a write all the same.
+		r.Dynamic["_"] = func(r *Runner) string {
+			// The tracked argument in the dialects that move `$_`;
+			// elsewhere, and before anything ran, whatever the environment
+			// brought — the invoking shell's own note of what it last ran.
+			if r.lastArgSet &&
+				r.ask(r.sem().UnderscoreTracksTheLastArgument, "`$_` following the last argument") {
+				return r.lastArg
+			}
+			for _, kv := range r.environ() {
+				if k, v, ok := strings.Cut(kv, "="); ok && k == "_" {
+					return v
+				}
+			}
+			return ""
+		}
+	}
 	if _, ok := r.Vars["PPID"]; !ok && !r.removed["PPID"] {
 		r.setVarQuietly("PPID", strconv.Itoa(os.Getppid()))
 	}

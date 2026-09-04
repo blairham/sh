@@ -635,6 +635,11 @@ var Corpus = []Case{
 		Why:     "space, tab and newline in three of them and a NUL as well in zsh — and read as bytes because whitespace is what it is made of. Splitting worked here while `$IFS` was empty, so a script could neither read it nor tell it had been changed",
 	},
 	{
+		ID: "special/underscore-follows-the-last-argument", Category: "parameters",
+		Snippet: `echo one two >/dev/null; echo "[$_]"; x=5; echo "[$_]"`,
+		Why:     "bash and zsh move $_ to the previous command's last argument and to empty after a bare assignment; dash and ksh93 leave it at the shell's own path forever",
+	},
+	{
 		ID: "special/lineno-is-where-you-are", Category: "parameters",
 		Snippet: `echo "$LINENO"; echo "$LINENO"`,
 		Why:     "produced when it is read rather than stored, which is the whole of the distinction: a stored copy would be the line the shell started on",

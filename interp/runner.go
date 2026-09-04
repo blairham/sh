@@ -354,6 +354,10 @@ type Runner struct {
 	errtrace bool
 	// functrace is `set -T`: the same carriage for DEBUG and RETURN.
 	functrace bool
+	// lastArg is the previous simple command's last expanded argument, kept
+	// for the `$_` the dialects that move it answer with.
+	lastArg    string
+	lastArgSet bool
 	// noexec is `set -n`: read, never run, never unset — even the `set +n`
 	// that would clear it is a command.
 	noexec bool
@@ -1429,6 +1433,17 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		// it through. The command does not run, and nothing below may
 		// overwrite the status it set.
 		return nil
+	}
+
+	// `$_` moves to this command's last expanded argument before it runs,
+	// so the command's own expansion saw the previous one's — and a bare
+	// assignment moves it to empty. Tracked unconditionally and cheaply;
+	// whether a read of `$_` answers with it is the dialect's question,
+	// asked where the read happens rather than on every command here.
+	if len(argv) > 0 {
+		r.lastArg, r.lastArgSet = argv[len(argv)-1], true
+	} else if len(c.Assigns) > 0 {
+		r.lastArg, r.lastArgSet = "", true
 	}
 
 	if len(argv) == 0 {

@@ -409,6 +409,18 @@ var Corpus = []Case{
 		Why:     "the other half: the same refusal from `export` carries no builtin name in bash, where dash names both of the two it has",
 	},
 	{
+		ID: "axis/readonly-reassign-abandons-the-line", Category: "semantics axes",
+		Script:  true,
+		Snippet: "readonly r=1\nr=2; echo one\necho two",
+		Why:     "the dialect that is not stopped by this still gives up the rest of the line: `one` never prints and `two` does",
+	},
+	{
+		ID: "axis/readonly-reassign-abandons-a-loop", Category: "semantics axes",
+		Script:  true,
+		Snippet: "readonly r=1\nfor i in 1 2; do r=2; echo one; done\necho two",
+		Why:     "and gives up whatever encloses it — the loop stops on its first round, where a plain failure would have carried on to the second",
+	},
+	{
 		ID: "axis/readonly-reassign-status", Category: "semantics axes",
 		Script:  true,
 		Snippet: "readonly r=1\nr=2\necho st=$?",

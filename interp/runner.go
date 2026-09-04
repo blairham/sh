@@ -391,6 +391,12 @@ type Runner struct {
 	// location does not name it for that message.
 	redirectForBuiltin string
 
+	// abandonLine is the line the statement that gave up was on, so the rest
+	// of that *line* is given up with it. Measured: `r=2; echo one` on one
+	// line prints nothing, and `r=2` with `echo one` on the line after it
+	// runs the echo.
+	abandonLine int
+
 	// assignFailed marks an assignment that was refused rather than made,
 	// so the status it left is not zeroed by the assignment that follows
 	// it. `readonly x=1; x=2` reports and carries on in one dialect, and
@@ -711,9 +717,29 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 		r.started = time.Now()
 	}
 	r.programEnd = f.End().Line + 1
+	abandoned := 0
 	for _, st := range f.Stmts {
+		if abandoned != 0 && r.lineOf(st.Pos()) == abandoned {
+			// The rest of the line the last statement gave up on goes with
+			// it. Everything inside a construct has already unwound; this is
+			// what makes `r=2; echo one` print nothing where the same two on
+			// separate lines run the echo.
+			//
+			// Never cleared, because a later statement cannot be on an
+			// earlier line: the numbers only go up, so a stale one matches
+			// nothing. Clearing it was equivalent under mutation, which is
+			// how that was established rather than assumed.
+			continue
+		}
 		if err := r.stmt(ctx, st); err != nil {
 			return err
+		}
+		if r.ctl == controlAbandon {
+			// The statement gave up; the shell has not. This is the one
+			// place that consumes it, which is what keeps the give-up from
+			// reaching Run the way a fatal error does.
+			r.ctl, abandoned = controlNone, r.abandonLine
+			continue
 		}
 		if r.ctl == controlExit {
 			break
@@ -1166,10 +1192,11 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		for _, a := range c.Assigns {
 			r.assign(a)
 		}
-		if r.ctl == controlExit {
-			// A readonly reassignment is fatal in three of the four shells.
-			// Zeroing the status here is what made it look survivable: the
-			// script stopped, and then reported success for having done so.
+		if r.ctl == controlExit || r.ctl == controlAbandon {
+			// A readonly reassignment is fatal in three of the four shells
+			// and abandons the statement in the fourth. Zeroing the status
+			// here is what made it look survivable: the script stopped, and
+			// then reported success for having done so.
 			return nil
 		}
 		if !r.substRan && !r.expandErr && !r.assignFailed {
@@ -1603,6 +1630,18 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 		}
 		r.diagf("%s\n", msg)
 		r.status, r.assignFailed = 1, true
+		// Reported and not fatal, and the shell still gives up what it was
+		// running: `readonly r=1; r=2; echo one` never prints `one`, and the
+		// line after it runs. Measured in every shape that encloses a
+		// statement — a loop, a function body, an `if`, a group, a subshell.
+		//
+		// A *declaration* does not give anything up. `export x=2`, `declare
+		// x=2` and `readonly x=2` against a readonly name all report and run
+		// the next command on the same line, which is the tell that this is
+		// about a bare assignment failing rather than about the refusal.
+		if form != assignedByDeclaration {
+			r.ctl, r.abandonLine = controlAbandon, r.line
+		}
 		return
 	}
 	if r.Vars == nil {

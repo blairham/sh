@@ -27,6 +27,24 @@ const (
 	// unwinds past every construct to Run, which is exactly what "fatal"
 	// means and what break, continue and return each deliberately are not.
 	controlExit
+	// controlAbandon gives up the statement being run and goes on to the
+	// next one. It unwinds like controlExit — past loops, functions, groups
+	// and subshells alike — and is consumed at the top-level statement loop
+	// rather than at Run, which is the whole of the difference.
+	//
+	// Measured, and it is a third thing rather than a shade of the other
+	// two. bash refuses an assignment to a readonly name, reports it, and
+	// abandons what it was running:
+	//
+	//	readonly r=1
+	//	for i in 1 2; do r=2; echo one; done     the loop stops, `one` never prints
+	//	echo two                                 and this runs
+	//
+	// The same in a function body, an `if`, a group and a subshell: every
+	// shape gives up at the top-level statement boundary and the shell
+	// carries on at the next one. Neither fatal nor survivable, which is
+	// why neither of the existing two could express it.
+	controlAbandon
 )
 
 // condList runs a list whose status is being *tested* rather than required to
@@ -245,9 +263,17 @@ func (r *Runner) loopControl() bool {
 			return true
 		}
 		return false
-	case controlReturn, controlExit:
+	case controlReturn, controlExit, controlAbandon:
 		// `exit` ends the loop as surely as `return` does, and neither is
-		// cleared here: the caller above has to see it too.
+		// cleared here: the caller above has to see it too. Abandoning a
+		// statement ends it for the same reason and is cleared in the same
+		// one place, which is the top-level statement loop.
+		//
+		// Naming controlAbandon here is a fast exit rather than the thing
+		// that stops the loop: without it the rounds still run and do
+		// nothing, because stmt refuses once control flow is set. Measured
+		// by mutation — the behavior is identical either way, and the
+		// difference is whether a `for i in 1 2 3` spins twice for nothing.
 		//
 		// Leaving `exit` out was not a missing case so much as an invisible
 		// one. The loop carried on, the next round found the shell refusing

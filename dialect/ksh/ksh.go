@@ -112,6 +112,7 @@ func Semantics() interp.Semantics {
 	// hash is an alias for `alias -t` here, and a name that resolves to
 	// nothing is a silent success.
 	s.HashReportsAMissingName = interp.No
+	s.TildePlusMinusExpands = interp.Yes
 	// A defined f-g stops the script; a.b is an invalid discipline function.
 	s.PunctuatedFunctionNameIsRefused = interp.Yes
 	s.DeclaredNameWithoutValueIsEmpty = interp.No

@@ -348,9 +348,20 @@ func (r *Runner) expandColonTildes(w *syntax.Word) {
 				k++
 			}
 			terminated := k < len(v) || i == len(w.Spans)-1
-			if k == j+2 && terminated {
+			if !terminated {
+				continue
+			}
+			switch v[j+2 : k] {
+			case "":
 				b.WriteString(home)
 				j = k - 1
+			case "+", "-":
+				// The same pair the leading position takes, in the same
+				// dialects: `PATH=~+/bin:~-/bin` names both directories.
+				if dir, ok := r.tildeDirVar(v[j+2 : k]); ok {
+					b.WriteString(dir)
+					j = k - 1
+				}
 			}
 		}
 		s.Value = b.String()
@@ -1308,6 +1319,14 @@ func (r *Runner) expandTilde(w *syntax.Word) {
 	if i := strings.IndexByte(rest, '/'); i >= 0 {
 		name, tail = rest[:i], rest[i:]
 	}
+	if name == "+" || name == "-" {
+		// `~+` is $PWD and `~-` is $OLDPWD in three of the four, and only
+		// when the variable is set: a fresh shell's `~-` stays literal.
+		if v, ok := r.tildeDirVar(name); ok {
+			s.Value = v + tail
+		}
+		return
+	}
 	if name != "" {
 		// `~user` needs a user database this package does not carry, so it is
 		// left alone rather than guessed at.
@@ -1318,6 +1337,22 @@ func (r *Runner) expandTilde(w *syntax.Word) {
 		return
 	}
 	s.Value = home + tail
+}
+
+// tildeDirVar resolves `~+` and `~-`, in the dialects that have them.
+func (r *Runner) tildeDirVar(name string) (string, bool) {
+	if !r.ask(r.sem().TildePlusMinusExpands, "`~+` and `~-` expanding to the directories") {
+		return "", false
+	}
+	which := "PWD"
+	if name == "-" {
+		which = "OLDPWD"
+	}
+	v, ok := r.getVar(which)
+	if !ok || v == "" {
+		return "", false
+	}
+	return v, true
 }
 
 // escapeAll marks every field's metacharacters as literal, for the fields

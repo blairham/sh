@@ -8826,6 +8826,38 @@
         "TimedOut": false
       }
     },
+    "expand/tilde-plus-and-minus": {
+      "bash": {
+        "Output": "/ /tmp~~-",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "/ /tmp~~-",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "/ /tmp~~-",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "~+ ~-~~-",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "/ /tmp~~-",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "/ /tmp~/tmp",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "expand/tilde-quoted": {
       "bash": {
         "Output": "literal",

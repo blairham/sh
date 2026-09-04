@@ -297,6 +297,11 @@ var Corpus = []Case{
 		Why:     "assignment values are a tilde context, which is why PATH=~/bin works",
 	},
 	{
+		ID: "expand/tilde-plus-and-minus", Category: "expansion",
+		Snippet: `cd /tmp; cd /; echo ~+ ~- | sed "s|/private||g"; unset OLDPWD; echo ~-`,
+		Why:     "~+ is $PWD and ~- is $OLDPWD in three of the four — dash keeps both as written — and only while the variable is set, except zsh, which still answers from directory state of its own",
+	},
+	{
 		ID: "expand/tilde-after-a-colon-in-an-assignment", Category: "expansion",
 		Snippet: `v=a:~/b:~; echo "$v" | sed "s|$HOME|H|g"; w=":~/q"; echo "$w"`,
 		Why:     "the context adds a tilde after each unquoted colon — PATH=~/bin:~/sbin — and quoting turns it back off; unanimous",

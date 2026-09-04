@@ -116,6 +116,7 @@ func Semantics() interp.Semantics {
 	s.DirectoryOnPathIsACandidate = interp.No
 	// set -E and -T carry the traps set -Eeuo pipefail scripts rely on.
 	s.SetHasTraceLetters = interp.Yes
+	s.TildePlusMinusExpands = interp.Yes
 	// hash counts builtins and functions and announces its empty table.
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes

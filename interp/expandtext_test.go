@@ -59,3 +59,32 @@ func TestATildeAfterAColonInAnAssignment(t *testing.T) {
 		})
 	}
 }
+
+// TestTildePlusAndMinusAreAnAxis — `~+` and `~-` name the directories in the
+// dialects that have the pair, only while the variable is set.
+func TestTildePlusAndMinusAreAnAxis(t *testing.T) {
+	set := func(answer Answer) func(*Runner) {
+		return func(r *Runner) {
+			sem := CoreSemantics()
+			sem.TildePlusMinusExpands = answer
+			r.Semantics = &sem
+			r.Vars = map[string]string{"PWD": "/here", "OLDPWD": "/before", "HOME": "/h"}
+		}
+	}
+	out, _ := run(t, `echo ~+ ~-/x`, set(Yes))
+	if strings.TrimSpace(out) != "/here /before/x" {
+		t.Errorf("got %q, want the directories named", strings.TrimSpace(out))
+	}
+	out, _ = run(t, `echo ~+ ~-`, set(No))
+	if strings.TrimSpace(out) != "~+ ~-" {
+		t.Errorf("got %q, want both kept as written", strings.TrimSpace(out))
+	}
+	out, _ = run(t, `unset OLDPWD; echo ~-`, set(Yes))
+	if strings.TrimSpace(out) != "~-" {
+		t.Errorf("got %q, want the unset variable to keep it literal", strings.TrimSpace(out))
+	}
+	out, _ = run(t, `v=a:~+/x; echo "$v"`, set(Yes))
+	if strings.TrimSpace(out) != "a:/here/x" {
+		t.Errorf("got %q, want the colon position expanded too", strings.TrimSpace(out))
+	}
+}

@@ -114,6 +114,7 @@ func Semantics() interp.Semantics {
 	// hash counts only what PATH holds: a builtin or a function is "no
 	// such command" to it.
 	s.HashSearchesPathAlone = interp.Yes
+	s.TildePlusMinusExpands = interp.Yes
 	s.EchoInterpretsEscapes = interp.Yes
 	// echo reads -n, -e and -E, and -e wins over -E whatever the order.
 	s.EchoOptions = "neE"

@@ -44,6 +44,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | array index base | *n/a* | 0 | 0 | **1** |
 | plain `$a` on an array | *n/a* | first element | first element | **all, joined** |
 | pipeline-status name | *none* | `PIPESTATUS` | *none* | `pipestatus` |
+| `=~` capture name | *n/a* | `BASH_REMATCH` | *none* | *none* |
 | a bare assignment updates it | *n/a* | **yes** | *n/a* | no |
 | `unset` ends it | *n/a* | no | *n/a* | **yes** |
 | `echo` expands backslashes | **yes** | no | no | **yes** |
@@ -1365,6 +1366,41 @@ names the token — and we say "expected ]]" to all of them. That gap predates
 this change and is only visible through it in one case: where zsh refuses a
 bare `|`, we refuse it too and say something else. The behaviour matches; the
 wording does not.
+
+## What `=~` captured
+
+A successful match is worth more than its status: the whole match and every
+parenthesized group are what the script matched *for*, and reading them back
+afterwards is the idiom the operator serves. Every shell with `=~` keeps
+them; none agrees with another about **where**. bash fills an array named
+`BASH_REMATCH` — the whole match at 0, the groups after it. zsh fills a
+scalar `MATCH` and an array `match` holding the groups alone, and leaves the
+bash name unset. ksh93 keeps `.sh.match`, whose name is not even a plain
+variable name, and leaves the bash name unset too (all measured, oracle run
+2026-09-04: bash 5.3.15, zsh 5.9.2, ksh 93u+).
+
+So the core records and a dialect names, the same seam as the
+pipeline-status record. Only the bash-shaped array has a name here so far;
+the other two shapes are different enough — a scalar plus a groups-only
+array, a dotted name — that each would be its own seam when a dialect wants
+it, not a second caller of this one.
+
+The rest is measured on bash and pinned by the corpus and the interp tests:
+
+- **A failed match empties the record** rather than leaving the capture
+  before last — `declare -p` shows `BASH_REMATCH=()` after a miss, even a
+  first miss, so an unchecked status reads nothing instead of stale groups.
+- **An optional group that matched nothing is an empty element**, not a gap:
+  `[[ abcd =~ b(x)?(c) ]]` gives three dense elements with `[1]` empty, so
+  the group after it keeps its number.
+- **The evaluation records, before `!` sees the result**: after
+  `[[ ! ab =~ a ]]` the record holds `a` while `$?` is 1 — the same order
+  the pipeline-status record follows.
+- **It is an ordinary stored array, not a produced one**: a script can
+  assign over it and read its own value back, and `unset` removes it until
+  the next `=~` fills it again.
+- A quoted operand made literal still records: `[[ abcd =~ "b" ]]` leaves
+  `b` at element 0.
 
 ## The names, rather than a value
 

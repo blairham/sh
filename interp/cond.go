@@ -152,7 +152,12 @@ func (r *Runner) evalCondBinary(x *syntax.CondBinary) (bool, error) {
 		if err != nil {
 			return false, arithError{msg: "invalid regular expression: " + pat}
 		}
-		return re.MatchString(left), nil
+		// The captures are the point of matching, not a by-product: element 0
+		// is the whole match and the rest are the groups. The core records
+		// them and a dialect names the record — see regexmatch.go.
+		m := re.FindStringSubmatch(left)
+		r.recordRegexMatch(m)
+		return m != nil, nil
 
 	case "==", "=", "!=":
 		// Unquoted, the right operand is a pattern; quoted, a literal. Only

@@ -2301,6 +2301,16 @@ echo unreachable`,
 		Why:     "bash treats a quoted right operand as a literal string where ksh93 and zsh keep it a regex, so quoting a regex is not portable in either direction",
 	},
 	{
+		ID: "cond/regex-captures-are-recorded", Category: "conditions",
+		Snippet: `[[ abcd =~ (b)(c) ]]; echo "[${BASH_REMATCH[0]}|${BASH_REMATCH[1]}|${BASH_REMATCH[2]}]"`,
+		Why:     "a successful =~ records the whole match at 0 and the groups after it, under bash's name for the record; ksh93 and zsh keep their captures under names of their own and leave this one unset",
+	},
+	{
+		ID: "cond/regex-failure-empties-the-record", Category: "conditions",
+		Snippet: `[[ ab =~ a ]]; [[ ab =~ q ]]; echo "n=${#BASH_REMATCH[@]}"`,
+		Why:     "a failed match empties the record rather than leaving the capture before last, so a script that forgets to check the status reads nothing instead of stale groups",
+	},
+	{
 		ID: "cond/logical-and-grouping", Category: "conditions",
 		Snippet: `[[ ( -n x || -n y ) && ! -z z ]] && echo grouped`,
 		Why:     "&& and || join conditions and ( ) groups them rather than starting a subshell, so the parser needs its own production for the inside",

@@ -505,6 +505,9 @@ type Runner struct {
 	// when a dialect has named it, because nothing else can read it.
 	pipeStatus     []int
 	pipeStatusName string
+	// regexMatchName is what the dialect calls the record of what the last
+	// `=~` captured. With no name, nothing is recorded — see regexmatch.go.
+	regexMatchName string
 	// readonly names refuse assignment.
 	readonly map[string]bool
 	// integer names evaluate what is assigned to them: with the attribute,

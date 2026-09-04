@@ -402,6 +402,10 @@ func Apply(r *interp.Runner) {
 	// The statuses of the last pipeline's elements. The core keeps the
 	// record and this names it; ksh93 and dash have no name for it at all.
 	r.SetPipelineStatus("PIPESTATUS")
+	// What the last `=~` captured — the whole match, then the groups. The
+	// core keeps the record and this names it; ksh93 and zsh keep their
+	// captures under names and shapes of their own, never this one.
+	r.SetRegexMatch("BASH_REMATCH")
 	// Parameters bash provides and the others do not all have. Which
 	// variables a shell supplies is the same kind of question as which
 	// builtins it has, so it is answered here rather than as an axis.

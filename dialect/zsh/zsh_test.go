@@ -389,6 +389,26 @@ func TestPipelineStatusName(t *testing.T) {
 	}
 }
 
+// TestRegexMatchLeavesTheBashNameAlone: zsh's `=~` keeps its captures under
+// names and shapes of its own, and the bash-style array is nothing here —
+// measured: after a successful match the uppercase name stays unset.
+func TestRegexMatchLeavesTheBashNameAlone(t *testing.T) {
+	f, err := syntax.Parse(`[[ abcd =~ (b)(c) ]]; echo "st=$? [${BASH_REMATCH[@]}]"`, zsh.Dialect())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	s, d := zsh.Semantics(), zsh.Diagnostics()
+	r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &s, Diagnostics: &d}
+	zsh.Apply(r)
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(out.String()) != "st=0 []" {
+		t.Errorf("got %q, want the match to succeed and the name to stay unset", out.String())
+	}
+}
+
 // TestCloseBraceIsReservedEverywhere: the grammar rule that makes zsh's brace
 // groups look different from the other three. It is documented in
 // docs/spec/semantics.md as measured, and was measured and never built — the

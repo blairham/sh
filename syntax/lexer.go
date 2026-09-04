@@ -501,6 +501,20 @@ func (l *Lexer) scanWord(start Pos) Token {
 				spans = append(spans, s)
 			}
 
+		case c == '$' && l.peekAt(1) == '"' && l.dialect.DollarDoubleQuote:
+			// `$"..."` marks the string for locale translation. With no
+			// message catalog every shell that has the form reads it as a
+			// plain double-quoted string — same escapes, same expansions — so
+			// the `$` contributes nothing and the spans are exactly what a
+			// bare `"` produces. The printer therefore writes them back as
+			// plain quotes: the two spellings parse to identical trees, and
+			// recording the `$` would be keeping a byte the tree has no
+			// question for. Where the flag is off, the `$` falls through to
+			// the literal path, which is what dash and zsh do with it.
+			flush()
+			l.advance() // $
+			spans = append(spans, l.scanDouble()...)
+
 		case c == '$' && l.peekAt(1) == '(' && l.peekAt(2) == '(':
 			// `$((` is arithmetic. A command substitution whose first
 			// construct is a subshell has to be written `$( (`, which is the

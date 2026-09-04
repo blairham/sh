@@ -23,6 +23,10 @@ func Dialect() syntax.Dialect {
 		"typeset": true, "export": true, "readonly": true,
 	}
 	d.ParamIndirection = true
+	// `$"..."`, the locale-translatable string: with no catalog it is a
+	// plain double-quoted string with the `$` stripped. Not core, because
+	// dash and zsh keep the `$` as a literal.
+	d.DollarDoubleQuote = true
 	// ksh93 alone refuses an unrecognized ${...} operator while reading the
 	// script; the other three wait until the expansion is reached.
 	d.BadSubstitutionAtParseTime = true

@@ -94,6 +94,16 @@ type Dialect struct {
 	// interpreted. Absent from dash.
 	DollarSingleQuote bool
 
+	// DollarDoubleQuote enables `$"..."`, the locale-translatable string.
+	// With no message catalog — the only condition the panel can measure —
+	// bash and ksh93 strip the `$` and read a plain double-quoted string,
+	// same escapes and same expansions. It is not core because dash and zsh
+	// are on the other side: there the `$` stays a literal character in
+	// front of an ordinary double-quoted string — no error, an extra byte in
+	// the word, which is the `&>` failure mode again and the reason this is
+	// a flag rather than always on.
+	DollarDoubleQuote bool
+
 	// Herestring enables `<<<`. Absent from dash.
 	Herestring bool
 

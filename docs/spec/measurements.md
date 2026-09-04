@@ -631,6 +631,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `token/heredoc-quoted-delimiter-literal` | `[$x]` | `[$x]` | `[$x]` | `[$x]` | `[$x]` | `[$x]` |
 | `token/heredoc-backslash-delimiter-literal` | `[$x]` | `[$x]` | `[$x]` | `[$x]` | `[$x]` | `[$x]` |
 | `token/ampersand-redirect-means-two-things` | `hi~[]` | `[hi]` | `[hi]` | `[hi]` | `hi~[]` | `[hi]` |
+| `token/dollar-double-is-a-translatable-string` | `[$hello]` | `[hello]` | `[hello]` | `[hello]` | `[hello]` | `[$hello]` |
+| `token/dollar-double-expands-inside` | `[$hi world]` | `[hi world]` | `[hi world]` | `[hi world]` | `[hi world]` | `[$hi world]` |
 | `token/clobber-override` | `[two]` | `[two]` | `[two]` | `[two]` | `[two]` | `[two]` |
 
 - `token/spans-within-a-word` — one word carrying quoted and unquoted spans; the case expansion.md's per-span requirement rests on
@@ -711,6 +713,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `token/ampersand-redirect-means-two-things` — the dangerous case: &> redirects both streams in bash and zsh, and is `&` then `>` in dash and ksh93 — no error, different meaning
   ```sh
   echo hi &>b; wait; printf "[%s]" "$(cat b)"
+  ```
+- `token/dollar-double-is-a-translatable-string` — with no message catalog bash and ksh93 strip the `$` and read a plain double-quoted string; dash and zsh keep the `$` as a literal — no error, an extra byte, the &> failure mode again
+  ```sh
+  printf "[%s]" $"hello"
+  ```
+- `token/dollar-double-expands-inside` — the translatable string is double quotes in every detail: expansions inside happen, and the quoting holds the result together as one field
+  ```sh
+  x=world; printf "[%s]" $"hi $x"
   ```
 - `token/clobber-override` — >| overrides noclobber with the same meaning everywhere, unlike &>
   ```sh

@@ -237,6 +237,17 @@ func TestDialectGatesOtherConstructs(t *testing.T) {
 		{"case continue where the flag is on", `a;;&b`, withCaseContinue(), `word(a) ;;& word(b)`},
 		{"case continue absent from core", `a;;&b`, Core(), `word(a) ;; & word(b)`},
 		{"dollar-single in core", `$'a\nb'`, Core(), `word($'a\nb')`},
+		// The `$` of a translatable string contributes nothing: the spans
+		// are exactly what a bare `"` produces, expansions included.
+		{"dollar-double where the flag is on", `echo $"a b"`, withDollarDoubleQuote(), `word(echo) word("a b")`},
+		{
+			"dollar-double expands inside", `echo $"a $x b"`, withDollarDoubleQuote(),
+			`word(echo) word("a "|"param{x}|" b")`,
+		},
+		// Without the flag the same text still lexes — the `$` is a literal
+		// byte in front of an ordinary double-quoted string, which is what
+		// dash and zsh do with it. A different word, not an error.
+		{"dollar-double absent from core", `echo $"a b"`, Core(), `word(echo) word($|"a b")`},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -459,6 +470,14 @@ func TestDoubleBracketIsLeftToTheParser(t *testing.T) {
 func withCaseContinue() Dialect {
 	d := Core()
 	d.CaseContinue = true
+	return d
+}
+
+// withDollarDoubleQuote is Core plus the one flag under test, for the same
+// reason: which shells set it is the dialect packages' business.
+func withDollarDoubleQuote() Dialect {
+	d := Core()
+	d.DollarDoubleQuote = true
 	return d
 }
 

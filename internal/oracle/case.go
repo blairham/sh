@@ -913,6 +913,11 @@ var Corpus = []Case{
 		Why:     "the whole point of -u, and the baseline the exemptions are measured against",
 	},
 	{
+		ID: "readonly/reassignment-from-a-command-string", Category: "builtins",
+		Snippet: "readonly x=1; x=2; echo after",
+		Why:     "an assignment to a name that cannot take one, given as an argument rather than read from a file. All four stop here — and one of them does not when the same three lines come from a file, which the case recorded elsewhere shows. So a readonly reassignment is fatal in three shells always and in the fourth by invocation, which is the second thing found to work that way after an expansion that failed",
+	},
+	{
 		ID: "nounset/unset-variable-from-a-command-string", Category: "expansion",
 		Snippet: "set -u\necho \"$NOPE\"\n",
 		Why:     "the same two lines as the case above, given as an argument instead of read from a file. Three of the panel answer the same either way; one answers 127 here and 1 there, which is a fact about how the shell was started rather than about the expansion — and only the pair can show it",

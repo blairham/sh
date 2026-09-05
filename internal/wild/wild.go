@@ -38,6 +38,13 @@ type Result struct {
 	// program that execs its real interpreter from the first line is the
 	// usual case, and those must not be counted against us.
 	NotShell bool
+	// Line is the source line the failure was on, and Text that line.
+	//
+	// Kept because a report of causes needs something a person can look at:
+	// the sweep can say what forty scripts have in common and cannot say why
+	// it matters, and a line of real script is the shortest thing that can.
+	Line int
+	Text string
 }
 
 // Report is a whole sweep.
@@ -57,9 +64,69 @@ type Report struct {
 
 // DefaultDirs are where a machine keeps its scripts. Missing ones are skipped,
 // so the same list serves a mac and a container.
+//
+// The bin directories are where a script a person *runs* lives. The rest are
+// where a script a person runs *reaches*: /etc holds a system's own, and the
+// libexec trees hold the helpers a program keeps for itself — git's are the
+// worked example, a few dozen shell scripts nobody ever types the name of and
+// every one of which runs on an ordinary working day.
 var DefaultDirs = []string{
 	"/bin", "/usr/bin", "/usr/sbin", "/usr/local/bin", "/usr/local/sbin",
 	"/opt/homebrew/bin", "/opt/homebrew/sbin",
+	"/etc", "/usr/libexec", "/opt/homebrew/opt",
+}
+
+// BashScope and ZshScope are the shebangs each dialect is answerable for.
+//
+// `sh` belongs to the bash scope on the machines this runs on rather than by
+// argument: a `#!/bin/sh` script is written to the common denominator, which
+// is the core, and grading it against bash asks the question the file was
+// written to answer. Nothing claims `#!/bin/sh` *is* bash.
+var (
+	BashScope = map[string]bool{"sh": true, "bash": true}
+	ZshScope  = map[string]bool{"zsh": true}
+)
+
+// DefaultDepth is how far below a named directory the sweep descends.
+//
+// Deep enough to reach a helper directory a package keeps its scripts in —
+// /opt/homebrew/opt/git/libexec/git-core is four — and shallow enough that
+// pointing the sweep at a home directory does not walk a source tree for a
+// minute. A caller that wants the whole subtree says so.
+const DefaultDepth = 4
+
+// Scope is what one sweep looks at: where to look, which shebangs count, and
+// how far down to go.
+//
+// It is a struct rather than three parameters because the three move together.
+// A zsh sweep is not a bash sweep with a different dialect — it looks for
+// different files, and reading the same set twice would grade zsh on scripts
+// that never claimed to be zsh.
+type Scope struct {
+	// Dirs are the roots. Missing ones are skipped.
+	Dirs []string
+	// Shells are the interpreter base names that count. Empty means BashScope.
+	Shells map[string]bool
+	// Depth is how far below each root to descend; 0 means DefaultDepth and a
+	// negative number means the roots themselves and nothing under them.
+	Depth int
+}
+
+func (s Scope) shells() map[string]bool {
+	if len(s.Shells) == 0 {
+		return BashScope
+	}
+	return s.Shells
+}
+
+func (s Scope) depth() int {
+	if s.Depth == 0 {
+		return DefaultDepth
+	}
+	if s.Depth < 0 {
+		return 0
+	}
+	return s.Depth
 }
 
 // Sweep parses every shell script it finds and grades this parser against the
@@ -68,9 +135,9 @@ var DefaultDirs = []string{
 // The reference is what makes the result trustworthy: a file whose first line
 // says `#!/bin/sh` is not necessarily shell, and refusing one that the
 // reference also refuses says nothing about us.
-func Sweep(ctx context.Context, dirs []string, dialect syntax.Dialect, reference string) Report {
+func Sweep(ctx context.Context, scope Scope, dialect syntax.Dialect, reference string) Report {
 	var rep Report
-	paths, skipped := Find(dirs)
+	paths, skipped := Find(scope)
 	rep.Skipped = skipped
 	for _, path := range paths {
 		rep.Scanned++
@@ -85,63 +152,167 @@ func Sweep(ctx context.Context, dirs []string, dialect syntax.Dialect, reference
 			rep.NotShell++
 			continue
 		} else {
-			rep.Failures = append(rep.Failures, Result{Path: path, Err: perr})
+			res := Result{Path: path, Err: perr}
+			var e *syntax.Error
+			if asParseError(perr, &e) {
+				res.Line = e.Pos.Line
+				res.Text = LineAt(string(src), e.Pos.Line)
+			}
+			rep.Failures = append(rep.Failures, res)
 		}
 	}
 	sort.Slice(rep.Failures, func(i, j int) bool { return rep.Failures[i].Path < rep.Failures[j].Path })
 	return rep
 }
 
-// Find is every readable regular file in dirs whose first line names a
-// shell, plus a count, by reason, of the files it declined to open because
-// CLEANROOM.md forbids reading them.
+// Find is every readable regular file in the scope whose first line names one
+// of its shells, plus a count, by reason, of the files it declined to open
+// because CLEANROOM.md forbids reading them.
 //
 // The denial happens before the shebang is read — reading the shebang is
 // reading the file — so a skipped count is of regular files, not of shell
 // scripts: whether a file nobody may open is a script is unknowable, and
 // counting all of them is the honest answer.
-func Find(dirs []string) (paths []string, skipped map[string]int) {
+//
+// A denied *directory* is not descended into either, and its files are counted
+// where the walk stops rather than one by one: the point of the denial is that
+// nothing under it is opened, and a count of a tree nobody may read is a count
+// of files, which is what os.ReadDir can say without opening one.
+func Find(scope Scope) (paths []string, skipped map[string]int) {
 	skipped = map[string]int{}
 	// The tree the sweep runs from is this project's own, so its testdata is
 	// never mistaken for someone else's.
 	own, _ := os.Getwd()
-	seen := map[string]bool{}
-	for _, dir := range dirs {
+	shells := scope.shells()
+	// Symbolic links are followed, files and directories alike, because on a
+	// machine with a package manager almost everything worth sweeping is one:
+	// /opt/homebrew/bin is a directory of links to files, and
+	// /opt/homebrew/opt is a directory of links to directories. Refusing to
+	// follow the second kind left the whole tree unread — git keeps its two
+	// dozen shell helpers behind exactly that link.
+	//
+	// What that costs is a walk that can meet the same file twice or go round
+	// forever, so the sweep remembers where it has been by the *resolved*
+	// path. That is the identity that matters anyway: two links to one script
+	// are one script, and counting it twice would put a phantom in every total.
+	visited := map[string]bool{}
+	var walk func(dir string, left int)
+	walk = func(dir string, left int) {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			continue
+			return
 		}
 		for _, e := range entries {
 			path := filepath.Join(dir, e.Name())
-			if seen[path] {
+			// Stat rather than the entry's own type, so that a link is judged
+			// by what it points at.
+			info, err := os.Stat(path)
+			if err != nil {
 				continue
 			}
-			seen[path] = true
-			if reason := Denied(path, own); reason != "" {
-				if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
-					skipped[reason]++
+			real, err := filepath.EvalSymlinks(path)
+			if err != nil {
+				continue
+			}
+			if visited[real] {
+				continue
+			}
+			visited[real] = true
+			if info.IsDir() {
+				if reason := either(DeniedDir, path, real, own); reason != "" {
+					skipped[reason] += countRegular(real)
+					continue
+				}
+				if left > 0 {
+					walk(path, left-1)
 				}
 				continue
 			}
-			if isShellScript(path) {
+			if !info.Mode().IsRegular() {
+				continue
+			}
+			if reason := either(Denied, path, real, own); reason != "" {
+				skipped[reason]++
+				continue
+			}
+			if shells[shellOf(path)] {
 				paths = append(paths, path)
 			}
 		}
+	}
+	for _, dir := range scope.Dirs {
+		// A root is judged by the same rule as anything the walk reaches.
+		// Naming a denied tree on the command line is still naming a denied
+		// tree, and the sweep may not read it because it was asked to.
+		real, err := filepath.EvalSymlinks(dir)
+		if err != nil {
+			continue
+		}
+		if reason := either(DeniedDir, dir, real, own); reason != "" {
+			skipped[reason] += countRegular(real)
+			continue
+		}
+		walk(dir, scope.depth())
 	}
 	sort.Strings(paths)
 	return paths, skipped
 }
 
-// isShellScript reads the shebang. A symbolic link is followed, which is how
-// most of these are installed.
-func isShellScript(path string) bool {
+// either applies a denial rule to both the path the walk arrived by and the
+// path it resolves to, and reports the first refusal.
+//
+// Both, because a link crosses the boundary in either direction:
+// /opt/homebrew/bin/bashbug is an innocent-looking name in a directory the
+// sweep is meant to read, and it points into a shell's own distribution. The
+// rule reads paths and never contents, so asking it twice costs nothing.
+func either(rule func(path, own string) string, path, real, own string) string {
+	if reason := rule(path, own); reason != "" {
+		return reason
+	}
+	return rule(real, own)
+}
+
+// countRegular is how many regular files a denied path stands for: one when it
+// is a file, and the whole subtree when it is a directory.
+//
+// The subtree is counted by listing directories, which never opens a file —
+// the one operation the denial forbids. Links are not followed here, unlike in
+// the walk: a count is not worth a loop, and a link inside a denied tree
+// points at something that is either in the same tree and counted already or
+// outside it and not this number's business.
+func countRegular(path string) int {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return 0
+	}
+	if !info.IsDir() {
+		if info.Mode().IsRegular() {
+			return 1
+		}
+		return 0
+	}
+	n := 0
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return 0
+	}
+	for _, e := range entries {
+		n += countRegular(filepath.Join(path, e.Name()))
+	}
+	return n
+}
+
+// shellOf reads the shebang and answers with the interpreter's base name, or
+// "" for a file that is not a script. A symbolic link is followed, which is
+// how most of these are installed.
+func shellOf(path string) string {
 	info, err := os.Stat(path)
 	if err != nil || !info.Mode().IsRegular() {
-		return false
+		return ""
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return false
+		return ""
 	}
 	defer func() { _ = f.Close() }()
 	var head [128]byte
@@ -149,19 +320,43 @@ func isShellScript(path string) bool {
 	line, _, _ := strings.Cut(string(head[:n]), "\n")
 	line = strings.TrimSpace(line)
 	if !strings.HasPrefix(line, "#!") {
-		return false
+		return autoloaded(line)
 	}
 	// `#!/bin/sh`, `#!/bin/bash -e`, `#!/usr/bin/env bash`. The interpreter
 	// is the last path component of the first word, or the word after `env`.
 	fields := strings.Fields(strings.TrimPrefix(line, "#!"))
 	if len(fields) == 0 {
-		return false
+		return ""
 	}
 	name := filepath.Base(fields[0])
 	if name == "env" && len(fields) > 1 {
 		name = filepath.Base(fields[1])
 	}
-	return name == "sh" || name == "bash"
+	return name
+}
+
+// autoloadMarkers are the first lines that declare a file to be a zsh function
+// rather than a program: a completion says `#compdef`, and a function meant to
+// be loaded on first use says `#autoload`.
+var autoloadMarkers = []string{"#compdef", "#autoload"}
+
+// autoloaded answers "zsh" for a file whose first line is zsh's own way of
+// saying what it is, and "" otherwise.
+//
+// A shebang is not the only convention for declaring an interpreter, and on a
+// machine with zsh installed it is not even the common one. Zsh's function
+// files are read by the shell rather than executed by the kernel, so they
+// carry no `#!` — which meant a sweep looking only for shebangs found eleven
+// zsh scripts on a machine holding several dozen. Every completion a package
+// installs is a real zsh program that someone wrote without knowing this
+// implementation exists, which is the population this sweep is for.
+func autoloaded(line string) string {
+	for _, marker := range autoloadMarkers {
+		if line == marker || strings.HasPrefix(line, marker+" ") {
+			return "zsh"
+		}
+	}
+	return ""
 }
 
 // accepts reports whether the reference shell parses the file.

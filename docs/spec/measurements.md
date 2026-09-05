@@ -228,6 +228,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `array/a-subscript-holding-a-command-substitution` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][Q]` | `[x][Q]` | `[x][Q]` | `[x][Q]` | `[Q][y]` |
 | `array/appending-through-a-subscript-holding-an-expansion` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[xQ][y]` |
 | `array/a-subscript-where-there-are-no-arrays` | `done` **2>** `<shell>: 1: a[1]=Q: not found` | `done` | `done` | `done` | `done` | `done` |
+| `array/appending-to-an-element-where-there-are-no-arrays` | `done` **2>** `<shell>: 1: a[1]+=Q: not found` | `done` | `done` | `done` | `done` | `done` |
 | `array/a-subscript-below-the-first-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][q] ok` | `[x][q] ok` | `[x][q] ok` | `[x][q] ok` | **2>** `<shell>:1: a: assignment to invalid subscript range` *(status 1)* |
 | `array/appending-below-the-first-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[pQ][q] ok` | `[pQ][q] ok` | `[pQ][q] ok` | `[pQ][q] ok` | **2>** `<shell>:1: a: assignment to invalid subscript range` *(status 1)* |
 | `array/a-negative-subscript-past-the-start` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a[-3]: bad array subscript` *(status 1)* | **2>** `<shell>: line 1: a[-3]: bad array subscript` *(status 127)* | **2>** `<shell>: a[-3]: bad array subscript` *(status 1)* | **2>** `<shell>: a: subscript out of range` *(status 1)* | `[x][p][q] n=3` |
@@ -499,6 +500,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `array/a-subscript-where-there-are-no-arrays` — the other side of the same gate. Where the dialect has no subscript the word is not an assignment at all and the shell looks for a command by that name, which is the answer the shell without arrays gives — so accepting the shape everywhere would have made this one silently assign instead of reporting. Three shells assign and say nothing; the fourth reports on standard error and carries on
   ```sh
   a[1]=Q; echo done
+  ```
+- `array/appending-to-an-element-where-there-are-no-arrays` — the append half of the same gate, and the one that was accidentally right. `a[1]=Q` leaked into the no-array dialect while this form did not, because `AppendAssign` is off there and refused it by another road — so the two forms agreed with the shell for different reasons and only one of them was gated on having arrays. Pinned separately so a dialect that ever takes `+=` without arrays cannot make this the leak the plain form was
+  ```sh
+  a[1]+=Q; echo done
   ```
 - `array/a-subscript-below-the-first-element` — an assignment before the array's first element is refused, and the refusal ends the script at 1. Which subscript reaches it is the array base and nothing else: where the first element is 1 this writes nothing and stops, and where it is 0 the same numeral names the first element and nothing is wrong at all. It used to be a wording of our own at status 0 with the script running on, so the element was not written and everything after read the array as though it had been
   ```sh

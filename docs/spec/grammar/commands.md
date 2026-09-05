@@ -144,6 +144,35 @@ and calls the `(` a syntax error rather than reading it as anything
 else. Grammar flag: `ArrayLiteral` (on in the core, off for `posix` and
 `dash`).
 
+**Two flags, not one.** `ArrayLiteral` is the parenthesized value and
+nothing else; the two *subscripted* spellings are `ArraySubscript`'s,
+the same flag that decides whether `${a[i]}` is read. Naming only the
+first is what let a shell with no arrays store an element (#618).
+
+| probe | dash | bash 3.2 | bash 5 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- |
+| `a[0]=x; echo "[${a[0]}]"` | `a[0]=x: not found`, then `Bad substitution` | `[x]` | `[x]` | `[x]` | refuses the subscript |
+| `echo "[${a[0]}]"` | `Bad substitution` | `[]` | `[]` | `[]` | `[]` |
+| `a[0]=x; a[0]+=Q` | `a[0]=x: not found`, `a[0]+=Q: not found` | `[xQ]` | `[xQ]` | `[xQ]` | refuses the subscript |
+
+Measured 2026-09-05, panel and machine as `../oracle.md`. Reading a
+subscript and writing through one split the panel identically — four
+shells against dash — which is why one flag covers both and a third is
+not added. zsh is not a fifth answer: it *parses* `a[0]=x` and rejects
+the subscript, because `0` is below its first element, which is the
+array-base axis on the semantics vector and not a grammar question
+(`array/a-subscript-below-the-first-element`).
+
+Being wrong here is one-sided and silent. Where the flag is off the word
+is a command name — the no-array shell reports `a[0]=x: not found` and
+carries on — so accepting the shape anyway stores an element, says
+nothing, and tells someone testing under that dialect on purpose that a
+script is portable when it is not. The `+=` form was accidentally right
+throughout, because `AppendAssign` is also off there and gated it by
+another road; the plain form had nothing (corpus:
+`array/a-subscript-where-there-are-no-arrays`,
+`array/appending-to-an-element-where-there-are-no-arrays`).
+
 **The `(` must be adjacent to the `=`, in every shell but ksh93.**
 
 | probe | dash | bash 5 | bash 3.2 | ksh93 | zsh |

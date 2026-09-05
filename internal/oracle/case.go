@@ -2271,6 +2271,11 @@ var Corpus = []Case{
 		Why:     "the other side of the same gate. Where the dialect has no subscript the word is not an assignment at all and the shell looks for a command by that name, which is the answer the shell without arrays gives — so accepting the shape everywhere would have made this one silently assign instead of reporting. Three shells assign and say nothing; the fourth reports on standard error and carries on",
 	},
 	{
+		ID: "array/appending-to-an-element-where-there-are-no-arrays", Category: "expansion",
+		Snippet: `a[1]+=Q; echo done`,
+		Why:     "the append half of the same gate, and the one that was accidentally right. `a[1]=Q` leaked into the no-array dialect while this form did not, because `AppendAssign` is off there and refused it by another road — so the two forms agreed with the shell for different reasons and only one of them was gated on having arrays. Pinned separately so a dialect that ever takes `+=` without arrays cannot make this the leak the plain form was",
+	},
+	{
 		ID: "array/a-subscript-below-the-first-element", Category: "expansion",
 		Snippet: `a=(p q); a[0]=x; printf "[%s]" "${a[@]}"; echo " ok"`,
 		Why:     "an assignment before the array's first element is refused, and the refusal ends the script at 1. Which subscript reaches it is the array base and nothing else: where the first element is 1 this writes nothing and stops, and where it is 0 the same numeral names the first element and nothing is wrong at all. It used to be a wording of our own at status 0 with the script running on, so the element was not written and everything after read the array as though it had been",

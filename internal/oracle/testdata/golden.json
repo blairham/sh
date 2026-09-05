@@ -11999,36 +11999,42 @@
         "Stdout": "FOO=baz~FOO=bar",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
         "Stdout": "FOO=baz~FOO=bar",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
         "Stdout": "FOO=baz~FOO=bar",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
         "TimedOut": false
       },
       "dash": {
         "Stdout": "FOO=baz~FOO=bar",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
         "TimedOut": false
       },
       "ksh93": {
         "Stdout": "FOO=bar~FOO=bar",
         "Stderr": "\u003cshell\u003e: local: not found",
         "Status": 0,
+        "Signal": 0,
         "TimedOut": false
       },
       "zsh": {
         "Stdout": "(none)~FOO=bar",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
         "TimedOut": false
       }
     },
@@ -12037,36 +12043,42 @@
         "Stdout": "TERM=changed~TERM=dumb",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
         "Stdout": "TERM=changed~TERM=dumb",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
         "Stdout": "TERM=changed~TERM=dumb",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
         "TimedOut": false
       },
       "dash": {
         "Stdout": "TERM=changed~TERM=dumb",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
         "TimedOut": false
       },
       "ksh93": {
         "Stdout": "TERM=dumb~TERM=dumb",
         "Stderr": "\u003cshell\u003e: local: not found",
         "Status": 0,
+        "Signal": 0,
         "TimedOut": false
       },
       "zsh": {
         "Stdout": "(none)~TERM=dumb",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
         "TimedOut": false
       }
     },
@@ -12339,36 +12351,42 @@
         "Stdout": "FOO=baz~FOO=bar",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
         "Stdout": "FOO=baz~FOO=bar",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
         "TimedOut": false
       },
       "bash32": {
         "Stdout": "FOO=baz~FOO=bar",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
         "TimedOut": false
       },
       "dash": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: 1: Syntax error: \"}\" unexpected",
         "Status": 2,
+        "Signal": 0,
         "TimedOut": false
       },
       "ksh93": {
         "Stdout": "(none)~FOO=bar",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
         "TimedOut": false
       },
       "zsh": {
         "Stdout": "(none)~FOO=bar",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
         "TimedOut": false
       }
     },
@@ -19676,6 +19694,50 @@
         "TimedOut": false
       }
     },
+    "invoke/c-before-s-names-the-operands": {
+      "bash": {
+        "Stdout": "name|1|a",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "name|1|a",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "name|1|a",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "name|1|a",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "\u003cshell\u003e|2|name a",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "\u003cshell\u003e|2|name a",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "invoke/c-in-the-middle-of-a-bundle": {
       "bash": {
         "Stdout": "name|1|a",
@@ -19758,6 +19820,138 @@
       },
       "zsh": {
         "Stdout": "hi|0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/c-with-s-and-no-operands": {
+      "bash": {
+        "Stdout": "\u003cshell\u003e|0|",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "sh|0|",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "\u003cshell\u003e|0|",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "\u003cshell\u003e|0|",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "\u003cshell\u003e|0|",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "\u003cshell\u003e|0|",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/c-with-s-names-the-operands": {
+      "bash": {
+        "Stdout": "name|1|a",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "name|1|a",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "name|1|a",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "name|1|a",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "\u003cshell\u003e|2|name a",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "\u003cshell\u003e|2|name a",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/c-with-s-unbundled": {
+      "bash": {
+        "Stdout": "name|1|a",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "name|1|a",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "name|1|a",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "name|1|a",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "\u003cshell\u003e|2|name a",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "\u003cshell\u003e|2|name a",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

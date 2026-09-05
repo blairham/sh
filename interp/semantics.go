@@ -1387,6 +1387,31 @@ type Semantics struct {
 	// Diagnostics.CommandStringParsedWhole.
 	StdinProgramReadInBlocks bool
 
+	// StdinOptionNamesTheOperands lets the standard-input option name the
+	// operands of an invocation that also carries a command string — `sh -sc
+	// CMD name a`. The stdin option's rule is that no operand is `$0`: the
+	// shell keeps its own name and every operand is a positional parameter,
+	// so `$0` is the shell and `$#` is 2. The command string's rule is that
+	// the first operand is `$0` and only the rest are parameters, so `$0` is
+	// `name` and `$#` is 1.
+	//
+	// Yes in ksh93 and zsh, no in bash and dash — measured with `-sc`, `-s
+	// -c` and `-c -s` alike, since order and bundling change nothing.
+	//
+	// Asked only when both are given, which is the only place the panel
+	// disagrees. Where the program comes from is not this question: all four
+	// run the command string, and the corpus pins that separately. Either
+	// option alone is unanimous too — the command string names the first
+	// operand `$0`, and standard input leaves `$0` as the shell — and with
+	// no operands at all the two rules agree by having nothing to name.
+	//
+	// It has no answer in PosixSemantics, and that is the honest zero
+	// rather than an omission: the standard gives `-c` and `-s` separate
+	// synopses and says the second is assumed only when the first is absent,
+	// so it never describes an invocation carrying both. A 2-2 split with no
+	// standard to break it is refused until a dialect chooses.
+	StdinOptionNamesTheOperands Answer
+
 	// LoginProfileWhenNonInteractive has a login shell read its login
 	// profile even when there is a script to run rather than a person to
 	// prompt. A shell is a login shell when argv[0] begins with a dash,

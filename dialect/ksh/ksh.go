@@ -68,6 +68,10 @@ func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
+	// `-c` and `-s` together: `-s` names the operands here, so `sh -sc CMD
+	// name a` keeps the shell in `$0` and makes both operands parameters.
+	// bash and dash let the command string name them instead.
+	s.StdinOptionNamesTheOperands = interp.Yes
 	// Measured from a script file, where `echo $-` reports `hB`; ksh93's
 	// route letters — `c` under -c, `s` when reading a command string or
 	// standard input — are the front end's and stay unmodeled.

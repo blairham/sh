@@ -5234,6 +5234,30 @@ out=$(CDPATH=./pool cd sub)
 		Why:     "-s and -c in one bundle: all four run the command rather than reading standard input, so a shell that let -s win would print nothing and still exit 0",
 	},
 	{
+		ID: "invoke/c-with-s-names-the-operands", Category: "invocation",
+		Args:    []string{"-sc", ArgSnippet, "name", "a"},
+		Snippet: `echo "$0|$#|$*"`,
+		Why:     "the same bundle with operands after it, which is where the panel splits 2-2: bash and dash apply the command string's rule and make `name` $0, ksh93 and zsh apply the standard-input rule and let no operand be $0, so the shell keeps its own name and both operands are parameters. Only the naming splits — all four run the command string, which the case above pins",
+	},
+	{
+		ID: "invoke/c-with-s-unbundled", Category: "invocation",
+		Args:    []string{"-s", "-c", ArgSnippet, "name", "a"},
+		Snippet: `echo "$0|$#|$*"`,
+		Why:     "the same question spelled as two words, which changes nothing anywhere: whichever rule a shell applies, it applies it to the bundle and to the pair alike",
+	},
+	{
+		ID: "invoke/c-before-s-names-the-operands", Category: "invocation",
+		Args:    []string{"-c", "-s", ArgSnippet, "name", "a"},
+		Snippet: `echo "$0|$#|$*"`,
+		Why:     "and in the other order, where the letter that comes first might have been expected to win and does not — the answer is the shell's rather than the invocation's",
+	},
+	{
+		ID: "invoke/c-with-s-and-no-operands", Category: "invocation",
+		Args:    []string{"-sc", ArgSnippet},
+		Snippet: `echo "$0|$#|$*"`,
+		Why:     "the same invocation with nothing for the two rules to disagree about: with no operand past the command string all four keep the shell's own name and no parameters, which is why the question is only asked where an operand follows",
+	},
+	{
 		ID: "invoke/standard-input-that-is-not-a-terminal", Category: "invocation",
 		Args:    []string{"-s"},
 		Snippet: `echo unreachable`,

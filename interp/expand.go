@@ -484,7 +484,7 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 	if e.Index != nil && !e.Length &&
 		(e.Op == syntax.ParamNone ||
 			((e.Op == syntax.ParamSubstring || e.Op == syntax.ParamTransform ||
-				elementOp(e.Op) || r.yieldsTheArray(e)) &&
+				selectsElements(e.Op) || elementOp(e.Op) || r.yieldsTheArray(e)) &&
 				wholeArraySubscript(r.subscriptText(e.Index)))) {
 		if elems, ok := r.arraySubscript(e); ok {
 			if e.Indirect {
@@ -499,6 +499,13 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 			}
 			if e.Op == syntax.ParamSubstring {
 				elems = sliceElems(elems, r.numOf(e.Arg, e, e.Arg2), e, r)
+			}
+			if selectsElements(e.Op) {
+				// Which elements there are, rather than what each one
+				// becomes — so this is here beside the slice and not with
+				// the elementOp mapping further down, whose whole shape is
+				// one output per input.
+				elems = r.selectElements(e, elems)
 			}
 			if e.Op == syntax.ParamTransform {
 				// `"${a[@]@Q}"` is one transformed word per element — the
@@ -1001,6 +1008,9 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 
 	case syntax.ParamSubstring:
 		return r.substringRange(value, e)
+
+	case syntax.ParamExclude, syntax.ParamSetDifference, syntax.ParamSetIntersection:
+		return r.selectScalar(e, value)
 
 	case syntax.ParamUpper, syntax.ParamLower, syntax.ParamToggle,
 		syntax.ParamUpperFirst, syntax.ParamLowerFirst, syntax.ParamToggleFirst:

@@ -65,6 +65,7 @@ func Dialect() syntax.Dialect {
 	// `${(%):-%x}` — which is this dialect's alone: the other three call
 	// the whole expansion a bad substitution.
 	d.ParamExpansionFlags = true
+	d.ParamElementSelection = true
 	// A parameter written without braces carries a subscript here, and `$#a`
 	// is a count rather than `$#` with a letter after it. Measured 2026-09-05
 	// on zsh 5.9.2: `a=(x y z); echo $a[1]` prints `x` and `echo $#a` prints

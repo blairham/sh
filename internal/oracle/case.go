@@ -2870,6 +2870,46 @@ var Corpus = []Case{
 		Why:     "how far the no-brace length form reaches, measured at the two edges at once: zsh takes a name and takes `@`, and does *not* take `#` — `$##` is the positional count and then a literal `#` there exactly as it is in bash. So the parameter after the `#` is drawn from a set with holes in it rather than from every parameter, and a dialect that read one more character than the shell does would differ only on the shapes nothing tests",
 	},
 	{
+		ID: "expansion/element-exclusion-by-pattern", Category: "expansion",
+		Snippet: `a=(one two three); printf "[%s]" "${(@)a:#t*}"; echo`,
+		Why:     "`:#` drops the elements a pattern matches, which is one shell's alone: to bash the characters after the colon are an offset and `#t*` is arithmetic it refuses, and ksh93 refuses the flag group before it gets that far. The shape a startup file on this machine uses to take a hook out of a list, and the one that produced `operand expected at ``#fig_precmd''` here",
+	},
+	{
+		ID: "expansion/element-exclusion-is-a-whole-match-not-a-prefix", Category: "expansion",
+		Snippet: `v=hello; echo "[${v:#hel*}][${v#hel*}][${v:#xyz}]"`,
+		Why:     "the sharpest row in the family, because two shells accept the same six characters and mean different things by them: zsh matches the pattern against the *whole* value and substitutes nothing when it hits, while ksh93 ignores the colon entirely and gives exactly what `${v#hel*}` gives — `lo`. bash refuses it as arithmetic. So `:#` is not `#` with a colon in front, and a dialect that treated it as one would silently answer ksh93's question in zsh's grammar",
+	},
+	{
+		ID: "expansion/element-exclusion-without-a-flag-group", Category: "expansion",
+		Snippet: `a=(one two three); echo "[${a:#two}]"`,
+		Why:     "the same operator with no `(@)` in front and inside quotes, where the array joins to one string first: the pattern is then matched against `one two three` as a whole, matches nothing, and the value is left standing. Not a no-op by accident — `${a:#*}` on the same array is empty — and it is what says the operator asks about *elements*, of which a joined scalar has one. ksh93 answers `one` from the same characters, which is `${a#two}` against a scalar that is only the first element, so the two shells agree on neither the operator nor what `$a` names",
+	},
+	{
+		ID: "expansion/element-exclusion-empty-pattern", Category: "expansion",
+		Snippet: `a=("" one); printf "[%s]" "${(@)a:#}"; echo`,
+		Why:     "an operator with nothing after it, which the whole-match rule makes meaningful rather than degenerate: the empty pattern matches only the empty string, so exactly the empty element goes. A reading that treated an absent pattern as `*` would empty the array, and one that treated it as no operator at all would leave it whole",
+	},
+	{
+		ID: "expansion/element-exclusion-pattern-out-of-a-parameter", Category: "expansion",
+		Snippet: `p='t*'; a=(one two); printf "[%s]" "${(@)a:#$p}"; echo`,
+		Why:     "whether the pattern may come out of a variable, and it may not: the shell that has the operator is the one that does not glob the result of an expansion, so `$p` is the two literal characters and matches no element. The same axis that keeps `p='et*'; echo $p` from expanding, reaching a third construct — and the reason the pattern is built from the operand's *word* rather than from its text",
+	},
+	{
+		ID: "expansion/element-set-difference-and-intersection", Category: "expansion",
+		Snippet: `a=(x y z); b=(y w); printf "[%s]" "${(@)a:|b}"; echo; printf "[%s]" "${(@)a:*b}"; echo`,
+		Why:     "the two operators that live beside `:#` and take the *name* of another array rather than a pattern, comparing elements for equality: `:|` keeps what the other does not hold and `:*` keeps only what it does. Both are the same one shell's, and both are refused as arithmetic elsewhere — bash names the token `|b` and `*b`, which is the tell that it read an offset",
+	},
+	{
+		ID: "expansion/element-set-operators-against-an-unset-name", Category: "expansion",
+		Snippet: `a=(x y z); printf "[%s]" "${(@)a:|nope}"; echo; printf "[%s]" "${(@)a:*nope}"; echo`,
+		Why:     "a name nothing is stored under is an empty set and not a complaint, in both directions: the difference keeps everything and the intersection keeps nothing. Quietly — no diagnostic and status 0 — which is the half a reading that refused an unknown name would get wrong on the safe-looking side",
+	},
+	{
+		ID: "expansion/a-colon-before-anything-else-is-still-an-offset", Category: "expansion",
+		Snippet: `v=abcdef; echo "[${v:2}][${v:2:2}][${v: -2}][${v:-alt}][${v:+set}]"`,
+		Why:     "the guard on the whole family: exactly three characters after a colon make it an operator, and every other spelling is what it always was. All five are unanimous across the panel, so a grammar that widened the disambiguation by one character would break the shapes every shell shares rather than the ones only zsh has",
+	},
+	{
 		ID: "array/reading-a-subscript-is-arithmetic", Category: "expansion",
 		Snippet: `a=(x y z); echo "[${a[1+1]}]"`,
 		Why:     "a subscript being read is an expression, exactly as one being written through is. It took a numeral and nothing else, so this expanded to the empty string with status 0 — and `a[1+1]=v` had already learned to store where `${a[1+1]}` could not look, which is two spellings of one subscript naming two different elements. zsh answers the element before, which is the base rather than a different reading",

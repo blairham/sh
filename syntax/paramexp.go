@@ -47,6 +47,20 @@ const (
 	// rejected unless the dialect has them.
 	ParamUpper
 	ParamLower
+	// ParamExclude is `:#`, ParamKeepOnly its inverse under a flag, and
+	// ParamSetDifference `:|` and ParamSetIntersection `:*`. All four choose
+	// which *elements* survive, where ParamSubstring chooses which
+	// characters do — and the `:` is shared, which is the whole difficulty:
+	// `${a:#p}` is an exclusion in one grammar and an offset of `#p` in
+	// another, so the character after the colon decides which construct was
+	// written before any of it can be evaluated.
+	//
+	// ParamExclude takes a pattern, matched against a whole element.
+	// ParamSetDifference and ParamSetIntersection take the *name* of another
+	// array, and compare elements for equality rather than by pattern.
+	ParamExclude
+	ParamSetDifference
+	ParamSetIntersection
 	// ParamTransform is `@` followed by one letter naming a transformation
 	// of the value — `${x@Q}` quotes it for reuse as input. The letter rides
 	// on [ParamExpr.Transform]; the set is fixed, and a letter outside it is
@@ -76,6 +90,12 @@ func (o ParamOp) String() string {
 		return "/"
 	case ParamSubstring:
 		return ":"
+	case ParamExclude:
+		return ":#"
+	case ParamSetDifference:
+		return ":|"
+	case ParamSetIntersection:
+		return ":*"
 	case ParamUpperFirst:
 		return "^"
 	case ParamLowerFirst:
@@ -476,6 +496,15 @@ func (p *Parser) scanParamOp(s string, e *ParamExpr) (ParamOp, string, bool) {
 		return condOp(s[1]), s[2:], true
 	}
 	switch {
+	// A `:` followed by one of these three is an operator rather than the
+	// start of an offset, and that one character is the whole
+	// disambiguation. Before the substring case, because everything here
+	// would otherwise be read as arithmetic — which is exactly what a
+	// grammar without the flag does, and what the error `operand expected
+	// at \`#fig_precmd\'` was.
+	case p.dialect.ParamElementSelection && len(s) >= 2 && s[0] == ':' &&
+		strings.IndexByte("#|*", s[1]) >= 0:
+		return elementSelectOp(s[1]), s[2:], true
 	case s[0] == ':':
 		if !p.dialect.ParamSubstring {
 			return 0, "", false
@@ -555,6 +584,17 @@ func condOp(c byte) ParamOp {
 		return ParamError
 	}
 	return ParamAlternate
+}
+
+// elementSelectOp names the operator the character after the colon asked for.
+func elementSelectOp(c byte) ParamOp {
+	switch c {
+	case '|':
+		return ParamSetDifference
+	case '*':
+		return ParamSetIntersection
+	}
+	return ParamExclude
 }
 
 // fillParamArgs splits the operand text according to the operator.

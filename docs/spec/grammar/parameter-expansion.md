@@ -634,6 +634,73 @@ subscript instead and reports `invalid subscript` at run time — for the
 unclosed unquoted form and for `"$a[" ]` alike; the shape fails either
 way, and the difference is the wording.
 
+## Choosing elements: `:#`, `:|` and `:*` — zsh only
+
+Three operators that change **which elements** a value has, where the
+substring above changes which characters each one has.
+
+    ${a:#pattern}   drop the elements the pattern matches
+    ${a:|other}     drop the elements the array named `other` holds
+    ${a:*other}     keep only those
+
+They share the `:` with the substring, and that is the whole difficulty:
+the single character after the colon decides which construct was
+written, before anything can be evaluated. Grammar flag
+`ParamElementSelection`, for the reason `BareSubscript` is one — the
+panel does not disagree about what these characters *mean*, it cuts the
+word in different places, and three shells cut it three ways:
+
+| `v=hello` | bash 5.3 / 3.2 / as-`sh` | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `${v:#hel*}` | `operand expected`, 1 | `Bad substitution`, 2 | `lo` | *empty* |
+| `${v#hel*}` | `lo` | `lo` | `lo` | `lo` |
+
+bash reads an offset and hands `#hel*` to arithmetic. **ksh93 accepts
+the same six characters and means `${v#hel*}` by them** — the colon is
+simply ignored, so it is prefix removal and not exclusion. Only zsh has
+the operator, and it matches the pattern against the **whole** value.
+Treating `:#` as `#` with a colon in front would answer ksh93's question
+inside zsh's grammar, silently.
+
+### What the operator does
+
+The pattern is matched whole and never against a part, which is the
+entire difference from `#`. Consequences, all measured:
+
+    a=(one two three); ${(@)a:#t*}     one
+    a=(one two);       ${(@)a:#*}      no fields at all
+    a=("" one);        ${(@)a:#}       one — the empty pattern matches
+                                       the empty string and nothing else
+    a=(One two);       ${(@)a:#one}    One two — case-sensitive
+
+A scalar is the one-element list it is, so the answer is the value or
+nothing — and *nothing* here is one empty field, where an emptied list
+is no field at all. `set -- "${v:#hel*}"` leaves `$#` at 1 and
+`set -- "${(@)a:#*}"` leaves it at 0.
+
+The pattern is built from the operand's **word**, so whether a
+metacharacter out of a parameter is a metacharacter is
+`GlobExpansionResults` — the same axis that decides whether
+`p='et*'; echo $p` expands. In the shell that has the operator that axis
+is false, so `p='t*'; ${(@)a:#$p}` removes nothing.
+
+`:|` and `:*` take the **name** of another array rather than a word, and
+compare elements for **equality** rather than by pattern: an element
+`t*` in the other array removes only a literal `t*`. A name nothing is
+stored under is an empty set, quietly — the difference keeps everything,
+the intersection keeps nothing, and neither complains.
+
+### The disambiguation is exactly one character
+
+Every other spelling after a colon is what it always was, and all of
+them are unanimous across the panel:
+
+    ${v:2}  ${v:2:2}  ${v: -2}  ${v:-alt}  ${v:=set}  ${v:?msg}  ${v:+set}
+
+`${v:}` is too short to carry an operator and stays the substring with an
+empty offset. A grammar that widened the rule by one character would
+break the shapes every shell shares rather than the ones only zsh has.
+
 ## Dialect flags
 
     ParamSubstitution      ${x/pat/rep} and its anchored forms
@@ -643,10 +710,12 @@ way, and the difference is the wording.
                            what ${!x} then *means* diverges (see above)
     ParamTransformations   ${x@Q} and its letter family — bash only
     ParamExpansionFlags    ${(U)x}           — zsh only
+    ParamElementSelection  ${a:#pat} ${a:|b} ${a:*b} — zsh only
     BareSubscript          $a[1] and $#a, written without braces — zsh only
 
 All false for `posix`. `ParamCaseChange`, `ParamIndirection`,
-`ParamTransformations` and `ParamExpansionFlags` are false for `core`:
+`ParamTransformations`, `ParamExpansionFlags` and
+`ParamElementSelection` are false for `core`:
 the first and the last two are one shell's, and the `!` family is two
 shells' — neither is a common denominator. `BareSubscript` is false for
 both, and for the same reason as `ParamExpansionFlags`: one shell reads

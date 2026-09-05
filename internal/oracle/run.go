@@ -320,13 +320,13 @@ func normalize(s string, sh Found, dir string) string {
 	// to the start of a line and required to be followed by a colon.
 	s = diagPrefix(filepath.Base(sh.Path)).ReplaceAllString(s, "<shell>:")
 	s = tracePrefix(filepath.Base(sh.Path)).ReplaceAllString(s, "+<shell>:")
-	s = usagePrefix(filepath.Base(sh.Path)).ReplaceAllString(s, "${1}<shell>")
+	s = usageBlock(s, filepath.Base(sh.Path))
 	// A shell invoked under another name reports *that* name, not its
 	// binary's — bash-as-sh says "sh:", which the line above cannot match.
 	if sh.Argv0 != "" {
 		s = diagPrefix(sh.Argv0).ReplaceAllString(s, "<shell>:")
 		s = tracePrefix(sh.Argv0).ReplaceAllString(s, "+<shell>:")
-		s = usagePrefix(sh.Argv0).ReplaceAllString(s, "${1}<shell>")
+		s = usageBlock(s, sh.Argv0)
 	}
 	s = strings.TrimRight(s, "\n")
 	// Newlines are shown as ~ so a result stays one table cell. Real output
@@ -354,16 +354,67 @@ func diagPrefix(base string) *regexp.Regexp {
 	return regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(base) + `:`)
 }
 
-// usagePrefix matches a shell naming itself in its own usage line, which is
-// the other place the name is not at the start of one.
+// usageBlock rewrites a shell naming itself in the usage text it prints when
+// it refuses an invocation, which is the other place the name is not at the
+// start of a line.
 //
-// A shell refusing an option at an invocation prints `Usage: ksh [-cilrs…]`,
-// and ksh93 writes the *last element* of the word it was invoked by there
-// where bash writes the whole of it. So the path replacement above catches
-// bash's and cannot catch ksh93's, and the corpus compared `Usage: ksh` with
-// `Usage: our-ksh` — a difference in where the binary lives rather than in
-// what the shell does. Anchored to the start of a line and required to follow
-// `Usage:` so an ordinary word spelled like the shell is left alone.
+// A shell refusing an option prints `Usage: ksh [-cilrs…]`, and ksh93 writes
+// the *last element* of the word it was invoked by there where bash writes
+// the whole of it. So the path replacement above catches bash's and cannot
+// catch ksh93's, and the corpus compared `Usage: ksh` with `Usage: our-ksh` —
+// a difference in where the binary lives rather than in what the shell does.
+//
+// A block rather than a line, because the usage text runs over several and
+// names the shell on more than one of them:
+//
+//	Usage:	sh [GNU long option] [option] ...
+//		sh [GNU long option] [option] script-file ...
+//
+// The second line is indented and so out of reach of anything anchored to
+// `Usage:`, which left a literal `sh` in the bash-as-sh column where every
+// other column read `<shell>`. That was cosmetic — argv[0] is fixed by the
+// harness, so the record was stable — but an asymmetry in a normalized record
+// is exactly what a later reader mistakes for a finding, and nothing in the
+// row said whether the bare name was deliberate (#667).
+//
+// It is scoped to the block rather than matching an indented name anywhere,
+// which would be a rule about indentation rather than about usage text and
+// would rewrite any output that happens to list the shell's own name. The
+// block opens on the `Usage:` line and closes at the first line that is not
+// indented — `GNU long options:` in the text above — so the option lists
+// after it are outside it and untouched.
+func usageBlock(s, base string) string {
+	header, cont := usagePrefix(base), usageContinuation(base)
+	lines := strings.Split(s, "\n")
+	inUsage := false
+	for i, line := range lines {
+		switch {
+		case header.MatchString(line):
+			lines[i] = header.ReplaceAllString(line, "${1}<shell>")
+			inUsage = true
+		case !inUsage:
+		case cont.MatchString(line):
+			lines[i] = cont.ReplaceAllString(line, "${1}<shell>")
+		case !indented(line):
+			inUsage = false
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func indented(line string) bool {
+	return strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t")
+}
+
+// usagePrefix opens a usage block: the name right after `Usage:`. Anchored to
+// the start of a line and required to follow `Usage:` so an ordinary word
+// spelled like the shell is left alone.
 func usagePrefix(base string) *regexp.Regexp {
 	return regexp.MustCompile(`(?m)^(Usage:[ \t]+)` + regexp.QuoteMeta(base) + `\b`)
+}
+
+// usageContinuation is the name at the head of a line continuing one, which
+// only usageBlock may apply and only inside a block it has already opened.
+func usageContinuation(base string) *regexp.Regexp {
+	return regexp.MustCompile(`(?m)^([ \t]+)` + regexp.QuoteMeta(base) + `\b`)
 }

@@ -37,7 +37,7 @@ func runNilStreams(t *testing.T, r *interp.Runner, src string) int {
 // to a shell inside it. Borrowing stdout is the worst of the three, because it
 // is the one the shell *writes*.
 func TestNilStreamsAreEmptyRatherThanTheProcess(t *testing.T) {
-	r := &interp.Runner{}
+	r := newTestRunner(t, &interp.Runner{})
 
 	if got := r.Out(); got == io.Writer(os.Stdout) {
 		t.Error("a nil Stdout answered with the process's own output")
@@ -65,7 +65,7 @@ func TestNilStreamsAreEmptyRatherThanTheProcess(t *testing.T) {
 // depend on what the embedding program happened to have on its own descriptor.
 func TestAShellWithNoInputReadsEndOfInput(t *testing.T) {
 	var out strings.Builder
-	r := &interp.Runner{Stdout: &out, Stderr: &out}
+	r := newTestRunner(t, &interp.Runner{Stdout: &out, Stderr: &out})
 
 	if status := runNilStreams(t, r, "if read line; then echo got:$line; else echo end; fi\n"); status != 0 {
 		t.Errorf("status = %d, want the script itself to have run", status)
@@ -82,7 +82,7 @@ func TestAShellWithNoInputReadsEndOfInput(t *testing.T) {
 // the wrong one — it would make every unwired embedder's script fail on its
 // first `echo`, which is a worse surprise than silence.
 func TestAShellWithNoOutputStillRuns(t *testing.T) {
-	r := &interp.Runner{}
+	r := newTestRunner(t, &interp.Runner{})
 	if status := runNilStreams(t, r, "echo one; echo two >&2; echo three\n"); status != 0 {
 		t.Errorf("status = %d, want writes to a nil stream to succeed quietly", status)
 	}
@@ -96,7 +96,7 @@ func TestAChildOfAShellWithNoStreamsStillRuns(t *testing.T) {
 	if _, err := os.Stat(path); err != nil {
 		t.Skipf("no %s on this machine", path)
 	}
-	r := &interp.Runner{}
+	r := newTestRunner(t, &interp.Runner{})
 	if status := runNilStreams(t, r, path+" out\n"); status != 0 {
 		t.Errorf("status = %d, want the command to have run and succeeded", status)
 	}

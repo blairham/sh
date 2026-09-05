@@ -184,7 +184,7 @@ func runWorded(t *testing.T, src string, dg Diagnostics) string {
 	sem := PosixSemantics()
 	// Not fatal here, so that what `set` reported can still be printed.
 	sem.BadSetOptionNameFatal = No
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "sh"}
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "sh"})
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -475,7 +475,7 @@ func TestARefusedLetterEndsTheScriptWhereTheDialectSaysSo(t *testing.T) {
 			sem := PosixSemantics()
 			sem.BadSetOptionNameFatal = c.fatal
 			dg := Diagnostics{}
-			r := &Runner{Stdout: &buf, Stderr: &strings.Builder{}, Semantics: &sem, Diagnostics: &dg, Name: "sh"}
+			r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &strings.Builder{}, Semantics: &sem, Diagnostics: &dg, Name: "sh"})
 			f, err := syntax.Parse("set -q\necho after\n", syntax.Core())
 			if err != nil {
 				t.Fatal(err)
@@ -498,7 +498,7 @@ func TestSetOptionLettersReportsAStatus(t *testing.T) {
 		sem := PosixSemantics()
 		sem.BadSetOptionNameFatal = No
 		dg := Diagnostics{SetInvalidOptionStatus: status}
-		return &Runner{Stdout: &strings.Builder{}, Stderr: &strings.Builder{}, Semantics: &sem, Diagnostics: &dg, Name: "sh"}
+		return newTestRunner(t, &Runner{Stdout: &strings.Builder{}, Stderr: &strings.Builder{}, Semantics: &sem, Diagnostics: &dg, Name: "sh"})
 	}
 	if got := newRunner(0).SetOptionLetters("e", true); got != 0 {
 		t.Errorf("a letter this shell has gave %d, want 0", got)
@@ -629,10 +629,10 @@ func TestAnOptionRefusedAtAnInvocationDoesNotNameTheBuiltin(t *testing.T) {
 		var errs strings.Builder
 		sem := PosixSemantics()
 		sem.BadSetOptionNameFatal = No
-		return &Runner{
+		return newTestRunner(t, &Runner{
 			Stdout: &strings.Builder{}, Stderr: &errs,
 			Semantics: &sem, Diagnostics: &dg, Name: "/opt/x/mysh",
-		}, &errs
+		}), &errs
 	}
 	t.Run("the sentence loses the builtin's name and the location", func(t *testing.T) {
 		r, errs := newRunner(Diagnostics{SetInvalidOptionLetter: "set: Illegal option -%[2]s"})

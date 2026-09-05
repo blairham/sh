@@ -139,7 +139,7 @@ func TestIndirectSubscriptYieldsTheKeys(t *testing.T) {
 			}
 			var out bytes.Buffer
 			sem := bash.Semantics()
-			r := &Runner{Semantics: &sem, Dialect: &d, Stdout: &out, Stderr: &out}
+			r := newTestRunner(t, &Runner{Semantics: &sem, Dialect: &d, Stdout: &out, Stderr: &out})
 			if _, err := r.Run(context.Background(), f); err != nil {
 				t.Fatalf("run: %v", err)
 			}

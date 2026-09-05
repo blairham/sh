@@ -22432,7 +22432,7 @@
       },
       "bash-as-sh": {
         "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -Z: invalid option~Usage:\t\u003cshell\u003e [GNU long option] [option] ...~\tsh [GNU long option] [option] script-file ...~GNU long options:~\t--debug~\t--debugger~\t--dump-po-strings~\t--dump-strings~\t--help~\t--init-file~\t--login~\t--noediting~\t--noprofile~\t--norc~\t--posix~\t--pretty-print~\t--rcfile~\t--restricted~\t--verbose~\t--version~Shell options:~\t-ilrsD or -c command or -O shopt_option\t\t(invocation only)~\t-abefhkmnptuvxBCEHPT or -o option",
+        "Stderr": "\u003cshell\u003e: -Z: invalid option~Usage:\t\u003cshell\u003e [GNU long option] [option] ...~\t\u003cshell\u003e [GNU long option] [option] script-file ...~GNU long options:~\t--debug~\t--debugger~\t--dump-po-strings~\t--dump-strings~\t--help~\t--init-file~\t--login~\t--noediting~\t--noprofile~\t--norc~\t--posix~\t--pretty-print~\t--rcfile~\t--restricted~\t--verbose~\t--version~Shell options:~\t-ilrsD or -c command or -O shopt_option\t\t(invocation only)~\t-abefhkmnptuvxBCEHPT or -o option",
         "Status": 2,
         "Signal": 0,
         "TimedOut": false
@@ -26832,7 +26832,7 @@
       },
       "bash-as-sh": {
         "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -q: invalid option~Usage:\t\u003cshell\u003e [GNU long option] [option] ...~\tsh [GNU long option] [option] script-file ...~GNU long options:~\t--debug~\t--debugger~\t--dump-po-strings~\t--dump-strings~\t--help~\t--init-file~\t--login~\t--noediting~\t--noprofile~\t--norc~\t--posix~\t--pretty-print~\t--rcfile~\t--restricted~\t--verbose~\t--version~Shell options:~\t-ilrsD or -c command or -O shopt_option\t\t(invocation only)~\t-abefhkmnptuvxBCEHPT or -o option",
+        "Stderr": "\u003cshell\u003e: -q: invalid option~Usage:\t\u003cshell\u003e [GNU long option] [option] ...~\t\u003cshell\u003e [GNU long option] [option] script-file ...~GNU long options:~\t--debug~\t--debugger~\t--dump-po-strings~\t--dump-strings~\t--help~\t--init-file~\t--login~\t--noediting~\t--noprofile~\t--norc~\t--posix~\t--pretty-print~\t--rcfile~\t--restricted~\t--verbose~\t--version~Shell options:~\t-ilrsD or -c command or -O shopt_option\t\t(invocation only)~\t-abefhkmnptuvxBCEHPT or -o option",
         "Status": 2,
         "Signal": 0,
         "TimedOut": false
@@ -28186,6 +28186,50 @@
         "TimedOut": false
       }
     },
+    "param/a-substring-length-that-names-a-variable": {
+      "bash": {
+        "Stdout": "[cd]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[cd]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[cd]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[cd]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: unrecognized modifier `i'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "param/a-substring-length-that-will-not-evaluate": {
       "bash": {
         "Stdout": "",
@@ -28274,6 +28318,138 @@
         "TimedOut": false
       }
     },
+    "param/a-substring-modifier-after-an-offset": {
+      "bash": {
+        "Stdout": "[mp/]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[mp/]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[mp/]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[mp/]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[File.Txt]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/a-substring-modifier-chain": {
+      "bash": {
+        "Stdout": "[File.Txt]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[File.Txt]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[File.Txt]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[File.Txt]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[Dir]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/a-substring-modifier-with-something-after-it": {
+      "bash": {
+        "Stdout": "[/tmp/Dir/File.Txt]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[/tmp/Dir/File.Txt]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[/tmp/Dir/File.Txt]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[/tmp/Dir/File.Txt]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: unrecognized modifier",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "param/a-substring-offset-is-an-expression": {
       "bash": {
         "Stdout": "[cd]",
@@ -28357,6 +28533,138 @@
       "zsh": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:1: bad math expression: operand expected at end of string",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/a-substring-offset-that-does-not-begin-with-a-letter": {
+      "bash": {
+        "Stdout": "[bc] [bc] [bc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[bc] [bc] [bc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[bc] [bc] [bc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: \\(_q\\):2: arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[bc] [bc] [bc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/a-substring-offset-that-is-a-modifier": {
+      "bash": {
+        "Stdout": "[File.Txt]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[File.Txt]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[File.Txt]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[File.Txt]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[/tmp/Dir]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/a-substring-offset-that-names-a-variable": {
+      "bash": {
+        "Stdout": "[cd]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[cd]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[cd]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[cd]~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: unrecognized modifier `i'",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false

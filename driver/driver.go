@@ -87,6 +87,18 @@ type Shell struct {
 	// leaves them alone.
 	Stdout, Stderr io.Writer
 
+	// Dir is where the shell starts, and empty means where the process is.
+	//
+	// A binary leaves it alone: a shell invoked from a command line begins in
+	// the directory it was invoked from, which is what the default reads.
+	// What it is here for is a front end holding more than one shell at once
+	// — an agent protocol gives every session a directory of its own — and
+	// there the process's own working directory cannot be the answer for all
+	// of them. Chdir-ing between them is the thing the library rule in
+	// docs/design.md forbids, one level up: a Runner's directory is r.Dir
+	// precisely so that two of them in one process need not agree.
+	Dir string
+
 	// Gate is asked about every action that leaves the process — an exec, a
 	// file open, a stat, a directory read — before it happens. Nil allows
 	// everything, which is what a shell without a policy is, and costs
@@ -750,12 +762,16 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		Gate:   sh.Gate,
 		Events: sh.Events,
 	}
-	if wd, err := os.Getwd(); err == nil {
-		// And where the process is, for the same reason: interp treats an
-		// empty Dir as "stay relative" and never calls os.Getwd itself. A
-		// failed Getwd — the directory was deleted under the process — leaves
-		// Dir empty, which is that relative reading and the best available.
-		r.Dir = wd
+	r.Dir = sh.Dir
+	if r.Dir == "" {
+		if wd, err := os.Getwd(); err == nil {
+			// And where the process is, for the same reason: interp treats an
+			// empty Dir as "stay relative" and never calls os.Getwd itself. A
+			// failed Getwd — the directory was deleted under the process —
+			// leaves Dir empty, which is that relative reading and the best
+			// available.
+			r.Dir = wd
+		}
 	}
 	if !sh.KeepProcess {
 		// This is a shell, so `exec` may really replace it. interp will not
@@ -945,6 +961,49 @@ func (sh Shell) applyOptions(r *interp.Runner, opts []optionSpec) (int, bool) {
 // through Finish rather than around it.
 func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 	ctx := context.Background()
+	status, how := sh.executeLines(ctx, r, pr, in)
+	switch how {
+	case endingRefused:
+		// The front end could not run what it was given, and the shell is
+		// left alone: there is no session to end and no trap that has become
+		// due.
+		return status
+	case endingParseFailure:
+		// The EXIT trap fires even when the last thing read would not parse,
+		// which is unanimous across the panel — but the status is the parse
+		// failure's rather than the trap's.
+		r.Finish(ctx)
+		return status
+	}
+	return r.Finish(ctx)
+}
+
+// ending is how a run of lines stopped, which decides what the caller owes the
+// shell afterwards. Split out from execute so that a front end holding a shell
+// open across several inputs — a prompt, an agent protocol session — can run
+// one input without ending the shell, and can still make the same three
+// decisions about what just happened.
+type ending int
+
+const (
+	// endingRanOut is the ordinary case: the input was all read and run.
+	endingRanOut ending = iota
+	// endingParseFailure is a parse failure that ended the run.
+	endingParseFailure
+	// endingRefused is the front end declining to run it at all, which is a
+	// usage error rather than anything the script did.
+	endingRefused
+)
+
+// executeLines runs the program a line at a time, and never ends the shell.
+//
+// A shell runs what it has read rather than reading everything first, so
+// `echo one` on line 1 runs before line 3 fails to parse. The line is the
+// unit and not the statement: with `echo one; { fi; }` on one line nothing
+// runs, so a whole line is parsed before any of it is.
+func (sh Shell) executeLines(
+	ctx context.Context, r *interp.Runner, pr *program, in source,
+) (int, ending) {
 	shown := 0
 	var echoed verbosePos
 	// A builtin can change the grammar for the lines after it — a run-time
@@ -975,8 +1034,7 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 				// the same way — measured, an unterminated quote piped in
 				// is one complaint and status 1 in all four.
 				sh.errf("%s", in.dg.ParseDiagnostic(in.name, in.input, err, pr.text()))
-				r.Finish(ctx)
-				return in.dg.StatusForParseError(err)
+				return in.dg.StatusForParseError(err), endingParseFailure
 			}
 			break
 		}
@@ -987,8 +1045,7 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 			if sh.readOn(r, pr, in, err) {
 				continue
 			}
-			r.Finish(ctx)
-			return in.dg.StatusForParseError(err)
+			return in.dg.StatusForParseError(err), endingParseFailure
 		}
 		// `set -v` — the input written back as it is read. The front end is
 		// the one holding the raw text, which is why the echo lives here: the
@@ -1006,13 +1063,15 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 			// Refused rather than silently doing nothing: a shell that
 			// quietly skips what it cannot do is worse than one that says so.
 			sh.errf("%s", in.dg.Report(in.name, 1, err.Error()+"\n"))
-			return usageStatus
+			return usageStatus, endingRefused
 		}
 		if r.Exited() {
 			break
 		}
 	}
-	return r.Finish(ctx)
+	// The status of a run that read everything is the shell's own, which the
+	// caller reads once it has decided whether to end the shell.
+	return 0, endingRanOut
 }
 
 // verbosePos is how far `set -v` has walked through the input: the physical

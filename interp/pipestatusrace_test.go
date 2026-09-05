@@ -31,7 +31,7 @@ func TestTwoSubshellsInAPipelineDoNotShareTheRecord(t *testing.T) {
 		var buf bytes.Buffer
 		sem := bash.Semantics()
 		dg := bash.Diagnostics()
-		r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg}
+		r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg})
 		bash.Apply(r)
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)

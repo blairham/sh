@@ -28,10 +28,10 @@ func TestBgMayReportAbsentJobControlFirst(t *testing.T) {
 			sem := PosixSemantics()
 			sem.JobControlAbsenceIsReportedFirst = c.first
 			errOut := &strings.Builder{}
-			r := &Runner{
+			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
 				Stdout: &strings.Builder{}, Stderr: errOut,
-			}
+			})
 			f, err := syntax.Parse("bg --version\n", syntax.Core())
 			if err != nil {
 				t.Fatal(err)

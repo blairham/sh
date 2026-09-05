@@ -38,7 +38,7 @@ func TestARefusedOpenStopsTheCommand(t *testing.T) {
 			}
 			var out, errs strings.Builder
 			sem := PosixSemantics()
-			r := &Runner{
+			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Stdout: &out, Stderr: &errs,
 				Gate: GateFunc(func(_ context.Context, a Action) Decision {
 					if a.Kind == ActionOpen {
@@ -46,7 +46,7 @@ func TestARefusedOpenStopsTheCommand(t *testing.T) {
 					}
 					return Allow
 				}),
-			}
+			})
 			f, err := syntax.Parse(tc.src, syntax.Core())
 			if err != nil {
 				t.Fatal(err)
@@ -97,7 +97,7 @@ func TestADeniedStatReadsAsAMissingPath(t *testing.T) {
 	})
 	newRunner := func(out, errs *strings.Builder) *Runner {
 		sem := PosixSemantics()
-		return &Runner{Semantics: &sem, Dir: dir, Stdout: out, Stderr: errs, Gate: denyStats}
+		return newTestRunner(t, &Runner{Semantics: &sem, Dir: dir, Stdout: out, Stderr: errs, Gate: denyStats})
 	}
 	runSrc := func(t *testing.T, src string) (string, string, int) {
 		t.Helper()
@@ -152,7 +152,7 @@ func TestADeniedStatReadsAsAMissingPath(t *testing.T) {
 		var out, errs strings.Builder
 		var resolved []string
 		sem := PosixSemantics()
-		r := &Runner{
+		r := newTestRunner(t, &Runner{
 			Semantics: &sem, Dir: dir, Stdout: &out, Stderr: &errs,
 			Gate: GateFunc(func(_ context.Context, a Action) Decision {
 				if a.Kind == ActionExec && strings.Contains(a.Path, dir) {
@@ -163,7 +163,7 @@ func TestADeniedStatReadsAsAMissingPath(t *testing.T) {
 				}
 				return Allow
 			}),
-		}
+		})
 		f, err := syntax.Parse("PATH="+dir+"\npresent; echo st=$?", syntax.Core())
 		if err != nil {
 			t.Fatal(err)
@@ -191,7 +191,7 @@ func TestADeniedDirectoryReadMatchesNothing(t *testing.T) {
 	}
 	var out, errs strings.Builder
 	sem := PosixSemantics()
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Dir: dir, Stdout: &out, Stderr: &errs,
 		Gate: GateFunc(func(_ context.Context, a Action) Decision {
 			if a.Kind == ActionReadDir {
@@ -199,7 +199,7 @@ func TestADeniedDirectoryReadMatchesNothing(t *testing.T) {
 			}
 			return Allow
 		}),
-	}
+	})
 	f, err := syntax.Parse("echo *", syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -225,7 +225,7 @@ func TestADeniedSourceReadFailsLikeAnUnreadableFile(t *testing.T) {
 	}
 	var out, errs strings.Builder
 	sem := PosixSemantics()
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Stdout: &out, Stderr: &errs,
 		Gate: GateFunc(func(_ context.Context, a Action) Decision {
 			if a.Kind == ActionOpen {
@@ -233,7 +233,7 @@ func TestADeniedSourceReadFailsLikeAnUnreadableFile(t *testing.T) {
 			}
 			return Allow
 		}),
-	}
+	})
 	f, err := syntax.Parse(". "+sourced, syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -260,7 +260,7 @@ func TestADeniedProcessSubstitutionAbortsTheCommand(t *testing.T) {
 	var mu sync.Mutex
 	var execs []string
 	sem := PosixSemantics()
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Stdout: &out, Stderr: &errs,
 		Gate: GateFunc(func(_ context.Context, a Action) Decision {
 			mu.Lock()
@@ -273,7 +273,7 @@ func TestADeniedProcessSubstitutionAbortsTheCommand(t *testing.T) {
 			}
 			return Allow
 		}),
-	}
+	})
 	f, err := syntax.Parse("/bin/cat <(/bin/echo hi)", syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -313,7 +313,7 @@ func TestADeniedSignalDoesNotReachTheProcess(t *testing.T) {
 		t.Helper()
 		var out, errs strings.Builder
 		sem := PosixSemantics()
-		r := &Runner{Semantics: &sem, Stdout: &out, Stderr: &errs, Gate: gate}
+		r := newTestRunner(t, &Runner{Semantics: &sem, Stdout: &out, Stderr: &errs, Gate: gate})
 		f, err := syntax.Parse("kill -TERM "+itoa(pid)+"; echo st=$?", syntax.Core())
 		if err != nil {
 			t.Fatal(err)
@@ -394,7 +394,7 @@ func TestADeniedSignalToAJobNeverReachesTheHook(t *testing.T) {
 			hits := 0
 			var out, errs strings.Builder
 			sem := PosixSemantics()
-			r := &Runner{
+			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Stdout: &out, Stderr: &errs, Gate: tc.gate,
 				SignalGroup: func(int, syscall.Signal) error {
 					mu.Lock()
@@ -402,7 +402,7 @@ func TestADeniedSignalToAJobNeverReachesTheHook(t *testing.T) {
 					hits++
 					return nil
 				},
-			}
+			})
 			f, err := syntax.Parse("/bin/sleep 30 &\nkill -TERM %1", syntax.Core())
 			if err != nil {
 				t.Fatal(err)
@@ -438,7 +438,7 @@ func TestADeniedSignalToAJobNeverReachesTheHook(t *testing.T) {
 func TestARefusalReachesABackgroundJob(t *testing.T) {
 	var out, errs strings.Builder
 	sem := PosixSemantics()
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Stdout: &out, Stderr: &errs,
 		Gate: GateFunc(func(_ context.Context, a Action) Decision {
 			if a.Kind == ActionExec {
@@ -446,7 +446,7 @@ func TestARefusalReachesABackgroundJob(t *testing.T) {
 			}
 			return Allow
 		}),
-	}
+	})
 	f, err := syntax.Parse("/bin/echo hi & wait $!; echo st=$?", syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -467,10 +467,10 @@ func TestARefusalReachesABackgroundJob(t *testing.T) {
 func TestARefusedCommandFailsAndTheScriptCarriesOn(t *testing.T) {
 	var out, errs strings.Builder
 	sem := PosixSemantics()
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Stdout: &out, Stderr: &errs,
 		Gate: GateFunc(func(_ context.Context, a Action) Decision { return Deny }),
-	}
+	})
 	f, err := syntax.Parse("/bin/echo one; echo mid=$?; :; echo end=$?", syntax.Core())
 	if err != nil {
 		t.Fatal(err)

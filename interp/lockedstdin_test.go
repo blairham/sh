@@ -26,12 +26,12 @@ func TestOnlyANonFileStdinIsGuarded(t *testing.T) {
 	}
 	defer func() { _ = f.Close() }()
 
-	r := &Runner{Stdin: f}
+	r := newTestRunner(t, &Runner{Stdin: f})
 	if got := r.lockedStdin(); got != any(f) {
 		t.Errorf("a file was wrapped in %T, want the file itself", got)
 	}
 
-	r = &Runner{Stdin: strings.NewReader("x")}
+	r = newTestRunner(t, &Runner{Stdin: strings.NewReader("x")})
 	if _, ok := r.lockedStdin().(*lockedReader); !ok {
 		t.Errorf("a reader was left bare, want it guarded")
 	}

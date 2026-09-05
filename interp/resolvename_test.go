@@ -37,7 +37,7 @@ func resolveRunner(t *testing.T) (*Runner, string) {
 		t.Fatal(err)
 	}
 	sem := permissive()
-	r := &Runner{Semantics: &sem, Dir: dir, Vars: map[string]string{"PATH": dir}}
+	r := newTestRunner(t, &Runner{Semantics: &sem, Dir: dir, Vars: map[string]string{"PATH": dir}})
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {
 		t.Fatal(rerr)
 	}
@@ -90,7 +90,7 @@ func TestResolveNameDoesNotHandOutAReservedBuiltinsFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	sem := permissive()
-	r := &Runner{Semantics: &sem, Dir: dir, Vars: map[string]string{"PATH": dir}}
+	r := newTestRunner(t, &Runner{Semantics: &sem, Dir: dir, Vars: map[string]string{"PATH": dir}})
 	r.Unregister("umask")
 	if kind, p := r.ResolveName("umask"); kind == NameFile {
 		t.Errorf("resolved to the file %q, want the name refused instead", p)
@@ -140,7 +140,7 @@ func TestLookPathAllListsEveryHit(t *testing.T) {
 		}
 	}
 	sem := permissive()
-	r := &Runner{Semantics: &sem, Dir: first, Vars: map[string]string{"PATH": first + ":" + second}}
+	r := newTestRunner(t, &Runner{Semantics: &sem, Dir: first, Vars: map[string]string{"PATH": first + ":" + second}})
 	hits := r.LookPathAll("tool431")
 	want := []string{filepath.Join(first, "tool431"), filepath.Join(second, "tool431")}
 	if len(hits) != len(want) {

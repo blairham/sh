@@ -35,10 +35,10 @@ func declRun(t *testing.T, src string, set func(*Semantics), dg Diagnostics) (st
 		set(&sem)
 	}
 	var out, errs bytes.Buffer
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem, Diagnostics: &dg,
 		Dir: t.TempDir(), Name: "testsh",
-	}
+	})
 	// One arrangement for every test that says a function back; the tests
 	// about arrangements live with the dialects that own them.
 	r.SetFunctionLayout(syntax.Layout{

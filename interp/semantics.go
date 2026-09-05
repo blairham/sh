@@ -1699,6 +1699,21 @@ type Semantics struct {
 	// all: ksh93; bash and zsh count the negative length from the end.
 	SubstringNegativeLengthIsEmpty Answer
 
+	// SubstringRangeReadsModifiers makes `${x:h}` a *modifier* rather than
+	// an arithmetic offset: zsh, where the range is also that shell's
+	// history-modifier syntax; bash, ksh93 and dash read it as the
+	// expression it looks like everywhere else.
+	//
+	// The two spellings share every byte of their punctuation, so the reading
+	// is decided before either is evaluated, and it is decided by the first
+	// byte: a range segment that begins with an unquoted letter is a
+	// modifier. `${x:_q:2}`, `${x: i:2}`, `${x:(i):2}`, `${x:$i:2}` and
+	// `${x:"h"}` are all substrings in that shell for that reason.
+	//
+	// Asked only where a segment does begin with one, so `${x:1:2}` needs no
+	// answer from anyone.
+	SubstringRangeReadsModifiers Answer
+
 	// LinenoCountsFromTheFunction numbers `$LINENO` inside a function from
 	// the line the function was written on: zsh; the other three count from
 	// the file.
@@ -2510,10 +2525,14 @@ func PosixSemantics() Semantics {
 		ArrayLengthWithoutSubscriptIsCount: No,
 		EmptyArrayAtIsOneEmptyField:        No,
 		SubstringNegativeLengthIsEmpty:     No,
-		LinenoCountsFromTheFunction:        No,
-		ArithBaseAbove36:                   Yes,
-		ArithOverflowSaturates:             No,
-		EmptyArithExpressionIsAnError:      No,
+		// The standard has no modifiers and no history syntax, so a range is
+		// the arithmetic it looks like — which is also what three of the four
+		// do with it.
+		SubstringRangeReadsModifiers:  No,
+		LinenoCountsFromTheFunction:   No,
+		ArithBaseAbove36:              Yes,
+		ArithOverflowSaturates:        No,
+		EmptyArithExpressionIsAnError: No,
 		// The standard says `times` takes no operands and does not say what to
 		// do with one; the two shells that follow it most closely ignore it.
 		TimesRejectsArguments: No,

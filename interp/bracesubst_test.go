@@ -77,10 +77,10 @@ func TestABracedSubstitutionIsPlacedInTheScript(t *testing.T) {
 	sem := PosixSemantics()
 	d := syntax.Core()
 	d.CurrentShellSubstitution = true
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{Location: LocationTightLine},
 		Name: "sh", Dialect: &d, Stdout: &strings.Builder{}, Stderr: &errs,
-	}
+	})
 	f, err := syntax.Parse("true\ntrue\ny=${ nosuchcmd;}\nnosuchcmd\n", d)
 	if err != nil {
 		t.Fatal(err)
@@ -102,10 +102,10 @@ func braceRun(t *testing.T, src string) string {
 	sem := PosixSemantics()
 	d := syntax.Core()
 	d.CurrentShellSubstitution = true
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dialect: &d,
 		Stdout: &buf, Stderr: &buf,
-	}
+	})
 	f, err := syntax.Parse(src, d)
 	if err != nil {
 		t.Fatal(err)
@@ -145,10 +145,10 @@ func TestBraceRanges(t *testing.T) {
 		sem.BraceRangeStepSignHonored = No
 		sem.BraceRangeNegativeStepReverses = No
 		d := syntax.Core()
-		r := &Runner{
+		r := newTestRunner(t, &Runner{
 			Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dialect: &d,
 			Stdout: &buf, Stderr: &buf,
-		}
+		})
 		f, err := syntax.Parse(tc.src, d)
 		if err != nil {
 			t.Fatal(err)

@@ -29,7 +29,7 @@ func killRun(t *testing.T, src string, sem Semantics, dg Diagnostics) (out, errs
 		t.Fatalf("parse %q: %v", src, err)
 	}
 	var o, e bytes.Buffer
-	r := &Runner{Stdout: &o, Stderr: &e, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+	r := newTestRunner(t, &Runner{Stdout: &o, Stderr: &e, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
@@ -256,7 +256,7 @@ func TestDieBySignalIsAskedLast(t *testing.T) {
 	var got syscall.Signal
 	asked := 0
 	sem := killSem()
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &o, Semantics: &sem, Name: "testsh",
 		DieBySignal: func(sig syscall.Signal) error {
 			got, asked = sig, asked+1
@@ -264,7 +264,7 @@ func TestDieBySignalIsAskedLast(t *testing.T) {
 			// assert on what happened before it was called.
 			return nil
 		},
-	}
+	})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}
@@ -308,10 +308,10 @@ func TestAnIgnoredFatalSignalIsNotADeath(t *testing.T) {
 			var o, e bytes.Buffer
 			sem := killSem()
 			sem.QuitIgnoredWhenNotInteractive = c.answer
-			r := &Runner{
+			r := newTestRunner(t, &Runner{
 				Stdout: &o, Stderr: &e, Semantics: &sem, Name: "testsh",
 				Interactive: c.interactive,
-			}
+			})
 			st, rerr := r.Run(context.Background(), f)
 			if rerr != nil {
 				t.Fatal(rerr)
@@ -381,10 +381,10 @@ func TestAnOrderlyEndingRaisesNothing(t *testing.T) {
 			sem := killSem()
 			sem.HangupIsAnOrderlyExit = c.answer
 			var o bytes.Buffer
-			r := &Runner{
+			r := newTestRunner(t, &Runner{
 				Stdout: &o, Semantics: &sem, Name: "testsh",
 				DieBySignal: func(syscall.Signal) error { asked++; return nil },
-			}
+			})
 			if _, err := r.Run(context.Background(), f); err != nil {
 				t.Fatal(err)
 			}

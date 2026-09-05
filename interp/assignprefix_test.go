@@ -26,10 +26,10 @@ func prefixAssignRun(t *testing.T, src string, sem Semantics) string {
 		t.Fatalf("parse %q: %v", src, err)
 	}
 	var out, errs bytes.Buffer
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem,
 		Dir: t.TempDir(), Name: "testsh",
-	}
+	})
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {
 		t.Fatalf("run %q: %v\nstderr: %s", src, rerr, errs.String())
 	}

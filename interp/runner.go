@@ -1056,7 +1056,21 @@ func (r *Runner) fatalExpansionQuiet() {
 }
 
 // name is what the shell calls itself in a diagnostic.
+//
+// Usually `$0`, which is the path it was invoked by — but one dialect answers
+// with a fixed name instead, and the two are genuinely different questions:
+// there, `$0` is still the whole path and only the diagnostic is short. That
+// is why the answer is read from Diagnostics rather than written into
+// Runner.Name, which would change `$0` with it.
 func (r *Runner) name() string {
+	// Only where the shell is what is being named. On the script route Name
+	// is the script's path, and every shell in the panel prints that — the
+	// dialect that shortens its own name shortens only its own. It is the
+	// same three-way split `$0` is decided by, which is why the route is the
+	// question rather than some second field saying the name is a file.
+	if n := r.diag().SelfName; n != "" && r.Route != RouteScriptFile {
+		return n
+	}
 	if r.Name == "" {
 		return "sh"
 	}

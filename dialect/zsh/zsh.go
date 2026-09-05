@@ -275,6 +275,20 @@ func Semantics() interp.Semantics {
 	s.JobsListNewestFirst = interp.No
 	s.JobsListFinishedJobs = interp.No
 
+	// `jobs`' letters: POSIX's pair, the state filters, and three of zsh's
+	// own — `-d` adds the directory the job was started in, `-z` and `-Z`
+	// are about the process title — which ride UnimplementedOptionLetters.
+	// `-n` and `-x`, which bash has, are bad options here.
+	s.JobsOptions = "lprs"
+	// The split this issue was about. zsh reads `-p` as "put the job's
+	// process *group* id in the listing" and prints its ordinary rows,
+	// where the other three print the ids and nothing else — so
+	// `kill $(jobs -p)` is a bash idiom rather than a portable one.
+	s.JobsPidsOnlyOption = interp.No
+	// Both filters at once list a job in either state here, where bash lets
+	// the last letter given decide.
+	s.JobsStateFiltersAccumulate = interp.Yes
+
 	// Whether a `&` job's command appears in a `jobs` listing.
 	s.JobsShowBackgroundCommand = interp.Yes
 
@@ -366,6 +380,9 @@ func Diagnostics() interp.Diagnostics {
 		// lower case in an 11-wide column. zsh never lists a finished job,
 		// so it needs no word for one.
 		JobLine: "[%[1]d]  %[2]s %-11[3]s%[4]s",
+		// `jobs -l`, and `jobs -p` too: the process id after the marker,
+		// with the same 11-wide state column after it.
+		JobLineLong: "[%[1]d]  %[2]s %[3]d %-11[4]s%[5]s",
 		// The builtin's name is in the location here rather than in the
 		// sentence, which is this shell's rule for every message.
 		// About its table rather than about the function, and the builtin
@@ -434,6 +451,10 @@ func Diagnostics() interp.Diagnostics {
 			// for `local` too.
 			"typeset": "bcEFhHkLmnRtTUZ",
 			"type":    "mvwsS",
+			// jobs' letters that are zsh's own: -d names the directory the
+			// job was started in, and -z and -Z are about the process
+			// title rather than about the job table.
+			"jobs":    "dzZ",
 			"declare": "bcEFhHkLmnRtTUZ",
 			"local":   "bcEFhHkLmnRtTUZ",
 		},

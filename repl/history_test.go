@@ -54,22 +54,22 @@ func TestHistorySurvivesTheSession(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hist")
 	h := historyFile{path: path, size: 100}
 
-	if got := h.load(); got != nil {
+	if got := h.load(t.Context()); got != nil {
 		t.Errorf("a missing file gave %q, want nothing and no complaint", got)
 	}
-	if err := h.save([]string{"one", "two"}); err != nil {
+	if err := h.save(t.Context(), []string{"one", "two"}); err != nil {
 		t.Fatal(err)
 	}
-	got := h.load()
+	got := h.load(t.Context())
 	if len(got) != 2 || got[0] != "one" || got[1] != "two" {
 		t.Fatalf("loaded %q", got)
 	}
 	// The second session appends its own and does not rewrite the file, so
 	// two shells open at once both keep what they typed.
-	if err := h.save([]string{"three"}); err != nil {
+	if err := h.save(t.Context(), []string{"three"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := h.load(); len(got) != 3 || got[2] != "three" {
+	if got := h.load(t.Context()); len(got) != 3 || got[2] != "three" {
 		t.Errorf("loaded %q, want three lines", got)
 	}
 	// The file is not readable by everyone: it is a record of what someone
@@ -87,10 +87,10 @@ func TestHistorySurvivesTheSession(t *testing.T) {
 // trimmed on the way in rather than read whole.
 func TestHistoryIsTrimmedToItsSize(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hist")
-	if err := (historyFile{path: path, size: 100}).save([]string{"a", "b", "c", "d"}); err != nil {
+	if err := (historyFile{path: path, size: 100}).save(t.Context(), []string{"a", "b", "c", "d"}); err != nil {
 		t.Fatal(err)
 	}
-	got := historyFile{path: path, size: 2}.load()
+	got := historyFile{path: path, size: 2}.load(t.Context())
 	if len(got) != 2 || got[0] != "c" || got[1] != "d" {
 		t.Errorf("loaded %q, want the last two", got)
 	}
@@ -100,19 +100,19 @@ func TestHistoryIsTrimmedToItsSize(t *testing.T) {
 func TestHistoryTurnedOff(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hist")
 	h := historyFile{path: path, size: 0}
-	if err := h.save([]string{"one"}); err != nil {
+	if err := h.save(t.Context(), []string{"one"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); err == nil {
 		t.Error("wrote a file for a history that is off")
 	}
-	if got := (historyFile{}).load(); got != nil {
+	if got := (historyFile{}).load(t.Context()); got != nil {
 		t.Errorf("loaded %q with no path", got)
 	}
 	// And a history with nowhere to go saves nothing, quietly. An empty
 	// HISTFILE means "keep none", not "fail on the way out" — the error
 	// would arrive as the shell exits, which is the worst moment for one.
-	if err := (historyFile{size: defaultHistorySize}).save([]string{"one"}); err != nil {
+	if err := (historyFile{size: defaultHistorySize}).save(t.Context(), []string{"one"}); err != nil {
 		t.Errorf("saving with no path gave %v, want it quietly skipped", err)
 	}
 }
@@ -124,7 +124,7 @@ func TestHistorySkipsBlankLines(t *testing.T) {
 	if err := os.WriteFile(path, []byte("one\n\n   \ntwo\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got := historyFile{path: path, size: 100}.load()
+	got := historyFile{path: path, size: 100}.load(t.Context())
 	if len(got) != 2 || got[0] != "one" || got[1] != "two" {
 		t.Errorf("loaded %q, want the two real lines", got)
 	}
@@ -135,10 +135,10 @@ func TestHistorySkipsBlankLines(t *testing.T) {
 func TestHistoryKeepsALongLine(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hist")
 	long := "echo " + strings.Repeat("x", 200000)
-	if err := (historyFile{path: path, size: 10}).save([]string{long, "after"}); err != nil {
+	if err := (historyFile{path: path, size: 10}).save(t.Context(), []string{long, "after"}); err != nil {
 		t.Fatal(err)
 	}
-	got := historyFile{path: path, size: 10}.load()
+	got := historyFile{path: path, size: 10}.load(t.Context())
 	if len(got) != 2 || got[0] != long || got[1] != "after" {
 		t.Errorf("loaded %d lines, want the long one and the next", len(got))
 	}
@@ -182,11 +182,11 @@ func TestAMultiLineCommandIsOneEntry(t *testing.T) {
 	// is a real limit of the format and not a thing this test wants.
 	path := filepath.Join(t.TempDir(), "hist")
 	h := historyFile{path: path, size: 100}
-	if err := h.save(e.history); err != nil {
+	if err := h.save(t.Context(), e.history); err != nil {
 		t.Fatal(err)
 	}
 	// Three lines from the loop and one from the command after it.
-	if got := h.load(); len(got) != 4 {
+	if got := h.load(t.Context()); len(got) != 4 {
 		t.Errorf("loaded %q, want the four lines a line-per-entry file gives back", got)
 	}
 }

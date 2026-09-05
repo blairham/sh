@@ -5,11 +5,13 @@ package repl
 
 import (
 	"bufio"
+	"context"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/blairham/sh/internal/boundary"
 	"github.com/blairham/sh/internal/secret"
 )
 
@@ -32,6 +34,13 @@ const defaultHistorySize = 1000
 type historyFile struct {
 	path string
 	size int
+	// bound is the session's gate and event sink, because this file is
+	// inside the boundary rather than beside it: HISTFILE is a shell
+	// variable, so the path is one a line typed at the prompt can change,
+	// and an open a script can aim is an open a policy is entitled to refuse.
+	// A zero Boundary allows and records nothing, which is every session that
+	// was never given a policy.
+	bound boundary.Boundary
 }
 
 // historyFrom reads the settings a session should use.
@@ -59,8 +68,16 @@ func historyFrom(get func(string) (string, bool), home string) historyFile {
 }
 
 // load reads the lines a previous session left.
-func (h historyFile) load() []string {
-	if h.size == 0 {
+func (h historyFile) load(ctx context.Context) []string {
+	if h.path == "" || h.size == 0 {
+		// Nothing to open, so nothing to ask a policy about: a history that
+		// is turned off is not an access that was refused.
+		return nil
+	}
+	if !h.bound.Open(ctx, h.path, false) {
+		// A refused history reads as no history, which is what a missing
+		// file already means here — the session starts empty rather than
+		// failing to start.
 		return nil
 	}
 	// A missing file is not an error, and neither is no file at all: the
@@ -93,9 +110,15 @@ func (h historyFile) load() []string {
 //
 // Only what it added: the lines it read at the start are already in the file,
 // and writing them again would double it every time a shell is opened.
-func (h historyFile) save(added []string) error {
+func (h historyFile) save(ctx context.Context, added []string) error {
 	added = withoutCredentials(added)
 	if h.path == "" || h.size == 0 || len(added) == 0 {
+		return nil
+	}
+	if !h.bound.Open(ctx, h.path, true) {
+		// Refused, and silently: the session is ending, there is nobody left
+		// to tell, and a policy that hid the file meant for it not to be
+		// written. The sink has the refusal.
 		return nil
 	}
 	if dir := filepath.Dir(h.path); dir != "" {

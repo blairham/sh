@@ -547,7 +547,11 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 		return source{onStdin: true, name: sh.Name, params: args, dg: sh.Diagnostics.ForStdin(), opts: inv.opts}, nil
 	}
 	path := args[0]
-	b, err := os.ReadFile(path)
+	// Through the gate: the program a shell was pointed at is an access
+	// chosen by whoever invoked it, so a policy hiding a path hides it from
+	// `sh /that/path` too — and an audit trail that recorded every file a
+	// script opened and not the script itself was missing the first one.
+	b, err := sh.readFile(path)
 	if err != nil {
 		// Not a usage error. Every shell in the panel tells this apart from
 		// being invoked wrongly, and three of the four tell the two ways it

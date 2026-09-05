@@ -427,6 +427,20 @@ stays true. Run the targets for the current scores.
 It is deliberately **not** a gate. The number is meant to be low and to
 climb; failing CI on it would only mean failing CI on unfinished work.
 
+`make startup` times process start to a first prompt, and the `-c` path a
+script's every subshell pays, against the real shells on the same machine in
+the same minute. `internal/startupcost` is the harness; it uses a
+pseudo-terminal, because a prompt is exactly the thing a shell declines to
+draw without one.
+
+Not a gate, and no threshold is committed: a startup time is a fact about
+the machine as much as about the code, so what is in the tree is the method
+and `docs/design/startup.md` records one run of it. Two measurement traps are
+written down there — a benchmark that timed a shell's *teardown* as part of
+its startup and reported a reference shell twenty-five times slower than it
+is, and the system-wide rc files — Ubuntu's for bash, macOS's for zsh — that
+silently replaced the prompt the harness watches for.
+
 `make wild` parses the shell scripts installed on the machine and reports
 the ones this parser cannot read. It reads and never runs — the reference
 shell is consulted with `-n` — which is what makes it safe to point at

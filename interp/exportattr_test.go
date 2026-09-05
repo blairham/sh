@@ -81,8 +81,7 @@ func TestUnsetTakesTheExportAttributeOff(t *testing.T) {
 // off, and never spoken about — because deleting the record puts the question
 // back to the environment, which answers that the name is exported.
 func TestTheExportAttributeCanBeTakenOffAndLeaveTheValue(t *testing.T) {
-	out, _ := run(t, `export -n IMPORTED; echo "[$IMPORTED]"; env`,
-		func(r *Runner) { r.Env = importedEnv() })
+	out, _ := run(t, `export -n IMPORTED; echo "[$IMPORTED]"; env`, unexporting)
 	if !strings.HasPrefix(out, "[first]\n") {
 		t.Errorf("out = %q, want the shell still reading the value", out)
 	}
@@ -96,12 +95,22 @@ func TestTheExportAttributeCanBeTakenOffAndLeaveTheValue(t *testing.T) {
 // tri-state. Without it the name would be re-exported by being written to,
 // since the environment it came from still names it.
 func TestTakingTheAttributeOffSurvivesAReassignment(t *testing.T) {
-	out, _ := run(t, `export -n IMPORTED; IMPORTED=second; echo "[$IMPORTED]"; env`,
-		func(r *Runner) { r.Env = importedEnv() })
+	out, _ := run(t, `export -n IMPORTED; IMPORTED=second; echo "[$IMPORTED]"; env`, unexporting)
 	if !strings.HasPrefix(out, "[second]\n") {
 		t.Errorf("out = %q, want the shell reading the new value", out)
 	}
 	if strings.Contains(out, "IMPORTED=") {
 		t.Errorf("out = %q, want no entry for it in the child's environment", out)
 	}
+}
+
+// unexporting is a runner in a dialect that has `export -n`, with a name that
+// arrived in the environment. The axis has to be answered for the two tests
+// above to reach the letter at all: what `-n` does is not in question
+// anywhere it exists, but whether the dialect has it is — see
+// Semantics.ExportTakesTheAttributeOff.
+func unexporting(r *Runner) {
+	sem := CoreSemantics()
+	sem.ExportTakesTheAttributeOff = Yes
+	r.Semantics, r.Env = &sem, importedEnv()
 }

@@ -876,6 +876,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `type/dash-t-on-nothing-is-silent-failure` | `-t: not found~a-name-that-is-nothing: not found~st=127` | `st=1` | `st=1` | `st=1` | `st=2` **2>** `<shell>: whence: -t: unknown option~Usage: whence [-afpqv] name  ...` | `st=1` **2>** `<shell>:type:1: bad option: -t` |
 | `export/unset-f-removes-a-function` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` |
 | `export/a-function-through-the-environment` | *(no output, status 2)* | `1` | `1` | `1` | *(no output, status 2)* | `0` *(status 1)* |
+| `export/the-n-option-takes-the-attribute-off` | **2>** `<shell>: 1: export: Illegal option -n` *(status 2)* | `st=0~0~alive` | `st=0~0~alive` | `st=0~0~alive` | **2>** `<shell>: export: -n: unknown option~Usage: export [-p] [name[=value]...]` *(status 2)* | `st=1~1~alive` **2>** `<shell>:export:1: bad option: -n` |
 | `export/a-name-that-is-not-a-function` | **2>** `<shell>: 1: export: Illegal option -f` *(status 2)* | `st=1` **2>** `<shell>: line 1: export: nope: not a function` | `st=1` **2>** `<shell>: line 1: export: nope: not a function` | `st=1` **2>** `<shell>: line 0: export: nope: not a function` | **2>** `<shell>: export: -f: unknown option~Usage: export [-p] [name[=value]...]` *(status 2)* | `st=1` **2>** `<shell>:export:1: invalid option(s)` |
 | `export/an-imported-name-keeps-the-attribute` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` |
 | `export/an-imported-name-reassigned-in-a-function` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` |
@@ -1229,6 +1230,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `export/a-function-through-the-environment` — one shell carries a function to its children and the other three have no way to: there is nothing but a string in an environment, so the source goes in and is parsed again at the other end. The count rather than the text, because what the entry holds is a shell's own spelling of a body
   ```sh
   f(){ echo carried; }; export -f f 2>/dev/null; env | grep -c '^BASH_FUNC'
+  ```
+- `export/the-n-option-takes-the-attribute-off` — the letter itself is the question, not what it does: bash has `-n` and the other three refuse it as an option, in three different ways and two of them fatally. Left out of #459 deliberately, because that change was about the export attribute and this row would have been recording an option-surface gap instead — which it now is, on purpose. Read through a real child, since what `-n` buys is that the name stays set in the shell and stops reaching one
+  ```sh
+  V=1; export V; export -n V; echo "st=$?"; env | grep -c "^V="; echo alive
   ```
 - `export/a-name-that-is-not-a-function` — a name that is not a function now will not become one by being exported. The shells that have the option refuse it and the ones that do not read `-f` as something else entirely, which is the more interesting half
   ```sh

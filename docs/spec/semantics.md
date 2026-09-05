@@ -4969,6 +4969,14 @@ and `> $e` with a pattern truncated whichever file happened to match.
 Has `fc` report the event it cannot find — zsh; bash and dash answer a
 script with silence at 0.
 
+**OPTIND is 1 before `getopts` has ever run.** Not an axis — every shell
+in the panel initializes it at startup rather than when the builtin first
+executes (`getopts/optind-starts-at-one`), so a script that reads it
+before entering its option loop, or that is handed no options at all,
+still finds a number. Leaving it unset until the first call is invisible
+to any case whose loop runs, which is how it survived here until
+`getopts/a-function-with-its-own-optind` read it back afterwards.
+
 **`GetoptsAssignmentRestartsWord`** — bash yes · dash yes · ksh93 yes · zsh no
 
 Makes assigning OPTIND begin the word again, dropping any position

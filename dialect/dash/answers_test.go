@@ -18,9 +18,20 @@ import (
 // package proves what each axis value does, and this file pins which value
 // this preset gives, so a preset edit cannot silently flip one.
 
+// answersRun parses and runs one snippet as this dialect.
+//
+// The dialect is handed to the runner as well as to the parser, and both
+// halves are load-bearing. The parser decides what the source *is*; the
+// runner asks Runner.Dialect what a pattern means, whether arithmetic has
+// floats, and what grammar nested input — a command substitution, an `eval`,
+// a trap body, a sourced file — is parsed with. A runner built without one
+// falls back to the core, so a test whose whole purpose is to assert this
+// dialect's answer was asserting the core's: `[[ $k == a(b|c) ]]` parsed here
+// and then did not match (#849, found closing #826).
 func answersRun(t *testing.T, src string) (string, int) {
 	t.Helper()
-	f, err := syntax.Parse(src, dash.Dialect())
+	d := dash.Dialect()
+	f, err := syntax.Parse(src, d)
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
 	}
@@ -28,7 +39,7 @@ func answersRun(t *testing.T, src string) (string, int) {
 	sem, diag := dash.Semantics(), dash.Diagnostics()
 	r := &interp.Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag,
-		Name: "sh", Env: []string{"PATH=/usr/bin:/bin"},
+		Dialect: &d, Name: "sh", Env: []string{"PATH=/usr/bin:/bin"},
 	}
 	dash.Apply(r)
 	st, rerr := r.Run(context.Background(), f)
@@ -36,6 +47,28 @@ func answersRun(t *testing.T, src string) (string, int) {
 		return buf.String() + "unsupported: " + rerr.Error(), -1
 	}
 	return buf.String(), st
+}
+
+// TestTheHelperRunsUnderThisDialectAndNotTheCore guards the field answersRun
+// sets, which nothing else in this package would miss.
+//
+// This is the dialect the omission flattered rather than weakened: dash has
+// no `[[ ]]`, the core has one, and an `eval` reparses its argument with
+// Runner.Dialect. So dash's own suite could run a construct dash does not
+// have and see it succeed. Measured, dash on this machine:
+//
+//	$ dash -c 'eval "[[ a == a ]]"; echo st=$?'
+//	dash: 1: eval: [[: not found
+//	st=127
+//
+// 127 is the point: with no such keyword it is an ordinary command name, and
+// there is no such command. Without the field it is a keyword and exits 0.
+func TestTheHelperRunsUnderThisDialectAndNotTheCore(t *testing.T) {
+	out, _ := answersRun(t, `eval '[[ a == a ]]'; echo st=$?`)
+	if !strings.Contains(out, "st=127") {
+		t.Errorf("answersRun = %q, want a status of 127: this shell has no [[ ]], "+
+			"so the runner was not told the dialect", out)
+	}
 }
 
 func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {

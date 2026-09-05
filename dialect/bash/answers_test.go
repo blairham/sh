@@ -18,9 +18,20 @@ import (
 // package proves what each axis value does, and this file pins which value
 // this preset gives, so a preset edit cannot silently flip one.
 
+// answersRun parses and runs one snippet as this dialect.
+//
+// The dialect is handed to the runner as well as to the parser, and both
+// halves are load-bearing. The parser decides what the source *is*; the
+// runner asks Runner.Dialect what a pattern means, whether arithmetic has
+// floats, and what grammar nested input — a command substitution, an `eval`,
+// a trap body, a sourced file — is parsed with. A runner built without one
+// falls back to the core, so a test whose whole purpose is to assert this
+// dialect's answer was asserting the core's: `[[ $k == a(b|c) ]]` parsed here
+// and then did not match (#849, found closing #826).
 func answersRun(t *testing.T, src string) (string, int) {
 	t.Helper()
-	f, err := syntax.Parse(src, bash.Dialect())
+	d := bash.Dialect()
+	f, err := syntax.Parse(src, d)
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
 	}
@@ -28,7 +39,7 @@ func answersRun(t *testing.T, src string) (string, int) {
 	sem, diag := bash.Semantics(), bash.Diagnostics()
 	r := &interp.Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag,
-		Name: "sh", Env: []string{"PATH=/usr/bin:/bin"},
+		Dialect: &d, Name: "sh", Env: []string{"PATH=/usr/bin:/bin"},
 	}
 	bash.Apply(r)
 	st, rerr := r.Run(context.Background(), f)
@@ -36,6 +47,26 @@ func answersRun(t *testing.T, src string) (string, int) {
 		return buf.String() + "unsupported: " + rerr.Error(), -1
 	}
 	return buf.String(), st
+}
+
+// TestTheHelperRunsUnderThisDialectAndNotTheCore guards the field answersRun
+// sets, which nothing else in this package would miss.
+//
+// `${v^^}` is bash's and not the core's, and an `eval` reparses its argument
+// with Runner.Dialect. Measured, bash 5.3.15:
+//
+//	$ bash -c 'eval "v=abc; echo \${v^^}"'
+//	ABC
+//
+// Without the field the reparse happens under the core and answers
+// `${v^^}: bad substitution` — a test in bash's own suite reporting on a
+// shell that is not bash.
+func TestTheHelperRunsUnderThisDialectAndNotTheCore(t *testing.T) {
+	out, st := answersRun(t, `eval 'v=abc; echo ${v^^}'`)
+	if strings.TrimSpace(out) != "ABC" || st != 0 {
+		t.Errorf("answersRun = %q status %d, want ABC and 0: the runner was not told the dialect",
+			out, st)
+	}
 }
 
 func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {

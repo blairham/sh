@@ -170,12 +170,18 @@ func allowOnce(context.Context, acp.RequestPermissionRequest) (acp.PermissionOut
 // does not exercise: the requests an agent makes *of* a client.
 type agentSide struct {
 	conn *acp.Conn
+
+	mu  sync.Mutex
+	saw []json.RawMessage
 	// answer, when set, is what the fake answers to every request rather
 	// than the usual handshake.
 	answer func(method string) (any, error)
 }
 
-func (a *agentSide) Handle(_ context.Context, method string, _ json.RawMessage) (any, error) {
+func (a *agentSide) Handle(_ context.Context, method string, params json.RawMessage) (any, error) {
+	a.mu.Lock()
+	a.saw = append(a.saw, params)
+	a.mu.Unlock()
 	if a.answer != nil {
 		return a.answer(method)
 	}
@@ -421,4 +427,41 @@ func (r *recorder) asked1(kind interp.ActionKind, path string, write bool) bool 
 		}
 	}
 	return false
+}
+
+// params is what the agent was sent for the nth request it answered.
+func (a *agentSide) params(n int) json.RawMessage {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if n >= len(a.saw) {
+		return nil
+	}
+	return a.saw[n]
+}
+
+// A capability is only usable if the agent is told about it. The client's
+// whole reason for serving the file methods is that an agent asks rather than
+// opening for itself, and an agent that was never told cannot ask.
+func TestTheFileCapabilityIsAdvertised(t *testing.T) {
+	t.Parallel()
+	for _, files := range []bool{true, false} {
+		t.Run(map[bool]string{true: "offered", false: "withheld"}[files], func(t *testing.T) {
+			t.Parallel()
+			c := &acp.Client{Info: acp.Implementation{Name: "test-client", Version: "1"}, Files: files}
+			fake := &agentSide{}
+			against(t, c, fake)
+			if _, err := c.Initialize(t.Context()); err != nil {
+				t.Fatalf("initialize: %v", err)
+			}
+			var req struct {
+				Capabilities acp.ClientCapabilities `json:"clientCapabilities"`
+			}
+			if err := json.Unmarshal(fake.params(0), &req); err != nil {
+				t.Fatalf("the agent could not read what it was sent: %v", err)
+			}
+			if req.Capabilities.FS.ReadTextFile != files || req.Capabilities.FS.WriteTextFile != files {
+				t.Errorf("fs capabilities = %+v, want both %v", req.Capabilities.FS, files)
+			}
+		})
+	}
 }

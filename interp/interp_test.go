@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/blairham/sh/dialect/bash"
@@ -125,6 +126,60 @@ func hasEnv(env []string, name string) bool {
 	return false
 }
 
+// output is the buffer a test's Runner writes into, and it is synchronized
+// because the shell's writers outlive the statement that made them.
+//
+// `&` returns as soon as the job's process has a pid — that is what makes `$!`
+// answerable on the next line — so `Run` returns, the helper reads the buffer,
+// and the job carries on writing into it. A bare bytes.Buffer read while
+// anything is still writing it is a data race whether or not the bytes ever
+// mattered to anybody, and this one was reported three times against three
+// *innocent* tests, because the detector charges the write to whichever test
+// the binary happens to be in when it lands (#722, #726).
+//
+// Waiting for the jobs, below, is the other half and not a replacement for
+// this one: a job a *subshell* started belongs to the clone that started it
+// and never appears in this runner's table, so there is nothing to wait for
+// and the lock is the only thing between it and the read.
+type output struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (o *output) Write(p []byte) (int, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.buf.Write(p)
+}
+
+// String is everything written so far, taken under the same lock the writers
+// hold.
+func (o *output) String() string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.buf.String()
+}
+
+// settle waits for the background jobs the script started.
+//
+// So that what a test reads is what the script produced, rather than however
+// much of it had arrived by the time the last foreground command finished.
+// Without this, `cmd & echo done` reads back `done` and nothing else however
+// loudly cmd complains — deterministically, since starting a process takes
+// longer than returning from `&` — and a test asserting on a background job's
+// output would be asserting on a coin toss.
+//
+// A *stopped* job is skipped: it has not finished and is not going to, because
+// it is waiting to be told to go on and nothing here is going to tell it.
+func settle(r *Runner) {
+	for _, j := range r.Jobs() {
+		if j.Stopped {
+			continue
+		}
+		j.Wait()
+	}
+}
+
 func run(t *testing.T, src string, setup func(*Runner)) (out string, status int) {
 	t.Helper()
 	return runGrammar(t, src, nil, setup)
@@ -135,6 +190,24 @@ func run(t *testing.T, src string, setup func(*Runner)) (out string, status int)
 // the construct it depends on rather than a shell that happens to have it.
 func runGrammar(t *testing.T, src string, enable func(*syntax.Dialect), setup func(*Runner)) (out string, status int) {
 	t.Helper()
+	return runScript(t, src, enable, setup, true)
+}
+
+// runLeavingJobsRunning is run() for a test whose subject is a job that is
+// still going.
+//
+// The exception rather than the rule, and there should stay very few of it: a
+// process group can only be asked about while the process is there, and run()
+// waits until it is not. Anything asserting on *output* wants run(), because
+// the output of a job is not in the buffer until the job has finished writing
+// it — which is the whole point of the wait.
+func runLeavingJobsRunning(t *testing.T, src string, setup func(*Runner)) (out string, status int) {
+	t.Helper()
+	return runScript(t, src, nil, setup, false)
+}
+
+func runScript(t *testing.T, src string, enable func(*syntax.Dialect), setup func(*Runner), wait bool) (out string, status int) {
+	t.Helper()
 	d := syntax.Core()
 	if enable != nil {
 		enable(&d)
@@ -143,7 +216,7 @@ func runGrammar(t *testing.T, src string, enable func(*syntax.Dialect), setup fu
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
 	}
-	var buf bytes.Buffer
+	var buf output
 	// Bash's answers unless a test says otherwise. A test asserting a
 	// *behavior* has to name a dialect, because the default is the strict
 	// core and the core refuses anything the shells disagree about — which
@@ -154,6 +227,11 @@ func runGrammar(t *testing.T, src string, enable func(*syntax.Dialect), setup fu
 		setup(r)
 	}
 	st, rerr := r.Run(context.Background(), f)
+	if wait {
+		// Before the buffer is read, and on the refusal path too: a script
+		// the runner gave up on can have started a job before it did.
+		settle(r)
+	}
 	if rerr != nil {
 		return buf.String() + "unsupported: " + rerr.Error(), -1
 	}
@@ -242,6 +320,87 @@ func TestTheHelperSuppliesOnlyWhatTheTestDidNot(t *testing.T) {
 	}
 	if len(tmp) != 1 || tmp[0] != myTmp {
 		t.Errorf("TMPDIR = %q, want exactly the one handed in (%q)", tmp, myTmp)
+	}
+}
+
+// TestTheHelperReadsTheBufferOnlyOnceTheJobsHaveStoppedWriting.
+//
+// The property both halves of the fix are for, asserted where a missing wait
+// is visible rather than where it is merely unsafe: a background job that
+// writes has to have written by the time the helper hands the output back.
+//
+// The race detector is not the test. It found this three times, on three
+// platforms and against three tests that had backgrounded nothing at all, and
+// each time it needed the write to land inside its window — which is why it
+// took three reports to recognize as one thing. The content assertion is
+// deterministic in the other direction: starting a process takes longer than
+// returning from `&` does, so without the wait this reads back `done` and
+// nothing else, every time, on every machine.
+func TestTheHelperReadsTheBufferOnlyOnceTheJobsHaveStoppedWriting(t *testing.T) {
+	// An external, because it is the gap: a builtin's `&` finishes inside the
+	// goroutine before the pid is settled, so the shell's own writers happen
+	// to be ordered already and only a real process shows the hole.
+	out, st := run(t, `/bin/sh -c 'echo from-the-job >&2' & echo done`, nil)
+	if st != 0 {
+		t.Fatalf("status %d, want 0 — starting a job succeeds either way", st)
+	}
+	if !strings.Contains(out, "from-the-job") {
+		t.Errorf("got %q, want the job's output too — the buffer was read while the job was still writing it", out)
+	}
+	if !strings.Contains(out, "done") {
+		t.Errorf("got %q, want the foreground command's output as well", out)
+	}
+}
+
+// TestTheBufferIsSafeToReadWhileAJobASubshellStartedIsStillWriting.
+//
+// The half the wait cannot do, and the reason the buffer is synchronized as
+// well as waited for. `( cmd & )` files the job in the *clone's* table, so the
+// runner this helper holds never hears about it and has nothing to wait for;
+// the lock is the only thing between that job's writes and this read.
+//
+// There is no output to assert on — which of the job's bytes have arrived by
+// the time the subshell returns is genuinely a race, and pinning it would be
+// pinning a coin toss. What is asserted is that reading is safe, which is a
+// statement `go test -race` is what makes visible: with a bare bytes.Buffer
+// here the detector reports it, and CI runs the suite that way.
+func TestTheBufferIsSafeToReadWhileAJobASubshellStartedIsStillWriting(t *testing.T) {
+	for i := 0; i < 8; i++ {
+		out, st := run(t, `( /bin/sh -c 'echo from-the-subshells-job >&2' & ) ; echo done`, nil)
+		if st != 0 {
+			t.Fatalf("status %d, want 0", st)
+		}
+		if !strings.Contains(out, "done") {
+			t.Fatalf("got %q, want the foreground command's output", out)
+		}
+	}
+}
+
+// TestTheHelpersExceptionLeavesTheJobRunning, which is the other side of the
+// wait and the reason it has an exception at all.
+//
+// A test that waits cannot see a job, and a job is a process: runLeavingJobsRunning
+// exists so the one property that has to be asked of a live process still can
+// be. Asserted by the pair, because a variant that quietly waited anyway would
+// pass every test that uses it — they would simply be looking at a corpse.
+func TestTheHelpersExceptionLeavesTheJobRunning(t *testing.T) {
+	var r *Runner
+	if _, st := runLeavingJobsRunning(t, `/bin/sleep 1 &`, func(rr *Runner) { r = rr }); st != 0 {
+		t.Fatalf("status %d", st)
+	}
+	jobs := r.Jobs()
+	if len(jobs) != 1 {
+		t.Fatalf("%d jobs, want one", len(jobs))
+	}
+	if jobs[0].Finished() {
+		t.Error("the job had already finished, so the variant waited for it after all")
+	}
+	// And run() is the other answer, on the same script.
+	if _, st := run(t, `/bin/sleep 0.05 &`, func(rr *Runner) { r = rr }); st != 0 {
+		t.Fatalf("status %d", st)
+	}
+	if jobs := r.Jobs(); len(jobs) != 1 || !jobs[0].Finished() {
+		t.Errorf("run() returned with the job unfinished: %v", jobs)
 	}
 }
 

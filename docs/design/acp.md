@@ -320,7 +320,7 @@ gate runs before `EventCommandStart`, so the tool call exists by the
 time the event arrives and the event updates it rather than creating a
 second.
 
-### The correlation gap, which is not ours to close
+### The correlation gap: blocked on #719, and not ours to close
 
 `interp.Event` carries no identity for the action it belongs to.
 `EventCommandStart` and `EventCommandEnd` are matched by *ordering*, and
@@ -333,14 +333,61 @@ with — does not close it either, and says so: `seq` is a total order of
 *emission* and is explicitly "not a causal order". That is the right
 call for a log and leaves this mapping without an answer.
 
-Until an id exists, this front end matches by a fingerprint of (kind,
-path, args, line, file) with a FIFO of open tool calls per fingerprint,
-and an unmatched end becomes a standalone completed tool call rather
-than being dropped. It is cosmetic when it is wrong — the wrong tool
-call is marked complete, no decision changes — but it is wrong, and the
-fix is one field: a per-action id on `Event`, and the same id on the
-`Action` a gate is consulted about, so that a permission request and the
-events for the action it approved are provably the same action.
+**Two consumers reached the same missing field from opposite
+directions.** The blocks work needed to say which events belong to which
+run and had to generate an id of its own to cope; this needs to say
+which events belong to which action, and to join a permission request to
+the events for the action it approved. It is filed as **#719**, and the
+reason it is one issue rather than two workarounds is that *two id
+schemes that do not agree are worse than none* — they look joinable and
+are not.
+
+So this front end does **not** invent one. Until #719 lands it matches
+by a fingerprint of the action alone — kind, path, args, and the write
+flag or the signal target — with a queue of open tool calls per
+fingerprint, and an unmatched end becomes a standalone completed tool
+call rather than being dropped. The line and the file would discriminate
+better and are deliberately left out: a gate is consulted with an
+`Action` before any event exists, so a key carrying them could never
+join the two halves. Where two identical commands are in flight at once
+it marks the wrong tool call complete, which is cosmetic — no decision
+changes — and is still wrong.
+
+The tool call ids and session ids this front end does mint are not that
+scheme and are not a substitute for it. `ToolCallId` and `SessionId` are
+*required by the protocol*: a client cannot show a permission request
+without one, and every message in a session names it. They identify
+things on the wire, not actions in the interpreter, and when #719 lands
+the fingerprint goes and these stay.
+
+### Reading the event schema, not only writing to it
+
+The schema's stability rules bind a consumer as much as a producer, and
+this side honours them: an event kind this shell does not know is
+**reported** rather than dropped, which is rule four — a consumer must
+not fail on a name it has not seen, and the useful default is to record
+it and carry on. `ActionSignal` arriving after the other five is the
+worked example; a mapping that ignored what it did not recognize would
+have shown a client a shell that never signaled anything. Zero is never
+read as absent, either: a signal's pid and number and a command's exit
+status are reported even when they are zero, because zero means
+something in all three.
+
+Nothing here reads `seq`. A client sees updates in the order they were
+sent on the wire, which the framing guarantees by handling notifications
+on the read loop; `seq` is emission order for gap detection and is not a
+sequence anything should be presented in.
+
+### Output reaches a client through a pipe, and that is a real cost
+
+The session's writers are not `*os.File`, so `os/exec` builds a pipe for
+every child and copies through it. Here that is the mechanism rather
+than an accident — it is *how* a command's output becomes session
+updates — but it is the same wall the blocks work met (#720), and it has
+the same two consequences: a copy per command, and a child that can tell
+it is not on a terminal. Programs that colour their output or draw
+progress will behave as they do in a pipe. The honest fix is a pty
+rather than a workaround, and it is not in this design.
 
 ## The three agents we must talk to
 

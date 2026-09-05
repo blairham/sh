@@ -409,6 +409,92 @@ silently refuses is a boundary that reports something other than what
 happened. Cancellation is the way out, and it is a message the protocol
 already has.
 
+### Asking a person, and where the question can live
+
+Permission requests on the client side were settled by `-acp-allow` — allow
+everything or refuse everything, chosen at the command line. That is a
+placeholder for a person and a deliberately bad one; this replaces it where a
+person is actually reachable.
+
+**The ladder, in the order it is preferred.** The last one is the default and
+has to be:
+
+1. `-acp-allow` answers allow-once to everything without asking. The question
+   and the answer still go to standard error, so a run made this way leaves the
+   record a person would have been shown.
+2. A terminal on both standard input and standard output: **the person is
+   asked**, and their answer is one of the four options the agent offered.
+3. Neither: reject-once to everything. **Nobody to ask is a denial**, which is
+   the rule the whole permission model is built on, unchanged.
+
+An answer that is not one of the offered option ids is a refusal, and so is the
+input ending with the question outstanding. There is still no timeout.
+
+**The reader is the prompt loop's own**, shared rather than duplicated, and
+that is safe by the shape of a turn rather than by luck: `talk` reads a line,
+hands it to `session/prompt`, and blocks there until the turn ends. A
+permission request or an elicitation only arrives *during* a turn, so the
+scanner is idle exactly when a question needs it. Two readers on one descriptor
+would race for bytes and lose lines to whichever won.
+
+It is a line read rather than `repl`'s line editor, which is worth stating
+because this shell has one. What `repl` exports is `Shell.Run`: a whole prompt
+loop that owns the terminal, the history and the shell it drives. There is no
+single-line entry point to borrow, and taking the terminal into raw mode for a
+one-word answer, in the middle of a turn whose output is still arriving on the
+same screen, would be a worse answer than a plain read rather than a better
+one. If a line editor is ever wanted here, the thing to add is a read-one-line
+entry point to `repl`, not a second editor.
+
+#### `elicitation/create`
+
+A permission request is not the only thing an agent may need a person for, and
+until v1 grew `elicitation/create` it was the only one the protocol had. An
+agent that needs a choice, a name or a confirmation asks for it there, and this
+client serves it at the same terminal, one line per field.
+
+**Form mode only**, and it is advertised as only that. The schema advertises
+each mode by supplying `{}` for it, so a client that cannot draw a form or
+cannot open a browser simply does not name that mode — and the rule the file
+and terminal capabilities are already held to applies again: a mode that is
+served is a mode that was claimed, and a mode that arrives unclaimed is
+refused rather than guessed at. URL mode would mean opening a browser and
+waiting for an `elicitation/complete` notification, which is a different
+mechanism and not one a terminal answers.
+
+Within a form, the primitive property types are asked for and coerced: a
+string, a number, an integer, a boolean, and the single-select enum, which the
+schema spells as a string property carrying `enum`. The multi-select case is an
+array property and is **not** served: a terminal line is a poor multi-select,
+and offering a bad one is worse than saying so.
+
+A required field left empty declines the whole elicitation, because a form
+returned without what it required is not an answer to it. Declining and
+cancelling are answers too — the agent is owed one either way — and, as with a
+permission request, the input ending is a decline rather than a hang.
+
+#### Why the agent side still cannot ask
+
+The **agent** side of this shell remains strictly non-interactive, and
+`elicitation/create` does not change that today, although it is the right route
+eventually.
+
+The reason is mechanical rather than philosophical. A session's standard input
+is `os.DevNull`, so a script's `read` gets end of file; making it reach a
+person means making that reader *demand-driven* — the question is only worth
+asking when a script actually reads. `driver.Shell.Stdin` is an `*os.File`, so
+there is nowhere to put a reader that calls out over the connection: an
+`os.Pipe` fed by a goroutine cannot know when somebody reads the other end, so
+it would have to elicit eagerly, which asks a person a question no script ever
+asked.
+
+Widening that field to an `io.Reader` is a `driver` change with its own blast
+radius — every route, every dialect binary, and the terminal detection that
+decides to prompt, which needs an `*os.File` to ask about. It is worth doing on
+purpose rather than as a side effect of this, so it is written down here rather
+than bodged: **a script's `read` under `sh -acp` will reach a person when
+`driver.Shell.Stdin` becomes an `io.Reader`, and not before.**
+
 ## The event stream becomes session updates
 
 | event | update |

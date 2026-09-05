@@ -262,6 +262,11 @@ func TestTheLoginProfileIsAChainAndOneLinkRuns(t *testing.T) {
 // between the two halves and is measured: the non-interactive file is not read
 // in the mode at all, because the standard has no such file, while the
 // standard does have an interactive one.
+//
+// Only the name is asked here, because the POSIX preset has no `posix` option
+// to enter the mode by. The other half — a mode entered with `set -o` before
+// the files are read — is exercised in cmd/bash, which is the dialect that
+// has the option.
 func TestPosixModeReadsTheStandardsInteractiveFile(t *testing.T) {
 	cleanStartupEnv(t)
 	home := startupHome(t, ".arc", ".profile")
@@ -589,6 +594,80 @@ func TestLoginCanBeAskedForOnTheCommandLine(t *testing.T) {
 			t.Errorf("read %v, want nothing — the letter is not this dialect's", got)
 		}
 	})
+}
+
+// `exit 3` in a startup file exits 3, and the files after it are not read.
+//
+// That is the other half of the files being run *by* this shell rather than
+// beside it, and it is measured in every shell that reads more than one. The
+// unread ones are the part a status alone would not show: a `.zshrc` that ran
+// after its `.zshenv` had ended the session would be running in a shell that
+// no longer exists.
+func TestAStartupFileCanEndTheShell(t *testing.T) {
+	cleanStartupEnv(t)
+	home := startupHome(t, ".zlogin")
+	if err := os.WriteFile(filepath.Join(home, ".zenv"),
+		[]byte("echo .zenv\nexit 3\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The file after it does not parse, which is how "not read" is told from
+	// "read and did nothing": a file that was opened at all would be reported
+	// here and would carry its own status out.
+	if err := os.WriteFile(filepath.Join(home, ".zrc"), []byte("if\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sh := shell()
+	sh.Semantics = zshLike()
+	t.Setenv("HOME", home)
+	for _, tc := range []struct {
+		name string
+		argv []string
+	}{
+		{"at a prompt", []string{"-testsh", "-i"}},
+		{"and with a script to run", []string{"-testsh", "-c", "echo main"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, errs, code := runPipedShell(t, sh, "echo typed\n", tc.argv...)
+			if code != 3 {
+				t.Errorf("status %d, want the status the file exited with", code)
+			}
+			if strings.Contains(out, ".zlogin") || strings.Contains(errs, ".zrc") {
+				t.Errorf("out = %q, err = %q, want the files after it left unread", out, errs)
+			}
+			if strings.Contains(out, "typed") || strings.Contains(out, "main") {
+				t.Errorf("out = %q, want nothing to have run after it", out)
+			}
+		})
+	}
+}
+
+// A long option this dialect does not name is refused, rather than read as a
+// bundle of the letters that spell it.
+//
+// Refusing is measured and unanimous, and it is not only a better diagnostic:
+// the letters of `--rcfile` include a `c`, so a shell reading it as a bundle
+// would take the next word as a command string and run it.
+func TestAnUnknownLongOptionIsRefused(t *testing.T) {
+	cleanStartupEnv(t)
+	sh := shell()
+	sh.Semantics = interp.PosixSemantics()
+	for _, argv := range [][]string{
+		{"testsh", "--nosuch", "-c", "echo ran"},
+		// The one that would have run something: this dialect has no
+		// `--rcfile`, so the word must not become `-r -c -f -i -l -e`.
+		{"testsh", "--rcfile", "echo ran", "-c", "echo main"},
+	} {
+		out, errs, code := runArgs(t, sh, argv...)
+		if code == 0 {
+			t.Errorf("%v reported 0, want a refusal", argv)
+		}
+		if strings.Contains(out, "ran") {
+			t.Errorf("%v ran something: %q", argv, out)
+		}
+		if !strings.Contains(errs, argv[1]) {
+			t.Errorf("%v said %q, want the option named", argv, errs)
+		}
+	}
 }
 
 // TestEveryStartupNameIsDistinct keeps the table above honest: two slots

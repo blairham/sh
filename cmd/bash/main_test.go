@@ -266,3 +266,35 @@ func prompt(t *testing.T, typed string, argv ...string) (out, errs string, code 
 	code = driver.MainArgs(sh, argv)
 	return o.String(), e.String(), code
 }
+
+// The mode can also be entered by option rather than by name, and the file
+// follows it there.
+//
+// The two are asked separately because they are not the same moment: the name
+// is read off argv[0] and turns the mode on *after* the startup files have
+// run, while the option is applied before them. A front end that consulted
+// only one of them reads the wrong file for the other, and this is the half a
+// dialect without a `posix` option cannot reach.
+//
+// Measured 2026-09-05: `bash -o posix -i` reads `$ENV` and leaves `~/.bashrc`
+// unread in bash 5.3.15, which is the panel member that counts — bash 3.2
+// still reads `~/.bashrc` there, and disagrees with its later build about
+// `--posix` in exactly the same way.
+func TestTheModeCanBeEnteredByOptionToo(t *testing.T) {
+	home := scratchHome(t)
+	writeHomeFile(t, home, ".bashrc", "echo read-rc\n")
+	writeHomeFile(t, home, "env.sh", "echo read-env\n")
+	t.Setenv("ENV", filepath.Join(home, "env.sh"))
+
+	out, _, _ := prompt(t, "", "bash", "-i")
+	if !strings.Contains(out, "read-rc") || strings.Contains(out, "read-env") {
+		t.Errorf("out = %q, want the shell's own file", out)
+	}
+	out, errs, code := prompt(t, "", "bash", "-o", "posix", "-i")
+	if code != 0 {
+		t.Fatalf("status %d, stderr %q", code, errs)
+	}
+	if !strings.Contains(out, "read-env") || strings.Contains(out, "read-rc") {
+		t.Errorf("out = %q, want the standard's file in the mode", out)
+	}
+}

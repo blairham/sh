@@ -152,6 +152,11 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		Style:  sh.PromptStyle,
 		Editor: sh.EditorStyle,
 		Name:   name,
+		// The same policy and observer the Runner is given, because a
+		// session gated for what a script does and ungated for what the
+		// prompt does has a hole shaped exactly like `HISTFILE=/somewhere`.
+		Gate:   sh.Gate,
+		Events: sh.Events,
 		// Whether a panic caught on a typed line prints its stack. Decided
 		// here because it is read from the process's environment, which is
 		// this package's to read and not repl's — see panic.go.

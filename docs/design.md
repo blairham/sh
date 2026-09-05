@@ -92,6 +92,44 @@ resume a job this shell started, with a fixed SIGCONT to a group that
 already passed the exec gate on its way to existing, so a policy that
 did not want that process running had its say when it started.
 
+**The front end has accesses too, and they were the tail of this.** A
+shell opens files before any script runs and after it has finished: the
+program named on the command line, `~/.profile` and `$ENV`, the history
+a session keeps. Those went to the os package directly, which was
+invisible while nothing supplied a gate and stopped being invisible the
+moment `driver.Shell` grew one — a policy handed to a binary that then
+read the very path it refuses is a boundary that reports more than it
+enforces. All three are inside it now, through `internal/boundary`, and
+the test of which side a front-end access falls on is **who chose the
+path**: a script operand comes from the invocation, `$ENV` and `HISTFILE`
+from shell variables a typed line can set, so all of them are the
+policy's business. The vocabulary stays the interpreter's; the front end
+only asks.
+
+The rest of the front end's own file work is outside, and here is the
+whole list, so that silence is never the record:
+
+- **`/dev/tty`, opened to hand the terminal to a process group.** A fixed
+  path, chosen by the front end, and the open reads nothing — the
+  descriptor exists to name the terminal in an ioctl. Gating it would
+  stop `^C` and `^Z` reaching commands while protecting no file. A
+  redirection a script writes to `/dev/tty` is an ordinary open and is
+  gated.
+- **`os.Stat(os.DevNull)`, deciding whether a stream is a terminal.** The
+  same shape: a fixed interpreter-chosen path, asked about a descriptor
+  the caller already handed over, teaching the shell nothing about the
+  filesystem. Gating it would let `-deny /dev/null` turn the null device
+  into a terminal, which changes behavior without refusing anything
+  reachable.
+- **`umask` and the resource limits.** These name no path and no program.
+  They do not perform an access; they change what a later access creates
+  with or is allowed to do, and that later access is itself gated and
+  recorded. They are also already *hooks* — nil in a library, filled in
+  only by a binary that is a shell — so a program that wants a say
+  installs its own and can refuse, where an event kind could only report
+  after the fact. That is the same promise `ActionInherit` is documented
+  for declining to make.
+
 What a refusal looks like follows the rule the file probes set. A denied
 signal answers EPERM — the errno for a process this one may not signal —
 so `kill` reports it in each dialect's own wording for that, and a policy

@@ -22,6 +22,11 @@ import (
 //
 // Homebrew's `brew` uses the first of them, `compgen -A builtin`, to walk
 // the shell's own commands and make sure none of them has been shadowed.
+//
+// Specified in the `compgen` section of docs/spec/semantics.md, which lists
+// what is out of scope and why; the corpus rows are under `compgen/`. Both
+// arrived late — this file carried its measurements in comments alone for a
+// while, and one of them was wrong for exactly as long.
 func init() {
 	builtins["compgen"] = biCompgen
 }
@@ -33,12 +38,36 @@ var compgenActions = map[string]func(r *Runner) []string{
 	"function": (*Runner).FuncNames,
 }
 
-// compgenActionLetters are the short spellings of those actions. bash has one
-// for most of its actions; these are the two that go with what is generated
-// here.
+// compgenActionLetters are the short spellings of those actions.
+//
+// One entry, and that is the measurement rather than a stub. bash's short
+// letters are `abcdefgjksuv` and **none of them is `function`** — the only
+// spelling for that action is the long `-A function`. This map said `u` meant
+// function until it was measured; `compgen -u` in bash lists *user* names, so
+// the claim was wrong in the one direction that is invisible, giving an answer
+// where bash gives a different one rather than failing.
 var compgenActionLetters = map[byte]string{
 	'b': "builtin",
-	'u': "function",
+}
+
+// compgenLetters is every letter bash's option string has, so that one it has
+// and this shell does not generate is refused as unimplemented while a letter
+// bash does not have is an invalid option — the same distinction
+// compgenKnownActions draws for the long names. Measured from bash 5.3's own
+// usage line:
+//
+//	compgen [-V varname] [-abcdefgjksuv] [-o option] [-A action]
+//	        [-G globpat] [-W wordlist] [-F function] [-C command]
+//	        [-X filterpat] [-P prefix] [-S suffix] [word]
+//
+// The lowercase run names actions; the rest take an argument and shape or
+// generate a word list some other way. None of the second group is read here,
+// so none of them reaches the point where the argument would be consumed.
+var compgenLetters = map[byte]bool{
+	'a': true, 'b': true, 'c': true, 'd': true, 'e': true, 'f': true,
+	'g': true, 'j': true, 'k': true, 's': true, 'u': true, 'v': true,
+	'o': true, 'V': true, 'G': true, 'W': true, 'F': true, 'C': true,
+	'X': true, 'P': true, 'S': true,
 }
 
 // compgenKnownActions are every action bash has, so that one it has and this
@@ -56,13 +85,13 @@ var compgenKnownActions = map[string]bool{
 
 func biCompgen(r *Runner, _ context.Context, args []string) int {
 	var action, word string
-	generated := false
+	generated, haveWord := false, false
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {
 		case a == "--":
-			if i+1 < len(args) {
-				word = args[i+1]
+			if i+1 < len(args) && !haveWord {
+				word, haveWord = args[i+1], true
 			}
 			i = len(args)
 		case a == "-A":
@@ -76,15 +105,25 @@ func biCompgen(r *Runner, _ context.Context, args []string) int {
 			for j := 1; j < len(a); j++ {
 				name, ok := compgenActionLetters[a[j]]
 				if !ok {
-					// Reported as unimplemented rather than as a bad option:
-					// bash has these letters and we do not generate them.
-					r.diagf("compgen: -%c: not implemented\n", a[j])
+					if compgenLetters[a[j]] {
+						// bash has the letter and we do not generate it.
+						r.diagf("compgen: -%c: not implemented\n", a[j])
+					} else {
+						// bash does not have it either, so the script has a
+						// typo rather than a shell that is missing something.
+						r.diagf("compgen: -%c: invalid option\n", a[j])
+					}
 					return 2
 				}
 				action, generated = name, true
 			}
 		default:
-			word = a
+			// The *first* word is the one matched against, and the rest are
+			// ignored: measured, `compgen -A builtin ret re` answers for
+			// `ret` in bash and `compgen -A builtin re ret` for `re`.
+			if !haveWord {
+				word, haveWord = a, true
+			}
 		}
 	}
 	if !generated {

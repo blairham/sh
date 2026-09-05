@@ -4351,6 +4351,52 @@ echo after`,
 		Snippet: `disable cd 2>/dev/null; enable cd 2>/dev/null; echo "st=$?"`,
 		Why:     "switching a builtin off is not forgetting it: the name comes back with the same builtin behind it. Standard error is discarded because three of the four have neither word and their complaint is about a missing command, which the case above pins",
 	},
+	// --- compgen: the completion generator, and the one shell that has it -
+	{
+		ID: "compgen/names-of-the-shells-own-builtins", Category: "builtins",
+		Snippet: `compgen -A builtin retu; echo "st=$?"`,
+		Why:     "the shape Homebrew's `brew` uses to check that none of the shell's own commands has been shadowed, and the reason `compgen` is registered at all. One shell answers; the other three have no such command and say so at 127. A prefix narrow enough to name one builtin, because the whole list differs between bash builds",
+	},
+	{
+		ID: "compgen/the-short-letter-for-builtin", Category: "builtins",
+		Snippet: `compgen -b retu; echo "st=$?"`,
+		Why:     "`-b` is the short spelling of `-A builtin` and must answer identically to the case above — the letter table and the action table are two ways to the same generator, and only a case that runs both notices when one of them drifts",
+	},
+	{
+		ID: "compgen/names-of-the-defined-functions", Category: "builtins",
+		Snippet: `f1() { :; }; f2() { :; }; compgen -A function f; echo "st=$?"`,
+		Why:     "the second thing this shell can generate from what it knows, and the one whose contents a case can fix: the functions are defined in the snippet, so the answer does not depend on the build the way the builtin list does",
+	},
+	{
+		ID: "compgen/there-is-no-short-letter-for-function", Category: "builtins",
+		Snippet: `f1() { :; }; compgen -u f1; echo "st=$?"`,
+		Why:     "`-u` is *user* names, not functions, and bash's letters have no short spelling for the function action at all. This shell's letter table said otherwise and answered `f1` where bash answers nothing at 1 — a wrong claim in the one direction nothing catches, since it produces an answer rather than an error",
+	},
+	{
+		ID: "compgen/nothing-matched-is-a-failure", Category: "builtins",
+		Snippet: `compgen -A builtin zzzznosuch; echo "st=$?"`,
+		Why:     "an empty completion is 1 rather than 0, because the question a completer asks is whether there is anything to offer — the opposite of the usual reading of a command that printed nothing without complaining",
+	},
+	{
+		ID: "compgen/no-action-is-a-quiet-success", Category: "builtins",
+		Snippet: `compgen foo; echo "st=$?"`,
+		Why:     "a word with nothing to generate it from is 0 and silent, which is the other half of the case above: 1 means asked-and-empty and 0 means never asked",
+	},
+	{
+		ID: "compgen/the-first-word-is-the-one-matched", Category: "builtins",
+		Snippet: `compgen -A builtin retu read; echo "st=$?"`,
+		Why:     "the extra words are ignored rather than replacing the first, which this shell had the wrong way round; measured both orders, since one order alone cannot tell first-wins from last-wins",
+	},
+	{
+		ID: "compgen/an-action-name-that-is-not-one", Category: "builtins",
+		Snippet: `compgen -A nosuchaction x; echo "st=$?"`,
+		Why:     "`invalid action name` at 2 — the wording that separates a typo from a shell that is missing something, which is the distinction the action table exists to keep",
+	},
+	{
+		ID: "compgen/an-action-this-shell-does-not-generate", Category: "builtins",
+		Snippet: `compgen -A alias zzzznosuch; echo "st=$?"`,
+		Why:     "bash generates it and answers 1 for no match; this shell refuses it as not implemented at 2, and the divergence is recorded here deliberately — an action generated from a guess would be a promise the shell cannot keep, and the honest refusal is the answer docs/spec/semantics.md scopes",
+	},
 	{
 		ID: "glob/matches-are-in-order", Category: "expansion",
 		Script:  true,

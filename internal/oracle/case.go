@@ -1155,6 +1155,21 @@ var Corpus = []Case{
 		Why:     "the same death by a signal no shell can trap, handle or re-raise deliberately — the kernel ends it — which is what says the row above is the shell's own discipline and not simply what happens to a process that is signaled",
 	},
 	{
+		ID: "signal-death/a-signal-with-no-meaning-of-its-own-is-fatal-too", Category: "traps and exit",
+		Snippet: `kill -USR1 $$; echo after`,
+		Why:     "the same discipline for a signal the shell is not expected to have an opinion about: USR1 has no default meaning beyond ending the process, and every shell in the panel is killed by it. It is here because ours was not — Go's runtime forwards a signal it classifies as killing and silently discards the rest, so USR1, USR2, ALRM, PIPE, XCPU, XFSZ, VTALRM and PROF raised at ourselves did nothing and the shell hung waiting for a death that was never coming, at ten seconds of harness timeout each",
+	},
+	{
+		ID: "signal-death/dying-by-a-signal-says-nothing", Category: "traps and exit",
+		Snippet: `kill -ABRT $$; echo after`,
+		Why:     "a shell killed by a signal writes no diagnostic of its own — both streams are empty in all four — and ABRT is the sharp way to ask, because it is one of the signals Go's runtime treats as a crash: it printed a full goroutine dump to standard error and exited 2 where a shell must print nothing at all and be killed by the signal. The same leak internal/panicguard exists to stop, arriving by another road",
+	},
+	{
+		ID: "signal-death/quit-is-not-fatal-in-every-shell", Category: "traps and exit",
+		Snippet: `kill -QUIT $$; echo after`,
+		Why:     "the one fatal signal the panel disagrees about: bash 5.3 and zsh take QUIT's default action away and print after with status 0, where dash, ksh93 — and bash 3.2, so the two bash columns differ — are killed by it. Measured with a signal from another process too, so it is a disposition rather than a deferral, and it disappears with `-i`, where all five ignore it",
+	},
+	{
 		ID: "signal-death/a-handled-signal-is-not-a-death", Category: "traps and exit",
 		Snippet: `trap "echo caught" TERM; kill -TERM $$; echo after`,
 		Why:     "the control: the same signal with a trap for it runs the handler and the shell carries on to exit normally, so the two rows above are about the *absence* of a handler rather than about the signal arriving",
@@ -4932,7 +4947,15 @@ bad`,
 		Script: true,
 		Snippet: `alias a='echo hit'
 a`,
-		Why: "the same two lines as `alias/expands-a-command-word`, from a file instead of -c, and zsh changes its answer: it declines to expand under -c and expands from a script file. So whether aliases expand is a property of *how the program arrived* rather than of the shell, which one boolean on the dialect cannot say — issue #583",
+		Why: "the same two lines as `alias/expands-a-command-word`, from a file instead of -c, and zsh changes its answer: it declines to expand under -c and expands from a script file. So whether aliases expand is a property of *how the program arrived* rather than of the shell, which one boolean on the dialect cannot say",
+	},
+	{
+		ID: "alias/standard-input-is-a-route-too", Category: "alias",
+		Args:  []string{"--"},
+		Stdin: ArgSnippet + "\n",
+		Snippet: `alias a='echo hit'
+a`,
+		Why: "the third of the three routes, and the one that completes the table: zsh expands here as it does from a file and unlike under -c, so the two rows beside this one are a pair rather than a curiosity. `--` is what says the program is not on the argv",
 	},
 	{
 		ID: "alias/a-body-newline-shifts-later-lines", Category: "alias",
@@ -4943,7 +4966,37 @@ alias two='echo one
 echo two'
 two
 echo "LINENO=$LINENO"`,
-		Why: "the one place a token-level splice is distinguishable from a textual one, and the shopt line is there so bash expands too and can be compared. The last line is physically line 5: bash reports 5, and dash, ksh93 and zsh all report 6 because they counted the newline inside the alias body. There is no axis for it and this shell reports 5 in every dialect — issue #583",
+		Why: "the one place a token-level splice is distinguishable from a textual one, and the shopt line is there so bash expands too and can be compared. The last line is physically line 5: bash reports 5, and dash, ksh93 and zsh all report 6 because they counted the newline inside the alias body",
+	},
+	{
+		ID: "alias/a-body-newline-shifts-a-diagnostic-too", Category: "alias",
+		Script:          true,
+		LayoutSensitive: true,
+		Snippet: `alias two='echo one
+nosuchcmd'
+two
+echo "LINENO=$LINENO"`,
+		Why: "the same shift seen from the other side: the failing command is on the body's *second* line, so the three that count the newline report it a line further down than the alias word — 4 against bash's 3 — and $LINENO after it moves with it. A diagnostic naming a line inside a body is the half `alias/a-diagnostic-names-the-use-site` cannot show, because a one-line body has no second line to name",
+	},
+	{
+		ID: "alias/two-newlines-shift-by-two", Category: "alias",
+		Script:          true,
+		LayoutSensitive: true,
+		Snippet: `alias three='echo one
+echo two
+echo three'
+three
+echo "LINENO=$LINENO"`,
+		Why: "the shift is per newline rather than per expansion that had one: a three-line body moves the line after it by two. Pinned because one newline cannot tell a count from a flag",
+	},
+	{
+		ID: "alias/an-alias-never-used-shifts-nothing", Category: "alias",
+		Script:          true,
+		LayoutSensitive: true,
+		Snippet: `alias two='echo one
+echo two'
+echo "LINENO=$LINENO"`,
+		Why: "and the shift belongs to the *expansion*, not to the definition: the same two-line body, never used, leaves the line after it where it was written. Unanimous, which is what makes it the control for the two rows above",
 	},
 	{
 		ID: "alias/defines-and-lists-one", Category: "alias",

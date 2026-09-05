@@ -34,6 +34,11 @@ type Parser struct {
 	// so the trailing-space rule can tell a word that *came from* the value
 	// from the word that follows it.
 	aliasSpliced int
+	// aliasLineShift totals the lines every expansion so far has added to
+	// the input, where the dialect counts an alias body's newlines. Reported
+	// by LineShift, for a caller that parses a program in pieces and has to
+	// carry the numbering from one piece to the next.
+	aliasLineShift int
 
 	err        error
 	incomplete bool
@@ -142,6 +147,16 @@ func (p *Parser) SetDialect(d Dialect) {
 // Incomplete reports whether the input ended part-way through a construct that
 // could still be finished. A prompt should ask for another line.
 func (p *Parser) Incomplete() bool { return p.incomplete || p.lex.Incomplete() }
+
+// LineShift is how many lines the alias bodies this parser expanded added to
+// the numbering, where [Dialect.AliasBodyCountsLines] says they count.
+//
+// A caller that reads a program in pieces — one that arrives on a descriptor —
+// retires a piece by counting its newlines and starting the next parser after
+// them. That count is of the text, and an expanded alias contributed lines
+// that were never in the text, so without this the numbering resets at the
+// first refill.
+func (p *Parser) LineShift() int { return p.aliasLineShift }
 
 // slice returns the source between two positions, which is how a node keeps
 // the text it was written as. A diagnostic quotes what the author typed, and

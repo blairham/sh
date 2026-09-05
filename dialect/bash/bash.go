@@ -16,8 +16,12 @@ import (
 func Dialect() syntax.Dialect {
 	d := syntax.Core()
 	// bash expands them interactively and needs `shopt -s expand_aliases`
-	// otherwise, which is not modeled yet.
-	d.ExpandAliases = false
+	// otherwise, which is not modeled yet — so no route, rather than a route
+	// this shell only takes with an option set. Measured on all three.
+	d.ExpandAliases = syntax.AliasOnNoRoute
+	// And a body's newlines do not count: bash alone leaves the whole of an
+	// expanded body on the line the alias word was written on.
+	d.AliasBodyCountsLines = false
 	// The utilities that take an array assignment as an operand. bash has
 	// all five.
 	d.DeclarationUtilities = map[string]bool{
@@ -207,6 +211,10 @@ func Semantics() interp.Semantics {
 	// bash reports success if it signaled anything at all, where the others
 	// count failures one way or another.
 	s.ExitTrapRunsOnSignalDeath = interp.Yes
+	// 5.3 ignores an untrapped QUIT when it is not interactive, where 3.2
+	// dies by it — a divergence between two builds of the same shell, and
+	// this preset is 5.3.
+	s.QuitIgnoredWhenNotInteractive = interp.Yes
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	s.KillListAcceptsName = interp.Yes
 	s.SIGPrefixAccepted = interp.Yes

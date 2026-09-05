@@ -10,6 +10,7 @@ import (
 
 	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // membership is the shape a script actually uses to read `$-`, and the shape
@@ -88,7 +89,7 @@ func TestWithoutDashIAScriptIsNotInteractive(t *testing.T) {
 func TestAnInteractiveShellExpandsAliases(t *testing.T) {
 	const src = "alias hi='echo aliased'\nhi\n"
 	sh := shell()
-	if sh.Dialect.ExpandAliases {
+	if sh.Dialect.ExpandAliases != syntax.AliasOnNoRoute {
 		t.Fatal("this test needs a dialect that does not expand aliases in a script")
 	}
 	// `alias` itself asks an axis the zero vector leaves open — whether it

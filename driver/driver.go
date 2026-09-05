@@ -330,6 +330,23 @@ type source struct {
 	dg      interp.Diagnostics
 }
 
+// aliasRoute is which of the three non-interactive routes this program
+// arrived by, for the one grammar question that differs between them.
+//
+// It lives here because only the front end knows: `syntax` asks whether a
+// dialect expands an alias on this route, and the route is what reading an
+// invocation produced. The same three cases `$0` already splits on, and the
+// same reason — a fact about the invocation rather than about the language.
+func (s source) aliasRoute() syntax.AliasRoutes {
+	switch {
+	case s.onStdin:
+		return syntax.AliasOnStandardInput
+	case s.file != "":
+		return syntax.AliasFromScriptFile
+	}
+	return syntax.AliasFromCommandString
+}
+
 // optionSpec is one run of set options the invocation asked for: the letters
 // of `-eu`, or the name after `-o`. Text rather than applied state, because
 // the runner the options belong to does not exist while the argument vector
@@ -820,7 +837,7 @@ func (sh Shell) runInput(in source) int {
 	// bash is the one that would not have in `sh script.sh`. This arm was
 	// unreachable until now — the field it read meant "took the prompt
 	// route", and the prompt route does not come through here.
-	if sh.Dialect.ExpandAliases || in.interactive {
+	if sh.Dialect.ExpandAliases.Has(in.aliasRoute()) || in.interactive {
 		pr.aliases = r.LookupAlias
 	}
 	if sh.Prelude != "" {

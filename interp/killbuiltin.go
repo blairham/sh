@@ -385,6 +385,12 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 		// involved: the handler runs before the next command because the
 		// arrival was recorded here, not because a goroutine was quick.
 		r.selfSignaled(name)
+	case !trapped && fatalSignal(name) && r.untrappedSignalIgnored(name):
+		// The shell has taken this signal's default action away from the
+		// kernel and put nothing in its place, so the raise is not merely
+		// survivable — it does not happen. Reported as sent, because the
+		// builtin succeeded: what the signal then did is not `kill`'s answer.
+		return nil
 	case !trapped && fatalSignal(name):
 		// Nothing is sent here either, and for a sharper reason. A signal
 		// already on its way arrives on whichever thread the kernel picks,
@@ -411,6 +417,25 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 		return r.killProcess(pid, sig)
 	}
 	return nil
+}
+
+// untrappedSignalIgnored reports whether this shell has replaced a signal's
+// default action with nothing, so that raising it at itself does neither what
+// the kernel would do nor what a trap would.
+//
+// SIGQUIT is the only one the panel does this for, and the question is asked
+// only where the panel disagrees about it. Interactive is unanimous — all five
+// ignore an untrapped QUIT with `-i` — and so is every other fatal signal, so
+// the axis is consulted for one signal in one mode and nowhere else.
+func (r *Runner) untrappedSignalIgnored(name string) bool {
+	if name != "QUIT" {
+		return false
+	}
+	if r.Interactive {
+		return true
+	}
+	return r.ask(r.sem().QuitIgnoredWhenNotInteractive,
+		"whether an untrapped QUIT ends a shell that is not interactive")
 }
 
 // fatalSignal reports whether a signal with no handler ends the process.

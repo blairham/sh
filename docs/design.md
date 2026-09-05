@@ -163,9 +163,20 @@ here as hard as anywhere. The gate was unit-tested from its first commit
 and no shipped binary ever set one, so the conformance harness and the
 wild sweep both ran ungated and a hole in the boundary would have looked
 exactly like a shell that works. `cmd/sh` therefore has a debug route
-onto it — `-trace-events` prints the stream, `-deny` refuses a path and
-everything under it — and that route is a way to *watch* the gate, not a
-sandbox.
+onto it — `-trace-events` prints the stream, `-deny` refuses an action —
+and that route is a way to *watch* the gate, not a sandbox.
+
+**A hole in the route has the same property as a missing route.** `-deny`
+was a list of paths, and a signal names a process rather than a file, so
+for a while a signal could be watched and not refused: nothing failed,
+and the surface that exists to grade the seam had a kind it could not
+speak about. It now takes a rule in `internal/policy`'s language — a
+selector and a pattern, `-deny signal`, `-deny exec:/usr/bin/**`, with a
+bare path as the shorthand it always had — so the vocabulary is the
+action kinds rather than paths, and there is one matcher rather than two.
+A test reads the `ActionKind` block out of `interp/seams.go` and fails
+when a kind lands that `-deny` cannot refuse, because a vocabulary
+without that guard only moves the gap to the next kind.
 
 The distinction is worth stating because the boundary is drawn around
 the interpreter and not around the process tree. `-deny /secret` hides

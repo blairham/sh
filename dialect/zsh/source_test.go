@@ -277,6 +277,25 @@ func TestErrexitAndPipefail(t *testing.T) {
 // TestPrintfOptions: this dialect's answers about `printf`'s options, run
 // rather than asserted against the fields — the wordings and the usage line
 // are what would be wrong.
+// zsh takes C89's three letters and exactly one of them, so the C99
+// additions are invalid directives — named as the whole directive.
+func TestPrintfLengthModifiers(t *testing.T) {
+	dir := t.TempDir()
+	out, _ := runZsh(t, dir, "printf \"[%ld][%hd][%Lf]\\n\" 42 42 1.5\n")
+	if want := "[42][42][1.500000]"; !strings.Contains(out, want) {
+		t.Errorf("said %q, want %q", out, want)
+	}
+	for _, tc := range []struct{ src, want string }{
+		{"printf \"[%zX]\" 255\n", "%z: invalid directive"},
+		{"printf \"[%lld]\" 42\n", "%ll: invalid directive"},
+		{"printf \"[%jd]\" 42\n", "%j: invalid directive"},
+	} {
+		if out, _ := runZsh(t, dir, tc.src); !strings.Contains(out, tc.want) {
+			t.Errorf("%s: said %q, want %q", tc.src, out, tc.want)
+		}
+	}
+}
+
 func TestPrintfOptions(t *testing.T) {
 	dir := t.TempDir()
 	out, _ := runZsh(t, dir, "printf -v o \"%05d\" 42\necho \"[$o]\"\n")

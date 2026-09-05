@@ -279,7 +279,7 @@ func TestAFinalLineWithoutANewlineStillRuns(t *testing.T) {
 func TestAcceptReturnsNothingUntilTheConstructIsDone(t *testing.T) {
 	s := Shell{Runner: newTestRunner(nil), Out: &strings.Builder{}}
 	var pending strings.Builder
-	stmts, err, ready := s.accept(&pending, nil, "for i in 1 2; do")
+	stmts, _, err, ready := s.accept(&pending, nil, "for i in 1 2; do")
 	if ready {
 		t.Fatal("said it was ready with the loop unfinished")
 	}

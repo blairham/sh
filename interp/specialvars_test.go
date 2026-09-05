@@ -199,6 +199,93 @@ func TestUnderscoreFollowsTheLastArgumentIsAnAxis(t *testing.T) {
 	}
 }
 
+// TestUnderscoreStartsAtTheInvocationIsAnAxis — one shell writes argv[0] into
+// `$_` before the first command runs and the other three leave it alone.
+//
+// Deliberately a separate axis from tracking the last argument, and this test
+// pins the combination that says why: a shell that tracks and does *not* start
+// at the invocation exists in the panel, so folding the two into one answer
+// would give it a value it has never had.
+func TestUnderscoreStartsAtTheInvocationIsAnAxis(t *testing.T) {
+	const src = `echo "[$_]"`
+	for _, tc := range []struct {
+		name          string
+		start, tracks Answer
+		want          string
+	}{
+		{"written", Yes, Yes, "[/some/where/sh]\n"},
+		{"left alone", No, Yes, "[]\n"},
+		{"left alone without tracking either", No, No, "[]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, src, func(r *Runner) {
+				sem := CoreSemantics()
+				sem.UnderscoreStartsAtTheInvocation = tc.start
+				sem.UnderscoreTracksTheLastArgument = tc.tracks
+				sem.UnderscoreInheritsFromTheEnvironment = Yes
+				r.Semantics = &sem
+				r.Invocation = "/some/where/sh"
+			})
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// TestUnderscoreInheritsFromTheEnvironmentIsAnAxis — an `_` the shell was
+// handed beats the invocation where it is read at all, and one shell discards
+// it and starts empty however it was called.
+//
+// The two axes compose rather than the first swallowing the second: a shell
+// that discards what it was handed still asks whether it writes an invocation
+// of its own. The panel cannot decide that, because the one member that
+// discards is also the one that writes nothing, so it is settled here on the
+// grounds that two questions with two answers make four combinations.
+func TestUnderscoreInheritsFromTheEnvironmentIsAnAxis(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		inherits, start Answer
+		want            string
+	}{
+		{"the environment wins over the invocation", Yes, Yes, "[brought]\n"},
+		{"the environment wins where nothing else is written", Yes, No, "[brought]\n"},
+		{"discarded, and the invocation written instead", No, Yes, "[/some/where/sh]\n"},
+		{"discarded, and nothing written", No, No, "[]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, `echo "[$_]"`, func(r *Runner) {
+				sem := CoreSemantics()
+				sem.UnderscoreInheritsFromTheEnvironment = tc.inherits
+				sem.UnderscoreStartsAtTheInvocation = tc.start
+				r.Semantics = &sem
+				r.Invocation = "/some/where/sh"
+				r.Env = append(r.Env, "_=brought")
+			})
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// TestTheInvocationIsNotTheNameTheShellCallsItself. `$0` and argv[0] are two
+// facts, and only the second is what the startup `$_` follows — a command
+// string takes `$0` from its first operand while the process was still
+// executed as the binary.
+func TestTheInvocationIsNotTheNameTheShellCallsItself(t *testing.T) {
+	out, _ := run(t, `echo "[$0][$_]"`, func(r *Runner) {
+		sem := CoreSemantics()
+		sem.UnderscoreStartsAtTheInvocation = Yes
+		r.Semantics = &sem
+		r.Name = "zeroname"
+		r.Invocation = "/some/where/sh"
+	})
+	if out != "[zeroname][/some/where/sh]\n" {
+		t.Errorf("got %q, want `$0` and the invocation to differ", out)
+	}
+}
+
 // The route letters, which arrive on the Runner the way `i` does and for the
 // same reason: where the program came from is a fact about the invocation,
 // and a library Runner would otherwise read the embedder's command line.

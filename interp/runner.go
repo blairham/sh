@@ -505,6 +505,25 @@ type Runner struct {
 	// one question and a second name for it is the one that would drift.
 	Route Route
 
+	// Invocation is the name the shell's own process was started under —
+	// argv[0], not `$0`.
+	//
+	// The two are different facts and only one of them is here already:
+	// Name is `$0`, which the front end may take from an operand, while
+	// this is the word the process was executed as. Measured on both the
+	// `-c` and the script route, the startup `$_` follows *this* one, so a
+	// shell handed `-c 'echo "$_"' zeroname` reports the binary and not
+	// `zeroname`, and the same binary reached through a symlink named `sh`
+	// reports `sh` rather than where the symlink points.
+	//
+	// Carried in rather than read here for the reason Route and Interactive
+	// are: os.Args answers for the process, a program may hold several
+	// Runners, and a library that reaches past what it was handed cannot be
+	// embedded. Empty is the honest answer for an embedded Runner that was
+	// never told, and the shells that write it at startup then write
+	// nothing.
+	Invocation string
+
 	// StandardInputOption says the invocation wrote `-s`.
 	//
 	// Nearly the same fact as Route being RouteStandardInput, and separate

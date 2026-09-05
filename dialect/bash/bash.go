@@ -197,6 +197,11 @@ func Semantics() interp.Semantics {
 	s.JobControlAbsenceIsReportedFirst = interp.Yes
 	s.TildePlusMinusExpands = interp.Yes
 	s.UnderscoreTracksTheLastArgument = interp.Yes
+	// Alone in the panel, bash writes `$_` before the first command runs,
+	// and what it writes is argv[0]: the same binary reached through a
+	// symlink named `sh` writes `sh`. An `_` the environment carried wins
+	// over it, which is the default answer and is left alone here.
+	s.UnderscoreStartsAtTheInvocation = interp.Yes
 	// hash counts builtins and functions and announces its empty table.
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes

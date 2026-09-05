@@ -1124,3 +1124,74 @@ func TestAPlusSignedCommandStringNamingItselfIsAnAxis(t *testing.T) {
 		}
 	}
 }
+
+// TestTheStartupUnderscoreIsTheInvocationAndNotThePrelude. argv[0] is a fact
+// about the process that only the front end reads, and the parameter that
+// carries it is the first one a script can see — so both halves of the
+// journey are the front end's: putting the invocation on the Runner, and not
+// letting the dialect's own text overwrite it before the script runs.
+//
+// The prelude is the half that made the fix look correct and do nothing. It
+// is shell, so it moves `$_` exactly as a script would, and a prelude ending
+// in an assignment leaves the parameter empty — which is what a real dialect's
+// does. Every binary here has one.
+//
+// The environment is set rather than assumed, because a Runner built by this
+// front end reads the *process's* environment and the process running a test
+// carries an `_` of its own. The axis that reads one is answered both ways so
+// that the value under test is the one this test put there.
+func TestTheStartupUnderscoreIsTheInvocationAndNotThePrelude(t *testing.T) {
+	t.Setenv("_", "brought")
+	base := func(inherits interp.Answer) driver.Shell {
+		sh := shell()
+		sh.Semantics.UnderscoreStartsAtTheInvocation = interp.Yes
+		sh.Semantics.UnderscoreTracksTheLastArgument = interp.Yes
+		sh.Semantics.UnderscoreInheritsFromTheEnvironment = inherits
+		return sh
+	}
+	for _, tc := range []struct {
+		name    string
+		prelude string
+	}{
+		{"no prelude", ""},
+		{"a prelude ending in an assignment", "PRELUDE_RAN=1\n"},
+		{"a prelude ending in a command", "PRELUDE_RAN=1\ntrue prelude word\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Discarding the inherited value, so what is left is the
+			// invocation the front end carried in.
+			sh := base(interp.No)
+			sh.Prelude = tc.prelude
+			out, errs, code := runArgs(t, sh, "/some/where/testsh", "-c", `echo "[$_]"`)
+			if out != "[/some/where/testsh]\n" || code != 0 {
+				t.Errorf("got %q (status %d, stderr %q), want the invocation", out, code, errs)
+			}
+
+			// And reading it, where it beats the invocation — the panel's
+			// own precedence, and the same prelude either way.
+			sh = base(interp.Yes)
+			sh.Prelude = tc.prelude
+			out, errs, code = runArgs(t, sh, "/some/where/testsh", "-c", `echo "[$_]"`)
+			if out != "[brought]\n" || code != 0 {
+				t.Errorf("got %q (status %d, stderr %q), want the inherited value", out, code, errs)
+			}
+		})
+	}
+
+	// It is argv[0] rather than `$0`, which a command string takes from its
+	// first operand.
+	sh := base(interp.No)
+	out, _, _ := runArgs(t, sh, "/some/where/testsh", "-c", `echo "[$0][$_]"`, "zeroname")
+	if out != "[zeroname][/some/where/testsh]\n" {
+		t.Errorf("got %q, want `$0` and the invocation to differ", out)
+	}
+
+	// The prelude is forgotten, not the script: a command in the script still
+	// moves the parameter.
+	sh = base(interp.No)
+	sh.Prelude = "PRELUDE_RAN=1\n"
+	out, _, _ = runArgs(t, sh, "/some/where/testsh", "-c", `true a b; echo "[$_]"`)
+	if out != "[b]\n" {
+		t.Errorf("got %q, want the script's own last argument", out)
+	}
+}

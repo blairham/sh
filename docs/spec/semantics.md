@@ -4774,8 +4774,8 @@ from the panel in the sweep of #500. `oracle-check` compares behavior and
 not prose, which is why a wrong sentence over a right row can sit in two
 places for as long as nobody re-reads it (#706).
 
-Two shapes the axis does not cover, both recorded rather than modeled
-because nothing has needed them:
+One shape the axis does not cover, recorded rather than modeled because
+nothing has needed it:
 
 - **A declaration command binds something different in every shell that
   has `$_`.** After `export y=2`, bash 5.3 holds `y=2` — the assignment
@@ -4783,11 +4783,53 @@ because nothing has needed them:
   command word (`special/underscore-after-a-declaration-command`). The
   disagreement runs *through* bash, so this is one of the shapes a claim
   recorded against a single build gets wrong.
-- **At startup `$_` is the invocation.** Before any command has run, bash
-  holds the path it was started as and the same binary called `sh` holds
-  `sh` — argv[0] rather than the path — while dash, ksh93 and zsh hold
-  nothing (`special/underscore-at-startup`). Ours holds nothing, which is
-  a gap rather than a choice.
+
+**`UnderscoreStartsAtTheInvocation`** — bash yes · dash no · ksh93 no · zsh no
+
+Writes argv[0] into `$_` before the first command runs, so a script
+reading it at the top finds how the shell was started. bash alone, in
+both builds; the same binary reached under an argv[0] of `sh` writes
+`sh`, so what is written is the invocation and not the executable, and
+not `$0` either — a `-c` shell takes that from its first operand and
+still writes the binary here (`special/underscore-at-startup`).
+
+It is a second axis rather than a consequence of the one above, and zsh
+is the reason: zsh tracks the last argument and still starts empty, so a
+startup write gated on tracking would give zsh a value no zsh has. That
+is what the issue proposing this predicted would work, and re-measuring
+is what showed it does not.
+
+**`UnderscoreInheritsFromTheEnvironment`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Lets an `_` the shell was handed in its environment show through.
+Everywhere but zsh, which discards it and starts empty however it was
+invoked (`special/underscore-inherited-from-the-environment`).
+
+It decides what the axis above means: bash writes argv[0] only where the
+environment said nothing, so an exported `_` wins over the invocation in
+every shell that reads one. This is not a hypothetical shape — some
+shells export `_` as the command they are about to run, so it is what a
+shell started by another shell actually finds — and it is unreachable
+from a snippet, since nothing running inside a shell can put a name in
+the environment that shell was started with. The case that pins it
+carries one.
+
+Both were measured with `_` scrubbed from the environment and again with
+`_=X` in it, on the `-c` route and the script route alike. Reading them
+from an ordinary interactive shell measures the *invoking* shell's `_`
+instead, which is a probe that answers even when the shell under test
+keeps no such parameter.
+
+**A prelude is not a command the script ran.** A dialect's prelude is
+shell text, so it moves `$_` exactly as a script would, and bash's ends
+in an assignment — which leaves the parameter empty in everything that
+tracks it. The front end puts `$_` back after sourcing it
+(`interp.Runner.ForgetLastArgument`), for the same reason it holds the
+invocation's `set` options back until the prelude has run: tracing the
+dialect's own plumbing under `-x`, or stopping on it under `-e`, reports
+on machinery nobody wrote. Without that, the startup value is unreachable
+through any binary that has a prelude at all, and the fix above would
+have looked correct in the library and done nothing in the shell.
 
 
 ### `test` and `[`

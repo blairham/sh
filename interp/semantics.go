@@ -1550,8 +1550,48 @@ type Semantics struct {
 	// UnderscoreTracksTheLastArgument moves `$_` to the previous simple
 	// command's last expanded argument — the command word itself when it
 	// had none, and empty after a bare assignment. bash and zsh; dash and
-	// ksh93 leave it at the shell's own path forever.
+	// ksh93 keep no such parameter at all.
+	//
+	// What the two that do not keep it hold instead was recorded here as
+	// the shell's own path, forever, and that was measured false: they
+	// hold whatever the environment brought and nothing when it brought
+	// nothing, because `_` is an ordinary name there. The claim survived
+	// because the harness writes a shell's path as `<shell>` and the cells
+	// were empty either way — a real path would have shown. Re-measured
+	// with `_` scrubbed from the environment and again with `_=X` in it,
+	// on both the `-c` and the script route.
 	UnderscoreTracksTheLastArgument Answer
+
+	// UnderscoreStartsAtTheInvocation writes argv[0] into `$_` before the
+	// first command runs, so a script reading it at the top finds how the
+	// shell was started. bash alone, in both builds and under either
+	// argv[0]; dash, ksh93 and zsh leave it as it was.
+	//
+	// Not the same question as UnderscoreTracksTheLastArgument, which is
+	// why it is its own axis rather than a consequence of that one: zsh
+	// answers yes to tracking and still starts empty, so a startup write
+	// gated on tracking would give zsh a value no zsh has.
+	//
+	// The value is the *invocation* rather than the executable — the same
+	// binary reached through a symlink named `sh` writes `sh` — and rather
+	// than `$0`, which a `-c` invocation takes from its first operand.
+	UnderscoreStartsAtTheInvocation Answer
+
+	// UnderscoreInheritsFromTheEnvironment lets an `_` the shell was handed
+	// in its environment show through. Everywhere but zsh, which discards
+	// it and starts empty however it was invoked.
+	//
+	// It is the other half of the startup value and it decides what the
+	// half above means: bash writes argv[0] only when the environment said
+	// nothing, so an exported `_` wins over the invocation in every shell
+	// that reads one. Only reachable with an environment, which is why the
+	// case that pins it carries one — no snippet can put a name in the
+	// environment of the shell already running it.
+	//
+	// `_` is exported by some shells as the command they are about to run,
+	// so this is not a hypothetical: it is what a shell started by another
+	// shell actually finds.
+	UnderscoreInheritsFromTheEnvironment Answer
 
 	// FdVariableOutlivesTheCommand keeps a `{name}>f` descriptor open past
 	// the simple command that carried it — two of the three that have the
@@ -2678,6 +2718,11 @@ func PosixSemantics() Semantics {
 		MonitorNeedsATerminal:           No,
 		TildePlusMinusExpands:           No,
 		UnderscoreTracksTheLastArgument: No,
+		// POSIX has no `$_`, so nothing is written at startup and a name
+		// the environment carried is an ordinary variable that shows
+		// through — which is also the majority, five of the six.
+		UnderscoreStartsAtTheInvocation:      No,
+		UnderscoreInheritsFromTheEnvironment: Yes,
 		// The majority answers: full bases, wrapping overflow, zero for an
 		// empty expression.
 		TestIntegerRefusalIsSilent: No,

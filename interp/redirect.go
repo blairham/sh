@@ -353,9 +353,6 @@ type closerFunc func() error
 
 func (f closerFunc) Close() error { return f() }
 
-// joinFields is what a redirection target does with a word that expanded to
-// more than one field. One is the normal case; more than one is ambiguous and
-// the shells differ, so this takes the first and does not pretend otherwise.
 // redirectTarget is the name a redirection opens, and says whether the shell
 // refused it.
 //

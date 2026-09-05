@@ -1970,7 +1970,7 @@ echo "st=$?"`,
 	{
 		ID: "redir/multios-is-zsh-only", Category: "redirection",
 		Snippet: `echo x >a >b; printf "[%s][%s]" "$(cat a 2>/dev/null)" "$(cat b 2>/dev/null)"`,
-		Why:     "zsh writes to every target and the others only to the last, with no error either way — the &> failure mode in a redirection, and not implemented here",
+		Why:     "zsh writes to every target and the others only to the last, with no error either way — the &> failure mode in a redirection: one spelling, two meanings, and no diagnostic to tell them apart",
 	},
 	{
 		ID: "token/clobber-override", Category: "tokenization",

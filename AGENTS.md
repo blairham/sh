@@ -367,11 +367,15 @@ failing set is the work.
 
 `make conformance-dialects` grades all four dialect binaries against the
 shells they claim to be. Each scores exactly what `make conformance` scores
-for the same dialect — bash 198, zsh 195, ksh93 193, dash 190 — because
-both routes run the same core through the same front end. **If the two ever
-disagree, the difference is a driver bug and not a dialect one**; that is
-the whole reason the front end is shared, and comparing the two numbers is
-the cheapest way to notice.
+for the same dialect, because both routes run the same core through the same
+front end. **If the two ever disagree, the difference is a driver bug and not
+a dialect one**; that is the whole reason the front end is shared, and
+comparing the two numbers is the cheapest way to notice.
+
+The numbers themselves are not written down here. The corpus grows with
+almost every change, so a figure in this file is stale within a day and reads
+as a target; the invariant — that the two routes agree, per dialect — is what
+stays true. Run the targets for the current scores.
 
 It is deliberately **not** a gate. The number is meant to be low and to
 climb; failing CI on it would only mean failing CI on unfinished work.

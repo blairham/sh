@@ -536,10 +536,10 @@ func boolInt(b bool) int {
 // arithValueOf reads a variable as a number.
 //
 // An unset one is zero rather than an error. A set one whose value is not a
-// number is *re-evaluated as an expression*, which is what bash and zsh do:
-// `x=abc; $((x+1))` finds abc, which is unset, so 0, so 1. dash and ksh93
-// error instead — docs/spec/grammar/arithmetic.md records that as a
-// three-way divergence, and this takes the two that agree.
+// number is *re-evaluated as an expression* where the dialect says so:
+// `x=abc; $((x+1))` finds abc, which is unset, so 0, so 1. The shells split —
+// docs/spec/grammar/arithmetic.md records the divergence — so this is not a
+// choice made here but the ArithNameValueRecurses ask below.
 //
 // The depth bound is not decoration: `x=x` would otherwise recur forever.
 func (r *Runner) arithValueOf(name string, depth int) (arithNum, error) {

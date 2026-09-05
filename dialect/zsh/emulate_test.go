@@ -29,6 +29,32 @@ func TestEmulateShMovesTheMeasuredAxes(t *testing.T) {
 	}
 }
 
+// The fourth axis, and the one that says where the answer to a POSIX-mode
+// question lives: under `emulate sh` a failed redirection on a special
+// builtin ends the script, and under `emulate zsh` it is a complaint the
+// script runs past. Measured on the real shell, which stops for `emulate sh`
+// and for `emulate ksh` alike and carries on for `emulate zsh`.
+func TestEmulateShEndsTheScriptOnAFailedRedirection(t *testing.T) {
+	for _, mode := range []string{"sh", "ksh"} {
+		out, st := runZsh(t, t.TempDir(), `emulate `+mode+`; exec 3>/nope/x; echo after`)
+		if strings.Contains(out, "after") {
+			t.Errorf("emulate %s: out %q, want the script stopped at the redirection", mode, out)
+		}
+		if st != 1 {
+			t.Errorf("emulate %s: status %d, want this shell's fatal status", mode, st)
+		}
+	}
+	out, st := runZsh(t, t.TempDir(), `emulate zsh; exec 3>/nope/x; echo after`)
+	if !strings.Contains(out, "after") || st != 0 {
+		t.Errorf("out %q status %d, want zsh's own answer, which carries on", out, st)
+	}
+	// And without any emulate at all, which is the same answer by default.
+	out, st = runZsh(t, t.TempDir(), `exec 3>/nope/x; echo after`)
+	if !strings.Contains(out, "after") || st != 0 {
+		t.Errorf("out %q status %d, want the preset's own answer", out, st)
+	}
+}
+
 // A plain emulation resets options to its defaults — measured, no -R needed:
 // `setopt err_exit; emulate zsh` turns errexit back off.
 func TestEmulateResetsOptions(t *testing.T) {

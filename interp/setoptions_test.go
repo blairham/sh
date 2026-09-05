@@ -37,8 +37,13 @@ func TestTurningOffWhatThisShellNeverDoesSucceeds(t *testing.T) {
 
 // And turning one *on* is refused, because accepting would be promising to
 // behave differently afterwards.
+//
+// `posix` was on this list until it became a mode this shell really has —
+// which is the shape of the rule rather than an exception to it: the promise
+// can be made now, so the request is granted. TestPosixModeMovesAnAxis is
+// where it is held to it.
 func TestTurningOnWhatThisShellDoesNotDoIsRefused(t *testing.T) {
-	for _, name := range []string{"posix", "notify", "vi"} {
+	for _, name := range []string{"notify", "vi"} {
 		t.Run(name, func(t *testing.T) {
 			// The status of `set` itself, which a later command would
 			// otherwise replace — the first version of this test asserted

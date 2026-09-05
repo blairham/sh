@@ -2069,6 +2069,41 @@ type Semantics struct {
 	// `export`, `readonly` and `unset`.
 	BadOptionToSpecialBuiltinFatal Answer
 
+	// RedirectErrorOnSpecialBuiltinFatal ends a non-interactive shell when a
+	// redirection written on a *special* builtin cannot be made — a file that
+	// will not open, a descriptor that is not there, a number the open-file
+	// limit refuses. POSIX states it outright, and it is one rule with a wide
+	// reach: `exec 3>/nope/x`, `: 3>/nope/x`, `eval : 3>/nope/x` and
+	// `. /dev/null 3>/nope/x` all stop where any of them does.
+	//
+	// The failure is the *redirection's*, so the builtin never runs and its
+	// own status is never reached; the status of the shell that stops is
+	// FatalErrorStatusIsOne's, which is why dash exits 2 here and the rest
+	// exit 1 without this needing a status of its own.
+	//
+	// The boundary is measured rather than assumed. A regular builtin
+	// (`true 3>/nope/x`) and an external command are unaffected everywhere,
+	// and so is a *compound* command's own redirection — `{ echo x; } 3>/f`
+	// carries on in all five, because the redirection is the group's and not
+	// a special builtin's. Inside a subshell it ends the subshell alone and
+	// the parent runs on; inside a function it ends the shell.
+	//
+	// **This axis is POSIX mode, not a shell.** The panel splits three to
+	// two — dash, ksh93 and bash-as-`sh` stop; bash and zsh carry on — and
+	// the bash column and the bash-as-`sh` column are the same binary. The
+	// flip is reachable at runtime in both shells that have such a mode, and
+	// that is what makes this an axis rather than a quirk of an invocation:
+	// `set -o posix` makes bash 5.3 and bash 3.2 stop, `set +o posix` makes
+	// bash invoked as `sh` carry on, and `emulate sh` or `emulate ksh` makes
+	// zsh stop where `emulate zsh` does not. zsh invoked as `sh` stops too,
+	// so the same argv[0] moves two different binaries the same way.
+	//
+	// So a dialect's field here is where the shell *starts*, and the shell's
+	// own posix knob moves it — see dialect/bash's `posix` option and
+	// dialect/zsh's `emulate`. Nothing is attached to argv[0]: naming the
+	// invocation would record the accident and lose the rule.
+	RedirectErrorOnSpecialBuiltinFatal Answer
+
 	// BadNameToDeclarationFatal ends the script when `export` or `readonly` is
 	// given an operand that is not a name. True in dash, ksh93 and zsh; bash
 	// reports every bad operand, exports the well-formed ones and carries on
@@ -2310,6 +2345,11 @@ func PosixSemantics() Semantics {
 		// POSIX makes a special builtin's failure fatal, and a bad option is
 		// one.
 		BadOptionToSpecialBuiltinFatal: Yes,
+		// A redirection that cannot be made is a special builtin's failure
+		// as well, and the standard names it in so many words. Three of the
+		// five follow it, and the two that do not both reach this answer as
+		// soon as their own posix mode is on.
+		RedirectErrorOnSpecialBuiltinFatal: Yes,
 		// A bad name is a special builtin's failure too, and the standard
 		// makes no exception for `unset`.
 		BadNameToDeclarationFatal: Yes,
@@ -2533,6 +2573,19 @@ func (r *Runner) sem() Semantics {
 		return *r.Semantics
 	}
 	return CoreSemantics()
+}
+
+// swapSemantics moves an axis at run time, copy-on-write.
+//
+// A subshell clone shares the vector by pointer, so the change goes on a
+// fresh copy and stays this runner's own — which is also what keeps a mode
+// entered inside a subshell inside it. The same shape a dialect uses from
+// outside the package, kept here because the core has a mode of its own to
+// switch: `set -o posix`.
+func (r *Runner) swapSemantics(change func(*Semantics)) {
+	s := r.sem()
+	change(&s)
+	r.Semantics = &s
 }
 
 // ExitArgumentPolicy is how strict `exit` is about its argument.

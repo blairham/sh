@@ -55,6 +55,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.Yes},
+		{"RedirectErrorOnSpecialBuiltinFatal", s.RedirectErrorOnSpecialBuiltinFatal, interp.Yes},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.No},
 		{"TraceShowsItsOwnDisabling", s.TraceShowsItsOwnDisabling, interp.Yes},
 		{"LocalInheritsTheExportAttribute", s.LocalInheritsTheExportAttribute, interp.Yes},
@@ -157,5 +158,26 @@ func TestALocalCarriesTheExportAttribute(t *testing.T) {
 	out, _ = answersRun(t, `export FOO=bar; f() { local FOO; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f`)
 	if !strings.Contains(out, "FOO=bar") {
 		t.Errorf("valueless: got %q, want the outer value showing through", out)
+	}
+}
+
+// The POSIX rule about a redirection error on a special builtin, asserted as
+// behavior rather than only as a field: this is the panel's strictest column
+// and the one the standard describes, and it keeps the answer with no mode to
+// be in. Status 2, because every fatal error here is 2.
+func TestAFailedRedirectionOnASpecialBuiltinEndsTheScript(t *testing.T) {
+	out, st := answersRun(t, "exec 3>/nope/x\necho after\n")
+	if strings.Contains(out, "after") {
+		t.Errorf("out %q, want the script to have stopped at the redirection", out)
+	}
+	if st != 2 {
+		t.Errorf("status = %d, want this shell's fatal status", st)
+	}
+
+	// And a command POSIX does not mark special is unaffected, which is the
+	// boundary the whole panel agrees on.
+	out, st = answersRun(t, "true 3>/nope/x\necho after\n")
+	if !strings.Contains(out, "after") || st != 0 {
+		t.Errorf("out %q status %d, want an ordinary command to carry on", out, st)
 	}
 }

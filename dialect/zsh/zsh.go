@@ -295,6 +295,11 @@ func Semantics() interp.Semantics {
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.No
 	s.BadOptionToSpecialBuiltinFatal = interp.No
+	// Nor does a redirection that cannot be made end anything: the message
+	// is printed and the script runs on. The starting value only — `emulate
+	// sh` and `emulate ksh` move it to the POSIX answer, and `emulate zsh`
+	// puts it back.
+	s.RedirectErrorOnSpecialBuiltinFatal = interp.No
 	// zsh takes it and sets a global instead of refusing.
 	s.LocalOutsideAFunctionIsAnError = interp.No
 	// Fatal to all three, which is the one place zsh is stricter than bash

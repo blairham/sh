@@ -55,6 +55,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"ArrayBaseIsZero", s.ArrayBaseIsZero, interp.Yes},
 		{"ArrayLiteralSubscriptIsAKey", s.ArrayLiteralSubscriptIsAKey, interp.No},
 		{"FatalErrorStatusIsOne", s.FatalErrorStatusIsOne, interp.Yes},
+		{"RedirectErrorOnSpecialBuiltinFatal", s.RedirectErrorOnSpecialBuiltinFatal, interp.No},
 		{"EchoInterpretsEscapes", s.EchoInterpretsEscapes, interp.No},
 		{"LengthOfSpecialIsCount", s.LengthOfSpecialIsCount, interp.Yes},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.Yes},

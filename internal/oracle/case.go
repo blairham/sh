@@ -931,7 +931,37 @@ var Corpus = []Case{
 	{
 		ID: "core/a-brace-body-is-not-a-while-body", Category: "command language", SyntaxError: true,
 		Snippet: `while true; { echo hi; break; }`,
-		Why:     "the production belongs to the loops built on a `for` header and to nothing else. Written with the separator, so that it is the same shape the list `for` accepts and the difference is the construct rather than the punctuation. Three refuse it; zsh accepts it as a short loop of its own, which is the divergence this case records",
+		Why:     "the brace-body production belongs to the loops built on a `for` header and to nothing else. Written with the separator, so that it is the same shape the list `for` accepts and the difference is the construct rather than the punctuation. Three refuse it; the fourth prints hi, and *not* because it read a body — the `;` keeps the condition list going, so the brace group is the last thing tested and the `break` inside it is what ends the loop. `core/a-tested-brace-group-is-not-a-body` is the same shape with a counter, which counts up there rather than stopping",
+	},
+	{
+		ID: "core/a-tested-brace-group-is-not-a-body", Category: "command language", SyntaxError: true,
+		Snippet: `i=0; while [ $i -lt 2 ]; { echo $i; i=$((i+1)); [ $i -lt 4 ]; }`,
+		Why:     "which half of `while cond; { … }` the brace group is, in the one shell that takes the line at all. As a *body* the loop would print 0 and 1 and stop on the header's test; as the tail of the condition list it prints 0..3 and stops on the test written inside the braces, and that is what happens — so the shell has no `while` brace body, it has an *omitted* one with the whole line as the condition. The counter and the inner test are what tell the readings apart; the shape alone cannot, which is why `core/a-brace-body-is-not-a-while-body` was read the other way for a while. Nothing may follow the group, either: a `; echo end` after it joins the condition list too, and its status is then what the loop tests, so the loop never ends. Three shells refuse the line outright",
+	},
+	{
+		ID: "core/a-while-condition-that-ends-itself-takes-a-body", Category: "command language", SyntaxError: true,
+		Snippet: `i=0; while (( i < 2 )) { echo $i; i=$((i+1)); }; echo end`,
+		Why:     "the short loop proper, and the same text as the row above with the separator taken *out*. Without one the condition list cannot continue, so the brace group is the body and the loop stops at 2 — which is the opposite of what the separator gives. `(( … ))` is what ends the header; `while true { … }` is a syntax error in the same shell, because a word cannot end one",
+	},
+	{
+		ID: "core/a-short-loop-body-is-one-command", Category: "command language", SyntaxError: true,
+		Snippet: `i=0; while (( i < 2 )) echo $((i++)); echo end`,
+		Why:     "the body of a short loop need not be a brace group, and it is exactly one command: the `; echo end` after it is outside the loop, so `end` prints once rather than per iteration. A second command inside would need a separator, and a separator there is the enclosing list's",
+	},
+	{
+		ID: "core/a-for-over-a-parenthesized-list", Category: "command language", SyntaxError: true,
+		Snippet: `for i (a b) { echo "$i"; }; for j (p q) echo "$j"`,
+		Why:     "the short `for`, in both its body spellings. The parentheses say what `in` says and end the header as `in` does not, which is why this one takes a brace body with nothing between where `for i in a b { … }` cannot. One shell parses it and four call the `(` a syntax error",
+	},
+	{
+		ID: "core/a-for-header-that-ends-itself-needs-no-body", Category: "command language", SyntaxError: true,
+		Snippet: `if true; then for i (a b); fi; echo no-body; for j (p q) echo body`,
+		Why:     "the body left out of a `for`, which is legal exactly where the header closed itself. Reaching it needs something the body cannot be, because anything that could be one *is* one — hence the `fi`, a word no command may start with. The second loop is the contrast in the same line: the same header with a command after it runs that command per item, so `no-body` prints once and `body` twice. `for i in a b` with nothing after it is a syntax error in the same shell, so this is a property of the header rather than of the loop",
+	},
+	{
+		ID: "core/a-short-loop-redirection-is-the-bodys", Category: "command language", SyntaxError: true,
+		Snippet: `for i (a b) > f$i; ls`,
+		Why:     "where a short loop's redirection lands, and the loop variable in the target is what makes the answer visible: two files named for the two items mean the redirection ran once per iteration and is the *body* — a command that only redirects. A redirection on the loop is expanded once before it starts and would leave a single `f`, which is what `for i (a b) { echo hi } > f$i` does. The distinction is unreachable from the tree alone, so it is pinned here",
 	},
 	{
 		ID: "core/for-wants-a-name", Category: "command language", SyntaxError: true,

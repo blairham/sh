@@ -28,6 +28,7 @@
 //	sh -policy p.policy script.sh  # run it under a declarative policy
 //	sh -audit log.jsonl script.sh  # record every action as JSON, one per line
 //	sh -acp                        # serve the Agent Client Protocol on stdio
+//	sh -acp-connect npx pkg --acp  # drive an ACP agent, under the same policy
 //	sh -blocks-list                # the recent blocks: what ran, and how it went
 //	sh -blocks-show 1              # the most recent block, its record and output
 //
@@ -128,6 +129,18 @@ func run(argv []string, stdout, stderr io.Writer) int {
 		// A policy that will not load is not a shell that runs unsandboxed.
 		return fail(stderr, err)
 	}
+	if own.acpConnect {
+		// The other direction: this shell drives an agent rather than being
+		// one. The words after the flag are the command that starts it, so
+		// they are not a shell invocation either — and the seams are already
+		// installed, so a policy governs what the agent asks us to do exactly
+		// as it governs what a script does.
+		code := connectACP(sh, own.acpAllow, rest)
+		if closer != nil {
+			_ = closer.Close()
+		}
+		return code
+	}
 	if own.acp {
 		// Not a shell invocation at all: the process becomes an Agent Client
 		// Protocol server on its own standard input and output, and the
@@ -202,6 +215,8 @@ type ownFlags struct {
 	// running a shell.
 	blocksList int
 	blocksShow string
+	acpConnect bool
+	acpAllow   bool
 }
 
 // readOwnFlags strips this binary's flags from the front of the line,
@@ -239,6 +254,10 @@ func readOwnFlags(args []string) (own ownFlags, rest []string, err error) {
 			own.traceEvents = true
 		case "acp":
 			own.acp = true
+		case "acp-connect":
+			own.acpConnect = true
+		case "acp-allow":
+			own.acpAllow = true
 		case "deny":
 			if !hasVal {
 				if i+1 >= len(args) {

@@ -375,3 +375,49 @@ const (
 	OutcomeSelected  = "selected"
 	OutcomeCancelled = "cancelled" //nolint:misspell // the protocol's spelling
 )
+
+// The client methods an agent calls back with, which this shell answers rather
+// than calls: a file the agent asks *us* to read is a file we open through the
+// gate and record, where a file it opens for itself is invisible to everyone.
+// docs/design/acp.md argues the asymmetry — the agent side of this shell
+// declines to call these for the same reason the client side implements them.
+const (
+	MethodReadTextFile  = "fs/read_text_file"
+	MethodWriteTextFile = "fs/write_text_file"
+)
+
+// ReadTextFileRequest asks the client to read a file on the agent's behalf.
+//
+// Line and Limit are a window into it, counted in lines from one. Both are
+// optional and absent means the whole file.
+type ReadTextFileRequest struct {
+	SessionID string `json:"sessionId"`
+	Path      string `json:"path"`
+	Line      *int   `json:"line,omitempty"`
+	Limit     *int   `json:"limit,omitempty"`
+}
+
+// ReadTextFileResponse carries what was read.
+type ReadTextFileResponse struct {
+	Content string `json:"content"`
+}
+
+// WriteTextFileRequest asks the client to write a file on the agent's behalf.
+type WriteTextFileRequest struct {
+	SessionID string `json:"sessionId"`
+	Path      string `json:"path"`
+	Content   string `json:"content"`
+}
+
+// WriteTextFileResponse is empty, and is an object rather than nothing so that
+// a client which later has something to say there can say it.
+type WriteTextFileResponse struct{}
+
+// AuthRequired is the code an agent answers when it will do nothing until it
+// has been authenticated.
+//
+// It is in ACP's own reserved range rather than JSON-RPC's, and a client has
+// to expect it from the *first* thing it tries after initialize: measured
+// against the published agents, two of the three refuse session/new with it.
+// Treating a successful initialize as "ready to work" is what fails on them.
+const CodeAuthRequired = -32000

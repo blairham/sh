@@ -269,6 +269,9 @@ func Semantics() interp.Semantics {
 	s.PrintfEmptyIsNotANumber = interp.No
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfBackslashC = interp.PrintfBackslashCStops
+	// One of `h`, `l` and `L`, which is C89's set: `%ld` is a decimal and
+	// `%lld`, `%zX` and `%jd` are invalid directives.
+	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC89
 	// No `%(fmt)T`: `%(` is a directive this shell does not have.
 	s.PrintfTimeConversion = interp.No
 	s.PrintfQuote = interp.PrintfQuoteBackslash

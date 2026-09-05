@@ -558,6 +558,82 @@ parsed node carries the flag letters in order plus the two separators
 (`SplitSep`, `JoinSep`); the printer writes the span back raw, so the
 construct round-trips.
 
+## A subscript without braces — zsh only
+
+Everything above is written `${ … }`. zsh also reads a subscript and a
+length on a parameter written **without** braces, and the difference is
+in the grammar rather than in what a shared syntax means: the same
+characters are a different number of words in the two shells.
+
+Measured 2026-09-05 on zsh 5.9.2, bash 5.3.15, bash 3.2.57 and dash,
+with `a=(x y z)`:
+
+| probe | zsh | bash 5.3 | bash 3.2 | dash |
+| --- | --- | --- | --- | --- |
+| `"[$a[1]]"` | `[x]` | `[x[1]]` | `[x[1]]` | no arrays |
+| `[$a[1]]` unquoted | `no matches found: [x]` | `[x[1]]` | `[x[1]]` | no arrays |
+| `"[$#a]"` | `[3]` | `[0a]` | `[0a]` | `[0a]` |
+
+To zsh, `$a[1]` is one expansion of the first element and `$#a` is the
+array's count. To everything else, `$a[1]` is `$a` followed by the three
+characters `[1]` — a glob pattern, once the quotes come off — and `$#a`
+is `$#` followed by the letter `a`.
+
+Both halves fail quietly in the direction that matters. `$#a` is a
+number in either reading, so a script that tests it against zero tests
+the count in one shell and the string `0a` in the other, and nothing
+says so. `$a[1]` is louder only by accident: zsh's default `nomatch`
+turns the *other* direction into an error, so a bash script's
+`$dir[0-9]*` read as a subscript would fail visibly, which is why the
+form is behind a flag and not in the core.
+
+### Which parameters take one
+
+Not all of them, and the two operators stop in different places.
+
+A **subscript** follows a name, `@` and `*`. It does not follow a
+positional digit: `set -- abcd; echo "[$1[2]]"` is `[abcd[2]]` in every
+shell in the panel, zsh included
+(`array/a-subscript-without-braces-is-not-a-positional`). Exactly one is
+read — `"[$a[1][1]]"` is `[x[1]]`, not a character of `x`
+(`array/a-subscript-without-braces-is-read-once`).
+
+zsh also subscripts the remaining specials: `$?[1]`, `$-[2]`, `$$[1]`
+and `$0[2]` all index the parameter's value. This implementation leaves
+those out, because the parsed form has nowhere to put them — the inner
+text of a span is what `${ … }` would hold, and there `${#[1]}` is a
+length and `${![1]}` an indirection. Recorded rather than modeled: no
+script writes them.
+
+A **length** takes a name, a digit, `@` or `*`: `$#a` is a count, `$#0`
+and `$#1` are the lengths of those parameters, and `$#@` and `$#*` are
+the number of positional parameters. It stops before `#` and before `!`
+— `$##` is the count and then a literal `#`, and `$#!` the count and then
+a literal `!`, both exactly as in bash
+(`array/a-length-without-braces-stops-at-two-specials`).
+
+### Grammar
+
+Grammar flag `BareSubscript`, consumed by the **lexer**, because the
+word boundary is what changes and nothing downstream can recover it once
+the spans are cut. The span it produces is the one `${ … }` would have
+produced — `$a[1]` and `${a[1]}` are one node — so the parser, the
+interpreter and the subscript's arithmetic are unchanged, and the
+printer writes the braced spelling back.
+
+Where the subscript may reach is the quoting's question rather than a
+fixed set of characters. Inside double quotes a blank and a newline are
+ordinary text, so `"$a[1 ]"` and `"$a[1` + newline + `]"` are both the
+first element; unquoted, either one ends the word. A closing quote stops
+the scan in the quoted case, which `"$a[" ]` shows: there is a `]` in
+that line and no subscript.
+
+An unquoted `[` that never closes before the word does is not a
+subscript here and its characters stay literal. zsh commits to the
+subscript instead and reports `invalid subscript` at run time — for the
+unclosed unquoted form and for `"$a[" ]` alike; the shape fails either
+way, and the difference is the wording.
+
 ## Dialect flags
 
     ParamSubstitution      ${x/pat/rep} and its anchored forms
@@ -567,11 +643,14 @@ construct round-trips.
                            what ${!x} then *means* diverges (see above)
     ParamTransformations   ${x@Q} and its letter family — bash only
     ParamExpansionFlags    ${(U)x}           — zsh only
+    BareSubscript          $a[1] and $#a, written without braces — zsh only
 
 All false for `posix`. `ParamCaseChange`, `ParamIndirection`,
 `ParamTransformations` and `ParamExpansionFlags` are false for `core`:
 the first and the last two are one shell's, and the `!` family is two
-shells' — neither is a common denominator.
+shells' — neither is a common denominator. `BareSubscript` is false for
+both, and for the same reason as `ParamExpansionFlags`: one shell reads
+those characters that way and three read them as text.
 
 ## What this does not cover
 

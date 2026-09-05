@@ -543,6 +543,42 @@ type Dialect struct {
 	// no-array dialect on purpose is told it is portable when it is not.
 	ArraySubscript bool
 
+	// BareSubscript lets a parameter written without braces carry a
+	// subscript, and lets `$#name` mean that parameter's length: `$a[1]` is
+	// an element and `$#a` is a count, where a grammar without the flag
+	// reads `$a` followed by the three characters `[1]`, and `$#` followed
+	// by the letter `a`.
+	//
+	// One shell in the panel, measured on zsh 5.9.2 against bash 3.2, bash
+	// 5.3 and dash: `a=(x y z); echo $a[1]` prints `x` there and `x[1]`
+	// everywhere else, and `echo $#a` prints `3` there and `0a` everywhere
+	// else. So this is a *grammar* question and not a value on the semantics
+	// vector — the same characters are two different words, not one word two
+	// shells disagree about the meaning of — which is why it sits here beside
+	// ShortLoop rather than in a dialect package.
+	//
+	// It is the lexer's, because the word boundary is: `$a[1]` is one
+	// expansion where the flag is on and an expansion plus a glob pattern
+	// where it is off, and nothing downstream can tell them apart once the
+	// spans are cut. Getting it wrong is loud in one direction and silent in
+	// the other — a shell without the flag globs `x y z[1]` and reports no
+	// matches, while a shell with it applied everywhere would quietly turn
+	// every `$dir[0-9]*` in a bash script into an element lookup.
+	//
+	// The subscript follows a name, `@` or `*`. Not the positional digits:
+	// measured, `set -- abcd; echo $1[2]` prints `abcd[2]` there, so the
+	// parameters that carry one are not simply all of them. The remaining
+	// specials do take one — `$?[1]`, `$-[2]`, `$$[1]` and `$0[2]` are all
+	// subscripted — and are left out here because a span has no way to write
+	// two of them down: `${#[1]}` is a length and `${![1]}` an indirection,
+	// so the inner text of `$#[1]` and `$![1]` would say something else.
+	//
+	// `$#` takes a name, a digit, `@` or `*` after it. Not `#` and not `!`:
+	// `$##` prints `2#` and `$#!` prints `2!` on the same shell, so the
+	// length form stops at exactly two of the specials rather than at all of
+	// them.
+	BareSubscript bool
+
 	// DoubleBracket enables `[[ ... ]]`.
 	//
 	// Consumed by the *parser*, not the lexer, and the reason is worth

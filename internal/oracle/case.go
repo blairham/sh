@@ -2840,6 +2840,36 @@ var Corpus = []Case{
 		Why:     "the parameter a diagnostic names is the name and its subscript, not the name alone — `a[@]` — in the one shell that names it at all. The list form of the substring reaches the same evaluation as the string form, so this also says the two spellings share it",
 	},
 	{
+		ID: "array/a-subscript-without-braces", Category: "expansion",
+		Snippet: `a=(x y z); echo "[$a[1]]"`,
+		Why:     "the same element by the spelling that has no braces, and it is a grammar split rather than a value: `$a[1]` is one subscripted expansion in zsh and the parameter `$a` followed by the three characters `[1]` in bash 3.2, bash 5.3 and ksh93 alike, so the panel cuts the word in two different places. Written inside quotes so the difference is the parse and not a glob — the unquoted form is `array/a-subscript-without-braces-is-a-pattern-elsewhere`",
+	},
+	{
+		ID: "array/a-subscript-without-braces-is-a-pattern-elsewhere", Category: "expansion",
+		Snippet: `a=(x y z); echo [$a[1]]`,
+		Why:     "the same word unquoted, which is where the split stops being quiet: to zsh the whole word is `[x]` and a pattern that matches no file, so it refuses the command outright, while the other three leave `[x[1]]` standing as an unmatched pattern and print it. One shell reports an error and the rest print a wrong answer, from the same nine characters",
+	},
+	{
+		ID: "array/a-subscript-without-braces-is-not-a-positional", Category: "expansion",
+		Snippet: `set -- abcd; echo "[$1[2]]"`,
+		Why:     "the parameters that take a bare subscript are not simply all of them: zsh subscripts a name and a scalar alike but reads `$1[2]` as the positional and then two literal characters, so this is unanimous across the panel — dash included, which has no arrays at all. It is the row that keeps a dialect from granting the form to every `$`",
+	},
+	{
+		ID: "array/a-subscript-without-braces-is-read-once", Category: "expansion",
+		Snippet: `a=(x y z); echo "[$a[1][1]]"`,
+		Why:     "one subscript and no more: zsh reads `[1]` and leaves the second bracket group as text, so the answer is `x[1]` rather than a character of `x`. The braced form has the same rule and no way to show it, since `${a[1][1]}` is a bad substitution",
+	},
+	{
+		ID: "array/a-length-without-braces", Category: "expansion",
+		Snippet: `a=(x y z); echo "[$#a]"`,
+		Why:     "`$#a` is the array's count in zsh and `$#` followed by the letter `a` everywhere else, which is the same grammar split read through the other operator — and the more dangerous half, because both readings produce a number and neither shell says anything. A script testing `$#a` against zero is testing the count in one shell and the string `0a` in the other",
+	},
+	{
+		ID: "array/a-length-without-braces-stops-at-two-specials", Category: "expansion",
+		Snippet: `set -- p q; a=(x y z); echo "[$##][$#@][$#a]"`,
+		Why:     "how far the no-brace length form reaches, measured at the two edges at once: zsh takes a name and takes `@`, and does *not* take `#` — `$##` is the positional count and then a literal `#` there exactly as it is in bash. So the parameter after the `#` is drawn from a set with holes in it rather than from every parameter, and a dialect that read one more character than the shell does would differ only on the shapes nothing tests",
+	},
+	{
 		ID: "array/reading-a-subscript-is-arithmetic", Category: "expansion",
 		Snippet: `a=(x y z); echo "[${a[1+1]}]"`,
 		Why:     "a subscript being read is an expression, exactly as one being written through is. It took a numeral and nothing else, so this expanded to the empty string with status 0 — and `a[1+1]=v` had already learned to store where `${a[1+1]}` could not look, which is two spellings of one subscript naming two different elements. zsh answers the element before, which is the base rather than a different reading",

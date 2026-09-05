@@ -240,6 +240,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `array/a-length-through-a-subscript-that-will-not-evaluate` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: b c: arithmetic syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: line 1: b c: arithmetic syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: b c: syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: b c: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operator expected at `c'` *(status 1)* |
 | `array/assigning-through-a-subscript-that-will-not-evaluate` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
 | `array/unsetting-through-a-subscript-that-will-not-evaluate` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | `st=1~ n=3` **2>** `<shell>: unset: 1+: more tokens expected` | `st=1~ n=3` **2>** `<shell>:1: bad math expression: operand expected at end of string` |
+| `array/a-subscript-without-braces` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x[1]]` | `[x[1]]` | `[x[1]]` | `[x[1]]` | `[x]` |
+| `array/a-subscript-without-braces-is-a-pattern-elsewhere` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x[1]]` | `[x[1]]` | `[x[1]]` | `[x[1]]` | **2>** `<shell>:1: no matches found: [x]` *(status 1)* |
+| `array/a-subscript-without-braces-is-not-a-positional` | `[abcd[2]]` | `[abcd[2]]` | `[abcd[2]]` | `[abcd[2]]` | `[abcd[2]]` | `[abcd[2]]` |
+| `array/a-subscript-without-braces-is-read-once` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x[1][1]]` | `[x[1][1]]` | `[x[1][1]]` | `[x[1][1]]` | `[x[1]]` |
+| `array/a-length-without-braces` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[0a]` | `[0a]` | `[0a]` | `[0a]` | `[3]` |
+| `array/a-length-without-braces-stops-at-two-specials` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[2#][2@][2a]` | `[2#][2@][2a]` | `[2#][2@][2a]` | `[2#][2@][2a]` | `[2#][2][3]` |
 | `array/reading-a-subscript-is-arithmetic` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[z]` | `[z]` | `[z]` | `[z]` | `[y]` |
 | `array/a-subscript-reads-a-variable` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[z]` | `[z]` | `[z]` | `[z]` | `[y]` |
 | `array/an-unset-name-in-a-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x]` | `[x]` | `[x]` | `[x]` | `[]` |
@@ -548,6 +554,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `array/unsetting-through-a-subscript-that-will-not-evaluate` — the same expression in `unset`, which is where the panel divides: bash gives up on the script as it does for any bad expression, and ksh93 and zsh leave a failed builtin behind and run the next command — the shape a script can test. ksh93 also names the builtin in front of the sentence, having worded the identical failure in an expansion without one. It was silent at 0 in all three
   ```sh
   a=(x y z); unset "a[1+]"; echo "st=$?"; echo " n=${#a[@]}"
+  ```
+- `array/a-subscript-without-braces` — the same element by the spelling that has no braces, and it is a grammar split rather than a value: `$a[1]` is one subscripted expansion in zsh and the parameter `$a` followed by the three characters `[1]` in bash 3.2, bash 5.3 and ksh93 alike, so the panel cuts the word in two different places. Written inside quotes so the difference is the parse and not a glob — the unquoted form is `array/a-subscript-without-braces-is-a-pattern-elsewhere`
+  ```sh
+  a=(x y z); echo "[$a[1]]"
+  ```
+- `array/a-subscript-without-braces-is-a-pattern-elsewhere` — the same word unquoted, which is where the split stops being quiet: to zsh the whole word is `[x]` and a pattern that matches no file, so it refuses the command outright, while the other three leave `[x[1]]` standing as an unmatched pattern and print it. One shell reports an error and the rest print a wrong answer, from the same nine characters
+  ```sh
+  a=(x y z); echo [$a[1]]
+  ```
+- `array/a-subscript-without-braces-is-not-a-positional` — the parameters that take a bare subscript are not simply all of them: zsh subscripts a name and a scalar alike but reads `$1[2]` as the positional and then two literal characters, so this is unanimous across the panel — dash included, which has no arrays at all. It is the row that keeps a dialect from granting the form to every `$`
+  ```sh
+  set -- abcd; echo "[$1[2]]"
+  ```
+- `array/a-subscript-without-braces-is-read-once` — one subscript and no more: zsh reads `[1]` and leaves the second bracket group as text, so the answer is `x[1]` rather than a character of `x`. The braced form has the same rule and no way to show it, since `${a[1][1]}` is a bad substitution
+  ```sh
+  a=(x y z); echo "[$a[1][1]]"
+  ```
+- `array/a-length-without-braces` — `$#a` is the array's count in zsh and `$#` followed by the letter `a` everywhere else, which is the same grammar split read through the other operator — and the more dangerous half, because both readings produce a number and neither shell says anything. A script testing `$#a` against zero is testing the count in one shell and the string `0a` in the other
+  ```sh
+  a=(x y z); echo "[$#a]"
+  ```
+- `array/a-length-without-braces-stops-at-two-specials` — how far the no-brace length form reaches, measured at the two edges at once: zsh takes a name and takes `@`, and does *not* take `#` — `$##` is the positional count and then a literal `#` there exactly as it is in bash. So the parameter after the `#` is drawn from a set with holes in it rather than from every parameter, and a dialect that read one more character than the shell does would differ only on the shapes nothing tests
+  ```sh
+  set -- p q; a=(x y z); echo "[$##][$#@][$#a]"
   ```
 - `array/reading-a-subscript-is-arithmetic` — a subscript being read is an expression, exactly as one being written through is. It took a numeral and nothing else, so this expanded to the empty string with status 0 — and `a[1+1]=v` had already learned to store where `${a[1+1]}` could not look, which is two spellings of one subscript naming two different elements. zsh answers the element before, which is the base rather than a different reading
   ```sh

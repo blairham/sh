@@ -546,6 +546,13 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `jobs/a-finished-background-job` | `[1] + Done                       ~---` | `[1]+  Done                       sleep 0.05~---` | `[1]+  Done                       sleep 0.05~---` | `---` | `[1] +  Running                 <command unknown>~---` | `---` |
 | `jobs/a-background-job-that-failed` | `[1] + Done(1)                    ` | `[1]+  Exit 1                     false` | `[1]+  Done(1)                    false` | *(no output, status 0)* | `[1] +  Running                 <command unknown>` | *(no output, status 0)* |
 | `jobs/two-jobs-and-which-end-it-starts-from` | `[2] + Running                    ~[1] - Running                    ` | `[1]-  Running                    sleep 0.4 &~[2]+  Running                    sleep 0.4 &` | `[1]-  Running                    sleep 0.4 &~[2]+  Running                    sleep 0.4 &` | `[1]-  Running                 sleep 0.4 &~[2]+  Running                 sleep 0.4 &` | `[2] +  Running                 <command unknown>~[1] -  Running                 <command unknown>` | `[1]  - running    sleep 0.4~[2]  + running    sleep 0.4` |
+| `jobs/dash-p-is-the-process-ids-alone` | `the job's process id alone` | `the job's process id alone` | `the job's process id alone` | `the job's process id alone` | `the job's process id alone` | `a listing with the id in it` |
+| `jobs/dash-l-puts-the-process-id-in-the-listing` | `[1] + PID Running ` | `[1]+ PID Running sleep 0.4 &` | `[1]+ PID Running sleep 0.4 &` | `[1]+ PID Running sleep 0.4 &` | `[1] + PID	 Running <command unknown>` | `[1] + PID running sleep 0.4` |
+| `jobs/dash-l-and-dash-p-the-last-one-wins` | `-pl: a listing~-lp: ids` | `-pl: a listing~-lp: ids` | `-pl: a listing~-lp: ids` | `-pl: a listing~-lp: ids` | `-pl: a listing~-lp: ids` | `-pl: a listing~-lp: a listing` |
+| `jobs/dash-r-lists-the-running-ones` | `st=2` **2>** `<shell>: 1: jobs: Illegal option -r` | `[1]+  Running                    sleep 0.4 &~st=0` | `[1]+  Running                    sleep 0.4 &~st=0` | `[1]+  Running                 sleep 0.4 &~st=0` | `st=2` **2>** `<shell>: jobs: -r: unknown option~Usage: jobs [-lnp] [job ...]` | `[1]  + running    sleep 0.4~st=0` |
+| `jobs/dash-s-is-a-letter-two-shells-do-not-have` | `st=2` **2>** `<shell>: 1: jobs: Illegal option -s` | `st=0` | `st=0` | `st=0` | `st=2` **2>** `<shell>: jobs: -s: unknown option~Usage: jobs [-lnp] [job ...]` | `st=0` |
+| `jobs/an-option-no-shell-has` | `st=2` **2>** `<shell>: 1: jobs: Illegal option -Q` | `st=2` **2>** `<shell>: line 1: jobs: -Q: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]` | `st=2` **2>** `<shell>: line 1: jobs: -Q: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]` | `st=2` **2>** `<shell>: line 0: jobs: -Q: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]` | `st=2` **2>** `<shell>: jobs: -Q: unknown option~Usage: jobs [-lnp] [job ...]` | `st=1` **2>** `<shell>:jobs:1: bad option: -Q` |
+| `jobs/two-job-specs-in-the-order-written` | `[2] + Running                    ~[1] - Running                    ` | `[2]+  Running                    sleep 0.5 &~[1]-  Running                    sleep 0.4 &` | `[2]+  Running                    sleep 0.5 &~[1]-  Running                    sleep 0.4 &` | `[2]+  Running                 sleep 0.5 &~[1]-  Running                 sleep 0.4 &` | `[2] +  Running                 <command unknown>~[1] -  Running                 <command unknown>` | `[2]  + running    sleep 0.5~[1]  - running    sleep 0.4` |
 | `read/a-failing-read-still-assigns` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` |
 | `read/a-final-line-without-a-newline` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` |
 | `read/an-unterminated-last-line-is-dropped` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` |
@@ -710,6 +717,34 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `jobs/two-jobs-and-which-end-it-starts-from` — dash and ksh93 print the most recent first and bash and zsh the oldest, and the number stays with the job either way — `%2` has to mean the same thing at both ends. Also where the `+` and `-` markers become visible
   ```sh
   sleep 0.4 & sleep 0.4 & jobs
+  ```
+- `jobs/dash-p-is-the-process-ids-alone` — the `kill $(jobs -p)` idiom, and the one place the letter splits: dash, bash and ksh93 print process ids and nothing else, zsh reads the same letter as the job's process *group* and prints its ordinary rows. Compared against `$!` rather than printed, because a process id is not the same twice. Through a file rather than a pipe: a subshell has no job table in dash or zsh
+  ```sh
+  sleep 0.4 & jobs -p >p.txt; read x <p.txt; case $x in "$!") echo "the job's process id alone";; *"$!"*) echo "a listing with the id in it";; *) echo "neither: [$x]";; esac; wait
+  ```
+- `jobs/dash-l-puts-the-process-id-in-the-listing` — the one `jobs` letter all five have, and each puts the id somewhere different — after the marker, or eating one of the two spaces behind it, or with a tab after it. Runs of spaces are squeezed because dash narrows its state column by the width of the id, so the untouched line would depend on how many digits this machine's process ids have
+  ```sh
+  sleep 0.4 & jobs -l >l.txt; sed -e "s/ [0-9][0-9]*/ PID/" l.txt | tr -s " "; wait
+  ```
+- `jobs/dash-l-and-dash-p-the-last-one-wins` — the two format letters are exclusive, and the last one given decides rather than either winning outright — unanimous in the three shells whose `-p` is the ids alone, and moot in the one whose is not
+  ```sh
+  sleep 0.4 & jobs -pl >a.txt; read x <a.txt; case $x in "$!") echo "-pl: ids";; *) echo "-pl: a listing";; esac; jobs -lp >b.txt; read y <b.txt; case $y in "$!") echo "-lp: ids";; *) echo "-lp: a listing";; esac; wait
+  ```
+- `jobs/dash-r-lists-the-running-ones` — a state filter bash and zsh have and dash and ksh93 have never heard of — an illegal option in the two without it, which is why the letter set has to be the dialect's rather than the engine's
+  ```sh
+  sleep 0.4 & jobs -r; echo "st=$?"; wait
+  ```
+- `jobs/dash-s-is-a-letter-two-shells-do-not-have` — the other half of the same split, with nothing stopped to list: silence and 0 where the letter exists, a refusal and 2 where it does not. Absence is the answer here rather than a divergence in behavior
+  ```sh
+  jobs -s; echo "st=$?"
+  ```
+- `jobs/an-option-no-shell-has` — the refusal itself: four wordings, two of them with a usage line naming the letters that shell really does have, and 2 everywhere but zsh. An option silently ignored is the failure this pins against
+  ```sh
+  jobs -Q; echo "st=$?"
+  ```
+- `jobs/two-job-specs-in-the-order-written` — operands settle the order themselves — `%2 %1` lists 2 then 1 in all five, including the two whose bare listing starts from the newest — and each row keeps the job's own number rather than counting from the start of the listing
+  ```sh
+  sleep 0.4 & sleep 0.5 & jobs %2 %1; wait
   ```
 - `read/a-failing-read-still-assigns` — end of input clears the variables rather than leaving what was there, which is what stops `while read -r l` from leaving the last line behind for the code after the loop. Unanimous across the panel, so it is the core's answer and not an axis
   ```sh
@@ -1643,6 +1678,10 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `cmd/case-fallthrough-then-continue-matching` | **2>** `<shell>: 1: Syntax error: "&" unexpected` *(status 2)* | `one~two~four` | `one~two~four` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in a) echo one;& b) echo two;;& c) echo three;; a) echo four;; esac'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `&' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `&'` *(status 1)* |
 | `cmd/case-fallthrough-last-arm` | **2>** `<shell>: 1: Syntax error: "&" unexpected` *(status 2)* | `last` | `last` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in x) echo no;; a) echo last;& esac'` *(status 2)* | `last` | `last` |
 | `cmd/function-body-simple-command` | `hi` | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `f() echo hi; f'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `f() echo hi; f'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `echo'~<shell>: -c: line 0: `f() echo hi; f'` *(status 2)* | `hi` | `hi` |
+| `cmd/function-body-an-assignment` | *(no output, status 0)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `x=1'~<shell>: -c: line 1: `f() x=1; f'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `x=1'~<shell>: -c: line 1: `f() x=1; f'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `x=1'~<shell>: -c: line 0: `f() x=1; f'` *(status 2)* | *(no output, status 0)* | *(no output, status 0)* |
+| `cmd/function-body-a-redirection` | *(no output, status 0)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `>'~<shell>: -c: line 1: `f() >out; f'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `>'~<shell>: -c: line 1: `f() >out; f'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `>'~<shell>: -c: line 0: `f() >out; f'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `>' unexpected` *(status 3)* | *(no output, status 0)* |
+| `cmd/function-with-no-body-at-all` | **2>** `<shell>: 1: Syntax error: ";" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `f() ;'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `f() ;'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `f() ;'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `;' unexpected` *(status 3)* | **2>** `<shell>: parse error near `;'` *(status 1)* |
+| `cmd/function-parens-then-end-of-input` | **2>** `<shell>: 1: Syntax error: end of file unexpected` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: syntax error at line 1: `end of file' unexpected` *(status 3)* | **2>** `<shell>: parse error near `()'` *(status 1)* |
 | `cmd/function-name-with-a-dash` | **2>** `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `ok~after` | `ok~after` | `ok~after` | **2>** `<shell>: f-g: invalid function name` *(status 1)* | `ok~after` |
 | `cmd/function-name-with-a-dot` | **2>** `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `ok~after` | `ok~after` | `ok~after` | **2>** `<shell>: a.b: invalid discipline function` *(status 1)* | `ok~after` |
 | `cmd/function-posix-form` | `posix` | `posix` | `posix` | `posix` | `posix` | `posix` |
@@ -1763,6 +1802,22 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `cmd/function-body-simple-command` — bash alone wants a compound body after the parens; dash, ksh93 and zsh take the simple command as a one-command body and run it — being more permissive than bash here is the dangerous direction only for scripts aimed at bash
   ```sh
   f() echo hi; f
+  ```
+- `cmd/function-body-an-assignment` — the same refusal reached by a body that is not even a command name: the shell that wants a compound body names the assignment as the offending token, which the token has to be *saved* to do — the rule is only decided once the body has been read
+  ```sh
+  f() x=1; f
+  ```
+- `cmd/function-body-a-redirection` — a body of nothing but a redirection: the token blamed is the operator rather than the word after it, and two shells refuse it where two run it
+  ```sh
+  f() >out; f
+  ```
+- `cmd/function-with-no-body-at-all` — no grammar has a body here, refusing or permissive, and all four name the token rather than describing the function
+  ```sh
+  f() ;
+  ```
+- `cmd/function-parens-then-end-of-input` — the input runs out with the parens already closed, so there is no construct left open to name — the shell that names one in its end-of-input sentence has to say something shorter here
+  ```sh
+  f()
   ```
 - `cmd/function-name-with-a-dash` — four answers: bash and zsh define and run it, dash refuses the name at parse time, ksh93 parses and stops the script at the definition
   ```sh

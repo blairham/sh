@@ -107,7 +107,7 @@ func TestAHighDescriptorDupIsKept(t *testing.T) {
 
 func TestDuplicatingFromANeverOpenedDescriptorIsRefused(t *testing.T) {
 	_, errOut, st := runSplit(t, `echo hi >&9`)
-	if st == 0 || !strings.Contains(errOut, "bad file descriptor") {
+	if st == 0 || !strings.Contains(errOut, "Bad file descriptor") {
 		t.Errorf("status %d, stderr %q", st, errOut)
 	}
 }

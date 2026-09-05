@@ -44,7 +44,15 @@ func (sh Shell) startup(r *interp.Runner, login bool) int {
 }
 
 // sourceFile runs a file on the runner, as `.` would.
-func (sh Shell) sourceFile(r *interp.Runner, path string) int {
+//
+// Guarded per file, and a caught panic costs the file rather than the session.
+// That is the opposite of what a *parse* error in the same file does, and the
+// difference is whose fault it is: a file that will not parse is wrong, and a
+// shell that started anyway would be running with settings a person wrote and
+// the shell silently declined. A file that parsed and then tickled an
+// interpreter bug is the shell being wrong, and a half-configured prompt is a
+// far better answer to that than no prompt at all.
+func (sh Shell) sourceFile(r *interp.Runner, path string) (status int) {
 	if path == "" {
 		return 0
 	}
@@ -55,9 +63,18 @@ func (sh Shell) sourceFile(r *interp.Runner, path string) int {
 		// there would be unusable on a fresh machine.
 		return 0
 	}
-	f, perr := syntax.Parse(string(b), sh.Dialect)
+	if sh.guard().Do(func() { status = sh.sourceText(r, path, string(b)) }) {
+		return 0
+	}
+	return status
+}
+
+// sourceText is sourceFile once the bytes are in hand and a guard is around
+// it.
+func (sh Shell) sourceText(r *interp.Runner, path, text string) int {
+	f, perr := syntax.Parse(text, sh.Dialect)
 	if perr != nil {
-		sh.errf("%s", sh.Diagnostics.ParseDiagnostic(path, string(b), perr, string(b)))
+		sh.errf("%s", sh.Diagnostics.ParseDiagnostic(path, text, perr, text))
 		return sh.Diagnostics.StatusForParseError(perr)
 	}
 	if _, err := r.Run(context.Background(), f); err != nil {

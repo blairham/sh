@@ -4,6 +4,7 @@
 package syntax
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -67,5 +68,71 @@ func TestASimpleCommandBodyFollowsTheFlag(t *testing.T) {
 	}
 	if _, err := Parse(`f() echo hi; f`, Core()); err != nil {
 		t.Errorf("the accepting grammar refused: %v", err)
+	}
+}
+
+// TestARefusedFunctionBodyNamesTheTokenItBeganWith — the refusal is decided
+// only once the body has been read, so the token it names has to be the one
+// saved before reading it rather than wherever the parser ended up.
+//
+// It is an ErrUnexpected and not a bare syntax error, which is what lets a
+// dialect word it and echo the offending line: this path used to build its own
+// sentence, so the dialect that repeats the source printed one line where the
+// shell it grades against prints two.
+func TestARefusedFunctionBodyNamesTheTokenItBeganWith(t *testing.T) {
+	strict := Core()
+	strict.FuncBodyMustBeCompound = true
+	for _, c := range []struct{ src, token string }{
+		{`f() echo hi; f`, "echo"},
+		{`f() x=1; f`, "x=1"},
+		{`f() >out; f`, ">"},
+	} {
+		_, err := Parse(c.src, strict)
+		var se *Error
+		if !errors.As(err, &se) {
+			t.Errorf("%s: refusal = %v, want a syntax error", c.src, err)
+			continue
+		}
+		if se.Kind != ErrUnexpected {
+			t.Errorf("%s: kind = %v, want an unexpected token", c.src, se.Kind)
+		}
+		if se.Token != c.token {
+			t.Errorf("%s: token = %q, want %q", c.src, se.Token, c.token)
+		}
+	}
+	// The line the body began on, not the line the parser stopped on: an echo
+	// of the offending line quotes the wrong one otherwise.
+	_, err := Parse("f()\necho hi\n", strict)
+	var se *Error
+	if !errors.As(err, &se) {
+		t.Fatalf("refusal = %v, want a syntax error", err)
+	}
+	if se.Pos.Line != 2 {
+		t.Errorf("line = %d, want the body's own", se.Pos.Line)
+	}
+}
+
+// TestAFunctionWithNoBodyAtAllNamesWhatStoodThere — `f() ;` has no body for
+// any grammar, refusing or not, and every shell measured names the token
+// rather than describing the function. Running out of input instead is the
+// unterminated kind, with no construct left open to name.
+func TestAFunctionWithNoBodyAtAllNamesWhatStoodThere(t *testing.T) {
+	for _, d := range []Dialect{Core(), POSIX()} {
+		_, err := Parse(`f() ;`, d)
+		var se *Error
+		if !errors.As(err, &se) {
+			t.Fatalf("refusal = %v, want a syntax error", err)
+		}
+		if se.Kind != ErrUnexpected || se.Token != ";" {
+			t.Errorf("kind %v token %q, want the token named", se.Kind, se.Token)
+		}
+		_, err = Parse(`f()`, d)
+		if !errors.As(err, &se) {
+			t.Fatalf("refusal = %v, want a syntax error", err)
+		}
+		if se.Kind != ErrUnterminated || se.Construct != "" {
+			t.Errorf("kind %v construct %q, want an end of input with nothing open",
+				se.Kind, se.Construct)
+		}
 	}
 }

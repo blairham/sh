@@ -171,6 +171,12 @@ func Semantics() interp.Semantics {
 	s.JobsListNewestFirst = interp.Yes
 	s.JobsListFinishedJobs = interp.Yes
 
+	// `jobs`' letters: POSIX's pair and nothing else. `-r`, `-s`, `-n` and
+	// `-x` are all "Illegal option" here, which is why the letter set is a
+	// dialect answer rather than one string in the engine.
+	s.JobsOptions = "lp"
+	s.JobsPidsOnlyOption = interp.Yes
+
 	// Whether a `&` job's command appears in a `jobs` listing.
 	s.JobsShowBackgroundCommand = interp.No
 
@@ -236,6 +242,13 @@ func Diagnostics() interp.Diagnostics {
 		// text for one, which JobKeepsBackgroundCommand answers; a job dash
 		// stopped itself does print its command here.
 		JobLine: "[%[1]d] %[2]s %-27[3]s%[4]s",
+		// `jobs -l`: the process id after the marker, and the state column
+		// narrowed by exactly what the id took — dash is the one shell in
+		// the panel that keeps the command column where it was. The 21 is
+		// the measured width for a five-digit id; nothing sees the
+		// difference, because dash's command column is empty for a `&` job
+		// and what moves is trailing whitespace.
+		JobLineLong: "[%[1]d] %[2]s %[3]d %-21[4]s%[5]s",
 		// The words and nothing else — no process id, no command, and alone
 		// among this shell's messages, no name and no line in front of it.
 		KilledCommandNotice: "%[2]s",
@@ -286,12 +299,15 @@ func Diagnostics() interp.Diagnostics {
 		SyntaxRedirectUnexpected: "Syntax error: redirection unexpected",
 		ForName:                  "Syntax error: Bad for loop variable",
 		Unterminated:             "Syntax error: end of file unexpected (expecting \"%[4]s\")",
-		UnmatchedQuote:           "Syntax error: Unterminated quoted string",
-		UnmatchedBackquote:       "Syntax error: EOF in backquote substitution",
-		UnmatchedCmdSubst:        "Syntax error: end of file unexpected (expecting \")\")",
-		UnmatchedBraceSubst:      "Syntax error: Missing '}'",
-		SyntaxError:              "Syntax error: %s",
-		BadSubstitution:          "Bad substitution",
+		// With nothing open there is nothing it could have been expecting,
+		// and the parenthetical goes rather than standing empty.
+		UnterminatedNoConstruct: "Syntax error: end of file unexpected",
+		UnmatchedQuote:          "Syntax error: Unterminated quoted string",
+		UnmatchedBackquote:      "Syntax error: EOF in backquote substitution",
+		UnmatchedCmdSubst:       "Syntax error: end of file unexpected (expecting \")\")",
+		UnmatchedBraceSubst:     "Syntax error: Missing '}'",
+		SyntaxError:             "Syntax error: %s",
+		BadSubstitution:         "Bad substitution",
 		// The builtin in front, which its plain form does not have.
 		ReadonlyVariableInDeclaration: "%[2]s: %[1]s: is read only",
 		ReadonlyRefusalNamesBuiltin:   map[string]bool{"export": true, "readonly": true},

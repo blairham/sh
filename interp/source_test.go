@@ -98,6 +98,29 @@ func TestBorrowedTextReportsItsOwnLine(t *testing.T) {
 	}
 }
 
+// TestEndOfInputWithNothingOpenHasItsOwnWording: a dialect that names the
+// construct in its end-of-input sentence needs something else to say when
+// there is no construct — `f()` with the parens already closed — so that is a
+// field rather than the same sentence printed with an empty hole in it. A
+// dialect that leaves it empty keeps the one wording it already had.
+func TestEndOfInputWithNothingOpenHasItsOwnWording(t *testing.T) {
+	dir := t.TempDir()
+	both := Diagnostics{
+		Location: LocationColonLine, Unterminated: "unfinished %[1]s",
+		UnterminatedNoConstruct: "gave out with nothing open",
+	}
+	if out, _ := sourceRun(t, dir, `eval "f()"`, permissive(), both); !strings.Contains(out, "gave out with nothing open") {
+		t.Errorf("got %q, want the construct-less wording", out)
+	}
+	if out, _ := sourceRun(t, dir, `eval "if"`, permissive(), both); !strings.Contains(out, "unfinished if") {
+		t.Errorf("got %q, want the construct named where there is one", out)
+	}
+	only := Diagnostics{Location: LocationColonLine, Unterminated: "unfinished %[1]s"}
+	if out, _ := sourceRun(t, dir, `eval "f()"`, permissive(), only); !strings.Contains(out, "unfinished ") {
+		t.Errorf("got %q, want the one wording the dialect has", out)
+	}
+}
+
 // TestBorrowedTextIsNamedWhereTheDialectNamesIt covers the three shapes, and
 // the reason there are two fields rather than one: `eval` and a sourced file
 // are two questions, and a dialect may answer them differently.

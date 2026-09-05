@@ -699,6 +699,31 @@ type Diagnostics struct {
 	// what it does.
 	JobLine string
 
+	// JobLineLong is the same row as `jobs -l` writes it, with the process
+	// id in it. Five verbs: the number, the marker, the process id, the
+	// state and the command.
+	//
+	// A separate format rather than a field spliced into JobLine, because
+	// where the id goes is not one rule. Measured to the byte, with a
+	// five-digit id:
+	//
+	//	bash   [1]+ 41293 Running                    sleep 0.4 &
+	//	dash   [1] + 41293 Running
+	//	ksh93  [1] + 41293\t Running                 <command unknown>
+	//	zsh    [1]  + 41293 running    sleep 0.4
+	//
+	// bash spends one of the two spaces after its marker on the id; the
+	// other three insert the id and keep the spacing they had. ksh93 puts a
+	// tab after it. And dash narrows its state column by exactly what the id
+	// took, so that the command column stays where it was — the only shell
+	// in the panel that does, and invisible in practice, because dash keeps
+	// no command text and what moves is trailing whitespace. The width here
+	// is the measured one for a five-digit id rather than that arithmetic.
+	//
+	// Empty means JobLine with the id and a space in front of the state,
+	// which no dialect in the panel relies on.
+	JobLineLong string
+
 	// JobRunning, JobStopped and JobDone are the states a job is listed in.
 	// No verbs.
 	//
@@ -1317,6 +1342,15 @@ type Diagnostics struct {
 	// bash names the first two, ksh93 the third, dash the fourth and zsh the
 	// fifth. Empty means the substrate's own, which names the construct.
 	Unterminated string
+	// UnterminatedNoConstruct is the same state with *nothing* open to name:
+	// `f()` given no body at all, where the parens have already closed.
+	//
+	// Its own wording because the dialect that names the construct has to say
+	// something when there is no construct, and what it says is a shorter
+	// sentence rather than the same one with a hole in it. The dialects whose
+	// wording never mentioned a construct leave this empty and keep the
+	// sentence they already have.
+	UnterminatedNoConstruct string
 	// BadSubstitution replaces a parse failure inside `${ }` entirely. No
 	// verbs: no shell in the panel says which operator was wrong.
 	BadSubstitution string
@@ -1884,7 +1918,11 @@ func (d Diagnostics) ParseFailure(err error) string {
 		return Wording(form, se.Msg,
 			se.Token, se.Expected, se.LastToken, se.Pos.Line, se.EofLine)
 	case syntax.ErrUnterminated:
-		return Wording(d.Unterminated, "syntax error: unterminated %[1]s",
+		form := d.Unterminated
+		if se.Construct == "" && d.UnterminatedNoConstruct != "" {
+			form = d.UnterminatedNoConstruct
+		}
+		return Wording(form, "syntax error: unterminated %[1]s",
 			se.Construct, se.ConstructLine, se.Innermost, se.Expected,
 			escapeToken(se.LastToken), se.Pos.Line)
 	}

@@ -70,3 +70,38 @@ popd; echo p2=$?`)
 		t.Errorf("got %q, want a silent popd and the empty-stack refusal", out)
 	}
 }
+
+// `jobs -p` is the one place the letter splits: zsh reads it as the job's
+// process *group* and prints its ordinary rows, where the other three print
+// the ids and nothing else.
+func TestJobsDashPIsStillAListing(t *testing.T) {
+	out, _ := runZsh(t, t.TempDir(), `/bin/sleep 0.3 & echo "bang=$!"
+jobs -p
+wait`)
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("got %q, want two lines", out)
+	}
+	bang := strings.TrimPrefix(lines[0], "bang=")
+	if !strings.HasPrefix(lines[1], "[1]") || !strings.Contains(lines[1], bang) {
+		t.Errorf("got %q, want a numbered row carrying the process id", out)
+	}
+
+	out, _ = runZsh(t, t.TempDir(), `jobs -n; echo n=$?
+jobs -d; echo d=$?`)
+	if !strings.Contains(out, "bad option: -n") || !strings.Contains(out, "n=1") {
+		t.Errorf("got %q, want the letter zsh does not have refused at 1", out)
+	}
+	if !strings.Contains(out, "-d is not implemented yet") {
+		t.Errorf("got %q, want the letter zsh does have named as missing", out)
+	}
+}
+
+// Both state filters at once list a job in either state here, where bash
+// lets the last letter given decide.
+func TestJobsStateFiltersAddUp(t *testing.T) {
+	out, _ := runZsh(t, t.TempDir(), `/bin/sleep 0.3 & jobs -rs; wait`)
+	if !strings.Contains(out, "[1]") {
+		t.Errorf("got %q, want the running job listed through -rs", out)
+	}
+}

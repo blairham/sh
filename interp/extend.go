@@ -6,7 +6,6 @@ package interp
 import (
 	"context"
 	"io"
-	"os"
 	"sort"
 )
 
@@ -119,12 +118,12 @@ func (r *Runner) Out() io.Writer { return r.stdout() }
 func (r *Runner) Err() io.Writer { return r.stderr() }
 
 // In is the stream a builtin should read from.
-func (r *Runner) In() io.Reader {
-	if r.Stdin == nil {
-		return os.Stdin
-	}
-	return r.Stdin
-}
+//
+// The runner's own resolution, not a second copy of it. It was a copy, and it
+// answered os.Stdin for a nil stream after the three streams had settled on
+// meaning empty — a duplicate of a decision is a place for the decision to go
+// stale.
+func (r *Runner) In() io.Reader { return r.stdin() }
 
 // SetVar sets a shell variable, creating the map if needed.
 // Diagnosef writes a diagnostic the way a builtin of this package would:

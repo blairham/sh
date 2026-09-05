@@ -405,6 +405,13 @@ func Semantics() interp.Semantics {
 	s.BareLocalListing = interp.BareLocalListsEveryParameter
 	s.SetListing = interp.SetListingEveryParameter
 
+	// A descriptor number the process cannot hold is not checked here: with
+	// `ulimit -n 6`, `exec 8>f` reports success and prints nothing, where
+	// bash and ksh93 hand the kernel's refusal back. Rarely reachable, since
+	// a number this shell reads is one digit and the shell picks its own for
+	// `{name}>f`.
+	s.FdNumberBoundedByOpenFileLimit = interp.No
+
 	return s
 }
 
@@ -572,9 +579,13 @@ func Diagnostics() interp.Diagnostics {
 		FcNoSuchEvent:                "no such event: 1",
 		NoJobControl:                 "no job control in this shell.",
 		FdVariableWithoutADescriptor: "parameter %[1]s does not contain a file descriptor",
-		ArithOperandExpected:         "bad math expression: operand expected at end of string",
-		ArithOperatorExpected:        "bad math expression: operator expected at `%[1]s'",
-		SyntaxUnexpected:             "parse error near `%[1]s'",
+		// The same split ksh93 makes, said the other way round: the text
+		// that could not be an operand is named where there is one, and the
+		// end of the string is named where there is not.
+		ArithOperandExpected:  "bad math expression: operand expected at `%[1]s'",
+		ArithExpressionRanOut: "bad math expression: operand expected at end of string",
+		ArithOperatorExpected: "bad math expression: operator expected at `%[1]s'",
+		SyntaxUnexpected:      "parse error near `%[1]s'",
 		// zsh names itself and stops when a function's body never began.
 		// `f() ;` reports as zsh: parse error near `;' where `if true` — an
 		// input that ran out just as much — reports the line as well, as

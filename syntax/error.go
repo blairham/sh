@@ -34,12 +34,28 @@ const (
 	// carries the construct, the innermost unclosed keyword, what was
 	// expected and the last token seen: each dialect names the one it names.
 	ErrUnterminated
-	// ErrArithOperand is an arithmetic expression that needed a value and
-	// found none: `$((1+))`. Every shell in the panel words this as an
-	// *arithmetic* failure rather than as a syntax error, which is why it is
-	// its own kind — dash calls it "expecting primary" and bash "operand
-	// expected", both inside the shape they use for a division by zero.
+	// ErrArithOperand is an arithmetic expression that wanted a value and
+	// found something that could not be one: `$((%))`, `$((1+&2))`. Every
+	// shell in the panel words this as an *arithmetic* failure rather than as
+	// a syntax error, which is why it is its own kind — dash calls it
+	// "expecting primary" and bash "operand expected", both inside the shape
+	// they use for a division by zero.
+	//
+	// Token is the text from the refused byte to the end of the expression,
+	// which is what the two shells that name anything here name.
 	ErrArithOperand
+	// ErrArithOperandEnd is an arithmetic expression that wanted a value and
+	// ran out of text instead: `$((1+))`, `$((~))`.
+	//
+	// A separate kind because two of the panel word the two apart, and they
+	// are the two that say the least otherwise: ksh93 has "more tokens
+	// expected" against "arithmetic syntax error", and zsh "operand expected
+	// at end of string" against "operand expected at `%'". bash words both
+	// identically, which is why nothing had noticed — it is the column a
+	// conformance number is usually read against.
+	//
+	// Token is the operator that was left wanting, which is what bash names.
+	ErrArithOperandEnd
 	// ErrArithOperator is an expression with something left over that could
 	// have been an operand: `$((1 2))`, and in dash also `$((1,2))`, whose
 	// comma it does not have. dash calls it "expecting EOF" and zsh

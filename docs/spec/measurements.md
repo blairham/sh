@@ -3738,6 +3738,8 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `redir/the-shell-picks-the-descriptor` | **2>** `<shell>: 1: exec: {fd}: not found` *(status 127)* | `hi` | `hi` | **2>** `<shell>: line 0: exec: {fd}: not found` *(status 127)* | `hi` | `hi` |
 | `redir/a-picked-descriptor-may-outlive-its-command` | **2>** `<shell>: 3: Syntax error: Bad fd number` *(status 2)* | `one~two` | `one~two` | `dead~one {fd}` **2>** `<shell>: line 1: $fd: ambiguous redirect` | `one~dead` **2>** `<shell>[2]: 10: cannot open [Bad file descriptor]` | `one~two` |
 | `redir/closing-through-a-name-that-holds-nothing` | **2>** `<shell>: 1: exec: {nofd}: not found` *(status 127)* | `st=1` **2>** `<shell>: line 1: nofd: ambiguous redirect` | **2>** `<shell>: line 1: nofd: ambiguous redirect` *(status 1)* | **2>** `<shell>: line 0: exec: {nofd}: not found` *(status 127)* | `st=0` | `st=1` **2>** `<shell>:1: parameter nofd does not contain a file descriptor` |
+| `redir/the-picked-descriptors-name-may-be-an-element` | **2>** `<shell>: 1: exec: {a[1]}: not found` *(status 127)* | `a1=10~written` | `a1=10~written` | **2>** `<shell>: line 0: exec: {a[1]}: not found` *(status 127)* | `a1=10~written` | **2>** `<shell>:1: no matches found: {a[1]}` *(status 1)* |
+| `redir/closing-a-descriptor-through-an-element` | **2>** `<shell>: 1: a[1]=3: not found~<shell>: 1: exec: {a[1]}: not found` *(status 127)* | `st=0~after=1` **2>** `<shell>: line 1: 3: Bad file descriptor` | `st=0~after=1` **2>** `<shell>: line 1: 3: Bad file descriptor` | **2>** `<shell>: line 0: exec: {a[1]}: not found` *(status 127)* | `st=0~after=1` **2>** `<shell>: 3: cannot open [Bad file descriptor]` | **2>** `<shell>:1: no matches found: {a[1]}` *(status 1)* |
 | `redir/noclobber-names-its-refusal` | `st=2` **2>** `<shell>: 1: cannot create f: File exists` | `st=1` **2>** `<shell>: line 1: f: cannot overwrite existing file` | `st=1` **2>** `<shell>: line 1: f: cannot overwrite existing file` | `st=1` **2>** `<shell>: f: cannot overwrite existing file` | `st=1` **2>** `<shell>: f: file already exists [File exists]` | `st=1` **2>** `<shell>:1: file exists: f` |
 
 - `procsub/reads-a-command-as-a-file` — `<(cmd)` runs cmd and expands to a path its output can be read from — the last of the core language, and the clearest case of a dialect being a runtime switch: bash 3.2 has it as `bash` and loses it as `sh`. dash has it in neither guise and reports the `(` as unexpected
@@ -3970,6 +3972,14 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `redir/closing-through-a-name-that-holds-nothing` — bash calls it an ambiguous redirect and zsh says the parameter holds no descriptor, both with 1; ksh93 says nothing at all and reports success
   ```sh
   exec {nofd}>&-; echo "st=$?"
+  ```
+- `redir/the-picked-descriptors-name-may-be-an-element` — the name inside the braces may be a subscripted one, and the panel splits three ways rather than two: bash 5.3 and ksh93 open the file and leave the number in the element, bash 3.2 and dash have no `{name}` token at all, and zsh has one and still will not take a subscript in it — the braces stay a word there, and a word with brackets is a pattern, so zsh reports no matches. Subscript 1 rather than 0 deliberately: it names the first element in every shell with arrays, so zsh's column is about the token and not about the array base
+  ```sh
+  exec {a[1]}>f; echo "a1=${a[1]}"; echo written >&${a[1]}; exec {a[1]}>&-; cat f
+  ```
+- `redir/closing-a-descriptor-through-an-element` — the same three-way split on the closing form, which is the one scripts reach for: `exec {COPROC[1]}>&-` is how a coprocess is told its input has ended, and the workaround for a shell without it is a scalar copied out of the element first. The write afterwards is what proves the close happened rather than being reported
+  ```sh
+  exec 3>f; a[1]=3; exec {a[1]}>&-; echo "st=$?"; echo x >&3; echo "after=$?"; cat f
   ```
 - `redir/noclobber-names-its-refusal` — the refusal is unanimous and the sentence is not: bash cannot overwrite an existing file, ksh93 says it already exists with the errno in brackets, dash and zsh word it as any other failed create
   ```sh

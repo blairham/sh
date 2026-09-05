@@ -5233,6 +5233,16 @@ cat pf`,
 		Why:     "bash calls it an ambiguous redirect and zsh says the parameter holds no descriptor, both with 1; ksh93 says nothing at all and reports success",
 	},
 	{
+		ID: "redir/the-picked-descriptors-name-may-be-an-element", Category: "redirection",
+		Snippet: `exec {a[1]}>f; echo "a1=${a[1]}"; echo written >&${a[1]}; exec {a[1]}>&-; cat f`,
+		Why:     "the name inside the braces may be a subscripted one, and the panel splits three ways rather than two: bash 5.3 and ksh93 open the file and leave the number in the element, bash 3.2 and dash have no `{name}` token at all, and zsh has one and still will not take a subscript in it — the braces stay a word there, and a word with brackets is a pattern, so zsh reports no matches. Subscript 1 rather than 0 deliberately: it names the first element in every shell with arrays, so zsh's column is about the token and not about the array base",
+	},
+	{
+		ID: "redir/closing-a-descriptor-through-an-element", Category: "redirection",
+		Snippet: `exec 3>f; a[1]=3; exec {a[1]}>&-; echo "st=$?"; echo x >&3; echo "after=$?"; cat f`,
+		Why:     "the same three-way split on the closing form, which is the one scripts reach for: `exec {COPROC[1]}>&-` is how a coprocess is told its input has ended, and the workaround for a shell without it is a scalar copied out of the element first. The write afterwards is what proves the close happened rather than being reported",
+	},
+	{
 		ID: "jobs/bg-with-no-job-control", Category: "commands",
 		Snippet: `bg --version; echo "st=$?"`,
 		Why:     "bash and zsh refuse before reading the operand — there is no job control under -c and they say so first; dash and ksh93 read the operand and complain about that instead",

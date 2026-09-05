@@ -60,6 +60,10 @@ func Dialect() syntax.Dialect {
 	// `coproc cat` with the near ends in COPROC. zsh's coprocess speaks
 	// `print -p` rather than an array and is a different feature.
 	d.Coproc = true
+	// And the way that array is closed: `exec {COPROC[1]}>&-` names the
+	// element holding the feed. Not core because zsh has the `{name}` token
+	// and still reads a subscripted one as a word.
+	d.FdVariableSubscript = true
 	return d
 }
 

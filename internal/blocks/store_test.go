@@ -243,6 +243,19 @@ func TestFindTakesAnIDOrARecencyNumber(t *testing.T) {
 	}
 }
 
+// base32hex's alphabet begins with the ten digits, so an id can be all digits.
+// Length is what tells the two forms apart, and a rule that read only the
+// characters would one day resolve a real id as a recency number.
+func TestAnAllDigitIDIsStillAnID(t *testing.T) {
+	s, _ := newStore(t)
+	id := strings.Repeat("7", idLength)
+	mustAppend(t, s, Record{ID: id, Command: "the all-digit one"})
+	r, err := s.Find(t.Context(), id, 100)
+	if err != nil || r.Command != "the all-digit one" {
+		t.Fatalf("an all-digit id gave %+v, %v — it was read as a recency number", r, err)
+	}
+}
+
 // The off state is a store every method tolerates, because it is a state a
 // session arrives at deliberately and often.
 func TestAStoreThatIsOffWritesNothingAndComplainsAboutNothing(t *testing.T) {

@@ -104,6 +104,14 @@ func (l *Lexer) ranOut(word string) {
 
 func (l *Lexer) pos() Pos { return Pos{Offset: l.off, Line: l.line, Col: l.col} }
 
+// shiftLines moves the line counter on without moving through any input.
+//
+// One caller: an alias body whose newlines the dialect counts as lines of the
+// program. The text substituted for the alias word is not in this source at
+// all, so nothing here can advance over it, and everything read afterwards
+// still has to be numbered as though it had been.
+func (l *Lexer) shiftLines(n int) { l.line += n }
+
 func (l *Lexer) eof() bool { return l.off >= len(l.src) }
 
 func (l *Lexer) peek() byte {

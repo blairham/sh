@@ -160,7 +160,14 @@ func (pr *program) fill(retire bool) bool {
 		if pr.p != nil {
 			pr.carried = append(pr.carried, pr.p.Remarks()...)
 		}
+		// The lines of the text, plus the lines the alias bodies expanded in
+		// it added to the numbering — which are in no text at all, so
+		// counting newlines cannot find them and the shift would be lost at
+		// every refill.
 		pr.base += strings.Count(pr.pending, "\n")
+		if pr.p != nil {
+			pr.base += pr.p.LineShift()
+		}
 		pr.pending, pr.ran = "", 0
 	}
 	text, ok := pr.more()

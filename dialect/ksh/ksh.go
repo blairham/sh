@@ -17,7 +17,10 @@ import (
 func Dialect() syntax.Dialect {
 	d := syntax.Core()
 	// ksh93 expands them in a script too.
-	d.ExpandAliases = true
+	d.ExpandAliases = syntax.AliasOnEveryRoute
+	// And a body's newlines are lines of the program: `$LINENO` after a
+	// two-line body reads one more than the physical line.
+	d.AliasBodyCountsLines = true
 	// ksh93 has neither `local` nor `declare`, so `local a=(x)` is the same
 	// syntax error there that `echo a=(x)` is — the rule follows the name
 	// into the shell that has it.

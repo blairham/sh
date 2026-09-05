@@ -276,20 +276,43 @@ shell, because the line was read before the definition ran.)
 
 It is a **token-level** substitution rather than a textual splice, and
 that is measured rather than assumed. Every diagnostic about a command
-that came from an alias names the line the *alias word* was written on,
-never a line inside the body — bash, dash and ksh93 all report line 3 for
-`alias bad=nosuchcmd` written on line 2 and used on line 3 — and
-`$LINENO` inside a body reads the same. So a spliced token carries the
+that came from a *single-line* alias names the line the alias word was
+written on — bash, dash and ksh93 all report line 3 for `alias
+bad=nosuchcmd` written on line 2 and used on line 3 — and `$LINENO`
+inside such a body reads the same. So a spliced token carries the
 position of the word it replaced, every position still points into the
 real input, and there is no position map to keep.
 
 The one place the two models are distinguishable from outside is a body
-containing a **newline**. Measured with `$LINENO` on the line after a
-two-line alias body, against a physical line 5: bash answers 5 and dash,
-ksh93 and zsh all answer 6 — the three count the body's newline and every
-later line shifts by one. There is no axis for this yet; this parser does
-not count it, so it agrees with bash and diverges from two of the shells
-it does expand aliases for. Tracked in issue #583.
+containing a **newline**, and `Dialect.AliasBodyCountsLines` is the axis.
+
+| shell | `$LINENO` on the line after a two-line body | a failure on the body's second line |
+| --- | --- | --- |
+| bash | 5 (its physical line) | reported at the alias word |
+| dash | 6 | one line below the alias word |
+| ksh93 | 6 | one line below the alias word |
+| zsh | 6 | one line below the alias word |
+
+The three splice the body's *text*, so its newlines are lines of the
+program; bash splices tokens and leaves the whole body on the alias
+word's line. Three further measurements pin the shape of it, all on
+2026-09-05:
+
+- The shift is **one per newline**: a three-line body moves what follows
+  by two.
+- It belongs to the **expansion**, not to the definition. An alias
+  defined and never used moves nothing, in all six columns; using it
+  twice moves what follows twice.
+- A command *inside* a multi-line body is reported on the body's own
+  line, which is the half a one-line body cannot show.
+
+Where the axis is on, this parser still substitutes tokens and gives
+them lines, rather than splicing text. That is what keeps every offset
+pointing into the real input — a diagnostic still quotes text that is
+really there — while the numbering matches. The lines an expansion adds
+are in no text at all, so a caller reading a program in pieces asks
+`Parser.LineShift` for them; counting newlines cannot find them, and
+without it the numbering resets at the first refill.
 
 ### Which shells expand in a script
 
@@ -306,9 +329,19 @@ front end decides rather than the grammar.
 
 **zsh does not fit a boolean**, and this was measured rather than
 inferred: the answer depends on how the program arrived, not on whether
-anyone is at the keyboard. `ExpandAliases` is a single flag and is false
-for zsh, which is right for `-c` and wrong for the other two routes —
-issue #583.
+anyone is at the keyboard. A boolean gets one of zsh's three right, and
+the two it gets wrong are the ones a real script uses.
+
+The same run found bash in POSIX mode splitting the other way — `sh -c`
+expands and `sh script.sh` does not — which settles that the route is a
+dimension of the question rather than one shell's quirk.
+
+So `Dialect.ExpandAliases` is a **set of routes**, `AliasRoutes`, and the
+front end asks it with the route it read: a command string, a file, or
+standard input. That is the same three-way split `$0` already turns on,
+and for the same reason — how a program arrived is the front end's fact
+and nothing else knows it. The parser never reads the set; whoever knows
+the route hands the table of aliases in, or leaves it nil.
 
 The algorithm, four rules, each measured and unanimous across the shells
 that expand aliases in scripts:

@@ -75,6 +75,11 @@ func Semantics() interp.Semantics {
 	// name a` keeps the shell in `$0` and makes both operands parameters.
 	// bash and dash let the command string name them instead.
 	s.StdinOptionNamesTheOperands = interp.Yes
+	// And the sign of the `c` is not decoration here: `sh +c CMD name a`
+	// keeps CMD in `$0` and makes both operands parameters, where the other
+	// three read `+c` as `-c` and name `$0` from the first operand. All four
+	// run the command string either way.
+	s.PlusSignedCommandStringIsDollarZero = true
 	// Measured from a script file, where `echo $-` reports `hB`; ksh93's
 	// route letters — `c` under -c, `s` when reading a command string or
 	// standard input — are the front end's and stay unmodeled.
@@ -180,6 +185,7 @@ func Semantics() interp.Semantics {
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutTakesWhatIsWaiting
 	s.ReadPartialCountSucceeds = interp.Yes
 	s.ReadExactCountKeepsPartial = interp.No
+	s.ReadTimeoutKeepsWhatArrived = interp.No
 	// typeset in a keyword function hides the caller's value, as bash's
 	// local does.
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes

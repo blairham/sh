@@ -26,14 +26,21 @@ const dyingScript = "SH_TEST_DYING_SCRIPT"
 //
 // It is not a performance assertion. The measured time is tens of
 // milliseconds on both platforms, and the defect this guards against was a
-// shell that parked forever — so this is loose enough that a loaded runner
-// cannot fail it and tight enough that a hang is reported as a hang rather
-// than as whatever the enclosing timeout eventually says.
+// shell that parked forever — so it only has to be tight enough that a hang
+// is reported as a hang rather than as whatever the enclosing timeout
+// eventually says.
 //
-// It is also deliberately under the raise's own grace period, so a shell that
-// gave up and exited with a number is caught by this as well as by the wait
-// status.
-const deathBudget = 2 * time.Second
+// It was two seconds, and a loaded ubuntu runner under -race missed it by
+// five milliseconds (2.0048s), which failed unrelated pull requests until
+// somebody read the number. Forking and starting a second copy of the test
+// binary is most of the measurement and is exactly what a busy machine
+// stretches, so the budget is set by what a stall costs rather than by what
+// the work costs.
+//
+// It is still deliberately under the raise's own grace period (deathGrace),
+// so a shell that gave up and exited with a number is caught by this as well
+// as by the wait status.
+const deathBudget = 4 * time.Second
 
 // dieRunningAsAShell turns this process into a shell when it was re-executed
 // as one, and does nothing otherwise.

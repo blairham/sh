@@ -1303,20 +1303,45 @@ var Corpus = []Case{
 		Snippet: "trap 'echo st=$?' INT\nfalse\nkill -INT $$\necho after\n",
 		Why:     "zsh shows the handler the status from before the command that triggered it; the other three show that command's own",
 	},
+	// The three cases below share one shape, and the trailing `sleep 0.2`
+	// inside the background subshell is load-bearing in all three.
+	//
+	// Without it, `kill -USR1 $$` is the subshell's last command, so the
+	// signal and the subshell's own death reach the parent at effectively the
+	// same instant — and a `wait` woken by SIGCHLD first reaps the job and
+	// reports 0, where a `wait` woken by SIGUSR1 reports the signal. Both
+	// outcomes were reachable and the case graded whichever the kernel picked:
+	// measured over 200 runs each, zsh answered `st=0` twice on the bare form
+	// and twice on the `$!` form, and dash twice in 60. That is a wandering
+	// conformance score in *both* directions, since the same coin flip fails
+	// the dialect expecting one answer and passes the one expecting the other.
+	//
+	// Lingering after the kill makes the separation a fact rather than a
+	// scheduling accident: the job is still alive when the signal lands, so
+	// `wait` can only be leaving early because it was interrupted. 300 runs
+	// per form under zsh, and 60 under each of dash, bash 5, bash 3.2 and
+	// ksh93, agree unanimously — and every recorded answer is the one the
+	// racy form gave when it won the race, so this pins the measurement down
+	// rather than changing what is measured.
+	//
+	// It is not `ReferenceRaces`: that flag is for a shell that genuinely
+	// races with itself, and here it was the *probe* that left the race open.
+	// A marked row would have stopped grading three cases about the one
+	// delivery path no other case covers.
 	{
 		ID: "trap/wait-cut-short-by-a-signal", Category: "traps and exit",
-		Snippet: `trap 'echo T' USR1; (sleep 0.3; kill -USR1 $$) & wait; echo "st=$?"`,
-		Why:     "the async delivery path, which every other trap case misses: the signal comes from a background job rather than from the shell's own line, and it has to reach a `wait` that is already blocked. The handler runs and then `wait` reports the signal — 128 + USR1 in bash, dash and zsh, 256 + USR1 in ksh93 — where a wait nobody interrupted reports 0. `wait; check $?` is the supervisor loop every job-runner script is built on, so a 0 here is silence in place of the whole point",
+		Snippet: `trap 'echo T' USR1; (sleep 0.3; kill -USR1 $$; sleep 0.2) & wait; echo "st=$?"`,
+		Why:     "the async delivery path, which every other trap case misses: the signal comes from a background job rather than from the shell's own line, and it has to reach a `wait` that is already blocked. The handler runs and then `wait` reports the signal — 128 + USR1 in bash, dash and zsh, 256 + USR1 in ksh93 — where a wait nobody interrupted reports 0. `wait; check $?` is the supervisor loop every job-runner script is built on, so a 0 here is silence in place of the whole point. The job outlives the signal it sends, so `wait` is still blocked when the signal lands rather than racing the job's own death",
 	},
 	{
 		ID: "trap/wait-for-a-job-cut-short-by-a-signal", Category: "traps and exit",
-		Snippet: `trap 'echo T' USR1; (sleep 0.3; kill -USR1 $$) & wait $!; echo "st=$?"`,
+		Snippet: `trap 'echo T' USR1; (sleep 0.3; kill -USR1 $$; sleep 0.2) & wait $!; echo "st=$?"`,
 		Why:     "naming the job splits the panel where the bare form did not: bash, dash and zsh answer exactly as above and ksh93 drops its own 256 encoding for a plain 1 (WaitForAJobFailsWhenInterrupted). `wait %1` is the same answer in all four, so the axis is about having an operand and not about how it is spelled",
 	},
 	{
 		ID: "trap/wait-is-not-cut-short-by-an-ignored-signal", Category: "traps and exit",
-		Snippet: `trap '' USR1; (sleep 0.3; kill -USR1 $$) & wait; echo "st=$?"`,
-		Why:     "the control, and the line between the two: an ignored signal has no handler to run, so it does not interrupt anything and `wait` still reports 0 in all four. Without it the case above would be evidence about a signal arriving rather than about a *trapped* one arriving",
+		Snippet: `trap '' USR1; (sleep 0.3; kill -USR1 $$; sleep 0.2) & wait; echo "st=$?"`,
+		Why:     "the control, and the line between the two: an ignored signal has no handler to run, so it does not interrupt anything and `wait` still reports 0 in all four. Without it the case above would be evidence about a signal arriving rather than about a *trapped* one arriving. Same shape to the character, so the trap is the only variable",
 	},
 	{
 		ID: "trap/exit-runs-at-the-end", Category: "traps and exit",
@@ -5400,6 +5425,24 @@ out=$(CDPATH=./pool cd sub)
 		Args:    []string{"-sc", ArgSnippet},
 		Snippet: `echo "hi|$#"`,
 		Why:     "-s and -c in one bundle: all four run the command rather than reading standard input, so a shell that let -s win would print nothing and still exit 0",
+	},
+	{
+		ID: "invoke/plus-c-names-itself", Category: "invocation",
+		Args:    []string{"+c", ArgSnippet, "name", "a"},
+		Snippet: `echo "$0|$#|$*"; true`,
+		Why:     "the sign of the `c` is not decoration in one shell: ksh93 leaves the command string in $0 and makes both operands parameters, where bash, dash and zsh read `+c` as `-c` and name $0 from the first operand. The trailing `true` is a shield rather than part of the question — the same shell also hands the operands to the program as literal words appended to its last command, which is a second divergence recorded in docs/spec/invocation.md and not modeled, and a command that ignores its arguments keeps it out of this case's output",
+	},
+	{
+		ID: "invoke/plus-c-with-no-operands-names-itself", Category: "invocation",
+		Args:    []string{"+c", ArgSnippet},
+		Snippet: `echo "$0|$#|$*"`,
+		Why:     "the same question with nothing for the operand rules to disagree about, which is where the naming still splits: three of the four keep the shell's own name in $0 and ksh93 puts the command string there. No shield is needed, because there is no operand to be appended",
+	},
+	{
+		ID: "invoke/plus-c-in-a-bundle-names-itself", Category: "invocation",
+		Args:    []string{"+ce", ArgSnippet, "name", "a"},
+		Snippet: `echo "$0|$#|$*"; true`,
+		Why:     "the sign belongs to the word rather than to the letter, so a bundle answers the same way — and the `e` riding with it is errexit being turned *off*, which is the plus sign doing its ordinary job to the letter beside the one that is not ordinary",
 	},
 	{
 		ID: "invoke/c-with-s-names-the-operands", Category: "invocation",

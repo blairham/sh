@@ -2152,7 +2152,12 @@ The letters themselves diverge before the behaviors do:
         dash    has no -t at all
 
   The first two columns are the same everywhere, which is why this looked
-  like one behavior. The third separates them, and so does what happens
+  like one behavior. The middle column is the same in what it *reports* and
+  not in what it leaves: `v=old; read -t 0 v` with nothing waiting is
+  `v=[old]` in all three, because giving up is running out of time and
+  running out of time touches no name — see "An expired `read -t` is not an
+  end of input" below. An already-ended stream is not that case and empties
+  the variable everywhere. The third column separates them, and so does what happens
   next: after bash's `-t 0` the following `read` still finds the first
   line, and after ksh93's and zsh's it finds the *second*. That is the
   difference that matters to a script — a shell that polls can be asked
@@ -2206,9 +2211,12 @@ The letters themselves diverge before the behaviors do:
   is the remaining place where a character device stands in for a
   terminal.
 - **The timeout.** `-t SECS`, fractions allowed; input already waiting is
-  read as if the flag were absent. Expiry clears the variables and reports
-  142 in bash (128 plus SIGALRM) and 1 in ksh93 and zsh —
-  `Diagnostics.ReadTimeoutStatus`. bash's `-t 0` polls for waiting input
+  read as if the flag were absent. Expiry reports 142 in bash (128 plus
+  SIGALRM) and 1 in ksh93 and zsh — `Diagnostics.ReadTimeoutStatus` — and
+  what it leaves in the variables is `Semantics.ReadTimeoutKeepsWhatArrived`,
+  measured below. bash 3.2 has the letter and takes **whole seconds only**:
+  `read -t 0.2` there is `invalid timeout specification`, status 1, not
+  modeled. bash's `-t 0` polls for waiting input
   without reading; the substrate reports the timeout there instead, a
   deferred difference. zsh's `-t` may stand alone as a poll; modeled as
   argument-taking. ksh93 reads a non-numeric timeout as none at all (not
@@ -2222,6 +2230,60 @@ The letters themselves diverge before the behaviors do:
 - **A word where a number belongs** (`-n bogus`, `-t bogus`, `-u bogus`) is
   refused with one substrate wording and status 1; the panel words it per
   shell per letter (bash's `-n` case matches the substrate's), deferred.
+
+## An expired `read -t` is not an end of input
+
+Measured 2026-09-05 against bash 5.3, bash 3.2, ksh93 and zsh; dash has no
+`-t`. The probe is a stream that delivers half a line and then stalls,
+because the usual one — nothing arriving at all — cannot tell the answers
+apart:
+
+    { printf part; sleep 0.5; printf 'ial\n'; } |
+      sh -c 'v=old; read -t 0.2 v; echo "$? [$v]"'
+
+    bash 5.3  142 [part]      ksh93  1 [old]      zsh  0 [partial]
+
+    { sleep 0.5; printf 'late\n'; } |
+      sh -c 'v=old; read -t 0.2 v; echo "$? [$v]"'
+
+    bash 5.3  142 []          ksh93  1 [old]      zsh  1 [old]
+
+Three things, and only the first is `ReadTimeoutKeepsWhatArrived`.
+
+**bash does not clear the variable, it assigns a short read.** The second
+probe is the one everybody writes, and it makes bash look like it clears —
+which is what this implementation copied, unconditionally, for all three
+dialects. The first probe says otherwise: what lands in the variable is
+whatever arrived before the deadline, and an empty assignment is only that
+rule with nothing to assign. The distinction matters because the code that
+was wrong was wrong in *both* directions at once — it cleared where ksh93
+leaves the name alone, and it discarded a partial line bash keeps.
+
+**A timeout is not an end of input.** At end of input all four assign,
+including the partial with no delimiter: `printf tail | read v` leaves
+`tail` everywhere. The comment on that arm explains why it has to — a
+`while read -r l` loop that left `l` behind would read as the last line
+rather than as nothing — and the rule does not carry over to a deadline,
+which two of the three treat as no read at all.
+
+**zsh's `-t` is not the same kind of timeout**, and this is a separate
+divergence rather than this axis. It bounds the wait for the stream to
+become *readable* and nothing after that: once a byte has arrived zsh reads
+the line to its end however long that takes and reports 0. Measured with a
+byte dripping every 0.1 s under `-t 0.25`, zsh returned 0 with the whole
+six-byte line after 0.6 s where bash returned 142 with the first three
+characters; with a stream that stalls mid-line for three seconds and never
+closes, zsh waited all three and succeeded. Ours is a whole-read deadline
+in every dialect, so the zsh preset answers this axis "leave the name
+alone" — right for every timeout it can actually reach, since a zsh timeout
+only happens with nothing to assign — and is still wrong about *when* it
+times out. Not modeled here; it is its own question and its own measurement.
+
+There is no corpus row for any of this. Every probe above needs a stream
+that is slow on purpose, and a case whose answer depends on which of two
+timers wins is the kind of *sometimes* `oracle.md` says a record cannot
+hold. It is pinned by Go tests instead, against a reader that hands over a
+fixed prefix and then blocks — the same situation with no clock in it.
 
 ## A write that failed is not a command that worked
 

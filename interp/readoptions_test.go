@@ -422,9 +422,26 @@ type blockedInput struct{ done chan struct{} }
 
 func (b blockedInput) Read([]byte) (int, error) { <-b.done; return 0, io.EOF }
 
-// TestReadTimeoutExpires: the deadline passes, the variables are cleared —
-// a failing read still assigns — and the status is the dialect's number,
-// 1 unless it says otherwise.
+// halfLineThenBlocks delivers one chunk and then never delivers again, which
+// is a partly arrived line without a sleep anywhere: the bytes are there for
+// the first reads and the read after them is the one that waits.
+type halfLineThenBlocks struct {
+	text string
+	done chan struct{}
+}
+
+func (h *halfLineThenBlocks) Read(b []byte) (int, error) {
+	if h.text != "" {
+		n := copy(b, h.text)
+		h.text = h.text[n:]
+		return n, nil
+	}
+	<-h.done
+	return 0, io.EOF
+}
+
+// TestReadTimeoutExpires: the deadline passes, nothing had arrived, and the
+// status is the dialect's number — 1 unless it says otherwise.
 func TestReadTimeoutExpires(t *testing.T) {
 	in := blockedInput{done: make(chan struct{})}
 	t.Cleanup(func() { close(in.done) })
@@ -434,7 +451,66 @@ func TestReadTimeoutExpires(t *testing.T) {
 		r.Diagnostics = &dg
 	})
 	if !strings.Contains(out, "st=142 []") {
-		t.Errorf("got %q, want the dialect's timeout status and a cleared variable", out)
+		t.Errorf("got %q, want the dialect's timeout status and an empty variable", out)
+	}
+}
+
+// TestAnExpiredTimeoutAsksWhatSurvives is ReadTimeoutKeepsWhatArrived, and
+// the case that tells the two answers apart is the one where something *did*
+// arrive.
+//
+// With nothing arriving the two are indistinguishable — an empty assignment
+// and no assignment both leave a variable that was never set looking unset —
+// so the axis is asked with half a line waiting and the rest never coming.
+// One side assigns the half, the other leaves the earlier value alone.
+//
+// A timeout is not an end of input, which is the whole reason this is an axis
+// at all: at end of input every shell assigns, and the comment on that arm
+// explains why a `while read -r l` loop needs it to.
+func TestAnExpiredTimeoutAsksWhatSurvives(t *testing.T) {
+	const src = `v=old; read -t 0.05 v; echo "st=$? [$v]"`
+	for _, tc := range []struct {
+		name   string
+		answer Answer
+		want   string
+	}{
+		{"the short read is assigned", Yes, "st=142 [part]"},
+		{"no name is touched", No, "st=142 [old]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			in := &halfLineThenBlocks{text: "part", done: make(chan struct{})}
+			t.Cleanup(func() { close(in.done) })
+			out, _ := run(t, src, func(r *Runner) {
+				r.Stdin = in
+				s := *r.Semantics
+				s.ReadTimeoutKeepsWhatArrived = tc.answer
+				r.Semantics = &s
+				dg := Diagnostics{ReadTimeoutStatus: 142}
+				r.Diagnostics = &dg
+			})
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// And the status is the dialect's either way: whether a name is touched is a
+// separate question from what the builtin reports, and answering the first
+// one "no" must not take the second one with it.
+func TestAnExpiredTimeoutReportsTheSameStatusEitherWay(t *testing.T) {
+	for _, answer := range []Answer{Yes, No} {
+		in := blockedInput{done: make(chan struct{})}
+		t.Cleanup(func() { close(in.done) })
+		out, _ := run(t, `read -t 0.05 v; echo "st=$?"`, func(r *Runner) {
+			r.Stdin = in
+			s := *r.Semantics
+			s.ReadTimeoutKeepsWhatArrived = answer
+			r.Semantics = &s
+		})
+		if !strings.Contains(out, "st=1") {
+			t.Errorf("keeping=%v: got %q, want the default timeout status", answer, out)
+		}
 	}
 }
 

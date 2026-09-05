@@ -474,6 +474,69 @@ The profile is sourced after the invocation's options are applied and after
 the runner is built, which is what the two measurements above require, and it
 is the same order the prompt route already used (#482).
 
+## `+c`: the sign of the option letter
+
+**The rule.** Both signs of the `c` letter select the command string —
+unanimous, and pinned by `invoke/plus-c-still-runs-the-command`. One shell
+then names the operands differently for the plus spelling: ksh93 leaves
+`$0` as the command string and makes every operand a positional
+parameter. `Semantics.PlusSignedCommandStringIsDollarZero`.
+
+### Measured
+
+Panel: bash 5.3.15, bash 3.2.57, dash, ksh93u+ 2012-08-01, zsh 5.9, on
+macOS 25.5 — measured 2026-09-05, with `HOME` a scratch directory holding
+an empty `.zshrc`. Snippet `echo "$0|$#|$*"; true`, invoked
+`sh +c SNIPPET name a`:
+
+| shell | result |
+| --- | --- |
+| bash 5.3 | `name\|1\|a` |
+| bash 3.2 | `name\|1\|a` |
+| dash | `name\|1\|a` |
+| ksh93 | `<the command string>\|2\|name a` |
+| zsh | `name\|1\|a` |
+
+The same for the bundle `+ce` and for `+c -- SNIPPET name a`: the sign
+belongs to the *word* the letter was written in, and nothing between the
+letter and its string changes the answer. With no operand at all the
+naming still splits — three of the four keep the shell's own name in `$0`
+and ksh93 puts the command string there.
+
+**A bool rather than a three-state answer.** Three of the four read `+c`
+as `-c` in every respect, so a common denominator exists, and refusing an
+invocation every shell in the panel runs is not an answer any shell could
+ship. False is that majority, and it is the standard's reading too: POSIX
+has no plus spelling of the option, so reading `+c` as the option it
+spells invents nothing.
+
+### Two more things ksh93 does with `+c`, measured and not modeled
+
+Both were found while pinning the naming, and neither is reproduced.
+
+**The operands also reach the program as literal words.** `ksh +c 'echo
+A' x y` prints `A x y`, and `ksh +c 'echo $1' foo bar` prints `foo foo
+bar` — the parameters are set *and* the operand words arrive at the
+program's last command. They are not re-parsed: `ksh +c 'echo A' '; echo
+B'` prints `A ; echo B` on one line rather than running two commands, so
+this is not the operands being joined to the command string and parsed.
+But `ksh +c 'echo A;' x y` prints `A` and then reports `x: not found`,
+which the appending story does not explain either. The two observations
+do not agree with each other, which is the reason this is recorded rather
+than modeled.
+
+**A one-word command string is looked up on PATH and run as a file.**
+`ksh +c 'echo'` reports `echo: echo: cannot execute [Exec format error]`
+and exits 126 — it found `/bin/echo` and refused the binary — and `ksh +c
+'nosuchcmd_xyz'` reports `nosuchcmd_xyz: not found`. `ksh -c 'echo'`
+prints an empty line from the builtin, so this is the plus spelling
+alone.
+
+The corpus works around the first of these rather than pinning it: the
+snippet in `invoke/plus-c-names-itself` ends in `true`, a command that
+ignores the arguments it is handed, so the appended words stay out of the
+case's output. The `Why` on the case says so.
+
 ## `-c` and `-s` together: who names the operands
 
 **The rule.** An invocation carrying both a command string and the

@@ -385,7 +385,13 @@ type invocation struct {
 	// all four shells keep reading options after the `c` and take the
 	// command string from the first operand, whichever sign the word had.
 	sawC bool
-	opts []optionSpec
+	// plusC is that letter written with a plus — `+c`, `+ce`. Both signs
+	// select the command string, which is unanimous and is what sawC
+	// records; the sign is kept because one shell then names the operands
+	// differently, and the sign of the word the letter was in is the whole
+	// of the question. See Semantics.PlusSignedCommandStringIsDollarZero.
+	plusC bool
+	opts  []optionSpec
 }
 
 func (sh Shell) input(argv []string) (source, error) {
@@ -463,6 +469,9 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 			// run the command for `sh +c cmd`. Reading `+c` as a set letter
 			// instead opened the command string as a script file.
 			inv.sawC = true
+			// Which sign it was written with, for the one shell that
+			// reads a plus-signed command string as its own `$0`.
+			inv.plusC = !on
 		case ch == 'i' && on:
 			inv.forcePrompt = true
 		case ch == 's' && on:
@@ -560,6 +569,14 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 			return sh.commandWithStdinOption(args[0], args[1:], inv)
 		}
 		s := commandSource(sh, args[0], args[1:])
+		if inv.plusC && sh.Semantics.PlusSignedCommandStringIsDollarZero {
+			// The plus spelling keeps `$0` for the command string, so no
+			// operand is named by it and every one is a parameter. Applied
+			// after commandSource rather than instead of it: everything
+			// else about the route — the `-c` label in a location, the
+			// dialect's diagnostics — is the same invocation.
+			s.name, s.params = args[0], args[1:]
+		}
 		s.opts = inv.opts
 		return s, nil
 	}

@@ -211,8 +211,9 @@ what a binary meant to be liftable into its own repository must not need.
 
 `build`, `test`, `fmt`, `vet`, `lint`, `tidy`, `clean`, `check`.
 
-`check` runs `fmt vet test`. Lint runs in CI, not pre-commit — it is too
-slow for every commit. When in doubt run `make check` *and* `make lint`.
+`check` runs `fmt vet test corpus-guard oracle-check`. Lint runs in CI,
+not pre-commit — it is too slow for every commit. When in doubt run
+`make check` *and* `make lint`.
 
 ## Conventions
 
@@ -424,6 +425,31 @@ timeout on each — so a whole-machine run takes minutes. `ARGS='-dirs
 Not a gate either, and for a stronger reason than conformance: the answer
 depends on what happens to be installed, so it cannot be the same twice on
 two machines.
+
+`make corpus-guard` fails when the corpus has *lost* a case. It runs in
+`make check` and as a step of the required `Build and test (ubuntu-latest)`
+job, comparing the case IDs in the tree against the case IDs at the merge
+base with `main`.
+
+It exists because the corpus is a **set** written down as a Go slice
+literal, and git merges it as text. A merge or a rebase can resolve
+`case.go` by taking one side, and the campaign convention — keep *both*
+sides — is a convention rather than a check. One `gh pr update-branch` took
+the corpus from 1088 to 1084 IDs with a clean auto-merge and no conflict,
+and only a hand count noticed. A dropped case is lost coverage that reads
+as a passing build: nothing fails, the conformance total shifts by a few,
+and that is indistinguishable from the ordinary movement.
+
+Two choices in it are worth knowing. It compares **sets and not a count**,
+because a branch that adds two cases while merging two away leaves the
+count alone and one that adds five while losing four makes it rise. And the
+baseline is **git history rather than a committed file**, because a
+committed list is another text file in the same tree, merged by the same
+merge that drops the case — a baseline the guarded event can edit is not a
+baseline. History also needs no maintenance, so it cannot go stale. No case
+ID has ever left `main` in the whole history of the file; retiring one on
+purpose means naming it in `corpusguard.Retired`, which is reviewable and
+fails safe if it is itself lost.
 
 `make oracle-check` runs in CI in **report-only** mode: the golden record
 is generated on one machine and a runner does not have the same builds of

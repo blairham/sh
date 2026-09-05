@@ -119,6 +119,10 @@ jobs:
     steps:
     - uses: actions/checkout@v6
       if: needs.changes.outputs.code == 'true'
+      with:
+        # The corpus guard compares against a commit, so it needs the
+        # history that commit is in. Nothing else in this job does.
+        fetch-depth: 0
     - uses: actions/setup-go@v6
       if: needs.changes.outputs.code == 'true'
       with:
@@ -129,6 +133,26 @@ jobs:
       if: needs.changes.outputs.code == 'true'
     - run: go test -race ./...
       if: needs.changes.outputs.code == 'true'
+    # Deliberately a step of an already-required job rather than a job of its
+    # own. A new job would have to be added to branch protection to gate
+    # anything, and until every open branch carried this workflow the new
+    # required check would never run on them — reporting as pending forever
+    # rather than as passed, which is the trap `changes` exists to avoid.
+    #
+    # Only on Linux: the answer is a property of the commit, not of the
+    # platform, so asking twice would only make it possible for the two to
+    # disagree.
+    - name: Has the corpus lost a case?
+      if: needs.changes.outputs.code == 'true' && matrix.os == 'ubuntu-latest'
+      env:
+        # A pull request is checked out as the merge of head into base, so
+        # base is contained in HEAD and every case that was on main has to
+        # still be here. That grades the tree that would land, which is
+        # exactly where a merge drops a case. A push to main compares against
+        # what main was. Either can be absent, and the guard falls back to a
+        # merge base rather than skipping.
+        BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+      run: go run ./cmd/corpusguard -base "$BASE"
 
   oracle:
     name: Oracle (report only)

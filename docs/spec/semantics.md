@@ -2077,3 +2077,88 @@ That is its own project with its own measurements. The letters sit in
 each dialect's `UnimplementedOptionLetters`, so `declare -n ref=x` is
 refused today as "not implemented yet" rather than misread as an
 ordinary declaration. Filed as part of #430's scope decision.
+
+## The job and lookup long tail: type's letters, job specs, wait -n, disown, ulimit -a, the directory stack
+
+Oracle runs, 2026-09-04, bash 5.3, dash, ksh93u+, zsh 5.9.2. Corpus rows
+under `jobspec/`, `disown/`, `type/`, `ulimit/` and `dirstack/`.
+
+**`type`'s remaining letters** ride `Semantics.TypeOptions` (bash `afpPt`,
+ksh93 and zsh `afp`, dash none), with three axes measured inside them:
+
+- `-a` is unanimous in shape — the shell's own answer and then every PATH
+  hit, in PATH order, duplicates and all. The file lines are worded
+  `name is /path` by all three, *including* the engine whose plain `type`
+  calls the same file a tracked alias.
+- `-p` splits twice. ksh93 and zsh search PATH past the shell's own answer
+  where bash prints nothing at all for a name the shell would answer
+  itself (`TypePSearchesPathPastTheShell`); zsh words the hit and the miss
+  the way its plain `type` does where bash and ksh93 print the bare path
+  and meet a miss with silence and status 1
+  (`TypePathAnswerIsASentence`). `-P` — always the PATH search, always
+  bare — is bash's alone.
+- `-f` leaves functions out of the search in bash and ksh93 — so
+  `type -f ls` names /bin/ls with an `ls` function standing right there —
+  and *prints* the function in zsh, definition only, no sentence
+  (`TypeFSaysTheFunctionBack`).
+
+**Job specs** resolve `%n`, `%%`/`%+`, `%-` everywhere, and `%name` /
+`%?text` — by command prefix and substring — everywhere but dash, where
+any spec that is not a number is a job that is not there
+(`JobSpecsByName`). A name matching two jobs is refused as ambiguous by
+bash and taken — the most recent match — by ksh93 and zsh
+(`AmbiguousJobNameIsRefused`). `wait` accepts the specs in all four; a
+spec that names nothing is bash's `no such job` at 127, dash's at 2,
+zsh's at 127 — and ksh93's *silence at 0* (`WaitReportsAMissingJob`).
+`kill %9` is its own complaint, not a malformed pid
+(`Diagnostics.KillNoSuchJob`) — and real ksh93 dies of it, a segmentation
+fault this engine deliberately does not reproduce.
+
+**`wait -n`** is bash's: block until whichever job finishes first, report
+its status, 127 in silence with no jobs at all
+(`WaitNWaitsForTheNextJob`). dash refuses the option, ksh93 refuses it
+with its usage line, and zsh reads it as a job named `-n`.
+
+**`disown`** exists in three shells and splits on what letting go means:
+bash and zsh take the job out of the table, ksh93 only shields it from a
+HUP this engine never forwards and goes on listing it
+(`DisownRemovesTheJob`). Bare `disown` with nothing to let go of is a
+worded 1 in bash and zsh and a silent 1 in ksh93
+(`Diagnostics.DisownNoCurrentJob`, empty meaning silence). Its sweeping
+letters (-a, -h, -r) are unimplemented and refused by name.
+
+**`ulimit -a`** is four tables that share nothing — labels, order, row
+sets, units — so each is the dialect's data
+(`Diagnostics.UlimitListing`): a row is a literal prefix and a value,
+live from the limit or fixed where the row is not a resource limit at
+all (pipe and socket buffers, the rows one engine lists as
+`not supported`). The `-n` row reports what the Go runtime raised the
+soft limit to, not what a child will get — driver/rlimit.go records why
+that is not fixable. The locked-memory, resident-set and process-count
+limits joined the driver's table by platform header numbers
+(driver/rlimit_darwin.go, _linux.go); elsewhere they keep the honest
+refusal.
+
+**The directory stack** stays in the prelude — shell over `cd`, the
+extension seam working as designed — and became a real stack: `pushd`
+pushes and prints the stack (silently, in zsh), a bare `pushd` exchanges
+the top entry with the current directory, `popd` pops, and `dirs` prints
+everything on one line, current directory first, `$HOME` as `~`, read
+from `$PWD` at print time so a plain `cd` never leaves it stale. Two
+divergences are deliberate: the empty-stack refusals are bare sentences
+(a shell function cannot reach the engine's location machinery), and
+`DIRSTACK` holds only the pushed entries where bash's also mirrors the
+current directory.
+
+### Out of scope, recorded rather than silent: newgrp
+
+`newgrp` — the one POSIX regular builtin still absent — replaces the
+shell with a new one running under a different group id, prompting for a
+password on the way. That is process image and credentials: exactly the
+two things `interp` may never touch (see "The core is a library"), so an
+implementation would be a `driver` hook wrapping setgid/exec, built for a
+feature no measured script uses — the panel shells themselves disagree
+only about how they fail it in a script. Deferred, with this paragraph
+as the record; a shell embedding this engine that needs it can register
+the builtin through the extension seam. Filed as part of #430's scope
+decision.

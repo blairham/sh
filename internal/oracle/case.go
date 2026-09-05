@@ -4068,6 +4068,71 @@ echo after`,
 		Why:     "a number that could be a process and is not one of this shell's children. Unanimous on 127, and two of the four say so out loud — so silence here is a wording rather than a behavior",
 	},
 	{
+		ID: "jobspec/wait-by-number", Category: "builtins",
+		Snippet: `sleep 0.1 & wait %1; echo "st=$?"`,
+		Why:     "the base case: `%1` resolves in all four, so the split below is about specs and not about wait",
+	},
+	{
+		ID: "jobspec/wait-a-number-that-names-nothing", Category: "builtins",
+		Snippet: `wait %5; echo "st=$?"`,
+		Why:     "a spec that resolves to no job: two shells refuse at a missing command's 127, one at 2 with its own wording — and one says nothing at all and reports 0, which is a behavior and not a wording",
+	},
+	{
+		ID: "jobspec/wait-a-name-that-names-nothing", Category: "builtins",
+		Snippet: `wait %nosuchname; echo "st=$?"`,
+		Why:     "the `%string` spelling of the same miss. POSIX gives the spelling; the shell that resolves only numbers gives the same refusal it gives `%5`, which is how its answer to the whole feature shows in one line",
+	},
+	{
+		ID: "jobspec/wait-for-the-next-job", Category: "builtins",
+		Snippet: `(exit 3) & wait -n; echo "st=$?"`,
+		Why:     "one shell's letter: the first finisher's status. The other three are the whole taxonomy of not having it — an illegal option, an unknown option with the usage line, and a job named -n that was not found",
+	},
+	{
+		ID: "jobspec/kill-a-job-that-is-not-there", Category: "builtins",
+		Snippet: `kill %9; echo "st=$?"`,
+		Why:     "a missing job is its own complaint, not a malformed pid — two wordings and two statuses among the three that answer. The fourth dies of it: a segmentation fault, recorded here as the fact it is and deliberately not reproduced",
+	},
+	{
+		ID: "disown/lets-go-or-only-shields", Category: "builtins",
+		Snippet: `sleep 0.3 & disown; jobs; echo "st=$?"; wait`,
+		Why:     "what letting go means: two shells take the job out of the table and their `jobs` shows nothing, one only shields it from a HUP and goes on listing it, and one has no disown at all and resolves the name like any missing command",
+	},
+	{
+		ID: "disown/with-nothing-held", Category: "builtins",
+		Snippet: `disown; echo "st=$?"`,
+		Why:     "a bare disown with no job: worded at 1 twice — differently — and a silent 1 in the third, so the silence is the dialect's answer rather than a gap",
+	},
+	{
+		ID: "ulimit/one-row-of-the-table", Category: "builtins",
+		Snippet: `(ulimit -f 12345; ulimit -a) | grep '12345$'; echo "st=$?"`,
+		Why:     "`ulimit -a` is four tables that share nothing — labels, order, units — pinned through one row whose value this snippet sets, because the rest of the table is the machine's",
+	},
+	{
+		ID: "dirstack/push-list-pop", Category: "builtins",
+		Snippet: `cd; pushd /tmp; dirs; popd; echo "p=$?"`,
+		Why:     "the directory stack's success path: one shell prints the stack at every push and pop, one moves in silence and answers only `dirs`, and two have none of the three names. The home directory lists as `~` in both that list at all",
+	},
+	{
+		ID: "type/f-skips-or-prints-the-function", Category: "builtins",
+		Snippet: `f() { :; }; type -f f; echo "st=$?"`,
+		Why:     "one letter, two opposite meanings: two shells use -f to leave functions out of the search — so a name that is only a function is not found — and one turns it around and prints the definition. The fourth has no options and answers -f as a name",
+	},
+	{
+		ID: "type/a-lists-a-keyword", Category: "builtins",
+		Snippet: `type -a if; echo "st=$?"`,
+		Why:     "`-a` on a name with one resolution is the plain sentence, which keeps the case machine-independent while still proving the letter parses — the multi-hit listing is pinned by unit tests against a made path",
+	},
+	{
+		ID: "type/p-on-a-name-that-is-nothing", Category: "builtins",
+		Snippet: `type -p nosuchzz_qq; echo "st=$?"`,
+		Why:     "the shape of -p's miss: silence at 1 twice, the dialect's own not-found sentence in the shell whose -p answers in sentences, and an operand in the one with no options",
+	},
+	{
+		ID: "type/capital-p-on-a-name-that-is-nothing", Category: "builtins",
+		Snippet: `type -P nosuchzz_qq; echo "st=$?"`,
+		Why:     "-P is one shell's letter: silence and 1 there, and three refusals — unknown option with usage, bad option, and an operand — everywhere else",
+	},
+	{
 		ID: "enable/a-letter-one-shell-does-not-have", Category: "builtins",
 		Snippet: `enable -n cd; echo "st=$?"`,
 		Why:     "`enable` is two different builtins: one takes -n to switch a name off, one has no -n at all and reads its options as the *table* to act on. The other two have no `enable`, so the same line is four answers",

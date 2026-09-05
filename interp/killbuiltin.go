@@ -229,8 +229,19 @@ func (r *Runner) signalSpec(spec string, form killSpecForm) (string, syscall.Sig
 func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) int {
 	sent, failed := 0, 0
 	for _, t := range targets {
-		pid, group, ok := r.killTarget(t)
-		if !ok {
+		pid, group, bad := r.killTarget(t)
+		switch bad {
+		case jobSpecUnanswered:
+			return r.status
+		case jobSpecAmbiguous:
+			r.diagf("%s\n", Wording(r.diag().AmbiguousJobSpec,
+				"%[1]s: %[2]s: ambiguous job spec", "kill", strings.TrimPrefix(t, "%")))
+			return orDefault(r.diag().KillArgumentStatus, 1)
+		case jobMissing:
+			// A `%` spec that resolves to nothing is its own complaint, not
+			// a malformed pid.
+			return r.killReport(killNoSuchJob, t)
+		case killTargetNotAPid:
 			return r.killReport(killNotAPid, t)
 		}
 		if group {
@@ -272,21 +283,33 @@ func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) 
 	return r.killStatus(sent, failed)
 }
 
+// killTargetNotAPid is killTarget's own failure code, past the job lookup's:
+// an operand with no `%` that is not a number either.
+const killTargetNotAPid = jobSpecUnanswered + 1
+
 // killTarget reads what `kill` was pointed at: a pid, or a job.
 //
 // `%1` names a job rather than a process, and a job is a process *group*. The
 // caller is told which it got, because reaching a group is a different call
 // from reaching a process and only one of them is this package's to make.
-func (r *Runner) killTarget(t string) (pid int, group, ok bool) {
+func (r *Runner) killTarget(t string) (pid int, group bool, bad int) {
 	if !strings.HasPrefix(t, "%") {
 		n, err := strconv.Atoi(t)
-		return n, false, err == nil
+		if err != nil {
+			return 0, false, killTargetNotAPid
+		}
+		return n, false, jobFound
 	}
 	j, code := r.findJobQuietly(t)
-	if code != 0 || j.PID == 0 {
-		return 0, false, false
+	if code != jobFound {
+		return 0, false, code
 	}
-	return j.PID, true, true
+	if j.PID == 0 {
+		// A job with no process of its own — nothing to signal, reported as
+		// the missing job it behaves as.
+		return 0, false, jobMissing
+	}
+	return j.PID, true, jobFound
 }
 
 // signalGroupPid sends to a job's process group.
@@ -499,6 +522,8 @@ const (
 	killNoSuchProcess
 	// killNotPermitted is a target that is there and is not ours.
 	killNotPermitted
+	// killNoSuchJob is a `%` spec that names no job.
+	killNoSuchJob
 )
 
 func (e *killError) Error() string { return e.fallback() }
@@ -526,6 +551,8 @@ func (e *killError) fallback() string {
 		return "kill: %[1]s: invalid signal specification"
 	case killNotAPid:
 		return "kill: %[1]s: not a pid"
+	case killNoSuchJob:
+		return "kill: %[1]s: no such job"
 	case killNoSuchProcess:
 		return "kill: (%[1]s) - No such process"
 	case killNotPermitted:
@@ -544,6 +571,8 @@ func (e *killError) format(d Diagnostics) string {
 		return d.KillIllegalOption
 	case killNotAPid:
 		return d.KillNotAPid
+	case killNoSuchJob:
+		return d.KillNoSuchJob
 	case killNoSuchProcess:
 		return d.KillNoSuchProcess
 	case killNotPermitted:

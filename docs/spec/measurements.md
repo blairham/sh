@@ -592,6 +592,19 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `wait/dash-dash-ends-the-options` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `wait/an-operand-that-is-neither` | `<shell>: 1: wait: Illegal number: nosuchjob~st=2` | `<shell>: line 1: wait: `nosuchjob': not a pid or valid job spec~st=1` | `<shell>: line 1: wait: `nosuchjob': not a pid or valid job spec~st=1` | `<shell>: line 0: wait: `nosuchjob': not a pid or valid job spec~st=1` | `<shell>: wait: nosuchjob: Arguments must be %job, process ids, or job pool names~st=1` | `<shell>:wait:1: job not found: nosuchjob~st=127` |
 | `wait/a-pid-that-is-not-ours` | `st=127` | `<shell>: line 1: wait: pid 999999 is not a child of this shell~st=127` | `<shell>: line 1: wait: pid 999999 is not a child of this shell~st=127` | `<shell>: wait: pid 999999 is not a child of this shell~st=127` | `st=127` | `<shell>:wait:1: pid 999999 is not a child of this shell~st=127` |
+| `jobspec/wait-by-number` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `jobspec/wait-a-number-that-names-nothing` | `<shell>: 1: wait: No such job: %5~st=2` | `<shell>: line 1: wait: %5: no such job~st=127` | `<shell>: line 1: wait: %5: no such job~st=127` | `<shell>: line 0: wait: %5: no such job~st=127` | `st=0` | `<shell>:wait:1: %5: no such job~st=127` |
+| `jobspec/wait-a-name-that-names-nothing` | `<shell>: 1: wait: No such job: %nosuchname~st=2` | `<shell>: line 1: wait: %nosuchname: no such job~st=127` | `<shell>: line 1: wait: %nosuchname: no such job~st=127` | `<shell>: line 0: wait: %nosuchname: no such job~st=127` | `st=0` | `<shell>:wait:1: job not found: nosuchname~st=127` |
+| `jobspec/wait-for-the-next-job` | `<shell>: 1: wait: Illegal option -n~st=2` | `st=3` | `st=3` | `<shell>: line 0: wait: -n: invalid option~wait: usage: wait [n]~st=2` | `<shell>: wait: -n: unknown option~Usage: wait [ options ] [job ...]~st=2` | `<shell>:wait:1: job not found: -n~st=127` |
+| `jobspec/kill-a-job-that-is-not-there` | `<shell>: 1: kill: No such job: %9~st=2` | `<shell>: line 1: kill: %9: no such job~st=1` | `<shell>: line 1: kill: %9: no such job~st=0` | `<shell>: line 0: kill: %9: no such job~st=1` | *(no output, status -1)* | `<shell>:kill:1: %9: no such job~st=1` |
+| `disown/lets-go-or-only-shields` | `<shell>: 1: disown: not found~[1] + Running                    ~st=0` | `st=0` | `st=0` | `st=0` | `[1] +  Running                 <command unknown>~st=0` | `st=0` |
+| `disown/with-nothing-held` | `<shell>: 1: disown: not found~st=127` | `<shell>: line 1: disown: current: no such job~st=1` | `<shell>: line 1: disown: current: no such job~st=1` | `<shell>: line 0: disown: current: no such job~st=1` | `st=1` | `<shell>:disown:1: no current job~st=1` |
+| `ulimit/one-row-of-the-table` | `file(blocks)         12345~st=0` | `file size                   (blocks, -f) 12345~st=0` | `file size                   (blocks, -f) 12345~st=0` | `file size               (blocks, -f) 12345~st=0` | `file size (blocks)             (-f)  12345~st=0` | `-f: file size (blocks)              12345~st=0` |
+| `dirstack/push-list-pop` | `<shell>: 1: pushd: not found~<shell>: 1: dirs: not found~<shell>: 1: popd: not found~p=127` | `/tmp ~~/tmp ~~~~p=0` | `/tmp ~~/tmp ~~~~p=0` | `/tmp ~~/tmp ~~~~p=0` | `<shell>: pushd: not found~<shell>: dirs: not found~<shell>: popd: not found~p=127` | `/tmp ~~p=0` |
+| `type/f-skips-or-prints-the-function` | `-f: not found~f is a shell function~st=127` | `<shell>: line 1: type: f: not found~st=1` | `<shell>: line 1: type: f: not found~st=1` | `<shell>: line 0: type: f: not found~st=1` | `f is an undefined function~st=0` | `f () {~	:~}~st=0` |
+| `type/a-lists-a-keyword` | `-a: not found~if is a shell keyword~st=127` | `if is a shell keyword~st=0` | `if is a shell keyword~st=0` | `if is a shell keyword~st=0` | `if is a keyword~st=0` | `if is a reserved word~st=0` |
+| `type/p-on-a-name-that-is-nothing` | `-p: not found~nosuchzz_qq: not found~st=127` | `st=1` | `st=1` | `st=1` | `st=1` | `nosuchzz_qq not found~st=1` |
+| `type/capital-p-on-a-name-that-is-nothing` | `-P: not found~nosuchzz_qq: not found~st=127` | `st=1` | `st=1` | `st=1` | `<shell>: whence: -P: unknown option~Usage: whence [-afpqv] name  ...~st=2` | `<shell>:type:1: bad option: -P~st=1` |
 | `enable/a-letter-one-shell-does-not-have` | `<shell>: 1: enable: not found~st=127` | `st=0` | `st=0` | `st=0` | `<shell>: enable: not found~st=127` | `<shell>:enable:1: bad option: -n~st=1` |
 | `enable/a-name-that-is-not-a-builtin` | `<shell>: 1: disable: not found~st=127` | `<shell>: line 1: disable: command not found~st=127` | `<shell>: line 1: disable: command not found~st=127` | `<shell>: disable: command not found~st=127` | `<shell>: disable: not found~st=127` | `<shell>:disable:1: no such hash table element: nosuchthing~st=1` |
 | `enable/switching-one-off-and-back-on` | `st=127` | `st=0` | `st=0` | `st=0` | `st=127` | `st=0` |
@@ -920,6 +933,58 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `wait/a-pid-that-is-not-ours` — a number that could be a process and is not one of this shell's children. Unanimous on 127, and two of the four say so out loud — so silence here is a wording rather than a behavior
   ```sh
   wait 999999; echo "st=$?"
+  ```
+- `jobspec/wait-by-number` — the base case: `%1` resolves in all four, so the split below is about specs and not about wait
+  ```sh
+  sleep 0.1 & wait %1; echo "st=$?"
+  ```
+- `jobspec/wait-a-number-that-names-nothing` — a spec that resolves to no job: two shells refuse at a missing command's 127, one at 2 with its own wording — and one says nothing at all and reports 0, which is a behavior and not a wording
+  ```sh
+  wait %5; echo "st=$?"
+  ```
+- `jobspec/wait-a-name-that-names-nothing` — the `%string` spelling of the same miss. POSIX gives the spelling; the shell that resolves only numbers gives the same refusal it gives `%5`, which is how its answer to the whole feature shows in one line
+  ```sh
+  wait %nosuchname; echo "st=$?"
+  ```
+- `jobspec/wait-for-the-next-job` — one shell's letter: the first finisher's status. The other three are the whole taxonomy of not having it — an illegal option, an unknown option with the usage line, and a job named -n that was not found
+  ```sh
+  (exit 3) & wait -n; echo "st=$?"
+  ```
+- `jobspec/kill-a-job-that-is-not-there` — a missing job is its own complaint, not a malformed pid — two wordings and two statuses among the three that answer. The fourth dies of it: a segmentation fault, recorded here as the fact it is and deliberately not reproduced
+  ```sh
+  kill %9; echo "st=$?"
+  ```
+- `disown/lets-go-or-only-shields` — what letting go means: two shells take the job out of the table and their `jobs` shows nothing, one only shields it from a HUP and goes on listing it, and one has no disown at all and resolves the name like any missing command
+  ```sh
+  sleep 0.3 & disown; jobs; echo "st=$?"; wait
+  ```
+- `disown/with-nothing-held` — a bare disown with no job: worded at 1 twice — differently — and a silent 1 in the third, so the silence is the dialect's answer rather than a gap
+  ```sh
+  disown; echo "st=$?"
+  ```
+- `ulimit/one-row-of-the-table` — `ulimit -a` is four tables that share nothing — labels, order, units — pinned through one row whose value this snippet sets, because the rest of the table is the machine's
+  ```sh
+  (ulimit -f 12345; ulimit -a) | grep '12345$'; echo "st=$?"
+  ```
+- `dirstack/push-list-pop` — the directory stack's success path: one shell prints the stack at every push and pop, one moves in silence and answers only `dirs`, and two have none of the three names. The home directory lists as `~` in both that list at all
+  ```sh
+  cd; pushd /tmp; dirs; popd; echo "p=$?"
+  ```
+- `type/f-skips-or-prints-the-function` — one letter, two opposite meanings: two shells use -f to leave functions out of the search — so a name that is only a function is not found — and one turns it around and prints the definition. The fourth has no options and answers -f as a name
+  ```sh
+  f() { :; }; type -f f; echo "st=$?"
+  ```
+- `type/a-lists-a-keyword` — `-a` on a name with one resolution is the plain sentence, which keeps the case machine-independent while still proving the letter parses — the multi-hit listing is pinned by unit tests against a made path
+  ```sh
+  type -a if; echo "st=$?"
+  ```
+- `type/p-on-a-name-that-is-nothing` — the shape of -p's miss: silence at 1 twice, the dialect's own not-found sentence in the shell whose -p answers in sentences, and an operand in the one with no options
+  ```sh
+  type -p nosuchzz_qq; echo "st=$?"
+  ```
+- `type/capital-p-on-a-name-that-is-nothing` — -P is one shell's letter: silence and 1 there, and three refusals — unknown option with usage, bad option, and an operand — everywhere else
+  ```sh
+  type -P nosuchzz_qq; echo "st=$?"
   ```
 - `enable/a-letter-one-shell-does-not-have` — `enable` is two different builtins: one takes -n to switch a name off, one has no -n at all and reads its options as the *table* to act on. The other two have no `enable`, so the same line is four answers
   ```sh

@@ -59,8 +59,14 @@ func TestPreludeFunctionsBuildOnPrimitives(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("status %d", code)
 	}
-	if filepath.Clean(out) != "/" {
+	// pushd prints the stack it just pushed — the measured behavior — so the
+	// directory change is the last line, from pwd.
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if got := filepath.Clean(lines[len(lines)-1]); got != "/" {
 		t.Errorf("pushd did not change directory, got %q", out)
+	}
+	if !strings.HasPrefix(lines[0], "/ ") {
+		t.Errorf("pushd did not print the stack, got %q", out)
 	}
 }
 

@@ -388,6 +388,20 @@ type Diagnostics struct {
 	// operand to have been.
 	WaitBadJobStatus int
 
+	// WaitNoSuchJob is a job spec `wait` cannot resolve — asked past
+	// Semantics.WaitReportsAMissingJob, whose No is the engine that says
+	// nothing at all. One verb: the spec as written. The status rides
+	// WaitNoSuchJobStatus; zero means 127, a missing command's number,
+	// which two of the three that speak report.
+	WaitNoSuchJob       string
+	WaitNoSuchJobStatus int
+
+	// AmbiguousJobSpec is `%name` matching more than one job, in the one
+	// engine that refuses it — see Semantics.AmbiguousJobNameIsRefused.
+	// Two verbs: the builtin, and the text with its `%` already stripped,
+	// which is how the engine writes it.
+	AmbiguousJobSpec string
+
 	// WaitNotOurChild is a number that is a plausible process id and is not
 	// one of this shell's children, taking the number. Empty means nothing
 	// is said, which is two of the four — the status is 127 in all of them
@@ -497,6 +511,11 @@ type Diagnostics struct {
 
 	// UlimitBadNumberStatus is what that reports. Zero means 1.
 	UlimitBadNumberStatus int
+
+	// UlimitListing is `ulimit -a`, one row per line in the dialect's own
+	// order and layout — see UlimitListingRow. Empty refuses the letter's
+	// listing as the unanswered question it is.
+	UlimitListing []UlimitListingRow
 
 	// UlimitCannotChange is the kernel refusing the change — raising a hard
 	// limit, most often. One verb: the reason.
@@ -918,6 +937,12 @@ type Diagnostics struct {
 	// the text that was kept.
 	JobRunningShowsAmpersand bool
 
+	// DisownNoCurrentJob is a bare `disown` with nothing to let go of, as
+	// one line with no verbs — the two shells that speak here agree on
+	// nothing about its shape. Empty means silence with the failing status,
+	// which is the third shell's answer and the substrate's.
+	DisownNoCurrentJob string
+
 	// NoSuchJob is a job spec that names nothing. Two verbs: the builtin and
 	// the spec as written.
 	NoSuchJob string
@@ -993,6 +1018,13 @@ type Diagnostics struct {
 	KillIllegalOption string
 	// KillNotAPid is an operand that is not a number. One verb: the operand.
 	KillNotAPid string
+
+	// KillNoSuchJob is a `%` spec that names no job — a different complaint
+	// from a number that names no process, in every shell that speaks here.
+	// One verb: the spec as written. (ksh93 dies on this one — a fault, not
+	// a wording — which is deliberately not reproduced; it falls back to
+	// the substrate's own line there.)
+	KillNoSuchJob string
 	// KillUsage is `kill` with nothing to signal. No verbs.
 	KillUsage string
 	// KillUsageUnprefixed prints that usage with no location and no shell

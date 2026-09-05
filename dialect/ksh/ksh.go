@@ -106,6 +106,15 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskTakesTheStickyLetter = interp.Yes
 	s.ShiftReadsOptions = interp.Yes
 	s.WaitReadsOptions = interp.Yes
+	// Job specs by command text, a second match taken rather than refused.
+	// A `wait` whose spec names nothing says nothing at all and reports 0;
+	// there is no -n, and disown only shields a job from a HUP this engine
+	// never forwards, so the listing keeps it.
+	s.JobSpecsByName = interp.Yes
+	s.AmbiguousJobNameIsRefused = interp.No
+	s.WaitReportsAMissingJob = interp.No
+	s.WaitNWaitsForTheNextJob = interp.No
+	s.DisownRemovesTheJob = interp.No
 	// Both Yes, re-measured with a letter ksh93 does not own (-q): the first
 	// probes used -x and -a, which are real ksh93 options, and recorded No
 	// off ksh93's own features.
@@ -286,6 +295,13 @@ func Semantics() interp.Semantics {
 	// No `-t` here: the letter is refused the way `whence` refuses any
 	// option it does not have, usage line and all.
 	s.TypeNamesTheKindWithDashT = interp.No
+	// whence -v's other letters: -a lists every resolution, -p and -f are
+	// the PATH search and the function skip — and -p searches past the
+	// shell's own answer here, naming the bare path.
+	s.TypeOptions = "afp"
+	s.TypePSearchesPathPastTheShell = interp.Yes
+	s.TypePathAnswerIsASentence = interp.No
+	s.TypeFSaysTheFunctionBack = interp.No
 
 	// The letters `typeset` reads here. `-f` prints functions *verbatim* in
 	// this engine — it keeps the source text, which this one does not — so
@@ -473,7 +489,7 @@ func Diagnostics() interp.Diagnostics {
 			// splitting and -v's default text. The -p coprocess is
 			// implemented as its measured refusal — see ReadNoCoprocess.
 			"read": "-CSv",
-			"type": "-afpqv",
+			"type": "-qv",
 			// typeset's letters this engine does not hold: the verbatim
 			// function listings (-f and the floats' -F), namerefs, padding
 			// and alignment, mappings and the rest of its usage line.
@@ -518,6 +534,31 @@ func Diagnostics() interp.Diagnostics {
 			"jobs":  "Usage: jobs [ options ] [job ...]",
 			"shift": "Usage: shift [ options ] [n]",
 			"unset": "Usage: unset [-nfv] name...",
+		},
+		// `ulimit -a`, row for row as the engine writes it. The rows this
+		// platform's engine calls unsupported, and the constant pipe and
+		// socket buffers, are fixed text rather than resource limits.
+		UlimitListing: []interp.UlimitListingRow{
+			{Prefix: "address space limit (Kibytes)  (-M)  ", Res: interp.ResourceAddressSpace, Scale: 1024},
+			{Prefix: "core file size (blocks)        (-c)  ", Res: interp.ResourceCore},
+			{Prefix: "cpu time (seconds)             (-t)  ", Res: interp.ResourceCPUTime, Scale: 1},
+			{Prefix: "data size (Kibytes)            (-d)  ", Res: interp.ResourceData, Scale: 1024},
+			{Prefix: "file size (blocks)             (-f)  ", Res: interp.ResourceFileSize},
+			{Prefix: "locks                          (-x)  ", Fixed: "not supported"},
+			{Prefix: "locked address space (Kibytes) (-l)  ", Res: interp.ResourceLockedMemory, Scale: 1024},
+			{Prefix: "message queue size (Kibytes)   (-q)  ", Fixed: "not supported"},
+			{Prefix: "nice                           (-e)  ", Fixed: "not supported"},
+			{Prefix: "nofile                         (-n)  ", Res: interp.ResourceOpenFiles, Scale: 1},
+			{Prefix: "nproc                          (-u)  ", Res: interp.ResourceProcesses, Scale: 1},
+			{Prefix: "pipe buffer size (bytes)       (-p)  ", Fixed: "512"},
+			{Prefix: "max memory size (Kibytes)      (-m)  ", Res: interp.ResourceResidentSet, Scale: 1024},
+			{Prefix: "rtprio                         (-r)  ", Fixed: "not supported"},
+			{Prefix: "socket buffer size (bytes)     (-b)  ", Fixed: "512"},
+			{Prefix: "sigpend                        (-i)  ", Fixed: "undefined"},
+			{Prefix: "stack size (Kibytes)           (-s)  ", Res: interp.ResourceStack, Scale: 1024},
+			{Prefix: "swap size (Kibytes)            (-w)  ", Fixed: "not supported"},
+			{Prefix: "threads                        (-T)  ", Fixed: "not supported"},
+			{Prefix: "process size (Kibytes)         (-v)  ", Res: interp.ResourceAddressSpace, Scale: 1024},
 		},
 		PrintfUsage:           "Usage: printf [ options ] format [string ...]",
 		PrintfUsageUnprefixed: true,

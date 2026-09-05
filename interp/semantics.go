@@ -509,6 +509,32 @@ type Semantics struct {
 	// and dash reads it as a name like the rest of its operands.
 	TypeNamesTheKindWithDashT Answer
 
+	// TypeOptions is the rest of `type`'s letters, in the getopts spelling
+	// the other optstrings use — `-a` for every resolution a name has, `-p`
+	// and `-P` for the path alone, `-f` to leave the functions out. Empty
+	// means none beyond what the two axes above already give, which is
+	// dash's answer: its `type` has no options at all, and
+	// TypeEndsOptionsWithDashDash already says so.
+	TypeOptions string
+
+	// TypePSearchesPathPastTheShell is what `type -p` does about a name the
+	// shell would answer itself: ksh93 and zsh search PATH anyway and name
+	// the file, bash prints nothing at all and reports 0 — its `-p` speaks
+	// only when the plain answer would have been a file. Asked only with
+	// the letter, so a dialect without it never meets the question.
+	TypePSearchesPathPastTheShell Answer
+
+	// TypePathAnswerIsASentence is the shape of `-p`'s answer: zsh words it
+	// the way its plain `type` does — `echo is /bin/echo`, and the not-found
+	// complaint for a miss — where bash and ksh93 print the bare path and
+	// meet a miss with silence and the failing status.
+	TypePathAnswerIsASentence Answer
+
+	// TypeFSaysTheFunctionBack turns `-f` around: in zsh the letter *prints*
+	// a function — the definition, laid out, nothing else — where bash and
+	// ksh93 use it to leave functions out of the search.
+	TypeFSaysTheFunctionBack Answer
+
 	// ArraysAreSparse makes an unassigned subscript no element at all, so
 	// `a=(x); a[5]=y` is an array of two. True in bash and ksh93; zsh reads
 	// the whole extent and finds the gap empty, giving five.
@@ -771,6 +797,29 @@ type Semantics struct {
 	// there; bash and zsh report it and carry on. Asked only when the
 	// refusal has happened, so a shell with no `typeset` never meets it.
 	TypesetBadOptionFatal Answer
+
+	// JobSpecsByName resolves `%name` — the job whose command begins with
+	// the text — and `%?text`, the one whose command contains it. POSIX
+	// gives both spellings; dash answers "no such job" to every spec that
+	// is not a number, `%%`, `%+` or `%-`.
+	JobSpecsByName Answer
+	// AmbiguousJobNameIsRefused is `%name` matching more than one job: bash
+	// refuses it as an ambiguous job spec where ksh93 and zsh take the most
+	// recent match. Asked only on a second match.
+	AmbiguousJobNameIsRefused Answer
+	// WaitReportsAMissingJob says a job spec `wait` cannot resolve earns a
+	// complaint — see Diagnostics.WaitNoSuchJob — and a failing status.
+	// ksh93 says nothing at all and reports 0.
+	WaitReportsAMissingJob Answer
+	// WaitNWaitsForTheNextJob gives `wait` a `-n`: block until whichever
+	// job finishes first and report its status, 127 with no jobs at all.
+	// bash's letter alone; the other three refuse or misread it.
+	WaitNWaitsForTheNextJob Answer
+	// DisownRemovesTheJob makes `disown` take the job out of the table, so
+	// a later `jobs` no longer lists it: bash and zsh. ksh93's disown only
+	// shields the job from the HUP an exiting shell would send — a signal
+	// this engine never forwards — and its `jobs` goes on listing the job.
+	DisownRemovesTheJob Answer
 
 	// DeclareGlobalReachesPastALocal is `declare -g x=new` with a `local x`
 	// standing in front of the name: bash writes the global cell and leaves
@@ -1855,10 +1904,19 @@ func PosixSemantics() Semantics {
 		// keep their zero values: no option letters, and a bad one reported
 		// rather than fatal — `typeset` is not one of the builtins POSIX
 		// marks special.
-		SetListing:                SetListingAssignments,
-		SetListingQuoting:         ListingQuoteAlwaysDoubled,
-		BareLocalListing:          BareLocalListsNothing,
-		TypesetBadOptionFatal:     No,
+		SetListing:            SetListingAssignments,
+		SetListingQuoting:     ListingQuoteAlwaysDoubled,
+		BareLocalListing:      BareLocalListsNothing,
+		TypesetBadOptionFatal: No,
+		// POSIX gives `%string` and `%?string` outright, has `wait` answer
+		// for a job that is not there, and calls a string matching more
+		// than one job unspecified — refusing is the reading that invents
+		// nothing. It has no `wait -n` and no `disown` at all, so the
+		// second stays unanswered and the letter is refused.
+		JobSpecsByName:            Yes,
+		AmbiguousJobNameIsRefused: Yes,
+		WaitReportsAMissingJob:    Yes,
+		WaitNWaitsForTheNextJob:   No,
 		DotMissingFileFatal:       Yes,
 		DotWithNoOperandIsAnError: Yes,
 		// The standard gives `.` a filename and nothing else; passing

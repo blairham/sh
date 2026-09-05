@@ -102,6 +102,14 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskTakesTheStickyLetter = interp.No
 	s.ShiftReadsOptions = interp.Yes
 	s.WaitReadsOptions = interp.No
+	// Job specs by command text, a second match taken rather than refused;
+	// `wait` complains about a spec that names nothing, has no -n, and
+	// `disown` takes the job out of the table.
+	s.JobSpecsByName = interp.Yes
+	s.AmbiguousJobNameIsRefused = interp.No
+	s.WaitReportsAMissingJob = interp.Yes
+	s.WaitNWaitsForTheNextJob = interp.No
+	s.DisownRemovesTheJob = interp.Yes
 	s.CommandRejectsUnknownOption = interp.No
 	s.GetoptsRejectsUnknownOption = interp.No
 	s.ShiftCountIsArithmetic = interp.Yes
@@ -293,6 +301,14 @@ func Semantics() interp.Semantics {
 	// zsh's word-per-name option is `-w`, with its own vocabulary; `-t` is
 	// a bad option there.
 	s.TypeNamesTheKindWithDashT = interp.No
+	// whence -v under another name, so the letters answer in sentences:
+	// -p searches PATH past the shell's own answer and words the hit the
+	// way plain type does, and -f *prints* a function rather than skipping
+	// it. The completion-system letters ride as unimplemented.
+	s.TypeOptions = "afp"
+	s.TypePSearchesPathPastTheShell = interp.Yes
+	s.TypePathAnswerIsASentence = interp.Yes
+	s.TypeFSaysTheFunctionBack = interp.Yes
 
 	// The letters `typeset` and `local` read. `-f` prints function bodies;
 	// `-F` is a *float's* precision here rather than bash's function-name
@@ -394,6 +410,7 @@ func Diagnostics() interp.Diagnostics {
 			// hiding, ties and the rest. The same set under both names, and
 			// for `local` too.
 			"typeset": "bcEFhHkLmnRtTUZ",
+			"type":    "mvwsS",
 			"declare": "bcEFhHkLmnRtTUZ",
 			"local":   "bcEFhHkLmnRtTUZ",
 		},
@@ -406,9 +423,22 @@ func Diagnostics() interp.Diagnostics {
 		// option complaint here.
 		OptionNeedsArgument: "%[1]s: argument expected: -%[2]s",
 		ReadonlyVariable:    "read-only variable: %s",
-		TraceQuoting:        interp.QuoteShell,
-		TraceStyle:          interp.TraceNameLine,
-		TraceForHeader:      interp.TraceForAssign,
+		// `ulimit -a`, row for row as the engine writes it — the flag
+		// first, no pipe row, and no resident-set row at all.
+		UlimitListing: []interp.UlimitListingRow{
+			{Prefix: "-t: cpu time (seconds)              ", Res: interp.ResourceCPUTime, Scale: 1},
+			{Prefix: "-f: file size (blocks)              ", Res: interp.ResourceFileSize},
+			{Prefix: "-d: data seg size (kbytes)          ", Res: interp.ResourceData, Scale: 1024},
+			{Prefix: "-s: stack size (kbytes)             ", Res: interp.ResourceStack, Scale: 1024},
+			{Prefix: "-c: core file size (blocks)         ", Res: interp.ResourceCore},
+			{Prefix: "-v: address space (kbytes)          ", Res: interp.ResourceAddressSpace, Scale: 1024},
+			{Prefix: "-l: locked-in-memory size (kbytes)  ", Res: interp.ResourceLockedMemory, Scale: 1024},
+			{Prefix: "-u: processes                       ", Res: interp.ResourceProcesses, Scale: 1},
+			{Prefix: "-n: file descriptors                ", Res: interp.ResourceOpenFiles, Scale: 1},
+		},
+		TraceQuoting:   interp.QuoteShell,
+		TraceStyle:     interp.TraceNameLine,
+		TraceForHeader: interp.TraceForAssign,
 		// zsh names the last token it read and nothing else.
 		EvalNaming:       interp.SourceReplacesShell,
 		SourceFileNaming: interp.SourceReplacesShell,
@@ -473,18 +503,22 @@ func Diagnostics() interp.Diagnostics {
 		UnaliasNoOperandStatus: 1,
 		// The builtin's name comes from the location here, as everywhere in
 		// zsh, so it is not in the wording.
-		UmaskBadSymbolicMode:             "bad symbolic mode permission: %[2]s",
-		UmaskBadSymbolicOperator:         "bad symbolic mode operator: %[2]s",
-		UmaskBadOption:                   "bad option: %[1]s",
-		UmaskBadOptionStatus:             1,
-		LetNoExpression:                  "not enough arguments",
-		UlimitBadOption:                  "bad option: -%[1]s",
-		UlimitBadNumber:                  "invalid number: %[1]s",
-		UlimitBadOptionStatus:            1,
-		BuiltinBadOption:                 "%[1]s: bad option: %[2]s",
-		BadOptionNaming:                  interp.BadOptionFirstUnknownLetter,
-		WaitBadJob:                       "wait: job not found: %[1]s",
-		WaitBadJobStatus:                 127,
+		UmaskBadSymbolicMode:     "bad symbolic mode permission: %[2]s",
+		UmaskBadSymbolicOperator: "bad symbolic mode operator: %[2]s",
+		UmaskBadOption:           "bad option: %[1]s",
+		UmaskBadOptionStatus:     1,
+		LetNoExpression:          "not enough arguments",
+		UlimitBadOption:          "bad option: -%[1]s",
+		UlimitBadNumber:          "invalid number: %[1]s",
+		UlimitBadOptionStatus:    1,
+		BuiltinBadOption:         "%[1]s: bad option: %[2]s",
+		BadOptionNaming:          interp.BadOptionFirstUnknownLetter,
+		WaitBadJob:               "wait: job not found: %[1]s",
+		WaitBadJobStatus:         127,
+		// The builtin's name rides the location, as ever.
+		WaitNoSuchJob:                    "wait: %[1]s: no such job",
+		KillNoSuchJob:                    "kill: %[1]s: no such job",
+		DisownNoCurrentJob:               "disown: no current job",
 		WaitNotOurChild:                  "wait: pid %[1]d is not a child of this shell",
 		TrapCouldNotParse:                "couldn't parse trap command",
 		UmaskWhoAloneIsANumericComplaint: true,

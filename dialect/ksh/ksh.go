@@ -254,6 +254,11 @@ func Semantics() interp.Semantics {
 	s.TestAcceptsDoubleEqual = interp.Yes
 	s.SignalDeathStatusIsTwoFiftySix = interp.Yes
 	s.PipefailOption = interp.Yes
+	// And the one place ksh93's 256-plus-the-signal convention stops: an
+	// element pipefail substitutes for the last one, and which a signal
+	// killed, is reported as the signal's number alone — 13 and 15, not 269
+	// and 271.
+	s.PipefailSubstitutesTheBareSignal = interp.Yes
 	s.ErrexitSeesPipefailFailure = interp.No
 	// Alone in the panel: `PATH=` finds nothing here, where dash, bash and
 	// zsh still search the current directory.

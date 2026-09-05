@@ -50,6 +50,9 @@ func Dialect() syntax.Dialect {
 	// $i; i=$((i+1)) }` counts up without stopping here, which is what says
 	// so.
 	d.ShortLoop = true
+	// The same reach: a body may have nothing in it — `{ }`, `( )`, `while
+	// cond; do done`, and a condition too. Every shape, and this shell alone.
+	d.EmptyCompoundBody = true
 	// Floating point, which POSIX has not and these two do.
 	d.ArithFloat = true
 	// A bare `(a|b)` inside a pattern word, which makes `@(abc|xyz)` a
@@ -243,6 +246,9 @@ func Semantics() interp.Semantics {
 	s.MissingFileIsOlder = interp.No
 	s.TerminalTestRequiresANumber = interp.No
 	s.PipefailOption = interp.Yes
+	// A substituted element keeps the status its death produced, 128 plus
+	// the signal, the same as anywhere else.
+	s.PipefailSubstitutesTheBareSignal = interp.No
 	s.ErrexitSeesPipefailFailure = interp.Yes
 	// Alone in refusing an argument to `times`; dash and bash ignore it.
 	s.TimesRejectsArguments = interp.Yes

@@ -176,7 +176,12 @@ func TestCloseBraceAlwaysReserved(t *testing.T) {
 	mustParse(t, `echo }`, Core(), "`}` as an ordinary word")
 	mustFail(t, `echo }`, reserved, "`}` where it is always reserved")
 	// Quoting takes it out of the rule, and so does anything but a word.
-	for _, src := range []string{`{ echo "a}" }`, `x=}`, `{ }`, `{ echo a; { echo b } }`} {
+	//
+	// `{ }` is not in this list and used to be: the `}` there is the group's
+	// terminator rather than a word, which is what this flag decides, but
+	// whether a group may be *empty* is a different flag and the core says
+	// no — see TestAnEmptyCompoundBodyNeedsTheFlag.
+	for _, src := range []string{`{ echo "a}" }`, `x=}`, `{ echo a; { echo b } }`} {
 		mustParse(t, src, reserved, "a brace that is not a reserved word")
 	}
 }

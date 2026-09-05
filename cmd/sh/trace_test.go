@@ -442,14 +442,26 @@ func TestAGatedRunDeniesAndReports(t *testing.T) {
 	if strings.Contains(out.String(), "trace:") {
 		t.Errorf("out = %q, want the trace kept off the shell's output stream", out.String())
 	}
-	// And every line carries the id of the action it is about. This is the
-	// half a formatting test cannot show: the field exists on the value, and
-	// until a running shell puts it on the line nobody watching a trace can
+	// And every *event* line carries the id of the action it is about. This is
+	// the half a formatting test cannot show: the field exists on the value,
+	// and until a running shell puts it on the line nobody watching a trace can
 	// pair a start with its end.
+	//
+	// Only the lines that are events. The stream carries one other thing — what
+	// the policy normalized, under its own prefix — and that is not something
+	// the shell did, so it has no action to name.
+	events := 0
 	for _, line := range strings.Split(strings.TrimSpace(trace.String()), "\n") {
+		if !strings.HasPrefix(line, "trace: ") {
+			continue
+		}
+		events++
 		if !strings.Contains(line, " id=") {
 			t.Errorf("trace line %q carries no action id", line)
 		}
+	}
+	if events == 0 {
+		t.Error("no event lines in the trace, so the assertion above is vacuous")
 	}
 }
 

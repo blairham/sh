@@ -880,6 +880,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `read/from-the-shells-own-standard-input` | `[one]~[two]~eof=1\|[]` | `[one]~[two]~eof=1\|[]` | `[one]~[two]~eof=1\|[]` | `[one]~[two]~eof=1\|[]` | `[one]~[two]~eof=1\|[]` | `[one]~[two]~eof=1\|[]` |
 | `read/a-zero-timeout-and-what-it-does-to-the-stream` | `st=2 v=[]~w=[a]` **2>** `<shell>: 1: read: Illegal option -t` | `st=0 v=[]~w=[a]` | `st=0 v=[]~w=[a]` | `st=1 v=[]~w=[a]` | `st=0 v=[a]~w=[b]` | `st=0 v=[a]~w=[b]` |
 | `read/a-zero-timeout-at-the-end-of-the-input` | `st=2 v=[]` **2>** `<shell>: 1: read: Illegal option -t` | `st=0 v=[]` | `st=0 v=[]` | `st=1 v=[]` | `st=1 v=[]` | `st=1 v=[]` |
+| `read/a-timeout-that-expires` | `st=2 l=[keep]` **2>** `<shell>: 1: read: Illegal option -t` | `st=142 l=[]` | `st=142 l=[]` | `st=1 l=[keep]` | `st=1 l=[keep]` | `st=1 l=[keep]` |
+| `read/a-descriptor-to-read-from` | `st=2 l=[keep]~st=2 l=[keep]` **2>** `<shell>: 1: read: Illegal option -u~<shell>: 1: read: Illegal option -u` | `st=0 l=[hello]~st=0 l=[world]` | `st=0 l=[hello]~st=0 l=[world]` | `st=0 l=[hello]~st=0 l=[world]` | `st=0 l=[hello]~st=0 l=[world]` | `st=0 l=[hello]~st=0 l=[world]` |
+| `read/a-count-that-stops-at-the-delimiter` | `st=2 []` **2>** `<shell>: 1: read: Illegal option -n` | `st=0 [ab]` | `st=0 [ab]` | `st=0 [ab]` | `st=0 [ab]` | `st=0 []` |
+| `read/a-count-that-crosses-the-delimiter` | `st=2 []` **2>** `<shell>: 1: read: Illegal option -N` | `st=0 [ab~c]` | `st=0 [ab~c]` | `st=2 []` **2>** `<shell>: line 0: read: -N: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]` | `st=0 [ab~c]` | `st=1 []` **2>** `<shell>:read:1: bad option: -N` |
+| `read/an-initial-value-for-the-line` | `st=2 l=[keep]` **2>** `<shell>: 1: read: Illegal option -i` | `st=0 l=[x]` | `st=0 l=[x]` | `st=2 l=[keep]` **2>** `<shell>: line 0: read: -i: invalid option~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]` | `st=2 l=[keep]` **2>** `<shell>: read: -i: unknown option~Usage: read [-ACprsSv] [-d delim] [-u fd] [-t timeout] [-n count] [-N count]~            [var?prompt] [var ...]` | `st=1 l=[keep]` **2>** `<shell>:read:1: bad option: -i` |
 | `name/unset-f-on-a-name-no-function-could-have` | `st=0` | `st=0` | `st=0` | `st=0` | `st=1` **2>** `<shell>: unset: 1x: invalid function name` | `st=1` **2>** `<shell>:unset:1: no such hash table element: 1x` |
 | `name/unset-f-on-a-name-that-is-merely-undefined` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=1` **2>** `<shell>:unset:1: no such hash table element: nosuch` |
 | `name/a-lone-dash-given-to-a-builtin` | `st=1` **2>** `unalias: - not found` | `st=1` **2>** `<shell>: line 1: unalias: -: not found` | `st=1` **2>** `<shell>: line 1: unalias: -: not found` | `st=1` **2>** `<shell>: line 0: unalias: -: not found` | `st=1` | `st=1` **2>** `<shell>:unalias:1: not enough arguments` |
@@ -907,6 +912,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `export/an-imported-name-reassigned-in-a-function` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` |
 | `export/an-imported-name-reassigned-in-a-subshell` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` |
 | `export/an-imported-name-reassigned-is-listed` | `1` | `1` | `1` | `1` | `1` | `1` |
+| `export/an-exported-name-reaches-a-real-child` | `E=2~X=1` | `E=2~X=1` | `E=2~X=1` | `E=2~X=1` | `E=2~X=1` | `E=2~X=1` |
 | `export/a-prefix-over-an-imported-name` | `TERM=prefixed~TERM=dumb` | `TERM=prefixed~TERM=dumb` | `TERM=prefixed~TERM=dumb` | `TERM=prefixed~TERM=dumb` | `TERM=prefixed~TERM=dumb` | `TERM=prefixed~TERM=dumb` |
 | `export/p-names-what-is-exported` | `1` | `1` | `1` | `1` | `1` | `1` |
 | `readonly/p-names-what-is-readonly` | `1` | `1` | `1` | `1` | `1` | `1` |
@@ -936,6 +942,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `wait/a-leading-dash` | `st=2` **2>** `<shell>: 1: wait: Illegal option -x` | `st=2` **2>** `<shell>: line 1: wait: -x: invalid option~wait: usage: wait [-fn] [-p var] [id ...]` | `st=2` **2>** `<shell>: line 1: wait: -x: invalid option~wait: usage: wait [-fn] [-p var] [id ...]` | `st=2` **2>** `<shell>: line 0: wait: -x: invalid option~wait: usage: wait [n]` | `st=2` **2>** `<shell>: wait: -x: unknown option~Usage: wait [ options ] [job ...]` | `st=127` **2>** `<shell>:wait:1: job not found: -x` |
 | `wait/dash-dash-ends-the-options` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `wait/an-operand-that-is-neither` | `st=2` **2>** `<shell>: 1: wait: Illegal number: nosuchjob` | `st=1` **2>** `<shell>: line 1: wait: `nosuchjob': not a pid or valid job spec` | `st=1` **2>** `<shell>: line 1: wait: `nosuchjob': not a pid or valid job spec` | `st=1` **2>** `<shell>: line 0: wait: `nosuchjob': not a pid or valid job spec` | `st=1` **2>** `<shell>: wait: nosuchjob: Arguments must be %job, process ids, or job pool names` | `st=127` **2>** `<shell>:wait:1: job not found: nosuchjob` |
+| `wait/the-status-of-the-last-background-job` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` |
 | `wait/a-pid-that-is-not-ours` | `st=127` | `st=127` **2>** `<shell>: line 1: wait: pid 999999 is not a child of this shell` | `st=127` **2>** `<shell>: line 1: wait: pid 999999 is not a child of this shell` | `st=127` **2>** `<shell>: wait: pid 999999 is not a child of this shell` | `st=127` | `st=127` **2>** `<shell>:wait:1: pid 999999 is not a child of this shell` |
 | `jobspec/wait-by-number` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `jobspec/wait-a-number-that-names-nothing` | `st=2` **2>** `<shell>: 1: wait: No such job: %5` | `st=127` **2>** `<shell>: line 1: wait: %5: no such job` | `st=127` **2>** `<shell>: line 1: wait: %5: no such job` | `st=127` **2>** `<shell>: line 0: wait: %5: no such job` | `st=0` | `st=127` **2>** `<shell>:wait:1: %5: no such job` |
@@ -1160,6 +1167,26 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   : > f; exec < f; read -t 0 v; echo "st=$? v=[$v]"
   ```
+- `read/a-timeout-that-expires` — the deadline the two zero-timeout cases cannot reach: a pipe held open with nothing in it, so the read has to wait and then give up. The panel splits three ways rather than agreeing — bash 5.3 answers 142, which is 128 plus the alarm, and clears the variable; bash 3.2, ksh93 and zsh answer 1 and leave what was there; dash has no -t at all. A fifo opened read-write is what makes it a deadline instead of an end of input, since the harness closes standard input and any file is already at its end
+  ```sh
+  mkfifo p; exec 3<>p; l=keep; read -t 1 -r l <&3; echo "st=$? l=[$l]"
+  ```
+- `read/a-descriptor-to-read-from` — -u reads from a descriptor the script opened rather than from standard input, and the second read is what says the descriptor keeps its position between calls rather than being reopened. Five accept it and dash calls the letter illegal, which is the same shape its -t and -n answers have
+  ```sh
+  printf "hello\nworld\n" > f; exec 8< f; l=keep; read -u 8 -r l; echo "st=$? l=[$l]"; read -u 8 -r l; echo "st=$? l=[$l]"
+  ```
+- `read/a-count-that-stops-at-the-delimiter` — -n is an *upper bound*, not a length: four characters were asked for and the line ended after two, so two arrive and the read still succeeds. `read/a-count-of-characters` asks for fewer characters than the line has; this is the other side, and it is what makes the -N case below a different question rather than a spelling of the same one
+  ```sh
+  printf "ab\ncd" | { read -n 4 v; echo "st=$? [$v]"; }
+  ```
+- `read/a-count-that-crosses-the-delimiter` — -N is the count that means it: the delimiter stops counting for -n and is just another character for -N, so bash 5.3 and ksh93 read `ab`, the newline, and the `c` after it into one variable. bash 3.2 has no such letter and answers with its usage, and zsh has neither -N nor a usage to print
+  ```sh
+  printf "ab\ncd" | { read -N 4 v; echo "st=$? [$v]"; }
+  ```
+- `read/an-initial-value-for-the-line` — -i seeds the line editor and is therefore about a terminal, and this is what it does when there is not one: bash takes the option, ignores the seed, and reads the line — three others refuse the letter in three wordings, and only one of them refuses at 1. Worth pinning because the tempting reading of the manual is that the seed is a *default* for an empty line, and no shell here does that
+  ```sh
+  printf "x\n" | { l=keep; read -i pre -r l; echo "st=$? l=[$l]"; }
+  ```
 - `name/unset-f-on-a-name-no-function-could-have` — two of the panel are quiet here and two are not, and the two that speak are not answering the same question — one is judging the name, which `1x` could never be, and the other is reporting that its table holds nothing under it. The case next to this one is what tells them apart
   ```sh
   unset -f 1x; echo "st=$?"
@@ -1280,6 +1307,10 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   TERM=changed; export -p | grep -c -E "^(declare -x|export) TERM="
   ```
+- `export/an-exported-name-reaches-a-real-child` — the export cases either side of it ask about a name the shell *inherited*; this asks about one the shell exported itself, and about a prefix over a name that was never in the environment at all. Both reach a real child's environment, unanimously. It is worth its own row because the two paths are separate in an implementation — an imported name arrives already in the table the child is built from, and an exported one has to be put there
+  ```sh
+  export E=2; X=1 env | grep -E "^(E|X)=" | sort
+  ```
 - `export/a-prefix-over-an-imported-name` — a prefix over a name the shell inherited: the command sees the prefix and the next command sees what came in, unanimously. `cmd/assignment-prefix-is-transient` asks this of a shell variable and reads it back in the shell; this one asks it of an inherited name and reads it back through a real environment, which is where a superseding entry would be one of two rather than instead of the other
   ```sh
   TERM=prefixed env | grep '^TERM='; env | grep '^TERM='
@@ -1395,6 +1426,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `wait/an-operand-that-is-neither` — an operand naming neither a process nor a job: four wordings and no two alike, and three statuses — one quotes it and names both things it could have been, one calls it an illegal number, one lists what it would have taken, and one calls it a job that was not found and reports the 127 of a command that is not there
   ```sh
   wait nosuchjob; echo "st=$?"
+  ```
+- `wait/the-status-of-the-last-background-job` — `$!` names the job just started and `wait` on it reports *that job's* status rather than its own success — 3, unanimously. The pair is the idiom every script uses to run something in the background and still find out how it went, and the failure mode is quiet: a `wait` that answered 0 because the wait itself worked would pass every case that only checks it returned
+  ```sh
+  (exit 3) & wait $!; echo "st=$?"
   ```
 - `wait/a-pid-that-is-not-ours` — a number that could be a process and is not one of this shell's children. Unanimous on 127, and two of the four say so out loud — so silence here is a wording rather than a behavior
   ```sh
@@ -2158,6 +2193,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cmd/function-posix-form` | `posix` | `posix` | `posix` | `posix` | `posix` | `posix` |
 | `cmd/function-keyword-form` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `kw` | `kw` | `kw` | `kw` | `kw` |
 | `cmd/function-keyword-and-parens` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `both` | `both` | `both` | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `both` |
+| `cmd/an-empty-brace-group` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `{ }; echo ok'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `{ }; echo ok'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `}'~<shell>: -c: line 0: `{ }; echo ok'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `}' unexpected` *(status 3)* | `ok` |
+| `cmd/an-empty-subshell` | **2>** `<shell>: 1: Syntax error: ")" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `)'~<shell>: -c: line 1: `( ); echo ok'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `)'~<shell>: -c: line 1: `( ); echo ok'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `)'~<shell>: -c: line 0: `( ); echo ok'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `)' unexpected` *(status 3)* | `ok` |
+| `cmd/an-empty-loop-body` | **2>** `<shell>: 1: Syntax error: "done" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `done'~<shell>: -c: line 1: `while false; do done; echo ok'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `done'~<shell>: -c: line 1: `while false; do done; echo ok'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `done'~<shell>: -c: line 0: `while false; do done; echo ok'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `done' unexpected` *(status 3)* | `ok` |
+| `cmd/an-empty-command-substitution` | `[] ok` | `[] ok` | `[] ok` | `[] ok` | `[] ok` | `[] ok` |
+| `cmd/a-case-with-no-arms` | `ok` | `ok` | `ok` | `ok` | **2>** `<shell>: syntax error at line 1: `;' unexpected` *(status 3)* | `ok` |
 | `cmd/close-brace-as-an-ordinary-word` | `}` | `}` | `}` | `}` | `}` | **2>** `<shell>:1: parse error near `}'` *(status 1)* |
 | `cmd/reserved-word-inside-a-brace-group` | **2>** `<shell>: 1: Syntax error: "do" unexpected (expecting "}")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `do'~<shell>: -c: line 1: `{ echo a; do :; done; }'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `do'~<shell>: -c: line 1: `{ echo a; do :; done; }'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `do'~<shell>: -c: line 0: `{ echo a; do :; done; }'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `do' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `do'` *(status 1)* |
 | `cmd/reserved-word-in-an-empty-brace-group` | **2>** `<shell>: 1: Syntax error: "fi" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `fi'~<shell>: -c: line 1: `{ fi; }'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `fi'~<shell>: -c: line 1: `{ fi; }'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `fi'~<shell>: -c: line 0: `{ fi; }'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `fi' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `fi'` *(status 1)* |
@@ -2389,6 +2429,26 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   function f() { echo both; }; f
   ```
+- `cmd/an-empty-brace-group` — a compound command's body may not be empty: dash, both bash builds and ksh93 refuse the brace group and name the `}` they met where a command belonged, and zsh alone takes it. The core is the language every shell accepts, so an empty body is outside it and a dialect adds it back rather than the core allowing what four shells reject
+  ```sh
+  { }; echo ok
+  ```
+- `cmd/an-empty-subshell` — the same rule with parentheses, which is what shows it is a rule about bodies rather than about braces — and it is not a `}` this time, so a shell that special-cased the brace would take it. The same four refuse and the same one takes it
+  ```sh
+  ( ); echo ok
+  ```
+- `cmd/an-empty-loop-body` — the keyword form of the same rule: `done` where a command belongs. Worth its own case because a loop's body has a terminator of its own, so a parser could reach the end of it without ever asking whether anything was in it
+  ```sh
+  while false; do done; echo ok
+  ```
+- `cmd/an-empty-command-substitution` — the counter-case, and the line the rule stops at: a command substitution's body is a whole program rather than a compound command's body, and every shell in the panel takes an empty one. Without it a shell could refuse every empty thing and look right on four cases out of four
+  ```sh
+  x=$( ); echo "[$x] ok"
+  ```
+- `cmd/a-case-with-no-arms` — the other line the rule stops at, and the panel splits the other way here: a `case` with no arms is a list of *arms* rather than a command list, and dash, bash and zsh take it where ksh93 alone refuses. Recorded so the empty-body rule is not quietly widened to cover it
+  ```sh
+  case x in esac; echo ok
+  ```
 - `cmd/close-brace-as-an-ordinary-word` — `}` is reserved only where a command may begin in three of the four, so as an argument it is an ordinary brace — and in zsh it is reserved wherever a word may stand, which is a parse error here and is the same rule that lets `{ echo a }` close without a terminator
   ```sh
   echo }
@@ -2443,6 +2503,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
 | `getopts/loop-reads-each-option` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` |
+| `getopts/optind-starts-at-one` | `OPTIND=[1]` | `OPTIND=[1]` | `OPTIND=[1]` | `OPTIND=[1]` | `OPTIND=[1]` | `OPTIND=[1]` |
+| `getopts/a-function-with-its-own-optind` | `[a][b] rest=3~[b][a] rest=3~outer OPTIND=1` | `[a][b] rest=3~[b][a] rest=3~outer OPTIND=1` | `[a][b] rest=3~[b][a] rest=3~outer OPTIND=1` | `[a][b] rest=3~[b][a] rest=3~outer OPTIND=1` | `[a][b] rest=3~ rest=3~outer OPTIND=3` **2>** `<shell>: local: not found~<shell>: local: not found` | `[a][b] rest=3~[b][a] rest=3~outer OPTIND=1` |
 | `getopts/clustered-options` | `[a][b] ind=2` | `[a][b] ind=2` | `[a][b] ind=2` | `[a][b] ind=2` | `[a][b] ind=2` | `[a][b] ind=2` |
 | `getopts/argument-attached-or-apart` | `[b][val]~[b][val]` | `[b][val]~[b][val]` | `[b][val]~[b][val]` | `[b][val]~[b][val]` | `[b][val]~[b][val]` | `[b][val]~[b][val]` |
 | `getopts/a-dash-word-where-the-optstring-belongs` | `st=0 o=[q]` | `st=2 o=[]` **2>** `<shell>: line 1: getopts: -q: invalid option~getopts: usage: getopts optstring name [arg ...]` | `st=2 o=[]` **2>** `<shell>: line 1: getopts: -q: invalid option~getopts: usage: getopts optstring name [arg ...]` | `st=2 o=[]` **2>** `<shell>: line 0: getopts: -q: invalid option~getopts: usage: getopts optstring name [arg]` | `st=2 o=[]` **2>** `<shell>: getopts: -q: unknown option~Usage: getopts [-a name] opstring name [args...]` | `st=0 o=[q]` |
@@ -2455,6 +2517,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `getopts/loop-reads-each-option` — the shape every script uses it in, and the one that reported success while running its body zero times when getopts was a separate program that could not reach the shell's variables
   ```sh
   set -- -a -b x; while getopts "ab:" o; do echo "[$o:${OPTARG-}]"; done; echo "ind=$OPTIND"
+  ```
+- `getopts/optind-starts-at-one` — OPTIND is 1 before anything has called getopts, in all six — it is initialized when the shell starts rather than when the builtin first runs. A script that reads it to decide how many operands to `shift` past does so *after* the loop, but one that tests it before entering the loop, or that runs no options at all, reads whatever startup left. Found by the function case beside it, which is why a one-line case sits in front of a nine-line one
+  ```sh
+  echo "OPTIND=[$OPTIND]"
+  ```
+- `getopts/a-function-with-its-own-optind` — the way a function is written so it can be called twice: a local OPTIND starts each scan at 1 and leaves the caller's alone. Five of the six do exactly that; ksh93 has no `local`, so its OPTIND is the one global and the second call finds the scan already finished — which is not a getopts difference but the `local` axis reaching a builtin's state, and the reason a portable function resets OPTIND by assigning to it rather than by declaring it
+  ```sh
+  f() { local OPTIND=1 o; while getopts ab o; do printf "[%s]" "$o"; done; echo " rest=$((OPTIND))"; }; f -a -b; f -b -a; echo "outer OPTIND=$OPTIND"
   ```
 - `getopts/clustered-options` — two options in one word, which is why the position inside a word cannot be OPTIND — that counts words
   ```sh
@@ -2742,6 +2812,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `trap/bad-signal-name` | `st=1` **2>** `trap: NOPE: bad trap` | `st=1` **2>** `<shell>: line 1: trap: NOPE: invalid signal specification` | `st=1` **2>** `<shell>: line 1: trap: NOPE: invalid signal specification` | `st=1` **2>** `<shell>: line 0: trap: NOPE: invalid signal specification` | `st=1` **2>** `<shell>: trap: NOPE: bad trap` | `st=1` **2>** `<shell>:trap:1: undefined signal: NOPE` |
 | `trap/sig-prefix-diverges` | `st=1` **2>** `trap: SIGUSR1: bad trap` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `trap/signal-handler-runs-and-continues` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
+| `trap/lineno-inside-an-action` | `one~in trap LINENO=1~two` | `one~in trap LINENO=1~two` | `one~in trap LINENO=1~two` | `one~in trap LINENO=3~two` | `one~in trap LINENO=3~two` | `one~in trap LINENO=3~two` |
 | `trap/empty-handler-ignores` | `after` | `after` | `after` | `after` | `after` | `after` |
 | `trap/default-signal-terminates` | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
 | `trap/reset-restores-the-default` | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
@@ -2758,6 +2829,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `umask/reads-the-mask` | `0022` | `0022` | `0022` | `0022` | `0022` | `022` |
 | `umask/symbolic-is-unanimous` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` |
 | `umask/setting-then-reading` | `0077~u=rwx,g=,o=` | `0077~u=rwx,g=,o=` | `0077~u=rwx,g=,o=` | `0077~u=rwx,g=,o=` | `0077~u=rwx,g=,o=` | `077~u=rwx,g=,o=` |
+| `umask/a-created-file-takes-the-mask` | `-rw-------~-rw-r--r--` | `-rw-------~-rw-r--r--` | `-rw-------~-rw-r--r--` | `-rw-------~-rw-r--r--` | `-rw-------~-rw-r--r--` | `-rw-------~-rw-r--r--` |
 | `umask/setting-is-silent` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `umask/dash-s-with-a-mask-echoes-in-bash` | *(no output, status 0)* | `u=rwx,g=,o=` | `u=rwx,g=,o=` | `u=rwx,g=,o=` | *(no output, status 0)* | *(no output, status 0)* |
 | `umask/a-mask-it-cannot-read` | `st=2` **2>** `<shell>: 1: umask: Illegal number: 9999` | `st=1` **2>** `<shell>: line 1: umask: 9999: octal number out of range` | `st=1` **2>** `<shell>: line 1: umask: 9999: octal number out of range` | `st=1` **2>** `<shell>: line 0: umask: 9999: octal number out of range` | `st=1` **2>** `<shell>: umask: 9999: bad number` | `st=1` **2>** `<shell>:umask:1: bad umask` |
@@ -2819,6 +2891,13 @@ grades it and nothing drift-checks it either, for the same reason.
   trap 'echo caught' INT
   kill -INT $$
   echo after
+  ```
+- `trap/lineno-inside-an-action` — which line a trap action thinks it is on, and the panel gives two answers: bash 5.3 numbers the action's own text from 1, while bash 3.2, ksh93, dash and zsh report the line the signal was delivered on. So a trap body is a little program of its own in one shell and part of the script in four, and the split runs *through* bash rather than between bash and the rest — which is why the case is worth having over an assertion that names `bash`
+  ```sh
+  trap 'echo "in trap LINENO=$LINENO"' USR1
+  echo one
+  kill -USR1 $$
+  echo two
   ```
 - `trap/empty-handler-ignores` — an empty handler ignores the signal, which is different from having no trap at all
   ```sh
@@ -2889,6 +2968,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `umask/setting-then-reading` — the mask a script sets is the mask it reads back, which is the whole point of the builtin and exactly what a `/usr/bin/umask` in a child process cannot do
   ```sh
   umask 077; umask; umask -S
+  ```
+- `umask/a-created-file-takes-the-mask` — every other umask case interrogates the builtin, and a mask nothing is created under is a number the shell is keeping rather than a mask. This is the one that opens a file on each side of a change and reads the mode back off the file system, unanimously — and it is the case the no-process-state rule makes worth having, since a core that may not call umask(2) has to carry the mask itself and apply it at every open. Two masks rather than one, because a shell that ignored the mask entirely would still pass with whatever the process started with
+  ```sh
+  umask 077; : > f; ls -l f | cut -c1-10; umask 022; : > g; ls -l g | cut -c1-10
   ```
 - `umask/setting-is-silent` — setting writes nothing in any of the four — so a script can set a mask without its output changing, and the `-S` form below is the exception rather than the rule
   ```sh
@@ -3099,6 +3182,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `arith/logical-yields-one-not-an-operand` | `[1][1]` | `[1][1]` | `[1][1]` | `[1][1]` | `[1][1]` | `[1][1]` |
 | `arith/short-circuit-is-observable` | `[0][0]` | `[0][0]` | `[0][0]` | `[0][0]` | `[0][0]` | `[0][0]` |
 | `arith/assignment-escapes` | `[5][5]` | `[5][5]` | `[5][5]` | `[5][5]` | `[5][5]` | `[5][5]` |
+| `arith/a-chained-assignment` | `5 a=5 b=5` | `5 a=5 b=5` | `5 a=5 b=5` | `5 a=5 b=5` | `5 a=5 b=5` | `5 a=5 b=5` |
+| `arith/a-negative-modulo` | `[-1][1]` | `[-1][1]` | `[-1][1]` | `[-1][1]` | `[-1][1]` | `[-1][1]` |
 | `arith/ternary` | `[2][3]` | `[2][3]` | `[2][3]` | `[2][3]` | `[2][3]` | `[2][3]` |
 | `arith/compound-arithmetic-assignment` | `42 7 3 x=3` | `42 7 3 x=3` | `42 7 3 x=3` | `42 7 3 x=3` | `42 7 3 x=3` | `42 7 3 x=3` |
 | `arith/compound-bitwise-assignment` | `8 11 27 x=27` | `8 11 27 x=27` | `8 11 27 x=27` | `8 11 27 x=27` | `8 11 27 x=27` | `8 11 27 x=27` |
@@ -3126,6 +3211,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `arith/a-negative-result` | `-5 -5 -5 -2` | `-5 -5 -5 -2` | `-5 -5 -5 -2` | `-5 -5 -5 -2` | `-5 -5 -5 -2` | `-5 -5 -5 -2` |
 | `arith/a-negative-result-in-a-variable` | `[-6]` | `[-6]` | `[-6]` | `[-6]` | `[-6]` | `[-6]` |
 | `arith/expansion-happens-before-reading` | `3` | `3` | `3` | `3` | `3` | `3` |
+| `arith/an-expansion-inside-is-not-split` | `[3]~n=2` | `[3]~n=2` | `[3]~n=2` | `[3]~n=2` | `[3]~n=2` | `[3]~n=1` |
 | `arith/a-positional-parameter-in-an-expression` | `5` | `5` | `5` | `5` | `5` | `5` |
 | `arith/the-parameter-count-in-an-expression` | `4` | `4` | `4` | `4` | `4` | `4` |
 | `arith/the-last-status-in-an-expression` | `2` | `2` | `2` | `2` | `2` | `2` |
@@ -3242,6 +3328,14 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   printf "[%s]" "$((x=5))"; printf "[%s]" "$x"
   ```
+- `arith/a-chained-assignment` — assignment associates to the right and is itself an expression, so one statement sets both names and the whole thing is worth 5. Unanimous, dash included. A parser that read assignment as a statement rather than an operator would take the left name and lose the right, which is a shape that produces a plausible number and a variable nobody set
+  ```sh
+  echo "$((a=b=5)) a=$a b=$b"
+  ```
+- `arith/a-negative-modulo` — the sign of a remainder follows the *dividend*, unanimously — C's truncating rule rather than a mathematical modulus, which is the other plausible answer and the one that would make the first of these 2. `arith/division-truncates` pins the quotient's half of the same rule
+  ```sh
+  printf "[%s]" "$((-7 % 3))" "$((7 % -3))"; echo
+  ```
 - `arith/ternary` — the conditional operator
   ```sh
   printf "[%s]" "$((1?2:3))" "$((0?2:3))"
@@ -3349,6 +3443,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `arith/expansion-happens-before-reading` — the substitution is textual and comes first, so the *result* is the expression — 3, which no tree built from `$x$y` as written could give, and the reason an expression containing a `$` has no tree until it runs
   ```sh
   x='1+'; y=2; echo $(( $x$y ))
+  ```
+- `arith/an-expansion-inside-is-not-split` — the whitespace-bearing half of `expand/arithmetic-text-is-not-split`, which asks the same question of a value with no blanks in it. Splitting on a *space* is what a shell does by default and without being told to, so a value holding one is the shape an exemption is most likely to be missing for, and IFS is set to a digit here so a split would visibly eat the operands rather than merely rearrange them. The second line is the control the older case has no room for: the same value in an ordinary command position *is* split, which is what makes this an exemption of the arithmetic context rather than a property of the value
+  ```sh
+  IFS=1; x="1 + 2"; echo "[$(( $x ))]"; set -- $x; echo "n=$#"
   ```
 - `arith/a-positional-parameter-in-an-expression` — `$2` is not a name and the arithmetic grammar has no room for it; it is text that is substituted before the grammar sees anything — the form that /usr/bin/man uses and that this could not read
   ```sh
@@ -5719,6 +5817,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `pipefail/errexit-does-not-always-see-it` | `reached` | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | `reached` | *(no output, status 1)* |
 | `pipefail/last-failure-not-last-element` | `st=0~st=0` | `st=4~st=3` | `st=4~st=3` | `st=4~st=3` | `st=4~st=3` | `st=4~st=3` |
 | `pipefail/all-succeeding-is-zero` | `st=0~st=0` | `st=0~st=7` | `st=0~st=7` | `st=0~st=7` | `st=0~st=7` | `st=0~st=7` |
+| `pipefail/a-builtin-killed-by-a-signal` | `st=0` | `st=141` | `st=141` | `st=141` | `st=13` | `st=141` |
+| `pipefail/an-external-command-killed-by-a-signal` | `st=0` | `st=141` | `st=141` | `st=141` | `st=13` | `st=141` |
+| `pipefail/an-ordinary-failure-is-substituted-unchanged` | `st=0~st=0` | `st=42~st=42` | `st=42~st=42` | `st=42~st=42` | `st=42~st=42` | `st=42~st=42` |
+| `pipefail/a-substituted-death-against-an-ordinary-one` | `substituted=0 foreground=143` | `substituted=141 foreground=143` | `substituted=141 foreground=143` | `substituted=141 foreground=143` | `substituted=13 foreground=271` | `substituted=141 foreground=143` |
 | `pipefail/turned-off-again` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `pipestatus/every-element` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[1 0 1]` | `[1 0 1]` | `[1 0 1]` | `[]` | `[]` |
 | `pipestatus/lowercase-is-zsh` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[]` | `[]` | `[]` | `[]` | `[1 0 1]` |
@@ -5759,6 +5861,31 @@ grades it and nothing drift-checks it either, for the same reason.
   if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi
   true | true | true; echo "st=$?"
   (exit 7) | true | true; echo "st=$?"
+  ```
+- `pipefail/a-builtin-killed-by-a-signal` — the status pipefail hands back for an element a signal killed, which is not the status that death reports everywhere else in the same shell: 141 in bash and zsh, and in ksh93 **13** rather than the 269 its own convention would give. The string is grown past a pipe buffer on purpose, so the write is certain to outlive the reader rather than fitting in the pipe and racing it
+  ```sh
+  if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi
+  v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done
+  { echo "$v"; } | true; echo "st=$?"
+  ```
+- `pipefail/an-external-command-killed-by-a-signal` — the same question with a real process on the writing end rather than a builtin, and the same three answers — so the split is about the substitution and not about which side of the process boundary the death happened on
+  ```sh
+  if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi
+  yes 2>/dev/null | head -1 >/dev/null; echo "st=$?"
+  ```
+- `pipefail/an-ordinary-failure-is-substituted-unchanged` — the control: an element that merely *failed* is handed back as it stands in every shell with the option, first or middle. Without this the signal rows read as a difference about pipefail in general rather than about a signal death in particular
+  ```sh
+  if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi
+  (exit 42) | true; echo "st=$?"
+  (exit 42) | { echo x >/dev/null; } | true; echo "st=$?"
+  ```
+- `pipefail/a-substituted-death-against-an-ordinary-one` — both encodings in one line, which is the whole point: ksh93 says 13 for the substituted death and 271 for the waited-for one, so its 256-plus-the-signal convention is intact and stops in exactly one place. bash and zsh say 141 and 143 and never distinguish the two. dash has neither the option nor a second answer. The job's own death notice is thrown away because it names a pid, and a pid is different on every run
+  ```sh
+  if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi
+  v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done
+  { echo "$v"; } | true; a=$?
+  b=$( { sleep 5 & p=$!; kill -TERM $p; wait $p; echo $?; } 2>/dev/null )
+  echo "substituted=$a foreground=$b"
   ```
 - `pipefail/turned-off-again` — the option is an option: `set +o` puts the pipeline back to reporting its last element, so every shell answers 0 here — the one case where the panel agrees for two different reasons
   ```sh

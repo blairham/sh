@@ -228,6 +228,9 @@ func Semantics() interp.Semantics {
 	s.UmaskPrintsFourDigits = interp.Yes
 	s.UmaskSetWithSPrints = interp.Yes
 	s.PipefailOption = interp.Yes
+	// A substituted element keeps the status its death produced, 128 plus
+	// the signal, the same as anywhere else.
+	s.PipefailSubstitutesTheBareSignal = interp.No
 	s.ErrexitSeesPipefailFailure = interp.Yes
 	s.UnterminatedBracket = interp.BracketLiteral
 	s.ExitArgument = interp.ExitArgNumeric

@@ -159,6 +159,14 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// dies and the shell still does not.
 	sig, stop := catchInterrupt()
 	defer stop()
+	// And the interpreter asks the same handler what it heard, because a ^C
+	// that arrives while the shell is running a loop of its own arrives *here*
+	// — the shell holds the terminal, so the signal is this process's — and
+	// interp installs no handlers of its own. Cleared on the way out: the
+	// Runner is the caller's, and a hook left pointing at this session's
+	// handler would outlive the handler.
+	s.Runner.TakeInterrupt = sig.take
+	defer func() { s.Runner.TakeInterrupt = nil }()
 
 	ed := s.newEditor()
 	// Where to add what this session types. The count of what was already
@@ -218,17 +226,9 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		b := s.beginBlock(text)
 		done := s.run(ctx, state, stmts)
 		s.closeBlock(ctx, store, capture, b)
-		if sig.took() || s.Runner.LastCommandWasInterrupted() {
+		if s.interrupted(sig) {
 			// The terminal echoed `^C` where the cursor was and left it
 			// there, so the next prompt would land on top of it.
-			//
-			// Two questions rather than one, because the shell only hears the
-			// signal when it still holds the terminal — a builtin, a loop of
-			// its own. An external command runs in a process group the ^C goes
-			// to instead, and this shell is not in it; there the interrupt is
-			// visible only in what the command died of, which is why the
-			// prompt landed on top of the `^C` for every real command once job
-			// control started handing the terminal over.
 			s.write("\n")
 		}
 		if done {
@@ -253,6 +253,20 @@ func (s Shell) run(ctx context.Context, state *terminalState, stmts []*syntax.Fi
 		}
 	}()
 	return s.runStmts(ctx, stmts)
+}
+
+// interrupted reports whether the line that just ran was ended by a ^C, which
+// is what the next prompt has to start on a line of its own for.
+//
+// Two questions rather than one, and the second is the load-bearing half. The
+// shell only *hears* the signal while it still holds the terminal — a builtin,
+// a loop of its own. An external command runs in a process group the ^C goes
+// to instead, and this shell is not in it, so there the interrupt is visible
+// only in what the command died of. Asking the first question alone put the
+// prompt on top of the `^C` for every real command from the moment job control
+// started handing the terminal over.
+func (s Shell) interrupted(sig *interrupts) bool {
+	return sig.took() || s.Runner.LastCommandWasInterrupted()
 }
 
 // heldForStoppedJobs asks the interpreter whether the end of input should end

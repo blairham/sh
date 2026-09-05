@@ -31,9 +31,17 @@ import (
 // The channel is also what tells the loop to start the next prompt on a fresh
 // line: the terminal echoes `^C` where the cursor was and does not move it, so
 // without a newline the prompt lands on top of it.
+// Two flags rather than one, because two things read an arrival and neither
+// may take it from the other. hit is the prompt's: the terminal echoed `^C`
+// where the cursor was, so the next prompt starts on a line of its own.
+// pending is the interpreter's, read through Runner.TakeInterrupt, and is what
+// stops a loop the shell is running itself — the one thing nothing else can
+// reach, since a loop of builtins never blocks, never waits and never comes
+// back here.
 type interrupts struct {
-	ch  chan os.Signal
-	hit atomic.Bool
+	ch      chan os.Signal
+	hit     atomic.Bool
+	pending atomic.Bool
 }
 
 func catchInterrupt() (*interrupts, func()) {
@@ -46,8 +54,11 @@ func catchInterrupt() (*interrupts, func()) {
 	go func() {
 		for {
 			select {
-			case <-in.ch:
+			case sig := <-in.ch:
 				in.hit.Store(true)
+				if offersToTheInterpreter(sig) {
+					in.pending.Store(true)
+				}
 			case <-done:
 				return
 			}
@@ -61,3 +72,17 @@ func catchInterrupt() (*interrupts, func()) {
 
 // took reports whether a ^C arrived since it was last asked, and forgets it.
 func (in *interrupts) took() bool { return in.hit.Swap(false) }
+
+// take is the same question asked by the interpreter, through
+// Runner.TakeInterrupt, and answered from a flag of its own so that the two
+// readers cannot take an arrival from each other.
+func (in *interrupts) take() bool { return in.pending.Swap(false) }
+
+// offersToTheInterpreter reports whether an arrival is one the interpreter
+// should be told about: an interrupt, and not a stop.
+//
+// A stop is not an interrupt. What ^Z does to a loop is decided from the
+// command that stopped — see interp's breakLoopsForAStop, and the measurements
+// behind it — and a shell that gave the line up here as well would end the
+// line that bash and zsh both carry on with.
+func offersToTheInterpreter(sig os.Signal) bool { return sig == syscall.SIGINT }

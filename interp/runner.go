@@ -263,6 +263,22 @@ type Runner struct {
 	// running until something waits for it by name.
 	PollCommand func(pid int) (w Wait, changed bool, err error)
 
+	// TakeInterrupt, when set, reports whether the person at the keyboard has
+	// interrupted the shell since it was last asked, and forgets it.
+	//
+	// The front end's to answer because only the front end can hear it. interp
+	// installs no signal handlers — a library that did would be taking them
+	// from the program around it — so a ^C aimed at *this process*, which is
+	// what one is whenever the shell is running something of its own rather
+	// than an external command, is invisible here. Without it a loop of
+	// builtins typed at a prompt cannot be stopped by anything short of
+	// closing the terminal.
+	//
+	// Consulted at the top of every command, and only in an interactive
+	// shell: what a *script* does with an interrupt is a different question,
+	// answered by the signal itself rather than by somebody typing.
+	TakeInterrupt func() bool
+
 	// Foreground, when set, hands the terminal to a process group for as long
 	// as it runs, and takes it back afterwards. A pgid of 0 means the shell
 	// itself.
@@ -476,6 +492,11 @@ type Runner struct {
 	// control flow rather than errors, so they are not returned as ones.
 	ctl      control
 	ctlDepth int
+	// loopDepth is how many loops execution is inside right now, which is
+	// what a ^Z has to break out of — see breakLoopsForAStop. Dynamic rather
+	// than lexical: a loop that calls a function that loops is two, because
+	// what the stop is inside is what matters.
+	loopDepth int
 	// ctx is the context of the current Run, so expansion can reach it. A
 	// command substitution runs commands, and threading a context through
 	// every expander signature to reach one place would be worse.
@@ -1681,6 +1702,12 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 	// here rather than beside each assignment to status, because this is the
 	// one door every command goes through.
 	r.diedOfSig = 0
+	// And the same door is where an interrupt has to be noticed, because for
+	// a loop of the shell's own commands there is no other: nothing in `while
+	// :; do echo tick; done` blocks, waits or returns to anywhere else.
+	if r.takeInterrupt() {
+		return nil
+	}
 	if r.noexec {
 		// `set -n` — commands are read and never executed, and nothing turns
 		// it back off: even `set +n` is a command. Syntax errors still
@@ -2229,6 +2256,18 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 		// Still there, so it becomes a job rather than a result. The prompt
 		// comes back and the command is waiting to be told to go on.
 		r.addStoppedJob(pid, argv, w.Signal)
+		// And the loops it was inside end, or a ^Z would leave the shell
+		// going round again with the command it was waiting for suspended —
+		// which is a loop that runs *faster* for having been suspended, and
+		// cannot be stopped at all.
+		r.breakLoopsForAStop()
+	}
+	if w.Killed && w.Signal == syscall.SIGINT && r.Interactive {
+		// The interrupt went to the command rather than to this shell — the
+		// terminal was its process group's — so there was no signal here to
+		// hear, and what it did is the only evidence. Same ending either way:
+		// the line is given up.
+		r.abandonForInterrupt()
 	}
 	r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: r.status})
 	return nil

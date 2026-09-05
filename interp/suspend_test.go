@@ -22,6 +22,18 @@ import (
 // notices are the only thing these tests run anything for.
 func jobSession(t *testing.T, f *fakeJobs, src string, jobControl bool, shape func(*Semantics, *Diagnostics)) (string, int, *Runner) {
 	t.Helper()
+	return jobSessionShaped(t, f, src, jobControl, shape, nil)
+}
+
+// jobSessionWith is the same with the dialect left alone and the Runner handed
+// to the caller before it runs, for a test that wires a front-end hook.
+func jobSessionWith(t *testing.T, f *fakeJobs, src string, jobControl bool, adjust func(*Runner)) (string, int, *Runner) {
+	t.Helper()
+	return jobSessionShaped(t, f, src, jobControl, func(*Semantics, *Diagnostics) {}, adjust)
+}
+
+func jobSessionShaped(t *testing.T, f *fakeJobs, src string, jobControl bool, shape func(*Semantics, *Diagnostics), adjust func(*Runner)) (string, int, *Runner) {
+	t.Helper()
 	file, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
@@ -37,7 +49,11 @@ func jobSession(t *testing.T, f *fakeJobs, src string, jobControl bool, shape fu
 	shape(&sem, &dg)
 	r := newTestRunner(t, &Runner{
 		Stdout: out, Stderr: out, Semantics: &sem, Diagnostics: &dg,
-		Name: "testsh", JobControl: jobControl,
+		// Interactive alongside JobControl, which is how a prompt sets them:
+		// one says there is somebody to tell about a job and the other says
+		// the shell is a session. What an interrupt does to the line is asked
+		// of the second.
+		Name: "testsh", JobControl: jobControl, Interactive: jobControl,
 	})
 	r.WaitForCommand = func(int) (Wait, error) { return f.next(), nil }
 	r.SignalGroup = func(int, syscall.Signal) error { return nil }
@@ -48,6 +64,9 @@ func jobSession(t *testing.T, f *fakeJobs, src string, jobControl bool, shape fu
 	r.PollCommand = func(int) (Wait, bool, error) {
 		w, changed := f.poll()
 		return w, changed, nil
+	}
+	if adjust != nil {
+		adjust(r)
 	}
 	if _, err := r.Run(context.Background(), file); err != nil {
 		t.Fatalf("run %q: %v", src, err)
@@ -353,5 +372,25 @@ func TestWhetherTheLastCommandWasInterrupted(t *testing.T) {
 				t.Errorf("LastCommandWasInterrupted = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// A stopped job that is still running is not one to hold an exit for: `bg`
+// resumed it, nothing about it is waiting to be told to go on, and a shell
+// that stayed for it would refuse to leave for as long as any job existed.
+func TestARunningJobDoesNotHoldTheExit(t *testing.T) {
+	f := &fakeJobs{waits: []Wait{stopped}}
+	_, _, r := jobSession(t, f, echoCmd+"\nbg", true, func(_ *Semantics, d *Diagnostics) {
+		d.StoppedJobsAtExit = "there are stopped jobs"
+	})
+	if jobs := r.Jobs(); len(jobs) != 1 || jobs[0].Stopped {
+		t.Fatalf("jobs = %+v, want the one job resumed", jobs)
+	}
+	out, _, _ := jobRun2(t, r, "exit")
+	if !r.Exited() {
+		t.Error("the shell stayed for a running job, want it to leave")
+	}
+	if strings.Contains(out, "stopped jobs") {
+		t.Errorf("said %q, want nothing", out)
 	}
 }

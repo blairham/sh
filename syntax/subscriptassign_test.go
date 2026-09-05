@@ -101,6 +101,44 @@ func TestASubscriptedAssignmentNeedsTheFlag(t *testing.T) {
 	}
 }
 
+// The two gates are separate and the append form has to pass both. A dialect
+// with subscripts but no `+=` reads `a[1]+=v` as a command name, exactly as
+// it reads a plain `x+=v` as one.
+//
+// Written as its own case because the presets hide it: every dialect that
+// refuses `+=` also refuses subscripts, so the ArraySubscript gate returns
+// first and the AppendAssign one is never reached. Removing it changed
+// nothing anywhere and the whole suite stayed green — a survivor rather than
+// an equivalent mutant, and the flag combination is legitimate for a dialect
+// written outside this repository.
+func TestASubscriptedAppendNeedsTheAppendFlagToo(t *testing.T) {
+	d := syntax.Core()
+	d.AppendAssign = false
+	for _, c := range []struct {
+		src     string
+		assigns int
+		args    int
+	}{
+		// No `+=`, so the word is a command name.
+		{"a[1]+=v", 0, 1},
+		{"a[$i]+=v", 0, 1},
+		// The plain form is untouched: it is the other flag's, and that one
+		// is still on.
+		{"a[1]=v", 1, 0},
+	} {
+		p := syntax.NewParser(c.src, d)
+		f := p.Parse()
+		if err := p.Err(); err != nil {
+			t.Fatalf("parse %q: %v", c.src, err)
+		}
+		cmd := onlySimple(t, f)
+		if len(cmd.Assigns) != c.assigns || len(cmd.Args) != c.args {
+			t.Errorf("%q: %d assignments and %d words, want %d and %d",
+				c.src, len(cmd.Assigns), len(cmd.Args), c.assigns, c.args)
+		}
+	}
+}
+
 // The scan stops where the shells stop it. A word whose name half is broken by
 // an expansion is a command name in every shell on the panel — `a$b=c` reports
 // `aX=c` — so a scan that followed the `=` across spans wherever it found one

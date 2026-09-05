@@ -425,12 +425,28 @@ type Dialect struct {
 	// never reaches the question.
 	RegexTakesAlternation bool
 
-	// ArraySubscript enables `${a[i]}`, `${a[@]}` and `${a[*]}`, and `a[i]`
-	// inside an arithmetic expression. Absent from dash, which has no arrays
-	// at all and calls the subscript a bad substitution rather than reading
-	// it — a separate flag from ArrayLiteral because the two halves are
-	// separately reachable: a subscript can be written for a variable that
-	// was never an array.
+	// ArraySubscript enables `${a[i]}`, `${a[@]}` and `${a[*]}`, `a[i]`
+	// inside an arithmetic expression, and the element assignment `a[i]=v`
+	// and `a[i]+=v`. Absent from dash, which has no arrays at all and calls
+	// the subscript a bad substitution rather than reading it — a separate
+	// flag from ArrayLiteral because the two halves are separately
+	// reachable: a subscript can be written for a variable that was never an
+	// array.
+	//
+	// The assignment shape is this flag's rather than a fourth one, and that
+	// is measured rather than assumed: reading a subscript and writing
+	// through one split the panel the same way, with bash 3.2, bash 5.3,
+	// ksh93 and zsh on one side and dash alone on the other. zsh's refusal
+	// of `a[0]=x` is not a third answer — it parses the assignment and
+	// rejects the *subscript*, which is the array-base axis and belongs to
+	// the semantics vector. A flag no dialect can be given a different value
+	// for is a field nothing reads, which is what #564 is about.
+	//
+	// Where it is off, `a[0]=x` is a command name and not an assignment —
+	// the shell without arrays reports `a[0]=x: not found` and carries on.
+	// Getting that wrong is silent on the permissive side: the element is
+	// stored, nothing is reported, and a script written against the
+	// no-array dialect on purpose is told it is portable when it is not.
 	ArraySubscript bool
 
 	// DoubleBracket enables `[[ ... ]]`.

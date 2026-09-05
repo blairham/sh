@@ -279,16 +279,34 @@ func (r *Runner) typeAll(name string, m typeMode) int {
 // typeNotFound is the tail every mode shares: the complaint — or `-t`'s
 // silence — and the dialect's status.
 func (r *Runner) typeNotFound(kind bool, notFound string) int {
-	dg := r.diag()
 	if kind {
-		return orDefault(dg.TypeNotFoundStatus, 1)
+		return orDefault(r.diag().TypeNotFoundStatus, 1)
 	}
+	r.reportNameNotFound(notFound)
+	return orDefault(r.diag().TypeNotFoundStatus, 1)
+}
+
+// reportNameNotFound writes the line `type` and `command -V` share for a name
+// that is nothing, on the stream the dialect reports it on.
+//
+// Two questions, asked in order and independent of each other: whether the
+// line carries the shell's name and location — TypeNotFoundUnprefixed — and
+// which stream it goes to — TypeNotFoundOnStdout. Half the panel calls this an
+// answer and writes it where the answers go, and half calls it a complaint;
+// getting the stream wrong hides the line from `type nope 2>/dev/null` or
+// leaks it into `$(type -p nope)`, neither of which the wording would show.
+func (r *Runner) reportNameNotFound(msg string) {
+	dg := r.diag()
+	line := r.diagLine("%s\n", msg)
 	if dg.TypeNotFoundUnprefixed {
-		r.errf("%s\n", notFound)
-	} else {
-		r.diagf("%s\n", notFound)
+		// Nothing in front of it, so there is no prefix to work out.
+		line = msg + "\n"
 	}
-	return orDefault(dg.TypeNotFoundStatus, 1)
+	if dg.TypeNotFoundOnStdout {
+		r.printf("%s", line)
+		return
+	}
+	r.errf("%s", line)
 }
 
 // describeName is the sentence itself, shared with `command -V`, which asks
@@ -352,13 +370,9 @@ func (r *Runner) describeName(name string, kind, skipFuncs bool, notFound string
 		// which is what makes `-t` scriptable in the first place.
 		return orDefault(dg.TypeNotFoundStatus, 1)
 	}
-	msg := notFound
-	if dg.TypeNotFoundUnprefixed {
-		// Two of the four write this one with nothing in front of it, where
-		// every other message they print carries the shell's name.
-		r.errf("%s\n", msg)
-	} else {
-		r.diagf("%s\n", msg)
-	}
+	// Two of the four write this one with nothing in front of it, where every
+	// other message they print carries the shell's name — and the same two
+	// write it to standard output. reportNameNotFound holds both facts.
+	r.reportNameNotFound(notFound)
 	return orDefault(dg.TypeNotFoundStatus, 1)
 }

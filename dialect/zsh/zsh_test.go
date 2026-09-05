@@ -160,6 +160,11 @@ func TestDiagnostics(t *testing.T) {
 	if !zsh.Diagnostics().TypeNotFoundUnprefixed {
 		t.Error("TypeNotFoundUnprefixed = false, want the line written bare")
 	}
+	// And on standard output, the other half of treating it as an answer:
+	// `type nope 1>/dev/null` prints nothing here.
+	if !zsh.Diagnostics().TypeNotFoundOnStdout {
+		t.Error("TypeNotFoundOnStdout = false, want the line on standard output")
+	}
 	if got, want := zsh.Diagnostics().SyntaxStatus(), 1; got != want {
 		t.Errorf("syntax-error status = %d, want %d", got, want)
 	}

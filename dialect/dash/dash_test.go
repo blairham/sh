@@ -183,6 +183,11 @@ func TestDiagnostics(t *testing.T) {
 	if got, want := dash.Diagnostics().TypeNotFoundStatus, 127; got != want {
 		t.Errorf("TypeNotFoundStatus = %d, want %d", got, want)
 	}
+	// And it is a report rather than a complaint: `type nope 1>/dev/null`
+	// prints nothing here, where two of the panel still show the line.
+	if !dash.Diagnostics().TypeNotFoundOnStdout {
+		t.Error("TypeNotFoundOnStdout = false, want the line on standard output")
+	}
 	if got, want := dash.Diagnostics().SyntaxStatus(), 2; got != want {
 		t.Errorf("syntax-error status = %d, want %d", got, want)
 	}

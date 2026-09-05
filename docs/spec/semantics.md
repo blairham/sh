@@ -736,6 +736,63 @@ prose rather than as a case because the output cannot be golden: bash and
 ksh93 announce the killed writer by its process id, which is different on
 every run.
 
+## A capability the corpus cannot hand a case
+
+The corpus can give a case its own argv (`Case.Args`) and its own standard
+input (`Case.Stdin`), and it still cannot give one a *fourth* descriptor.
+Every case is run by one harness that builds one `exec.Cmd`, and nothing
+in a Case says "and open this on 3" — so the whole of what a shell does
+with a descriptor its caller opened is outside what `make oracle` can
+re-run. The obvious workaround makes it worse: a snippet could invoke
+`"$0"` recursively with a redirection, but one panel column is deliberately
+invoked with `argv[0]` of `sh`, and `"$0"` there is whatever `/bin/sh`
+happens to be on the machine — bash on macOS, dash on Debian. That is the
+mislabeled-column trap `MustReport` exists to prevent, reintroduced by a
+snippet.
+
+So it is prose, measured and re-measured against bash 5.3, bash 3.2, dash,
+ksh93 and zsh (macOS, 2026-09-05). The invocation throughout is
+`echo hello | <shell> 3<&0 case.sh`, which opens descriptor 3 on the pipe
+before the shell starts:
+
+    exec <&3; read x; echo "got:$x"        got:hello — unanimous
+    read x <&3; echo "got:$x"              got:hello — unanimous
+    exec 4<&3; read x <&4                  got:hello — unanimous
+    exec 3<&3; read x <&3                  got:hello — unanimous
+    read x <&7                             7: bad file descriptor — unanimous
+    exec 3<&-; read x <&3                  3: bad file descriptor — unanimous
+    exec 3>&-; read x <&3                  3: bad file descriptor — unanimous,
+                                           and the close reports 0 whichever
+                                           direction it is written
+    exec 3<&-; exec 3<&-                   0 — closing a closed one is not an
+                                           error, as closing an unopened one
+                                           is not
+    sh -c 'read y <&3'                     the child reads it — unanimous
+    exec 3<&-; sh -c 'read y <&3'          the child finds it closed — unanimous
+    exec 9<&3 3<&-; sh -c '… >&3'          the same, with the descriptor moved
+                                           rather than dropped
+    exec sh -c 'read y <&3'                the replacement reads it — unanimous
+
+Nothing splits the panel, which is the finding: an inherited descriptor is
+an ordinary member of the table from the moment the shell starts, and every
+question that has an answer for `exec 3<file` has the same answer for one
+the caller opened. There is no axis here, so no preset gains a field — see
+"Rules for adding an axis": a unanimous answer is a *behavior*, and asking
+about it would refuse the construct in the core over a question that
+decides nothing.
+
+Two things about it are ours rather than the panel's, because a shell
+written in Go has to rebuild what fork and exec give a shell in C. The
+descriptors have to be found, and close-on-exec is the discriminator: the
+Go runtime opens every descriptor of its own close-on-exec, so one that
+would survive an exec is one the process was handed. And they have to be
+found by the *binary* rather than by the interpreter — `interp` is a
+library, and a Runner embedded in some other program would otherwise
+publish that program's own files to a script it was asked to interpret.
+`interp.Runner.InheritedFiles` is therefore a fact the front end hands in,
+laid out exactly as the outbound table is: entry i is descriptor 3+i, and
+a gap is a number nothing arrived on.
+
 ## An axis that is only about one of two names
 
 `typeset` and `local` do the same thing and do not have the same rule.
@@ -2164,8 +2221,50 @@ bare in ksh93.
 with its own `type` sentence, so the option costs one wording — the
 complaint for a name that is nothing (`Diagnostics.CommandVNotFound`),
 where bash and ksh93 blame `command` and dash and zsh keep the shell's
-name off the line exactly as their `type` does. Status and prefix rule
-are `type`'s own (`TypeNotFoundStatus`, `TypeNotFoundUnprefixed`).
+name off the line exactly as their `type` does. Status, prefix rule and
+stream are `type`'s own (`TypeNotFoundStatus`, `TypeNotFoundUnprefixed`,
+`TypeNotFoundOnStdout`).
+
+**A name `type` could not account for goes to a different stream in each
+half of the panel** (`Diagnostics.TypeNotFoundOnStdout`). bash and ksh93
+write it to standard error; dash and zsh write it to standard output.
+
+    $ type nope 2>/dev/null      $ type nope 1>/dev/null
+    bash   (nothing)             bash   bash: line 1: type: nope: not found
+    dash   nope: not found       dash   (nothing)
+    ksh93  (nothing)             ksh93  ksh: whence: nope: not found
+    zsh    nope not found        zsh    (nothing)
+
+Two shells treat the line as an *answer* — part of what the reader asked
+`type` for — and two treat it as a complaint about the request. It is a
+question of its own: the status is settled separately
+(`TypeNotFoundStatus`, 127 in dash and 1 elsewhere) and so is the prefix
+(`TypeNotFoundUnprefixed`), and nothing about either predicts the stream.
+
+The consequences are the ones a wording difference never has.
+`p=$(type -p nope)` captures the line where the shells report it and
+captures nothing where they complain; `type nope 2>/dev/null` shows it in
+one half and hides it in the other. It is also why a multi-name
+invocation reads in order under the reporting shells: dash has no option
+letters on `type` at all, so `type -t f cd if ls` reads five names and
+prints five lines — two misses and three answers — in one stream, in the
+order they were asked for. Splitting them across two streams leaves a
+reader to interleave them, and under a pipe leaves them unordered.
+
+`command -V` shares the answer, being `type`'s question under another
+name. ksh93's `whence`, which is the builtin its `type` is spelled from,
+complains on standard error to match.
+
+Oracle runs, 2026-09-05, bash 5.3.15, dash, ksh93u+ 2012-08-01, zsh
+5.9.2, each stream redirected separately. Corpus rows
+`type/a-name-that-is-nothing`, `type/p-on-a-name-that-is-nothing`,
+`type/capital-p-on-a-name-that-is-nothing`, `type/dash-t-names-the-kind`,
+`type/dash-t-on-nothing-is-silent-failure`, `type/a-lists-a-keyword`,
+`type/f-skips-or-prints-the-function`,
+`type/several-names-and-a-double-dash` and
+`command/capital-v-a-name-that-is-nothing`. The rows were scoring as
+agreement until #462 stopped merging the two captures before grading, and
+they are the reason it does not.
 
 ### Out of scope, recorded rather than silent: namerefs
 

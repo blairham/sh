@@ -350,6 +350,9 @@ func Semantics() interp.Semantics {
 	// An operator on `${a[*]}` trims each element before the join here.
 	s.OperatorDistributesOverStarSubscript = interp.Yes
 	s.ExportCarriesFunctions = interp.No
+	// No `-n` either: measured, `export: -n: unknown option` with the usage
+	// line under it, and the script ends there.
+	s.ExportTakesTheAttributeOff = interp.No
 	s.AnnouncesBackgroundJob = interp.Yes
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.No
@@ -527,8 +530,12 @@ func Diagnostics() interp.Diagnostics {
 		// range: `${x:1+:2}` names `1+:2`. A failing length has nothing after
 		// it and is named on its own.
 		SubstringErrorNamesTheWholeRange: true,
-		ArithOperandExpected:             "more tokens expected",
-		ArithOperatorExpected:            "arithmetic syntax error",
+		// An operand failure is two sentences here, and which one is said
+		// turns on whether the expression ran out or found something it
+		// could not use: `$((1+))` against `$((%))`.
+		ArithOperandExpected:  "arithmetic syntax error",
+		ArithExpressionRanOut: "more tokens expected",
+		ArithOperatorExpected: "arithmetic syntax error",
 		// A digit the base does not have is the same sentence.
 		DigitTooGreatForBase: "arithmetic syntax error",
 		// ksh93 does not call this a bad substitution: it is a syntax error

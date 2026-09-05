@@ -337,6 +337,27 @@ Unanimous. The redirection belongs to the compound command as a whole,
 which means the AST node for every compound form needs a redirection
 list, not just simple commands.
 
+**Every** compound form, and the one that was missed is worth recording
+because of how quietly it failed. The C-style `for` had no list to keep
+one in, so the operator was left standing where it was and became a
+statement of its own — a redirection with no command, which truncates the
+file and redirects nothing:
+
+    for ((i=0;i<2;i++)); do echo $i; done >f    the numbers on the
+                                                terminal and f empty
+
+There was no diagnostic anywhere, because both halves are legal: a
+redirection with no command is a real construct, and it is exactly what
+is left over when the one before it did not take its own suffix. A node
+without a redirection list does not refuse a redirection — it silently
+means something else. Measured 2026-09-05 on the four shells that have
+the loop; dash has no C-style `for` at all:
+
+    for ((i=0;i<2;i++)); do echo $i; done >f    f holds 0 and 1
+    for ((i=0;i<2;i++)) { echo $i; } >f         the same, brace body
+    for ((i=0;i<2;i++)); do read x; …; done <d  the loop reads the file
+    for … done 2>f                              and the same for stderr
+
 ## Loops
 
 `while`, `until` and `for` exit **0 when the body never runs**:
@@ -392,6 +413,10 @@ separator to delimit.
 The header is also a *lexer* fact rather than a parser one: `(( … ))`
 arrives whole, because what is inside is arithmetic and not a command
 list, so the three parts are cut on the semicolons afterwards.
+
+Nothing else about it is special, and that includes the redirection
+suffix every other compound command takes — see "Compound commands take
+redirections", where the shape this loop got wrong is written down.
 
 ## A brace group as a loop body
 

@@ -3473,21 +3473,69 @@ means reproducing that shell's modifier table and the order it tries it
 in, which is a feature rather than an axis — #662, filed on its own rather
 than guessed at here.
 
-### Recorded rather than reproduced: what "operand expected" means
+### What "operand expected" means — two failures, not one
 
-Two of the panel word the *reason* by whether the expression ran out or
-found something it could not use, and this implementation gives the
-end-of-input wording for both:
+Issue #661. Two of the panel word the *reason* by whether the expression
+ran out or found something it could not use. Measured 2026-09-05 across
+bash 5.3.15, bash 3.2.57, ksh93u+ 2012-08-01, zsh 5.9.2 and dash:
 
     $((1+))    ksh93  more tokens expected        zsh  operand expected at end of string
+    $((~))     ksh93  more tokens expected        zsh  operand expected at end of string
     $((%))     ksh93  arithmetic syntax error     zsh  operand expected at `%'
+    $((1+&2))  ksh93  arithmetic syntax error     zsh  operand expected at `&2'
     $((@))     ksh93  arithmetic syntax error     zsh  illegal character: @
 
-bash words all three the same, which is why nothing had noticed. It is
-not this section's failure — `$((%))` has the same divergence and reaches
-no subscript — but it is what the `unset a[@]` rows under #648 and the
-substring-offset row here still differ on, so it is written down where
-they are — #661.
+bash words all of them identically —
+`arithmetic syntax error: operand expected (error token is "…")`, and bash
+3.2 the same without the leading `arithmetic` — and dash names the whole
+expression and says `expecting primary` whatever happened. That is why one
+field served for years: bash is the column a conformance number is usually
+read against, and it cannot see the difference.
+
+The parser is the only place the two can be told apart, and it already
+separated them without knowing it. Reading a value returns nothing at the
+end of the text *without* reporting anything, so the frame that wanted the
+operand names the operator it was left holding — `ErrArithOperandEnd`,
+token `+`. Where there is text that cannot begin a value, the reading
+reports it itself, naming everything from the refused byte to the end of
+the expression — `ErrArithOperand`, token `&2`. The two tokens differ
+because the two shells that name anything name different things.
+
+`Diagnostics.ArithOperandExpected` is the found wording and
+`ArithExpressionRanOut` the other; an empty second field means "the same
+as the first", which is what bash and dash want.
+
+**A dialect that blames past the expression read past it.** ksh93 reports
+a failing substring offset together with everything after it in the range
+— `${x:1+:2}` is `1+:2` — because it reads `offset:length` as one string.
+So what ran out for this parser did not run out for that shell: it found
+a `:`. Naming the whole range and reading the whole range are one fact,
+so the blamed text is enough to know it and there is no second flag to
+keep in step:
+
+    ${x:1+}      ksh93  1+: more tokens expected
+    ${x:2:1+}    ksh93  1+: more tokens expected      a length has nothing after it
+    ${x:1+:2}    ksh93  1+:2: arithmetic syntax error
+
+#### Still recorded rather than reproduced: zsh's third wording
+
+zsh has a third sentence for a byte that is not part of any arithmetic
+token — `illegal character: @` — and it is not modeled. It is not a
+question of *which* byte alone; it is also where the byte stands:
+
+    $((@))       illegal character: @          nothing read yet
+    $((1 @))     illegal character: @          where an operator belonged
+    $((1+@))     operand expected at `@'       where an operand belonged
+    $((+@))      operand expected at `@'       after a unary operator too
+    $((1 :))     operand expected at end of string    `:` *is* a math token
+    $((1 2))     operator expected at `2'      a value where an operator belonged
+
+The refused set measured is `@ { } ; '`; every other byte tried is either
+a math token or can begin a value. Reproducing the sentence therefore
+needs that shell's lexical table *and* a rule about position, which is a
+lexer's internals rather than a grammar question, and this repository
+learns behavior by running binaries. `arith/an-operand-a-lexer-refuses-outright`
+records it: three of the four columns pass and the zsh column is the work.
 
 ## A subscript before the first element
 
@@ -4887,6 +4935,20 @@ Gives `export` its `-f`, which writes a function into a child's
 environment. True in bash alone: the other three have no way to carry a
 function at all, and each rejects the option as an option — two of them
 fatally.
+
+**`ExportTakesTheAttributeOff`** — bash yes · dash no · ksh93 no · zsh no
+
+Gives `export` its `-n`, which takes the export attribute off a name and
+leaves the name itself alone. True in bash alone. What the letter *means*
+is not in question anywhere it exists — the name stays set in the shell
+and stops reaching a child — so the axis is about availability and there
+is no wording beside it: a dialect that says no sends `-n` down the
+ordinary unknown-option path and collects its own refusal. Measured
+2026-09-05: `dash: 1: export: Illegal option -n` and the script ends,
+`ksh: export: -n: unknown option` with a usage line and the script ends,
+`zsh:export:1: bad option: -n` with `export` failing at 1 and the script
+carrying on. The POSIX preset says no from the text, which spells
+`export` with `-p` and nothing else.
 
 **`ExportListing`** — bash DeclareListingClustered · dash DeclareListingCommandWord · ksh93 DeclareListingCommandWord · zsh DeclareListingCommandWord
 

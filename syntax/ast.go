@@ -472,6 +472,7 @@ type ForArithClause struct {
 	Body                         []*Stmt
 	Header                       string
 	Start, Stop                  Pos
+	redirs
 }
 
 func (c *ForArithClause) Pos() Pos     { return c.Start }

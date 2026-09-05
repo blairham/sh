@@ -904,6 +904,21 @@ var Corpus = []Case{
 		Why:     "the terminator between the header and the body is optional before the brace exactly as it is before `do`, which is what says the brace stands where `do` stands rather than being glued to the header",
 	},
 	{
+		ID: "core/c-style-for-takes-a-redirection", Category: "command language",
+		Snippet: `for ((i=0;i<2;i++)); do echo "$i"; done > f; echo end; cat f`,
+		Why:     "a redirection after a compound command covers the whole of it, and the C-style loop is no exception — the quiet failure is that a node with nowhere to keep one leaves the operator standing as a statement of its own, which truncates the file, redirects nothing, and says not a word. dash has no C-style loop and refuses the header",
+	},
+	{
+		ID: "core/c-style-for-with-a-brace-body-takes-a-redirection", Category: "command language",
+		Snippet: `for ((i=0;i<2;i++)) { echo "$i"; } > f; echo end; cat f`,
+		Why:     "the same on the brace-bodied spelling, which is where the suffix is easiest to lose: the body ends in a `}` rather than a keyword and the redirection reads as the brace group's",
+	},
+	{
+		ID: "core/c-style-for-takes-an-input-redirection", Category: "command language",
+		Snippet: `printf 'L1\nL2\n' > d; for ((i=0;i<2;i++)); do read x; echo "got=$x"; done < d`,
+		Why:     "the reading half, and the one that shows the redirection outlives an iteration: the second `read` continues where the first left off, which it could not do if the file were opened per pass",
+	},
+	{
 		ID: "core/a-list-for-with-a-brace-body", Category: "command language",
 		Snippet: `for i in a b; { printf "%s" "$i"; }; echo`,
 		Why:     "the same production on the ordinary `for`, which is the half easiest to miss: the brace body is not the C-style loop's alone. It needs the separator, and the next case says why — this is the one three of the four accept and dash refuses, dash being the only panel shell without the form",
@@ -2105,6 +2120,11 @@ var Corpus = []Case{
 		Why:     "one shell carries a function to its children and the other three have no way to: there is nothing but a string in an environment, so the source goes in and is parsed again at the other end. The count rather than the text, because what the entry holds is a shell's own spelling of a body",
 	},
 	{
+		ID: "export/the-n-option-takes-the-attribute-off", Category: "builtins",
+		Snippet: `V=1; export V; export -n V; echo "st=$?"; env | grep -c "^V="; echo alive`,
+		Why:     "the letter itself is the question, not what it does: bash has `-n` and the other three refuse it as an option, in three different ways and two of them fatally. Left out of #459 deliberately, because that change was about the export attribute and this row would have been recording an option-surface gap instead — which it now is, on purpose. Read through a real child, since what `-n` buys is that the name stays set in the shell and stops reaching one",
+	},
+	{
 		ID: "export/a-name-that-is-not-a-function", Category: "builtins",
 		Snippet: `export -f nope; echo "st=$?"`,
 		Why:     "a name that is not a function now will not become one by being exported. The shells that have the option refuse it and the ones that do not read `-f` as something else entirely, which is the more interesting half",
@@ -2288,6 +2308,11 @@ var Corpus = []Case{
 		ID: "param/a-substring-length-that-will-not-evaluate", Category: "parameter expansion",
 		Snippet: `x=abcdef; echo "[${x:2:1+}]"; echo after`,
 		Why:     "the length rather than the offset, which is what separates the two namings: the shell that blames an offset along with the rest of the range has nothing after a length and names it alone. Extending the text before *evaluating* it rather than only before reporting it invented a second failure, so the pair is what pins that the extension is a wording and not a reading",
+	},
+	{
+		ID: "param/a-substring-length-with-an-operand-it-found", Category: "parameter expansion",
+		Snippet: `x=abcdef; echo "[${x:2:%}]"; echo after`,
+		Why:     "the found-an-operand wording reached through a range rather than through `$(( ))`, which is where the two are held together: the shell that blames an offset along with the rest of the range also *reads* the rest of the range, so `${x:1+:2}` is its found case where `${x:1+}` is its ran-out one. A length has nothing after it and is the plain case in every column",
 	},
 	{
 		ID: "param/a-substring-offset-on-a-subscripted-parameter", Category: "parameter expansion",
@@ -3486,6 +3511,26 @@ echo unreachable`,
 		ID: "arith/a-name-shaped-value-is-chased", Category: "arithmetic",
 		Snippet: `a=b; b=3; echo $((a)); echo "st=$?"`,
 		Why:     "bash, ksh93 and zsh resolve a value that names another variable until it is a number; dash calls b an illegal number and stops",
+	},
+	{
+		ID: "arith/an-operand-the-expression-ran-out-of", SyntaxError: true, Category: "arithmetic",
+		Snippet: `echo "[$((1+))]"; echo "st=$?"`,
+		Why:     "an operand was wanted and the text ended, which two of the panel word apart from an operand that was wanted and found: ksh93 says more tokens expected and zsh names the end of the string. The pair with `arith/an-operand-the-expression-found` is the whole of it — either row alone passes under one wording for both, which is what let the end-of-input sentence stand for every operand failure in two dialects",
+	},
+	{
+		ID: "arith/an-operand-the-expression-found", SyntaxError: true, Category: "arithmetic",
+		Snippet: `echo "[$((%))]"; echo "st=$?"`,
+		Why:     "the other half: a token is there and it cannot begin a value. ksh93 drops to its bare arithmetic syntax error and zsh names the text — ``operand expected at `%'`` — where both said the expression had run out. bash words the two identically, which is why the bash column cannot see this at all and why the failure survived every conformance read",
+	},
+	{
+		ID: "arith/an-operand-found-after-an-operator", SyntaxError: true, Category: "arithmetic",
+		Snippet: `echo "[$((1+&2))]"; echo "st=$?"`,
+		Why:     "the found case reached mid-expression rather than at its start, and the text named runs to the end of the expression rather than being the one refused byte — `&2`, which is what the two shells that name anything name. It also says the distinction is not about where in the expression the failure is: the same operator wanting the same operand is worded one way here and the other way in `arith/an-operand-the-expression-ran-out-of`",
+	},
+	{
+		ID: "arith/an-operand-a-lexer-refuses-outright", SyntaxError: true, Category: "arithmetic",
+		Snippet: `echo "[$((@))]"; echo "st=$?"`,
+		Why:     "a byte that is not part of any arithmetic token, which zsh alone words a third way — `illegal character: @` rather than the operand sentence it gives `%`. The row is recorded rather than reproduced: the third wording turns on where in the expression the byte stands as well as on which byte it is, since `$((1+@))` gets the operand sentence and `$((1 @))` and `$((@))` do not, and that is a lexer's table rather than a grammar rule. bash, ksh93 and dash word it exactly as they word `%`, so three of the four columns pass",
 	},
 	{
 		ID: "arith/the-error-names-what-was-consumed", Category: "arithmetic",

@@ -80,7 +80,12 @@ Quoting a regex is therefore not portable in either direction, and the
 portable spelling is to keep it unquoted or to put it in a variable and
 use that unquoted.
 
-Vector field: `RegexQuotingMakesLiteral` (default true, matching bash).
+Semantics axis: `RegexQuotingMakesLiteral` — bash yes, ksh93 and zsh no,
+dash not applicable because it has no `[[ ]]`. Unanswered in the core,
+and POSIX has no answer either, since `=~` is not in the standard: bash
+is the outlier here rather than the rule, so an entry that called its
+behavior the default would have named the one shell that disagrees with
+the other two.
 
 ## Unary and logical operators
 
@@ -117,8 +122,8 @@ bash refuses loudly — and bash 3.2 does not, so the complaint is
 younger than the operator. dash, which reaches the question only
 through `test`, refuses too with its `Illegal number` wording.
 
-Vector field: `TerminalTestRequiresANumber` (bash and dash yes, ksh93
-and zsh no), asked only for such an operand.
+Semantics axis: `TerminalTestRequiresANumber` (bash and dash yes, ksh93
+and zsh no; unanswered in the core), asked only for such an operand.
 
 ## The file comparisons: `-nt`, `-ot`, `-ef`
 
@@ -147,9 +152,9 @@ exist; dash and zsh want both files present. The mirrored cases ask
 nothing — `missing -nt f` and `f -ot missing` are false everywhere, a
 missing file never being *newer* — and so are the both-missing cases.
 
-Vector field: `MissingFileIsOlder` (bash and ksh93 yes, dash and zsh
-no). One axis for `test`, `[` and `[[ ]]` alike, because every shell
-answers its two constructs the same way.
+Semantics axis: `MissingFileIsOlder` (bash and ksh93 yes, dash and zsh
+no; unanswered in the core). One axis for `test`, `[` and `[[ ]]` alike,
+because every shell answers its two constructs the same way.
 
 `&&` and `||` inside `[[ ]]` join *conditions*, not commands, and `( )`
 groups conditions rather than starting a subshell.

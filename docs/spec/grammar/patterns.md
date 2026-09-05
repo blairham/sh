@@ -60,7 +60,10 @@ have — there it is an ordinary character, so `[^abc]` matches a literal
 `^`, `a`, `b` or `c`. Silent again: the pattern still matches things,
 just not the things intended.
 
-Vector field: `BracketCaretNegates` (default true, false for `posix`).
+Semantics axis: `BracketCaretNegates` — dash no, bash, ksh93 and zsh
+yes. Unanswered in the core, and the `posix` preset says no, because in
+a shell pattern the standard has `!` *replace* `^` in the role it plays
+in regular expression notation (XCU §2.13.1), which leaves `^` ordinary.
 
 ### The character classes
 
@@ -118,7 +121,9 @@ Note the shape of the failures: dash and bash report a **syntax error**,
 because `(` is an operator where a pattern was expected, while zsh parses
 the pattern and simply does not match. Three behaviors again.
 
-Vector field: `ExtendedPattern` (default false, true for `ksh`).
+Grammar flag: `ExtendedPattern` — core: off; `ksh`: on. bash's narrower
+`ExtendedPatternInCondition` turns them on inside `[[ ]]` and nowhere
+else, which is where bash reads them.
 
 ## Run-time switches over the language
 

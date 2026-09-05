@@ -307,6 +307,9 @@ func TestRefusingToRemarkOnAPipelineElementLeavesItsStatusAlone(t *testing.T) {
 	sem.LastPipelineElementInCurrentShell = No
 	sem.PipefailOption = Yes
 	sem.SignalDeathStatusIsTwoFiftySix = No
+	// And the second encoding question, which only a substituted element
+	// raises: this vector keeps the status the death produced.
+	sem.PipefailSubstitutesTheBareSignal = No
 	out := &strings.Builder{}
 	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{Location: LocationTightLine},

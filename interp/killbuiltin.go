@@ -470,6 +470,7 @@ func (r *Runner) signalDeath(name string, sig syscall.Signal) {
 		return
 	}
 	r.killedBy, r.killedBySig = name, sig
+	r.diedOfSig = sig
 	r.status = 128 + int(sig)
 	r.ctl = controlExit
 }

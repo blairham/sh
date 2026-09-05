@@ -429,45 +429,42 @@ gate runs before `EventCommandStart`, so the tool call exists by the
 time the event arrives and the event updates it rather than creating a
 second.
 
-### The correlation gap: blocked on #719, and not ours to close
+### Correlation: one id, asked for rather than invented
 
-`interp.Event` carries no identity for the action it belongs to.
-`EventCommandStart` and `EventCommandEnd` are matched by *ordering*, and
-ordering is exactly what concurrency breaks: a background job and each
-half of a pipeline emit from their own goroutines.
+`interp.Event` used to carry no identity for the action it belonged to, so a
+start and an end were matched by *ordering* — and ordering is exactly what
+concurrency breaks, since a background job and each half of a pipeline emit
+from their own goroutines. This front end matched on a fingerprint of the
+action instead: kind, path, argv, and the write flag or the signal target,
+with a queue of open tool calls per fingerprint. That was right whenever two
+identical commands were not in flight at once, and marked the wrong tool call
+complete when they were.
 
-The audit schema in `internal/event` — owned by
-`docs/design/sandboxing.md`, which this consumes rather than competes
-with — does not close it either, and says so: `seq` is a total order of
-*emission* and is explicitly "not a causal order". That is the right
-call for a log and leaves this mapping without an answer.
+It is closed. **#719** — landed as #730 — gave `interp.Action` an `ID` and
+`interp.Event` a `Session`, and the id is the same string on the Action a gate
+is consulted about and on every event that action produces. That is exactly
+the promise this needed, so the fingerprint is gone and the tracker is a set
+keyed on the id.
 
-**Two consumers reached the same missing field from opposite
-directions.** The blocks work needed to say which events belong to which
-run and had to generate an id of its own to cope; this needs to say
-which events belong to which action, and to join a permission request to
-the events for the action it approved. It is filed as **#719**, and the
-reason it is one issue rather than two workarounds is that *two id
-schemes that do not agree are worse than none* — they look joinable and
-are not.
+Two things about the shape are worth keeping.
 
-So this front end does **not** invent one. Until #719 lands it matches
-by a fingerprint of the action alone — kind, path, args, and the write
-flag or the signal target — with a queue of open tool calls per
-fingerprint, and an unmatched end becomes a standalone completed tool
-call rather than being dropped. The line and the file would discriminate
-better and are deliberately left out: a gate is consulted with an
-`Action` before any event exists, so a key carrying them could never
-join the two halves. Where two identical commands are in flight at once
-it marks the wrong tool call complete, which is cosmetic — no decision
-changes — and is still wrong.
+**The tool call id and the action id are the same string.** `ToolCallId` is
+required by the protocol and was minted here as `call-1`, `call-2`; there is no
+reason for it to be a different value from the one the interpreter already
+uses, and every reason for it not to be — a client's transcript and the audit
+stream now join on a value both already carry, rather than on a fingerprint
+that agrees by luck. Nothing was invented for this: asking for one field
+rather than minting a second scheme was the whole argument, because two id
+schemes that do not agree are worse than none.
 
-The tool call ids and session ids this front end does mint are not that
-scheme and are not a substitute for it. `ToolCallId` and `SessionId` are
-*required by the protocol*: a client cannot show a permission request
-without one, and every message in a session names it. They identify
-things on the wire, not actions in the interpreter, and when #719 lands
-the fingerprint goes and these stay.
+**An action with no id is matched to nothing, not to everything.** Nothing in
+the interpreter produces one — an empty id means a Runner with neither a gate
+nor a sink, which emits no events either — and a defensive fallback that keyed
+the empty string would put every such action in one bucket and close the wrong
+tool call, which is the fingerprint's failure brought back by a default. It
+still gets a tool call id, because the protocol requires one; it simply joins
+to nothing, and an unmatched end becomes a standalone completed tool call,
+which is visible.
 
 ### Reading the event schema, not only writing to it
 

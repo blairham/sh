@@ -810,16 +810,21 @@ func (sh Shell) runInput(in source) int {
 // dialect does not have — has already been reported by the same machinery
 // `set` uses, and stops the shell before anything runs, which is measured
 // and unanimous.
+//
+// *What it exits with* is not unanimous, and the two spellings are read the
+// same way here for that reason: the status is the dialect's on both. It was
+// the front end's own `usageStatus` for a letter, so `zsh -q` exited 2 where
+// zsh exits 1 while `zsh -o nosuchoption` already exited 1 — one question
+// answered two ways because only one of the paths could carry an answer
+// (#483).
 func (sh Shell) applyOptions(r *interp.Runner, opts []optionSpec) (int, bool) {
 	for _, o := range opts {
+		apply := r.SetOptionLetters
 		if o.isName {
-			if code := r.SetNamedOption(o.spec, o.on); code != 0 {
-				return code, false
-			}
-			continue
+			apply = r.SetNamedOption
 		}
-		if !r.SetOptionLetters(o.spec, o.on) {
-			return usageStatus, false
+		if code := apply(o.spec, o.on); code != 0 {
+			return code, false
 		}
 	}
 	return 0, true

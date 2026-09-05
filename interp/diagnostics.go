@@ -881,9 +881,20 @@ type Diagnostics struct {
 	// ksh93 follows it with the usage line it keeps in BuiltinUsage.
 	SetInvalidOptionName string
 
-	// SetInvalidOptionNameStatus is what that reports. Zero means 2, which
-	// is three of the four; zsh answers 1.
-	SetInvalidOptionNameStatus int
+	// SetInvalidOptionStatus is what a refused `set` option reports —
+	// either spelling. Zero means 2, which is three of the four; zsh
+	// answers 1.
+	//
+	// One value for the letter and the name because the panel answers them
+	// identically, measured 2026-09-05 on `-q`, `-j`, `-z` and `-A`, which
+	// are the letters all six of bash 5.3, bash 3.2, bash-as-`sh`, dash,
+	// ksh93 and zsh refuse: `set -q` reports exactly what
+	// `set -o nosuchoption` reports in every one of them, and so does the
+	// same letter given to the invocation. Two fields would be two names for
+	// one measurement, and the one that was not being read would be the one
+	// that drifted — which is what this replaced: the letter never asked at
+	// all and the front end exited 2 for everybody (#483).
+	SetInvalidOptionStatus int
 
 	// MonitorDenied is `set -m` asked for by a shell the dialect says needs
 	// a terminal for it (Semantics.MonitorNeedsATerminal), in the dialect's

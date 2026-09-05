@@ -473,3 +473,100 @@ their keyboard is exactly what `$ENV` exists not to do.
 The profile is sourced after the invocation's options are applied and after
 the runner is built, which is what the two measurements above require, and it
 is the same order the prompt route already used (#482).
+
+## Refusing an option
+
+**The rule.** An option the shell does not have is refused before anything
+runs, on every route and in both spellings — `sh -q script.sh`,
+`sh -o nosuchoption -c cmd`. What it *exits with* is the dialect's.
+
+### Measured
+
+Panel: bash 5.3.15, bash 3.2.57, bash-as-`sh`, dash, ksh93u+ 2012-08-01, zsh
+5.9, on macOS 25.5 — measured 2026-09-05. `-q`, `-j`, `-z` and `-A` are the
+four letters every one of the six refuses, which is what makes them the
+probe; a letter one shell happens to have — zsh answers to `-Q` — measures
+nothing.
+
+| | bash 5.3 | bash 3.2 | bash-as-`sh` | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `sh -q …` | 2 | 2 | 2 | 2 | 2 | **1** |
+| `sh -o nosuchoption …` | 2 | 2 | 2 | 2 | 2 | **1** |
+| `set -q` in a script | 2, carries on | 2, carries on | 2, stops | 2, stops | 2, stops | **1**, stops |
+| `set -o nosuchoption` | 2, carries on | 2, carries on | 2, stops | 2, stops | 2, stops | **1**, stops |
+
+**The letter and the name are one question.** Every shell reports the same
+status for both and ends the script or does not in the same way, on both
+routes, so one dialect value answers both: `Diagnostics.SetInvalidOptionStatus`,
+zero meaning the 2 that five of the six report, with
+`Semantics.BadSetOptionNameFatal` deciding whether the script survives.
+
+The letter asked neither question until #483. It reported the front end's own
+2 for everybody, so `zsh -q` exited 2 where zsh exits 1 — while
+`zsh -o nosuchoption` already exited 1, because only the long spelling had a
+way to carry an answer back — and `set -q` inside a dash script carried on
+where dash stops.
+
+**The wording is not modeled and the statuses are.** The panel spells this
+four ways — `-q: invalid option`, `Illegal option -q`, `-q: unknown option`,
+`bad option: -q` — and at an *invocation* bash and ksh93 name themselves
+rather than `set` and add a usage block that a run-time `set` does not get.
+This shell says `set: -q is not implemented` throughout. That is a real gap
+and it is visible in `make conformance` as a case agreeing on status and
+disagreeing on words; #598 has the four wordings and the two shapes.
+
+**One wrinkle is measured and deliberately not modeled.** bash exits **1**,
+with no usage block, when a letter it *has* comes before the bad one in the
+same word: `bash -eq -c cmd` is 1 where `bash -qe -c cmd` is 2. dash and
+ksh93 answer 2 either way and zsh 1 either way, so bash is alone and only in
+one of the two orders. An axis for the position of a letter within a bundle
+would be a field asked once.
+
+## Two bash startup inputs this shell does not have
+
+Recorded because an absence nobody wrote down is one that gets implemented
+twice, or not at all. Neither `SHELLOPTS` nor `BASH_ENV` is read anywhere in
+this tree, and until now nothing said whether that was a decision.
+
+### Measured
+
+Same panel and date. A scratch `HOME`, `PATH` set to one nonexistent
+directory, running a script file so that the shell is not interactive.
+
+| | bash 5.3 | bash 3.2 | bash-as-`sh` | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `BASH_ENV=f` sources f | **yes** | **yes** | no | no | no | no |
+| `$0` inside it | the script | `bash` | — | — | — | — |
+| `SHELLOPTS=xtrace:nounset` in the environment | **applied**: `$-` gains `ux` | **applied** | **applied** | ignored | ignored | ignored |
+| `SHELLOPTS` after startup | rewritten, sorted, with the shell's own defaults | same | same, plus `posix` | the string as given | the string as given | the string as given |
+| assigning to `SHELLOPTS` | refused, `readonly variable`, 1 | refused, 1 | refused, 127, fatal | ordinary variable, 0 | ordinary variable, 0 | ordinary variable, 0 |
+
+`BASH_ENV` is the non-interactive counterpart of `$ENV`, and the two do not
+overlap: bash reads `BASH_ENV` and not `$ENV` when it is not interactive, and
+bash-as-`sh` reads neither. dash, ksh93 and zsh read neither, so this is one
+shell's feature rather than an axis — which is also why bash 3.2 differing
+about `$0` inside the file is a version wrinkle rather than a split.
+
+`SHELLOPTS` is not a variable that happens to be read at startup. It is bound
+to `$-` in both directions, readonly, normalized to a sorted list, and
+populated with the options the shell has on by default; the environment merely
+seeds it. It is also the sharpest security-relevant input a shell takes, since
+an inherited `SHELLOPTS=xtrace` changes what every non-interactive bash on the
+machine writes to standard error.
+
+### The decision
+
+**Both are out of scope for now, and this is the statement of it.**
+
+`BASH_ENV` would be small — a per-dialect variable *name* whose value is
+sourced on the script routes, the shape `loginProfile` already has. It waits
+on nothing but a reason to want it.
+
+`SHELLOPTS` is not small. A two-way binding to `$-`, a readonly variable the
+dialect installs, the name-to-letter mapping in both directions, and a
+decision about the defaults would all have to arrive together, and a partial
+one — importing the value without keeping it in step — would be worse than
+none, because a script reading `SHELLOPTS` would be told something untrue.
+
+Filed as #596 rather than left here, so that the absence is tracked and not
+only stated.

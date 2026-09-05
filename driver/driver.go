@@ -355,6 +355,26 @@ type source struct {
 // standard-input route with a person on the other end — but because it never
 // reaches here. The prompt branch hands off to interactive before run is
 // called, and session says so itself, beside the two other facts it states
+// diagName is what a diagnostic about this input calls the shell.
+//
+// The same question interp's own answers for a diagnostic raised while
+// running, asked here because a parse failure is raised before there is a
+// runner to ask. One dialect names itself rather than the path it was invoked
+// by, and the two have to agree or the same shell gives two names depending on
+// whether the script got as far as running.
+//
+// Only where the shell is what is being named: a script is named by its own
+// path in every shell in the panel, and `file` is exactly the routes that have
+// one. `$0` is s.name either way — the dialect that shortens its diagnostic
+// still reports the whole path there, which is why this is a separate answer
+// and not a change to the name.
+func (s source) diagName() string {
+	if s.file == "" && s.dg.SelfName != "" {
+		return s.dg.SelfName
+	}
+	return s.name
+}
+
 // about a session.
 func (s source) invocationRoute() interp.Route {
 	switch {
@@ -834,7 +854,12 @@ func (sh Shell) run(in source) (status int) {
 }
 
 func (sh Shell) runInput(in source) int {
-	src, name, input, dg := in.src, in.name, in.input, in.dg
+	// Two names, because they are two questions. `name` is `$0` — the path
+	// the shell was invoked by — and `said` is what a diagnostic calls the
+	// shell, which one dialect answers with a fixed name instead. Folding
+	// them together shortened `$0` along with the diagnostic, which is a
+	// thing no shell in the panel does.
+	src, name, said, input, dg := in.src, in.name, in.diagName(), in.input, in.dg
 	// One dialect reads a command string whole before running any of it, and
 	// the rest run each line as they reach it. Parsing everything up front is
 	// how that is done: the failure is then reported before anything has run.
@@ -850,8 +875,8 @@ func (sh Shell) runInput(in source) int {
 			// can accompany a fatal failure, which is measured — a here
 			// document with neither its delimiter nor its enclosing `}`
 			// produces both, warning first.
-			sh.sayRemarks(dg, name, p.Remarks(), 0)
-			sh.errf("%s", dg.ParseDiagnostic(name, input, err, src))
+			sh.sayRemarks(dg, said, p.Remarks(), 0)
+			sh.errf("%s", dg.ParseDiagnostic(said, input, err, src))
 			return dg.StatusForParseError(err)
 		}
 	}
@@ -1020,7 +1045,7 @@ func (sh Shell) executeLines(
 		line, ok := pr.nextLine()
 		// Said as soon as it is known and before anything the line does,
 		// which is where the one shell that remarks puts it.
-		shown = sh.sayRemarks(in.dg, in.name, pr.remarks(), shown)
+		shown = sh.sayRemarks(in.dg, in.diagName(), pr.remarks(), shown)
 		if !ok {
 			if err := pr.err(); err != nil {
 				// The input ended part-way through something. Reported here
@@ -1033,7 +1058,7 @@ func (sh Shell) executeLines(
 				// so the shell that reads on and the shell that stops end
 				// the same way — measured, an unterminated quote piped in
 				// is one complaint and status 1 in all four.
-				sh.errf("%s", in.dg.ParseDiagnostic(in.name, in.input, err, pr.text()))
+				sh.errf("%s", in.dg.ParseDiagnostic(in.diagName(), in.input, err, pr.text()))
 				return in.dg.StatusForParseError(err), endingParseFailure
 			}
 			break
@@ -1041,7 +1066,7 @@ func (sh Shell) executeLines(
 		if err := pr.err(); err != nil {
 			// The line did not parse, so none of it runs — not even the
 			// statements before the failure, which is measured.
-			sh.errf("%s", in.dg.ParseDiagnostic(in.name, in.input, err, pr.text()))
+			sh.errf("%s", in.dg.ParseDiagnostic(in.diagName(), in.input, err, pr.text()))
 			if sh.readOn(r, pr, in, err) {
 				continue
 			}
@@ -1062,7 +1087,7 @@ func (sh Shell) executeLines(
 		if err := r.RunPart(ctx, line); err != nil {
 			// Refused rather than silently doing nothing: a shell that
 			// quietly skips what it cannot do is worse than one that says so.
-			sh.errf("%s", in.dg.Report(in.name, 1, err.Error()+"\n"))
+			sh.errf("%s", in.dg.Report(in.diagName(), 1, err.Error()+"\n"))
 			return usageStatus, endingRefused
 		}
 		if r.Exited() {

@@ -63,6 +63,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | readonly reassignment | fatal | **continues** | fatal | fatal |
 | `shift` past the end | fatal | **survives** | fatal | **survives** |
 | unparseable text in a special builtin | **fatal** | survives | survives | survives |
+| failed redirection on a special builtin | **fatal** | survives *(fatal under `set -o posix`)* | **fatal** | survives *(fatal under `emulate sh`)* |
 | `.` cannot open its file | **fatal** | survives | **fatal** | survives |
 | `.` with no operand | **not an error** | 2, survives | 2, fatal | 1, survives |
 | `.` passes positional parameters | **no** | yes | yes | yes |
@@ -5376,6 +5377,51 @@ builtin's failure is fatal; bash and zsh report it and carry on.
 A different question from BuiltinSyntaxErrorFatal, which is about text
 that would not *parse* and is true for dash alone. Measured across
 `export`, `readonly` and `unset`.
+
+**`RedirectErrorOnSpecialBuiltinFatal`** — bash no · dash yes · ksh93 yes · zsh no
+
+Ends a non-interactive shell when a redirection written on a *special*
+builtin cannot be made. POSIX states it outright, and the reach is one
+rule rather than several: `exec 3>/nope/x`, `: 3>/nope/x`,
+`eval : 3>/nope/x` and `. /dev/null 3>/nope/x` stop wherever any of them
+does, and so does a descriptor number the open-file limit refuses.
+
+The failure is the redirection's, so the builtin never runs and the
+status of the shell that stops is `FatalErrorStatusIsOne`'s — dash 2,
+the rest 1 — which is why this axis carries no status of its own.
+
+The boundary was measured from both sides and is unanimous. A regular
+builtin (`true 3>/nope/x`), an external command, and a *compound*
+command's own redirection (`{ echo x; } 3>/nope/x`) stop nothing in any
+column. Inside a subshell it ends the subshell and the parent runs on;
+inside a function it ends the shell.
+
+**This axis is posix mode, and that is where the answer lives.** The
+panel splits three to two — dash, ksh93 and bash-as-`sh` stop, bash and
+zsh carry on — and the two disagreeing bash columns are the same binary,
+so the difference cannot be attached to a shell. It is reachable at run
+time in both shells that have such a mode, which is what turns an
+accident of `argv[0]` into a rule:
+
+| probe | answer |
+| --- | --- |
+| `bash -c 'exec 3>/nope/x; echo after'` | prints `after`, status 0 |
+| `bash -c 'set -o posix; exec 3>/nope/x; echo after'` | stops, status 1 |
+| `sh -c 'set +o posix; exec 3>/nope/x; echo after'` (bash as `sh`) | prints `after`, status 0 |
+| `zsh -c 'emulate sh; exec 3>/nope/x; echo after'` | stops, status 1 |
+| `zsh -c 'emulate zsh; exec 3>/nope/x; echo after'` | prints `after`, status 0 |
+| `sh -c 'exec 3>/nope/x; echo after'` (zsh as `sh`) | stops, status 1 |
+
+Both bash builds move, seventeen years apart, and so does a second
+binary — so a dialect's field here is where the shell *starts* and its
+own posix knob is what moves it. `set -o posix` is a real option in the
+core's table for that reason, and `emulate sh` and `emulate ksh` carry
+it in the zsh dialect beside the three axes they already moved.
+
+Nothing is attached to `argv[0]`. Starting in posix mode because the
+shell was called `sh` is a fact about an *invocation*, and the front end
+does not read it yet; recording it as the axis would have written the
+accident down and lost the rule.
 
 **`BuiltinWriteErrorFailsTheCommand`** — bash yes · dash yes · ksh93 yes · zsh no
 

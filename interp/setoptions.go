@@ -129,7 +129,44 @@ var extraSetOptions = map[string]setOption{
 		get:   func(r *Runner) bool { return r.histIgnoreDups },
 	},
 
-	"posix":      {},
+	// posix is a mode rather than a single behavior, and it is the core's to
+	// implement for the same reason PosixSemantics is the core's: the name
+	// asks for the standard's answers, not for some shell's. A dialect still
+	// says whether the shell *has* the name — one of the panel does — and
+	// this says what happens when it is asked for.
+	//
+	// It moves the axes measured to move with it and no others, which is the
+	// same partial honesty `emulate` keeps in the zsh dialect: real posix
+	// modes fold in dozens of behaviors, and claiming those would be a
+	// promise nothing here keeps. Today that is one axis, and the evidence
+	// is direct — `set -o posix` makes a failed redirection on a special
+	// builtin end bash 5.3 and bash 3.2, `set +o posix` makes bash invoked
+	// as `sh` carry on, and the two states are exactly the panel's `bash`
+	// and `bash-as-sh` columns.
+	//
+	// Turning it *off* puts back the answer the dialect started with rather
+	// than writing the opposite of the standard's, which is not the same
+	// thing: a shell POSIX already agrees with would lose its own answer
+	// that way. A request for the state we are already in moves nothing,
+	// which is what keeps `set +o posix` — the thirteenth line of Homebrew's
+	// own script — the grant it has always been.
+	"posix": {
+		apply: func(r *Runner, on bool) {
+			if on == r.posixMode {
+				return
+			}
+			restore := r.posixSaved
+			if on {
+				r.posixSaved = r.sem().RedirectErrorOnSpecialBuiltinFatal
+				restore = Yes
+			}
+			r.swapSemantics(func(s *Semantics) {
+				s.RedirectErrorOnSpecialBuiltinFatal = restore
+			})
+			r.posixMode = on
+		},
+		get: func(r *Runner) bool { return r.posixMode },
+	},
 	"errtrace":   {},
 	"functrace":  {},
 	"history":    {},

@@ -27,7 +27,7 @@ func runPow(t *testing.T, src string, float bool, negIsError Answer) (string, in
 	var out bytes.Buffer
 	s := PosixSemantics()
 	s.ArithNegativeExponentIsError = negIsError
-	r := &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &s}
+	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &s})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatal(rerr)

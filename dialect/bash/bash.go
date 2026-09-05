@@ -289,6 +289,12 @@ func Semantics() interp.Semantics {
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.Yes
 	s.BadOptionToSpecialBuiltinFatal = interp.No
+	// A redirection that cannot be made is where bash parts from POSIX and
+	// from three of the panel: `exec 3>/nope/x; echo after` complains and
+	// prints `after` at status 0. It is the starting value rather than a
+	// fixed one — `set -o posix` moves it, which is the whole of the
+	// bash-as-`sh` column; see the posix option below.
+	s.RedirectErrorOnSpecialBuiltinFatal = interp.No
 	s.LocalOutsideAFunctionIsAnError = interp.Yes
 	s.LocalOutsideAFunctionIsFatal = interp.No
 	// bash reports every operand that is not a name, exports the ones that

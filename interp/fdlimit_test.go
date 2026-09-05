@@ -26,6 +26,16 @@ import (
 // which is the whole reason reading it is a hook at all.
 func runWithOpenFileLimit(t *testing.T, src string, soft int64, answer Answer) (errOut string, status int) {
 	t.Helper()
+	return runWithOpenFileLimitAnd(t, src, soft, func(s *Semantics) {
+		s.FdNumberBoundedByOpenFileLimit = answer
+	})
+}
+
+// runWithOpenFileLimitAnd is the same with the whole vector open to the
+// caller, for the one question that needs a *second* axis answered: whether
+// the refusal this file is about ends the script.
+func runWithOpenFileLimitAnd(t *testing.T, src string, soft int64, tweak func(*Semantics)) (errOut string, status int) {
+	t.Helper()
 	d := syntax.Core()
 	d.MultiDigitFdNumber = true
 	f, err := syntax.Parse(src, d)
@@ -34,8 +44,8 @@ func runWithOpenFileLimit(t *testing.T, src string, soft int64, answer Answer) (
 	}
 	var o, e bytes.Buffer
 	sem := permissive()
-	sem.FdNumberBoundedByOpenFileLimit = answer
-	r := &Runner{
+	tweak(&sem)
+	r := newTestRunner(t, &Runner{
 		Stdout: &o, Stderr: &e, Semantics: &sem, Diagnostics: &Diagnostics{},
 		Dir: t.TempDir(), Name: "testsh",
 		GetRlimit: func(res Resource) (int64, int64, error) {
@@ -44,7 +54,7 @@ func runWithOpenFileLimit(t *testing.T, src string, soft int64, answer Answer) (
 			}
 			return soft, soft, nil
 		},
-	}
+	})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatal(rerr)
@@ -77,6 +87,40 @@ func TestADescriptorNumberAtTheOpenFileLimitIsRefused(t *testing.T) {
 	}
 }
 
+// A number the limit refuses is a failed redirection like any other, so on a
+// special builtin it ends the script wherever that rule is being kept. This is
+// how the rule turned up at all: the panel's bash column prints its status and
+// carries on here, and the same binary invoked as `sh` stops.
+//
+// Two axes at once, deliberately — one decides that the number is refused and
+// the other decides what the refusal costs — because the pair is the shape a
+// script actually meets.
+func TestARefusedDescriptorNumberEndsTheScriptWhereTheOtherAxisSaysSo(t *testing.T) {
+	errOut, st := runWithOpenFileLimitAnd(t, "exec 20>f\necho after >&2\n", 20, func(s *Semantics) {
+		s.FdNumberBoundedByOpenFileLimit = Yes
+		s.RedirectErrorOnSpecialBuiltinFatal = Yes
+	})
+	if strings.Contains(errOut, "after") {
+		t.Errorf("stderr = %q, want the script to have stopped at the refusal", errOut)
+	}
+	// 2, because this vector answers FatalErrorStatusIsOne with No — the
+	// fatal status is that axis's and never this one's.
+	if st != 2 {
+		t.Errorf("status = %d, want this vector's fatal status", st)
+	}
+
+	errOut, st = runWithOpenFileLimitAnd(t, "exec 20>f\necho after >&2\n", 20, func(s *Semantics) {
+		s.FdNumberBoundedByOpenFileLimit = Yes
+		s.RedirectErrorOnSpecialBuiltinFatal = No
+	})
+	if !strings.Contains(errOut, "after") {
+		t.Errorf("stderr = %q, want the script to have carried on", errOut)
+	}
+	if st != 0 {
+		t.Errorf("status = %d, want the status of the command that carried on", st)
+	}
+}
+
 // It is the number that could not be had and not the file. The open happens
 // first and the file is there afterwards, which is what the shells do and what
 // a script that goes looking for its log will find.
@@ -91,11 +135,11 @@ func TestARefusedDescriptorNumberStillOpensTheFile(t *testing.T) {
 	var o, e bytes.Buffer
 	sem := permissive()
 	sem.FdNumberBoundedByOpenFileLimit = Yes
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &o, Stderr: &e, Semantics: &sem, Diagnostics: &Diagnostics{},
 		Dir: dir, Name: "testsh",
 		GetRlimit: func(Resource) (int64, int64, error) { return 20, 20, nil },
-	}
+	})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}
@@ -140,10 +184,10 @@ func TestWithNoLimitsHookNoNumberIsRefused(t *testing.T) {
 	var o, e bytes.Buffer
 	sem := permissive()
 	sem.FdNumberBoundedByOpenFileLimit = Yes
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &o, Stderr: &e, Semantics: &sem, Diagnostics: &Diagnostics{},
 		Dir: t.TempDir(), Name: "testsh",
-	}
+	})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatal(rerr)

@@ -29,10 +29,10 @@ func ulimitListingRun(t *testing.T, rows []UlimitListingRow, hard bool) (string,
 	sem := permissive()
 	sem.UlimitBlockIsKilobyte = No
 	var out, errs bytes.Buffer
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem, Name: "testsh",
 		Diagnostics: &Diagnostics{UlimitListing: rows},
-	}
+	})
 	r.GetRlimit = func(res Resource) (int64, int64, error) {
 		switch res {
 		case ResourceFileSize:

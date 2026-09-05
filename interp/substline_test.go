@@ -95,10 +95,10 @@ func substLine(t *testing.T, src string, dg Diagnostics) string {
 	t.Helper()
 	var errs strings.Builder
 	sem := PosixSemantics()
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &dg, Name: "sh",
 		Stdout: &strings.Builder{}, Stderr: &errs,
-	}
+	})
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatal(err)

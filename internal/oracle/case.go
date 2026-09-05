@@ -5695,6 +5695,41 @@ exit 7`,
 		Why:     "the refusal is unanimous and the sentence is not: bash cannot overwrite an existing file, ksh93 says it already exists with the errno in brackets, dash and zsh word it as any other failed create",
 	},
 	{
+		ID: "redir/exec-with-a-redirection-that-cannot-be-made", Category: "redirection",
+		Snippet: `exec 3>/nope/x; echo after`,
+		Why:     "POSIX makes a redirection error on a special builtin fatal to a non-interactive shell, and the panel splits three to two over it: dash stops at 2, ksh93 and bash-as-`sh` stop at 1, and bash and zsh complain and print `after`. The bash and bash-as-`sh` rows are the same binary, which is what says the answer belongs to posix mode rather than to a shell",
+	},
+	{
+		ID: "redir/a-failed-redirection-on-a-colon", Category: "redirection",
+		Snippet: `: 3>/nope/x; echo after`,
+		Why:     "the same rule reached without `exec`: `:` is a special builtin too, and every column answers exactly as it does above — so the rule is about which builtin carries the redirection and not about replacing the shell",
+	},
+	{
+		ID: "redir/a-failed-redirection-on-an-ordinary-command", Category: "redirection",
+		Snippet: `true 3>/nope/x; echo after`,
+		Why:     "the boundary, and it is unanimous: on a builtin POSIX does not mark special nothing stops anywhere, so a rule written as `a failed redirection is fatal` would be wrong in five columns at once",
+	},
+	{
+		ID: "redir/a-failed-redirection-on-a-compound-command", Category: "redirection",
+		Snippet: `{ echo x; } 3>/nope/x; echo after`,
+		Why:     "the other half of the boundary: a redirection written on a group belongs to the group and not to any builtin, so every column complains and carries on — including the three that stop for the identical redirection on `exec`",
+	},
+	{
+		ID: "redir/a-failed-redirection-inside-a-subshell", Category: "redirection",
+		Snippet: `( exec 3>/nope/x; echo inner ); echo after`,
+		Why:     "what `ends the shell` means where there is a process boundary: the three that stop lose `inner` and still print `after` at status 0, so the subshell ends and the parent does not — which our cloned-runner subshells have to reconstruct by hand",
+	},
+	{
+		ID: "set/posix-mode-makes-a-failed-redirection-fatal", Category: "invocation",
+		Snippet: `set -o posix; exec 3>/nope/x; echo after`,
+		Why:     "the same binary, both answers: bash 5.3 and bash 3.2 print `after` without this line and stop at 1 with it, which is the bash-as-`sh` column reached at run time. The other three have no such name and refuse the `set` instead, each in its own words",
+	},
+	{
+		ID: "set/leaving-posix-mode-restores-the-shells-own-answer", Category: "invocation",
+		Snippet: `set -o posix; set +o posix; exec 3>/nope/x; echo after`,
+		Why:     "the round trip, which is what makes it a mode rather than a one-way door: bash goes back to printing `after` at 0. Turning it off is also the direction a shell without a posix mode can honestly grant, and the thirteenth line of Homebrew's own script",
+	},
+	{
 		ID: "shift/an-operand-that-was-never-given", Category: "builtins",
 		Snippet: `shift; echo "st=$?"`,
 		Why:     "past the end with no count written down, ksh93 reports `(null)` — the operand it did not get — where its complaint about `shift 99` names the 99; dash keeps one sentence for both and bash and zsh keep their usual answers",

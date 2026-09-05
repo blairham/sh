@@ -33,10 +33,10 @@ func declareRun(t *testing.T, src string, set func(*Semantics), dg Diagnostics) 
 		set(&sem)
 	}
 	var o, e bytes.Buffer
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &o, Stderr: &e, Semantics: &sem, Diagnostics: &dg,
 		Name: "testsh", Env: []string{},
-	}
+	})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
@@ -213,11 +213,11 @@ func TestDeclarePrintWithNoNamesListsEverythingSorted(t *testing.T) {
 	}
 	sem := bash.Semantics()
 	var o, e bytes.Buffer
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &o, Stderr: &e, Semantics: &sem, Name: "testsh",
 		// Born in the environment: listed as exported, in its sorted place.
 		Env: []string{"ZED=z"},
-	}
+	})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil || st != 0 {
 		t.Fatalf("run: %v, status %d", rerr, st)
@@ -254,7 +254,7 @@ func TestDeclarePrintRefusedWithoutADialect(t *testing.T) {
 		t.Fatal(err)
 	}
 	var o, e bytes.Buffer
-	r := &Runner{Stdout: &o, Stderr: &e, Name: "testsh", Env: []string{}}
+	r := newTestRunner(t, &Runner{Stdout: &o, Stderr: &e, Name: "testsh", Env: []string{}})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatal(rerr)

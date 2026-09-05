@@ -26,7 +26,7 @@ func collectEvents(t *testing.T, src string, arrange func(*Runner)) []Event {
 	var mu sync.Mutex
 	var events []Event
 	sem := PosixSemantics()
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem,
 		Stdout:    &strings.Builder{}, Stderr: &strings.Builder{},
 		Events: SinkFunc(func(_ context.Context, e Event) {
@@ -34,7 +34,7 @@ func collectEvents(t *testing.T, src string, arrange func(*Runner)) []Event {
 			defer mu.Unlock()
 			events = append(events, e)
 		}),
-	}
+	})
 	if arrange != nil {
 		arrange(r)
 	}

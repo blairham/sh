@@ -23,7 +23,7 @@ import (
 func TestBuiltinOptionsKeepsALoneDash(t *testing.T) {
 	sem := PosixSemantics()
 	sem.LoneDashIsAnOption = No
-	r := &Runner{Semantics: &sem}
+	r := newTestRunner(t, &Runner{Semantics: &sem})
 	for _, c := range []struct {
 		args []string
 		rest []string
@@ -71,7 +71,7 @@ func TestBuiltinOptionsKeepsALoneDash(t *testing.T) {
 func TestBuiltinOptionsTakesArguments(t *testing.T) {
 	sem := PosixSemantics()
 	sem.LoneDashIsAnOption = No
-	r := &Runner{Semantics: &sem}
+	r := newTestRunner(t, &Runner{Semantics: &sem})
 	for _, c := range []struct {
 		args []string
 		rest []string
@@ -121,7 +121,7 @@ func TestBuiltinOptionsRefusesAMissingArgument(t *testing.T) {
 	sem := PosixSemantics()
 	sem.LoneDashIsAnOption = No
 	var buf strings.Builder
-	r := &Runner{Semantics: &sem, Stderr: &buf}
+	r := newTestRunner(t, &Runner{Semantics: &sem, Stderr: &buf})
 	for _, args := range [][]string{
 		{"-d"},
 		{"-vd"},

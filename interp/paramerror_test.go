@@ -139,7 +139,7 @@ func paramErr(t *testing.T, src string, dg Diagnostics) (string, int) {
 	var buf strings.Builder
 	sem := PosixSemantics()
 	sem.FatalErrorStatusIsOne = Yes
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "sh"}
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "sh"})
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatal(err)

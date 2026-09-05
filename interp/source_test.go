@@ -30,11 +30,11 @@ func sourceRun(t *testing.T, dir, src string, sem Semantics, dg Diagnostics) (st
 		t.Fatalf("parse %q: %v", src, err)
 	}
 	var buf bytes.Buffer
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf,
 		Semantics: &sem, Diagnostics: &dg,
 		Dir: dir, Name: "testsh",
-	}
+	})
 	// PATH is set explicitly rather than inherited: a `.` that found something
 	// on the developer's PATH would pass here and fail on a runner.
 	r.Vars = map[string]string{"PATH": dir}
@@ -62,6 +62,11 @@ func permissive() Semantics {
 	// about either question, so a test that is not about those gets silence.
 	s.UnsetFunctionChecksTheName = No
 	s.UnsetFunctionReportsMissing = No
+	// A redirection that will not open is fatal on a special builtin under
+	// POSIX, and `exec` is one. A test asking what a *redirection* did needs
+	// the shell still running to answer, so the permissive answer here is
+	// the one that carries on; redirfatal_test.go asks the axis itself.
+	s.RedirectErrorOnSpecialBuiltinFatal = No
 	return s
 }
 
@@ -301,10 +306,10 @@ func TestDotSearchesPathBeforeTheCurrentDirectory(t *testing.T) {
 	}
 	var buf bytes.Buffer
 	dg := Diagnostics{}
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
 		Dir: cwd, Name: "testsh", Vars: map[string]string{"PATH": pathDir},
-	}
+	})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}
@@ -336,13 +341,13 @@ func TestDotFallsBackToTheCurrentDirectoryOnlyWhenAsked(t *testing.T) {
 			}
 			var buf bytes.Buffer
 			dg := Diagnostics{}
-			r := &Runner{
+			r := newTestRunner(t, &Runner{
 				Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
 				Dir: cwd, Name: "testsh",
 				// PATH deliberately points somewhere without the file, so the
 				// fallback is the only thing that could find it.
 				Vars: map[string]string{"PATH": empty},
-			}
+			})
 			if _, err := r.Run(context.Background(), f); err != nil {
 				t.Fatal(err)
 			}
@@ -535,10 +540,10 @@ func TestTheSubstrateRefusesWhenNoDialectAnswered(t *testing.T) {
 // the dialects. One shell in the panel does not have it, so the core offering
 // it would give that dialect no way to say no.
 func TestSourceIsNotASubstrateBuiltin(t *testing.T) {
-	if _, ok := (&Runner{}).Builtin("source"); ok {
+	if _, ok := newTestRunner(t, &Runner{}).Builtin("source"); ok {
 		t.Error("`source` should come from a dialect's Apply, not the core")
 	}
-	if _, ok := (&Runner{}).Builtin("."); !ok {
+	if _, ok := newTestRunner(t, &Runner{}).Builtin("."); !ok {
 		t.Error("`.` is POSIX and belongs to the core")
 	}
 }
@@ -547,7 +552,7 @@ func TestSourceIsNotASubstrateBuiltin(t *testing.T) {
 // dialects use to register `source`. A synonym has to be the same function, or
 // the two names drift.
 func TestBuiltinLookupIsWhatMakesASynonymTheSameFunction(t *testing.T) {
-	r := &Runner{}
+	r := newTestRunner(t, &Runner{})
 	dot, ok := r.Builtin(".")
 	if !ok {
 		t.Fatal("no `.` builtin")
@@ -565,10 +570,10 @@ func TestBuiltinLookupIsWhatMakesASynonymTheSameFunction(t *testing.T) {
 	var buf bytes.Buffer
 	sem := permissive()
 	dg := Diagnostics{}
-	r2 := &Runner{
+	r2 := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
 		Dir: dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
-	}
+	})
 	if got := again(r2, context.Background(), []string{p}); got != 0 {
 		t.Fatalf("status %d, output %q", got, buf.String())
 	}
@@ -578,7 +583,7 @@ func TestBuiltinLookupIsWhatMakesASynonymTheSameFunction(t *testing.T) {
 
 	// And a dialect that replaced `.` gets its own back rather than the
 	// core's, which is what "follows lookupBuiltin's precedence" means.
-	r3 := &Runner{}
+	r3 := newTestRunner(t, &Runner{})
 	r3.Register(".", func(*Runner, context.Context, []string) int { return 42 })
 	mine, ok := r3.Builtin(".")
 	if !ok {
@@ -610,10 +615,10 @@ func TestPWDIsSetBeforeTheFirstCommand(t *testing.T) {
 	var buf bytes.Buffer
 	sem := permissive()
 	dg := Diagnostics{}
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
 		Dir: dir, Name: "testsh", Vars: map[string]string{},
-	}
+	})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}
@@ -632,11 +637,11 @@ func TestPWDAlreadySetIsLeftAlone(t *testing.T) {
 	var buf bytes.Buffer
 	sem := permissive()
 	dg := Diagnostics{}
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
 		Dir: t.TempDir(), Name: "testsh",
 		Vars: map[string]string{"PWD": "/chosen/by/the/caller"},
-	}
+	})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}
@@ -652,7 +657,7 @@ func TestEvalAndDotAreSpecialBuiltins(t *testing.T) {
 		if !IsSpecialBuiltin(name) {
 			t.Errorf("%s should be a special builtin", name)
 		}
-		if _, ok := (&Runner{}).Builtin(name); !ok {
+		if _, ok := newTestRunner(t, &Runner{}).Builtin(name); !ok {
 			t.Errorf("%s is called special and does not exist", name)
 		}
 	}

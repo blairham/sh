@@ -30,11 +30,11 @@ func refusedRun(t *testing.T, src string) (string, int) {
 	sem.ReadonlyReassignmentByDeclarationFatal = No
 	var out, errs bytes.Buffer
 	dir := t.TempDir()
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem,
 		Diagnostics: &Diagnostics{Location: LocationLineWord},
 		Dir:         dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
-	}
+	})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
@@ -111,7 +111,7 @@ func TestOnlySomeDeclarationsNameThemselves(t *testing.T) {
 		sem.ReadonlyReassignmentByDeclarationFatal = No
 		var errs bytes.Buffer
 		dir := t.TempDir()
-		r := &Runner{
+		r := newTestRunner(t, &Runner{
 			Stdout: &bytes.Buffer{}, Stderr: &errs, Semantics: &sem,
 			Diagnostics: &Diagnostics{
 				Location:                      LocationLineWord,
@@ -120,7 +120,7 @@ func TestOnlySomeDeclarationsNameThemselves(t *testing.T) {
 				ReadonlyRefusalNamesBuiltin:   names,
 			},
 			Dir: dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
-		}
+		})
 		if _, rerr := r.Run(context.Background(), f); rerr != nil {
 			t.Fatalf("run %q: %v", src, rerr)
 		}

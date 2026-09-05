@@ -28,7 +28,7 @@ func matchWith(t *testing.T, subject, pattern string, extended, alternation bool
 	}
 	var out bytes.Buffer
 	s := PosixSemantics()
-	r := &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &s}
+	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &s})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func runWith(t *testing.T, src string, extended, alternation bool) string {
 	}
 	var out bytes.Buffer
 	s := PosixSemantics()
-	r := &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &s}
+	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &s})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func condRunGlob(t *testing.T, src string, extended, condOnly, alternation bool,
 	var out bytes.Buffer
 	s := PosixSemantics()
 	s.GlobExpansionResults = globs
-	r := &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &s}
+	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &s})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}

@@ -110,7 +110,7 @@ func enableRun(t *testing.T, src string, setup func(*Runner)) string {
 	t.Helper()
 	var buf strings.Builder
 	sem := PosixSemantics()
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh"}
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh"})
 	if setup != nil {
 		setup(r)
 	}

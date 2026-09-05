@@ -64,7 +64,7 @@ func physicalRun(t *testing.T, dir, src string, deny []string) (out, errs string
 	}
 	var stdout, stderr strings.Builder
 	sem := CoreSemantics()
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Dir: dir, Stdout: &stdout, Stderr: &stderr,
 		Gate: GateFunc(func(_ context.Context, a Action) Decision {
 			mu.Lock()
@@ -87,7 +87,7 @@ func physicalRun(t *testing.T, dir, src string, deny []string) (out, errs string
 				denied = append(denied, e.Action.Path)
 			}
 		}),
-	}
+	})
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)

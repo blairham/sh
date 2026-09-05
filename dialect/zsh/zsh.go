@@ -300,6 +300,11 @@ func Semantics() interp.Semantics {
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.No
 	s.BadOptionToSpecialBuiltinFatal = interp.No
+	// Nor does a redirection that cannot be made end anything: the message
+	// is printed and the script runs on. The starting value only — `emulate
+	// sh` and `emulate ksh` move it to the POSIX answer, and `emulate zsh`
+	// puts it back.
+	s.RedirectErrorOnSpecialBuiltinFatal = interp.No
 	// zsh takes it and sets a global instead of refusing.
 	s.LocalOutsideAFunctionIsAnError = interp.No
 	// Fatal to all three, which is the one place zsh is stricter than bash
@@ -428,6 +433,12 @@ func Semantics() interp.Semantics {
 // Diagnostics is how zsh reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		// zsh names itself, not the path it was invoked by. `/bin/zsh` and a
+		// symlink called `myzsh` both say `zsh:`, and so does the shell run
+		// as `exec -a weirdname /bin/zsh` — measured all three ways, because
+		// the first alone looks like a base name rather than a fixed one.
+		// The other three shells print argv[0] whole.
+		SelfName:    "zsh",
 		TypeKeyword: "%[1]s is a reserved word",
 		// The only one that names itself in the line.
 		TypeFunction:           "%[1]s is a shell function from zsh",

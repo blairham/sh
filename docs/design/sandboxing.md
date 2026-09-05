@@ -552,6 +552,19 @@ a process permanently opens a descriptor. In a shell that number is not
 an implementation detail — descriptor 3 is the first one a script parks
 with `exec 3>f`, and the process's table is what a replacement inherits.
 
+**The front end's own accesses are identified too, and mint their ids
+rather than counting.** `internal/boundary` is the third emitter — the
+script operand, `$ENV`, `HISTFILE`, the block store's own index — and
+its records are the ones most likely to be joined, since one of the
+files it opens *is* the record of what the shell ran. It carries the
+same `session`, and stamps each access with an `event.NewID`. The
+opposite choice from `interp`, for the opposite reason: there a counter
+is forced by the hot path, and out here a run makes a handful of these,
+so an id needing no coordination is what lets the several places that
+build a `Boundary` go on building one independently. A shared counter
+would have to be threaded through all of them and the first that forgot
+would issue a duplicate.
+
 ## Consequences a user meets immediately
 
 These follow from the decisions above and are listed so they are not

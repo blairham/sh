@@ -504,7 +504,7 @@ func (s Shell) historyFile() historyFile {
 	h := historyFrom(s.Runner.GetVar, home)
 	// The session's boundary, so an open this package makes is asked about
 	// the same way one the interpreter makes is.
-	h.bound = boundary.Boundary{Gate: s.Gate, Events: s.Events}
+	h.bound = boundary.Boundary{Gate: s.Gate, Events: s.Events, Session: s.Session}
 	return h
 }
 

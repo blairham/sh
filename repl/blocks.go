@@ -51,7 +51,8 @@ import (
 // than a reason to invent one; the records still read, they just cannot be
 // joined to anything.
 func (s Shell) blocksStore() *blocks.Store {
-	return blocks.Open(s.blocksDir(), boundary.Boundary{Gate: s.Gate, Events: s.Events},
+	return blocks.Open(s.blocksDir(),
+		boundary.Boundary{Gate: s.Gate, Events: s.Events, Session: s.Session},
 		s.Session)
 }
 

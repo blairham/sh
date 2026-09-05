@@ -112,4 +112,22 @@ type EditorStyle struct {
 	// line alone, zsh swaps `e` and `c` and leaves the cursor past them.
 	// Everywhere else in the line the two agree exactly.
 	TransposeAtTheStartSwapsTheFirstTwo bool
+
+	// CompletionMatchesHiddenFiles offers names beginning with a dot to a
+	// word that does not begin with one.
+	//
+	// The dialects disagree, measured with a `.hidden` beside nine ordinary
+	// names and the lot listed on a double Tab:
+	//
+	//	bash   .hidden  a$b.txt  bracket[1].txt  dir/ …
+	//	zsh    a$b.txt  bracket[1].txt  dir/ …
+	//
+	// bash's readline calls it `match-hidden-files` and has it on. It is
+	// off here by default, which is zsh's answer and the one that keeps Tab
+	// usable in a home directory — a bare Tab there is otherwise a list of
+	// configuration files nobody was reaching for.
+	//
+	// A word that *does* begin with a dot matches them in either case, so
+	// this decides one thing only: what an empty name matches.
+	CompletionMatchesHiddenFiles bool
 }

@@ -33,5 +33,9 @@ func EditorStyle() repl.EditorStyle {
 		KillWordBeforeCursorUsesWordCharacters: true,
 		ForwardWordStopsBeforeTheNextWord:      true,
 		TransposeAtTheStartSwapsTheFirstTwo:    true,
+		// Measured: a bare Tab in a directory holding a `.hidden` lists
+		// everything except it, and `.` completes it outright because it is
+		// then the only match. Left false rather than written out, so that
+		// what a dialect *says* is what it differs about.
 	}
 }

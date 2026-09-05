@@ -54,7 +54,7 @@ func (e *editor) complete(c completer) []string {
 		return nil
 	}
 	if len(matches) == 1 {
-		e.replaceWord(start, matches[0]+completionSuffix(matches[0]))
+		e.replaceWord(start, matches[0]+completionSuffix(word, matches[0]))
 		return nil
 	}
 	// Several. Fill in as far as they agree, which is what makes a second Tab
@@ -63,7 +63,24 @@ func (e *editor) complete(c completer) []string {
 		e.replaceWord(start, common)
 		return nil
 	}
-	return matches
+	return displayNames(matches, word)
+}
+
+// displayNames are the matches as a listing shows them: without the directory
+// already typed, which every one of them carries and none of them is about.
+//
+// Measured in both shells — `: sub/` lists `nested.txt`, not `sub/nested.txt`.
+// The opening quote goes the same way, for the same reason.
+func displayNames(matches []string, word string) []string {
+	prefix := wordPrefix(word)
+	if prefix == "" {
+		return matches
+	}
+	out := make([]string, len(matches))
+	for i, m := range matches {
+		out[i] = strings.TrimPrefix(m, prefix)
+	}
+	return out
 }
 
 // replaceWord swaps the word that began at start for the completion.
@@ -74,34 +91,22 @@ func (e *editor) replaceWord(start int, with string) {
 	e.line = append(e.line, rest...)
 }
 
-// completionSuffix is what follows a single match: a slash for a directory,
-// because the next thing typed is usually what is inside it, and a space for
-// anything else, because the word is finished.
-func completionSuffix(match string) string {
+// completionSuffix is what follows a single match.
+//
+// A directory already carries its slash and gets nothing more, because the
+// next thing typed is usually what is inside it. Anything else is a finished
+// word: the quotation it was typed inside is closed, and a space follows.
+//
+// Measured in both shells: `: "file o` completes to `: "file one.txt" ` with
+// the quote closed, and `: "only` to `: "onlydir/` with it still open.
+func completionSuffix(word, match string) string {
 	if strings.HasSuffix(match, "/") {
 		return ""
 	}
-	return " "
-}
-
-// wordStart finds where the word under the cursor begins.
-//
-// Whitespace is the boundary, and a backslash before it is not: `a\ b` is one
-// word with a space in it, and completing the `b` alone would replace half of
-// a filename someone escaped deliberately.
-func wordStart(line []rune, pos int) int {
-	i := pos
-	for i > 0 {
-		if line[i-1] == ' ' || line[i-1] == '\t' {
-			if i >= 2 && line[i-2] == '\\' {
-				i -= 2
-				continue
-			}
-			break
-		}
-		i--
+	if q := wordQuote(word); q != 0 {
+		return string(q) + " "
 	}
-	return i
+	return " "
 }
 
 // commandPosition reports whether a word beginning at start is the first of a
@@ -125,25 +130,29 @@ func commandPosition(line []rune, start int) bool {
 	return false
 }
 
-// commonPrefix is how much of the matches agree, in runes rather than bytes.
+// commonPrefix is how much of the matches agree.
+//
+// In escaped units rather than in bytes or in runes: a backslash and what it
+// escapes are one thing, and a prefix that ended between them would escape
+// whatever was typed next instead.
 func commonPrefix(matches []string) string {
 	if len(matches) == 0 {
 		return ""
 	}
-	prefix := []rune(matches[0])
+	prefix := escapeUnits(matches[0])
 	for _, m := range matches[1:] {
-		r := []rune(m)
-		if len(r) < len(prefix) {
-			prefix = prefix[:len(r)]
+		u := escapeUnits(m)
+		if len(u) < len(prefix) {
+			prefix = prefix[:len(u)]
 		}
 		for i := range prefix {
-			if r[i] != prefix[i] {
+			if u[i] != prefix[i] {
 				prefix = prefix[:i]
 				break
 			}
 		}
 	}
-	return string(prefix)
+	return strings.Join(prefix, "")
 }
 
 // shellCompleter answers from a running shell: its builtins, its functions,
@@ -155,12 +164,36 @@ type shellCompleter struct {
 	names []string
 	path  string
 	dir   string
+
+	// home is what a bare `~` names, taken from the shell's own HOME rather
+	// than from the process's, for the same reason dir is.
+	home string
+
+	// hidden offers names beginning with a dot to a word that does not begin
+	// with one. See EditorStyle.CompletionMatchesHiddenFiles.
+	hidden bool
+
+	// passwd is where account names are read from; empty is /etc/passwd. A
+	// field so a test can ask about names that are not on the machine.
+	passwd string
 }
 
-func (s shellCompleter) commands(prefix string) []string {
+// commands are the names that could run.
+//
+// A word with a slash in it is a path rather than a name, and PATH has
+// nothing to say about it: what is offered is what could actually run from
+// there, which is the directories and the files with an execute bit.
+// Measured — `./pl` offers nothing where `plain.txt` is not executable, and
+// `./onl` offers `./onlydir/`.
+func (s shellCompleter) commands(word string) []string {
+	if hasPathSeparator(word) {
+		return s.paths(word, s.runnable)
+	}
+	quote := wordQuote(word)
+	base := dequote(word)
 	seen := map[string]bool{}
 	for _, n := range s.names {
-		if strings.HasPrefix(n, prefix) {
+		if strings.HasPrefix(n, base) {
 			seen[n] = true
 		}
 	}
@@ -176,7 +209,7 @@ func (s shellCompleter) commands(prefix string) []string {
 		}
 		for _, e := range entries {
 			name := e.Name()
-			if !strings.HasPrefix(name, prefix) || e.IsDir() {
+			if !strings.HasPrefix(name, base) || e.IsDir() {
 				continue
 			}
 			if info, err := e.Info(); err == nil && info.Mode()&0o111 != 0 {
@@ -189,35 +222,14 @@ func (s shellCompleter) commands(prefix string) []string {
 		out = append(out, n)
 	}
 	sort.Strings(out)
+	for i, n := range out {
+		out[i] = wordPrefix(word) + escapeName(n, quote, false)
+	}
 	return out
 }
 
-func (s shellCompleter) files(prefix string) []string {
-	dir, base := filepath.Split(prefix)
-	entries, err := os.ReadDir(s.resolve(dirOrDot(dir)))
-	if err != nil {
-		return nil
-	}
-	var out []string
-	for _, e := range entries {
-		name := e.Name()
-		if !strings.HasPrefix(name, base) {
-			continue
-		}
-		// A name that was not asked for by its dot is not offered: a bare Tab
-		// listing every dotfile is what makes completion unusable in a home
-		// directory.
-		if strings.HasPrefix(name, ".") && !strings.HasPrefix(base, ".") {
-			continue
-		}
-		if e.IsDir() {
-			name += "/"
-		}
-		out = append(out, dir+name)
-	}
-	sort.Strings(out)
-	return out
-}
+// files are the paths that could follow.
+func (s shellCompleter) files(word string) []string { return s.paths(word, nil) }
 
 // resolve reads a path the way the shell would, against its working directory
 // rather than the process's — which are not the same once `cd` has run.
@@ -226,13 +238,6 @@ func (s shellCompleter) resolve(path string) string {
 		return path
 	}
 	return filepath.Join(s.dir, path)
-}
-
-func dirOrDot(dir string) string {
-	if dir == "" {
-		return "."
-	}
-	return dir
 }
 
 // listQueryThreshold is how many matches it takes before a shell asks rather

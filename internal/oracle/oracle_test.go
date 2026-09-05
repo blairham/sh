@@ -1393,3 +1393,154 @@ func TestAUsageBlockSurvivesALineThatDoesNotNameTheShell(t *testing.T) {
 		t.Errorf("%d usage lines were rewritten, want both across the line between them: %q", n, got)
 	}
 }
+
+// TestNormalizeRewritesAFixedSelfName is the third spelling of a shell's own
+// name, after the binary's basename and Argv0.
+//
+// zsh answers with a constant `zsh:` whatever it was invoked as, so a binary
+// that is a zsh but is not *called* zsh — which is every build the graders
+// produce — printed a name the harness left standing.
+func TestNormalizeRewritesAFixedSelfName(t *testing.T) {
+	sh := Found{Shell: Shell{Name: "ours", SelfName: "zsh"}, Path: "/build/our-zsh"}
+	const said = "zsh:1: command not found: nosuchcmd\n" +
+		"+zsh:1> echo a\n"
+
+	got := normalize(said, sh, "/tmp/d")
+	want := "<shell>:1: command not found: nosuchcmd~+<shell>:1> echo a"
+	if got != want {
+		t.Errorf("normalize = %q, want %q", got, want)
+	}
+}
+
+// TestAFixedSelfNameIsRewrittenOnlyWhereAShellNamesItself. The rewrite is the
+// same anchored one the basename gets, and for the same reason: a name
+// replaced anywhere corrupts ordinary words. `zsh` is a word a shell's own
+// output says — `echo zsh: hi` is a program printing, not a shell
+// complaining — so the rule must not reach it.
+func TestAFixedSelfNameIsRewrittenOnlyWhereAShellNamesItself(t *testing.T) {
+	sh := Found{Shell: Shell{Name: "ours", SelfName: "zsh"}, Path: "/build/our-zsh"}
+	for _, tc := range []struct{ said, want string }{
+		{"the zsh: shell\n", "the zsh: shell"},
+		{"zshrc: not a name\n", "zshrc: not a name"},
+		{"  zsh: indented\n", "  zsh: indented"},
+		{"zsh1: no colon after the name\n", "zsh1: no colon after the name"},
+	} {
+		if got := normalize(tc.said, sh, "/tmp/d"); got != tc.want {
+			t.Errorf("normalize(%q) = %q, want %q", tc.said, got, tc.want)
+		}
+	}
+}
+
+// TestNoSelfNameRewritesNothingExtra: the field is opt-in, and the shells
+// that name themselves by argv[0] — three of the four — must be unaffected.
+func TestNoSelfNameRewritesNothingExtra(t *testing.T) {
+	sh := Found{Shell: Shell{Name: "ours"}, Path: "/build/our-bash"}
+	const said = "zsh:1: command not found: nosuchcmd\n"
+	if got := normalize(said, sh, "/tmp/d"); got != "zsh:1: command not found: nosuchcmd" {
+		t.Errorf("normalize = %q, want the line untouched", got)
+	}
+}
+
+// TestTheZshPanelEntryDeclaresItsFixedSelfName pins the measured fact where
+// the harness reads it. Losing it costs 22 points of measured zsh conformance
+// and nothing looks wrong: the reference column normalizes by accident,
+// because real zsh's binary happens to be called zsh.
+func TestTheZshPanelEntryDeclaresItsFixedSelfName(t *testing.T) {
+	for _, s := range Panel {
+		if s.Name == "zsh" && s.SelfName != "zsh" {
+			t.Fatalf("the zsh panel entry declares SelfName %q, want zsh", s.SelfName)
+		}
+		if s.Name != "zsh" && s.SelfName != "" {
+			t.Errorf("%s declares a fixed self name %q; only zsh was measured to have one",
+				s.Name, s.SelfName)
+		}
+	}
+}
+
+// TestARunIsRecordedTheSameUnderAnyBinaryName is the fix stated as the
+// property it buys: where a binary sits is not a fact about the shell, so the
+// same shell reached by two names must record identically.
+func TestARunIsRecordedTheSameUnderAnyBinaryName(t *testing.T) {
+	ref, ok := panelMember(t, "zsh")
+	if !ok {
+		t.Skip("zsh is not on this machine")
+	}
+	link := filepath.Join(t.TempDir(), "our-zsh")
+	if err := os.Symlink(ref.Path, link); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+	renamed := Found{Shell: Shell{Name: "ours", SelfName: ref.SelfName}, Path: link}
+	c := Case{ID: "t", Snippet: "nosuchcmd_zz"}
+
+	want, got := Exec(context.Background(), ref, c), Exec(context.Background(), renamed, c)
+	if want.Stderr == "" || !strings.Contains(want.Stderr, "<shell>:") {
+		t.Fatalf("the fixture no longer produces a self-named diagnostic: %q", want.Stderr)
+	}
+	if want != got {
+		t.Errorf("the same shell under two names recorded differently:\n  %q\n  %q",
+			want.Stderr, got.Stderr)
+	}
+}
+
+// TestConformanceGradesTheShellAndNotTheBuildPath is the same property one
+// level up, through the grader, which is where the 281 rows were lost.
+func TestConformanceGradesTheShellAndNotTheBuildPath(t *testing.T) {
+	ref, ok := panelMember(t, "zsh")
+	if !ok {
+		t.Skip("zsh is not on this machine")
+	}
+	link := filepath.Join(t.TempDir(), "our-zsh")
+	if err := os.Symlink(ref.Path, link); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+	cases := []Case{
+		{ID: "a", Snippet: "nosuchcmd_zz"},
+		{ID: "b", Snippet: "set -x; echo a"},
+	}
+
+	rep, err := RunConformance(context.Background(), link, "zsh", nil, cases)
+	if err != nil {
+		t.Fatalf("RunConformance: %v", err)
+	}
+	if rep.Passed != rep.Total {
+		t.Errorf("zsh graded against itself scored %d/%d; the failures are:\n%s",
+			rep.Passed, rep.Total, rep.Summary(true))
+	}
+}
+
+// TestConformanceStillFailsARowThatDiffersInMoreThanTheName is the other half,
+// and the one that decides whether the change is a fix or a loosening.
+//
+// The rewrite is anchored to one literal word in one position. Everything
+// else about the row is still compared byte for byte, so a shell that words
+// its diagnostic differently fails exactly as before — here bash, which says
+// `line 1: nosuchcmd_zz: command not found` where zsh says `1: command not
+// found: nosuchcmd_zz`, graded against zsh.
+func TestConformanceStillFailsARowThatDiffersInMoreThanTheName(t *testing.T) {
+	_, okz := panelMember(t, "zsh")
+	bash, okb := panelMember(t, "bash")
+	if !okz || !okb {
+		t.Skip("this needs both zsh and bash")
+	}
+	cases := []Case{{ID: "a", Snippet: "nosuchcmd_zz"}}
+
+	rep, err := RunConformance(context.Background(), bash.Path, "zsh", nil, cases)
+	if err != nil {
+		t.Fatalf("RunConformance: %v", err)
+	}
+	if rep.Passed != 0 {
+		t.Errorf("bash scored %d/%d against zsh; the self-name rewrite is forgiving "+
+			"a difference in the wording, not only in the name", rep.Passed, rep.Total)
+	}
+}
+
+func panelMember(t *testing.T, name string) (Found, bool) {
+	t.Helper()
+	found, _ := Resolve(context.Background())
+	for _, f := range found {
+		if f.Name == name {
+			return f, true
+		}
+	}
+	return Found{}, false
+}

@@ -48,6 +48,28 @@ type Shell struct {
 	// Linux runner until this existed — a mislabeled column is worse than a
 	// missing one, because nothing looks wrong.
 	MustReport string
+
+	// SelfName, when set, is the fixed word this shell writes when it names
+	// itself in a diagnostic, whatever it was invoked as.
+	//
+	// Empty is the common case and means the shell names itself by argv[0],
+	// which the path and Argv0 replacements in normalize already cover. zsh
+	// is the exception: it prints a constant `zsh:` on the two routes that
+	// have no script to name. Measured by giving it an argv[0] of its own —
+	// a symlink `xyzzy` to zsh 5.9.2, then `./xyzzy -c 'nosuchcmd_zz'`, which
+	// answers `zsh:1: command not found: nosuchcmd_zz`, and `./xyzzy -xc
+	// 'echo a'`, which traces `+zsh:1> echo a`. The same fact is recorded on
+	// the implementation side as interp.Diagnostics.SelfName.
+	//
+	// The harness needs it because it normalizes a shell's own name to
+	// <shell> so that two shells' diagnostics can be compared at all, and it
+	// knew only two spellings of that name: the binary's basename and Argv0.
+	// Real zsh lives at a path whose basename happens to be `zsh`, so its own
+	// column normalized by accident — and the implementation under test,
+	// built to a path named for the run, did not. That is a fact about where
+	// a binary sits rather than about how a shell behaves, which is precisely
+	// what normalize exists to remove.
+	SelfName string
 }
 
 // Panel is the reference set. Membership is a deliberate claim: dash stands in
@@ -91,9 +113,10 @@ var Panel = []Shell{
 		Why:    "the other ksh-family lineage; the only panel member without `local`",
 	},
 	{
-		Name:   "zsh",
-		Lookup: []string{"/opt/homebrew/bin/zsh", "/usr/local/bin/zsh", "/bin/zsh", "/usr/bin/zsh"},
-		Why:    "the interactive incumbent, and the most divergent semantics",
+		Name:     "zsh",
+		Lookup:   []string{"/opt/homebrew/bin/zsh", "/usr/local/bin/zsh", "/bin/zsh", "/usr/bin/zsh"},
+		SelfName: "zsh",
+		Why:      "the interactive incumbent, and the most divergent semantics",
 	},
 }
 

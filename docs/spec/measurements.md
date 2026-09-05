@@ -220,6 +220,13 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `array/assigning-through-an-expression-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[Q]~[x][y][Q] n=3` | `[Q]~[x][y][Q] n=3` | `[Q]~[x][y][Q] n=3` | `[Q]~[x][y][Q] n=3` | `[y]~[x][y] n=2` |
 | `array/unsetting-an-element-by-expression` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][y] n=2` | `[x][y] n=2` | `[x][y] n=2` | `[x][y] n=2` | `[x][][z] n=3` |
 | `array/an-unset-operand-subscript-expands` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][z]` | `[x][z]` | `[x][z]` | `[x][y][z]` **2>** `<shell>: unset: $i: arithmetic syntax error` | `[][y][z]` |
+| `array/a-quoted-gap-is-one-field` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=3` | `n=3` | `n=3` | `n=3` | `n=3` |
+| `array/a-quoted-gap-keeps-its-place` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][][y]` | `[x][][y]` | `[x][][y]` | `[x][][y]` | `[][x][y]` |
+| `array/an-unquoted-gap-is-no-field` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=2` | `n=2` | `n=2` | `n=2` | `n=2` |
+| `array/a-subscript-on-a-name-that-is-no-array` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `n=1` | `n=1` | `n=1` | `n=1` | `n=1` |
+| `array/a-quoted-empty-array-is-not-the-same-question` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=0` | `n=0` | `n=0` | `n=1` | `n=0` |
+| `array/a-quoted-empty-array-with-a-star` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=1` | `n=1` | `n=1` | `n=1` | `n=1` |
+| `assoc/a-missing-key-quoted-is-one-field` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: Bad substitution` *(status 2)* | `n=1` | `n=1` | `n=1` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `n=1` | `n=1` |
 | `assoc/a-string-subscript` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: Bad substitution` *(status 2)* | `v k` | `v k` | `v 0` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `v k` | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `assoc/the-subscript-is-not-arithmetic` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[1+1]=x: not found~<shell>: 1: Bad substitution` *(status 2)* | `[x]` | `[x]` | `[x]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[x]` | `[x]` |
 | `assoc/values-in-some-order` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[b]=2: not found~<shell>: 1: m[a]=1: not found~<shell>: 1: Bad substitution~<shell>: 1: Bad substitution` *(status 2)* | `1 2 n=2` | `1 2 n=2` | `1 n=1` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `1 2 n=2` | `1 2 n=2` |
@@ -478,6 +485,34 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `array/an-unset-operand-subscript-expands` — the operand reached `unset` unexpanded — it was in single quotes — and two of the three still substitute into it, because an arithmetic expression is expanded before it is read wherever one is written. ksh93 does not and says so, which is the divergence worth having recorded rather than discovered
   ```sh
   a=(x y z); i=1; unset 'a[$i]'; printf "[%s]" "${a[@]}"; echo
+  ```
+- `array/a-quoted-gap-is-one-field` — quoting guarantees exactly one field, and it does not stop guaranteeing it because the element is not there — an unassigned subscript in quotes is one empty field, the same as `"$unset"`, unanimously in the three with arrays. It produced no field at all, so the count came back 2 and every argument after the gap moved up one: the script keeps running with everything off by one, which is the worst shape a wrong answer takes
+  ```sh
+  a=(x); a[5]=y; set -- "${a[0]}" "${a[1]}" "${a[5]}"; echo "n=$#"
+  ```
+- `array/a-quoted-gap-keeps-its-place` — the same three expansions read as arguments rather than counted, which is what shows *where* the missing field was: the empty one is between the two that are there. A count alone cannot say that, and the shifting is the whole harm. zsh puts the gap first because its first element is 1
+  ```sh
+  a=(x); a[5]=y; printf "[%s]" "${a[0]}" "${a[1]}" "${a[5]}"; echo
+  ```
+- `array/an-unquoted-gap-is-no-field` — the other side, and the reason the first is about quoting rather than about arrays: unquoted, an empty expansion is no field at all and the count is 2 in all three. The pair is what says the rule is `"$x"` versus `$x` applied to an element
+  ```sh
+  a=(x); a[5]=y; set -- ${a[0]} ${a[1]} ${a[5]}; echo "n=$#"
+  ```
+- `array/a-subscript-on-a-name-that-is-no-array` — a subscript may be written on a name that was never an array, and quoted it is still one empty field rather than none — the same guarantee reached without any array at all, so a fix that only counted gaps inside one would miss it
+  ```sh
+  set -- "${b[3]}"; echo "n=$#"
+  ```
+- `array/a-quoted-empty-array-is-not-the-same-question` — how many fields an empty *list* makes is a dialect's answer — two shells say none and ksh93 says one, which is why careful scripts write `"${a[@]+"${a[@]}"}"`. It is recorded next to the gap cases because the two were being answered by one test: asking this axis about a single subscript is what made a gap disappear, and only this spelling is entitled to ask it
+  ```sh
+  a=(); set -- "${a[@]}"; echo "n=$#"
+  ```
+- `array/a-quoted-empty-array-with-a-star` — `[*]` joins, so a quoted one is a single field whether or not there is anything to join — one, unanimously, where `[@]` splits the panel. The two spellings differing on an empty array is the sharpest statement that the star is not the at
+  ```sh
+  a=(); set -- "${a[*]}"; echo "n=$#"
+  ```
+- `assoc/a-missing-key-quoted-is-one-field` — the same guarantee where the subscript is a key rather than an index: a key nothing was stored under is one empty field in quotes, in all three that have the attribute. The declared path had its own reading of an absent element and gave no field either
+  ```sh
+  typeset -A m; m[k]=v; set -- "${m[nokey]}"; echo "n=$#"
   ```
 - `assoc/a-string-subscript` — the declaration that turns a subscript from an expression into a key. bash and ksh93 store under the letter and answer it back; zsh has the arrays but rejects `${!m[@]}` outright; dash has none of it — the issue's own snippet, spelled with the name all three declarers share
   ```sh

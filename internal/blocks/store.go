@@ -132,6 +132,51 @@ func (s *Store) Append(ctx context.Context, r Record) error {
 	return err
 }
 
+// Output is what a block printed, as the caller measured it.
+//
+// Text is what will be kept and Bytes is what the command actually wrote, which
+// is larger when Truncated is set. The two are separate because the record
+// reports the true size: a consumer looking at a body has to be able to tell
+// whether it is looking at all of one.
+type Output struct {
+	Text      string
+	Bytes     int64
+	Truncated bool
+}
+
+// Record writes one block: its body first, then the record that names it.
+//
+// One entry point rather than two calls in the right order, because the order
+// is the invariant. A command line carrying a credential is refused here,
+// before anything is written, so the body of a block that will not be recorded
+// is never created — a store that wrote the output and then declined the record
+// would leave the interesting half on disk with nothing pointing at it.
+//
+// The body first and the record second, so that a record naming a body always
+// has one. The reverse order leaves a window where a shell that died between
+// the two writes has a record pointing at a file that was never made; a body
+// with no record is invisible instead, and is what the date-sharded layout
+// makes easy to sweep up.
+func (s *Store) Record(ctx context.Context, r Record, out Output) error {
+	if s == nil || s.dir == "" {
+		return nil
+	}
+	if _, found := secret.Default().Match(r.Command); found {
+		return nil
+	}
+	if out.Text != "" {
+		path, err := s.WriteBody(ctx, r.ID, r.Start, out.Text)
+		if err != nil {
+			return err
+		}
+		if path != "" {
+			r.Output, r.OutputBytes = path, out.Bytes
+			r.Truncated, r.Streams = out.Truncated, StreamsMerged
+		}
+	}
+	return s.Append(ctx, r)
+}
+
 // indexFile is the open index, opened on first use.
 //
 // Opened once per session and kept, rather than opened per record: a record is

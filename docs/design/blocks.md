@@ -442,12 +442,26 @@ The store is inspected through `cmd/sh`, following the route
 by the binary that exists to exercise seams.
 
     sh -blocks-list          # the recent blocks, one per line
+    sh -blocks-list=100      # more of them
     sh -blocks-show 1        # the most recent block, record and body
     sh -blocks-show <id>     # a block by id
 
-`-blocks-list` prints time, status, duration, cwd and the command. A
-failing block is the one people are looking for, so status is early on
-the line rather than at the end of it.
+`-blocks-list` prints time, status, duration, id, cwd and the command,
+in that order. The time is first because this is a log and that is how a
+log is scanned; the status is second because a block that failed is the
+one somebody came looking for; the command is last because it is the
+only field with no bound on its length.
+
+The count on `-blocks-list` is attached with `=` rather than taken as
+the following word, and that is not a style choice: the scan stops at
+the first word that is not one of this binary's flags, so a bare count
+would eat a script operand. `-blocks-show` has no such problem, since
+its argument is required.
+
+Both read a store instead of running a shell, so they end the
+invocation — through whatever gate the same command line asked for,
+because a policy that hides the store has to hide it from the tool that
+reads it too. A refused store reads as an empty one.
 
 This is deliberately not a builtin. A builtin would have to live in
 `interp`, which has no history, no store and no business acquiring

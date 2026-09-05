@@ -350,6 +350,11 @@ func Diagnostics() interp.Diagnostics {
 		TypeFunction:           "%[1]s is a shell function from zsh",
 		TypeNotFound:           "%[1]s not found",
 		TypeNotFoundUnprefixed: true,
+		// And on standard output, which is the other half of treating it as
+		// an answer rather than a complaint: `type -- nope ls` prints the
+		// miss and the hit on one stream, in the order they were asked for.
+		// Measured: `type nope 1>/dev/null` prints nothing.
+		TypeNotFoundOnStdout: true,
 		// `command -V` complains the way `type` does, shell's name and all.
 		CommandVNotFound: "%[1]s not found",
 		// A function said back keeps its opening brace on the header's

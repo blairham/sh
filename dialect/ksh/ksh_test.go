@@ -152,6 +152,12 @@ func TestDiagnostics(t *testing.T) {
 	if got, want := ksh.Diagnostics().TypeExternal, "%[1]s is a tracked alias for %[2]s"; got != want {
 		t.Errorf("TypeExternal = %q, want %q", got, want)
 	}
+	// A name it could not account for is a complaint, so it goes to standard
+	// error the way the rest of `whence`'s messages do. Half the panel
+	// reports it on standard output instead.
+	if ksh.Diagnostics().TypeNotFoundOnStdout {
+		t.Error("TypeNotFoundOnStdout = true, want the line on standard error")
+	}
 	// `type` is `whence -v` here, and a refused option says so — the
 	// complaint and the usage line under it both name `whence`.
 	if got, want := ksh.Diagnostics().BuiltinComplaintName["type"], "whence"; got != want {

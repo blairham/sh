@@ -625,6 +625,33 @@ type Diagnostics struct {
 	TypeNotFound           string
 	TypeNotFoundUnprefixed bool
 
+	// TypeNotFoundOnStdout writes that line to standard output rather than
+	// to standard error, which is half the panel:
+	//
+	//	bash   standard error
+	//	dash   standard output
+	//	ksh93  standard error
+	//	zsh    standard output
+	//
+	// It is a question of its own and not a consequence of the wording. Two
+	// shells treat a name they could not account for as a *report* — part of
+	// what the reader asked `type` for, and so an answer — and two treat it
+	// as a complaint about the request. Nothing else about the builtin
+	// follows from which: the status is settled separately by
+	// TypeNotFoundStatus, and the prefix by TypeNotFoundUnprefixed.
+	//
+	// The stream is visible in ways the wording is not. On the two shells
+	// that report it, `type nope 2>/dev/null` still prints the line and
+	// `p=$(type -p nope)` captures it; on the two that complain, both are
+	// silent. It is also why a multi-name invocation reads in order there —
+	// `type -t f cd if ls` puts every line, found or not, in one stream.
+	//
+	// A dialect that both prefixes the line and reports it on standard
+	// output is not in the panel, but the two fields do not constrain each
+	// other: the prefix is chosen first and the stream carries whatever
+	// results.
+	TypeNotFoundOnStdout bool
+
 	// TypeNotFoundStatus is what `type` reports when a name was not
 	// accounted for. Zero means 1, which is three of the four; dash answers
 	// with a missing command's 127.
@@ -633,8 +660,9 @@ type Diagnostics struct {
 	// CommandVNotFound is what `command -V` says about a name that is
 	// nothing, which is `type`'s complaint with a different name in front:
 	// two shells blame `command`, and the two that keep the shell's name off
-	// the line here keep it off there too — TypeNotFoundUnprefixed and
-	// TypeNotFoundStatus speak for both builtins. One verb, the name.
+	// the line here keep it off there too — TypeNotFoundUnprefixed,
+	// TypeNotFoundOnStdout and TypeNotFoundStatus speak for both builtins.
+	// One verb, the name.
 	CommandVNotFound string
 
 	// FunctionListingHeader is how a function said back whole begins —

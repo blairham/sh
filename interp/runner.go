@@ -803,6 +803,16 @@ func (r *Runner) errf(format string, args ...any) {
 // and zsh each name the location differently, and one of them names it not at
 // all.
 func (r *Runner) diagf(format string, args ...any) {
+	r.errf("%s", r.diagLine(format, args...))
+}
+
+// diagLine is the text diagf would write, without choosing a stream for it.
+//
+// Split out because one message in the panel is not always a diagnostic: the
+// "not found" `type` and `command -V` report goes to standard output in two of
+// the four shells — see Diagnostics.TypeNotFoundOnStdout — and the prefix rule
+// is the same wherever it lands.
+func (r *Runner) diagLine(format string, args ...any) string {
 	msg := fmt.Sprintf(format, args...)
 	if r.inBuiltin != "" && r.diag().NamesBuiltinInLocation {
 		// The builtin's name belongs in exactly one place. Most dialects put it
@@ -815,7 +825,7 @@ func (r *Runner) diagf(format string, args ...any) {
 		// as the sentence every other dialect prints.
 		msg = strings.TrimPrefix(msg, r.inBuiltin+": ")
 	}
-	r.errf("%s%s", r.locationPrefix(), msg)
+	return r.locationPrefix() + msg
 }
 
 // lineOf is where a node is in the script, rather than in the string that was

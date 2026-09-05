@@ -4720,4 +4720,10 @@ out=$(CDPATH=./pool cd sub)
 		Snippet: `echo "hi|$#"`,
 		Why:     "-s and -c in one bundle: all four run the command rather than reading standard input, so a shell that let -s win would print nothing and still exit 0",
 	},
+	{
+		ID: "invoke/standard-input-that-is-not-a-terminal", Category: "invocation",
+		Args:    []string{"-s"},
+		Snippet: `echo unreachable`,
+		Why:     "the harness gives every child the null device for standard input, and the null device is a character device — which is exactly what made the prompt decision say terminal, ask it for raw mode, and exit 2 with `operation not supported by device` (#509). No shell in the panel prompts here: -s says read standard input, standard input ends at once, and the shell exits 0 having said nothing. Deliberately no placeholder — what is pinned is what a shell does before it reads anything, and the snippet is written down as the thing that would have run",
+	},
 }

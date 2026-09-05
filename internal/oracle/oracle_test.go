@@ -48,10 +48,10 @@ func TestCompareOnlyComparesShellsPresentInBoth(t *testing.T) {
 	// CI and a laptop have different panels. Failing on a shell that only one
 	// side has would make the check useless exactly where it is most wanted.
 	golden := &Run{Results: map[string]map[string]Result{
-		"c1": {"bash": {Output: "x"}, "ksh93": {Output: "y"}},
+		"c1": {"bash": {Stdout: "x"}, "ksh93": {Stdout: "y"}},
 	}}
 	now := &Run{Results: map[string]map[string]Result{
-		"c1": {"bash": {Output: "x"}}, // ksh93 absent here
+		"c1": {"bash": {Stdout: "x"}}, // ksh93 absent here
 	}}
 	if d := now.Compare(golden); len(d) != 0 {
 		t.Errorf("missing shell reported as drift: %v", d)
@@ -60,13 +60,13 @@ func TestCompareOnlyComparesShellsPresentInBoth(t *testing.T) {
 
 func TestCompareDetectsChangedOutputAndStatus(t *testing.T) {
 	golden := &Run{Results: map[string]map[string]Result{
-		"c1": {"bash": {Output: "x", Status: 0}},
-		"c2": {"bash": {Output: "y", Status: 0}},
+		"c1": {"bash": {Stdout: "x", Status: 0}},
+		"c2": {"bash": {Stdout: "y", Status: 0}},
 	}}
 	now := &Run{Results: map[string]map[string]Result{
-		"c1": {"bash": {Output: "CHANGED", Status: 0}},
+		"c1": {"bash": {Stdout: "CHANGED", Status: 0}},
 		// Same output, different status is still a difference.
-		"c2": {"bash": {Output: "y", Status: 1}},
+		"c2": {"bash": {Stdout: "y", Status: 1}},
 	}}
 	d := now.Compare(golden)
 	if len(d) != 2 {
@@ -81,7 +81,7 @@ func TestNewCasesAreNotDrift(t *testing.T) {
 	golden := &Run{Results: map[string]map[string]Result{"old": {"bash": {}}}}
 	now := &Run{Results: map[string]map[string]Result{
 		"old": {"bash": {}},
-		"new": {"bash": {Output: "z"}},
+		"new": {"bash": {Stdout: "z"}},
 	}}
 	if d := now.Compare(golden); len(d) != 0 {
 		t.Errorf("a new case has nothing to drift from, got %v", d)
@@ -168,8 +168,8 @@ func TestArgsWithNoPlaceholderDoNotHandOverTheSnippet(t *testing.T) {
 	c := Case{ID: "t", Snippet: `echo the-snippet`, Args: []string{"-c", "echo the-argv"}}
 
 	got := Exec(context.Background(), found[0], c)
-	if got.Output != "the-argv" {
-		t.Errorf("Output = %q, want %q: Args are the whole invocation", got.Output, "the-argv")
+	if got.Stdout != "the-argv" {
+		t.Errorf("Stdout = %q, want %q: Args are the whole invocation", got.Stdout, "the-argv")
 	}
 }
 
@@ -187,10 +187,10 @@ func TestStdinReachesBothShellsIdentically(t *testing.T) {
 
 	a, b := Exec(context.Background(), ref, c), Exec(context.Background(), ours, c)
 	if a != b {
-		t.Errorf("same case, different input: %q vs %q", a.Output, b.Output)
+		t.Errorf("same case, different input: %q vs %q", a.Stdout, b.Stdout)
 	}
-	if a.Output != "[one][two]" {
-		t.Errorf("Output = %q, want %q", a.Output, "[one][two]")
+	if a.Stdout != "[one][two]" {
+		t.Errorf("Stdout = %q, want %q", a.Stdout, "[one][two]")
 	}
 }
 
@@ -204,8 +204,8 @@ func TestNoStdinLeavesTheShellWithNothingToRead(t *testing.T) {
 		t.Skip("no reference shells on this machine")
 	}
 	got := Exec(context.Background(), found[0], Case{ID: "t", Snippet: `read a; echo "st=$?|[$a]"`})
-	if got.Output != "st=1|[]" {
-		t.Errorf("Output = %q, want %q: a case with no Stdin reads nothing", got.Output, "st=1|[]")
+	if got.Stdout != "st=1|[]" {
+		t.Errorf("Stdout = %q, want %q: a case with no Stdin reads nothing", got.Stdout, "st=1|[]")
 	}
 }
 
@@ -220,8 +220,8 @@ func TestStdinCarriesTheProgramWhenArgsNameNoPlaceholder(t *testing.T) {
 	sh := found[0]
 	c := Case{ID: "t", Snippet: `echo "0=[$0]|n=$#"`, Args: []string{"--"}, Stdin: ArgSnippet + "\n"}
 
-	if got := Exec(context.Background(), sh, c); got.Output != "0=[<shell>]|n=0" {
-		t.Errorf("Output = %q, want %q", got.Output, "0=[<shell>]|n=0")
+	if got := Exec(context.Background(), sh, c); got.Stdout != "0=[<shell>]|n=0" {
+		t.Errorf("Stdout = %q, want %q", got.Stdout, "0=[<shell>]|n=0")
 	}
 }
 
@@ -261,8 +261,11 @@ func TestArgsAndScriptAreRefusedTogether(t *testing.T) {
 		{ID: "twice", Snippet: "echo hi", Args: []string{"-c", ArgSnippet, ArgScript}},
 	} {
 		got := Exec(context.Background(), found[0], c)
-		if !strings.HasPrefix(got.Output, "harness error:") || got.Status != -1 {
-			t.Errorf("%s: Exec = %q (status %d), want a harness error", c.ID, got.Output, got.Status)
+		// On standard error, and nothing on standard output: the harness's
+		// own failure must not read as something a shell printed.
+		if !strings.HasPrefix(got.Stderr, "harness error:") || got.Stdout != "" || got.Status != -1 {
+			t.Errorf("%s: Exec = out %q err %q (status %d), want a harness error on stderr",
+				c.ID, got.Stdout, got.Stderr, got.Status)
 		}
 	}
 }
@@ -280,7 +283,7 @@ func TestArgsRunTheSameInvocationOnBothSides(t *testing.T) {
 	c := Case{ID: "t", Snippet: `echo "$0|$#"`, Args: []string{"-c", ArgSnippet, "name", "a"}}
 
 	if a, b := Exec(context.Background(), ref, c), Exec(context.Background(), ours, c); a != b {
-		t.Errorf("same case, different invocations: %q vs %q", a.Output, b.Output)
+		t.Errorf("same case, different invocations: %q vs %q", a.Stdout, b.Stdout)
 	}
 }
 
@@ -292,11 +295,71 @@ func TestExecRunsASnippetAndCapturesStatus(t *testing.T) {
 	sh := found[0]
 
 	got := Exec(context.Background(), sh, Case{ID: "t", Snippet: `printf hi; exit 3`})
-	if got.Output != "hi" {
-		t.Errorf("Output = %q, want %q", got.Output, "hi")
+	if got.Stdout != "hi" {
+		t.Errorf("Stdout = %q, want %q", got.Stdout, "hi")
 	}
 	if got.Status != 3 {
 		t.Errorf("Status = %d, want 3", got.Status)
+	}
+}
+
+func TestExecKeepsTheTwoStreamsApart(t *testing.T) {
+	// The regression a merged capture cannot see. A diagnostic that moves
+	// from standard error to standard output is a behavior change, and
+	// cmd.CombinedOutput() recorded the two as the same result — which is
+	// why the harness could not back up its own claim that a shell printing
+	// to the other stream has not behaved the same way.
+	found, _ := Resolve(context.Background())
+	if len(found) == 0 {
+		t.Skip("no reference shells on this machine")
+	}
+	sh := found[0]
+
+	got := Exec(context.Background(), sh, Case{ID: "t", Snippet: `echo out; echo err >&2`})
+	if got.Stdout != "out" || got.Stderr != "err" {
+		t.Errorf("Exec = out %q err %q, want out %q err %q", got.Stdout, got.Stderr, "out", "err")
+	}
+	moved := Exec(context.Background(), sh, Case{ID: "t", Snippet: `echo out >&2; echo err`})
+	if moved == got {
+		t.Error("two snippets differing only in which stream they wrote to recorded the same result")
+	}
+}
+
+func TestExecNormalizesStandardErrorToo(t *testing.T) {
+	// Nearly everything worth normalizing — the shell naming itself, the
+	// script's path — arrives on standard error, so a split that normalized
+	// only standard output would put the machine straight back into the
+	// record.
+	found, _ := Resolve(context.Background())
+	if len(found) == 0 {
+		t.Skip("no reference shells on this machine")
+	}
+	got := Exec(context.Background(), found[0], Case{ID: "t", Snippet: `nosuchcmd-xyz`})
+	if got.Stdout != "" {
+		t.Errorf("Stdout = %q, want nothing: the diagnostic belongs on the other stream", got.Stdout)
+	}
+	if !strings.HasPrefix(got.Stderr, "<shell>:") {
+		t.Errorf("Stderr = %q, want a normalized diagnostic naming <shell>", got.Stderr)
+	}
+}
+
+func TestCellNamesTheStreamAMessageCameOutOn(t *testing.T) {
+	// The convention docs/spec/measurements.md is read with. The marker is
+	// bold, and therefore outside the code span, so a shell that prints the
+	// characters `2>` cannot be mistaken for the harness saying "stderr".
+	for _, tc := range []struct {
+		in   Result
+		want string
+	}{
+		{Result{Stdout: "a"}, "`a`"},
+		{Result{Stderr: "oops", Status: 1}, "**2>** `oops` *(status 1)*"},
+		{Result{Stdout: "a", Stderr: "oops", Status: 1}, "`a` **2>** `oops` *(status 1)*"},
+		{Result{Status: 2}, "*(no output, status 2)*"},
+		{Result{TimedOut: true, Status: -1}, "*(timeout)*"},
+	} {
+		if got := cell(tc.in); got != tc.want {
+			t.Errorf("cell(%+v) = %q, want %q", tc.in, got, tc.want)
+		}
 	}
 }
 
@@ -311,8 +374,8 @@ func TestExecDoesNotInheritTheDevelopersEnvironment(t *testing.T) {
 	t.Setenv("ORACLE_LEAK_CANARY", "leaked")
 
 	got := Exec(context.Background(), found[0], Case{ID: "t", Snippet: `echo "[${ORACLE_LEAK_CANARY-clean}]"`})
-	if got.Output != "[clean]" {
-		t.Errorf("environment leaked into the run: %q", got.Output)
+	if got.Stdout != "[clean]" {
+		t.Errorf("environment leaked into the run: %q", got.Stdout)
 	}
 }
 
@@ -321,7 +384,7 @@ func TestMarkdownEndsWithExactlyOneNewline(t *testing.T) {
 	// ends in a blank line — which fails the commit on every regeneration.
 	r := &Run{
 		Shells:  []ShellRecord{{Name: "bash", Version: "5"}},
-		Results: map[string]map[string]Result{"c1": {"bash": {Output: "x"}}},
+		Results: map[string]map[string]Result{"c1": {"bash": {Stdout: "x"}}},
 	}
 	got := r.Markdown([]Case{{ID: "c1", Category: "cat", Snippet: "echo x", Why: "because"}})
 	if !strings.HasSuffix(got, "\n") || strings.HasSuffix(got, "\n\n") {

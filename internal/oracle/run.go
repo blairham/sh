@@ -4,6 +4,7 @@
 package oracle
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -22,11 +23,27 @@ const RunTimeout = 10 * time.Second
 
 // Result is what one shell did with one case.
 type Result struct {
-	// Output is combined stdout and stderr, normalized and with the trailing
-	// newline removed. Both streams are kept because a diagnostic is part of
-	// the behavior: two shells that print the same thing to different streams
-	// have not behaved the same way.
-	Output string
+	// Stdout and Stderr are what the shell wrote to each stream, normalized
+	// and with the trailing newline removed.
+	//
+	// They are recorded apart because a diagnostic is part of the behavior:
+	// two shells that print the same thing to different streams have not
+	// behaved the same way, and a merged capture cannot tell. That claim was
+	// written here while the harness took cmd.CombinedOutput() and could not
+	// make it good — a diagnostic printed to standard output read exactly
+	// like one printed to standard error, so a whole class of regression was
+	// invisible unless the snippet separated the streams itself with `2>`.
+	// A handful of cases do that; the rest were being graded on a merge.
+	//
+	// What a merge bought was the order the two streams interleaved in, and
+	// that is given up here. It was never worth much: a shell block-buffers
+	// standard output into a pipe and writes standard error unbuffered, so
+	// the merged order was the order the buffers happened to flush rather
+	// than the order the shell wrote. A case that means to pin ordering
+	// across the two streams still says so the only reliable way, by
+	// redirecting one of them where it can see it.
+	Stdout string
+	Stderr string
 
 	// Status is the exit status, or -1 if the shell could not be run at all.
 	// It is recorded separately because a case can produce identical output
@@ -35,6 +52,15 @@ type Result struct {
 
 	// TimedOut marks a snippet the shell never finished.
 	TimedOut bool
+}
+
+// harnessError is the Result for a case that could not be measured.
+//
+// It goes to Stderr because that is what it is — a diagnostic — and because
+// a reader scanning the record for the stream a message came out on should
+// not find the harness's own failures filed under a shell's output.
+func harnessError(err error) Result {
+	return Result{Stderr: "harness error: " + err.Error(), Status: -1}
 }
 
 // ArgSnippet and ArgScript are the placeholders a Case.Args may use to say
@@ -59,14 +85,14 @@ const (
 // whole invocation out.
 func Exec(ctx context.Context, sh Found, c Case) Result {
 	if err := c.validate(); err != nil {
-		return Result{Output: "harness error: " + err.Error(), Status: -1}
+		return harnessError(err)
 	}
 	ctx, cancel := context.WithTimeout(ctx, RunTimeout)
 	defer cancel()
 
 	dir, err := os.MkdirTemp("", "oracle-")
 	if err != nil {
-		return Result{Output: "harness error: " + err.Error(), Status: -1}
+		return harnessError(err)
 	}
 	// The scratch directory is this run's alone, so a failed removal is a
 	// leaked temp dir rather than a wrong measurement; nothing here can act
@@ -86,8 +112,18 @@ func Exec(ctx context.Context, sh Found, c Case) Result {
 		"TERM=dumb",
 	}
 
-	out, err := cmd.CombinedOutput()
-	res := Result{Output: normalize(string(out), sh, dir), Status: 0}
+	// A buffer per stream rather than one shared one. os/exec sends both to
+	// the same pipe when they are the same writer, which is what
+	// CombinedOutput does and what this exists not to do.
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err = cmd.Run()
+	res := Result{
+		Stdout: normalize(stdout.String(), sh, dir),
+		Stderr: normalize(stderr.String(), sh, dir),
+		Status: 0,
+	}
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		res.TimedOut = true
@@ -99,8 +135,10 @@ func Exec(ctx context.Context, sh Found, c Case) Result {
 	case errors.As(err, &ee):
 		res.Status = ee.ExitCode()
 	case err != nil:
-		res.Output = "harness error: " + err.Error()
-		res.Status = -1
+		// Whatever the shell managed to write before the harness failed is
+		// not a measurement of anything, so it is replaced rather than
+		// annotated.
+		res = harnessError(err)
 	}
 	return res
 }

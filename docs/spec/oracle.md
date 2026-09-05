@@ -108,16 +108,87 @@ that say which shell each of them is, so an option the harness has never
 heard of is still the same option in both runs.
 
 The snippet still has to reach the shell, and `Args` says where it goes:
-`oracle.ArgSnippet` is replaced by the snippet as one word, and
-`oracle.ArgScript` by the path of a file holding it — the same file
-`Script` writes, normalized to `<script>` in the output. At most one may
-appear. A case with neither never hands the shell its snippet, which is
-how an invocation that must fail before it reads anything is written.
+`oracle.ArgSnippet` is replaced by the snippet, and `oracle.ArgScript` by
+the path of a file holding it — the same file `Script` writes, normalized
+to `<script>` in the output. At most one may appear. A case with neither
+never hands the shell its snippet, which is how an invocation that must
+fail before it reads anything is written.
+
+A placeholder is replaced **wherever it appears**, not only as a whole
+word — the same rule `Stdin` has always followed. `-c` takes its command
+string as a separate word only when it is written that way, and
+`sh -c'echo hi'` attaches it to the letter, so an invocation that needs
+the snippet inside a larger word is spelled `"-c" + ArgSnippet`.
+
+Requiring a whole word meant such a case had to write the text twice,
+once as its `Snippet` and once literally in its argv, with nothing
+checking that the two stayed in step: an edit to either made the case
+test something other than what it recorded, silently. Interpolating
+removes the second copy rather than guarding it, and the corpus test now
+rejects an argv that spells the snippet out, since there is no longer a
+reason to.
+
+Guarding it was the cheaper-sounding option and would have been wrong.
+Of the sixteen cases whose `Args` name no placeholder, eleven hand the
+program over through `Stdin` and four withhold it deliberately — a script
+path that does not exist, `-c` with nothing after it. A rule that a
+no-placeholder argv must contain the snippet verbatim would have fired on
+fifteen of the sixteen, and suppressing it would have taken a new field
+to say which cases mean it.
 
 This exists because the invocation surface was graded by nothing else.
 The corpus started every case the same way, so the front end was pinned
 only by its own unit tests — the shape of the incident where the drivers
 scored 178/198 against a core scoring 198/198.
+
+## Cases graded on the refusal rather than on its wording
+
+The shapes most worth pinning about an invocation are the ones a shell
+**refuses**: a command string written against its letter, an option that
+is not one, `-c` with nothing after it. Every shell refuses in words of
+its own, and those words are deliberately different — they are what the
+Diagnostics vector exists for, and a dialect is meant to sound like the
+shell it names. So an exact comparison scores four shells that agree
+about the behavior as four disagreements, and the sharpest of these
+cases could not be written down at all.
+
+`Case.GradedOnRefusal` grades such a case on the fact that the shell
+declined. Capturing the two streams apart is what makes that a precise
+claim rather than an approximation — "it complained, on standard error,
+and did not carry on" is three recorded fields and needs no normalizer:
+
+| still compared exactly | forgiven |
+| --- | --- |
+| the outcome — status, signal, timeout | the text of the diagnostic |
+| standard output, byte for byte | |
+| that **both sides** refused: nonzero **and** a diagnostic on stderr | |
+
+The last row is the safeguard, and it is why this is not simply
+"compare less". The mode adds two requirements the exact comparison
+never makes, so it is *stricter* in the direction that matters. Put the
+flag on a case the reference does not refuse and the case **fails** — a
+misused flag has to be louder than a correct one, not quieter. A shell
+that refuses silently fails too, because saying nothing is not a wording
+difference. And a timeout is never a refusal: a shell that never
+finished declined nothing, and a case that hangs has stopped measuring.
+
+Keeping standard output exact costs something, and the cost is the point.
+bash answers `sh -c'echo hi'` by writing its whole `set -o` table to
+standard *output* as part of the usage, so the case that pins that shape
+reports a real gap against a bash reference until we write the table
+too. Forgiving the stream instead would forgive a shell that **ran** the
+command string, which is the exact divergence the case was written to
+catch. Measured on the four cases as they stand: two pass on the
+wording, and two fail on a genuine difference in what the shell did.
+
+**Only the grading is relaxed; the record is not.** `measurements.md`
+prints what each shell actually said, and the drift check still compares
+every byte, so a shell that changes its wording is still caught. The
+rendered tables mark such a row **(refusal)**, in the table and beside
+the case's reason, and a conformance report says how many of its passes
+needed the relaxation and which they were. That visibility is the
+condition the mode is allowed on: a relaxation nobody can enumerate is
+indistinguishable from a score that is quietly wrong.
 
 ## Cases that supply the shell's standard input
 

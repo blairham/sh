@@ -91,7 +91,7 @@ func TestABadLetterInABundleIsRefusedFirst(t *testing.T) {
 	// `set`'s own status, not the script's — the echo after it succeeds and
 	// would report 0 whatever `set` did.
 	out, _ := setRun(t, dir, nil, "set -Zo pipefail\necho s=$?\n(exit 3) | true\necho p=$?")
-	if !strings.Contains(out, "s=2") || !strings.Contains(out, "not implemented") {
+	if !strings.Contains(out, "s=2") || !strings.Contains(out, "set: -Z: invalid option") {
 		t.Errorf("said %q, want the letter refused with status 2", out)
 	}
 	if !strings.Contains(out, "p=0") {

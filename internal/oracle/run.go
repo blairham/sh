@@ -194,11 +194,13 @@ func (c Case) validate() error {
 	if c.Script {
 		return errors.New("Case.Args and Case.Script are exclusive: put ArgScript in Args instead")
 	}
+	// Counted as substrings, because that is how they are replaced. A word
+	// that merely contains a placeholder still names the snippet's place, so
+	// counting whole words would let `-c{snippet}` and a second `{snippet}`
+	// through as though only one of them said anything.
 	n := 0
 	for _, a := range c.Args {
-		if a == ArgSnippet || a == ArgScript {
-			n++
-		}
+		n += strings.Count(a, ArgSnippet) + strings.Count(a, ArgScript)
 	}
 	if n > 1 {
 		return errors.New("Case.Args names the snippet's place more than once")
@@ -223,12 +225,20 @@ func command(ctx context.Context, sh Found, c Case, dir string) *exec.Cmd {
 	args := append([]string(nil), sh.Args...)
 	switch {
 	case len(c.Args) > 0:
+		// Replaced wherever they appear rather than only as a whole word,
+		// which is what Case.Stdin has always done. An invocation that needs
+		// the snippet *inside* a larger word — `-c` with its command string
+		// written against the letter, the shape a hand and a generated
+		// command line both produce — could otherwise only spell the text a
+		// second time, and nothing kept the two copies in step. The case then
+		// tested something other than what it recorded, silently, from the
+		// first edit to either one.
 		for _, a := range c.Args {
-			switch a {
-			case ArgSnippet:
-				a = c.Snippet
-			case ArgScript:
-				a = script()
+			a = strings.ReplaceAll(a, ArgSnippet, c.Snippet)
+			// The script file is written only if something asks for it, so
+			// a case that never names it leaves no file behind.
+			if strings.Contains(a, ArgScript) {
+				a = strings.ReplaceAll(a, ArgScript, script())
 			}
 			args = append(args, a)
 		}
@@ -310,11 +320,13 @@ func normalize(s string, sh Found, dir string) string {
 	// to the start of a line and required to be followed by a colon.
 	s = diagPrefix(filepath.Base(sh.Path)).ReplaceAllString(s, "<shell>:")
 	s = tracePrefix(filepath.Base(sh.Path)).ReplaceAllString(s, "+<shell>:")
+	s = usagePrefix(filepath.Base(sh.Path)).ReplaceAllString(s, "${1}<shell>")
 	// A shell invoked under another name reports *that* name, not its
 	// binary's — bash-as-sh says "sh:", which the line above cannot match.
 	if sh.Argv0 != "" {
 		s = diagPrefix(sh.Argv0).ReplaceAllString(s, "<shell>:")
 		s = tracePrefix(sh.Argv0).ReplaceAllString(s, "+<shell>:")
+		s = usagePrefix(sh.Argv0).ReplaceAllString(s, "${1}<shell>")
 	}
 	s = strings.TrimRight(s, "\n")
 	// Newlines are shown as ~ so a result stays one table cell. Real output
@@ -340,4 +352,18 @@ func tracePrefix(base string) *regexp.Regexp {
 
 func diagPrefix(base string) *regexp.Regexp {
 	return regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(base) + `:`)
+}
+
+// usagePrefix matches a shell naming itself in its own usage line, which is
+// the other place the name is not at the start of one.
+//
+// A shell refusing an option at an invocation prints `Usage: ksh [-cilrs…]`,
+// and ksh93 writes the *last element* of the word it was invoked by there
+// where bash writes the whole of it. So the path replacement above catches
+// bash's and cannot catch ksh93's, and the corpus compared `Usage: ksh` with
+// `Usage: our-ksh` — a difference in where the binary lives rather than in
+// what the shell does. Anchored to the start of a line and required to follow
+// `Usage:` so an ordinary word spelled like the shell is left alone.
+func usagePrefix(base string) *regexp.Regexp {
+	return regexp.MustCompile(`(?m)^(Usage:[ \t]+)` + regexp.QuoteMeta(base) + `\b`)
 }

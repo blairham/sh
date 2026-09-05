@@ -1065,7 +1065,61 @@ Placing the table is the *binary's*, for the reason the exec itself is:
 rewriting the process's descriptors is process-wide state, and a Runner
 embedded in another program may not touch it. So `interp` decides which
 descriptors are the script's to hand out and hands that slice to
-`Runner.ReplaceProcess`, in the layout both other halves already use.
+`Runner.ReplaceProcess`.
+
+### The named streams cross in the same slice
+
+They are the half with no second route. A descriptor above 2 is placed
+because Go opened it close-on-exec; standard output has to be placed
+because after `exec >log` the file is on whatever number Go had free and
+the process's own 1 is still the caller's. An external child never shows
+this, because `os/exec` builds its 0, 1 and 2 separately and will copy
+bytes through a pipe for a stream that is not a file at all — there is no
+separately here, and nothing to copy with.
+
+Measured on macOS, 2026-09-05, across bash 5.3, bash 3.2, dash, ksh93 and
+zsh, and pinned in the corpus as `redir/a-replacement-keeps-a-redirected-…`
+and `redir/a-closed-std…-is-closed-for-a-replacement`:
+
+    exec >log; exec cmd                    the replacement writes to the file
+                                           — unanimous, ksh93 included
+    exec cmd >log                          the same, with the redirection on
+                                           the `exec` itself
+    exec <data; exec cat                   the replacement reads the file
+                                           rather than the shell's own input
+    exec >log 2>&1; exec cmd               both streams reach the file: `2>&1`
+                                           is one file under two numbers
+                                           rather than two targets
+    exec >&-; exec cmd                     the command finds it closed and
+                                           fails — unanimous
+    exec <&-; exec cmd                     the same on the reading side
+
+So the slice a replacement is given is the table extended down to zero —
+entry i is descriptor i — rather than the ExtraFiles layout the other two
+halves use, and that is the whole of the difference between them. The
+exclusion the dissenting shell makes for what `exec` opened stops above 2
+in that shell too: its own `exec >log; exec cmd` writes to the file.
+
+Both rules the table already stated carry over, and the second is a
+decision rather than a consequence:
+
+- **Only a real file can cross.** A Runner embedded in another program may
+  have a caller's buffer behind standard output, and there is no number to
+  hand a replacement for one of those.
+- **A nil is a number that must not be open**, for a named stream as for
+  the rest of the table, rather than "leave the process's own". The
+  measured rows above decide it: `exec >&-; exec cmd` leaves the command a
+  closed descriptor everywhere, and it is the same nil. The alternative
+  would also be the one way for an embedder's terminal to reach a command
+  through a stream the script had redirected away from, which is the
+  borrowing of process state this library exists not to do.
+
+One case is a known divergence and is neither reading: one dialect writes
+to *every* target of a repeated redirection, so `exec >a >b` leaves the
+runner a writer over two files and no single number to place. The command
+a replacement runs finds standard output closed there, where that shell
+gives it both files — which needs a copying process between the two, and
+is a larger thing than a table.
 
 ### Whether a descriptor `exec` parked is handed over at all
 
@@ -3344,6 +3398,97 @@ wording a dialect vector could hold. The status, 126, is reproduced.
 Neither is about a file whose *contents* are not a script; that is a
 separate question and has an issue of its own.
 
+## A subscript that will not read
+
+Issue #649. A subscript is an arithmetic expression, so one that does not
+read is the failure `$((b c))` is — and every shell in the panel with
+arrays reports it in exactly the words it reports that one, gives up on
+the word, and exits non-zero. Measured 2026-09-05 across bash 5.3.15,
+bash 3.2.57, ksh93u+ 2012-08-01, zsh 5.9.2 and dash.
+
+    a=(x y z); echo "[${a[b c]}]"; echo after
+
+    bash 5.3   b c: arithmetic syntax error in expression (error token is "c")
+    bash 3.2   b c: syntax error in expression (error token is "c")
+    ksh93      b c: arithmetic syntax error
+    zsh        bad math expression: operator expected at `c'
+
+`after` is never printed. This expanded to nothing at status 0 and the
+script ran on, which is the worst shape a wrong answer takes here: an
+empty string is a plausible value for a real element, so nothing after it
+could tell. The evaluator's error was being returned and dropped at every
+one of the five places a subscript is read — the element, its length, an
+operator that reaches one, `${a[i]:=v}`, and a substring's offset and
+length, which are the same reading under another spelling.
+
+The **status is the ordinary fatal one** rather than the failed-expansion
+one. bash draws that line itself: `-c 'echo "${a[b c]}"'` exits 1 where
+`-c 'echo "${x@QQ}"'` from the same invocation exits 127
+(`ExpansionFailureStatusFromCommandString`, recorded under #577). A bad
+expression is not a word that could not be read.
+
+**Writing through one is unanimous and `unset` is not.** `a[1+]=v` ends
+the script in all four; `unset a[1+]` ends it only in bash, and ksh93 and
+zsh leave a failed builtin behind — `BadSubscriptToUnsetFatal`, in the
+catalog below.
+
+### What a substring's range is blamed on
+
+Three shapes for one failure, which is why it is two fields rather than
+one flag on `ArithError`:
+
+    x=abcdef; echo "${x:1+:2}"
+
+    bash 5.3   x: 1+: arithmetic syntax error: operand expected …
+    ksh93      1+:2: more tokens expected
+    zsh        bad math expression: operand expected at end of string
+
+bash puts the **parameter** in front of the sentence — the name and its
+subscript, so `${a[@]:1+}` is blamed on `a[@]` — where the same shell
+blames a bad *subscript* on the expression alone.
+`Diagnostics.SubstringRangeError` carries it. ksh93 blames the offset
+together with everything written after it in the range
+(`SubstringErrorNamesTheWholeRange`); a failing **length** has nothing
+after it and is named alone, which is the pair that shows this is a
+wording rather than a reading. Extending the text before *evaluating* it
+instead invents a second failure — `${x:2:1+}` reported that `2:1+` would
+not parse and then that `1+` would not, where the shell reports one.
+
+### Recorded rather than reproduced: zsh's substring modifiers
+
+zsh alone refuses a substring offset that begins with a bare name, because
+`${x:…}` is also its history-modifier syntax and the name is read as a
+modifier:
+
+    x=abcdef; i=2; echo "${x:i:2}"
+
+    bash 5.3, bash 3.2, ksh93   cd
+    zsh                         unrecognized modifier `i'   (status 1)
+
+The core follows the three that agree. zsh's rule is not a switch that can
+be answered yes or no: `${x:i+1:2}` is refused naming `i`, `${x:abc:2}` is
+refused naming nothing at all, `${x:_q:2}` is *accepted* as offset 0, and
+`${x:$i:2}`, `${x: i:2}` and `${x:(i):2}` are all accepted. Reproducing it
+means reproducing that shell's modifier table and the order it tries it
+in, which is a feature rather than an axis — #662, filed on its own rather
+than guessed at here.
+
+### Recorded rather than reproduced: what "operand expected" means
+
+Two of the panel word the *reason* by whether the expression ran out or
+found something it could not use, and this implementation gives the
+end-of-input wording for both:
+
+    $((1+))    ksh93  more tokens expected        zsh  operand expected at end of string
+    $((%))     ksh93  arithmetic syntax error     zsh  operand expected at `%'
+    $((@))     ksh93  arithmetic syntax error     zsh  illegal character: @
+
+bash words all three the same, which is why nothing had noticed. It is
+not this section's failure — `$((%))` has the same divergence and reaches
+no subscript — but it is what the `unset a[@]` rows under #648 and the
+substring-offset row here still differ on, so it is written down where
+they are — #661.
+
 ## The axis catalog
 
 Issue #487: 160 of the fields on `interp.Semantics` were named nowhere in
@@ -4696,6 +4841,35 @@ modeled.
 
 
 ### `unset`
+
+**`BadSubscriptToUnsetFatal`** — bash yes · dash unspecified · ksh93 no · zsh no
+
+Ends the script when an `unset` operand's subscript will not evaluate.
+This is the one place a bad subscript does not behave the same way in all
+four: everywhere else — reading an element, its length, an operator that
+reaches one, an assignment through one, a substring's offset — the word
+is abandoned and the script with it, unanimously.
+
+    a=(x y z); unset "a[1+]"; echo "st=$? n=${#a[@]}"
+
+    bash 5.3    1+: arithmetic syntax error: operand expected …  and stops
+    ksh93       unset: 1+: more tokens expected                  st=1 n=3
+    zsh         bad math expression: operand expected …          st=1 n=3
+
+So bash gives up on the script as it does for any bad expression, and the
+other two leave a *failed builtin* behind — which is the shape a script can
+test, and the reason this is an axis rather than a wording.
+
+It was silent in all three: the subscript's error came back and nothing
+read it, so `unset a[b c]` was a no-op at status 0.
+
+ksh93 also names the builtin in front of the sentence
+(`Diagnostics.UnsetBadSubscript`), where it words the identical failure in
+an expansion without one. That is a wording and not a second axis.
+
+Asked only for an operand whose subscript actually failed. dash has no
+subscript to evaluate — `UnsetTakesASubscript` is no there — so the axis
+is absent rather than false.
 
 **`UnsetArrayAt`** — bash removes every element · dash unspecified · ksh93 a subscript · zsh leaves one empty element
 

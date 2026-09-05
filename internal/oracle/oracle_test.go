@@ -111,6 +111,18 @@ func TestCorpusIsWellFormed(t *testing.T) {
 			t.Errorf("%s: no Why; it could not be judged when it drifts", c.ID)
 		}
 		seen[c.ID] = true
+		// An argv that spells the snippet out is the drift #535 is about: two
+		// copies of one text with nothing keeping them in step, so an edit to
+		// either makes the case test something other than what it records.
+		// There is no longer a reason to write it twice — a placeholder is
+		// interpolated wherever it appears — so the second copy is now an
+		// error rather than a documented cost.
+		for _, a := range c.Args {
+			if strings.Contains(a, c.Snippet) {
+				t.Errorf("%s: argv %q spells the snippet out; write %q instead",
+					c.ID, a, strings.ReplaceAll(a, c.Snippet, ArgSnippet))
+			}
+		}
 		if err := c.validate(); err != nil {
 			// A case whose invocation cannot be built records a harness error
 			// in place of a measurement, which looks like a shell that
@@ -154,6 +166,132 @@ func TestArgScriptWritesTheSnippetToTheFileTheNormalizerKnows(t *testing.T) {
 	}
 	if got := normalize(filepath.Join(dir, "case.sh")+": bad\n", sh, dir); !strings.Contains(got, "<script>") {
 		t.Errorf("the file ArgScript wrote does not normalize: %q", got)
+	}
+}
+
+// TestAPlaceholderIsReplacedInsideAWordToo is the expressiveness #535 was
+// about, and the reason the duplication it removes existed.
+//
+// `-c` takes its command string as its own word only when it is written that
+// way. `sh -c'echo hi'` attaches the string to the letter — the shape a hand
+// and a generated command line both produce, and the one all four panel
+// shells refuse — and a whole-word placeholder cannot spell it. The only way
+// left was to write the snippet text a second time, literally, in the argv.
+func TestAPlaceholderIsReplacedInsideAWordToo(t *testing.T) {
+	sh := Found{Shell: Shell{Name: "ours"}, Path: "/bin/sh"}
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{
+			name: "the command string attached to its letter",
+			args: []string{"-c" + ArgSnippet},
+			want: []string{"/bin/sh", "-cecho hi"},
+		},
+		{
+			// The word it always worked in stays exactly as it was: this is
+			// an addition and not a change of meaning.
+			name: "a placeholder that is the whole word still works",
+			args: []string{"-c", ArgSnippet},
+			want: []string{"/bin/sh", "-c", "echo hi"},
+		},
+		{
+			name: "text on both sides of it",
+			args: []string{"before" + ArgSnippet + "after"},
+			want: []string{"/bin/sh", "beforeecho hiafter"},
+		},
+		{
+			// A word that names no placeholder is passed through untouched,
+			// which is what makes the deliberate no-snippet shapes work.
+			name: "a word with no placeholder is left alone",
+			args: []string{"-s", "a"},
+			want: []string{"/bin/sh", "-s", "a"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := Case{ID: "t", Snippet: "echo hi", Args: tc.args}
+			if err := c.validate(); err != nil {
+				t.Fatalf("validate: %v", err)
+			}
+			cmd := command(t.Context(), sh, c, dir)
+			if !slices.Equal(cmd.Args, tc.want) {
+				t.Errorf("argv = %q, want %q", cmd.Args, tc.want)
+			}
+		})
+	}
+}
+
+// TestArgScriptIsReplacedInsideAWordToo is the same rule for the other
+// placeholder, and it checks the path is still the one the normalizer knows —
+// an embedded path that did not normalize would put the machine's temp
+// directory in the record.
+func TestArgScriptIsReplacedInsideAWordToo(t *testing.T) {
+	dir := t.TempDir()
+	sh := Found{Shell: Shell{Name: "ours"}, Path: "/bin/sh"}
+	c := Case{ID: "t", Snippet: "echo hi", Args: []string{"--rcfile=" + ArgScript}}
+
+	cmd := command(t.Context(), sh, c, dir)
+	want := []string{"/bin/sh", "--rcfile=" + filepath.Join(dir, "case.sh")}
+	if !slices.Equal(cmd.Args, want) {
+		t.Fatalf("argv = %q, want %q", cmd.Args, want)
+	}
+	if got := normalize(cmd.Args[1], sh, dir); !strings.Contains(got, "<script>") {
+		t.Errorf("the embedded path does not normalize: %q", got)
+	}
+	if b, err := os.ReadFile(filepath.Join(dir, "case.sh")); err != nil || string(b) != "echo hi\n" {
+		t.Errorf("script file = %q, %v; want the snippet", b, err)
+	}
+}
+
+// TestTheScriptFileIsOnlyWrittenWhenACaseAsksForIt is why the replacement is
+// guarded rather than unconditional, and it is a measurement bug and not
+// tidiness.
+//
+// The scratch directory is the shell's *working* directory, so a file written
+// into it is a file the snippet can see: several cases glob the current
+// directory, and `echo *` would list a case.sh nobody asked for. Replacing
+// ArgScript unconditionally would write one for every case that uses Args.
+func TestTheScriptFileIsOnlyWrittenWhenACaseAsksForIt(t *testing.T) {
+	sh := Found{Shell: Shell{Name: "ours"}, Path: "/bin/sh"}
+	dir := t.TempDir()
+
+	command(t.Context(), sh, Case{ID: "t", Snippet: "echo *", Args: []string{"-c" + ArgSnippet}}, dir)
+	if _, err := os.Stat(filepath.Join(dir, "case.sh")); !os.IsNotExist(err) {
+		t.Errorf("case.sh exists in the working directory of a case that never named it (%v); a snippet that globs would see it", err)
+	}
+	// The control, so this cannot pass by the file never being written at all.
+	other := t.TempDir()
+	command(t.Context(), sh, Case{ID: "t", Snippet: "echo hi", Args: []string{ArgScript}}, other)
+	if _, err := os.Stat(filepath.Join(other, "case.sh")); err != nil {
+		t.Errorf("case.sh missing for a case that did name it: %v", err)
+	}
+}
+
+// TestAPlaceholderNamedTwiceIsRefusedInsideAWordToo keeps validate's rule in
+// step with the replacement rule.
+//
+// Counting whole words while replacing substrings would let a case name the
+// snippet's place twice and be told it had named it once — the harness error
+// exists so that a case which quietly ran something other than what it says
+// cannot be measured, and it has to count what is actually replaced.
+func TestAPlaceholderNamedTwiceIsRefusedInsideAWordToo(t *testing.T) {
+	for _, args := range [][]string{
+		{"-c" + ArgSnippet, ArgSnippet},
+		{"-c" + ArgSnippet + ArgSnippet},
+		{"-c" + ArgSnippet, ArgScript},
+		{ArgSnippet, ArgSnippet},
+	} {
+		c := Case{ID: "t", Snippet: "echo hi", Args: args}
+		if err := c.validate(); err == nil {
+			t.Errorf("validate(%q) = nil; want a harness error: the snippet's place is named twice", args)
+		}
+	}
+	// And the one that is still legal, so the rule is not simply "refuse".
+	c := Case{ID: "t", Snippet: "echo hi", Args: []string{"-c" + ArgSnippet, "name"}}
+	if err := c.validate(); err != nil {
+		t.Errorf("validate: %v; naming the place once is what the field is for", err)
 	}
 }
 
@@ -600,6 +738,201 @@ func TestArgv0ReachesTheBinaryOnTheScriptRoute(t *testing.T) {
 	if ref := Exec(t.Context(), plain, c); ref.Status != 0 || !strings.Contains(ref.Stdout, "survived") {
 		t.Errorf("bash: status %d, stdout %q; want status 0 and 'survived' — the probe no longer distinguishes the two names",
 			ref.Status, ref.Stdout)
+	}
+}
+
+// TestGradedOnRefusalCasesAreActuallyRefused is the guard that keeps the
+// relaxation from becoming a way to pass.
+//
+// The mode forgives the wording of a diagnostic, which is only defensible on a
+// case where every shell genuinely declines. Put the flag on a case the panel
+// *runs* and it would forgive an ordinary difference instead — so the claim
+// the flag makes is checked here against the golden record, which is checked
+// in. That costs no shells and runs everywhere, and it fails at the moment
+// someone marks the wrong case rather than at the moment a score quietly
+// improves.
+//
+// The record is the right authority for it. matchesRefusal already refuses to
+// pass a case whose reference did not refuse, so a misused flag cannot make
+// conformance green; what it could do without this is sit in the corpus
+// looking like a claim that had been checked.
+func TestGradedOnRefusalCasesAreActuallyRefused(t *testing.T) {
+	golden, err := Load(filepath.Join("testdata", "golden.json"))
+	if err != nil {
+		t.Fatalf("golden record: %v", err)
+	}
+	marked := 0
+	for _, c := range Corpus {
+		if !c.GradedOnRefusal {
+			continue
+		}
+		marked++
+		row, ok := golden.Results[c.ID]
+		if !ok {
+			// A brand new case has nothing recorded yet; `make oracle` is what
+			// puts it there, and until then there is nothing to check it
+			// against.
+			continue
+		}
+		for _, shell := range golden.Shells {
+			res, ok := row[shell.Name]
+			if !ok {
+				continue
+			}
+			if !refused(res) {
+				t.Errorf("%s is GradedOnRefusal but %s did not refuse it: %s\n"+
+					"\tthe flag forgives the wording of a refusal, so a case the panel runs must not carry it",
+					c.ID, shell.Name, describe(res))
+			}
+		}
+	}
+	if marked == 0 {
+		t.Error("no case carries GradedOnRefusal; the mode has no coverage and this guard proves nothing")
+	}
+}
+
+// TestARefusalIsNotForgivenUnlessBothSidesRefused fixes the boundary of the
+// relaxation, which is the whole of its safety.
+//
+// Every row here is a case the exact comparison would fail. The question is
+// which of them the refusal mode should *also* fail, and the answer is all but
+// one: it forgives a wording, and nothing else.
+func TestARefusalIsNotForgivenUnlessBothSidesRefused(t *testing.T) {
+	refusal := Result{Stdout: "", Stderr: "sh: -c: option requires an argument", Status: 2}
+	for _, tc := range []struct {
+		name string
+		want Result
+		got  Result
+		ok   bool
+	}{
+		{
+			// The case the mode exists for: two shells that declined alike
+			// and said so in their own words.
+			name: "same refusal, different words",
+			want: refusal,
+			got:  Result{Stderr: "our-sh: -c needs an operand", Status: 2},
+			ok:   true,
+		},
+		{
+			// The bug the motivating case was written to catch. Running what
+			// the reference declined to run is not a wording difference.
+			name: "we ran what the reference refused",
+			want: refusal,
+			got:  Result{Stdout: "hi", Status: 0},
+		},
+		{
+			// A silent failure has not diagnosed anything, and "it complained
+			// on stderr" is half the claim being graded.
+			name: "we refused without saying anything",
+			want: refusal,
+			got:  Result{Status: 2},
+		},
+		{
+			// The status is still exact. Two shells that refuse with
+			// different numbers have not behaved the same way.
+			name: "refused with a different status",
+			want: refusal,
+			got:  Result{Stderr: "our-sh: no", Status: 1},
+		},
+		{
+			// Standard output is still exact, which is what stops the mode
+			// forgiving a stream of output nobody produced — bash's `set -o`
+			// table on the attached-command-string case is exactly this.
+			name: "refused alike but printed something extra",
+			want: Result{Stdout: "allexport\toff", Stderr: "sh: - : invalid option", Status: 1},
+			got:  Result{Stderr: "our-sh: - : invalid option", Status: 1},
+		},
+		{
+			// The flag on a case that is not a refusal. It fails rather than
+			// passing loosely: a misused flag has to be louder than a correct
+			// one, not quieter.
+			name: "the reference did not refuse at all",
+			want: Result{Stdout: "hi", Status: 0},
+			got:  Result{Stdout: "different", Status: 0},
+		},
+		{
+			// The same requirement where it is the only one left doing work.
+			// Once the outcomes match, "both refused" reduces to "both wrote
+			// a diagnostic" — so the case that separates the two halves is a
+			// reference that failed *silently*, which is an ordinary failure
+			// and not a refusal. Complaining where the reference did not is a
+			// divergence, and forgiving it would be the misused-flag hole
+			// with the reference-side check taken out.
+			name: "the reference failed without diagnosing anything",
+			want: Result{Status: 1},
+			got:  Result{Stderr: "our-sh: no", Status: 1},
+		},
+		{
+			// A shell that never finished declined nothing, and a case that
+			// hangs has stopped measuring. Both sides carry a diagnostic on
+			// purpose: without one the outcome check alone would reject this,
+			// and the row would not be testing the timeout clause at all.
+			name: "a timeout is not a refusal",
+			want: Result{TimedOut: true, Status: -1, Stderr: "sh: still going"},
+			got:  Result{TimedOut: true, Status: -1, Stderr: "our-sh: still going"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := Case{ID: "t", GradedOnRefusal: true}
+			if matches(tc.want, tc.got) {
+				t.Fatal("the exact comparison already passes this, so it says nothing about the relaxation")
+			}
+			ok, relaxed := verdict(c, tc.want, tc.got)
+			if ok != tc.ok {
+				t.Errorf("verdict = %v, want %v", ok, tc.ok)
+			}
+			if relaxed != tc.ok {
+				t.Errorf("relaxed = %v, want %v: a pass here is only ever a relaxed one", relaxed, tc.ok)
+			}
+			// And the flag is the only thing that grants it: the same two
+			// results without it must fail, or the mode is not opt-in.
+			if ok, _ := verdict(Case{ID: "t"}, tc.want, tc.got); ok {
+				t.Error("passed without GradedOnRefusal; the relaxation is not opt-in")
+			}
+		})
+	}
+}
+
+// TestAnExactMatchIsNeverCountedAsRelaxed keeps the discount honest.
+//
+// The count has to mean "this much of the score is currently being forgiven".
+// Counting every flagged case would make it measure how the corpus is labeled
+// instead, and it would grow when a dialect got *better* — the number moving
+// the wrong way at the moment the gap closes.
+func TestAnExactMatchIsNeverCountedAsRelaxed(t *testing.T) {
+	same := Result{Stderr: "sh: -c: option requires an argument", Status: 2}
+	ok, relaxed := verdict(Case{ID: "t", GradedOnRefusal: true}, same, same)
+	if !ok || relaxed {
+		t.Errorf("verdict = (%v, %v), want (true, false): an exact match needs no relaxation", ok, relaxed)
+	}
+}
+
+// TestTheRecordMarksARelaxedRow is the visibility requirement, which is the
+// condition the mode was allowed on.
+//
+// A reader of the generated tables has to be able to tell which rows are
+// graded loosely. Without that, the objection to the mode stands — it would be
+// indistinguishable from a score that is quietly wrong.
+func TestTheRecordMarksARelaxedRow(t *testing.T) {
+	cases := []Case{
+		{ID: "loose", Category: "invocation", Snippet: "echo hi", GradedOnRefusal: true},
+		{ID: "strict", Category: "invocation", Snippet: "echo hi"},
+	}
+	run := &Run{
+		Shells:  []ShellRecord{{Name: "dash", Version: "x"}},
+		Results: map[string]map[string]Result{"loose": {"dash": {Status: 2, Stderr: "no"}}, "strict": {"dash": {Stdout: "hi"}}},
+	}
+	md := run.Markdown(cases)
+	for _, line := range strings.Split(md, "\n") {
+		if strings.Contains(line, "`loose`") && !strings.Contains(line, "(refusal)") {
+			t.Errorf("a relaxed row is not marked: %q", line)
+		}
+		if strings.Contains(line, "`strict`") && strings.Contains(line, "(refusal)") {
+			t.Errorf("an exactly graded row is marked as relaxed: %q", line)
+		}
+	}
+	if !strings.Contains(md, "**(refusal)**") {
+		t.Error("the mark never appears at all")
 	}
 }
 

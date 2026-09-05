@@ -112,6 +112,95 @@ func TestDescriptorsCrossAReplacementWhateverOrderTheyWereOpenedIn(t *testing.T)
 	}
 }
 
+// A redirection the script has already applied is the replacement's too.
+//
+// This is the half of the table that has no second route across. A descriptor
+// above 2 is placed because Go opened it close-on-exec; standard output is
+// placed because after `exec >log` the file is on whatever number Go had free,
+// and the process's own 1 is still the caller's — so the replacement wrote
+// there, past a redirection the script had already made, in every form of it.
+func TestARedirectedStandardOutputReachesAReplacement(t *testing.T) {
+	beTheShell()
+	dir := t.TempDir()
+	target := filepath.Join(dir, "log")
+	out := runAsShellReplacingItself(t, "TestARedirectedStandardOutputReachesAReplacement",
+		"exec >"+target+"\nexec /bin/echo hi\n")
+	if strings.Contains(out, "hi") {
+		t.Errorf("the replacement wrote to the shell's caller: %q", out)
+	}
+	if b, _ := os.ReadFile(target); strings.TrimSpace(string(b)) != "hi" {
+		t.Errorf("file = %q, want the replacement's line", b)
+	}
+}
+
+// The other form of the same thing, and the one a script is likelier to write:
+// the redirection is on the `exec` itself rather than on an `exec` before it.
+func TestAReplacementsOwnRedirectionOfStandardOutputCrosses(t *testing.T) {
+	beTheShell()
+	dir := t.TempDir()
+	target := filepath.Join(dir, "log")
+	out := runAsShellReplacingItself(t, "TestAReplacementsOwnRedirectionOfStandardOutputCrosses",
+		"exec /bin/echo hi >"+target+"\n")
+	if strings.Contains(out, "hi") {
+		t.Errorf("the replacement wrote to the shell's caller: %q", out)
+	}
+	if b, _ := os.ReadFile(target); strings.TrimSpace(string(b)) != "hi" {
+		t.Errorf("file = %q, want the replacement's line", b)
+	}
+}
+
+// Standard error is placed for the same reason and is worth its own case,
+// because a shell that reported the failure to place anything would report it
+// there and could not be trusted to say so.
+func TestARedirectedStandardErrorReachesAReplacement(t *testing.T) {
+	beTheShell()
+	dir := t.TempDir()
+	target := filepath.Join(dir, "err")
+	runAsShellReplacingItself(t, "TestARedirectedStandardErrorReachesAReplacement",
+		"exec 2>"+target+"\nexec /bin/sh -c 'echo complaint >&2'\n")
+	if b, _ := os.ReadFile(target); strings.TrimSpace(string(b)) != "complaint" {
+		t.Errorf("file = %q, want the replacement's line", b)
+	}
+}
+
+// The reading half. `exec <data; exec /bin/cat` read the *caller's* standard
+// input, which with a terminal there is a shell that hangs rather than one
+// that prints the file.
+func TestARedirectedStandardInputReachesAReplacement(t *testing.T) {
+	beTheShell()
+	dir := t.TempDir()
+	data := filepath.Join(dir, "data")
+	if err := os.WriteFile(data, []byte("fromthefile\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out := runAsShellReplacingItself(t, "TestARedirectedStandardInputReachesAReplacement",
+		"exec <"+data+"\nexec /bin/cat\n")
+	if !strings.Contains(out, "fromthefile") {
+		t.Errorf("the replacement read %q, want the file the script opened", out)
+	}
+}
+
+// And a named stream the script *closed* is closed there, which is what makes
+// a nil one rule rather than two. Every shell in the panel leaves the command
+// a closed descriptor here, and it complains rather than writing anywhere.
+//
+// What the command reported is the assertion and not what it wrote: with
+// standard output closed there is nowhere for it to write, which is the point.
+func TestAClosedStandardStreamIsClosedForAReplacement(t *testing.T) {
+	beTheShell()
+	dir := t.TempDir()
+	report := filepath.Join(dir, "report")
+	runAsShellReplacingItself(t, "TestAClosedStandardStreamIsClosedForAReplacement",
+		"exec >&-\nexec /bin/sh -c '/bin/echo hi; echo st=$? >"+report+"'\n")
+	b, _ := os.ReadFile(report)
+	if !strings.Contains(string(b), "st=") {
+		t.Fatalf("the replacement did not run, so nothing was proved: %q", b)
+	}
+	if strings.Contains(string(b), "st=0") {
+		t.Errorf("a closed standard output was open in the replacement: %q", b)
+	}
+}
+
 // And a descriptor the *caller* opened and the script closed is closed for the
 // replacement, which is the half that has nothing to do with the flag.
 //

@@ -10,6 +10,13 @@ standard error after a bold **2>**. The two streams are captured apart,
 so a diagnostic that moved from one to the other shows up here as a
 changed cell rather than as no change at all. Newlines are shown as `~`.
 
+A case marked **(refusal)** is *graded* on the fact that the shell said
+no — same outcome, same standard output, and a diagnostic on standard
+error from both sides — rather than on the words it said no in, which
+are a dialect's own. Only the grading is relaxed: the cells below are
+what each shell actually printed, and the drift check still compares
+every byte of them.
+
 ## Panel
 
 | shell | build |
@@ -213,6 +220,11 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `array/a-subscript-holding-a-command-substitution` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][Q]` | `[x][Q]` | `[x][Q]` | `[x][Q]` | `[Q][y]` |
 | `array/appending-through-a-subscript-holding-an-expansion` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[xQ][y]` |
 | `array/a-subscript-where-there-are-no-arrays` | `done` **2>** `<shell>: 1: a[1]=Q: not found` | `done` | `done` | `done` | `done` | `done` |
+| `array/a-subscript-that-will-not-evaluate` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: b c: arithmetic syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: line 1: b c: arithmetic syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: b c: syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: b c: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operator expected at `c'` *(status 1)* |
+| `array/a-subscript-that-will-not-parse` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
+| `array/a-length-through-a-subscript-that-will-not-evaluate` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: b c: arithmetic syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: line 1: b c: arithmetic syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: b c: syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: b c: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operator expected at `c'` *(status 1)* |
+| `array/assigning-through-a-subscript-that-will-not-evaluate` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
+| `array/unsetting-through-a-subscript-that-will-not-evaluate` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | `st=1~ n=3` **2>** `<shell>: unset: 1+: more tokens expected` | `st=1~ n=3` **2>** `<shell>:1: bad math expression: operand expected at end of string` |
 | `array/reading-a-subscript-is-arithmetic` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[z]` | `[z]` | `[z]` | `[z]` | `[y]` |
 | `array/a-subscript-reads-a-variable` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[z]` | `[z]` | `[z]` | `[z]` | `[y]` |
 | `array/an-unset-name-in-a-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x]` | `[x]` | `[x]` | `[x]` | `[]` |
@@ -462,6 +474,26 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `array/a-subscript-where-there-are-no-arrays` — the other side of the same gate. Where the dialect has no subscript the word is not an assignment at all and the shell looks for a command by that name, which is the answer the shell without arrays gives — so accepting the shape everywhere would have made this one silently assign instead of reporting. Three shells assign and say nothing; the fourth reports on standard error and carries on
   ```sh
   a[1]=Q; echo done
+  ```
+- `array/a-subscript-that-will-not-evaluate` — a subscript is an expression, so one that does not read is the failure `$((b c))` is — the identical sentence in all four, the command abandoned, and a non-zero status. It expanded to nothing at status 0 and the script carried on, which is the worst shape available: an empty string is a plausible value for a real element, so nothing downstream could tell. `after` is printed so the case records that the input unit is given up on rather than only that a line went to standard error
+  ```sh
+  a=(x y z); echo "[${a[b c]}]"; echo after
+  ```
+- `array/a-subscript-that-will-not-parse` — the other half of the same reading: an expression can fail before it is evaluated as well as while it is, and the panel words the two differently — `operand expected` against `operator expected`, in each shell's own sentence. Both spellings had one silent answer here, so a fix that only caught the evaluator would leave this one empty at 0
+  ```sh
+  a=(x y z); echo "[${a[1+]}]"; echo after
+  ```
+- `array/a-length-through-a-subscript-that-will-not-evaluate` — the length operator reaches the element through the same reading, and reported `0` for it — a plausible length for a real element, where the shells all refuse the word. The operator forms are worth one row between them because they share the subscript path rather than each having one
+  ```sh
+  a=(x y z); echo "[${#a[b c]}]"; echo after
+  ```
+- `array/assigning-through-a-subscript-that-will-not-evaluate` — writing an element names it by expression too, and the failure ends the script in all four — unanimously, where the same failure inside `unset` splits them. It had a wording of its own that named the array rather than the expression, and it carried on to the next command, so the array a script thought it had written was untouched and nothing stopped
+  ```sh
+  a=(x y z); a[1+]=v; printf "[%s]" "${a[@]}"; echo " after"
+  ```
+- `array/unsetting-through-a-subscript-that-will-not-evaluate` — the same expression in `unset`, which is where the panel divides: bash gives up on the script as it does for any bad expression, and ksh93 and zsh leave a failed builtin behind and run the next command — the shape a script can test. ksh93 also names the builtin in front of the sentence, having worded the identical failure in an expansion without one. It was silent at 0 in all three
+  ```sh
+  a=(x y z); unset "a[1+]"; echo "st=$?"; echo " n=${#a[@]}"
   ```
 - `array/reading-a-subscript-is-arithmetic` — a subscript being read is an expression, exactly as one being written through is. It took a numeral and nothing else, so this expanded to the empty string with status 0 — and `a[1+1]=v` had already learned to store where `${a[1+1]}` could not look, which is two spellings of one subscript naming two different elements. zsh answers the element before, which is the base rather than a different reading
   ```sh
@@ -3197,6 +3229,9 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `opt/command-tracking-has-two-long-names` | *(no output, status 2)* | `hashall=0~trackall=2` | `hashall=0` *(status 2)* | `hashall=0~trackall=1` | *(no output, status 2)* | `hashall=0~trackall=0` |
 | `opt/an-unknown-long-name-is-refused` | **2>** `<shell>: 1: set: Illegal option -o zzznosuch` *(status 2)* | `on=2~off=2` **2>** `<shell>: line 1: set: zzznosuch: invalid option name~<shell>: line 1: set: zzznosuch: invalid option name` | **2>** `<shell>: line 1: set: zzznosuch: invalid option name` *(status 2)* | `on=1~off=1` **2>** `<shell>: line 0: set: zzznosuch: invalid option name~<shell>: line 0: set: zzznosuch: invalid option name` | **2>** `<shell>: set: zzznosuch: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: zzznosuch` *(status 1)* |
 | `opt/an-unknown-letter-is-refused` | **2>** `<shell>: 1: set: Illegal option -q` *(status 2)* | `st=2~alive` **2>** `<shell>: line 1: set: -q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` | **2>** `<shell>: line 1: set: -q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` *(status 2)* | `st=2~alive` **2>** `<shell>: line 0: set: -q: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]` | **2>** `<shell>: set: -q: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: bad option: -q` *(status 1)* |
+| `opt/a-refused-letter-echoes-the-sign` | **2>** `<shell>: 1: set: Illegal option -q` *(status 2)* | `st=2` **2>** `<shell>: line 1: set: +q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` | **2>** `<shell>: line 1: set: +q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` *(status 2)* | `st=2` **2>** `<shell>: line 0: set: +q: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]` | **2>** `<shell>: set: +q: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: bad option: -q` *(status 1)* |
+| `opt/an-unknown-letter-at-an-invocation` | **2>** `<shell>: 0: Illegal option -q` *(status 2)* | **2>** `<shell>: -q: invalid option~Usage:	<shell> [GNU long option] [option] ...~	<shell> [GNU long option] [option] script-file ...~GNU long options:~	--debug~	--debugger~	--dump-po-strings~	--dump-strings~	--help~	--init-file~	--login~	--noediting~	--noprofile~	--norc~	--posix~	--pretty-print~	--rcfile~	--restricted~	--verbose~	--version~Shell options:~	-ilrsD or -c command or -O shopt_option		(invocation only)~	-abefhkmnptuvxBCEHPT or -o option` *(status 2)* | **2>** `<shell>: -q: invalid option~Usage:	<shell> [GNU long option] [option] ...~	sh [GNU long option] [option] script-file ...~GNU long options:~	--debug~	--debugger~	--dump-po-strings~	--dump-strings~	--help~	--init-file~	--login~	--noediting~	--noprofile~	--norc~	--posix~	--pretty-print~	--rcfile~	--restricted~	--verbose~	--version~Shell options:~	-ilrsD or -c command or -O shopt_option		(invocation only)~	-abefhkmnptuvxBCEHPT or -o option` *(status 2)* | **2>** `<shell>: -q: invalid option~Usage:	<shell> [GNU long option] [option] ...~	<shell> [GNU long option] [option] script-file ...~GNU long options:~	--debug~	--debugger~	--dump-po-strings~	--dump-strings~	--help~	--init-file~	--login~	--noediting~	--noprofile~	--norc~	--posix~	--protected~	--rcfile~	--restricted~	--verbose~	--version~	--wordexp~Shell options:~	-irsD or -c command or -O shopt_option		(invocation only)~	-abefhkmnptuvxBCHP or -o option` *(status 2)* | **2>** `<shell>: -q: unknown option~Usage: <shell> [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>: bad option: -q` *(status 1)* |
+| `opt/an-unknown-long-name-at-an-invocation` | **2>** `<shell>: 0: Illegal option -o zzznosuch` *(status 2)* | **2>** `<shell>: line 0: <shell>: zzznosuch: invalid option name` *(status 2)* | **2>** `<shell>: line 0: sh: zzznosuch: invalid option name` *(status 2)* | **2>** `<shell>: line 0: <shell>: zzznosuch: invalid option name` *(status 2)* | **2>** `<shell>: zzznosuch: bad option(s)~Usage: <shell> [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>: no such option: zzznosuch` *(status 1)* |
 | `opt/turning-off-a-name-a-shell-does-not-implement` | **2>** `<shell>: 1: set: Illegal option -o posix` *(status 2)* | `st=0~st=0` | `st=0~st=0` | `st=0~st=0` | **2>** `<shell>: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: posix` *(status 1)* |
 | `opt/noglob-does-not-stop-matching` | `match` | `match` | `match` | `match` | `match` | `match` |
 | `opt/an-option-can-be-turned-back-off` | `a.txt` | `a.txt` | `a.txt` | `a.txt` | `a.txt` | `a.txt` |
@@ -3394,6 +3429,18 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
   ```sh
   set -q; echo "st=$?"; echo alive
   ```
+- `opt/a-refused-letter-echoes-the-sign` — the other half of the letter's spelling: bash and ksh93 echo the `+` back where dash and zsh write `-q` whichever way they were asked, so the sign is a verb in two of the wordings and a literal in the other two
+  ```sh
+  set +q; echo "st=$?"
+  ```
+- `opt/an-unknown-letter-at-an-invocation` — the same refusal by the other route, and it is not the same sentence: nobody names `set` here, bash and ksh93 print the whole *shell* usage rather than the builtin's, and zsh drops the location its run-time form writes. The letter is first in the word deliberately — bash answers 1 with no usage block when a letter it has comes before the one it does not, which is a position axis nobody has asked for yet
+  ```sh
+  echo hi
+  ```
+- `opt/an-unknown-long-name-at-an-invocation` — the long spelling by the same route, and bash alone shapes it differently from its own letter: dash, ksh93 and zsh word both the same way here, while bash hands this one to the builtin and prints `<shell>: line 0: <shell>: …` — its own name standing where `set` would
+  ```sh
+  echo hi
+  ```
 - `opt/turning-off-a-name-a-shell-does-not-implement` — the thirteenth line of Homebrew's own brew script is `set +o posix`, and it is the shape this implementation's accept-off/refuse-on policy exists for: turning off what a shell was never doing is a request that has been granted, where turning it *on* would be a promise. Recorded across the panel because the two names split it — bash has both, and the others have neither
   ```sh
   set +o posix; echo "st=$?"; set +o history; echo "st=$?"
@@ -3428,6 +3475,9 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
 | `param/unset-positional-takes-a-default` | `[default]` | `[default]` | `[default]` | `[default]` | `[default]` | `[default]` |
+| `param/a-substring-offset-that-will-not-evaluate` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: x: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: x: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: x: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+:2: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
+| `param/a-substring-length-that-will-not-evaluate` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: x: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: x: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: x: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
+| `param/a-substring-offset-on-a-subscripted-parameter` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a[@]: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: a[@]: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: a[@]: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
 | `param/a-substring-offset-is-an-expression` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[cd]` | `[cd]` | `[cd]` | `[cd]` | `[cd]` |
 | `param/colon-extends-the-test-unset` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` |
 | `param/colon-extends-the-test-empty` | `[D][]` | `[D][]` | `[D][]` | `[D][]` | `[D][]` | `[D][]` |
@@ -3498,6 +3548,18 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `param/unset-positional-takes-a-default` — an out-of-range positional is unset rather than empty, so the plain default form fires for it
   ```sh
   echo "[${1-default}]"
+  ```
+- `param/a-substring-offset-that-will-not-evaluate` — a substring's offset is the same reading reached by another spelling, and it took the failure silently: an offset of 0 is a real substring of the right length. What is *blamed* is three shapes rather than one — bash puts the parameter in front of the sentence, ksh93 names the offset together with everything after it in the range, and zsh gives the sentence bare
+  ```sh
+  x=abcdef; echo "[${x:1+:2}]"; echo after
+  ```
+- `param/a-substring-length-that-will-not-evaluate` — the length rather than the offset, which is what separates the two namings: the shell that blames an offset along with the rest of the range has nothing after a length and names it alone. Extending the text before *evaluating* it rather than only before reporting it invented a second failure, so the pair is what pins that the extension is a wording and not a reading
+  ```sh
+  x=abcdef; echo "[${x:2:1+}]"; echo after
+  ```
+- `param/a-substring-offset-on-a-subscripted-parameter` — the parameter a diagnostic names is the name and its subscript, not the name alone — `a[@]` — in the one shell that names it at all. The list form of the substring reaches the same evaluation as the string form, so this also says the two spellings share it
+  ```sh
+  a=(p q r); echo "[${a[@]:1+}]"; echo after
   ```
 - `param/a-substring-offset-is-an-expression` — the same numeral-only reading, reached through the substring rather than through a subscript: unanimous in all four with substrings, and taking the numeral alone gave an offset of 0 — `ab`, which is a real substring of the right length and so looks like an answer rather than a failure
   ```sh
@@ -3799,6 +3861,13 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `redir/restating-the-number-hands-an-exec-descriptor-over` | `st=0~restated` | `st=0~restated` | `st=0~restated` | `st=0~restated` | `st=0~restated` | `st=0~restated` |
 | `redir/exec-descriptor-reaches-a-replacement` | `repl` | `repl` | `repl` | `repl` | *(no output, status 0)* | `repl` |
 | `redir/a-replacements-descriptor-numbers-keep-their-gaps` | `five` | `five` | `five` | `five` | *(no output, status 0)* | `five` |
+| `redir/a-replacement-keeps-a-redirected-stdout` | **2>** `repl` | **2>** `repl` | **2>** `repl` | **2>** `repl` | **2>** `repl` | **2>** `repl` |
+| `redir/a-replacement-keeps-a-redirected-stderr` | `err` | `err` | `err` | `err` | `err` | `err` |
+| `redir/a-replacement-keeps-a-redirected-stdin` | `line` | `line` | `line` | `line` | `line` | `line` |
+| `redir/a-replacements-own-redirection-crosses` | **2>** `own` | **2>** `own` | **2>** `own` | **2>** `own` | **2>** `own` | **2>** `own` |
+| `redir/a-replacement-keeps-a-merged-stream` | *(no output, status 2)* | *(no output, status 2)* | *(no output, status 2)* | *(no output, status 2)* | *(no output, status 2)* | *(no output, status 2)* |
+| `redir/a-closed-stdout-is-closed-for-a-replacement` | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* |
+| `redir/a-closed-stdin-is-closed-for-a-replacement` | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* |
 | `redir/an-inherited-descriptor-keeps-its-number` | `five` | `five` | `five` | `five` | *(no output, status 0)* | `five` |
 | `redir/a-dup-prefix-is-that-commands-alone` | `st=2` **2>** `<shell>: 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: 6: Bad file descriptor` | `st=1` **2>** `<shell>: 6: cannot open [Bad file descriptor]` | `st=1` **2>** `<shell>:1: 6: bad file descriptor` |
 | `redir/merge-then-file` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` |
@@ -3959,6 +4028,34 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `redir/a-replacements-descriptor-numbers-keep-their-gaps` — the replacement's table is the shell's table by number rather than a packing of it: with 3 and 4 never opened, the file parked on 5 is on 5 there and 3 is closed rather than shifted down to fill the hole. Unanimous but for ksh93, which passes neither
   ```sh
   exec 5>f; exec /bin/sh -c "{ echo five >&5; echo three >&3; } 2>/dev/null; cat f"
+  ```
+- `redir/a-replacement-keeps-a-redirected-stdout` — the named streams cross a replacement as the rest of the table does, and unanimously — ksh93 included, which is the boundary of what that shell keeps to itself. The replacement reads the file back on the one stream still going to the terminal, because there is no shell left to read it
+  ```sh
+  exec >f; exec /bin/sh -c "echo repl; cat f >&2"
+  ```
+- `redir/a-replacement-keeps-a-redirected-stderr` — the same claim for the stream a shell reports its own failures on, read back on the standard output the script left alone
+  ```sh
+  exec 2>f; exec /bin/sh -c "echo err >&2; cat f"
+  ```
+- `redir/a-replacement-keeps-a-redirected-stdin` — the reading half: the replacement reads the file the script opened rather than the shell's own input, which with a terminal there is the difference between printing a line and hanging
+  ```sh
+  printf 'line\n' >f; exec <f; exec /bin/cat
+  ```
+- `redir/a-replacements-own-redirection-crosses` — the form a script is likelier to write — the redirection on the `exec` itself rather than on an `exec` before it — and the same answer, so the rule is about the stream and not about which command opened it
+  ```sh
+  exec /bin/sh -c "echo own; cat f >&2" >f
+  ```
+- `redir/a-replacement-keeps-a-merged-stream` — `>f 2>&1` is one file under two numbers rather than two targets, so a replacement that places files by number gets both — the count is the only channel left once every stream is in the file, and it is 2 in every shell. The command substitution is the replacement's, quoted so that the shell being replaced does not run it against a file it has only just truncated
+  ```sh
+  exec >f 2>&1; exec /bin/sh -c 'echo out; echo err >&2; exit $(grep -c . f)'
+  ```
+- `redir/a-closed-stdout-is-closed-for-a-replacement` — a stream the script closed stays closed across the replacement rather than falling back to the process's own: the command fails where it would otherwise have written, unanimously. The complaint is discarded because its wording is a fact about whatever /bin/echo is on the machine
+  ```sh
+  exec >&-; exec /bin/echo hi 2>/dev/null
+  ```
+- `redir/a-closed-stdin-is-closed-for-a-replacement` — the same rule on the reading side, and the case that tells a closed stream from an empty one: a replacement handed the shell's own input would read to end of file and report success
+  ```sh
+  exec <&-; exec /bin/cat 2>/dev/null
   ```
 - `redir/an-inherited-descriptor-keeps-its-number` — the discriminating case for how the table crosses: with 3 and 4 never opened, the file parked on 5 is still on 5 in the child and 3 is a hole, so the file holds `five`. A table packed from the bottom would put it on 3 and the file would hold `three`
   ```sh
@@ -5643,6 +5740,10 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `invoke/a-script-under-a-directory-that-is-not-there` | **2>** `<shell>: 0: cannot open nodir/nosuch.sh: No such file` *(status 2)* | **2>** `<shell>: nodir/nosuch.sh: No such file or directory` *(status 127)* | **2>** `<shell>: nodir/nosuch.sh: No such file or directory` *(status 127)* | **2>** `<shell>: nodir/nosuch.sh: No such file or directory` *(status 127)* | **2>** `<shell>: nodir/nosuch.sh: not found` *(status 127)* | **2>** `<shell>: can't open input file: nodir/nosuch.sh` *(status 127)* |
 | `invoke/a-script-that-is-there-runs` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` |
 | `invoke/a-script-is-not-interactive` | `not` | `not` | `not` | `not` | `not` | `not` |
+| `invoke/a-command-string-attached-to-the-letter` **(refusal)** | **2>** `<shell>: 0: Illegal option -h` *(status 2)* | `allexport      	off~braceexpand    	on~emacs          	on~errexit        	on~errtrace       	off~functrace      	off~hashall        	on~histexpand     	off~history        	off~ignoreeof      	off~interactive-comments	on~keyword        	off~monitor        	off~noclobber      	off~noexec         	off~noglob         	off~nolog          	off~notify         	off~nounset        	off~onecmd         	off~physical       	off~pipefail       	off~posix          	off~privileged     	off~verbose        	off~vi             	off~xtrace         	off` **2>** `<shell>: - : invalid option` *(status 1)* | `allexport      	off~braceexpand    	on~emacs          	on~errexit        	on~errtrace       	off~functrace      	off~hashall        	on~histexpand     	off~history        	off~ignoreeof      	off~interactive-comments	on~keyword        	off~monitor        	off~noclobber      	off~noexec         	off~noglob         	off~nolog          	off~notify         	off~nounset        	off~onecmd         	off~physical       	off~pipefail       	off~posix          	off~privileged     	off~verbose        	off~vi             	off~xtrace         	off` **2>** `<shell>: - : invalid option` *(status 1)* | `allexport      	off~braceexpand    	on~emacs          	on~errexit        	on~errtrace       	off~functrace      	off~hashall        	on~histexpand     	on~history        	on~ignoreeof      	off~interactive-comments	on~keyword        	off~monitor        	off~noclobber      	off~noexec         	off~noglob         	off~nolog          	off~notify         	off~nounset        	off~onecmd         	off~physical       	off~pipefail       	off~posix          	off~privileged     	off~verbose        	off~vi             	off~xtrace         	off` **2>** `<shell>: - : invalid option` *(status 1)* | **2>** `<shell>:  hi: bad option(s)~Usage: <shell> [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>: no such option:  hi` *(status 1)* |
+| `invoke/c-with-nothing-after-it` **(refusal)** | **2>** `<shell>: 0: -c requires an argument` *(status 2)* | **2>** `<shell>: -c: option requires an argument` *(status 2)* | **2>** `<shell>: -c: option requires an argument` *(status 2)* | **2>** `<shell>: -c: option requires an argument` *(status 2)* | **2>** `<shell>: -c requires argument~Usage: <shell> [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>: string expected after -c` *(status 1)* |
+| `invoke/an-option-letter-that-is-not-one` **(refusal)** | **2>** `<shell>: 0: Illegal option -Z` *(status 2)* | **2>** `<shell>: -Z: invalid option~Usage:	<shell> [GNU long option] [option] ...~	<shell> [GNU long option] [option] script-file ...~GNU long options:~	--debug~	--debugger~	--dump-po-strings~	--dump-strings~	--help~	--init-file~	--login~	--noediting~	--noprofile~	--norc~	--posix~	--pretty-print~	--rcfile~	--restricted~	--verbose~	--version~Shell options:~	-ilrsD or -c command or -O shopt_option		(invocation only)~	-abefhkmnptuvxBCEHPT or -o option` *(status 2)* | **2>** `<shell>: -Z: invalid option~Usage:	<shell> [GNU long option] [option] ...~	sh [GNU long option] [option] script-file ...~GNU long options:~	--debug~	--debugger~	--dump-po-strings~	--dump-strings~	--help~	--init-file~	--login~	--noediting~	--noprofile~	--norc~	--posix~	--pretty-print~	--rcfile~	--restricted~	--verbose~	--version~Shell options:~	-ilrsD or -c command or -O shopt_option		(invocation only)~	-abefhkmnptuvxBCEHPT or -o option` *(status 2)* | **2>** `<shell>: -Z: invalid option~Usage:	<shell> [GNU long option] [option] ...~	<shell> [GNU long option] [option] script-file ...~GNU long options:~	--debug~	--debugger~	--dump-po-strings~	--dump-strings~	--help~	--init-file~	--login~	--noediting~	--noprofile~	--norc~	--posix~	--protected~	--rcfile~	--restricted~	--verbose~	--version~	--wordexp~Shell options:~	-irsD or -c command or -O shopt_option		(invocation only)~	-abefhkmnptuvxBCHP or -o option` *(status 2)* | **2>** `<shell>: -Z: unknown option~Usage: <shell> [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>: can't open input file: echo hi` *(status 127)* |
+| `invoke/a-long-option-name-that-is-not-one` **(refusal)** | **2>** `<shell>: 0: Illegal option -o nosuchoption` *(status 2)* | **2>** `<shell>: line 0: <shell>: nosuchoption: invalid option name` *(status 2)* | **2>** `<shell>: line 0: sh: nosuchoption: invalid option name` *(status 2)* | **2>** `<shell>: line 0: <shell>: nosuchoption: invalid option name` *(status 2)* | **2>** `<shell>: nosuchoption: bad option(s)~Usage: <shell> [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>: no such option: nosuchoption` *(status 1)* |
 
 - `invoke/errexit-with-a-script` — the first line of most scripts, spelled on the command line instead: a set option given at invocation has to reach the runner, and abandon the script at the failure rather than run to the end
   ```sh
@@ -5790,4 +5891,20 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `invoke/a-script-is-not-interactive` — the negative half of #472: `i` belongs in $- only where the shell is interactive, and a script operand is not — unanimous. Membership rather than the spelling, for the same reason invoke/errexit-reaches-the-option-letters uses it. The positive half cannot live here: bash and dash announce that job control is off when -i has no terminal, and bash's line carries a pid, so `-i` under the harness is not a recordable fact
   ```sh
   case $- in *i*) echo interactive ;; *) echo not ;; esac
+  ```
+- `invoke/a-command-string-attached-to-the-letter` **(refusal)** — `sh -c'echo hi'` — the command string written against the letter rather than as its own word, which is how a hand and a generated command line both get it wrong. All six refuse it: `-c` takes its operand as a separate word, so the rest of this one is read as more option letters and `echo hi` is not a run of them. We ran it. That is the bug this case exists for, and it is caught here against every reference, because a shell that ran the string writes `hi` to standard output and standard output is still compared exactly. bash is the reason the row is marked: it answers by writing its entire `set -o` table to standard *output* as part of the usage, so against a bash reference this reports a real gap until we write the table too — the relaxation forgives a diagnostic's wording and declines to forgive a stream of output nobody produced
+  ```sh
+  echo hi
+  ```
+- `invoke/c-with-nothing-after-it` **(refusal)** — the option that requires an argument, given none — deliberately no placeholder, because what is pinned is the shell refusing before it has a program at all. Unanimous in behavior and unanimous in nothing else: five of the six exit 2 and zsh exits 1, and all six word it differently, which is the pair of facts that makes this gradable only on the refusal. A front end that treated a missing operand as an empty command string would exit 0 having done nothing
+  ```sh
+  echo this never arrives
+  ```
+- `invoke/an-option-letter-that-is-not-one` **(refusal)** — a letter no shell has. Four of them say so and stop; zsh is the divergence worth recording — it accepts `-Z` as one of its own and then fails on the operand as a script it cannot open, at 127 rather than 2. So the panel is unanimous that this fails and split on why, which is a fact the row keeps in full even though the grading only asks whether the shell declined
+  ```sh
+  echo hi
+  ```
+- `invoke/a-long-option-name-that-is-not-one` **(refusal)** — the same question one level in: `-o` is a valid letter and its operand is not a valid name, so the refusal comes from the option table rather than from the letter table. All six decline before running the command string, which is the part that matters — a shell that warned and carried on would print `hi` and standard output would catch it
+  ```sh
+  echo hi
   ```

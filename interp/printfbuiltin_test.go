@@ -4,6 +4,7 @@
 package interp_test
 
 import (
+	"strings"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
@@ -17,7 +18,107 @@ func printfSem() Semantics {
 	s.PrintfEmptyIsNotANumber = No
 	s.PrintfBackslashC = PrintfBackslashCLiteral
 	s.PrintfQuote = PrintfQuoteBackslash
+	s.PrintfLengthModifiers = PrintfLengthModifiersAbsent
 	return s
+}
+
+// The C length modifiers are a set with three answers, and every one of them
+// reads the letters and throws them away.
+func TestPrintfLengthModifiersAreThreeSets(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		set  PrintfLengthModifierSet
+		src  string
+		want string
+	}{
+		{"none takes the letter for the conversion", PrintfLengthModifiersAbsent, `printf "[%ld]" 42`, "sh: printf: %l: invalid directive"},
+		{"C89 takes l", PrintfLengthModifiersC89, `printf "[%ld]" 42`, "[42]"},
+		{"C89 takes h", PrintfLengthModifiersC89, `printf "[%hd]" 42`, "[42]"},
+		{"C89 takes L", PrintfLengthModifiersC89, `printf "[%Lf]" 1.5`, "[1.500000]"},
+		{"C89 refuses a doubled letter", PrintfLengthModifiersC89, `printf "[%lld]" 42`, "sh: printf: %ll: invalid directive"},
+		{"C89 refuses the C99 additions", PrintfLengthModifiersC89, `printf "[%zX]" 255`, "sh: printf: %z: invalid directive"},
+		{"C99 takes the C99 additions", PrintfLengthModifiersC99, `printf "[%zX][%jd][%td]" 255 42 42`, "[FF][42][42]"},
+		{"C99 takes a doubled letter", PrintfLengthModifiersC99, `printf "[%lld]" 42`, "[42]"},
+		{"C99 takes a run of them", PrintfLengthModifiersC99, `printf "[%llld][%hld]" 42 42`, "[42][42]"},
+		{"a modifier changes no width", PrintfLengthModifiersC99, `printf "[%hhd]" 300`, "[300]"},
+		{"the flags and width still come first", PrintfLengthModifiersC99, `printf "[%-5.3ld]" 42`, "[042  ]"},
+		{"a width after the modifier is not a conversion", PrintfLengthModifiersC99, `printf "[%l5d]" 42`, "sh: printf: %l5: invalid directive"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfLengthModifiers = tc.set
+			out, _ := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("got %q, want it to contain %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// The axis is asked only where a letter one of the answers would take is
+// actually in the format, so the strict core runs `%d` and refuses `%ld`.
+func TestPrintfLengthModifiersAreAskedOnlyWhenOneIsThere(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfLengthModifiers = PrintfLengthModifiersUnspecified
+
+	out, st := run(t, `printf "[%d]" 42`, func(r *Runner) { r.Semantics = &sem })
+	if out != "[42]" || st != 0 {
+		t.Errorf("a format with no modifier: got %q status %d, want [42] and 0", out, st)
+	}
+	out, st = run(t, `printf "[%ld]" 42`, func(r *Runner) { r.Semantics = &sem })
+	if st != 2 || !strings.Contains(out, "no dialect was chosen") {
+		t.Errorf("a format with one: got %q status %d, want a refusal and 2", out, st)
+	}
+}
+
+// A format that runs out before it reaches a conversion character has no
+// character to name, so the two wordings collapse onto the directive.
+func TestPrintfBadVerbWithNoConversionCharacterAtAll(t *testing.T) {
+	for _, tc := range []struct{ name, wording, src, want string }{
+		{"nothing after the percent", "printf: [%[1]s]: no", `printf "a%"`, "sh: printf: []: no\na"},
+		{"nothing after a width", "printf: [%[1]s]: no", `printf "a%5"`, "sh: printf: []: no\na"},
+		{"nothing after a modifier", "printf: [%[1]s]: no", `printf "a%ll"`, "sh: printf: []: no\na"},
+		{"the directive is still whole", "printf: %[2]s: no", `printf "a%5"`, "sh: printf: %5: no\na"},
+		{"the modifier belongs to it", "printf: %[2]s: no", `printf "a%ll"`, "sh: printf: %ll: no\na"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfLengthModifiers = PrintfLengthModifiersC99
+			diag := Diagnostics{PrintfBadVerb: tc.wording}
+			out, _ := run(t, tc.src, func(r *Runner) {
+				r.Semantics = &sem
+				r.Diagnostics = &diag
+			})
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// A conversion nothing has is named two ways, and a length modifier is what
+// makes the two visible: the character is not the directive once the
+// directive can hold more than a verb.
+func TestPrintfBadVerbNamesTheConversionOrTheDirective(t *testing.T) {
+	for _, tc := range []struct{ name, wording, src, want string }{
+		{"the character alone", "printf: %[1]s: no", `printf "%v]xY" 1`, "sh: printf: v: no\n"},
+		{"the whole directive", "printf: %[2]s: no", `printf "%v]xY" 1`, "sh: printf: %v: no\n"},
+		{"the character, past a modifier", "printf: %[1]s: no", `printf "%lQ" 1`, "sh: printf: Q: no\n"},
+		{"the directive, past a modifier", "printf: %[2]s: no", `printf "%lQ" 1`, "sh: printf: %lQ: no\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfLengthModifiers = PrintfLengthModifiersC99
+			diag := Diagnostics{PrintfBadVerb: tc.wording}
+			out, _ := run(t, tc.src, func(r *Runner) {
+				r.Semantics = &sem
+				r.Diagnostics = &diag
+			})
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
 }
 
 // The parts every shell in the panel agrees on, which is most of printf and

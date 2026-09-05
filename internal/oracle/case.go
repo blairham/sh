@@ -1303,20 +1303,45 @@ var Corpus = []Case{
 		Snippet: "trap 'echo st=$?' INT\nfalse\nkill -INT $$\necho after\n",
 		Why:     "zsh shows the handler the status from before the command that triggered it; the other three show that command's own",
 	},
+	// The three cases below share one shape, and the trailing `sleep 0.2`
+	// inside the background subshell is load-bearing in all three.
+	//
+	// Without it, `kill -USR1 $$` is the subshell's last command, so the
+	// signal and the subshell's own death reach the parent at effectively the
+	// same instant — and a `wait` woken by SIGCHLD first reaps the job and
+	// reports 0, where a `wait` woken by SIGUSR1 reports the signal. Both
+	// outcomes were reachable and the case graded whichever the kernel picked:
+	// measured over 200 runs each, zsh answered `st=0` twice on the bare form
+	// and twice on the `$!` form, and dash twice in 60. That is a wandering
+	// conformance score in *both* directions, since the same coin flip fails
+	// the dialect expecting one answer and passes the one expecting the other.
+	//
+	// Lingering after the kill makes the separation a fact rather than a
+	// scheduling accident: the job is still alive when the signal lands, so
+	// `wait` can only be leaving early because it was interrupted. 300 runs
+	// per form under zsh, and 60 under each of dash, bash 5, bash 3.2 and
+	// ksh93, agree unanimously — and every recorded answer is the one the
+	// racy form gave when it won the race, so this pins the measurement down
+	// rather than changing what is measured.
+	//
+	// It is not `ReferenceRaces`: that flag is for a shell that genuinely
+	// races with itself, and here it was the *probe* that left the race open.
+	// A marked row would have stopped grading three cases about the one
+	// delivery path no other case covers.
 	{
 		ID: "trap/wait-cut-short-by-a-signal", Category: "traps and exit",
-		Snippet: `trap 'echo T' USR1; (sleep 0.3; kill -USR1 $$) & wait; echo "st=$?"`,
-		Why:     "the async delivery path, which every other trap case misses: the signal comes from a background job rather than from the shell's own line, and it has to reach a `wait` that is already blocked. The handler runs and then `wait` reports the signal — 128 + USR1 in bash, dash and zsh, 256 + USR1 in ksh93 — where a wait nobody interrupted reports 0. `wait; check $?` is the supervisor loop every job-runner script is built on, so a 0 here is silence in place of the whole point",
+		Snippet: `trap 'echo T' USR1; (sleep 0.3; kill -USR1 $$; sleep 0.2) & wait; echo "st=$?"`,
+		Why:     "the async delivery path, which every other trap case misses: the signal comes from a background job rather than from the shell's own line, and it has to reach a `wait` that is already blocked. The handler runs and then `wait` reports the signal — 128 + USR1 in bash, dash and zsh, 256 + USR1 in ksh93 — where a wait nobody interrupted reports 0. `wait; check $?` is the supervisor loop every job-runner script is built on, so a 0 here is silence in place of the whole point. The job outlives the signal it sends, so `wait` is still blocked when the signal lands rather than racing the job's own death",
 	},
 	{
 		ID: "trap/wait-for-a-job-cut-short-by-a-signal", Category: "traps and exit",
-		Snippet: `trap 'echo T' USR1; (sleep 0.3; kill -USR1 $$) & wait $!; echo "st=$?"`,
+		Snippet: `trap 'echo T' USR1; (sleep 0.3; kill -USR1 $$; sleep 0.2) & wait $!; echo "st=$?"`,
 		Why:     "naming the job splits the panel where the bare form did not: bash, dash and zsh answer exactly as above and ksh93 drops its own 256 encoding for a plain 1 (WaitForAJobFailsWhenInterrupted). `wait %1` is the same answer in all four, so the axis is about having an operand and not about how it is spelled",
 	},
 	{
 		ID: "trap/wait-is-not-cut-short-by-an-ignored-signal", Category: "traps and exit",
-		Snippet: `trap '' USR1; (sleep 0.3; kill -USR1 $$) & wait; echo "st=$?"`,
-		Why:     "the control, and the line between the two: an ignored signal has no handler to run, so it does not interrupt anything and `wait` still reports 0 in all four. Without it the case above would be evidence about a signal arriving rather than about a *trapped* one arriving",
+		Snippet: `trap '' USR1; (sleep 0.3; kill -USR1 $$; sleep 0.2) & wait; echo "st=$?"`,
+		Why:     "the control, and the line between the two: an ignored signal has no handler to run, so it does not interrupt anything and `wait` still reports 0 in all four. Without it the case above would be evidence about a signal arriving rather than about a *trapped* one arriving. Same shape to the character, so the trap is the only variable",
 	},
 	{
 		ID: "trap/exit-runs-at-the-end", Category: "traps and exit",
@@ -2078,6 +2103,36 @@ var Corpus = []Case{
 		ID: "array/a-literal-value-is-an-assignment-value", Category: "expansion",
 		Snippet: `x="p q"; a=([2]=$x); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
 		Why:     "the value of a subscripted element is not field-split, exactly as the right side of `a[2]=$x` is not — unanimous, and the opposite of a bare element in the same literal, which is a word and does split. So one set of parentheses holds two expansion rules and the subscript is what chooses between them",
+	},
+	{
+		ID: "array/a-subscript-holding-an-expansion", Category: "expansion",
+		Snippet: `a=(x y); i=1; a[$i]=Q; printf "[%s]" "${a[@]}"; echo`,
+		Why:     "the ordinary way a loop writes an element, and it used to be a command name: the assignment scan looked only at the first span of the word, which ends at the bracket as soon as anything expands inside it. The result was a `command not found` and an untouched array, so the loop kept going and everything read back afterwards was stale. zsh writes the first element rather than the second, which is the array-base axis and not a disagreement about the form",
+	},
+	{
+		ID: "array/a-subscript-expansion-spelled-three-ways", Category: "expansion",
+		Snippet: `a=(p q r); i=1; a[$i]=A; a[${i}]=B; a[$((i))]=C; printf "[%s]" "${a[@]}"; echo`,
+		Why:     "the three spellings of one subscript all name the same element, so the last written is what comes back and the array alone cannot tell them apart. What separates them is standard error: a shell that reads one of the three as a command name says so there, which is exactly how this failed — all three at once, because they are one gap and a case with only `$i` would pass a fix that special-cased the dollar",
+	},
+	{
+		ID: "array/a-subscript-holding-a-command-substitution", Category: "expansion",
+		Snippet: `a=(x y); a[$(echo 1)]=Q; printf "[%s]" "${a[@]}"; echo`,
+		Why:     "the subscript is a word and not a numeral, so a command substitution stands in one — the shape that shows the parser has to keep the spans rather than flatten the brackets to text. Unanimous in the three with arrays, at the base each of them counts from",
+	},
+	{
+		ID: "array/appending-through-a-subscript-holding-an-expansion", Category: "expansion",
+		Snippet: `a=(x y); i=1; a[$i]+=Q; printf "[%s]" "${a[@]}"; echo`,
+		Why:     "`+=` after an expanded subscript, which is the combination that reaches both halves of the assignment scan at once: the `]` and the `+=` after it are in a span the old scan never looked at. Joining rather than replacing is `array/appending-to-an-element`'s question and the base is `array/appending-to-an-element-inherits-the-base`'s; this case is only about the form parsing at all",
+	},
+	{
+		ID: "array/a-subscript-where-there-are-no-arrays", Category: "expansion",
+		Snippet: `a[1]=Q; echo done`,
+		Why:     "the other side of the same gate. Where the dialect has no subscript the word is not an assignment at all and the shell looks for a command by that name, which is the answer the shell without arrays gives — so accepting the shape everywhere would have made this one silently assign instead of reporting. Three shells assign and say nothing; the fourth reports on standard error and carries on",
+	},
+	{
+		ID: "cmd/a-name-broken-by-an-expansion", Category: "commands",
+		Snippet: `b=X; a$b=c; echo "rc=$?"`,
+		Why:     "a name interrupted by an expansion is not a name, unanimously in all five: the word is a command name and the expansion happens first, so the diagnostic reports `aX=c`. It is the boundary the subscript form has to stop at — a scan that follows the `=` across spans wherever it finds one would turn this into an assignment to `a`",
 	},
 	{
 		ID: "assoc/a-string-subscript", Category: "expansion",

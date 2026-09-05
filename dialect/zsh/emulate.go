@@ -51,12 +51,18 @@ func currentEmulation(r *interp.Runner) string {
 	return "zsh"
 }
 
-// emulations is what each mode means on the three axes this shell can move.
+// emulations is what each mode means on the four axes this shell can move.
 // csh changes nothing it can speak about.
-var emulations = map[string]struct{ split, nomatchOk, zeroBase bool }{
-	"zsh": {split: false, nomatchOk: false, zeroBase: false},
-	"sh":  {split: true, nomatchOk: true, zeroBase: true},
-	"ksh": {split: true, nomatchOk: true, zeroBase: true},
+//
+// redirFatal is the fourth and arrived last: `emulate sh` and `emulate ksh`
+// make a failed redirection on a special builtin end the script, where
+// `emulate zsh` leaves it a complaint the script runs past. That is the same
+// switch bash's `set -o posix` throws, measured in a second binary, which is
+// what says the axis belongs to the mode rather than to either shell.
+var emulations = map[string]struct{ split, nomatchOk, zeroBase, redirFatal bool }{
+	"zsh": {split: false, nomatchOk: false, zeroBase: false, redirFatal: false},
+	"sh":  {split: true, nomatchOk: true, zeroBase: true, redirFatal: true},
+	"ksh": {split: true, nomatchOk: true, zeroBase: true, redirFatal: true},
 	"csh": {},
 }
 
@@ -69,6 +75,7 @@ func applyEmulation(r *interp.Runner, mode string) {
 			s.SplitParamExpansion = answer(e.split)
 			s.GlobNoMatchIsError = answer(!e.nomatchOk)
 			s.ArrayBaseIsZero = answer(e.zeroBase)
+			s.RedirectErrorOnSpecialBuiltinFatal = answer(e.redirFatal)
 		})
 	}
 	for _, o := range zshOptions {

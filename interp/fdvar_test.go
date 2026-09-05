@@ -105,6 +105,11 @@ func runFdVar(t *testing.T, dir string, tweak func(*Semantics), src string) stri
 		t.Fatal(err)
 	}
 	sem := PosixSemantics()
+	// The question here is what a descriptor *name* does, not what a failed
+	// redirection ends: POSIX has one on a special builtin stop the shell,
+	// and `exec {nofd}>&-` is both at once, so leaving that answer in would
+	// make these cases about the wrong axis.
+	sem.RedirectErrorOnSpecialBuiltinFatal = No
 	if tweak != nil {
 		tweak(&sem)
 	}

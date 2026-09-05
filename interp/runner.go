@@ -514,6 +514,13 @@ type Runner struct {
 	// no history there are no duplicates to ignore, so either state is kept
 	// truthfully.
 	histIgnoreDups bool
+	// posixMode is `set -o posix`, and posixSaved is the answer the axes it
+	// moves held before it was turned on, so turning it off restores the
+	// dialect's rather than asserting the standard's opposite. Two fields
+	// rather than a saved vector: an option changed *while* posix mode is on
+	// is not part of the mode and must survive leaving it.
+	posixMode  bool
+	posixSaved Answer
 
 	// fds are the descriptors beyond the three named streams — what
 	// `exec 6>&1` saves and `>&6` finds again. Values are the io.Reader or
@@ -1820,6 +1827,16 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	if r.redirErr {
 		// The open failed — noclobber, a missing directory, a permission.
 		// The status is already set and the command does not run.
+		//
+		// On a *special* builtin that is a fatal error to a non-interactive
+		// shell wherever the POSIX rule is being kept, so the shell stops
+		// rather than reaching the next command. Asked only there: on
+		// anything else no shell in the panel stops, so there is nothing to
+		// ask about `true 3>/nope/x`.
+		if specialBuiltins[argv[0]] &&
+			r.ask(r.sem().RedirectErrorOnSpecialBuiltinFatal, "a failed redirection on a special builtin ending the script") {
+			r.fatalQuiet()
+		}
 		return nil
 	}
 

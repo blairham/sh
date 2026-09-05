@@ -35,8 +35,8 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "LINENO=4",
-        "Stderr": "\u003cscript\u003e: line 3: two: command not found",
+        "Stdout": "one~LINENO=4",
+        "Stderr": "\u003cscript\u003e: line 3: nosuchcmd: command not found",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -211,9 +211,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "",
-        "Stderr": "\u003cscript\u003e: line 2: a: command not found",
-        "Status": 127,
+        "Stdout": "hit",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
@@ -739,8 +739,8 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "LINENO=5",
-        "Stderr": "\u003cscript\u003e: line 4: three: command not found",
+        "Stdout": "one~two~three~LINENO=5",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -5227,9 +5227,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "st=1~after",
+        "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 1: export: `a[0]': not a valid identifier",
-        "Status": 0,
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       },
@@ -5447,9 +5447,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "st=1~after",
+        "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 1: readonly: `a[0]': not a valid identifier",
-        "Status": 0,
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       },
@@ -5491,9 +5491,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "survived",
+        "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 2: r: readonly variable",
-        "Status": 0,
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       },
@@ -5535,9 +5535,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "two",
+        "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 2: r: readonly variable",
-        "Status": 0,
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       },
@@ -5579,9 +5579,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "two",
+        "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 2: r: readonly variable",
-        "Status": 0,
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       },
@@ -5623,9 +5623,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "st=1",
+        "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 2: r: readonly variable",
-        "Status": 0,
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       },
@@ -5667,9 +5667,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "st=1",
+        "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 2: r: readonly variable",
-        "Status": 0,
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       },
@@ -5711,9 +5711,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "end",
+        "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 2: r: readonly variable",
-        "Status": 0,
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       },
@@ -5975,9 +5975,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "end",
+        "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 1: trap: -Q: invalid option~trap: usage: trap [-Plp] [[action] signal_spec ...]",
-        "Status": 0,
+        "Status": 2,
         "Signal": 0,
         "TimedOut": false
       },
@@ -6239,9 +6239,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "end",
-        "Stderr": "",
-        "Status": 0,
+        "Stdout": "",
+        "Stderr": "trap: usage: trap [-Plp] [[action] signal_spec ...]",
+        "Status": 2,
         "Signal": 0,
         "TimedOut": false
       },
@@ -6283,9 +6283,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "end",
+        "Stdout": "",
         "Stderr": "trap: usage: trap [-Plp] [[action] signal_spec ...]",
-        "Status": 0,
+        "Status": 2,
         "Signal": 0,
         "TimedOut": false
       },
@@ -6327,7 +6327,7 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "trap -- 'echo hi' SIGINT~end",
+        "Stdout": "trap -- - EXIT~trap -- - HUP~trap -- 'echo hi' INT~trap -- - QUIT~trap -- - ILL~trap -- - TRAP~trap -- - ABRT~trap -- - EMT~trap -- - FPE~trap -- - KILL~trap -- - BUS~trap -- - SEGV~trap -- - SYS~trap -- - PIPE~trap -- - ALRM~trap -- - TERM~trap -- - URG~trap -- - STOP~trap -- - TSTP~trap -- - CONT~trap -- - CHLD~trap -- - TTIN~trap -- - TTOU~trap -- - IO~trap -- - XCPU~trap -- - XFSZ~trap -- - VTALRM~trap -- - PROF~trap -- - WINCH~trap -- - INFO~trap -- - USR1~trap -- - USR2~trap -- - DEBUG~trap -- - ERR~trap -- - RETURN~end",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -6371,7 +6371,7 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "trap -- ':' SIGINT~end",
+        "Stdout": "trap -- ':' INT~end",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -6415,7 +6415,7 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "trap -- 'echo hi' SIGINT~end",
+        "Stdout": "trap -- 'echo hi' INT~end",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -13631,9 +13631,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "[1]~[1]",
+        "Stdout": "[1]",
         "Stderr": "\u003cscript\u003e: line 3: c: readonly variable",
-        "Status": 0,
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       },

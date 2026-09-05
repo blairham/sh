@@ -559,7 +559,9 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 				}
 				continue
 			}
-			r.unsetArrayElem(base, idx)
+			if code := r.unsetArrayElem(base, idx, sub); code != 0 {
+				status = code
+			}
 			continue
 		}
 		delete(r.Vars, name)

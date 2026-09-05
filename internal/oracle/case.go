@@ -4803,4 +4803,10 @@ out=$(CDPATH=./pool cd sub)
 		Snippet: `echo ran; echo "st=$?"`,
 		Why:     "the control the two above need: the same route, with a path that opens, runs the file and reports 0. Without it a front end that called every script path unreadable would pass both failure cases. The truly empty script the pair also wants is not expressible here — the corpus requires a snippet that parses to at least one statement — so it is measured in docs/spec/semantics.md instead",
 	},
+	{
+		ID: "invoke/a-script-is-not-interactive", Category: "invocation",
+		Args:    []string{ArgScript},
+		Snippet: "case $- in *i*) echo interactive ;; *) echo not ;; esac",
+		Why:     "the negative half of #472: `i` belongs in $- only where the shell is interactive, and a script operand is not — unanimous. Membership rather than the spelling, for the same reason invoke/errexit-reaches-the-option-letters uses it. The positive half cannot live here: bash and dash announce that job control is off when -i has no terminal, and bash's line carries a pid, so `-i` under the harness is not a recordable fact",
+	},
 }

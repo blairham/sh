@@ -164,7 +164,7 @@ func MainArgs(sh Shell, argv []string) int {
 		sh.errf("%s: %v\n", sh.Name, err)
 		return usageStatus
 	}
-	if in.interactive {
+	if in.prompt {
 		// A prompt rather than a script, and reached from here so that every
 		// binary built on this front end has one. It was in a single binary's
 		// main once, which is how `sh` learned to prompt and `bash` did not.
@@ -276,10 +276,20 @@ type source struct {
 	// panel hands them to the same machinery `set` uses, which is why `$-`
 	// reflects them and `set +e` can undo them.
 	opts []optionSpec
-	// interactive says there is nothing to run and a person at a keyboard,
-	// so the shell should prompt rather than read a script. It travels on
-	// the source because deciding it is part of reading the invocation:
-	// `-i`, or no operands and a terminal on standard input.
+	// prompt says there is nothing to run and a person at a keyboard, so the
+	// shell should prompt rather than read a script. It travels on the
+	// source because deciding it is part of reading the invocation: `-i`,
+	// or no operands and a terminal on standard input.
+	prompt bool
+	// interactive says the shell *is* an interactive one, which is a wider
+	// question than whether it prompts and is why the two are separate
+	// fields. `-i` with a script operand runs the script — the panel splits
+	// only over whether a prompt follows it, and the core follows the three
+	// that exit — but the shell it runs the script in is interactive all the
+	// same: measured, `i` is in `$-` for `-i` on every route in all four,
+	// and all four expand aliases there even where they would not in a
+	// script. Conflating the two dropped `-i` outright whenever an operand
+	// was given (#472).
 	interactive bool
 	// file is the path the input was read from, or empty where there was no
 	// file — `-c`, or standard input. It is the floor of the call stack: a
@@ -463,7 +473,29 @@ func (e *scriptError) Unwrap() error { return e.err }
 
 // operands handles what is left once the options are gone: the command string
 // for `-c`, a script path, or nothing at all, which means standard input.
+//
+// Choosing the route is route's; carrying `-i` past it is this function's, in
+// one place and after the fact rather than at each of the four returns.
+// Deciding it per route is how it came to be decided in exactly one of them —
+// `sh -i script.sh` ran the script with `-i` dropped on the floor, because
+// the only branch that consulted the flag was the one with nothing to run
+// (#472). A fifth route added below would inherit the answer rather than have
+// to remember it.
 func (sh Shell) operands(args []string, inv invocation) (source, error) {
+	in, err := sh.route(args, inv)
+	if err != nil {
+		return source{}, err
+	}
+	// Either half makes the shell interactive: `-i` says so outright on
+	// every route, and a prompt is interactive whether or not `-i` was
+	// given. Measured, all four shells agree on both.
+	in.interactive = inv.forcePrompt || in.prompt
+	return in, nil
+}
+
+// route is operands without the part that is the same for every route: which
+// of the four the invocation named, and what the shell is to run.
+func (sh Shell) route(args []string, inv invocation) (source, error) {
 	if inv.sawC {
 		// `-c` wins over both of the other routes, which is measured rather
 		// than a precedence invented here: all four shells run the command
@@ -490,7 +522,7 @@ func (sh Shell) operands(args []string, inv invocation) (source, error) {
 			// Nothing to run and someone at a keyboard. Asked before
 			// reading, not after: reading standard input from a terminal
 			// waits for an end-of-file that a person has not typed yet.
-			return source{interactive: true, name: sh.Name, params: args, dg: sh.Diagnostics, opts: inv.opts}, nil
+			return source{prompt: true, name: sh.Name, params: args, dg: sh.Diagnostics, opts: inv.opts}, nil
 		}
 		// sh.Stdin, not os.Stdin: a Runner's streams are its own, and a
 		// front end that reaches past them is not usable by anything that
@@ -649,6 +681,11 @@ func (sh Shell) run(in source) int {
 	}
 
 	r := sh.newRunner(name, in.params, dg, input == "-c")
+	// What the invocation decided, handed to the runner rather than looked
+	// up by it: interp is a library and has no standing to ask the process
+	// whether anyone is watching. `$-` reports it as `i`, which is measured
+	// unanimous for `-i` on every route.
+	r.Interactive = in.interactive
 	r.SetScriptFile(in.file)
 	// Aliases are expanded when a line is *parsed*, and the table is the
 	// runner's, so the front end is the only place the two can be joined.
@@ -656,6 +693,12 @@ func (sh Shell) run(in source) int {
 	// line has run by the time the next is read, which is exactly the rule
 	// every shell has — an alias is never expanded on the line that defines
 	// it.
+	//
+	// An interactive shell expands them whatever the dialect says, which is
+	// measured unanimous: all four expand an alias in `sh -i script.sh`, and
+	// bash is the one that would not have in `sh script.sh`. This arm was
+	// unreachable until now — the field it read meant "took the prompt
+	// route", and the prompt route does not come through here.
 	if sh.Dialect.ExpandAliases || in.interactive {
 		p.Aliases = r.LookupAlias
 	}

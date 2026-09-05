@@ -440,12 +440,18 @@ type Semantics struct {
 	// Measured identical under `-c`, a script file and standard input —
 	// bash and ksh93 report `hB`, zsh `569X`, dash nothing at all.
 	//
-	// The letters that describe the invocation route rather than an option
-	// a script could set — `c` for a command string, `s` for standard
-	// input, `i` for interactive — are not modeled: they are the front
-	// end's to know, not the same on any two shells, and no deterministic
-	// assertion can be written against them. A script's own `case $- in
-	// *e*)` never depends on them.
+	// The letters that describe the invocation *route* rather than an option
+	// a script could set — `c` for a command string, `s` for standard input
+	// — are not modeled, because the panel disagrees about them and no axis
+	// has been asked yet: measured, ksh93 alone puts `s` in `$-` under `-c`,
+	// and only bash and ksh93 put `c` there at all. `i` is the exception and
+	// is modeled, by Runner.Interactive rather than here: it is unanimous,
+	// and it is a fact about the invocation that the front end carries in
+	// rather than a startup letter of the dialect's.
+	//
+	// Nor are the letters a shell turns on only *when* it is interactive:
+	// bash adds `H`, zsh adds `Z`, and ksh93 trades `h` for `mE`. That is a
+	// second, per-dialect vector and nothing has needed it yet.
 	DefaultOptionLetters string
 
 	// ArithIntegerOperatorRefusesFloat rejects a float where only an integer

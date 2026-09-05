@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -48,7 +49,29 @@ type Result struct {
 	// Status is the exit status, or -1 if the shell could not be run at all.
 	// It is recorded separately because a case can produce identical output
 	// with a different status, and that is still a difference.
+	//
+	// It is also -1 for a shell that died by a *signal*, because there is no
+	// exit status in that case: the wait status carries a signal number
+	// instead, and Go reports the absence as -1. Which signal is in Signal.
 	Status int
+
+	// Signal is the signal that killed the shell, or 0 if it exited normally.
+	//
+	// Without it, every way of dying by a signal looks the same in the
+	// record, because Status is -1 for all of them: a shell that ended on
+	// SIGINT and one that ended on SIGKILL were indistinguishable, and so
+	// were a shell killed by a signal and one the harness could not run at
+	// all. That made a shell's whole exit-on-signal discipline untestable —
+	// the convention that a shell dying of an untrapped fatal signal kills
+	// *itself* with that same signal, so its own caller sees the signal
+	// rather than a status. Every case that wanted to look at a signal had
+	// to hide the death inside a nested child and read the number the parent
+	// shell computed from it, which measures the parent's arithmetic rather
+	// than the child's death.
+	//
+	// Zero is "no signal" and not a signal number: 0 is the valid argument
+	// to kill(2) that sends nothing, so nothing is ever killed by it.
+	Signal syscall.Signal
 
 	// TimedOut marks a snippet the shell never finished.
 	TimedOut bool
@@ -134,6 +157,7 @@ func Exec(ctx context.Context, sh Found, c Case) Result {
 	switch {
 	case errors.As(err, &ee):
 		res.Status = ee.ExitCode()
+		res.Signal = signalOf(ee.ProcessState)
 	case err != nil:
 		// Whatever the shell managed to write before the harness failed is
 		// not a measurement of anything, so it is replaced rather than
@@ -141,6 +165,20 @@ func Exec(ctx context.Context, sh Found, c Case) Result {
 		res = harnessError(err)
 	}
 	return res
+}
+
+// signalOf is the signal a process died of, or 0.
+//
+// The wait status is the only place the number survives: an exit status and a
+// signal death are alternatives in it, which is why ExitCode() has to answer
+// -1 for the second. Anything that is not a wait status this package
+// understands reports no signal rather than guessing.
+func signalOf(st *os.ProcessState) syscall.Signal {
+	ws, ok := st.Sys().(syscall.WaitStatus)
+	if !ok || !ws.Signaled() {
+		return 0
+	}
+	return ws.Signal()
 }
 
 // validate reports a case whose invocation cannot be built.

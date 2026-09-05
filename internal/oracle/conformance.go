@@ -15,7 +15,7 @@ import (
 // whole corpus.
 //
 // This is what the harness was built for. The corpus already records what six
-// real shells do with 162 snippets; pointing it at our own binary turns every
+// real shells do with the whole corpus; pointing it at our own binary turns every
 // one of them into a conformance test, with no new cases to write and no
 // expectations to maintain by hand.
 //
@@ -73,6 +73,27 @@ type Report struct {
 // behind it when this was changed.
 func graded(c Case) bool { return !c.ReferenceRaces }
 
+// matches reports whether the implementation did what the reference did.
+//
+// Each stream on its own: matching a merge would let an implementation that
+// writes its diagnostics to standard output score as agreeing with a shell
+// that writes them to standard error.
+//
+// And the end, which is a status *or* a signal rather than only a status. A
+// process a signal killed has no exit status, so both sides answer -1 for it
+// — which made a shell killed by SIGINT, a shell killed by SIGKILL and a
+// shell that hung until the harness gave up all score as the same behavior.
+func matches(want, got Result) bool {
+	return want.Stdout == got.Stdout && want.Stderr == got.Stderr && sameOutcome(want, got)
+}
+
+// sameOutcome reports whether two runs ended the same way, ignoring what they
+// printed. It is what "agreed about what happened but not about the wording"
+// means, and no two shells word a diagnostic alike.
+func sameOutcome(want, got Result) bool {
+	return want.Status == got.Status && want.Signal == got.Signal && want.TimedOut == got.TimedOut
+}
+
 func RunConformance(ctx context.Context, path, against string, args []string, cases []Case) (*Report, error) {
 	if path == "" {
 		return &Report{NotBuilt: true}, nil
@@ -111,16 +132,13 @@ func RunConformance(ctx context.Context, path, against string, args []string, ca
 		}
 		want := Exec(ctx, ref, c)
 		got := Exec(ctx, ours, c)
-		// Each stream on its own. Matching the merge would let an
-		// implementation that writes its diagnostics to standard output
-		// score as agreeing with a shell that writes them to standard error.
-		ok := want.Stdout == got.Stdout && want.Stderr == got.Stderr && want.Status == got.Status
+		ok := matches(want, got)
 		rep.Matches = append(rep.Matches, Match{CaseID: c.ID, Want: want, Got: got, OK: ok})
 		rep.Total++
 		switch {
 		case ok:
 			rep.Passed++
-		case want.Status == got.Status:
+		case sameOutcome(want, got):
 			rep.SameStatus++
 		}
 	}

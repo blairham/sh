@@ -176,6 +176,8 @@ own. Containing what a command does once it is running is the job of an
 OS sandbox backend, which sits above this and is what a real `Gate`
 implementation would reach for.
 
+The agent-protocol consumer of that seam is designed in [design/acp.md](design/acp.md).
+
 ## The process model is decided now
 
 Background jobs are **real process groups**, not goroutines.

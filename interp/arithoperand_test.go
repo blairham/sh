@@ -53,13 +53,16 @@ func TestAMissingOperandIsTwoWordings(t *testing.T) {
 // wording", so a preset does not have to repeat itself to say it does not
 // distinguish the cases.
 func TestOneWordingServesBothWhenTheSecondIsEmpty(t *testing.T) {
-	d := Diagnostics{ArithError: "%[1]s: %[2]s", ArithOperandExpected: "operand expected"}
+	// The sentence is deliberately not the wording a missing field falls back
+	// to, so the test tells "the other field was consulted" from "nothing was
+	// and the default stood in".
+	d := Diagnostics{ArithError: "%[1]s: %[2]s", ArithOperandExpected: "one sentence for both"}
 	for _, src := range []string{"1+", "%"} {
 		_, err := syntax.Parse("echo $(("+src+"))", syntax.Core())
 		if err == nil {
 			t.Fatalf("%s: parsed, want a failure", src)
 		}
-		if got, want := d.ParseFailure(err), src+": operand expected"; got != want {
+		if got, want := d.ParseFailure(err), src+": one sentence for both"; got != want {
 			t.Errorf("%s: got %q, want %q", src, got, want)
 		}
 	}

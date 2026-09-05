@@ -20,7 +20,7 @@ func TestAReplacementsTableHoldsTheNamedStreamsAtTheirOwnNumbers(t *testing.T) {
 	in, out, errs := openScratch(t), openScratch(t), openScratch(t)
 	parked := openScratch(t)
 
-	r := &Runner{Stdin: in, Stdout: out, Stderr: errs}
+	r := newTestRunner(t, &Runner{Stdin: in, Stdout: out, Stderr: errs})
 	r.setFd(4, parked)
 
 	files := r.replacementFiles()
@@ -43,7 +43,7 @@ func TestAReplacementsTableHoldsTheNamedStreamsAtTheirOwnNumbers(t *testing.T) {
 // output leaves the replacement with no standard output, rather than with the
 // process's own stream that the script never named.
 func TestAStreamThatIsNotAFileDoesNotCrossToAReplacement(t *testing.T) {
-	r := &Runner{Stdin: bytes.NewReader(nil), Stdout: &bytes.Buffer{}, Stderr: io.Discard}
+	r := newTestRunner(t, &Runner{Stdin: bytes.NewReader(nil), Stdout: &bytes.Buffer{}, Stderr: io.Discard})
 	files := r.replacementFiles()
 	if len(files) != firstExtraFd {
 		t.Fatalf("table has %d entries, want the three named streams and nothing above them", len(files))
@@ -60,7 +60,7 @@ func TestAStreamThatIsNotAFileDoesNotCrossToAReplacement(t *testing.T) {
 // shell in the panel leaves such a descriptor closed in the command that
 // `exec` runs next.
 func TestAClosedNamedStreamLeavesAReplacementNothingToPlace(t *testing.T) {
-	r := &Runner{Stdin: closedFd{}, Stdout: closedFd{}, Stderr: openScratch(t)}
+	r := newTestRunner(t, &Runner{Stdin: closedFd{}, Stdout: closedFd{}, Stderr: openScratch(t)})
 	files := r.replacementFiles()
 	if files[0] != nil || files[1] != nil {
 		t.Errorf("closed streams placed %v and %v, want nothing on either number", files[0], files[1])
@@ -77,7 +77,7 @@ func TestAClosedNamedStreamLeavesAReplacementNothingToPlace(t *testing.T) {
 // replacement runs writes into the coprocess through descriptor 1.
 func TestACoprocessOnANamedStreamStillCrossesToAReplacement(t *testing.T) {
 	f := openScratch(t)
-	r := &Runner{Stdout: shellOwnedFd{f}}
+	r := newTestRunner(t, &Runner{Stdout: shellOwnedFd{f}})
 	r.setFd(3, shellOwnedFd{openScratch(t)})
 
 	files := r.replacementFiles()

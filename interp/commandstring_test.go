@@ -66,10 +66,10 @@ func cmdStringStatus(t *testing.T, src string, commandString bool, answer int) i
 	sem := PosixSemantics()
 	sem.FatalErrorStatusIsOne = Yes
 	dg := Diagnostics{ExpansionFailureStatusFromCommandString: answer}
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &dg, Name: "sh", Route: routeFor(commandString),
 		Stdout: &buf, Stderr: &buf,
-	}
+	})
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -105,10 +105,10 @@ func TestAReadonlyReassignmentMayAnswerByHowTheShellStarted(t *testing.T) {
 			sem.ReadonlyReassignmentFatal = c.base
 			sem.ReadonlyReassignmentFatalFromCommandString = c.fromCommand
 			sem.FatalErrorStatusIsOne = Yes
-			r := &Runner{
+			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
 				Route: routeFor(c.commandString), Stdout: &buf, Stderr: &buf,
-			}
+			})
 			f, err := syntax.Parse("readonly x=1\nx=2\necho after\n", syntax.Core())
 			if err != nil {
 				t.Fatal(err)
@@ -135,10 +135,10 @@ func TestOnlyAnAssignmentStandingAloneAsksTheOtherQuestion(t *testing.T) {
 	// command-string one not reaching it — so that one says carry on.
 	sem.ReadonlyReassignmentByDeclarationFatal = No
 	sem.FatalErrorStatusIsOne = Yes
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
 		Route: RouteCommandString, Stdout: &buf, Stderr: &buf,
-	}
+	})
 	// `export x=2` is an assignment, but not one standing as a command of
 	// its own — and the dialect that splits is not fatal for it by either
 	// route.
@@ -183,10 +183,10 @@ func TestAReadonlyReassignmentByADeclaration(t *testing.T) {
 				sem.ReadonlyReassignmentFatalFromCommandString = No
 				sem.ReadonlyReassignmentByDeclarationFatal = c.byDeclaration
 				sem.FatalErrorStatusIsOne = Yes
-				r := &Runner{
+				r := newTestRunner(t, &Runner{
 					Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
 					Route: routeFor(c.commandString), Stdout: &buf, Stderr: &buf,
-				}
+				})
 				f, err := syntax.Parse(src, syntax.Core())
 				if err != nil {
 					t.Fatal(err)
@@ -209,10 +209,10 @@ func TestADeclarationYieldsTheFailuresStatus(t *testing.T) {
 	sem := PosixSemantics()
 	sem.ReadonlyReassignmentByDeclarationFatal = Yes
 	sem.FatalErrorStatusIsOne = No // so the failure's status is 2, not 0 or 1
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
 		Stdout: &buf, Stderr: &buf,
-	}
+	})
 	f, err := syntax.Parse("readonly x=1\nexport x=2\necho after\n", syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -272,10 +272,10 @@ func TestWhatADeclarationSaysAboutAReadonlyName(t *testing.T) {
 			sem := PosixSemantics()
 			sem.ReadonlyReassignmentByDeclarationFatal = No
 			dg := c.dg
-			r := &Runner{
+			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Diagnostics: &dg, Name: "sh",
 				Stdout: &strings.Builder{}, Stderr: &buf,
-			}
+			})
 			f, err := syntax.Parse("readonly x=1\nexport x=2\n", syntax.Core())
 			if err != nil {
 				t.Fatal(err)

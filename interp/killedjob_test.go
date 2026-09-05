@@ -32,10 +32,10 @@ func killedJobRun(t *testing.T, src string, set func(*Semantics)) string {
 		set(&sem)
 	}
 	var errs strings.Builder
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &dg, Name: "sh",
 		Stdout: &strings.Builder{}, Stderr: &errs,
-	}
+	})
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatal(err)

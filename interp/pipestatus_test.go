@@ -149,7 +149,7 @@ func TestNoNameAsksNoAxis(t *testing.T) {
 	var out bytes.Buffer
 	// The strict core: every axis unanswered, so anything asked is reported.
 	s := PosixSemantics()
-	r := &Runner{Stdout: &out, Stderr: &out, Semantics: &s}
+	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Semantics: &s})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}

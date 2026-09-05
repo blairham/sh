@@ -192,10 +192,10 @@ func mapfileRun(t *testing.T, src string, setup func(*Runner)) (string, int) {
 	t.Helper()
 	var buf strings.Builder
 	sem := PosixSemantics()
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &Diagnostics{},
 		Name: "sh", Stdin: strings.NewReader(""),
-	}
+	})
 	if setup != nil {
 		setup(r)
 	}

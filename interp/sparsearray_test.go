@@ -149,7 +149,7 @@ func arrays(t *testing.T, src string, sparse Answer) string {
 	sem.ArrayScalarIsTheWholeArray = No
 	sem.UnsetTakesASubscript = Yes
 	sem.IndirectionYieldsName = No
-	r := &Runner{Semantics: &sem, Dialect: &d, Stdout: &out, Stderr: &out}
+	r := newTestRunner(t, &Runner{Semantics: &sem, Dialect: &d, Stdout: &out, Stderr: &out})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatalf("run: %v", err)
 	}

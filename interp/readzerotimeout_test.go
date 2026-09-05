@@ -34,10 +34,10 @@ func zeroTimeoutRun(t *testing.T, in *os.File, style ReadZeroTimeoutStyle, src s
 	// readoptions_test.go, where both answers are exercised; fixing it here
 	// keeps these tests about the style.
 	sem.ReadTimeoutKeepsWhatArrived = No
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdin: in, Stdout: &buf, Stderr: &buf,
 		Semantics: &sem, Dir: t.TempDir(), Name: "testsh",
-	}
+	})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)

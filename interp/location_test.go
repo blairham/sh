@@ -57,7 +57,7 @@ func TestDiagnosticsCarryTheFailingLine(t *testing.T) {
 	var buf bytes.Buffer
 	sem := PosixSemantics() // fatal shift, so there is a diagnostic
 	diag := Diagnostics{Location: LocationColonLine}
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag, Name: "mysh"}
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag, Name: "mysh"})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestEveryDiagnosticGoesThroughTheDialect(t *testing.T) {
 		var buf bytes.Buffer
 		sem := PosixSemantics() // fatal shift, so there is a diagnostic
 		diag := tc.diag
-		r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag, Name: "mysh"}
+		r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag, Name: "mysh"})
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)
 		}

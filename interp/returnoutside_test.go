@@ -113,7 +113,7 @@ func returnRun(t *testing.T, src string, refused Answer) (string, int) {
 	sem := PosixSemantics()
 	sem.ReturnOutsideAFunctionIsRefused = refused
 	dg := Diagnostics{}
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "sh"}
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "sh"})
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatal(err)

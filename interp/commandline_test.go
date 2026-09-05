@@ -48,10 +48,10 @@ func TestACommandIsReportedAtItsOwnLine(t *testing.T) {
 			var errs strings.Builder
 			sem := PosixSemantics()
 			dg := Diagnostics{Location: LocationTightLine}
-			r := &Runner{
+			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Diagnostics: &dg, Name: "sh",
 				Stdout: &strings.Builder{}, Stderr: &errs,
-			}
+			})
 			f, err := syntax.Parse(c.src, syntax.Core())
 			if err != nil {
 				t.Fatal(err)

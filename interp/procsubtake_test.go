@@ -10,7 +10,7 @@ import "testing"
 // cleared removes the same paths again after every later command and never
 // looks wrong — it only grows, for as long as the session lasts.
 func TestTakeProcSubsForgetsWhatItHandedOver(t *testing.T) {
-	r := &Runner{}
+	r := newTestRunner(t, &Runner{})
 	r.procSubs = []string{"a", "b"}
 	if got := r.takeProcSubs(); len(got) != 2 {
 		t.Fatalf("took %v, want both pipes", got)

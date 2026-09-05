@@ -29,7 +29,7 @@ func runTestBuiltin(t *testing.T, a Answer, src string) (string, int) {
 	sem := permissive()
 	sem.TestAcceptsDoubleEqual = a
 	dg := Diagnostics{}
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
@@ -108,7 +108,7 @@ func TestADiagnosticNamesTheWordThatWasTyped(t *testing.T) {
 		}
 		var buf bytes.Buffer
 		sem := permissive()
-		r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+		r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatalf("run %q: %v", c.src, err)
 		}

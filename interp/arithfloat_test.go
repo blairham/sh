@@ -34,7 +34,7 @@ func runFloat(t *testing.T, src string, digits int, keepPoint bool, refuse Answe
 		ArithNotANumber:            "NaN",
 		ArithInvalidFloatOperation: "invalid floating point operation",
 	}
-	r := &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &s, Diagnostics: &dg}
+	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &s, Diagnostics: &dg})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestWithoutTheGrammarThereAreNoFloats(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := PosixSemantics()
-	r := &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &s}
+	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &s})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}

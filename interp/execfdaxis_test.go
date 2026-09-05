@@ -29,11 +29,11 @@ func runWithExecFdAnswer(t *testing.T, dir, src string, reaches Answer, inherite
 	sem := permissive()
 	sem.ExecOpenedFdReachesACommand = reaches
 	var out strings.Builder
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "testsh",
 		Dir: dir, Env: testPATH(), Stdout: &out, Stderr: &out,
 		InheritedFiles: inherited,
-	}
+	})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatalf("run %q: %v", src, err)
 	}

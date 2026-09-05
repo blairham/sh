@@ -82,10 +82,10 @@ func funcLocRun(t *testing.T, src string, names bool) string {
 	var buf strings.Builder
 	sem := PosixSemantics()
 	dg := Diagnostics{Location: LocationTightLine, LocationNamesTheFunction: names}
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &dg, Name: "sh",
 		Stdout: &strings.Builder{}, Stderr: &buf,
-	}
+	})
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatal(err)

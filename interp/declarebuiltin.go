@@ -183,6 +183,12 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 		// among the three shells that have the name — subject to ksh93's
 		// rule about which functions have a scope at all.
 		r.shadowTypeset(name)
+		r.localExportAttribute(name, f.export)
+		if r.unspecified {
+			// See biLocal: an unanswered axis refuses the declaration
+			// rather than making it one way and saying so.
+			return r.status
+		}
 		if f.assoc && !f.remove {
 			// After the shadow, so that `typeset -A` inside a function
 			// declares a local table and the caller's absence comes back
@@ -401,6 +407,52 @@ func (r *Runner) declareEmpty(name string) {
 	if r.ask(r.sem().ValuelessDeclarationHidesTheOuterValue, "a declaration without a value hiding the outer value") {
 		r.hideVar(name)
 	}
+}
+
+// localExportAttribute answers whether the local a declaration just took
+// inherits the export attribute of the name it shadows.
+//
+// The question is only there when the shadowed name is exported and a scope
+// was actually taken; explicit says the declaration named the attribute
+// itself, which answers it outright. Taking the attribute off is a change to
+// a record the scope has to put back, so it is saved the way the value is.
+func (r *Runner) localExportAttribute(name string, explicit bool) {
+	if explicit {
+		return
+	}
+	if len(r.scopes) == 0 {
+		return
+	}
+	sc := r.scopes[len(r.scopes)-1]
+	if _, shadowed := sc.saved[name]; !shadowed {
+		// No scope was taken — a declaration at the top level, or one this
+		// dialect gives no scope to — so there is no local to export.
+		return
+	}
+	if !r.isExported(name) {
+		// Nothing to inherit, and so nothing to disagree about.
+		return
+	}
+	if r.ask(r.sem().LocalInheritsTheExportAttribute,
+		"a local declaration inheriting the export attribute of the name it shadows") {
+		return
+	}
+	if r.unspecified {
+		return
+	}
+	if sc.exportedSpoken == nil {
+		sc.exportedSpoken = map[string]bool{}
+		sc.savedExported = map[string]bool{}
+	}
+	if _, seen := sc.exportedSpoken[name]; !seen {
+		on, spoken := r.exported[name]
+		sc.exportedSpoken[name] = spoken
+		sc.savedExported[name] = on
+	}
+	if r.exported == nil {
+		r.exported = map[string]bool{}
+	}
+	r.exported[name] = false
 }
 
 // hideVar takes a name out of view entirely — the tables and the environment

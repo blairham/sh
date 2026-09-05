@@ -11994,6 +11994,82 @@
         "TimedOut": false
       }
     },
+    "declare/local-shadowing-an-exported-name": {
+      "bash": {
+        "Stdout": "FOO=baz~FOO=bar",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "FOO=baz~FOO=bar",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "FOO=baz~FOO=bar",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "FOO=baz~FOO=bar",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "FOO=bar~FOO=bar",
+        "Stderr": "\u003cshell\u003e: local: not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "(none)~FOO=bar",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/local-shadowing-an-imported-name": {
+      "bash": {
+        "Stdout": "TERM=changed~TERM=dumb",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "TERM=changed~TERM=dumb",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "TERM=changed~TERM=dumb",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "TERM=changed~TERM=dumb",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "TERM=dumb~TERM=dumb",
+        "Stderr": "\u003cshell\u003e: local: not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "(none)~TERM=dumb",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "declare/lower-case-attribute": {
       "bash": {
         "Stdout": "v=abc~v2=def",
@@ -12255,6 +12331,44 @@
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/typeset-local-shadowing-an-exported-name": {
+      "bash": {
+        "Stdout": "FOO=baz~FOO=bar",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "FOO=baz~FOO=bar",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "FOO=baz~FOO=bar",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"}\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "(none)~FOO=bar",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "(none)~FOO=bar",
+        "Stderr": "",
+        "Status": 0,
         "TimedOut": false
       }
     },

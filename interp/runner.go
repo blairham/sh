@@ -2104,6 +2104,14 @@ type scope struct {
 	// much as what it held.
 	savedAssoc   map[string]AssocArray
 	assocExisted map[string]bool
+	// savedExported and exportedSpoken are the export attribute a shadowed
+	// name had, for the dialects where a local does not inherit it. Taking
+	// the attribute off is a change to the runner's record and has to be put
+	// back like the value, and the record is a tri-state — so what was there
+	// is two maps rather than one: whether it had been spoken about at all,
+	// and what it said.
+	savedExported  map[string]bool
+	exportedSpoken map[string]bool
 	// keyword records that the function was defined with the `function` word
 	// rather than with parentheses. ksh93 gives only those functions a local
 	// scope, so `typeset` needs to know which kind it is standing in.

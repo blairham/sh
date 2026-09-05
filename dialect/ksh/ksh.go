@@ -177,6 +177,13 @@ func Semantics() interp.Semantics {
 	// local does.
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes
 	s.TypesetLocalNeedsKeywordFunction = interp.Yes
+	// There is no `local` here, so this is reached only through `typeset` in
+	// a keyword function — where a child is told nothing about the shadowed
+	// name, as in zsh. This shell arrives at that from further away: its
+	// `typeset` takes the export attribute off any name it assigns, at the
+	// top level as well as in a function, and only the local half is
+	// modeled.
+	s.LocalInheritsTheExportAttribute = interp.No
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.ArithInvalidOctalDigitIsError = interp.No
 	s.IndirectionYieldsName = interp.Yes

@@ -63,6 +63,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.No},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.Yes},
 		{"TraceShowsItsOwnDisabling", s.TraceShowsItsOwnDisabling, interp.Yes},
+		{"LocalInheritsTheExportAttribute", s.LocalInheritsTheExportAttribute, interp.Yes},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)
@@ -138,5 +139,15 @@ func TestNoTestWordingSpellsItsOwnName(t *testing.T) {
 	// opened.
 	if got := d.TestMissingBracket; got != "" && !strings.ContainsAny(got, "[]") {
 		t.Errorf("TestMissingBracket = %q: want a bracket in it", got)
+	}
+}
+
+// TestALocalCarriesTheExportAttribute: a local shadowing an exported name is
+// exported itself here, so a child sees the local's value — and the caller's
+// value comes back with the caller.
+func TestALocalCarriesTheExportAttribute(t *testing.T) {
+	out, _ := answersRun(t, `export FOO=bar; f() { local FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f; /usr/bin/env | grep '^FOO='`)
+	if !strings.Contains(out, "FOO=baz") || !strings.Contains(out, "FOO=bar") {
+		t.Errorf("got %q, want the local's value inside and the outer value after", out)
 	}
 }

@@ -57,6 +57,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.Yes},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.No},
 		{"TraceShowsItsOwnDisabling", s.TraceShowsItsOwnDisabling, interp.Yes},
+		{"LocalInheritsTheExportAttribute", s.LocalInheritsTheExportAttribute, interp.Yes},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)
@@ -129,5 +130,20 @@ func TestNoTestWordingSpellsItsOwnName(t *testing.T) {
 	}
 	if got := d.TestMissingBracket; got != "" && !strings.ContainsAny(got, "[]") {
 		t.Errorf("TestMissingBracket = %q: want a bracket in it", got)
+	}
+}
+
+// TestALocalCarriesTheExportAttribute: the same answer as bash, reached with
+// this shell's own reading of a valueless declaration — `local FOO` leaves the
+// caller's value showing through, and it is exported, so the child is told
+// `FOO=bar` where bash tells it nothing.
+func TestALocalCarriesTheExportAttribute(t *testing.T) {
+	out, _ := answersRun(t, `export FOO=bar; f() { local FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f`)
+	if !strings.Contains(out, "FOO=baz") {
+		t.Errorf("got %q, want the child told the local's value", out)
+	}
+	out, _ = answersRun(t, `export FOO=bar; f() { local FOO; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f`)
+	if !strings.Contains(out, "FOO=bar") {
+		t.Errorf("valueless: got %q, want the outer value showing through", out)
 	}
 }

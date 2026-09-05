@@ -475,6 +475,16 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 			delete(r.AssocArrays, name)
 		}
 	}
+	// And the export attribute, where the dialect took it off for the local:
+	// the outer name goes back to whatever the shell had recorded about it,
+	// including having recorded nothing.
+	for name, spoken := range sc.exportedSpoken {
+		if spoken {
+			r.exported[name] = sc.savedExported[name]
+		} else {
+			delete(r.exported, name)
+		}
+	}
 	// And whether `unset` had hidden the name, which a hiding `local` set
 	// for the function's duration: put back what was true at the shadow.
 	for name, was := range sc.removedBefore {

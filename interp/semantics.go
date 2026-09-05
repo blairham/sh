@@ -792,6 +792,29 @@ type Semantics struct {
 	// assigning it conditionally, so the difference is silent: the function
 	// reads the caller's value where it expected nothing.
 	ValuelessDeclarationHidesTheOuterValue Answer
+
+	// LocalInheritsTheExportAttribute gives a local declaration the export
+	// attribute of the name it shadows, so a child sees the local's value
+	// under the shadowed name. bash and dash say yes; zsh says no and hands
+	// the child nothing at all under that name for as long as the function
+	// runs.
+	//
+	// Asked only where the shadowed name is exported — explicitly or by
+	// having been inherited — and only where a scope was actually taken.
+	// Declaring a name nothing has exported asks nothing, and a local
+	// declared `-x` says so outright and asks nothing either.
+	//
+	// The value is not the question: the local's own value is what a child
+	// is told in the dialects that answer yes, and whether a valueless
+	// declaration still shows the outer value is
+	// ValuelessDeclarationHidesTheOuterValue rather than this.
+	//
+	// ksh93 has no `local`, so the question reaches it only through
+	// `typeset` in a keyword-defined function, where a child is told
+	// nothing — the same answer as zsh by a different road, because that
+	// shell's `typeset` takes the attribute off any name it assigns, at the
+	// top level as well as in a function. Only the local half is modeled.
+	LocalInheritsTheExportAttribute Answer
 	// TypesetLocalNeedsKeywordFunction restricts `typeset`'s local scope to
 	// functions defined with the `function` word. ksh93 says yes: in
 	// `f() { typeset x=1; }` the assignment reaches the caller's `x`, and in
@@ -2006,6 +2029,11 @@ func PosixSemantics() Semantics {
 		// The standard has no `local`; dash is the closest reading, and it
 		// leaves the outer value visible until the first assignment.
 		ValuelessDeclarationHidesTheOuterValue: No,
+		// The standard has no `local` either, and it does have the export
+		// attribute belong to the *name* for the life of the shell — so a
+		// declaration of that name keeps it, which is what both shells with
+		// a `local` worth the reading do.
+		LocalInheritsTheExportAttribute: Yes,
 		// POSIX has `trap` save the action and execute it when the
 		// condition arises, so the text is not read until then. Three of
 		// the four agree; zsh reads it as the trap is set.

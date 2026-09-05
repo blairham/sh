@@ -4704,6 +4704,9 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `declare/valueless-local` | `[UNSET]` | `[UNSET]` | `[UNSET]` | `[]` | `[UNSET]` **2>** `<script>: line 1: local: not found` | `[]` |
 | `declare/valueless-local-with-an-outer-value` | `[out]~after=[out]` | `[UNSET]~after=[out]` | `[UNSET]~after=[out]` | `[UNSET]~after=[out]` | `[out]~after=[out]` **2>** `<script>: line 2: local: not found` | `[]~after=[out]` |
 | `declare/valueless-typeset-with-an-outer-value` | **2>** `<script>: 2: Syntax error: "}" unexpected` *(status 2)* | `[UNSET]~after=[out]` | `[UNSET]~after=[out]` | `[UNSET]~after=[out]` | `[UNSET]~after=[out]` | `[]~after=[out]` |
+| `declare/local-shadowing-an-exported-name` | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `FOO=bar~FOO=bar` **2>** `<shell>: local: not found` | `(none)~FOO=bar` |
+| `declare/local-shadowing-an-imported-name` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=dumb~TERM=dumb` **2>** `<shell>: local: not found` | `(none)~TERM=dumb` |
+| `declare/typeset-local-shadowing-an-exported-name` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `(none)~FOO=bar` | `(none)~FOO=bar` |
 | `declare/integer-attribute-evaluates-a-later-assignment` | `[5+2]` **2>** `<shell>: 1: typeset: not found` | `[7]` | `[7]` | `[7]` | `[7]` | `[7]` |
 | `declare/integer-attribute-on-the-declaration` | `[]` **2>** `<shell>: 1: typeset: not found` | `[9]` | `[9]` | `[9]` | `[9]` | `[9]` |
 | `declare/integer-attribute-removed` | `[5+2]` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `[5+2]` | `[5+2]` | `[5+2]` | `[5+2]` | `[5+2]` |
@@ -4765,6 +4768,18 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
   function f { typeset u; echo "[${u-UNSET}]"; }
   f
   echo "after=[$u]"
+  ```
+- `declare/local-shadowing-an-exported-name` — whether the local inherits the export attribute of the name it shadows: bash and dash hand the child the local's value, zsh hands it nothing at all under that name, and ksh93 has no `local` to ask with. Read through a real child rather than through a listing, because what the attribute decides is what a command is told
+  ```sh
+  export FOO=bar; f() { local FOO=baz; env | grep '^FOO=' || echo "(none)"; }; f; env | grep '^FOO='
+  ```
+- `declare/local-shadowing-an-imported-name` — the same question where the name arrived in the environment rather than being exported by hand, which is the route that made the two answers one: an imported name is exported by having been imported, so the local either inherits that or does not, and the split is the same either way
+  ```sh
+  f() { local TERM=changed; env | grep '^TERM=' || echo "(none)"; }; f; env | grep '^TERM='
+  ```
+- `declare/typeset-local-shadowing-an-exported-name` — the same question through `typeset` in a keyword function, which is the only form that asks it of ksh93 — and it answers as zsh does, by a road of its own: this shell's `typeset` takes the attribute off any name it assigns, at the top level as well as in a function
+  ```sh
+  export FOO=bar; function f { typeset FOO=baz; env | grep '^FOO=' || echo "(none)"; }; f; env | grep '^FOO='
   ```
 - `declare/integer-attribute-evaluates-a-later-assignment` — the attribute belongs to the name, so an ordinary assignment made afterwards is an expression — which is the whole point of it
   ```sh

@@ -5,6 +5,7 @@ package oracle
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -82,11 +83,40 @@ func CheckRecord(golden *Run, doc string, cases []Case) *RecordCheck {
 	sort.Strings(c.Unrecorded)
 	sort.Strings(c.Orphaned)
 
-	if want := golden.Markdown(cases); want != doc {
+	want, got := portable(golden.Markdown(cases)), portable(doc)
+	if want != got {
 		c.DocDiffers = true
-		c.DocDetail = firstDifference(want, doc)
+		c.DocDetail = firstDifference(want, got)
 	}
 	return c
+}
+
+// signalWord matches the system's word for a signal, beside the number the
+// record actually keeps.
+var signalWord = regexp.MustCompile(`(killed by signal \d+) \([^)]*\)`)
+
+// portable removes the one thing in the rendered document that is a property
+// of the reader's kernel rather than of the measurement.
+//
+// The document is otherwise a pure function of the record and the corpus,
+// which is the whole basis for comparing it byte for byte. The exception is
+// the word beside a signal number: it comes from syscall.Signal.String(),
+// which is the operating system's spelling, and the number in the record is
+// the one the *recording* machine used. Signal 30 is SIGUSR1 on macOS and
+// SIGPWR on Linux, so a name derived from a recorded number is wrong away
+// from the machine that recorded it — deriving it from the constant instead
+// only moves the problem, because the constant's value is what differs.
+//
+// This was found by the check failing on a Linux runner and passing on macOS
+// for a byte-identical tree, which is the failure mode a machine-independent
+// gate must not have.
+//
+// Nothing is lost by excluding it. The word is computed from the number, so
+// it carries no fact the number does not, and it is removed from *both* sides
+// rather than from the committed file — the document keeps its words for a
+// reader, and the comparison stops pretending they are evidence.
+func portable(doc string) string {
+	return signalWord.ReplaceAllString(doc, "$1")
 }
 
 // String is the report, or empty when there is nothing to report.

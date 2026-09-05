@@ -462,6 +462,15 @@ That needs no shells and cannot differ by machine, so it **blocks**: it is
 `TestTheCommittedRecordAndDocumentAgree` in `internal/oracle`, which runs
 in `make check` and in the required `Build and test` job.
 
+With exactly one exception, found by this check passing on macOS and
+failing on a Linux runner for a byte-identical tree: the *word* beside a
+signal number comes from `syscall.Signal.String()`, which is the reader's
+kernel, while the number is the recording machine's. Signal 30 is SIGUSR1
+on macOS and SIGPWR on Linux, so the same measurement is spelled two ways.
+The word is computed from the number and carries no fact the number does
+not, so the comparison drops it from *both* sides — the document keeps its
+words for a reader, and the check stops treating them as evidence.
+
 It exists because `oracle-check` compared *behavior* and a `Why` is prose.
 Editing one after `make oracle` had run left `measurements.md` carrying a
 sentence its own source no longer held, and nothing failed — twice in one

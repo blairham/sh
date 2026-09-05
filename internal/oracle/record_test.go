@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -134,6 +135,36 @@ func TestADocumentOfTheSameLengthStillHasToMatch(t *testing.T) {
 	}
 	if !strings.Contains(rc.DocDetail, "line ") {
 		t.Errorf("the report does not name a line:\n%s", rc.DocDetail)
+	}
+}
+
+// The document is a pure function of the record and the corpus with exactly
+// one exception, and the exception is why this check once passed on macOS and
+// failed on a Linux runner for a byte-identical tree: the word beside a signal
+// number comes from the reader's kernel, and the number in the record is the
+// recording machine's. Signal 30 is SIGUSR1 on one and SIGPWR on the other.
+func TestTheSystemsWordForASignalIsNotComparedAcrossMachines(t *testing.T) {
+	cases := twoCases()
+	golden := recordOf(cases)
+	golden.Results["a/one"]["bash"] = Result{Status: -1, Signal: 30}
+	doc := golden.Markdown(cases)
+	if !strings.Contains(doc, "killed by signal 30") {
+		t.Fatalf("this test assumes the rendering names the signal:\n%s", doc)
+	}
+	// The same document as another kernel would have spelled it.
+	elsewhere := strings.ReplaceAll(doc, "killed by signal 30 ("+syscall.Signal(30).String()+")",
+		"killed by signal 30 (power failure)")
+	if elsewhere == doc {
+		t.Fatal("could not build the other machine's spelling")
+	}
+
+	if rc := CheckRecord(golden, elsewhere, cases); !rc.OK() {
+		t.Errorf("the same measurement spelled by another kernel was reported as a difference:\n%s", rc)
+	}
+	// The number is the fact, so it is still compared.
+	changed := strings.ReplaceAll(doc, "killed by signal 30", "killed by signal 31")
+	if rc := CheckRecord(golden, changed, cases); rc.OK() {
+		t.Error("a changed signal number was forgiven along with the word")
 	}
 }
 

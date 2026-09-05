@@ -174,11 +174,37 @@ func (p *Policy) defaultDirective(rest string) error {
 	return nil
 }
 
+// ParseRule reads one rule from the text a policy line carries *after* its
+// decision word: a selector, then a pattern where the selector takes one.
+//
+// It exists so that a caller who has a rule but no file — `cmd/sh -deny` is
+// the one — can have the same rule mean the same thing. That is worth an
+// exported function rather than a second matcher: two rule languages over one
+// gate is two answers to the same question, and the one nobody exercises is
+// the one that is wrong. It was, before this: the flag matched a path by
+// lexical prefix and the file cleans a path before matching it, so `..` walked
+// out of one and not the other.
+//
+// The body is exactly what a file line holds, so a diagnostic about it reads
+// the same on either route.
+func ParseRule(d interp.Decision, body string) (Rule, error) {
+	var p Policy
+	if err := p.parseRule(d, body); err != nil {
+		return Rule{}, err
+	}
+	return p.rules[0], nil
+}
+
 func (p *Policy) rule(word, rest string) error {
 	decision, err := decisionOf(word)
 	if err != nil {
 		return err
 	}
+	return p.parseRule(decision, rest)
+}
+
+func (p *Policy) parseRule(decision interp.Decision, rest string) error {
+	word := decisionName(decision)
 	name, pattern := cut(rest)
 	if name == "" {
 		return fmt.Errorf("%s needs something to act on: a selector, then a pattern", word)
@@ -212,6 +238,16 @@ func (p *Policy) rule(word, rest string) error {
 	}
 	p.rules = append(p.rules, Rule{Decision: decision, Sel: sel, Pattern: pattern})
 	return nil
+}
+
+// decisionName is the word a rule is written with, for a diagnostic about a
+// rule that did not come from a line — ParseRule's caller has a decision and
+// no word.
+func decisionName(d interp.Decision) string {
+	if d == interp.Allow {
+		return "allow"
+	}
+	return "deny"
 }
 
 func decisionOf(word string) (interp.Decision, error) {

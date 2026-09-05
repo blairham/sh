@@ -27,6 +27,8 @@ func corpusDialect() syntax.Dialect {
 	// One case records `f() echo hi` as a syntax error, which only a
 	// grammar that insists on a compound body can reproduce.
 	d.FuncBodyMustBeCompound = true
+	// `coproc NAME { …; }` — the cases that pin where a name may be written.
+	d.Coproc = true
 	return d
 }
 

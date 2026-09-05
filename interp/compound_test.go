@@ -230,3 +230,36 @@ func TestCompoundRedirections(t *testing.T) {
 		t.Errorf("file held %q, want both lines", got)
 	}
 }
+
+// A redirection on a compound command covers the whole of it, and the C-style
+// loop is the one that had nowhere to keep one — so every iteration went to
+// the terminal while the file was truncated by the leftover operator, which is
+// two wrong things and no diagnostic.
+//
+// Reading the file back is the assertion rather than the absence of output:
+// output that went nowhere and output that went to the file look the same from
+// here, and only one of them is right.
+func TestACStyleForRedirectsEveryIteration(t *testing.T) {
+	got, _ := run(t, `for ((i=0;i<2;i++)); do echo "$i"; done > f; echo end; cat f`, nil)
+	if got != "end\n0\n1\n" {
+		t.Errorf("got %q, want the loop's lines in the file and only `end` before them", got)
+	}
+
+	// The brace-bodied spelling of the same loop, where the body ends in a
+	// `}` and the suffix reads as the brace group's if nothing claims it.
+	got, _ = runGrammar(t, `for ((i=0;i<2;i++)) { echo "$i"; } > f; echo end; cat f`, nil, nil)
+	if got != "end\n0\n1\n" {
+		t.Errorf("brace body: got %q, want the same", got)
+	}
+}
+
+// And the reading half, which also shows the redirection outlives an
+// iteration: the second `read` continues where the first left off, which it
+// could not do if the file were opened again each time round.
+func TestACStyleForReadsThroughOneRedirection(t *testing.T) {
+	got, _ := run(t,
+		`printf 'L1\nL2\n' > d; for ((i=0;i<2;i++)); do read x; echo "got=$x"; done < d`, nil)
+	if got != "got=L1\ngot=L2\n" {
+		t.Errorf("got %q, want both lines read through one open file", got)
+	}
+}

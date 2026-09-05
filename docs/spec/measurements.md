@@ -2081,6 +2081,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/c-style-for` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `012` | `012` | `012` | `012` | `012` |
 | `core/c-style-for-with-a-brace-body` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `012` | `012` | `012` | `012` | `012` |
 | `core/c-style-for-brace-body-after-a-separator` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `01` | `01` | `01` | `01` | `01` |
+| `core/c-style-for-takes-a-redirection` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `end~0~1` | `end~0~1` | `end~0~1` | `end~0~1` | `end~0~1` |
+| `core/c-style-for-with-a-brace-body-takes-a-redirection` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `end~0~1` | `end~0~1` | `end~0~1` | `end~0~1` | `end~0~1` |
+| `core/c-style-for-takes-an-input-redirection` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `got=L1~got=L2` | `got=L1~got=L2` | `got=L1~got=L2` | `got=L1~got=L2` | `got=L1~got=L2` |
 | `core/a-list-for-with-a-brace-body` | **2>** `<shell>: 1: Syntax error: "{" unexpected (expecting "do")` *(status 2)* | `ab` | `ab` | `ab` | `ab` | `ab` |
 | `core/a-list-for-brace-body-needs-a-separator` | **2>** `<shell>: 1: Syntax error: "}" unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `for i in a b { echo "$i"; }'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `for i in a b { echo "$i"; }'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `}'~<shell>: -c: line 0: `for i in a b { echo "$i"; }'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `}' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `}'` *(status 1)* |
 | `core/a-brace-body-is-not-a-while-body` | **2>** `<shell>: 1: Syntax error: end of file unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file from `while' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file from `while' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: syntax error at line 1: `while' unmatched` *(status 3)* | `hi` |
@@ -2143,6 +2146,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `core/c-style-for-brace-body-after-a-separator` — the terminator between the header and the body is optional before the brace exactly as it is before `do`, which is what says the brace stands where `do` stands rather than being glued to the header
   ```sh
   for ((i=0;i<2;i++)); { printf "%s" "$i"; }; echo
+  ```
+- `core/c-style-for-takes-a-redirection` — a redirection after a compound command covers the whole of it, and the C-style loop is no exception — the quiet failure is that a node with nowhere to keep one leaves the operator standing as a statement of its own, which truncates the file, redirects nothing, and says not a word. dash has no C-style loop and refuses the header
+  ```sh
+  for ((i=0;i<2;i++)); do echo "$i"; done > f; echo end; cat f
+  ```
+- `core/c-style-for-with-a-brace-body-takes-a-redirection` — the same on the brace-bodied spelling, which is where the suffix is easiest to lose: the body ends in a `}` rather than a keyword and the redirection reads as the brace group's
+  ```sh
+  for ((i=0;i<2;i++)) { echo "$i"; } > f; echo end; cat f
+  ```
+- `core/c-style-for-takes-an-input-redirection` — the reading half, and the one that shows the redirection outlives an iteration: the second `read` continues where the first left off, which it could not do if the file were opened per pass
+  ```sh
+  printf 'L1\nL2\n' > d; for ((i=0;i<2;i++)); do read x; echo "got=$x"; done < d
   ```
 - `core/a-list-for-with-a-brace-body` — the same production on the ordinary `for`, which is the half easiest to miss: the brace body is not the C-style loop's alone. It needs the separator, and the next case says why — this is the one three of the four accept and dash refuses, dash being the only panel shell without the form
   ```sh

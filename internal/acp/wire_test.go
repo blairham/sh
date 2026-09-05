@@ -5,6 +5,7 @@ package acp_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/blairham/sh/internal/acp"
@@ -218,5 +219,47 @@ func TestVersionIsOne(t *testing.T) {
 	t.Parallel()
 	if acp.Version != 1 {
 		t.Errorf("Version = %d, want 1", acp.Version)
+	}
+}
+
+// A required field is written even when it is empty, and an empty list is not
+// null.
+//
+// This is a fact about a real agent rather than a reading of the schema: the
+// published Claude adapter answers `-32602` with `mcpServers: Required value
+// is missing` to `{"cwd":"/tmp"}` and opens a session for
+// `{"cwd":"/tmp","mcpServers":[]}`. An omitempty on the field, and a nil slice
+// without one, are the two ways to get the first.
+func TestANewSessionAlwaysCarriesTheRequiredList(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		req  acp.NewSessionRequest
+	}{
+		{"nothing set", acp.NewSessionRequest{Cwd: "/work"}},
+		{"an empty list", acp.NewSessionRequest{Cwd: "/work", MCPServers: []json.RawMessage{}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			b, err := json.Marshal(tc.req)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			if !strings.Contains(string(b), `"mcpServers":[]`) {
+				t.Errorf("session/new = %s, want an empty mcpServers array", b)
+			}
+		})
+	}
+
+	// And one that is set is carried through rather than replaced.
+	b, err := json.Marshal(acp.NewSessionRequest{
+		Cwd:        "/work",
+		MCPServers: []json.RawMessage{json.RawMessage(`{"name":"x"}`)},
+	})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(b), `{"name":"x"}`) {
+		t.Errorf("session/new = %s, want the server it was given", b)
 	}
 }

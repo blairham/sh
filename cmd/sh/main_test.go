@@ -226,3 +226,31 @@ func TestACPTakesNoOperands(t *testing.T) {
 		t.Error("operands were accepted; they would have been ignored")
 	}
 }
+
+// -acp-connect takes the command that starts an agent, and the scan stops at
+// it: the agent's own flags are the agent's, not ours. `npx pkg --acp` must
+// reach the agent with its `--acp` intact.
+func TestACPConnectFlag(t *testing.T) {
+	own, rest, err := readOwnFlags([]string{"-acp-allow", "-acp-connect", "npx", "pkg", "--acp"})
+	if err != nil {
+		t.Fatalf("readOwnFlags: %v", err)
+	}
+	if !own.acpConnect || !own.acpAllow {
+		t.Fatalf("flags = %+v, want both read", own)
+	}
+	if !slices.Equal(rest, []string{"npx", "pkg", "--acp"}) {
+		t.Errorf("rest = %v, want the agent's whole command line", rest)
+	}
+}
+
+// With no command there is nothing to connect to, and saying so beats hanging
+// on a pipe nobody is on the other end of.
+func TestACPConnectNeedsACommand(t *testing.T) {
+	sh, err := pickDialect("core")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := connectACP(sh, false, nil); code == 0 {
+		t.Error("connecting to nothing reported success")
+	}
+}

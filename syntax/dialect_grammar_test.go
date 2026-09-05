@@ -302,6 +302,82 @@ func TestPatternGroupsBelongToTheWord(t *testing.T) {
 	}
 }
 
+// TestAPatternOperandMayStartWithAGroup: `(` is in the operator table, so a
+// token that begins with one is taken as an operator and the word scanner is
+// never entered — which made a group belong to a pattern everywhere but at
+// the front of one, where it is written most often (#826).
+func TestAPatternOperandMayStartWithAGroup(t *testing.T) {
+	alt := Core()
+	alt.PatternAlternation = true
+
+	for _, src := range []string{
+		`[[ $k == (a|b) ]]`,
+		`[[ $k = (a|b) ]]`,
+		`[[ $k != (a|b) ]]`,
+		`[[ $k == (a|b)* ]]`,
+		// A group inside a group starts `((`, the one place two parentheses
+		// are otherwise a single token.
+		`[[ $k == ((a|b)|x)(b|c) ]]`,
+		// Whitespace is inside the group rather than the end of the word.
+		`[[ $k == (a b) ]]`,
+	} {
+		mustParse(t, src, alt, "a group starting a pattern operand")
+		mustFail(t, src, Core(), "a group where the dialect has none")
+	}
+
+	// The boundary: a group is read where a *pattern* is read and nowhere
+	// else in the construct.
+	for _, src := range []string{
+		`[[ -n (a|b) ]]`,    // not a pattern operand
+		`[[ (a|b) == $k ]]`, // the left operand is not one either
+		`[[ $k == () ]]`,    // an empty group is a function's parentheses
+		`[[ $k ==(a|b) ]]`,  // welded to the operator, so not the operand
+		// The numeric and file families are not pattern operators. The
+		// shell with bare groups does take a `(` after these, and means
+		// something else by it each time — `[[ 3 -eq (1|2) ]]` is true
+		// there, so the group is *arithmetic* — which is why the flag is
+		// the pattern operators and not every binary one.
+		`[[ 1 -eq (1|2) ]]`,
+		`[[ x -nt (a|b) ]]`,
+	} {
+		mustFail(t, src, alt, "a group where no pattern is read")
+	}
+
+	// And what the flag must not have disturbed.
+	for _, src := range []string{`[[ ( -n $k ) ]]`, `[[ ( $k == a ) ]]`, `(( 1 + 1 ))`, `[[ $k == a(b|c) ]]`} {
+		mustParse(t, src, alt, "unchanged by the pattern-operand rule")
+	}
+}
+
+// TestAPatternOperandGroupSurvivesPrinting: the group is a literal span of the
+// operand word, so printing has to put it back unquoted or the reparse reads
+// a different pattern. The corpus round trip cannot reach this — every case
+// that uses it is a syntax error under the core dialect it prints with.
+func TestAPatternOperandGroupSurvivesPrinting(t *testing.T) {
+	alt := Core()
+	alt.PatternAlternation = true
+	for _, src := range []string{
+		`[[ $k == (a|b) ]]`,
+		`[[ $k == (a|b)* ]]`,
+		`[[ $k == ((a|b)|x)(b|c) ]]`,
+		`[[ $k == (a b) ]]`,
+		`[[ $k != (a|b) ]]`,
+	} {
+		first, err := Parse(src, alt)
+		if err != nil {
+			t.Fatalf("%q: %v", src, err)
+		}
+		printed := Print(first)
+		second, err := Parse(printed, alt)
+		if err != nil {
+			t.Fatalf("%q printed as %q, which does not parse: %v", src, printed, err)
+		}
+		if again := Print(second); again != printed {
+			t.Errorf("%q is not settled:\n  once:  %s\n  twice: %s", src, printed, again)
+		}
+	}
+}
+
 // TestQuantifiedGroupsMayBeConditionOnly: where a group is allowed is a
 // separate question from whether the shell has one. bash reads them inside
 // `[[ ]]` and calls the same text a syntax error in a `case` pattern.

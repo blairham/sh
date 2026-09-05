@@ -11862,6 +11862,182 @@
         "TimedOut": false
       }
     },
+    "cond/a-group-is-one-word-whitespace-and-all": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(a'~\u003cshell\u003e: -c: line 1: `k=\"a b\"; [[ $k == (a b) ]] \u0026\u0026 echo hit || echo miss; k=a; [[ $k == (a b) ]] \u0026\u0026 echo hit || echo miss'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(a'~\u003cshell\u003e: -c: line 1: `k=\"a b\"; [[ $k == (a b) ]] \u0026\u0026 echo hit || echo miss; k=a; [[ $k == (a b) ]] \u0026\u0026 echo hit || echo miss'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 0: syntax error near `(a'~\u003cshell\u003e: -c: line 0: `k=\"a b\"; [[ $k == (a b) ]] \u0026\u0026 echo hit || echo miss; k=a; [[ $k == (a b) ]] \u0026\u0026 echo hit || echo miss'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "hit~miss",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/a-group-is-the-patterns-and-not-the-conditions": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional unary operator~\u003cshell\u003e: -c: line 1: syntax error near `(a'~\u003cshell\u003e: -c: line 1: `[[ -n (a|b) ]]; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional unary operator~\u003cshell\u003e: -c: line 1: syntax error near `(a'~\u003cshell\u003e: -c: line 1: `[[ -n (a|b) ]]; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: unexpected argument `(' to conditional unary operator~\u003cshell\u003e: -c: line 0: syntax error near `(a'~\u003cshell\u003e: -c: line 0: `[[ -n (a|b) ]]; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `('",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/a-group-may-be-followed-by-more-pattern": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(a'~\u003cshell\u003e: -c: line 1: `k=abc; [[ $k == (a|b)* ]] \u0026\u0026 echo hit || echo miss; k=xbc; [[ $k == (a|b)* ]] \u0026\u0026 echo hit || echo miss; k=ab; [[ $k == ((a|b)|x)(b|c) ]] \u0026\u0026 echo hit || echo miss'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(a'~\u003cshell\u003e: -c: line 1: `k=abc; [[ $k == (a|b)* ]] \u0026\u0026 echo hit || echo miss; k=xbc; [[ $k == (a|b)* ]] \u0026\u0026 echo hit || echo miss; k=ab; [[ $k == ((a|b)|x)(b|c) ]] \u0026\u0026 echo hit || echo miss'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 0: syntax error near `(a'~\u003cshell\u003e: -c: line 0: `k=abc; [[ $k == (a|b)* ]] \u0026\u0026 echo hit || echo miss; k=xbc; [[ $k == (a|b)* ]] \u0026\u0026 echo hit || echo miss; k=ab; [[ $k == ((a|b)|x)(b|c) ]] \u0026\u0026 echo hit || echo miss'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "hit~miss~hit",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/a-group-may-not-start-the-left-operand": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected token `|', conditional binary operator expected~\u003cshell\u003e: -c: line 1: expected `)'~\u003cshell\u003e: -c: line 1: syntax error near `|b'~\u003cshell\u003e: -c: line 1: `k=a; [[ (a|b) == $k ]]; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected token `|', conditional binary operator expected~\u003cshell\u003e: -c: line 1: expected `)'~\u003cshell\u003e: -c: line 1: syntax error near `|b'~\u003cshell\u003e: -c: line 1: `k=a; [[ (a|b) == $k ]]; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: unexpected token `|', conditional binary operator expected~\u003cshell\u003e: -c: line 0: expected `)'~\u003cshell\u003e: -c: line 0: syntax error near `|b'~\u003cshell\u003e: -c: line 0: `k=a; [[ (a|b) == $k ]]; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: word unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `|' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `|'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "cond/a-group-starting-a-regex": {
       "bash": {
         "Stdout": "y",
@@ -12038,6 +12214,138 @@
         "TimedOut": false
       }
     },
+    "cond/a-paren-after-a-condition-is-still-a-subshell": {
+      "bash": {
+        "Stdout": "x~y",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "x~y",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "x~y",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "y",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "x~y",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "x~y",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/a-pattern-operand-may-start-with-a-group": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(a'~\u003cshell\u003e: -c: line 1: `k=a; [[ $k == (a|b) ]] \u0026\u0026 echo hit || echo miss; k=c; [[ $k == (a|b) ]] \u0026\u0026 echo hit || echo miss; k=a; [[ $k = (a|b) ]] \u0026\u0026 echo hit || echo miss; k=a; [[ $k != (a|b) ]] \u0026\u0026 echo hit || echo miss'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `(a'~\u003cshell\u003e: -c: line 1: `k=a; [[ $k == (a|b) ]] \u0026\u0026 echo hit || echo miss; k=c; [[ $k == (a|b) ]] \u0026\u0026 echo hit || echo miss; k=a; [[ $k = (a|b) ]] \u0026\u0026 echo hit || echo miss; k=a; [[ $k != (a|b) ]] \u0026\u0026 echo hit || echo miss'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 0: syntax error near `(a'~\u003cshell\u003e: -c: line 0: `k=a; [[ $k == (a|b) ]] \u0026\u0026 echo hit || echo miss; k=c; [[ $k == (a|b) ]] \u0026\u0026 echo hit || echo miss; k=a; [[ $k = (a|b) ]] \u0026\u0026 echo hit || echo miss; k=a; [[ $k != (a|b) ]] \u0026\u0026 echo hit || echo miss'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "hit~miss~hit~miss",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/a-quoted-group-is-a-literal": {
+      "bash": {
+        "Stdout": "miss~hit",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "miss~hit",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "miss~hit",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "miss~miss",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "miss~hit",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "miss~hit",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "cond/a-subshell-is-still-a-subshell": {
       "bash": {
         "Stdout": "subshell",
@@ -12078,6 +12386,50 @@
         "Stdout": "subshell",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/an-empty-group-is-not-a-pattern": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `()'~\u003cshell\u003e: -c: line 1: `k=a; [[ $k == () ]]; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 1: syntax error near `()'~\u003cshell\u003e: -c: line 1: `k=a; [[ $k == () ]]; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: unexpected argument `(' to conditional binary operator~\u003cshell\u003e: -c: line 0: syntax error near `()'~\u003cshell\u003e: -c: line 0: `k=a; [[ $k == () ]]; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error: condition expected: $k",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }

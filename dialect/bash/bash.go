@@ -757,13 +757,18 @@ func Diagnostics() interp.Diagnostics {
 		BuiltinHelpStatus:        2,
 		BuiltinHelp:              builtinHelp(),
 		BuiltinUsage:             builtinUsage(),
-		PrintfUsage:              "printf: usage: printf [-v var] format [arguments]",
-		UmaskBadMask:             "umask: %[1]s: octal number out of range",
-		AliasNotFound:            "%[1]s: %[2]s: not found",
-		UnaliasNotFound:          "%[1]s: %[2]s: not found",
-		AliasListPrefix:          "alias ",
-		UnaliasUsage:             "unalias: usage: unalias [-a] name [name ...]",
-		UnaliasUsageUnprefixed:   true,
+		// bash words this as a statement about the operator that was
+		// waiting rather than about the token it met: `[[ $k == (a|b) ]]`
+		// is "unexpected argument `(' to conditional binary operator", where
+		// ksh93 and zsh name the token and stop.
+		CondOperand:            "unexpected argument `%[1]s' to conditional %[2]s operator",
+		PrintfUsage:            "printf: usage: printf [-v var] format [arguments]",
+		UmaskBadMask:           "umask: %[1]s: octal number out of range",
+		AliasNotFound:          "%[1]s: %[2]s: not found",
+		UnaliasNotFound:        "%[1]s: %[2]s: not found",
+		AliasListPrefix:        "alias ",
+		UnaliasUsage:           "unalias: usage: unalias [-a] name [name ...]",
+		UnaliasUsageUnprefixed: true,
 		// bash names the character and says which kind it wanted.
 		UmaskBadSymbolicMode:     "umask: `%[2]s': invalid symbolic mode character",
 		UmaskBadSymbolicOperator: "umask: `%[2]s': invalid symbolic mode operator",

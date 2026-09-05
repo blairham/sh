@@ -2985,6 +2985,33 @@ echo "st=$?"`,
 		Why:     "the failure is per write, never fatal: each echo inside the group fails on its own — bash and dash complain twice — and the group reports the last one. zsh says `write error` here where it said nothing for a simple command's own `>&-`, and still answers 0",
 	},
 	{
+		// The subshell and the `>/dev/null` on it are what keep bash 3.2
+		// out of the answer twice over. Its failed write leaves the line
+		// queued on the shared output stream, so the next write to standard
+		// output flushes the builtin's own text ahead of `st=` — here that
+		// next write goes to /dev/null and the case measures the status
+		// rather than the leftovers. Everything the builtin says still
+		// reaches `e`.
+		ID: "redir/pwd-writing-to-a-closed-descriptor", Category: "redirection",
+		Snippet: `( pwd >&- ) 2>e >/dev/null; echo "st=$?"; cat e`,
+		Why:     "the same question as `redir/a-write-to-a-closed-descriptor-fails` asked of a builtin that is not `echo`, and the panel does not answer it the same way: dash and both bash builds report the failed write and fail the command, and ksh93 and zsh both answer 0 in silence — where ksh93 *does* report `echo`'s. So whether a builtin's failed write fails the command is not one answer per shell; ksh93 gives one answer for `echo` and the opposite for `pwd`",
+	},
+	{
+		ID: "redir/times-writing-to-a-closed-descriptor", Category: "redirection",
+		Snippet: `( times >&- ) 2>e >/dev/null; echo "st=$?"; cat e`,
+		Why:     "the third of the panel's answers on the same question: dash, bash 5.3 and ksh93 all fail the command, bash 3.2 and zsh do not, and ksh93 words it as a failure to *open* rather than to write — `cannot open [Bad file descriptor]`, with no builtin named. bash 3.2's 0 is its queued write rather than a decision: the text is still in its buffer when the builtin returns",
+	},
+	{
+		ID: "redir/export-writing-to-a-closed-descriptor", Category: "redirection",
+		Snippet: `( export >&- ) 2>e >/dev/null; echo "st=$?"; cat e`,
+		Why:     "`export` with no operands writes the exported names, so it is a builtin whose output exists without being asked for — and the failed write is reported by dash and bash 5.3 and by nobody else. It is here because the listing itself was missing: writing nothing, this had no write to fail and answered 0 everywhere",
+	},
+	{
+		ID: "redir/readonly-writing-to-a-closed-descriptor", Category: "redirection",
+		Snippet: `readonly RO=1; ( readonly >&- ) 2>e >/dev/null; echo "st=$?"; cat e`,
+		Why:     "the same for `readonly`, which lists the same way and had the same silence. The name is set first because a shell with nothing readonly writes nothing, and a case where the write never happens cannot say whether a failed one is reported",
+	},
+	{
 		ID: "redir/exec-opens-a-high-descriptor", Category: "redirection",
 		Snippet: `exec 3>f; echo hi; echo aside >&3; exec 3>&-; cat f`,
 		Why:     "`exec 3>file` holds the file on a descriptor of its own — stdout stays where it was, and only what is aimed at 3 reaches the file",
@@ -4432,6 +4459,16 @@ echo unreachable`,
 		ID: "export/p-names-what-is-exported", Category: "builtins",
 		Snippet: `export V=1; export -p | grep -c -E "^(declare -x|export) V="`,
 		Why:     "the listing must name the exported variable in one of the two spellings the shells use — the grep finds either, and found neither before",
+	},
+	{
+		ID: "export/no-operands-lists-what-is-exported", Category: "builtins",
+		Snippet: `export MYNAME=1; export | grep MYNAME`,
+		Why:     "`export` with nothing after it lists, in all five: POSIX says so and the panel agrees that something is written. This wrote nothing at all, which is also why `export >&-` had no failed write to report. The *shape* is where they part, and it is not the shape `-p` uses: dash and both bash builds write the same line either way, while ksh93 and zsh drop the leading `export` and write a plain assignment for the bare form alone. The grep keeps the case to one line, so the split is the whole of what is recorded",
+	},
+	{
+		ID: "readonly/no-operands-lists-what-is-readonly", Category: "builtins",
+		Snippet: `readonly RONAME=2; readonly | grep RONAME`,
+		Why:     "the same rule for `readonly`, and the same split in the same two shells — with zsh's `-p` form being `typeset -r` rather than `readonly`, so its bare form differs from its own `-p` by more than a missing word",
 	},
 	{
 		ID: "readonly/p-names-what-is-readonly", Category: "builtins",

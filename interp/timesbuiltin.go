@@ -85,7 +85,10 @@ func biTimes(r *Runner, _ context.Context, args []string) int {
 		fmt.Fprintf(&b, "%s %s\n", clockTime(children.user, d.timesDecimals()),
 			clockTime(children.system, d.timesDecimals()))
 	}
-	_, _ = fmt.Fprint(r.Out(), b.String())
+	// Through printf, so a failed write is recorded for the dispatcher rather
+	// than discarded here — `times >&-` reports it in dash and in both bash
+	// builds, and this answered 0 in silence.
+	r.printf("%s", b.String())
 	return 0
 }
 

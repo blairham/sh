@@ -151,3 +151,92 @@ func TestWrappedBuiltinBlamesTheOneThatWrote(t *testing.T) {
 		t.Errorf("stderr = %q, want echo named and the wrapper not", errOut)
 	}
 }
+
+// Every builtin that writes reaches the same axis and the same wording, which
+// is only true while every builtin's write is *recorded*. These three wrote
+// their stream directly and threw the error away, so the axis was never asked
+// and the wording never reached: each answered 0 in silence whatever the
+// dialect said.
+func TestEveryWritingBuiltinReachesTheWriteFailureAxis(t *testing.T) {
+	sem, diag := failingWrites()
+	sem.ExportListing = DeclareListingCommandWord
+	sem.ReadonlyListing = DeclareListingCommandWord
+	sem.DeclareValueQuoting = ListingQuoteAlwaysEscaped
+	for _, c := range []struct{ name, src, blames string }{
+		{"pwd", `pwd >&-; echo st=$?`, "pwd: write error:"},
+		{"times", `times >&-; echo st=$?`, "times: write error:"},
+		{"export", `export >&-; echo st=$?`, "export: write error:"},
+		{"readonly", `readonly RO=1; readonly >&-; echo st=$?`, "readonly: write error:"},
+	} {
+		out, errOut, _ := runClosedWrite(t, c.src, sem, diag)
+		if out != "st=1\n" {
+			t.Errorf("%s: stdout = %q, want the failed write to fail the command", c.name, out)
+		}
+		if !strings.Contains(errOut, c.blames) {
+			t.Errorf("%s: stderr = %q, want it to carry %q", c.name, errOut, c.blames)
+		}
+	}
+}
+
+// And the axis still decides: a dialect that keeps a failed write as a success
+// keeps these too, which is what says they are on the shared path rather than
+// carrying an answer of their own.
+func TestTheWritingBuiltinsFollowTheAxisWhenItSaysNo(t *testing.T) {
+	sem, diag := failingWrites()
+	sem.BuiltinWriteErrorFailsTheCommand = No
+	sem.ExportListing = DeclareListingCommandWord
+	sem.DeclareValueQuoting = ListingQuoteAlwaysEscaped
+	for _, src := range []string{
+		`pwd >&-; echo st=$?`,
+		`times >&-; echo st=$?`,
+		`export >&-; echo st=$?`,
+	} {
+		out, errOut, _ := runClosedWrite(t, src, sem, diag)
+		if out != "st=0\n" {
+			t.Errorf("%q: stdout = %q, want st=0", src, out)
+		}
+		if errOut != "" {
+			t.Errorf("%q: stderr = %q, want nothing said", src, errOut)
+		}
+	}
+}
+
+// `export` and `readonly` with no operands list, which is what gives them a
+// write to fail in the first place. They wrote nothing at all, so the two
+// questions are one change and one test: the listing is there, and it is the
+// same listing `-p` asks for.
+func TestExportAndReadonlyWithNoOperandsList(t *testing.T) {
+	sem, diag := failingWrites()
+	sem.ExportListing = DeclareListingCommandWord
+	sem.ReadonlyListing = DeclareListingCommandWord
+	sem.DeclareValueQuoting = ListingQuoteWhenNeededPlain
+	out, _, _ := runClosedWrite(t, `export V=1; readonly R=2; export; echo --; export -p; echo --; readonly; echo --; readonly -p`, sem, diag)
+	parts := strings.Split(out, "--\n")
+	if len(parts) != 4 {
+		t.Fatalf("stdout = %q, want four listings", out)
+	}
+	if !strings.Contains(parts[0], "export V=1") {
+		t.Errorf("bare export listed %q, want the exported name in it", parts[0])
+	}
+	if parts[0] != parts[1] {
+		t.Errorf("bare export listed %q and -p listed %q, want the same listing", parts[0], parts[1])
+	}
+	if !strings.Contains(parts[2], "readonly R=2") {
+		t.Errorf("bare readonly listed %q, want the readonly name in it", parts[2])
+	}
+	if parts[2] != parts[3] {
+		t.Errorf("bare readonly listed %q and -p listed %q, want the same listing", parts[2], parts[3])
+	}
+}
+
+// An operand is not a listing: `export V=1` sets and says nothing, which is
+// the line the bare form has to stop at.
+func TestExportWithOperandsDoesNotList(t *testing.T) {
+	sem, diag := failingWrites()
+	sem.ExportListing = DeclareListingCommandWord
+	sem.DeclareValueQuoting = ListingQuoteWhenNeededPlain
+	out, errOut, st := runClosedWrite(t, `export V=1; readonly R=2`, sem, diag)
+	if out != "" || errOut != "" || st != 0 {
+		t.Errorf("stdout %q, stderr %q, status %d — an assignment writes nothing", out, errOut, st)
+	}
+}

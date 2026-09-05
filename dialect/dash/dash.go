@@ -52,6 +52,12 @@ func Semantics() interp.Semantics {
 	// standard-input route, which is unanimous and comes from Runner.Route.
 	// Under `-c` it stays blank — neither letter, where bash and ksh93 show
 	// `c` and ksh93 also shows `s`.
+	//
+	// InteractiveOptionLetters stays empty too, and here that is an answer
+	// rather than a silence: measured 2026-09-05, `-i script.sh` reports `i`
+	// and nothing else, so the interactive set is the same empty set. dash is
+	// the one shell in the panel that adds nothing at a prompt, which is what
+	// makes the other three's additions evidence rather than a coincidence.
 	s.CommandStringShowsCInDollarDash = interp.No
 	s.CommandStringShowsSInDollarDash = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No

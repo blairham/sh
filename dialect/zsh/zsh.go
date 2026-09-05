@@ -91,6 +91,10 @@ func Semantics() interp.Semantics {
 	// Runner.Route; under `-c` zsh shows neither route letter, where bash
 	// and ksh93 show `c`.
 	s.DefaultOptionLetters = "569X"
+	// And `569XZi` when interactive, so the interactive set is the same four
+	// plus the line-editor letter. Measured 2026-09-05 under `-i script.sh`
+	// and at a pseudo-terminal alike; `i` comes from the runner.
+	s.InteractiveOptionLetters = "569XZ"
 	s.CommandStringShowsCInDollarDash = interp.No
 	s.CommandStringShowsSInDollarDash = interp.No
 	// The panel's holdout: `echo hi >&-` is status 0 here and 1 in the other

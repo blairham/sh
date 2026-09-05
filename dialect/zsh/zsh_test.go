@@ -726,3 +726,12 @@ func TestAFunctionBodyThatNeverBeganIsLocatedByNameAlone(t *testing.T) {
 		}
 	}
 }
+
+// TestDollarDashInteractiveStartupLetters. Measured 2026-09-05 on zsh 5.9.2:
+// `zsh -i script.sh` reports `569XZi`, so the interactive set is the same four
+// plus the line-editor letter. `i` comes from the runner.
+func TestDollarDashInteractiveStartupLetters(t *testing.T) {
+	if got, want := zsh.Semantics().InteractiveOptionLetters, "569XZ"; got != want {
+		t.Errorf("InteractiveOptionLetters = %q, want %q", got, want)
+	}
+}

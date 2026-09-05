@@ -235,8 +235,9 @@ Unanimous across the panel. Any quoting anywhere in the delimiter makes
 the whole body literal; it is not a per-character property.
 
 The delimiter's quoting must survive onto the heredoc token, because the
-body is read later. obi got this wrong twice by rewriting the parse tree
-instead — see `../../lessons-from-obi.md`.
+body is read later. Earlier work of ours got this wrong twice by
+rewriting the parse tree instead — see
+`../../lessons-carried-forward.md`.
 
 ### Where the body is
 

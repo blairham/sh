@@ -69,8 +69,8 @@ implementation.
 - **Public interface shape** — that a shell parser exposes something
   called a parser producing something called a syntax tree. Names and
   interfaces are facts about the domain.
-- **Anything the author of this repository wrote**, including obi's
-  `internal/compat` corpus and its builtins.
+- **Anything the author of this repository wrote**, including the
+  compatibility corpora and builtins of their earlier shell work.
 
 ## Red list — never, while working in this tree
 

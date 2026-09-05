@@ -67,7 +67,8 @@ needs no Go at all.
 
     CLEANROOM.md              the rules that keep this independent
     docs/design.md            architecture
-    docs/lessons-from-obi.md  starting constraints, learned the hard way
+    docs/lessons-carried-forward.md
+                              starting constraints, learned the hard way
     docs/spec/                behavioral specs — the wall
       oracle.md               how behavior is learned from real binaries
       shell-matrix.md         measured: which constructs exist where

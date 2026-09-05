@@ -261,7 +261,7 @@ func (a *arithParser) assign() ArithExpr {
 			if a.take(op) {
 				v := a.assign()
 				if v == nil {
-					a.failArith(ErrArithOperand, op)
+					a.failArith(ErrArithOperandEnd, op)
 					return nil
 				}
 				return &ArithAssign{Name: name, Index: index, Op: op, Value: v, Start: start}
@@ -324,7 +324,7 @@ func (a *arithParser) binary(level int) ArithExpr {
 		a.off += len(op)
 		y := a.binary(level + 1)
 		if y == nil {
-			a.failArith(ErrArithOperand, op)
+			a.failArith(ErrArithOperandEnd, op)
 			return x
 		}
 		x = &ArithBinary{Op: op, X: x, Y: y}
@@ -363,7 +363,7 @@ func (a *arithParser) power() ArithExpr {
 	}
 	y := a.power()
 	if y == nil {
-		a.failArith(ErrArithOperand, "**")
+		a.failArith(ErrArithOperandEnd, "**")
 		return x
 	}
 	return &ArithBinary{Op: "**", X: x, Y: y}
@@ -390,7 +390,7 @@ func (a *arithParser) unary() ArithExpr {
 		a.off++
 		x := a.unary()
 		if x == nil {
-			a.failArith(ErrArithOperand, op)
+			a.failArith(ErrArithOperandEnd, op)
 			return nil
 		}
 		return &ArithUnary{Op: op, X: x, Start: start}
@@ -454,6 +454,13 @@ func (a *arithParser) primary() ArithExpr {
 	// a leftover operator: `$((.5))` in a dialect without floats is blamed
 	// for wanting a number, where `$((1 @))` is blamed for the `@`. Both
 	// shells without floats word the two apart.
+	//
+	// There *is* text here, which is the half that separates this from a
+	// caller's ErrArithOperandEnd. Running out is not reported at all —
+	// primary returns nil at the top with no error, so the frame that wanted
+	// the operand names the operator it was left holding. The two are the
+	// same failure to two of the panel and different failures to the other
+	// two, and this is the only place the parser can tell them apart.
 	a.failArith(ErrArithOperand, a.src[a.off:])
 	return nil
 }

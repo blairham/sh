@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/internal/event"
 	"github.com/blairham/sh/interp"
 )
 
@@ -36,21 +37,62 @@ import (
 //
 // Nil is not an oversight here, it is the contract: a nil Gate allows
 // everything and a nil Sink discards, so a shell nobody has pointed a policy
-// at costs one nil check per action and behaves exactly as it did before
-// either flag existed.
+// at costs one nil check per action and behaves exactly as it did before any
+// of these flags existed.
 //
 // Assembled in a function of its own so a test can look at what the flags
 // produced. Wiring dropped on the floor inside main() is invisible — it looks
 // precisely like a shell that was never asked to gate anything, which is the
 // failure mode this whole change is about.
-func installSeams(sh driver.Shell, own ownFlags, w io.Writer) driver.Shell {
+//
+// The closer is the audit file, when there is one, and it is returned rather
+// than deferred here because main ends with os.Exit and a defer would never
+// run. Nothing is lost when it is skipped — a record is written straight
+// through — but a file left open by a process that is exiting anyway is
+// untidy in exactly the way that later reads as a leak.
+func installSeams(sh driver.Shell, own ownFlags, w io.Writer) (driver.Shell, io.Closer, error) {
+	var g gates
 	if len(own.deny) > 0 {
-		sh.Gate = denyPrefixes(own.deny)
+		g = append(g, denyPrefixes(own.deny))
 	}
+	if own.policy != "" {
+		p, err := loadPolicy(own.policy)
+		if err != nil {
+			return sh, nil, err
+		}
+		g = append(g, p)
+	}
+	var s sinks
 	if own.traceEvents {
-		sh.Events = &traceSink{w: w}
+		s = append(s, &traceSink{w: w})
 	}
-	return sh
+	var closer io.Closer
+	if own.audit != "" {
+		aw, c, err := openAudit(own.audit, w)
+		if err != nil {
+			return sh, nil, err
+		}
+		closer = c
+		s = append(s, event.NewEncoder(aw))
+	}
+	// One of a kind is installed as itself rather than as a list of one, so
+	// the common case pays nothing for the composition and a stack trace names
+	// what is actually deciding.
+	switch len(g) {
+	case 0:
+	case 1:
+		sh.Gate = g[0]
+	default:
+		sh.Gate = g
+	}
+	switch len(s) {
+	case 0:
+	case 1:
+		sh.Events = s[0]
+	default:
+		sh.Events = s
+	}
+	return sh, closer, nil
 }
 
 // traceSink prints every event to a writer, one line each.

@@ -35,7 +35,7 @@ func runWithOpenFileLimit(t *testing.T, src string, soft int64, answer Answer) (
 	var o, e bytes.Buffer
 	sem := permissive()
 	sem.FdNumberBoundedByOpenFileLimit = answer
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &o, Stderr: &e, Semantics: &sem, Diagnostics: &Diagnostics{},
 		Dir: t.TempDir(), Name: "testsh",
 		GetRlimit: func(res Resource) (int64, int64, error) {
@@ -44,7 +44,7 @@ func runWithOpenFileLimit(t *testing.T, src string, soft int64, answer Answer) (
 			}
 			return soft, soft, nil
 		},
-	}
+	})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatal(rerr)
@@ -91,11 +91,11 @@ func TestARefusedDescriptorNumberStillOpensTheFile(t *testing.T) {
 	var o, e bytes.Buffer
 	sem := permissive()
 	sem.FdNumberBoundedByOpenFileLimit = Yes
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &o, Stderr: &e, Semantics: &sem, Diagnostics: &Diagnostics{},
 		Dir: dir, Name: "testsh",
 		GetRlimit: func(Resource) (int64, int64, error) { return 20, 20, nil },
-	}
+	})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}
@@ -140,10 +140,10 @@ func TestWithNoLimitsHookNoNumberIsRefused(t *testing.T) {
 	var o, e bytes.Buffer
 	sem := permissive()
 	sem.FdNumberBoundedByOpenFileLimit = Yes
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &o, Stderr: &e, Semantics: &sem, Diagnostics: &Diagnostics{},
 		Dir: t.TempDir(), Name: "testsh",
-	}
+	})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatal(rerr)

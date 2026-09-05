@@ -989,6 +989,36 @@ var Corpus = []Case{
 		Why:     "the body of a short loop need not be a brace group, and it is exactly one command: the `; echo end` after it is outside the loop, so `end` prints once rather than per iteration. A second command inside would need a separator, and a separator there is the enclosing list's",
 	},
 	{
+		ID: "core/two-commands-need-a-separator-between-them", Category: "command language", SyntaxError: true,
+		Snippet: `(echo a) echo b`,
+		Why:     "the list production's separator is required, and this is the shortest text that shows it. Every shell in the panel names the second command's word and refuses the line; the reading that takes it is two statements, which would print a and b — a *different program*, so the wrong answer here is silent rather than noisy. Nothing shows the rule until a compound is written, because a simple command's words absorb whatever follows and `true echo x` is one command with an argument",
+	},
+	{
+		ID: "core/a-compound-does-not-absorb-the-word-after-it", Category: "command language", SyntaxError: true,
+		Snippet: `echo one; { :; } echo x`,
+		Why:     "the same rule with a statement in front of it, so that the refusal cannot be a property of the line's first command. `echo one` never runs either: the panel parses the whole `-c` string before running any of it, so a failure anywhere in it discards everything. The construct is a brace group here rather than a subshell to show that the rule is about the *list* and not about parentheses",
+	},
+	{
+		ID: "core/a-separator-is-needed-after-a-redirected-compound", Category: "command language", SyntaxError: true,
+		Snippet: `{ :; } 2>/dev/null echo b`,
+		Why:     "a redirection after a compound command belongs to the compound and does not reopen it, so a word after the redirection is still a second command with nothing between. Worth pinning apart from the bare form because the suffix is the one place a parser might keep reading words — and if it did, `echo b` would become an argument of nothing",
+	},
+	{
+		ID: "core/the-missing-separator-is-named-inside-a-group", Category: "command language", SyntaxError: true,
+		Snippet: `{ (echo a) echo b; }`,
+		Why:     "where the failure is reported when the list is a construct's rather than the program's. All five name the token the list stopped on, and the one shell that prints an expectation adds the closer that was waiting — `(expecting \"}\")` here, `\")\"` in a subshell and `\"done\"` in a loop, so the token comes from the list and the expectation from whatever enclosed it",
+	},
+	{
+		ID: "core/two-subshells-with-nothing-between-them", Category: "command language", SyntaxError: true,
+		Snippet: `(echo a) (echo b)`,
+		Why:     "the same missing separator where the token that follows is an operator rather than a word. It changes what the diagnostics say — the shell that classifies a token calls this one `\"(\"` where the rows above are `word` — so it grades the class as well as the refusal",
+	},
+	{
+		ID: "core/a-missing-separator-inside-a-loop-body", Category: "command language", SyntaxError: true,
+		Snippet: `while true; do (echo a) echo b; done`,
+		Why:     "a `do … done` body is an ordinary list and needs the separator an ordinary list needs. Paired with the short-loop rows below, which are the one place the panel splits: the shell with short loops reads a command after an *ended header* as the loop's body, and even there a `do … done` body is this",
+	},
+	{
 		ID: "core/a-for-over-a-parenthesized-list", Category: "command language", SyntaxError: true,
 		Snippet: `for i (a b) { echo "$i"; }; for j (p q) echo "$j"`,
 		Why:     "the short `for`, in both its body spellings. The parentheses say what `in` says and end the header as `in` does not, which is why this one takes a brace body with nothing between where `for i in a b { … }` cannot. One shell parses it and four call the `(` a syntax error",

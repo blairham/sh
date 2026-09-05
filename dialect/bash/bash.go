@@ -259,6 +259,19 @@ func Semantics() interp.Semantics {
 	s.JobsListNewestFirst = interp.No
 	s.JobsListFinishedJobs = interp.Yes
 
+	// `jobs`' letters. bash has the widest set in the panel: POSIX's `-l`
+	// and `-p`, the state filters `-r` and `-s`, `-n` for what has changed
+	// since it last said, and `-x` — which is not a listing at all but a
+	// command to run with its job specs replaced by process ids. The last
+	// two ride UnimplementedOptionLetters and are refused by name.
+	s.JobsOptions = "lprs"
+	// `jobs -p` here is the process ids and nothing else, which is what
+	// makes `kill $(jobs -p)` mean what it is written to mean.
+	s.JobsPidsOnlyOption = interp.Yes
+	// With both filters at once the last letter given decides, so
+	// `jobs -rs` lists the stopped jobs and `jobs -sr` the running ones.
+	s.JobsStateFiltersAccumulate = interp.No
+
 	// Whether a `&` job's command appears in a `jobs` listing.
 	s.JobsShowBackgroundCommand = interp.Yes
 
@@ -339,6 +352,10 @@ func Diagnostics() interp.Diagnostics {
 		UnsetParameterStatusFromCommandString: 127,
 		ParamNullOrNotSet:                     "parameter null or not set",
 		JobLine:                               "[%[1]d]%[2]s  %-27[3]s%[4]s",
+		// `jobs -l`: the same 27-wide state column, with the process id
+		// spending one of the two spaces after the marker rather than
+		// pushing the rest of the row along.
+		JobLineLong: "[%[1]d]%[2]s %[3]d %-27[4]s%[5]s",
 		// The same twenty-seven-column state field the listing above uses,
 		// with the process id in front of it rather than the job number: one
 		// formatter, said in two places.
@@ -488,6 +505,14 @@ func Diagnostics() interp.Diagnostics {
 			// disown's sweepers: -a for every job, -h for HUP shielding
 			// alone, -r for the running ones.
 			"disown": "ahr",
+			// `jobs -n` lists what has changed since the shell last said,
+			// which needs a record of what it has already reported — and
+			// the two shells with the letter do not agree on what counts:
+			// a job that has only just started is a change here and is not
+			// one in ksh93. `jobs -x` is not a listing at all: it runs a
+			// command with the job specs in its arguments replaced by
+			// process ids.
+			"jobs": "nx",
 			// What is left of read's letters: readline editing and the text
 			// -i seeds it with — about a line editor this runner does not
 			// hold. The -p prompt is implemented: parsed always, printed
@@ -554,6 +579,7 @@ func Diagnostics() interp.Diagnostics {
 			"readonly": "readonly: usage: readonly [-aAf] [name[=value] ...] or readonly -p",
 			"trap":     "trap: usage: trap [-Plp] [[action] signal_spec ...]",
 			"type":     "type: usage: type [-afptP] name [name ...]",
+			"jobs":     "jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]",
 			"wait":     "wait: usage: wait [-fn] [-p var] [id ...]",
 			"unset":    "unset: usage: unset [-f] [-v] [-n] [name ...]",
 		},

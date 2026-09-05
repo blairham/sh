@@ -491,3 +491,39 @@ printf '%(%Y)T\n' abc; echo "bad=$?"`)
 		}
 	}
 }
+
+// A format that ends before its conversion character has a second wording
+// here, and it names the whole directive where the ordinary bad-conversion
+// complaint names the character.
+func TestPrintfMissingFormatCharacter(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf 'a%'`, "printf: `%': missing format character"},
+		{`printf 'a%5'`, "printf: `%5': missing format character"},
+		{`printf 'a%ll'`, "printf: `%ll': missing format character"},
+	} {
+		out, st := runBash(t, dir, tc.src+"\n")
+		if !strings.Contains(out, tc.want) || st != 1 {
+			t.Errorf("%s: said %q status %d, want %q and 1", tc.src, out, st, tc.want)
+		}
+	}
+}
+
+// `\x` reads at most two digits as one byte, and an empty digit run leaves
+// the escape standing with a complaint that does not fail the command.
+func TestPrintfHexEscapeIsAByte(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf 'a\x41Z'`, "aAZ"},
+		{`printf '[\x0ff]'`, "[\x0ff]"},
+		{`printf 'a\x80Z'`, "a\x80Z"},
+	} {
+		if out, _ := runBash(t, dir, tc.src+"\n"); out != tc.want {
+			t.Errorf("%s: said % x, want % x", tc.src, out, tc.want)
+		}
+	}
+	out, st := runBash(t, dir, `printf 'a\xZ'`+"\n")
+	if !strings.Contains(out, `printf: missing hex digit for \x`) || st != 0 {
+		t.Errorf("said %q status %d, want the warning and a zero status", out, st)
+	}
+}

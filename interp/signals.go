@@ -371,7 +371,23 @@ func (r *Runner) selfSignaled(name string) {
 // a *pipeline element* breaking its pipe hands the process a signal the shell
 // that started it never had — and with a handler installed the runtime
 // forwards it, and the outer handler ran. No panel shell does that.
+//
+// Delivered to two different lists, and that is the whole of what a subshell
+// needed. A handler at the top level belongs to the process, so its arrival
+// goes on the shared list with every other one. A handler a subshell set for
+// itself belongs to the subshell, and its arrival goes on the subshell's own
+// list — where the parent cannot see it, which is the same fact the absorbing
+// above states from the other side. Recording it on the shared list is what a
+// naive fix does, and it makes the parent run its own PIPE handler for a
+// broken pipe an element caused: measured, no panel shell does that either.
 func (r *Runner) brokenPipeAbsorbed(deliver bool) {
+	if deliver && r.traps != nil {
+		// A subshell's own handler, for a signal that never left the
+		// subshell. Run between the subshell's commands, and once more as
+		// its body ends — see runSelfRaisedTraps.
+		r.selfPending = append(r.selfPending, "PIPE")
+		deliver = false
+	}
 	s := r.sigs()
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -380,6 +396,36 @@ func (r *Runner) brokenPipeAbsorbed(deliver bool) {
 	}
 	s.pipeAbsorbed++
 	s.poke()
+}
+
+// takeSelfPending reports what this subshell raised on itself and has not
+// handled yet, and forgets it. No lock; see the field.
+func (r *Runner) takeSelfPending() []string {
+	got := r.selfPending
+	r.selfPending = nil
+	return got
+}
+
+// runSelfRaisedTraps answers what a subshell raised on itself, at the point
+// its body ends.
+//
+// A handler runs between commands, and the last command of a subshell has no
+// command after it — so the element whose *final* write breaks its own pipe
+// would set a handler for exactly that and never run it. Measured on `{ trap
+// 'echo child >&2' PIPE; echo "$big"; } | true`, with nothing after the failed
+// write inside the element: dash, bash 5.3, ksh93 and zsh all print `child`.
+//
+// It is the subshell's half of what Finish does for the shell at the top, and
+// it is called at the end of a *list* rather than where the subshell's body
+// was started, because the two are on opposite sides of the body's
+// redirections. Measured with the element's standard error sent to a file:
+// dash, bash 5.3, ksh93 and zsh all put the handler's output in that file, so
+// the handler runs while the redirection is still in force.
+func (r *Runner) runSelfRaisedTraps(ctx context.Context) {
+	if !r.inSubshell || len(r.selfPending) == 0 {
+		return
+	}
+	r.runPendingTraps(ctx)
 }
 
 // recordSharedDeath notes a fatal signal a subshell sent the process, for
@@ -522,12 +568,25 @@ func signalName(s os.Signal) (string, bool) {
 func (r *Runner) runPendingTraps(ctx context.Context) {
 	if r.inSubshell {
 		// A subshell is a pretend child process: a signal aimed at `$$` is
-		// aimed at the shell at the top, so what has arrived is the
+		// aimed at the shell at the top, so what has *arrived* is the
 		// parent's to handle once the subshell is done — measured, `trap
 		// 'echo x' USR1; (kill -USR1 $$; echo sub)` prints sub before x in
-		// bash, dash and zsh. Draining here would run the parent's handler
-		// in the child, or worse, lose the arrival to a runner about to be
-		// discarded.
+		// bash, dash and zsh. Draining the shared list here would run the
+		// parent's handler in the child, or worse, lose the arrival to a
+		// runner about to be discarded.
+		//
+		// What the subshell raised on *itself* is not one of those, and it
+		// has a list of its own for that reason. A broken pipe an element
+		// wrote into is the element's signal: the process never had it, and
+		// the handler that answers it is the one the element set. Measured
+		// on `{ trap 'echo child >&2' PIPE; echo "$big"; echo reached >&2; }
+		// | true`, every shell in the panel runs the element's handler and
+		// none of them runs the shell's.
+		for _, name := range r.takeSelfPending() {
+			if body, ok := r.traps[name]; ok && body != "" {
+				r.runTrapHandler(ctx, body)
+			}
+		}
 		return
 	}
 	if name, sig, died := r.takeSharedDeath(); died {
@@ -543,17 +602,23 @@ func (r *Runner) runPendingTraps(ctx context.Context) {
 		if !ok || body == "" {
 			continue
 		}
-		outer := r.status
-		if r.ask(r.sem().SignalHandlerSeesEarlierStatus, "the status a signal handler sees") {
-			r.status = r.statusBefore
-		}
-		ctl := r.ctl
-		r.ctl = controlNone
-		r.runTrapBody(ctx, body)
-		if r.ctl == controlNone {
-			r.ctl = ctl
-			r.status = outer
-		}
+		r.runTrapHandler(ctx, body)
+	}
+}
+
+// runTrapHandler runs one handler body, with what the interrupted script can
+// see put back around it.
+func (r *Runner) runTrapHandler(ctx context.Context, body string) {
+	outer := r.status
+	if r.ask(r.sem().SignalHandlerSeesEarlierStatus, "the status a signal handler sees") {
+		r.status = r.statusBefore
+	}
+	ctl := r.ctl
+	r.ctl = controlNone
+	r.runTrapBody(ctx, body)
+	if r.ctl == controlNone {
+		r.ctl = ctl
+		r.status = outer
 	}
 }
 

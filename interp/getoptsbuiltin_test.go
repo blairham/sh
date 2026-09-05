@@ -4,8 +4,12 @@
 package interp_test
 
 import (
+	"bytes"
+	"context"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/syntax"
 
 	. "github.com/blairham/sh/interp"
 )
@@ -43,6 +47,64 @@ func TestGetoptsTheUnanimousParts(t *testing.T) {
 				t.Errorf("got %q, want %q", out, tc.want)
 			}
 		})
+	}
+}
+
+// TestOptindHasItsStartupValueBeforeGetoptsRuns. The index the next scan will
+// read is 1 from the moment the shell starts, not from the first call to the
+// builtin — unanimous, so it is a starting value rather than an axis.
+//
+// The two halves are separate failures. A shell that leaves the variable
+// unset answers a script that tests it before its loop with an empty string
+// where a number belongs, and one that lets the *environment* answer starts
+// the scan wherever its caller had got to. Only the second needs an
+// environment to see, which is why it is asserted here rather than left to
+// the first assertion passing for the wrong reason.
+func TestOptindHasItsStartupValueBeforeGetoptsRuns(t *testing.T) {
+	const src = `echo "[${OPTIND-unset}]"`
+	for _, tc := range []struct {
+		name string
+		env  []string
+	}{
+		{"nothing inherited", nil},
+		{"an inherited value is overwritten", []string{"OPTIND=7"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := getoptsSem()
+			out, _ := run(t, src, func(r *Runner) {
+				r.Semantics = &sem
+				r.Env = append(r.Env, tc.env...)
+			})
+			if out != "[1]\n" {
+				t.Errorf("got %q, want %q", out, "[1]\n")
+			}
+		})
+	}
+}
+
+// TestTheStartupOptindIsAStartingValueAndNotAFloor. A starting value is
+// written once, before anything has run, and a chunk that arrives afterwards
+// must not have it written again — or a front end reading its input a line at
+// a time would reset the scan between the two lines of `getopts … ; echo`.
+//
+// Every corpus case is one chunk, so nothing outside this can tell a value
+// supplied at startup from one re-supplied on every chunk; the whole
+// difference is only visible through RunPart.
+func TestTheStartupOptindIsAStartingValueAndNotAFloor(t *testing.T) {
+	var out bytes.Buffer
+	sem := getoptsSem()
+	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Semantics: &sem})
+	for _, src := range []string{`set -- -a -b; getopts ab o`, `getopts ab o`, `echo "[$OPTIND][$o]"`} {
+		f, err := syntax.Parse(src, syntax.Core())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := r.RunPart(context.Background(), f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := out.String(); got != "[3][b]\n" {
+		t.Errorf("got %q, want the scan to have carried across the chunks", got)
 	}
 }
 

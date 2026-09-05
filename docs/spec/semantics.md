@@ -1015,11 +1015,172 @@ Two things ksh93 does here are **not** modeled, and neither belongs to
 this axis:
 
 - ksh93 will read a width *after* a modifier — `printf '%l5d' 42` is a
-  padded 42 there and an error in bash and zsh. That is its free-order
-  conversion prefix and has nothing to do with modifiers: `printf '%5-d'`
-  and `printf '%5 d'` work in ksh93 too, with no modifier in them at all.
+  padded 42 there and an error in bash and zsh. That belongs to the shape
+  of its conversion prefix, below, and has nothing to do with modifiers:
+  `printf '%5-d'` and `printf '%5 d'` work in ksh93 too, with no modifier
+  in either of them.
 - ksh93 appends a newline to any output holding a byte above the ASCII
   range, in a format and inside `$'…'` alike.
+
+### ksh93's conversion prefix, and why it is not one axis
+
+The note above once read that ksh93's prefix is **free-order** — that it
+loops over flags, width and precision until it finds a verb, where the
+rest of the panel walks the four parts once. That is half right, and the
+half that is wrong is the half that would have to be implemented.
+
+What holds. A flag after the width is read and acted on, and a width after
+a length modifier likewise:
+
+    printf '[%5-d]' 42    ksh93 [42   ]   bash `-': invalid format character
+    printf '[%5 d]' 42    ksh93 [   42]   bash ` ': invalid format character
+    printf '[%5+d]' 42    ksh93 [  +42]   bash `+': invalid format character
+    printf '[%l5d]' 42    ksh93 [   42]   bash `5': invalid format character
+
+What does not. The second `.` is **not** a second precision that a
+free-order reader would fold into the first. It is ksh93's output *base*,
+which is a conversion feature of its own and not a question about order:
+
+    printf '[%..36d]'  1295   ksh93 [zz]     1295 is zz in base 36
+    printf '[%..2d]'   5      ksh93 [101]    and 101 in base 2
+    printf '[%.3.16d]' 255    ksh93 [0ff]    base 16, padded to a precision of 3
+    printf '[%.0.8d]'  64     ksh93 [100]    base 8
+    printf '[%5.2.3d]' 42     ksh93 [ 1120]  base 3, precision 2, width 5
+
+`[ 1120]` was what made the prefix look like it was being read twice. It
+is 42 written in base 3.
+
+And the order is not free even among the parts that are reordered: the
+same precision and the same flag give two different results depending on
+which side of each other they are written.
+
+    printf '[%-.3d]' 42   ksh93 [042]   the precision survives
+    printf '[%.3-d]' 42   ksh93 [42]    written after it, the minus loses it
+
+So "does this shell read the prefix in any order" is the wrong shape for
+the question, the way "does this shell add 128" was the wrong shape for
+the pipefail one. Implementing it needs ksh93's output base as a feature
+and a rule for what a flag does to a precision already read, neither of
+which is an axis over prefix order. It stays unmodeled, and now with the
+measurement that says why rather than a claim that was never checked.
+
+### A format that ends before its conversion character
+
+`printf 'a%'` has no conversion character to complain about, and the panel
+answers it four ways — none of which is the ordinary bad-conversion
+complaint with an empty name:
+
+    printf 'a%'    bash   a, and `%': missing format character     st=1
+                   zsh    a, and %: invalid directive              st=1
+                   dash   a, and missing format character          st=2
+                   ksh93  a%                                       st=0
+    printf 'a%5'   bash   `%5': missing format character
+                   zsh    %5: invalid directive
+                   dash   missing format character
+                   ksh93  a%
+    printf 'a%ll'  bash   `%ll': missing format character
+                   zsh    %ll: invalid directive
+                   dash   %l: invalid directive
+                   ksh93  a%
+
+Three things are in there, and each is modeled separately.
+
+- bash has a **second wording**, `missing format character`, and it names
+  the *whole directive* in it where its ordinary bad-conversion complaint
+  names the conversion character alone. That is `PrintfMissingVerb`, a
+  diagnostic beside `PrintfBadVerb` rather than the same one spelled with
+  an empty name. It takes one verb, the directive, because there is no
+  character in it to name.
+- dash names nothing at all for `%`, `%5` and `%.` — its wording simply
+  takes no verb — and reports 2 where the others report 1, which is
+  `PrintfMissingVerbStatus`. Its `%ll` line is not this case: dash has no
+  length modifiers, so nothing ran out there and the `l` is an ordinary
+  conversion it could not read.
+- ksh93 does not complain. It writes a bare `%` for the whole unfinished
+  conversion — `a%5` and `a%ll` are both `a%`, so the prefix it scanned is
+  dropped rather than written back — and reports success. That is
+  `PrintfUnfinishedConversionIsAPercent`, asked only where a format
+  actually ends inside a conversion.
+
+Only the *last* conversion can be the unfinished one, so a doubled percent
+earlier in the format is unrelated: `printf 'a%%b%'` writes `a%b` in all
+four before any of this applies.
+
+### The hexadecimal escape in a format
+
+`printf` reads `\xHH` in its *format*, and the panel splits four ways over
+how. Measured with `/bin/bash` 3.2.57, `/opt/homebrew/bin/bash` 5.3.15,
+`/bin/ksh` 93u+ 2012-08-01, `/opt/homebrew/bin/zsh` 5.9.2 and `/bin/dash`,
+reading the bytes with `od -An -tx1` rather than the display — which is
+the only way to ask this question at all. The two bash builds agree
+throughout, so they are one column here:
+
+    printf 'a\x41Z'    bash 61 41 5a   ksh93 61 41 5a   zsh 61 41 5a
+                       dash 61 5c 78 34 31 5a
+    printf 'a\x80Z'    bash 61 80 5a   ksh93 61 80 5a   zsh 61 80 5a
+                       dash 61 5c 78 38 30 5a
+    printf 'a\x1Z'     bash 61 01 5a   ksh93 61 01 5a   zsh 61 01 5a
+    printf '[\xff]'    bash 5b ff 5d   ksh93 5b ff 5d   zsh 5b ff 5d
+    printf '[\x0ff]'   bash 5b 0f 66 5d   zsh 5b 0f 66 5d
+                       ksh93 5b c3 bf 5d
+    printf '[\x0041]'  bash 5b 00 34 31 5d   zsh 5b 00 34 31 5d
+                       ksh93 5b 41 5d
+    printf 'a\xZ'      bash 61 5c 78 5a and `printf: missing hex digit for \x`
+                       ksh93 61 00 5a   zsh 61 00 5a
+                       dash 61 5c 78 5a
+
+Three separate details, and each splits the panel in a different place,
+which is why `PrintfHexEscape` is one enumeration rather than a bool:
+
+- **Whether the escape is there.** dash has no `\x`, so all six characters
+  of `a\x41Z` come out as written. It is the sole holdout, as it is on
+  most of this file.
+- **How wide the digit run is, and what the value means.** bash and zsh
+  stop at two digits and the value is a *byte*. ksh93 takes every digit
+  that follows, and once there are more than two of them the value is a
+  *code point* written in UTF-8 — which is why `\xff` is one byte there
+  and `\x0ff` is two. The switch is on the number of digits and not on the
+  value: `\x0041` is an `A` and `\x0080` is `c2 80`.
+- **What an empty digit run means.** bash leaves `\x` standing and writes
+  `printf: missing hex digit for \x` on standard error, with a status that
+  is still 0 — a warning rather than a failure. ksh93 and zsh read the
+  empty run as a zero and write a NUL.
+
+One thing measured here is **not** modeled. ksh93's code point may run
+past the last one there is, and it writes a nonstandard encoding for it:
+`printf '[\x123456789abc]'` is `5b fd 96 9e 89 aa bc 5d`, six bytes for a
+value forty times larger than U+10FFFF. This writes nothing for a run past
+the last code point, which is what ksh93 itself does once the value stops
+fitting at all — `printf '[\xffffffffffffffffffffff]'` is `5b 5d` there.
+Every value Unicode has agrees.
+
+The escape is a question about the **format**. `%b` expands the set `echo`
+expands, and the two tables are not the same one: ksh93 reads `\x41` in a
+format and leaves it as written in `printf '%b' 'a\x41Z'`, which is
+`61 5c 78 34 31 5a`. bash and zsh have it in both and dash in neither, so
+ksh93 alone shows that the site matters — and the axis is put to a format
+and never to a `%b` argument.
+
+### A format is a byte string, in every direction
+
+A shell word is a string of bytes and so is a `printf` format, and the
+byte a format decodes has to reach the output as that byte. Three routes
+into `printf` were spelling it as the text UTF-8 gives the *code point* of
+the same number instead, so `printf 'a\300Z'` wrote `61 c3 80 5a` where
+all five shells write `61 c0 5a`:
+
+    printf 'a<0xc0>Z'    a literal byte walked over by the format loop
+    printf 'a\300Z'      an octal escape
+    printf '%c' '<0xc0>' the first byte of a `%c` operand
+
+None of them is about how a word is *read*. The same byte written into a
+variable, or produced by `$'\xc0'`, or handed to `%s`, came through
+untouched in every dialect — `printf '%s' 'a<0xc0>Z'` was already
+`61 c0 5a` — and the octal case has no byte above ASCII in its source at
+all. The three sites are the format's own, and the cause in each is the
+same one: Go's `string(x)` on an integer is a *rune* conversion, so a byte
+of 0xc0 becomes the two bytes U+00C0 is spelled with. A one-byte slice is
+the conversion that means what a shell means.
 
 ## A capability the corpus cannot hand a case
 
@@ -5102,6 +5263,14 @@ before entering its option loop, or that is handed no options at all,
 still finds a number. Leaving it unset until the first call is invisible
 to any case whose loop runs, which is how it survived here until
 `getopts/a-function-with-its-own-optind` read it back afterwards.
+
+The startup value is *written* and not merely defaulted: an `OPTIND` in
+the environment is overwritten with 1 by all six
+(`getopts/optind-ignores-an-inherited-value`), so it cannot be supplied
+by falling back to the inherited value when nothing has set the variable.
+`OPTIND` is not exported, so the only way a script sees an inherited one
+is a caller that exported it on purpose — and the panel still refuses to
+start a scan in the middle.
 
 **`GetoptsAssignmentRestartsWord`** — bash yes · dash yes · ksh93 yes · zsh no
 

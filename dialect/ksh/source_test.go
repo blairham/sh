@@ -393,3 +393,37 @@ func TestABadBuiltinOption(t *testing.T) {
 		t.Errorf("said %q, want usage=true", out)
 	}
 }
+
+// A format that ends before its conversion character is not an error here:
+// the whole unfinished conversion becomes one literal percent and the
+// command succeeds.
+func TestPrintfUnfinishedConversionIsALiteralPercent(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf 'a%'`, "a%"},
+		{`printf 'a%5'`, "a%"},
+		{`printf 'a%ll'`, "a%"},
+		{`printf 'a%%b%'`, "a%b%"},
+	} {
+		out, st := runKsh(t, dir, tc.src+"\n")
+		if out != tc.want || st != 0 {
+			t.Errorf("%s: said %q status %d, want %q and 0", tc.src, out, st, tc.want)
+		}
+	}
+}
+
+// `\x` reads every digit that follows, and more than two of them make the
+// value a code point rather than a byte.
+func TestPrintfHexEscapeReadsACodePoint(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf 'a\x41Z'`, "aAZ"},
+		{`printf 'a\xffZ'`, "a\xffZ"},
+		{`printf '[\x0ff]'`, "[\u00ff]"},
+		{`printf 'a\xZ'`, "a\x00Z"},
+	} {
+		if out, _ := runKsh(t, dir, tc.src+"\n"); out != tc.want {
+			t.Errorf("%s: said % x, want % x", tc.src, out, tc.want)
+		}
+	}
+}

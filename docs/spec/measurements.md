@@ -2226,6 +2226,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cmd/compound-takes-redirection` | `[a,b,]` | `[a,b,]` | `[a,b,]` | `[a,b,]` | `[a,b,]` | `[a,b,]` |
 | `cmd/loop-takes-redirection` | `[1,2,]` | `[1,2,]` | `[1,2,]` | `[1,2,]` | `[1,2,]` | `[1,2,]` |
 | `cmd/loop-status-when-body-never-runs` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `core/a-while-loop-answers-with-its-body` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
+| `core/a-loop-answers-with-its-body-and-not-its-condition` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `core/an-until-loop-answers-with-its-body` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
+| `core/a-loop-that-never-ran-does-not-inherit` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `core/a-c-style-loop-answers-with-its-body` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
+| `core/the-status-a-loop-body-starts-from` | `it=1~it=0` | `it=1~it=0` | `it=1~it=0` | `it=1~it=0` | `it=1~it=0` | `it=1~it=0` |
+| `core/a-loop-condition-sees-the-status-before-it` | `end` | `end` | `end` | `end` | `end` | `end` |
+| `core/a-break-is-a-command-of-the-body` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `cmd/for-status-empty-list` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `cmd/case-fallthrough` | **2>** `<shell>: 1: Syntax error: "&" unexpected` *(status 2)* | `one~two` | `one~two` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in a) echo one;& b) echo two;; esac'` *(status 2)* | `one~two` | `one~two` |
 | `cmd/case-continue-matching` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `one~two` | `one~two` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in a) echo one;;& a) echo two;; esac'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `&' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `&'` *(status 1)* |
@@ -2432,6 +2440,38 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   while false; do :; done; echo "st=$?"
   ```
+- `core/a-while-loop-answers-with-its-body` — the other half of the zero-iterations rule, and the half a shell written only for that one loses: once the body has run, the loop's status is the body's last command. Unanimous, and POSIX says the same
+  ```sh
+  i=0; while [ $i -lt 1 ]; do i=1; false; done; echo "st=$?"
+  ```
+- `core/a-loop-answers-with-its-body-and-not-its-condition` — the row that tells the two readings apart, which the one above cannot: here the condition that ended the loop is *false* and the body's last command succeeded, so a shell reporting the condition would say 1 and every shell in the panel says 0. Both rows are needed — with `false` in the body the condition and the body agree, and the wrong answer looks right
+  ```sh
+  i=0; while [ $i -lt 1 ]; do i=1; true; done; echo "st=$?"
+  ```
+- `core/an-until-loop-answers-with-its-body` — the same rule for `until`, whose condition is inverted and whose status is not. Written out rather than assumed from the `while` row, because inverting the test is exactly where an implementation might invert the answer too
+  ```sh
+  i=0; until [ $i -ge 1 ]; do i=1; false; done; echo "st=$?"
+  ```
+- `core/a-loop-that-never-ran-does-not-inherit` — zero iterations is 0 rather than whatever the shell's status happened to be, which `cmd/loop-status-when-body-never-runs` cannot show because nothing preceded the loop there. It is the guard on the row above: a shell that stopped resetting the status would pass that one and fail this
+  ```sh
+  false; while false; do :; done; echo "st=$?"
+  ```
+- `core/a-c-style-loop-answers-with-its-body` — the same rule for the arithmetic header, in the four shells that have one. Written out rather than assumed from the list `for`, because it is a separate clause with a condition of its own and the condition is evaluated once more after the last iteration — the same shape that lost the answer in the conditional loops
+  ```sh
+  for ((i=0;i<1;i++)); do false; done; echo "st=$?"
+  ```
+- `core/the-status-a-loop-body-starts-from` — what `$?` is *inside* a loop before the body has set one, which is a different question from what the loop reports and is answered by the same line of an implementation. The first iteration sees the command before the loop and the second sees the first iteration's `echo`, so this prints 1 then 0 — a shell that zeroes the status on the way in prints 0 twice and still passes every row about what the loop reports
+  ```sh
+  false; for i in a b; do echo "it=$?"; done
+  ```
+- `core/a-loop-condition-sees-the-status-before-it` — the same question asked of the condition rather than the body, and it is the sharper one because the answer changes what runs: the condition tests the status of the command before the loop, so it is false and the body never runs. A shell that zeroes the status before the first test prints `ran` — a loop that runs where no shell in the panel runs one
+  ```sh
+  false; while [ $? -eq 0 ]; do echo ran; break; done; echo end
+  ```
+- `core/a-break-is-a-command-of-the-body` — a loop left by `break` is not an exception to the rule but an instance of it: `break` is the last command the body ran and it succeeded, so the answer is 0 even though the command before it failed. Unanimous
+  ```sh
+  i=0; while [ $i -lt 3 ]; do i=$((i+1)); false; break; done; echo "st=$?"
+  ```
 - `cmd/for-status-empty-list` — same rule for an empty for list
   ```sh
   for i in; do echo x; done; echo "st=$?"
@@ -2579,6 +2619,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | --- | --- | --- | --- | --- | --- | --- |
 | `getopts/loop-reads-each-option` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` |
 | `getopts/optind-starts-at-one` | `OPTIND=[1]` | `OPTIND=[1]` | `OPTIND=[1]` | `OPTIND=[1]` | `OPTIND=[1]` | `OPTIND=[1]` |
+| `getopts/optind-ignores-an-inherited-value` | `OPTIND=[1]` | `OPTIND=[1]` | `OPTIND=[1]` | `OPTIND=[1]` | `OPTIND=[1]` | `OPTIND=[1]` |
 | `getopts/a-function-with-its-own-optind` | `[a][b] rest=3~[b][a] rest=3~outer OPTIND=1` | `[a][b] rest=3~[b][a] rest=3~outer OPTIND=1` | `[a][b] rest=3~[b][a] rest=3~outer OPTIND=1` | `[a][b] rest=3~[b][a] rest=3~outer OPTIND=1` | `[a][b] rest=3~ rest=3~outer OPTIND=3` **2>** `<shell>: local: not found~<shell>: local: not found` | `[a][b] rest=3~[b][a] rest=3~outer OPTIND=1` |
 | `getopts/clustered-options` | `[a][b] ind=2` | `[a][b] ind=2` | `[a][b] ind=2` | `[a][b] ind=2` | `[a][b] ind=2` | `[a][b] ind=2` |
 | `getopts/argument-attached-or-apart` | `[b][val]~[b][val]` | `[b][val]~[b][val]` | `[b][val]~[b][val]` | `[b][val]~[b][val]` | `[b][val]~[b][val]` | `[b][val]~[b][val]` |
@@ -2594,6 +2635,10 @@ grades it and nothing drift-checks it either, for the same reason.
   set -- -a -b x; while getopts "ab:" o; do echo "[$o:${OPTARG-}]"; done; echo "ind=$OPTIND"
   ```
 - `getopts/optind-starts-at-one` — OPTIND is 1 before anything has called getopts, in all six — it is initialized when the shell starts rather than when the builtin first runs. A script that reads it to decide how many operands to `shift` past does so *after* the loop, but one that tests it before entering the loop, or that runs no options at all, reads whatever startup left. Found by the function case beside it, which is why a one-line case sits in front of a nine-line one
+  ```sh
+  echo "OPTIND=[$OPTIND]"
+  ```
+- `getopts/optind-ignores-an-inherited-value` — the startup value is written rather than merely defaulted: an OPTIND in the environment is overwritten with 1 by all six, so a shell that stops at `unset means 1` still answers 7 here and a script that inherited one from its caller would start its scan in the middle. It is the half of the startup value that reading the variable alone cannot see, since both a fresh shell and a leaking one print a number
   ```sh
   echo "OPTIND=[$OPTIND]"
   ```
@@ -2686,6 +2731,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `printf/a-length-modifier-c99-added` | `[st=2` **2>** `<shell>: 1: printf: %z: invalid directive` | `[FF][42][42][42]~st=0` | `[FF][42][42][42]~st=0` | `[FF][42][42][42]~st=0` | `[FF][42][42][42]~st=0` | `[st=1` **2>** `<shell>:printf:1: %z: invalid directive` |
 | `printf/a-length-modifier-is-read-and-thrown-away` | `[st=2` **2>** `<shell>: 1: printf: %h: invalid directive` | `[300][9223372036854775807]~st=0` | `[300][9223372036854775807]~st=0` | `[300][9223372036854775807]~st=0` | `[300][9223372036854775807]~st=0` | `[st=1` **2>** `<shell>:printf:1: %hh: invalid directive` |
 | `printf/a-run-of-length-modifiers` | `[st=2` **2>** `<shell>: 1: printf: %l: invalid directive` | `[42][42]~st=0` | `[42][42]~st=0` | `[42][42]~st=0` | `[42][42]~st=0` | `[st=1` **2>** `<shell>:printf:1: %ll: invalid directive` |
+| `printf/a-format-that-ends-at-the-percent` | `a st=2` **2>** `<shell>: 1: printf: missing format character` | `a st=1` **2>** `<shell>: line 1: printf: `%': missing format character` | `a st=1` **2>** `<shell>: line 1: printf: `%': missing format character` | `a st=1` **2>** `<shell>: line 0: printf: `%': missing format character` | `a% st=0` | `a st=1` **2>** `<shell>:printf:1: %: invalid directive` |
+| `printf/a-format-that-ends-after-a-width` | `a st=2` **2>** `<shell>: 1: printf: missing format character` | `a st=1` **2>** `<shell>: line 1: printf: `%5': missing format character` | `a st=1` **2>** `<shell>: line 1: printf: `%5': missing format character` | `a st=1` **2>** `<shell>: line 0: printf: `%5': missing format character` | `a% st=0` | `a st=1` **2>** `<shell>:printf:1: %5: invalid directive` |
+| `printf/a-format-that-ends-after-a-length-modifier` | `a st=2` **2>** `<shell>: 1: printf: %l: invalid directive` | `a st=1` **2>** `<shell>: line 1: printf: `%ll': missing format character` | `a st=1` **2>** `<shell>: line 1: printf: `%ll': missing format character` | `a st=1` **2>** `<shell>: line 0: printf: `%ll': missing format character` | `a% st=0` | `a st=1` **2>** `<shell>:printf:1: %ll: invalid directive` |
+| `printf/a-trailing-percent-after-a-doubled-one` | `a%b st=2` **2>** `<shell>: 1: printf: missing format character` | `a%b st=1` **2>** `<shell>: line 1: printf: `%': missing format character` | `a%b st=1` **2>** `<shell>: line 1: printf: `%': missing format character` | `a%b st=1` **2>** `<shell>: line 0: printf: `%': missing format character` | `a%b% st=0` | `a%b st=1` **2>** `<shell>:printf:1: %: invalid directive` |
+| `printf/a-flag-after-the-width` | `[ st=2` **2>** `<shell>: 1: printf: %5-: invalid directive` | `[ st=1` **2>** `<shell>: line 1: printf: `-': invalid format character` | `[ st=1` **2>** `<shell>: line 1: printf: `-': invalid format character` | `[ st=1` **2>** `<shell>: line 0: printf: `-': invalid format character` | `[42   ][   42] st=0` | `[ st=1` **2>** `<shell>:printf:1: %5-: invalid directive` |
+| `printf/a-second-dot-is-an-output-base` | `[ st=2` **2>** `<shell>: 1: printf: %..: invalid directive` | `[ st=1` **2>** `<shell>: line 1: printf: `.': invalid format character` | `[ st=1` **2>** `<shell>: line 1: printf: `.': invalid format character` | `[ st=1` **2>** `<shell>: line 0: printf: `.': invalid format character` | `[zz][101] st=0` | `[ st=1` **2>** `<shell>:printf:1: %..: invalid directive` |
+| `printf/an-output-base-beside-a-precision` | `[ st=2` **2>** `<shell>: 1: printf: %.3.: invalid directive` | `[ st=1` **2>** `<shell>: line 1: printf: `.': invalid format character` | `[ st=1` **2>** `<shell>: line 1: printf: `.': invalid format character` | `[ st=1` **2>** `<shell>: line 0: printf: `.': invalid format character` | `[0ff] st=0` | `[ st=1` **2>** `<shell>:printf:1: %.3.: invalid directive` |
+| `printf/a-flag-after-a-precision-drops-it` | `[ st=2` **2>** `<shell>: 1: printf: %.3-: invalid directive` | `[ st=1` **2>** `<shell>: line 1: printf: `-': invalid format character` | `[ st=1` **2>** `<shell>: line 1: printf: `-': invalid format character` | `[ st=1` **2>** `<shell>: line 0: printf: `-': invalid format character` | `[42][042] st=0` | `[ st=1` **2>** `<shell>:printf:1: %.3-: invalid directive` |
 | `printf/an-unknown-conversion-names-the-character` | `st=2` **2>** `<shell>: 1: printf: %v: invalid directive` | `st=1` **2>** `<shell>: line 1: printf: `v': invalid format character` | `st=1` **2>** `<shell>: line 1: printf: `v': invalid format character` | `st=1` **2>** `<shell>: line 0: printf: `v': invalid format character` | `st=1` **2>** `<shell>: printf: v: unknown format specifier` | `st=1` **2>** `<shell>:printf:1: %v: invalid directive` |
 | `printf/no-format-at-all` | `st=2` **2>** `<shell>: 1: printf: usage: printf format [arg ...]` | `st=2` **2>** `printf: usage: printf [-v var] format [arguments]` | `st=2` **2>** `printf: usage: printf [-v var] format [arguments]` | `st=2` **2>** `printf: usage: printf [-v var] format [arguments]` | `st=2` **2>** `Usage: printf [ options ] format [string ...]` | `st=1` **2>** `<shell>:printf:1: not enough arguments` |
 | `printf/a-date-conversion-and-the-shells-without-one` | `st=2` **2>** `<shell>: 1: printf: %(: invalid directive` | `%~st=0` | `%~st=0` | `st=1` **2>** `<shell>: line 0: printf: `(': invalid format character` | `%~st=1` **2>** `<shell>: printf: warning: invalid argument of type T` | `st=1` **2>** `<shell>:printf:1: %(: invalid directive` |
@@ -2698,6 +2751,15 @@ grades it and nothing drift-checks it either, for the same reason.
 | `printf/backslash-c-with-a-symbol-outside-the-letters` | ` a \ c ~ Z : a \ c ? Z ` | ` a \ c ~ Z : a \ c ? Z ` | ` a \ c ~ Z : a \ c ? Z ` | ` a \ c ~ Z : a \ c ? Z ` | ` a > Z : a 177 Z ` | ` a ` |
 | `printf/backslash-c-controls-a-decoded-escape` | ` a \ c \t Z ` | ` a \ c \t Z ` | ` a \ c \t Z ` | ` a \ c \t Z ` | ` a I Z ` | ` a ` |
 | `printf/backslash-c-at-the-end-of-a-format` | ` a \ c \ ` | ` a \ c \ ` | ` a \ c \ ` | ` a \ c \ ` | ` a @ ` | ` a ` |
+| `printf/hex-escape-in-a-format` | ` 61 5c 78 34 31 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 41 5a ` |
+| `printf/hex-escape-writes-one-raw-byte` | ` 61 5c 78 38 30 5a ` | ` 61 80 5a ` | ` 61 80 5a ` | ` 61 80 5a ` | ` 61 80 5a ` | ` 61 80 5a ` |
+| `printf/hex-escape-digit-run-diverges` | ` 5b 5c 78 30 66 66 5d ` | ` 5b 0f 66 5d ` | ` 5b 0f 66 5d ` | ` 5b 0f 66 5d ` | ` 5b c3 bf 5d ` | ` 5b 0f 66 5d ` |
+| `printf/hex-escape-four-digits-is-a-code-point` | ` 5b 5c 78 30 30 34 31 5d ` | ` 5b 00 34 31 5d ` | ` 5b 00 34 31 5d ` | ` 5b 00 34 31 5d ` | ` 5b 41 5d ` | ` 5b 00 34 31 5d ` |
+| `printf/hex-escape-with-no-digits` | ` 61 5c 78 5a ` | ` 61 5c 78 5a ` **2>** `<shell>: line 1: printf: missing hex digit for \x` | ` 61 5c 78 5a ` **2>** `<shell>: line 1: printf: missing hex digit for \x` | ` 61 5c 78 5a ` **2>** `<shell>: line 0: printf: missing hex digit for \x` | ` 61 00 5a ` | ` 61 00 5a ` |
+| `printf/hex-escape-is-not-a-b-escape` | ` 61 5c 78 34 31 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 5c 78 34 31 5a ` | ` 61 41 5a ` |
+| `printf/an-octal-escape-is-a-byte-and-not-a-code-point` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` |
+| `printf/a-quoted-escape-used-as-a-format` | ` 24 61 5c 78 63 30 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` |
+| `printf/a-c-conversion-writes-one-byte` | ` 24 ` | ` c0 ` | ` c0 ` | ` c0 ` | ` c0 ` | ` c0 ` |
 
 - `printf/assigns-with-v` — `printf -v name` puts the formatted text in a variable and prints nothing, which is how a script formats a value without a command substitution and a subshell. bash and zsh have it; dash and ksh93 reject it as an unknown option, and each words that differently
   ```sh
@@ -2759,6 +2821,38 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   printf "[%llld][%hld]\n" 42 42; echo "st=$?"
   ```
+- `printf/a-format-that-ends-at-the-percent` — four answers to a format that ran out before its conversion character, and not one of them is the ordinary bad-conversion complaint: bash has a second wording for it, zsh spells its usual one with the directive, dash names nothing and reports 2, and ksh93 writes a literal % and succeeds
+  ```sh
+  printf 'a%'; echo " st=$?"
+  ```
+- `printf/a-format-that-ends-after-a-width` — the same with a prefix to name, which is what shows bash and zsh naming the whole directive rather than a conversion character there is none of — and shows ksh93 dropping the prefix, since `a%5` is `a%` and not `a%5`
+  ```sh
+  printf 'a%5'; echo " st=$?"
+  ```
+- `printf/a-format-that-ends-after-a-length-modifier` — the modifier belongs to the directive, so the shells that name it say `%ll`. dash has no modifiers at all, so for it the format did not run out — the `l` is the conversion it could not read, and it says so instead
+  ```sh
+  printf 'a%ll'; echo " st=$?"
+  ```
+- `printf/a-trailing-percent-after-a-doubled-one` — a doubled percent earlier in the format is unrelated to one that ends it: everything before the last % is written by every shell, and only the trailing one is the unfinished conversion
+  ```sh
+  printf 'a%%b%'; echo " st=$?"
+  ```
+- `printf/a-flag-after-the-width` — ksh93 reads a flag after the width and acts on it — left-justified in five, then the space flag — where the rest of the panel wants flags first and reports the flag character as a conversion it could not read. No length modifier is in either directive, so this is about the shape of the prefix and nothing to do with the modifier set
+  ```sh
+  printf '[%5-d][%5 d]' 42 42; echo " st=$?"
+  ```
+- `printf/a-second-dot-is-an-output-base` — the field after a second dot is ksh93's output base and not a second precision: 1295 in base 36 is zz and 5 in base 2 is 101. The rest of the panel stops at the second dot and calls it a conversion it could not read
+  ```sh
+  printf '[%..36d][%..2d]' 1295 5; echo " st=$?"
+  ```
+- `printf/an-output-base-beside-a-precision` — both fields at once, which is how the base is told from a precision that happens to look like one: 255 in base 16 padded to three digits is 0ff, where a second precision could only have produced a decimal
+  ```sh
+  printf '[%.3.16d]' 255; echo " st=$?"
+  ```
+- `printf/a-flag-after-a-precision-drops-it` — the two spellings are not the same directive in ksh93 even though both hold a precision of 3 and a minus: written after the precision the minus loses it and 42 stays 42, written before it the precision survives and 42 is 042 — so the prefix is not simply read in any order
+  ```sh
+  printf '[%.3-d][%-.3d]' 42 42; echo " st=$?"
+  ```
 - `printf/an-unknown-conversion-names-the-character` — a conversion no shell in the panel has, with a tail after it, which is what separates naming the conversion character from naming what follows it: two shells say `v` and two say `%v`, and none of them names the `]`
   ```sh
   printf "%v]xY" 1; echo "st=$?"
@@ -2806,6 +2900,42 @@ grades it and nothing drift-checks it either, for the same reason.
 - `printf/backslash-c-at-the-end-of-a-format` — a backslash with nothing after it escapes the end of the format, so what \c controls is a NUL rather than the backslash itself — an @ and not a control-backslash for the shell that reads the escape
   ```sh
   printf 'a\c\' | od -An -c | tr -s " "
+  ```
+- `printf/hex-escape-in-a-format` — \xHH is an escape in a format for every shell in the panel but dash, which has none and writes the six characters as they stand
+  ```sh
+  printf 'a\x41Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/hex-escape-writes-one-raw-byte` — the escape produces a byte and not a character, so a value no encoding claims is one byte wide — read as hexadecimal because the display cannot tell 80 from the two bytes UTF-8 spells U+0080 with, and unanimous among the five that have the escape at all
+  ```sh
+  printf 'a\x80Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/hex-escape-digit-run-diverges` — how wide the digit run is: bash and zsh stop at two and the value is a byte, so this is 0x0f followed by an f, and ksh93 takes every digit and reads more than two of them as a code point, so the same text is U+00FF in UTF-8
+  ```sh
+  printf '[\x0ff]' | od -An -tx1 | tr -s " "
+  ```
+- `printf/hex-escape-four-digits-is-a-code-point` — the same split with a value that is ASCII, which shows the switch is on the number of digits rather than on the size of the value: two digits would be a NUL and a 4 and a 1, and every digit read as a code point is an A
+  ```sh
+  printf '[\x0041]' | od -An -tx1 | tr -s " "
+  ```
+- `printf/hex-escape-with-no-digits` — an empty digit run: bash leaves the escape standing and warns without failing, ksh93 and zsh read the run as a zero and write a NUL, and dash has no escape here to have an empty run
+  ```sh
+  printf 'a\xZ' | od -An -tx1 | tr -s " "
+  ```
+- `printf/hex-escape-is-not-a-b-escape` — the site matters and not only the shell: ksh93 reads \x41 in a format and leaves it as written in a %b argument, which expands the set echo expands. bash and zsh have it in both and dash in neither, so ksh93 alone separates the two tables
+  ```sh
+  printf '%b' 'a\x41Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/an-octal-escape-is-a-byte-and-not-a-code-point` — unanimous, and worth pinning as bytes: \300 is the single byte 0xc0 in all six, never the two bytes UTF-8 gives the code point of the same number
+  ```sh
+  printf 'a\300Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/a-quoted-escape-used-as-a-format` — the byte arrives already decoded and the format only has to carry it, which is a different route to the output from an escape the format decodes itself. dash has no quoted-escape form, so the dollar sign is part of the word there
+  ```sh
+  printf $'a\xc0Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/a-c-conversion-writes-one-byte` — %c takes the first byte of its operand rather than the first character, so a byte above the ASCII range is written alone and not as the pair an encoding would spell it with
+  ```sh
+  printf '%c' $'\xc0' | od -An -tx1 | tr -s " "
   ```
 
 ## kill
@@ -2891,6 +3021,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `trap/empty-handler-ignores` | `after` | `after` | `after` | `after` | `after` | `after` |
 | `trap/default-signal-terminates` | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
 | `trap/reset-restores-the-default` | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
+| `trap/a-pipeline-element-runs-the-pipe-handler-it-set-for-itself` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `~child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` |
+| `trap/an-elements-broken-pipe-is-not-the-outer-shells-to-handle` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `~child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` |
+| `trap/an-elements-pipe-handler-runs-inside-the-elements-redirections` | `e=[<shell>: 1: echo: echo: I/O error~child]` | `e=[<shell>: line 1: echo: write error: Broken pipe~child]` | `e=[sh: line 1: echo: write error: Broken pipe~child]` | `e=[<shell>: line 0: echo: write error: Broken pipe~~child]` | `e=[child]` | `e=[child~child~<shell>:echo:1: write error: broken pipe~<shell>:1: write error: broken pipe~child]` |
 | `signal-death/status-encodes-the-signal` | `st=141~after` | `st=141~after` | `st=141~after` | `st=141~after` | `st=269~after` | `st=141~after` |
 | `signal-death/the-shell-dies-by-the-signal-rather-than-exiting` | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* |
 | `signal-death/an-uncatchable-signal-ends-it-outright` | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* |
@@ -2993,6 +3126,18 @@ grades it and nothing drift-checks it either, for the same reason.
   trap - INT
   kill -INT $$
   echo after
+  ```
+- `trap/a-pipeline-element-runs-the-pipe-handler-it-set-for-itself` — a handler is not only the shell's to set: an element that traps PIPE for itself runs that handler when its own write meets the broken pipe, and every shell in the panel does it — `child` then `reached` on standard error, in that order, in dash, both bash builds, ksh93 and zsh. The trap has to be set *inside* the element, because a handled signal is back at its default across the boundary and only an ignore crosses intact, so this cannot be spelled from the outside. ksh93 prints `after` before either of them, which is why the two streams are recorded apart
+  ```sh
+  v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; { trap 'echo child >&2' PIPE; echo "$v" 2>/dev/null; echo reached >&2; } | true; echo after
+  ```
+- `trap/an-elements-broken-pipe-is-not-the-outer-shells-to-handle` — the same shape with a handler on both sides, which is the half that says where the signal went: the element's handler runs and the shell's never does, in all five, because the broken pipe was the element's and the process never had it. It is the case a naive fix breaks — recording the arrival where the shell can see it makes the shell run `outer` for a signal it was never sent
+  ```sh
+  v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; trap 'echo outer >&2' PIPE; { trap 'echo child >&2' PIPE; echo "$v" 2>/dev/null; echo reached >&2; } | true; echo after
+  ```
+- `trap/an-elements-pipe-handler-runs-inside-the-elements-redirections` — two facts one shape can hold, and both are about *when* the handler runs. The failed write is the element's last command, so there is no command after it to run a handler between — and every shell in the panel runs it anyway, which makes the end of the element's body a boundary of its own. And `child` lands in the file rather than on the shell's standard error, so it runs while the element's own redirection is still in force: the boundary is at the end of the element's *list*, inside the redirection, and not after the body has been taken down. The wording of the failed write lands in the file too, ahead of the handler, which is the ordering all five agree on — ksh93 has no wording, and zsh says its own twice and runs the handler three times
+  ```sh
+  v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; { trap 'echo child >&2' PIPE; echo "$v"; } 2>e | true; echo "e=[$(cat e)]"
   ```
 - `signal-death/status-encodes-the-signal` — a command killed by a signal has no exit status of its own, so the signal goes in the number: 128 + 13 in bash, dash and zsh, and 256 + 13 in ksh93. PIPE is the signal to ask with — it is one of only two the panel does not announce (INT is the other), so the case is about the number and not about three wordings, and unlike INT it does not end the script in ksh93
   ```sh

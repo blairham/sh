@@ -276,6 +276,10 @@ func Semantics() interp.Semantics {
 	s.PrintfEmptyIsNotANumber = interp.No
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfBackslashC = interp.PrintfBackslashCStops
+	s.PrintfUnfinishedConversionIsAPercent = interp.No
+	// The same two digits bash reads, and an empty digit run is a zero
+	// rather than an escape left standing: `printf 'a\xZ'` is a NUL here.
+	s.PrintfHexEscape = interp.PrintfHexEscapeByteOrNul
 	// One of `h`, `l` and `L`, which is C89's set: `%ld` is a decimal and
 	// `%lld`, `%zX` and `%jd` are invalid directives.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC89
@@ -687,6 +691,7 @@ func Diagnostics() interp.Diagnostics {
 		GetoptsMissingArgument: "argument expected after -%[1]s option",
 		CdCannotChange:         "%[2]s: %[1]s",
 		PrintfBadVerb:          "%[2]s: invalid directive",
+		PrintfMissingVerb:      "%[1]s: invalid directive",
 		UmaskBadMask:           "bad umask",
 		// The builtin's name comes from the location, as everywhere in zsh.
 		UnaliasNotFound:        "no such hash table element: %[2]s",

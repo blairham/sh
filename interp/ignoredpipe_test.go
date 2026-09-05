@@ -6,7 +6,9 @@ package interp_test
 import (
 	"bytes"
 	"context"
+	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -119,9 +121,9 @@ func TestOnlyTheDefaultActionEndsTheWriter(t *testing.T) {
 }
 
 // An element's own broken pipe is the element's, and it is never delivered to
-// the shell that started it. Nothing in the panel prints the outer handler
-// here — three print the inner one and one prints neither, and the outer one
-// would be a signal arriving at a process that never had it.
+// the shell that started it. The element's own handler runs — every shell in
+// the panel runs it — and the outer one would be a signal arriving at a
+// process that never had it, which no shell in the panel does.
 func TestABrokenPipeInsideAnElementIsNotTheOuterShellsToHandle(t *testing.T) {
 	const src = `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; ` +
 		`trap 'echo outer >&2' PIPE; ` +
@@ -130,10 +132,91 @@ func TestABrokenPipeInsideAnElementIsNotTheOuterShellsToHandle(t *testing.T) {
 	if strings.Contains(errOut, "outer") {
 		t.Errorf("stderr = %q, want the outer handler left alone", errOut)
 	}
-	for _, want := range []string{"reached", "after"} {
+	for _, want := range []string{"inner", "reached", "after"} {
 		if !strings.Contains(errOut, want) {
 			t.Errorf("stderr = %q, want it to carry %q", errOut, want)
 		}
+	}
+	if i, j := strings.Index(errOut, "inner"), strings.Index(errOut, "reached"); i > j {
+		t.Errorf("stderr = %q, want the element's handler to run before its next command", errOut)
+	}
+}
+
+// A handler an element sets for itself is the element's to run, and the shell
+// around it has no part in it either way — it may have no PIPE trap at all and
+// the element's still runs.
+func TestAnElementRunsThePipeHandlerItSetForItself(t *testing.T) {
+	const src = `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; ` +
+		`{ trap 'echo child >&2' PIPE; echo "$v"; echo reached >&2; } | true; echo after >&2`
+	errOut, _ := pipeRun(t, src)
+	for _, want := range []string{"child", "reached", "after"} {
+		if !strings.Contains(errOut, want) {
+			t.Errorf("stderr = %q, want it to carry %q", errOut, want)
+		}
+	}
+}
+
+// A handler runs between commands, and the element's last command has no
+// command after it — so the body ending is the last chance to run one.
+// Measured: `{ trap 'echo child >&2' PIPE; echo "$big"; } | true` prints child
+// in dash, bash 5.3, bash 3.2, ksh93 and zsh.
+func TestAnElementsPipeHandlerRunsWhenTheFailedWriteWasItsLastCommand(t *testing.T) {
+	const src = `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; ` +
+		`{ trap 'echo child >&2' PIPE; echo "$v"; } | true; echo after >&2`
+	errOut, _ := pipeRun(t, src)
+	if !strings.Contains(errOut, "child") {
+		t.Errorf("stderr = %q, want the handler to run as the element ends", errOut)
+	}
+}
+
+// And it runs while the element's redirections are still in force, which is
+// what says the last chance is at the end of the element's list rather than
+// after its body has been taken down. Measured with the element's standard
+// error sent to a file: dash, bash 5.3, ksh93 and zsh all put the handler's
+// output in the file and none of them lets it reach the shell's own stream.
+func TestAnElementsPipeHandlerRunsInsideItsOwnRedirections(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "elem.err")
+	src := `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; ` +
+		`{ trap 'echo child >&2' PIPE; echo "$v"; } 2>` + path + ` | true`
+	errOut, _ := pipeRun(t, src)
+	if strings.Contains(errOut, "child") {
+		t.Errorf("stderr = %q, want the handler's output caught by the element's redirection", errOut)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	if !strings.Contains(string(got), "child") {
+		t.Errorf("redirected file = %q, want it to carry the handler's output", got)
+	}
+}
+
+// The same last chance for a subshell written out, which is a different clone
+// site from a pipeline element and would otherwise drop the arrival with the
+// runner.
+func TestASubshellRunsThePipeHandlerItSetForItself(t *testing.T) {
+	const src = `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; ` +
+		`( trap 'echo child >&2' PIPE; echo "$v" ); echo after >&2`
+	errOut, _ := pipeRun(t, src)
+	for _, want := range []string{"child", "after"} {
+		if !strings.Contains(errOut, want) {
+			t.Errorf("stderr = %q, want it to carry %q", errOut, want)
+		}
+	}
+}
+
+// An ignore is not a handler on either side of the boundary: an element that
+// ignores PIPE for itself carries on and runs nothing.
+func TestAnElementThatIgnoresPipeForItselfRunsNoHandler(t *testing.T) {
+	const src = `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; ` +
+		`trap 'echo outer >&2' PIPE; ` +
+		`{ trap '' PIPE; echo "$v"; echo reached >&2; } | true; echo after >&2`
+	errOut, _ := pipeRun(t, src)
+	if strings.Contains(errOut, "outer") {
+		t.Errorf("stderr = %q, want no handler at all for an ignored signal", errOut)
+	}
+	if !strings.Contains(errOut, "reached") {
+		t.Errorf("stderr = %q, want the element to carry on past the failed write", errOut)
 	}
 }
 

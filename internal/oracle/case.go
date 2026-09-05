@@ -1099,6 +1099,11 @@ var Corpus = []Case{
 		Why:     "OPTIND is 1 before anything has called getopts, in all six — it is initialized when the shell starts rather than when the builtin first runs. A script that reads it to decide how many operands to `shift` past does so *after* the loop, but one that tests it before entering the loop, or that runs no options at all, reads whatever startup left. Found by the function case beside it, which is why a one-line case sits in front of a nine-line one",
 	},
 	{
+		ID: "getopts/optind-ignores-an-inherited-value", Category: "getopts", Env: []string{"OPTIND=7"},
+		Snippet: `echo "OPTIND=[$OPTIND]"`,
+		Why:     "the startup value is written rather than merely defaulted: an OPTIND in the environment is overwritten with 1 by all six, so a shell that stops at `unset means 1` still answers 7 here and a script that inherited one from its caller would start its scan in the middle. It is the half of the startup value that reading the variable alone cannot see, since both a fresh shell and a leaking one print a number",
+	},
+	{
 		ID: "getopts/a-function-with-its-own-optind", Category: "getopts",
 		Snippet: `f() { local OPTIND=1 o; while getopts ab o; do printf "[%s]" "$o"; done; echo " rest=$((OPTIND))"; }; f -a -b; f -b -a; echo "outer OPTIND=$OPTIND"`,
 		Why:     "the way a function is written so it can be called twice: a local OPTIND starts each scan at 1 and leaves the caller's alone. Five of the six do exactly that; ksh93 has no `local`, so its OPTIND is the one global and the second call finds the scan already finished — which is not a getopts difference but the `local` axis reaching a builtin's state, and the reason a portable function resets OPTIND by assigning to it rather than by declaring it",
@@ -1251,6 +1256,46 @@ var Corpus = []Case{
 		Why:     "the shells with the C99 set skip a run of the letters rather than a list of spellings, so nonsense like `lll` and `hl` is accepted; the shell with C89's set takes exactly one letter and refuses both",
 	},
 	{
+		ID: "printf/a-format-that-ends-at-the-percent", Category: "printf",
+		Snippet: `printf 'a%'; echo " st=$?"`,
+		Why:     "four answers to a format that ran out before its conversion character, and not one of them is the ordinary bad-conversion complaint: bash has a second wording for it, zsh spells its usual one with the directive, dash names nothing and reports 2, and ksh93 writes a literal % and succeeds",
+	},
+	{
+		ID: "printf/a-format-that-ends-after-a-width", Category: "printf",
+		Snippet: `printf 'a%5'; echo " st=$?"`,
+		Why:     "the same with a prefix to name, which is what shows bash and zsh naming the whole directive rather than a conversion character there is none of — and shows ksh93 dropping the prefix, since `a%5` is `a%` and not `a%5`",
+	},
+	{
+		ID: "printf/a-format-that-ends-after-a-length-modifier", Category: "printf",
+		Snippet: `printf 'a%ll'; echo " st=$?"`,
+		Why:     "the modifier belongs to the directive, so the shells that name it say `%ll`. dash has no modifiers at all, so for it the format did not run out — the `l` is the conversion it could not read, and it says so instead",
+	},
+	{
+		ID: "printf/a-trailing-percent-after-a-doubled-one", Category: "printf",
+		Snippet: `printf 'a%%b%'; echo " st=$?"`,
+		Why:     "a doubled percent earlier in the format is unrelated to one that ends it: everything before the last % is written by every shell, and only the trailing one is the unfinished conversion",
+	},
+	{
+		ID: "printf/a-flag-after-the-width", Category: "printf",
+		Snippet: `printf '[%5-d][%5 d]' 42 42; echo " st=$?"`,
+		Why:     "ksh93 reads a flag after the width and acts on it — left-justified in five, then the space flag — where the rest of the panel wants flags first and reports the flag character as a conversion it could not read. No length modifier is in either directive, so this is about the shape of the prefix and nothing to do with the modifier set",
+	},
+	{
+		ID: "printf/a-second-dot-is-an-output-base", Category: "printf",
+		Snippet: `printf '[%..36d][%..2d]' 1295 5; echo " st=$?"`,
+		Why:     "the field after a second dot is ksh93's output base and not a second precision: 1295 in base 36 is zz and 5 in base 2 is 101. The rest of the panel stops at the second dot and calls it a conversion it could not read",
+	},
+	{
+		ID: "printf/an-output-base-beside-a-precision", Category: "printf",
+		Snippet: `printf '[%.3.16d]' 255; echo " st=$?"`,
+		Why:     "both fields at once, which is how the base is told from a precision that happens to look like one: 255 in base 16 padded to three digits is 0ff, where a second precision could only have produced a decimal",
+	},
+	{
+		ID: "printf/a-flag-after-a-precision-drops-it", Category: "printf",
+		Snippet: `printf '[%.3-d][%-.3d]' 42 42; echo " st=$?"`,
+		Why:     "the two spellings are not the same directive in ksh93 even though both hold a precision of 3 and a minus: written after the precision the minus loses it and 42 stays 42, written before it the precision survives and 42 is 042 — so the prefix is not simply read in any order",
+	},
+	{
 		ID: "printf/an-unknown-conversion-names-the-character", Category: "printf",
 		Snippet: `printf "%v]xY" 1; echo "st=$?"`,
 		Why:     "a conversion no shell in the panel has, with a tail after it, which is what separates naming the conversion character from naming what follows it: two shells say `v` and two say `%v`, and none of them names the `]`",
@@ -1309,6 +1354,51 @@ var Corpus = []Case{
 		ID: "printf/backslash-c-at-the-end-of-a-format", Category: "printf",
 		Snippet: `printf 'a\c\' | od -An -c | tr -s " "`,
 		Why:     "a backslash with nothing after it escapes the end of the format, so what \\c controls is a NUL rather than the backslash itself — an @ and not a control-backslash for the shell that reads the escape",
+	},
+	{
+		ID: "printf/hex-escape-in-a-format", Category: "printf",
+		Snippet: `printf 'a\x41Z' | od -An -tx1 | tr -s " "`,
+		Why:     "\\xHH is an escape in a format for every shell in the panel but dash, which has none and writes the six characters as they stand",
+	},
+	{
+		ID: "printf/hex-escape-writes-one-raw-byte", Category: "printf",
+		Snippet: `printf 'a\x80Z' | od -An -tx1 | tr -s " "`,
+		Why:     "the escape produces a byte and not a character, so a value no encoding claims is one byte wide — read as hexadecimal because the display cannot tell 80 from the two bytes UTF-8 spells U+0080 with, and unanimous among the five that have the escape at all",
+	},
+	{
+		ID: "printf/hex-escape-digit-run-diverges", Category: "printf",
+		Snippet: `printf '[\x0ff]' | od -An -tx1 | tr -s " "`,
+		Why:     "how wide the digit run is: bash and zsh stop at two and the value is a byte, so this is 0x0f followed by an f, and ksh93 takes every digit and reads more than two of them as a code point, so the same text is U+00FF in UTF-8",
+	},
+	{
+		ID: "printf/hex-escape-four-digits-is-a-code-point", Category: "printf",
+		Snippet: `printf '[\x0041]' | od -An -tx1 | tr -s " "`,
+		Why:     "the same split with a value that is ASCII, which shows the switch is on the number of digits rather than on the size of the value: two digits would be a NUL and a 4 and a 1, and every digit read as a code point is an A",
+	},
+	{
+		ID: "printf/hex-escape-with-no-digits", Category: "printf",
+		Snippet: `printf 'a\xZ' | od -An -tx1 | tr -s " "`,
+		Why:     "an empty digit run: bash leaves the escape standing and warns without failing, ksh93 and zsh read the run as a zero and write a NUL, and dash has no escape here to have an empty run",
+	},
+	{
+		ID: "printf/hex-escape-is-not-a-b-escape", Category: "printf",
+		Snippet: `printf '%b' 'a\x41Z' | od -An -tx1 | tr -s " "`,
+		Why:     "the site matters and not only the shell: ksh93 reads \\x41 in a format and leaves it as written in a %b argument, which expands the set echo expands. bash and zsh have it in both and dash in neither, so ksh93 alone separates the two tables",
+	},
+	{
+		ID: "printf/an-octal-escape-is-a-byte-and-not-a-code-point", Category: "printf",
+		Snippet: `printf 'a\300Z' | od -An -tx1 | tr -s " "`,
+		Why:     "unanimous, and worth pinning as bytes: \\300 is the single byte 0xc0 in all six, never the two bytes UTF-8 gives the code point of the same number",
+	},
+	{
+		ID: "printf/a-quoted-escape-used-as-a-format", Category: "printf",
+		Snippet: `printf $'a\xc0Z' | od -An -tx1 | tr -s " "`,
+		Why:     "the byte arrives already decoded and the format only has to carry it, which is a different route to the output from an escape the format decodes itself. dash has no quoted-escape form, so the dollar sign is part of the word there",
+	},
+	{
+		ID: "printf/a-c-conversion-writes-one-byte", Category: "printf",
+		Snippet: `printf '%c' $'\xc0' | od -An -tx1 | tr -s " "`,
+		Why:     "%c takes the first byte of its operand rather than the first character, so a byte above the ASCII range is written alone and not as the pair an encoding would spell it with",
 	},
 
 	// --- kill: a builtin, because a shell has to know what it sent ---------
@@ -1423,6 +1513,25 @@ var Corpus = []Case{
 		Script:  true,
 		Snippet: "trap 'echo caught' INT\ntrap - INT\nkill -INT $$\necho after\n",
 		Why:     "`trap -` puts the default back rather than leaving an empty handler",
+	},
+	{
+		// The doubling loop of the pipeline cases, so the write cannot fit in
+		// the pipe and the reader has already gone. `2>/dev/null` on the
+		// failing write alone is what keeps this about the handler rather
+		// than about four different wordings for the write.
+		ID: "trap/a-pipeline-element-runs-the-pipe-handler-it-set-for-itself", Category: "traps and exit",
+		Snippet: `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; { trap 'echo child >&2' PIPE; echo "$v" 2>/dev/null; echo reached >&2; } | true; echo after`,
+		Why:     "a handler is not only the shell's to set: an element that traps PIPE for itself runs that handler when its own write meets the broken pipe, and every shell in the panel does it — `child` then `reached` on standard error, in that order, in dash, both bash builds, ksh93 and zsh. The trap has to be set *inside* the element, because a handled signal is back at its default across the boundary and only an ignore crosses intact, so this cannot be spelled from the outside. ksh93 prints `after` before either of them, which is why the two streams are recorded apart",
+	},
+	{
+		ID: "trap/an-elements-broken-pipe-is-not-the-outer-shells-to-handle", Category: "traps and exit",
+		Snippet: `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; trap 'echo outer >&2' PIPE; { trap 'echo child >&2' PIPE; echo "$v" 2>/dev/null; echo reached >&2; } | true; echo after`,
+		Why:     "the same shape with a handler on both sides, which is the half that says where the signal went: the element's handler runs and the shell's never does, in all five, because the broken pipe was the element's and the process never had it. It is the case a naive fix breaks — recording the arrival where the shell can see it makes the shell run `outer` for a signal it was never sent",
+	},
+	{
+		ID: "trap/an-elements-pipe-handler-runs-inside-the-elements-redirections", Category: "traps and exit",
+		Snippet: `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; { trap 'echo child >&2' PIPE; echo "$v"; } 2>e | true; echo "e=[$(cat e)]"`,
+		Why:     "two facts one shape can hold, and both are about *when* the handler runs. The failed write is the element's last command, so there is no command after it to run a handler between — and every shell in the panel runs it anyway, which makes the end of the element's body a boundary of its own. And `child` lands in the file rather than on the shell's standard error, so it runs while the element's own redirection is still in force: the boundary is at the end of the element's *list*, inside the redirection, and not after the body has been taken down. The wording of the failed write lands in the file too, ahead of the handler, which is the ordering all five agree on — ksh93 has no wording, and zsh says its own twice and runs the handler three times",
 	},
 	{
 		ID: "signal-death/status-encodes-the-signal", Category: "traps and exit",
@@ -3125,6 +3234,46 @@ echo "st=$?"`,
 		ID: "cmd/loop-status-when-body-never-runs", Category: "command language",
 		Snippet: `while false; do :; done; echo "st=$?"`,
 		Why:     "zero iterations exits 0; \"status of the last command\" is the obvious wrong answer when there was none",
+	},
+	{
+		ID: "core/a-while-loop-answers-with-its-body", Category: "command language",
+		Snippet: `i=0; while [ $i -lt 1 ]; do i=1; false; done; echo "st=$?"`,
+		Why:     "the other half of the zero-iterations rule, and the half a shell written only for that one loses: once the body has run, the loop's status is the body's last command. Unanimous, and POSIX says the same",
+	},
+	{
+		ID: "core/a-loop-answers-with-its-body-and-not-its-condition", Category: "command language",
+		Snippet: `i=0; while [ $i -lt 1 ]; do i=1; true; done; echo "st=$?"`,
+		Why:     "the row that tells the two readings apart, which the one above cannot: here the condition that ended the loop is *false* and the body's last command succeeded, so a shell reporting the condition would say 1 and every shell in the panel says 0. Both rows are needed — with `false` in the body the condition and the body agree, and the wrong answer looks right",
+	},
+	{
+		ID: "core/an-until-loop-answers-with-its-body", Category: "command language",
+		Snippet: `i=0; until [ $i -ge 1 ]; do i=1; false; done; echo "st=$?"`,
+		Why:     "the same rule for `until`, whose condition is inverted and whose status is not. Written out rather than assumed from the `while` row, because inverting the test is exactly where an implementation might invert the answer too",
+	},
+	{
+		ID: "core/a-loop-that-never-ran-does-not-inherit", Category: "command language",
+		Snippet: `false; while false; do :; done; echo "st=$?"`,
+		Why:     "zero iterations is 0 rather than whatever the shell's status happened to be, which `cmd/loop-status-when-body-never-runs` cannot show because nothing preceded the loop there. It is the guard on the row above: a shell that stopped resetting the status would pass that one and fail this",
+	},
+	{
+		ID: "core/a-c-style-loop-answers-with-its-body", Category: "command language",
+		Snippet: `for ((i=0;i<1;i++)); do false; done; echo "st=$?"`,
+		Why:     "the same rule for the arithmetic header, in the four shells that have one. Written out rather than assumed from the list `for`, because it is a separate clause with a condition of its own and the condition is evaluated once more after the last iteration — the same shape that lost the answer in the conditional loops",
+	},
+	{
+		ID: "core/the-status-a-loop-body-starts-from", Category: "command language",
+		Snippet: `false; for i in a b; do echo "it=$?"; done`,
+		Why:     "what `$?` is *inside* a loop before the body has set one, which is a different question from what the loop reports and is answered by the same line of an implementation. The first iteration sees the command before the loop and the second sees the first iteration's `echo`, so this prints 1 then 0 — a shell that zeroes the status on the way in prints 0 twice and still passes every row about what the loop reports",
+	},
+	{
+		ID: "core/a-loop-condition-sees-the-status-before-it", Category: "command language",
+		Snippet: `false; while [ $? -eq 0 ]; do echo ran; break; done; echo end`,
+		Why:     "the same question asked of the condition rather than the body, and it is the sharper one because the answer changes what runs: the condition tests the status of the command before the loop, so it is false and the body never runs. A shell that zeroes the status before the first test prints `ran` — a loop that runs where no shell in the panel runs one",
+	},
+	{
+		ID: "core/a-break-is-a-command-of-the-body", Category: "command language",
+		Snippet: `i=0; while [ $i -lt 3 ]; do i=$((i+1)); false; break; done; echo "st=$?"`,
+		Why:     "a loop left by `break` is not an exception to the rule but an instance of it: `break` is the last command the body ran and it succeeded, so the answer is 0 even though the command before it failed. Unanimous",
 	},
 	{
 		ID: "cmd/for-status-empty-list", Category: "command language",

@@ -7,10 +7,13 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,9 +55,11 @@ import (
 // method's extra arguments, on the terminal this shell is already attached to.
 // That is why it is offered only when this process has one — see terminalAuth.
 //
-// What is deliberately still not here is the surface a person answers a
-// permission request from: they are settled by -acp-allow rather than by
-// asking. docs/design/acp.md has it as the next step.
+// A person answers here, where a person actually is. A permission request the
+// agent makes is put to them at the terminal, and so is an elicitation — the
+// protocol's own way of asking a human for something that is not permission.
+// -acp-allow still answers everything without asking, and a run with no
+// terminal refuses everything, because nobody to ask is a denial.
 
 // connectACP drives an agent and returns the status to exit with.
 func connectACP(sh driver.Shell, allow bool, authMethod string, argv []string) int {
@@ -86,6 +91,13 @@ func connectACP(sh driver.Shell, allow bool, authMethod string, argv []string) i
 	// to standard error and answers a bare code on the wire.
 	go acp.Stderr(logs, os.Stderr, "agent: ")
 
+	// One reader for the whole session: the prompt loop and every question an
+	// agent asks a person take their lines from it, and never at the same
+	// time. Two scanners on one descriptor would each buffer whatever they
+	// read, so a line meant for one would sit unread inside the other.
+	in := bufio.NewScanner(os.Stdin)
+	tty := repl.IsTerminal(os.Stdin) && repl.IsTerminal(os.Stderr)
+
 	client := &acp.Client{
 		Info: acp.Implementation{Name: "sh", Title: "sh", Version: version},
 		// The point of the exercise: the agent's file access is ours to
@@ -103,8 +115,12 @@ func connectACP(sh driver.Shell, allow bool, authMethod string, argv []string) i
 		// named, so without one every record of what the agent was allowed
 		// would belong to no run.
 		Boundary: boundary.Boundary{Gate: sh.Gate, Events: sh.Events, Session: runID(sh)},
-		Answer:   fixedAnswer(allow),
 		Update:   renderUpdate,
+		// The person is at this end of the connection, and this is the one
+		// reader they answer on — the prompt loop's own, shared rather than
+		// duplicated. See answerer for why that is safe.
+		Answer: answerer(allow, tty, in),
+		Elicit: form(tty, in),
 		// Nil where this process has no terminal, which is also what withholds
 		// the capability: an agent is told we can run a terminal login only
 		// where we can.
@@ -113,7 +129,7 @@ func connectACP(sh driver.Shell, allow bool, authMethod string, argv []string) i
 	client.Connect(fromAgent, toAgent)
 	go func() { _ = client.Serve(ctx) }()
 
-	status := talk(ctx, client, authMethod)
+	status := talk(ctx, client, authMethod, in)
 	_ = toAgent.Close()
 	_ = agent.Wait()
 	return status
@@ -204,7 +220,7 @@ func loginCommand(ctx context.Context, argv, args []string, env map[string]strin
 
 // talk does the handshake, authenticates if asked to, and then relays prompts
 // until the input ends.
-func talk(ctx context.Context, client *acp.Client, authMethod string) int {
+func talk(ctx context.Context, client *acp.Client, authMethod string, in *bufio.Scanner) int {
 	info, err := client.Initialize(ctx)
 	if err != nil {
 		return fail1("initialize: %v", err)
@@ -242,7 +258,6 @@ func talk(ctx context.Context, client *acp.Client, authMethod string) int {
 		return fail1("session/new: %v", err)
 	}
 
-	in := bufio.NewScanner(os.Stdin)
 	for in.Scan() {
 		stop, err := client.Prompt(ctx, session, in.Text())
 		if err != nil {
@@ -319,4 +334,230 @@ func renderUpdate(n acp.SessionNotification) {
 	default:
 		fmt.Fprintf(os.Stderr, "sh: agent %s\n", u.SessionUpdate)
 	}
+}
+
+// answerer decides who settles the agent's permission requests.
+//
+// Three arrangements, in the order they are preferred, and the last is the one
+// that has to be the default: nobody to ask is a denial.
+//
+//  1. -acp-allow answers allow-once to everything without asking. The question
+//     and the answer still go to standard error, so a run made this way leaves
+//     the record a person would have been shown.
+//  2. A terminal: the person is asked, and their answer is one of the options
+//     the agent offered.
+//  3. Neither: reject-once to everything.
+//
+// The reader is the prompt loop's own scanner, shared rather than duplicated,
+// and that is safe by the shape of a turn rather than by luck: talk reads a
+// line, hands it to session/prompt, and blocks there until the turn ends. A
+// permission request only arrives *during* a turn, so the scanner is idle
+// exactly when a question needs it. Two readers on one descriptor would race
+// for bytes and lose lines to whichever won.
+//
+// It is a line read rather than repl's line editor, which is worth saying
+// because this shell has one. What repl exports is Shell.Run — a whole prompt
+// loop that owns the terminal, the history and the shell it drives — and there
+// is no single-line entry point to borrow. Taking the terminal into raw mode
+// for a one-word answer, in the middle of a turn whose output is still
+// arriving on the same screen, would be the worse answer rather than the
+// better one.
+func answerer(allow, tty bool, in *bufio.Scanner) func(context.Context, acp.RequestPermissionRequest) (acp.PermissionOutcome, error) {
+	if allow || !tty {
+		return fixedAnswer(allow)
+	}
+	return func(_ context.Context, req acp.RequestPermissionRequest) (acp.PermissionOutcome, error) {
+		fmt.Fprintf(os.Stderr, "\nsh: the agent asks to: %s\n", callName(req.ToolCall))
+		for _, o := range req.Options {
+			fmt.Fprintf(os.Stderr, "sh:   %s  %s\n", letter(o.Kind), o.Name)
+		}
+		fmt.Fprint(os.Stderr, "sh: your answer, or nothing to refuse: ")
+		if !in.Scan() {
+			// The input ended with the question outstanding, which is not an
+			// answer. Everything that is not an explicit allow is a denial.
+			fmt.Fprintln(os.Stderr, "\nsh: no answer — refused")
+			return refusal(), nil
+		}
+		id, ok := chosen(strings.TrimSpace(in.Text()), req.Options)
+		if !ok {
+			fmt.Fprintln(os.Stderr, "sh: not one of the options — refused")
+			return refusal(), nil
+		}
+		return acp.PermissionOutcome{Outcome: acp.OutcomeSelected, OptionID: id}, nil
+	}
+}
+
+// letter is what a person types for an option, derived from its *kind* rather
+// than from its id.
+//
+// The ids in a request are the agent's, not ours: this shell's own agent side
+// spells them allow-once and reject-always, and another agent may spell them
+// anything at all. The kind is the protocol's own vocabulary and is the same
+// four values for everyone, so keying on it is what makes one keystroke mean
+// the same thing whichever agent asked.
+func letter(kind string) string {
+	switch kind {
+	case acp.KindAllowOnce:
+		return "a"
+	case acp.KindAllowAlways:
+		return "A"
+	case acp.KindRejectOnce:
+		return "r"
+	case acp.KindRejectAlway:
+		return "R"
+	}
+	return "?"
+}
+
+// chosen turns what a person typed into one of the options that were offered.
+//
+// A letter, or the option id itself for anybody who prefers to type it. An
+// answer that matches neither is not an answer, and the caller refuses.
+//
+// Nothing is typed is checked first and once, rather than beside the letter
+// comparison where it would be dead — no kind maps to the empty string, so
+// only the *id* comparison can be reached by an empty answer. It can be: an
+// agent that offered an option with an empty id would have it chosen by
+// somebody who pressed return, which is the "an option id we never offered"
+// rule failing from the other end.
+func chosen(typed string, options []acp.PermissionOption) (string, bool) {
+	if typed == "" {
+		return "", false
+	}
+	for _, o := range options {
+		if typed == o.OptionID || typed == letter(o.Kind) {
+			return o.OptionID, true
+		}
+	}
+	return "", false
+}
+
+// refusal is what this client sends when nobody said yes.
+//
+// reject-once rather than reject-always: a refusal that was not chosen must not
+// be remembered as though it had been.
+func refusal() acp.PermissionOutcome {
+	return acp.PermissionOutcome{Outcome: acp.OutcomeSelected, OptionID: acp.OptionRejectOnce}
+}
+
+// form puts an elicitation to the person, one line per field.
+//
+// Nil where there is no terminal, and that nil is what withholds the
+// capability: an agent is told this client can collect a form only where it
+// can. The same rule the terminal login and the file methods are held to.
+func form(tty bool, in *bufio.Scanner) func(context.Context, acp.CreateElicitationRequest) (acp.CreateElicitationResponse, error) {
+	if !tty {
+		return nil
+	}
+	return func(_ context.Context, req acp.CreateElicitationRequest) (acp.CreateElicitationResponse, error) {
+		fmt.Fprintf(os.Stderr, "\nsh: the agent asks: %s\n", req.Message)
+		content := map[string]any{}
+		if req.RequestedSchema == nil {
+			return acp.CreateElicitationResponse{Action: acp.ElicitAccept}, nil
+		}
+		for name, p := range req.RequestedSchema.Properties {
+			value, ok := field(in, name, p)
+			if !ok {
+				// A field the person would not or could not fill in. Whether
+				// that ends the form depends on whether the agent said it had
+				// to be there.
+				if required(req.RequestedSchema, name) {
+					fmt.Fprintln(os.Stderr, "sh: declined")
+					return acp.CreateElicitationResponse{Action: acp.ElicitDecline}, nil
+				}
+				continue
+			}
+			content[name] = value
+		}
+		return acp.CreateElicitationResponse{Action: acp.ElicitAccept, Content: content}, nil
+	}
+}
+
+// required reports whether the agent said a field has to be there.
+func required(schema *acp.ElicitationSchema, name string) bool {
+	return slices.Contains(schema.Required, name)
+}
+
+// field asks for one value and reads it back as the type the schema declared.
+//
+// A value that will not read as its type is asked for again rather than
+// refused: a mistyped number is a slip and not a decision, and turning it into
+// a decline would answer the agent something the person did not mean. An empty
+// line, or the end of input, is the decision — and it is the only one that
+// leaves the field unset.
+func field(in *bufio.Scanner, name string, p acp.ElicitationProperty) (any, bool) {
+	label := name
+	if p.Title != "" {
+		label = p.Title
+	}
+	for {
+		fmt.Fprintf(os.Stderr, "sh:   %s%s: ", label, hint(p))
+		if !in.Scan() {
+			fmt.Fprintln(os.Stderr)
+			return nil, false
+		}
+		typed := strings.TrimSpace(in.Text())
+		if typed == "" {
+			return nil, false
+		}
+		value, err := coerce(typed, p)
+		if err == nil {
+			return value, true
+		}
+		fmt.Fprintf(os.Stderr, "sh:   %v\n", err)
+	}
+}
+
+// hint says what a field will take, where that is not obvious from its name.
+func hint(p acp.ElicitationProperty) string {
+	if len(p.Enum) > 0 {
+		return " (" + strings.Join(p.Enum, "/") + ")"
+	}
+	switch p.Type {
+	case acp.PropertyBoolean:
+		return " (yes/no)"
+	case acp.PropertyInteger, acp.PropertyNumber:
+		return " (a number)"
+	}
+	return ""
+}
+
+// coerce reads a typed line as the property's declared type.
+//
+// The multi-select case — an array property — is deliberately absent: a
+// terminal line is a poor multi-select, and this client does not claim to
+// serve one.
+func coerce(typed string, p acp.ElicitationProperty) (any, error) {
+	if len(p.Enum) > 0 {
+		if !slices.Contains(p.Enum, typed) {
+			return nil, fmt.Errorf("one of %s", strings.Join(p.Enum, ", "))
+		}
+		return typed, nil
+	}
+	switch p.Type {
+	case acp.PropertyBoolean:
+		switch strings.ToLower(typed) {
+		case "y", "yes", "true", "1":
+			return true, nil
+		case "n", "no", "false", "0":
+			return false, nil
+		}
+		return nil, errors.New("yes or no")
+	case acp.PropertyInteger:
+		n, err := strconv.Atoi(typed)
+		if err != nil {
+			return nil, errors.New("a whole number")
+		}
+		return n, nil
+	case acp.PropertyNumber:
+		f, err := strconv.ParseFloat(typed, 64)
+		if err != nil {
+			return nil, errors.New("a number")
+		}
+		return f, nil
+	}
+	// Anything else is taken as written, which is what a string is and what an
+	// unknown type is best treated as: a client that refused a type it had not
+	// seen would fail on a schema that grows.
+	return typed, nil
 }

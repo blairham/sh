@@ -79,6 +79,16 @@ type Client struct {
 	// an agent is offered a login this client cannot run.
 	Relaunch func(ctx context.Context, args []string, env map[string]string) error
 
+	// Elicit puts a question from the agent to a person, as a form the agent
+	// described. It is the protocol's own answer to "this needs a human", and
+	// the only one that is not about permission.
+	//
+	// Nil is a client that cannot reach a person, and it is nil-ness that
+	// decides what is advertised: the capability and the ability to honor it
+	// are one field, so an agent is never told to ask a question that would go
+	// nowhere.
+	Elicit func(ctx context.Context, req CreateElicitationRequest) (CreateElicitationResponse, error)
+
 	// Terminals says whether to advertise terminal/*, and it is the sharper
 	// half of Files. An agent that cannot ask us to run something runs it
 	// itself, and no gate anywhere sees the argv; off is for a caller that
@@ -125,6 +135,8 @@ func (c *Client) Handle(ctx context.Context, method string, params json.RawMessa
 		return c.readFile(ctx, params)
 	case MethodWriteTextFile:
 		return c.writeFile(ctx, params)
+	case MethodCreateElicitation:
+		return c.elicit(ctx, params)
 	case MethodCreateTerminal:
 		return c.createTerminal(ctx, params)
 	}
@@ -187,6 +199,13 @@ func (c *Client) Initialize(ctx context.Context) (InitializeResponse, error) {
 	// can ask us to run something runs it itself, and there is no argv for any
 	// gate to see.
 	req.Capabilities.Terminal = c.Terminals
+	// Read off the hook, for the same reason and by the same rule: a mode this
+	// client cannot serve is a mode it must not name. Only the form mode is
+	// named, because a browser and a completion notification are a different
+	// mechanism and not one a terminal answers.
+	if c.Elicit != nil {
+		req.Capabilities.Elicitation = &ElicitationCapabilities{Form: &ElicitationMode{}}
+	}
 	var resp InitializeResponse
 	if err := c.conn.Call(ctx, MethodInitialize, req, &resp); err != nil {
 		return resp, err

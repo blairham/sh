@@ -40,7 +40,24 @@ from POSIX, from vendor manuals, and from running real shell binaries as
 oracles; it is written down in `docs/spec/`; code is written from the
 spec. `CLEANROOM.md` is the binding rule set.
 
-## Using it
+## Installing
+
+    make install                           # /usr/local/libexec/sh — needs sudo to write
+    make install PREFIX="$HOME/.local"     # no sudo
+
+Five binaries: `sh`, and the dialect binaries `bash`, `zsh`, `ksh` and
+`dash`. They land in `libexec` and **not** in a `bin` directory, because
+they are named after the shells they model — a directory ahead of `/bin`
+on `PATH` would answer for every program on the machine that resolves a
+shell by name. `make install` refuses a `SHELLDIR` that is on `PATH`
+unless it is told to go ahead.
+
+`docs/install.md` has the whole of it, including what `/etc/shells` and
+`chsh` need to make one of them a login shell — and the warning to read
+first, which is that an interactive session does not read `~/.bashrc` or
+`~/.zshrc` yet.
+
+## Using it as a library
 
 The core is a library, and it does not know which shells exist: `syntax`
 and `interp` define the questions, and each shell answers them in its own
@@ -66,6 +83,7 @@ needs no Go at all.
 ## Layout
 
     CLEANROOM.md              the rules that keep this independent
+    docs/install.md           installing, and running it as a login shell
     docs/design.md            architecture
     docs/lessons-carried-forward.md
                               starting constraints, learned the hard way

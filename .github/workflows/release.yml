@@ -1,0 +1,75 @@
+name: Release
+
+# A `v*` tag is the whole trigger, which is this tree's release convention:
+# green CI on main → tag → this workflow → the tap is updated. `workflow_dispatch`
+# re-runs a tag that already exists, for the case where the release job itself
+# failed and nothing about the tree needs to change.
+on:
+  push:
+    tags:
+    - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.0.0). Must already exist."
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        # GoReleaser reads the tag history to build a changelog, so a shallow
+        # checkout gives it nothing to compare against.
+        fetch-depth: 0
+
+    - uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+        check-latest: true # setup-go's manifest lags fresh Go patch releases; resolve via go.dev
+        cache: false # replaced by the release-scoped cache below
+
+    # Release-scoped Go cache. setup-go's built-in cache is an exact match on
+    # go.sum and is saved by the CI test jobs, which build for the host platform
+    # only; this one falls back on a prefix and is saved after goreleaser has
+    # run, so it warms every cross-compiled GOOS/GOARCH pair.
+    - name: Restore release Go cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: go-release-${{ runner.os }}-${{ hashFiles('go.mod', 'go.sum') }}
+        restore-keys: |
+          go-release-${{ runner.os }}-
+
+    - name: Checkout tag (workflow_dispatch)
+      if: github.event_name == 'workflow_dispatch'
+      run: git checkout "refs/tags/${{ inputs.tag }}"
+
+    # The tests, and only the tests. `make check` would also run the oracle,
+    # which needs the shell panel this runner does not have and grades against
+    # a record made on another machine — see AGENTS.md for why that is
+    # report-only in CI. A release must not fail on it.
+    - name: Run tests
+      run: make test
+
+    - name: Run GoReleaser
+      uses: goreleaser/goreleaser-action@v7
+      with:
+        distribution: goreleaser
+        version: "~> v2"
+        args: release --clean
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        MACOS_SIGN_P12: ${{ secrets.MACOS_SIGN_P12 }}
+        MACOS_SIGN_PASSWORD: ${{ secrets.MACOS_SIGN_PASSWORD }}
+        MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+        MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY }}

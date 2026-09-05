@@ -721,6 +721,12 @@ func TestAJobControlSignalIsCoveredWhereTheRuntimeReportsIt(t *testing.T) {
 			t.Errorf("%s: a reported job-control disposition reached the shell: %q", sh.Name, got.Stdout)
 		}
 	}
+	// Asked of the runtime as well as of the panel, because three of the six
+	// shells do not report an inherited ignore through `trap` and a machine
+	// with only those would pass the loop above without measuring anything.
+	if signal.Ignored(syscall.SIGTSTP) {
+		t.Error("the scrub left SIGTSTP ignored, so a child would still inherit it")
+	}
 }
 
 // jobControlChildEnv marks the re-executed half of the test below.
@@ -730,51 +736,41 @@ func TestJobControlGapChild(t *testing.T) {
 	if os.Getenv(jobControlChildEnv) != "1" {
 		t.Skip("the child half of TestTheJobControlSignalsAreAKnownGapAndStillAre")
 	}
-	found, _ := Resolve(context.Background())
-	if len(found) == 0 {
-		t.Fatal("no reference shells on this machine")
+	// The launcher ignored these four before this binary started. Whether the
+	// runtime admits it is the whole question.
+	for _, sig := range []syscall.Signal{syscall.SIGTSTP, syscall.SIGTTIN, syscall.SIGTTOU} {
+		fmt.Printf("job-control gap: %v reported-as-ignored=%v\n", sig, signal.Ignored(sig))
 	}
-	leaked := 0
-	for _, sh := range found {
-		got := Exec(context.Background(), sh, Case{ID: "t", Snippet: `trap`})
-		if strings.Contains(got.Stdout, "TSTP") {
-			leaked++
-		}
-	}
-	// Not every shell reports an inherited ignore — dash, ksh93 and bash 3.2
-	// print nothing — so the claim is about at least one of them rather than
-	// all of them.
-	fmt.Printf("job-control gap: %d of %d shells still see it\n", leaked, len(found))
 }
 
 func TestTheJobControlSignalsAreAKnownGapAndStillAre(t *testing.T) {
-	// An inverted test: it pins a limit rather than a fix, so that the limit
-	// cannot quietly stop being true.
+	// An inverted test: it pins a limit rather than a fix, so the limit cannot
+	// quietly stop being true.
 	//
-	// SIGTSTP, SIGTTIN, SIGTTOU and SIGCONT are the four the Go runtime keeps
-	// an inherited SIG_IGN for without reporting it, so the scrub cannot see
-	// them. Taking them over blind is possible and irreversible — it would
-	// cost the harness its Ctrl-Z forever — and asking a shell is not
-	// portable, so they are left alone and written down instead.
+	// The Go runtime keeps an inherited SIG_IGN for SIGTSTP, SIGTTIN, SIGTTOU
+	// and SIGCONT — stopping a process that was started with stopping turned
+	// off would be wrong — and does not report that it has, so the scrub
+	// cannot detect the condition. They are listed with the rest anyway, so
+	// the day a Go release starts reporting them nothing more is needed. This
+	// fails on that day, which is the notice to delete it.
 	//
-	// This asserts the leak is still there. When a Go release starts
-	// reporting the four truthfully this fails, which is the notice to move
-	// them into ignorableSignals and delete it.
+	// It asks the runtime and not a shell. An earlier version measured the
+	// panel instead — does any shell still see the ignore — and was red on a
+	// macOS runner for a legitimate reason: bash 3.2, dash and ksh93 do not
+	// report an inherited ignore through `trap` at all, so the answer was
+	// about which shells happened to be installed rather than about Go. A
+	// check that is red for a legitimate reason is one people learn to
+	// ignore.
 	//
 	// The disposition has to come from a launcher: signal.Ignore records the
 	// runtime's own state and signal.Ignored answers truthfully about it
-	// afterwards, so the interesting case cannot be built in this process. A
-	// real shell is the launcher, which is the oracle method pointed at the
-	// harness rather than at the language.
-	if len(mustResolve(t)) == 0 {
-		t.Skip("no reference shells on this machine")
-	}
+	// afterwards, so the interesting case cannot be built in this process.
 	exe, err := os.Executable()
 	if err != nil {
 		t.Skip("cannot find this test binary to re-execute")
 	}
 	cmd := exec.Command("/bin/sh", "-c",
-		`trap '' TSTP; exec "$1" -test.run='^TestJobControlGapChild$' -test.v`, "sh", exe)
+		`trap '' TSTP TTIN TTOU; exec "$1" -test.run='^TestJobControlGapChild$' -test.v`, "sh", exe)
 	cmd.Env = append(os.Environ(), jobControlChildEnv+"=1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -783,17 +779,10 @@ func TestTheJobControlSignalsAreAKnownGapAndStillAre(t *testing.T) {
 	if !strings.Contains(string(out), "job-control gap:") {
 		t.Fatalf("the child skipped instead of measuring anything:\n%s", out)
 	}
-	if strings.Contains(string(out), "job-control gap: 0 of") {
-		t.Error("no shell sees an inherited SIGTSTP any more: the gap this works around is closed. " +
-			"Move the four job-control signals into ignorableSignals and delete this test")
+	if !strings.Contains(string(out), "reported-as-ignored=false") {
+		t.Errorf("the runtime now reports an inherited ignore for the job-control signals: "+
+			"the gap this works around is closed, so delete this test\n%s", out)
 	}
-}
-
-// mustResolve is Resolve with the context spelled out once.
-func mustResolve(t *testing.T) []Found {
-	t.Helper()
-	found, _ := Resolve(context.Background())
-	return found
 }
 
 func TestMarkdownEndsWithExactlyOneNewline(t *testing.T) {

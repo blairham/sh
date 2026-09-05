@@ -9,6 +9,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -113,6 +114,10 @@ func Exec(ctx context.Context, sh Found, c Case) Result {
 	ctx, cancel := context.WithTimeout(ctx, RunTimeout)
 	defer cancel()
 
+	// The other half of the scrub below: a shell inherits how it was launched
+	// through its signal dispositions as surely as through its environment.
+	scrubSignalDispositions()
+
 	dir, err := os.MkdirTemp("", "oracle-")
 	if err != nil {
 		return harnessError(err)
@@ -165,6 +170,109 @@ func Exec(ctx context.Context, sh Found, c Case) Result {
 		res = harnessError(err)
 	}
 	return res
+}
+
+// ignorableSignals are the signals a caller can leave ignored and the Go
+// runtime will report as ignored. Every one is a signal a shell reports
+// through `trap`, dies of, or declines to die of, so an inherited disposition
+// for any of them is a difference the record would attribute to the shell.
+//
+// SIGKILL and SIGSTOP are absent because they cannot be caught, so they cannot
+// be ignored either. SIGURG and SIGPROF are absent because the Go runtime owns
+// them — preemption and profiling — and taking them over would break the
+// harness to guard against a state the runtime does not permit anyway.
+//
+// The four job-control signals are here, and are also the one thing this
+// cannot reach today: the runtime will not report an *inherited* ignore for
+// them, so the condition is never detected. Listing them costs nothing —
+// nothing is taken over that is not reported — and it means the day the
+// runtime starts reporting them, they are already covered. See the comment on
+// scrubSignalDispositions.
+var ignorableSignals = []os.Signal{
+	syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGILL,
+	syscall.SIGTRAP, syscall.SIGABRT, syscall.SIGFPE, syscall.SIGBUS,
+	syscall.SIGSEGV, syscall.SIGSYS, syscall.SIGPIPE, syscall.SIGALRM,
+	syscall.SIGTERM, syscall.SIGCHLD, syscall.SIGXCPU, syscall.SIGXFSZ,
+	syscall.SIGVTALRM, syscall.SIGWINCH, syscall.SIGUSR1, syscall.SIGUSR2,
+	syscall.SIGTSTP, syscall.SIGTTIN, syscall.SIGTTOU, syscall.SIGCONT,
+}
+
+// ignoredSink receives the signals taken over because the caller had ignored
+// them, and nothing ever reads it. That is not an oversight and not a leak:
+// os/signal never blocks on delivery, so a full channel means the signal is
+// dropped — which is precisely what the caller asked for by ignoring it. A
+// goroutine draining this was written first and does nothing a mutation could
+// detect, which is how it came out again.
+var ignoredSink = make(chan os.Signal, 1)
+
+// scrubSignalDispositions makes a child start with default signal
+// dispositions whatever the harness was started with.
+//
+// This is the same argument as the environment scrub in Exec, arriving by a
+// route that is easier to miss. A disposition of *ignored* survives exec —
+// that is the whole of what `nohup` does — so a shell measured by a harness
+// launched under `nohup` starts with SIGHUP already ignored. It reports
+// `trap -- ” SIGHUP`, and `kill -HUP $$` leaves it alive to print what came
+// after. Over the whole panel that moved a conformance run from 1110/1116 to
+// 1101/1116 and made `oracle-check` drift, so the project's headline
+// instrument was a function of how the harness happened to be launched: a
+// terminal, a CI runner, a supervisor and a background shell can each hand it
+// a different answer. Two runs that disagreed would read as a flaky
+// implementation, which is the most expensive misreading available here.
+//
+// It cannot be done to the child, because a disposition belongs to the
+// process that forks and there is nothing to run between fork and exec. It is
+// done to the harness instead: signal.Notify replaces SIG_IGN with a handler,
+// and exec resets a *handled* signal to its default in the child. Draining
+// and discarding is what keeps the harness's own behavior the one its caller
+// asked for — `nohup` still means this process ignores hangups; it no longer
+// means the shells it measures do, because os/signal drops what it cannot
+// deliver rather than blocking.
+//
+// Nothing guards it against running per case, because it needs no guard: the
+// loop disarms itself, since a signal that has been taken over stops being
+// reported as ignored. Running it per case is what lets a disposition set
+// after the first measurement still be caught.
+//
+// # The four this cannot cover, and why it does not try
+//
+// SIGTSTP, SIGTTIN, SIGTTOU and SIGCONT leak, and the choice to let them is
+// deliberate. The Go runtime keeps an inherited SIG_IGN for those four —
+// stopping a process that was started with stopping turned off would be
+// wrong — and does not report that it has: signal.Ignored answers false for
+// all four while a child still sees `trap -- ” SIGTSTP`. Measured across
+// every signal a shell can have an opinion about, they are the only ones
+// where the report and the child disagree.
+//
+// Taking them over blind is possible and costs more than it buys, because it
+// cannot be undone. A Go program stops on a SIGTSTP raised at itself; the
+// same program after one signal.Notify does not, and neither signal.Stop nor
+// signal.Reset gives the stop back. So a blind takeover would permanently
+// cost the harness its Ctrl-Z, and a forwarder that restores the disposition
+// and re-raises cannot put it back either — measured, not assumed.
+//
+// Asking a shell instead does not work portably. POSIX says a signal ignored
+// on entry cannot be trapped, so `trap : TSTP; trap` would say which it was —
+// but only bash honors it. dash and zsh install the trap regardless, so a
+// probe would be right only when bash happened to be the shell probing.
+//
+// What is left is a hole no launcher opens. `nohup`, a CI runner, a
+// supervisor and a non-interactive shell's background job ignore SIGHUP,
+// SIGINT or SIGQUIT, and all three are covered. If a Go release starts
+// reporting the four truthfully, move them into ignorableSignals; the test
+// named for this gap fails when that day comes.
+func scrubSignalDispositions() []os.Signal {
+	var taken []os.Signal
+	for _, sig := range ignorableSignals {
+		if signal.Ignored(sig) {
+			taken = append(taken, sig)
+		}
+	}
+	if len(taken) == 0 {
+		return nil
+	}
+	signal.Notify(ignoredSink, taken...)
+	return taken
 }
 
 // signalOf is the signal a process died of, or 0.

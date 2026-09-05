@@ -4047,6 +4047,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/a-failed-redirection-on-a-colon` | **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` *(status 2)* | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | `after` **2>** `<shell>: /nope/x: No such file or directory` | **2>** `<shell>: /nope/x: cannot create [No such file or directory]` *(status 1)* | `after` **2>** `<shell>:1: no such file or directory: /nope/x` |
 | `redir/a-failed-redirection-on-an-ordinary-command` | `after` **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: cannot create [No such file or directory]` | `after` **2>** `<shell>:1: no such file or directory: /nope/x` |
 | `redir/a-failed-redirection-on-a-compound-command` | `after` **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: cannot create [No such file or directory]` | `after` **2>** `<shell>:1: no such file or directory: /nope/x` |
+| `redir/a-duplication-target-of-more-than-one-digit` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=1` **2>** `<shell>: line 1: 10: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: 10: Bad file descriptor` | `hi~st=0` | `st=1` **2>** `<shell>: 10: cannot open [Bad file descriptor]` | `st=1` **2>** `<shell>:1: 10: bad file descriptor` |
+| `redir/reading-through-a-wide-duplication-target` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=1` **2>** `<shell>: line 1: 10: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: 10: Bad file descriptor` | `st=1` **2>** `<shell>: 10: Bad file descriptor` | `st=1` **2>** `<shell>: 10: cannot open [Bad file descriptor]` | `st=1` **2>** `<shell>:1: 10: bad file descriptor` |
+| `redir/a-wide-duplication-target-with-a-leading-zero` | **2>** `<shell>: 1: Syntax error: Bad fd number` *(status 2)* | `st=1` **2>** `<shell>: line 1: 8: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: 8: Bad file descriptor` | `st=1` **2>** `<shell>: 8: Bad file descriptor` | `st=1` **2>** `<shell>: 08: cannot open [Bad file descriptor]` | `st=1` **2>** `<shell>:1: 8: bad file descriptor` |
+| `redir/a-duplication-target-that-expands-to-two-digits` | *(no output, status 2)* | `st=1` | `st=1` | `hi~st=0` | `st=1` | `st=1` |
 | `redir/a-failed-redirection-inside-a-subshell` | `after` **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` | `inner~after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `inner~after` **2>** `<shell>: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: cannot create [No such file or directory]` | `inner~after` **2>** `<shell>:1: no such file or directory: /nope/x` |
 
 - `procsub/reads-a-command-as-a-file` — `<(cmd)` runs cmd and expands to a path its output can be read from — the last of the core language, and the clearest case of a dialect being a runtime switch: bash 3.2 has it as `bash` and loses it as `sh`. dash has it in neither guise and reports the `(` as unexpected
@@ -4355,6 +4359,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `redir/a-failed-redirection-on-a-compound-command` — the other half of the boundary: a redirection written on a group belongs to the group and not to any builtin, so every column complains and carries on — including the three that stop for the identical redirection on `exec`
   ```sh
   { echo x; } 3>/nope/x; echo after
+  ```
+- `redir/a-duplication-target-of-more-than-one-digit` — dash alone will not take a duplication target wider than one digit and refuses before it looks at what is open — `Syntax error: Bad fd number`, status 2, and nothing after it runs. The other four read the number and report `Bad file descriptor` at 1. bash 3.2's `hi` is not a fifth answer: that build parks its own saved streams at descriptor 10, so the write really does land somewhere, without crossing any boundary — the next case is the tell
+  ```sh
+  echo hi >&10; echo "st=$?"
+  ```
+- `redir/reading-through-a-wide-duplication-target` — the same target read from instead of written to, and the row that settles bash 3.2: it complains here where it printed `hi` for `>&10`, which is what a saved stream open for writing looks like from both sides. dash refuses this one identically, so its rule is about the width of the word and not about the direction
+  ```sh
+  cat <&10; echo "st=$?"
+  ```
+- `redir/a-wide-duplication-target-with-a-leading-zero` — the refusal is about the width and not the value: `08` names descriptor 8, which is a number every shell would otherwise accept, and dash refuses it exactly as it refuses `10`. That is what keeps this a question of its own rather than a second reading of the one about numbers the open-file limit will not give out
+  ```sh
+  echo hi >&08; echo "st=$?"
+  ```
+- `redir/a-duplication-target-that-expands-to-two-digits` — the check is on the *expanded* word rather than on what was typed, which is what says it cannot be the lexer's: dash refuses `>&$n` once `n` holds two digits and takes it when `n` holds one. Standard error is put aside first because the shells name the target differently here — as written or as expanded — and the question is which of them stops
+  ```sh
+  exec 2>/dev/null; n=10; echo hi >&$n; echo "st=$?"
   ```
 - `redir/a-failed-redirection-inside-a-subshell` — what `ends the shell` means where there is a process boundary: the three that stop lose `inner` and still print `after` at status 0, so the subshell ends and the parent does not — which our cloned-runner subshells have to reconstruct by hand
   ```sh

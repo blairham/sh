@@ -6,6 +6,7 @@ package blocks
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -388,4 +389,20 @@ func TestARefusedIndexIsAskedAboutOnce(t *testing.T) {
 	if n != 1 {
 		t.Errorf("the gate was asked %d times about the index, want 1", n)
 	}
+}
+
+// readAll lists everything under a directory, so a test can say "the store
+// holds nothing" rather than "the index holds nothing".
+func readAll(dir string) ([]string, error) {
+	var found []string
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			found = append(found, p)
+		}
+		return nil
+	})
+	return found, err
 }

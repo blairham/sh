@@ -310,6 +310,9 @@ func Semantics() interp.Semantics {
 	// A redirection that cannot be made is a special builtin's failure too,
 	// and this shell keeps the POSIX rule without needing a mode to be in:
 	// `exec 3>/nope/x` stops the script at 1.
+	// The number is read and the failure is the descriptor's, not the
+	// word's — this shell has no width rule of its own here.
+	s.MultiDigitDuplicationTargetIsAnError = interp.No
 	s.RedirectErrorOnSpecialBuiltinFatal = interp.Yes
 	// Fatal to `export` and `readonly` and not to `unset`, which prints the
 	// same kind of complaint, returns 1 and carries on. Not `unset` being

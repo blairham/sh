@@ -83,7 +83,17 @@ func (s *traceSink) Emit(_ context.Context, e interp.Event) {
 // something failed, and a file only when the line came from one.
 func formatEvent(e interp.Event) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "trace: %s %s %s", e.Kind, e.Action.Kind, e.Action.Path)
+	fmt.Fprintf(&b, "trace: %s %s", e.Kind, e.Action.Kind)
+	if e.Action.Path != "" {
+		fmt.Fprintf(&b, " %s", e.Action.Path)
+	}
+	if e.Action.Kind == interp.ActionSignal {
+		// A signal names a process rather than a path, so it is the one kind
+		// with nothing to print above. The number rather than a name: which
+		// numbers exist is not the same on two operating systems, and the
+		// table that answers that is the interpreter's.
+		fmt.Fprintf(&b, " pid=%d signal=%d", e.Action.PID, int(e.Action.Signal))
+	}
 	if e.Action.Args != nil {
 		fmt.Fprintf(&b, " args=%q", e.Action.Args)
 	}
@@ -110,10 +120,14 @@ func formatEvent(e interp.Event) string {
 // neighboring directory because its name starts the same way, which is not
 // what anyone typing a directory means.
 //
-// Every kind of action, deliberately. What a refusal then *looks like* is the
-// interpreter's and differs by kind — a denied exec says so and fails, a
-// denied stat answers as a missing path does and says nothing — and that
-// difference is the point of pointing this at a real script.
+// Every kind of action that has a path, deliberately. What a refusal then
+// *looks like* is the interpreter's and differs by kind — a denied exec says
+// so and fails, a denied stat answers as a missing path does and says
+// nothing — and that difference is the point of pointing this at a real
+// script. A signal names a process instead, so nothing a path list holds can
+// match one: `-trace-events` watches signals and `-deny` cannot refuse them,
+// which is a limit of this debug surface rather than of the gate. Refusing by
+// something other than a path is what a real policy is for.
 //
 // It keeps no state, so it needs no lock despite being called from several
 // goroutines at once.

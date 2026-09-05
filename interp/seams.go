@@ -15,7 +15,10 @@
 // primitives rather than three subsystems.
 package interp
 
-import "context"
+import (
+	"context"
+	"syscall"
+)
 
 // ActionKind is what an action does. These are the points where control
 // leaves the interpreter's own memory, which is the complete boundary worth
@@ -53,6 +56,29 @@ const (
 	// A denied read yields no entries, quietly — the directory reads as
 	// empty, exactly as it does when the process may not list it.
 	ActionReadDir
+	// ActionSignal sends a signal to a process: `kill -9 1234`, `kill %1`
+	// reaching a job's process group, `kill -0` asking whether a process is
+	// there at all.
+	//
+	// The boundary is the system call rather than the builtin, which is what
+	// makes the exemption exact. A signal a script aims at *this* shell and
+	// this shell alone never reaches the kernel — a trap for it runs the
+	// shell's own handler and an untrapped fatal one stops the script and
+	// leaves the dying to the driver — so nothing leaves the process and
+	// there is nothing to gate. Everything else asks the kernel: another
+	// process, a process group, an existence probe, and a stopping signal
+	// aimed here, because that one really does need the kernel.
+	//
+	// PID is the target as kill(2) takes it, so a negative value names a
+	// process group. Signal is what is being sent, and 0 is the probe that
+	// delivers nothing.
+	//
+	// A denied signal answers EPERM, which is the errno for a process this
+	// one may not signal — not an error of the gate's own, for the reason a
+	// denied stat is ENOENT-shaped: `kill` reports it with the wording it
+	// already has, so a policy hiding a process and a kernel refusing one
+	// are indistinguishable to the script.
+	ActionSignal
 )
 
 func (k ActionKind) String() string {
@@ -63,6 +89,8 @@ func (k ActionKind) String() string {
 		return "stat"
 	case ActionReadDir:
 		return "read-dir"
+	case ActionSignal:
+		return "signal"
 	}
 	return "exec"
 }
@@ -76,6 +104,12 @@ type Action struct {
 	Args []string
 	// Write is set when an open is for writing.
 	Write bool
+	// PID is the process a signal is aimed at, as kill(2) takes it: a
+	// negative value names a process group. Meaningful for ActionSignal.
+	PID int
+	// Signal is the signal being sent, for ActionSignal. Zero there is the
+	// existence probe rather than a signal, which is `kill -0`.
+	Signal syscall.Signal
 }
 
 // Decision is a gate's answer.
@@ -123,15 +157,17 @@ const (
 	// EventError carries a failure that was not an exit status — a program
 	// that could not be found, a file that could not be opened.
 	EventError
-	// EventAccess records a file action that went ahead: an open, a stat, a
-	// directory read — Action.Kind says which. Without it a Sink held every
-	// file the shell failed to open and none it opened, which is backwards
-	// for an audit trail.
+	// EventAccess records an action that went ahead: an open, a stat, a
+	// directory read, a signal — Action.Kind says which. Without it a Sink
+	// held every file the shell failed to open and none it opened, which is
+	// backwards for an audit trail.
 	//
 	// For an open it follows the successful open. For a stat or a directory
 	// read it records the probe itself, whichever answer came back: an
 	// existence probe is the auditable act whether or not the file exists,
-	// and "not there" is an answer rather than a failure.
+	// and "not there" is an answer rather than a failure. A signal is
+	// recorded the same way and for the same reason — the auditable act is
+	// aiming one, and a target that has already exited is an answer.
 	EventAccess
 )
 

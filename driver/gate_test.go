@@ -6,10 +6,14 @@ package driver_test
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/interp"
@@ -212,6 +216,56 @@ func TestADeniedProbeLooksLikeAPathThatIsNotThere(t *testing.T) {
 		return e.Kind == interp.EventDenied && e.Action.Kind == interp.ActionStat
 	}) {
 		t.Error("the refusal was quiet to the script but must still reach the observer")
+	}
+}
+
+// TestASignalARealShellSendsIsGatedHereToo is the boundary a shell binary
+// crosses that a library cannot.
+//
+// `kill` is a builtin, so making it one moved `kill -9 1234` out of the
+// boundary that an external kill's exec had put it in: the process really ends
+// and nothing above the interpreter could refuse it. This is that path through
+// a shell built here, with a real process on the other end — the only witness
+// that can tell a refusal from a diagnostic printed after the fact.
+func TestASignalARealShellSendsIsGatedHereToo(t *testing.T) {
+	victim := exec.Command("/bin/sleep", "30")
+	if err := victim.Start(); err != nil {
+		t.Skipf("no process to signal: %v", err)
+	}
+	ended := make(chan struct{})
+	go func() {
+		_ = victim.Wait()
+		close(ended)
+	}()
+	t.Cleanup(func() {
+		_ = victim.Process.Kill()
+		<-ended
+	})
+	src := "kill -TERM " + strconv.Itoa(victim.Process.Pid) + "\necho status=$?\n"
+
+	rec := &recorder{deny: denyKind(interp.ActionSignal)}
+	sh := shell()
+	sh.Gate, sh.Events = rec, rec
+	out, errs, _ := runArgs(t, sh, "testsh", "-c", src)
+
+	select {
+	case <-ended:
+		t.Fatal("the process the gate refused to signal died anyway")
+	case <-time.After(200 * time.Millisecond):
+	}
+	// EPERM-shaped, so the shell prints what it prints for a process that is
+	// not ours and the script cannot tell which refused it.
+	if !strings.Contains(errs, "Operation not permitted") {
+		t.Errorf("err = %q, want the wording for a process that may not be signaled", errs)
+	}
+	if !strings.Contains(out, "status=1") {
+		t.Errorf("out = %q, want the status a kill that was not permitted carries", out)
+	}
+	if !rec.seen(func(e interp.Event) bool {
+		return e.Kind == interp.EventDenied && e.Action.Kind == interp.ActionSignal &&
+			e.Action.PID == victim.Process.Pid && e.Action.Signal == syscall.SIGTERM
+	}) {
+		t.Error("no signal denial reached the event stream")
 	}
 }
 

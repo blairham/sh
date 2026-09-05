@@ -356,6 +356,14 @@ func (r *Runner) findJob(spec, name string) (*Job, int) {
 // The group is the point: a job is a pipeline as often as a command, and
 // signaling only the first of three would resume one and leave the rest
 // stopped. The negative pid is how the kernel is told to mean the group.
+//
+// Not gated, unlike the signal `kill` sends, and the difference is what the
+// script chose rather than what reaches the kernel. This is job control: a
+// fixed SIGCONT, to a job this shell started and therefore already passed the
+// exec gate on its way to existing, named by a `%` spec that can name nothing
+// else. A policy that does not want that process resumed did not want it
+// started, and refusing it here would leave a stopped job with nothing able
+// to reach it. `kill -CONT %1` is the script choosing, and that one is gated.
 func (r *Runner) signalJob(j *Job, sig syscall.Signal) error {
 	if j.PID == 0 {
 		// A job with no process of its own — a builtin or a compound command

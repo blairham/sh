@@ -252,7 +252,7 @@ func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) 
 			// that could drift.
 			if err := r.signalGroupPid(pid, sig); err != nil {
 				failed++
-				r.killReport(killNoSuchProcess, t)
+				r.killReport(killFailureKind(err), t)
 				continue
 			}
 			sent++
@@ -268,11 +268,7 @@ func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) 
 		}
 		if err := r.sendSignal(pid, name, sig); err != nil {
 			failed++
-			kind := killNoSuchProcess
-			if errors.Is(err, syscall.EPERM) {
-				kind = killNotPermitted
-			}
-			r.killReport(kind, t)
+			r.killReport(killFailureKind(err), t)
 			continue
 		}
 		sent++
@@ -281,6 +277,20 @@ func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) 
 		return r.status
 	}
 	return r.killStatus(sent, failed)
+}
+
+// killFailureKind is what a send that failed is reported as: a target that is
+// not there, or one that is there and is not ours.
+//
+// One function for both routes because a group and a process fail the same
+// way, and because a gate's refusal arrives here as EPERM and has to land in
+// the second — a refused target reads exactly as a target the kernel would
+// not let us have. See signalgate.go for why that is the bargain.
+func killFailureKind(err error) killErrorKind {
+	if errors.Is(err, syscall.EPERM) {
+		return killNotPermitted
+	}
+	return killNoSuchProcess
 }
 
 // killTargetNotAPid is killTarget's own failure code, past the job lookup's:
@@ -316,10 +326,22 @@ func (r *Runner) killTarget(t string) (pid int, group bool, bad int) {
 //
 // Nil hook means this shell has no way to reach a group, which is not the same
 // as the group being gone — so it is reported as a process it could not find
-// rather than silently succeeding.
+// rather than silently succeeding. Asked before the gate is, because a hook
+// that is not there is an action that will not happen, and an audit trail that
+// recorded it would be recording a signal nothing sent.
+//
+// The gate is consulted here rather than inside the hook, and that is the same
+// split as everywhere else: the hook is a capability the embedder supplied, in
+// the embedder's own code, and the gate is a question about what the script
+// asked for. It sees the target the kernel will be given — negative, because
+// that is how a process group is named — so a policy reading a pid does not
+// have to know which of two calls is about to be made.
 func (r *Runner) signalGroupPid(pgid int, sig syscall.Signal) error {
 	if r.SignalGroup == nil {
 		return errNoJobProcess
+	}
+	if !r.signalAllowed(-pgid, sig) {
+		return syscall.EPERM
 	}
 	return r.SignalGroup(pgid, sig)
 }
@@ -338,6 +360,12 @@ func (r *Runner) signalGroupPid(pgid int, sig syscall.Signal) error {
 // output before the process went away. Nothing here can make that thread win
 // the race, and nothing needs to — the script is over either way, so it stops
 // here and lets the death arrive whenever it arrives.
+//
+// The split that decision produces is also where the gate goes. Two of the
+// three cases never reach the kernel, so nothing leaves this process and there
+// is nothing for a policy to refuse; the two that do call it go through
+// killProcess, which asks first. Drawing the boundary at the system call
+// rather than at the builtin is what keeps those two facts one fact.
 func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 	// Signal 0 is the existence probe and delivers nothing, and anything
 	// aimed elsewhere is somebody else's process. A negative pid, and 0
@@ -345,7 +373,7 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 	// group this shell is in is a job-control question rather than a
 	// signaling one, so neither is treated as aimed here.
 	if sig == 0 || pid != os.Getpid() {
-		return syscall.Kill(pid, sig)
+		return r.killProcess(pid, sig)
 	}
 	s := r.sigs()
 	s.mu.Lock()
@@ -380,7 +408,7 @@ func (r *Runner) sendSignal(pid int, name string, sig syscall.Signal) error {
 		// An ignored signal, and the ones whose default action suspends or
 		// resumes rather than ends. Those really do want the kernel: nothing
 		// this package does could stop a process or start it again.
-		return syscall.Kill(pid, sig)
+		return r.killProcess(pid, sig)
 	}
 	return nil
 }

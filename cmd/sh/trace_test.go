@@ -10,8 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 
 	"github.com/blairham/sh/driver"
@@ -224,6 +226,17 @@ func TestFormatEventShowsWhatTheEventCarries(t *testing.T) {
 			},
 			"trace: access read-dir /tmp line=1",
 		},
+		{
+			// The one kind with no path: a signal names a process, so the
+			// target and the number are what there is to print.
+			"a signal",
+			interp.Event{
+				Kind:   interp.EventAccess,
+				Action: interp.Action{Kind: interp.ActionSignal, PID: 4321, Signal: syscall.SIGTERM},
+				Line:   7,
+			},
+			"trace: access signal pid=4321 signal=" + strconv.Itoa(int(syscall.SIGTERM)) + " line=7",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := formatEvent(tc.e); got != tc.want {
@@ -339,5 +352,37 @@ func TestAGatedRunDeniesAndReports(t *testing.T) {
 	// consumer redirecting the script's stdout must not collect it.
 	if strings.Contains(out.String(), "trace:") {
 		t.Errorf("out = %q, want the trace kept off the shell's output stream", out.String())
+	}
+}
+
+// A signal a script sends reaches the trace, through the flag a person types.
+//
+// The kind arrived last and by a different route from the file actions —
+// `kill` is a builtin, so nothing about a path was ever going to show it — and
+// a kind the shipped binary cannot be made to print is a kind nothing outside
+// interp's own tests would ever notice was missing.
+func TestATracedRunRecordsASignal(t *testing.T) {
+	base, err := pickDialect("core")
+	if err != nil {
+		t.Fatal(err)
+	}
+	base.Name = "sh"
+
+	own, rest, err := readOwnFlags([]string{"-trace-events", "-c", "kill -0 $$"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out, errs, trace bytes.Buffer
+	sh := base
+	sh.Stdout, sh.Stderr = &out, &errs
+	sh = installSeams(sh, own, &trace)
+	if code := driver.MainArgs(sh, append([]string{"sh"}, rest...)); code != 0 {
+		t.Fatalf("status %d: %s", code, errs.String())
+	}
+	// The probe delivers nothing and is still an act worth recording: `kill
+	// -0` exists to learn whether a process is there.
+	want := "trace: access signal pid=" + strconv.Itoa(os.Getpid()) + " signal=0"
+	if !strings.Contains(trace.String(), want) {
+		t.Errorf("trace =\n%s\nwant %s", trace.String(), want)
 	}
 }

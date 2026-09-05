@@ -6,9 +6,11 @@ package interp_test
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 
 	. "github.com/blairham/sh/interp"
@@ -201,6 +203,177 @@ func TestTheGateSeesTheFilesBehindReentry(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Every signal that reaches the kernel passes the gate, by every route that
+// can send one.
+//
+// `kill` is a builtin, and making it one is what moved this out of the
+// boundary: an external kill was an exec and the gate saw it. The routes
+// differ enough to be worth naming individually — a pid, a job spec that means
+// a process group, the probe that delivers nothing, and a signal aimed at this
+// process that the kernel still has to carry out.
+func TestTheGateSeesEverySignalThatLeaves(t *testing.T) {
+	pid, _ := aLiveProcess(t)
+
+	for _, tc := range []struct {
+		name, src string
+		// want reports whether this is the action the route should produce.
+		want func(a Action, jobPID int) bool
+	}{
+		{"a pid", "kill -TERM " + itoa(pid), func(a Action, _ int) bool {
+			return a.PID == pid && a.Signal == syscall.SIGTERM
+		}},
+		{"the existence probe", "kill -0 " + itoa(pid), func(a Action, _ int) bool {
+			return a.PID == pid && a.Signal == 0
+		}},
+		{"a probe aimed at this shell", "kill -0 $$", func(a Action, _ int) bool {
+			return a.PID == os.Getpid() && a.Signal == 0
+		}},
+		{"a signal this shell can only ask the kernel for", "kill -CONT $$", func(a Action, _ int) bool {
+			// Continuing is one of the two things the shell cannot do for
+			// itself out of its trap table, so it makes the call — and a call
+			// is an action that leaves.
+			return a.PID == os.Getpid() && a.Signal == syscall.SIGCONT
+		}},
+		{"a job spec", "/bin/sleep 30 &\nkill -TERM %1", func(a Action, jobPID int) bool {
+			// Negative, because a job is a process group and that is how the
+			// kernel is told to mean one. Nonzero as well: a job that never
+			// started would make an unasked gate and a gate asked about
+			// nothing the same answer.
+			return jobPID != 0 && a.PID == -jobPID && a.Signal == syscall.SIGTERM
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var seen []Action
+			sem := PosixSemantics()
+			var out strings.Builder
+			r := &Runner{
+				Semantics: &sem,
+				Stdout:    &out, Stderr: &strings.Builder{},
+				Gate: GateFunc(func(_ context.Context, a Action) Decision {
+					mu.Lock()
+					defer mu.Unlock()
+					if a.Kind == ActionSignal {
+						seen = append(seen, a)
+					}
+					// Refused, so nothing is really sent: the claim here is
+					// that the gate is asked, and a signal that went out
+					// anyway would be a live process the test then has to
+					// chase.
+					if a.Kind == ActionSignal {
+						return Deny
+					}
+					return Allow
+				}),
+				// A group is the driver's to reach, so a runner with no hook
+				// cannot signal one at all — and the gate belongs above the
+				// hook, which this fake is here to demonstrate.
+				SignalGroup: func(int, syscall.Signal) error { return nil },
+			}
+			f, err := syntax.Parse(tc.src, syntax.Core())
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			if _, err := r.Run(context.Background(), f); err != nil {
+				t.Fatalf("run: %v", err)
+			}
+			jobPID := lastJobPID(t, r)
+			mu.Lock()
+			defer mu.Unlock()
+			for _, a := range seen {
+				if tc.want(a, jobPID) {
+					return
+				}
+			}
+			t.Errorf("the gate was asked %v, want the signal %q sends", seen, tc.src)
+		})
+	}
+}
+
+// A signal that stays inside this process is not an action that leaves it, so
+// the gate is not asked and must not be.
+//
+// This is the boundary drawn at the system call rather than at the builtin.
+// `kill -TERM $$` with no trap for it never calls kill(2): the script stops
+// and the dying is the driver's, through a hook a library leaves nil. Gating
+// it would mean a policy could refuse a shell the right to stop running its
+// own script, which is not a boundary anything crosses.
+func TestTheGateIsNotAskedAboutASignalThatNeverLeaves(t *testing.T) {
+	var mu sync.Mutex
+	var seen []Action
+	var out strings.Builder
+	sem := PosixSemantics()
+	r := &Runner{
+		Semantics: &sem,
+		Stdout:    &out, Stderr: &strings.Builder{},
+		Gate: GateFunc(func(_ context.Context, a Action) Decision {
+			mu.Lock()
+			defer mu.Unlock()
+			if a.Kind == ActionSignal {
+				seen = append(seen, a)
+			}
+			return Allow
+		}),
+	}
+	f, err := syntax.Parse("kill -TERM $$\necho after", syntax.Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, err := r.Run(context.Background(), f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The shell stopped where a shell killed by TERM stops, which is the
+	// evidence that this went down the path that does not call the kernel.
+	if status != 128+int(syscall.SIGTERM) {
+		t.Errorf("status = %d, want the status of a shell killed by the signal it sent itself", status)
+	}
+	if out.String() != "" {
+		t.Errorf("out = %q, want nothing after the shell killed itself", out.String())
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(seen) != 0 {
+		t.Errorf("the gate was asked about %v, want nothing: no signal left this process", seen)
+	}
+}
+
+// aLiveProcess starts a real process for a signal to be aimed at, and reports
+// a channel that closes when it ends.
+//
+// A real one, because the question these tests ask is whether something
+// outside this shell was reached, and a pid nobody owns cannot answer it: a
+// signal to a process that is not there fails identically whether the gate
+// refused it or the kernel did.
+func aLiveProcess(t *testing.T) (pid int, ended <-chan struct{}) {
+	t.Helper()
+	cmd := exec.Command("/bin/sleep", "30")
+	if err := cmd.Start(); err != nil {
+		t.Skipf("no process to signal: %v", err)
+	}
+	done := make(chan struct{})
+	go func() {
+		_ = cmd.Wait()
+		close(done)
+	}()
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		<-done
+	})
+	return cmd.Process.Pid, done
+}
+
+// lastJobPID is the pid the script's own `&` produced, which only the runner
+// knows: the test cannot predict it and the gate has to be checked against it.
+func lastJobPID(t *testing.T, r *Runner) int {
+	t.Helper()
+	jobs := r.Jobs()
+	if len(jobs) == 0 {
+		return 0
+	}
+	return jobs[len(jobs)-1].PID
 }
 
 // A pipeline asks about both halves, which is worth its own case: each is a

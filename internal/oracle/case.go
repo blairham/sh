@@ -1140,7 +1140,32 @@ var Corpus = []Case{
 	{
 		ID: "printf/unknown-verb-diverges", Category: "printf",
 		Snippet: `printf "[%z]\n" x; echo "st=$?"`,
-		Why:     "half the panel names the character *after* the one it could not read and half names the conversion, with four wordings and three statuses between them",
+		Why:     "half the panel names the conversion character alone and half names the whole directive as written, with four wordings and three statuses between them. `z` is a length modifier in three of them, so the character they cannot read here is the `]`",
+	},
+	{
+		ID: "printf/a-length-modifier-on-a-conversion", Category: "printf",
+		Snippet: `printf "[%ld][%5ld][%Lf]\n" 42 42 1.5; echo "st=$?"`,
+		Why:     "the C length modifiers every shell with any of them takes, in the place C puts them — after the precision and before the verb. The one shell with none reads the `l` as the conversion and says so",
+	},
+	{
+		ID: "printf/a-length-modifier-c99-added", Category: "printf",
+		Snippet: `printf "[%zX][%jd][%lld][%hhd]\n" 255 42 42 42; echo "st=$?"`,
+		Why:     "the C99 additions, which is where the panel splits three ways rather than two: two shells take them, one takes only C89's `h`, `l` and `L` and calls these invalid directives, and one takes none at all",
+	},
+	{
+		ID: "printf/a-length-modifier-is-read-and-thrown-away", Category: "printf",
+		Snippet: `printf "[%hhd][%lld]\n" 300 9223372036854775807; echo "st=$?"`,
+		Why:     "an accepted modifier never narrows or widens anything: 300 through `%hhd` is 300 and not 44, and the largest signed 64-bit value survives `%lld` — so this is about what a format may say and never about what it means",
+	},
+	{
+		ID: "printf/a-run-of-length-modifiers", Category: "printf",
+		Snippet: `printf "[%llld][%hld]\n" 42 42; echo "st=$?"`,
+		Why:     "the shells with the C99 set skip a run of the letters rather than a list of spellings, so nonsense like `lll` and `hl` is accepted; the shell with C89's set takes exactly one letter and refuses both",
+	},
+	{
+		ID: "printf/an-unknown-conversion-names-the-character", Category: "printf",
+		Snippet: `printf "%v]xY" 1; echo "st=$?"`,
+		Why:     "a conversion no shell in the panel has, with a tail after it, which is what separates naming the conversion character from naming what follows it: two shells say `v` and two say `%v`, and none of them names the `]`",
 	},
 	{
 		ID: "printf/no-format-at-all", Category: "printf",

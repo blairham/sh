@@ -262,6 +262,21 @@ func TestSetOInABundle(t *testing.T) {
 // TestPrintfOptions: this dialect's answers about `printf`'s options, run
 // rather than asserted against the fields — the wordings and the usage line
 // are what would be wrong.
+// dash has no length modifiers at all, so the letter is read as a conversion
+// it does not have — and named with the flags and width in front of it.
+func TestPrintfLengthModifiers(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{"printf \"[%ld]\" 42\n", "printf: %l: invalid directive"},
+		{"printf \"[%5ld]\" 42\n", "printf: %5l: invalid directive"},
+		{"printf \"[%zX]\" 255\n", "printf: %z: invalid directive"},
+	} {
+		if out, _ := runDash(t, dir, tc.src); !strings.Contains(out, tc.want) {
+			t.Errorf("%s: said %q, want %q", tc.src, out, tc.want)
+		}
+	}
+}
+
 func TestPrintfOptions(t *testing.T) {
 	dir := t.TempDir()
 	out, _ := runDash(t, dir, "printf -v o \"%05d\" 42\necho \"[$o]\"\n")

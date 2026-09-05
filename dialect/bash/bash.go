@@ -247,6 +247,9 @@ func Semantics() interp.Semantics {
 	s.PrintfEmptyIsNotANumber = interp.Yes
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
+	// `%zX`, `%ld`, `%jd` and any run of the letters, all of them read and
+	// thrown away: `%hhd` with 300 is 300.
+	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC99
 	// `%(fmt)T`: an epoch through a date format, with -1 for now and -2 for
 	// when the shell started. This shell alone in the panel — 3.2 has it not
 	// either, which is why the two bash columns of the corpus differ here.

@@ -84,7 +84,60 @@ keeps it out of the core.
 Vector field: `DollarDoubleQuote` (off in the core; the bash and ksh
 dialects set it).
 
-## Token recognition
+### `$'...'` decodes escapes, and this is the set
+
+`$'...'` is single quotes with one difference: backslash escapes decode.
+`shell-matrix.md` records the form as core — bash, ksh93 and zsh all
+have it, and dash keeps every character literally, `$` included. The
+corpus pins the load-bearing failure mode
+(`core/dollar-single-expands-escapes`: the quoting was once recorded and
+nothing decoded it); the full set below was measured escape by escape on
+2026-09-04, same panel and machine as `shell-matrix.md`.
+
+Unanimous across bash 3.2, bash 5.3, ksh93 and zsh, and decoded here:
+
+| escape | value |
+| --- | --- |
+| `\n` `\t` `\r` `\a` `\b` `\f` `\v` | the C control characters |
+| `\e`, `\E` | ESC (0x1b), both spellings |
+| `\\` `\'` `\"` `\?` | the character itself |
+| `\xHH` | the byte, one or two hex digits — `$'\x4'` is 0x04 |
+| `\NNN` | the byte, one to three octal digits — `$'\101'` is `A` |
+
+Two escapes are decoded here on the current shells' agreement, with
+bash 3.2 keeping the text as written — dated, not vetoed, per
+`../core.md`:
+
+| escape | value | bash 3.2 |
+| --- | --- | --- |
+| `\uHHHH` | the code point, up to four hex digits, as UTF-8 | literal |
+| `\UHHHHHHHH` | the same, up to eight digits | literal (as `sh` and as `bash` alike) |
+
+Two decisions are recorded because the panel splits, and each follows
+bash:
+
+- **An escape with no meaning keeps both characters.** `$'\q'` is `\q`
+  in bash (3.2 and 5.3); ksh93 and zsh drop the backslash and keep the
+  `q`. Ours keeps both — dropping the backslash destroys information,
+  and the dominant scripting target keeps it.
+- **`\x` with no digit after it stays literal.** bash keeps `\xzz` as
+  written; zsh reads a zero byte and keeps the `zz`; ksh93 emits a byte
+  of its own. Ours is bash's answer, and the same rule covers a
+  digitless `\u` and `\U`.
+
+One escape is measured and deliberately not decoded: **`\cX`**, the
+control character, which bash and ksh93 decode (`$'\cA'` is 0x01) and
+zsh treats as unknown. Ours treats it as unknown too — both characters
+kept — recorded here so the gap is a decision rather than an oversight;
+a script that needs a control character has `\x01` in every shell that
+has the form at all.
+
+The form is specified here because it is a *quoting* rule: the decoded
+text is a *quoted span*, so no later stage splits or globs it —
+`$'a\tb'` is one field holding a real tab, however much whitespace the
+tab is. When the decoding runs is an implementation's choice; what may
+never be lost is the span's quoting, which is the same requirement every
+other quote form places on this stage.
 
 POSIX §2.3 is a set of rules applied character by character. The three
 that determine the lexer's shape:
@@ -112,6 +165,27 @@ tokenization is context-sensitive:
 One space changes what the digit *is*. The rule is strict adjacency: no
 space between the digits and the operator, and the token is a candidate
 IO number only in that position.
+
+### `{name}` before a redirection asks the shell to pick the descriptor
+
+Where an IO number could stand, bash, ksh93 and zsh also accept a
+variable in braces: `exec {fd}>f` opens the file on a descriptor the
+shell chooses — 10 or above — and assigns the number to `fd`, so
+`>&$fd` and `{fd}>&-` use and close it later. To dash the braces are
+part of an ordinary word, and `exec {fd}>f` goes looking for a command
+named `{fd}` (measured: `redir/the-shell-picks-the-descriptor`; the
+follow-on case, `redir/a-picked-descriptor-may-outlive-its-command`,
+is where the *lifetime* answers diverge, and that half belongs to the
+interpreter).
+
+The grammar is the adjacency rule again, one token earlier: `{fd}>f`
+names a descriptor and `{fd} >f` is a word followed by a redirection,
+exactly as `1>f` and `1 >f` differ. That is why the construct is
+consumed by the lexer — the space is the whole distinction, and only
+the lexer still has it.
+
+Vector field: `FdVariableRedirections` (on in the core, off for `posix`
+and `dash`).
 
 ## Comments
 

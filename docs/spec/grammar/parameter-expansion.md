@@ -105,6 +105,16 @@ Two rows deserve their own note.
 substitution. `shell-matrix.md` already recorded it as bash-4-only; this
 places it in the bash dialect rather than the core.
 
+Case change has a third direction: **`${x~}` toggles the first
+character's case and `${x~~}` toggles every character's** — `aBc` to
+`ABc` and `AbC` — and each operator takes a pattern saying which
+characters to touch, exactly as `^` and `,` do: `${x~~[ab]}` on `aBc`
+is `ABc`, the pattern matched case-sensitively against each character.
+bash 5.3 alone; bash 3.2, dash and zsh call it a bad substitution and
+ksh93 refuses it while reading (measured:
+`param/case-toggle-is-newer-bash-still`). It rides the same dialect
+flag as `^^` and `,,` — one shell, one family of operators, one flag.
+
 **`${!x}` diverges four ways.** With `x=y` and `y=V`, bash yields `V`,
 dash and zsh reject it, and **ksh93 yields `x`** — it is not an error
 there, it means something else. That is the `&>` failure mode inside an
@@ -112,6 +122,33 @@ expansion, and the third measured instance of it.
 
 `${a[i]}` inherits the array-base axis from `semantics.md`: with
 `a=(p q r)`, `${a[1]}` is `q` in bash and ksh93 and `p` in zsh.
+
+## The `!` that lists names instead of following one
+
+Two more spellings open with `!` and are not indirection:
+
+**`${!prefix*}` and `${!prefix@}` are the *names* beginning with the
+prefix**, sorted, and the two suffixes differ exactly as `$*` and `$@`
+do — joined into one field on IFS's first character, or one field per
+name (measured: `param/the-names-with-a-prefix` and its
+`-one-field-each`, `-joined` and `-are-sorted` neighbors; a prefix
+matching nothing is empty with status 0, `param/no-names-with-that-prefix`).
+bash and ksh93 answer alike; dash and zsh call the whole form a bad
+substitution. Two shells is not a common denominator, so the form
+belongs to the bash and ksh dialects and rides `ParamIndirection` —
+the flag that already admits `!` after `{`.
+
+**`${!a[@]}` and `${!a[*]}` are an array's *subscripts*, not its
+elements** — with a sparse array, the subscripts actually assigned
+rather than `0..n-1`. It exists to iterate an array by index, and the
+corpus case is written as that loop (`param/array-indices`): bash and
+ksh93 answer, zsh rejects it as a bad substitution — its arrays are
+dense, so the question does not arise there — and dash has no arrays at
+all. The same dialect flag governs it.
+
+A `!` directly before an *operator* is none of these: `${!:+set}` is the
+special parameter `$!` with an operator, unanimously
+(`param/bang-with-an-operator-is-the-parameter`).
 
 ## Negative subscripts
 
@@ -146,6 +183,42 @@ implementation reads nothing, and refuses the write with the same
 diagnostic any below-base subscript gets; the divergence is recorded
 rather than modeled, because none of it is behavior a script can rely on
 across shells.
+
+## Slicing the whole array
+
+`${a[@]:off}` and `${a[@]:off:len}` slice the **list**: the result is
+elements, one field each, not a substring of anything joined. With
+`a=("a b" c d)`, `"${a[@]:0:2}"` is the two fields `a b` and `c` —
+which is the whole reason this is not `${x:off:len}` over joined text
+(measured: `param/array-slice`, `param/array-slice-keeps-its-fields`).
+
+Two facts ride along, both measured in the same cases:
+
+- **The offset counts from 0 in every shell with arrays — zsh
+  included**, whose *subscripts* count from 1. Like a negative
+  subscript, the slice does not inherit the base axis.
+- **A negative offset counts back from the end**, and needs the space:
+  `${a[@]: -2}` is the last two elements, while `${a[@]:-2}` is the
+  `:-` default operator on the whole array. The space is what keeps the
+  two spellings apart, and it is why the operator table earlier reads
+  the colon forms first.
+
+A negative **length** is where the agreement stops. On a scalar, bash
+and zsh stop that many characters short of the end and ksh93 answers
+with nothing at all (`param/a-negative-substring-length`) — the
+`SubstringNegativeLengthIsEmpty` axis, which the core leaves unanswered
+and the ksh dialect answers yes. On the *list* the same probe splits
+three ways (measured 2026-09-04, same panel): zsh stops short of the
+end, ksh93 is empty again, and bash — whose scalar answer is
+count-from-the-end — **refuses it**, `substring expression < 0`. This
+implementation counts a list's negative length from the end, the answer
+its scalar default already gives; bash's refusal is recorded here
+rather than modeled, the same treatment as its out-of-range subscript
+warning above.
+
+The scalar `${x:off:len}` itself is in the extensions table above; this
+section exists because the `[@]` subject changes what the numbers index
+— elements rather than characters.
 
 ## An operator over the whole array
 
@@ -358,15 +431,16 @@ construct round-trips.
 
     ParamSubstitution      ${x/pat/rep} and its anchored forms
     ParamSubstring         ${x:off:len}
-    ParamCaseChange        ${x^^} ${x,,}     — bash only
-    ParamIndirection       ${!x}             — bash only, and not an error elsewhere
+    ParamCaseChange        ${x^^} ${x,,} ${x~~} and their single forms — bash only
+    ParamIndirection       ${!x}, ${!prefix*}, ${!a[@]} — parses in bash and ksh;
+                           what ${!x} then *means* diverges (see above)
     ParamTransformations   ${x@Q} and its letter family — bash only
     ParamExpansionFlags    ${(U)x}           — zsh only
 
 All false for `posix`. `ParamCaseChange`, `ParamIndirection`,
-`ParamTransformations` and `ParamExpansionFlags` are false for `core`,
-because a construct one shell in the panel supports is not a common
-denominator.
+`ParamTransformations` and `ParamExpansionFlags` are false for `core`:
+the first and the last two are one shell's, and the `!` family is two
+shells' — neither is a common denominator.
 
 ## What this does not cover
 

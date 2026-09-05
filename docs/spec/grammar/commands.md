@@ -143,8 +143,15 @@ made of operators and needs neither:
 | `{ echo a }` | error | error | error | **`a`** |
 | `(echo a)` | `a` | `a` | `a` | `a` |
 
-zsh accepts a brace group without the terminator. Vector field:
-`BraceGroupNeedsTerminator` (default true).
+zsh accepts a brace group without the terminator — but the rule is not
+about brace groups, and modeling it that way misses half of it. In zsh
+`}` is reserved wherever a *word* may stand, which is why `echo }` is a
+parse error there and prints a brace in the other three. Grammar flag:
+`CloseBraceAlwaysReserved` — note the inverted sense: the flag is
+**off** by default and the terminator requirement is what its absence
+produces; the zsh dialect turns it on and gets both halves. The full
+account, including how the wrong model was caught, is in
+`../semantics.md`.
 
 ## Compound commands take redirections
 
@@ -186,7 +193,55 @@ core language.
 `;&` is also a **bash 4** feature: bash 3.2 rejects it, so it is
 unavailable through macOS's `/bin/sh`. That column only appeared when the
 panel gained `bash32`; a four-shell run had reported `;&` as universally
-supported outside dash.
+supported outside dash. It stays core despite the refusal: the boundary
+counts the current shells, and bash 3.2's column dates a construct
+rather than vetoing it — the rule is stated in `../core.md`.
+
+## `select`
+
+The menu loop, with a for-loop's header over a different loop:
+
+    select name [ [ 'in' word* ] sep ] 'do' list sep 'done'
+
+The words are a menu rather than a sequence, the body runs once per
+*reply* rather than once per word, and the loop ends when the input does
+rather than when the list does. Every non-dash shell in the panel has
+it, bash 3.2 included, which is what makes it core; to dash the header
+is a syntax error at `do` (`shell-matrix.md`, and the corpus's
+`select/` cases — twelve rows, cited individually below).
+
+What the panel agrees on, each row measured:
+
+- **The menu and the prompt go to standard error**, so a script's own
+  output can be redirected without taking the menu with it
+  (`select/menu-goes-to-standard-error`).
+- **The variable gets the chosen item; `REPLY` gets the line as typed.**
+  A reply that names no item — out of range, or not a number — leaves
+  the variable empty, keeps the typed text in `REPLY`, and still runs
+  the body, which is how a script detects it (`select/reply-out-of-range`,
+  `select/reply-is-not-a-number`).
+- **A blank reply reprints the menu and does not run the body** — the
+  only way to see the menu again (`select/blank-reply-reprints-the-menu`).
+- **`PS3` is the prompt and is read before each prompt**, not once at
+  loop entry (`select/ps3-is-read-each-time`).
+- **With `in` omitted the menu is the positional parameters**
+  (`select/no-list-uses-the-positionals`), so the AST keeps the same
+  "no list is not an empty list" distinction `for` requires.
+- **An empty menu does not prompt**: the loop body never runs and the
+  status is 0 (`select/empty-list`). bash 3.2 alone refuses to *parse*
+  `select x in;` — dated, not vetoed, per `../core.md`.
+- **`break` is how the loop ends on purpose**, status 0
+  (`select/break-leaves-the-loop`); input ending is the other way out
+  (`select/input-ends`).
+
+Presentation is where the shells split — the menu's layout, the prompt's
+spelling, the status after end-of-input, and whether an unterminated
+final reply is taken (zsh) or ignored (bash, ksh93). Those are
+`SelectLayout` and its neighbors on the semantics vector, measured in
+`../semantics.md`; the grammar is the part above, and it is one flag:
+`Select` (on in the core, off for `posix`).
+
+Like every compound command, `select … done` takes redirections.
 
 ## Function definitions
 
@@ -203,6 +258,19 @@ which is where the keyword originated, so it is not core.
 A function body is a **compound command**, so it can be any of them, not
 only a brace group, and it can carry its own redirections.
 
+**A function name may carry `-` and `.`** — `f-g()`, `a.b()` — and the
+panel splits by *stage* rather than by yes and no: bash and zsh define
+and run the function, dash refuses the name while parsing
+(`Bad function name`), and ksh93 **parses it and stops at the
+definition** — `invalid function name` for the dash, and its own
+sentence, `invalid discipline function`, for the dot (measured:
+`cmd/function-name-with-a-dash`, `cmd/function-name-with-a-dot`).
+Parsing the name is therefore common ground for every shell but dash,
+and that is all the grammar claims. Grammar flag:
+`FunctionNamePunctuation` (on in the core, off for `posix` and `dash`);
+what a shell that parsed the name then does with it is the
+interpreter's question, not this one.
+
 ## Compound command productions
 
 The shapes, in the notation of POSIX XCU §2.10. `list` is a sequence of
@@ -217,6 +285,7 @@ and-or lists separated by `;`, `&` or newline; `sep` is any one of those.
     while       :  'while' list sep 'do' list sep 'done'
     until       :  'until' list sep 'do' list sep 'done'
     for         :  'for' name [ [ 'in' word* ] sep ] 'do' list sep 'done'
+    select      :  'select' name [ [ 'in' word* ] sep ] 'do' list sep 'done'
     case        :  'case' word 'in' { case-item } 'esac'
     case-item   :  [ '(' ] pattern { '|' pattern } ')' [ list ] terminator
     terminator  :  ';;' | ';&' | ';;&'

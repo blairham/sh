@@ -2248,6 +2248,11 @@ echo "st=$?"`,
 		Why:     "bash alone: ksh93 reports a syntax error and zsh a bad substitution, so it belongs to the bash dialect rather than the core",
 	},
 	{
+		ID: "param/case-toggle-is-newer-bash-still", Category: "parameter expansion",
+		Snippet: `x=aBc; printf "[%s][%s][%s]" "${x~}" "${x~~}" "${x~~[ab]}"`,
+		Why:     "the third spelling of case change, swapping instead of forcing a direction, single and doubled like the other two and carrying a pattern the same way. bash 5.3 alone — bash 3.2 refuses it too — so it rides the same dialect flag as `^^` and `,,`",
+	},
+	{
 		ID: "param/indirection-diverges-four-ways", Category: "parameter expansion",
 		Snippet: `x=y; y=V; printf "[%s]" "${!x}"`,
 		Why:     "bash indirects, dash and zsh reject, and ksh93 yields x — not an error there, a different meaning, which is the &> failure mode inside an expansion",
@@ -2452,6 +2457,21 @@ echo unreachable`,
 		ID: "pat/character-class", Category: "pattern matching",
 		Snippet: `case 5 in [[:digit:]]) echo class;; esac`,
 		Why:     "POSIX character classes are universal",
+	},
+	{
+		ID: "pat/the-remaining-character-classes", Category: "pattern matching",
+		Snippet: `case "$(printf '\1')" in [[:cntrl:]]) printf cntrl;; esac; case " " in [[:blank:]]) printf " blank";; esac; case x in [[:graph:]]) printf " graph";; esac; case " " in [[:print:]]) printf " print";; esac`,
+		Why:     "the four classes the matcher grew last, unanimous like the other eight — pinned because they were silently matching nothing while every panel shell answered",
+	},
+	{
+		ID: "pat/classes-that-overlap-and-differ", Category: "pattern matching",
+		Snippet: `t=$(printf "\t"); case "$t" in [[:blank:]]) printf blank;; esac; case "$t" in [[:print:]]) printf " P";; *) printf " noprint";; esac; case " " in [[:graph:]]) printf " G";; *) printf " nograph";; esac`,
+		Why:     "the edges that tell the four apart in the C locale the panel runs under: a tab is blank but not printable, and a space is printable but not graphic — unanimous, and the pair an implementation that aliases print to graph gets wrong",
+	},
+	{
+		ID: "pat/an-unknown-character-class", Category: "pattern matching",
+		Snippet: `case b in [[:bogus:]]) printf yes;; *) printf no;; esac; case "b]" in [[:bogus:]]) printf " lit";; *) printf " no";; esac`,
+		Why:     "a class name nothing defines matches nothing, silently — no error, no output, status 0 — in every panel shell but bash 3.2, which alone falls back to reading the brackets as literal characters, so `b]` matches there and nowhere else",
 	},
 	{
 		ID: "pat/escaped-metacharacter-is-literal", Category: "pattern matching",

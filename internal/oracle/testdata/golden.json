@@ -14778,6 +14778,38 @@
         "TimedOut": false
       }
     },
+    "param/case-toggle-is-newer-bash-still": {
+      "bash": {
+        "Output": "[ABc][AbC][ABc]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[ABc][AbC][ABc]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: ${x~}: bad substitution",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: syntax error at line 1: `~' unexpected",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:1: bad substitution",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "param/colon-extends-the-test-empty": {
       "bash": {
         "Output": "[D][]",
@@ -16058,6 +16090,38 @@
         "TimedOut": false
       }
     },
+    "pat/an-unknown-character-class": {
+      "bash": {
+        "Output": "no no",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "no no",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "no lit",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "no no",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "no no",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "no no",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "pat/bracket-bang-negates-everywhere": {
       "bash": {
         "Output": "negated",
@@ -16214,6 +16278,38 @@
       },
       "zsh": {
         "Output": "class",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "pat/classes-that-overlap-and-differ": {
+      "bash": {
+        "Output": "blank noprint nograph",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "blank noprint nograph",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "blank noprint nograph",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "blank noprint nograph",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "blank noprint nograph",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "blank noprint nograph",
         "Status": 0,
         "TimedOut": false
       }
@@ -16535,6 +16631,38 @@
       "zsh": {
         "Output": "\u003cshell\u003e:1: no matches found: *f",
         "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "pat/the-remaining-character-classes": {
+      "bash": {
+        "Output": "cntrl blank graph print",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "cntrl blank graph print",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "cntrl blank graph print",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "cntrl blank graph print",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "cntrl blank graph print",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "cntrl blank graph print",
+        "Status": 0,
         "TimedOut": false
       }
     },

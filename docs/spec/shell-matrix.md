@@ -27,6 +27,7 @@ ksh93 (`/bin/ksh`), zsh 5.9.2. macOS arm64, 2026-08-29.
 | `<(...)` process subst. | **no** | *see note* | yes | yes | yes |
 | `function f { }` | **no** | yes | yes | yes | yes |
 | `function f() { }` | **no** | yes | yes | **no** | yes |
+| `select` menu loop | **no** | yes | yes | yes | yes |
 | `case` `;&` fallthrough | **no** | **no** | yes | yes | yes |
 | `case` `;;&` continue | **no** | **no** | yes | **no** | **no** |
 
@@ -45,15 +46,21 @@ rather than as a compile-time choice.
 
 ## What this decided
 
-**dash is the sole holdout on 12 of the 15 rows.** The core boundary
+**dash is the sole holdout on 13 of the 21 rows.** The core boundary
 therefore hinges entirely on whether dash is in the panel:
 
 - Include dash → the core collapses to roughly POSIX plus `local`.
 - Exclude dash → the core is the ksh-family common denominator: arrays,
   `[[ ]]`, `$'...'`, `+=`, substrings, pattern substitution, C-style
-  `for`, `function`, herestrings and process substitution.
+  `for`, `function`, `select`, herestrings and process substitution.
 
 **The second was chosen.** See `core.md`.
+
+One more row needs its role stated. `;&` is refused by **two** panel
+shells — dash and bash 3.2 — and is core anyway, because bash 3.2's
+column is evidence about a construct's age, not a veto over the
+boundary. `core.md` states that rule and lists the decisions that
+already rely on it.
 
 Note the two rows that break any tidy story: `local` is absent from
 ksh93 but present in dash, and `typeset` is the reverse. **There is no

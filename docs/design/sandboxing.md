@@ -255,6 +255,20 @@ real shell has a `-policy`; adding it there would make `./bash -policy`
 accept a flag bash rejects, which is the rule `AGENTS.md` states about
 which flags belong where.
 
+`-audit FILE` is the other half of the same route, and writes the event
+schema below to a file — or to standard error for a lone `-`. Appended
+rather than truncated, because a trail that erases the previous run on
+the next one is not one, and written straight through rather than
+buffered, so a shell that dies mid-script has still recorded everything
+up to the action that killed it.
+
+**More than one gate composes as an intersection.** `-policy` and
+`-deny` together consult both, and any refusal refuses. That is the same
+rule the file uses between its own lines, and it is what makes adding a
+`-deny` to an existing policy a narrowing rather than a way around the
+file. Sinks compose the other way and are fanned out to: watching a
+trace by eye and keeping an audit file are different jobs.
+
 **A policy is never discovered.** Not from an environment variable, not
 from a dotfile searched for in the working directory or the home
 directory, not from a path a shell variable names. A policy that can be

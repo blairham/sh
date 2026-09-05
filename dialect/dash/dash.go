@@ -230,6 +230,13 @@ func Semantics() interp.Semantics {
 	// looking forgotten.
 	s.TypeNamesTheKindWithDashT = interp.No
 
+	// A descriptor number the process cannot hold is not checked here: with
+	// `ulimit -n 6`, `exec 8>f` reports success and the descriptor is
+	// unusable afterwards, where bash and ksh93 hand the kernel's refusal
+	// back. Unreachable for a two-digit number, which this shell does not
+	// read as one at all.
+	s.FdNumberBoundedByOpenFileLimit = interp.No
+
 	return s
 }
 

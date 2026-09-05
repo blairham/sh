@@ -2488,6 +2488,21 @@ echo "st=$?"`,
 		Why:     "`exec 3>file` holds the file on a descriptor of its own — stdout stays where it was, and only what is aimed at 3 reaches the file",
 	},
 	{
+		ID: "redir/a-two-digit-descriptor-number", Category: "redirection",
+		Snippet: `exec 10>f; echo hi >&10; exec 10>&-; cat f`,
+		Why:     "how many digits a descriptor number may have is not unanimous: bash reads ten as a number, and to dash, ksh93 and zsh the digits are an ordinary word, so the line runs a command called `10` with its output in the file. Those three still reach descriptors above nine through `exec {v}>f`, which is what makes this a question about the token rather than about the table",
+	},
+	{
+		ID: "redir/digits-before-a-redirection-that-are-not-a-number", Category: "redirection",
+		Snippet: `echo x 10>f; echo "st=$?"; cat f`,
+		Why:     "the same split read from the quiet side, and the reason it is a grammar flag rather than a refusal: where the digits are a word nothing is reported and a different command runs — `x 10` into the file, against `x` on the terminal and an empty file",
+	},
+	{
+		ID: "redir/a-descriptor-number-over-the-open-file-limit", Category: "redirection",
+		Snippet: `ulimit -n 64; exec 70>fresh; echo "st=$?"; ls fresh`,
+		Why:     "no shell in the panel has a ceiling of its own — the bound is the kernel's limit on open files, and only some shells hand its refusal back. The limit is moved by the case rather than assumed, so the row is about the rule and not about the machine's default. bash refuses and still creates the file; the other three cannot write a two-digit number at all and run a command called `70`",
+	},
+	{
 		ID: "redir/exec-descriptor-reaches-an-external-child", Category: "redirection",
 		Snippet: `exec 3>f; /bin/sh -c "echo child >&3" 2>/dev/null; exec 3>&-; cat f`,
 		Why:     "a descriptor parked with `exec 3>file` is inherited by an external command, which is what the flock and shared-log idioms are built on — the child writes in every shell but ksh93, which alone keeps it to itself. The child's complaint is discarded because its wording is a fact about whatever /bin/sh is on the machine",

@@ -394,6 +394,13 @@ func Semantics() interp.Semantics {
 	s.BareLocalListing = interp.BareLocalListsEveryParameter
 	s.SetListing = interp.SetListingEveryParameter
 
+	// A descriptor number the process cannot hold is not checked here: with
+	// `ulimit -n 6`, `exec 8>f` reports success and prints nothing, where
+	// bash and ksh93 hand the kernel's refusal back. Rarely reachable, since
+	// a number this shell reads is one digit and the shell picks its own for
+	// `{name}>f`.
+	s.FdNumberBoundedByOpenFileLimit = interp.No
+
 	return s
 }
 

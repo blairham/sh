@@ -4609,6 +4609,56 @@ it — two of the three that have the grammar; ksh93 takes it back with
 the command's other redirections, so the number the variable holds is
 already dead.
 
+**`FdNumberBoundedByOpenFileLimit`** — bash yes · dash no · ksh93 yes · zsh no
+
+Refuses a redirection whose descriptor number is at or above the
+process's soft limit on open files.
+
+**No shell in the panel has a ceiling of its own.** There is no language
+constant to look for; the bound is the kernel's, and the shells differ
+only in whether they hand its refusal back. Measured on macOS,
+2026-09-05, by moving the limit rather than by finding the default —
+which is what shows it is the limit and not a number somebody chose:
+
+    ulimit -n 20; exec 19>f     silent, status 0, in all five
+    ulimit -n 20; exec 20>f     bash: `20: Bad file descriptor`, status 1
+    ulimit -n 20; exec 20<f     the same — the direction does not matter
+    ulimit -n 20; echo hi 20>f  the same, on a command's own redirection
+    ulimit -n 6;  exec 8>f      bash: `8: Bad file descriptor`
+                                ksh93: `bad file unit number [Invalid
+                                       argument]`, and the shell ends
+                                dash, zsh: status 0, and the descriptor
+                                       is unusable afterwards
+    ulimit -n 20; exec 20>fresh the file is created either way: the open
+                                happens and it is the *number* that
+                                cannot be had
+
+bash and ksh93 report the errno they were given, and they were given
+different ones — EBADF against EINVAL — which is why the wording is a
+Diagnostics field (`FdNumberOverLimit`) rather than one sentence with the
+number substituted in. dash and zsh do not ask, which is the shape of not
+looking rather than of a different answer: the redirection reports
+success and then nothing aimed at that number works.
+
+Reached most often through `MultiDigitFdNumber`, since a script that may
+write only one digit can only get here under a limit below ten. It is why
+`exec 1000000>f` was accepted here and refused by both bash builds, which
+is what this axis was opened for.
+
+A number the *shell* picks is checked too, and that is measured rather
+than assumed: `ulimit -n 6; exec {v}>f` fails in all three shells that
+have the construct, since the number they pick is over the limit like any
+other. They word it three ways — `cannot duplicate fd`, `cannot open`,
+`cannot move fd 3` — and we say what we say about a number the script
+wrote, which is the shape of the failure without the sentence. It is
+reachable only under a limit below ten, where the picking starts.
+
+The axis is asked at the disagreement and never on the common path: a
+number below the limit is nobody's question, and a Runner with no
+`GetRlimit` has no limit to be asked about — a library that was handed no
+limits is not the place to invent one. Recorded as
+`redir/a-descriptor-number-over-the-open-file-limit`.
+
 **`RedirectTargetIsAnOrdinaryWord`** — bash yes · dash no · ksh93 no · zsh no
 
 Expands a redirection's target the way an argument is expanded — split

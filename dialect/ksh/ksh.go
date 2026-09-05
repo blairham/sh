@@ -395,6 +395,11 @@ func Semantics() interp.Semantics {
 	// redirects itself.
 	s.ExecOpenedFdReachesACommand = interp.No
 	s.FdVariableBadCloseIsAnError = interp.No
+	// And a number the process cannot hold is refused, as it is in bash and
+	// unlike dash and zsh — in this shell's own words and quoting a different
+	// errno: with `ulimit -n 6`, `exec 8>f` is `bad file unit number [Invalid
+	// argument]`.
+	s.FdNumberBoundedByOpenFileLimit = interp.Yes
 
 	return s
 }
@@ -465,6 +470,11 @@ func Diagnostics() interp.Diagnostics {
 		// staying empty.
 		// Measured: ksh93 reports a failed open at the line before the redirect.
 		RedirectFailureLine: interp.LineBeforeRedirect,
+		// A descriptor number the process cannot hold names the thing rather
+		// than the number, and quotes the errno the other refusing shell does
+		// not: `ulimit -n 6; exec 8>f` is `bad file unit number [Invalid
+		// argument]` here and `8: Bad file descriptor` in bash.
+		FdNumberOverLimit: "bad file unit number [Invalid argument]",
 		// A target that expanded to nothing gets neither the reason nor the
 		// "create" wording, whichever direction the redirection was.
 		EmptyRedirectTarget:  "%[1]s: cannot open",

@@ -108,7 +108,7 @@ func unsetFnRun(t *testing.T, src string, checks, warns Answer) (string, int) {
 	sem.UnsetFunctionChecksTheName = checks
 	sem.UnsetFunctionReportsMissing = warns
 	sem.LoneDashIsAnOption = No
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh"}
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh"})
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatal(err)

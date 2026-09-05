@@ -32,7 +32,7 @@ func timesRun(t *testing.T, src string, sem Semantics, dg Diagnostics) (out, err
 		t.Fatalf("parse %q: %v", src, err)
 	}
 	var o, e bytes.Buffer
-	r := &Runner{Stdout: &o, Stderr: &e, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+	r := newTestRunner(t, &Runner{Stdout: &o, Stderr: &e, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
@@ -45,7 +45,7 @@ func TestTimesIsASpecialBuiltinThatExists(t *testing.T) {
 	if !IsSpecialBuiltin("times") {
 		t.Error("times should be a special builtin")
 	}
-	if _, ok := (&Runner{}).Builtin("times"); !ok {
+	if _, ok := newTestRunner(t, &Runner{}).Builtin("times"); !ok {
 		t.Error("times is called special and does not exist")
 	}
 }

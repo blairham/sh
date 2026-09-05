@@ -37,10 +37,10 @@ func execRun(t *testing.T, dir, src string, setup func(*Runner)) (string, int, *
 	var buf bytes.Buffer
 	sem := execSemantics()
 	dg := Diagnostics{}
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
 		Dir: dir, Name: "testsh", Env: testPATH(),
-	}
+	})
 	if setup != nil {
 		setup(r)
 	}
@@ -59,7 +59,7 @@ func execRun(t *testing.T, dir, src string, setup func(*Runner)) (string, int, *
 // caller opts in — which means the default has to be checked, because the
 // dangerous version is the one that looks like it works.
 func TestReplaceProcessIsOptIn(t *testing.T) {
-	if (&Runner{}).ReplaceProcess != nil {
+	if newTestRunner(t, &Runner{}).ReplaceProcess != nil {
 		t.Fatal("a zero Runner must not be able to replace its process")
 	}
 
@@ -174,10 +174,10 @@ func TestAFailedExecRunsTheExitTrapOnlyWhenTheDialectSaysSo(t *testing.T) {
 			}
 			var buf bytes.Buffer
 			dg := Diagnostics{}
-			r := &Runner{
+			r := newTestRunner(t, &Runner{
 				Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
 				Dir: t.TempDir(), Name: "testsh", Env: testPATH(),
-			}
+			})
 			if _, err := r.Run(context.Background(), f); err != nil {
 				t.Fatal(err)
 			}
@@ -309,14 +309,14 @@ func TestExecOptionsAreADialectQuestion(t *testing.T) {
 	}
 	var buf bytes.Buffer
 	dg := Diagnostics{}
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
 		Dir: t.TempDir(), Name: "testsh", Env: testPATH(),
 		ReplaceProcess: func(_ string, a, _ []string, _ []*os.File) error {
 			argv = a
 			return os.ErrPermission
 		},
-	}
+	})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}
@@ -334,10 +334,10 @@ func TestExecOptionsAreADialectQuestion(t *testing.T) {
 	}
 	var buf2 bytes.Buffer
 	dg2 := Diagnostics{}
-	r2 := &Runner{
+	r2 := newTestRunner(t, &Runner{
 		Stdout: &buf2, Stderr: &buf2, Semantics: &sem2, Diagnostics: &dg2,
 		Dir: t.TempDir(), Name: "testsh", Env: testPATH(),
-	}
+	})
 	st, err := r2.Run(context.Background(), f2)
 	if err != nil {
 		t.Fatal(err)
@@ -395,7 +395,7 @@ func TestExecIsASpecialBuiltin(t *testing.T) {
 	if !IsSpecialBuiltin("exec") {
 		t.Error("exec should be a special builtin")
 	}
-	if _, ok := (&Runner{}).Builtin("exec"); !ok {
+	if _, ok := newTestRunner(t, &Runner{}).Builtin("exec"); !ok {
 		t.Error("exec is called special and does not exist")
 	}
 }

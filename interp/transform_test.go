@@ -294,7 +294,7 @@ func TestDeferredBadSubstitutionUsesItsRunWording(t *testing.T) {
 		BadSubstitutionAtRun: "${%[1]s}: bad substitution",
 	}
 	var buf bytes.Buffer
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run: %v", rerr)

@@ -16,10 +16,10 @@ import (
 // it would have to parse and expand, which is the whole of this package.
 func TestExpandASetting(t *testing.T) {
 	sem := permissive()
-	r := &Runner{Semantics: &sem, Vars: map[string]string{
+	r := newTestRunner(t, &Runner{Semantics: &sem, Vars: map[string]string{
 		"HOME": "/home/someone",
 		"NAME": "rc",
-	}}
+	}})
 	for _, c := range []struct{ in, want string }{
 		{"$HOME/.shrc", "/home/someone/.shrc"},
 		{"${HOME}/.shrc", "/home/someone/.shrc"},

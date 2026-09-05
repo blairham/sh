@@ -42,7 +42,7 @@ func embed(t *testing.T, r *Runner, src string) int {
 // working there is no smaller thing to fall back to.
 func TestTheZeroValueRuns(t *testing.T) {
 	var out, errs strings.Builder
-	r := &Runner{Stdout: &out, Stderr: &errs}
+	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &errs})
 	if status := embed(t, r, "echo hi; x=1; echo $x; /bin/echo external"); status != 0 {
 		t.Errorf("status %d, want 0", status)
 	}
@@ -58,11 +58,11 @@ func TestTheZeroValueRuns(t *testing.T) {
 func TestVariablesAndArraysHandedIn(t *testing.T) {
 	var out strings.Builder
 	sem := PosixSemantics()
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Stdout: &out, Stderr: &strings.Builder{},
 		Vars:   map[string]string{"PRESET": "value", "PATH": "/bin:/usr/bin"},
 		Arrays: map[string]Array{"LIST": {0: "a", 1: "b"}},
-	}
+	})
 	embed(t, r, `echo [$PRESET]; PRESET=changed; echo [$PRESET]; unset PRESET; echo [$PRESET]`+
 		"\n"+`echo [${LIST[0]}][${LIST[1]}]`)
 	if got := out.String(); got != "[value]\n[changed]\n[]\n[a][b]\n" {
@@ -80,12 +80,12 @@ func TestAProducedParameter(t *testing.T) {
 	var out strings.Builder
 	sem := PosixSemantics()
 	n := 0
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Stdout: &out, Stderr: &strings.Builder{},
 		Dynamic: map[string]func(*Runner) string{
 			"COUNTER": func(*Runner) string { n++; return string(rune('0' + n)) },
 		},
-	}
+	})
 	embed(t, r, "echo [$COUNTER][$COUNTER]; COUNTER=fixed; echo [$COUNTER]; unset COUNTER; echo [$COUNTER]")
 	if got := out.String(); got != "[1][2]\n[3]\n[]\n" {
 		t.Errorf("out = %q, want fresh each read, unshadowed by assignment, and gone once unset", got)
@@ -99,7 +99,7 @@ func TestARegisteredBuiltin(t *testing.T) {
 	target := filepath.Join(dir, "out")
 	var out strings.Builder
 	sem := PosixSemantics()
-	r := &Runner{Semantics: &sem, Stdout: &out, Stderr: &strings.Builder{}}
+	r := newTestRunner(t, &Runner{Semantics: &sem, Stdout: &out, Stderr: &strings.Builder{}})
 	var got []string
 	r.Register("greet", func(rr *Runner, _ context.Context, args []string) int {
 		got = args
@@ -139,7 +139,7 @@ func TestARegisteredBuiltin(t *testing.T) {
 func TestStreamsThatAreNotFiles(t *testing.T) {
 	var out, errs strings.Builder
 	sem := PosixSemantics()
-	r := &Runner{Semantics: &sem, Stdout: &out, Stderr: &errs}
+	r := newTestRunner(t, &Runner{Semantics: &sem, Stdout: &out, Stderr: &errs})
 	embed(t, r, "echo one; /bin/echo two; echo three; /bin/sh -c 'echo four >&2'")
 	if got := out.String(); got != "one\ntwo\nthree\n" {
 		t.Errorf("out = %q, want the builtin and the program in the order they ran", got)
@@ -156,11 +156,11 @@ func TestStreamsThatAreNotFiles(t *testing.T) {
 func TestAReaderThatIsNotAFileIsShared(t *testing.T) {
 	var out strings.Builder
 	sem := PosixSemantics()
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem,
 		Stdin:     strings.NewReader("line one\nline two\nline three\n"),
 		Stdout:    &out, Stderr: &strings.Builder{},
-	}
+	})
 	embed(t, r, "read a; echo got=$a; /bin/cat")
 	if got := out.String(); got != "got=line one\nline two\nline three\n" {
 		t.Errorf("out = %q, want the shell to take one line and the child the rest", got)
@@ -172,7 +172,7 @@ func TestTheWorkingDirectoryHandedIn(t *testing.T) {
 	dir := t.TempDir()
 	var out strings.Builder
 	sem := PosixSemantics()
-	r := &Runner{Semantics: &sem, Dir: dir, Stdout: &out, Stderr: &strings.Builder{}}
+	r := newTestRunner(t, &Runner{Semantics: &sem, Dir: dir, Stdout: &out, Stderr: &strings.Builder{}})
 	embed(t, r, "pwd; echo hi > relative.txt")
 	if got := strings.TrimSpace(out.String()); got != dir {
 		t.Errorf("pwd said %q, want %q", got, dir)
@@ -201,8 +201,8 @@ func TestTwoRunnersDoNotShareAWorkingDirectory(t *testing.T) {
 
 	var outA, outB strings.Builder
 	semA, semB := PosixSemantics(), PosixSemantics()
-	a := &Runner{Semantics: &semA, Dir: dirA, Stdout: &outA, Stderr: &strings.Builder{}}
-	b := &Runner{Semantics: &semB, Dir: dirB, Stdout: &outB, Stderr: &strings.Builder{}}
+	a := newTestRunner(t, &Runner{Semantics: &semA, Dir: dirA, Stdout: &outA, Stderr: &strings.Builder{}})
+	b := newTestRunner(t, &Runner{Semantics: &semB, Dir: dirB, Stdout: &outB, Stderr: &strings.Builder{}})
 
 	embed(t, a, "echo *.txt; echo $PWD")
 	embed(t, b, "echo *.txt; echo $PWD")
@@ -235,6 +235,9 @@ func TestTwoRunnersDoNotShareAWorkingDirectory(t *testing.T) {
 func TestNoDirectoryHandedInStaysRelative(t *testing.T) {
 	var out strings.Builder
 	sem := PosixSemantics()
+	// testrunner:bare — an unset Dir is the subject here, so this is the one
+	// place the helper's directory would be the thing under test going missing.
+	// It writes nothing, so there is nothing for it to write into the tree.
 	r := &Runner{Semantics: &sem, Stdout: &out, Stderr: &strings.Builder{}}
 	embed(t, r, "pwd; echo $PWD")
 	if got := out.String(); got != ".\n.\n" {
@@ -246,11 +249,11 @@ func TestNoDirectoryHandedInStaysRelative(t *testing.T) {
 func TestTheEnvironmentHandedIn(t *testing.T) {
 	var out strings.Builder
 	sem := PosixSemantics()
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem,
 		Env:       []string{"ONLY=one", "PATH=/bin:/usr/bin"},
 		Stdout:    &out, Stderr: &strings.Builder{},
-	}
+	})
 	embed(t, r, "echo [$ONLY]; export ADDED=x; /usr/bin/env | grep -c '^ADDED=x$'")
 	if got := out.String(); got != "[one]\n1\n" {
 		t.Errorf("out = %q, want the handed-in value read and the exported one reaching a child", got)

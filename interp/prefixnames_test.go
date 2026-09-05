@@ -26,7 +26,7 @@ func runIndirect(t *testing.T, src string, setup func(*Runner)) string {
 	}
 	var out bytes.Buffer
 	s := PosixSemantics()
-	r := &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &s}
+	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Dialect: &d, Semantics: &s})
 	if setup != nil {
 		setup(r)
 	}

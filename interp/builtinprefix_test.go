@@ -28,10 +28,10 @@ func prefixRun(t *testing.T, dir, src string, dg Diagnostics) string {
 	}
 	var out, errs bytes.Buffer
 	sem := permissive()
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem, Diagnostics: &dg,
 		Dir: dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
-	}
+	})
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
 	}

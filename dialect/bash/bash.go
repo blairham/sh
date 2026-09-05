@@ -226,6 +226,7 @@ func Semantics() interp.Semantics {
 	s.SIGPrefixAccepted = interp.Yes
 	s.RedirectsWriteToEveryTarget = interp.No
 	s.KillStatus = interp.KillStatusAnySuccess
+	s.SubshellJobTable = interp.SubshellJobsKeptOutsideACompound
 	s.PrintfEmptyIsNotANumber = interp.Yes
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral

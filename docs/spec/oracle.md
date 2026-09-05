@@ -108,11 +108,33 @@ that say which shell each of them is, so an option the harness has never
 heard of is still the same option in both runs.
 
 The snippet still has to reach the shell, and `Args` says where it goes:
-`oracle.ArgSnippet` is replaced by the snippet as one word, and
-`oracle.ArgScript` by the path of a file holding it — the same file
-`Script` writes, normalized to `<script>` in the output. At most one may
-appear. A case with neither never hands the shell its snippet, which is
-how an invocation that must fail before it reads anything is written.
+`oracle.ArgSnippet` is replaced by the snippet, and `oracle.ArgScript` by
+the path of a file holding it — the same file `Script` writes, normalized
+to `<script>` in the output. At most one may appear. A case with neither
+never hands the shell its snippet, which is how an invocation that must
+fail before it reads anything is written.
+
+A placeholder is replaced **wherever it appears**, not only as a whole
+word — the same rule `Stdin` has always followed. `-c` takes its command
+string as a separate word only when it is written that way, and
+`sh -c'echo hi'` attaches it to the letter, so an invocation that needs
+the snippet inside a larger word is spelled `"-c" + ArgSnippet`.
+
+Requiring a whole word meant such a case had to write the text twice,
+once as its `Snippet` and once literally in its argv, with nothing
+checking that the two stayed in step: an edit to either made the case
+test something other than what it recorded, silently. Interpolating
+removes the second copy rather than guarding it, and the corpus test now
+rejects an argv that spells the snippet out, since there is no longer a
+reason to.
+
+Guarding it was the cheaper-sounding option and would have been wrong.
+Of the sixteen cases whose `Args` name no placeholder, eleven hand the
+program over through `Stdin` and four withhold it deliberately — a script
+path that does not exist, `-c` with nothing after it. A rule that a
+no-placeholder argv must contain the snippet verbatim would have fired on
+fifteen of the sixteen, and suppressing it would have taken a new field
+to say which cases mean it.
 
 This exists because the invocation surface was graded by nothing else.
 The corpus started every case the same way, so the front end was pinned

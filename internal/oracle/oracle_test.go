@@ -111,6 +111,18 @@ func TestCorpusIsWellFormed(t *testing.T) {
 			t.Errorf("%s: no Why; it could not be judged when it drifts", c.ID)
 		}
 		seen[c.ID] = true
+		// An argv that spells the snippet out is the drift #535 is about: two
+		// copies of one text with nothing keeping them in step, so an edit to
+		// either makes the case test something other than what it records.
+		// There is no longer a reason to write it twice — a placeholder is
+		// interpolated wherever it appears — so the second copy is now an
+		// error rather than a documented cost.
+		for _, a := range c.Args {
+			if strings.Contains(a, c.Snippet) {
+				t.Errorf("%s: argv %q spells the snippet out; write %q instead",
+					c.ID, a, strings.ReplaceAll(a, c.Snippet, ArgSnippet))
+			}
+		}
 		if err := c.validate(); err != nil {
 			// A case whose invocation cannot be built records a harness error
 			// in place of a measurement, which looks like a shell that
@@ -154,6 +166,108 @@ func TestArgScriptWritesTheSnippetToTheFileTheNormalizerKnows(t *testing.T) {
 	}
 	if got := normalize(filepath.Join(dir, "case.sh")+": bad\n", sh, dir); !strings.Contains(got, "<script>") {
 		t.Errorf("the file ArgScript wrote does not normalize: %q", got)
+	}
+}
+
+// TestAPlaceholderIsReplacedInsideAWordToo is the expressiveness #535 was
+// about, and the reason the duplication it removes existed.
+//
+// `-c` takes its command string as its own word only when it is written that
+// way. `sh -c'echo hi'` attaches the string to the letter — the shape a hand
+// and a generated command line both produce, and the one all four panel
+// shells refuse — and a whole-word placeholder cannot spell it. The only way
+// left was to write the snippet text a second time, literally, in the argv.
+func TestAPlaceholderIsReplacedInsideAWordToo(t *testing.T) {
+	sh := Found{Shell: Shell{Name: "ours"}, Path: "/bin/sh"}
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{
+			name: "the command string attached to its letter",
+			args: []string{"-c" + ArgSnippet},
+			want: []string{"/bin/sh", "-cecho hi"},
+		},
+		{
+			// The word it always worked in stays exactly as it was: this is
+			// an addition and not a change of meaning.
+			name: "a placeholder that is the whole word still works",
+			args: []string{"-c", ArgSnippet},
+			want: []string{"/bin/sh", "-c", "echo hi"},
+		},
+		{
+			name: "text on both sides of it",
+			args: []string{"before" + ArgSnippet + "after"},
+			want: []string{"/bin/sh", "beforeecho hiafter"},
+		},
+		{
+			// A word that names no placeholder is passed through untouched,
+			// which is what makes the deliberate no-snippet shapes work.
+			name: "a word with no placeholder is left alone",
+			args: []string{"-s", "a"},
+			want: []string{"/bin/sh", "-s", "a"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := Case{ID: "t", Snippet: "echo hi", Args: tc.args}
+			if err := c.validate(); err != nil {
+				t.Fatalf("validate: %v", err)
+			}
+			cmd := command(t.Context(), sh, c, dir)
+			if !slices.Equal(cmd.Args, tc.want) {
+				t.Errorf("argv = %q, want %q", cmd.Args, tc.want)
+			}
+		})
+	}
+}
+
+// TestArgScriptIsReplacedInsideAWordToo is the same rule for the other
+// placeholder, and it checks the path is still the one the normalizer knows —
+// an embedded path that did not normalize would put the machine's temp
+// directory in the record.
+func TestArgScriptIsReplacedInsideAWordToo(t *testing.T) {
+	dir := t.TempDir()
+	sh := Found{Shell: Shell{Name: "ours"}, Path: "/bin/sh"}
+	c := Case{ID: "t", Snippet: "echo hi", Args: []string{"--rcfile=" + ArgScript}}
+
+	cmd := command(t.Context(), sh, c, dir)
+	want := []string{"/bin/sh", "--rcfile=" + filepath.Join(dir, "case.sh")}
+	if !slices.Equal(cmd.Args, want) {
+		t.Fatalf("argv = %q, want %q", cmd.Args, want)
+	}
+	if got := normalize(cmd.Args[1], sh, dir); !strings.Contains(got, "<script>") {
+		t.Errorf("the embedded path does not normalize: %q", got)
+	}
+	if b, err := os.ReadFile(filepath.Join(dir, "case.sh")); err != nil || string(b) != "echo hi\n" {
+		t.Errorf("script file = %q, %v; want the snippet", b, err)
+	}
+}
+
+// TestAPlaceholderNamedTwiceIsRefusedInsideAWordToo keeps validate's rule in
+// step with the replacement rule.
+//
+// Counting whole words while replacing substrings would let a case name the
+// snippet's place twice and be told it had named it once — the harness error
+// exists so that a case which quietly ran something other than what it says
+// cannot be measured, and it has to count what is actually replaced.
+func TestAPlaceholderNamedTwiceIsRefusedInsideAWordToo(t *testing.T) {
+	for _, args := range [][]string{
+		{"-c" + ArgSnippet, ArgSnippet},
+		{"-c" + ArgSnippet + ArgSnippet},
+		{"-c" + ArgSnippet, ArgScript},
+		{ArgSnippet, ArgSnippet},
+	} {
+		c := Case{ID: "t", Snippet: "echo hi", Args: args}
+		if err := c.validate(); err == nil {
+			t.Errorf("validate(%q) = nil; want a harness error: the snippet's place is named twice", args)
+		}
+	}
+	// And the one that is still legal, so the rule is not simply "refuse".
+	c := Case{ID: "t", Snippet: "echo hi", Args: []string{"-c" + ArgSnippet, "name"}}
+	if err := c.validate(); err != nil {
+		t.Errorf("validate: %v; naming the place once is what the field is for", err)
 	}
 }
 

@@ -11,10 +11,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/internal/acp"
 	"github.com/blairham/sh/internal/boundary"
+	"github.com/blairham/sh/repl"
 )
 
 // `sh -acp-connect CMD...`: the other direction. This shell launches a coding
@@ -34,15 +36,26 @@ import (
 //	sh -acp-connect npx @agentclientprotocol/codex-acp
 //
 // Prompts are read from standard input, a line at a time, and what the agent
-// says comes back on standard output. What is deliberately *not* here yet is
-// the surface a person answers from: permission requests are settled by
-// -acp-allow rather than by asking, and an agent that needs authenticating is
-// reported rather than authenticated. docs/design/acp.md has both as the next
-// step, and Terminal Auth — where the client relaunches the agent in an
-// interactive terminal — is the one a shell is unusually well placed to serve.
+// says comes back on standard output.
+//
+// Authentication is the first thing that happens rather than the last: two of
+// the three published agents refuse a session with -32000 until it has, so
+// `-acp-auth ID` names one of the methods the agent advertised and settles it
+// between the handshake and the session. Which method is a person's choice and
+// there is no default, because a client that picked a credential path on
+// somebody's behalf would be guessing about their account.
+//
+// Terminal auth is the half a shell is unusually well placed to serve, and it
+// is not a message: the client runs the agent's own command *again*, with the
+// method's extra arguments, on the terminal this shell is already attached to.
+// That is why it is offered only when this process has one — see terminalAuth.
+//
+// What is deliberately still not here is the surface a person answers a
+// permission request from: they are settled by -acp-allow rather than by
+// asking. docs/design/acp.md has it as the next step.
 
 // connectACP drives an agent and returns the status to exit with.
-func connectACP(sh driver.Shell, allow bool, argv []string) int {
+func connectACP(sh driver.Shell, allow bool, authMethod string, argv []string) int {
 	if len(argv) == 0 {
 		fmt.Fprintln(os.Stderr, "sh: -acp-connect needs the command that starts an agent")
 		return exitFailure
@@ -82,14 +95,35 @@ func connectACP(sh driver.Shell, allow bool, argv []string) int {
 		Boundary: boundary.Boundary{Gate: sh.Gate, Events: sh.Events},
 		Answer:   fixedAnswer(allow),
 		Update:   renderUpdate,
+		// Nil where this process has no terminal, which is also what withholds
+		// the capability: an agent is told we can run a terminal login only
+		// where we can.
+		Relaunch: terminalAuth(argv, os.Stdin, os.Stdout),
 	}
 	client.Connect(fromAgent, toAgent)
 	go func() { _ = client.Serve(ctx) }()
 
-	status := talk(ctx, client)
+	status := talk(ctx, client, authMethod)
 	_ = toAgent.Close()
 	_ = agent.Wait()
 	return status
+}
+
+// listAuth writes out what the agent said it would accept.
+//
+// The kind is named beside the id, because it decides what a person has to do:
+// an agent method opens something of the agent's own and a terminal method
+// hands them a login here. Naming the flag is the other half — a list of ids
+// with no way to use one is a diagnostic that stops short.
+func listAuth(methods []acp.AuthMethod) {
+	if len(methods) == 0 {
+		fmt.Fprintln(os.Stderr, "sh:   it advertised no authentication methods")
+		return
+	}
+	for _, m := range methods {
+		fmt.Fprintf(os.Stderr, "sh:   %s [%s] (%s): %s\n", m.ID, m.Kind(), m.Name, m.Description)
+	}
+	fmt.Fprintf(os.Stderr, "sh: choose one with -acp-auth %s\n", methods[0].ID)
 }
 
 func fail1(format string, args ...any) int {
@@ -97,8 +131,57 @@ func fail1(format string, args ...any) int {
 	return exitFailure
 }
 
-// talk does the handshake and then relays prompts until the input ends.
-func talk(ctx context.Context, client *acp.Client) int {
+// terminalAuth reproduces the agent's own invocation for a terminal login.
+//
+// Nil when in and out are not both a terminal, and that is the whole of the
+// capability decision: the schema says a client should claim terminal
+// authentication only where it can reproduce the agent's invocation
+// interactively, and a shell reading its prompts from a pipe cannot. Claiming
+// it anyway would have the agent offer a person a login that draws nothing.
+//
+// Both streams are checked rather than one. A login TUI reads keystrokes *and*
+// draws, and a `sh -acp-connect … < script` has a terminal on exactly one of
+// the two.
+func terminalAuth(argv []string, in, out *os.File) func(context.Context, []string, map[string]string) error {
+	if !repl.IsTerminal(in) || !repl.IsTerminal(out) {
+		return nil
+	}
+	return func(ctx context.Context, args []string, env map[string]string) error {
+		login := loginCommand(ctx, argv, args, env)
+		// The person's own terminal, which is the point: a login TUI wants
+		// keystrokes and this is the process holding them.
+		login.Stdin, login.Stdout, login.Stderr = in, out, os.Stderr
+		fmt.Fprintf(os.Stderr, "sh: starting %s to log in\n", strings.Join(login.Args, " "))
+		// A zero exit status signals success and any other termination signals
+		// failure, which is exactly what a non-nil error from Run is.
+		return login.Run()
+	}
+}
+
+// loginCommand is the second invocation a terminal method asks for: the same
+// program with the same arguments, plus the method's, and its environment over
+// the top.
+//
+// A second process rather than something done to the running agent — the one
+// on the wire keeps its stdio, which is the protocol — and the agent's own
+// arguments are kept, because the method's are described as additional to the
+// configured invocation rather than as a replacement for it.
+func loginCommand(ctx context.Context, argv, args []string, env map[string]string) *exec.Cmd {
+	line := append(append([]string{}, argv[1:]...), args...)
+	login := exec.CommandContext(ctx, argv[0], line...)
+	// Appended after the inherited environment, because os/exec keeps the last
+	// of a repeated name — which is what "these values override same-named
+	// variables in the base launch configuration" asks for.
+	login.Env = os.Environ()
+	for k, v := range env {
+		login.Env = append(login.Env, k+"="+v)
+	}
+	return login
+}
+
+// talk does the handshake, authenticates if asked to, and then relays prompts
+// until the input ends.
+func talk(ctx context.Context, client *acp.Client, authMethod string) int {
 	info, err := client.Initialize(ctx)
 	if err != nil {
 		return fail1("initialize: %v", err)
@@ -108,6 +191,14 @@ func talk(ctx context.Context, client *acp.Client) int {
 		name = info.AgentInfo.Name + " " + info.AgentInfo.Version
 	}
 	fmt.Fprintf(os.Stderr, "sh: connected to %s, protocol %d\n", name, info.ProtocolVersion)
+
+	if authMethod != "" {
+		if err := client.Authenticate(ctx, authMethod); err != nil {
+			fmt.Fprintf(os.Stderr, "sh: %s did not authenticate: %v\n", name, err)
+			listAuth(info.AuthMethods)
+			return exitFailure
+		}
+	}
 
 	wd, err := os.Getwd()
 	if err != nil {
@@ -122,9 +213,7 @@ func talk(ctx context.Context, client *acp.Client) int {
 			// the useful half, since which one applies decides what a person
 			// has to do about it.
 			fmt.Fprintf(os.Stderr, "sh: %s needs authenticating first: %v\n", name, err)
-			for _, m := range info.AuthMethods {
-				fmt.Fprintf(os.Stderr, "sh:   %s (%s): %s\n", m.ID, m.Name, m.Description)
-			}
+			listAuth(info.AuthMethods)
 			return exitFailure
 		}
 		return fail1("session/new: %v", err)

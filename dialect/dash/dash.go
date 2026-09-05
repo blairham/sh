@@ -221,6 +221,12 @@ func Diagnostics() interp.Diagnostics {
 		// messages dash prints.
 		TypeNotFound:           "%[1]s: not found",
 		TypeNotFoundUnprefixed: true,
+		// And on standard output, where the sentences about the names it
+		// *could* account for go. dash has no option letters on `type` at
+		// all, so `type -t f cd if ls` reads every word as a name and prints
+		// five lines — two misses and three answers — in one stream, in
+		// order. Measured: `type nope 1>/dev/null` prints nothing.
+		TypeNotFoundOnStdout: true,
 		// `command -V` says it the same way, shell's name and all.
 		CommandVNotFound: "%[1]s: not found",
 		// And a missing *command*'s status rather than a plain failure.

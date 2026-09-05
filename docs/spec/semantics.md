@@ -2164,8 +2164,50 @@ bare in ksh93.
 with its own `type` sentence, so the option costs one wording — the
 complaint for a name that is nothing (`Diagnostics.CommandVNotFound`),
 where bash and ksh93 blame `command` and dash and zsh keep the shell's
-name off the line exactly as their `type` does. Status and prefix rule
-are `type`'s own (`TypeNotFoundStatus`, `TypeNotFoundUnprefixed`).
+name off the line exactly as their `type` does. Status, prefix rule and
+stream are `type`'s own (`TypeNotFoundStatus`, `TypeNotFoundUnprefixed`,
+`TypeNotFoundOnStdout`).
+
+**A name `type` could not account for goes to a different stream in each
+half of the panel** (`Diagnostics.TypeNotFoundOnStdout`). bash and ksh93
+write it to standard error; dash and zsh write it to standard output.
+
+    $ type nope 2>/dev/null      $ type nope 1>/dev/null
+    bash   (nothing)             bash   bash: line 1: type: nope: not found
+    dash   nope: not found       dash   (nothing)
+    ksh93  (nothing)             ksh93  ksh: whence: nope: not found
+    zsh    nope not found        zsh    (nothing)
+
+Two shells treat the line as an *answer* — part of what the reader asked
+`type` for — and two treat it as a complaint about the request. It is a
+question of its own: the status is settled separately
+(`TypeNotFoundStatus`, 127 in dash and 1 elsewhere) and so is the prefix
+(`TypeNotFoundUnprefixed`), and nothing about either predicts the stream.
+
+The consequences are the ones a wording difference never has.
+`p=$(type -p nope)` captures the line where the shells report it and
+captures nothing where they complain; `type nope 2>/dev/null` shows it in
+one half and hides it in the other. It is also why a multi-name
+invocation reads in order under the reporting shells: dash has no option
+letters on `type` at all, so `type -t f cd if ls` reads five names and
+prints five lines — two misses and three answers — in one stream, in the
+order they were asked for. Splitting them across two streams leaves a
+reader to interleave them, and under a pipe leaves them unordered.
+
+`command -V` shares the answer, being `type`'s question under another
+name. ksh93's `whence`, which is the builtin its `type` is spelled from,
+complains on standard error to match.
+
+Oracle runs, 2026-09-05, bash 5.3.15, dash, ksh93u+ 2012-08-01, zsh
+5.9.2, each stream redirected separately. Corpus rows
+`type/a-name-that-is-nothing`, `type/p-on-a-name-that-is-nothing`,
+`type/capital-p-on-a-name-that-is-nothing`, `type/dash-t-names-the-kind`,
+`type/dash-t-on-nothing-is-silent-failure`, `type/a-lists-a-keyword`,
+`type/f-skips-or-prints-the-function`,
+`type/several-names-and-a-double-dash` and
+`command/capital-v-a-name-that-is-nothing`. The rows were scoring as
+agreement until #462 stopped merging the two captures before grading, and
+they are the reason it does not.
 
 ### Out of scope, recorded rather than silent: namerefs
 

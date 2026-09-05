@@ -43,6 +43,16 @@ package interp
 // of the script interleave with it, and a caller reading what the shell wrote
 // would find the report missing from what it had just been handed.
 
+// What the guard cannot reach is worth stating, because something else now
+// rests on it. driver's process replacement stops the garbage collector while
+// it places the descriptor table — the numbers a script names are numbers the
+// runtime may own, and a collection between the placing and the execve is
+// fatal — and a recover inside that window would carry on with the collector
+// stopped for the life of the process. It cannot happen from here: execBuiltin
+// asks for the hook only when `!r.inSubshell`, and every goroutine spawn wraps
+// runs a clone, which is a subshell by definition. TestASubshellNeverReplacesTheProcess
+// covers all four.
+
 // spawn runs work on a goroutine of this shell's own, and hands over what the
 // rest of the shell is waiting on when it is done.
 //

@@ -64,6 +64,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | `shift` past the end | fatal | **survives** | fatal | **survives** |
 | unparseable text in a special builtin | **fatal** | survives | survives | survives |
 | failed redirection on a special builtin | **fatal** | survives *(fatal under `set -o posix`)* | **fatal** | survives *(fatal under `emulate sh`)* |
+| duplication target wider than one digit | **refused, fatal** | read as a number | read as a number | read as a number |
 | `.` cannot open its file | **fatal** | survives | **fatal** | survives |
 | `.` with no operand | **not an error** | 2, survives | 2, fatal | 1, survives |
 | `.` passes positional parameters | **no** | yes | yes | yes |
@@ -5377,6 +5378,54 @@ builtin's failure is fatal; bash and zsh report it and carry on.
 A different question from BuiltinSyntaxErrorFatal, which is about text
 that would not *parse* and is true for dash alone. Measured across
 `export`, `readonly` and `unset`.
+
+**`MultiDigitDuplicationTargetIsAnError`** — bash no · dash **yes** · ksh93 no · zsh no
+
+Refuses `>&10`: a duplication whose *target* is written with more than one
+digit. dash alone; the other four read the number and fail at run time with
+`10: Bad file descriptor` at status 1, carrying on.
+
+**It is not a parse refusal, though the shell that has it words it as one.**
+Measured three ways, and each one moves the question out of the grammar:
+
+    sh -n -c 'echo hi >&10'                    accepted, exits 0
+    printf 'echo one\necho hi >&10\n' | sh     prints `one`, then stops
+    n=10; echo hi >&$n                         refused; n=9 is not
+
+So the grammar takes the construct everywhere and the answer is the semantics
+vector's, with the sentence in the dialect's `MultiDigitDuplicationTarget`.
+The third line also fixes *where* the check goes: after the target expands.
+
+The **width** is what is refused, not the value — `>&08` names descriptor 8, a
+number everyone would otherwise take, and is refused just the same. That is
+what keeps it apart from `FdNumberBoundedByOpenFileLimit`, which is about a
+number too large for the process.
+
+The refusal ends the script, and that travels with the answer rather than
+being an axis of its own: one shell in the panel refuses and that shell stops.
+The status is `FatalErrorStatusIsOne`'s, so 2 there.
+
+**The companion question has the opposite dissenter**, which is why this is a
+field of its own rather than the same one read from the other end. How many
+digits may stand *before* the operator is the grammar's — bash alone reads
+`exec 10>f` as a redirection where the other three run a command called `10`
+(`Dialect.MultiDigitFdNumber`). One shell adds a width there; a different one
+takes one away here.
+
+**Reading the file is what settles the panel.** bash 3.2 prints `hi` for `echo
+hi >&10` and reports success, which looks like a fifth answer and is not: that
+build parks its own saved streams at descriptor 10, so something really is
+open there and the write goes to bash's internal copy of standard output
+without crossing any boundary. `cat <&10` in the same build is `Bad file
+descriptor`, which is the tell.
+
+One divergence is recorded rather than modeled: dash reports the line its
+reader has *reached* rather than the redirection's own. With the redirection
+on line 2 of three it says 3, and on the last line it says that line. It is
+the same lookahead that makes the message read like a parse error while the
+parse has already succeeded, and reproducing it would mean keeping a lexer
+position that an evaluated tree does not have. Single-line programs — every
+corpus case here — agree.
 
 **`RedirectErrorOnSpecialBuiltinFatal`** — bash no · dash yes · ksh93 yes · zsh no
 

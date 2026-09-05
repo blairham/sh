@@ -56,6 +56,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.Yes},
 		{"RedirectErrorOnSpecialBuiltinFatal", s.RedirectErrorOnSpecialBuiltinFatal, interp.Yes},
+		{"MultiDigitDuplicationTargetIsAnError", s.MultiDigitDuplicationTargetIsAnError, interp.Yes},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.No},
 		{"TraceShowsItsOwnDisabling", s.TraceShowsItsOwnDisabling, interp.Yes},
 		{"LocalInheritsTheExportAttribute", s.LocalInheritsTheExportAttribute, interp.Yes},
@@ -179,5 +180,32 @@ func TestAFailedRedirectionOnASpecialBuiltinEndsTheScript(t *testing.T) {
 	out, st = answersRun(t, "true 3>/nope/x\necho after\n")
 	if !strings.Contains(out, "after") || st != 0 {
 		t.Errorf("out %q status %d, want an ordinary command to carry on", out, st)
+	}
+}
+
+// The one shell in the panel that will not take a duplication target wider
+// than one digit. It words the refusal as a syntax error and stops, though
+// the parse itself succeeded — `sh -n -c 'echo hi >&10'` accepts the input —
+// so what is asserted here is the behavior and not the sentence's category.
+func TestAWideDuplicationTargetIsRefused(t *testing.T) {
+	out, st := answersRun(t, "echo hi >&10\necho after\n")
+	if !strings.Contains(out, "Syntax error: Bad fd number") {
+		t.Errorf("out %q, want this shell's wording", out)
+	}
+	if strings.Contains(out, "after") {
+		t.Errorf("out %q, want nothing after the redirection to have run", out)
+	}
+	if st != 2 {
+		t.Errorf("status = %d, want this shell's fatal status", st)
+	}
+
+	// And a single digit is left to the ordinary descriptor failure, which
+	// is survivable here as it is everywhere.
+	out, st = answersRun(t, "echo hi >&9\necho after\n")
+	if strings.Contains(out, "Bad fd number") {
+		t.Errorf("out %q, want one digit past the width question", out)
+	}
+	if !strings.Contains(out, "after") || st != 0 {
+		t.Errorf("out %q status %d, want the script to have carried on", out, st)
 	}
 }

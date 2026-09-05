@@ -260,6 +260,91 @@ Because it happens before tokenization, a continuation can split an
 operator or a word anywhere. It does **not** apply inside single quotes,
 where backslash has no special meaning at all.
 
+## Aliases are expanded while the line is read
+
+Alias expansion belongs to this document rather than to the interpreter,
+and that placement is forced: **an alias may hold a keyword.**
+
+    alias iff='if true; then'
+    iff echo yes
+    fi                          →  yes, in all six shells
+
+Nothing substituting at execution time can produce that, because by then
+the grammar has already been decided. (Measured from a script file: an
+alias defined and used on the same *line* is not expanded, in every
+shell, because the line was read before the definition ran.)
+
+It is a **token-level** substitution rather than a textual splice, and
+that is measured rather than assumed. Every diagnostic about a command
+that came from an alias names the line the *alias word* was written on,
+never a line inside the body — bash, dash and ksh93 all report line 3 for
+`alias bad=nosuchcmd` written on line 2 and used on line 3 — and
+`$LINENO` inside a body reads the same. So a spliced token carries the
+position of the word it replaced, every position still points into the
+real input, and there is no position map to keep.
+
+The one place the two models are distinguishable from outside is a body
+containing a **newline**. Measured with `$LINENO` on the line after a
+two-line alias body, against a physical line 5: bash answers 5 and dash,
+ksh93 and zsh all answer 6 — the three count the body's newline and every
+later line shifts by one. There is no axis for this yet; this parser does
+not count it, so it agrees with bash and diverges from two of the shells
+it does expand aliases for. Tracked in issue #583.
+
+### Which shells expand in a script
+
+| shell | `-c` | script file | standard input |
+| --- | --- | --- | --- |
+| bash | no | no | no |
+| dash | yes | yes | yes |
+| ksh93 | yes | yes | yes |
+| zsh | **no** | **yes** | **yes** |
+
+bash needs `shopt -s expand_aliases` and then expands by every route; the
+`no` row is bash without it. All four expand interactively, which the
+front end decides rather than the grammar.
+
+**zsh does not fit a boolean**, and this was measured rather than
+inferred: the answer depends on how the program arrived, not on whether
+anyone is at the keyboard. `ExpandAliases` is a single flag and is false
+for zsh, which is right for `-c` and wrong for the other two routes —
+issue #583.
+
+The algorithm, four rules, each measured and unanimous across the shells
+that expand aliases in scripts:
+
+- **Only an unquoted word in command position.** `"a"` is a command name
+  and not an alias — the rule that lets a script reach the real thing past
+  an alias shadowing it. The lookup is by the token's source text, quotes
+  and all.
+- **Keep expanding while the replacement names another**, with the names
+  already used in *this command* remembered. That is the whole of the
+  recursion guard: `alias echo='echo x'` gives `x hi` rather than looping,
+  and a cycle `a` → `b x` → `a y x` leaves the inner `a` as an ordinary
+  word, which is then not found. The set is fresh per command, so
+  `e yes` and `e two` on two lines both expand.
+- **A value ending in a space makes the word *after* the expansion
+  eligible too.** This is the rule behind `alias sudo='sudo '`. It applies
+  once the expansion's own tokens are spent — the space makes the
+  following word eligible, not the value's own second word.
+- **A value that is empty or all blanks leaves nothing behind**, and the
+  command becomes whatever followed it.
+
+## An unterminated quote at end of input
+
+`echo "abc` with no closing quote is a syntax error in bash, dash and
+zsh — each with its own wording — and in **ksh93 it prints `abc`**, as if
+the closing mark had been there. The same for an unterminated backquote:
+`echo \`echo hi` prints `hi` in ksh93 and nowhere else.
+
+`$(` and `${` are **not** quotes and still refuse, in ksh93 as well:
+`echo $(echo hi` is `` `(' unmatched `` there.
+
+Grammar flag: `CloseQuotesAtEOF` — ksh only. It is a flag rather than a
+leniency applied everywhere because the difference is visible in what a
+script *does*, not only in whether it is diagnosed: a truncated file ends
+up running a command under one shell and not another.
+
 ## Heredoc delimiters
 
 Whether the delimiter is quoted decides whether the body is expanded, and
@@ -323,6 +408,29 @@ and the heredoc swallows the rest of the input. bash warns about that
 (`here-document delimited by end-of-file`); dash, ksh93 and zsh take it
 silently. Reaching the end of input without the delimiter is therefore
 **unfinished input**, not a syntax error.
+
+## `<<<` is a redirection, not a heredoc
+
+It shares a prefix with `<<` and nothing else. There is no delimiter, no
+body read from later lines, and no cooperation between the lexer and the
+parser: **the operator takes exactly one word**, on the same line, and
+that word becomes the input.
+
+    cat <<< hi                    →  `hi\n` — a newline is appended
+    printf '[%s]' <<< one two     →  [two] — `two` is an argument to the
+                                     command, not part of the input
+    x='a b'; cat <<< "$x"         →  a b
+    x='a b'; cat <<< '$x'         →  $x
+
+The word is expanded as a word — quoting decides, exactly as it does
+anywhere else, and a single-quoted word is literal — and it is **not
+field-split** (`word-splitting.md`, where the one dated exception is
+recorded). A trailing newline is always added, so `cat <<< hi` yields
+three bytes and not two.
+
+Grammar flag: `Herestring` — core: on; `posix` and `dash`: off. dash is
+the only panel member without it, and refuses at the operator
+(`Syntax error: redirection unexpected`) rather than at the word.
 
 ## `&>` is the dangerous one
 

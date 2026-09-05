@@ -78,6 +78,32 @@ leave `b"}` behind as text. The **operators inside** (`:-`, `#`, `%`,
 `/`, `:offset:length`, `[index]`) are a separate specification this
 document does not attempt. The lexer only has to find the end.
 
+## `${ cmd;}` — a substitution that runs in the current shell
+
+A space after the brace turns the same delimiters into a **command**
+substitution whose command runs in the shell itself rather than in a
+subshell, so an assignment inside it survives:
+
+    echo "[${ echo hi;}]"     →  [hi]   in bash 5.3 and ksh93
+                                        bad substitution in bash 3.2,
+                                        dash and zsh
+
+Measured 2026-09-05 across the panel. bash 3.2 is on the refusing side,
+which dates the construct rather than disputing it — but the two shells
+that have it are bash 5.3 and ksh93, so it is a two-shell construct and
+not core.
+
+**The space is the entire grammar.** `${x}` is a parameter and `${ x}` is
+a command, and the decision is made on the one character after the brace
+rather than by trying to read a name and failing — which is possible
+because a parameter name may not begin with a blank. Measured, the
+characters that make it a command are exactly space, tab and newline.
+
+The body is delimited exactly as the parameter form is: a `}` inside
+quotes does not close either, and both nest. Grammar flag:
+`CurrentShellSubstitution`, on for bash and ksh, off elsewhere including
+the core.
+
 ## Process substitution: `<(cmd)` and `>(cmd)`
 
 A command run with one end of a pipe, expanding to a **path** the other

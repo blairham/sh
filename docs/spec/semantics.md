@@ -1555,9 +1555,103 @@ outright, fatally, as it refuses any `set` letter it does not have:
                             set: Illegal option -h, exit 2, in dash
 
 Two axes: whether the letter exists at all, and which option it abbreviates.
-The long names raise no question — `set -o hashall`, `set -o trackall` and
-`set -o histignoredups` each belong to the dialects that list them and to no
-other.
+The long names are the dialect's membership rather than an axis — but the
+membership is not the clean three-way split the letters suggest, and this
+file said it was. Re-measured 2026-09-05 by asking each shell for every
+name in both directions:
+
+| long name | bash 5.3 | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `hashall` | yes | no | no | **yes** |
+| `trackall` | no | no | yes | **yes** |
+| `histignoredups` | no | no | no | yes |
+
+**zsh has both spellings of command tracking.** The sentence that stood
+here — each name belonging to the dialects that list them "and to no
+other" — read as though `trackall` were ksh93's alone, and
+`dialect/zsh` had been written to match: `set +o trackall` succeeded in
+real zsh and was refused by ours. Corrected in both places, and pinned by
+`opt/command-tracking-has-two-long-names` so the next reading of the
+table is against the panel rather than against the sentence.
+
+## The long `set -o` names, and why turning one *off* always works
+
+Three questions live behind one builtin, and conflating them is what made
+`set +o posix` — the thirteenth line of Homebrew's own `brew` script —
+stop the shell dead with `invalid option name`:
+
+1. **Does this shell have the name at all?** The dialect's answer.
+2. **Do we implement it?** Ours, and for most of them the answer is no.
+3. **If not, which state are we already in?** Also ours, and it decides
+   whether a request is a lie or a no-op.
+
+The third is the point, and it yields one policy: **a request to turn off
+something this shell was never doing has been granted.** `set +o posix`
+in a shell with no posix mode leaves it exactly where it was asked to be,
+so it succeeds silently. Turning *on* something we do not do would be a
+promise we cannot keep, so it is refused out loud rather than accepted
+quietly. The corpus row is
+`opt/turning-off-a-name-a-shell-does-not-implement`.
+
+The policy stops at names the dialect does not have at all. A name outside
+the table is refused in both directions, because a name that does not
+exist is not a state anything is already in — every shell in the panel
+agrees, in four wordings and at two statuses, and three of them end the
+script over it (`opt/an-unknown-long-name-is-refused`).
+
+**Fourteen names are unanimous** and belong to the core, needing no
+dialect to declare them: `errexit`, `nounset`, `xtrace`, `noclobber`,
+`noglob`, `allexport`, `noexec`, `verbose`, `monitor`, `notify`,
+`ignoreeof`, `nolog`, `vi`, `emacs`. Measured by asking each shell to turn
+each one off; all four accept all fourteen. (ksh93's own `set -o` listing
+prints the *positive* spellings — `unset`, `glob`, `clobber`, `exec`,
+`log` — which is why the membership was established by asking rather than
+by reading the listing.)
+
+The rest are declared by each dialect that has them:
+
+| name | bash 5.3 | ksh93 | zsh |
+| --- | --- | --- | --- |
+| `braceexpand` | yes | yes | yes |
+| `histexpand` | yes | yes | yes |
+| `pipefail` | yes | yes | yes |
+| `privileged` | yes | yes | yes |
+| `keyword` | yes | yes | no |
+| `hashall` | yes | no | yes |
+| `onecmd` | yes | no | yes |
+| `physical` | yes | no | yes |
+| `trackall` | no | yes | yes |
+| `histignoredups` | no | no | yes |
+| `errtrace` | yes | no | no |
+| `functrace` | yes | no | no |
+| `history` | yes | no | no |
+| `interactive-comments` | yes | no | no |
+| `posix` | yes | no | no |
+
+dash declares none of them: it has the fourteen and nothing else.
+
+Of these, four are real here — `pipefail` (the pipeline code reads it),
+`hashall`/`trackall` (one state behind both names: permission to cache
+rather than a promise to), and `histignoredups` (kept truthfully over a
+history this shell does not keep). The rest are recorded with the state we
+are already in, so that turning them off succeeds honestly:
+`braceexpand` and `interactive-comments` are **on**, because we do expand
+braces and do honor comments wherever they are written; everything else is
+**off**. That is not a claim about what any other shell defaults to —
+bash has `hashall` on and we do not hash at all, so ours is off and a
+script turning it off gets what it asked for.
+
+The table is a subset of what these shells actually have — ksh93's own
+listing runs to `bgnice`, `globstar`, `letoctal`, `markdirs` and a dozen
+more, and zsh's to roughly a hundred and eighty. Names outside it are
+refused by name rather than accepted and ignored, for the same reason
+`setopt`'s table is an honest subset: accepting an option we do not honor
+would be a promise.
+
+Two names are one-way. `noexec` ignores being turned back off in all four
+shells — and with it on, the command that would do so never runs anyway.
+`monitor` is the one request in the table a dialect can refuse, which is
+the `set -m` split above.
 
 `set -m` splits the panel three ways, and the split is about the terminal.
 Measured with none — which is what a script has, and how the oracle runs:
@@ -2024,6 +2118,56 @@ The corpus cannot catch this class of difference — `internal/oracle` pins
 `LC_ALL=C` for every run so the record does not depend on the developer's
 environment — so the pinning lives in unit tests that set the variables
 per case.
+
+## Where a one-shell builtin's code lives: register in the core, take it away
+
+Two placements are available for a builtin only some shells have, and the
+choice is made per builtin rather than by a rule that covers all of them.
+It is worth stating because the two look contradictory from outside and
+`core.md`'s boundary reads as forbidding the first.
+
+**Registered in the dialect.** `dialect/zsh/setopt.go`,
+`dialect/ksh/whence.go`, `dialect/ksh/print.go`, `dialect/bash/caller.go`.
+The command is that shell's own idea — its option namespace, its escape
+set, its stack format — and nothing in the core would have a use for it.
+
+**Registered in the core and `Unregister`ed by the dialects without it.**
+`mapfile`, `readarray`, `compgen`, `complete`, `enable`, and the same
+shape for `local` (taken away by ksh93), `let`, `fc`, `typeset`, `disown`
+and `builtin` (taken away by dash).
+
+The criterion is not which shells have it today but **whether the command
+is the substrate's kind of thing**: does it act on state the core already
+owns, in a way a second dialect would plausibly want? `mapfile` reads a
+stream into an array; `compgen` answers from the builtin and function
+tables; `enable` turns a builtin off. All three are questions about the
+interpreter rather than about bash, so the code belongs where the state
+is, and membership is expressed by taking the name away.
+
+Measured 2026-09-05 with `command -v` under an empty PATH, which is how
+the Unregister lists were checked rather than assumed:
+
+| name | bash 5.3 | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `mapfile`, `readarray` | yes | no | no | no |
+| `compgen`, `complete` | yes | no | no | no |
+| `enable` | yes | no | no | **yes** |
+| `let`, `fc`, `typeset`, `disown`, `builtin` | yes | no | yes | yes |
+| `local` | yes | yes | **no** | yes |
+
+`enable` is the row that shows the lists are measured: zsh has it, so
+`dialect/zsh` does not take it away, while `dialect/ksh` and
+`dialect/dash` both do. `builtin` is a further wrinkle — ksh93 has a
+command of that name that does something else entirely, so ksh does not
+unregister it but replaces it.
+
+**This is not a hole in `core.md`'s boundary.** That boundary is about the
+*language* — what parses, and what identical syntax means. Which builtins
+a shell has is neither: ksh93 simply lacks `local` and reports a command
+that was not found. Where a Go function is registered is an implementation
+detail of the extension seam, and a name registered in the core map is not
+thereby in the core language; it is in the core language only if every
+dialect keeps it.
 
 ## Builtins that belong to one shell
 
@@ -2528,6 +2672,56 @@ divergences are deliberate: the empty-stack refusals are bare sentences
 (a shell function cannot reach the engine's location machinery), and
 `DIRSTACK` holds only the pushed entries where bash's also mirrors the
 current directory.
+
+**Rotation and `dirs`' letters** are the half that landed behind that
+single success-path pin and were therefore never exercised (#468).
+Oracle runs, 2026-09-05, and the first thing they settled is that
+**bash and zsh agree about rotation exactly** — twelve rotations
+compared, entry for entry and standing directory for standing
+directory, so there is no axis here at all:
+
+- `pushd +N` counts the *current* directory as entry 0 and turns the
+  stack until entry N is the one the shell stands in. `pushd -N` counts
+  from the other end, so `-0` is the oldest entry.
+- `popd +N` takes an entry out where it stands and leaves the shell
+  where it is; only `+0` — which is what a bare `popd` means — moves it.
+- `dirs -c` empties the stack, `-l` writes `$HOME` out in full where the
+  plain listing abbreviates it, `-p` writes one entry to a line and `-v`
+  numbers them.
+
+The wordings and the option parsers do not agree, and both dialects have
+their own prelude, so those are written twice rather than switched on:
+
+| | bash 5.3 | zsh |
+| --- | --- | --- |
+| index out of range | `pushd: +9: directory stack index out of range` | `pushd: no such entry in dir stack` |
+| nothing pushed | `pushd: directory stack empty` | the same sentence as above |
+| `dirs` out of range | `dirs: 9: …` — the sign dropped | no such form |
+| a letter it has not | `-q: invalid number` + usage, at 2 | `bad option: -q`, at 1 |
+| `dirs` letters | one to a word: `-lv` is a malformed index | they bundle |
+| `-v` numbering | right-aligned in two columns, two spaces | bare, then a tab |
+| bare `pushd`, nothing pushed | `pushd: no other directory`, at 1 | goes to `$HOME` and pushes, at 0 |
+| a `dirs` operand | an index into the stack | a *new* stack |
+
+dash and ksh93 have no `pushd`, `popd` or `dirs` at all — three names
+that resolve to nothing and exit 127. Recorded as absence rather than as
+a divergence, which is what the corpus rows show in those two columns.
+
+Deliberately out of scope, and refused by name rather than read as a
+directory called `-n`: **`pushd -n` and `popd -n`**, which do the stack
+work and stay where they are. Recorded and not implemented: zsh's
+`pushd old new`, the substitution form; zsh's `dirs -c` in company with
+a printing letter, which that engine measures as doing nothing at all;
+and bash's `DIRSTACK` as an assignable variable.
+
+One divergence the rotation work made visible rather than caused: a
+`pushd` whose directory does not exist reports `cd`'s complaint, located
+inside the prelude, where the real shell says
+`pushd: /nope: No such file or directory`. The status and the untouched
+stack are right; the sentence is the function's. The corpus rows
+therefore pin the *status* of every refusal and discard the text, and
+the wordings are pinned in `dialect/bash` and `dialect/zsh` instead,
+where a location prefix is not part of the comparison.
 
 ### Out of scope, recorded rather than silent: newgrp
 

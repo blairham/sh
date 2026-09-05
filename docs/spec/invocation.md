@@ -300,3 +300,52 @@ byte at a time, because reading past the line is exactly the bug. Whether it
 rewinds is asked of the descriptor once and remembered against it, since a
 pipe, a socket and a terminal are all `*os.File` and the type answers nothing
 (#567).
+
+## Writing the input back: `set -v`
+
+**The rule.** Under `-v` the shell writes each **physical line of its input**
+to standard error as it reads it, before running anything that line says. It
+is the input that is echoed and not the commands found in it: a comment and a
+blank line are echoed although they run nothing, a here-document body is echoed
+although it is never parsed as input, and a compound command's lines are all
+echoed before the first iteration of it runs. The line that turns the option on
+is not echoed by the shell it turns on — lines read while it was off are spent,
+not saved.
+
+The front end is where this lives, and it has to be: the runner knows only
+whether the option is on, and the raw text belongs to whatever read it.
+
+### It walks the text once, and used to walk it once per line
+
+The echo has to find the text of the lines it has not written yet. Recovering
+them from a line *number* means splitting the whole program on newlines, and
+the echo is asked once per logical line, so an n-line script split an n-line
+string n times: a slice of every line in the program allocated and discarded
+for every line echoed, which is n² work to write n lines.
+
+Measured, best of five, macOS 25.5, on a program of assignments and nothing
+else so that what is timed is the echoing rather than the running:
+
+| lines | `-v`, before | `-v`, after | the same script with no `-v` | bash 5.3 `-v` |
+| --- | --- | --- | --- | --- |
+| 1 000 | 0.014 s | 0.005 s | 0.004 s | 0.006 s |
+| 2 000 | 0.041 s | 0.006 s | 0.005 s | 0.006 s |
+| 4 000 | 0.147 s | 0.010 s | 0.008 s | 0.008 s |
+| 8 000 | 0.575 s | 0.016 s | 0.012 s | 0.012 s |
+| 16 000 | 2.304 s | 0.028 s | 0.021 s | 0.020 s |
+
+Eight times the lines was fifty times the work, which is the shape of an n²
+and not of an n; it is a factor of four across the board now, and `-v` costs
+about a third again on top of running the script rather than a hundred times
+it. `set -v` is what people reach for when a script is misbehaving, so a shell
+that gets slower the more it has to say is at its worst exactly when it is
+being asked for help (#580).
+
+### Where it lives
+
+`driver`'s `sayVerbose`, and the position it carries. The position is a line
+number **and a byte offset**: the number is what the parser reports and the
+offset is what makes the walk one pass, and neither can be derived from the
+other once the text is growing a line at a time. Lines read while the option is
+off are walked past rather than skipped, for the same reason — the offset has
+to keep up or the line after a mid-script `set -v` cannot be found.

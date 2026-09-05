@@ -26,6 +26,44 @@
     }
   ],
   "results": {
+    "alias/a-body-newline-shifts-later-lines": {
+      "bash": {
+        "Stdout": "one~two~LINENO=5",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~two~LINENO=5",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~two~LINENO=5",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one~two~LINENO=6",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one~two~LINENO=6",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~two~LINENO=6",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "alias/a-diagnostic-names-the-use-site": {
       "bash": {
         "Stdout": "",
@@ -97,6 +135,44 @@
       },
       "zsh": {
         "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "alias/a-script-file-is-a-different-route": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: a: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: a: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 2: a: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "hit",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "hit",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "hit",
         "Stderr": "",
         "Status": 0,
         "TimedOut": false
@@ -4738,6 +4814,44 @@
         "TimedOut": false
       }
     },
+    "case/an-operator-where-a-pattern-belongs": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `\u0026'~\u003cshell\u003e: -c: line 1: `case a in \u0026 ) echo hit;; *) echo miss;; esac'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `\u0026'~\u003cshell\u003e: -c: line 1: `case a in \u0026 ) echo hit;; *) echo miss;; esac'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `\u0026'~\u003cshell\u003e: -c: line 0: `case a in \u0026 ) echo hit;; *) echo miss;; esac'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "miss",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `\u0026' unexpected",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `\u0026'",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "cd/cdpath-may-announce-the-move": {
       "bash": {
         "Stdout": "announced",
@@ -5039,6 +5153,44 @@
         "Stdout": "PL resolved~LP resolved",
         "Stderr": "",
         "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cmd/a-malformed-function-header-blames-two-tokens": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `x'~\u003cshell\u003e: -c: line 1: `f ( x ) { echo hi; }'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `x'~\u003cshell\u003e: -c: line 1: `f ( x ) { echo hi; }'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `x'~\u003cshell\u003e: -c: line 0: `f ( x ) { echo hi; }'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: word unexpected (expecting \")\")",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unexpected",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `}'",
+        "Status": 1,
         "TimedOut": false
       }
     },
@@ -10400,6 +10552,234 @@
         "TimedOut": false
       }
     },
+    "dirstack/clear-the-stack": {
+      "bash": {
+        "Stdout": "st=0~/usr~p=1",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~/usr~p=1",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~/usr~p=1",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~p=127",
+        "Stderr": "\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: dirs: not found~\u003cshell\u003e: 1: dirs: not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127~p=127",
+        "Stderr": "\u003cshell\u003e: pushd: not found~\u003cshell\u003e: pushd: not found~\u003cshell\u003e: dirs: not found~\u003cshell\u003e: dirs: not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~/usr~p=1",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "dirstack/dirs-a-letter-it-does-not-have": {
+      "bash": {
+        "Stdout": "st=2",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "dirstack/dirs-one-to-a-line-and-numbered": {
+      "bash": {
+        "Stdout": "/usr~/tmp~/~--~ 0  /usr~ 1  /tmp~ 2  /",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "/usr~/tmp~/~--~ 0  /usr~ 1  /tmp~ 2  /",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "/usr~/tmp~/~--~ 0  /usr~ 1  /tmp~ 2  /",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: dirs: not found~\u003cshell\u003e: 1: dirs: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: pushd: not found~\u003cshell\u003e: pushd: not found~\u003cshell\u003e: dirs: not found~\u003cshell\u003e: dirs: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "/usr~/tmp~/~--~0\t/usr~1\t/tmp~2\t/",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "dirstack/dirs-unabbreviated": {
+      "bash": {
+        "Stdout": "/ ~~--~/ \u003ctmp\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "/ ~~--~/ \u003ctmp\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "/ ~~--~/ \u003ctmp\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: dirs: not found~\u003cshell\u003e: 1: dirs: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "--",
+        "Stderr": "\u003cshell\u003e: pushd: not found~\u003cshell\u003e: dirs: not found~\u003cshell\u003e: dirs: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "/ ~~--~/ \u003ctmp\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "dirstack/popd-an-entry-that-is-not-the-top": {
+      "bash": {
+        "Stdout": "/usr /~/usr /~pwd=/usr",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "/usr /~/usr /~pwd=/usr",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "/usr /~/usr /~pwd=/usr",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "pwd=/",
+        "Stderr": "\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: popd: not found~\u003cshell\u003e: 1: dirs: not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "pwd=/",
+        "Stderr": "\u003cshell\u003e: pushd: not found~\u003cshell\u003e: pushd: not found~\u003cshell\u003e: popd: not found~\u003cshell\u003e: dirs: not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "/usr /~pwd=/usr",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "dirstack/popd-with-nothing-pushed": {
+      "bash": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "dirstack/push-list-pop": {
       "bash": {
         "Stdout": "/tmp ~~/tmp ~~~~p=0",
@@ -10433,6 +10813,158 @@
       },
       "zsh": {
         "Stdout": "/tmp ~~p=0",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "dirstack/rotate-past-the-end-of-the-stack": {
+      "bash": {
+        "Stdout": "st=1~/tmp /",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~/tmp /",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~/tmp /",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: dirs: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: pushd: not found~\u003cshell\u003e: dirs: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~/tmp /",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "dirstack/rotate-to-an-entry-counted-from-the-back": {
+      "bash": {
+        "Stdout": "/ /usr /tmp~/ /usr /tmp~pwd=/",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "/ /usr /tmp~/ /usr /tmp~pwd=/",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "/ /usr /tmp~/ /usr /tmp~pwd=/",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "pwd=/",
+        "Stderr": "\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: dirs: not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "pwd=/",
+        "Stderr": "\u003cshell\u003e: pushd: not found~\u003cshell\u003e: pushd: not found~\u003cshell\u003e: pushd: not found~\u003cshell\u003e: dirs: not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "/ /usr /tmp~pwd=/",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "dirstack/rotate-to-an-entry-counted-from-the-front": {
+      "bash": {
+        "Stdout": "/tmp / /usr~/tmp / /usr~pwd=/tmp",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "/tmp / /usr~/tmp / /usr~pwd=/tmp",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "/tmp / /usr~/tmp / /usr~pwd=/tmp",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "pwd=/",
+        "Stderr": "\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: dirs: not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "pwd=/",
+        "Stderr": "\u003cshell\u003e: pushd: not found~\u003cshell\u003e: pushd: not found~\u003cshell\u003e: pushd: not found~\u003cshell\u003e: dirs: not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "/tmp / /usr~pwd=/tmp",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "dirstack/rotate-with-nothing-pushed": {
+      "bash": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
         "Stderr": "",
         "Status": 0,
         "TimedOut": false
@@ -12794,6 +13326,82 @@
         "TimedOut": false
       }
     },
+    "expand/a-here-string-is-not-split": {
+      "bash": {
+        "Stdout": "a:b:c~a:b:c",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a:b:c~a:b:c",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a b c~a:b:c",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: redirection unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a:b:c~a:b:c",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a:b:c~a:b:c",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/a-heredoc-body-is-not-split": {
+      "bash": {
+        "Stdout": "[a:b:c]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[a:b:c]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[a:b:c]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[a:b:c]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[a:b:c]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[a:b:c]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "expand/an-assignment-value-from-a-command-is-not-split": {
       "bash": {
         "Stdout": "\u003ca b\u003e",
@@ -12865,6 +13473,44 @@
       },
       "zsh": {
         "Stdout": "\u003ca b\u003e\u003cp:q\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/arithmetic-text-is-not-split": {
+      "bash": {
+        "Stdout": "[3]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[3]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[3]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[3]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[3]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[3]",
         "Stderr": "",
         "Status": 0,
         "TimedOut": false
@@ -19026,6 +19672,82 @@
         "TimedOut": false
       }
     },
+    "opt/an-unknown-long-name-is-refused": {
+      "bash": {
+        "Stdout": "on=2~off=2",
+        "Stderr": "\u003cshell\u003e: line 1: set: zzznosuch: invalid option name~\u003cshell\u003e: line 1: set: zzznosuch: invalid option name",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: set: zzznosuch: invalid option name",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "on=1~off=1",
+        "Stderr": "\u003cshell\u003e: line 0: set: zzznosuch: invalid option name~\u003cshell\u003e: line 0: set: zzznosuch: invalid option name",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -o zzznosuch",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: zzznosuch: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: zzznosuch",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "opt/command-tracking-has-two-long-names": {
+      "bash": {
+        "Stdout": "hashall=0~trackall=2",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "hashall=0",
+        "Stderr": "",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "hashall=0~trackall=1",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "hashall=0~trackall=0",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "opt/dollar-dash-drops-a-letter-turned-back-off": {
       "bash": {
         "Stdout": "no-e",
@@ -19707,6 +20429,44 @@
         "Stdout": "a~b",
         "Stderr": "echo a~echo b",
         "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "opt/turning-off-a-name-a-shell-does-not-implement": {
+      "bash": {
+        "Stdout": "st=0~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -o posix",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: posix",
+        "Status": 1,
         "TimedOut": false
       }
     },
@@ -31490,6 +32250,82 @@
         "TimedOut": false
       }
     },
+    "token/an-unterminated-quote-at-end-of-input": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected EOF while looking for matching `\"'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected EOF while looking for matching `\"'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: unexpected EOF while looking for matching `\"'~\u003cshell\u003e: -c: line 1: syntax error: unexpected end of file",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: Unterminated quoted string",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "abc",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: unmatched \"",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "token/an-unterminated-substitution-still-refuses": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 2: unexpected EOF while looking for matching `)'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 2: unexpected EOF while looking for matching `)'",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: unexpected EOF while looking for matching `)'~\u003cshell\u003e: -c: line 1: syntax error: unexpected end of file",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: end of file unexpected (expecting \")\")",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `(' unmatched",
+        "Status": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: parse error near `$(echo hi'",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "token/backslash-escapes-dollar": {
       "bash": {
         "Stdout": "[a$HOME]",
@@ -35311,13 +36147,13 @@
       },
       "dash": {
         "Stdout": "a",
-        "Stderr": "+ echo a~+ cat",
+        "Stderr": "+ cat~+ echo a",
         "Status": 0,
         "TimedOut": false
       },
       "ksh93": {
         "Stdout": "a",
-        "Stderr": "+ cat~+ echo a",
+        "Stderr": "+ echo a~+ cat",
         "Status": 0,
         "TimedOut": false
       },

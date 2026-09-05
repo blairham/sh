@@ -150,6 +150,17 @@ func MainArgs(sh Shell, argv []string) int {
 	sh = sh.withDefaults(argv)
 	in, err := sh.input(argv)
 	if err != nil {
+		var se *scriptError
+		if errors.As(err, &se) {
+			// A script operand that would not open is the shell failing to
+			// reach a program rather than failing to understand its own
+			// argument vector, and the panel numbers it that way: 127 for a
+			// path that is not there and 126 for one that will not open, in
+			// the shells that tell them apart. Reported before `$0` exists,
+			// so the shell names itself.
+			sh.errf("%s", sh.Diagnostics.ScriptDiagnostic(sh.Name, se.path, se.err))
+			return sh.Diagnostics.ScriptStatus(se.err)
+		}
 		sh.errf("%s: %v\n", sh.Name, err)
 		return usageStatus
 	}
@@ -434,6 +445,22 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 	return args, nil
 }
 
+// scriptError is a script operand the shell could not read, carried as its own
+// type so that the one place which knows an invocation went wrong can still
+// tell *which* way it went wrong.
+//
+// The path travels beside the error because a diagnostic names the operand as
+// it was written, and Go's own message would name it a second time in its own
+// words — "open nosuch.sh: no such file or directory" reads like a Go program
+// and not like a shell.
+type scriptError struct {
+	path string
+	err  error
+}
+
+func (e *scriptError) Error() string { return e.err.Error() }
+func (e *scriptError) Unwrap() error { return e.err }
+
 // operands handles what is left once the options are gone: the command string
 // for `-c`, a script path, or nothing at all, which means standard input.
 func (sh Shell) operands(args []string, inv invocation) (source, error) {
@@ -476,7 +503,11 @@ func (sh Shell) operands(args []string, inv invocation) (source, error) {
 	path := args[0]
 	b, err := os.ReadFile(path)
 	if err != nil {
-		return source{}, err
+		// Not a usage error. Every shell in the panel tells this apart from
+		// being invoked wrongly, and three of the four tell the two ways it
+		// fails apart from each other as well — so the error is wrapped
+		// rather than returned bare, and the dialect words it and numbers it.
+		return source{}, &scriptError{path: path, err: err}
 	}
 	// A shell running a script names the *script* in `$0` and in every
 	// diagnostic, not itself, and reports in the script form — ksh93 also

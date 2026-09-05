@@ -467,6 +467,53 @@ func TestAMissingScriptIsReportedNotRunAsEmpty(t *testing.T) {
 	if !strings.Contains(errs, "absent.sh") {
 		t.Errorf("stderr = %q, want it to name the file it could not read", errs)
 	}
+	// And with the substrate's own number, which is a missing command's
+	// rather than a usage error's: reaching no program at all is not the same
+	// failure as being invoked wrongly, and every shell in the panel keeps
+	// them apart. The pair above pinned only "not zero", which a flat 2 for
+	// everything satisfied.
+	if code != 127 {
+		t.Errorf("status = %d, want 127", code)
+	}
+}
+
+// TestTheDialectWordsAndNumbersAScriptItCannotRead checks the front end asks
+// the dialect for both halves of this, and asks it twice: a path that is not
+// there and a path that is there and will not open are two failures, and three
+// of the four shells in the panel number them differently.
+//
+// Bespoke wordings and statuses rather than any shell's, for the reason every
+// test in this package uses them: the front end's job is to ask, and a test
+// that asserted a real dialect's numbers would pass just as well if the front
+// end had them written into it.
+func TestTheDialectWordsAndNumbersAScriptItCannotRead(t *testing.T) {
+	sh := shell()
+	sh.Diagnostics = interp.Diagnostics{
+		ScriptNotFound:          "bespoke nothing at %[1]s, being %[2]s",
+		ScriptNotFoundStatus:    41,
+		ScriptNotReadable:       "bespoke will not open %[1]s, being %[2]s",
+		ScriptNotReadableStatus: 42,
+	}
+
+	missing := filepath.Join(t.TempDir(), "absent.sh")
+	_, errs, code := runArgs(t, sh, "testsh", missing)
+	if code != 41 {
+		t.Errorf("missing script status = %d, want the dialect's 41", code)
+	}
+	if !strings.Contains(errs, "bespoke nothing at "+missing) {
+		t.Errorf("stderr = %q, want the dialect's wording naming the operand", errs)
+	}
+
+	// A directory is a path that is there and will not be read, and it is the
+	// portable way to say so: a mode-000 file is still readable to a test that
+	// happens to run as root, which is how a container runs one.
+	_, errs, code = runArgs(t, sh, "testsh", t.TempDir())
+	if code != 42 {
+		t.Errorf("unreadable script status = %d, want the dialect's 42", code)
+	}
+	if !strings.Contains(errs, "bespoke will not open ") {
+		t.Errorf("stderr = %q, want the other of the dialect's two wordings", errs)
+	}
 }
 
 // TestTheDialectWordsItsOwnSyntaxError checks the front end asks the dialect

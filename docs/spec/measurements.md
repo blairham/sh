@@ -4801,6 +4801,9 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `invoke/standard-input-that-is-not-a-terminal` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `invoke/the-program-arrives-on-standard-input` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` | `0=[sh]\|n=0` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` |
 | `invoke/dash-s-makes-every-operand-a-parameter` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[sh]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` |
+| `invoke/a-script-that-is-not-there` | `<shell>: 0: cannot open nosuch.sh: No such file` *(status 2)* | `<shell>: nosuch.sh: No such file or directory` *(status 127)* | `<shell>: nosuch.sh: No such file or directory` *(status 127)* | `<shell>: nosuch.sh: No such file or directory` *(status 127)* | `<shell>: nosuch.sh: not found` *(status 127)* | `<shell>: can't open input file: nosuch.sh` *(status 127)* |
+| `invoke/a-script-under-a-directory-that-is-not-there` | `<shell>: 0: cannot open nodir/nosuch.sh: No such file` *(status 2)* | `<shell>: nodir/nosuch.sh: No such file or directory` *(status 127)* | `<shell>: nodir/nosuch.sh: No such file or directory` *(status 127)* | `<shell>: nodir/nosuch.sh: No such file or directory` *(status 127)* | `<shell>: nodir/nosuch.sh: not found` *(status 127)* | `<shell>: can't open input file: nodir/nosuch.sh` *(status 127)* |
+| `invoke/a-script-that-is-there-runs` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` |
 
 - `invoke/errexit-with-a-script` — the first line of most scripts, spelled on the command line instead: a set option given at invocation has to reach the runner, and abandon the script at the failure rather than run to the end
   ```sh
@@ -4860,4 +4863,16 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `invoke/dash-s-makes-every-operand-a-parameter` — -s says the program is on standard input, so the words after it are parameters rather than a script path — the one route where $1 is set and $0 is still the shell. Without it the same two words would make `a` the script and `b` its first parameter
   ```sh
   echo "0=[$0]|n=$#|[$*]"
+  ```
+- `invoke/a-script-that-is-not-there` — an operand naming nothing, so the snippet never reaches the shell — the shape Case.Args exists to allow. The status is the split: bash, ksh93 and zsh answer with a missing command's 127 and dash with its usage 2, where a shell that folded this into the generic input error would answer 2 for all four
+  ```sh
+  echo this file was never written
+  ```
+- `invoke/a-script-under-a-directory-that-is-not-there` — the same diagnosis reached a different way: it is the *parent* that is missing, and every shell in the panel words and numbers it exactly as it does a missing leaf rather than complaining about the directory
+  ```sh
+  echo this file was never written
+  ```
+- `invoke/a-script-that-is-there-runs` — the control the two above need: the same route, with a path that opens, runs the file and reports 0. Without it a front end that called every script path unreadable would pass both failure cases. The truly empty script the pair also wants is not expressible here — the corpus requires a snippet that parses to at least one statement — so it is measured in docs/spec/semantics.md instead
+  ```sh
+  echo ran; echo "st=$?"
   ```

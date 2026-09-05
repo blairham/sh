@@ -167,6 +167,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `expand/brace-range-step-sign-and-direction` | `{10..1..3}~{1..10..-3}` | `10 7 4 1~1 4 7 10` | `10 7 4 1~1 4 7 10` | `{10..1..3}~{1..10..-3}` | `10~1` | `10 7 4 1~10 7 4 1` |
 | `expand/brace-range-negative-step-reversal` | `{3..1..-1}~{1..10..-4}` | `3 2 1~1 5 9` | `3 2 1~1 5 9` | `{3..1..-1}~{1..10..-4}` | `3 2 1~1` | `1 2 3~9 5 1` |
 | `expand/brace-range-alpha-stepped` | `{a..e..2}` | `a c e` | `a c e` | `{a..e..2}` | `a c e` | `{a..e..2}` |
+| `expand/brace-nested` | `{a,{b,c}}~x{1,{2,3}}y` | `a b c~x1y x2y x3y` | `a b c~x1y x2y x3y` | `a b c~x1y x2y x3y` | `a b c~x1y x2y x3y` | `a b c~x1y x2y x3y` |
 | `expand/brace-before-param` | `{1,2}` | `1 2` | `1 2` | `1 2` | `1 2` | `1 2` |
 | `expand/tilde-unquoted` | `abs` | `abs` | `abs` | `abs` | `abs` | `abs` |
 | `expand/tilde-quoted` | `literal` | `literal` | `literal` | `literal` | `literal` | `literal` |
@@ -249,6 +250,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `expand/brace-range-alpha-stepped` — a stride over a letter range: bash and ksh93 expand it, zsh leaves the word alone
   ```sh
   echo {a..e..2}
+  ```
+- `expand/brace-nested` — an alternative may itself be a brace expansion, and a prefix and suffix distribute over the flattened result — {a,{b,c}} is three words, not a word containing braces
+  ```sh
+  echo {a,{b,c}}; echo x{1,{2,3}}y
   ```
 - `expand/brace-before-param` — braces resolve before parameter expansion, so variable ranges cannot work
   ```sh
@@ -2114,6 +2119,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `arith/short-circuit-is-observable` | `[0][0]` | `[0][0]` | `[0][0]` | `[0][0]` | `[0][0]` | `[0][0]` |
 | `arith/assignment-escapes` | `[5][5]` | `[5][5]` | `[5][5]` | `[5][5]` | `[5][5]` | `[5][5]` |
 | `arith/ternary` | `[2][3]` | `[2][3]` | `[2][3]` | `[2][3]` | `[2][3]` | `[2][3]` |
+| `arith/compound-arithmetic-assignment` | `42 7 3 x=3` | `42 7 3 x=3` | `42 7 3 x=3` | `42 7 3 x=3` | `42 7 3 x=3` | `42 7 3 x=3` |
+| `arith/compound-bitwise-assignment` | `8 11 27 x=27` | `8 11 27 x=27` | `8 11 27 x=27` | `8 11 27 x=27` | `8 11 27 x=27` | `8 11 27 x=27` |
+| `arith/compound-shift-assignment` | `48 12 x=12` | `48 12 x=12` | `48 12 x=12` | `48 12 x=12` | `48 12 x=12` | `48 12 x=12` |
+| `arith/logical-not` | `1 0 0` | `1 0 0` | `1 0 0` | `1 0 0` | `1 0 0` | `1 0 0` |
 | `arith/increment-absent-from-dash` | `<shell>: 1: arithmetic expression: expecting primary: "x++"` *(status 2)* | `[1][2]` | `[1][2]` | `[1][2]` | `[1][2]` | `[1][2]` |
 | `arith/comma-absent-from-dash` | `<shell>: 1: arithmetic expression: expecting EOF: "1,2"` *(status 2)* | `[2]` | `[2]` | `[2]` | `[2]` | `[2]` |
 | `arith/exponent-absent-from-dash` | `<shell>: 1: arithmetic expression: expecting primary: "2**10"` *(status 2)* | `[1024]` | `[1024]` | `[1024]` | `[1024]` | `[1024]` |
@@ -2239,6 +2248,22 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `arith/ternary` — the conditional operator
   ```sh
   printf "[%s]" "$((1?2:3))" "$((0?2:3))"
+  ```
+- `arith/compound-arithmetic-assignment` — -=, /= and %= each apply their operator to the target and leave the result behind, so the chain reads 42, 7, 3 off one variable
+  ```sh
+  x=44; a=$((x-=2)); b=$((x/=6)); c=$((x%=4)); echo "$a $b $c x=$x"
+  ```
+- `arith/compound-bitwise-assignment` — the bitwise half of the assignment family: &=, ^= and |= are POSIX and unanimous, dash included
+  ```sh
+  x=12; a=$((x&=10)); b=$((x^=3)); c=$((x|=16)); echo "$a $b $c x=$x"
+  ```
+- `arith/compound-shift-assignment` — <<= and >>= complete the family, and the second reads the first's result rather than the original — the target is written before the next expression runs
+  ```sh
+  x=3; a=$((x<<=4)); b=$((x>>=2)); echo "$a $b x=$x"
+  ```
+- `arith/logical-not` — ! yields 1 on zero and 0 on anything else — a truth rather than a bit flip, so !7 is 0 and not -8
+  ```sh
+  echo "$((!0)) $((!1)) $((!7))"
   ```
 - `arith/increment-absent-from-dash` — ++ is not POSIX and dash rejects it
   ```sh
@@ -2914,6 +2939,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `heredoc/an-unquoted-body-expands` | `VAL VAL sub 3` | `VAL VAL sub 3` | `VAL VAL sub 3` | `VAL VAL sub 3` | `VAL VAL sub 3` | `VAL VAL sub 3` |
 | `heredoc/a-quoted-delimiter-takes-the-body-whole` | `don't $x \$x \\ "hi"` | `don't $x \$x \\ "hi"` | `don't $x \$x \\ "hi"` | `don't $x \$x \\ "hi"` | `don't $x \$x \\ "hi"` | `don't $x \$x \\ "hi"` |
 | `heredoc/a-continued-line-is-joined` | `abcdef` | `abcdef` | `abcdef` | `abcdef` | `abcdef` | `abcdef` |
+| `heredoc/dash-strips-tabs-and-only-tabs` | `one~two~    spaced~zero~after` | `one~two~    spaced~zero~after` | `one~two~    spaced~zero~after` | `one~two~    spaced~zero~after` | `one~two~    spaced~zero~after` | `one~two~    spaced~zero~after` |
+| `heredoc/dash-does-not-strip-spaces-from-the-delimiter` | `body~    EOF` | `<script>: line 4: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')~body~    EOF` | `<script>: line 4: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')~body~    EOF` | `body~    EOF` | `body~    EOF` | `body~    EOF` |
+| `heredoc/the-body-follows-the-next-newline` | `one~after~done` | `one~after~done` | `one~after~done` | `one~after~done` | `one~after~done` | `one~after~done` |
+| `heredoc/two-on-one-line-collect-in-operator-order` | `first~second` | `first~second` | `first~second` | `first~second` | `first~second` | `first~second` |
 | `redir/the-shell-picks-the-descriptor` | `<shell>: 1: exec: {fd}: not found` *(status 127)* | `hi` | `hi` | `<shell>: line 0: exec: {fd}: not found` *(status 127)* | `hi` | `hi` |
 | `redir/a-picked-descriptor-may-outlive-its-command` | `<shell>: 3: Syntax error: Bad fd number` *(status 2)* | `one~two` | `one~two` | `<shell>: line 1: $fd: ambiguous redirect~dead~one {fd}` | `one~<shell>[2]: 10: cannot open [Bad file descriptor]~dead` | `one~two` |
 | `redir/closing-through-a-name-that-holds-nothing` | `<shell>: 1: exec: {nofd}: not found` *(status 127)* | `<shell>: line 1: nofd: ambiguous redirect~st=1` | `<shell>: line 1: nofd: ambiguous redirect` *(status 1)* | `<shell>: line 0: exec: {nofd}: not found` *(status 127)* | `st=0` | `<shell>:1: parameter nofd does not contain a file descriptor~st=1` |
@@ -3084,6 +3113,37 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   abc\
   def
   EOF
+  ```
+- `heredoc/dash-strips-tabs-and-only-tabs` — <<- strips every leading tab from a body line and from the delimiter line, and nothing else: a spaces-indented line keeps its spaces, an unindented one is untouched, and the tabbed delimiter still ends the body
+  ```sh
+  cat <<-EOF
+  	one
+  		two
+      spaced
+  zero
+  	EOF
+  echo after
+  ```
+- `heredoc/dash-does-not-strip-spaces-from-the-delimiter` — the other half of tabs-and-only-tabs: a spaces-indented delimiter never matches even under <<-, so the body runs to the end of the input — the shell that remarks on that does so here too
+  ```sh
+  cat <<-EOF
+  body
+      EOF
+  ```
+- `heredoc/the-body-follows-the-next-newline` — the body is not after the operator but after the newline: the rest of the line is ordinary input, so the command after the semicolon runs with the body already consumed
+  ```sh
+  cat <<EOF; echo after
+  one
+  EOF
+  echo done
+  ```
+- `heredoc/two-on-one-line-collect-in-operator-order` — two here-documents behind one newline: the first operator takes the first body and the second the second, unanimously — reversed collection would print them swapped
+  ```sh
+  cat <<A; cat <<B
+  first
+  A
+  second
+  B
   ```
 - `redir/the-shell-picks-the-descriptor` — three of the four allocate a descriptor for `{fd}` and assign its number to the variable; to dash the braces are a command word and exec goes looking for it
   ```sh
@@ -3332,6 +3392,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `pat/star-stops-at-slash-in-glob` | `[*f]` | `[*f]` | `[*f]` | `[*f]` | `[*f]` | `<shell>:1: no matches found: *f` *(status 1)* |
 | `pat/only-a-leading-period-is-special` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` | `[a.b]` |
 | `pat/bracket-set-and-range` | `set range` | `set range` | `set range` | `set range` | `set range` | `set range` |
+| `pat/bracket-dash-at-an-edge-is-literal` | `trailing~leading~a~not-b` | `trailing~leading~a~not-b` | `trailing~leading~a~not-b` | `trailing~leading~a~not-b` | `trailing~leading~a~not-b` | `trailing~leading~a~not-b` |
 | `pat/bracket-bang-negates-everywhere` | `negated` | `negated` | `negated` | `negated` | `negated` | `negated` |
 | `pat/bracket-caret-is-an-extension` | `no-caret` | `caret` | `caret` | `caret` | `caret` | `caret` |
 | `pat/character-class` | `class` | `class` | `class` | `class` | `class` | `class` |
@@ -3391,6 +3452,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `pat/bracket-set-and-range` — the two universal bracket forms
   ```sh
   case b in [abc]) printf set;; esac; case c in [a-z]) printf " range";; esac
+  ```
+- `pat/bracket-dash-at-an-edge-is-literal` — a dash first or last in a bracket expression is a character rather than a range, so [a-] matches a and a literal dash and nothing between
+  ```sh
+  case - in [a-]) echo trailing;; esac; case - in [-a]) echo leading;; esac; case a in [a-]) echo a;; esac; case b in [a-]) echo range;; *) echo not-b;; esac
   ```
 - `pat/bracket-bang-negates-everywhere` — ! is the portable negation
   ```sh
@@ -3484,6 +3549,9 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `cond/command-language-is-the-other-way` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
 | `cond/file-kind-operators` | `<shell>: 1: [[: not found~<shell>: 1: [[: not found~plain~<shell>: 1: [[: not found~<shell>: 1: [[: not found~notblock~<shell>: 1: [[: not found~notsocket` | `fifo~plain~chardev~notblock~notsocket` | `fifo~plain~chardev~notblock~notsocket` | `fifo~plain~chardev~notblock~notsocket` | `fifo~plain~chardev~notblock~notsocket` | `fifo~plain~chardev~notblock~notsocket` |
 | `cond/permission-bit-operators` | `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: -u: not found~<shell>: 1: -k: not found~plain` | `setgid~setuid~sticky~plain` | `setgid~setuid~sticky~plain` | `setgid~setuid~sticky~plain` | `setgid~setuid~sticky~plain` | `setgid~setuid~sticky~plain` |
+| `cond/existence-and-kind-operators` | `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found~e-missing~<shell>: 1: [[: not found~<shell>: 1: [[: not found~not-dir~<shell>: 1: [[: not found~<shell>: 1: [[: not found~not-file` | `e-file~e-dir~e-missing~dir~not-dir~file~not-file` | `e-file~e-dir~e-missing~dir~not-dir~file~not-file` | `e-file~e-dir~e-missing~dir~not-dir~file~not-file` | `e-file~e-dir~e-missing~dir~not-dir~file~not-file` | `e-file~e-dir~e-missing~dir~not-dir~file~not-file` |
+| `cond/permission-operators` | `<shell>: 1: [[: not found~<shell>: 1: [[: not found~not-writable~<shell>: 1: [[: not found~not-executable~<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found~not-readable` | `readable~not-writable~not-executable~writable~executable~not-readable` | `readable~not-writable~not-executable~writable~executable~not-readable` | `readable~not-writable~not-executable~writable~executable~not-readable` | `readable~not-writable~not-executable~writable~executable~not-readable` | `readable~not-writable~not-executable~writable~executable~not-readable` |
+| `cond/size-operator` | `<shell>: 1: [[: not found~<shell>: 1: [[: not found~is-empty~<shell>: 1: [[: not found~missing` | `full~is-empty~missing` | `full~is-empty~missing` | `full~is-empty~missing` | `full~is-empty~missing` | `full~is-empty~missing` |
 | `cond/newer-older-and-equal-times` | `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found~neither` | `newer~older~neither` | `newer~older~neither` | `newer~older~neither` | `newer~older~neither` | `newer~older~neither` |
 | `cond/a-missing-file-is-older-diverges` | `<shell>: 1: [[: not found~nt=127~<shell>: 1: [[: not found~ot=127~<shell>: 1: [[: not found~mirror=127` | `nt=0~ot=0~mirror=1` | `nt=0~ot=0~mirror=1` | `nt=0~ot=0~mirror=1` | `nt=0~ot=0~mirror=1` | `nt=1~ot=1~mirror=1` |
 | `cond/same-file-is-identity` | `<shell>: 1: [[: not found~<shell>: 1: [[: not found~distinct` | `linked~distinct` | `linked~distinct` | `linked~distinct` | `linked~distinct` | `linked~distinct` |
@@ -3554,6 +3622,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `cond/permission-bit-operators` — -g, -u and -k read the setgid, setuid and sticky bits — unanimous, and octal modes rather than symbolic ones so the umask has no say
   ```sh
   touch f; chmod 2600 f; [[ -g f ]] && echo setgid; chmod 4600 f; [[ -u f ]] && echo setuid; chmod 1600 f; [[ -k f ]] && echo sticky; chmod 600 f; [[ -g f || -u f || -k f ]] || echo plain
+  ```
+- `cond/existence-and-kind-operators` — -e answers for anything that exists where -f and -d split it by kind: a directory passes -e and fails -f, a plain file the reverse — unanimous in the three shells that have the construct
+  ```sh
+  touch f; mkdir d; [[ -e f ]] && echo e-file; [[ -e d ]] && echo e-dir; [[ -e missing ]] || echo e-missing; [[ -d d ]] && echo dir; [[ -d f ]] || echo not-dir; [[ -f f ]] && echo file; [[ -f d ]] || echo not-file
+  ```
+- `cond/permission-operators` — -r, -w and -x ask about access rather than existence, shown by flipping the owner bits under the same name — octal modes so the umask has no say, and each operator is pinned both true and false
+  ```sh
+  touch f; chmod 400 f; [[ -r f ]] && echo readable; [[ -w f ]] || echo not-writable; [[ -x f ]] || echo not-executable; chmod 300 f; [[ -w f ]] && echo writable; [[ -x f ]] && echo executable; [[ -r f ]] || echo not-readable
+  ```
+- `cond/size-operator` — -s wants a size greater than zero, so a file that exists but is empty answers the same as one that does not exist at all
+  ```sh
+  touch empty; printf x > full; [[ -s full ]] && echo full; [[ -s empty ]] || echo is-empty; [[ -s missing ]] || echo missing
   ```
 - `cond/newer-older-and-equal-times` — -nt and -ot compare modification times, pinned with touch -t rather than a sleep — and equal times are neither newer nor older, which a <= in either direction would get wrong
   ```sh

@@ -197,6 +197,10 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `callstack/nesting-is-innermost-first` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `g f` | `g f` | `g f` | *(no output, status 0)* | *(no output, status 0)* |
 | `array/a-subscript-past-the-end` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=2 all=[x y]` | `n=2 all=[x y]` | `n=2 all=[x y]` | `n=2 all=[x y]` | `n=5 all=[x    y]` |
 | `array/removing-one-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=2 all=[p q]` | `n=2 all=[p q]` | `n=2 all=[p q]` | `n=2 all=[p q]` | `n=3 all=[p  r]` |
+| `array/appending-to-an-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][yQ]~[x][yQ][z]` | `[x][yQ]~[x][yQ][z]` | **2>** `<shell>: a[-1]: bad array subscript` *(status 1)* | `[x][yQ]~[x][yQ][z]` | `[x][yQ]~[x][yQ][z]` |
+| `array/appending-to-an-element-inherits-the-base` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[xQ][y]` |
+| `array/appending-to-an-unset-element` | **2>** `<shell>: 1: a[3]+=Q: not found~<shell>: 1: Bad substitution` *(status 2)* | `[Q]` | `[Q]` | `[Q]` | `[Q]` | `[Q]` |
+| `array/appending-to-an-associative-element` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]+=x: not found~<shell>: 1: m[k]+=Q: not found~<shell>: 1: Bad substitution` *(status 2)* | `[xQ]` | `[xQ]` | `[xQ]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[xQ]` | `[xQ]` |
 | `assoc/a-string-subscript` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: Bad substitution` *(status 2)* | `v k` | `v k` | `v 0` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `v k` | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `assoc/the-subscript-is-not-arithmetic` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[1+1]=x: not found~<shell>: 1: Bad substitution` *(status 2)* | `[x]` | `[x]` | `[x]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[x]` | `[x]` |
 | `assoc/values-in-some-order` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[b]=2: not found~<shell>: 1: m[a]=1: not found~<shell>: 1: Bad substitution~<shell>: 1: Bad substitution` *(status 2)* | `1 2 n=2` | `1 2 n=2` | `1 n=1` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `1 2 n=2` | `1 2 n=2` |
@@ -363,6 +367,22 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `array/removing-one-element` — the same question reached from the other side, and `unset a[i]` had been doing nothing at all: the subscript was read as part of the name, so a name that was never in the table was deleted from it. What the hole then looks like is the same axis
   ```sh
   a=(p q r); unset "a[2]"; echo "n=${#a[@]} all=[${a[@]}]"
+  ```
+- `array/appending-to-an-element` — `+=` is two operations sharing a spelling and the subscript is what tells them apart: with one it joins the element it names, without one it adds an element after the last. Both halves in one case because the bug was that the first did what neither does — it replaced the element — and a case showing only the array form would have passed throughout. The subscript is `-1` so the case says nothing about the array base: the last element is the last element in all three shells with arrays. bash 3.2 refuses it, which is about having no negative subscripts rather than about appending — `array/appending-to-an-element-inherits-the-base` is the row it answers
+  ```sh
+  a=(x y); a[-1]+=Q; printf "[%s]" "${a[@]}"; echo; a+=(z); printf "[%s]" "${a[@]}"; echo
+  ```
+- `array/appending-to-an-element-inherits-the-base` — the base axis reaches the append: the same numeral names the second element in two shells and the first in the third, exactly as a plain `a[1]=Q` does. Appending is therefore not a form with a subscript rule of its own, which is the claim worth pinning before anything special-cases it
+  ```sh
+  a=(x y); a[1]+=Q; printf "[%s]" "${a[@]}"; echo
+  ```
+- `array/appending-to-an-unset-element` — an element that was never assigned has nothing to append to, and all three place the value as it stands rather than refusing. Unanimous, and it is the half a fix is most likely to get wrong by reading an absent element as an error instead of as an empty one
+  ```sh
+  a[3]+=Q; echo "[${a[3]}]"
+  ```
+- `array/appending-to-an-associative-element` — the declared form appends by key just as the indexed form appends by subscript — unanimous in the three that have the attribute. Both assignments are written with `+=` so that the first one also stands as the unset-key case, and so that dash, which has neither, reports the two identically
+  ```sh
+  typeset -A m; m[k]+=x; m[k]+=Q; echo "[${m[k]}]"
   ```
 - `assoc/a-string-subscript` — the declaration that turns a subscript from an expression into a key. bash and ksh93 store under the letter and answer it back; zsh has the arrays but rejects `${!m[@]}` outright; dash has none of it — the issue's own snippet, spelled with the name all three declarers share
   ```sh

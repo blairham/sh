@@ -181,6 +181,32 @@ type Rule struct {
 	Decision interp.Decision
 	Sel      Selector
 	Pattern  string
+	// Alias is the other name for the same place, where the pattern names one
+	// the platform has two names for, and empty otherwise. A rule matches
+	// either, so this is always a widening and never a rewrite — see alias.go
+	// for why keeping both is the answer here and not what a kernel does.
+	//
+	// It is filled in when the rule is parsed, so it costs nothing per decision
+	// and reads nothing from the filesystem at all.
+	Alias string
+}
+
+// String renders a rule the way a policy file writes one, with what it
+// normalized to said out loud.
+//
+// Silence is the thing to avoid here. A rule that quietly covers a second path
+// is a rule whose meaning is not in the file, and this is what lets a front end
+// show the operator that the two names are one place — see cmd/sh, which prints
+// it under -trace-events.
+func (r Rule) String() string {
+	out := decisionName(r.Decision) + " " + r.Sel.String()
+	if r.Pattern != "" {
+		out += " " + r.Pattern
+	}
+	if r.Alias != "" {
+		out += " (also " + r.Alias + ")"
+	}
+	return out
 }
 
 // Policy is a rule set and its defaults. Build one with Parse or New; the zero
@@ -249,7 +275,7 @@ func (p *Policy) Allow(_ context.Context, a interp.Action) interp.Decision {
 			continue
 		}
 		if r.Sel.takesPattern() {
-			if !addressable || !match(r.Pattern, path) {
+			if !addressable || !r.matches(path) {
 				continue
 			}
 		}
@@ -283,9 +309,30 @@ func (p *Policy) defaultFor(sl slot) bool {
 	return p.allowSlot[sl]
 }
 
+// matches reports whether a path is one this rule speaks about, under either of
+// the names the platform has for it.
+func (r Rule) matches(path string) bool {
+	return match(r.Pattern, path) || (r.Alias != "" && match(r.Alias, path))
+}
+
+// Normalized is the rules that gained a second name when they were parsed, for
+// a caller that wants to tell an operator what their file turned into.
+func (p *Policy) Normalized() []Rule {
+	if p == nil {
+		return nil
+	}
+	var out []Rule
+	for _, r := range p.rules {
+		if r.Alias != "" {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 func (p *Policy) execAllows(path string) bool {
 	for _, r := range p.rules {
-		if r.Decision == interp.Allow && r.Sel == SelExec && match(r.Pattern, path) {
+		if r.Decision == interp.Allow && r.Sel == SelExec && r.matches(path) {
 			return true
 		}
 	}

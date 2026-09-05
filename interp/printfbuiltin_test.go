@@ -19,7 +19,110 @@ func printfSem() Semantics {
 	s.PrintfBackslashC = PrintfBackslashCLiteral
 	s.PrintfQuote = PrintfQuoteBackslash
 	s.PrintfLengthModifiers = PrintfLengthModifiersAbsent
+	s.PrintfHexEscape = PrintfHexEscapeAbsent
 	return s
+}
+
+// `\x` in a format is four readings, and they differ on three separate
+// details: whether the escape is there at all, how wide the digit run is, and
+// what an empty run means.
+func TestPrintfHexEscapeIsFourReadings(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		policy PrintfHexEscapePolicy
+		src    string
+		want   string
+	}{
+		{"absent leaves the escape as written", PrintfHexEscapeAbsent, `printf 'a\x41Z'`, `a\x41Z`},
+		{"a byte reads two digits", PrintfHexEscapeByte, `printf 'a\x41Z'`, "aAZ"},
+		{"a byte stops at two", PrintfHexEscapeByte, `printf '[\x0ff]'`, "[\x0ff]"},
+		{"a byte is a byte and not a code point", PrintfHexEscapeByte, `printf 'a\x80Z'`, "a\x80Z"},
+		{"one digit is enough", PrintfHexEscapeByte, `printf 'a\x1Z'`, "a\x01Z"},
+		{"an empty run leaves the escape standing", PrintfHexEscapeByte, `printf 'a\xZ'`, "sh: printf: missing hex digit for \\x\na\\xZ"},
+		{"an empty run is a zero", PrintfHexEscapeByteOrNul, `printf 'a\xZ'`, "a\x00Z"},
+		{"a code point still stops at two for a byte", PrintfHexEscapeCodePoint, `printf 'a\xffZ'`, "a\xffZ"},
+		{"a third digit makes it a code point", PrintfHexEscapeCodePoint, `printf '[\x0ff]'`, "[ÿ]"},
+		{"every digit is taken", PrintfHexEscapeCodePoint, `printf '[\x0041]'`, "[A]"},
+		{"a code point reads an empty run as a zero", PrintfHexEscapeCodePoint, `printf 'a\xZ'`, "a\x00Z"},
+		{"past the last code point there is, nothing", PrintfHexEscapeCodePoint, `printf '[\xffffffffffffffffffffff]'`, "[]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfHexEscape = tc.policy
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got %q status %d, want %q and 0", out, st, tc.want)
+			}
+		})
+	}
+}
+
+// The reading that leaves `\x` standing says so on standard error, and still
+// reports success — a warning rather than a failure.
+func TestPrintfHexEscapeWithNoDigitsWarnsWithoutFailing(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfHexEscape = PrintfHexEscapeByte
+	diag := Diagnostics{PrintfMissingHexDigit: "printf: no hex digit"}
+	out, st := run(t, `printf 'a\xZ'`, func(r *Runner) {
+		r.Semantics = &sem
+		r.Diagnostics = &diag
+	})
+	if out != "sh: printf: no hex digit\na\\xZ" || st != 0 {
+		t.Errorf("got %q status %d, want the complaint, the text, and 0", out, st)
+	}
+}
+
+// The axis is asked only where a `\x` is actually in the format.
+func TestPrintfHexEscapeIsAskedOnlyWhenOneIsThere(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfHexEscape = PrintfHexEscapeUnspecified
+
+	out, st := run(t, `printf '[%d]' 42`, func(r *Runner) { r.Semantics = &sem })
+	if out != "[42]" || st != 0 {
+		t.Errorf("a format with no hex escape: got %q status %d, want [42] and 0", out, st)
+	}
+	out, st = run(t, `printf 'a\x41Z'`, func(r *Runner) { r.Semantics = &sem })
+	if st != 2 || !strings.Contains(out, "no dialect was chosen") {
+		t.Errorf("a format with one: got %q status %d, want a refusal and 2", out, st)
+	}
+}
+
+// `%b` expands the escape set `echo` expands, which is not the format's: the
+// question a format answers about `\x` is not put to a `%b` argument, so the
+// axis is not asked there and the escape stays as written.
+func TestPrintfHexEscapeIsNotAskedOfABArgument(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfHexEscape = PrintfHexEscapeUnspecified
+	out, st := run(t, `printf '%b' 'a\x41Z'`, func(r *Runner) { r.Semantics = &sem })
+	if out != `a\x41Z` || st != 0 {
+		t.Errorf("got %q status %d, want the escape as written and 0", out, st)
+	}
+}
+
+// A format is a byte string. Every route from the format to the output writes
+// the byte it decoded rather than the text an encoding spells that number
+// with, which a rune conversion would: 0xc0 is one byte and not two.
+//
+// The word already held the byte — `%s` and a variable both carried it
+// through untouched — so this was never about how a word is read.
+func TestPrintfWritesBytesAndNotEncodedRunes(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfHexEscape = PrintfHexEscapeByte
+	for _, tc := range []struct{ name, src, want string }{
+		{"a literal byte in the format", "printf 'a\xc0Z'", "a\xc0Z"},
+		{"an octal escape in the format", `printf 'a\300Z'`, "a\xc0Z"},
+		{"a hexadecimal escape in the format", `printf 'a\xc0Z'`, "a\xc0Z"},
+		{"a literal byte in an operand", "printf '%s' 'a\xc0Z'", "a\xc0Z"},
+		{"the first byte of a %c operand", "printf '%c' '\xc0Z'", "\xc0"},
+		{"a %c operand is still padded", "printf '[%3c]' '\xc0Z'", "[  \xc0]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want || st != 0 {
+				t.Errorf("got % x status %d, want % x and 0", out, st, tc.want)
+			}
+		})
+	}
 }
 
 // The C length modifiers are a set with three answers, and every one of them

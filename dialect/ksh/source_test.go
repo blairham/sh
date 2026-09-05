@@ -393,3 +393,19 @@ func TestABadBuiltinOption(t *testing.T) {
 		t.Errorf("said %q, want usage=true", out)
 	}
 }
+
+// `\x` reads every digit that follows, and more than two of them make the
+// value a code point rather than a byte.
+func TestPrintfHexEscapeReadsACodePoint(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf 'a\x41Z'`, "aAZ"},
+		{`printf 'a\xffZ'`, "a\xffZ"},
+		{`printf '[\x0ff]'`, "[\u00ff]"},
+		{`printf 'a\xZ'`, "a\x00Z"},
+	} {
+		if out, _ := runKsh(t, dir, tc.src+"\n"); out != tc.want {
+			t.Errorf("%s: said % x, want % x", tc.src, out, tc.want)
+		}
+	}
+}

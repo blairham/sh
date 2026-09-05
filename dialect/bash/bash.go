@@ -242,6 +242,10 @@ func Semantics() interp.Semantics {
 	s.PrintfEmptyIsNotANumber = interp.Yes
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
+	// `\x41` is an `A`, and at most two digits: `\x0ff` is 0x0f then an
+	// `f`. A `\x` with no digit after it stands as written, with a warning
+	// on standard error and a status that is still zero.
+	s.PrintfHexEscape = interp.PrintfHexEscapeByte
 	// `%zX`, `%ld`, `%jd` and any run of the letters, all of them read and
 	// thrown away: `%hhd` with 300 is 300.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC99
@@ -600,6 +604,7 @@ func Diagnostics() interp.Diagnostics {
 		CdOldpwdNotSet:              "cd: OLDPWD not set",
 		PrintfBadNumber:             "printf: %[1]s: invalid number",
 		PrintfBadVerb:               "printf: `%[1]s': invalid format character",
+		PrintfMissingHexDigit:       `printf: missing hex digit for \x`,
 		PrintfBadOption:             "printf: %[1]s: invalid option",
 		TrapBarePrintNeedsCondition: "trap: -P requires at least one signal name",
 		PrintfBadOptionShowsUsage:   true,

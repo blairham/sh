@@ -97,6 +97,9 @@ func Semantics() interp.Semantics {
 	s.PrintfEmptyIsNotANumber = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
+	// No `\x` in a format at all: `printf 'a\x41Z'` is the six characters
+	// as written, which is the whole panel's one holdout.
+	s.PrintfHexEscape = interp.PrintfHexEscapeAbsent
 	// None: `%ld` is the conversion `l`, which dash does not have.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersAbsent
 	// No `%(fmt)T`: `%(` is a directive this shell does not have.

@@ -495,6 +495,21 @@ type Semantics struct {
 	// to tell the middle one from the last: ksh93's output *looks* truncated
 	// next to zsh's until the control character is read as a byte.
 	PrintfBackslashC PrintfBackslashCPolicy
+	// PrintfHexEscape is how a printf format reads `\x`, and it is four
+	// answers rather than a presence:
+	//
+	//	printf 'a\x80Z'   bash, ksh93, zsh  a<0x80>Z    one raw byte
+	//	                  dash              a\x80Z      not an escape at all
+	//	printf 'a\x0ffZ'  bash, zsh         a<0x0f>ffZ  two digits, then text
+	//	                  ksh93             a<0xc3><0xbf>Z  every digit, a code point
+	//	printf 'a\xZ'     bash              a\xZ        and a complaint
+	//	                  ksh93, zsh        a<0x00>Z    an empty digit run is zero
+	//	                  dash              a\xZ        not an escape at all
+	//
+	// Asked only where a `\x` is actually in the format. It is a question
+	// about the *format*: `%b` expands the escape set `echo` expands, where
+	// `\x` is a separate question with a different grouping.
+	PrintfHexEscape PrintfHexEscapePolicy
 	// PrintfLengthModifiers is which C length modifiers a conversion may
 	// carry between its precision and its verb — `%zX`, `%ld`, `%jd`.
 	//
@@ -2757,6 +2772,67 @@ func (r *Runner) backslashC() PrintfBackslashCPolicy {
 	if p == PrintfBackslashCUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
 			`printf: \c: the shells disagree here and no dialect was chosen`))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// PrintfHexEscapePolicy is how a printf format reads `\x`.
+//
+// Four answers, measured digit by digit rather than assumed from the two the
+// escape is usually described with. The panel splits on three separate
+// details and each split falls in a different place, which is why this is one
+// enumeration and not a bool:
+//
+//   - Whether the escape exists. dash has no `\x`, so `printf 'a\x41Z'` is
+//     the four characters as written.
+//   - How wide the digit run is. bash and zsh stop at two and the value is a
+//     byte, so `\x0ff` is 0x0f followed by an `f`. ksh93 takes every digit
+//     that follows and the value is a *code point* once there are more than
+//     two of them: `\xff` is one byte and `\x0ff` is U+00FF in UTF-8.
+//   - What an empty digit run means. bash leaves `\x` standing and says so
+//     on standard error; ksh93 and zsh read it as zero and write a NUL.
+type PrintfHexEscapePolicy int
+
+const (
+	// PrintfHexEscapeUnspecified is no answer, and is refused like any other.
+	PrintfHexEscapeUnspecified PrintfHexEscapePolicy = iota
+	// PrintfHexEscapeAbsent has no `\x` at all, so the backslash and the
+	// letter stand as written: dash.
+	PrintfHexEscapeAbsent
+	// PrintfHexEscapeByte reads at most two digits as one byte, and leaves
+	// `\x` with no digit after it as written: bash 3.2 and bash 5.3.
+	PrintfHexEscapeByte
+	// PrintfHexEscapeByteOrNul reads the same two digits, and an empty digit
+	// run as a zero: zsh.
+	PrintfHexEscapeByteOrNul
+	// PrintfHexEscapeCodePoint reads every digit that follows. Up to two of
+	// them is a byte and three or more is a code point written in UTF-8, and
+	// an empty run is a zero: ksh93.
+	PrintfHexEscapeCodePoint
+)
+
+func (p PrintfHexEscapePolicy) String() string {
+	switch p {
+	case PrintfHexEscapeAbsent:
+		return "absent"
+	case PrintfHexEscapeByte:
+		return "two digits, one byte"
+	case PrintfHexEscapeByteOrNul:
+		return "two digits, one byte, and no digits is a NUL"
+	case PrintfHexEscapeCodePoint:
+		return "every digit, a code point"
+	}
+	return "unspecified"
+}
+
+// hexEscape resolves the axis, and only for a format that has a `\x` in it.
+func (r *Runner) hexEscape() PrintfHexEscapePolicy {
+	p := r.sem().PrintfHexEscape
+	if p == PrintfHexEscapeUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			`printf: \x: the shells disagree here and no dialect was chosen`))
 		r.status = 2
 		r.unspecified = true
 	}

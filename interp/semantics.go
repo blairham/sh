@@ -560,6 +560,18 @@ type Semantics struct {
 	// looked for and run.
 	CommandNotFoundStatusIsNotFound Answer
 
+	// SubshellJobTable is what a subshell sees of the jobs its parent
+	// started. Three answers, and neither of the two-way splits it contains
+	// is the same pair:
+	//
+	//	sleep 1 & jobs -p | cat; echo T    bash, ksh93 → the pid   dash, zsh → nothing
+	//	sleep 1 & (jobs -p); echo T        ksh93 → the pid         bash, dash, zsh → nothing
+	//
+	// so no single yes-or-no can hold both rows for bash. See
+	// SubshellJobsKeptOutsideACompound for what bash is doing and for the
+	// part of it that is measured and not modeled.
+	SubshellJobTable SubshellJobTable
+
 	// SetFTurnsOffGlobbing makes `set -f` the short spelling of `set -o
 	// noglob`. True in bash, dash and ksh93. zsh spells that option the long
 	// way only: there `-f` is about startup files and leaves globbing alone,
@@ -1409,6 +1421,33 @@ type Semantics struct {
 	// so the number the variable holds is already dead.
 	FdVariableOutlivesTheCommand Answer
 
+	// ExecOpenedFdReachesACommand hands a descriptor that `exec`'s own
+	// redirection list opened to whatever the shell runs next — the flock
+	// and shared-log idioms, and every script that gives a child a logging
+	// descriptor. Four of the five say yes; ksh93 alone closes anything
+	// above 2 that `exec` opened when it invokes another program, which its
+	// manual states as the rule rather than leaving it to be discovered.
+	//
+	// POSIX decides nothing here: the Shell Command Language says whether
+	// standard input, output and error are open for a utility and is silent
+	// about the rest, so both answers conform and there is no majority to
+	// defer to on the standard's authority.
+	//
+	// It is narrower than "that shell hands nothing over", and the boundary
+	// is measured. A descriptor the *caller* opened crosses in every shell,
+	// this one included, and closing it closes it for the child everywhere.
+	// A command's own redirection crosses everywhere too — `sh -c '… >&3'
+	// 3>f` writes, and so does `exec 3>f; sh -c '… >&3' 3>&3`, where
+	// restating the number on the command brings it back. What is withheld
+	// is what `exec` opened: the numbered form, a `{v}>f` the shell numbered
+	// itself, and a `9<&3` duplicated from an inherited descriptor, while
+	// the inherited 3 it was copied from still crosses.
+	//
+	// Read where the outbound table is built, so an external command and a
+	// process replacement get the same answer — measured the same in both,
+	// which is one divergence rather than two.
+	ExecOpenedFdReachesACommand Answer
+
 	// FdVariableBadCloseIsAnError refuses `exec {name}>&-` when the name
 	// holds no descriptor number. ksh93 says nothing and reports success.
 	FdVariableBadCloseIsAnError Answer
@@ -1998,6 +2037,14 @@ type Semantics struct {
 	// answers are not the same: bash, ksh93 and zsh take it and dash refuses
 	// it.
 	UnsetTakesASubscript Answer
+
+	// UnsetArrayAt is what `unset a[@]` and `unset a[*]` do, and the panel
+	// gives three answers rather than two — see UnsetArrayAtPolicy.
+	//
+	// Asked only for those two spellings. Every other subscript is an
+	// expression in all three shells with arrays, so `unset a[1]` never
+	// reaches the question.
+	UnsetArrayAt UnsetArrayAtPolicy
 }
 
 // NameOperands is what a builtin takes where it wants a name.
@@ -2304,12 +2351,15 @@ func PosixSemantics() Semantics {
 		MissingFileIsOlder: No,
 		// POSIX gives -t a file descriptor, and dash refuses anything that
 		// is not a number.
-		TerminalTestRequiresANumber:        Yes,
-		FcEmptyHistoryIsAnError:            No,
-		JobControlAbsenceIsReportedFirst:   No,
-		CdpathAnnouncesTheDirectory:        Yes,
-		FdVariableOutlivesTheCommand:       Yes,
-		FdVariableBadCloseIsAnError:        Yes,
+		TerminalTestRequiresANumber:      Yes,
+		FcEmptyHistoryIsAnError:          No,
+		JobControlAbsenceIsReportedFirst: No,
+		CdpathAnnouncesTheDirectory:      Yes,
+		FdVariableOutlivesTheCommand:     Yes,
+		FdVariableBadCloseIsAnError:      Yes,
+		// The standard is silent and four of the five hand the descriptor
+		// over, which is what the flock and shared-log idioms are built on.
+		ExecOpenedFdReachesACommand:        Yes,
 		ReadRequiresAVariableName:          No,
 		ArrayLengthWithoutSubscriptIsCount: No,
 		EmptyArrayAtIsOneEmptyField:        No,
@@ -2678,6 +2728,62 @@ func (r *Runner) bracketPolicy() BracketPolicy {
 	if p == BracketUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
 			"an unterminated bracket expression: the shells disagree here and no dialect was chosen"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// UnsetArrayAtPolicy is what `unset a[@]` — and `unset a[*]`, which every
+// shell measured treats identically — does to the array.
+//
+// Three answers rather than a switch, and the third is not a variation on the
+// other two: one shell does not read `@` as a spelling for "every element" at
+// all, so the brackets hold an arithmetic expression like any other and `@` is
+// not one. That is a different question from what is left behind, and folding
+// it into a boolean would have had to call it "does not clear", which says
+// nothing about why.
+type UnsetArrayAtPolicy int
+
+const (
+	// UnsetArrayAtUnspecified is no answer, and is refused like any other.
+	UnsetArrayAtUnspecified UnsetArrayAtPolicy = iota
+	// UnsetArrayAtIsASubscript reads the brackets as it reads any other
+	// subscript: ksh93, where `@` is not an expression and the operand is
+	// reported as a bad one.
+	UnsetArrayAtIsASubscript
+	// UnsetArrayAtRemovesEveryElement leaves the array with nothing in it:
+	// bash, in both builds measured. A name that is not an array is reported
+	// rather than emptied, and one that holds nothing at all is quietly left
+	// alone.
+	UnsetArrayAtRemovesEveryElement
+	// UnsetArrayAtLeavesOneEmptyElement replaces what the subscript names
+	// with a single empty element: zsh, where `unset` of a span is the span
+	// becoming one empty string rather than the subscripts going away — so a
+	// three-element array comes back holding one empty element and a scalar
+	// comes back empty.
+	UnsetArrayAtLeavesOneEmptyElement
+)
+
+func (p UnsetArrayAtPolicy) String() string {
+	switch p {
+	case UnsetArrayAtIsASubscript:
+		return "a subscript"
+	case UnsetArrayAtRemovesEveryElement:
+		return "removes every element"
+	case UnsetArrayAtLeavesOneEmptyElement:
+		return "leaves one empty element"
+	}
+	return "unspecified"
+}
+
+// unsetArrayAt resolves the axis, and only for the two spellings that raise
+// it: `unset a[1]` names one element in all three and needs no answer.
+func (r *Runner) unsetArrayAt() UnsetArrayAtPolicy {
+	p := r.sem().UnsetArrayAt
+	if p == UnsetArrayAtUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			"`unset a[@]`: the shells disagree here and no dialect was chosen"))
 		r.status = 2
 		r.unspecified = true
 	}

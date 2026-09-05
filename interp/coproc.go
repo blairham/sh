@@ -47,6 +47,7 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 		Command: name,
 	}
 	sub := r.clone()
+	sub.inheritJobs(jobBoundaryBackground)
 	sub.retagTrapBoundary(trapContextBackground)
 	sub.bg = job
 	sub.Stdin = childIn

@@ -1672,6 +1672,31 @@ var Corpus = []Case{
 		Why:     "the refusal itself: four wordings, two of them with a usage line naming the letters that shell really does have, and 2 everywhere but zsh. An option silently ignored is the failure this pins against",
 	},
 	{
+		ID: "jobs/a-subshell-and-the-parents-jobs", Category: "builtins",
+		Snippet: `sleep 0.4 & first=$!; (jobs -p) >s.txt; x=; read x <s.txt; case $x in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "something else";; esac; wait`,
+		Why:     "ksh93 alone hands a subshell the jobs the shell around it started; bash, dash and zsh hand it an empty table. Through a file rather than by printing the id, because a process id is not the same twice — and with commands after the `( … )`, because a subshell that is the last thing a script does need not be a subshell at all: without them dash answers the parent's job instead",
+	},
+	{
+		ID: "jobs/a-pipeline-element-and-the-parents-jobs", Category: "builtins",
+		Snippet: `sleep 0.4 & first=$!; jobs -p | cat >s.txt; x=; read x <s.txt; case $x in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "something else";; esac; wait`,
+		Why:     "`jobs -p | cat` is the idiom the question is really about, and it splits the panel differently from the row above: bash and ksh93 list the parent's job here, dash and zsh list nothing. Two rows, two different pairs, which is why one yes-or-no cannot hold both",
+	},
+	{
+		ID: "jobs/a-group-in-a-pipeline-and-the-parents-jobs", Category: "builtins",
+		Snippet: `sleep 0.4 & first=$!; { jobs -p; } | cat >s.txt; x=; read x <s.txt; case $x in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "something else";; esac; wait`,
+		Why:     "the same pipeline with braces around the same builtin, and bash changes its answer: a simple command as an element keeps the parent's jobs there and a compound one does not. ksh93 still lists and dash and zsh still do not, so this is the row that says bash's answer is neither of the other two",
+	},
+	{
+		ID: "jobs/a-substitution-and-the-parents-jobs", Category: "builtins",
+		Snippet: `sleep 0.4 & first=$!; case "$(jobs -p)" in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "something else";; esac; wait`,
+		Why:     "command substitution goes with the simple pipeline element rather than with the parentheses it is written like — bash and ksh93 list, dash and zsh do not. `cat <(jobs -p)` is measured the same way in the three shells that have it",
+	},
+	{
+		ID: "jobs/a-subshell-lists-a-job-it-started-itself", Category: "builtins",
+		Snippet: `sleep 0.4 & first=$!; (sleep 0.4 & jobs -p >s.txt; wait); x=; read x <s.txt; case $x in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "its own";; esac; wait`,
+		Why:     "the control for all four rows above: whatever a shell hands a subshell of the parent's table, a job the subshell starts for itself is listed there — unanimously. Without it an empty listing would be evidence that `jobs` does not work in a subshell rather than that the table is emptied on the way in",
+	},
+	{
 		ID: "jobs/two-job-specs-in-the-order-written", Category: "builtins",
 		Snippet: `sleep 0.4 & sleep 0.5 & jobs %2 %1; wait`,
 		Why:     "operands settle the order themselves — `%2 %1` lists 2 then 1 in all five, including the two whose bare listing starts from the newest — and each row keeps the job's own number rather than counting from the start of the listing",
@@ -2211,6 +2236,26 @@ var Corpus = []Case{
 		Why:     "the operand reached `unset` unexpanded — it was in single quotes — and two of the three still substitute into it, because an arithmetic expression is expanded before it is read wherever one is written. ksh93 does not and says so, which is the divergence worth having recorded rather than discovered",
 	},
 	{
+		ID: "array/unsetting-every-element", Category: "expansion",
+		Snippet: `a=(p q r); unset "a[@]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the spelling that starts a list over, and it did nothing at all: `@` is not an arithmetic expression, so the subscript failed to evaluate and the element nobody named was quietly not removed — the array came back with every element in place at status 0. Three answers among the shells that have arrays, which is why it is a policy and not a switch: bash empties it, zsh replaces the elements with a single empty one, and ksh93 has no such reading at all and reports the operand as a bad subscript with the array untouched",
+	},
+	{
+		ID: "array/unsetting-every-element-with-a-star", Category: "expansion",
+		Snippet: `a=(p q r); unset "a[*]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the star is the at here, which is worth pinning because the two part company elsewhere — a quoted `${a[*]}` joins where `${a[@]}` splits. Every column answers this exactly as it answers the `[@]` spelling, so the case exists to say the two are one question rather than to record a difference",
+	},
+	{
+		ID: "array/unsetting-every-element-then-appending", Category: "expansion",
+		Snippet: `a=(p q); unset "a[@]"; a+=(z); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "where the next append lands, which is what shows the difference between the two shells that clear rather than only counting it: bash has nothing left and `z` is the whole array, zsh has one empty element left and `z` goes after it. A count alone cannot tell an emptied array from one holding a single empty string, and a script that resets a list and pushes onto it sees the difference on the first read",
+	},
+	{
+		ID: "array/unsetting-every-element-of-a-scalar", Category: "expansion",
+		Snippet: `a=hello; unset "a[@]"; echo "st=$? [$a]"`,
+		Why:     "the same spelling on a name that is no array, which is where the two readings show what they mean: bash means take every element away, a scalar has none, and it refuses and says so at 1; zsh means the span becomes one empty string, a scalar is one such span, and it comes back empty at 0. ksh93 reports its bad subscript and leaves the value alone. Nobody turns the scalar into an array",
+	},
+	{
 		ID: "param/a-substring-offset-is-an-expression", Category: "parameter expansion",
 		Snippet: `x=abcdef; echo "[${x:1+1:2}]"`,
 		Why:     "the same numeral-only reading, reached through the substring rather than through a subscript: unanimous in all four with substrings, and taking the numeral alone gave an offset of 0 — `ab`, which is a real substring of the right length and so looks like an answer rather than a failure",
@@ -2244,6 +2289,11 @@ var Corpus = []Case{
 		ID: "array/a-quoted-empty-array-with-a-star", Category: "expansion",
 		Snippet: `a=(); set -- "${a[*]}"; echo "n=$#"`,
 		Why:     "`[*]` joins, so a quoted one is a single field whether or not there is anything to join — one, unanimously, where `[@]` splits the panel. The two spellings differing on an empty array is the sharpest statement that the star is not the at",
+	},
+	{
+		ID: "assoc/unsetting-at-is-a-key-and-not-every-element", Category: "expansion",
+		Snippet: `typeset -A m; m[k]=v; m[j]=w; unset "m[@]"; echo "n=${#m[@]}"`,
+		Why:     "the whole-array reading belongs to the indexed array alone. With the attribute on, `@` is a key like any other and nothing was stored under it, so all three that have the attribute leave both elements where they are — including the two that clear an indexed array through the same spelling. It is the boundary a fix is likeliest to cross by accident, because the two kinds share a builtin and an operand shape",
 	},
 	{
 		ID: "assoc/a-missing-key-quoted-is-one-field", Category: "expansion",
@@ -2401,6 +2451,16 @@ echo "st=$?"`,
 		ID: "redir/exec-descriptor-reaches-an-external-child", Category: "redirection",
 		Snippet: `exec 3>f; /bin/sh -c "echo child >&3" 2>/dev/null; exec 3>&-; cat f`,
 		Why:     "a descriptor parked with `exec 3>file` is inherited by an external command, which is what the flock and shared-log idioms are built on — the child writes in every shell but ksh93, which alone keeps it to itself. The child's complaint is discarded because its wording is a fact about whatever /bin/sh is on the machine",
+	},
+	{
+		ID: "redir/a-commands-own-redirection-crosses", Category: "redirection",
+		Snippet: `/bin/sh -c "echo own >&3" 3>f 2>/dev/null; echo "st=$?"; cat f`,
+		Why:     "the boundary of the shell that keeps `exec`'s descriptors to itself: a redirection the *command* carries crosses in every shell, ksh93 included, so what that shell withholds is what `exec` opened rather than what the table holds",
+	},
+	{
+		ID: "redir/restating-the-number-hands-an-exec-descriptor-over", Category: "redirection",
+		Snippet: `exec 3>f; /bin/sh -c "echo restated >&3" 3>&3 2>/dev/null; echo "st=$?"; cat f`,
+		Why:     "the same boundary read from the other side, and unanimous: `exec 3>f` alone leaves the child nothing in ksh93, and naming 3 again on the command hands it over there — so the rule is about which redirection list opened the descriptor and not about the number",
 	},
 	{
 		ID: "redir/exec-descriptor-reaches-a-replacement", Category: "redirection",

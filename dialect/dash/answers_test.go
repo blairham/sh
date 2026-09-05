@@ -71,6 +71,9 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	if got, want := s.ExitArgument, interp.ExitArgStrict; got != want {
 		t.Errorf("ExitArgument = %v, want %v", got, want)
 	}
+	if got, want := s.SubshellJobTable, interp.SubshellJobsCleared; got != want {
+		t.Errorf("SubshellJobTable = %v, want %v", got, want)
+	}
 }
 
 // The invocation answers this preset gives that are not Answers.

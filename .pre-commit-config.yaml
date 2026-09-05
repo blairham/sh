@@ -6,7 +6,6 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files
-      - id: check-merge-conflict
       - id: detect-private-key
   # Go hygiene, at commit time. This repository had none of it, so a
   # formatting slip or an untidy go.mod was only caught by CI — minutes later,
@@ -41,9 +40,15 @@ repos:
     hooks:
       - id: gitleaks
   - repo: https://github.com/blairham/pre-commit-hooks
-    rev: v0.2.0
+    rev: v0.3.0
     hooks:
       - id: check-license-headers
         args: [--license, Apache-2.0]
       # go.mod's `go` directive and .tool-versions' golang pin must match.
       - id: check-go-version-sync
+      # Replaces upstream's check-merge-conflict, which missed a diff3 base
+      # marker that lived in docs/spec/semantics.md until an audit found it by
+      # eye. Upstream knows only the three markers of the default conflict
+      # style, and scans only while a merge is in progress — so it cannot see a
+      # marker that was already committed, which is the only kind still here.
+      - id: check-conflict-markers

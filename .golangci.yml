@@ -5,6 +5,29 @@ run:
   timeout: 10m
   tests: true
   modules-download-mode: readonly
+  # Several worktrees of this module are linted at once, and by default the
+  # second one to start refuses outright: golangci-lint takes a file lock and
+  # gives up after five seconds with "parallel golangci-lint is running". The
+  # pre-commit hook inherits that, so a *commit* fails for a reason that has
+  # nothing to do with the commit.
+  #
+  # The lock is `$TMPDIR/golangci-lint.lock` — it is not inside the cache
+  # directory, so pointing GOLANGCI_LINT_CACHE somewhere per-worktree does not
+  # move it and does not help. Two runs with private cold caches still collide.
+  #
+  # The lock exists to serialise writers to the shared cache, and the cache no
+  # longer needs it. Its keys are hashed over module-relative paths and the
+  # issues it stores carry module-relative positions that are re-anchored on
+  # read, so an entry written by one checkout is correct for another; the store
+  # underneath is the Go build cache format, which is written by atomic rename
+  # and is designed for concurrent use. Four runs across two worktrees against
+  # one cold shared cache agree exactly.
+  #
+  # Sharing the cache is also the point. A checkout that shares a warm one
+  # lints in 0.7s; the same checkout with a private cold cache takes 37s —
+  # which is both the 54x tax a per-worktree cache would charge every new
+  # worktree, and the reason the five-second lock timeout was ever reached.
+  allow-parallel-runners: true
 
 linters:
   settings:

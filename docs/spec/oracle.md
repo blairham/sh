@@ -26,11 +26,27 @@ invoked is incomplete.
 
 ## Producing a fact
 
-A case is a snippet plus, for each shell in the panel, the combined
-output and exit status observed. Both halves are recorded; a construct
-that prints the same thing with a different status is still a difference.
+A case is a snippet plus, for each shell in the panel, what it wrote to
+standard output, what it wrote to standard error, and the exit status
+observed. All three are recorded; a construct that prints the same thing
+with a different status is still a difference.
 
 Rules that keep the facts honest:
+
+- **The two streams are facts about each other.** A diagnostic is part
+  of the behavior, so which stream carried it is measured rather than
+  merged away. `type` on a name that is nothing prints to standard
+  output in dash and zsh; a harness that captured one merged stream
+  could not see a shell that printed the same words to the other one,
+  and could not see an implementation that got it backwards.
+- **Order across the two streams is not a fact.** They are captured on
+  separate pipes, so a row says what each stream carried and not how the
+  two interleaved. That was never worth recording: a shell block-buffers
+  standard output into a pipe and writes standard error unbuffered, so a
+  merged capture recorded the order the buffers flushed rather than the
+  order the shell wrote. A case that means to pin ordering across the
+  streams says so the only reliable way, by redirecting one of them
+  where the snippet itself can see it.
 
 - **Compare against the binary, never against a belief.** If the panel
   disagrees with the POSIX text, record what the binaries did and note

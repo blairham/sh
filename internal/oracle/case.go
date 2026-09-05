@@ -4351,6 +4351,52 @@ echo after`,
 		Snippet: `disable cd 2>/dev/null; enable cd 2>/dev/null; echo "st=$?"`,
 		Why:     "switching a builtin off is not forgetting it: the name comes back with the same builtin behind it. Standard error is discarded because three of the four have neither word and their complaint is about a missing command, which the case above pins",
 	},
+	// --- compgen: the completion generator, and the one shell that has it -
+	{
+		ID: "compgen/names-of-the-shells-own-builtins", Category: "builtins",
+		Snippet: `compgen -A builtin retu; echo "st=$?"`,
+		Why:     "the shape Homebrew's `brew` uses to check that none of the shell's own commands has been shadowed, and the reason `compgen` is registered at all. One shell answers; the other three have no such command and say so at 127. A prefix narrow enough to name one builtin, because the whole list differs between bash builds",
+	},
+	{
+		ID: "compgen/the-short-letter-for-builtin", Category: "builtins",
+		Snippet: `compgen -b retu; echo "st=$?"`,
+		Why:     "`-b` is the short spelling of `-A builtin` and must answer identically to the case above — the letter table and the action table are two ways to the same generator, and only a case that runs both notices when one of them drifts",
+	},
+	{
+		ID: "compgen/names-of-the-defined-functions", Category: "builtins",
+		Snippet: `f1() { :; }; f2() { :; }; compgen -A function f; echo "st=$?"`,
+		Why:     "the second thing this shell can generate from what it knows, and the one whose contents a case can fix: the functions are defined in the snippet, so the answer does not depend on the build the way the builtin list does",
+	},
+	{
+		ID: "compgen/there-is-no-short-letter-for-function", Category: "builtins",
+		Snippet: `f1() { :; }; compgen -u f1; echo "st=$?"`,
+		Why:     "`-u` is *user* names, not functions, and bash's letters have no short spelling for the function action at all. This shell's letter table said otherwise and answered `f1` where bash answers nothing at 1 — a wrong claim in the one direction nothing catches, since it produces an answer rather than an error",
+	},
+	{
+		ID: "compgen/nothing-matched-is-a-failure", Category: "builtins",
+		Snippet: `compgen -A builtin zzzznosuch; echo "st=$?"`,
+		Why:     "an empty completion is 1 rather than 0, because the question a completer asks is whether there is anything to offer — the opposite of the usual reading of a command that printed nothing without complaining",
+	},
+	{
+		ID: "compgen/no-action-is-a-quiet-success", Category: "builtins",
+		Snippet: `compgen foo; echo "st=$?"`,
+		Why:     "a word with nothing to generate it from is 0 and silent, which is the other half of the case above: 1 means asked-and-empty and 0 means never asked",
+	},
+	{
+		ID: "compgen/the-first-word-is-the-one-matched", Category: "builtins",
+		Snippet: `compgen -A builtin retu read; echo "st=$?"`,
+		Why:     "the extra words are ignored rather than replacing the first, which this shell had the wrong way round; measured both orders, since one order alone cannot tell first-wins from last-wins",
+	},
+	{
+		ID: "compgen/an-action-name-that-is-not-one", Category: "builtins",
+		Snippet: `compgen -A nosuchaction x; echo "st=$?"`,
+		Why:     "`invalid action name` at 2 — the wording that separates a typo from a shell that is missing something, which is the distinction the action table exists to keep",
+	},
+	{
+		ID: "compgen/an-action-this-shell-does-not-generate", Category: "builtins",
+		Snippet: `compgen -A alias zzzznosuch; echo "st=$?"`,
+		Why:     "bash generates it and answers 1 for no match; this shell refuses it as not implemented at 2, and the divergence is recorded here deliberately — an action generated from a guess would be a promise the shell cannot keep, and the honest refusal is the answer docs/spec/semantics.md scopes",
+	},
 	{
 		ID: "glob/matches-are-in-order", Category: "expansion",
 		Script:  true,
@@ -4829,6 +4875,69 @@ out=$(CDPATH=./pool cd sub)
 		Stdin:   ArgSnippet + "\n",
 		Snippet: `echo "0=[$0]|n=$#|[$*]"`,
 		Why:     "-s says the program is on standard input, so the words after it are parameters rather than a script path — the one route where $1 is set and $0 is still the shell. Without it the same two words would make `a` the script and `b` its first parameter",
+	},
+	{
+		ID: "invoke/a-read-takes-the-next-line-of-a-program-on-standard-input", Category: "invocation",
+		// The line a diagnostic names is the whole point: the shells that
+		// hand the line to `read` never parse it, so the line after it is
+		// numbered as though it were not there.
+		LayoutSensitive: true,
+		Args:            []string{"--"},
+		Stdin:           ArgSnippet + "\nDATA-LINE\necho end\n",
+		Snippet:         "read x\necho \"[$x]\"",
+		Why:             "the split this route turns on, and the reason it matters: bash, ksh93 and zsh read the program a line at a time off the descriptor, so `read x` takes the *next line of the program*, `echo` is never parsed, and DATA-LINE is the first thing run — at line 2, because a line handed to `read` is never counted. dash takes the program in blocks and keeps what it took, so `read` finds end of input, prints [] and DATA-LINE runs at line 3. Taking the whole input for everyone was the bug (#470): a payload piped after a `curl | sh` script was executed as commands",
+	},
+	{
+		ID: "invoke/a-read-at-the-end-of-a-program-on-standard-input", Category: "invocation",
+		Args:    []string{"--"},
+		Stdin:   ArgSnippet + "\n",
+		Snippet: `read x; echo "$? [$x]"`,
+		Why:     "the half of the split that is unanimous: with nothing after it there is nothing to take, so `read` reports end of input at 1 and leaves the variable empty in all four. It is the control for the case above — the difference there is what the *rest of the program* is, not how `read` behaves",
+	},
+	{
+		ID: "invoke/a-while-read-loop-eats-the-rest-of-a-program-on-standard-input", Category: "invocation",
+		LayoutSensitive: true,
+		Args:            []string{"--"},
+		Stdin:           ArgSnippet + "\nA\nB\nC\n",
+		Snippet:         `while read -r l; do echo "got:$l"; done`,
+		Why:             "the shape a script piped to a shell is actually written in, and the sharpest reading of the same split: three shells feed the loop the three lines that follow it and dash runs all three as commands. One loop, two entirely different programs, decided by nothing in the text",
+	},
+	{
+		ID: "invoke/a-command-reads-the-rest-of-a-program-on-standard-input", Category: "invocation",
+		LayoutSensitive: true,
+		Args:            []string{"--"},
+		Stdin:           ArgSnippet + "\nNOT-A-COMMAND\necho end\n",
+		Snippet:         "echo one\ncat",
+		Why:             "not a builtin's doing: an external command inherits the descriptor the program is on, so `cat` prints the rest of the program instead of running it — in bash, ksh93 and zsh alike. dash's block has already taken those bytes, so cat sees end of input and the lines run. The descriptor is shared with everything the script starts, which is why this is a property of the route and not of `read`",
+	},
+	{
+		ID: "invoke/exec-repoints-the-rest-of-a-program-on-standard-input", Category: "invocation",
+		LayoutSensitive: true,
+		Args:            []string{"--"},
+		Stdin:           ArgSnippet + "\necho never reached\n",
+		Snippet:         "printf 'FIRST\\nSECOND\\n' > d.txt\nexec 0< d.txt",
+		Why:             "what the sharing really is: the program *is* the descriptor, so pointing descriptor 0 at a file half way through replaces the rest of the program with that file's contents — bash, ksh93 and zsh all run FIRST and SECOND as commands and never see the line after the `exec`. dash runs its remaining block first and only then reads the file, which is the same rule with a bigger unit rather than a different rule",
+	},
+	{
+		ID: "invoke/a-heredoc-in-a-program-on-standard-input", Category: "invocation",
+		Args:    []string{"--"},
+		Stdin:   ArgSnippet + "\n",
+		Snippet: "cat <<EOF\nbody\nEOF\necho after",
+		Why:     "unanimous, and the case that stops a line-at-a-time reader from being wrong: a here-document's body arrives on the same descriptor as the program and belongs to the command that opened it, so a reader that treated every line as a command would run `body` and `EOF`. All four print the body once and carry on",
+	},
+	{
+		ID: "invoke/a-continued-line-in-a-program-on-standard-input", Category: "invocation",
+		Args:    []string{"--"},
+		Stdin:   ArgSnippet + "\n",
+		Snippet: "echo one \\\ntwo\necho three",
+		Why:     "unanimous, and the other way a line-at-a-time reader goes wrong: a trailing backslash joins the line to the one after it, and a reader that ran each line as it arrived would print `one` and then fail on `two`. A parser cannot answer this — the same text at the end of the input is a finished command — so only the reader can",
+	},
+	{
+		ID: "invoke/a-construct-over-several-lines-in-a-program-on-standard-input", Category: "invocation",
+		Args:    []string{"--"},
+		Stdin:   ArgSnippet + "\n",
+		Snippet: "if true\nthen\n\techo yes\nfi\necho done",
+		Why:     "unanimous: a construct is read until it finishes however many lines that takes, on this route as on any other. The unit a shell runs is the whole construct and not the line, which a reader that takes one line at a time has to be told rather than discover",
 	},
 	{
 		ID: "invoke/a-script-that-is-not-there", Category: "invocation",

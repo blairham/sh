@@ -47,6 +47,27 @@ func TestCompgenGeneratesWhatThisShellKnows(t *testing.T) {
 			"a name that is no action", "compgen -A nosuch\n", "invalid action name", "not implemented", 2,
 		},
 		{"an option letter we do not generate", "compgen -d\n", "not implemented", "", 2},
+		{
+			// bash has no short letter for the function action at all — `-u`
+			// is user names there — so a function is not what this answers.
+			// It said otherwise once, which is the wrong direction: an answer
+			// where the real shell gives a different one.
+			"there is no short letter for function",
+			"f1() { :; }\ncompgen -u f1\n", "not implemented", "f1\n", 2,
+		},
+		{
+			// A letter bash does not have either, which is a typo rather than
+			// a shell that is missing something — the same split the action
+			// names get.
+			"a letter that is no letter", "compgen -z\n", "invalid option", "not implemented", 2,
+		},
+		{
+			// The first non-option word is the one matched against and the
+			// rest are ignored. Written with the narrow prefix first, so a
+			// last-wins reading would answer with the wider one and show.
+			"the first word is the one matched",
+			"compgen -b unse read\n", "unset\n", "readonly", 0,
+		},
 		{"an action name with nothing after it", "compgen -A\n", "requires an argument", "", 2},
 	} {
 		t.Run(c.name, func(t *testing.T) {

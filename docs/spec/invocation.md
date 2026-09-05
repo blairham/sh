@@ -5,7 +5,8 @@ was invoked by, which operand becomes `$0`, and whether there is a person
 at the other end. `driver/` is the whole of it — nothing outside that
 directory implements how a shell is invoked.
 
-This file covers the last of those. The rest is in `AGENTS.md` under
+This file covers the last of those, and how much of a program arriving on
+standard input the shell takes at a time. The rest is in `AGENTS.md` under
 "One driver, four dialects" and is not yet written down here.
 
 ## Deciding to prompt
@@ -185,3 +186,82 @@ it differently — a character device, excepting the null device — because
 `semantics.md` as a knowing difference. The two are not the same
 question: the front end asks about the *invocation*, and a builtin asks
 about whatever stream `-u` resolved to.
+
+## A program on standard input shares the descriptor with itself
+
+**The rule.** When the program is on standard input, the shell holds *one*
+descriptor: the program and the program's own input are the same stream. What
+the shell has not read yet is what a `read` in the script finds, what a command
+the script starts inherits, and what an `exec 0<` replaces. The shells split
+over one thing only — **how much the shell takes at a time**.
+
+- **A line at a time** — bash 5.3, bash 3.2, bash-as-sh, ksh93, zsh. The line
+  after the one being run is still on the descriptor.
+- **In blocks** — dash. What the block took has left the descriptor, so the
+  script finds only what had not arrived yet.
+
+`Semantics.StdinProgramReadInBlocks` is the axis. It is a bool rather than an
+`Answer`: the panel is four to one, so a common denominator exists, and
+"refuse to read a piped script" is not an answer any shell could ship.
+
+### Measured
+
+Panel: bash 5.3.15, bash 3.2.57, dash, ksh93u+ 2012-08-01, zsh 5.9, on macOS
+25.5 — measured 2026-09-05, by piping each program into each shell with no
+operands. bash 3.2 and bash-as-sh answer with bash throughout and are left out
+of the table.
+
+| the program, piped in | dash | bash | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `read x` / `echo "[$x]"` / `DATA-LINE` / `echo end` | `[]`, then DATA-LINE not found **at line 3**, then `end` | `read` takes line 2, so nothing is printed; DATA-LINE not found **at line 2**, then `end` | as bash | as bash, with no line in its wording |
+| `read x; echo "$? [$x]"`, nothing after | `1 []` | `1 []` | `1 []` | `1 []` |
+| `read x` ×3 then `A` / `B` / `C` | all three read fail at 1; A, B and C run as commands | the three reads take A, B and C | as bash | as bash |
+| `while read -r l; do echo "got:$l"; done` then `A` / `B` / `C` | A, B and C run as commands | `got:A`, `got:B`, `got:C` | as bash | as bash |
+| `echo one` / `cat` / `NOT-A-COMMAND` / `echo end` | `one`, then NOT-A-COMMAND not found, then `end` | `one`, then `cat` prints the rest of the program | as bash | as bash |
+| `cat <<EOF` / `body` / `EOF` / `echo after` | `body`, `after` | same | same | same |
+| `echo one \` / `two` / `echo three` | `one two`, `three` | same | same | same |
+| `if true` / `then` / `echo yes` / `fi` / `echo done` | `yes`, `done` | same | same | same |
+| `printf 'A\nB\n' > d.txt` / `exec 0< d.txt` / `echo never` | `never`, then A and B run as commands | A and B run as commands; `echo never` is never read | as bash | as bash |
+
+The same programs delivered as a **file operand** are unanimous and are the
+block answer throughout, which is the control: a script named on the command
+line is opened separately from standard input, so nothing is shared and there
+is nothing to disagree about. `sh < script` is *not* the file route — it is
+this one, and it answers exactly as a pipe does in all five.
+
+### What the line numbers say
+
+A line handed to the script is never parsed, so it is never counted. With
+`read x` on line 1 taking line 2, bash and ksh93 report the physical line 3 as
+**line 2**. That falls out of numbering by what the parser consumed rather than
+by what arrived, and it is why the front end carries the count across the
+pieces it reads — `syntax.NewParserAt`.
+
+### dash's block is a buffer, not a decision
+
+Measured from the other side: with the same program produced *slowly* — the
+`read` line written, a second's pause, then the data line — dash's `read` gets
+the data, exactly as bash's does. The block is however much had arrived, so
+where its boundary falls is a fact about the producer's timing rather than
+about dash. All five also run the first line before a second one written a
+second later arrives, so none of them waits for end of input.
+
+What that means for the model is that the two answers are one rule with two
+units, not two rules: **read a piece of standard input, run what parses, come
+back for more from whatever descriptor 0 is now.** dash's piece is a block and
+everyone else's is a line. It is why `exec 0<` mid-program behaves as it does
+in dash too — the rest of the block runs first, and *then* the file becomes the
+program.
+
+### Why it matters
+
+`curl … | sh` is this route. Taking the whole input for every dialect — which
+is what the front end did until #470 — meant a script's `read` found end of
+input and the data the script was reading was executed as commands instead.
+
+### Where it lives
+
+`driver`'s `program`, which is the only thing that reads a program. The
+descriptor is asked for on every refill rather than captured once, because the
+script may point it somewhere else; the line reader takes one byte at a time,
+because reading past the line is exactly the bug.

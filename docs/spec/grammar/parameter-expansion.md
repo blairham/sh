@@ -270,12 +270,26 @@ otherwise refuses at parse time.
 **bash checks the letter only once it has a value.** `${u@QQ}` on an
 *unset* `u` is empty at status 0 — no diagnostic at all — while the same
 spelling on a set name is `[${x@QQ}]: bad substitution`, naming the whole
-**word** rather than the expansion, abandoning the line, and exiting 127.
-The three shells without the family reject both spellings alike. Two
-consequences worth stating: a probe that forgets to set the variable
-measures nothing, and a script cannot use an invalid letter to detect
-whether the shell has the family, because the answer depends on the
-variable rather than on the shell.
+**word** rather than the expansion. The three shells without the family
+reject both spellings alike. Two consequences worth stating: a probe that
+forgets to set the variable measures nothing, and a script cannot use an
+invalid letter to detect whether the shell has the family, because the
+answer depends on the variable rather than on the shell.
+
+A *list* has no value when it is empty, and an empty *string* has one:
+`a=(); ${a[@]@Z}` and `set --; ${@@Z}` are both quiet at status 0, while
+`u=; ${u@QQ}` is refused. Measured over four spellings on 2026-09-05.
+
+**A bad letter is a failed expansion, not an unreadable word**, and bash
+draws the line itself: `bash -c 'x=a; echo "${x@QQ}"'` exits **127**,
+where `bash -c 'x=a; echo "${(q)x}"'` — a bad substitution for a
+different reason, found while reading the word rather than while
+expanding it — exits **1** from the same invocation. The 127 is the same
+number the same shell gives an unset parameter under `set -u` and a
+`${x?}`, and it is a property of the *route*: both are 1 when the program
+comes from a file or from standard input. `${#u@Z}`, where the length
+question refuses the operator before the family is reached, exits 1 like
+any other unreadable word.
 
 Measured on bash 5.3, all with the variable set unless said otherwise; an
 unset variable yields empty for every letter, with `set -u` complaining
@@ -352,6 +366,13 @@ watching for the error gets no error and quietly wrong values instead.
 Recorded by `param/transform-distributes-over-an-array` and
 `param/transform-keys-and-values`.
 
+**It is bash 3.2's alone.** ksh93 and zsh both refuse `${a[@]@Q}` — a
+bad substitution at status 1, exactly as they refuse the scalar spelling
+— so a dialect that reproduced the swallow reproduced the wrong shell.
+This implementation did: a subscript is read before the operator is, and
+an expansion the grammar had already marked unreadable still carried the
+`[@]`, so the array shape answered and the refusal was never reached.
+
 Citation: oracle runs against bash 5.3.15, ksh93u+ 2012-08-01, zsh 5.9.2
 and dash on 2026-09-05. The corpus rows under `param/transform-…` pin the
 panel's answers for every letter — `transform-quotes-for-reuse` (`Q`),
@@ -379,20 +400,35 @@ a silent wrong answer for every value that carries one. The corpus row
 `param/transform-prompt-escapes` therefore records a conformance
 difference on purpose, which is the honest shape for a deferred feature.
 
-Two smaller differences are recorded here rather than smoothed over,
-because they were found by the rows above and are not yet decided:
+The four differences #577 recorded are settled, three as answers a
+dialect gives and one as core behavior:
 
-- **The diagnostic names the expansion, where bash names the word.**
-  `${x@QQ}: bad substitution` against bash's `[${x@QQ}]: bad
-  substitution`, and status 1 against bash's 127.
-- **A bad substitution is diagnosed whether or not the name is set**,
-  where bash is silent for an unset one. Matching bash here would mean
-  making the validity of an operator depend on whether a variable happens
-  to have a value, which is a quirk to copy deliberately if at all.
+- **What the sentence names** is `Diagnostics.BadSubstitutionNames`, with
+  three values because the panel gives three. bash names the run of the
+  word that shares the expansion's quoting, with the quote characters
+  off; ksh93 names the whole word exactly as written; dash and zsh name
+  nothing at all, so their wordings have no verb and never reach it.
+- **Whether the letter is checked on a name with no value** is
+  `Semantics.TransformLetterCheckedOnlyWhenValued`, reached only by a
+  grammar that *has* the family. It is an axis with one measured answer
+  on purpose: making an operator's validity depend on what a variable
+  holds is not a rule anything should inherit by having a `@` family, so
+  the shell that does it has to say so.
+- **The status of a bad letter** follows
+  `Diagnostics.ExpansionFailureStatusFromCommandString`, the field the
+  unset-parameter route already used, on the strength of the measurement
+  above: it is the same 127-under-`-c` rule, and every other unreadable
+  operator keeps the ordinary fatal status.
+- **Abandoning at the first** is not an axis. Every column stops at the
+  first expansion it cannot answer — for a bad substitution and for
+  `set -u` alike — so the word stops at its first failing span and the
+  command stops at its first failing word.
 
-Both are tracked in issue #577 rather than settled — along with a third
-the zsh-flag rows found: where a command has several unreadable words we
-diagnose each and bash abandons at the first.
+The `@`-letter and the diagnostic rows are
+`param/bad-substitution-names-the-word`,
+`param/bad-substitution-names-only-one-quoting`,
+`param/bad-substitution-stops-at-the-first` and
+`param/an-unset-name-stops-at-the-first-too`.
 
 ## Parenthesized expansion flags — zsh only
 

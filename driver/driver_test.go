@@ -937,7 +937,7 @@ func TestTheFrontEndSaysWhenTheProgramWasAnArgument(t *testing.T) {
 	sh.Semantics = interp.PosixSemantics()
 	sh.Semantics.FatalErrorStatusIsOne = interp.Yes
 	// A status this dialect gives only when the program came from `-c`.
-	sh.Diagnostics.UnsetParameterStatusFromCommandString = 127
+	sh.Diagnostics.ExpansionFailureStatusFromCommandString = 127
 
 	const src = "set -u\necho \"$NOPE\"\n"
 	if _, _, code := runArgs(t, sh, "testsh", "-c", src); code != 127 {

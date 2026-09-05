@@ -609,8 +609,8 @@ func TestTerminateIsWrittenBare(t *testing.T) {
 // The status this shell answers a failed expansion with when the program came
 // from an argument rather than from a file.
 func TestAFailedExpansionFromACommandString(t *testing.T) {
-	if got, want := bash.Diagnostics().UnsetParameterStatusFromCommandString, 127; got != want {
-		t.Errorf("UnsetParameterStatusFromCommandString = %d, want %d", got, want)
+	if got, want := bash.Diagnostics().ExpansionFailureStatusFromCommandString, 127; got != want {
+		t.Errorf("ExpansionFailureStatusFromCommandString = %d, want %d", got, want)
 	}
 }
 

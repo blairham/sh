@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/blairham/sh/syntax"
@@ -178,6 +179,10 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 
 	var wg sync.WaitGroup
 	statuses := make([]int, n)
+	// Beside each status, what ended that element — zero unless a signal
+	// did. A status alone cannot say: 143 is `exit 143` as readily as it is
+	// SIGTERM, and one shell reports the signal where pipefail substitutes.
+	signals := make([]syscall.Signal, n)
 	errs := make([]error, n)
 
 	// Decided before anything starts, because asking from inside a goroutine
@@ -275,6 +280,7 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 				timing.elems[i].wall = time.Since(start)
 			}
 			statuses[i] = subs[i].status
+			signals[i] = subs[i].diedOfSig
 			// An element that never reached a trace point must still let the
 			// next one print, or the pipeline deadlocks on its own logging.
 			subs[i].releaseTraceTurn()
@@ -316,6 +322,7 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			timing.elems[i].wall = time.Since(start)
 		}
 		statuses[i] = r.status
+		signals[i] = r.diedOfSig
 		r.Stdin, r.Stdout, r.Stderr = savedIn, savedOut, savedErr
 		r.elemCPU = savedCPU
 		if readers[i] != nil {
@@ -348,10 +355,17 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		// 1 either way, but where two elements fail with different statuses
 		// it is the rightmost one that is reported. Measured against bash,
 		// ksh93 and zsh, which agree.
-		for _, st := range statuses {
+		chosen := -1
+		for i, st := range statuses {
 			if st != 0 {
-				r.status = st
+				r.status, chosen = st, i
 			}
+		}
+		if chosen >= 0 && chosen != n-1 {
+			// An element pipefail went looking for, rather than the one the
+			// pipeline reports anyway. Where it died of a signal, one shell
+			// gives the number alone.
+			r.status = r.substitutedSignalStatus(r.status, signals[chosen])
 		}
 	}
 	return nil
@@ -403,4 +417,35 @@ func literalName(w *syntax.Word) string {
 		return ""
 	}
 	return s.Value
+}
+
+// substitutedSignalStatus is what a pipeline reports for an element pipefail
+// chose over its last one, where that element died of a signal.
+//
+// The status a signal death produces is the shell's own — 128 or 256 plus the
+// number, see signalDeathStatus — and one shell in the panel does not use it
+// here. Measured, its `set -o pipefail` reports 13 for SIGPIPE and 15 for
+// SIGTERM where the same death anywhere else in that shell reports 269 and
+// 271: a foreground command, a subshell, a command substitution, a `wait` and
+// the pipeline's *last* element all keep the ordinary encoding.
+//
+// So this is about the substitution and not about pipelines or about signals
+// in general, which is why it is its own axis rather than a second reading of
+// the one that chooses the base. An ordinary non-zero exit is substituted
+// unchanged everywhere, so a signal is the whole of the difference.
+func (r *Runner) substitutedSignalStatus(st int, sig syscall.Signal) int {
+	if sig == 0 {
+		return st
+	}
+	if r.ask(r.sem().PipefailSubstitutesTheBareSignal,
+		"the status pipefail substitutes for an element a signal killed") {
+		return int(sig)
+	}
+	if r.sem().PipefailSubstitutesTheBareSignal == Unspecified {
+		// The refusal is the answer, and ask has already chosen the status
+		// that goes with it. Reporting the element's own here would let a
+		// core with no dialect quietly pick one of the two conventions.
+		return r.status
+	}
+	return st
 }

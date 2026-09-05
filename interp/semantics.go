@@ -1863,6 +1863,36 @@ type Semantics struct {
 	// stops all three, and this is only about the failure the option adds.
 	ErrexitSeesPipefailFailure Answer
 
+	// PipefailSubstitutesTheBareSignal reports an element pipefail chose over
+	// the pipeline's last one, and which died of a signal, as the signal's
+	// *number* rather than as the status a command killed by that signal
+	// reports.
+	//
+	// True in ksh93 alone, and it is not the same question as
+	// SignalDeathStatusIsTwoFiftySix. That axis is about every status a
+	// signal death produces, and ksh93 answers it consistently everywhere it
+	// was measured — a foreground command, a subshell, a command
+	// substitution, a `wait`, the shell dying by its own hand as its parent
+	// sees it, and the *last* element of a pipeline are all 256 + n there.
+	// This is the one place the convention stops: with `pipefail` set,
+	//
+	//	kill-me-with-TERM | cat     ksh93  15    bash/zsh  143
+	//	kill-me-with-PIPE | head -1  ksh93  13    bash/zsh  141
+	//	( exit 42 )       | cat      ksh93  42    bash/zsh   42
+	//	cat </dev/null | kill-me     ksh93 271    bash/zsh  143
+	//
+	// The last row is why this is about the *substitution* and not about the
+	// pipeline: an element that fails in the position the pipeline reports
+	// anyway keeps the ordinary encoding, and only the status pipefail went
+	// looking for is bare. An ordinary non-zero exit is unchanged either way,
+	// so a signal is the whole of the difference.
+	//
+	// Measured builtin and external, first and middle, in pipelines of two
+	// and of three, with SIGPIPE and SIGTERM. Absent rather than false in
+	// dash, which has no pipefail, and asked only where a substitution
+	// actually happened and actually was a signal death.
+	PipefailSubstitutesTheBareSignal Answer
+
 	// PrintfAssignsWithV makes `printf -v name fmt args` put the formatted
 	// text in a variable and print nothing. True in bash and zsh; dash and
 	// ksh93 have no such option and reject it as an unknown one.

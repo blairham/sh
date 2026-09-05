@@ -73,15 +73,47 @@ func TestAReplacementsDescriptorNumbersAreTheShellsWithGapsLeftClosed(t *testing
 	beTheShell()
 	dir := t.TempDir()
 	five := filepath.Join(dir, "five")
-	runAsShellReplacingItself(t, "TestAReplacementsDescriptorNumbersAreTheShellsWithGapsLeftClosed",
-		"exec 5>"+five+"\nexec /bin/sh -c 'echo onfive >&5; echo onthree >&3' 2>/dev/null\n")
+	// Kept rather than discarded, which is the difference between a failure
+	// that can be read and one that cannot. This said `2>/dev/null` for a
+	// year, and when it failed on CI the only evidence left was an empty
+	// file — while the reason, a fatal runtime error from the shell half,
+	// had been written to the descriptor and thrown away. See #695: it took
+	// three reports and a container to recover a sentence the test had had
+	// in its hands every time.
+	complaint := filepath.Join(dir, "complaint")
+	out := runAsShellReplacingItself(t, "TestAReplacementsDescriptorNumbersAreTheShellsWithGapsLeftClosed",
+		"exec 5>"+five+"\nexec /bin/sh -c 'echo onfive >&5; echo onthree >&3' 2>"+complaint+"\n")
 	b, _ := os.ReadFile(five)
 	if !strings.Contains(string(b), "onfive") {
-		t.Errorf("five = %q, want the replacement's line", b)
+		t.Errorf("five = %q, want the replacement's line%s", b, saidWhat(t, out, complaint))
 	}
 	if strings.Contains(string(b), "onthree") {
 		t.Errorf("descriptor 3 in the replacement reached the file parked on 5: %q", b)
 	}
+}
+
+// saidWhat is everything the shell half and the replacement had to say, for a
+// failure message to carry.
+//
+// A descriptor that did not arrive leaves an empty file and nothing else, and
+// the two places an explanation could be — what the shell half printed before
+// it was replaced, and what the replacement printed when the number was not
+// what it expected — are both routinely redirected away by the very scripts
+// these tests run. Reading them back costs nothing and is the difference
+// between diagnosing the next occurrence and re-investigating it.
+func saidWhat(t *testing.T, out, complaint string) string {
+	t.Helper()
+	said := ""
+	if b, err := os.ReadFile(complaint); err == nil && len(b) > 0 {
+		said += "\nthe replacement said: " + string(b)
+	}
+	if out != "" {
+		said += "\nthe shell half said: " + out
+	}
+	if said == "" {
+		said = "\nand neither the shell half nor the replacement said anything"
+	}
+	return said
 }
 
 // Placing the table cannot be a walk from three upward, because the shell's
@@ -103,11 +135,12 @@ func TestDescriptorsCrossAReplacementWhateverOrderTheyWereOpenedIn(t *testing.T)
 	}
 	src += "true'\n"
 
-	runAsShellReplacingItself(t, "TestDescriptorsCrossAReplacementWhateverOrderTheyWereOpenedIn", src)
+	out := runAsShellReplacingItself(t, "TestDescriptorsCrossAReplacementWhateverOrderTheyWereOpenedIn", src)
 	for _, name := range names {
 		b, _ := os.ReadFile(filepath.Join(dir, name))
 		if strings.TrimSpace(string(b)) != name {
-			t.Errorf("%s = %q, want its own line — the descriptors crossed over each other", name, b)
+			t.Errorf("%s = %q, want its own line — the descriptors crossed over each other%s",
+				name, b, saidWhat(t, out, ""))
 		}
 	}
 }

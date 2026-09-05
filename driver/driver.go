@@ -798,7 +798,8 @@ func (sh Shell) applyOptions(r *interp.Runner, opts []optionSpec) (int, bool) {
 // through Finish rather than around it.
 func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 	ctx := context.Background()
-	shown, echoed := 0, 0
+	shown := 0
+	var echoed verbosePos
 	// A builtin can change the grammar for the lines after it — a run-time
 	// option can decide whether a quantified group is a group. The runner
 	// says so by replacing its Dialect, never by writing through it, so a
@@ -832,18 +833,18 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 			r.Finish(ctx)
 			return in.dg.StatusForParseError(err)
 		}
-		if r.Verbose() {
-			// `set -v` — the input written back as it is read. The front end
-			// is the one holding the raw text, which is why the echo lives
-			// here: the runner only says whether the option is on. Echoed up
-			// to the line the parser has consumed, so a here-document's body
-			// goes out with the line that owns it, and never twice.
-			echoed = sh.sayVerbose(pr.text(), line.Last.Line, echoed)
-		} else {
-			// Lines read while the option is off are spent, not saved: the
-			// line that says `set -v` is not echoed by the shell it turns on.
-			echoed = line.Last.Line
-		}
+		// `set -v` — the input written back as it is read. The front end is
+		// the one holding the raw text, which is why the echo lives here: the
+		// runner only says whether the option is on. Accounted for up to the
+		// line the parser has consumed, so a here-document's body goes out
+		// with the line that owns it, and never twice.
+		//
+		// Passed over rather than skipped when the option is off, because the
+		// position has to keep up either way: lines read while it is off are
+		// spent, not saved — the line that says `set -v` is not echoed by the
+		// shell it turns on — and the line after it can only be found once
+		// every line before it has been walked past.
+		echoed = sh.sayVerbose(pr.text(), line.Last.Line, echoed, r.Verbose())
 		if err := r.RunPart(ctx, line); err != nil {
 			// Refused rather than silently doing nothing: a shell that
 			// quietly skips what it cannot do is worse than one that says so.
@@ -857,17 +858,55 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 	return r.Finish(ctx)
 }
 
-// sayVerbose writes the physical lines up to and including upTo, resuming
-// after the last one already written, and reports how far it got.
-func (sh Shell) sayVerbose(src string, upTo, echoed int) int {
-	if upTo <= echoed {
-		return echoed
+// verbosePos is how far `set -v` has walked through the input: the physical
+// lines already accounted for, and the byte just after them.
+//
+// The offset is the whole of the type and the reason it is a type. Without it
+// the only record of where the echo has got to is a line *number*, and finding
+// the text of a line from its number means splitting the program on newlines —
+// so an n-line script split an n-line string n times, allocating a slice of
+// every line in the program for every line it echoed. `set -v` on 8 000 lines
+// cost 0.57 s where the same script without it cost 0.011 s, and doubling the
+// script quadrupled that: the shell was at its slowest exactly when it was
+// being asked to explain itself (#580). A byte offset carried alongside the
+// number makes the whole echo one pass over the text.
+type verbosePos struct {
+	// line is how many physical lines have been passed, and off the byte in
+	// the program text where the next one starts. off runs one past the end
+	// of the text once the piece after the final newline has been passed,
+	// which is a position strings.Split has and a byte offset otherwise
+	// cannot distinguish from resting on it.
+	line int
+	off  int
+}
+
+// sayVerbose accounts for the physical lines up to and including upTo,
+// resuming where it left off and reporting how far it got. It writes them when
+// echo says to and passes over them silently when it does not.
+func (sh Shell) sayVerbose(src string, upTo int, at verbosePos, echo bool) verbosePos {
+	if upTo <= at.line {
+		return at
 	}
-	lines := strings.Split(src, "\n")
-	for i := echoed; i < upTo && i < len(lines); i++ {
-		sh.errf("%s\n", lines[i])
+	for at.line < upTo && at.off <= len(src) {
+		rest := src[at.off:]
+		text := rest
+		if i := strings.IndexByte(rest, '\n'); i >= 0 {
+			text, at.off = rest[:i], at.off+i+1
+		} else {
+			// The piece after the last newline, which the input may yet
+			// continue but which is a line of its own for as long as this is
+			// all there is. One past the end says it has been taken.
+			at.off = len(src) + 1
+		}
+		if echo {
+			sh.errf("%s\n", text)
+		}
+		at.line++
 	}
-	return upTo
+	// Where the text ran out before upTo did, the lines that are not there are
+	// counted anyway rather than echoed again when more arrives.
+	at.line = upTo
+	return at
 }
 
 // source runs the prelude on an existing runner, which is how a prelude is

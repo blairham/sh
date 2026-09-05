@@ -245,7 +245,7 @@ type Runner struct {
 
 	// procSubs are the named pipes this command's process substitutions made,
 	// waiting to be removed once it is done with them.
-	procSubs    []string
+	procSubs    []procSubPipe
 	procSubSeq  int
 	procSubHome *procSubDirs
 	// substRan records that a command substitution reported a status during

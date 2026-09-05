@@ -88,41 +88,56 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 		sub.Stdout = r.lockedStdout()
 	}
 
-	go func() {
-		// Opening a FIFO blocks until the other end is opened, which is why
-		// this is here and not above: the command that names the path has not
-		// started yet, and the shell must not wait for it to.
-		//
-		// `<(cmd)` writes cmd's output into the pipe, so this end is the
-		// writer; `>(cmd)` reads the command's input out of it.
+	// `>(cmd)` reads the command's input out of the pipe, and the shell can
+	// take that end without waiting for anybody — so it is taken here, on
+	// this goroutine, and a failure is the shell's own and is reported like
+	// one. `hold` is what makes waiting unnecessary; see openFifoReadEnd.
+	var hold *os.File
+	if kind == syntax.ProcSubstOut {
 		var end *os.File
-		var err error
-		if kind == syntax.ProcSubstOut {
-			end, err = os.OpenFile(path, os.O_RDONLY, 0)
-		} else {
-			end, err = os.OpenFile(path, os.O_WRONLY, 0)
+		var oerr error
+		end, hold, oerr = openFifoReadEnd(path)
+		if oerr != nil {
+			_ = os.Remove(path)
+			r.diagf("%v\n", oerr)
+			r.expandErr = true
+			return "", false
 		}
-		if err != nil {
-			// Nobody opened the other end — the command did not use the path
-			// it was given. There is nothing to run and nothing to report:
-			// `echo <(true)` prints a path and is not an error anywhere.
-			return
-		}
-		defer func() { _ = end.Close() }()
-		// Through the clone, which this goroutine owns: the record of the
-		// open that the gate already allowed, emitted where it happened.
-		sub.emit(ctx, Event{Kind: EventAccess, Action: action})
-		if kind == syntax.ProcSubstOut {
-			sub.Stdin = end
-		} else {
+		sub.Stdin = end
+		go func() {
+			defer func() { _ = end.Close() }()
+			// Through the clone, which this goroutine owns: the record of
+			// the open that the gate already allowed.
+			sub.emit(ctx, Event{Kind: EventAccess, Action: action})
+			if _, err := sub.Run(ctx, f); err != nil {
+				sub.diagf("%v\n", err)
+			}
+		}()
+	} else {
+		// `<(cmd)` writes cmd's output into the pipe, so this end is the
+		// writer — and a writer has to wait for its reader, which is why
+		// this half is on a goroutine and the other half is not. The wait
+		// is bounded now rather than endless; openFifoWriteEnd is where
+		// that is done and why.
+		go func() {
+			end, err := openFifoWriteEnd(path)
+			if err != nil {
+				// Nobody opened the other end — the command did not use the
+				// path it was given, and the pipe went with it. There is
+				// nothing to run and nothing to report: `echo <(true)`
+				// prints a path and is not an error anywhere.
+				return
+			}
+			defer func() { _ = end.Close() }()
+			sub.emit(ctx, Event{Kind: EventAccess, Action: action})
 			sub.Stdout = end
-		}
-		if _, err := sub.Run(ctx, f); err != nil {
-			sub.diagf("%v\n", err)
-		}
-	}()
+			if _, err := sub.Run(ctx, f); err != nil {
+				sub.diagf("%v\n", err)
+			}
+		}()
+	}
 
-	r.procSubs = append(r.procSubs, path)
+	r.procSubs = append(r.procSubs, procSubPipe{path: path, hold: hold})
 	return path, true
 }
 
@@ -213,16 +228,24 @@ func (r *Runner) tempHome() string {
 	return dir
 }
 
+// procSubPipe is one substitution's named pipe: the path a command was given,
+// and — for `>(cmd)` only — the descriptor holding that pipe open until the
+// command is done with it. See openFifoReadEnd.
+type procSubPipe struct {
+	path string
+	hold *os.File
+}
+
 // takeProcSubs hands over the pipes a command's substitutions made, and
 // forgets them.
 //
 // Taken rather than read, because they belong to one command: the next one has
 // its own, and a path left on the runner would be removed after some later
 // command that never mentioned it.
-func (r *Runner) takeProcSubs() []string {
-	paths := r.procSubs
+func (r *Runner) takeProcSubs() []procSubPipe {
+	pipes := r.procSubs
 	r.procSubs = nil
-	return paths
+	return pipes
 }
 
 // removeProcSubs takes away what a command's substitutions left behind.
@@ -231,9 +254,18 @@ func (r *Runner) takeProcSubs() []string {
 // is still reading or writing it holds an open file and does not care that the
 // name is gone, which is the property that makes this safe to do early rather
 // than at exit — a long session would otherwise fill its directory.
-func removeProcSubs(paths []string) {
-	for _, p := range paths {
-		_ = os.Remove(p)
+//
+// And it is what ends the two waits a substitution can be in, which is why
+// this runs even when the command never touched the path. The placeholder
+// closing is the end-of-file a `>(cmd)` is waiting for; the name going away is
+// the answer a `<(cmd)`'s writer is waiting for. Neither can outlive the
+// command that named the path.
+func removeProcSubs(pipes []procSubPipe) {
+	for _, p := range pipes {
+		if p.hold != nil {
+			_ = p.hold.Close()
+		}
+		_ = os.Remove(p.path)
 	}
 }
 

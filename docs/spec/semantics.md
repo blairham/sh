@@ -64,6 +64,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | `shift` past the end | fatal | **survives** | fatal | **survives** |
 | unparseable text in a special builtin | **fatal** | survives | survives | survives |
 | failed redirection on a special builtin | **fatal** | survives *(fatal under `set -o posix`)* | **fatal** | survives *(fatal under `emulate sh`)* |
+| duplication target wider than one digit | **refused, fatal** | read as a number | read as a number | read as a number |
 | `.` cannot open its file | **fatal** | survives | **fatal** | survives |
 | `.` with no operand | **not an error** | 2, survives | 2, fatal | 1, survives |
 | `.` passes positional parameters | **no** | yes | yes | yes |
@@ -1115,12 +1116,40 @@ decision rather than a consequence:
   through a stream the script had redirected away from, which is the
   borrowing of process state this library exists not to do.
 
-One case is a known divergence and is neither reading: one dialect writes
-to *every* target of a repeated redirection, so `exec >a >b` leaves the
-runner a writer over two files and no single number to place. The command
-a replacement runs finds standard output closed there, where that shell
-gives it both files — which needs a copying process between the two, and
-is a larger thing than a table.
+One case is neither reading, and it is the one the two rules together got
+wrong: one dialect writes to *every* target of a repeated redirection, so
+`exec >a >b` leaves the runner a writer over two files and no single number
+to place. Read as "not a file, therefore nil, therefore closed", the command
+a replacement ran found standard output closed and failed —
+`echo: fflush: Bad file descriptor` — where that shell writes into both.
+
+The two rules are still right; what was missing was a third, ahead of them
+and narrower than either:
+
+- **A replacement is declined for a stream the shell built out of several
+  targets**, and for nothing else. It then stands in for the replacement
+  with the child route it already has for a subshell, which `os/exec` gives
+  a pipe and copies from, so both files get the bytes.
+
+The narrowness is the point. The test is a mark the shell puts on the stream
+when it combines the targets, not "this is not an `*os.File`" — that wider
+reading would have swept in an embedder's buffer, whose closed number is
+measured and deliberate and which a child route could not improve on
+anyway. A stream closed on purpose still crosses as a closed number, which
+is the row the panel is unanimous about.
+
+What that costs is the child route's own difference, written down where it
+is: the pid, the signal dispositions, and being the process the parent waits
+for. Measured, the shell being reproduced spends a process on this too — it
+forks a copier and keeps its own pid for the command, where we keep the pid
+for the shell and give the command a new one — so the number of processes
+agrees and which one is the command does not. Everything the corpus can see
+agrees.
+
+**Only the named streams.** A *numbered* descriptor with several targets —
+`exec 3>a 3>b` — is a different gap and an older one: it is not modeled at
+all here, replacement or not, and the last target simply wins. No route
+through `os/exec` would carry it either, because `ExtraFiles` is files.
 
 ### Whether a descriptor `exec` parked is handed over at all
 
@@ -5377,6 +5406,54 @@ builtin's failure is fatal; bash and zsh report it and carry on.
 A different question from BuiltinSyntaxErrorFatal, which is about text
 that would not *parse* and is true for dash alone. Measured across
 `export`, `readonly` and `unset`.
+
+**`MultiDigitDuplicationTargetIsAnError`** — bash no · dash **yes** · ksh93 no · zsh no
+
+Refuses `>&10`: a duplication whose *target* is written with more than one
+digit. dash alone; the other four read the number and fail at run time with
+`10: Bad file descriptor` at status 1, carrying on.
+
+**It is not a parse refusal, though the shell that has it words it as one.**
+Measured three ways, and each one moves the question out of the grammar:
+
+    sh -n -c 'echo hi >&10'                    accepted, exits 0
+    printf 'echo one\necho hi >&10\n' | sh     prints `one`, then stops
+    n=10; echo hi >&$n                         refused; n=9 is not
+
+So the grammar takes the construct everywhere and the answer is the semantics
+vector's, with the sentence in the dialect's `MultiDigitDuplicationTarget`.
+The third line also fixes *where* the check goes: after the target expands.
+
+The **width** is what is refused, not the value — `>&08` names descriptor 8, a
+number everyone would otherwise take, and is refused just the same. That is
+what keeps it apart from `FdNumberBoundedByOpenFileLimit`, which is about a
+number too large for the process.
+
+The refusal ends the script, and that travels with the answer rather than
+being an axis of its own: one shell in the panel refuses and that shell stops.
+The status is `FatalErrorStatusIsOne`'s, so 2 there.
+
+**The companion question has the opposite dissenter**, which is why this is a
+field of its own rather than the same one read from the other end. How many
+digits may stand *before* the operator is the grammar's — bash alone reads
+`exec 10>f` as a redirection where the other three run a command called `10`
+(`Dialect.MultiDigitFdNumber`). One shell adds a width there; a different one
+takes one away here.
+
+**Reading the file is what settles the panel.** bash 3.2 prints `hi` for `echo
+hi >&10` and reports success, which looks like a fifth answer and is not: that
+build parks its own saved streams at descriptor 10, so something really is
+open there and the write goes to bash's internal copy of standard output
+without crossing any boundary. `cat <&10` in the same build is `Bad file
+descriptor`, which is the tell.
+
+One divergence is recorded rather than modeled: dash reports the line its
+reader has *reached* rather than the redirection's own. With the redirection
+on line 2 of three it says 3, and on the last line it says that line. It is
+the same lookahead that makes the message read like a parse error while the
+parse has already succeeded, and reproducing it would mean keeping a lexer
+position that an evaluated tree does not have. Single-line programs — every
+corpus case here — agree.
 
 **`RedirectErrorOnSpecialBuiltinFatal`** — bash no · dash yes · ksh93 yes · zsh no
 

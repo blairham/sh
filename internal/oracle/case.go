@@ -2702,6 +2702,11 @@ echo "st=$?"`,
 		Why:     "`>f 2>&1` is one file under two numbers rather than two targets, so a replacement that places files by number gets both — the count is the only channel left once every stream is in the file, and it is 2 in every shell. The command substitution is the replacement's, quoted so that the shell being replaced does not run it against a file it has only just truncated",
 	},
 	{
+		ID: "redir/a-multi-target-stream-crosses-a-replacement", Category: "redirection",
+		Snippet: `exec >a >b; exec /bin/echo hi`,
+		Why:     "a repeated redirection of the same stream, and then a replacement. Nothing is said and the status is 0 in all six, which is the fact this pins: four of them put `hi` in the last file and zsh puts it in both, and neither hands the command a closed descriptor. The files themselves are not recorded here — the shell is gone before anything could read them — so the case grades the command having run at all, which is what a stream that is no single number once cost it",
+	},
+	{
 		ID: "redir/a-closed-stdout-is-closed-for-a-replacement", Category: "redirection",
 		Snippet: `exec >&-; exec /bin/echo hi 2>/dev/null`,
 		Why:     "a stream the script closed stays closed across the replacement rather than falling back to the process's own: the command fails where it would otherwise have written, unanimously. The complaint is discarded because its wording is a fact about whatever /bin/echo is on the machine",
@@ -5713,6 +5718,26 @@ exit 7`,
 		ID: "redir/a-failed-redirection-on-a-compound-command", Category: "redirection",
 		Snippet: `{ echo x; } 3>/nope/x; echo after`,
 		Why:     "the other half of the boundary: a redirection written on a group belongs to the group and not to any builtin, so every column complains and carries on — including the three that stop for the identical redirection on `exec`",
+	},
+	{
+		ID: "redir/a-duplication-target-of-more-than-one-digit", Category: "redirection",
+		Snippet: `echo hi >&10; echo "st=$?"`,
+		Why:     "dash alone will not take a duplication target wider than one digit and refuses before it looks at what is open — `Syntax error: Bad fd number`, status 2, and nothing after it runs. The other four read the number and report `Bad file descriptor` at 1. bash 3.2's `hi` is not a fifth answer: that build parks its own saved streams at descriptor 10, so the write really does land somewhere, without crossing any boundary — the next case is the tell",
+	},
+	{
+		ID: "redir/reading-through-a-wide-duplication-target", Category: "redirection",
+		Snippet: `cat <&10; echo "st=$?"`,
+		Why:     "the same target read from instead of written to, and the row that settles bash 3.2: it complains here where it printed `hi` for `>&10`, which is what a saved stream open for writing looks like from both sides. dash refuses this one identically, so its rule is about the width of the word and not about the direction",
+	},
+	{
+		ID: "redir/a-wide-duplication-target-with-a-leading-zero", Category: "redirection",
+		Snippet: `echo hi >&08; echo "st=$?"`,
+		Why:     "the refusal is about the width and not the value: `08` names descriptor 8, which is a number every shell would otherwise accept, and dash refuses it exactly as it refuses `10`. That is what keeps this a question of its own rather than a second reading of the one about numbers the open-file limit will not give out",
+	},
+	{
+		ID: "redir/a-duplication-target-that-expands-to-two-digits", Category: "redirection",
+		Snippet: `exec 2>/dev/null; n=10; echo hi >&$n; echo "st=$?"`,
+		Why:     "the check is on the *expanded* word rather than on what was typed, which is what says it cannot be the lexer's: dash refuses `>&$n` once `n` holds two digits and takes it when `n` holds one. Standard error is put aside first because the shells name the target differently here — as written or as expanded — and the question is which of them stops",
 	},
 	{
 		ID: "redir/a-failed-redirection-inside-a-subshell", Category: "redirection",

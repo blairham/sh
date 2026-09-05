@@ -136,3 +136,118 @@ func TestAFunctionWithNoBodyAtAllNamesWhatStoodThere(t *testing.T) {
 		}
 	}
 }
+
+// TestARedirectionOnlyBodyFollowsItsOwnFlag — a third answer to the body
+// question, narrower than the compound one: this grammar takes the simple
+// command and refuses only what it redirects.
+//
+// The two flags are separate because the refusals are not nested. The compound
+// one rejects `f() echo hi` outright and names the command; this one accepts
+// it, and rejects `f() echo hi >out` at the operator with the command already
+// read.
+func TestARedirectionOnlyBodyFollowsItsOwnFlag(t *testing.T) {
+	noRedir := Core()
+	noRedir.FuncBodyTakesNoRedirection = true
+	for _, c := range []struct{ src, token string }{
+		{`f() >out; f`, ">"},
+		{`f() echo hi >out; f`, ">"},
+		{`f() x=1 >out; f`, ">"},
+		{`f() 2>&1; f`, ">&"},
+		{`f() cat <in; f`, "<"},
+	} {
+		_, err := Parse(c.src, noRedir)
+		var se *Error
+		if !errors.As(err, &se) {
+			t.Errorf("%s: refusal = %v, want a syntax error", c.src, err)
+			continue
+		}
+		if se.Kind != ErrUnexpected || se.Token != c.token {
+			t.Errorf("%s: kind %v token %q, want the operator named as %q",
+				c.src, se.Kind, se.Token, c.token)
+		}
+		if !se.Redirect {
+			t.Errorf("%s: the error does not say it was a redirection", c.src)
+		}
+	}
+	// A body with no redirection, and a redirection on a *compound* body:
+	// both accepted, which is what makes this about the body rather than
+	// about redirecting a function.
+	for _, src := range []string{`f() echo hi; f`, `f() { echo hi; } >out; f`, `f() x=1; f`} {
+		if _, err := Parse(src, noRedir); err != nil {
+			t.Errorf("%s: refused: %v", src, err)
+		}
+	}
+	// And the flag is what decides: the same text parses without it.
+	if _, err := Parse(`f() >out; f`, Core()); err != nil {
+		t.Errorf("the accepting grammar refused: %v", err)
+	}
+}
+
+// TestEmptyParensAreOneTokenToTheGrammarThatSaysSo — the last token an
+// end-of-input error names is `()` there and `)` everywhere else, which is the
+// only place the granularity shows.
+func TestEmptyParensAreOneTokenToTheGrammarThatSaysSo(t *testing.T) {
+	joined := Core()
+	joined.EmptyParensAreOneToken = true
+	for _, c := range []struct {
+		d    Dialect
+		want string
+	}{{joined, "()"}, {Core(), ")"}} {
+		_, err := Parse(`f()`, c.d)
+		var se *Error
+		if !errors.As(err, &se) {
+			t.Fatalf("refusal = %v, want a syntax error", err)
+		}
+		if se.LastToken != c.want {
+			t.Errorf("last token = %q, want %q", se.LastToken, c.want)
+		}
+	}
+	// Only until something else is read: `f() ;` names the semicolon in both.
+	_, err := Parse(`f() ;`, joined)
+	var se *Error
+	if !errors.As(err, &se) {
+		t.Fatalf("refusal = %v, want a syntax error", err)
+	}
+	if se.Token != ";" {
+		t.Errorf("token = %q, want the semicolon", se.Token)
+	}
+}
+
+// TestAMissingFunctionBodyIsMarkedAsOne — the fact one dialect locates
+// differently, recorded on the error rather than deduced from its kind: the
+// two shapes below are an unexpected token and an end of input, and both are a
+// body that never began.
+func TestAMissingFunctionBodyIsMarkedAsOne(t *testing.T) {
+	for _, src := range []string{`f() ;`, `f()`, `f() &`, `f() }`} {
+		_, err := Parse(src, Core())
+		var se *Error
+		if !errors.As(err, &se) {
+			t.Fatalf("%s: refusal = %v, want a syntax error", src, err)
+		}
+		if !se.FuncBody {
+			t.Errorf("%s: not marked as a missing function body", src)
+		}
+	}
+	// A body that began and then ran out is not this: the input is unfinished
+	// inside the body rather than missing one.
+	for _, src := range []string{`f() {`, `f() { echo hi`, `if true`} {
+		_, err := Parse(src, Core())
+		var se *Error
+		if !errors.As(err, &se) {
+			t.Fatalf("%s: refusal = %v, want a syntax error", src, err)
+		}
+		if se.FuncBody {
+			t.Errorf("%s: wrongly marked as a missing function body", src)
+		}
+	}
+	// Nor is one where a newline came between the parens and the failure:
+	// measured, the dialect that drops the line for this puts it back there.
+	_, err := Parse("f()\n;", Core())
+	var se *Error
+	if !errors.As(err, &se) {
+		t.Fatalf("refusal = %v, want a syntax error", err)
+	}
+	if se.FuncBody {
+		t.Error("a body expected on a later line was marked as a missing one")
+	}
+}

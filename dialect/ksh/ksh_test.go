@@ -591,3 +591,30 @@ func TestKshReadsTheProfileWithAScriptToRun(t *testing.T) {
 		t.Error("the substrate's own answer reads a file out of a home directory, want it not to")
 	}
 }
+
+// TestARedirectionInAnUncompoundedBodyIsRefused — ksh93's own answer to the
+// function-body question, which is neither of the other two: it takes the
+// simple command and refuses the redirection, naming the operator.
+func TestARedirectionInAnUncompoundedBodyIsRefused(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"f() >out; f", "syntax error at line 1: `>' unexpected"},
+		{"f() echo hi >out; f", "syntax error at line 1: `>' unexpected"},
+		{"f() 2>&1; f", "syntax error at line 1: `>&' unexpected"},
+	} {
+		_, err := syntax.Parse(tc.src, ksh.Dialect())
+		if err == nil {
+			t.Errorf("%q: parsed, want a syntax error", tc.src)
+			continue
+		}
+		if got := ksh.Diagnostics().ParseFailure(err); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
+		}
+	}
+	// The command without the redirection, and the redirection on a braced
+	// body: both accepted, which is what says this is about the body.
+	for _, src := range []string{"f() echo hi; f", "f() { echo hi; } >out; f"} {
+		if _, err := syntax.Parse(src, ksh.Dialect()); err != nil {
+			t.Errorf("%q: refused: %v", src, err)
+		}
+	}
+}

@@ -349,3 +349,127 @@ offset is what makes the walk one pass, and neither can be derived from the
 other once the text is growing a line at a time. Lines read while the option is
 off are walked past rather than skipped, for the same reason — the offset has
 to keep up or the line after a mid-script `set -v` cannot be found.
+
+## Startup files
+
+**The rule.** A shell reads two kinds of file before it starts, and they
+answer different questions. A **login** shell reads a *profile* — what a
+person wants set once, for everything started from that session. An
+**interactive** shell reads a *run-commands* file — what only makes sense at
+a prompt, and what a script must not inherit.
+
+A shell is a **login shell** when the first character of `argv[0]` is a dash.
+That is a convention rather than a flag because there is nowhere else to put
+it: `login` and every terminal emulator's "run as a login shell" exec the
+shell with no arguments of its own. `-l`, and `--login` in the shells that
+have it, say the same thing explicitly.
+
+Being a login shell and being interactive are independent, and the four
+combinations are not four rules. Three of them are unanimous; the fourth is
+where the panel splits.
+
+### Measured
+
+Panel: bash 5.3.15, bash 3.2.57, bash-as-`sh`, dash, ksh93u+ 2012-08-01, zsh
+5.9, on macOS 25.5 — measured 2026-09-05. Every row used a scratch `HOME`
+containing a marker file for every name any of them reads, since a developer's
+own `.profile` is not evidence about anything. `PATH` was set to a single
+nonexistent directory before each run, so that the `path_helper` call in
+`/etc/profile` and `/etc/zprofile` shows whether the *system* file was read as
+well as the user's. The interactive rows were driven through a
+pseudo-terminal pair.
+
+| | bash 5.3 | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| interactive, login | `~/.bash_profile` | `~/.profile` | `~/.profile`, `~/.kshrc` | `~/.zshenv`, `~/.zprofile`, `~/.zshrc`, `~/.zlogin` |
+| interactive, not login | `~/.bashrc` | *(nothing)* | `~/.kshrc` | `~/.zshenv`, `~/.zshrc` |
+| **script, login** | ***(nothing)*** | `~/.profile` | `~/.profile` | `~/.zshenv`, `~/.zprofile`, `~/.zlogin` |
+| script, not login | *(nothing)* | *(nothing)* | *(nothing)* | `~/.zshenv` |
+
+The system-wide file goes with the user's throughout: every cell that names a
+profile also read `/etc/profile` — `/etc/zprofile` for zsh — and every cell
+that names nothing read nothing.
+
+**The third row is the only disagreement, and it is one shell against three.**
+bash reads nothing for a login shell with a script to run; dash, ksh93 and zsh
+each read theirs. It holds on all four non-interactive routes — a script
+operand, `-c`, a program on standard input, and `-s` — so it is a fact about
+the shell rather than about the route, and bash 3.2 and bash invoked as `sh`
+answer with bash 5.3.
+
+**bash is not declining to be a login shell.** `shopt login_shell` is on for
+`argv[0] = -bash`, and `$-` is unchanged. What it declines is reading a
+startup file at all when it is not interactive — and an explicit `--login`
+overrides that:
+
+| non-interactive, with the option written out | bash 5.3 | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `-l` | `~/.bash_profile` | `~/.profile` | `~/.profile` | its three |
+| `--login` | `~/.bash_profile` | **refused**: `dash: 0: Illegal option --`, status 2 | `~/.profile` | its three |
+
+So the split above is about login-ness *inferred from argv[0]*, and `-l` makes
+the panel unanimous the other way. bash invoked as `sh` reads `~/.profile`
+rather than `~/.bash_profile` under `-l`, which is the POSIX name for the file
+and the reason the two spellings are one row here.
+
+### What the profile sees
+
+A profile is run *by* the shell that is about to run the script, and sees what
+that shell sees. Measured in dash and ksh93, on the script route:
+
+- `$0` and `$#` are the script's own. `-dash script.sh A B` runs a profile
+  that reports `$0` as `script.sh` and `$#` as 2. On `-c` they are the
+  command string's — `$0` is the name operand where there is one and the
+  shell's own name where there is not — so the profile is behind the
+  parameters rather than in front of them.
+- The invocation's options are already in effect. `-x` traces the profile's
+  own lines.
+- `exit 3` in it exits 3 and the script never runs.
+- A file that is not there is not a failure, in any of them.
+
+### What is modeled, and what is not
+
+`Semantics.LoginProfileWhenNonInteractive` is the third row and nothing else.
+It is a bool: there is no third thing to do, and "refuse to start" is not an
+answer any shell could ship. dash, ksh93 and zsh answer true and the POSIX
+preset does too; bash alone answers false.
+
+Its zero value is `false`, which is the *minority* answer — the opposite of
+the way `StdinProgramReadInBlocks` is named, and deliberately. The majority
+behavior here is to read a file out of the invoking person's home directory,
+and a `Semantics` nobody has filled in belongs to a library embedder or to a
+test rather than to a shell. Neither should touch a home directory because a
+field was left at its default.
+
+The interactive rows ask nothing, because all four read a profile there. Only
+the script routes had a question.
+
+Three things in the table are **not** modeled, and all three predate the axis:
+
+- **Which file.** The front end reads `~/.profile` for every dialect, which
+  is dash's, ksh93's and POSIX's name for it, where bash reads
+  `~/.bash_profile` and zsh reads `~/.zshenv`, `~/.zprofile` and `~/.zlogin`.
+  Modeling it is a per-dialect list of names rather than an axis.
+- **The system-wide file.** `/etc/profile` is not read at all, on any route.
+- **`-l` and `--login`.** The front end has no such option, so the only way
+  to be a login shell here is `argv[0]`. Adding it would also need a decision
+  about `--login`, which dash refuses outright.
+
+The interactive file is `$ENV` rather than a name of our own, and that is a
+separate decision: dash and ksh93 both read `$ENV` when interactive and read
+nothing else, while `~/.bashrc` and `~/.zshrc` are names those shells own.
+This binary is not those shells, so it reads the one that is nobody's brand.
+`$ENV` is expanded before it is opened, since `$HOME/.shrc` is the usual
+spelling.
+
+### Where it lives
+
+`driver`'s `startup`, and `loginProfile` beside it. They are two functions
+rather than one with a flag because the *script* routes want the first and
+must not have the second: reaching the profile through `startup` would have
+brought `$ENV` with it, and a script inheriting the settings someone wrote for
+their keyboard is exactly what `$ENV` exists not to do.
+
+The profile is sourced after the invocation's options are applied and after
+the runner is built, which is what the two measurements above require, and it
+is the same order the prompt route already used (#482).

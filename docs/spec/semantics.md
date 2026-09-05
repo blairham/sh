@@ -2862,3 +2862,1442 @@ wording a dialect vector could hold. The status, 126, is reproduced.
 
 Neither is about a file whose *contents* are not a script; that is a
 separate question and has an issue of its own.
+
+## The axis catalog
+
+Issue #487: 160 of the fields on `interp.Semantics` were named nowhere in
+`docs/spec/`. None of them was dark — every one is exercised by the corpus
+or by a unit test, and each carries a field comment that already reads
+like a spec entry — but this file's own rule is that **a probe is recorded
+here**, and for those 160 it was not. The rest of this document is the
+record, and with it every field on the vector is named somewhere a reader
+looks. (One of the 160, `RedirectTargetIsAnOrdinaryWord`, gained a
+section of its own under field splitting while this was being written;
+its entry below is the short form.)
+
+**What an entry says.** The bold name is the field on `interp.Semantics`.
+The line beside it is the answer each preset gives; `unspecified` is a
+real answer and means the axis is *refused* rather than guessed, which is
+what the core does wherever the panel genuinely disagrees. Then the
+behavior, in the terms the measurement was taken in.
+
+**Where the answers come from.** Each was measured against bash 5.3.15,
+dash, ksh93u+ 2012-08-01 and zsh 5.9.2, in the fixed environment
+`oracle.md` describes. Two things follow, and both matter for reading the
+catalog:
+
+- **`bash` here means bash 5.3.** A preset is one shell, and bash 3.2's
+  column dates a construct rather than voting on it (`core.md`). Where
+  bash 3.2 differs the entry says so; where it is silent, it was not the
+  question being asked.
+- **The answers are this implementation's, and they are claims about the
+  panel.** Re-measuring is how the claim is checked, and it is worth
+  doing: writing this catalog re-measured every cluster below against the
+  live panel, and the `set -o` long names — audited in the same sweep —
+  turned out to have a wrong answer in both the code and the prose.
+
+**Where an axis is asked.** Almost every one is asked *narrowly*: only
+where the construct that raises it is actually present. `echo hi` needs
+no dialect, and `echo -e "a\tb"` does. That is not an optimization but
+the thing that lets the bare core run useful scripts while refusing the
+handful of questions no boolean can answer for it — the rule stated under
+"Rules for adding an axis" above, seen from the other end.
+
+**Multi-valued axes name a policy type** rather than yes-or-no, and the
+type's own values are documented beside it in `interp/semantics.go`:
+`ListingQuotingStyle`, `PrintfQuoteStyle`, `NameOperands`,
+`ExitArgumentPolicy`, `TrapBodyLineStyle`, `SelectMenuLayout`,
+`DeclarationListingForm`, `KillStatusStyle`, `BracketPolicy`,
+`DollarSingleControlPolicy`, `DollarSingleUnknownPolicy`. Where an entry
+below says "see X", X is one of those.
+
+**This catalog is not the whole of the vector.** The axes with their own
+sections earlier in this document — word splitting, array base, the
+special-builtin fatality rules, `$'…'` decoding, `read`'s letters and the
+rest — are covered there in more depth and are not repeated here.
+
+### `alias` and `unalias`
+
+**`AliasHasPrintOption`** — bash yes · dash no · ksh93 yes · zsh no
+
+Gives `alias` a `-p`, which prints the listing with `alias ` in front of
+every line. bash and ksh93 have it — and it is what bash's plain listing
+already looks like, so it is only visible in ksh93. dash parses no
+options for `alias` at all, so `-p` is a *name* there and the answer is
+"not found"; zsh has options and refuses it.
+
+**`AliasNotFoundStatusCounts`** — bash no · dash no · ksh93 yes · zsh no
+
+Makes `alias` report how many names it could not find rather than a
+plain 1: `alias n1 n2 n3` is 3 in ksh93 and 1 in the other three.
+
+About `alias` alone — ksh93's own `unalias` answers 1 however many were
+missing — so it is asked where the count is known and not where the
+complaint is printed.
+
+**`AliasParsesOptions`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Lets `alias` read leading `-` words as options. True in bash, ksh93 and
+zsh; dash reads none, so `alias -p` is a name there and the answer is
+"-p not found" rather than a refusal.
+
+**`AliasQuoting`** — bash ListingQuoteAlwaysEscaped · dash ListingQuoteAlwaysDoubled · ksh93 ListingQuoteWhenNeededDollar · zsh ListingQuoteWhenNeededEscaped
+
+Is how a value is spelled in a listing — four engines, no two alike. See
+ListingQuotingStyle.
+
+**`AliasReportsNotFound`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Says something when `alias` is given a name the table does not hold.
+True in bash, dash and ksh93; zsh reports 1 and prints nothing.
+
+**`UnaliasAllRefusesOperands`** — bash no · dash no · ksh93 no · zsh yes
+
+Makes `unalias -a name` an error that clears nothing. zsh alone: "-a:
+too many arguments", status 1, table intact. The other three take the
+`-a`, ignore the names and empty the table.
+
+**`UnaliasReportsNotFound`** — bash yes · dash yes · ksh93 no · zsh yes
+
+Is that question for `unalias`, and the panel does not pair the two:
+ksh93 complains about `alias nope` and is silent about `unalias nope`,
+and zsh does exactly the reverse. One field could not say that.
+
+
+### `echo`
+
+**`EchoExpandsEscEscape`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Admits `\e` and `\E` for the escape character: everyone with escapes but
+dash, whose set is the XSI list alone.
+
+Re-measured for this catalog, bash 3.2 prints `\e` as written where bash
+5.3 writes ESC, so this too is a bash 4 addition — dating rather than
+vetoing, per `core.md`.
+
+**`EchoExpandsHexEscapes`** — bash yes · dash no · ksh93 no · zsh yes
+
+Admits `\xHH` alongside the XSI set: bash and zsh do, dash and ksh93
+print it as written.
+
+**`EchoInterpretsEscapes`** — bash no · dash yes · ksh93 no · zsh yes
+
+Expands backslash escapes in `echo` without -e. True in dash and zsh,
+false in bash and ksh93 — a grouping no other axis produces.
+
+**`EchoLastEscapeFlagWins`** — bash yes · dash unspecified · ksh93 unspecified · zsh no
+
+Decides `echo -e -E`: bash lets the last flag win and prints the
+backslashes, zsh lets -e win whatever the order. Reached only when -e
+came first — the other order agrees everywhere — and only in a dialect
+whose EchoOptions has both letters.
+
+**`EchoOptions`** — bash neE · dash n · ksh93 ne · zsh neE
+
+Is the set of letters `echo` reads as options: `n` for every shell
+measured, `e` everywhere but dash, `E` in bash and zsh alone. A word
+carrying any other letter is not an option at all — the whole word
+becomes an operand, which is unanimous and is why `echo -nq hi` prints
+`-nq hi` in all four. Empty means `n`.
+
+
+### `cd`, `CDPATH` and command lookup
+
+**`CdDashPrintsTheDirectory`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Writes the new directory when `cd -` moves. True in bash, dash and
+ksh93; zsh alone is silent.
+
+**`CdLastPathOptionWins`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Lets the last of `cd -L` and `cd -P` decide. True in bash, dash and
+ksh93 — `cd -P -L` is logical there. zsh gives `-P` the answer wherever
+it appears, so both orders resolve.
+
+Asked only when both were given, because that is the only time the two
+rules differ.
+
+**`CdRefusesUnknownOption`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Refuses a letter `cd` does not have rather than reading the word as a
+directory. True in bash, dash and ksh93; zsh looks for somewhere called
+`-Q` instead, because its `cd` takes two operands — `cd old new` — and a
+leading dash word is the first of them there.
+
+Only about an *unknown* letter. `-L` and `-P` are options in all four
+and are not asked about.
+
+**`CdWithoutHomeIsAnError`** — bash yes · dash no · ksh93 yes · zsh no
+
+Makes `cd` with no operand and no HOME a failure. True in bash and
+ksh93; dash and zsh stay where they are and report success, which is the
+quieter answer and the surprising one. The same axis answers `cd -` with
+no OLDPWD.
+
+**`CdpathAnnouncesTheDirectory`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Prints where CDPATH sent a `cd`, when the winning entry was not a plain
+dot — three of the four; zsh moves in silence.
+
+**`CommandNotFoundStatusIsNotFound`** — bash no · dash yes · ksh93 no · zsh no
+
+Makes `command -v` answer 127 for a name that is nothing, rather than a
+plain 1. dash alone says yes; the other three report a failure and leave
+127 to mean a command that was looked for and run.
+
+**`DirectoryOnPathIsACandidate`** — bash no · dash yes · ksh93 yes · zsh yes
+
+Keeps a directory the PATH search found as the failed candidate when no
+later entry runs, so the report names the directory rather than saying
+the command was never found.
+
+Every shell measured continues the search past the directory — that is
+unanimous, and is what makes a shim directory early on PATH work at all.
+They part ways only when nothing later matches: bash reports the name as
+not found at all (status 127), where dash, ksh93 and zsh report the
+directory they could not run. dash alone keeps 127 for the status even
+then, which is DirectoryOnPathStatus's question.
+
+**`EmptyPathIsTheCurrentDirectory`** — bash yes · dash yes · ksh93 no · zsh yes
+
+Searches the current directory when PATH is set and empty.
+
+True in dash, bash and zsh; false in ksh93. `PATH=` reads like "nowhere"
+and is not: an empty PATH is one *empty element*, and an empty element
+means the current directory, so three of the four will still run a
+command sitting next to the script. Measured with the command in the
+current directory, which is the only arrangement that tells the two
+answers apart — with it anywhere else all four report not-found and the
+axis is invisible.
+
+`PATH=:` is not this question. Two empty elements is unanimous: every
+shell searches the current directory for it.
+
+**`HashReportsAMissingName`** — bash yes · dash yes · ksh93 no · zsh yes
+
+Has `hash name` complain and answer 1 when the name resolves to nothing.
+bash, dash and zsh do; ksh93 — whose hash is an alias for `alias -t` —
+says nothing and reports success.
+
+**`HashSearchesPathAlone`** — bash no · dash no · ksh93 no · zsh yes
+
+Counts only what PATH holds: zsh answers `hash shift` with "no such
+command" where the other three accept a builtin or a function as
+hashable. Measured with `shift`, which no PATH carries — `cd` was the
+contaminated probe, macOS ships /usr/bin/cd. Recorded as
+`hash/a-builtin-counts-except-in-zsh`.
+
+
+### `umask`, and the symbolic form
+
+**`SymbolicMaskSetsWithoutAWho`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Takes `umask -- =w`, where `=` has no who before it and means all three
+groups. Three of the four do; zsh wants one, and names a character that
+is not in the input when it does not get one.
+
+**`SymbolicMaskTakesMoreThanOneOperator`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Lets one `umask` clause turn on several: `umask u+rw-x` is 0122 from 022
+in three of the four. zsh takes a single operator per clause and names
+the second one.
+
+Re-measured for this catalog, bash 3.2 is on zsh's side —
+`` umask: `-': invalid symbolic mode character `` — so the multi-operator
+form is a bash 4 addition. Dating rather than vetoing, per `core.md`.
+
+**`SymbolicMaskTakesTheSetuidLetter`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Accepts `s` in a clause, which changes no bits — a umask has no setuid
+bit to deny — and is accepted by three of the four all the same. zsh
+refuses it.
+
+**`SymbolicMaskTakesTheStickyLetter`** — bash yes · dash no · ksh93 yes · zsh no
+
+Is the same question about `t`, and a different set of shells: bash and
+ksh93 take it, dash and zsh do not. Two fields because the two letters
+are not answered together.
+
+**`SymbolicMaskWhoAloneSetsIt`** — bash no · dash no · ksh93 yes · zsh no
+
+Reads `umask g` as `umask g=`, denying that group everything. ksh93
+alone. bash and dash refuse it, and zsh answers it with the complaint it
+gives a number it could not read.
+
+**`UmaskPrintsFourDigits`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Writes the mask as four digits, always — `0022` against zsh's `022`.
+True in bash, dash and ksh93.
+
+False is not "three digits". zsh writes a C octal literal with a minimum
+of three, so the leading zero comes back as soon as the owner group
+denies anything: `022` and `077`, but `0333` and `0777`. Reading this as
+a flat three printed `333` where zsh prints `0333`.
+
+Only about printing: all four read `022` and `0022` alike, and the
+symbolic form `umask -S` is identical in every one of them.
+
+**`UmaskSetWithSPrints`** — bash yes · dash no · ksh93 no · zsh no
+
+Echoes the new mask when `umask -S mask` both sets and is asked for the
+symbolic form. True only in bash, which prints `u=rwx,g=,o=` after
+setting; the other three set and say nothing.
+
+Only for that combination: `umask mask` is silent in all four, and
+`umask -S` with no mask prints in all four.
+
+
+### `trap`: options, listings and what survives a subshell
+
+**`BackgroundJobKeepsTrapListing`** — bash yes · dash no · ksh93 no · zsh no
+
+Asks it of `… &`. bash alone: the other three list nothing the parent
+had there.
+
+**`KeptTrapListingIncludesExit`** — bash yes · dash unspecified · ksh93 yes · zsh no
+
+Says a kept listing shows the parent's EXIT trap alongside the signals.
+bash and ksh93 list it; zsh keeps a pipeline element's listing and still
+drops EXIT from it. Unanswerable where nothing is kept, so dash never
+reaches the question.
+
+**`PipelineElementKeepsTrapListing`** — bash yes · dash no · ksh93 no · zsh yes
+
+Is the same question asked of a pipeline element that runs in a subshell
+environment, and the panel pairs off the other way: bash and zsh keep
+the listing there, ksh93 and dash do not. `trap 'echo x' USR1; trap |
+cat` prints the trap in bash and zsh and nothing in the other two — the
+shape issue #339 measured.
+
+**`SubshellHidesInheritedIgnoredTraps`** — bash no · dash no · ksh93 no · zsh yes
+
+Drops an *inherited* ignore from the child's listing while the signal
+stays ignored in fact: zsh, where `trap '' INT; (trap)` prints nothing
+and `(kill -INT $$; echo alive)` still prints alive. The other three
+list what POSIX says is still a current trap. An ignore the child sets
+itself is listed everywhere.
+
+**`SubshellKeepsTrapListing`** — bash yes · dash no · ksh93 yes · zsh no
+
+Makes `trap` inside `( … )` or `$( … )` still list the traps the parent
+had, though a handled one no longer fires — the save=$(trap) idiom POSIX
+carves out, extended to the compound. bash and ksh93; dash and zsh list
+only what survived the entry.
+
+**`TrapActionIsParsedWhenSet`** — bash no · dash no · ksh93 no · zsh yes
+
+Reads a trap's action when the trap is set rather than when it fires,
+and refuses a trap whose action will not parse.
+
+zsh alone. The other three store the text: `trap "if" EXIT` is taken and
+complains at the end, and `trap "if" INT` is taken and never complains
+at all, because the trap never fires.
+
+**`TrapBodyLine`** — bash TrapBodyLineWithin · dash TrapBodyLineWithin · ksh93 TrapBodyLineOffsetFromWhereItFired · zsh TrapBodyLineWhereItFired
+
+Is which lines a diagnostic from inside a trap's body names. See
+TrapBodyLineStyle.
+
+**`TrapBodyRunsWhatParsed`** — bash yes · dash yes · ksh93 no · zsh no
+
+Runs each line of a trap's body as it parses, so the part before a
+syntax error has already run by the time the error is reported.
+
+bash and dash do — `trap "echo a if" EXIT` prints `a` and then
+complains. ksh93 reads the whole body first and prints nothing. zsh
+answers no by construction rather than by measurement: it reads the
+action when the trap is set, so by the time a trap fires the whole body
+has parsed and there is no partial run to have. The two answers cannot
+be told apart there.
+
+**`TrapHasDebugCondition`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Makes `trap … DEBUG` run the action before each simple command. dash
+alone refuses the name.
+
+**`TrapHasErrCondition`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Makes `trap … ERR` a condition rather than a misspelled signal: the
+action runs after every command that fails where `set -e` would judge it
+— with or without `set -e` on, which is measured rather than assumed.
+dash alone refuses the name, with the same words it refuses any other
+word that names no signal.
+
+**`TrapHasReturnCondition`** — bash yes · dash no · ksh93 no · zsh no
+
+Makes `trap … RETURN` a condition that fires when a sourced file
+finishes, and when a function whose own body set the trap returns. bash
+alone; the other three refuse the name the way they refuse any word that
+names no signal.
+
+**`TrapListsSignalsWithL`** — bash yes · dash no · ksh93 no · zsh unspecified
+
+Makes `trap -l` list the signal names, the way `kill -l` does. bash only
+— ksh93 refuses the letter.
+
+**`TrapOneArgumentIsACondition`** — bash yes · dash yes · ksh93 no · zsh yes
+
+Reads `trap EXIT` as "put EXIT back" rather than as an action with no
+condition to attach it to.
+
+Three of the four do, which makes `trap EXIT` the short spelling of
+`trap - EXIT`. ksh93 refuses the form and the refusal ends the script.
+
+**`TrapParseFailureNamesWhereItFired`** — bash no · dash no · ksh93 yes · zsh no
+
+Puts the runtime location in front of a trap body's parse failure —
+where the trap fired — rather than the line the parse gave out on.
+
+ksh93 alone, and the two are different numbers: a body set on line 2 and
+fired from line 5 reports `w5.sh: line 5: syntax error at line 6`. bash
+and dash name the parse position in both places. zsh is not asked,
+because it reads the action when the trap is set and never reaches a
+parse failure at fire time.
+
+**`TrapParsesOptions`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Reads a leading `-` word as an option rather than as the action to run.
+
+Three of the four do. zsh does not, so `trap -p` sets a trap whose
+action is the word `-p` and the failure surfaces later, when it fires —
+which is what this shell did for every dialect before there were options
+here at all.
+
+Asked of the letters a dialect knows as much as of the ones it does not,
+because zsh takes `-p` as the action just as it takes `-Q`. A lone `-`
+is trap's own word for "put it back" and is never an option, and `--`
+ends them in all four.
+
+**`TrapPrintsBareWithConditions`** — bash no · dash no · ksh93 yes · zsh unspecified
+
+Makes `trap -p condition ...` write the action alone rather than the
+whole `trap -- action condition` line.
+
+ksh93 only, and it is why `-p` and bash's `-P` are two questions and not
+one: ksh93 reaches bash's `-P` output through `-p` with an operand, and
+has no `-P` at all.
+
+**`TrapPrintsBareWithP`** — bash yes · dash no · ksh93 no · zsh unspecified
+
+Makes `trap -P condition ...` write the action alone, with no `trap --`
+around it. bash only, and it is the one option that insists on an
+operand: printing all of them is `-p`'s job.
+
+**`TrapPrintsWithP`** — bash yes · dash no · ksh93 yes · zsh unspecified
+
+Makes `trap -p` write the traps currently set, and `trap -p condition
+...` only the named ones. bash and ksh93 have it; dash rejects the
+letter along with every other.
+
+**`TrapQuoting`** — bash ListingQuoteAlwaysEscaped · dash ListingQuoteAlwaysDoubled · ksh93 ListingQuoteWhenNeededDollar · zsh ListingQuoteWhenNeededPlain
+
+Is that same question asked of `trap`, and it is a separate field
+because one dialect answers the two differently: zsh writes an alias
+holding a tab as `$'a\tb'` and a trap holding one as a plainly quoted
+`'a<tab>b'`.
+
+**`TrapReportsAnUnknownSingleCondition`** — bash yes · dash yes · ksh93 unspecified · zsh no
+
+Complains when that one word turns out not to name a condition. zsh says
+nothing — and does complain about `trap : foo`, so this is the single-
+word form's own answer rather than zsh declining to check at all.
+
+**`TrapSingleUnknownConditionIsUsage`** — bash yes · dash no · ksh93 unspecified · zsh unspecified
+
+Prints the usage line rather than naming the word. bash does: with one
+word it cannot tell a misspelled condition from an action someone forgot
+to give a condition to. dash names the word the same way it does
+anywhere else.
+
+
+### the ERR, DEBUG, RETURN and EXIT conditions
+
+**`DebugTrapRunsInSubshells`** — bash no · dash unspecified · ksh93 yes · zsh yes
+
+Fires the DEBUG trap inside a subshell or a command substitution. ksh93
+and zsh do — a command substitution there captures the handler's output
+into the variable — and bash does not, which is a grouping
+ErrTrapRunsInSubshells does not have: ksh93 carries DEBUG into the child
+and not ERR.
+
+**`DebugTrapRunsInsideCalls`** — bash no · dash unspecified · ksh93 yes · zsh yes
+
+Fires the DEBUG trap before commands inside a function or a sourced file
+the trap was not set in. bash does not; ksh93 and zsh do. Not the ERR
+axis under another name, and not only because bash controls the two with
+different options: a sourced file bounds DEBUG there and does not bound
+ERR — measured, with a top-level trap of each, `false` inside a dotted
+file fires ERR and the commands of the same file fire no DEBUG.
+
+**`ErrTrapRunsInSubshells`** — bash no · dash unspecified · ksh93 no · zsh yes
+
+Fires the ERR trap for a failure inside a subshell or a command
+substitution. zsh alone: `trap 'echo E' ERR; x=$(false; echo hi)`
+captures an E there and nowhere else. bash and ksh93 reset the trap on
+the way into the child, the way they reset every trap that is not
+ignored.
+
+**`ErrTrapRunsInsideFunctions`** — bash no · dash unspecified · ksh93 yes · zsh yes
+
+Fires the ERR trap for a failure inside a function the trap was not set
+in. bash does not — there a function does not inherit the ERR trap, so
+only the call itself is judged where the trap can see it. ksh93 and zsh
+fire it inside too.
+
+The suppression is per *frame*, not per depth, which is measured: a trap
+set inside a function fires in that function and at the top level after
+it returns, and does not fire inside a sibling function entered
+afterwards, though the sibling's own failing call still does.
+
+**`ExitTrapFiresPastTheEnd`** — bash unspecified · dash unspecified · ksh93 no · zsh yes
+
+Counts the EXIT trap as having fired on the line after the script's
+last, rather than on its first.
+
+Only asked by a dialect whose TrapBodyLine needs a firing line at all,
+and only for EXIT, which has no line of its own. zsh says yes: its EXIT
+trap reports the line the parser stopped at. ksh93 says no, which makes
+an EXIT body read like a small script of its own.
+
+**`ExitTrapIsFunctionLocal`** — bash no · dash no · ksh93 no · zsh yes
+
+Fires an EXIT trap set inside a function when that function returns,
+rather than when the script ends. zsh alone; a trap set at the top level
+behaves the same everywhere.
+
+**`ExitTrapRunsOnSignalDeath`** — bash yes · dash no · ksh93 yes · zsh no
+
+Fires the EXIT trap when the shell is ending because a signal it had no
+handler for killed it, rather than because it reached the end or ran
+`exit`.
+
+    trap 'echo bye' EXIT; kill -INT $$
+
+prints bye in bash and ksh93 and prints nothing in dash and zsh, and all
+four report 130. A two-two split on whether dying counts as exiting.
+
+**`ReturnOutsideAFunctionIsRefused`** — bash yes · dash no · ksh93 no · zsh no
+
+Reports a `return` that has nothing to return from and carries on,
+instead of ending the script with the status it was given. True in bash
+alone.
+
+Asked only where there is nothing to return from. Inside a function and
+inside a sourced file all four obey it, so the question is about the one
+case they split on.
+
+
+### jobs, `kill` and background work
+
+**`AnnouncesBackgroundJob`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Prints the job number and the process id when a job is backgrounded,
+before the next prompt. True in bash, ksh93 and zsh; dash says nothing
+at all.
+
+Only ever at a prompt: no shell announces one to a script.
+
+**`JobControlAbsenceIsReportedFirst`** — bash yes · dash no · ksh93 no · zsh yes
+
+Refuses `bg` and `fg` before reading the operand when there is no job
+control — bash and zsh; dash and ksh93 read their operands and options
+first and complain about those.
+
+**`JobsListFinishedJobs`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Includes a job that has already ended in a `jobs` listing, once, before
+forgetting it. True in bash, dash and ksh93; zsh drops a finished job
+without ever mentioning it.
+
+The forgetting is not the axis and is not optional: every shell in the
+panel reports a finished job at most once, so a second `jobs` shows
+nothing. A shell that kept them would grow a listing for the length of
+the session.
+
+**`JobsListNewestFirst`** — bash no · dash yes · ksh93 yes · zsh no
+
+Puts the most recent job at the top of a `jobs` listing. True in dash
+and ksh93; bash and zsh list oldest first.
+
+A two-two split, which is the usual shape here and the reason this is a
+field rather than a choice: there is no ordering of the shells that
+explains it.
+
+**`JobsShowBackgroundCommand`** — bash yes · dash no · ksh93 no · zsh yes
+
+Puts the command of a `&` job in a `jobs` listing. True in bash and zsh;
+dash prints an empty column there and ksh93 a placeholder.
+
+Only for a `&` job, which is the whole reason this is not a question
+about rendering a command at all: both of the shells that leave it out
+here *do* print the command of a job they stopped themselves. They kept
+nothing for this kind of job, and the listing is where that shows.
+
+**`KillListAcceptsName`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Lets `kill -l` translate a name into a number, as the reverse of what it
+does with one. True in bash, ksh93 and zsh.
+
+dash's `-l` takes an *exit status* rather than a signal, so `kill -l 9`
+agrees with everyone by arriving there another way and `kill -l INT` is
+an illegal number. One question with two answers rather than a feature
+dash is missing, which is why it is an axis and not a gap.
+
+**`KillStatus`** — bash any success · dash any failure · ksh93 any failure · zsh failure count
+
+Is what `kill` reports when it was given several targets and they did
+not all agree. Three answers, and no two of them are the majority:
+
+    kill -0 $$ 999999    bash → 0   dash, ksh93 → 1   zsh → 1
+    kill 999998 999999   bash → 1   dash, ksh93 → 1   zsh → 2
+
+bash reports success if it signaled anything at all, and zsh reports the
+number that failed — which is a status carrying a count rather than a
+verdict, and the reason this is a policy rather than a bool.
+
+**`MonitorNeedsATerminal`** — bash no · dash yes · ksh93 no · zsh yes
+
+Ties turning `set -m` on to having a terminal. Measured in shells run
+with none, which is what a script has: bash and ksh93 grant the option
+silently; dash remarks `can't access tty; job control turned off` and
+reports success with the option left off; zsh refuses it at 1, fatally.
+The two refusal shapes are the dialect's own wording and status —
+Diagnostics.MonitorDenied and MonitorDeniedStatus. A runner whose front
+end gave it a person to report jobs to (JobControl) has a terminal, so
+the question is asked only without one. Turning the option *off* is
+granted everywhere.
+
+**`WaitReadsOptions`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Reads a leading `-` word as an option rather than as a job to wait for.
+Three of the four do; zsh has none, and answers `wait -x` with the job
+it could not find.
+
+
+### `printf`
+
+**`PrintfAssignsWithV`** — bash yes · dash no · ksh93 no · zsh yes
+
+Makes `printf -v name fmt args` put the formatted text in a variable and
+print nothing. True in bash and zsh; dash and ksh93 have no such option
+and reject it as an unknown one.
+
+It is how a script formats a value without a command substitution, so
+without it the text goes to stdout and the variable stays empty — two
+wrongs at once, and both silent.
+
+**`PrintfBackslashC`** — bash literal · dash literal · ksh93 control character · zsh stops the output
+
+Is what `\c` means in a printf format, and it is three different things
+rather than a switch:
+
+    printf "a\cbZ"   bash, dash  a\cbZ      two literal characters
+                     ksh93       a<0x02>Z   \cX is control-X
+                     zsh         a          the output stops there
+
+Measured by the bytes rather than by the display, which is the only way
+to tell the middle one from the last: ksh93's output *looks* truncated
+next to zsh's until the control character is read as a byte.
+
+**`PrintfEmptyIsNotANumber`** — bash yes · dash no · ksh93 no · zsh no
+
+Complains about a numeric conversion given an operand that is present
+and empty. bash alone: `printf '%d' ""` is an error there and a zero in
+the other three, all of which print the zero anyway. An argument that is
+*missing* is never an error in any of them.
+
+**`PrintfQuote`** — bash backslash · dash absent · ksh93 single quoted · zsh backslash
+
+Is how `%q` quotes, which is three answers and an absence rather than a
+switch — see PrintfQuoteStyle.
+
+**`PrintfRejectsUnknownOption`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Treats any leading word starting with `-` as an option and refuses one
+it does not know. True in bash, dash and ksh93, where even `printf
+"-%s\n" x` is an error because the format itself begins with a dash.
+
+False in zsh, which recognizes the options it has and takes anything
+else as the format — so `printf -q x` prints `-q` there and is an error
+in the other three.
+
+**`PrintfReportsBadNumber`** — bash yes · dash yes · ksh93 no · zsh no
+
+Complains when a numeric conversion is given something that is not a
+number. True in bash and dash, false in ksh93 and zsh — and all four
+print the zero either way, so the complaint sits beside the output
+rather than instead of it.
+
+
+### `$_`, `$-` and the option letters
+
+**`BadSetOptionNameFatal`** — bash no · dash yes · ksh93 yes · zsh yes
+
+Ends the script when `set -o` is given a name this shell does not have.
+True in dash, ksh93 and zsh.
+
+Not the same question as BadOptionToSpecialBuiltinFatal, and measured
+rather than assumed to be: a bad option *letter* to the same builtin is
+fatal in only two of them, and zsh does not so much as complain about
+`set -Q`. So one shell treats an unknown name as worse than an unknown
+letter, which is why this is a field of its own.
+
+**`DefaultOptionLetters`** — bash hB · dash  · ksh93 hB · zsh 569X
+
+Is what `$-` starts with before the script has set anything: the single-
+letter options a shell turns on at startup. Measured identical under
+`-c`, a script file and standard input — bash and ksh93 report `hB`, zsh
+`569X`, dash nothing at all.
+
+The letters that describe the invocation *route* rather than an option a
+script could set — `c` for a command string, `s` for standard input —
+are not modeled, because the panel disagrees about them and no axis has
+been asked yet: measured, ksh93 alone puts `s` in `$-` under `-c`, and
+only bash and ksh93 put `c` there at all. `i` is the exception and is
+modeled, by Runner.Interactive rather than here: it is unanimous, and it
+is a fact about the invocation that the front end carries in rather than
+a startup letter of the dialect's.
+
+Nor are the letters a shell turns on only *when* it is interactive: bash
+adds `H`, zsh adds `Z`, and ksh93 trades `h` for `mE`. That is a second,
+per-dialect vector and nothing has needed it yet.
+
+**`NoglobLetterIsF`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Puts `f` in `$-` while noglob is on, which is the letter POSIX gives it
+and what bash, dash and ksh93 report. False in zsh, which reports the
+capital: `-F` is the short option that means noglob there, `-f` being
+about startup files — the same split SetFTurnsOffGlobbing records, seen
+from the reading side.
+
+**`SetFTurnsOffGlobbing`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Makes `set -f` the short spelling of `set -o noglob`. True in bash, dash
+and ksh93. zsh spells that option the long way only: there `-f` is about
+startup files and leaves globbing alone, so `set -f; echo *.txt` lists
+the files.
+
+**`SetHLetterTracksCommands`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Makes `set -h` the short spelling of command tracking — the option bash
+lists as hashall and ksh93 as trackall, permission to remember where
+commands were found. zsh answers no: its -h abbreviates histignoredups,
+a history option, and leaves command hashing alone. Asked only where the
+letter is written, like SetFTurnsOffGlobbing: the long names raise no
+question.
+
+**`SetHasTheHLetter`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Gives `set` the -h letter at all. Three of the four have it and no two
+mean quite the same thing by it — which option it abbreviates is
+SetHLetterTracksCommands — while dash refuses the letter outright,
+fatally, the way it refuses any letter it does not have.
+
+**`SetHasTraceLetters`** — bash yes · dash no · ksh93 no · zsh no
+
+Gives `set` the -E and -T letters, which carry the ERR trap (and DEBUG
+with RETURN) into functions and subshells the dialect otherwise bounds
+them out of. bash alone: dash and ksh93 refuse the letters, and zsh
+spells different options with them, so only a refusal is honest
+elsewhere. Recorded as `opt/set-e-carries-the-err-trap`.
+
+**`UnderscoreTracksTheLastArgument`** — bash yes · dash no · ksh93 no · zsh yes
+
+Moves `$_` to the previous simple command's last expanded argument — the
+command word itself when it had none, and empty after a bare assignment.
+bash and zsh; dash and ksh93 leave it at the shell's own path forever.
+
+
+### `test` and `[`
+
+**`TestAcceptsDoubleEqual`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Makes `==` a synonym for `=` in `test` and `[`, so `test a == a` is a
+string comparison. True in bash, ksh93 and zsh.
+
+False in dash, and false does not mean "compares unequal": it means the
+word is not an operator at all, so `test a == b` is three words with no
+operator among them and is reported as one. The answer therefore has to
+come before the comparison, not after it.
+
+This is only about `test` and `[`. Inside `[[ ]]` the same spelling is a
+pattern match, which is a different question entirely.
+
+**`TestIntegerRefusalIsSilent`** — bash no · dash no · ksh93 yes · zsh no
+
+Has `[ a -eq 1 ]` fail with no sentence at status 1 — ksh93; the other
+three complain at 2.
+
+
+### the names a builtin will and will not take
+
+**`BadNameToDeclarationFatal`** — bash no · dash yes · ksh93 yes · zsh yes
+
+Ends the script when `export` or `readonly` is given an operand that is
+not a name. True in dash, ksh93 and zsh; bash reports every bad operand,
+exports the well-formed ones and carries on with a status of 1.
+
+**`BadNameToUnsetFatal`** — bash no · dash yes · ksh93 no · zsh yes
+
+Is that question again for `unset`, and is a separate field because
+ksh93 answers the two differently: `export 1x` ends the script there
+where `unset 1x` prints the same kind of complaint, returns 1 and
+carries on.
+
+Not a question about `unset` being less special than the other two — a
+bad *option* to ksh93's `unset` is fatal, which is what makes the split
+about the kind of failure rather than about the builtin.
+
+**`DeclarePrintReportsAMissingName`** — bash yes · dash unspecified · ksh93 no · zsh yes
+
+Makes `typeset -p nosuch` say so and fail. bash and zsh report it (with
+their own wording — see Diagnostics.DeclareNoSuchVariable) and answer 1
+even when other names listed fine; ksh93 prints nothing for the missing
+name and answers 0.
+
+**`PunctuatedFunctionNameIsRefused`** — bash no · dash no · ksh93 yes · zsh no
+
+Stops the script when a function whose name carries `-` or `.` is
+defined. ksh93 alone: bash and zsh define and run it, and dash never
+parses the definition at all.
+
+**`ReadRequiresAVariableName`** — bash no · dash yes · ksh93 no · zsh no
+
+Refuses a bare `read`: dash's "arg count" at 2, where the other three
+read into REPLY.
+
+**`UnsetFunctionChecksTheName`** — bash no · dash no · ksh93 yes · zsh no
+
+Judges the operand `unset -f` was given as a name, and refuses one that
+could not be a function name. True in ksh93 alone.
+
+Not the same question as the one below, and measured to be: ksh93
+refuses `1x` and is quiet about a well formed name that is not defined,
+where zsh is the other way round.
+
+
+### arrays
+
+**`ArrayBaseIsZero`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Indexes arrays from 0. True in bash and ksh93, false in zsh, which
+counts from 1. dash has no arrays at all, which is why the axis is
+absent rather than false there.
+
+**`ArrayLengthWithoutSubscriptIsCount`** — bash no · dash no · ksh93 no · zsh yes
+
+Makes `${#a}` of an array the number of elements, which is zsh's
+reading; bash and ksh93 measure the element the bare name yields. Asked
+only where the two answers differ.
+
+**`ArrayScalarIsTheWholeArray`** — bash no · dash unspecified · ksh93 no · zsh yes
+
+Decides what a plain `$a` gives when `a` is an array: zsh says every
+element joined by a space, and bash and ksh93 say the first element
+alone. dash has no arrays, which is why the axis is absent rather than
+false there.
+
+**`ArraysAreSparse`** — bash yes · dash unspecified · ksh93 yes · zsh no
+
+Makes an unassigned subscript no element at all, so `a=(x); a[5]=y` is
+an array of two. True in bash and ksh93; zsh reads the whole extent and
+finds the gap empty, giving five.
+
+The store is sparse either way — only the reading differs — so this is
+asked when an array *has* a gap and never otherwise, which is almost
+every array there is.
+
+**`EmptyArrayAtIsOneEmptyField`** — bash no · dash no · ksh93 yes · zsh no
+
+Hands a quoted "${a[@]}" of an empty array one empty field: ksh93 alone,
+and the reason careful scripts write "${a[@]+"${a[@]}"}".
+
+
+### arithmetic
+
+**`ArithBaseAbove36`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Admits `37#…` through `64#…`, whose letters split into cases and whose
+last two digits are `@` and `_`. bash and ksh93 take the full 64; zsh
+stops at 36 and says so.
+
+**`ArithIntegerOperatorRefusesFloat`** — bash unspecified · dash unspecified · ksh93 yes · zsh no
+
+Rejects a float where only an integer will do — `7 % 2.5`, `1.5 & 1`, a
+shift. ksh93 says yes and refuses; zsh says no and truncates. It does
+not arise in a shell without floats, which is why bash and dash leave it
+unanswered.
+
+**`ArithOverflowSaturates`** — bash no · dash no · ksh93 yes · zsh no
+
+Clamps integer overflow at the edge: ksh93 holds max+1 at the maximum
+where the other shells wrap. Asked only when an overflow actually
+happened.
+
+**`EmptyArithExpressionIsAnError`** — bash no · dash yes · ksh93 no · zsh no
+
+Refuses `$(( ))`: dash wants a primary and stops the script; the other
+three answer zero.
+
+**`ShiftCountIsArithmetic`** — bash no · dash no · ksh93 yes · zsh yes
+
+Reads `shift`'s operand as an expression rather than as a plain number:
+`shift 1+1` moves two and `shift n` moves whatever n holds.
+
+ksh93 and zsh do. An unset name is zero in an expression, so `shift abc`
+shifts nothing and succeeds there, where bash and dash call it a number
+they cannot read.
+
+
+### `select`
+
+**`SelectAssumesUnboundedWidth`** — bash no · dash unspecified · ksh93 unspecified · zsh yes
+
+Treats an unset COLUMNS as no limit rather than as 80. zsh says yes —
+with no terminal to ask it puts forty items on one line — and bash says
+no. It does not arise for a menu that is always vertical, which is why
+ksh93 leaves it unanswered.
+
+**`SelectEofEndsPromptLine`** — bash no · dash unspecified · ksh93 no · zsh yes
+
+Writes a newline to standard error when the input runs out, closing the
+line the prompt left open. zsh alone does; bash closes the line on
+standard *output* instead, which is a different question and the axis
+`SelectEofPrintsNewline` below.
+
+**`SelectEofIsSuccess`** — bash no · dash unspecified · ksh93 no · zsh yes
+
+Makes the input running out a success. zsh alone says yes; the other two
+report 1.
+
+**`SelectEofPrintsNewline`** — bash yes · dash unspecified · ksh93 no · zsh no
+
+Writes a newline to standard *output* when the input runs out — the one
+thing this loop prints that does not go to standard error. bash alone
+does it.
+
+**`SelectPromptNeedsTerminal`** — bash no · dash unspecified · ksh93 yes · zsh no
+
+Withholds PS3 unless the input is a terminal. ksh93 alone says yes,
+which is why a ksh93 script's transcript has the menu in it and no
+prompt.
+
+**`SelectTakesUnterminatedReply`** — bash no · dash unspecified · ksh93 no · zsh yes
+
+Counts a final reply that has no trailing newline. zsh alone: `printf 2
+| sh -c 'select x in a b; do ...'` picks `b` there, and bash and ksh93
+ignore the line and end the loop with 1.
+
+The same question `read` answers, and the opposite outcome — the panel
+is unanimous for `read` and split here, so that one is the core's
+behavior and this one is an axis. Reachable only from a pipe or a file,
+since a terminal ends every line.
+
+
+### `exec`, `.` and `local`
+
+**`DotFallsBackToCurrentDirectory`** — bash yes · dash no · ksh93 no · zsh no
+
+Looks in the current directory for a `.` operand with no slash in it,
+after PATH has missed.
+
+True only in bash. PATH is searched first everywhere, and wins over an
+identically named file in the current directory in all four — this is
+only about what happens when PATH does not have it.
+
+**`DotPassesArguments`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Gives a sourced file its own positional parameters from the words after
+the filename, restoring the caller's afterwards.
+
+False in dash, which ignores them, so `. f.sh ARG` leaves `$1` as the
+caller's; true in bash, ksh93 and zsh. With no words after the filename
+every shell leaves the parameters alone, so the axis only speaks when
+there are some.
+
+**`DotWithNoOperandIsAnError`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Decides whether `.` with no filename is a failure at all. False in dash,
+which does nothing and reports success; true in bash, ksh93 and zsh.
+
+Separate from the status and from the fatality because the panel splits
+four ways on `.` alone — dash 0, bash 2 surviving, ksh93 2 fatal, zsh 1
+surviving — and one field with four answers would have to invent a type
+to hold what is really three independent questions.
+
+**`ExecFailureRunsExitTrap`** — bash yes · dash yes · ksh93 no · zsh no
+
+Runs a `trap … EXIT` handler when `exec` could not run the command it
+was given. True in dash and bash, false in ksh93 and zsh.
+
+A *successful* exec runs no handler anywhere, and that is not an axis:
+the trap died with the process the exec replaced. Only the failure has a
+shell left to decide anything, and the panel splits on it.
+
+**`ExecTakesOptions`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Lets `exec` read options of its own, such as `-a name` to choose the
+argv[0] the command sees. True in bash, ksh93 and zsh; false in dash,
+where a leading `-a` is the name of a command and is reported as not
+found.
+
+The answer has to come before the command is looked up, because it
+decides which word the command is.
+
+**`LocalOutsideAFunctionIsAnError`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Refuses `local x=2` written where there is no function to be local to.
+
+bash and dash refuse it, zsh takes it and sets a global instead. ksh93
+has no `local` at all, so it never reaches the question.
+
+**`LocalOutsideAFunctionIsFatal`** — bash no · dash yes · ksh93 unspecified · zsh unspecified
+
+Ends the script rather than carrying on after that refusal. dash does;
+bash says the same thing and runs the next command.
+
+
+### signals, status and interruption
+
+**`ChildInterruptEndsTheScript`** — bash no · dash no · ksh93 yes · zsh no
+
+Stops the script when a child was ended by an interrupt, instead of
+carrying on with the next command. True in ksh93 alone, and for SIGINT
+alone — measured across QUIT, TERM, HUP, USR1 and PIPE, every one of
+which it carries on from.
+
+It ends the whole script rather than the construct around it: from
+inside a loop, the loop and everything after it are abandoned too. The
+status is 128 plus the signal, which is not the same shell's answer for
+a command killed by one — that is 256 plus it.
+
+**`ExitInTrapReportsEarlierStatus`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Makes a bare `exit` in an EXIT trap report the status the shell had when
+the trap began, rather than that of the trap's own last command.
+
+    trap "false; exit" 0; true
+
+is 0 in bash, dash and ksh93 and 1 in zsh. Only the bare form: `exit 7`
+is 7 everywhere, and a trap that does not exit at all leaves the
+script's status alone in all four.
+
+Found on an installed script — /usr/bin/bzless traps `stty …; exit` on
+EXIT, and the `stty` failing made the script exit 1 where every shell
+exits 0. A wrong exit status is what a caller branches on, so this is
+the quiet kind of difference.
+
+**`ReportsACommandKilledBySignal`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Says out loud that a signal ended a command, rather than leaving the
+status to carry it alone. True in bash, dash and ksh93; zsh says nothing
+— measured with a terminal as well as without one, so it is not the
+prompt-only rule that governs a background job's announcement.
+
+Not asked for the two signals nothing reports. ^C and a broken pipe are
+how a command is meant to end, and all four stay quiet about those, so
+there is no disagreement there to put to a dialect.
+
+**`ReportsAKilledCommandInACommandSubstitution`** — bash no · dash yes · ksh93 yes · zsh unspecified
+
+Remarks on a command that a signal ended inside `$(…)`.
+
+bash does not, and does remark on the same command inside `( … )`, so
+this is not the subshell question in another spelling. dash and ksh93
+report it wherever it happened; zsh remarks on none of them and never
+reaches this.
+
+Asked only inside a substitution, so the three dialects that answer the
+wider question the same way everywhere are not asked twice.
+
+**`ReportsAnyKilledPipelineElement`** — bash no · dash yes · ksh93 no · zsh no
+
+Remarks on a signal that ended an element of a pipeline other than the
+last. True in dash alone.
+
+bash and ksh93 report only the element whose status the pipeline takes:
+`sh -c 'kill -ABRT $$' | cat` is silent in both, and the same command as
+the *last* element is not. dash says the same thing wherever the element
+stands.
+
+Unreachable in zsh, which says nothing about a killed command at all, so
+the question never arises there.
+
+**`SIGPrefixAccepted`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Reads `SIGINT` as a name for the same signal `INT` names, wherever a
+signal can be named.
+
+dash alone says no, and says it in three places for two different
+reasons — the prefix is simply not part of a signal's name there:
+
+    trap 'x' SIGINT   trap: SIGINT: bad trap
+    kill -SIGINT $$   kill: Illegal option -S
+    kill -s SIGINT $$ kill: invalid signal number or name: SIGINT
+
+It is one axis rather than one per builtin because it is a property of
+how the shell reads a signal name, and the shell that refuses it refuses
+it everywhere. Asked only where the prefix is actually present and
+stripping it would name a signal: `trap 'x' INT` needs no answer from
+anyone, and neither does `SIGNOPE`, which names nothing either way.
+
+**`SignalHandlerSeesEarlierStatus`** — bash no · dash no · ksh93 no · zsh yes
+
+Shows a signal handler the status from before the command that triggered
+it rather than that command's own. zsh alone: after `false; kill -INT
+$$`, zsh's handler reads 1 where the others read 0, because `kill`
+succeeded.
+
+
+### descriptor variables and redirection targets
+
+**`FdVariableBadCloseIsAnError`** — bash yes · dash yes · ksh93 no · zsh yes
+
+Refuses `exec {name}>&-` when the name holds no descriptor number. ksh93
+says nothing and reports success.
+
+**`FdVariableOutlivesTheCommand`** — bash yes · dash yes · ksh93 no · zsh yes
+
+Keeps a `{name}>f` descriptor open past the simple command that carried
+it — two of the three that have the grammar; ksh93 takes it back with
+the command's other redirections, so the number the variable holds is
+already dead.
+
+**`RedirectTargetIsAnOrdinaryWord`** — bash yes · dash no · ksh93 no · zsh no
+
+Expands a redirection's target the way an argument is expanded — split
+into fields and matched as a pattern — and requires the result to be
+exactly one word. True in bash alone:
+
+    e="a b"; echo hi > $e      bash refuses; the rest write to `a b`
+    e="x*";  echo hi > $e      bash refuses where two files match, and
+                               writes to the match where one does; the
+                               rest create a file named `x*`
+
+The other three expand it and stop there: no splitting, no matching,
+whatever it came to is the name. A tilde expands either way.
+
+Doing bash's expansion and then quietly taking the first field is the
+answer no shell gives, and it is the one this had: `> $e` wrote to `a`,
+and `> $e` with a pattern truncated whichever file happened to match.
+
+
+### `getopts`, `shift`, `times`, `type`, `ulimit` and `fc`
+
+**`FcEmptyHistoryIsAnError`** — bash no · dash no · ksh93 no · zsh yes
+
+Has `fc` report the event it cannot find — zsh; bash and dash answer a
+script with silence at 0.
+
+**`GetoptsAssignmentRestartsWord`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Makes assigning OPTIND begin the word again, dropping any position
+inside a cluster.
+
+True in bash, dash and ksh93, and it is the *assignment* that does it
+rather than the value: `set -- -ab; getopts ab o; OPTIND=1` writes the
+number OPTIND already held, and those three still restart and read `a` a
+second time where zsh carries on to `b`.
+
+**`GetoptsClearsOptarg`** — bash no · dash no · ksh93 no · zsh yes
+
+Empties OPTARG when `getopts` reports a bad option rather than leaving
+it unset. zsh alone, and a script testing `${OPTARG-}` can tell the two
+apart.
+
+**`ShiftPastEndFatal`** — bash no · dash yes · ksh93 yes · zsh no
+
+Ends a non-interactive shell when `shift` runs off the end. True in dash
+and ksh93.
+
+**`ShiftReadsOptions`** — bash no · dash no · ksh93 yes · zsh yes
+
+Reads a leading `-` word that is not a number as an option rather than
+as the count.
+
+ksh93 and zsh do, and refuse it as one; bash and dash read it as the
+count and complain about the number. Same input, two different kinds of
+complaint — and both are fatal in the dialects where a special builtin's
+failure is, which `shift` is.
+
+**`TimesRejectsArguments`** — bash no · dash no · ksh93 no · zsh yes
+
+Makes `times` refuse an argument rather than ignore it. True in zsh,
+false in dash and bash.
+
+ksh93 answers neither: `times` is a reserved word there, so `times foo`
+is a *syntax* error and no builtin ever runs. That is a grammar question
+rather than this one, and it is recorded in the corpus rather than
+modeled here.
+
+**`TypeEndsOptionsWithDashDash`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Makes `type -- name` skip the `--`. True in bash, ksh93 and zsh; dash
+has no options for it at all, so `--` is a name there and gets answered
+as one before the real names are.
+
+**`TypeNamesTheKindWithDashT`** — bash yes · dash no · ksh93 no · zsh no
+
+Gives `type` its `-t`, which answers one bare word per name — keyword,
+function, builtin or file — and prints nothing at all for a name it
+cannot account for, only the failing status. The scripted form of the
+question: a word to compare against rather than a sentence to parse.
+True in bash alone; ksh93 and zsh refuse the letter the way they refuse
+any option they do not have, and dash reads it as a name like the rest
+of its operands.
+
+**`TypePrintsFunctionBody`** — bash yes · dash no · ksh93 no · zsh no
+
+Makes `type name` follow "name is a function" with the function itself,
+reformatted. True in bash alone; the other three stop at the sentence.
+
+**`UlimitSetsBothLimits`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Lowers the hard limit along with the soft one when neither -H nor -S was
+given — which is what makes `ulimit -t 3600` irreversible. True in bash,
+dash and ksh93.
+
+False in zsh, which sets only the soft limit and leaves the hard one
+where it was, so the same line there can be undone.
+
+
+### declarations, `export` and `readonly`
+
+**`DeclarationNameOperands`** — bash PlainNamesOnly · dash PlainNamesOnly · ksh93 PlainNamesOnly · zsh NamesAndSpecialParameters
+
+Says what may stand where `export` and `readonly` want a name, beyond a
+plain name itself.
+
+zsh is the only one that takes anything more: the special parameters are
+names to it, which is why `export -` is a complaint in three of the four
+and not in the fourth.
+
+**`DeclarationTakesASubscript`** — bash no · dash no · ksh93 yes · zsh no
+
+Accepts `export a[0]` and `readonly a[0]`, naming an element rather than
+a variable. ksh93 does; bash and dash refuse it in the words they give
+any other bad name.
+
+A separate question from the name strictness above, because the answer
+is per builtin: bash refuses it here and takes it for `unset`, and the
+two builtins sit on different strictnesses in every shell, so no rule
+over that strictness gives all four.
+
+**`DeclareListing`** — bash DeclareListingClustered · dash DeclarationListingUnspecified · ksh93 DeclareListingBareAssignments · zsh DeclareListingExportSpelled
+
+Is the shape of what `declare -p` and `typeset -p` write back. Three
+engines rather than two answers — see DeclarationListingForm.
+
+**`DeclareValueQuoting`** — bash ListingQuoteAlwaysDouble · dash ListingQuoteAlwaysEscaped · ksh93 ListingQuoteWhenNeededDollar · zsh ListingQuoteWhenNeededEscaped
+
+Is how a listed declaration spells its value. A field of its own over
+the shared vocabulary because it does not follow the dialect's other
+listings: the engine that single-quotes its aliases and traps double-
+quotes its declarations.
+
+**`DeclaredNameWithoutValueIsEmpty`** — bash no · dash no · ksh93 no · zsh yes
+
+Gives a name a value when it is declared without one: `local u` or
+`typeset u`. zsh alone says yes, so `${u-UNSET}` is empty there and
+UNSET in bash and ksh93 — the name exists in all three, but only zsh
+considers it set.
+
+**`ExportCarriesFunctions`** — bash yes · dash no · ksh93 no · zsh no
+
+Gives `export` its `-f`, which writes a function into a child's
+environment. True in bash alone: the other three have no way to carry a
+function at all, and each rejects the option as an option — two of them
+fatally.
+
+**`ExportListing`** — bash DeclareListingClustered · dash DeclareListingCommandWord · ksh93 DeclareListingCommandWord · zsh DeclareListingCommandWord
+
+Is the shape `export -p` writes: bash spells each name as a clustered
+declaration (`declare -x V="1"`), and the other three repeat the command
+word (`export V='1'`).
+
+**`ReadonlyListing`** — bash DeclareListingClustered · dash DeclareListingCommandWord · ksh93 DeclareListingCommandWord · zsh DeclareListingExportSpelled
+
+Is the same question from `readonly -p`, where zsh parts ways with its
+own export listing and writes `typeset -r R=2`.
+
+**`ReadonlyReassignmentByDeclarationFatal`** — bash no · dash yes · ksh93 yes · zsh yes
+
+Ends the script when a declaration utility assigns to a readonly name —
+`export x=2`, `typeset x=2`. True in dash, ksh93 and zsh; bash reports
+it and carries on.
+
+A different set of shells from the plain assignment above, which is what
+makes it a question of its own: bash stops for `x=2` given as an
+argument and never stops for this one.
+
+**`ReadonlyReassignmentFatal`** — bash no · dash yes · ksh93 yes · zsh yes
+
+Ends the script when a readonly variable is assigned. True everywhere
+but bash, measured with a plain assignment in a script file — adding a
+redirect makes it a command and reverses the answer, which is the
+contaminated-probe trap docs/spec/oracle.md records.
+
+**`ReadonlyReassignmentFatalFromCommandString`** — bash yes · dash yes · ksh93 yes · zsh yes
+
+Is the same question for a shell whose program came from an argument
+rather than from a file.
+
+One dialect answers the two differently: `bash -c 'readonly x=1; x=2;
+echo after'` stops and exits 1, and the same three lines in a file print
+`after` and exit 0. The other three are fatal either way.
+
+Asked only for an assignment standing as a command of its own. The
+dialect that splits is not fatal for `export x=2` or `x=2 cmd` by either
+route, so those keep the answer above.
+
+**`ValuelessDeclarationHidesTheOuterValue`** — bash yes · dash no · ksh93 yes · zsh no
+
+Makes `local u` in a function hide any outer `u` — the local exists
+unset, so `${u-UNSET}` fires the default even when the caller had a
+value. Reached only when DeclaredNameWithoutValueIsEmpty said no: a name
+declared *empty* hides the outer value by having one of its own.
+
+bash hides it, and so does ksh93's `typeset` in a keyword function; dash
+leaves the caller's value showing through until the first assignment.
+This is the shape used to declare a local before assigning it
+conditionally, so the difference is silent: the function reads the
+caller's value where it expected nothing.
+
+
+### `unset`
+
+**`UnsetEndsTheProducedPipelineStatus`** — bash no · dash unspecified · ksh93 unspecified · zsh yes
+
+Makes `unset` permanent. zsh says yes and the name never fills again; in
+bash the producer outlives it. It is the opposite of what a produced
+*scalar* does, where unset ends it in both — `unset RANDOM` leaves an
+ordinary empty name everywhere.
+
+**`UnsetFunctionReportsMissing`** — bash no · dash no · ksh93 no · zsh yes
+
+Complains when `unset -f` names a function that is not defined. True in
+zsh alone, which reports it about any name it does not hold, well formed
+or not.
+
+Unsetting a function that *is* there is quiet in all four.
+
+**`UnsetNameOperands`** — bash AnythingIsAName · dash PlainNamesOnly · ksh93 PlainNamesOnly · zsh NamesAndPositionals
+
+Is that question for `unset`, and is a separate field because two
+dialects answer it differently from the declarations. zsh answers the
+two with *disjoint* sets — `export ?` is fine there and `unset ?` is
+not, while `unset 12` is fine and `export 12` is not — and bash 5.3
+checks a name for `export` and nothing at all for `unset`. One field
+could not say either.
+
+**`UnsetPositionalIsAllowed`** — bash no · dash no · ksh93 yes · zsh no
+
+Lets `$1` expand to nothing under `set -u` rather than being an error.
+ksh93 alone, and quiet where it differs: a script that reads an argument
+it was not given carries on there and stops everywhere else.
+
+**`UnsetTakesASubscript`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Is the same question asked of `unset`, where the answers are not the
+same: bash, ksh93 and zsh take it and dash refuses it.
+
+
+### expansion and tracing
+
+**`BraceExpansion`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Expands `{a,b}` and `{1..3}`. Absent from dash, where the word is a
+literal.
+
+It lives here rather than in syntax.Dialect even though it is additive,
+because the token stream is identical either way: the parser produces
+the same word, and only expansion differs. It is also silent in the `&>`
+sense — `echo {1..3}` prints something either way, and nothing reports
+that one of them is not what was meant.
+
+**`DollarZeroInFunctionIsFunctionName`** — bash no · dash no · ksh93 no · zsh yes
+
+Makes `$0` inside a function the function's name. True only in zsh.
+
+**`EqualsExpansion`** — bash no · dash no · ksh93 no · zsh yes
+
+Replaces an unquoted word beginning with `=` by the path of the command
+named after it: `echo =ls` prints /bin/ls. zsh alone, and silent in the
+`&>` sense — the other three take the word literally and report nothing,
+so the same script prints two different things and neither shell
+complains.
+
+Its failure is not silent: a name that resolves to nothing is fatal to
+the script, like any other failed expansion.
+
+**`LinenoCountsFromTheFunction`** — bash no · dash no · ksh93 no · zsh yes
+
+Numbers `$LINENO` inside a function from the line the function was
+written on: zsh; the other three count from the file.
+
+**`TraceAssignmentsSeparately`** — bash yes · dash no · ksh93 yes · zsh no
+
+Gives each assignment of `a=1 b=2` its own trace line. True in bash and
+ksh93; dash and zsh put them on one.
+
+**`TraceShowsItsOwnDisabling`** — bash yes · dash yes · ksh93 no · zsh yes
+
+Prints `set +x` before acting on it. True in dash, bash and zsh; ksh93
+applies the change first, so the command that stops tracing leaves no
+trace of itself.
+
+
+### options, pipelines and status
+
+**`AssignmentUpdatesPipelineStatus`** — bash yes · dash unspecified · ksh93 unspecified · zsh no
+
+Counts a bare assignment as a command for the pipeline-status record.
+bash says yes, so `false | true; x=1` replaces the two elements with one
+holding 0; zsh says no and leaves them. Every other shape of command
+updates it in both.
+
+**`BadOptionToSpecialBuiltinFatal`** — bash no · dash yes · ksh93 yes · zsh no
+
+Ends the script when a special builtin is given an option it does not
+have. True in dash and ksh93, which is the POSIX rule that a special
+builtin's failure is fatal; bash and zsh report it and carry on.
+
+A different question from BuiltinSyntaxErrorFatal, which is about text
+that would not *parse* and is true for dash alone. Measured across
+`export`, `readonly` and `unset`.
+
+**`BuiltinWriteErrorFailsTheCommand`** — bash yes · dash yes · ksh93 yes · zsh no
+
+Makes a builtin whose output write failed — into a descriptor closed
+with `>&-`, most plainly — report status 1. True in bash, dash and
+ksh93; zsh keeps the builtin's own status and quietly loses the text.
+
+Whether anything is *said* about it is the dialect's wording —
+Diagnostics.BuiltinWriteError — not a second axis: bash and dash
+complain, ksh93 fails silently, and zsh has nothing to word because it
+does not fail. Asked only when a write has actually failed, so `echo hi`
+on an open stream needs no dialect.
+
+**`ErrexitSeesPipefailFailure`** — bash yes · dash unspecified · ksh93 no · zsh yes
+
+Lets `set -e` stop for a failure that only pipefail produced — a
+pipeline whose last element succeeded and whose earlier one did not.
+True in bash and zsh; false in ksh93, which runs on.
+
+Absent rather than false in dash, which has no pipefail, so the question
+cannot arise there and is never asked.
+
+Narrower than it looks: an ordinary failing pipeline — `true | false` —
+stops all three, and this is only about the failure the option adds.
+
+**`PipefailOption`** — bash yes · dash no · ksh93 yes · zsh yes
+
+Is whether `set -o pipefail` exists, making a pipeline report its last
+failing element rather than its last element. True in bash, ksh93 and
+zsh; absent from dash and from POSIX, where a pipeline is defined to
+report its last command and nothing offers to change it.
+
+Not a wording difference: where it is absent the name is not an option
+at all, so `set -o pipefail` fails and the pipeline goes on reporting
+its last element — which is the answer a script guarding against a
+failure upstream is specifically trying not to get.

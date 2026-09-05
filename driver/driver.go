@@ -176,6 +176,10 @@ func MainArgs(sh Shell, argv []string) int {
 		// sets `$1` at a prompt in all four.
 		return sh.interactive(argv, in.params, in.opts)
 	}
+	// Asked here rather than inside the option loop: it is a fact about
+	// argv[0], which is the one word that loop never looks at. The prompt
+	// route above asks the same question of the same vector for itself.
+	in.login = LoginShell(argv)
 	return sh.run(in)
 }
 
@@ -306,6 +310,17 @@ type source struct {
 	// wholeFirst parses the whole input before running any of it, which one
 	// dialect does for a command string and no dialect does for a script.
 	wholeFirst bool
+	// login says argv[0] began with a dash, the convention by which `login`
+	// and every terminal emulator's "run as a login shell" tell a shell what
+	// it is. It travels on the source for the same reason interactive does:
+	// deciding it is part of reading the invocation, and the routes that run
+	// a script are reached without an argv.
+	//
+	// It is only ever set from an argument vector, so a caller reaching Run,
+	// RunCommand, RunScript or RunStdin directly is never a login shell —
+	// which is right, because a program embedding a runner has an invocation
+	// of its own and this shell is not it.
+	login bool
 	// onStdin says the program itself arrives on standard input, so it is
 	// read as it runs rather than handed over as text. The shell holds one
 	// descriptor: what it has not read yet is still there for the script's
@@ -766,6 +781,25 @@ func (sh Shell) runInput(in source) int {
 	// nobody wrote.
 	if code, ok := sh.applyOptions(r, in.opts); !ok {
 		return code
+	}
+	// A login shell reads ~/.profile before the script, in the dialects that
+	// say a shell with work to do still reads it. After the options, which is
+	// where the panel has them: `-x` given to the invocation traces the
+	// profile's own lines in dash, ksh93 and zsh alike. After the runner is
+	// built rather than before, because the profile is run *by* this shell
+	// and sees what it sees — measured, `$0` and `$#` inside ~/.profile are
+	// the script's in dash and ksh93.
+	if in.login && sh.Semantics.LoginProfileWhenNonInteractive {
+		if code := sh.loginProfile(r); code != 0 {
+			return code
+		}
+		if r.Exited() {
+			// The profile ended the shell, which is measured: `exit 3` in it
+			// exits 3 and the script never runs, in all three of the shells
+			// that read it. Through Finish, so an EXIT trap the profile set
+			// still fires.
+			return r.Finish(context.Background())
+		}
 	}
 
 	return sh.execute(r, pr, in)

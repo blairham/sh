@@ -95,6 +95,26 @@ type Semantics struct {
 	// axis produces.
 	EchoInterpretsEscapes Answer
 
+	// DollarSingleBackslashC is what `\c` means inside `$'…'`, and like the
+	// `\c` of a printf format it is three different things rather than a
+	// switch — see DollarSingleControlPolicy. Asked only for a `$'…'` that
+	// has a `\c` in it.
+	DollarSingleBackslashC DollarSingleControlPolicy
+	// DollarSingleUnknownEscape is what becomes of a backslash before a
+	// character no escape claims — `$'\q'` — see DollarSingleUnknownPolicy.
+	// Asked only when such an escape is actually there.
+	DollarSingleUnknownEscape DollarSingleUnknownPolicy
+	// DollarSingleNulTruncates ends the decoded text at the first NUL an
+	// escape produces, which is C-string semantics: `$'a\0b'` is `a` in
+	// bash and ksh93 and the three bytes `a`, NUL, `b` in zsh.
+	//
+	// The truncation is the *span's*, not the word's: `$'a\0b'ccc` is `accc`
+	// in the shells that truncate, so what is lost is the remainder of the
+	// quoted text and nothing else. Reached only where a decoded escape
+	// actually yields a zero byte — `\0`, an octal or hex escape that comes
+	// to zero, and `\c@`, which is the same zero by another road.
+	DollarSingleNulTruncates Answer
+
 	// ReadOptions is the set of letters `read` takes, a `:` after a letter
 	// marking one whose argument follows it — the getopts convention, the
 	// same one the shared option reader speaks. The letters are the
@@ -2142,6 +2162,101 @@ func (r *Runner) quoteStyle() PrintfQuoteStyle {
 	if p == PrintfQuoteUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
 			"printf: %q: the shells disagree here and no dialect was chosen"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// DollarSingleControlPolicy is what `\c` means inside `$'…'`.
+//
+// The three answers were measured character by character rather than assumed
+// from the usual "XOR 0x40" rule, and the measurement is why there are two
+// decoding answers instead of one: the rules agree on every letter and on
+// `@ [ \ ] ^ _` — the range where masking to five bits and toggling bit 6 are
+// the same arithmetic — and part company everywhere else. `$'\c1'` is 0x11 in
+// bash and `q` in ksh93.
+type DollarSingleControlPolicy int
+
+const (
+	// DollarSingleControlUnspecified is no answer, and is refused like any
+	// other.
+	DollarSingleControlUnspecified DollarSingleControlPolicy = iota
+	// DollarSingleControlMasked uppercases the character and keeps its low
+	// five bits, with `?` reading as DEL: bash.
+	//
+	// The `?` is bash 5.3's answer. bash 3.2 has no special case and gives
+	// 0x1f, which is what masking alone produces — dated rather than vetoed,
+	// per docs/spec/core.md.
+	DollarSingleControlMasked
+	// DollarSingleControlToggled uppercases the character and toggles bit 6:
+	// ksh93, where `\c?` is DEL because 0x3f toggles to 0x7f rather than
+	// because anything special was said about it.
+	DollarSingleControlToggled
+	// DollarSingleControlAbsent is a dialect with no `\c` escape at all: zsh,
+	// where the backslash falls to DollarSingleUnknownEscape like any other
+	// character no escape claims.
+	DollarSingleControlAbsent
+)
+
+func (p DollarSingleControlPolicy) String() string {
+	switch p {
+	case DollarSingleControlMasked:
+		return "masked to five bits"
+	case DollarSingleControlToggled:
+		return "toggled by 0x40"
+	case DollarSingleControlAbsent:
+		return "absent"
+	}
+	return "unspecified"
+}
+
+// dollarSingleControl resolves the axis, and only for a `$'…'` that has a `\c`
+// in it.
+func (r *Runner) dollarSingleControl() DollarSingleControlPolicy {
+	p := r.sem().DollarSingleBackslashC
+	if p == DollarSingleControlUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			`$'\c': the shells disagree here and no dialect was chosen`))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// DollarSingleUnknownPolicy is what a backslash does before a character no
+// escape claims.
+type DollarSingleUnknownPolicy int
+
+const (
+	// DollarSingleUnknownUnspecified is no answer, and is refused like any
+	// other.
+	DollarSingleUnknownUnspecified DollarSingleUnknownPolicy = iota
+	// DollarSingleUnknownKeepsBackslash keeps both characters, so `$'\q'` is
+	// a backslash and a `q`: bash.
+	DollarSingleUnknownKeepsBackslash
+	// DollarSingleUnknownDropsBackslash keeps the character alone, so `$'\q'`
+	// is a `q`: ksh93 and zsh.
+	DollarSingleUnknownDropsBackslash
+)
+
+func (p DollarSingleUnknownPolicy) String() string {
+	switch p {
+	case DollarSingleUnknownKeepsBackslash:
+		return "keeps the backslash"
+	case DollarSingleUnknownDropsBackslash:
+		return "drops the backslash"
+	}
+	return "unspecified"
+}
+
+// dollarSingleUnknown resolves the axis, and only for an escape that really
+// has no meaning.
+func (r *Runner) dollarSingleUnknown() DollarSingleUnknownPolicy {
+	p := r.sem().DollarSingleUnknownEscape
+	if p == DollarSingleUnknownUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			`$'\': an escape with no meaning: the shells disagree here and no dialect was chosen`))
 		r.status = 2
 		r.unspecified = true
 	}

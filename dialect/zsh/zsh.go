@@ -215,6 +215,12 @@ func Semantics() interp.Semantics {
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfBackslashC = interp.PrintfBackslashCStops
 	s.PrintfQuote = interp.PrintfQuoteBackslash
+	// zsh is the one shell with `$'…'` and no `\c` in it, so `$'\cA'` is the
+	// two characters `cA`; and its strings are counted rather than
+	// terminated, so a decoded NUL is a byte like any other.
+	s.DollarSingleBackslashC = interp.DollarSingleControlAbsent
+	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownDropsBackslash
+	s.DollarSingleNulTruncates = interp.No
 	s.GetoptsAssignmentRestartsWord = interp.No
 	s.GetoptsClearsOptarg = interp.Yes
 	s.CdWithoutHomeIsAnError = interp.No

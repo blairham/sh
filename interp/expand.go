@@ -607,7 +607,7 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy) (text string, split b
 			// missing: the quoting was recorded, nothing read it, and the
 			// escape reached the output as the two characters it was written
 			// as. The result is quoted text like any other.
-			return globEscape(expandDollarSingle(s.Value)), false
+			return globEscape(r.expandDollarSingle(s.Value)), false
 		}
 		// Literal text is never split, however it was written. Its
 		// metacharacters stay live only when it was unquoted; quoting is
@@ -1668,10 +1668,13 @@ func isPositional(s string) bool {
 
 // expandDollarSingle decodes the escapes `$'…'` gives meaning to.
 //
-// The same set `printf` reads, plus `\e` for escape and the hexadecimal and
-// unicode forms, and without `\c`: there is no output to stop here, only a
-// word being built.
-func expandDollarSingle(s string) string {
+// Most of the table is unanimous across every shell that has the form at all,
+// and docs/spec/grammar/tokenization.md records it escape by escape. Three
+// places are not, and each is an axis rather than a choice made here: what
+// `\c` means, what a backslash before an unclaimed character does, and
+// whether a decoded NUL ends the text. All three are asked only where the
+// input reaches them.
+func (r *Runner) expandDollarSingle(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); {
 		if s[i] != '\\' || i+1 >= len(s) {
@@ -1679,44 +1682,19 @@ func expandDollarSingle(s string) string {
 			i++
 			continue
 		}
-		switch c := s[i+1]; c {
-		case 'n':
-			b.WriteByte('\n')
-			i += 2
-		case 't':
-			b.WriteByte('\t')
-			i += 2
-		case 'r':
-			b.WriteByte('\r')
-			i += 2
-		case 'a':
-			b.WriteByte('\a')
-			i += 2
-		case 'b':
-			b.WriteByte('\b')
-			i += 2
-		case 'f':
-			b.WriteByte('\f')
-			i += 2
-		case 'v':
-			b.WriteByte('\v')
-			i += 2
-		case 'e', 'E':
-			b.WriteByte(0x1b)
-			i += 2
-		case '\\', '\'', '"', '?':
-			b.WriteByte(c)
-			i += 2
-		case 'x':
+		switch c := s[i+1]; {
+		case c == 'x':
 			n, used := scanBase(s[i+2:], 16, 2)
 			if used == 0 {
 				b.WriteString(`\x`)
 				i += 2
 				continue
 			}
-			b.WriteByte(byte(n))
+			if !r.writeDecodedByte(&b, byte(n)) {
+				return b.String()
+			}
 			i += 2 + used
-		case 'u', 'U':
+		case c == 'u' || c == 'U':
 			width := 4
 			if c == 'U' {
 				width = 8
@@ -1728,21 +1706,170 @@ func expandDollarSingle(s string) string {
 				i += 2
 				continue
 			}
-			b.WriteRune(rune(n))
+			if n == 0 {
+				if !r.writeDecodedByte(&b, 0) {
+					return b.String()
+				}
+			} else {
+				b.WriteRune(rune(n))
+			}
 			i += 2 + used
-		case '0', '1', '2', '3', '4', '5', '6', '7':
+		case c >= '0' && c <= '7':
 			n, used := scanBase(s[i+1:], 8, 3)
-			b.WriteByte(byte(n))
+			if !r.writeDecodedByte(&b, byte(n)) {
+				return b.String()
+			}
 			i += 1 + used
+		case c == 'c':
+			p := r.dollarSingleControl()
+			if p == DollarSingleControlAbsent {
+				// The shell has no `\c` escape, so the backslash is before a
+				// character nothing claims and the unknown rule decides it.
+				r.writeUnknownEscape(&b, c)
+				i += 2
+				continue
+			}
+			x, next, ok := controlArgument(p, s, i+2)
+			if !ok {
+				// Nothing left to make a control character out of. ksh93
+				// drops the escape and produces nothing; bash keeps the two
+				// characters, the way it keeps any escape it cannot read.
+				if p != DollarSingleControlToggled {
+					r.writeUnknownEscape(&b, c)
+				}
+				i += 2
+				continue
+			}
+			if !r.writeDecodedByte(&b, controlByte(p, x)) {
+				return b.String()
+			}
+			i = next
 		default:
-			// An escape with no meaning keeps both characters, which is what
-			// the panel does rather than dropping the backslash.
-			b.WriteByte('\\')
-			b.WriteByte(c)
+			if v, ok := simpleEscape(c); ok {
+				b.WriteByte(v)
+				i += 2
+				continue
+			}
+			r.writeUnknownEscape(&b, c)
 			i += 2
 		}
 	}
 	return b.String()
+}
+
+// simpleEscape is the byte a one-character escape stands for, and whether the
+// character names one at all.
+//
+// Every entry is unanimous across bash, ksh93 and zsh — dash has no `$'…'` to
+// disagree with — so nothing here is an axis. It is a function rather than
+// part of the loop because `\c` has to read the same table: ksh93 controls
+// the character an escape *produced*, so `$'\c\t'` is control-tab there.
+func simpleEscape(c byte) (byte, bool) {
+	switch c {
+	case 'n':
+		return '\n', true
+	case 't':
+		return '\t', true
+	case 'r':
+		return '\r', true
+	case 'a':
+		return '\a', true
+	case 'b':
+		return '\b', true
+	case 'f':
+		return '\f', true
+	case 'v':
+		return '\v', true
+	case 'e', 'E':
+		return 0x1b, true
+	case '\\', '\'', '"', '?':
+		return c, true
+	}
+	return 0, false
+}
+
+// controlArgument is the character `\c` applies to, where the escape ends, and
+// whether there was anything there at all.
+//
+// The two decoding policies read the argument differently, and it shows only
+// where the argument is itself written as an escape. bash takes the raw byte,
+// so `$'\c\t'` is control-backslash followed by a `t` — with the one
+// exception that a doubled backslash is read as the single character it
+// stands for. ksh93 decodes first, so the same text is control-tab.
+func controlArgument(p DollarSingleControlPolicy, s string, i int) (byte, int, bool) {
+	switch {
+	case i >= len(s):
+		return 0, i, false
+	case s[i] != '\\' || i+1 >= len(s):
+		return s[i], i + 1, true
+	case p == DollarSingleControlMasked:
+		if s[i+1] == '\\' {
+			return '\\', i + 2, true
+		}
+		return '\\', i + 1, true
+	}
+	switch c := s[i+1]; {
+	case c == 'x':
+		if n, used := scanBase(s[i+2:], 16, 2); used > 0 {
+			return byte(n), i + 2 + used, true
+		}
+	case c >= '0' && c <= '7':
+		n, used := scanBase(s[i+1:], 8, 3)
+		return byte(n), i + 1 + used, true
+	default:
+		if v, ok := simpleEscape(c); ok {
+			return v, i + 2, true
+		}
+	}
+	// An escape ksh93 does not know loses its backslash, and what `\c`
+	// controls is the character that survives.
+	return s[i+1], i + 2, true
+}
+
+// writeDecodedByte writes one byte an escape decoded to, reporting whether
+// decoding carries on.
+//
+// A zero byte is the interesting one. Where a shell holds a word as a C
+// string there is nothing after it to hold, so `$'a\0b'` is `a` — and only
+// the *span* ends: `$'a\0b'ccc` is `accc`, because the rest of the word was
+// never inside the quotes. zsh counts its strings and keeps all three bytes.
+func (r *Runner) writeDecodedByte(b *strings.Builder, c byte) bool {
+	if c == 0 && r.ask(r.sem().DollarSingleNulTruncates, `a NUL inside $'…'`) {
+		return false
+	}
+	b.WriteByte(c)
+	return true
+}
+
+// writeUnknownEscape writes a backslash before a character no escape claims.
+func (r *Runner) writeUnknownEscape(b *strings.Builder, c byte) {
+	if r.dollarSingleUnknown() == DollarSingleUnknownKeepsBackslash {
+		b.WriteByte('\\')
+	}
+	b.WriteByte(c)
+}
+
+// controlByte is what `\cX` decodes to, which is two different arithmetics.
+//
+// Both uppercase a letter first — `$'\ca'` is 0x01 and not 0x21 anywhere that
+// decodes it at all — and then either keep the low five bits or toggle bit 6.
+// Those agree over `@` through `_`, which is every letter and six symbols,
+// and disagree over everything else: `$'\c1'` is 0x11 one way and `q` the
+// other.
+func controlByte(p DollarSingleControlPolicy, x byte) byte {
+	if x >= 'a' && x <= 'z' {
+		x -= 'a' - 'A'
+	}
+	switch p {
+	case DollarSingleControlMasked:
+		if x == '?' {
+			return 0x7f
+		}
+		return x & 0x1f
+	case DollarSingleControlToggled:
+		return x ^ 0x40
+	}
+	return 0
 }
 
 // scanBase reads up to max digits in the given base, reporting how many it

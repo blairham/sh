@@ -76,6 +76,10 @@ func Semantics() interp.Semantics {
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
 	s.PrintfQuote = interp.PrintfQuoteAbsent
+	// The three `$'…'` axes are left unanswered on purpose: dash has no
+	// `$'…'` at all — `$'a\tb'` is the six characters it was written as,
+	// dollar included — so the grammar refuses the form before any of them
+	// can be asked. An answer here would be an invention.
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
 	s.CdWithoutHomeIsAnError = interp.No

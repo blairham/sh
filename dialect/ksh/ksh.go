@@ -216,6 +216,11 @@ func Semantics() interp.Semantics {
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfBackslashC = interp.PrintfBackslashCControl
 	s.PrintfQuote = interp.PrintfQuoteSingle
+	// The same `\c` as the printf format, and the arithmetic is bit 6
+	// toggled rather than bash's five-bit mask: `$'\c1'` is `q`, not 0x11.
+	s.DollarSingleBackslashC = interp.DollarSingleControlToggled
+	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownDropsBackslash
+	s.DollarSingleNulTruncates = interp.Yes
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
 	s.CdWithoutHomeIsAnError = interp.Yes

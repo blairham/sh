@@ -327,7 +327,7 @@ func (r *Runner) applyFlagOp(e *syntax.ParamExpr, words []string, set, isList bo
 		if isList {
 			return sliceElems(words, r.numOf(e.Arg, e, e.Arg2), e, r), true, true
 		}
-		words[0] = substring(words[0], r.numOf(e.Arg, e, e.Arg2), e, r)
+		words[0] = r.substringRange(words[0], e)
 	case syntax.ParamUpper, syntax.ParamLower, syntax.ParamToggle,
 		syntax.ParamUpperFirst, syntax.ParamLowerFirst, syntax.ParamToggleFirst:
 		for i, w := range words {

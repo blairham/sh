@@ -3578,6 +3578,102 @@
         "TimedOut": false
       }
     },
+    "caller/from-a-function-under-dash-c": {
+      "bash": {
+        "Output": "1 NULL~st=0~st0=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1 NULL~st=0~st0=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=1~st0=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: caller: not found~st=127~\u003cshell\u003e: 1: caller: not found~st0=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: caller: not found~st=127~\u003cshell\u003e: caller: not found~st0=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "f: command not found: caller~st=127~f: command not found: caller~st0=127",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "caller/refuses-what-is-not-a-depth": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: caller: x: invalid number~caller: usage: caller [expr]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: caller: x: invalid number~caller: usage: caller [expr]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: caller: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: caller: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "f: command not found: caller~st=127",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "caller/walks-a-script-s-stack": {
+      "bash": {
+        "Output": "2 \u003cscript\u003e~2 g \u003cscript\u003e~3 main \u003cscript\u003e~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "2 \u003cscript\u003e~2 g \u003cscript\u003e~3 main \u003cscript\u003e~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "2 \u003cscript\u003e~2 g \u003cscript\u003e~3 main \u003cscript\u003e~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cscript\u003e: 1: caller: not found~\u003cscript\u003e: 1: caller: not found~\u003cscript\u003e: 1: caller: not found~\u003cscript\u003e: 1: caller: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cscript\u003e: line 1: caller: not found~\u003cscript\u003e: line 1: caller: not found~\u003cscript\u003e: line 1: caller: not found~\u003cscript\u003e: line 1: caller: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "f: command not found: caller~f: command not found: caller~f: command not found: caller~f: command not found: caller~st=127",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "callstack/a-function-knows-it-is-one": {
       "bash": {
         "Output": "[f] n=1~outside=[]",
@@ -7606,6 +7702,166 @@
       },
       "zsh": {
         "Output": "m\tn",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "emulate/an-unknown-mode-is-passed-over": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: emulate: command not found~st=127~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: emulate: command not found~st=127~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: emulate: command not found~st=127~\u003cshell\u003e: emulate: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: emulate: not found~st=127~\u003cshell\u003e: 1: emulate: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: emulate: not found~st=127~\u003cshell\u003e: emulate: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0~zsh",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "emulate/dash-c-restores-after": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found~x*~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found~x*~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: setopt: command not found~\u003cshell\u003e: emulate: command not found~x*~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: emulate: not found~x*~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found~x*~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "inner~x*~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "emulate/names-the-current-mode": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: emulate: command not found~\u003cshell\u003e: line 1: emulate: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: emulate: command not found~\u003cshell\u003e: line 1: emulate: command not found~\u003cshell\u003e: line 1: emulate: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: emulate: command not found~\u003cshell\u003e: emulate: command not found~\u003cshell\u003e: emulate: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: emulate: not found~\u003cshell\u003e: 1: emulate: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: emulate: not found~\u003cshell\u003e: emulate: not found~\u003cshell\u003e: emulate: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "zsh~sh",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "emulate/resets-the-options": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found~reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: emulate: command not found~reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: setopt: command not found~\u003cshell\u003e: emulate: command not found~reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: emulate: not found~reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: emulate: not found~reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "reached",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "emulate/sh-moves-the-measured-axes": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: emulate: command not found~n=2~x*~q",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: emulate: command not found~n=2~x*~q",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: emulate: command not found~n=2~x*~q",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: emulate: not found~n=2~x*~q",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "n=2~x*~q",
         "Status": 0,
         "TimedOut": false
       }
@@ -16314,6 +16570,230 @@
         "TimedOut": false
       }
     },
+    "print/a-lone-dash-ends-the-options": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "-n~-n",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "-n~-n",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "print/backslash-c-stops-everything": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "abafter",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "abafter",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "print/f-is-printf": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: print: command not found~.",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: print: command not found~.",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: print: command not found~.",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: print: not found~.",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "a|b|.",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "a|b|.",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "print/joins-expands-and-ends-the-line": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "hello world~abcd",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "hello world~abcd",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "print/r-withholds-the-escapes": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: print: command not found~\u003cshell\u003e: line 1: print: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: print: command not found~\u003cshell\u003e: print: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: print: not found~\u003cshell\u003e: 1: print: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "a\tb~a\\tb",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "a\tb~a\\tb",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "print/the-coprocess-letter-with-nothing-there": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: print: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: print: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: print: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: print: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: print: no query process [Bad file descriptor]~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:print:1: -p: no coprocess~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "print/u-aims-at-a-descriptor": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: print: command not found~st=127~\u003cshell\u003e: line 1: print: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: print: command not found~st=127~\u003cshell\u003e: line 1: print: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: print: command not found~st=127~\u003cshell\u003e: print: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: print: not found~st=127~\u003cshell\u003e: 1: print: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "to-err~st=0~\u003cshell\u003e: print: bad file unit number [Bad file descriptor]~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "to-err~st=0~\u003cshell\u003e:print:1: bad file number: 9~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "printf/a-dash-word-is-an-option": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: printf: -q: invalid option~printf: usage: printf [-v var] format [arguments]~st=2",
@@ -18807,6 +19287,230 @@
       "zsh": {
         "Output": "\u003cshell\u003e:1: no matches found: *",
         "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "setopt/acts-past-a-bad-name": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: setopt: command not found~st=127~x*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: setopt: command not found~st=127~x*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: setopt: command not found~st=127~x*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: setopt: not found~st=127~x*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: setopt: not found~st=127~x*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:setopt:1: no such option: zzqq~st=1~x*",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "setopt/bare-lists-the-deviations": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: setopt: command not found~\u003cshell\u003e: line 1: setopt: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: setopt: command not found~\u003cshell\u003e: setopt: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: setopt: not found~\u003cshell\u003e: 1: setopt: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: setopt: not found~\u003cshell\u003e: setopt: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "noclobber~errexit~nohashdirs",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "setopt/errexit-is-the-same-switch-as-set-e": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: setopt: command not found~reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: setopt: command not found~reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: setopt: command not found~reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: setopt: not found~reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: setopt: not found~reached",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "setopt/nonomatch-passes-the-glob-through": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: unsetopt: command not found~x*~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: unsetopt: command not found~x*~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: unsetopt: command not found~x*~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: unsetopt: not found~x*~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: unsetopt: not found~x*~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "x*~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "setopt/normalizes-zsh-spellings": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: setopt: command not found~st=127~x*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: setopt: command not found~st=127~x*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: setopt: command not found~st=127~x*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: setopt: not found~st=127~x*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: setopt: not found~st=127~x*",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0~x*",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "setopt/shwordsplit-is-an-option": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: setopt: command not found~n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: setopt: command not found~n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: setopt: command not found~n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: setopt: not found~n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: setopt: not found~n=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "n=2",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "setopt/the-no-prefix-strips-once": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: setopt: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: setopt: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: setopt: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: setopt: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: setopt: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:setopt:1: no such option: no_no_glob~st=1",
+        "Status": 0,
         "TimedOut": false
       }
     },
@@ -24118,6 +24822,198 @@
       },
       "zsh": {
         "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "whence/a-name-that-resolves-to-nothing": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: whence: command not found~st=127~\u003cshell\u003e: line 1: whence: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: whence: command not found~st=127~\u003cshell\u003e: line 1: whence: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: whence: command not found~st=127~\u003cshell\u003e: whence: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: whence: not found~st=127~\u003cshell\u003e: 1: whence: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=1~\u003cshell\u003e: whence: nosuchcmd431: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=1~nosuchcmd431 not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "whence/an-alias-answers-as-its-value": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: whence: command not found~\u003cshell\u003e: whence: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: whence: not found~\u003cshell\u003e: 1: whence: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "'ls -l'~ll is an alias for 'ls -l'",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "ls -l~ll is an alias for ls -l",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "whence/an-unknown-letter": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: whence: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: whence: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: whence: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: whence: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: whence: -z: unknown option~Usage: whence [-afpqv] name  ...~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:whence:1: bad option: -z~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "whence/bare-is-the-resolution": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: whence: command not found~st=127~\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: whence: command not found~st=127~\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: whence: command not found~st=127~\u003cshell\u003e: whence: command not found~\u003cshell\u003e: whence: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: whence: not found~st=127~\u003cshell\u003e: 1: whence: not found~\u003cshell\u003e: 1: whence: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "echo~st=0~if~f",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "echo~st=0~if~f",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "whence/p-searches-path-alone": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: whence: command not found~got=~\u003cshell\u003e: line 1: whence: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: whence: command not found~got=~\u003cshell\u003e: line 1: whence: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: whence: command not found~got=~\u003cshell\u003e: whence: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: whence: not found~got=~\u003cshell\u003e: 1: whence: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "path-ok~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "path-ok~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "whence/v-is-the-sentence": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: whence: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: whence: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: whence: command not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: whence: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "echo is a shell builtin~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "echo is a shell builtin~st=0",
         "Status": 0,
         "TimedOut": false
       }

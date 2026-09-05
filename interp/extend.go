@@ -230,6 +230,51 @@ func sortedNames(seen map[string]bool) []string {
 	return out
 }
 
+// LookPath resolves a name through PATH the way a command word is resolved —
+// against the runner's own PATH and directory, never the process's.
+//
+// For a registered builtin that answers "where would this run from" while
+// deliberately passing over functions and builtins: one dialect has a builtin
+// whose whole job is that narrower question, and without this it would have
+// to reimplement the search the runner already does.
+func (r *Runner) LookPath(name string) (string, bool) {
+	path, err := r.lookPath(name)
+	if err != nil {
+		return "", false
+	}
+	return path, true
+}
+
+// WriterForFd is the stream a builtin writing "to descriptor n" needs: the
+// named two by their numbers, anything past them from the shell's own table —
+// the writing half of what `read -u` already reads. A number nothing is open
+// at, or one held by something that cannot be written, is not a stream.
+func (r *Runner) WriterForFd(fd int) (io.Writer, bool) {
+	switch fd {
+	case 1:
+		return r.stdout(), true
+	case 2:
+		return r.stderr(), true
+	}
+	if v, held := r.fds[fd]; held {
+		w, ok := v.(io.Writer)
+		return w, ok
+	}
+	return nil, false
+}
+
+// NamedOption reads one `set -o` name's current state, for a registered
+// builtin that presents the same state under its own names — a listing has to
+// read the live answer, and the fields it lives in are the runner's own.
+// The second result says whether this shell has the name at all.
+func (r *Runner) NamedOption(name string) (on, known bool) {
+	o, ok := r.lookupSetOption(name)
+	if !ok {
+		return false, false
+	}
+	return o.state(r), true
+}
+
 // Expand performs parameter and command expansion on raw text.
 //
 // For a caller that holds a *setting* which is a path with parameters in it —

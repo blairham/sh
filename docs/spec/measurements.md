@@ -586,6 +586,34 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `enable/a-name-that-is-not-a-builtin` | `<shell>: 1: disable: not found~st=127` | `<shell>: line 1: disable: command not found~st=127` | `<shell>: line 1: disable: command not found~st=127` | `<shell>: disable: command not found~st=127` | `<shell>: disable: not found~st=127` | `<shell>:disable:1: no such hash table element: nosuchthing~st=1` |
 | `enable/switching-one-off-and-back-on` | `st=127` | `st=0` | `st=0` | `st=0` | `st=127` | `st=0` |
 | `shift/an-operand-that-was-never-given` | `<shell>: 1: shift: can't shift that many` *(status 2)* | `st=1` | `<shell>: line 1: shift: shift count out of range~st=1` | `st=1` | `<shell>: shift: (null): bad number` *(status 1)* | `<shell>:shift:1: shift count must be <= $#~st=1` |
+| `setopt/normalizes-zsh-spellings` | `<shell>: 1: setopt: not found~st=127~x*` | `<shell>: line 1: setopt: command not found~st=127~x*` | `<shell>: line 1: setopt: command not found~st=127~x*` | `<shell>: setopt: command not found~st=127~x*` | `<shell>: setopt: not found~st=127~x*` | `st=0~x*` |
+| `setopt/acts-past-a-bad-name` | `<shell>: 1: setopt: not found~st=127~x*` | `<shell>: line 1: setopt: command not found~st=127~x*` | `<shell>: line 1: setopt: command not found~st=127~x*` | `<shell>: setopt: command not found~st=127~x*` | `<shell>: setopt: not found~st=127~x*` | `<shell>:setopt:1: no such option: zzqq~st=1~x*` |
+| `setopt/the-no-prefix-strips-once` | `<shell>: 1: setopt: not found~st=127` | `<shell>: line 1: setopt: command not found~st=127` | `<shell>: line 1: setopt: command not found~st=127` | `<shell>: setopt: command not found~st=127` | `<shell>: setopt: not found~st=127` | `<shell>:setopt:1: no such option: no_no_glob~st=1` |
+| `setopt/bare-lists-the-deviations` | `<shell>: 1: setopt: not found~<shell>: 1: setopt: not found` *(status 127)* | `<shell>: line 1: setopt: command not found~<shell>: line 1: setopt: command not found` *(status 127)* | `<shell>: line 1: setopt: command not found~<shell>: line 1: setopt: command not found` *(status 127)* | `<shell>: setopt: command not found~<shell>: setopt: command not found` *(status 127)* | `<shell>: setopt: not found~<shell>: setopt: not found` *(status 127)* | `noclobber~errexit~nohashdirs` |
+| `setopt/shwordsplit-is-an-option` | `<shell>: 1: setopt: not found~n=2` | `<shell>: line 1: setopt: command not found~n=2` | `<shell>: line 1: setopt: command not found~n=2` | `<shell>: setopt: command not found~n=2` | `<shell>: setopt: not found~n=2` | `n=2` |
+| `setopt/nonomatch-passes-the-glob-through` | `<shell>: 1: unsetopt: not found~x*~st=0` | `<shell>: line 1: unsetopt: command not found~x*~st=0` | `<shell>: line 1: unsetopt: command not found~x*~st=0` | `<shell>: unsetopt: command not found~x*~st=0` | `<shell>: unsetopt: not found~x*~st=0` | `x*~st=0` |
+| `setopt/errexit-is-the-same-switch-as-set-e` | `<shell>: 1: setopt: not found~reached` | `<shell>: line 1: setopt: command not found~reached` | `<shell>: line 1: setopt: command not found~reached` | `<shell>: setopt: command not found~reached` | `<shell>: setopt: not found~reached` | *(no output, status 1)* |
+| `emulate/names-the-current-mode` | `<shell>: 1: emulate: not found~<shell>: 1: emulate: not found~<shell>: 1: emulate: not found` *(status 127)* | `<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found` *(status 127)* | `<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found` *(status 127)* | `<shell>: emulate: command not found~<shell>: emulate: command not found~<shell>: emulate: command not found` *(status 127)* | `<shell>: emulate: not found~<shell>: emulate: not found~<shell>: emulate: not found` *(status 127)* | `zsh~sh` |
+| `emulate/sh-moves-the-measured-axes` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `<shell>: line 1: emulate: command not found~n=2~x*~q` | `<shell>: line 1: emulate: command not found~n=2~x*~q` | `<shell>: emulate: command not found~n=2~x*~q` | `<shell>: emulate: not found~n=2~x*~q` | `n=2~x*~q` |
+| `emulate/resets-the-options` | `<shell>: 1: setopt: not found~<shell>: 1: emulate: not found~reached` | `<shell>: line 1: setopt: command not found~<shell>: line 1: emulate: command not found~reached` | `<shell>: line 1: setopt: command not found~<shell>: line 1: emulate: command not found~reached` | `<shell>: setopt: command not found~<shell>: emulate: command not found~reached` | `<shell>: setopt: not found~<shell>: emulate: not found~reached` | `reached` |
+| `emulate/dash-c-restores-after` | `<shell>: 1: setopt: not found~<shell>: 1: emulate: not found~x*~st=0` | `<shell>: line 1: setopt: command not found~<shell>: line 1: emulate: command not found~x*~st=0` | `<shell>: line 1: setopt: command not found~<shell>: line 1: emulate: command not found~x*~st=0` | `<shell>: setopt: command not found~<shell>: emulate: command not found~x*~st=0` | `<shell>: setopt: not found~<shell>: emulate: not found~x*~st=0` | `inner~x*~st=0` |
+| `emulate/an-unknown-mode-is-passed-over` | `<shell>: 1: emulate: not found~st=127~<shell>: 1: emulate: not found` *(status 127)* | `<shell>: line 1: emulate: command not found~st=127~<shell>: line 1: emulate: command not found` *(status 127)* | `<shell>: line 1: emulate: command not found~st=127~<shell>: line 1: emulate: command not found` *(status 127)* | `<shell>: emulate: command not found~st=127~<shell>: emulate: command not found` *(status 127)* | `<shell>: emulate: not found~st=127~<shell>: emulate: not found` *(status 127)* | `st=0~zsh` |
+| `whence/bare-is-the-resolution` | `<shell>: 1: whence: not found~st=127~<shell>: 1: whence: not found~<shell>: 1: whence: not found` *(status 127)* | `<shell>: line 1: whence: command not found~st=127~<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found` *(status 127)* | `<shell>: line 1: whence: command not found~st=127~<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found` *(status 127)* | `<shell>: whence: command not found~st=127~<shell>: whence: command not found~<shell>: whence: command not found` *(status 127)* | `echo~st=0~if~f` | `echo~st=0~if~f` |
+| `whence/v-is-the-sentence` | `<shell>: 1: whence: not found~st=127` | `<shell>: line 1: whence: command not found~st=127` | `<shell>: line 1: whence: command not found~st=127` | `<shell>: whence: command not found~st=127` | `echo is a shell builtin~st=0` | `echo is a shell builtin~st=0` |
+| `whence/a-name-that-resolves-to-nothing` | `<shell>: 1: whence: not found~st=127~<shell>: 1: whence: not found~st=127` | `<shell>: line 1: whence: command not found~st=127~<shell>: line 1: whence: command not found~st=127` | `<shell>: line 1: whence: command not found~st=127~<shell>: line 1: whence: command not found~st=127` | `<shell>: whence: command not found~st=127~<shell>: whence: command not found~st=127` | `st=1~<shell>: whence: nosuchcmd431: not found~st=1` | `st=1~nosuchcmd431 not found~st=1` |
+| `whence/p-searches-path-alone` | `<shell>: 1: whence: not found~got=~<shell>: 1: whence: not found~st=127` | `<shell>: line 1: whence: command not found~got=~<shell>: line 1: whence: command not found~st=127` | `<shell>: line 1: whence: command not found~got=~<shell>: line 1: whence: command not found~st=127` | `<shell>: whence: command not found~got=~<shell>: whence: command not found~st=127` | `path-ok~st=1` | `path-ok~st=1` |
+| `whence/an-alias-answers-as-its-value` | `<shell>: 1: whence: not found~<shell>: 1: whence: not found` *(status 127)* | `<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found` *(status 127)* | `<shell>: line 1: whence: command not found~<shell>: line 1: whence: command not found` *(status 127)* | `<shell>: whence: command not found~<shell>: whence: command not found` *(status 127)* | `'ls -l'~ll is an alias for 'ls -l'` | `ls -l~ll is an alias for ls -l` |
+| `whence/an-unknown-letter` | `<shell>: 1: whence: not found~st=127` | `<shell>: line 1: whence: command not found~st=127` | `<shell>: line 1: whence: command not found~st=127` | `<shell>: whence: command not found~st=127` | `<shell>: whence: -z: unknown option~Usage: whence [-afpqv] name  ...~st=2` | `<shell>:whence:1: bad option: -z~st=1` |
+| `print/joins-expands-and-ends-the-line` | `<shell>: 1: print: not found~<shell>: 1: print: not found~<shell>: 1: print: not found` *(status 127)* | `<shell>: line 1: print: command not found~<shell>: line 1: print: command not found~<shell>: line 1: print: command not found` *(status 127)* | `<shell>: line 1: print: command not found~<shell>: line 1: print: command not found~<shell>: line 1: print: command not found` *(status 127)* | `<shell>: print: command not found~<shell>: print: command not found~<shell>: print: command not found` *(status 127)* | `hello world~abcd` | `hello world~abcd` |
+| `print/r-withholds-the-escapes` | `<shell>: 1: print: not found~<shell>: 1: print: not found` *(status 127)* | `<shell>: line 1: print: command not found~<shell>: line 1: print: command not found` *(status 127)* | `<shell>: line 1: print: command not found~<shell>: line 1: print: command not found` *(status 127)* | `<shell>: print: command not found~<shell>: print: command not found` *(status 127)* | `a	b~a\tb` | `a	b~a\tb` |
+| `print/backslash-c-stops-everything` | `<shell>: 1: print: not found~<shell>: 1: print: not found` *(status 127)* | `<shell>: line 1: print: command not found~<shell>: line 1: print: command not found` *(status 127)* | `<shell>: line 1: print: command not found~<shell>: line 1: print: command not found` *(status 127)* | `<shell>: print: command not found~<shell>: print: command not found` *(status 127)* | `abafter` | `abafter` |
+| `print/u-aims-at-a-descriptor` | `<shell>: 1: print: not found~st=127~<shell>: 1: print: not found~st=127` | `<shell>: line 1: print: command not found~st=127~<shell>: line 1: print: command not found~st=127` | `<shell>: line 1: print: command not found~st=127~<shell>: line 1: print: command not found~st=127` | `<shell>: print: command not found~st=127~<shell>: print: command not found~st=127` | `to-err~st=0~<shell>: print: bad file unit number [Bad file descriptor]~st=1` | `to-err~st=0~<shell>:print:1: bad file number: 9~st=1` |
+| `print/a-lone-dash-ends-the-options` | `<shell>: 1: print: not found~<shell>: 1: print: not found` *(status 127)* | `<shell>: line 1: print: command not found~<shell>: line 1: print: command not found` *(status 127)* | `<shell>: line 1: print: command not found~<shell>: line 1: print: command not found` *(status 127)* | `<shell>: print: command not found~<shell>: print: command not found` *(status 127)* | `-n~-n` | `-n~-n` |
+| `print/f-is-printf` | `<shell>: 1: print: not found~.` | `<shell>: line 1: print: command not found~.` | `<shell>: line 1: print: command not found~.` | `<shell>: print: command not found~.` | `a\|b\|.` | `a\|b\|.` |
+| `print/the-coprocess-letter-with-nothing-there` | `<shell>: 1: print: not found~st=127` | `<shell>: line 1: print: command not found~st=127` | `<shell>: line 1: print: command not found~st=127` | `<shell>: print: command not found~st=127` | `<shell>: print: no query process [Bad file descriptor]~st=1` | `<shell>:print:1: -p: no coprocess~st=1` |
+| `caller/from-a-function-under-dash-c` | `<shell>: 1: caller: not found~st=127~<shell>: 1: caller: not found~st0=127` | `1 NULL~st=0~st0=1` | `1 NULL~st=0~st0=1` | `st=1~st0=1` | `<shell>: caller: not found~st=127~<shell>: caller: not found~st0=127` | `f: command not found: caller~st=127~f: command not found: caller~st0=127` |
+| `caller/walks-a-script-s-stack` | `<script>: 1: caller: not found~<script>: 1: caller: not found~<script>: 1: caller: not found~<script>: 1: caller: not found~st=127` | `2 <script>~2 g <script>~3 main <script>~st=1` | `2 <script>~2 g <script>~3 main <script>~st=1` | `2 <script>~2 g <script>~3 main <script>~st=1` | `<script>: line 1: caller: not found~<script>: line 1: caller: not found~<script>: line 1: caller: not found~<script>: line 1: caller: not found~st=127` | `f: command not found: caller~f: command not found: caller~f: command not found: caller~f: command not found: caller~st=127` |
+| `caller/refuses-what-is-not-a-depth` | `<shell>: 1: caller: not found~st=127` | `<shell>: line 1: caller: x: invalid number~caller: usage: caller [expr]~st=2` | `<shell>: line 1: caller: x: invalid number~caller: usage: caller [expr]~st=2` | `st=1` | `<shell>: caller: not found~st=127` | `f: command not found: caller~st=127` |
 
 - `echo/dash-e-and-capital-e` — -e turns escapes on where the shell has the letter and -E off where it has that one: dash has neither and prints them, ksh93 has only -e
   ```sh
@@ -878,6 +906,120 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `shift/an-operand-that-was-never-given` — past the end with no count written down, ksh93 reports `(null)` — the operand it did not get — where its complaint about `shift 99` names the 99; dash keeps one sentence for both and bash and zsh keep their usual answers
   ```sh
   shift; echo "st=$?"
+  ```
+- `setopt/normalizes-zsh-spellings` — zsh's option namespace ignores case and underscores, so No_Glob is noglob and the glob comes back literal; everyone else has no setopt at all and says so
+  ```sh
+  setopt No_Glob; echo "st=$?"; echo x*
+  ```
+- `setopt/acts-past-a-bad-name` — zsh refuses the name it does not have — `no such option`, as typed, status 1 — and still acts on the one it does: the glob is off despite the complaint
+  ```sh
+  setopt no_glob zzqq; echo "st=$?"; echo x*
+  ```
+- `setopt/the-no-prefix-strips-once` — a single `no` negates and a second is nobody's option: zsh says `no such option: no_no_glob` rather than restoring the glob
+  ```sh
+  setopt no_no_glob; echo "st=$?"
+  ```
+- `setopt/bare-lists-the-deviations` — a bare setopt lists what differs from zsh's defaults, canonically spelled and ordered by the base name — noclobber prints between allexport's place and errexit — with nohashdirs as the -c baseline's one line
+  ```sh
+  setopt err_exit no_clobber; setopt
+  ```
+- `setopt/shwordsplit-is-an-option` — zsh's no-splitting is an option, not a law: shwordsplit turns the sh behavior on. The name is zsh's own for a semantics axis, which is what makes it a one-line dialect answer
+  ```sh
+  x="a b"; setopt shwordsplit; set -- $x; echo "n=$#"
+  ```
+- `setopt/nonomatch-passes-the-glob-through` — unsetopt is setopt inverted, and nomatch is the option behind zsh's `no matches found`: off, the pattern passes through as itself the way the other shells default to
+  ```sh
+  unsetopt nomatch; echo x*; echo "st=$?"
+  ```
+- `setopt/errexit-is-the-same-switch-as-set-e` — setopt and set -o drive one table: err_exit ends the run exactly as set -e would, rather than being a second errexit that drifts
+  ```sh
+  setopt err_exit; false; echo reached
+  ```
+- `emulate/names-the-current-mode` — a bare emulate answers which shell zsh is currently being — zsh until something changes it, and the word that changed it after
+  ```sh
+  emulate; emulate sh; emulate
+  ```
+- `emulate/sh-moves-the-measured-axes` — what `emulate sh` means, measured probe by probe: unquoted expansions split, a failed glob passes through as itself, and arrays base at zero — three axes, not a new shell
+  ```sh
+  x="a b"; emulate sh; set -- $x; echo "n=$#"; echo x*; a=(p q); echo "${a[1]}"
+  ```
+- `emulate/resets-the-options` — a plain emulation resets options to its defaults with no -R asked for: the errexit set before it is gone and the script reaches its end
+  ```sh
+  setopt err_exit; emulate zsh; false; echo reached
+  ```
+- `emulate/dash-c-restores-after` — -c runs the string under the emulation and puts everything back, options included: the no_glob set before it still holds after, so the glob prints literal at 0
+  ```sh
+  setopt no_glob; emulate sh -c 'echo inner'; echo x*; echo "st=$?"
+  ```
+- `emulate/an-unknown-mode-is-passed-over` — a word naming no emulation is silence and 0 in zsh, the mode unchanged — measured, and strange enough to be worth pinning against the guess that it would complain
+  ```sh
+  emulate fish; echo "st=$?"; emulate
+  ```
+- `whence/bare-is-the-resolution` — ksh93's own question about a name, answered bare: a builtin, keyword or function is its own name and nothing more. zsh has a whence too — the same ancestry — and bash and dash have none
+  ```sh
+  whence echo; echo "st=$?"; whence if; f() { :; }; whence f
+  ```
+- `whence/v-is-the-sentence` — whence -v is what ksh93 spells type as, so the sentence is type's; zsh words its own
+  ```sh
+  whence -v echo; echo "st=$?"
+  ```
+- `whence/a-name-that-resolves-to-nothing` — bare whence misses in silence at 1 where -v says so out loud — ksh93's complaint naming whence itself — and the two shells that have the builtin disagree only about the wording
+  ```sh
+  whence nosuchcmd431; echo "st=$?"; whence -v nosuchcmd431; echo "st=$?"
+  ```
+- `whence/p-searches-path-alone` — -p is the PATH search with functions and builtins invisible: the file answers with its path — matched rather than printed, because zsh spells the temp directory through /private and ksh93 does not — and the function is nobody, status 1
+  ```sh
+  mkdir -p d; printf '#!/bin/sh\n' > d/tool431; chmod +x d/tool431; PATH=$PWD/d:$PATH; f() { :; }; w=$(whence -p tool431); case $w in */d/tool431) echo path-ok;; *) echo "got=$w";; esac; whence -p f; echo "st=$?"
+  ```
+- `whence/an-alias-answers-as-its-value` — the one resolution that is the parser's fact rather than the runner's: ksh93 prints the value quoted and the -v sentence calls it an alias; zsh words the same answer its own way
+  ```sh
+  alias ll="ls -l"; whence ll; whence -v ll
+  ```
+- `whence/an-unknown-letter` — ksh93 refuses with `unknown option` and its whence usage line at 2, the same shape its other builtins use; zsh's whence reads -z as its own flag set differs
+  ```sh
+  whence -z echo; echo "st=$?"
+  ```
+- `print/joins-expands-and-ends-the-line` — ksh93's echo: operands joined with single spaces, a newline after, and -n withholding it. zsh has print too; bash and dash do not, which is the dialect boundary this case records
+  ```sh
+  print hello world; print -n ab; print cd
+  ```
+- `print/r-withholds-the-escapes` — print expands echo's escapes by default and -r prints the operands raw — the pair a script chooses between where bash would choose echo -e against echo -E
+  ```sh
+  print 'a\tb'; print -r 'a\tb'
+  ```
+- `print/backslash-c-stops-everything` — \c ends the command's output where it stands: the rest of the text and the newline are both unwritten, so `after` lands directly against `ab`
+  ```sh
+  print 'ab\c def'; print after
+  ```
+- `print/u-aims-at-a-descriptor` — -u writes to the named descriptor — 2 lands on the diagnostic stream — and a number nothing is open at is ksh93's `bad file unit number` with the errno in brackets, 1
+  ```sh
+  print -u2 to-err; echo "st=$?"; print -u9 x; echo "st=$?"
+  ```
+- `print/a-lone-dash-ends-the-options` — both enders work in ksh93, so `-n` prints as a word; zsh's print reads the lone dash its own way
+  ```sh
+  print -- -n; print - -n
+  ```
+- `print/f-is-printf` — -f hands the whole command to printf: the format is reused over the operands and no newline is added, so the dot lands against the second bar
+  ```sh
+  print -f '%s|' a b; echo .
+  ```
+- `print/the-coprocess-letter-with-nothing-there` — -p writes to the coprocess, and with no |& in this grammar there is never one: ksh93's `no query process` at 1, the same shape read -p measured
+  ```sh
+  print -p x; echo "st=$?"
+  ```
+- `caller/from-a-function-under-dash-c` — bash's question about who called: under -c there is no script frame, so bare caller prints the call line and NULL at 0, and caller 0 — which needs a frame above — is silence at 1. The other three have no caller at all
+  ```sh
+  f() { caller; echo "st=$?"; caller 0; echo "st0=$?"; }; f
+  ```
+- `caller/walks-a-script-s-stack` — from a file the frames are real: bare caller is the line and the file, a depth adds the function — the script's own frame answering as main — and past the stack is silence at 1. Line numbers are the output, which is why this runs as a script
+  ```sh
+  f() { caller; caller 0; caller 1; caller 2; echo "st=$?"; }
+  g() { f; }
+  g
+  ```
+- `caller/refuses-what-is-not-a-depth` — the expression is a plain number despite the manual's word for it — 1+1 is refused the same way — and bash answers `invalid number` with its caller usage at 2
+  ```sh
+  f() { caller x; echo "st=$?"; }; f
   ```
 
 ## diagnostics

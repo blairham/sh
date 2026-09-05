@@ -27,24 +27,141 @@ func Prelude() string { return identity() + functions }
 // not modeled — `dirs` reads $PWD at print time instead, so a plain `cd`
 // never leaves the listing stale.
 //
-// Measured (2026-09-04): `pushd dir` prints the stack after pushing, a bare
-// `pushd` exchanges the top entry with the current directory, `popd` prints
-// what remains, and `dirs` writes everything on one line, current directory
-// first, each entry with $HOME abbreviated to `~`. An empty stack refuses
-// `popd` with status 1; the real engine locates that complaint the way it
-// locates any message, which a shell function cannot, so ours is the bare
-// sentence.
+// Measured (2026-09-04, extended 2026-09-05): `pushd dir` prints the stack
+// after pushing, a bare `pushd` exchanges the top entry with the current
+// directory, `popd` prints what remains, and `dirs` writes everything on one
+// line, current directory first, each entry with $HOME abbreviated to `~`.
+// An empty stack refuses `popd` with status 1; the real engine locates that
+// complaint the way it locates any message, which a shell function cannot,
+// so ours is the bare sentence.
+//
+// The rotating forms are the half that was missing (#468). `pushd +N` and
+// `pushd -N` turn the stack — counting the *current* directory as entry 0,
+// from the left with `+` and from the right with `-` — so that entry N
+// becomes the one you are standing in; `popd +N` takes an entry out and
+// leaves the current directory alone unless N picks it. `dirs -c` empties
+// the stack, `-l` writes paths unabbreviated, `-p` one to a line, `-v` the
+// same numbered, and `+N` / `-N` print one entry.
+//
+// Rotation goes through the positional parameters rather than through array
+// subscripts, and that is not a flourish: this text is one line different
+// from the zsh dialect's, whose arrays start at 1, and `set -- "$@" "$1";
+// shift` means the same thing in both.
+//
+// `pushd -n` and `popd -n` — do the stack work and stay where you are — are
+// deliberately out of scope, and refused by name rather than read as a
+// directory called `-n`. docs/spec/semantics.md records the rest.
 const functions = `
 dirs() {
-	local __d __out=${PWD/#$HOME/\~}
-	for __d in "${DIRSTACK[@]}"; do
-		__out="$__out ${__d/#$HOME/\~}"
+	local __d __n= __clear= __long= __lines= __numbers= __i= __out=
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-c) __clear=1 ;;
+		-l) __long=1 ;;
+		-p) __lines=1 ;;
+		-v) __lines=1; __numbers=1 ;;
+		--) ;;
+		+[0-9]*|-[0-9]*) __n=$1 ;;
+		-*|+*)
+			# A word that looks like an index and is not one, against a
+			# word that is neither an index nor an option: two complaints,
+			# and this shell says which of the two it met.
+			echo "dirs: $1: invalid number" >&2
+			echo "dirs: usage: dirs [-clpv] [+N] [-N]" >&2
+			return 2
+			;;
+		*)
+			echo "dirs: $1: invalid option" >&2
+			echo "dirs: usage: dirs [-clpv] [+N] [-N]" >&2
+			return 2
+			;;
+		esac
+		shift
 	done
-	echo "$__out"
+	if [ -n "$__clear" ]; then
+		DIRSTACK=()
+		return 0
+	fi
+	set -- "$PWD" "${DIRSTACK[@]}"
+	if [ -n "$__n" ]; then
+		case $__n in
+		+*) __i=${__n#+} ;;
+		*)  __i=$(( $# - 1 - ${__n#-} )) ;;
+		esac
+		if [ "$__i" -lt 0 ] || [ "$__i" -ge $# ]; then
+			echo "dirs: ${__n#[-+]}: directory stack index out of range" >&2
+			return 1
+		fi
+		while [ "$__i" -gt 0 ]; do
+			shift
+			__i=$(( __i - 1 ))
+		done
+		if [ -n "$__long" ]; then echo "$1"; else echo "${1/#$HOME/\~}"; fi
+		return 0
+	fi
+	__i=0
+	for __d in "$@"; do
+		if [ -z "$__long" ]; then
+			__d=${__d/#$HOME/\~}
+		fi
+		if [ -n "$__numbers" ]; then
+			printf '%2d  %s\n' "$__i" "$__d"
+		elif [ -n "$__lines" ]; then
+			echo "$__d"
+		elif [ "$__i" -eq 0 ]; then
+			__out=$__d
+		else
+			__out="$__out $__d"
+		fi
+		__i=$(( __i + 1 ))
+	done
+	if [ -z "$__lines" ]; then
+		echo "$__out"
+	fi
+}
+__dirs_rotate() {
+	local __name=$1 __spec=$2 __i __new
+	set -- "$PWD" "${DIRSTACK[@]}"
+	case $__spec in
+	+*) __i=${__spec#+} ;;
+	*)  __i=$(( $# - 1 - ${__spec#-} )) ;;
+	esac
+	if [ "$__i" -lt 0 ] || [ "$__i" -ge $# ]; then
+		# An empty stack is its own complaint, and not the same one: with
+		# nothing pushed there is no index that could have been in range.
+		if [ $# -eq 1 ]; then
+			echo "$__name: directory stack empty" >&2
+		else
+			echo "$__name: $__spec: directory stack index out of range" >&2
+		fi
+		return 1
+	fi
+	while [ "$__i" -gt 0 ]; do
+		set -- "$@" "$1"
+		shift
+		__i=$(( __i - 1 ))
+	done
+	__new=$1
+	shift
+	cd "$__new" || return 1
+	DIRSTACK=("$@")
 }
 pushd() {
-	local __old=$PWD
-	if [ $# -eq 0 ]; then
+	local __old=$PWD __spec=
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-n)
+			echo "pushd: -n is not implemented yet" >&2
+			return 2
+			;;
+		+[0-9]*|-[0-9]*) __spec=$1; shift ;;
+		--) shift; break ;;
+		*) break ;;
+		esac
+	done
+	if [ -n "$__spec" ]; then
+		__dirs_rotate pushd "$__spec" || return 1
+	elif [ $# -eq 0 ]; then
 		if [ ${#DIRSTACK[@]} -eq 0 ]; then
 			echo "pushd: no other directory" >&2
 			return 1
@@ -58,12 +175,67 @@ pushd() {
 	dirs
 }
 popd() {
+	local __spec= __i __k __len
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-n)
+			echo "popd: -n is not implemented yet" >&2
+			return 2
+			;;
+		+[0-9]*|-[0-9]*) __spec=$1; shift ;;
+		-*|+*)
+			echo "popd: $1: invalid number" >&2
+			echo "popd: usage: popd [-n] [+N | -N]" >&2
+			return 2
+			;;
+		*)
+			# Not an index and not an option: popd takes no directory, and
+			# says so with a third wording of its own.
+			echo "popd: $1: invalid argument" >&2
+			echo "popd: usage: popd [-n] [+N | -N]" >&2
+			return 2
+			;;
+		esac
+	done
 	if [ ${#DIRSTACK[@]} -eq 0 ]; then
 		echo "popd: directory stack empty" >&2
 		return 1
 	fi
-	cd "${DIRSTACK[0]}" || return 1
-	DIRSTACK=("${DIRSTACK[@]:1}")
+	set -- "$PWD" "${DIRSTACK[@]}"
+	__i=0
+	if [ -n "$__spec" ]; then
+		case $__spec in
+		+*) __i=${__spec#+} ;;
+		*)  __i=$(( $# - 1 - ${__spec#-} )) ;;
+		esac
+		if [ "$__i" -lt 0 ] || [ "$__i" -ge $# ]; then
+			echo "popd: $__spec: directory stack index out of range" >&2
+			return 1
+		fi
+	fi
+	if [ "$__i" -eq 0 ]; then
+		# The entry you are standing in: the shell moves to the next one
+		# down, which is what a bare popd does.
+		cd "${DIRSTACK[0]}" || return 1
+		DIRSTACK=("${DIRSTACK[@]:1}")
+		dirs
+		return 0
+	fi
+	# Any other entry is taken out where it stands and the shell does not
+	# move. Built by walking the whole stack rather than by two slices,
+	# because a subscript is the one thing the two dialects spell alike and
+	# mean differently.
+	__len=$#
+	__k=0
+	while [ "$__k" -lt "$__len" ]; do
+		if [ "$__k" -ne "$__i" ]; then
+			set -- "$@" "$1"
+		fi
+		shift
+		__k=$(( __k + 1 ))
+	done
+	shift
+	DIRSTACK=("$@")
 	dirs
 }
 `

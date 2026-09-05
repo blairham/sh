@@ -4501,6 +4501,56 @@ echo after`,
 		Why:     "the directory stack's success path: one shell prints the stack at every push and pop, one moves in silence and answers only `dirs`, and two have none of the three names. The home directory lists as `~` in both that list at all",
 	},
 	{
+		ID: "dirstack/rotate-to-an-entry-counted-from-the-front", Category: "builtins",
+		Snippet: `cd /; pushd /tmp >/dev/null; pushd /usr >/dev/null; pushd +1; dirs; echo "pwd=$PWD"`,
+		Why:     "the half of the directory stack that was never exercised: `+N` counts the current directory as entry 0 and turns the stack until entry N is the one the shell stands in. The two shells that have it agree exactly, down to which entry the shell ends up in",
+	},
+	{
+		ID: "dirstack/rotate-to-an-entry-counted-from-the-back", Category: "builtins",
+		Snippet: `cd /; pushd /tmp >/dev/null; pushd /usr >/dev/null; pushd -0; dirs; echo "pwd=$PWD"`,
+		Why:     "`-N` counts from the other end, so `-0` is the oldest entry — the one a `+N` would have to name by a number that depends on how deep the stack is",
+	},
+	{
+		ID: "dirstack/rotate-past-the-end-of-the-stack", Category: "builtins",
+		Snippet: `cd /; pushd /tmp >/dev/null; pushd +9 2>/dev/null; echo "st=$?"; dirs`,
+		Why:     "an index there is no entry for: refused, at 1, with the stack left alone. The complaint itself is discarded here and pinned in the dialect tests instead — this engine's stack is a prelude function, and a shell function cannot reach the location prefix (`<shell>: line 1:`) the real builtin writes in front of it",
+	},
+	{
+		ID: "dirstack/rotate-with-nothing-pushed", Category: "builtins",
+		Snippet: `cd /; pushd +1 2>/dev/null; echo "st=$?"`,
+		Why:     "the same refusal against a stack with nothing in it — a different sentence in both shells, and the same status. The wording is the dialect tests' to pin, for the location reason above",
+	},
+	{
+		ID: "dirstack/popd-an-entry-that-is-not-the-top", Category: "builtins",
+		Snippet: `cd /; pushd /tmp >/dev/null; pushd /usr >/dev/null; popd +1; dirs; echo "pwd=$PWD"`,
+		Why:     "`popd +N` takes an entry out where it stands and leaves the shell where it is — the current directory only moves when N picks the entry the shell is in, which is what a bare `popd` does",
+	},
+	{
+		ID: "dirstack/popd-with-nothing-pushed", Category: "builtins",
+		Snippet: `cd /; popd 2>/dev/null; echo "st=$?"`,
+		Why:     "the underflow, which is 1 in both shells that have `popd` and 127 in the two that do not have the name at all — absence rather than divergence, and the case says which by the status",
+	},
+	{
+		ID: "dirstack/clear-the-stack", Category: "builtins",
+		Snippet: `cd /; pushd /tmp >/dev/null; pushd /usr >/dev/null; dirs -c; echo "st=$?"; dirs; popd 2>/dev/null; echo "p=$?"`,
+		Why:     "`dirs -c` empties the stack in silence, and what is left is the current directory alone — which `dirs` still prints, because it reads $PWD rather than an entry. A `popd` after it is the underflow",
+	},
+	{
+		ID: "dirstack/dirs-one-to-a-line-and-numbered", Category: "builtins",
+		Snippet: `cd /; pushd /tmp >/dev/null; pushd /usr >/dev/null; dirs -p; echo "--"; dirs -v`,
+		Why:     "`-p` writes one entry to a line and `-v` numbers them, and the numbering is the whole difference between the two shells: a right-aligned two-column number and two spaces against a bare number and a tab",
+	},
+	{
+		ID: "dirstack/dirs-unabbreviated", Category: "builtins",
+		Snippet: `cd; pushd / >/dev/null; dirs; echo "--"; dirs -l`,
+		Why:     "`-l` writes the home directory out in full where the plain listing abbreviates it to `~`. Both shells agree, and the abbreviation is the only thing the letter turns off",
+	},
+	{
+		ID: "dirstack/dirs-a-letter-it-does-not-have", Category: "builtins",
+		Snippet: `dirs -q 2>/dev/null; echo "st=$?"`,
+		Why:     "the shape of the option parser, by its status alone: 2 where a bad letter is an invalid *number* with a usage line after it, 1 where it is a bad option, 127 where there is no `dirs`. The same split decides whether `dirs -lv` is two letters or one malformed index",
+	},
+	{
 		ID: "type/f-skips-or-prints-the-function", Category: "builtins",
 		Snippet: `f() { :; }; type -f f; echo "st=$?"`,
 		Why:     "one letter, two opposite meanings: two shells use -f to leave functions out of the search — so a name that is only a function is not found — and one turns it around and prints the definition. The fourth has no options and answers -f as a name",

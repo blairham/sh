@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blairham/sh/internal/blocks"
 	"github.com/blairham/sh/internal/boundary"
 	"github.com/blairham/sh/internal/panicguard"
 	"github.com/blairham/sh/internal/secret"
@@ -103,12 +104,18 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	hist := s.historyFile()
 	earlier := hist.load(ctx)
 	s.counts = &counts{history: len(earlier)}
+	// Where this session records a command and what came of it. Opened here
+	// rather than in either loop so the two cannot disagree about whether a
+	// session keeps blocks, which is the mistake beforeReading already
+	// documents having been made once with what goes between lines.
+	store := s.blocksStore()
+	defer func() { _ = store.Close() }()
 	if !IsTerminal(s.In) {
 		// A prompt without a terminal is not a mistake to refuse: every shell
 		// in the panel, given `-i` on a pipe, still prints a prompt and runs
 		// the lines — it only says that job control is off. The *editor* is
 		// what needs a terminal, and it is the editor that goes away.
-		return s.runPlain(ctx)
+		return s.runPlain(ctx, store)
 	}
 	state, err := makeRaw(s.In)
 	if err != nil {
@@ -164,7 +171,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		// 1, 5, 6. accept already keeps the history that way — it remembers
 		// the whole accumulated text as one line — and only the numbering
 		// disagreed with it.
-		stmts, perr, ready := s.take(&pending, s.recording(ed.remember), line)
+		stmts, text, perr, ready := s.take(&pending, s.recording(ed.remember), line)
 		if !ready {
 			continue
 		}
@@ -172,10 +179,16 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			// Remembered but not run, and the two numbers say so: measured,
 			// bash draws `!3 #2` at the prompt after a line that would not
 			// parse.
+			//
+			// Not a block either, and for the same reason it is not a command:
+			// nothing ran. The store records what a shell did, and a line the
+			// parser refused never became something it could do.
 			s.errf("%s", s.report(perr))
 			continue
 		}
+		b := s.beginBlock(text)
 		done := s.run(ctx, state, stmts)
+		s.closeBlock(ctx, store, b)
 		if sig.took() {
 			// The terminal echoed `^C` where the cursor was and left it
 			// there, so the next prompt would land on top of it.
@@ -293,7 +306,7 @@ func (s Shell) reportFinishedJobs(continuing bool) {
 //
 // The prompt goes to the error stream, where a shell always puts it: the
 // output of `sh -i < script > out` is the commands' output and nothing else.
-func (s Shell) runPlain(ctx context.Context) (int, error) {
+func (s Shell) runPlain(ctx context.Context, store *blocks.Store) (int, error) {
 	in := bufio.NewReader(s.In)
 	var pending strings.Builder
 	for {
@@ -308,7 +321,7 @@ func (s Shell) runPlain(ctx context.Context) (int, error) {
 		}
 		line = strings.TrimSuffix(line, "\n")
 
-		stmts, perr, ready := s.take(&pending, nil, line)
+		stmts, text, perr, ready := s.take(&pending, nil, line)
 		if !ready {
 			// Nothing to run yet. take returns no statements and no error in
 			// that case, so this guard cannot change an outcome — it says
@@ -320,7 +333,10 @@ func (s Shell) runPlain(ctx context.Context) (int, error) {
 			s.errf("%s", s.report(perr))
 			continue
 		}
-		if s.runStmts(ctx, stmts) {
+		b := s.beginBlock(text)
+		done := s.runStmts(ctx, stmts)
+		s.closeBlock(ctx, store, b)
+		if done {
 			return s.status(), nil
 		}
 	}
@@ -338,7 +354,14 @@ func (s Shell) runPlain(ctx context.Context) (int, error) {
 // Remembering each continuation line as it was typed put a `for` loop in the
 // history four times over — once per line and once entire — and left
 // `do echo $i` there as something that can be recalled and cannot be run.
-func (s Shell) accept(pending *strings.Builder, remember func(string), line string) ([]*syntax.File, error, bool) {
+// The accumulated text is returned as well as the statements, because two
+// things want it and only this function has it. The history wants the finished
+// construct, which is what remember is handed; the block store wants the same
+// text for a different reason — a block records the line *as typed*, before
+// expansion, and an event cannot supply that, since what an event carries for
+// an exec is argv after expansion. `echo $HOME` is a block whose command is
+// `echo $HOME`.
+func (s Shell) accept(pending *strings.Builder, remember func(string), line string) ([]*syntax.File, string, error, bool) {
 	pending.WriteString(line)
 	pending.WriteString("\n")
 	text := pending.String()
@@ -361,17 +384,18 @@ func (s Shell) accept(pending *strings.Builder, remember func(string), line stri
 		// is what the parser is still inside, and this is the only place it
 		// is known.
 		s.counted().open = p.Open()
-		return nil, nil, false
+		return nil, "", nil, false
 	}
 	pending.Reset()
 	// The construct is whole, so nothing is waiting on the next line.
 	s.counted().open = nil
+	text = strings.TrimSuffix(text, "\n")
 	if remember != nil {
 		// Nil where there is nothing to recall with: a session without an
 		// editor has no way to reach a history and no reason to keep one.
-		remember(strings.TrimSuffix(text, "\n"))
+		remember(text)
 	}
-	return stmts, err, true
+	return stmts, text, err, true
 }
 
 // endsWithContinuation reports whether the text ends with a backslash joining
@@ -546,14 +570,14 @@ func or(a, b string) string {
 // because writing it in both loops is how the terminal one came to have a
 // copy that nothing exercised — which the note on beforeReading warned about,
 // having already happened once with what goes between lines.
-func (s Shell) take(pending *strings.Builder, remember func(string), line string) ([]*syntax.File, error, bool) {
+func (s Shell) take(pending *strings.Builder, remember func(string), line string) ([]*syntax.File, string, error, bool) {
 	blank := strings.TrimSpace(pending.String()+line) == ""
-	stmts, perr, ready := s.accept(pending, remember, line)
+	stmts, text, perr, ready := s.accept(pending, remember, line)
 	if !ready {
-		return nil, nil, false
+		return nil, "", nil, false
 	}
 	s.counted().accepted(blank, perr == nil)
-	return stmts, perr, true
+	return stmts, text, perr, true
 }
 
 // recording is what an accepted line goes into the session's history

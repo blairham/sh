@@ -428,6 +428,12 @@ func Semantics() interp.Semantics {
 // Diagnostics is how zsh reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		// zsh names itself, not the path it was invoked by. `/bin/zsh` and a
+		// symlink called `myzsh` both say `zsh:`, and so does the shell run
+		// as `exec -a weirdname /bin/zsh` — measured all three ways, because
+		// the first alone looks like a base name rather than a fixed one.
+		// The other three shells print argv[0] whole.
+		SelfName:    "zsh",
 		TypeKeyword: "%[1]s is a reserved word",
 		// The only one that names itself in the line.
 		TypeFunction:           "%[1]s is a shell function from zsh",

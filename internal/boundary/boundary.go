@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-// Package boundary asks a shell's gate about the files a *front end* opens.
+// Package boundary asks a shell's gate about what a *front end* does itself.
 //
 // The boundary is drawn around execution, and interp holds it for everything a
 // script does. But a shell opens two kinds of file before and after any script
@@ -27,6 +27,7 @@ package boundary
 
 import (
 	"context"
+	"syscall"
 	"time"
 
 	"github.com/blairham/sh/internal/event"
@@ -56,12 +57,54 @@ type Boundary struct {
 // different things by it. A script the shell cannot read is a failure it names
 // and exits over; a startup file it cannot read is not a failure at all.
 func (b Boundary) Open(ctx context.Context, path string, write bool) bool {
-	a := interp.Action{ID: b.id(), Kind: interp.ActionOpen, Path: path, Write: write}
+	return b.ask(ctx, interp.Action{ID: b.id(), Kind: interp.ActionOpen, Path: path, Write: write})
+}
+
+// Exec reports whether the front end may run a program, recording it either
+// way. Argv is the whole vector, argv[0] included, as interp builds one.
+//
+// The caller is an ACP client: an agent asking us to run a command, which is
+// the one arrangement where a program a policy is about is named by somebody
+// outside this process. It is squarely inside the boundary by this package's
+// own rule — the program was chosen by whoever the policy is about — and it is
+// the reason the rule is worth stating as a rule rather than as a list of the
+// files a shell opens.
+func (b Boundary) Exec(ctx context.Context, path string, argv []string) bool {
+	return b.ask(ctx, interp.Action{ID: b.id(), Kind: interp.ActionExec, Path: path, Args: argv})
+}
+
+// Signal reports whether the front end may signal a process, recording it
+// either way. The pid is as kill(2) takes it, so a negative value names a
+// process group.
+func (b Boundary) Signal(ctx context.Context, pid int, sig syscall.Signal) bool {
+	return b.ask(ctx, interp.Action{ID: b.id(), Kind: interp.ActionSignal, PID: pid, Signal: sig})
+}
+
+// Record notes an access the front end made without asking about it.
+//
+// It is deliberately narrow, and the rule for reaching for it is this
+// package's own: an act belongs here rather than at the gate when the *front
+// end* chose it rather than whoever the policy is about. The worked example is
+// an ACP client releasing a terminal — the protocol's only way for an agent to
+// say it is finished, whose kill is the client ending something the client
+// started. Everything the policy subject chose goes through the three above,
+// which ask and record together.
+//
+// It stamps the id and the session for the same reason those do: a record that
+// names no action and no run is a record nothing can be joined to, which is
+// exactly what this field was added to fix.
+func (b Boundary) Record(ctx context.Context, a interp.Action) {
+	a.ID = b.id()
+	b.emit(ctx, interp.Event{Kind: interp.EventAccess, Action: a})
+}
+
+// ask is the whole of the three above: consult, record, answer.
+func (b Boundary) ask(ctx context.Context, a interp.Action) bool {
 	if b.Gate != nil && b.Gate.Allow(ctx, a) == interp.Deny {
 		b.emit(ctx, interp.Event{Kind: interp.EventDenied, Action: a})
 		return false
 	}
-	// Recorded before the open rather than after it, unlike interp's, and
+	// Recorded before the access rather than after it, unlike interp's, and
 	// the difference is what there is to say afterwards: interp records a
 	// *successful* open because a failed one already becomes an EventError
 	// with the reason. Out here a failure is often not an error — a startup

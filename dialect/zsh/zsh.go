@@ -453,6 +453,7 @@ func Semantics() interp.Semantics {
 	s.CdRefusesUnknownOption = interp.No
 	s.CdLastPathOptionWins = interp.No
 	s.BadSetOptionNameFatal = interp.Yes
+	s.UnknownConditionOptionIsAStatus = interp.Yes
 	s.ReturnOutsideAFunctionIsRefused = interp.No
 	s.LoneDashIsAnOption = interp.Yes
 	s.UnsetFunctionChecksTheName = interp.No
@@ -567,6 +568,12 @@ func Diagnostics() interp.Diagnostics {
 		// `monitor` — and fails at 1, fatally like every `set` failure here.
 		MonitorDenied:       "can't change option: %[1]s",
 		MonitorDeniedStatus: 1,
+		// `[[ -o nosuchoption ]]`. The same words `setopt` uses for the same
+		// mistake, and measured to be: one message, said at the condition's
+		// own location rather than a builtin's. The status is 3, which is
+		// neither of the two a condition otherwise gives.
+		UnknownConditionOption:       "no such option: %[1]s",
+		UnknownConditionOptionStatus: 3,
 		// zsh knows `-f` — it means functions to its own typeset — so what
 		// it refuses is the combination, and it says so without naming the
 		// letter it names in every other refusal.

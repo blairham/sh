@@ -5601,6 +5601,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cond/same-file-is-identity` | `distinct` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `linked~distinct` | `linked~distinct` | `linked~distinct` | `linked~distinct` | `linked~distinct` |
 | `cond/terminal-test-closed-descriptors` | `t0=127~t1=127~t99=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` | `t0=1~t1=1~t99=1` |
 | `cond/terminal-test-non-number-diverges` | `st=127` **2>** `<shell>: 1: [[: not found` | `st=2` **2>** `<shell>: line 1: [[: x: integer expected` | `st=2` **2>** `<shell>: line 1: [[: x: integer expected` | `st=1` | `st=1` | `st=1` |
+| `cond/option-test-reads-a-set-option` | **2>** `<shell>: 1: [[: not found` *(status 127)* | `on=0~off=1` | `on=0~off=1` | `on=0~off=1` | `on=0~off=1` | `on=0~off=1` |
+| `cond/option-test-operand-is-an-ordinary-word` | `var=127~quoted=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `var=0~quoted=0` | `var=0~quoted=0` | `var=0~quoted=0` | `var=0~quoted=0` | `var=0~quoted=0` |
+| `cond/option-test-unknown-name-diverges` | `st=127~alive` **2>** `<shell>: 1: [[: not found` | `st=1~alive` | `st=1~alive` | `st=1~alive` | `st=1~alive` | `st=3~alive` **2>** `<shell>:1: no such option: nosuchoption` |
+| `cond/option-test-unknown-name-is-not-a-false` | `not=127~or=127~and=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: [[: not found~<shell>: 1: 1: not found~<shell>: 1: [[: not found` | `not=0~or=0~and=1` | `not=0~or=0~and=1` | `not=0~or=0~and=1` | `not=0~or=0~and=1` | `not=3~or=0~and=3` **2>** `<shell>:1: no such option: nosuchoption~<shell>:1: no such option: nosuchoption~<shell>:1: no such option: nosuchoption` |
+| `cond/option-test-missing-operand` | `st=127` **2>** `<shell>: 1: [[: not found` | **2>** `<shell>: -c: line 1: unexpected argument `]]' to conditional unary operator~<shell>: -c: line 1: syntax error near `;'~<shell>: -c: line 1: `[[ -o ]]; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected argument `]]' to conditional unary operator~<shell>: -c: line 1: syntax error near `;'~<shell>: -c: line 1: `[[ -o ]]; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 0: unexpected argument `]]' to conditional unary operator~<shell>: -c: line 0: syntax error near `;'~<shell>: -c: line 0: `[[ -o ]]; echo "st=$?"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `]]' unexpected` *(status 3)* | **2>** `<shell>:1: unknown condition: -o` *(status 2)* |
+| `cond/single-bracket-o-is-not-the-option-test` | `two=2~one=0~or=0` **2>** `<shell>: 1: [: -o: unexpected operator` | `two=1~one=0~or=0` | `two=1~one=0~or=0` | `two=1~one=0~or=0` | `two=1~one=0~or=0` | `two=2~one=0~or=0` **2>** `<shell>:[:1: too many arguments` |
 | `cond/a-group-in-a-regex` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `y` | `y` | `y` | `y` | `y` |
 | `cond/a-group-starting-a-regex` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `y` | `y` | `y` | `y` | `y` |
 | `cond/nested-groups-in-a-regex` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `y` | `y` | `y` | `y` | `y` |
@@ -5698,6 +5704,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cond/terminal-test-non-number-diverges` — a -t operand that is not a number: bash names an integer at status 2 where ksh93 and zsh answer a plain false at 1 — and bash 3.2 answers 1 too, so the complaint is younger than the operator. The TerminalTestRequiresANumber axis
   ```sh
   [[ -t x ]]; echo "st=$?"
+  ```
+- `cond/option-test-reads-a-set-option` — `-o` asks whether a shell option is set, and it is the core's rather than a dialect's: every shell in the panel that has `[[ ]]` at all has it, and dash is absent only because it has no `[[ ]]` to put it in. The name every one of them agrees about, read in both states from the same run
+  ```sh
+  set -e; [[ -o errexit ]]; echo "on=$?"; set +e; [[ -o errexit ]]; echo "off=$?"
+  ```
+- `cond/option-test-operand-is-an-ordinary-word` — how the name reaches the operator: it is an ordinary word, expanded out of a variable and stripped of its quotes, unanimously. The quoted spelling is the one the prompt theme on this machine writes — `[[ ! -o 'aliases' ]]` — and a parser that took the operand as a literal token would read the apostrophes as part of the name
+  ```sh
+  set -u; v=nounset; [[ -o $v ]]; echo "var=$?"; [[ -o 'nounset' ]]; echo "quoted=$?"
+  ```
+- `cond/option-test-unknown-name-diverges` — a name no shell in the panel has: bash and ksh93 answer a quiet false at 1 where zsh complains and answers 3, and all three carry on to the next command — so this is not the fatality `set -o nosuchoption` produces in the same shell. The UnknownConditionOptionIsAStatus axis
+  ```sh
+  [[ -o nosuchoption ]]; echo "st=$?"; echo alive
+  ```
+- `cond/option-test-unknown-name-is-not-a-false` — what the divergent answer *is*, which the bare status hides: in zsh it is a third value rather than a false, so `!` leaves it at 3 instead of turning it into 0, `||` walks on past it to a right-hand side that answers 0, and `&&` stops on it. bash and ksh93 have a plain false in the same three places and answer 0, 0 and 1. A dialect that returned false with a status painted on would get the negation wrong
+  ```sh
+  [[ ! -o nosuchoption ]]; echo "not=$?"; [[ -o nosuchoption || 1 == 1 ]]; echo "or=$?"; [[ 1 == 1 && -o nosuchoption ]]; echo "and=$?"
+  ```
+- `cond/option-test-missing-operand` — `-o` with nothing after it is refused in all three, which is what says the operator takes an operand rather than defaulting one — and refused in three different ways: bash and ksh93 make it a *parse* error, where zsh takes the `-o` for a condition name it does not know and answers 2 at run time. It is also the shape that separates this from the single-bracket `-o`, where the same two words are a non-empty string test that succeeds
+  ```sh
+  [[ -o ]]; echo "st=$?"
+  ```
+- `cond/single-bracket-o-is-not-the-option-test` — the operator the standard gives `[` is `or`, and conflating it with the option test is the mistake this row exists to catch: bash and ksh93 do have a unary `-o` in the builtin, dash refuses it as an unexpected operator and zsh calls it too many arguments, so the single-bracket spelling is not core the way the double-bracket one is. `[ -o ]` is one argument and a true everywhere, and `[ '' -o x ]` is the binary or
+  ```sh
+  [ -o nosuchoption ]; echo "two=$?"; [ -o ]; echo "one=$?"; [ '' -o x ]; echo "or=$?"
   ```
 - `cond/a-group-in-a-regex` — the parentheses belong to the regular expression rather than to the shell, so the word does not end at one — which the lexer has to be told, since where a word ends is settled before any parser sees a token
   ```sh

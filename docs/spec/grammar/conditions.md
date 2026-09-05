@@ -206,6 +206,7 @@ the other two.
     -b f   -c f   -p f   -S f       block, character, fifo, socket
     -g f   -u f   -k f              setgid, setuid, sticky
     -t fd                           the descriptor is a terminal
+    -o name                         the shell option is set
     !                               negation
     &&     ||                       conjunction, disjunction
     ( … )                           grouping
@@ -234,6 +235,120 @@ through `test`, refuses too with its `Illegal number` wording.
 
 Semantics axis: `TerminalTestRequiresANumber` (bash and dash yes, ksh93
 and zsh no; unanswered in the core), asked only for such an operand.
+
+## `-o`: the option test
+
+`[[ -o name ]]` is true when the named shell option is set. It is
+**core**, on the same head count that put `[[ ]]` itself there: bash
+5.3, bash 3.2, bash-as-`sh`, ksh93 and zsh all have it, and dash is
+absent from the row only because it has no `[[ ]]` to put it in. There
+is no grammar for a dialect to switch here, because what the shells
+disagree about is which *names* exist — a question the parser never
+asks.
+
+The operand is an **ordinary word**, unanimously: it is expanded, its
+quotes come off, and it is not globbed.
+
+    v=errexit; [[ -o $v ]]          reads the variable
+    [[ -o 'aliases' ]]              the same name as the bare spelling
+    [[ -o err* ]]                   a name literally spelled `err*`; false
+
+Missing, it is refused everywhere, in three different ways — bash and
+ksh93 make `[[ -o ]]` a *parse* error, and zsh takes the `-o` for a
+condition name it does not know and answers 2 at run time. No shell
+lets it through, so this parser refuses it too.
+
+### Which names, and what an unknown one does
+
+Three separable questions, and only the last is an axis.
+
+**Does the shell have the name?** The option vector's, already:
+`interp` holds the names every shell has and each dialect declares its
+own extras. Names that read the same state in the whole panel include
+`errexit`, `nounset`, `xtrace`, `noexec`, `verbose` and `monitor`.
+Names that belong to some and not others do not: `braceexpand`,
+`posix` and `privileged` are bash's, `aliases` and `functionargzero`
+are zsh's, and `interactive` is ksh93's and zsh's and not bash's.
+
+**How is a spelling folded onto a name?** Measured, and it is not
+uniform: bash matches exactly, ksh93 also ignores underscores, and zsh
+folds case, ignores underscores, and reads a single leading `no` as a
+negation of what follows.
+
+| probe | bash | bash 3.2 | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `[[ -o errexit ]]` under `set -e` | true | true | true | true |
+| `[[ -o Err_Exit ]]` under `set -e` | false | false | true (`err_exit`) | true |
+| `[[ -o noerrexit ]]` under `set +e` | false | false | true | true |
+
+So zsh's option namespace is not its `set -o` names — about a hundred
+and eighty against a couple of dozen — which is why the substrate takes
+the lookup as a function a dialect supplies
+(`Runner.SetOptionNamespace`) rather than a longer list of its own. A
+shell that installs none reads its `set -o` names, which is bash's
+shape and ksh93's.
+
+**What happens to a name the shell does not have?** This is the axis.
+bash and ksh93 answer a quiet false at 1 and say nothing. zsh
+complains and answers **3** — a status that is neither of the two a
+condition otherwise gives. Both carry on to the next command, so this
+is *not* the fatality the same shell gives `set -o nosuchoption`
+(`BadSetOptionNameFatal`); one construct's refusal is not the other's.
+
+Semantics axis: `UnknownConditionOptionIsAStatus` (zsh yes; bash, ksh93
+and dash no; unanswered in the core), asked only where the shells
+disagree — at a name none of them would recognize. Wording and status
+are `Diagnostics.UnknownConditionOption` and
+`UnknownConditionOptionStatus`.
+
+The 3 is a **third value and not a false**, which is only visible
+through the operators that combine conditions. Measured across the
+whole truth table on zsh 5.9.2, with `zzz` a name it does not have:
+
+| probe | bash / ksh93 | zsh |
+| --- | --- | --- |
+| `[[ -o zzz ]]` | 1 | **3** |
+| `[[ ! -o zzz ]]` | 0 | **3** |
+| `[[ ! ! -o zzz ]]` | 1 | **3** |
+| `[[ -o zzz \|\| 1 == 1 ]]` | 0 | 0 |
+| `[[ -o zzz \|\| 1 == 2 ]]` | 1 | 1 |
+| `[[ -o zzz && 1 == 1 ]]` | 1 | **3** |
+| `[[ 1 == 1 && -o zzz ]]` | 1 | **3** |
+| `[[ 1 == 2 && -o zzz ]]` | 1 | 1 |
+| `[[ 1 == 1 \|\| -o zzz ]]` | 0 | 0 |
+
+The rule every row fits: `[[ ]]` combines *statuses*. `||` stops on a
+zero and otherwise takes the right-hand answer, `&&` stops on a
+non-zero and otherwise takes the right-hand answer, and `!` maps 0 to 1
+and 1 to 0 while leaving anything else alone. A false and a 3 differ
+only under `!` and under `||`, which is exactly where an
+implementation that returned false with a status painted on would give
+the wrong answer.
+
+A condition that failed for some *other* reason is a plain false, not a
+third value: `[[ x =~ "[" ]]` is 1 in all three, `[[ ! x =~ "[" ]]` is
+0 in all three, and zsh writes `failed to compile regex` beside its 1.
+So the third value belongs to this operator and not to `[[ ]]` errors
+in general.
+
+### The single-bracket `-o` is a different operator
+
+POSIX gives `[` a binary `-o` meaning *or*, and conflating the two is
+the mistake worth naming:
+
+| probe | bash | bash 3.2 | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- |
+| `[ -o errexit ]` under `set -e` | true | true | `unexpected operator`, 2 | true | `too many arguments`, 2 |
+| `[ -o nosuchoption ]` | 1 | 1 | `unexpected operator`, 2 | 1 | `too many arguments`, 2 |
+| `[ -o ]` | 0 | 0 | 0 | 0 | 0 |
+| `[ '' -o x ]` | 0 | 0 | 0 | 0 | 0 |
+
+bash and ksh93 do carry the option test into the builtin; dash and zsh
+do not. So the single-bracket spelling is **not** core the way the
+double-bracket one is, and this shell does not implement it — `[ -o x ]`
+is `unary operator expected` here. One argument (`[ -o ]`) is a
+non-empty string test and true everywhere, and three arguments are the
+standard's *or* everywhere.
 
 ## The file comparisons: `-nt`, `-ot`, `-ef`
 

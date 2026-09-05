@@ -5,12 +5,29 @@ package interp
 
 import (
 	"context"
+	"errors"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
 )
+
+// condStatus is a condition operand that produced neither true nor false but
+// a status of its own — `[[ -o name ]]` in the one dialect that refuses a
+// name it does not have.
+//
+// An error rather than a third boolean because that is what already
+// propagates the way the shells were measured to: `!` leaves it alone, which
+// falls out of CondNot returning what it was given, and `&&` stops on it,
+// which falls out of the short-circuit. Only `||` had to learn it.
+//
+// Error is never rendered — the complaint is written where the status is
+// produced, because it is said even in the arrangements where the status is
+// then thrown away.
+type condStatus struct{ code int }
+
+func (c condStatus) Error() string { return "condition option status" }
 
 // testClause evaluates `[[ … ]]`. It exits 0 when the condition holds.
 func (r *Runner) testClause(ctx context.Context, c *syntax.TestClause) error {
@@ -22,6 +39,14 @@ func (r *Runner) testClause(ctx context.Context, c *syntax.TestClause) error {
 			return nil
 		}
 		if err != nil {
+			// A status the condition produced for itself, already complained
+			// about where it happened; anything else is a failure this
+			// construct reports at 2.
+			var cs condStatus
+			if errors.As(err, &cs) {
+				r.status = cs.code
+				return nil
+			}
 			r.diagf("%v\n", err)
 			r.status = 2
 			return nil
@@ -46,6 +71,21 @@ func (r *Runner) evalCond(c syntax.CondExpr) (bool, error) {
 	case *syntax.CondLogic:
 		l, err := r.evalCond(x.X)
 		if err != nil {
+			// An operand that produced a status of its own rather than a
+			// truth value. The combining operators read it as a status, so
+			// `||` goes on to the right exactly as it would past a false and
+			// the right-hand answer is the whole answer, where `&&` stops on
+			// it. Measured on zsh: `[[ -o zzz || 1 == 1 ]]` is 0 and
+			// `[[ 1 == 1 && -o zzz ]]` is 3.
+			//
+			// Only this error. A condition that failed for another reason —
+			// a regular expression that will not compile — is a plain false
+			// in all three shells, `!` flips it and `||` sees a false, so
+			// widening this would be a change nothing measured asked for.
+			var cs condStatus
+			if x.Op == "||" && errors.As(err, &cs) {
+				return r.evalCond(x.Y)
+			}
 			return false, err
 		}
 		// Short-circuit, as everywhere else.
@@ -88,6 +128,25 @@ func (r *Runner) evalCondUnary(x *syntax.CondUnary) (bool, error) {
 				"%[2]s: %[1]s: integer expected", s, "[[")}
 		}
 		return false, nil
+	case "-o":
+		// The shell's own option state, read through the dialect's namespace
+		// — which for one of the panel is far wider than its `set -o` names.
+		// A name this shell has is a plain true or false in all three that
+		// have the operator; only a name none of them would know is a
+		// question, and it is asked there and nowhere else.
+		if on, known := r.conditionOption(s); known {
+			return on, nil
+		}
+		if !r.ask(r.sem().UnknownConditionOptionIsAStatus,
+			"`[[ -o ]]` given a name this shell does not have") {
+			return false, nil
+		}
+		d := r.diag()
+		// Said here rather than carried out in the error, because it is said
+		// even when nothing downstream reports the status: `[[ -o zzz || 1
+		// == 1 ]]` is 0 in zsh with the complaint already written.
+		r.diagf("%s\n", Wording(d.UnknownConditionOption, "no such option: %s", s))
+		return false, condStatus{code: d.UnknownConditionOptionStatus}
 	case "-e", "-f", "-d", "-s", "-r", "-w", "-x",
 		"-b", "-c", "-p", "-S", "-g", "-u", "-k", "-L", "-h":
 		// The file questions are `test`'s, answered by the same code: the

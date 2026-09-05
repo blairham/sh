@@ -87,12 +87,22 @@ func (c *TestClause) End() Pos     { return c.Stop }
 func (c *TestClause) commandNode() {}
 
 // condUnaryOps are the one-operand tests.
+//
+// `-o` is here for the same head count that put DoubleBracket in the core:
+// every shell in the panel that has `[[ ]]` at all has the option test inside
+// it, measured on bash 5.3, bash 3.2, bash-as-`sh`, ksh93 and zsh 5.9, and
+// dash has no `[[ ]]` to put it in. It is not a dialect flag, because the
+// three that answer disagree about *names* and not about the grammar: the
+// operand is an ordinary word everywhere — `[[ -o 'aliases' ]]` reads the
+// same name as `[[ -o aliases ]]`, and `v=errexit; [[ -o $v ]]` reads it out
+// of the variable — and a missing one is a syntax error in all three.
 var condUnaryOps = map[string]bool{
 	"-n": true, "-z": true,
 	"-e": true, "-f": true, "-d": true, "-s": true,
 	"-r": true, "-w": true, "-x": true,
 	"-b": true, "-c": true, "-p": true, "-S": true, "-L": true, "-h": true,
 	"-g": true, "-u": true, "-k": true, "-t": true,
+	"-o": true,
 }
 
 // condBinaryWordOps are the two-operand tests spelled as words. These compare

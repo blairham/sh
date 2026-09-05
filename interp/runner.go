@@ -756,6 +756,11 @@ type Runner struct {
 	// extraOptions are the `set -o` names this dialect has beyond the ones
 	// every shell has. Declared through AddSetOptions; see setoptions.go.
 	extraOptions map[string]bool
+	// optionNamespace is the wider set of names `[[ -o name ]]` reads, for a
+	// dialect that has one. Nil in a shell whose option names are its
+	// `set -o` names and nothing more, which is where `[[ -o ]]` falls back
+	// to those. Installed through SetOptionNamespace; see extend.go.
+	optionNamespace func(name string) (on, known bool)
 	// lineBase is how far into the script the input being run starts.
 	//
 	// A command substitution's body is parsed on its own, so its positions

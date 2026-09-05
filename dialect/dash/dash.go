@@ -240,6 +240,9 @@ func Semantics() interp.Semantics {
 	s.CdRefusesUnknownOption = interp.Yes
 	s.CdLastPathOptionWins = interp.Yes
 	s.BadSetOptionNameFatal = interp.Yes
+	// dash has no `[[ ]]` to ask it in; answered so that a shell built from
+	// this preset with the construct turned back on is not left refusing.
+	s.UnknownConditionOptionIsAStatus = interp.No
 	s.ReturnOutsideAFunctionIsRefused = interp.No
 	s.LoneDashIsAnOption = interp.No
 	s.UnsetFunctionChecksTheName = interp.No

@@ -89,6 +89,7 @@ func TestSemantics(t *testing.T) {
 		{"TypesetLocalNeedsKeywordFunction", s.TypesetLocalNeedsKeywordFunction, interp.No},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.No},
 		{"ArrayBaseIsZero", s.ArrayBaseIsZero, interp.No},
+		{"ArrayLiteralSubscriptIsAKey", s.ArrayLiteralSubscriptIsAKey, interp.No},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.Yes},
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
@@ -622,5 +623,19 @@ func TestZshReadsTheProfileWithAScriptToRun(t *testing.T) {
 	}
 	if (interp.Semantics{}).LoginProfileWhenNonInteractive {
 		t.Error("the substrate's own answer reads a file out of a home directory, want it not to")
+	}
+}
+
+// The panel's holdout on what a refused `set` option reports: 1 where bash,
+// dash and ksh93 report 2. Measured 2026-09-05 on `-q`, `-j`, `-z` and `-A` —
+// the letters all six shells refuse — and on `set -o nosuchoption`, at an
+// invocation and inside a script alike, which is why one value answers both
+// spellings (#483).
+func TestZshRefusesASetOptionAtOne(t *testing.T) {
+	if got := zsh.Diagnostics().SetInvalidOptionStatus; got != 1 {
+		t.Errorf("SetInvalidOptionStatus = %d, want 1", got)
+	}
+	if got := (interp.Diagnostics{}).SetInvalidOptionStatus; got != 0 {
+		t.Errorf("the substrate answers %d, want nothing — zero means the 2 the other three report", got)
 	}
 }

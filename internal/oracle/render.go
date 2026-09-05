@@ -120,7 +120,7 @@ func cell(res Result) string {
 	case res.TimedOut:
 		return "*(timeout)*"
 	case res.Stdout == "" && res.Stderr == "":
-		return fmt.Sprintf("*(no output, status %d)*", res.Status)
+		return fmt.Sprintf("*(no output, %s)*", outcome(res))
 	}
 	var parts []string
 	if res.Stdout != "" {
@@ -130,10 +130,29 @@ func cell(res Result) string {
 		parts = append(parts, "**2>** `"+escapeCell(res.Stderr)+"`")
 	}
 	out := strings.Join(parts, " ")
-	if res.Status != 0 {
-		return fmt.Sprintf("%s *(status %d)*", out, res.Status)
+	if res.Signal != 0 || res.Status != 0 {
+		return fmt.Sprintf("%s *(%s)*", out, outcome(res))
 	}
 	return out
+}
+
+// outcome names how the shell ended: the signal that killed it, or the status
+// it exited with.
+//
+// The two are alternatives rather than a pair — there is no exit status for a
+// process a signal ended — so printing the status of a signal death would be
+// printing the -1 that stands for its absence.
+//
+// The number and the system's word for it, because neither alone is enough:
+// the number is what the record keeps and it is not the same on two operating
+// systems for the signals above the standard set, and the word is the fact a
+// reader wants but is a description rather than a name — the word for SIGKILL
+// is "killed", which says nothing on its own.
+func outcome(res Result) string {
+	if res.Signal != 0 {
+		return fmt.Sprintf("killed by signal %d (%s)", int(res.Signal), res.Signal)
+	}
+	return fmt.Sprintf("status %d", res.Status)
 }
 
 // escapeCell hides the one character a Markdown table reads as structure.
@@ -194,7 +213,7 @@ func describe(r Result) string {
 	if r.TimedOut {
 		return "(timeout)"
 	}
-	return fmt.Sprintf("out %q err %q (status %d)", r.Stdout, r.Stderr, r.Status)
+	return fmt.Sprintf("out %q err %q (%s)", r.Stdout, r.Stderr, outcome(r))
 }
 
 // Compare reports where this run differs from the golden record.

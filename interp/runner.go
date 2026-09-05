@@ -2365,25 +2365,12 @@ func (r *Runner) assign(a *syntax.Assign) {
 		// rather than counted.
 		r.assignAssocLiteral(a.Name, a.Elems, a.Append)
 	case a.IsArray:
-		var elems []string
-		for _, w := range a.Elems {
-			// Each element is a word, so `a=(1 $x 3)` expands and splits
-			// like any other — which is how an array is built from a
-			// command's output.
-			elems = append(elems, r.expandWord(w)...)
-		}
-		if a.Append {
-			// `a+=(d)` adds to the end of the array rather than to its first
-			// element, which is what makes append two operations sharing a
-			// spelling rather than one.
-			//
-			// After the highest subscript rather than after the count:
-			// appending to `a[0]=x a[5]=y` puts the next element at 6, which
-			// is where the end is.
-			r.appendArray(a.Name, elems)
-			return
-		}
-		r.setArray(a.Name, elems)
+		// Each bare element is a word, so `a=(1 $x 3)` expands and splits
+		// like any other — which is how an array is built from a command's
+		// output — and a `[sub]=value` element places its value instead.
+		// `a+=(d)` adds to the end rather than to the first element, which is
+		// what makes append two operations sharing a spelling rather than one.
+		r.assignArrayLiteral(a.Name, a.Elems, a.Append)
 	case a.Index != nil && r.assocDeclared(a.Name):
 		// A declared name takes its subscript as a string, expanded and
 		// never evaluated: `m[1+1]=x` stores under the three characters.
@@ -2399,7 +2386,7 @@ func (r *Runner) assign(a *syntax.Assign) {
 		}
 		r.setAssocElem(a.Name, key, value)
 	case a.Index != nil:
-		idx, err := r.parseNum(strings.TrimSpace(r.joinWord(a.Index)))
+		idx, err := r.writtenSubscript(r.joinWord(a.Index))
 		if err != nil {
 			r.diagf("%s: bad array subscript\n", a.Name)
 			return

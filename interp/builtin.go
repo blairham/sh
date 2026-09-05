@@ -231,8 +231,7 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 				if r.unspecified {
 					return false
 				}
-				r.diagf("set: -%c is not implemented\n", opt)
-				return false
+				return r.badSetOptionLetter(opt)
 			}
 			if r.ask(r.sem().SetHLetterTracksCommands, "which option `set -h` abbreviates") {
 				// The same state the hashall and trackall table entries
@@ -251,8 +250,7 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 				if r.unspecified {
 					return false
 				}
-				r.diagf("set: -%c is not implemented\n", opt)
-				return false
+				return r.badSetOptionLetter(opt)
 			}
 			if opt == 'E' {
 				r.errtrace = on
@@ -268,8 +266,7 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 				r.noglob = on
 			}
 		default:
-			r.diagf("set: -%c is not implemented\n", opt)
-			return false
+			return r.badSetOptionLetter(opt)
 		}
 	}
 	return true
@@ -286,6 +283,34 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 // panel follows it with a usage line, one puts the builtin's name in the
 // location rather than in the sentence, and one answers 1 where the rest
 // answer 2.
+// badSetOptionLetter reports an option letter this shell does not have.
+//
+// The letter and the name are one question with one answer, which is why this
+// reads the same dialect status badSetOptionName reads and asks the same
+// dialect whether a refusal ends the script. Measured 2026-09-05 on `-q`,
+// `-j`, `-z` and `-A` — the letters all six of bash 5.3, bash 3.2,
+// bash-as-`sh`, dash, ksh93 and zsh refuse: `set -q` reports exactly what
+// `set -o nosuchoption` reports in each of them, and dies or does not in the
+// same way. The letter asked neither question before: it reported 2 for
+// everybody and never ended a script, so `zsh -q` exited 2 where zsh exits 1
+// and `set -q` in a dash script carried on where dash stops (#483).
+//
+// The wording is still ours rather than the dialect's, and that is a separate
+// gap: the panel spells this four ways — `-q: invalid option`,
+// `Illegal option -q`, `-q: unknown option`, `bad option: -q` — and at an
+// invocation bash and ksh93 name themselves rather than `set` and add a usage
+// block. See docs/spec/invocation.md and #598.
+func (r *Runner) badSetOptionLetter(opt rune) bool {
+	r.diagf("set: -%c is not implemented\n", opt)
+	status := orDefault(r.diag().SetInvalidOptionStatus, 2)
+	r.setOptionStatus = status
+	if r.ask(r.sem().BadSetOptionNameFatal, "a refused `set` option letter ending the script") {
+		r.status = status
+		r.fatalQuiet()
+	}
+	return false
+}
+
 func (r *Runner) badSetOptionName(name string) bool {
 	d := r.diag()
 	r.diagf("%s\n", Wording(d.SetInvalidOptionName, "set: %[1]s: invalid option name", name))
@@ -296,7 +321,7 @@ func (r *Runner) badSetOptionName(name string) bool {
 			r.diagf("%s\n", usage)
 		}
 	}
-	status := orDefault(d.SetInvalidOptionNameStatus, 2)
+	status := orDefault(d.SetInvalidOptionStatus, 2)
 	r.setOptionStatus = status
 	if r.ask(r.sem().BadSetOptionNameFatal, "an unknown `set -o` name ending the script") {
 		r.status = status

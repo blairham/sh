@@ -137,6 +137,15 @@ func (r *Runner) assocScalar(a AssocArray) (string, bool) {
 // assignAssocLiteral is `m=([k]=v …)` on a declared name — and `m+=(…)`,
 // which keeps the elements already there where `=` starts over.
 func (r *Runner) assignAssocLiteral(name string, elems []*syntax.Word, appendTo bool) {
+	r.assignAssocElems(name, r.literalElems(elems), appendTo)
+}
+
+// assignAssocElems places an already-expanded literal into the keyed table.
+//
+// Taken apart from the expansion because the indexed path reaches it too: a
+// dialect that reads a subscript as a key stores `a=([k]=v)` here, and it must
+// not expand the elements a second time to do so.
+func (r *Runner) assignAssocElems(name string, parsed []literalElem, appendTo bool) {
 	if !appendTo {
 		if r.AssocArrays == nil {
 			r.AssocArrays = map[string]AssocArray{}
@@ -148,12 +157,12 @@ func (r *Runner) assignAssocLiteral(name string, elems []*syntax.Word, appendTo 
 	// refuses it, and refusing the shape both others accept would be the
 	// lone answer.
 	var pairs []string
-	for _, w := range elems {
-		if key, value, ok := r.assocElem(w); ok {
-			r.setAssocElem(name, key, value)
+	for _, e := range parsed {
+		if e.subscripted {
+			r.setAssocElem(name, e.sub, e.value)
 			continue
 		}
-		pairs = append(pairs, r.expandWord(w)...)
+		pairs = append(pairs, e.fields...)
 	}
 	for i := 0; i < len(pairs); i += 2 {
 		value := ""

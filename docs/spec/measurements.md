@@ -201,6 +201,13 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `array/appending-to-an-element-inherits-the-base` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[xQ][y]` |
 | `array/appending-to-an-unset-element` | **2>** `<shell>: 1: a[3]+=Q: not found~<shell>: 1: Bad substitution` *(status 2)* | `[Q]` | `[Q]` | `[Q]` | `[Q]` | `[Q]` |
 | `array/appending-to-an-associative-element` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]+=x: not found~<shell>: 1: m[k]+=Q: not found~<shell>: 1: Bad substitution` *(status 2)* | `[xQ]` | `[xQ]` | `[xQ]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[xQ]` | `[xQ]` |
+| `array/a-literal-places-its-subscripts` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[b][c] n=2` | `[b][c] n=2` | `[b][c] n=2` | `[b][c] n=2` | `[b][c] n=2` |
+| `array/a-literal-leaves-a-gap` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[c] n=1` | `[c] n=1` | `[c] n=1` | `[c] n=1` | `[][c] n=2` |
+| `array/a-literal-subscript-is-an-expression` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[d] n=1` | `[d] n=1` | `[d] n=1` | `[c][d] n=2` | `[][d] n=2` |
+| `array/a-literal-repeats-a-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[d] n=1` | `[d] n=1` | `[d] n=1` | `[d] n=1` | `[][d] n=2` |
+| `array/a-literal-mixes-subscripts-and-positions` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][y][z] n=3` | `[x][y][z] n=3` | `[x][y][z] n=3` | `[x][[3]=y][z] n=3` | `[x][][y][z] n=4` |
+| `array/appending-a-literal-with-a-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[c][f] n=2` | `[c][f] n=2` | `[c][f] n=2` | `[c][f] n=2` | `[][c][][][f] n=5` |
+| `array/a-literal-value-is-an-assignment-value` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[p q] n=1` | `[p q] n=1` | `[p q] n=1` | `[p q] n=1` | `[][p q] n=2` |
 | `assoc/a-string-subscript` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: Bad substitution` *(status 2)* | `v k` | `v k` | `v 0` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `v k` | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `assoc/the-subscript-is-not-arithmetic` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[1+1]=x: not found~<shell>: 1: Bad substitution` *(status 2)* | `[x]` | `[x]` | `[x]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[x]` | `[x]` |
 | `assoc/values-in-some-order` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[b]=2: not found~<shell>: 1: m[a]=1: not found~<shell>: 1: Bad substitution~<shell>: 1: Bad substitution` *(status 2)* | `1 2 n=2` | `1 2 n=2` | `1 n=1` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `1 2 n=2` | `1 2 n=2` |
@@ -383,6 +390,34 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `array/appending-to-an-associative-element` — the declared form appends by key just as the indexed form appends by subscript — unanimous in the three that have the attribute. Both assignments are written with `+=` so that the first one also stands as the unset-key case, and so that dash, which has neither, reports the two identically
   ```sh
   typeset -A m; m[k]+=x; m[k]+=Q; echo "[${m[k]}]"
+  ```
+- `array/a-literal-places-its-subscripts` — the ordinary way to build an array out of order, and unanimous in the three that have arrays: the value goes where the subscript says and the brackets are not part of it. It used to be kept as text — two elements reading `[2]=c` and `[1]=b` — which is the silent kind of wrong, because the array is the right length and only its contents are nonsense. Both subscripts are at or above every shell's first, so the case asks nothing about the base
+  ```sh
+  a=([2]=c [1]=b); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/a-literal-leaves-a-gap` — placing at a subscript nothing has filled up to leaves the positions below it unassigned, which is the sparse-array axis reached through the literal rather than through `a[5]=y`: two shells count one element and the one that walks the extent counts the gap as well
+  ```sh
+  a=([2]=c); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/a-literal-subscript-is-an-expression` — a subscript written inside a literal is evaluated in two of the three and kept as the text between the brackets in the other, which is the same characters meaning two different things — the `ArrayLiteralSubscriptIsAKey` axis. Both spellings evaluate to 2, so where they are expressions the second overwrites the first and one element comes back; where they are keys they are two different keys and two elements do. The count is what tells the readings apart, which is why it is printed
+  ```sh
+  i=2; a=([1+1]=c [i]=d); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/a-literal-repeats-a-subscript` — the same subscript twice is one element holding the later value, unanimously — the elements are placed in the order written rather than gathered and reconciled, which is the only reading under which the second wins
+  ```sh
+  a=([2]=c [2]=d); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/a-literal-mixes-subscripts-and-positions` — a bare element after a subscripted one continues from that subscript rather than from where the count had reached, so `z` lands one past `y`. Two of the three do this; ksh93 does not take the mixture at all and keeps the subscripted element as text, which is the divergence this case exists to record rather than a wording difference
+  ```sh
+  a=(x [3]=y z); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/appending-a-literal-with-a-subscript` — `+=` keeps what is there and the subscripted element still places rather than landing after the end, so the two elements are at 2 and 5 with nothing between. Unanimous in the three, and it is the combination a fix is likeliest to miss because each half works alone
+  ```sh
+  a=([2]=c); a+=([5]=f); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/a-literal-value-is-an-assignment-value` — the value of a subscripted element is not field-split, exactly as the right side of `a[2]=$x` is not — unanimous, and the opposite of a bare element in the same literal, which is a word and does split. So one set of parentheses holds two expansion rules and the subscript is what chooses between them
+  ```sh
+  x="p q"; a=([2]=$x); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
   ```
 - `assoc/a-string-subscript` — the declaration that turns a subscript from an expression into a key. bash and ksh93 store under the letter and answer it back; zsh has the arrays but rejects `${!m[@]}` outright; dash has none of it — the issue's own snippet, spelled with the name all three declarers share
   ```sh
@@ -666,7 +701,7 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `jobspec/wait-a-number-that-names-nothing` | `st=2` **2>** `<shell>: 1: wait: No such job: %5` | `st=127` **2>** `<shell>: line 1: wait: %5: no such job` | `st=127` **2>** `<shell>: line 1: wait: %5: no such job` | `st=127` **2>** `<shell>: line 0: wait: %5: no such job` | `st=0` | `st=127` **2>** `<shell>:wait:1: %5: no such job` |
 | `jobspec/wait-a-name-that-names-nothing` | `st=2` **2>** `<shell>: 1: wait: No such job: %nosuchname` | `st=127` **2>** `<shell>: line 1: wait: %nosuchname: no such job` | `st=127` **2>** `<shell>: line 1: wait: %nosuchname: no such job` | `st=127` **2>** `<shell>: line 0: wait: %nosuchname: no such job` | `st=0` | `st=127` **2>** `<shell>:wait:1: job not found: nosuchname` |
 | `jobspec/wait-for-the-next-job` | `st=2` **2>** `<shell>: 1: wait: Illegal option -n` | `st=3` | `st=3` | `st=2` **2>** `<shell>: line 0: wait: -n: invalid option~wait: usage: wait [n]` | `st=2` **2>** `<shell>: wait: -n: unknown option~Usage: wait [ options ] [job ...]` | `st=127` **2>** `<shell>:wait:1: job not found: -n` |
-| `jobspec/kill-a-job-that-is-not-there` | `st=2` **2>** `<shell>: 1: kill: No such job: %9` | `st=1` **2>** `<shell>: line 1: kill: %9: no such job` | `st=0` **2>** `<shell>: line 1: kill: %9: no such job` | `st=1` **2>** `<shell>: line 0: kill: %9: no such job` | *(no output, status -1)* | `st=1` **2>** `<shell>:kill:1: %9: no such job` |
+| `jobspec/kill-a-job-that-is-not-there` | `st=2` **2>** `<shell>: 1: kill: No such job: %9` | `st=1` **2>** `<shell>: line 1: kill: %9: no such job` | `st=0` **2>** `<shell>: line 1: kill: %9: no such job` | `st=1` **2>** `<shell>: line 0: kill: %9: no such job` | *(no output, killed by signal 11 (segmentation fault))* | `st=1` **2>** `<shell>:kill:1: %9: no such job` |
 | `disown/lets-go-or-only-shields` | `[1] + Running                    ~st=0` **2>** `<shell>: 1: disown: not found` | `st=0` | `st=0` | `st=0` | `[1] +  Running                 <command unknown>~st=0` | `st=0` |
 | `disown/with-nothing-held` | `st=127` **2>** `<shell>: 1: disown: not found` | `st=1` **2>** `<shell>: line 1: disown: current: no such job` | `st=1` **2>** `<shell>: line 1: disown: current: no such job` | `st=1` **2>** `<shell>: line 0: disown: current: no such job` | `st=1` | `st=1` **2>** `<shell>:disown:1: no current job` |
 | `ulimit/one-row-of-the-table` | `file(blocks)         12345~st=0` | `file size                   (blocks, -f) 12345~st=0` | `file size                   (blocks, -f) 12345~st=0` | `file size               (blocks, -f) 12345~st=0` | `file size (blocks)             (-f)  12345~st=0` | `-f: file size (blocks)              12345~st=0` |
@@ -1359,7 +1394,7 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
 | `axis/trap-body-line-exit` | `one~two~a` **2>** `<script>: 2: nosuchcmd-xyz: not found` | `one~two~a` **2>** `<script>: line 2: nosuchcmd-xyz: command not found` | `one~two~a` **2>** `<script>: line 2: nosuchcmd-xyz: command not found` | `one~two~a` **2>** `<script>: line 6: nosuchcmd-xyz: command not found` | `one~two~a` **2>** `<script>: line 2: nosuchcmd-xyz: not found` | `one~two~a` **2>** `<script>:5: command not found: nosuchcmd-xyz` |
-| `axis/trap-body-parse-failure-location` | `one~two~a` **2>** `<script>: 2: Syntax error: end of file unexpected (expecting "then")` *(status 2)* | `one~two~a~three` **2>** `<script>: trap: line 3: syntax error: unexpected end of file from `if' command on line 2` | `one~two~a~three` **2>** `<script>: trap: line 3: syntax error: unexpected end of file from `if' command on line 2` | `one~two~a~three` **2>** `<script>: trap: line 7: syntax error: unexpected end of file` | `one~two~three` **2>** `<script>: line 5: syntax error at line 6: `if' unmatched` | `one~two` **2>** `<script>:2: parse error near `if'~<script>:trap:2: couldn't parse trap command` *(status -1)* |
+| `axis/trap-body-parse-failure-location` | `one~two~a` **2>** `<script>: 2: Syntax error: end of file unexpected (expecting "then")` *(status 2)* | `one~two~a~three` **2>** `<script>: trap: line 3: syntax error: unexpected end of file from `if' command on line 2` | `one~two~a~three` **2>** `<script>: trap: line 3: syntax error: unexpected end of file from `if' command on line 2` | `one~two~a~three` **2>** `<script>: trap: line 7: syntax error: unexpected end of file` | `one~two~three` **2>** `<script>: line 5: syntax error at line 6: `if' unmatched` | `one~two` **2>** `<script>:2: parse error near `if'~<script>:trap:2: couldn't parse trap command` *(killed by signal 30 (user defined signal 1))* |
 | `axis/trap-body-line-signal` | `two~a~three` **2>** `<script>: 2: nosuchcmd-xyz: not found` | `two~a~three` **2>** `<script>: line 2: nosuchcmd-xyz: command not found` | `two~a~three` **2>** `<script>: line 2: nosuchcmd-xyz: command not found` | `two~a~three` **2>** `<script>: line 5: nosuchcmd-xyz: command not found` | `two~a~three` **2>** `<script>: line 5: nosuchcmd-xyz: not found` | `two~a~three` **2>** `<script>:4: command not found: nosuchcmd-xyz` |
 | `axis/trap-prints-a-bare-action` | `trap -- ':' INT~end` | `trap -- ':' SIGINT~end` | `trap -- ':' SIGINT~end` | `trap -- ':' SIGINT~end` | `trap -- : INT~end` | `trap -- : INT~end` |
 | `axis/trap-prints-a-quoted-action` | `trap -- 'echo hi' INT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' SIGINT~end` | `trap -- 'echo hi' INT~end` | `trap -- 'echo hi' INT~end` |
@@ -2243,14 +2278,17 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
-| `kill/exit-trap-after-a-fatal-signal` | *(no output, status -1)* | `bye` *(status -1)* | `bye` *(status -1)* | `bye` *(status -1)* | `bye` *(status -1)* | *(no output, status -1)* |
+| `kill/exit-trap-after-a-fatal-signal` | *(no output, killed by signal 2 (interrupt))* | `bye` *(killed by signal 2 (interrupt))* | `bye` *(killed by signal 2 (interrupt))* | `bye` *(killed by signal 2 (interrupt))* | `bye` *(killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
 | `trap/bad-signal-name` | `st=1` **2>** `trap: NOPE: bad trap` | `st=1` **2>** `<shell>: line 1: trap: NOPE: invalid signal specification` | `st=1` **2>** `<shell>: line 1: trap: NOPE: invalid signal specification` | `st=1` **2>** `<shell>: line 0: trap: NOPE: invalid signal specification` | `st=1` **2>** `<shell>: trap: NOPE: bad trap` | `st=1` **2>** `<shell>:trap:1: undefined signal: NOPE` |
 | `trap/sig-prefix-diverges` | `st=1` **2>** `trap: SIGUSR1: bad trap` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `trap/signal-handler-runs-and-continues` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
 | `trap/empty-handler-ignores` | `after` | `after` | `after` | `after` | `after` | `after` |
-| `trap/default-signal-terminates` | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* |
-| `trap/reset-restores-the-default` | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* | *(no output, status -1)* |
+| `trap/default-signal-terminates` | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
+| `trap/reset-restores-the-default` | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
 | `signal-death/status-encodes-the-signal` | `st=141~after` | `st=141~after` | `st=141~after` | `st=141~after` | `st=269~after` | `st=141~after` |
+| `signal-death/the-shell-dies-by-the-signal-rather-than-exiting` | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* |
+| `signal-death/an-uncatchable-signal-ends-it-outright` | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* |
+| `signal-death/a-handled-signal-is-not-a-death` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
 | `signal-death/an-ordinary-failure-is-untouched` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` |
 | `umask/reads-the-mask` | `0022` | `0022` | `0022` | `0022` | `0022` | `022` |
 | `umask/symbolic-is-unanimous` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` | `u=rwx,g=rx,o=rx` |
@@ -2338,6 +2376,18 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `signal-death/status-encodes-the-signal` — a command killed by a signal has no exit status of its own, so the signal goes in the number: 128 + 13 in bash, dash and zsh, and 256 + 13 in ksh93. PIPE is the signal to ask with — it is one of only two the panel does not announce (INT is the other), so the case is about the number and not about three wordings, and unlike INT it does not end the script in ksh93
   ```sh
   sh -c 'kill -PIPE $$'; echo "st=$?"; echo after
+  ```
+- `signal-death/the-shell-dies-by-the-signal-rather-than-exiting` — the discipline the record could not see until it kept the signal: a shell with no trap for a fatal signal does not exit with 128 plus the number, it *re-raises the signal at itself*, so its own caller is told the shell was killed and by which one. `sh -c 'kill -TERM $$'; echo $?` says 143 either way, which is why every earlier case had to nest a child and read the parent shell's arithmetic instead of the death
+  ```sh
+  kill -TERM $$; echo after
+  ```
+- `signal-death/an-uncatchable-signal-ends-it-outright` — the same death by a signal no shell can trap, handle or re-raise deliberately — the kernel ends it — which is what says the row above is the shell's own discipline and not simply what happens to a process that is signaled
+  ```sh
+  kill -KILL $$; echo after
+  ```
+- `signal-death/a-handled-signal-is-not-a-death` — the control: the same signal with a trap for it runs the handler and the shell carries on to exit normally, so the two rows above are about the *absence* of a handler rather than about the signal arriving
+  ```sh
+  trap "echo caught" TERM; kill -TERM $$; echo after
   ```
 - `signal-death/an-ordinary-failure-is-untouched` — a command that exits by itself reports what it exited with, unanimously — which is what says the encoding above is about being killed rather than about failing
   ```sh
@@ -2885,6 +2935,7 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `opt/set-o-noglob-is-unanimous` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` |
 | `opt/command-tracking-has-two-long-names` | *(no output, status 2)* | `hashall=0~trackall=2` | `hashall=0` *(status 2)* | `hashall=0~trackall=1` | *(no output, status 2)* | `hashall=0~trackall=0` |
 | `opt/an-unknown-long-name-is-refused` | **2>** `<shell>: 1: set: Illegal option -o zzznosuch` *(status 2)* | `on=2~off=2` **2>** `<shell>: line 1: set: zzznosuch: invalid option name~<shell>: line 1: set: zzznosuch: invalid option name` | **2>** `<shell>: line 1: set: zzznosuch: invalid option name` *(status 2)* | `on=1~off=1` **2>** `<shell>: line 0: set: zzznosuch: invalid option name~<shell>: line 0: set: zzznosuch: invalid option name` | **2>** `<shell>: set: zzznosuch: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: zzznosuch` *(status 1)* |
+| `opt/an-unknown-letter-is-refused` | **2>** `<shell>: 1: set: Illegal option -q` *(status 2)* | `st=2~alive` **2>** `<shell>: line 1: set: -q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` | **2>** `<shell>: line 1: set: -q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` *(status 2)* | `st=2~alive` **2>** `<shell>: line 0: set: -q: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]` | **2>** `<shell>: set: -q: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: bad option: -q` *(status 1)* |
 | `opt/turning-off-a-name-a-shell-does-not-implement` | **2>** `<shell>: 1: set: Illegal option -o posix` *(status 2)* | `st=0~st=0` | `st=0~st=0` | `st=0~st=0` | **2>** `<shell>: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: posix` *(status 1)* |
 | `opt/noglob-does-not-stop-matching` | `match` | `match` | `match` | `match` | `match` | `match` |
 | `opt/an-option-can-be-turned-back-off` | `a.txt` | `a.txt` | `a.txt` | `a.txt` | `a.txt` | `a.txt` |
@@ -3077,6 +3128,10 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `opt/an-unknown-long-name-is-refused` — a name outside the shell's table is refused in both directions, with four different wordings and two different statuses — the boundary the accept-off policy stops at, since a name that does not exist is not a state anything is already in
   ```sh
   set -o zzznosuch; echo "on=$?"; set +o zzznosuch; echo "off=$?"
+  ```
+- `opt/an-unknown-letter-is-refused` — the letter half of the question the long name asks, and the panel answers the two identically — `-q`, `-j`, `-z` and `-A` are the letters all six refuse, and each shell reports for `set -q` exactly what it reports for `set -o zzznosuch` and ends the script or does not in the same way. bash alone carries on, at 2; dash and ksh93 stop at 2 and zsh at 1. The letter had no dialect answer at all until #483: it reported 2 everywhere and never stopped a script, so the same shell answered its own two spellings differently
+  ```sh
+  set -q; echo "st=$?"; echo alive
   ```
 - `opt/turning-off-a-name-a-shell-does-not-implement` — the thirteenth line of Homebrew's own brew script is `set +o posix`, and it is the shape this implementation's accept-off/refuse-on policy exists for: turning off what a shell was never doing is a request that has been granted, where turning it *on* would be a promise. Recorded across the panel because the two names split it — bash has both, and the others have neither
   ```sh
@@ -3710,7 +3765,7 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `subst/the-subshell-form-loses-what-it-assigns` | `[0][hi]` | `[0][hi]` | `[0][hi]` | `[0][hi]` | `[0][hi]` | `[0][hi]` |
 | `subst/a-body-is-placed-in-the-script` | **2>** `<shell>: 4: nosuchcmd: not found` *(status 127)* | **2>** `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 3: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 4: nosuchcmd: not found` *(status 127)* | **2>** `<shell>:4: command not found: nosuchcmd` *(status 127)* |
 | `subst/a-backquoted-body-is-placed-differently` | **2>** `<shell>: 1: nosuchcmd: not found` *(status 127)* | **2>** `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 4: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 3: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 4: nosuchcmd: not found` *(status 127)* | **2>** `<shell>:4: command not found: nosuchcmd` *(status 127)* |
-| `signal/an-interrupt-that-ended-a-child` | `after` | `after` | `after` | `after` | *(no output, status -1)* | `after` |
+| `signal/an-interrupt-that-ended-a-child` | `after` | `after` | `after` | `after` | *(no output, killed by signal 2 (interrupt))* | `after` |
 | `signal/a-command-ended-by-a-terminate` | `Terminated: N` | `Terminated: N /bin/sh -c 'kill -TERM $$'` | *(no output, status 0)* | `<shell>: line N: N Terminated: N /bin/sh -c 'kill -TERM $$'` | `<shell>: N: Terminated` | *(no output, status 0)* |
 | `signal/a-pipeline-element-that-is-not-the-last` | `User defined signal N: N~after` | `after` | `after` | `after` | `after` | `after` |
 | `signal/a-command-a-signal-ended-in-a-group` | `User defined signal N: N~after` | `<shell>: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'~after` | `after` | `<shell>: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'~after` | `<shell>: N: User signal N~after` | `after` |

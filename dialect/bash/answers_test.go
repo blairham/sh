@@ -53,6 +53,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"ArithNameValueRecurses", s.ArithNameValueRecurses, interp.Yes},
 		{"ArithInvalidOctalDigitIsError", s.ArithInvalidOctalDigitIsError, interp.Yes},
 		{"ArrayBaseIsZero", s.ArrayBaseIsZero, interp.Yes},
+		{"ArrayLiteralSubscriptIsAKey", s.ArrayLiteralSubscriptIsAKey, interp.No},
 		{"FatalErrorStatusIsOne", s.FatalErrorStatusIsOne, interp.Yes},
 		{"EchoInterpretsEscapes", s.EchoInterpretsEscapes, interp.No},
 		{"LengthOfSpecialIsCount", s.LengthOfSpecialIsCount, interp.Yes},

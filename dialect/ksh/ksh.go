@@ -77,6 +77,10 @@ func Semantics() interp.Semantics {
 	// is 0.5.
 	s.ArithNegativeExponentIsError = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.No
+	// A subscript inside a literal is the text between the brackets, and a
+	// literal written with one declares a keyed array: `typeset -p` answers
+	// `-A` and `${a[2]}` does not find what `[1+1]=c` stored.
+	s.ArrayLiteralSubscriptIsAKey = interp.Yes
 	s.SelectLayout = interp.SelectMenuVertical
 	s.SelectPromptNeedsTerminal = interp.Yes
 	s.AliasParsesOptions = interp.Yes

@@ -138,7 +138,7 @@ func TestARefusedNameIsWordedByTheDialect(t *testing.T) {
 	}{
 		{
 			"a shell with its own words and status",
-			Diagnostics{SetInvalidOptionName: "set: no such option: %[1]s", SetInvalidOptionNameStatus: 1},
+			Diagnostics{SetInvalidOptionName: "set: no such option: %[1]s", SetInvalidOptionStatus: 1},
 			[]string{"no such option: bogus", "st=1"},
 			"invalid option name",
 		},
@@ -417,5 +417,94 @@ func TestPipefailIsListedWhereDeclared(t *testing.T) {
 	})
 	if strings.Contains(out, "pipefail") {
 		t.Errorf("out=%q, want no pipefail line without a declaration", out)
+	}
+}
+
+// TestARefusedLetterReportsTheDialectsStatus is #483: the letter and the name
+// are one question with one answer, and only the name could carry it. `set -q`
+// reported 2 whatever the dialect said, while `set -o nosuchoption` under the
+// same dialect reported 1 — one shell answering itself two ways.
+//
+// Asserted against a *named* status rather than against a shell, since a shell
+// is a value here and this package does not know any: what the test says is
+// that the value travels.
+func TestARefusedLetterReportsTheDialectsStatus(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		dg   Diagnostics
+		want string
+	}{
+		{"a shell with a status of its own", Diagnostics{SetInvalidOptionStatus: 1}, "st=1"},
+		{"and the default", Diagnostics{}, "st=2"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			// The same value read through both spellings, in one run, so
+			// that a change teaching one of them and not the other fails.
+			out := runWorded(t, "set -q\necho \"st=$?\"\nset -o bogus\necho \"st=$?\"\n", c.dg)
+			if got := strings.Count(out, c.want); got != 2 {
+				t.Errorf("said %q, want %q twice — the letter and the name report the same status, got it %d time(s)", out, c.want, got)
+			}
+		})
+	}
+}
+
+// TestARefusedLetterEndsTheScriptWhereTheDialectSaysSo: the other half of
+// routing the letter the way the name goes. Three of the panel end the script
+// on a refused `set` option and one carries on, and the letter used to carry
+// on everywhere — so a script that asked for an option its shell does not have
+// ran the rest of itself in three shells that would have stopped.
+func TestARefusedLetterEndsTheScriptWhereTheDialectSaysSo(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		fatal Answer
+		want  string
+	}{
+		{"a shell that stops", Yes, ""},
+		{"a shell that carries on", No, "after\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var buf strings.Builder
+			sem := PosixSemantics()
+			sem.BadSetOptionNameFatal = c.fatal
+			dg := Diagnostics{}
+			r := &Runner{Stdout: &buf, Stderr: &strings.Builder{}, Semantics: &sem, Diagnostics: &dg, Name: "sh"}
+			f, err := syntax.Parse("set -q\necho after\n", syntax.Core())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := r.Run(context.Background(), f); err != nil {
+				t.Fatal(err)
+			}
+			if buf.String() != c.want {
+				t.Errorf("got %q, want %q", buf.String(), c.want)
+			}
+		})
+	}
+}
+
+// TestSetOptionLettersReportsAStatus is the front end's half of #483, at the
+// call it makes. It returned a bool, so the one status the caller had was the
+// only one an invocation could exit with however the dialect answered.
+func TestSetOptionLettersReportsAStatus(t *testing.T) {
+	newRunner := func(status int) *Runner {
+		sem := PosixSemantics()
+		sem.BadSetOptionNameFatal = No
+		dg := Diagnostics{SetInvalidOptionStatus: status}
+		return &Runner{Stdout: &strings.Builder{}, Stderr: &strings.Builder{}, Semantics: &sem, Diagnostics: &dg, Name: "sh"}
+	}
+	if got := newRunner(0).SetOptionLetters("e", true); got != 0 {
+		t.Errorf("a letter this shell has gave %d, want 0", got)
+	}
+	if got := newRunner(1).SetOptionLetters("q", true); got != 1 {
+		t.Errorf("a refused letter gave %d, want the dialect's 1", got)
+	}
+	if got := newRunner(0).SetOptionLetters("q", true); got != 2 {
+		t.Errorf("a refused letter under a dialect with no answer gave %d, want 2", got)
+	}
+	// The letters before the refused one still applied, which is why a bundle
+	// is one call: `sh -eq` is errexit and then a refusal, not neither.
+	r := newRunner(1)
+	if got := r.SetOptionLetters("eq", true); got != 1 {
+		t.Errorf("a bundle ending in a refused letter gave %d, want 1", got)
 	}
 }

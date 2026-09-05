@@ -1120,6 +1120,21 @@ var Corpus = []Case{
 		Why:     "a command killed by a signal has no exit status of its own, so the signal goes in the number: 128 + 13 in bash, dash and zsh, and 256 + 13 in ksh93. PIPE is the signal to ask with — it is one of only two the panel does not announce (INT is the other), so the case is about the number and not about three wordings, and unlike INT it does not end the script in ksh93",
 	},
 	{
+		ID: "signal-death/the-shell-dies-by-the-signal-rather-than-exiting", Category: "traps and exit",
+		Snippet: `kill -TERM $$; echo after`,
+		Why:     "the discipline the record could not see until it kept the signal: a shell with no trap for a fatal signal does not exit with 128 plus the number, it *re-raises the signal at itself*, so its own caller is told the shell was killed and by which one. `sh -c 'kill -TERM $$'; echo $?` says 143 either way, which is why every earlier case had to nest a child and read the parent shell's arithmetic instead of the death",
+	},
+	{
+		ID: "signal-death/an-uncatchable-signal-ends-it-outright", Category: "traps and exit",
+		Snippet: `kill -KILL $$; echo after`,
+		Why:     "the same death by a signal no shell can trap, handle or re-raise deliberately — the kernel ends it — which is what says the row above is the shell's own discipline and not simply what happens to a process that is signaled",
+	},
+	{
+		ID: "signal-death/a-handled-signal-is-not-a-death", Category: "traps and exit",
+		Snippet: `trap "echo caught" TERM; kill -TERM $$; echo after`,
+		Why:     "the control: the same signal with a trap for it runs the handler and the shell carries on to exit normally, so the two rows above are about the *absence* of a handler rather than about the signal arriving",
+	},
+	{
 		ID: "signal-death/an-ordinary-failure-is-untouched", Category: "traps and exit",
 		Snippet: `sh -c 'exit 3'; echo "st=$?"`,
 		Why:     "a command that exits by itself reports what it exited with, unanimously — which is what says the encoding above is about being killed rather than about failing",
@@ -1988,6 +2003,41 @@ var Corpus = []Case{
 		ID: "array/appending-to-an-associative-element", Category: "expansion",
 		Snippet: `typeset -A m; m[k]+=x; m[k]+=Q; echo "[${m[k]}]"`,
 		Why:     "the declared form appends by key just as the indexed form appends by subscript — unanimous in the three that have the attribute. Both assignments are written with `+=` so that the first one also stands as the unset-key case, and so that dash, which has neither, reports the two identically",
+	},
+	{
+		ID: "array/a-literal-places-its-subscripts", Category: "expansion",
+		Snippet: `a=([2]=c [1]=b); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the ordinary way to build an array out of order, and unanimous in the three that have arrays: the value goes where the subscript says and the brackets are not part of it. It used to be kept as text — two elements reading `[2]=c` and `[1]=b` — which is the silent kind of wrong, because the array is the right length and only its contents are nonsense. Both subscripts are at or above every shell's first, so the case asks nothing about the base",
+	},
+	{
+		ID: "array/a-literal-leaves-a-gap", Category: "expansion",
+		Snippet: `a=([2]=c); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "placing at a subscript nothing has filled up to leaves the positions below it unassigned, which is the sparse-array axis reached through the literal rather than through `a[5]=y`: two shells count one element and the one that walks the extent counts the gap as well",
+	},
+	{
+		ID: "array/a-literal-subscript-is-an-expression", Category: "expansion",
+		Snippet: `i=2; a=([1+1]=c [i]=d); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "a subscript written inside a literal is evaluated in two of the three and kept as the text between the brackets in the other, which is the same characters meaning two different things — the `ArrayLiteralSubscriptIsAKey` axis. Both spellings evaluate to 2, so where they are expressions the second overwrites the first and one element comes back; where they are keys they are two different keys and two elements do. The count is what tells the readings apart, which is why it is printed",
+	},
+	{
+		ID: "array/a-literal-repeats-a-subscript", Category: "expansion",
+		Snippet: `a=([2]=c [2]=d); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the same subscript twice is one element holding the later value, unanimously — the elements are placed in the order written rather than gathered and reconciled, which is the only reading under which the second wins",
+	},
+	{
+		ID: "array/a-literal-mixes-subscripts-and-positions", Category: "expansion",
+		Snippet: `a=(x [3]=y z); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "a bare element after a subscripted one continues from that subscript rather than from where the count had reached, so `z` lands one past `y`. Two of the three do this; ksh93 does not take the mixture at all and keeps the subscripted element as text, which is the divergence this case exists to record rather than a wording difference",
+	},
+	{
+		ID: "array/appending-a-literal-with-a-subscript", Category: "expansion",
+		Snippet: `a=([2]=c); a+=([5]=f); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "`+=` keeps what is there and the subscripted element still places rather than landing after the end, so the two elements are at 2 and 5 with nothing between. Unanimous in the three, and it is the combination a fix is likeliest to miss because each half works alone",
+	},
+	{
+		ID: "array/a-literal-value-is-an-assignment-value", Category: "expansion",
+		Snippet: `x="p q"; a=([2]=$x); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the value of a subscripted element is not field-split, exactly as the right side of `a[2]=$x` is not — unanimous, and the opposite of a bare element in the same literal, which is a word and does split. So one set of parentheses holds two expansion rules and the subscript is what chooses between them",
 	},
 	{
 		ID: "assoc/a-string-subscript", Category: "expansion",
@@ -4271,6 +4321,11 @@ echo unreachable`,
 		ID: "opt/an-unknown-long-name-is-refused", Category: "shell options",
 		Snippet: `set -o zzznosuch; echo "on=$?"; set +o zzznosuch; echo "off=$?"`,
 		Why:     "a name outside the shell's table is refused in both directions, with four different wordings and two different statuses — the boundary the accept-off policy stops at, since a name that does not exist is not a state anything is already in",
+	},
+	{
+		ID: "opt/an-unknown-letter-is-refused", Category: "shell options",
+		Snippet: `set -q; echo "st=$?"; echo alive`,
+		Why:     "the letter half of the question the long name asks, and the panel answers the two identically — `-q`, `-j`, `-z` and `-A` are the letters all six refuse, and each shell reports for `set -q` exactly what it reports for `set -o zzznosuch` and ends the script or does not in the same way. bash alone carries on, at 2; dash and ksh93 stop at 2 and zsh at 1. The letter had no dialect answer at all until #483: it reported 2 everywhere and never stopped a script, so the same shell answered its own two spellings differently",
 	},
 	{
 		ID: "opt/turning-off-a-name-a-shell-does-not-implement", Category: "shell options",

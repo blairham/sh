@@ -27,9 +27,21 @@ invoked is incomplete.
 ## Producing a fact
 
 A case is a snippet plus, for each shell in the panel, what it wrote to
-standard output, what it wrote to standard error, and the exit status
-observed. All three are recorded; a construct that prints the same thing
-with a different status is still a difference.
+standard output, what it wrote to standard error, how it ended, and
+whether it ended at all. All of it is recorded; a construct that prints
+the same thing with a different status is still a difference.
+
+"How it ended" is a status *or* a signal, never both. A process a signal
+killed has no exit status — the two are alternatives in one wait status —
+so an exit status of -1 means only "there was none", and without the
+signal beside it a shell killed by SIGINT, a shell killed by SIGKILL and
+a shell that hung until the harness gave up were all one row. Recording
+the signal is what makes a shell's exit-on-signal discipline observable:
+the convention that a shell with no trap for a fatal signal re-raises it
+at itself, so its caller is told which signal killed it rather than a
+number the shell computed. Nesting a `sh -c 'kill …'` child and reading
+`$?` measures the *parent's* arithmetic instead, and every case that
+wanted to see a signal had to do that.
 
 Rules that keep the facts honest:
 

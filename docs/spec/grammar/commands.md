@@ -171,18 +171,71 @@ The two-element answer for `a=($x)` is the `SplitParamExpansion` axis
 from `semantics.md` reaching into the literal; it is one rule, not a
 second one for arrays.
 
-Two corners split the panel and each is silent:
+One corner splits the panel and is silent:
 
 | probe | bash 5 | ksh93 | zsh |
 | --- | --- | --- | --- |
 | `a=(); echo ${#a[@]}` | 0 | **1** | 0 |
-| `a=([2]=c [0]=a)` | placed | placed | **refused** |
 
 `a=()` is an *empty array* in bash and zsh. In ksh93 it declares a
 compound variable instead — `typeset -p a` answers `typeset -C a=()`,
 `${#a[@]}` is 1, and `${a[0]}` renders as the two-line text `(` `)`.
-zsh refuses a subscript written inside the literal (`bad subscript for
-direct array assignment`) at status 1.
+
+### A subscript inside the literal
+
+An element may name where it goes: `a=([2]=c [1]=b)` is two elements, at
+subscripts 1 and 2, and the brackets are not part of either value. This
+is the ordinary way to build a sparse array, and it is where the panel
+splits twice — neither split being the one an earlier reading recorded,
+which was that zsh refuses the form outright. Measured 2026-09-05:
+
+| probe | bash 5 | bash 3.2 | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `a=([2]=c [1]=b)` | `b c` | `b c` | `b c` | `b c` |
+| `a=([2]=c); echo ${#a[@]}` | 1 | 1 | 1 | **2** |
+| `a=([2]=c [2]=d)` | `d` | `d` | `d` | `d` |
+| `x="p q"; a=([2]=$x)` | one element | one element | one element | one element |
+| `a=([2]=c); a+=([5]=f)` | at 2 and 5 | at 2 and 5 | at 2 and 5 | at 2 and 5 |
+| `i=2; a=([1+1]=c [i]=d)` | 1 element | 1 element | **2 elements** | 1 element |
+| `a=(x [3]=y z)` | `x y z` | `x y z` | **`x [3]=y z`** | `x  y z` |
+| `a=([0]=p)` | placed | placed | placed | **refused** |
+
+Placing is unanimous, and so is everything about how a value is read:
+the value of a subscripted element is an **assignment's** value and is
+not field-split, where a bare element in the same parentheses is a word
+and is; a repeated subscript keeps the later value, so the elements are
+placed in the order written; and `+=` keeps what is there while a
+subscripted element in the appended literal still places rather than
+landing after the end.
+
+**zsh does not refuse the form.** It refuses subscript `0`, and for the
+subscript rather than for the literal: `0` is below zsh's first
+subscript, so a plain `a[0]=Q` earns the same complaint in different
+words. `a=([2]=c)` is accepted there, and the two elements it then
+reports are the sparse-array axis (`ArraysAreSparse`) reading the gap
+below the subscript, not a second refusal. The `${#a[@]}` row is that
+axis and nothing else.
+
+**ksh93 reads the subscript as a key rather than as an expression**, and
+a literal written with one declares a *keyed* array: `typeset -p a`
+answers `typeset -A`, `[1+1]` and `[i]` are two different three- and
+one-character keys rather than two spellings of 2, and `${a[2]}` finds
+nothing that `a=([1+1]=c)` stored. bash and zsh evaluate the subscript,
+so both spellings land on the same element. Semantics axis:
+`ArrayLiteralSubscriptIsAKey` — ksh93 yes, bash and zsh no. Asked only
+where the two readings differ: a plain decimal numeral evaluates to
+itself, so `a=([2]=c)` fills the same slot either way and the core needs
+no dialect for it.
+
+The last row is a divergence that is **recorded rather than modeled**.
+bash and zsh take a literal mixing bare and subscripted elements, and a
+bare element after a subscripted one continues from *that* subscript —
+`z` lands one past `y` — which follows the written subscript through the
+array base, so the same literal fills the same positions under either
+answer. ksh93 takes no such mixture: `a=(x [3]=y z)` leaves the middle
+element as the five characters `[3]=y`, and `a=([1]=p q)` is a syntax
+error. Two different refusals of one shape is thin ground for an axis,
+and the implementation places in every dialect.
 
 `a[i]+=v` is **not** one of the corners, which an earlier reading of
 `a=(x y); a[0]+=Q` had it be: zsh refuses that line, but for the
@@ -224,18 +277,26 @@ name rather than by an assignment prefix (`DeclarationUtilities`;
 measured: `decl/an-array-assignment-as-an-operand`,
 `decl/a-local-array-stays-local`, `decl/readonly-takes-its-array-first`).
 
+A subscript a script assigns **through** is an arithmetic expression and
+not only a numeral, wherever it is written: `a[1+1]=v`, `a[i]=v` and
+`a=([1+1]=v)` all name the element a bare `2` names, in bash and zsh.
+Reading one back is a separate path and does not evaluate here yet —
+`${a[1+1]}` finds nothing where bash finds the element — which is
+recorded so the gap is a known one.
+
 Corpus: `core/append-to-an-array`, `core/array-star-joins`,
 `array/a-subscript-past-the-end`, `array/removing-one-element`,
 `array/appending-to-an-element`,
 `array/appending-to-an-element-inherits-the-base`,
 `array/appending-to-an-unset-element`,
 `array/appending-to-an-associative-element`,
+`array/a-literal-places-its-subscripts`, `array/a-literal-leaves-a-gap`,
+`array/a-literal-subscript-is-an-expression`,
+`array/a-literal-repeats-a-subscript`,
+`array/a-literal-mixes-subscripts-and-positions`,
+`array/appending-a-literal-with-a-subscript`,
+`array/a-literal-value-is-an-assignment-value`,
 `pat/an-array-literal-is-not-a-group`.
-
-**One row above is ahead of the implementation**, and is recorded so the
-gap is a known one: a subscript inside a literal is kept as literal text
-here rather than placed (`a=([2]=c)` leaves one element reading
-`[2]=c`), which is unanimous in the two shells that answer it.
 
 ## Grouping: `( )` and `{ }`
 

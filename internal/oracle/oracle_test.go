@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -356,10 +357,102 @@ func TestCellNamesTheStreamAMessageCameOutOn(t *testing.T) {
 		{Result{Stdout: "a", Stderr: "oops", Status: 1}, "`a` **2>** `oops` *(status 1)*"},
 		{Result{Status: 2}, "*(no output, status 2)*"},
 		{Result{TimedOut: true, Status: -1}, "*(timeout)*"},
+		// A signal death is named rather than given the -1 that stands for
+		// the exit status it does not have.
+		{Result{Status: -1, Signal: syscall.SIGTERM}, "*(no output, killed by signal 15 (terminated))*"},
+		{Result{Stdout: "a", Status: -1, Signal: syscall.SIGINT}, "`a` *(killed by signal 2 (interrupt))*"},
 	} {
 		if got := cell(tc.in); got != tc.want {
 			t.Errorf("cell(%+v) = %q, want %q", tc.in, got, tc.want)
 		}
+	}
+}
+
+// TestExecRecordsWhichSignalKilledTheShell: an exit status and a signal death
+// are alternatives in a wait status, so Go answers -1 for the exit status of a
+// process a signal ended. Without the signal beside it every death looked the
+// same in the record, and a shell's whole exit-on-signal discipline — dying of
+// the signal rather than exiting with 128 plus its number — was unrecordable.
+//
+// The shell kills *itself*, so nothing here touches this process's own signal
+// dispositions: those are process-wide and survive an exec, and changing one
+// in a test has broken unrelated runs before.
+func TestExecRecordsWhichSignalKilledTheShell(t *testing.T) {
+	found, _ := Resolve(context.Background())
+	if len(found) == 0 {
+		t.Skip("no reference shells on this machine")
+	}
+	for _, tc := range []struct {
+		name    string
+		snippet string
+		want    syscall.Signal
+	}{
+		{"terminated", `kill -TERM $$`, syscall.SIGTERM},
+		// A second one, because a field that always held the same number
+		// would pass a test that only ever asked about one signal.
+		{"killed outright", `kill -KILL $$`, syscall.SIGKILL},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Exec(context.Background(), found[0], Case{ID: "t", Snippet: tc.snippet})
+			if got.Signal != tc.want {
+				t.Errorf("Signal = %v, want %v", got.Signal, tc.want)
+			}
+			if got.Status != -1 {
+				t.Errorf("Status = %d, want the -1 that says there is no exit status", got.Status)
+			}
+		})
+	}
+	// And a shell that ends by itself carries no signal, so zero really does
+	// mean "not killed" rather than "not recorded".
+	got := Exec(context.Background(), found[0], Case{ID: "t", Snippet: `exit 3`})
+	if got.Signal != 0 || got.Status != 3 {
+		t.Errorf("an ordinary exit = status %d signal %v, want status 3 and no signal", got.Status, got.Signal)
+	}
+}
+
+// TestATimeoutIsNotASignalDeath: both answer -1 for the exit status, which is
+// how a shell that hung could be recorded as one that was killed. The signal
+// is what tells them apart, and it is what a case grading an implementation
+// compares.
+func TestATimeoutIsNotASignalDeath(t *testing.T) {
+	timedOut := Result{Status: -1, TimedOut: true}
+	killed := Result{Status: -1, Signal: syscall.SIGTERM}
+	if timedOut == killed {
+		t.Fatal("a timeout and a signal death are the same record")
+	}
+	if describe(timedOut) == describe(killed) {
+		t.Errorf("both read as %q", describe(killed))
+	}
+}
+
+// TestConformanceGradesHowARunEnded: three ways of not having an exit status
+// — killed by one signal, killed by another, and never finishing — agree on
+// every other field, so grading on the status alone scores them as the same
+// behavior.
+func TestConformanceGradesHowARunEnded(t *testing.T) {
+	term := Result{Status: -1, Signal: syscall.SIGTERM}
+	for _, tc := range []struct {
+		name  string
+		other Result
+		want  bool
+	}{
+		{"the same death", Result{Status: -1, Signal: syscall.SIGTERM}, true},
+		{"a different signal", Result{Status: -1, Signal: syscall.SIGINT}, false},
+		{"a run that never finished", Result{Status: -1, TimedOut: true}, false},
+		{"an exit that says the same number", Result{Status: -1}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.other.Stdout != term.Stdout || tc.other.Stderr != term.Stderr ||
+				tc.other.Status != term.Status {
+				t.Fatal("the fixture no longer isolates how the run ended")
+			}
+			if got := matches(term, tc.other); got != tc.want {
+				t.Errorf("matches = %v, want %v", got, tc.want)
+			}
+			if got := sameOutcome(term, tc.other); got != tc.want {
+				t.Errorf("sameOutcome = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 

@@ -50,6 +50,9 @@ func Dialect() syntax.Dialect {
 	// $i; i=$((i+1)) }` counts up without stopping here, which is what says
 	// so.
 	d.ShortLoop = true
+	// The same reach: a body may have nothing in it — `{ }`, `( )`, `while
+	// cond; do done`, and a condition too. Every shape, and this shell alone.
+	d.EmptyCompoundBody = true
 	// Floating point, which POSIX has not and these two do.
 	d.ArithFloat = true
 	// A bare `(a|b)` inside a pattern word, which makes `@(abc|xyz)` a
@@ -266,6 +269,9 @@ func Semantics() interp.Semantics {
 	s.PrintfEmptyIsNotANumber = interp.No
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfBackslashC = interp.PrintfBackslashCStops
+	// One of `h`, `l` and `L`, which is C89's set: `%ld` is a decimal and
+	// `%lld`, `%zX` and `%jd` are invalid directives.
+	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC89
 	// No `%(fmt)T`: `%(` is a directive this shell does not have.
 	s.PrintfTimeConversion = interp.No
 	s.PrintfQuote = interp.PrintfQuoteBackslash

@@ -343,3 +343,28 @@ func TestAuthenticateNamesTheMethodId(t *testing.T) {
 		t.Errorf("authenticate = %v, want methodId", got)
 	}
 }
+
+// The elicitation capability is an object per mode, and a mode that is not
+// served is *absent* rather than written false. That is the schema's own way
+// of saying it — supplying `{}` is the claim, omitting it is not — so a
+// struct written always would claim the capability and then name no mode
+// inside it, which is a shape an agent has to guess about.
+func TestElicitationModesAreClaimedByPresence(t *testing.T) {
+	t.Parallel()
+	got := encode(t, acp.ClientCapabilities{
+		Elicitation: &acp.ElicitationCapabilities{Form: &acp.ElicitationMode{}},
+	})
+	e, ok := got["elicitation"].(map[string]any)
+	if !ok {
+		t.Fatalf("clientCapabilities = %v, want an elicitation object", got)
+	}
+	if _, ok := e["form"]; !ok {
+		t.Errorf("elicitation = %v, want the form mode claimed", e)
+	}
+	if _, ok := e["url"]; ok {
+		t.Errorf("elicitation = %v, want no url mode where none is served", e)
+	}
+	if _, ok := encode(t, acp.ClientCapabilities{})["elicitation"]; ok {
+		t.Error("elicitation was claimed by a client that serves none")
+	}
+}

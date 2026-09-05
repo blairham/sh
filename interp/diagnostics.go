@@ -831,6 +831,17 @@ type Diagnostics struct {
 	// with every message.
 	UnsetFunctionNotFound string
 
+	// UnsetNotAnArray is what `unset a[@]` says when the name holds a value
+	// that is not an array. One verb: the name.
+	//
+	// Only the shell that answers UnsetArrayAtRemovesEveryElement has
+	// anything to say here, and it is the same in both builds measured: the
+	// spelling means "take every element away" and a scalar has none to take,
+	// so it is refused rather than emptied. The shell that leaves one empty
+	// element instead treats a scalar as the single element it is and empties
+	// it without a word, so it words nothing.
+	UnsetNotAnArray string
+
 	// ExpansionFailureStatusFromCommandString is what a shell exits with when
 	// an expansion failed *and the program came from an argument* — `-c` —
 	// rather than from a file or standard input.

@@ -220,12 +220,17 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `array/assigning-through-an-expression-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[Q]~[x][y][Q] n=3` | `[Q]~[x][y][Q] n=3` | `[Q]~[x][y][Q] n=3` | `[Q]~[x][y][Q] n=3` | `[y]~[x][y] n=2` |
 | `array/unsetting-an-element-by-expression` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][y] n=2` | `[x][y] n=2` | `[x][y] n=2` | `[x][y] n=2` | `[x][][z] n=3` |
 | `array/an-unset-operand-subscript-expands` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][z]` | `[x][z]` | `[x][z]` | `[x][y][z]` **2>** `<shell>: unset: $i: arithmetic syntax error` | `[][y][z]` |
+| `array/unsetting-every-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[] n=0` | `[] n=0` | `[] n=0` | `[p][q][r] n=3` **2>** `<shell>: unset: @: arithmetic syntax error` | `[] n=1` |
+| `array/unsetting-every-element-with-a-star` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[] n=0` | `[] n=0` | `[] n=0` | `[p][q][r] n=3` **2>** `<shell>: unset: *: arithmetic syntax error` | `[] n=1` |
+| `array/unsetting-every-element-then-appending` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[z] n=1` | `[z] n=1` | `[z] n=1` | `[p][q][z] n=3` **2>** `<shell>: unset: @: arithmetic syntax error` | `[][z] n=2` |
+| `array/unsetting-every-element-of-a-scalar` | **2>** `<shell>: 1: unset: a[@]: bad variable name` *(status 2)* | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 0: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: unset: @: arithmetic syntax error` | `st=0 []` |
 | `array/a-quoted-gap-is-one-field` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=3` | `n=3` | `n=3` | `n=3` | `n=3` |
 | `array/a-quoted-gap-keeps-its-place` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][][y]` | `[x][][y]` | `[x][][y]` | `[x][][y]` | `[][x][y]` |
 | `array/an-unquoted-gap-is-no-field` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=2` | `n=2` | `n=2` | `n=2` | `n=2` |
 | `array/a-subscript-on-a-name-that-is-no-array` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `n=1` | `n=1` | `n=1` | `n=1` | `n=1` |
 | `array/a-quoted-empty-array-is-not-the-same-question` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=0` | `n=0` | `n=0` | `n=1` | `n=0` |
 | `array/a-quoted-empty-array-with-a-star` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=1` | `n=1` | `n=1` | `n=1` | `n=1` |
+| `assoc/unsetting-at-is-a-key-and-not-every-element` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: m[j]=w: not found~<shell>: 1: unset: m[@]: bad variable name` *(status 2)* | `n=2` | `n=2` | `n=0` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `n=2` | `n=2` |
 | `assoc/a-missing-key-quoted-is-one-field` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: Bad substitution` *(status 2)* | `n=1` | `n=1` | `n=1` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `n=1` | `n=1` |
 | `assoc/a-string-subscript` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: Bad substitution` *(status 2)* | `v k` | `v k` | `v 0` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `v k` | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `assoc/the-subscript-is-not-arithmetic` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[1+1]=x: not found~<shell>: 1: Bad substitution` *(status 2)* | `[x]` | `[x]` | `[x]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[x]` | `[x]` |
@@ -486,6 +491,22 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
   ```sh
   a=(x y z); i=1; unset 'a[$i]'; printf "[%s]" "${a[@]}"; echo
   ```
+- `array/unsetting-every-element` — the spelling that starts a list over, and it did nothing at all: `@` is not an arithmetic expression, so the subscript failed to evaluate and the element nobody named was quietly not removed — the array came back with every element in place at status 0. Three answers among the shells that have arrays, which is why it is a policy and not a switch: bash empties it, zsh replaces the elements with a single empty one, and ksh93 has no such reading at all and reports the operand as a bad subscript with the array untouched
+  ```sh
+  a=(p q r); unset "a[@]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/unsetting-every-element-with-a-star` — the star is the at here, which is worth pinning because the two part company elsewhere — a quoted `${a[*]}` joins where `${a[@]}` splits. Every column answers this exactly as it answers the `[@]` spelling, so the case exists to say the two are one question rather than to record a difference
+  ```sh
+  a=(p q r); unset "a[*]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/unsetting-every-element-then-appending` — where the next append lands, which is what shows the difference between the two shells that clear rather than only counting it: bash has nothing left and `z` is the whole array, zsh has one empty element left and `z` goes after it. A count alone cannot tell an emptied array from one holding a single empty string, and a script that resets a list and pushes onto it sees the difference on the first read
+  ```sh
+  a=(p q); unset "a[@]"; a+=(z); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/unsetting-every-element-of-a-scalar` — the same spelling on a name that is no array, which is where the two readings show what they mean: bash means take every element away, a scalar has none, and it refuses and says so at 1; zsh means the span becomes one empty string, a scalar is one such span, and it comes back empty at 0. ksh93 reports its bad subscript and leaves the value alone. Nobody turns the scalar into an array
+  ```sh
+  a=hello; unset "a[@]"; echo "st=$? [$a]"
+  ```
 - `array/a-quoted-gap-is-one-field` — quoting guarantees exactly one field, and it does not stop guaranteeing it because the element is not there — an unassigned subscript in quotes is one empty field, the same as `"$unset"`, unanimously in the three with arrays. It produced no field at all, so the count came back 2 and every argument after the gap moved up one: the script keeps running with everything off by one, which is the worst shape a wrong answer takes
   ```sh
   a=(x); a[5]=y; set -- "${a[0]}" "${a[1]}" "${a[5]}"; echo "n=$#"
@@ -509,6 +530,10 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `array/a-quoted-empty-array-with-a-star` — `[*]` joins, so a quoted one is a single field whether or not there is anything to join — one, unanimously, where `[@]` splits the panel. The two spellings differing on an empty array is the sharpest statement that the star is not the at
   ```sh
   a=(); set -- "${a[*]}"; echo "n=$#"
+  ```
+- `assoc/unsetting-at-is-a-key-and-not-every-element` — the whole-array reading belongs to the indexed array alone. With the attribute on, `@` is a key like any other and nothing was stored under it, so all three that have the attribute leave both elements where they are — including the two that clear an indexed array through the same spelling. It is the boundary a fix is likeliest to cross by accident, because the two kinds share a builtin and an operand shape
+  ```sh
+  typeset -A m; m[k]=v; m[j]=w; unset "m[@]"; echo "n=${#m[@]}"
   ```
 - `assoc/a-missing-key-quoted-is-one-field` — the same guarantee where the subscript is a key rather than an index: a key nothing was stored under is one empty field in quotes, in all three that have the attribute. The declared path had its own reading of an absent element and gave no field either
   ```sh

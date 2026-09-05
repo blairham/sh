@@ -287,6 +287,11 @@ func Semantics() interp.Semantics {
 	s.UnsetNameOperands = interp.AnythingIsAName
 	s.DeclarationTakesASubscript = interp.No
 	s.UnsetTakesASubscript = interp.Yes
+	// `unset a[@]` empties the array: `a=(x y z)` comes back with no elements
+	// and `${#a[@]}` is 0. Measured in both bash builds, and the same for
+	// `a[*]`. A name that holds a scalar is refused rather than emptied, and
+	// one that holds nothing at all is quietly left alone.
+	s.UnsetArrayAt = interp.UnsetArrayAtRemovesEveryElement
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No
@@ -437,9 +442,11 @@ func Diagnostics() interp.Diagnostics {
 		UnboundVariable:         "%s: unbound variable",
 		UnboundPositional:       "$%s: unbound variable",
 		NumericArgument:         "%[1]s: %[2]s: numeric argument required",
-		ArithError:              `%[1]s: %[2]s (error token is "%[3]s")`,
-		DivisionByZero:          "division by 0",
-		ArithNegativeExponent:   "exponent less than 0",
+		// `unset a[@]` where `a` holds a scalar. Identical in bash 3.2.
+		UnsetNotAnArray:       "unset: %[1]s: not an array variable",
+		ArithError:            `%[1]s: %[2]s (error token is "%[3]s")`,
+		DivisionByZero:        "division by 0",
+		ArithNegativeExponent: "exponent less than 0",
 
 		// bash reserves its generic arithmetic wording for operands that are
 		// not literals, so a bad digit gets a reason of its own.

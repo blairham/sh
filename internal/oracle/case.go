@@ -2165,6 +2165,26 @@ var Corpus = []Case{
 		Why:     "the operand reached `unset` unexpanded — it was in single quotes — and two of the three still substitute into it, because an arithmetic expression is expanded before it is read wherever one is written. ksh93 does not and says so, which is the divergence worth having recorded rather than discovered",
 	},
 	{
+		ID: "array/unsetting-every-element", Category: "expansion",
+		Snippet: `a=(p q r); unset "a[@]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the spelling that starts a list over, and it did nothing at all: `@` is not an arithmetic expression, so the subscript failed to evaluate and the element nobody named was quietly not removed — the array came back with every element in place at status 0. Three answers among the shells that have arrays, which is why it is a policy and not a switch: bash empties it, zsh replaces the elements with a single empty one, and ksh93 has no such reading at all and reports the operand as a bad subscript with the array untouched",
+	},
+	{
+		ID: "array/unsetting-every-element-with-a-star", Category: "expansion",
+		Snippet: `a=(p q r); unset "a[*]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the star is the at here, which is worth pinning because the two part company elsewhere — a quoted `${a[*]}` joins where `${a[@]}` splits. Every column answers this exactly as it answers the `[@]` spelling, so the case exists to say the two are one question rather than to record a difference",
+	},
+	{
+		ID: "array/unsetting-every-element-then-appending", Category: "expansion",
+		Snippet: `a=(p q); unset "a[@]"; a+=(z); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "where the next append lands, which is what shows the difference between the two shells that clear rather than only counting it: bash has nothing left and `z` is the whole array, zsh has one empty element left and `z` goes after it. A count alone cannot tell an emptied array from one holding a single empty string, and a script that resets a list and pushes onto it sees the difference on the first read",
+	},
+	{
+		ID: "array/unsetting-every-element-of-a-scalar", Category: "expansion",
+		Snippet: `a=hello; unset "a[@]"; echo "st=$? [$a]"`,
+		Why:     "the same spelling on a name that is no array, which is where the two readings show what they mean: bash means take every element away, a scalar has none, and it refuses and says so at 1; zsh means the span becomes one empty string, a scalar is one such span, and it comes back empty at 0. ksh93 reports its bad subscript and leaves the value alone. Nobody turns the scalar into an array",
+	},
+	{
 		ID: "param/a-substring-offset-is-an-expression", Category: "parameter expansion",
 		Snippet: `x=abcdef; echo "[${x:1+1:2}]"`,
 		Why:     "the same numeral-only reading, reached through the substring rather than through a subscript: unanimous in all four with substrings, and taking the numeral alone gave an offset of 0 — `ab`, which is a real substring of the right length and so looks like an answer rather than a failure",
@@ -2198,6 +2218,11 @@ var Corpus = []Case{
 		ID: "array/a-quoted-empty-array-with-a-star", Category: "expansion",
 		Snippet: `a=(); set -- "${a[*]}"; echo "n=$#"`,
 		Why:     "`[*]` joins, so a quoted one is a single field whether or not there is anything to join — one, unanimously, where `[@]` splits the panel. The two spellings differing on an empty array is the sharpest statement that the star is not the at",
+	},
+	{
+		ID: "assoc/unsetting-at-is-a-key-and-not-every-element", Category: "expansion",
+		Snippet: `typeset -A m; m[k]=v; m[j]=w; unset "m[@]"; echo "n=${#m[@]}"`,
+		Why:     "the whole-array reading belongs to the indexed array alone. With the attribute on, `@` is a key like any other and nothing was stored under it, so all three that have the attribute leave both elements where they are — including the two that clear an indexed array through the same spelling. It is the boundary a fix is likeliest to cross by accident, because the two kinds share a builtin and an operand shape",
 	},
 	{
 		ID: "assoc/a-missing-key-quoted-is-one-field", Category: "expansion",

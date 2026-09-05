@@ -532,6 +532,18 @@ type Semantics struct {
 	// looked for and run.
 	CommandNotFoundStatusIsNotFound Answer
 
+	// SubshellJobTable is what a subshell sees of the jobs its parent
+	// started. Three answers, and neither of the two-way splits it contains
+	// is the same pair:
+	//
+	//	sleep 1 & jobs -p | cat; echo T    bash, ksh93 → the pid   dash, zsh → nothing
+	//	sleep 1 & (jobs -p); echo T        ksh93 → the pid         bash, dash, zsh → nothing
+	//
+	// so no single yes-or-no can hold both rows for bash. See
+	// SubshellJobsKeptOutsideACompound for what bash is doing and for the
+	// part of it that is measured and not modeled.
+	SubshellJobTable SubshellJobTable
+
 	// SetFTurnsOffGlobbing makes `set -f` the short spelling of `set -o
 	// noglob`. True in bash, dash and ksh93. zsh spells that option the long
 	// way only: there `-f` is about startup files and leaves globbing alone,

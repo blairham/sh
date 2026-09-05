@@ -1626,6 +1626,31 @@ var Corpus = []Case{
 		Why:     "the refusal itself: four wordings, two of them with a usage line naming the letters that shell really does have, and 2 everywhere but zsh. An option silently ignored is the failure this pins against",
 	},
 	{
+		ID: "jobs/a-subshell-and-the-parents-jobs", Category: "builtins",
+		Snippet: `sleep 0.4 & first=$!; (jobs -p) >s.txt; x=; read x <s.txt; case $x in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "something else";; esac; wait`,
+		Why:     "ksh93 alone hands a subshell the jobs the shell around it started; bash, dash and zsh hand it an empty table. Through a file rather than by printing the id, because a process id is not the same twice — and with commands after the `( … )`, because a subshell that is the last thing a script does need not be a subshell at all: without them dash answers the parent's job instead",
+	},
+	{
+		ID: "jobs/a-pipeline-element-and-the-parents-jobs", Category: "builtins",
+		Snippet: `sleep 0.4 & first=$!; jobs -p | cat >s.txt; x=; read x <s.txt; case $x in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "something else";; esac; wait`,
+		Why:     "`jobs -p | cat` is the idiom the question is really about, and it splits the panel differently from the row above: bash and ksh93 list the parent's job here, dash and zsh list nothing. Two rows, two different pairs, which is why one yes-or-no cannot hold both",
+	},
+	{
+		ID: "jobs/a-group-in-a-pipeline-and-the-parents-jobs", Category: "builtins",
+		Snippet: `sleep 0.4 & first=$!; { jobs -p; } | cat >s.txt; x=; read x <s.txt; case $x in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "something else";; esac; wait`,
+		Why:     "the same pipeline with braces around the same builtin, and bash changes its answer: a simple command as an element keeps the parent's jobs there and a compound one does not. ksh93 still lists and dash and zsh still do not, so this is the row that says bash's answer is neither of the other two",
+	},
+	{
+		ID: "jobs/a-substitution-and-the-parents-jobs", Category: "builtins",
+		Snippet: `sleep 0.4 & first=$!; case "$(jobs -p)" in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "something else";; esac; wait`,
+		Why:     "command substitution goes with the simple pipeline element rather than with the parentheses it is written like — bash and ksh93 list, dash and zsh do not. `cat <(jobs -p)` is measured the same way in the three shells that have it",
+	},
+	{
+		ID: "jobs/a-subshell-lists-a-job-it-started-itself", Category: "builtins",
+		Snippet: `sleep 0.4 & first=$!; (sleep 0.4 & jobs -p >s.txt; wait); x=; read x <s.txt; case $x in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "its own";; esac; wait`,
+		Why:     "the control for all four rows above: whatever a shell hands a subshell of the parent's table, a job the subshell starts for itself is listed there — unanimously. Without it an empty listing would be evidence that `jobs` does not work in a subshell rather than that the table is emptied on the way in",
+	},
+	{
 		ID: "jobs/two-job-specs-in-the-order-written", Category: "builtins",
 		Snippet: `sleep 0.4 & sleep 0.5 & jobs %2 %1; wait`,
 		Why:     "operands settle the order themselves — `%2 %1` lists 2 then 1 in all five, including the two whose bare listing starts from the newest — and each row keeps the job's own number rather than counting from the start of the listing",

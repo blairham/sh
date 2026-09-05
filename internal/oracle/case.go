@@ -1170,6 +1170,16 @@ var Corpus = []Case{
 		Why:     "the one fatal signal the panel disagrees about: bash 5.3 and zsh take QUIT's default action away and print after with status 0, where dash, ksh93 — and bash 3.2, so the two bash columns differ — are killed by it. Measured with a signal from another process too, so it is a disposition rather than a deferral, and it disappears with `-i`, where all five ignore it",
 	},
 	{
+		ID: "signal-death/hangup-is-an-exit-in-one-shell", Category: "traps and exit",
+		Snippet: `kill -HUP $$; echo after`,
+		Why:     "the second fatal signal the panel disagrees about, and the only other one: zsh reports 1 where bash, dash and ksh93 are killed by SIGHUP and report 129. Nothing prints after it anywhere, so the disagreement is about how the shell ended rather than about whether it did — and 1 is not 128 plus anything, which is the first sign that zsh is exiting rather than dying. Measured across all nineteen signals whose default action ends a process: this and QUIT are the whole of the split",
+	},
+	{
+		ID: "signal-death/a-hangup-that-exits-runs-the-exit-trap", Category: "traps and exit",
+		Snippet: `trap 'echo bye' EXIT; kill -HUP $$; echo after`,
+		Why:     "what says the row above is an exit and not merely a different number. zsh does not run the EXIT trap when a signal kills it — `trap 'echo bye' EXIT; kill -TERM $$` prints nothing there — and it prints bye here, so SIGHUP produced no death for that question to be asked about. bash and ksh93 print bye because dying counts as exiting for them, and dash prints nothing for either signal, which is why the trap alone cannot tell the two apart and the status beside it can",
+	},
+	{
 		ID: "signal-death/a-handled-signal-is-not-a-death", Category: "traps and exit",
 		Snippet: `trap "echo caught" TERM; kill -TERM $$; echo after`,
 		Why:     "the control: the same signal with a trap for it runs the handler and the shell carries on to exit normally, so the two rows above are about the *absence* of a handler rather than about the signal arriving",
@@ -2168,6 +2178,41 @@ var Corpus = []Case{
 		ID: "param/a-substring-offset-is-an-expression", Category: "parameter expansion",
 		Snippet: `x=abcdef; echo "[${x:1+1:2}]"`,
 		Why:     "the same numeral-only reading, reached through the substring rather than through a subscript: unanimous in all four with substrings, and taking the numeral alone gave an offset of 0 — `ab`, which is a real substring of the right length and so looks like an answer rather than a failure",
+	},
+	{
+		ID: "array/a-quoted-gap-is-one-field", Category: "expansion",
+		Snippet: `a=(x); a[5]=y; set -- "${a[0]}" "${a[1]}" "${a[5]}"; echo "n=$#"`,
+		Why:     "quoting guarantees exactly one field, and it does not stop guaranteeing it because the element is not there — an unassigned subscript in quotes is one empty field, the same as `\"$unset\"`, unanimously in the three with arrays. It produced no field at all, so the count came back 2 and every argument after the gap moved up one: the script keeps running with everything off by one, which is the worst shape a wrong answer takes",
+	},
+	{
+		ID: "array/a-quoted-gap-keeps-its-place", Category: "expansion",
+		Snippet: `a=(x); a[5]=y; printf "[%s]" "${a[0]}" "${a[1]}" "${a[5]}"; echo`,
+		Why:     "the same three expansions read as arguments rather than counted, which is what shows *where* the missing field was: the empty one is between the two that are there. A count alone cannot say that, and the shifting is the whole harm. zsh puts the gap first because its first element is 1",
+	},
+	{
+		ID: "array/an-unquoted-gap-is-no-field", Category: "expansion",
+		Snippet: `a=(x); a[5]=y; set -- ${a[0]} ${a[1]} ${a[5]}; echo "n=$#"`,
+		Why:     "the other side, and the reason the first is about quoting rather than about arrays: unquoted, an empty expansion is no field at all and the count is 2 in all three. The pair is what says the rule is `\"$x\"` versus `$x` applied to an element",
+	},
+	{
+		ID: "array/a-subscript-on-a-name-that-is-no-array", Category: "expansion",
+		Snippet: `set -- "${b[3]}"; echo "n=$#"`,
+		Why:     "a subscript may be written on a name that was never an array, and quoted it is still one empty field rather than none — the same guarantee reached without any array at all, so a fix that only counted gaps inside one would miss it",
+	},
+	{
+		ID: "array/a-quoted-empty-array-is-not-the-same-question", Category: "expansion",
+		Snippet: `a=(); set -- "${a[@]}"; echo "n=$#"`,
+		Why:     "how many fields an empty *list* makes is a dialect's answer — two shells say none and ksh93 says one, which is why careful scripts write `\"${a[@]+\"${a[@]}\"}\"`. It is recorded next to the gap cases because the two were being answered by one test: asking this axis about a single subscript is what made a gap disappear, and only this spelling is entitled to ask it",
+	},
+	{
+		ID: "array/a-quoted-empty-array-with-a-star", Category: "expansion",
+		Snippet: `a=(); set -- "${a[*]}"; echo "n=$#"`,
+		Why:     "`[*]` joins, so a quoted one is a single field whether or not there is anything to join — one, unanimously, where `[@]` splits the panel. The two spellings differing on an empty array is the sharpest statement that the star is not the at",
+	},
+	{
+		ID: "assoc/a-missing-key-quoted-is-one-field", Category: "expansion",
+		Snippet: `typeset -A m; m[k]=v; set -- "${m[nokey]}"; echo "n=$#"`,
+		Why:     "the same guarantee where the subscript is a key rather than an index: a key nothing was stored under is one empty field in quotes, in all three that have the attribute. The declared path had its own reading of an absent element and gave no field either",
 	},
 	{
 		ID: "cmd/a-name-broken-by-an-expansion", Category: "commands",
@@ -5186,6 +5231,16 @@ cat pf`,
 		ID: "redir/closing-through-a-name-that-holds-nothing", Category: "redirection",
 		Snippet: `exec {nofd}>&-; echo "st=$?"`,
 		Why:     "bash calls it an ambiguous redirect and zsh says the parameter holds no descriptor, both with 1; ksh93 says nothing at all and reports success",
+	},
+	{
+		ID: "redir/the-picked-descriptors-name-may-be-an-element", Category: "redirection",
+		Snippet: `exec {a[1]}>f; echo "a1=${a[1]}"; echo written >&${a[1]}; exec {a[1]}>&-; cat f`,
+		Why:     "the name inside the braces may be a subscripted one, and the panel splits three ways rather than two: bash 5.3 and ksh93 open the file and leave the number in the element, bash 3.2 and dash have no `{name}` token at all, and zsh has one and still will not take a subscript in it — the braces stay a word there, and a word with brackets is a pattern, so zsh reports no matches. Subscript 1 rather than 0 deliberately: it names the first element in every shell with arrays, so zsh's column is about the token and not about the array base",
+	},
+	{
+		ID: "redir/closing-a-descriptor-through-an-element", Category: "redirection",
+		Snippet: `exec 3>f; a[1]=3; exec {a[1]}>&-; echo "st=$?"; echo x >&3; echo "after=$?"; cat f`,
+		Why:     "the same three-way split on the closing form, which is the one scripts reach for: `exec {COPROC[1]}>&-` is how a coprocess is told its input has ended, and the workaround for a shell without it is a scalar copied out of the element first. The write afterwards is what proves the close happened rather than being reported",
 	},
 	{
 		ID: "jobs/bg-with-no-job-control", Category: "commands",

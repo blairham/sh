@@ -220,6 +220,13 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `array/assigning-through-an-expression-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[Q]~[x][y][Q] n=3` | `[Q]~[x][y][Q] n=3` | `[Q]~[x][y][Q] n=3` | `[Q]~[x][y][Q] n=3` | `[y]~[x][y] n=2` |
 | `array/unsetting-an-element-by-expression` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][y] n=2` | `[x][y] n=2` | `[x][y] n=2` | `[x][y] n=2` | `[x][][z] n=3` |
 | `array/an-unset-operand-subscript-expands` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][z]` | `[x][z]` | `[x][z]` | `[x][y][z]` **2>** `<shell>: unset: $i: arithmetic syntax error` | `[][y][z]` |
+| `array/a-quoted-gap-is-one-field` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=3` | `n=3` | `n=3` | `n=3` | `n=3` |
+| `array/a-quoted-gap-keeps-its-place` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][][y]` | `[x][][y]` | `[x][][y]` | `[x][][y]` | `[][x][y]` |
+| `array/an-unquoted-gap-is-no-field` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=2` | `n=2` | `n=2` | `n=2` | `n=2` |
+| `array/a-subscript-on-a-name-that-is-no-array` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `n=1` | `n=1` | `n=1` | `n=1` | `n=1` |
+| `array/a-quoted-empty-array-is-not-the-same-question` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=0` | `n=0` | `n=0` | `n=1` | `n=0` |
+| `array/a-quoted-empty-array-with-a-star` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=1` | `n=1` | `n=1` | `n=1` | `n=1` |
+| `assoc/a-missing-key-quoted-is-one-field` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: Bad substitution` *(status 2)* | `n=1` | `n=1` | `n=1` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `n=1` | `n=1` |
 | `assoc/a-string-subscript` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: Bad substitution` *(status 2)* | `v k` | `v k` | `v 0` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `v k` | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `assoc/the-subscript-is-not-arithmetic` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[1+1]=x: not found~<shell>: 1: Bad substitution` *(status 2)* | `[x]` | `[x]` | `[x]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[x]` | `[x]` |
 | `assoc/values-in-some-order` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[b]=2: not found~<shell>: 1: m[a]=1: not found~<shell>: 1: Bad substitution~<shell>: 1: Bad substitution` *(status 2)* | `1 2 n=2` | `1 2 n=2` | `1 n=1` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `1 2 n=2` | `1 2 n=2` |
@@ -478,6 +485,34 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `array/an-unset-operand-subscript-expands` — the operand reached `unset` unexpanded — it was in single quotes — and two of the three still substitute into it, because an arithmetic expression is expanded before it is read wherever one is written. ksh93 does not and says so, which is the divergence worth having recorded rather than discovered
   ```sh
   a=(x y z); i=1; unset 'a[$i]'; printf "[%s]" "${a[@]}"; echo
+  ```
+- `array/a-quoted-gap-is-one-field` — quoting guarantees exactly one field, and it does not stop guaranteeing it because the element is not there — an unassigned subscript in quotes is one empty field, the same as `"$unset"`, unanimously in the three with arrays. It produced no field at all, so the count came back 2 and every argument after the gap moved up one: the script keeps running with everything off by one, which is the worst shape a wrong answer takes
+  ```sh
+  a=(x); a[5]=y; set -- "${a[0]}" "${a[1]}" "${a[5]}"; echo "n=$#"
+  ```
+- `array/a-quoted-gap-keeps-its-place` — the same three expansions read as arguments rather than counted, which is what shows *where* the missing field was: the empty one is between the two that are there. A count alone cannot say that, and the shifting is the whole harm. zsh puts the gap first because its first element is 1
+  ```sh
+  a=(x); a[5]=y; printf "[%s]" "${a[0]}" "${a[1]}" "${a[5]}"; echo
+  ```
+- `array/an-unquoted-gap-is-no-field` — the other side, and the reason the first is about quoting rather than about arrays: unquoted, an empty expansion is no field at all and the count is 2 in all three. The pair is what says the rule is `"$x"` versus `$x` applied to an element
+  ```sh
+  a=(x); a[5]=y; set -- ${a[0]} ${a[1]} ${a[5]}; echo "n=$#"
+  ```
+- `array/a-subscript-on-a-name-that-is-no-array` — a subscript may be written on a name that was never an array, and quoted it is still one empty field rather than none — the same guarantee reached without any array at all, so a fix that only counted gaps inside one would miss it
+  ```sh
+  set -- "${b[3]}"; echo "n=$#"
+  ```
+- `array/a-quoted-empty-array-is-not-the-same-question` — how many fields an empty *list* makes is a dialect's answer — two shells say none and ksh93 says one, which is why careful scripts write `"${a[@]+"${a[@]}"}"`. It is recorded next to the gap cases because the two were being answered by one test: asking this axis about a single subscript is what made a gap disappear, and only this spelling is entitled to ask it
+  ```sh
+  a=(); set -- "${a[@]}"; echo "n=$#"
+  ```
+- `array/a-quoted-empty-array-with-a-star` — `[*]` joins, so a quoted one is a single field whether or not there is anything to join — one, unanimously, where `[@]` splits the panel. The two spellings differing on an empty array is the sharpest statement that the star is not the at
+  ```sh
+  a=(); set -- "${a[*]}"; echo "n=$#"
+  ```
+- `assoc/a-missing-key-quoted-is-one-field` — the same guarantee where the subscript is a key rather than an index: a key nothing was stored under is one empty field in quotes, in all three that have the attribute. The declared path had its own reading of an absent element and gave no field either
+  ```sh
+  typeset -A m; m[k]=v; set -- "${m[nokey]}"; echo "n=$#"
   ```
 - `assoc/a-string-subscript` — the declaration that turns a subscript from an expression into a key. bash and ksh93 store under the letter and answer it back; zsh has the arrays but rejects `${!m[@]}` outright; dash has none of it — the issue's own snippet, spelled with the name all three declarers share
   ```sh
@@ -2416,6 +2451,8 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `signal-death/a-signal-with-no-meaning-of-its-own-is-fatal-too` | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* |
 | `signal-death/dying-by-a-signal-says-nothing` | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* |
 | `signal-death/quit-is-not-fatal-in-every-shell` | *(no output, killed by signal 3 (quit))* | `after` | `after` | *(no output, killed by signal 3 (quit))* | *(no output, killed by signal 3 (quit))* | `after` |
+| `signal-death/hangup-is-an-exit-in-one-shell` | *(no output, killed by signal 1 (hangup))* | *(no output, killed by signal 1 (hangup))* | *(no output, killed by signal 1 (hangup))* | *(no output, killed by signal 1 (hangup))* | *(no output, killed by signal 1 (hangup))* | *(no output, status 1)* |
+| `signal-death/a-hangup-that-exits-runs-the-exit-trap` | *(no output, killed by signal 1 (hangup))* | `bye` *(killed by signal 1 (hangup))* | `bye` *(killed by signal 1 (hangup))* | `bye` *(killed by signal 1 (hangup))* | `bye` *(killed by signal 1 (hangup))* | `bye` *(status 1)* |
 | `signal-death/a-handled-signal-is-not-a-death` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
 | `signal-death/an-ordinary-failure-is-untouched` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` |
 | `umask/reads-the-mask` | `0022` | `0022` | `0022` | `0022` | `0022` | `022` |
@@ -2524,6 +2561,14 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `signal-death/quit-is-not-fatal-in-every-shell` — the one fatal signal the panel disagrees about: bash 5.3 and zsh take QUIT's default action away and print after with status 0, where dash, ksh93 — and bash 3.2, so the two bash columns differ — are killed by it. Measured with a signal from another process too, so it is a disposition rather than a deferral, and it disappears with `-i`, where all five ignore it
   ```sh
   kill -QUIT $$; echo after
+  ```
+- `signal-death/hangup-is-an-exit-in-one-shell` — the second fatal signal the panel disagrees about, and the only other one: zsh reports 1 where bash, dash and ksh93 are killed by SIGHUP and report 129. Nothing prints after it anywhere, so the disagreement is about how the shell ended rather than about whether it did — and 1 is not 128 plus anything, which is the first sign that zsh is exiting rather than dying. Measured across all nineteen signals whose default action ends a process: this and QUIT are the whole of the split
+  ```sh
+  kill -HUP $$; echo after
+  ```
+- `signal-death/a-hangup-that-exits-runs-the-exit-trap` — what says the row above is an exit and not merely a different number. zsh does not run the EXIT trap when a signal kills it — `trap 'echo bye' EXIT; kill -TERM $$` prints nothing there — and it prints bye here, so SIGHUP produced no death for that question to be asked about. bash and ksh93 print bye because dying counts as exiting for them, and dash prints nothing for either signal, which is why the trap alone cannot tell the two apart and the status beside it can
+  ```sh
+  trap 'echo bye' EXIT; kill -HUP $$; echo after
   ```
 - `signal-death/a-handled-signal-is-not-a-death` — the control: the same signal with a trap for it runs the handler and the shell carries on to exit normally, so the two rows above are about the *absence* of a handler rather than about the signal arriving
   ```sh
@@ -3693,6 +3738,8 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `redir/the-shell-picks-the-descriptor` | **2>** `<shell>: 1: exec: {fd}: not found` *(status 127)* | `hi` | `hi` | **2>** `<shell>: line 0: exec: {fd}: not found` *(status 127)* | `hi` | `hi` |
 | `redir/a-picked-descriptor-may-outlive-its-command` | **2>** `<shell>: 3: Syntax error: Bad fd number` *(status 2)* | `one~two` | `one~two` | `dead~one {fd}` **2>** `<shell>: line 1: $fd: ambiguous redirect` | `one~dead` **2>** `<shell>[2]: 10: cannot open [Bad file descriptor]` | `one~two` |
 | `redir/closing-through-a-name-that-holds-nothing` | **2>** `<shell>: 1: exec: {nofd}: not found` *(status 127)* | `st=1` **2>** `<shell>: line 1: nofd: ambiguous redirect` | **2>** `<shell>: line 1: nofd: ambiguous redirect` *(status 1)* | **2>** `<shell>: line 0: exec: {nofd}: not found` *(status 127)* | `st=0` | `st=1` **2>** `<shell>:1: parameter nofd does not contain a file descriptor` |
+| `redir/the-picked-descriptors-name-may-be-an-element` | **2>** `<shell>: 1: exec: {a[1]}: not found` *(status 127)* | `a1=10~written` | `a1=10~written` | **2>** `<shell>: line 0: exec: {a[1]}: not found` *(status 127)* | `a1=10~written` | **2>** `<shell>:1: no matches found: {a[1]}` *(status 1)* |
+| `redir/closing-a-descriptor-through-an-element` | **2>** `<shell>: 1: a[1]=3: not found~<shell>: 1: exec: {a[1]}: not found` *(status 127)* | `st=0~after=1` **2>** `<shell>: line 1: 3: Bad file descriptor` | `st=0~after=1` **2>** `<shell>: line 1: 3: Bad file descriptor` | **2>** `<shell>: line 0: exec: {a[1]}: not found` *(status 127)* | `st=0~after=1` **2>** `<shell>: 3: cannot open [Bad file descriptor]` | **2>** `<shell>:1: no matches found: {a[1]}` *(status 1)* |
 | `redir/noclobber-names-its-refusal` | `st=2` **2>** `<shell>: 1: cannot create f: File exists` | `st=1` **2>** `<shell>: line 1: f: cannot overwrite existing file` | `st=1` **2>** `<shell>: line 1: f: cannot overwrite existing file` | `st=1` **2>** `<shell>: f: cannot overwrite existing file` | `st=1` **2>** `<shell>: f: file already exists [File exists]` | `st=1` **2>** `<shell>:1: file exists: f` |
 
 - `procsub/reads-a-command-as-a-file` — `<(cmd)` runs cmd and expands to a path its output can be read from — the last of the core language, and the clearest case of a dialect being a runtime switch: bash 3.2 has it as `bash` and loses it as `sh`. dash has it in neither guise and reports the `(` as unexpected
@@ -3925,6 +3972,14 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `redir/closing-through-a-name-that-holds-nothing` — bash calls it an ambiguous redirect and zsh says the parameter holds no descriptor, both with 1; ksh93 says nothing at all and reports success
   ```sh
   exec {nofd}>&-; echo "st=$?"
+  ```
+- `redir/the-picked-descriptors-name-may-be-an-element` — the name inside the braces may be a subscripted one, and the panel splits three ways rather than two: bash 5.3 and ksh93 open the file and leave the number in the element, bash 3.2 and dash have no `{name}` token at all, and zsh has one and still will not take a subscript in it — the braces stay a word there, and a word with brackets is a pattern, so zsh reports no matches. Subscript 1 rather than 0 deliberately: it names the first element in every shell with arrays, so zsh's column is about the token and not about the array base
+  ```sh
+  exec {a[1]}>f; echo "a1=${a[1]}"; echo written >&${a[1]}; exec {a[1]}>&-; cat f
+  ```
+- `redir/closing-a-descriptor-through-an-element` — the same three-way split on the closing form, which is the one scripts reach for: `exec {COPROC[1]}>&-` is how a coprocess is told its input has ended, and the workaround for a shell without it is a scalar copied out of the element first. The write afterwards is what proves the close happened rather than being reported
+  ```sh
+  exec 3>f; a[1]=3; exec {a[1]}>&-; echo "st=$?"; echo x >&3; echo "after=$?"; cat f
   ```
 - `redir/noclobber-names-its-refusal` — the refusal is unanimous and the sentence is not: bash cannot overwrite an existing file, ksh93 says it already exists with the errno in brackets, dash and zsh word it as any other failed create
   ```sh

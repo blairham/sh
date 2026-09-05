@@ -228,6 +228,55 @@ the lexer still has it.
 Grammar flag: `FdVariableRedirections` — core: on; `posix` and `dash`:
 off.
 
+### The name in those braces may be an element
+
+`exec {a[1]}>&-` closes the descriptor that element holds, and that is
+the way a coprocess's feed is closed: the shell puts the near ends in an
+array, so the number to close is `${NAME[1]}` and never a scalar.
+
+The panel splits three ways rather than two (macOS, 2026-09-05, with a
+descriptor parked on 3 and the element holding 3):
+
+    exec 3>f; a[1]=3; exec {a[1]}>&-
+      bash 5.3   closes it — the write afterwards fails
+      ksh93      closes it
+      zsh        `no matches found: {a[1]}` — the braces are a word, and
+                 a word with brackets is a pattern; with globbing turned
+                 off it is `command not found: {a[1]}` instead
+      bash 3.2   `exec: {a[1]}: not found` — no `{name}` token at all
+      dash       the same, and no arrays either
+
+    exec {a[1]}>f; echo "${a[1]}"
+      bash 5.3 and ksh93 both answer 10 and leave the file open there
+
+Subscript 1 rather than 0 on purpose: it names the first element in every
+shell that has arrays, so zsh's column is about the token rather than
+about the array base — `a[0]=3` is `assignment to invalid subscript
+range` there, which would have looked like a refusal of this construct
+and is not one. The refusal is real, and it is the *construct's*: with
+`setopt noglob` zsh still reads the word as a command name.
+
+So this is not a consequence of having both `{name}` and subscripts —
+zsh has both and refuses — and it gets a flag of its own. The core is
+what bash 5.3, ksh93 and zsh agree on, which leaves this to the two that
+answer yes.
+
+The subscript is taken as written and never expanded, because the whole
+token becomes one literal: `{a[i]}` and `{a[i+1]}` are read, and
+`{a[$i]}` stays an ordinary word rather than quietly meaning the two
+characters. bash reads that last spelling and ksh93 takes the token and
+then refuses the `$` in the arithmetic, so no answer there is
+everyone's. A subscript is also never empty and never nested.
+
+Where it is read, the subscript means what it means everywhere else: a
+declared associative name takes it as a key and any other takes it as an
+expression, which is `${a[i+1]}`'s rule and not a second one.
+
+Measured: `redir/the-picked-descriptors-name-may-be-an-element` and
+`redir/closing-a-descriptor-through-an-element`.
+
+Grammar flag: `FdVariableSubscript` — core: off; `bash` and `ksh`: on.
+
 ## Comments
 
 `#` begins a comment only where a word could begin. Mid-word it is an
@@ -319,22 +368,33 @@ without it the numbering resets at the first refill.
 | shell | `-c` | script file | standard input |
 | --- | --- | --- | --- |
 | bash | no | no | no |
+| bash as `sh` | yes | yes | yes |
 | dash | yes | yes | yes |
 | ksh93 | yes | yes | yes |
 | zsh | **no** | **yes** | **yes** |
 
 bash needs `shopt -s expand_aliases` and then expands by every route; the
-`no` row is bash without it. All four expand interactively, which the
-front end decides rather than the grammar.
+`no` row is bash without it. The same binary invoked as `sh` expands by
+every route with no `shopt` anywhere — POSIX mode turns alias expansion
+on for a non-interactive shell, which is why the panel runs bash twice.
+All of them expand interactively, which the front end decides rather than
+the grammar.
 
 **zsh does not fit a boolean**, and this was measured rather than
 inferred: the answer depends on how the program arrived, not on whether
 anyone is at the keyboard. A boolean gets one of zsh's three right, and
 the two it gets wrong are the ones a real script uses.
 
-The same run found bash in POSIX mode splitting the other way — `sh -c`
-expands and `sh script.sh` does not — which settles that the route is a
-dimension of the question rather than one shell's quirk.
+zsh is the only witness to the split, and one witness is enough: a
+boolean cannot record an answer that zsh gives two ways.
+
+Measuring this needs care, because the obvious probe answers a different
+question. Writing the `-c` case as `alias a=…; a` puts the definition and
+the use on one line, and aliases are applied while the line is parsed —
+so the whole string is parsed before the definition takes effect, and
+every shell reports `a` as not found. That measures same-line-versus-next
+line, which is what `alias/not-on-the-line-that-defines-it` covers. The
+route only shows itself when the `-c` string carries a real newline.
 
 So `Dialect.ExpandAliases` is a **set of routes**, `AliasRoutes`, and the
 front end asks it with the route it read: a command string, a file, or

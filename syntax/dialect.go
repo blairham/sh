@@ -463,6 +463,30 @@ type Dialect struct {
 	// ordinary word.
 	FdVariableRedirections bool
 
+	// FdVariableSubscript lets the name inside those braces carry a
+	// subscript: `exec {a[1]}>&-` closes the descriptor that element holds,
+	// which is how a coprocess's feed is closed by the array the shell put
+	// its near ends in.
+	//
+	// A flag of its own rather than a consequence of having both features,
+	// because the shell that has both still refuses this one. Measured with
+	// a descriptor parked on 3 and the element holding 3: bash 5.3 and ksh93
+	// close it, and zsh reads `{a[1]}` as an ordinary word — as a *pattern*,
+	// in fact, so it reports no matches, and with globbing turned off it
+	// reports a command not found. Either way it never reached a redirection,
+	// which is what makes this the construct's absence rather than a glob
+	// getting in first. bash 3.2 and dash have no `{name}` token at all.
+	//
+	// So two of the three shells that have the parent feature have this one,
+	// and the core is what all three agree on — which leaves it to the two
+	// that answer yes.
+	//
+	// The subscript is taken as written and never expanded, because the
+	// token is one literal: `{a[i]}` and `{a[i+1]}` are read where `{a[$i]}`
+	// stays a word. bash takes that last spelling and ksh93 refuses it in
+	// the arithmetic, so no answer here is everyone's.
+	FdVariableSubscript bool
+
 	// CloseQuotesAtEOF ends an unterminated `'`, `"` or backquote at the
 	// end of input as if the closing mark were there, instead of refusing
 	// to parse: `echo "abc` prints abc in the one shell that answers this

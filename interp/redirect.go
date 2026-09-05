@@ -141,7 +141,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 					// holds. The close is for keeps — this path never joins
 					// the save — so the pipe or file behind it really ends,
 					// which is what lets a coprocess see its input finish.
-					v, okv := r.getVar(fdVar)
+					v, okv := r.fdVarValue(fdVar)
 					n, okn := atoi(v)
 					if !okv || !okn {
 						if r.ask(r.sem().FdVariableBadCloseIsAnError,
@@ -186,7 +186,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				return closers, nil
 			}
 			if fdVar != "" {
-				r.setVar(fdVar, itoa(fd))
+				r.setFdVar(fdVar, itoa(fd))
 			}
 			continue
 		}
@@ -331,7 +331,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			}
 			r.setFd(fd, f)
 			if fdVar != "" {
-				r.setVar(fdVar, itoa(fd))
+				r.setFdVar(fdVar, itoa(fd))
 			}
 		}
 	}
@@ -646,3 +646,58 @@ type closedFd struct{}
 
 func (closedFd) Write([]byte) (int, error) { return 0, syscall.EBADF }
 func (closedFd) Read([]byte) (int, error)  { return 0, syscall.EBADF }
+
+// fdVarValue reads the descriptor number a `{name}` token names.
+//
+// The name may carry a subscript where the dialect allows one — `{a[1]}` is
+// the element, and `exec {COPROC[1]}>&-` is how a coprocess's feed is closed
+// by the array the shell put its near ends in. The lexer has already decided
+// that the brackets are part of the name; what arrives here is the text
+// between the braces, so this is where a name and an element part company.
+//
+// The subscript is read the way every other subscript in this package is: a
+// declared associative name takes it as a key and any other takes it as an
+// expression, which is what makes `{a[i+1]}` mean what `${a[i+1]}` means.
+func (r *Runner) fdVarValue(ref string) (string, bool) {
+	base, sub, ok := r.subscriptOperand(ref)
+	if !ok {
+		return r.getVar(ref)
+	}
+	if r.assocDeclared(base) {
+		v, held := r.AssocArrays[base][sub]
+		return v, held
+	}
+	idx, err := r.subscriptValue(sub)
+	if err != nil {
+		return "", false
+	}
+	elems, isArray := r.arrayElems(base)
+	if !isArray {
+		return "", false
+	}
+	return r.elemAt(base, elems, idx)
+}
+
+// setFdVar gives the name the number the shell picked, which is the other
+// half of the same rule: `exec {a[2]}>f` opens the file and leaves the
+// descriptor in that element.
+func (r *Runner) setFdVar(ref, value string) {
+	base, sub, ok := r.subscriptOperand(ref)
+	if !ok {
+		r.setVar(ref, value)
+		return
+	}
+	if r.assocDeclared(base) {
+		r.setAssocElem(base, sub, value)
+		return
+	}
+	idx, err := r.subscriptValue(sub)
+	if err != nil {
+		// The same silence a bad subscript gets from the reading half. The
+		// redirection itself has already happened, and the number it chose
+		// has nowhere to go — which is the shape of the case the dialect
+		// answers with FdVariableBadCloseIsAnError on the way in.
+		return
+	}
+	r.setArrayElem(base, idx, value)
+}

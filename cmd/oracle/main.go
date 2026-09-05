@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/blairham/sh/internal/oracle"
@@ -58,6 +59,20 @@ func main() {
 }
 
 func run(check bool, goldenPath, docPath string) error {
+	// Asked first, and before a shell is run, because it is the half that
+	// gives the same answer on every machine: the corpus, the record and the
+	// rendered document either agree with each other or they do not. The
+	// panel comparison below cannot make that claim — see RecordCheck — so
+	// the two are reported apart rather than as one verdict.
+	stale := false
+	if check {
+		bad, err := checkRecord(goldenPath, docPath)
+		if err != nil {
+			return err
+		}
+		stale = bad
+	}
+
 	got, err := oracle.Execute(context.Background(), oracle.Corpus)
 	if err != nil {
 		return err
@@ -112,19 +127,85 @@ func run(check bool, goldenPath, docPath string) error {
 	drifts := got.Compare(want)
 	if len(drifts) == 0 {
 		fmt.Println("no drift: the panel behaves as recorded.")
+		if stale {
+			// Said twice on purpose. The record check runs first because it
+			// needs no shells, and the panel run that follows takes half a
+			// minute and prints six version lines, so the reason this
+			// command failed would otherwise have scrolled off the screen
+			// before it finished.
+			fmt.Fprintln(os.Stderr, "\nbut the committed files still disagree with each other: run `make oracle`.")
+			os.Exit(exitDrift)
+		}
 		return nil
 	}
 
+	if stale {
+		fmt.Fprint(os.Stderr, "and the committed files disagree with each other, as above.\n\n")
+	}
 	fmt.Fprintf(os.Stderr, "%d case(s) drifted:\n\n", len(drifts))
 	for _, d := range drifts {
 		fmt.Fprintln(os.Stderr, "  "+d.String())
 	}
+	fmt.Fprintln(os.Stderr, "\n  by shell: "+byShell(drifts))
 	fmt.Fprint(os.Stderr, `
 Drift is not automatically a bug. A shell was upgraded, or a case was
 edited, and the recorded behavior is no longer what the panel does.
 Decide which, then update docs/spec to match and run `+"`make oracle`"+`.
 The spec entries that cite these cases are now the ones to re-read.
+
+This half of the check cannot be the same on two machines, which is why it
+is reported rather than enforced in continuous integration: a runner does
+not have the same builds of the same shells. Locally, where the panel is
+the one that produced the record, it is the gate.
 `)
 	os.Exit(exitDrift)
 	return nil
+}
+
+// checkRecord compares the committed artifacts against each other and reports
+// whether they disagree. It is deliberately separate from the panel run: this
+// question needs no shells and has one right answer everywhere.
+func checkRecord(goldenPath, docPath string) (bool, error) {
+	golden, err := oracle.Load(goldenPath)
+	if err != nil {
+		return false, fmt.Errorf("%w (run `make oracle` to create it)", err)
+	}
+	doc, err := os.ReadFile(docPath)
+	if err != nil {
+		return false, err
+	}
+	rc := oracle.CheckRecord(golden, string(doc), oracle.Corpus)
+	if rc.OK() {
+		return false, nil
+	}
+	fmt.Fprint(os.Stderr, rc.String())
+	fmt.Fprintln(os.Stderr)
+	return true, nil
+}
+
+// byShell tallies a drift report by column.
+//
+// Four hundred lines of drift is not a report anyone reads, and the shape of
+// it is the part worth seeing at a glance: drift concentrated in one column
+// is a shell that moved, drift spread evenly is a record that did.
+func byShell(drifts []oracle.Drift) string {
+	n := map[string]int{}
+	for _, d := range drifts {
+		n[d.Shell]++
+	}
+	names := make([]string, 0, len(n))
+	for name := range n {
+		names = append(names, name)
+	}
+	sort.Slice(names, func(i, j int) bool {
+		if n[names[i]] != n[names[j]] {
+			return n[names[i]] > n[names[j]]
+		}
+		return names[i] < names[j]
+	})
+	parts := make([]string, 0, len(names))
+	for _, name := range names {
+		parts = append(parts, fmt.Sprintf("%s %d", name, n[name]))
+	}
+	return strings.Join(parts, ", ")
 }

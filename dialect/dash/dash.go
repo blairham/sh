@@ -97,6 +97,8 @@ func Semantics() interp.Semantics {
 	s.PrintfEmptyIsNotANumber = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
+	// None: `%ld` is the conversion `l`, which dash does not have.
+	s.PrintfLengthModifiers = interp.PrintfLengthModifiersAbsent
 	// No `%(fmt)T`: `%(` is a directive this shell does not have.
 	s.PrintfTimeConversion = interp.No
 	s.PrintfQuote = interp.PrintfQuoteAbsent

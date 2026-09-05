@@ -71,6 +71,42 @@ func TestVerboseEchoesThePhysicalLinesAsTheyAreRead(t *testing.T) {
 			want: "echo one\none\n",
 			why:  "the last line is a line whether or not the text ends in a newline",
 		},
+		{
+			name: "a tail of blank lines",
+			src:  "echo one\n\n\n",
+			want: "echo one\none\n\n\n",
+			why:  "the lines after the last command are read like any others, and nothing comes after them to drag them out",
+		},
+		{
+			name: "a trailing comment",
+			src:  "echo one\n# the end\n",
+			want: "echo one\none\n# the end\n",
+			why:  "a comment is input, and the last one has no later line to be echoed with",
+		},
+		{
+			name: "nothing but a newline",
+			src:  "\n",
+			want: "\n",
+			why:  "a program that is one blank line is one line read, so it is one line written",
+		},
+		{
+			name: "a here-document is echoed whole before it runs",
+			src:  "cat <<END\nbody\nEND\necho after\n",
+			want: "cat <<END\nbody\nEND\nbody\necho after\nafter\n",
+			why:  "the terminator is a physical line of the command that opened it, so it goes out with the command rather than after the body the command wrote",
+		},
+		{
+			name: "the last of several here-documents closes the line",
+			src:  "cat <<A <<B\na\nA\nb\nB\necho after\n",
+			want: "cat <<A <<B\na\nA\nb\nB\nb\necho after\nafter\n",
+			why:  "B's delimiter ends the command and A's does not, so all five lines precede the output",
+		},
+		{
+			name: "an indented here-document keeps its tabs",
+			src:  "cat <<-END\n\tbody\n\tEND\necho after\n",
+			want: "cat <<-END\n\tbody\n\tEND\nbody\necho after\nafter\n",
+			why:  "the echo writes the input back as it was written; only the command sees the tabs stripped",
+		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			// One stream for both, so that the order of the echo against the
@@ -94,12 +130,9 @@ func TestVerboseEchoesThePhysicalLinesAsTheyAreRead(t *testing.T) {
 // as input, and is echoed anyway — the echo is of the text the shell read, not
 // of the commands it found in it.
 //
-// Asserted on the echo alone rather than against the command's own output,
-// because where the terminator falls in that interleaving is a separate
-// question from this one and is not yet the panel's answer: the four real
-// shells echo the terminator before running the command and this shell echoes
-// it after. That is #582 and predates #580 — it is recorded here so that the
-// case is not read as evidence the ordering was checked.
+// The echo alone, so that this stays about *which* lines come out; where they
+// fall against the command's own output is asserted with one stream in the
+// table above.
 func TestVerboseEchoesAHereDocumentBody(t *testing.T) {
 	var out, errs strings.Builder
 	sh := shell()
@@ -113,6 +146,23 @@ func TestVerboseEchoesAHereDocumentBody(t *testing.T) {
 	}
 	if want := "body\nafter\n"; out.String() != want {
 		t.Errorf("output = %q, want %q", out.String(), want)
+	}
+}
+
+// TestVerboseDoesNotEchoTheTailAfterTheShellHasStopped: a script that ends
+// itself has stopped reading, so what is left of the file is not input it
+// read. Three of the four panel shells say nothing after `exit`.
+func TestVerboseDoesNotEchoTheTailAfterTheShellHasStopped(t *testing.T) {
+	var out strings.Builder
+	sh := shell()
+	sh.Stdout, sh.Stderr = &out, &out
+	src := "echo one\nexit 0\n\n\n# never read\n"
+	if code := driver.MainArgs(sh, []string{"testsh", "-v", writeScript(t, src)}); code != 0 {
+		t.Fatalf("status %d", code)
+	}
+	want := "echo one\none\nexit 0\n"
+	if got := out.String(); got != want {
+		t.Errorf("got %q, want %q — the file goes on and the shell does not", got, want)
 	}
 }
 

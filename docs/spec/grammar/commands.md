@@ -483,12 +483,9 @@ which is why that one form takes the brace with nothing between. So
 form lacks the production; it is evidence about where a word list ends.
 
 **The brace body belongs to those two loops and to nothing else.**
-`while`, `until` and `if` refuse it, with or without a separator — the
-one exception being zsh's *short loops*, where a brace group may follow
-a `while` or `until` condition that has been ended by a `;` or that
-ends itself (`while (( i < 2 )) { …; }`). That is zsh's alone, is not
-modeled here, and is why the `while` row is written with the separator:
-without one the refusal is unanimous and says nothing about zsh.
+`while`, `until` and `if` refuse it, with or without a separator. One
+shell has a wider family of its own — see *Short loops* below, where the
+`while` row is answered — and `if` gets nothing anywhere.
 
 The group is the ordinary one and keeps every rule it already has: the
 body needs a terminator before `}` wherever a brace group does — so
@@ -507,6 +504,85 @@ Corpus: `core/c-style-for-with-a-brace-body`,
 `core/a-list-for-with-a-brace-body`,
 `core/a-list-for-brace-body-needs-a-separator`,
 `core/a-brace-body-is-not-a-while-body`.
+
+## Short loops
+
+One shell writes a loop without `do … done`, and the family is wider than
+the brace body above. Measured 2026-09-05 (panel and machine as
+`../oracle.md`); the accepted rows are that shell's alone.
+
+| probe | dash | bash 3.2 | bash 5 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- |
+| `while (( i<2 )) echo $i` | error | error | error | error | **runs** |
+| `while (( i<2 )) { …; }` | error | error | error | error | **runs** |
+| `until [[ -n $x ]] { …; }` | error | error | error | error | **runs** |
+| `for i (a b) { echo $i; }` | error | error | error | error | **runs** |
+| `for i (a b) echo $i` | error | error | error | error | **runs** |
+| `select x (a b) { …; }` | error | error | error | error | **runs** |
+| `for i in a b; echo $i` | error | error | error | error | **runs** |
+| `while false` | error | error | error | error | **accepted** |
+| `for i (a b)`, `for i` | error | error | error | error | **accepted** |
+| `while true { …; }` | error | error | error | error | error |
+| `for i in a b` | error | error | error | error | error |
+| `if true; { …; }` | error | error | error | error | error |
+
+Grammar flag: `ShortLoop` — off in the core, on for `zsh` alone.
+
+**Two productions and one flag, because they are one rule:** a loop
+header that has *ended* may be followed straight by its body, and the
+body may be left out. What ends a header is the whole of it —
+`(( … ))` and `[[ … ]]` close, a word does not, which is why
+`while true { …; }` is refused there as well as everywhere else. For a
+`for`, the parenthesized list closes and so does having no `in` clause;
+`for i in a b` closes on a separator and on nothing else, which is the
+same rule that makes `for i in a b { …; }` read `{` as another item.
+
+**`while cond; { …; }` is not a short body**, and this is the reading the
+shape invites and the measurement refuses. The `;` keeps the *condition
+list* going, so the brace group is the last thing tested and the body is
+empty:
+
+    i=0; while (( i<2 )); { echo $i; i=$((i+1)); }     →  0 1 2 3 … forever
+    i=0; while (( i<2 ))  { echo $i; i=$((i+1)); }     →  0 1
+
+The separator is the only difference between those two lines and it
+reverses which half the group is in. `while false; echo A; echo B` shows
+the same thing at length — it prints `A B` forever, because all three
+statements are the condition list and the last one's status is what the
+loop tests. So `while true; { echo hi; break; }` printing `hi` is the
+`break` leaving a loop whose body was never there, not a body running
+once (`core/a-brace-body-is-not-a-while-body`,
+`core/a-tested-brace-group-is-not-a-body`,
+`core/a-while-condition-that-ends-itself-takes-a-body`).
+
+**The short body is one command**, not a list: a second needs a
+separator, and a separator there belongs to whatever encloses the loop.
+`while (( i<2 )) echo $((i++)); echo end` prints `end` once
+(`core/a-short-loop-body-is-one-command`).
+
+**A redirection written after a short body is that body's**, and after a
+closed one it is the loop's — measured with the loop variable in the
+target, which is what makes the two visible: `for i (a b) > f$i` leaves
+`fa` and `fb`, so it ran once per iteration with `$i` set, while
+`for i (a b) { echo hi; } > f$i` leaves one `f`, expanded before the loop
+started (`core/a-short-loop-redirection-is-the-bodys`). The corollary is
+that a loop with *no* body and a redirection of its own has no source
+form at all, since any redirection after the header becomes the body.
+
+The tree is the ordinary one — the parenthesized list is the `in` list,
+and a short body is the loop's body, so `break` and `continue` reach the
+loop. **Printing follows from that**: a body that was written short is
+printed as `do … done`, which parses to the same tree under any dialect;
+only an *omitted* body has no long spelling — `do done` is refused
+everywhere — so that one is printed short, with the parenthesized list,
+because `for i in a b` with nothing after it does not parse.
+
+Corpus: `core/a-tested-brace-group-is-not-a-body`,
+`core/a-while-condition-that-ends-itself-takes-a-body`,
+`core/a-short-loop-body-is-one-command`,
+`core/a-for-over-a-parenthesized-list`,
+`core/a-for-header-that-ends-itself-needs-no-body`,
+`core/a-short-loop-redirection-is-the-bodys`.
 
 ## `case`
 

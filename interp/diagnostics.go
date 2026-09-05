@@ -292,9 +292,10 @@ type Diagnostics struct {
 	PrintfBadNumber string
 	// PrintfBadNumberStatus is what that reports. Zero means 1.
 	PrintfBadNumberStatus int
-	// PrintfBadVerb is a conversion this shell does not have. One verb, and
-	// the panel does not agree on what to put in it: half name the character
-	// *after* the one they could not read and half name the conversion.
+	// PrintfBadVerb is a conversion this shell does not have. Two verbs, and
+	// the panel splits evenly between them: %[1]s is the conversion
+	// character alone and %[2]s is the whole directive as written, so `%lQ`
+	// is `Q` for half of them and `%lQ` for the other half.
 	PrintfBadVerb string
 	// PrintfBadVerbStatus is what that reports. Zero means 1.
 	PrintfBadVerbStatus int

@@ -209,7 +209,14 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, bool) {
 				continue
 			}
 			if verb == 0 {
-				return used, r.printfBadVerb(format[:i], badVerbName(format, i), format[i:]), true
+				// An empty prefix is a format that ran out before it
+				// reached a conversion character — `%`, `%5`, `%ll` at the
+				// end — so there is no character to name.
+				name := ""
+				if spec != "" {
+					name = badVerbName(format, i)
+				}
+				return used, r.printfBadVerb(format[:i], name), true
 			}
 			text, code, stop := r.printfVerb(spec, verb, timeFmt, next)
 			if code != 0 {
@@ -305,7 +312,7 @@ func (r *Runner) printfQuote(spec, arg string) (string, int, bool) {
 	case PrintfQuoteAbsent:
 		// A conversion the shell does not have stops the output where it is,
 		// as any other unknown one does.
-		return "", r.printfBadVerb("%q", "q", ""), true
+		return "", r.printfBadVerb("%q", "q"), true
 	}
 	return "", r.status, true
 }
@@ -359,11 +366,53 @@ func (r *Runner) scanPrintfSpec(s string) (string, byte, string, int, int) {
 			return "", 0, "", i, r.status
 		}
 	}
+	i += r.lengthModifierRun(s, i)
+	if r.unspecified {
+		return "", 0, "", i, r.status
+	}
+	if i >= len(s) {
+		// A format that ends inside a conversion. The modifier is not what
+		// went wrong, so this is the same nothing `%` at the end of a format
+		// already is.
+		return "", 0, "", len(s), 0
+	}
 	verb := s[i]
 	if strings.IndexByte("sbcqdiouxXfeEgG%", verb) < 0 {
 		return spec, 0, "", i + 1, 0
 	}
 	return spec, verb, "", i + 1, 0
+}
+
+// lengthModifierRun is how many bytes at i are a C length modifier this
+// dialect takes.
+//
+// The letters are read and thrown away. Every shell that accepts one ignores
+// it — `%hhd` with 300 is 300 rather than 44 — so this exists to stop a
+// format bash and ksh93 accept from being reported as a conversion nobody
+// has, which is the shape that sends someone debugging their format string.
+//
+// The axis is asked only when a letter one of the answers would take is
+// actually there, so `%d` never raises the question.
+func (r *Runner) lengthModifierRun(s string, i int) int {
+	const letters = "hljztL"
+	if i >= len(s) || strings.IndexByte(letters, s[i]) < 0 {
+		return 0
+	}
+	switch r.lengthModifiers() {
+	case PrintfLengthModifiersC89:
+		// One letter, and only the three C89 had. The C99 additions are
+		// exactly the ones this answer refuses.
+		if strings.IndexByte("hlL", s[i]) >= 0 {
+			return 1
+		}
+	case PrintfLengthModifiersC99:
+		n := 0
+		for i+n < len(s) && strings.IndexByte(letters, s[i+n]) >= 0 {
+			n++
+		}
+		return n
+	}
+	return 0
 }
 
 // timeZone is the zone a date is written in, which is `$TZ` — the Runner's,
@@ -438,15 +487,21 @@ func (r *Runner) printfTime(spec, format, arg string, present bool) (string, int
 	return fmt.Sprintf(spec+"s", strftime(format, t)), code, false
 }
 
-// badVerbName is what a diagnostic calls a conversion it does not have.
+// badVerbName is the conversion character a diagnostic names, given where the
+// conversion ended.
 //
-// Two of the panel name the character *after* the one they could not read —
-// `%z]` is reported as `]` — and two name the conversion as written. The
-// wordings differ too, so this hands both spellings over and each dialect
-// takes the one it uses.
-func badVerbName(format string, after int) string {
-	if after < len(format) {
-		return format[after : after+1]
+// Two of the panel name that one character — `%v]xY` is reported as `v` in
+// both — and two name the whole directive as written, `%v`. The wordings
+// differ too, so this hands both spellings over and each dialect takes the
+// one it uses.
+//
+// It reads backwards from the end of the conversion rather than forwards from
+// its start, because what is in front of the verb is flags, a width, a
+// precision and length modifiers, and the caller has already walked past all
+// of them.
+func badVerbName(format string, end int) string {
+	if end > 0 && end <= len(format) {
+		return format[end-1 : end]
 	}
 	return ""
 }
@@ -466,19 +521,18 @@ const (
 
 // printfBadVerb reports a conversion this shell does not have.
 //
-// Three verbs, because the panel does not agree on what to name: %[1]s is
-// the character *after* the one it could not read, which bash reports;
-// %[2]s is the conversion as written, which dash and zsh report; and %[3]s
-// is the rest of the format after the conversion with its escapes already
-// expanded, which is ksh93's answer — for `%z\n` it names a newline, so its
-// complaint really does end in two colons on two lines.
-func (r *Runner) printfBadVerb(conversion, next, rest string) int {
+// Two verbs, because the panel does not agree on what to name: %[1]s is the
+// conversion character alone, which bash and ksh93 report — `%v]xY` is `v`
+// in both — and %[2]s is the whole directive as written, `%v`, which dash
+// and zsh report. Where a dialect takes length modifiers the two diverge
+// further, since the modifier belongs to the directive and is not the
+// character: zsh calls `%lQ` exactly that and bash calls it `Q`.
+func (r *Runner) printfBadVerb(conversion, verb string) int {
 	d := r.diag()
 	if i := strings.LastIndexByte(conversion, '%'); i >= 0 {
 		conversion = conversion[i:]
 	}
-	rest, _, _ = r.expandPrintfEscapes(rest)
-	r.diagf("%s\n", Wording(d.PrintfBadVerb, "printf: %[2]s: invalid directive", next, conversion, rest))
+	r.diagf("%s\n", Wording(d.PrintfBadVerb, "printf: %[2]s: invalid directive", verb, conversion))
 	return orDefault(d.PrintfBadVerbStatus, 1)
 }
 
@@ -489,7 +543,7 @@ func (r *Runner) printfReport(kind printfErrorKind, operand string) int {
 		r.diagf("%s\n", Wording(d.PrintfBadNumber, "printf: %[1]s: invalid number", operand))
 		return orDefault(d.PrintfBadNumberStatus, 1)
 	case printfBadVerb:
-		return r.printfBadVerb(operand, operand, "")
+		return r.printfBadVerb(operand, operand)
 	}
 	usage := Wording(d.PrintfUsage, "printf: usage: printf format [arguments]")
 	if d.PrintfUsageUnprefixed {

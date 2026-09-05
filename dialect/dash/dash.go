@@ -202,6 +202,10 @@ func Semantics() interp.Semantics {
 	// Whether a backgrounded job is announced to whoever is typing.
 	// Whether `export -f` carries a function to a child.
 	s.ExportCarriesFunctions = interp.No
+	// And whether it has `-n` at all. It does not: measured, dash answers
+	// `export: Illegal option -n` and the script ends there, `export` being
+	// a special builtin.
+	s.ExportTakesTheAttributeOff = interp.No
 	s.AnnouncesBackgroundJob = interp.No
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.Yes

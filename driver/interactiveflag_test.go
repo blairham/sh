@@ -126,20 +126,22 @@ func TestAPromptIsInteractiveWithoutBeingTold(t *testing.T) {
 	done := make(chan int, 1)
 	go func() { done <- driver.MainArgs(sh, []string{"testsh"}) }()
 
-	drawn.await(t, "$ ")
+	drawn.awaitReadyForInput(t)
 	// `yes` alone would be satisfied by the terminal echoing the line that
 	// was typed, so the answer is spelled as something the line does not
 	// contain.
 	write(t, control, `case $- in *i*) echo mark-$((6 * 7)) ;; esac`+"\r")
 	drawn.await(t, "mark-42")
-	write(t, control, "\x04")
+	// The output says the command ran; the next prompt says the editor has
+	// the terminal back and is reading, which is when ^D can be typed.
+	drawn.endSession(t, control)
 
 	select {
 	case code := <-done:
 		if code != 0 {
 			t.Errorf("status = %d, want 0", code)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(sessionBudget):
 		_ = control.Close()
 		t.Fatalf("the session did not end; drawn so far: %q", drawn.text())
 	}

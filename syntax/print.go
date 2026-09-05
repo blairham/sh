@@ -341,6 +341,7 @@ func (p *printer) command(c Command) {
 		p.str("for ((" + x.InitText + "; " + x.CondText + "; " + x.PostText + ")); do")
 		p.body(x.Body, true)
 		p.keyword("done")
+		p.redirs(x.Redirs)
 	case *TestClause:
 		p.str("[[ ")
 		p.cond(x.Expr)

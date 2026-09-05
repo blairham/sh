@@ -4438,6 +4438,37 @@ echo unreachable`,
 		Snippet: `[[ -t x ]]; echo "st=$?"`,
 		Why:     "a -t operand that is not a number: bash names an integer at status 2 where ksh93 and zsh answer a plain false at 1 — and bash 3.2 answers 1 too, so the complaint is younger than the operator. The TerminalTestRequiresANumber axis",
 	},
+	{
+		ID: "cond/option-test-reads-a-set-option", Category: "conditions",
+		Snippet: `set -e; [[ -o errexit ]]; echo "on=$?"; set +e; [[ -o errexit ]]; echo "off=$?"`,
+		Why:     "`-o` asks whether a shell option is set, and it is the core's rather than a dialect's: every shell in the panel that has `[[ ]]` at all has it, and dash is absent only because it has no `[[ ]]` to put it in. The name every one of them agrees about, read in both states from the same run",
+	},
+	{
+		ID: "cond/option-test-operand-is-an-ordinary-word", Category: "conditions",
+		Snippet: `set -u; v=nounset; [[ -o $v ]]; echo "var=$?"; [[ -o 'nounset' ]]; echo "quoted=$?"`,
+		Why:     "how the name reaches the operator: it is an ordinary word, expanded out of a variable and stripped of its quotes, unanimously. The quoted spelling is the one the prompt theme on this machine writes — `[[ ! -o 'aliases' ]]` — and a parser that took the operand as a literal token would read the apostrophes as part of the name",
+	},
+	{
+		ID: "cond/option-test-unknown-name-diverges", Category: "conditions",
+		Snippet: `[[ -o nosuchoption ]]; echo "st=$?"; echo alive`,
+		Why:     "a name no shell in the panel has: bash and ksh93 answer a quiet false at 1 where zsh complains and answers 3, and all three carry on to the next command — so this is not the fatality `set -o nosuchoption` produces in the same shell. The UnknownConditionOptionIsAStatus axis",
+	},
+	{
+		ID: "cond/option-test-unknown-name-is-not-a-false", Category: "conditions",
+		Snippet: `[[ ! -o nosuchoption ]]; echo "not=$?"; [[ -o nosuchoption || 1 == 1 ]]; echo "or=$?"; [[ 1 == 1 && -o nosuchoption ]]; echo "and=$?"`,
+		Why:     "what the divergent answer *is*, which the bare status hides: in zsh it is a third value rather than a false, so `!` leaves it at 3 instead of turning it into 0, `||` walks on past it to a right-hand side that answers 0, and `&&` stops on it. bash and ksh93 have a plain false in the same three places and answer 0, 0 and 1. A dialect that returned false with a status painted on would get the negation wrong",
+	},
+	{
+		ID: "cond/option-test-missing-operand", Category: "conditions",
+		SyntaxError: true,
+		Snippet:     `[[ -o ]]; echo "st=$?"`,
+		Why:         "`-o` with nothing after it is refused in all three, which is what says the operator takes an operand rather than defaulting one — and refused in three different ways: bash and ksh93 make it a *parse* error, where zsh takes the `-o` for a condition name it does not know and answers 2 at run time. It is also the shape that separates this from the single-bracket `-o`, where the same two words are a non-empty string test that succeeds",
+	},
+	{
+		ID: "cond/single-bracket-o-is-not-the-option-test", Category: "conditions",
+		Snippet: `[ -o nosuchoption ]; echo "two=$?"; [ -o ]; echo "one=$?"; [ '' -o x ]; echo "or=$?"`,
+		Why:     "the operator the standard gives `[` is `or`, and conflating it with the option test is the mistake this row exists to catch: bash and ksh93 do have a unary `-o` in the builtin, dash refuses it as an unexpected operator and zsh calls it too many arguments, so the single-bracket spelling is not core the way the double-bracket one is. `[ -o ]` is one argument and a true everywhere, and `[ '' -o x ]` is the binary or",
+	},
 
 	// --- eval and . : the special builtins that run text in this shell ---
 	{

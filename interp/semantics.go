@@ -884,6 +884,28 @@ type Semantics struct {
 	// the one case they split on.
 	ReturnOutsideAFunctionIsRefused Answer
 
+	// UnknownConditionOptionIsAStatus makes `[[ -o name ]]` with a name this
+	// shell does not have a status of its own with a complaint, instead of
+	// the plain false that a name it has but has not set would give. True in
+	// zsh alone; bash and ksh93 answer 1 and say nothing, and dash has no
+	// `[[ ]]` to ask it in.
+	//
+	// Asked only where the shells disagree, which is at a name none of them
+	// would recognize. A name this shell has is read the same way in all
+	// three and nothing is asked.
+	//
+	// Not the same question as BadSetOptionNameFatal, and measured rather
+	// than assumed to be: the name that ends a zsh script when `set -o` is
+	// given it leaves `[[ ]]` running, with the complaint said and the next
+	// command reached. One construct's refusal is not the other's.
+	//
+	// The status is a third value rather than a false, which the combining
+	// operators show: `[[ ! -o zzz ]]` is 3 and not 0, so `!` leaves it
+	// alone, and `[[ -o zzz || 1 == 1 ]]` is 0, so `||` goes on past it the
+	// way it would past a false. Measured across the whole truth table on
+	// zsh 5.9.2.
+	UnknownConditionOptionIsAStatus Answer
+
 	// BadSetOptionNameFatal ends the script when `set -o` is given a name
 	// this shell does not have. True in dash, ksh93 and zsh.
 	//

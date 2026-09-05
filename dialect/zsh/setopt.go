@@ -65,6 +65,11 @@ type zshOption struct {
 
 // zshOptions is the table, in listing order (sorted by base).
 var zshOptions = []zshOption{
+	// Alias expansion happens here, which is what the name asks about. Which
+	// routes into the shell it happens on is the parser's question and this
+	// is not it (syntax.Dialect.ExpandAliases); the state is that the shell
+	// does the thing, and it is not this shell's to switch off.
+	fixedConstant("aliases", true, true),
 	setOptBacked("allexport", false, "allexport", false),
 	// banghist is history expansion's own name; histexpand below is the
 	// sh-style alias, and both read one switch.
@@ -76,6 +81,9 @@ var zshOptions = []zshOption{
 	// noexec has a real apply now, one-way on under both spellings the way
 	// all four shells treat it.
 	setOptBacked("exec", true, "noexec", true),
+	// `$0` inside a function is the function's name here, which is what the
+	// name asks for and what this shell already does.
+	fixedConstant("functionargzero", true, true),
 	setOptBacked("glob", true, "noglob", true),
 	// Command tracking is permission to cache rather than a promise to, and
 	// the substrate holds the switch; off at start, which keeps the listing
@@ -87,6 +95,15 @@ var zshOptions = []zshOption{
 	fixedOptBacked("histexpand", false, "histexpand", false),
 	setOptBacked("histignoredups", false, "histignoredups", false),
 	fixedOptBacked("ignoreeof", false, "ignoreeof", false),
+	// Whether this is an interactive shell — a fact the front end brought in
+	// rather than a switch, which is why it is read and not set. The
+	// third-party integration this machine's startup files load opens on
+	// `[[ -o interactive ]]`, and ksh93 has the same name for the same fact,
+	// measured in its own `set -o` listing.
+	{
+		base: "interactive", def: false,
+		get: func(r *interp.Runner) bool { return r.Interactive },
+	},
 	// Comments are honored wherever they are written; the set -o table says
 	// the same, but this dialect does not declare the name there, so the
 	// state is a constant rather than a read through it.
@@ -115,6 +132,11 @@ var zshOptions = []zshOption{
 	fixedOptBacked("physical", false, "physical", false),
 	setOptBacked("pipefail", false, "pipefail", false),
 	fixedOptBacked("privileged", false, "privileged", false),
+	// sh-style globbing narrows the pattern language to the standard's. This
+	// shell does not narrow it, which is the state, and zsh's default is the
+	// same, so the listings do not move. The prompt theme this machine loads
+	// reads the name at its third line.
+	fixedConstant("shglob", false, false),
 	{
 		base: "shwordsplit", def: false,
 		get: func(r *interp.Runner) bool { return r.Semantics.SplitParamExpansion == interp.Yes },
@@ -202,10 +224,29 @@ func lookupZshOption(name string) (zshOption, bool, bool) {
 	return zshOption{}, false, false
 }
 
-// registerSetopt installs the pair.
+// conditionOption answers `[[ -o name ]]` out of this namespace rather than
+// out of the `set -o` names, which is the whole of why the substrate takes a
+// function for it: `[[ -o no_brace_expand ]]` is one question here and three
+// unknown names anywhere else.
+//
+// It is the same lookup `setopt` does, read rather than written, so a name
+// this dialect can speak about answers the same way through either — and a
+// name it cannot is unknown to both, which is what lets the substrate's axis
+// decide what to say about it.
+func conditionOption(r *interp.Runner, name string) (on, known bool) {
+	o, inverted, ok := lookupZshOption(normalizeOption(name))
+	if !ok {
+		return false, false
+	}
+	return o.get(r) != inverted, true
+}
+
+// registerSetopt installs the pair, and the namespace they share with the
+// condition.
 func registerSetopt(r *interp.Runner) {
 	r.Register("setopt", setoptBuiltin(true))
 	r.Register("unsetopt", setoptBuiltin(false))
+	r.SetOptionNamespace(func(name string) (bool, bool) { return conditionOption(r, name) })
 }
 
 // setoptBuiltin builds either half; they differ in the direction a bare base

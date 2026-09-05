@@ -404,6 +404,7 @@ func Semantics() interp.Semantics {
 	s.CdRefusesUnknownOption = interp.Yes
 	s.CdLastPathOptionWins = interp.Yes
 	s.BadSetOptionNameFatal = interp.Yes
+	s.UnknownConditionOptionIsAStatus = interp.No
 	s.ReturnOutsideAFunctionIsRefused = interp.No
 	s.LoneDashIsAnOption = interp.No
 	s.UnsetFunctionChecksTheName = interp.Yes

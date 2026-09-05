@@ -1151,6 +1151,24 @@ type Diagnostics struct {
 	// way it treats any other `set` refusal.
 	MonitorDeniedStatus int
 
+	// UnknownConditionOption is `[[ -o name ]]` given a name this shell does
+	// not have, in the dialect's words, for the one dialect that says
+	// anything (Semantics.UnknownConditionOptionIsAStatus). One verb: the
+	// name exactly as the script wrote it, before any of the namespace's own
+	// folding — measured, zsh echoes `Err_Exit` back with its capitals and
+	// its underscore.
+	//
+	//	zsh    no such option: zzz
+	//
+	// zsh's location prefix comes from the location, as everywhere else.
+	UnknownConditionOption string
+
+	// UnknownConditionOptionStatus is what `[[ ]]` reports when that
+	// happened and nothing later in the condition overrode it. zsh answers
+	// 3, which is neither of the two a condition otherwise gives — that is
+	// the whole of how the third value is visible from outside.
+	UnknownConditionOptionStatus int
+
 	// KilledCommandNotice is what a shell says when a signal ended a
 	// command. Three verbs: the process id, the words for the signal, and
 	// the command written back out.

@@ -379,6 +379,36 @@ func (r *Runner) NamedOption(name string) (on, known bool) {
 	return o.state(r), true
 }
 
+// SetOptionNamespace installs the names `[[ -o name ]]` reads, for a dialect
+// whose option namespace is wider than the `set -o` names it declares.
+//
+// Two namespaces rather than one because the panel has two. bash and ksh93
+// test the same names `set -o` takes, so their `[[ -o ]]` needs nothing here
+// and reads NamedOption. zsh's is its own: about a hundred and eighty names
+// where `set -o` shows a couple of dozen, folded case-insensitively, with
+// underscores ignored and a single `no` prefix negating what follows — which
+// is why the lookup is a function the dialect supplies rather than a longer
+// list this package could hold. Measured: `[[ -o Err_Exit ]]` and
+// `[[ -o errexit ]]` are one question in zsh and two unknown names in bash.
+//
+// The second result is what decides between a plain false and the dialect's
+// complaint, so a namespace that guesses `true, false` for a name it has
+// never heard of would turn every typo into a silent no. It answers about
+// names, never about states.
+func (r *Runner) SetOptionNamespace(lookup func(name string) (on, known bool)) {
+	r.optionNamespace = lookup
+}
+
+// conditionOption reads one option name the way `[[ -o ]]` asks for it:
+// through the dialect's namespace where it has one, and through the `set -o`
+// names otherwise.
+func (r *Runner) conditionOption(name string) (on, known bool) {
+	if r.optionNamespace != nil {
+		return r.optionNamespace(name)
+	}
+	return r.NamedOption(name)
+}
+
 // MatchPattern reports whether a shell pattern matches a whole string, by this
 // shell's own pattern rules.
 //

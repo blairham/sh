@@ -13578,6 +13578,226 @@
         "TimedOut": false
       }
     },
+    "cond/option-test-missing-operand": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `]]' to conditional unary operator~\u003cshell\u003e: -c: line 1: syntax error near `;'~\u003cshell\u003e: -c: line 1: `[[ -o ]]; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: unexpected argument `]]' to conditional unary operator~\u003cshell\u003e: -c: line 1: syntax error near `;'~\u003cshell\u003e: -c: line 1: `[[ -o ]]; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: unexpected argument `]]' to conditional unary operator~\u003cshell\u003e: -c: line 0: syntax error near `;'~\u003cshell\u003e: -c: line 0: `[[ -o ]]; echo \"st=$?\"'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `]]' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: unknown condition: -o",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/option-test-operand-is-an-ordinary-word": {
+      "bash": {
+        "Stdout": "var=0~quoted=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "var=0~quoted=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "var=0~quoted=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "var=127~quoted=127",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "var=0~quoted=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "var=0~quoted=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/option-test-reads-a-set-option": {
+      "bash": {
+        "Stdout": "on=0~off=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "on=0~off=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "on=0~off=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "on=0~off=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "on=0~off=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/option-test-unknown-name-diverges": {
+      "bash": {
+        "Stdout": "st=1~alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~alive",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~alive",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=3~alive",
+        "Stderr": "\u003cshell\u003e:1: no such option: nosuchoption",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/option-test-unknown-name-is-not-a-false": {
+      "bash": {
+        "Stdout": "not=0~or=0~and=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "not=0~or=0~and=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "not=0~or=0~and=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "not=127~or=127~and=127",
+        "Stderr": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: 1: not found~\u003cshell\u003e: 1: [[: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "not=0~or=0~and=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "not=3~or=0~and=3",
+        "Stderr": "\u003cshell\u003e:1: no such option: nosuchoption~\u003cshell\u003e:1: no such option: nosuchoption~\u003cshell\u003e:1: no such option: nosuchoption",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "cond/pattern-through-a-variable-diverges": {
       "bash": {
         "Stdout": "var-is-pattern",
@@ -13969,6 +14189,50 @@
       "zsh": {
         "Stdout": "linked~distinct",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/single-bracket-o-is-not-the-option-test": {
+      "bash": {
+        "Stdout": "two=1~one=0~or=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "two=1~one=0~or=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "two=1~one=0~or=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "two=2~one=0~or=0",
+        "Stderr": "\u003cshell\u003e: 1: [: -o: unexpected operator",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "two=1~one=0~or=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "two=2~one=0~or=0",
+        "Stderr": "\u003cshell\u003e:[:1: too many arguments",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

@@ -105,6 +105,9 @@ func TestSemantics(t *testing.T) {
 		{"CdRefusesUnknownOption", s.CdRefusesUnknownOption, interp.Yes},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.Yes},
 		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.Yes},
+		// The two questions come apart here: `set -o nosuchoption` ends the
+		// script and `[[ -o nosuchoption ]]` is a quiet false.
+		{"UnknownConditionOptionIsAStatus", s.UnknownConditionOptionIsAStatus, interp.No},
 		// `set -h` is command tracking — trackall, this shell's name for
 		// it — and `set -m` is granted to a script with no terminal.
 		{"SetHasTheHLetter", s.SetHasTheHLetter, interp.Yes},

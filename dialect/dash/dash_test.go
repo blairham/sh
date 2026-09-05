@@ -134,6 +134,10 @@ func TestSemantics(t *testing.T) {
 		{"CdRefusesUnknownOption", s.CdRefusesUnknownOption, interp.Yes},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.Yes},
 		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.Yes},
+		// Answered although this shell has no `[[ ]]` to ask it in, so a
+		// grammar built from this preset with the construct turned on is
+		// not left refusing.
+		{"UnknownConditionOptionIsAStatus", s.UnknownConditionOptionIsAStatus, interp.No},
 		// The one shell that refuses the -h letter, and one of the two that
 		// tie `set -m` to the tty — declined in a remark, not an error.
 		{"SetHasTheHLetter", s.SetHasTheHLetter, interp.No},

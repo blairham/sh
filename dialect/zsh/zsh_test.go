@@ -140,6 +140,9 @@ func TestSemantics(t *testing.T) {
 		{"CdRefusesUnknownOption", s.CdRefusesUnknownOption, interp.No},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.No},
 		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.Yes},
+		// The one shell that says anything about a `[[ -o ]]` name it does
+		// not have — and answers 3, which is neither of a condition's two.
+		{"UnknownConditionOptionIsAStatus", s.UnknownConditionOptionIsAStatus, interp.Yes},
 		// `set -h` is a history option here, not command tracking, and
 		// `set -m` wants the terminal this shell ties job control to.
 		{"SetHasTheHLetter", s.SetHasTheHLetter, interp.Yes},

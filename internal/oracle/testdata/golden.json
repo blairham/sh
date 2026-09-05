@@ -22818,6 +22818,50 @@
         "TimedOut": false
       }
     },
+    "heredoc/a-delimiter-that-closes-a-command-substitution": {
+      "bash": {
+        "Stdout": "v=[a] st=0",
+        "Stderr": "\u003cscript\u003e: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "v=[a] st=0",
+        "Stderr": "\u003cscript\u003e: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "v=[a] st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 6: Syntax error: end of file unexpected (expecting \")\")",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "v=[a] st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:6: parse error near `v=$(cat \u003c\u003cEOF'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "heredoc/a-delimiter-that-never-matches": {
       "bash": {
         "Stdout": "[a)~ EOF]",
@@ -23208,6 +23252,50 @@
       },
       "zsh": {
         "Stdout": "one~after~done",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "heredoc/the-delimiter-is-the-whole-line": {
+      "bash": {
+        "Stdout": "line~EOF x~echo \"st=0\"",
+        "Stderr": "\u003cscript\u003e: line 5: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "line~EOF x~echo \"st=0\"",
+        "Stderr": "\u003cscript\u003e: line 5: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "line~EOF x~echo \"st=0\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "line~EOF x~echo \"st=0\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "line~EOF x~echo \"st=0\"",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "line~EOF x~echo \"st=0\"",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -38878,6 +38966,50 @@
         "TimedOut": false
       }
     },
+    "read/interrupted-by-a-trapped-signal": {
+      "bash": {
+        "Stdout": "T~st=0 l=[late]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "T~st=130 l=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "T~st=0 l=[late]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "T~st=1 l=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "T~st=258 l=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "T~st=0 l=[late]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "read/options-cluster-in-one-word": {
       "bash": {
         "Stdout": "[x\\]",
@@ -43586,6 +43718,50 @@
         "TimedOut": false
       }
     },
+    "shift/a-double-dash-before-the-count": {
+      "bash": {
+        "Stdout": "st=0 n=1 rest=[c]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0 n=1 rest=[c]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0 n=1 rest=[c]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: shift: Illegal number: --",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0 n=1 rest=[c]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 n=1 rest=[c]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "shift/a-leading-dash-that-is-not-a-number": {
       "bash": {
         "Stdout": "st=2",
@@ -43630,6 +43806,50 @@
         "TimedOut": false
       }
     },
+    "shift/a-negative-count": {
+      "bash": {
+        "Stdout": "st=1 n=3",
+        "Stderr": "\u003cshell\u003e: line 1: shift: -1: shift count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1 n=3",
+        "Stderr": "\u003cshell\u003e: line 1: shift: -1: shift count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 n=3",
+        "Stderr": "\u003cshell\u003e: line 0: shift: -1: shift count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: shift: Illegal number: -1",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: shift: -1: unknown option~Usage: shift [ options ] [n]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1 n=3",
+        "Stderr": "\u003cshell\u003e:shift:1: argument to shift must be non-negative",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "shift/an-operand-that-was-never-given": {
       "bash": {
         "Stdout": "st=1",
@@ -43668,6 +43888,50 @@
       },
       "zsh": {
         "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:shift:1: shift count must be \u003c= $#",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "shift/past-the-end-with-a-count": {
+      "bash": {
+        "Stdout": "st=1 n=2 rest=[a b]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1 n=2 rest=[a b]",
+        "Stderr": "\u003cshell\u003e: line 1: shift: 5: shift count out of range",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 n=2 rest=[a b]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: shift: can't shift that many",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: shift: 5: bad number",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1 n=2 rest=[a b]",
         "Stderr": "\u003cshell\u003e:shift:1: shift count must be \u003c= $#",
         "Status": 0,
         "Signal": 0,
@@ -44598,6 +44862,138 @@
         "TimedOut": false
       }
     },
+    "special/dollar-dash-in-full": {
+      "bash": {
+        "Stdout": "[hBc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[hBc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[hBc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[chsB]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[569X]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "special/dollar-dash-in-full-from-a-script": {
+      "bash": {
+        "Stdout": "[hB]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[hB]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[hB]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[hB]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[569X]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "special/dollar-dash-orders-the-letters-its-own-way": {
+      "bash": {
+        "Stdout": "[efhuBc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[efhuBc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[efhuBc]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[ufe]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[cefhsuB]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[569Xefu]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "special/ifs-has-a-default": {
       "bash": {
         "Stdout": " \\t \\n ",
@@ -44812,6 +45208,94 @@
       },
       "zsh": {
         "Stdout": "have",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "special/underscore-after-a-declaration-command": {
+      "bash": {
+        "Stdout": "a=[]~b=[y=2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a=[]~b=[y=2]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a=[]~b=[y]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a=[]~b=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a=[]~b=[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a=[]~b=[export]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "special/underscore-at-startup": {
+      "bash": {
+        "Stdout": "[\u003cshell\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[sh]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[\u003cshell\u003e]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[]",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -50312,6 +50796,94 @@
       },
       "zsh": {
         "Stdout": "3600~unlimited",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "ulimit/setting-with-neither-letter-moves-both": {
+      "bash": {
+        "Stdout": "s=100 hard_moved=yes",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "s=100 hard_moved=yes",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "s=100 hard_moved=yes",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "s=100 hard_moved=yes",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "s=100 hard_moved=yes",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "s=100 hard_moved=no",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "ulimit/the-file-size-block": {
+      "bash": {
+        "Stdout": "size=600",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "size=512",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "size=600",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "size=512",
+        "Stderr": "Filesize limit exceeded: 25",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "size=512",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "size=512",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

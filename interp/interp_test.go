@@ -6,14 +6,29 @@ package interp_test
 import (
 	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/blairham/sh/dialect/bash"
+	"github.com/blairham/sh/internal/treeguard"
 	. "github.com/blairham/sh/interp"
 
 	"github.com/blairham/sh/syntax"
 )
+
+// TestMain guards the source tree, because this package's tests are the ones
+// that can damage it. `go test` runs them in `interp/`, a Runner with no Dir
+// resolves a relative path against wherever it is running, and a test that
+// redirects to one therefore writes into the checkout — silently, since the
+// write succeeds and the test passes. One such file reached `main` twice
+// before anybody noticed it was not part of either change.
+//
+// newTestRunner is the fix and this is the reason the fix cannot quietly stop
+// working: a test that builds its own Runner without a Dir, and writes, fails
+// the package here rather than leaving a file for the next `git add -A`.
+func TestMain(m *testing.M) { os.Exit(treeguard.Run(m)) }
 
 // TestSurvivableShiftSpeaksOnlyWhereTheDialectHasWords names the field rather
 // than a shell, which is the rule for a test in this package.
@@ -53,6 +68,31 @@ func TestSurvivableShiftSpeaksOnlyWhereTheDialectHasWords(t *testing.T) {
 // the developer's machine has accumulated.
 func testPATH() []string { return []string{"PATH=/usr/bin:/bin"} }
 
+// newTestRunner is how a test in this package builds a Runner.
+//
+// It exists because the two pieces of state a Runner reads from its own fields
+// — where relative paths start and where temporary files go — are exactly the
+// two a test that sets neither borrows from the machine instead. A Runner with
+// no Dir resolves `>f` against the process's directory, which under `go test`
+// is the package's own source directory, so the shell writes into the
+// checkout; a Runner with no TMPDIR puts a process substitution's pipes in the
+// machine's real temporary directory, where only CleanUp would ever remove
+// them. Both failures are silent, and the first one has twice been committed
+// by a later change that swept up the file it found.
+//
+// So the answer to "may a test construct a Runner without a directory" is no,
+// and this is the shape that makes it so: two directories the framework takes
+// away again, and the CleanUp registered rather than remembered. The Dir and
+// the TMPDIR are deliberately different directories — a substitution's pipes
+// appearing inside the shell's own working directory would be visible to a
+// glob, which is a difference no real shell has.
+func newTestRunner(t *testing.T) *Runner {
+	t.Helper()
+	r := &Runner{Dir: t.TempDir(), Env: append(testPATH(), "TMPDIR="+t.TempDir())}
+	t.Cleanup(r.CleanUp)
+	return r
+}
+
 func run(t *testing.T, src string, setup func(*Runner)) (out string, status int) {
 	t.Helper()
 	return runGrammar(t, src, nil, setup)
@@ -77,15 +117,8 @@ func runGrammar(t *testing.T, src string, enable func(*syntax.Dialect), setup fu
 	// core and the core refuses anything the shells disagree about — which
 	// is exactly what these tests are full of.
 	bash := bash.Semantics()
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &bash, Env: testPATH()}
-	// A temporary directory the framework takes away again. A process
-	// substitution makes a directory for its pipes under the shell's TMPDIR
-	// and only CleanUp removes it, which most tests have no reason to call —
-	// so without this the suite leaves one behind per substituting Runner, in
-	// whatever real directory the machine names. Seeding the Runner's own
-	// environment is all it takes, which is the point of the change that
-	// made TMPDIR the Runner's question rather than the process's.
-	r.Env = append(r.Env, "TMPDIR="+t.TempDir())
+	r := newTestRunner(t)
+	r.Stdout, r.Stderr, r.Semantics = &buf, &buf, &bash
 	if setup != nil {
 		setup(r)
 	}
@@ -94,6 +127,63 @@ func runGrammar(t *testing.T, src string, enable func(*syntax.Dialect), setup fu
 		return buf.String() + "unsupported: " + rerr.Error(), -1
 	}
 	return buf.String(), st
+}
+
+// TestARelativeRedirectStaysInTheRunnersOwnDirectory, which is the property
+// the shared helper exists for. A Runner resolves a relative path against its
+// Dir, and a Runner with no Dir resolves it against wherever the process is —
+// under `go test` that is this source directory, so the shell writes into the
+// checkout and says nothing about it.
+//
+// Asserted from both sides: the file has to be somewhere the framework takes
+// away, and it has to not be here. The second half is what a passing test
+// without this could never notice.
+func TestARelativeRedirectStaysInTheRunnersOwnDirectory(t *testing.T) {
+	const name = "written-by-a-relative-redirect"
+	var dir string
+	out, st := run(t, `echo content >`+name+`; cat `+name, func(r *Runner) {
+		dir = r.Dir
+	})
+	if out != "content\n" || st != 0 {
+		t.Fatalf("got %q status %d, want the file written and read back", out, st)
+	}
+	if dir == "" {
+		t.Fatal("the helper left Dir empty, so a relative path resolves against the source tree")
+	}
+	if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+		t.Errorf("the file is not in the runner's directory: %v", err)
+	}
+	if _, err := os.Stat(name); err == nil {
+		t.Errorf("%s was written into the source tree", name)
+		// Removed as well as reported, and only this name, which nothing
+		// but this test writes. A stray left in place fails every later run
+		// for a reason that has already been fixed, and — the original
+		// complaint — waits in the tree for somebody's `git add -A`.
+		if err := os.Remove(name); err != nil {
+			t.Errorf("and could not be removed: %v", err)
+		}
+	}
+}
+
+// TestTheHelperGivesTemporaryFilesSomewhereTemporary. A process substitution
+// makes a directory for its pipes under the shell's TMPDIR, and only CleanUp
+// removes it — which most tests have no reason to call. Left to the machine's
+// real temporary directory that is one directory per substituting Runner,
+// forever; the helper registers the cleanup so no test has to remember.
+func TestTheHelperGivesTemporaryFilesSomewhereTemporary(t *testing.T) {
+	r := newTestRunner(t)
+	var tmp string
+	for _, kv := range r.Env {
+		if rest, ok := strings.CutPrefix(kv, "TMPDIR="); ok {
+			tmp = rest
+		}
+	}
+	if tmp == "" {
+		t.Fatal("the helper left TMPDIR unset, so pipes go in the machine's own")
+	}
+	if tmp == r.Dir {
+		t.Error("TMPDIR is the working directory, so a substitution's pipes would be visible to a glob")
+	}
 }
 
 func TestFieldSplittingMatchesTheSpec(t *testing.T) {

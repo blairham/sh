@@ -418,14 +418,29 @@ type Runner struct {
 	// almost always; a clone inherits it, so a subshell inside a timed
 	// element still bills that element.
 	elemCPU *cpuAccum
-	// CommandString says the program came from an argument — `-c` — rather
-	// than from a file or from standard input.
+	// Route is where the program came from: a command string, a script
+	// file, or standard input.
 	//
-	// Set by the front end, because that is what reads the invocation. One
-	// dialect answers a failed expansion with a different status depending
-	// on it, and on nothing else: the same two lines exit 127 given with
-	// `-c` and 1 read from a file.
-	CommandString bool
+	// Set by the front end, because that is what reads the invocation — the
+	// same fact Interactive is, and carried in for the same reason. Three
+	// things read it and each reads a different pair of the three: one
+	// dialect answers a failed expansion with a different status under `-c`
+	// than from a file, one answers a readonly reassignment differently the
+	// same way, and `$-` shows `c` and `s` for two of the routes in some
+	// shells and not others.
+	//
+	// One field rather than a bool per route, because they are answers to
+	// one question and a second name for it is the one that would drift.
+	Route Route
+
+	// StandardInputOption says the invocation wrote `-s`.
+	//
+	// Nearly the same fact as Route being RouteStandardInput, and separate
+	// for the one invocation where it is not: `sh -s -c cmd` runs the
+	// command string in all four shells and still puts `s` in `$-` in all
+	// four. So the letter follows either the route or the spelling, and the
+	// spelling has to survive a route that overrode it.
+	StandardInputOption bool
 
 	// inFunc is the name of the function being run, for `$0`.
 	inFunc string
@@ -1035,7 +1050,7 @@ func (r *Runner) fatalExpansion(format string, args ...any) {
 // itself, as fatalQuiet is to fatal.
 func (r *Runner) fatalExpansionQuiet() {
 	r.fatalQuiet()
-	if n := r.diag().ExpansionFailureStatusFromCommandString; n != 0 && r.CommandString {
+	if n := r.diag().ExpansionFailureStatusFromCommandString; n != 0 && r.Route == RouteCommandString {
 		r.status = n
 	}
 }
@@ -2291,7 +2306,7 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 		defer func() { r.inBuiltin = outer }()
 		fatal := r.sem().ReadonlyReassignmentFatal
 		switch {
-		case form == assignedAlone && r.CommandString:
+		case form == assignedAlone && r.Route == RouteCommandString:
 			fatal = r.sem().ReadonlyReassignmentFatalFromCommandString
 		case form == assignedByDeclaration:
 			// A third answer, and a different set of shells from either of

@@ -85,9 +85,14 @@ func Semantics() interp.Semantics {
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
 	// Measured: `echo $-` reports `hB` — hashall and braceexpand — under
-	// -c, a script file and standard input alike, before the route letters
-	// the semantics field deliberately leaves out.
+	// -c, a script file and standard input alike, before the letters that
+	// describe the route.
 	s.DefaultOptionLetters = "hB"
+	// `bash -c 'echo $-'` reports `hBc`; ksh93 agrees and dash and zsh do
+	// not. The `s` of the standard-input route is not added under `-c`
+	// here — ksh93 alone does that.
+	s.CommandStringShowsCInDollarDash = interp.Yes
+	s.CommandStringShowsSInDollarDash = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.No
 	// A subscript inside a literal is an expression: `a=([1+1]=c)` lands at 2.
 	s.ArrayLiteralSubscriptIsAKey = interp.No

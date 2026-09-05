@@ -71,8 +71,13 @@ func Semantics() interp.Semantics {
 	s.MonitorNeedsATerminal = interp.Yes
 	// Measured: `echo $-` reports `569X` under -c, a script file and
 	// standard input alike — letters from zsh's own single-letter option
-	// namespace, which shares almost nothing with the other shells'.
+	// namespace, which shares almost nothing with the other shells'. The
+	// `s` of the standard-input route is added on top of it and comes from
+	// Runner.Route; under `-c` zsh shows neither route letter, where bash
+	// and ksh93 show `c`.
 	s.DefaultOptionLetters = "569X"
+	s.CommandStringShowsCInDollarDash = interp.No
+	s.CommandStringShowsSInDollarDash = interp.No
 	// The panel's holdout: `echo hi >&-` is status 0 here and 1 in the other
 	// three — the text is quietly lost and nothing is said about a simple
 	// command's own closed stream. What zsh prints when the stream was

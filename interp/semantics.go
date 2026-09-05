@@ -591,18 +591,42 @@ type Semantics struct {
 	// bash and ksh93 report `hB`, zsh `569X`, dash nothing at all.
 	//
 	// The letters that describe the invocation *route* rather than an option
-	// a script could set — `c` for a command string, `s` for standard input
-	// — are not modeled, because the panel disagrees about them and no axis
-	// has been asked yet: measured, ksh93 alone puts `s` in `$-` under `-c`,
-	// and only bash and ksh93 put `c` there at all. `i` is the exception and
-	// is modeled, by Runner.Interactive rather than here: it is unanimous,
-	// and it is a fact about the invocation that the front end carries in
-	// rather than a startup letter of the dialect's.
+	// a script could set — `c` and `s` — are not here either, for the reason
+	// `i` is not: they are facts about the invocation that the front end
+	// carries in, read off Runner.Route. Where the panel splits over them
+	// they have axes of their own, below.
 	//
 	// Nor are the letters a shell turns on only *when* it is interactive:
 	// bash adds `H`, zsh adds `Z`, and ksh93 trades `h` for `mE`. That is a
 	// second, per-dialect vector and nothing has needed it yet.
 	DefaultOptionLetters string
+
+	// CommandStringShowsCInDollarDash puts `c` in `$-` when the program came
+	// from `-c`. Two against two: bash and ksh93 do, dash and zsh do not, so
+	// there is no majority to follow and this is a switch.
+	//
+	// The POSIX preset says yes, from the text rather than from a vote: `$-`
+	// is defined as the option flags specified on invocation, and `-c` is
+	// one of them.
+	//
+	// Read without asking, unlike most axes. A dialect that answers nothing
+	// shows no letter, which is the same thing an unanswered
+	// DefaultOptionLetters does; refusing a whole `$-` expansion over it
+	// would break `case $- in *e*)`, the ordinary errexit check, in every
+	// script that runs under a preset which has not chosen.
+	CommandStringShowsCInDollarDash Answer
+
+	// CommandStringShowsSInDollarDash also puts `s` there under `-c`.
+	//
+	// ksh93 alone, and the shape of the disagreement is worth stating: `s`
+	// itself is unanimous for the standard-input route — with `-s` written
+	// or not, and at a prompt — so what splits the panel is only whether a
+	// command string counts. Read down ksh93's rows and its rule is "no
+	// script file was named" where the other three's is "the program came
+	// from standard input"; the two agree everywhere except here.
+	//
+	// Read without asking, for the reason above.
+	CommandStringShowsSInDollarDash Answer
 
 	// ArithIntegerOperatorRefusesFloat rejects a float where only an integer
 	// will do — `7 % 2.5`, `1.5 & 1`, a shift. ksh93 says yes and refuses;
@@ -2215,7 +2239,13 @@ func PosixSemantics() Semantics {
 		PipefailOption: No,
 		// POSIX names the noglob letter itself: `set -f`, reported in `$-`
 		// as `f`. Only zsh answers otherwise.
-		NoglobLetterIsF:                            Yes,
+		NoglobLetterIsF: Yes,
+		// POSIX defines `$-` as the option flags specified on invocation,
+		// and `-c` is one of them; `-s` is not, when it was not written.
+		// The preset takes the text rather than a vote, which is the rule
+		// everywhere here, and the panel splits two against two anyway.
+		CommandStringShowsCInDollarDash:            Yes,
+		CommandStringShowsSInDollarDash:            No,
 		ArithInvalidOctalDigitIsError:              Yes,
 		RegexQuotingMakesLiteral:                   No,
 		LastPipelineElementInCurrentShell:          No,

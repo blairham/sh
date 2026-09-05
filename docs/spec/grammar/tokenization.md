@@ -368,22 +368,33 @@ without it the numbering resets at the first refill.
 | shell | `-c` | script file | standard input |
 | --- | --- | --- | --- |
 | bash | no | no | no |
+| bash as `sh` | yes | yes | yes |
 | dash | yes | yes | yes |
 | ksh93 | yes | yes | yes |
 | zsh | **no** | **yes** | **yes** |
 
 bash needs `shopt -s expand_aliases` and then expands by every route; the
-`no` row is bash without it. All four expand interactively, which the
-front end decides rather than the grammar.
+`no` row is bash without it. The same binary invoked as `sh` expands by
+every route with no `shopt` anywhere — POSIX mode turns alias expansion
+on for a non-interactive shell, which is why the panel runs bash twice.
+All of them expand interactively, which the front end decides rather than
+the grammar.
 
 **zsh does not fit a boolean**, and this was measured rather than
 inferred: the answer depends on how the program arrived, not on whether
 anyone is at the keyboard. A boolean gets one of zsh's three right, and
 the two it gets wrong are the ones a real script uses.
 
-The same run found bash in POSIX mode splitting the other way — `sh -c`
-expands and `sh script.sh` does not — which settles that the route is a
-dimension of the question rather than one shell's quirk.
+zsh is the only witness to the split, and one witness is enough: a
+boolean cannot record an answer that zsh gives two ways.
+
+Measuring this needs care, because the obvious probe answers a different
+question. Writing the `-c` case as `alias a=…; a` puts the definition and
+the use on one line, and aliases are applied while the line is parsed —
+so the whole string is parsed before the definition takes effect, and
+every shell reports `a` as not found. That measures same-line-versus-next
+line, which is what `alias/not-on-the-line-that-defines-it` covers. The
+route only shows itself when the `-c` string carries a real newline.
 
 So `Dialect.ExpandAliases` is a **set of routes**, `AliasRoutes`, and the
 front end asks it with the route it read: a command string, a file, or

@@ -36,7 +36,7 @@ PREFIX ?= /usr/local
 SHELLDIR ?= $(PREFIX)/libexec/sh
 SHELLS := sh bash zsh ksh dash
 
-.PHONY: all build test test-cover fmt vet lint tidy clean check corpus-guard oracle oracle-check conformance conformance-dialects install uninstall
+.PHONY: all build test test-cover fmt vet lint tidy clean check corpus-guard oracle oracle-check conformance conformance-dialects smoke install uninstall
 
 all: build
 
@@ -116,6 +116,12 @@ wild-run: ## Also RUN each script that parses, under both shells, and report whe
 	@mkdir -p $(BINDIR)
 	@go build -o $(BINDIR)/wild-bash ./cmd/bash
 	@go run ./cmd/wild -run $(BINDIR)/wild-bash $(ARGS)
+
+smoke: ## Drive a realistic interactive session through a pty and report, per feature, what works
+	@mkdir -p $(BINDIR)
+	@go build -o $(BINDIR)/smoke-bash ./cmd/bash
+	@go build -o $(BINDIR)/smoke-zsh ./cmd/zsh
+	@go run ./cmd/smoke -bash $(BINDIR)/smoke-bash -zsh $(BINDIR)/smoke-zsh $(ARGS)
 
 conformance-dialects: ## Grade each dialect binary against the shell it claims to be
 	@mkdir -p $(BINDIR)

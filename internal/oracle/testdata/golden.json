@@ -1274,6 +1274,102 @@
         "TimedOut": false
       }
     },
+    "arith/compound-arithmetic-assignment": {
+      "bash": {
+        "Output": "42 7 3 x=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "42 7 3 x=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "42 7 3 x=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "42 7 3 x=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "42 7 3 x=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "42 7 3 x=3",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/compound-bitwise-assignment": {
+      "bash": {
+        "Output": "8 11 27 x=27",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "8 11 27 x=27",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "8 11 27 x=27",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "8 11 27 x=27",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "8 11 27 x=27",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "8 11 27 x=27",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/compound-shift-assignment": {
+      "bash": {
+        "Output": "48 12 x=12",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "48 12 x=12",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "48 12 x=12",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "48 12 x=12",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "48 12 x=12",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "48 12 x=12",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "arith/dividing-a-float-by-zero": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: 1.0/0: arithmetic syntax error: invalid arithmetic operator (error token is \".0/0\")",
@@ -1718,6 +1814,38 @@
       },
       "zsh": {
         "Output": "[10][100]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "arith/logical-not": {
+      "bash": {
+        "Output": "1 0 0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1 0 0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1 0 0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "1 0 0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1 0 0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1 0 0",
         "Status": 0,
         "TimedOut": false
       }
@@ -5882,6 +6010,38 @@
         "TimedOut": false
       }
     },
+    "cond/existence-and-kind-operators": {
+      "bash": {
+        "Output": "e-file~e-dir~e-missing~dir~not-dir~file~not-file",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "e-file~e-dir~e-missing~dir~not-dir~file~not-file",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "e-file~e-dir~e-missing~dir~not-dir~file~not-file",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~e-missing~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~not-dir~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~not-file",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "e-file~e-dir~e-missing~dir~not-dir~file~not-file",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "e-file~e-dir~e-missing~dir~not-dir~file~not-file",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "cond/file-kind-operators": {
       "bash": {
         "Output": "fifo~plain~chardev~notblock~notsocket",
@@ -6170,6 +6330,38 @@
         "TimedOut": false
       }
     },
+    "cond/permission-operators": {
+      "bash": {
+        "Output": "readable~not-writable~not-executable~writable~executable~not-readable",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "readable~not-writable~not-executable~writable~executable~not-readable",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "readable~not-writable~not-executable~writable~executable~not-readable",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~not-writable~\u003cshell\u003e: 1: [[: not found~not-executable~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~not-readable",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "readable~not-writable~not-executable~writable~executable~not-readable",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "readable~not-writable~not-executable~writable~executable~not-readable",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "cond/quoted-regex-diverges": {
       "bash": {
         "Output": "literal",
@@ -6358,6 +6550,38 @@
       },
       "zsh": {
         "Output": "linked~distinct",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "cond/size-operator": {
+      "bash": {
+        "Output": "full~is-empty~missing",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "full~is-empty~missing",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "full~is-empty~missing",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: [[: not found~\u003cshell\u003e: 1: [[: not found~is-empty~\u003cshell\u003e: 1: [[: not found~missing",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "full~is-empty~missing",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "full~is-empty~missing",
         "Status": 0,
         "TimedOut": false
       }
@@ -9658,6 +9882,38 @@
         "TimedOut": false
       }
     },
+    "expand/brace-nested": {
+      "bash": {
+        "Output": "a b c~x1y x2y x3y",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "a b c~x1y x2y x3y",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "a b c~x1y x2y x3y",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "{a,{b,c}}~x{1,{2,3}}y",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "a b c~x1y x2y x3y",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "a b c~x1y x2y x3y",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "expand/brace-range-alpha-stepped": {
       "bash": {
         "Output": "a c e",
@@ -11034,6 +11290,70 @@
         "TimedOut": false
       }
     },
+    "heredoc/dash-does-not-strip-spaces-from-the-delimiter": {
+      "bash": {
+        "Output": "\u003cscript\u003e: line 4: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')~body~    EOF",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cscript\u003e: line 4: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')~body~    EOF",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "body~    EOF",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "body~    EOF",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "body~    EOF",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "body~    EOF",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "heredoc/dash-strips-tabs-and-only-tabs": {
+      "bash": {
+        "Output": "one~two~    spaced~zero~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "one~two~    spaced~zero~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "one~two~    spaced~zero~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "one~two~    spaced~zero~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "one~two~    spaced~zero~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "one~two~    spaced~zero~after",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "heredoc/no-delimiter-and-a-warning": {
       "bash": {
         "Output": "\u003cscript\u003e: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `X')~body",
@@ -11126,6 +11446,70 @@
       },
       "zsh": {
         "Output": "don't say \"hi\"",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "heredoc/the-body-follows-the-next-newline": {
+      "bash": {
+        "Output": "one~after~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "one~after~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "one~after~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "one~after~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "one~after~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "one~after~done",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "heredoc/two-on-one-line-collect-in-operator-order": {
+      "bash": {
+        "Output": "first~second",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "first~second",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "first~second",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "first~second",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "first~second",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "first~second",
         "Status": 0,
         "TimedOut": false
       }
@@ -15734,6 +16118,38 @@
       },
       "zsh": {
         "Output": "caret",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "pat/bracket-dash-at-an-edge-is-literal": {
+      "bash": {
+        "Output": "trailing~leading~a~not-b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "trailing~leading~a~not-b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "trailing~leading~a~not-b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "trailing~leading~a~not-b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "trailing~leading~a~not-b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "trailing~leading~a~not-b",
         "Status": 0,
         "TimedOut": false
       }

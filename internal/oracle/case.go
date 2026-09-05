@@ -1555,6 +1555,42 @@ var Corpus = []Case{
 		Why:     "a caught signal runs its handler and the script carries on, which is the whole reason to catch one",
 	},
 	{
+		// The shape that was wrong, and the reason it is this one. A handler
+		// runs between commands, so an `exit` raised by a signal delivered
+		// during the body is read at the top of the *next* command — and in
+		// a `while` the next command is the condition. A loop that reads
+		// that refusal as a condition's answer finds it non-zero, decides
+		// the loop is over, and writes its own bookkeeping over the 7: the
+		// handler's line is printed, `after` is never reached, and the shell
+		// exits 0 all the same.
+		//
+		// Bounded rather than `while :`, so a shell that loses the exit
+		// fails this case instead of hanging on it.
+		ID: "trap/an-exit-from-a-handler-ends-a-while-loop", Category: "traps and exit",
+		Snippet: `trap 'echo caught; exit 7' USR1; i=0; while [ $i -lt 3 ]; do i=$((i+1)); kill -USR1 $$; done; echo after`,
+		Why:     "an `exit` raised inside a signal handler ends the shell from wherever it was raised, and a loop that was running when the signal arrived is not an exception: all six print `caught` once, never reach `after`, and exit 7. It is the status a caller acts on, and the one shape most likely to be got wrong, because a `while` asks its condition a question immediately after the handler has answered a different one",
+	},
+	{
+		ID: "trap/an-exit-from-a-handler-ends-an-until-loop", Category: "traps and exit",
+		Snippet: `trap 'echo caught; exit 7' USR1; i=0; until [ $i -ge 3 ]; do i=$((i+1)); kill -USR1 $$; done; echo after`,
+		Why:     "the same for the loop that reads its condition the other way round, unanimously 7. It is worth having beside the `while` row rather than assumed from it: an `until` inverts the sense of the status it reads, so a shell that mistakes a refusal for a condition gets the *opposite* wrong answer here — it runs the body again rather than deciding the loop is over",
+	},
+	{
+		ID: "trap/an-exit-from-a-handler-ends-a-for-loop", Category: "traps and exit",
+		Snippet: `trap 'echo caught; exit 7' USR1; for i in 1 2 3; do kill -USR1 $$; done; echo after`,
+		Why:     "the control row. A `for` reads no condition, so it has nothing to mistake a refusal for, and it was right while the `while` was wrong — which is what says the fault was in how a loop reads its control state rather than in how a trap sets one. All six exit 7 here too",
+	},
+	{
+		ID: "trap/an-exit-from-a-handler-ends-nested-loops", Category: "traps and exit",
+		Snippet: `trap 'echo caught; exit 7' USR1; i=0; while [ $i -lt 2 ]; do j=0; while [ $j -lt 2 ]; do j=$((j+1)); kill -USR1 $$; done; i=$((i+1)); done; echo after`,
+		Why:     "an exit raised two loops deep leaves both of them, rather than the inner one only: the outer loop's own condition is the next command after the inner loop returns, so a shell that recovers at one level goes round the outer loop and reports its bookkeeping instead. Still `caught` once and 7 in all six",
+	},
+	{
+		ID: "trap/an-exit-from-a-handler-ends-a-loop-inside-a-function", Category: "traps and exit",
+		Snippet: `trap 'echo caught; exit 7' USR1; f() { i=0; while [ $i -lt 3 ]; do i=$((i+1)); kill -USR1 $$; done; }; f; echo after`,
+		Why:     "and the same through a function boundary, which is the shape a real script has: an `exit` is not a `return`, so the function call it was raised inside does not absorb it. `caught` and 7 in all six, with `after` unreached",
+	},
+	{
 		ID: "trap/lineno-inside-an-action", Category: "traps and exit",
 		Script:          true,
 		LayoutSensitive: true,

@@ -524,6 +524,64 @@ Corpus: `cmd/loop-status-when-body-never-runs`,
 `core/the-status-a-loop-body-starts-from`,
 `core/a-loop-condition-sees-the-status-before-it`.
 
+### An exit raised inside a loop is not a status the loop may overwrite
+
+The rule above is about what a loop *reports*, and it has a boundary: a
+loop only has an answer to give when it ended by running out. A loop that
+was left rather than finished — by `exit`, by `return`, by an interrupt
+that gave up the line — has no status of its own to report, and the status
+standing is the one whatever left it set.
+
+The sharp case is a **signal handler that exits**, because a handler runs
+*between commands*: the `exit` is read at the top of the command after the
+one the signal interrupted, and in a conditional loop that command is the
+next round's condition. A loop that reads the refusal as though it were the
+condition's answer finds it non-zero, concludes the loop is over, and puts
+its own bookkeeping over the top of the handler's status.
+
+Measured 2026-09-05 on dash (`/bin/dash`), bash 3.2.57 (`/bin/bash`), bash
+5.3.15 (`/opt/homebrew/bin/bash`), that same 5.3.15 binary through a name
+of `sh`, ksh93u+ (`/bin/ksh`) and zsh 5.9.2 (`/opt/homebrew/bin/zsh`).
+Every probe prints `caught` once, never reaches `after`, and exits **7** in
+all six — a core answer, with nothing to make an axis of:
+
+| probe | all six |
+| --- | --- |
+| `trap 'echo caught; exit 7' USR1; i=0; while [ $i -lt 3 ]; do i=$((i+1)); kill -USR1 $$; done; echo after` | `caught`, 7 |
+| the same with `until [ $i -ge 3 ]` | `caught`, 7 |
+| the same with `for i in 1 2 3` | `caught`, 7 |
+| the same two loops deep | `caught`, 7 |
+| the same inside a function | `caught`, 7 |
+
+The **`for` row is the control**, and it is what says where the fault lies
+when there is one. A `for` reads no condition, so it has nothing to mistake
+a refusal for; a shell can be wrong about `while` and right about `for`
+with the same handler and the same signal, which points at how the loop
+reads its control state rather than at how the trap sets it.
+
+The `until` row is not implied by the `while` row either, because `until`
+inverts the sense of the status it reads: a shell that mistakes the refusal
+for a condition gets the *opposite* wrong answer there and runs the body
+again rather than stopping.
+
+The status is the whole of the observable difference. The handler's output
+is there in every case and the command after the loop is unreached in every
+case, so a caller acting on `$?` — which is what a caller does — is the only
+reader that can tell a shell that gets this right from one that does not.
+
+The same holds for the external half, where the signal comes from another
+process rather than from the loop's own `kill`: a shell held in
+`while :; do sleep 0.05; done` and signaled from outside exits with the
+handler's status in all six. That half needs a second process, so it is a
+driver test (`TestAnExitFromATrapEndsAnEndlessLoop`) rather than a corpus
+case.
+
+Corpus: `trap/an-exit-from-a-handler-ends-a-while-loop`,
+`trap/an-exit-from-a-handler-ends-an-until-loop`,
+`trap/an-exit-from-a-handler-ends-a-for-loop`,
+`trap/an-exit-from-a-handler-ends-nested-loops`,
+`trap/an-exit-from-a-handler-ends-a-loop-inside-a-function`.
+
 ## C-style `for ((init; cond; post))`
 
 A loop on a condition rather than over a list. Core — bash, ksh93 and

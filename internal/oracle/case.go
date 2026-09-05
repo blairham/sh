@@ -2425,6 +2425,21 @@ var Corpus = []Case{
 		Why:     "an end-relative subscript, which the shell that blanks does not act on at all beyond `-1` — the array comes back whole where the shells that remove take the middle element away. Pinned because the blanking rule would otherwise be applied to every negative subscript by symmetry, and it is not. bash 3.2 has no negative subscripts and reports a bad one, which is the same absence `array/appending-to-an-element` records",
 	},
 	{
+		ID: "array/unsetting-below-the-first-element", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[0]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "`array/a-subscript-below-the-first-element`'s boundary reached from `unset` rather than from an assignment, and the base decides who is being asked exactly as it does there: where the first element is 1 this names nothing and is refused, and where it is 0 the same numeral is the first element and it is removed. What the two routes do *not* share is the ending — the assignment stops the script and this leaves a failed builtin behind for the next command to test — so a fix that reused the fatal path would have been a new bug. It was silent at 0, which told a script it had removed something out of reach",
+	},
+	{
+		ID: "array/unsetting-past-the-start", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[-4]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the same boundary from the other side, which is the only side the shells whose first element is 0 can reach it from. The shell that blanks is silent here rather than refusing, and that is not a second rule: blanking replaces a span that is there, and a subscript counting back past the start names none — the same reading `array/removing-an-element-from-the-end` records at `-2`. bash 3.2 refuses it for having no negative subscripts at all, which is a different reason for the same line",
+	},
+	{
+		ID: "array/an-unset-subscript-refused-is-named-as-written", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[x-9]"; echo "st=$?"; echo "n=${#a[@]}"`,
+		Why:     "what the refusal names on this route, which is not what it names on the assignment's: bash keeps the subscript as written but drops the array in front of it, ksh93 names the array alone, and both put the builtin's name before the sentence where neither does for an assignment. The expression is what tells the written text from the -9 it came to. zsh has nothing to refuse, a negative subscript reaching nothing being silent there",
+	},
+	{
 		ID: "array/unsetting-every-element-of-a-scalar", Category: "expansion",
 		Snippet: `a=hello; unset "a[@]"; echo "st=$? [$a]"`,
 		Why:     "the same spelling on a name that is no array, which is where the two readings show what they mean: bash means take every element away, a scalar has none, and it refuses and says so at 1; zsh means the span becomes one empty string, a scalar is one such span, and it comes back empty at 0. ksh93 reports its bad subscript and leaves the value alone. Nobody turns the scalar into an array",

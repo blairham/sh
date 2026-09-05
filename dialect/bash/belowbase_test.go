@@ -34,3 +34,30 @@ func TestARefusedLiteralSubscriptNamesTheElement(t *testing.T) {
 		t.Errorf("got %q (status %d), want %q at 1", out, st, want)
 	}
 }
+
+// Reached from `unset` the same boundary drops the array's name and keeps the
+// bare subscript, with the builtin named in front — and it leaves a failed
+// builtin behind rather than ending the script, where the assignment stops.
+// Measured against bash 5.3.15 (2026-09-05).
+func TestUnsetPastTheStartIsRefused(t *testing.T) {
+	for _, c := range []struct{ src, sub string }{
+		{`a=(x y z); unset "a[-4]"; echo "st=$? n=${#a[@]}"`, "-4"},
+		// Named as it was written, not as the -9 it came to.
+		{`a=(x y z); unset "a[x-9]"; echo "st=$? n=${#a[@]}"`, "x-9"},
+	} {
+		out, st := runBash(t, t.TempDir(), c.src)
+		want := "bash: line 1: unset: [" + c.sub + "]: bad array subscript\nst=1 n=3\n"
+		if out != want || st != 0 {
+			t.Errorf("%s = %q (status %d), want %q at 0", c.src, out, st, want)
+		}
+	}
+}
+
+// The first element is 0 here, so `a[0]` names it and is removed rather than
+// refused — the same numeral the one-based shell cannot reach.
+func TestUnsetOfTheFirstElement(t *testing.T) {
+	out, st := runBash(t, t.TempDir(), `a=(x y z); unset "a[0]"; echo "st=$? n=${#a[@]}"`)
+	if out != "st=0 n=2\n" || st != 0 {
+		t.Errorf("got %q (status %d), want %q at 0", out, st, "st=0 n=2\n")
+	}
+}

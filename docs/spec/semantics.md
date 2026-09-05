@@ -5103,6 +5103,14 @@ still finds a number. Leaving it unset until the first call is invisible
 to any case whose loop runs, which is how it survived here until
 `getopts/a-function-with-its-own-optind` read it back afterwards.
 
+The startup value is *written* and not merely defaulted: an `OPTIND` in
+the environment is overwritten with 1 by all six
+(`getopts/optind-ignores-an-inherited-value`), so it cannot be supplied
+by falling back to the inherited value when nothing has set the variable.
+`OPTIND` is not exported, so the only way a script sees an inherited one
+is a caller that exported it on purpose — and the panel still refuses to
+start a scan in the middle.
+
 **`GetoptsAssignmentRestartsWord`** — bash yes · dash yes · ksh93 yes · zsh no
 
 Makes assigning OPTIND begin the word again, dropping any position

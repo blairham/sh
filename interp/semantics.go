@@ -1432,6 +1432,43 @@ type Semantics struct {
 	// axis is absent rather than false there.
 	ArrayBaseIsZero Answer
 
+	// SubscriptCommaIsARange reads the comma in `${a[1,3]}` as the separator
+	// of a range — elements 1 through 3 — rather than as the arithmetic comma
+	// operator, whose value is its right operand and names element 3 alone.
+	//
+	// The same characters with two meanings, which is what puts it here
+	// rather than in a grammar flag: `${a[1,3]}` is one subscript in every
+	// shell that has subscripts at all, and they disagree about what it
+	// says. Measured on `a=(w x y z)`: zsh 5.9.2 gives `w x y`, and bash
+	// 5.3.15, bash 3.2.57, bash as `sh` and ksh93 all give `z`. dash has no
+	// subscript to read.
+	//
+	// Asked only where the two readings differ, which is what keeps
+	// `${a[2,2]}` — one element under either — from needing an answer.
+	SubscriptCommaIsARange Answer
+
+	// ScalarSubscriptIsACharacter reads `${s[2]}` on a plain string as its
+	// second character, rather than as an element of the one-element array a
+	// scalar reads as.
+	//
+	// Measured on `s=hello`: zsh 5.9.2 gives `h` for `${s[1]}` and `e` for
+	// `${s[2]}`, where bash 5.3.15, bash 3.2.57, bash as `sh` and ksh93 all
+	// give `hello` for `${s[0]}` and nothing for either of the others. Both
+	// readings answer, neither reports, and an empty string is a plausible
+	// element — so a script cannot tell which shell it is on except by the
+	// value it gets, which is the definition of a conflict rather than an
+	// addition.
+	//
+	// A range and a character go together: `${s[2,4]}` is the substring
+	// `ell` in the shell that reads characters, and the arithmetic comma's
+	// element 4 — nothing — in the shells that do not. But they are two
+	// axes, because `${a[1,3]}` on an *array* is a range without a character
+	// anywhere in it.
+	//
+	// Asked only where the two readings differ: a one-character string at
+	// the dialect's first subscript is itself under either reading.
+	ScalarSubscriptIsACharacter Answer
+
 	// NegativeSubscriptPastTheStartInserts places a new element in front of
 	// every other when a negative subscript counts back past the first one:
 	// `a=(p q); a[-3]=x` leaves three elements with `x` at the head, however
@@ -2774,7 +2811,13 @@ func PosixSemantics() Semantics {
 		ReadonlyReassignmentFatalFromCommandString: Yes,
 		ReadonlyReassignmentByDeclarationFatal:     Yes,
 		ArrayBaseIsZero:                            Yes,
-		DollarZeroInFunctionIsFunctionName:         No,
+		// The standard has no subscript, and the nearest reading it does
+		// have is its arithmetic: a comma there is the operator whose value
+		// is its right operand, and a string is not a sequence a subscript
+		// reaches into. Both are also what every panel member but one does.
+		SubscriptCommaIsARange:             No,
+		ScalarSubscriptIsACharacter:        No,
+		DollarZeroInFunctionIsFunctionName: No,
 		// A special builtin's failure is fatal to a non-interactive shell,
 		// which the standard states outright. dash is the only member of the
 		// panel that still does it, and the preset follows the standard

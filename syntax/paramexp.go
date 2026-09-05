@@ -270,7 +270,7 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 		return e
 	}
 
-	if p.dialect.ArraySubscript && strings.HasPrefix(s, "[") {
+	if p.dialect.ArraySubscript && strings.HasPrefix(s, "[") && p.subscriptableName(e.Name) {
 		if i := closingBracket(s); i > 0 {
 			e.Index = p.wordFrom(s[1:i], start)
 			s = s[i+1:]
@@ -313,6 +313,34 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 	e.Op = op
 	p.fillParamArgs(e, rest, start)
 	return e
+}
+
+// subscriptableName reports whether the parameter just named may carry a
+// subscript in this grammar.
+//
+// A name always may, where the grammar has subscripts at all. A parameter that
+// is *not* a name — `@`, `*`, `0`, a positional digit, `?`, `-`, `$` — needs
+// the flag: one shell reads `${@[1]}` as a positional parameter and the rest
+// of the panel refuse the expansion outright. Leaving the bracket unconsumed
+// is what produces that refusal, in each grammar's own words and at each
+// grammar's own moment.
+func (p *Parser) subscriptableName(name string) bool {
+	if isParamName(name) {
+		return true
+	}
+	return p.dialect.SpecialParamSubscript
+}
+
+// isParamName reports whether a parameter was spelled as a name rather than as
+// one of the specials or a positional number. `${10[1]}` is a positional
+// parameter in the shells that read two digits there, so a run of digits is
+// not a name however long it is.
+func isParamName(name string) bool {
+	if name == "" {
+		return false
+	}
+	c := name[0]
+	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
 // paramFlagArgs says how many delimited arguments a flag letter may read:

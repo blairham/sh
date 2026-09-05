@@ -366,7 +366,11 @@ func (r *Runner) arrayScalar(elems []string) string {
 	case len(elems) == 1:
 		return elems[0]
 	case r.ask(r.sem().ArrayScalarIsTheWholeArray, "a plain `$a` giving the whole array"):
-		return strings.Join(elems, " ")
+		// Joined with the first character of IFS, exactly as `$*` is and as
+		// `${a[*]}` already was. A hard space was wrong for the same reason
+		// it would be wrong there: measured, `IFS=-; a=(x y z); echo "$a"`
+		// is `x-y-z` and `IFS=; echo "$a"` is `xyz`.
+		return strings.Join(elems, ifsFirst(r.ifs()))
 	default:
 		return elems[0]
 	}
@@ -465,26 +469,299 @@ func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 		// falls through to the numeric path below.
 		return r.assocSubscript(a, e), true
 	}
-	elems, ok := r.arrayElems(e.Name)
+	elems, scalar, ok := r.subscriptTarget(e)
 	if !ok {
 		return nil, true
 	}
-	switch idx := r.subscriptText(e.Index); idx {
+	idx := r.subscriptText(e.Index)
+	switch idx {
 	case "@", "*":
 		return elems, true
-	default:
-		// An expression, not a numeral: `${a[1+1]}` and `${a[i+1]}` name the
-		// element `${a[2]}` names. It took a numeral and nothing else, so
-		// every other spelling silently expanded to nothing.
-		n, ok := r.subscriptIndex(idx)
-		if !ok {
-			return nil, true
-		}
-		if v, ok := r.elemAt(e.Name, elems, n); ok {
-			return []string{v}, true
+	}
+	if lo, hi, isRange := splitSubscriptRange(idx); isRange {
+		return r.rangeSubscript(e, elems, scalar, idx, lo, hi)
+	}
+	if at, extra := topLevelComma(idx); at >= 0 && extra &&
+		r.sem().SubscriptCommaIsARange == Yes {
+		// A range has two ends. The dialect that reads the comma that way
+		// has no reading for a third — measured, `${a[1,2,3]}` is a bad
+		// substitution there — and answering with the arithmetic comma's
+		// last operand would be the other dialect's reading wearing this
+		// one's name.
+		r.reportBadSubstitution(e)
+		return nil, true
+	}
+	if scalar && r.scalarReadsAsCharacters(elems[0], idx) {
+		if c, ok := r.charAt(elems[0], idx); ok {
+			return []string{c}, true
 		}
 		return nil, true
 	}
+	// An expression, not a numeral: `${a[1+1]}` and `${a[i+1]}` name the
+	// element `${a[2]}` names. It took a numeral and nothing else, so
+	// every other spelling silently expanded to nothing.
+	n, ok := r.subscriptIndex(idx)
+	if !ok {
+		return nil, true
+	}
+	if v, ok := r.elemAt(e.Name, elems, n); ok {
+		return []string{v}, true
+	}
+	return nil, true
+}
+
+// subscriptTarget is what a subscript reaches into, and whether that is one
+// string rather than a list.
+//
+// Three sources, because a subscript is written on all three. A name reads its
+// array or, failing that, its value as an array of one — which is what makes
+// `x=v; echo ${x[0]}` work. `@` and `*` are the positional parameters, as a
+// list. Every other special parameter supplies a value, and a value is a
+// string: `${?[1]}` is a digit of the status, not an element of anything.
+//
+// The scalar flag is what the character reading needs and the element reading
+// does not, so it is answered here rather than guessed at from the length: an
+// array holding one element is not a scalar, and reading it as characters
+// would be wrong however short it is.
+func (r *Runner) subscriptTarget(e *syntax.ParamExpr) (elems []string, scalar, ok bool) {
+	if e.Name == "@" || e.Name == "*" {
+		return r.Params, false, true
+	}
+	if _, isArray := r.Arrays[e.Name]; isArray {
+		elems, ok = r.arrayElems(e.Name)
+		return elems, false, ok
+	}
+	if _, produced := r.pipelineStatuses(e.Name); produced {
+		elems, ok = r.arrayElems(e.Name)
+		return elems, false, ok
+	}
+	if _, dynamic := r.DynamicArrays[e.Name]; dynamic {
+		elems, ok = r.arrayElems(e.Name)
+		return elems, false, ok
+	}
+	if v, held := r.getVar(e.Name); held {
+		return []string{v}, true, true
+	}
+	if v, special := r.specialParam(e); special {
+		return []string{v}, true, true
+	}
+	return nil, false, false
+}
+
+// splitSubscriptRange splits `1,3` into its two halves, reporting whether the
+// subscript is written as a pair at all.
+//
+// One comma exactly. Nested parentheses and brackets hold their own commas —
+// `${a[f(1,2),3]}` has two halves and not three — and a subscript with two
+// top-level commas is a pair in no shell measured, so it is left to the
+// arithmetic that reads it as an expression.
+func splitSubscriptRange(idx string) (lo, hi string, ok bool) {
+	at, extra := topLevelComma(idx)
+	if at < 0 || extra {
+		return "", "", false
+	}
+	return idx[:at], idx[at+1:], true
+}
+
+// topLevelComma reports where the first comma outside any nesting is, and
+// whether another follows it.
+func topLevelComma(idx string) (at int, extra bool) {
+	depth := 0
+	at = -1
+	for i := range len(idx) {
+		switch idx[i] {
+		case '(', '[':
+			depth++
+		case ')', ']':
+			depth--
+		case ',':
+			if depth != 0 {
+				continue
+			}
+			if at >= 0 {
+				return at, true
+			}
+			at = i
+		}
+	}
+	return at, false
+}
+
+// rangeSubscript answers a subscript written as a pair, `${a[1,3]}`.
+//
+// Both readings are worked out before either is chosen, and the axis is asked
+// only when they disagree — `${a[2,2]}` is the second element whether the
+// comma separates a range or joins two expressions, so it needs no answer, and
+// neither does a pair either reading refuses.
+func (r *Runner) rangeSubscript(e *syntax.ParamExpr, elems []string, scalar bool, idx, lo, hi string) ([]string, bool) {
+	span, spanOK := r.rangeElems(elems, scalar, lo, hi)
+	whole, wholeErr := r.subscriptValue(idx)
+	var one []string
+	oneOK := wholeErr == nil
+	if oneOK {
+		if v, found := r.elemAt(e.Name, elems, whole); found {
+			one = []string{v}
+		}
+	}
+	if spanOK && oneOK && equalStrings(span, one) {
+		return span, true
+	}
+	if r.ask(r.sem().SubscriptCommaIsARange, "`${a[1,3]}` naming a range rather than one subscript") {
+		if !spanOK {
+			return nil, true
+		}
+		return span, true
+	}
+	if !oneOK {
+		r.diagf("%s\n", r.subscriptFailure(idx, wholeErr))
+		r.expandErr = true
+		return nil, true
+	}
+	return one, true
+}
+
+// rangeElems is the range reading of `[lo,hi]`, over elements or characters.
+//
+// The endpoints are subscripts, so they are counted from the dialect's base
+// and from the end when they are negative — the same two rules a single
+// subscript follows, which is what keeps `${a[2,2]}` and `${a[2]}` naming the
+// same element.
+//
+// The rest is measured rather than derived, on zsh 5.9.2 with `a=(w x y z)`
+// and `s=hello`. An `hi` past the last is the last, so `${a[0,99]}` is the
+// whole array, and an `hi` before the first leaves the range empty. An `lo`
+// below the base is the first, so `${a[0,2]}` is `w x`.
+//
+// And the two ends of the panel's one range differ in a place no symmetry
+// predicts: an `lo` written as a *negative* that counts back past the first
+// element leaves an array empty — `${a[-5,2]}` on four elements is nothing —
+// where the same reach past the start of a string is clamped, so `${s[-6,2]}`
+// on five characters is still `he`.
+func (r *Runner) rangeElems(elems []string, scalar bool, lo, hi string) ([]string, bool) {
+	var units []string
+	if scalar {
+		units = characters(elems[0])
+	} else {
+		units = elems
+	}
+	from, err := r.subscriptValue(lo)
+	if err != nil {
+		return nil, false
+	}
+	to, err := r.subscriptValue(hi)
+	if err != nil {
+		return nil, false
+	}
+	n := len(units)
+	base := r.arrayBase()
+	first, negative := from-base, from < 0
+	if negative {
+		first = n + from
+	}
+	last := to - base
+	if to < 0 {
+		last = n + to
+	}
+	if first < 0 {
+		if negative && !scalar {
+			return []string{}, true
+		}
+		first = 0
+	}
+	if last >= n {
+		last = n - 1
+	}
+	if last < first {
+		return []string{}, true
+	}
+	span := units[first : last+1]
+	if scalar {
+		return []string{strings.Join(span, "")}, true
+	}
+	return span, true
+}
+
+// scalarReadsAsCharacters asks whether a subscript on a plain string names one
+// of its characters, and asks only where the two readings differ.
+//
+// They agree on a one-character string at the subscript both readings answer
+// to, and on any subscript that names nothing under either. Everywhere else
+// the readings are two different strings with no diagnostic between them,
+// which is why the answer is a dialect's rather than a default.
+func (r *Runner) scalarReadsAsCharacters(v, idx string) bool {
+	n, err := r.subscriptValue(idx)
+	if err != nil {
+		// Neither reading has an answer; the element path reports it.
+		return false
+	}
+	c, asChar := r.charAt(v, idx)
+	elem, asElem := r.elemAt("", []string{v}, n)
+	if asChar == asElem && c == elem {
+		return false
+	}
+	return r.ask(r.sem().ScalarSubscriptIsACharacter, "`${s[2]}` naming a character of a string")
+}
+
+// charAt is one character of a string, counted the way the dialect counts
+// subscripts and from the end when the subscript is negative.
+//
+// Characters and not bytes: the shell that reads a string this way reports
+// `${s[2]}` of a five-character string holding a two-byte character as that
+// character, measured.
+func (r *Runner) charAt(v, idx string) (string, bool) {
+	n, err := r.subscriptValue(idx)
+	if err != nil {
+		return "", false
+	}
+	chars := characters(v)
+	var pos int
+	if n < 0 {
+		pos = len(chars) + n
+	} else {
+		pos = n - r.arrayBase()
+	}
+	if pos < 0 || pos >= len(chars) {
+		return "", false
+	}
+	return chars[pos], true
+}
+
+// characters splits a string the way a shell counts it: by character, so a
+// multi-byte one is a single unit.
+func characters(v string) []string {
+	out := make([]string, 0, len(v))
+	for _, c := range v {
+		out = append(out, string(c))
+	}
+	return out
+}
+
+// equalStrings compares two readings of one subscript, counting a nil result
+// and an empty one as the same: both say the subscript named nothing.
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// subscriptIsARange reports whether a subscript was written as a pair and this
+// dialect reads it as one. The callers that need it are asking a question
+// about the *shape* of the answer — how many fields it makes, and whether its
+// length is a count or a width — rather than about its value.
+func (r *Runner) subscriptIsARange(e *syntax.ParamExpr) bool {
+	if e.Index == nil {
+		return false
+	}
+	if _, _, ok := splitSubscriptRange(r.subscriptText(e.Index)); !ok {
+		return false
+	}
+	return r.sem().SubscriptCommaIsARange == Yes
 }
 
 // elemAt answers a numeric subscript against the elements a dialect read.
@@ -636,4 +913,43 @@ func (r *Runner) arrayElementCount(name string) (int, bool) {
 		return len(m), true
 	}
 	return 0, false
+}
+
+// subscriptYieldsAList reports whether a subscript named several elements
+// rather than one value, which is what decides whether `${#…}` is a count or a
+// width.
+//
+// `[@]` and `[*]` always do. A range does when what it ranged over was a list;
+// a range over a string is a substring, which is one value however many
+// characters it holds.
+func (r *Runner) subscriptYieldsAList(e *syntax.ParamExpr) bool {
+	if e.Index == nil {
+		return false
+	}
+	if wholeArraySubscript(r.subscriptText(e.Index)) {
+		return true
+	}
+	if !r.subscriptIsARange(e) {
+		return false
+	}
+	_, scalar, ok := r.subscriptTarget(e)
+	return ok && !scalar
+}
+
+// subscriptJoinsElements reports whether a quoted expansion of this subscript
+// is one field with the elements joined rather than one field each.
+//
+// `[*]` is the spelling that says so outright. A range says it by the name it
+// was written on: everything but `@` joins, because `@` is the one parameter
+// whose fields survive quoting.
+func (r *Runner) subscriptJoinsElements(e *syntax.ParamExpr) bool {
+	idx := r.subscriptText(e.Index)
+	if e.Name == "@" || idx == "@" {
+		// Either spelling of the list keeps its fields, and one is enough:
+		// measured, `"${@[*]}"` is one field per parameter and so is
+		// `"${*[@]}"`, where `"${*[1,3]}"` — neither `@` — is one joined
+		// field.
+		return false
+	}
+	return idx == "*" || r.subscriptIsARange(e)
 }

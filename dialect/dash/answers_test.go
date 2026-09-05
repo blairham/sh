@@ -51,6 +51,10 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"ExitTrapIsFunctionLocal", s.ExitTrapIsFunctionLocal, interp.No},
 		{"ArithNameValueRecurses", s.ArithNameValueRecurses, interp.No},
 		{"ArrayBaseIsZero", s.ArrayBaseIsZero, interp.Yes},
+		// dash has no subscript to read at all, so both are the preset it
+		// inherits rather than a measurement of its own.
+		{"SubscriptCommaIsARange", s.SubscriptCommaIsARange, interp.No},
+		{"ScalarSubscriptIsACharacter", s.ScalarSubscriptIsACharacter, interp.No},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.Yes},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},

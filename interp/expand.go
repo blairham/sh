@@ -534,12 +534,19 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 					elems = mapped
 				}
 			}
-			if r.subscriptText(e.Index) == "*" {
+			if r.subscriptJoinsElements(e) {
 				// `[*]` is *one* field with the elements joined, where `[@]`
 				// is one field each — the same difference `"$*"` has from
 				// `"$@"`, and the reason both spellings exist. Taking the
 				// `[@]` path for it produced no field at all inside a larger
 				// word, so `echo "[${a[*]}]"` printed `[]`.
+				//
+				// A range joins on the same side of that line as the *name*
+				// it was written on: measured, `"${a[1,2]}"` is one field
+				// holding `x-y` under `IFS=-` exactly as `"$a"` is, and
+				// `"${*[1,2]}"` is one field too — while `"${@[1,2]}"` is
+				// one field per parameter, because `@` keeps its fields
+				// however it is subscripted.
 				joined := strings.Join(elems, ifsFirst(ifs, set))
 				if s.Quoting != syntax.Unquoted {
 					return []string{globEscape(joined)}, true
@@ -887,8 +894,12 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 				// `${#a[@]}` is the number of elements; `${#a[0]}` is the
 				// length of one. The subscript decides which question was
 				// asked, which is why this is here rather than below.
-				idx := r.subscriptText(e.Index)
-				if idx == "@" || idx == "*" {
+				//
+				// A range asks the same question `[@]` does when it names
+				// elements and the same one `[0]` does when it names
+				// characters: measured, `${#a[1,2]}` on `(aa bb cc)` is 2
+				// and `${#s[2,4]}` on `hello` is 3.
+				if r.subscriptYieldsAList(e) {
 					return itoa(len(elems))
 				}
 				return itoa(len(strings.Join(elems, "")))

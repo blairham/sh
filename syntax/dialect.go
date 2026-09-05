@@ -543,6 +543,35 @@ type Dialect struct {
 	// no-array dialect on purpose is told it is portable when it is not.
 	ArraySubscript bool
 
+	// SpecialParamSubscript lets a parameter that is *not* a name carry a
+	// subscript: `${@[1]}` and `${*[2]}` name one of the positional
+	// parameters, and `${1[2]}`, `${0[1]}`, `${?[1]}`, `${-[1]}` and
+	// `${$[1]}` reach into the value of a special one.
+	//
+	// One shell in the panel. Measured on zsh 5.9.2 against bash 5.3.15,
+	// bash 3.2.57, bash as `sh`, ksh93 and dash: `set -- a b; echo ${@[1]}`
+	// prints `a` there, where bash calls the whole expansion
+	// `${@[1]}: bad substitution` when it is reached, ksh93 refuses `[' at
+	// parse time and dash says `Bad substitution`. Every one of those five
+	// refuses; none of them means something else by it. So this is the same
+	// kind of split ArraySubscript is — a construct one grammar has and the
+	// rest do not — rather than a conflict for the semantics vector.
+	//
+	// It is the *name* that this flag is about and not the subscript, which
+	// is why it is separate from ArraySubscript: `${a[1]}` is read by four
+	// of the six and `${@[1]}` by one, so a single flag could not say both.
+	//
+	// Where it is off the bracket is simply not consumed, and the leftover
+	// text takes the ordinary route an unreadable expansion takes — deferred
+	// to the run in most of the panel, refused while reading by the one
+	// grammar that refuses everything else while reading. Nothing here has
+	// to word a diagnostic of its own.
+	//
+	// `#` and `!` are unreachable in the braced spelling for the reason
+	// BareSubscript records: `${#[1]}` is a length and `${![1]}` an
+	// indirection, so there is nowhere to write them down.
+	SpecialParamSubscript bool
+
 	// BareSubscript lets a parameter written without braces carry a
 	// subscript, and lets `$#name` mean that parameter's length: `$a[1]` is
 	// an element and `$#a` is a count, where a grammar without the flag

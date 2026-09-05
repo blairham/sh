@@ -123,6 +123,8 @@ func TestSemantics(t *testing.T) {
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.No},
 		{"ArrayBaseIsZero", s.ArrayBaseIsZero, interp.No},
 		{"ArrayLiteralSubscriptIsAKey", s.ArrayLiteralSubscriptIsAKey, interp.No},
+		{"SubscriptCommaIsARange", s.SubscriptCommaIsARange, interp.Yes},
+		{"ScalarSubscriptIsACharacter", s.ScalarSubscriptIsACharacter, interp.Yes},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.Yes},
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},

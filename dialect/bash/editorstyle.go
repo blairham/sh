@@ -24,5 +24,11 @@ func EditorStyle() repl.EditorStyle {
 		// cursor, `^W` is delimited by whitespace, `M-f` stops at the end of
 		// the word rather than before the next, and `^T` at the start of the
 		// line does nothing. zsh disagrees with all five.
+		//
+		// Measured: a bare Tab in a directory holding a `.hidden` lists it
+		// along with everything else. readline calls this
+		// `match-hidden-files` and documents it as on by default, which is
+		// what the run shows.
+		CompletionMatchesHiddenFiles: true,
 	}
 }

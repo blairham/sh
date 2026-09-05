@@ -537,11 +537,16 @@ func (s Shell) completer() completer {
 	if s.Runner == nil {
 		return nil
 	}
-	return runnerCompleter{r: s.Runner}
+	return runnerCompleter{r: s.Runner, hidden: s.Editor.CompletionMatchesHiddenFiles}
 }
 
 // runnerCompleter reads the shell's state at the moment Tab is pressed.
-type runnerCompleter struct{ r *interp.Runner }
+type runnerCompleter struct {
+	r *interp.Runner
+	// hidden is the dialect's answer and not the shell's, so it is settled
+	// once when the session starts rather than read again per keystroke.
+	hidden bool
+}
 
 func (c runnerCompleter) names() []string {
 	names := append(c.r.BuiltinNames(), c.r.FuncNames()...)
@@ -553,7 +558,14 @@ func (c runnerCompleter) names() []string {
 
 func (c runnerCompleter) shell() shellCompleter {
 	path, _ := c.r.GetVar("PATH")
-	return shellCompleter{names: c.names(), path: path, dir: c.r.Dir}
+	// HOME from the shell's own variables rather than from the process's
+	// environment, for the same reason the directory is the Runner's: a
+	// Runner holds both, and a line that says `HOME=/tmp` means it.
+	home, _ := c.r.GetVar("HOME")
+	return shellCompleter{
+		names: c.names(), path: path, dir: c.r.Dir,
+		home: home, hidden: c.hidden,
+	}
 }
 
 func (c runnerCompleter) commands(prefix string) []string { return c.shell().commands(prefix) }

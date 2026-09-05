@@ -1016,6 +1016,16 @@ var Corpus = []Case{
 		Why:     "the shape every script uses it in, and the one that reported success while running its body zero times when getopts was a separate program that could not reach the shell's variables",
 	},
 	{
+		ID: "getopts/optind-starts-at-one", Category: "getopts",
+		Snippet: `echo "OPTIND=[$OPTIND]"`,
+		Why:     "OPTIND is 1 before anything has called getopts, in all six — it is initialized when the shell starts rather than when the builtin first runs. A script that reads it to decide how many operands to `shift` past does so *after* the loop, but one that tests it before entering the loop, or that runs no options at all, reads whatever startup left. Found by the function case beside it, which is why a one-line case sits in front of a nine-line one",
+	},
+	{
+		ID: "getopts/a-function-with-its-own-optind", Category: "getopts",
+		Snippet: `f() { local OPTIND=1 o; while getopts ab o; do printf "[%s]" "$o"; done; echo " rest=$((OPTIND))"; }; f -a -b; f -b -a; echo "outer OPTIND=$OPTIND"`,
+		Why:     "the way a function is written so it can be called twice: a local OPTIND starts each scan at 1 and leaves the caller's alone. Five of the six do exactly that; ksh93 has no `local`, so its OPTIND is the one global and the second call finds the scan already finished — which is not a getopts difference but the `local` axis reaching a builtin's state, and the reason a portable function resets OPTIND by assigning to it rather than by declaring it",
+	},
+	{
 		ID: "getopts/clustered-options", Category: "getopts",
 		Snippet: `set -- -ab; while getopts "ab" o; do printf "[%s]" "$o"; done; echo " ind=$OPTIND"`,
 		Why:     "two options in one word, which is why the position inside a word cannot be OPTIND — that counts words",
@@ -1312,6 +1322,13 @@ var Corpus = []Case{
 		Why:     "a caught signal runs its handler and the script carries on, which is the whole reason to catch one",
 	},
 	{
+		ID: "trap/lineno-inside-an-action", Category: "traps and exit",
+		Script:          true,
+		LayoutSensitive: true,
+		Snippet:         "trap 'echo \"in trap LINENO=$LINENO\"' USR1\necho one\nkill -USR1 $$\necho two\n",
+		Why:             "which line a trap action thinks it is on, and the panel gives two answers: bash 5.3 numbers the action's own text from 1, while bash 3.2, ksh93, dash and zsh report the line the signal was delivered on. So a trap body is a little program of its own in one shell and part of the script in four, and the split runs *through* bash rather than between bash and the rest — which is why the case is worth having over an assertion that names `bash`",
+	},
+	{
 		ID: "trap/empty-handler-ignores", Category: "traps and exit",
 		Script:  true,
 		Snippet: "trap '' INT\nkill -INT $$\necho after\n",
@@ -1393,6 +1410,11 @@ var Corpus = []Case{
 		ID: "umask/setting-then-reading", Category: "traps and exit",
 		Snippet: `umask 077; umask; umask -S`,
 		Why:     "the mask a script sets is the mask it reads back, which is the whole point of the builtin and exactly what a `/usr/bin/umask` in a child process cannot do",
+	},
+	{
+		ID: "umask/a-created-file-takes-the-mask", Category: "traps and exit",
+		Snippet: `umask 077; : > f; ls -l f | cut -c1-10; umask 022; : > g; ls -l g | cut -c1-10`,
+		Why:     "every other umask case interrogates the builtin, and a mask nothing is created under is a number the shell is keeping rather than a mask. This is the one that opens a file on each side of a change and reads the mode back off the file system, unanimously — and it is the case the no-process-state rule makes worth having, since a core that may not call umask(2) has to carry the mask itself and apply it at every open. Two masks rather than one, because a shell that ignored the mask entirely would still pass with whatever the process started with",
 	},
 	{
 		ID: "umask/setting-is-silent", Category: "traps and exit",
@@ -1968,6 +1990,31 @@ var Corpus = []Case{
 		Why:     "the end of a stream is *ready* to the shell that polls — a read there would return at once, with nothing — so it reports success where the shells that read report the end of input. Two answers to the same question from one empty file",
 	},
 	{
+		ID: "read/a-timeout-that-expires", Category: "builtins",
+		Snippet: `mkfifo p; exec 3<>p; l=keep; read -t 1 -r l <&3; echo "st=$? l=[$l]"`,
+		Why:     "the deadline the two zero-timeout cases cannot reach: a pipe held open with nothing in it, so the read has to wait and then give up. The panel splits three ways rather than agreeing — bash 5.3 answers 142, which is 128 plus the alarm, and clears the variable; bash 3.2, ksh93 and zsh answer 1 and leave what was there; dash has no -t at all. A fifo opened read-write is what makes it a deadline instead of an end of input, since the harness closes standard input and any file is already at its end",
+	},
+	{
+		ID: "read/a-descriptor-to-read-from", Category: "builtins",
+		Snippet: `printf "hello\nworld\n" > f; exec 8< f; l=keep; read -u 8 -r l; echo "st=$? l=[$l]"; read -u 8 -r l; echo "st=$? l=[$l]"`,
+		Why:     "-u reads from a descriptor the script opened rather than from standard input, and the second read is what says the descriptor keeps its position between calls rather than being reopened. Five accept it and dash calls the letter illegal, which is the same shape its -t and -n answers have",
+	},
+	{
+		ID: "read/a-count-that-stops-at-the-delimiter", Category: "builtins",
+		Snippet: `printf "ab\ncd" | { read -n 4 v; echo "st=$? [$v]"; }`,
+		Why:     "-n is an *upper bound*, not a length: four characters were asked for and the line ended after two, so two arrive and the read still succeeds. `read/a-count-of-characters` asks for fewer characters than the line has; this is the other side, and it is what makes the -N case below a different question rather than a spelling of the same one",
+	},
+	{
+		ID: "read/a-count-that-crosses-the-delimiter", Category: "builtins",
+		Snippet: `printf "ab\ncd" | { read -N 4 v; echo "st=$? [$v]"; }`,
+		Why:     "-N is the count that means it: the delimiter stops counting for -n and is just another character for -N, so bash 5.3 and ksh93 read `ab`, the newline, and the `c` after it into one variable. bash 3.2 has no such letter and answers with its usage, and zsh has neither -N nor a usage to print",
+	},
+	{
+		ID: "read/an-initial-value-for-the-line", Category: "builtins",
+		Snippet: `printf "x\n" | { l=keep; read -i pre -r l; echo "st=$? l=[$l]"; }`,
+		Why:     "-i seeds the line editor and is therefore about a terminal, and this is what it does when there is not one: bash takes the option, ignores the seed, and reads the line — three others refuse the letter in three wordings, and only one of them refuses at 1. Worth pinning because the tempting reading of the manual is that the seed is a *default* for an empty line, and no shell here does that",
+	},
+	{
 		ID: "redir/a-target-that-is-not-one-word", Category: "redirection",
 		Snippet: `e="a b"; echo hi > $e; echo "st=$?"`,
 		Why:     "a redirection target is expanded and then, in three of the four, neither split nor matched — so `> $e` writes to a file called `a b`. bash expands it as an ordinary word and refuses anything that is not exactly one, naming the target *as written*. Doing bash's expansion and taking the first field is the answer nobody gives, and it wrote to `a`",
@@ -2268,6 +2315,11 @@ var Corpus = []Case{
 		ID: "export/an-imported-name-reassigned-is-listed", Category: "builtins",
 		Snippet: `TERM=changed; export -p | grep -c -E "^(declare -x|export) TERM="`,
 		Why:     "the listing has to agree with what the child gets, in whichever of the two spellings the shell uses. The two answers came apart: the environment kept the imported entry and the listing dropped the name entirely, because one was reading the attribute and the other the record of having set it",
+	},
+	{
+		ID: "export/an-exported-name-reaches-a-real-child", Category: "builtins",
+		Snippet: `export E=2; X=1 env | grep -E "^(E|X)=" | sort`,
+		Why:     "the export cases either side of it ask about a name the shell *inherited*; this asks about one the shell exported itself, and about a prefix over a name that was never in the environment at all. Both reach a real child's environment, unanimously. It is worth its own row because the two paths are separate in an implementation — an imported name arrives already in the table the child is built from, and an exported one has to be put there",
 	},
 	{
 		ID: "export/a-prefix-over-an-imported-name", Category: "builtins",
@@ -3749,6 +3801,16 @@ echo unreachable`,
 		Why:     "an assignment inside an expression is a side effect that outlives it, like ${x:=5}",
 	},
 	{
+		ID: "arith/a-chained-assignment", Category: "arithmetic",
+		Snippet: `echo "$((a=b=5)) a=$a b=$b"`,
+		Why:     "assignment associates to the right and is itself an expression, so one statement sets both names and the whole thing is worth 5. Unanimous, dash included. A parser that read assignment as a statement rather than an operator would take the left name and lose the right, which is a shape that produces a plausible number and a variable nobody set",
+	},
+	{
+		ID: "arith/a-negative-modulo", Category: "arithmetic",
+		Snippet: `printf "[%s]" "$((-7 % 3))" "$((7 % -3))"; echo`,
+		Why:     "the sign of a remainder follows the *dividend*, unanimously — C's truncating rule rather than a mathematical modulus, which is the other plausible answer and the one that would make the first of these 2. `arith/division-truncates` pins the quotient's half of the same rule",
+	},
+	{
 		ID: "arith/ternary", Category: "arithmetic",
 		Snippet: `printf "[%s]" "$((1?2:3))" "$((0?2:3))"`,
 		Why:     "the conditional operator",
@@ -4951,6 +5013,11 @@ echo unreachable`,
 		Why:     "the substitution is textual and comes first, so the *result* is the expression — 3, which no tree built from `$x$y` as written could give, and the reason an expression containing a `$` has no tree until it runs",
 	},
 	{
+		ID: "arith/an-expansion-inside-is-not-split", Category: "arithmetic",
+		Snippet: `IFS=1; x="1 + 2"; echo "[$(( $x ))]"; set -- $x; echo "n=$#"`,
+		Why:     "the whitespace-bearing half of `expand/arithmetic-text-is-not-split`, which asks the same question of a value with no blanks in it. Splitting on a *space* is what a shell does by default and without being told to, so a value holding one is the shape an exemption is most likely to be missing for, and IFS is set to a digit here so a split would visibly eat the operands rather than merely rearrange them. The second line is the control the older case has no room for: the same value in an ordinary command position *is* split, which is what makes this an exemption of the arithmetic context rather than a property of the value",
+	},
+	{
 		ID: "arith/a-positional-parameter-in-an-expression", Category: "arithmetic",
 		Snippet: `set -- 5 7; echo $(( $2-2 ))`,
 		Why:     "`$2` is not a name and the arithmetic grammar has no room for it; it is text that is substituted before the grammar sees anything — the form that /usr/bin/man uses and that this could not read",
@@ -5371,6 +5438,11 @@ echo after`,
 		ID: "wait/an-operand-that-is-neither", Category: "builtins",
 		Snippet: `wait nosuchjob; echo "st=$?"`,
 		Why:     "an operand naming neither a process nor a job: four wordings and no two alike, and three statuses — one quotes it and names both things it could have been, one calls it an illegal number, one lists what it would have taken, and one calls it a job that was not found and reports the 127 of a command that is not there",
+	},
+	{
+		ID: "wait/the-status-of-the-last-background-job", Category: "builtins",
+		Snippet: `(exit 3) & wait $!; echo "st=$?"`,
+		Why:     "`$!` names the job just started and `wait` on it reports *that job's* status rather than its own success — 3, unanimously. The pair is the idiom every script uses to run something in the background and still find out how it went, and the failure mode is quiet: a `wait` that answered 0 because the wait itself worked would pass every case that only checks it returned",
 	},
 	{
 		ID: "wait/a-pid-that-is-not-ours", Category: "builtins",

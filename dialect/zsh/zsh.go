@@ -387,11 +387,11 @@ func Diagnostics() interp.Diagnostics {
 		// sentence, which is this shell's rule for every message.
 		// About its table rather than about the function, and the builtin
 		// is named in the location as it is for every message here.
-		UnsetFunctionNotFound:      "no such hash table element: %[1]s",
-		DeclareNoSuchVariable:      "no such variable: %[1]s",
-		LocationNamesTheFunction:   true,
-		SetInvalidOptionName:       "no such option: %[1]s",
-		SetInvalidOptionNameStatus: 1,
+		UnsetFunctionNotFound:    "no such hash table element: %[1]s",
+		DeclareNoSuchVariable:    "no such variable: %[1]s",
+		LocationNamesTheFunction: true,
+		SetInvalidOptionName:     "no such option: %[1]s",
+		SetInvalidOptionStatus:   1,
 		// A denied `set -m` echoes the spelling it was asked with — `-m` or
 		// `monitor` — and fails at 1, fatally like every `set` failure here.
 		MonitorDenied:       "can't change option: %[1]s",

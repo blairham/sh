@@ -19520,6 +19520,44 @@
         "TimedOut": false
       }
     },
+    "opt/an-unknown-letter-is-refused": {
+      "bash": {
+        "Stdout": "st=2~alive",
+        "Stderr": "\u003cshell\u003e: line 1: set: -q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: set: -q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2~alive",
+        "Stderr": "\u003cshell\u003e: line 0: set: -q: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -q",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: -q: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: bad option: -q",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "opt/an-unknown-long-name-is-refused": {
       "bash": {
         "Stdout": "on=2~off=2",
@@ -35995,13 +36033,13 @@
       },
       "dash": {
         "Stdout": "a",
-        "Stderr": "+ cat~+ echo a",
+        "Stderr": "+ echo a~+ cat",
         "Status": 0,
         "TimedOut": false
       },
       "ksh93": {
         "Stdout": "a",
-        "Stderr": "+ echo a~+ cat",
+        "Stderr": "+ cat~+ echo a",
         "Status": 0,
         "TimedOut": false
       },

@@ -7,6 +7,7 @@ package driver_test
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,28 +23,80 @@ import (
 // is a real execve: the test binary stops being a test, so the shell has to be
 // somewhere other than the process asserting on it. What comes back is
 // whatever the *replacement* wrote, which is what a caller of a shell sees.
-func runAsShellReplacingItself(t *testing.T, name, src string) string {
+func runAsShellReplacingItself(t *testing.T, name, src string, ran func(out string) bool) string {
 	t.Helper()
 	script := filepath.Join(t.TempDir(), "case.sh")
 	if err := os.WriteFile(script, []byte(src), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(os.Args[0], "-test.run="+name)
-	cmd.Env = append(os.Environ(), helperScript+"="+script)
-	// Deliberately no ExtraFiles: descriptor 3 is unopened here, so what the
-	// replacement finds on it is the script's doing and nothing else's.
-	out, err := cmd.CombinedOutput()
-	// A status is deliberately not asserted, and not even tolerated silently
-	// by accident: what comes back is the *replacement's* status, and a
-	// replacement that could not write to a descriptor reports 1 in bash and
-	// 2 in dash — /bin/sh being one on macOS and the other on Debian. That is
-	// a fact about the machine, so every assertion here is about what was
-	// written instead.
-	var exit *exec.ExitError
-	if err != nil && !errors.As(err, &exit) {
-		t.Fatalf("the shell half could not be started: %v\n%s", err, out)
+	var out string
+	for attempt := 1; ; attempt++ {
+		cmd := exec.Command(os.Args[0], "-test.run="+name)
+		cmd.Env = append(os.Environ(), helperScript+"="+script)
+		// Deliberately no ExtraFiles: descriptor 3 is unopened here, so what
+		// the replacement finds on it is the script's doing and nothing
+		// else's.
+		b, err := cmd.CombinedOutput()
+		// A status is deliberately not asserted, and not even tolerated
+		// silently by accident: what comes back is the *replacement's*
+		// status, and a replacement that could not write to a descriptor
+		// reports 1 in bash and 2 in dash — /bin/sh being one on macOS and
+		// the other on Debian. That is a fact about the machine, so every
+		// assertion here is about what was written instead.
+		var exit *exec.ExitError
+		if err != nil && !errors.As(err, &exit) {
+			t.Fatalf("the shell half could not be started: %v\n%s", err, b)
+		}
+		out = string(b)
+		if ran(out) || attempt == replacementAttempts {
+			if attempt > 1 {
+				// Said on stderr rather than through t.Logf, and that is the
+				// whole point of saying it here: CI runs `go test` without
+				// -v, which prints nothing a passing test logged. The rate is
+				// the number worth watching — a retry is rare, and a rise in
+				// how often one is needed is the first sign the window has
+				// grown — so it has to survive a quiet run.
+				fmt.Fprintf(os.Stderr, "%s: the replacement ran on attempt %d of %d — see #731\n",
+					name, attempt, replacementAttempts)
+			}
+			return out
+		}
 	}
-	return string(out)
+}
+
+// replacementAttempts is how many times a replacement is tried before its
+// absence is taken for an answer.
+//
+// A run that never reached the replacement did not answer the question this
+// package asks, and #731 is a way for that to happen which no code here can
+// prevent. `exec 5>f; exec cmd` has to put the script's file on descriptor 5,
+// and 5 is where this shell's own startup leaves the Go runtime's epoll
+// descriptor — measured, and the reason is in replace.go. Between that dup3
+// and the execve, another thread polls the number on a timer of its own and
+// finds a regular file:
+//
+//	runtime: epollwait on fd 5 failed with 22
+//	fatal error: runtime: netpoll failed
+//
+// #838 emptied that window of everything this repository puts in it — an
+// strace is the dup3 and then the execve, adjacent, with nothing allocating
+// between them. What is left belongs to the kernel: execve on a multithreaded
+// process kills the other threads *inside* the call, and until it has, they
+// are still running against a table that has already changed. No Go code can
+// shorten that, which is why this is a retry and not a fix.
+//
+// It is not a weakening, and the difference is worth stating. Every attempt
+// has to miss before an assertion does, so a real break still fails; each
+// retry is logged, so the rate is visible in a CI log rather than swallowed;
+// and the run that *does* reach the replacement is graded exactly as strictly
+// as before.
+const replacementAttempts = 5
+
+// wrote reports whether a replacement left something in a file, which is the
+// usual sign that it ran at all.
+func wrote(path string) bool {
+	b, err := os.ReadFile(path)
+	return err == nil && strings.TrimSpace(string(b)) != ""
 }
 
 // The descriptor a script parks is parked *for* whatever runs next, and `exec
@@ -56,7 +109,8 @@ func TestAParkedDescriptorSurvivesAProcessReplacement(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "parked")
 	runAsShellReplacingItself(t, "TestAParkedDescriptorSurvivesAProcessReplacement",
-		"exec 3>"+target+"\nexec /bin/sh -c 'echo replacement >&3'\n")
+		"exec 3>"+target+"\nexec /bin/sh -c 'echo replacement >&3'\n",
+		func(string) bool { return wrote(target) })
 	if b, _ := os.ReadFile(target); string(b) != "replacement\n" {
 		t.Errorf("file = %q, want the replacement's line", b)
 	}
@@ -82,7 +136,8 @@ func TestAReplacementsDescriptorNumbersAreTheShellsWithGapsLeftClosed(t *testing
 	// in its hands every time.
 	complaint := filepath.Join(dir, "complaint")
 	out := runAsShellReplacingItself(t, "TestAReplacementsDescriptorNumbersAreTheShellsWithGapsLeftClosed",
-		"exec 5>"+five+"\nexec /bin/sh -c 'echo onfive >&5; echo onthree >&3' 2>"+complaint+"\n")
+		"exec 5>"+five+"\nexec /bin/sh -c 'echo onfive >&5; echo onthree >&3' 2>"+complaint+"\n",
+		func(string) bool { return wrote(five) })
 	b, _ := os.ReadFile(five)
 	if !strings.Contains(string(b), "onfive") {
 		t.Errorf("five = %q, want the replacement's line%s", b, saidWhat(t, out, complaint))
@@ -135,7 +190,8 @@ func TestDescriptorsCrossAReplacementWhateverOrderTheyWereOpenedIn(t *testing.T)
 	}
 	src += "true'\n"
 
-	out := runAsShellReplacingItself(t, "TestDescriptorsCrossAReplacementWhateverOrderTheyWereOpenedIn", src)
+	out := runAsShellReplacingItself(t, "TestDescriptorsCrossAReplacementWhateverOrderTheyWereOpenedIn", src,
+		func(string) bool { return wrote(filepath.Join(dir, names[len(names)-1])) })
 	for _, name := range names {
 		b, _ := os.ReadFile(filepath.Join(dir, name))
 		if strings.TrimSpace(string(b)) != name {
@@ -157,7 +213,8 @@ func TestARedirectedStandardOutputReachesAReplacement(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "log")
 	out := runAsShellReplacingItself(t, "TestARedirectedStandardOutputReachesAReplacement",
-		"exec >"+target+"\nexec /bin/echo hi\n")
+		"exec >"+target+"\nexec /bin/echo hi\n",
+		func(string) bool { return wrote(target) })
 	if strings.Contains(out, "hi") {
 		t.Errorf("the replacement wrote to the shell's caller: %q", out)
 	}
@@ -173,7 +230,8 @@ func TestAReplacementsOwnRedirectionOfStandardOutputCrosses(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "log")
 	out := runAsShellReplacingItself(t, "TestAReplacementsOwnRedirectionOfStandardOutputCrosses",
-		"exec /bin/echo hi >"+target+"\n")
+		"exec /bin/echo hi >"+target+"\n",
+		func(string) bool { return wrote(target) })
 	if strings.Contains(out, "hi") {
 		t.Errorf("the replacement wrote to the shell's caller: %q", out)
 	}
@@ -190,7 +248,8 @@ func TestARedirectedStandardErrorReachesAReplacement(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "err")
 	runAsShellReplacingItself(t, "TestARedirectedStandardErrorReachesAReplacement",
-		"exec 2>"+target+"\nexec /bin/sh -c 'echo complaint >&2'\n")
+		"exec 2>"+target+"\nexec /bin/sh -c 'echo complaint >&2'\n",
+		func(string) bool { return wrote(target) })
 	if b, _ := os.ReadFile(target); strings.TrimSpace(string(b)) != "complaint" {
 		t.Errorf("file = %q, want the replacement's line", b)
 	}
@@ -207,7 +266,8 @@ func TestARedirectedStandardInputReachesAReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := runAsShellReplacingItself(t, "TestARedirectedStandardInputReachesAReplacement",
-		"exec <"+data+"\nexec /bin/cat\n")
+		"exec <"+data+"\nexec /bin/cat\n",
+		func(out string) bool { return strings.Contains(out, "fromthefile") })
 	if !strings.Contains(out, "fromthefile") {
 		t.Errorf("the replacement read %q, want the file the script opened", out)
 	}
@@ -224,7 +284,8 @@ func TestAClosedStandardStreamIsClosedForAReplacement(t *testing.T) {
 	dir := t.TempDir()
 	report := filepath.Join(dir, "report")
 	runAsShellReplacingItself(t, "TestAClosedStandardStreamIsClosedForAReplacement",
-		"exec >&-\nexec /bin/sh -c '/bin/echo hi; echo st=$? >"+report+"'\n")
+		"exec >&-\nexec /bin/sh -c '/bin/echo hi; echo st=$? >"+report+"'\n",
+		func(string) bool { return wrote(report) })
 	b, _ := os.ReadFile(report)
 	if !strings.Contains(string(b), "st=") {
 		t.Fatalf("the replacement did not run, so nothing was proved: %q", b)

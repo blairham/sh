@@ -831,6 +831,13 @@ type Diagnostics struct {
 	// with every message.
 	UnsetFunctionNotFound string
 
+	// UnsetBadSubscript wraps the sentence about an `unset` operand whose
+	// subscript would not evaluate. One verb: that sentence, already worded by
+	// ArithError. Empty leaves it to stand alone, which is what bash and zsh
+	// do; ksh93 alone names the builtin in front of it, having worded the
+	// identical failure in an expansion without one.
+	UnsetBadSubscript string
+
 	// UnsetNotAnArray is what `unset a[@]` says when the name holds a value
 	// that is not an array. One verb: the name.
 	//
@@ -1599,6 +1606,26 @@ type Diagnostics struct {
 	// DivisionByZero is the reason itself, which dash and ksh93 spell
 	// differently. No verbs.
 	DivisionByZero string
+
+	// SubstringRangeError wraps a substring offset or length that would not
+	// evaluate. Two verbs: the parameter as written — `x`, or `a[@]` when a
+	// subscript was given — and the arithmetic sentence, already worded by
+	// ArithError. Empty leaves the sentence to stand alone, which is what two
+	// of the three shells with substrings do; bash alone puts the parameter in
+	// front of it.
+	//
+	// A separate field from ArithError rather than a flag on it, because the
+	// same shell wraps a subscript's failure without any such prefix: `${a[b
+	// c]}` is blamed on `b c` and `${x:b c}` on `x: b c`. One field could not
+	// say both.
+	SubstringRangeError string
+
+	// SubstringErrorNamesTheWholeRange blames a failing offset together with
+	// everything written after it: `${x:1+:2}` is `1+:2` rather than `1+`.
+	// ksh93 alone, which reads `offset:length` as one string and reports from
+	// the failing point to its end — so a failing *length* is named on its own
+	// there, having nothing after it.
+	SubstringErrorNamesTheWholeRange bool
 	// EqualsNotFound is `=cmd` naming nothing. One verb: the name. zsh omits
 	// the colon it uses everywhere else, which is why this is not NotFound.
 	EqualsNotFound string
@@ -1922,6 +1949,30 @@ func (d Diagnostics) ParseFailureLine(err error) int {
 	return se.Pos.Line
 }
 
+// arithParseFailure words an expression the parser refused, blaming expr.
+//
+// The text blamed is a parameter rather than the error's own, because it is
+// not always the text that failed: one dialect names a substring's offset
+// together with everything after it in the range, so `${x:1+:2}` is reported
+// as `1+:2` where the parser was handed `1+`. Every other caller passes what
+// the parser saw.
+func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
+	reason, fallback := d.ArithOperandExpected, "operand expected"
+	switch se.Kind {
+	case syntax.ErrArithOperator:
+		reason, fallback = d.ArithOperatorExpected, "operator expected"
+	case syntax.ErrArithBadOperator:
+		reason, fallback = d.ArithBadOperator, "operator expected"
+		if reason == "" {
+			// Only one dialect separates the two; for the rest the operator
+			// wording covers both.
+			reason = d.ArithOperatorExpected
+		}
+	}
+	return Wording(d.ArithError, "%[1]s: %[2]s",
+		expr, Wording(reason, fallback, se.Token), se.Token)
+}
+
 // ParseFailure words a parse error the way this dialect words it.
 //
 // It lives here rather than in the front end because the front end is not the
@@ -1943,20 +1994,7 @@ func (d Diagnostics) ParseFailure(err error) string {
 		// not read, %[2]d the line.
 		return Wording(d.BadSubstitution, se.Msg, se.Token, se.Pos.Line)
 	case syntax.ErrArithOperand, syntax.ErrArithOperator, syntax.ErrArithBadOperator:
-		reason, fallback := d.ArithOperandExpected, "operand expected"
-		switch se.Kind {
-		case syntax.ErrArithOperator:
-			reason, fallback = d.ArithOperatorExpected, "operator expected"
-		case syntax.ErrArithBadOperator:
-			reason, fallback = d.ArithBadOperator, "operator expected"
-			if reason == "" {
-				// Only one dialect separates the two; for the rest the
-				// operator wording covers both.
-				reason = d.ArithOperatorExpected
-			}
-		}
-		return Wording(d.ArithError, "%[1]s: %[2]s",
-			se.Expr, Wording(reason, fallback, se.Token), se.Token)
+		return d.arithParseFailure(se, se.Expr)
 	case syntax.ErrForName:
 		return Wording(d.ForName, "expected a name after `for`", se.Token, se.Pos.Line)
 	case syntax.ErrUnexpected:

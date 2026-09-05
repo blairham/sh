@@ -297,6 +297,9 @@ func Semantics() interp.Semantics {
 	// `a[*]`. A name that holds a scalar is refused rather than emptied, and
 	// one that holds nothing at all is quietly left alone.
 	s.UnsetArrayAt = interp.UnsetArrayAtRemovesEveryElement
+	// A subscript that will not evaluate ends the script here, as a bad
+	// expression does wherever one is written.
+	s.BadSubscriptToUnsetFatal = interp.Yes
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No
@@ -473,11 +476,14 @@ func Diagnostics() interp.Diagnostics {
 		// dash and ksh93 keep the script's own name.
 		LocationNamesTheCurrentFile: true,
 		UnterminatedEndsOnNextLine:  true,
-		ArithOperandExpected:        "arithmetic syntax error: operand expected",
-		ArithOperatorExpected:       "arithmetic syntax error in expression",
-		ArithBadOperator:            "arithmetic syntax error: invalid arithmetic operator",
-		ArithFailureStatus:          1,
-		SyntaxUnexpected:            "syntax error near unexpected token `%[1]s'",
+		// A substring range puts the parameter in front of the sentence, where
+		// the same shell blames a bad *subscript* on the expression alone.
+		SubstringRangeError:   "%[1]s: %[2]s",
+		ArithOperandExpected:  "arithmetic syntax error: operand expected",
+		ArithOperatorExpected: "arithmetic syntax error in expression",
+		ArithBadOperator:      "arithmetic syntax error: invalid arithmetic operator",
+		ArithFailureStatus:    1,
+		SyntaxUnexpected:      "syntax error near unexpected token `%[1]s'",
 		// A parse failure by every other measure, and 1 rather than this
 		// dialect's syntax-error status.
 		ForNameStatus: 1,

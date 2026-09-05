@@ -314,6 +314,9 @@ func Semantics() interp.Semantics {
 	// the operand is reported as a bad subscript with the array left as it
 	// was — the only shell in the panel that does not clear it.
 	s.UnsetArrayAt = interp.UnsetArrayAtIsASubscript
+	// And the complaint is the builtin's: `unset` reports 1 and the script
+	// goes on, which is what makes `unset a[@]` survivable here.
+	s.BadSubscriptToUnsetFatal = interp.No
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.Yes
@@ -420,6 +423,9 @@ func Diagnostics() interp.Diagnostics {
 		KilledCommandNotice:  "%[1]d: %[2]s",
 		ParamNull:            "parameter null",
 		UnsetBadFunctionName: "unset: %[1]s: invalid function name",
+		// The builtin names itself in front of the arithmetic sentence, which
+		// it does not do for the identical failure in an expansion.
+		UnsetBadSubscript:    "unset: %[1]s",
 		SetInvalidOptionName: "set: %[1]s: bad option(s)",
 		SignalDescriptions:   signalDescriptions(),
 		JobRunning:           " Running",
@@ -478,8 +484,12 @@ func Diagnostics() interp.Diagnostics {
 		EvalNaming:             interp.SourceBeforeLocation,
 		SourceFileNaming:       interp.SourceBeforeLocation,
 		SourceFileIsTheBuiltin: true,
-		ArithOperandExpected:   "more tokens expected",
-		ArithOperatorExpected:  "arithmetic syntax error",
+		// A failing offset is blamed together with what follows it in the
+		// range: `${x:1+:2}` names `1+:2`. A failing length has nothing after
+		// it and is named on its own.
+		SubstringErrorNamesTheWholeRange: true,
+		ArithOperandExpected:             "more tokens expected",
+		ArithOperatorExpected:            "arithmetic syntax error",
 		// A digit the base does not have is the same sentence.
 		DigitTooGreatForBase: "arithmetic syntax error",
 		// ksh93 does not call this a bad substitution: it is a syntax error

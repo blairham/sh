@@ -407,6 +407,35 @@ func (r *Runner) unsetFunction(name string) int {
 	return 0
 }
 
+// badSubscriptToUnset reports an `unset` operand whose subscript would not
+// evaluate, and answers with the status the builtin carries.
+//
+// Two answers, and they are not a wording difference. bash ends the script
+// where a bad expression always ends it, so nothing after the `unset` runs;
+// ksh93 and zsh leave a failed builtin behind and go on to the next command,
+// which is the shape a script can test. ksh93 also names the builtin in front
+// of the sentence, where it words the identical failure in an expansion
+// without one.
+func (r *Runner) badSubscriptToUnset(sub string, err error) int {
+	sentence := r.subscriptFailure(sub, err)
+	// The complaint is the shell's rather than the builtin's — it is the same
+	// sentence the same shell writes about the same text inside `$(( ))` — so
+	// the location must not name `unset`. The one dialect that does name it
+	// puts it in the message, where it puts every other builtin's name.
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
+	if r.ask(r.sem().BadSubscriptToUnsetFatal, "a bad subscript ending the script") {
+		r.fatal("%s\n", sentence)
+		return r.status
+	}
+	if r.unspecified {
+		return 2
+	}
+	r.diagf("%s\n", Wording(r.diag().UnsetBadSubscript, "%[1]s", sentence))
+	return 1
+}
+
 func biUnset(r *Runner, _ context.Context, args []string) int {
 	args, opts, code := r.builtinOptions("unset", args, "vfn")
 	if code != 0 {
@@ -455,9 +484,20 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 					continue
 				}
 			}
-			if idx, err := r.subscriptValue(sub); err == nil {
-				r.unsetArrayElem(base, idx)
+			idx, err := r.subscriptValue(sub)
+			if err != nil {
+				// Reported by every shell in the panel, and silent here: the
+				// error came back and nothing read it, so `unset a[b c]` was
+				// a no-op at status 0. What follows differs — bash gives up
+				// on the script and the other two leave a failed builtin
+				// behind — but nobody says nothing.
+				status = r.badSubscriptToUnset(sub, err)
+				if r.ctl == controlExit {
+					return status
+				}
+				continue
 			}
+			r.unsetArrayElem(base, idx)
 			continue
 		}
 		delete(r.Vars, name)

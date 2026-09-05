@@ -34,6 +34,40 @@ type arithError struct {
 
 func (e arithError) Error() string { return e.msg }
 
+// arithFailure is the sentence a dialect writes about an expression that
+// would not evaluate, given the text it was written as and what went wrong.
+//
+// One function rather than one per caller, because an expression is written
+// in more places than `$(( ))` and every one of them is reported the same way
+// by every shell measured. A subscript is the case that proved it: `${a[b c]}`
+// is the identical complaint to `$((b c))` in all four, and reached its own
+// code path, which said nothing at all.
+func (r *Runner) arithFailure(text string, err error) string {
+	// The expression as written is what dash and ksh93 quote back, and the
+	// caller still has it: the parser keeps the raw text beside the tree it
+	// built from it.
+	ae, _ := err.(arithError)
+	token := ae.token
+	expr := strings.TrimSpace(text)
+	if token == "" {
+		// bash blames the whole expression when the failing part is the whole
+		// expression, which is also the honest answer when the tree cannot
+		// name a smaller piece.
+		token = expr
+	}
+	if ae.complete {
+		return err.Error()
+	}
+	if r.diag().ArithErrorNamesThePrefix && token != "" {
+		// One dialect's leading position is what it had consumed when the
+		// token failed: `08+1` is blamed as `08` and `1+08` as `1+08`.
+		if i := strings.Index(expr, token); i >= 0 {
+			expr = expr[:i+len(token)]
+		}
+	}
+	return Wording(r.diag().ArithError, "%[2]s", expr, err.Error(), token)
+}
+
 // arithToken names the part of an expression a failure should be blamed on.
 //
 // Only a literal and a bare name can be named this way. Anything else — a

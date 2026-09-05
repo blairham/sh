@@ -1999,6 +1999,15 @@ type Semantics struct {
 	// it.
 	UnsetTakesASubscript Answer
 
+	// BadSubscriptToUnsetFatal ends the script when an `unset` operand's
+	// subscript will not evaluate. True in bash, where a bad expression ends
+	// it wherever one is written; false in ksh93 and zsh, which leave a failed
+	// builtin behind and go on. dash has no subscript to evaluate.
+	//
+	// Asked only for an operand whose subscript actually failed, so `unset
+	// a[1]` needs no answer from anyone.
+	BadSubscriptToUnsetFatal Answer
+
 	// UnsetArrayAt is what `unset a[@]` and `unset a[*]` do, and the panel
 	// gives three answers rather than two — see UnsetArrayAtPolicy.
 	//

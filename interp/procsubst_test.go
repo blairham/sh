@@ -6,6 +6,7 @@ package interp_test
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -122,6 +123,37 @@ func TestProcessSubstitutionWritesIntoACommand(t *testing.T) {
 	if got := waitForFile(t, out); got != "HI\n" {
 		t.Errorf("%s = %q, want %q — the command on the far end never ran", out, got, "HI\n")
 	}
+}
+
+// More than a pipe buffer, in both directions.
+//
+// The reason the inner command runs concurrently rather than to completion
+// first — a pipe holds 64 kibibytes and no more, so anything longer than that
+// only moves if both ends are live at once. It is also the case that catches a
+// descriptor left in nonblocking mode: the shell opens its own end without
+// waiting, and O_NONBLOCK belongs to the open file description, so a flag left
+// set travels into the command on the far side and turns a write it should
+// have waited on into an EAGAIN it reports as an error. Under 64 kibibytes
+// nothing ever waits and the flag is invisible.
+func TestProcessSubstitutionCarriesMoreThanAPipeBuffer(t *testing.T) {
+	const lines = 30000 // roughly 200 kibibytes, well past any pipe buffer
+	t.Run("reading from one", func(t *testing.T) {
+		out, st := run(t, `cat <(seq `+strconv.Itoa(lines)+`) | tail -n 1`, nil)
+		if st != 0 || out != strconv.Itoa(lines)+"\n" {
+			t.Errorf("out = %q status %d, want the last of %d lines", out, st, lines)
+		}
+	})
+	t.Run("writing into one", func(t *testing.T) {
+		dir := t.TempDir()
+		out := filepath.Join(dir, "out")
+		src := `seq ` + strconv.Itoa(lines) + ` > >(tail -n 1 > ` + out + `)`
+		if _, st := run(t, src, nil); st != 0 {
+			t.Fatalf("status %d", st)
+		}
+		if got := waitForFile(t, out); got != strconv.Itoa(lines)+"\n" {
+			t.Errorf("%s = %q, want the last of %d lines", out, got, lines)
+		}
+	})
 }
 
 // What the path names is a pipe, and not a temporary file the shell filled in

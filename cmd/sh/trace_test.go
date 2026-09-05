@@ -249,6 +249,33 @@ func TestFormatEventShowsWhatTheEventCarries(t *testing.T) {
 			},
 			"trace: access signal pid=4321 signal=" + strconv.Itoa(int(syscall.SIGTERM)) + " line=7",
 		},
+		{
+			// The id, last, and only when the action has one. It is what pairs
+			// a start with its end by eye — ordering cannot, because a
+			// background job and each half of a pipeline write from their own
+			// goroutines, so the line after a start is often another command's.
+			"an action carrying an id",
+			interp.Event{
+				Kind:   interp.EventCommandEnd,
+				Action: interp.Action{ID: "12", Kind: interp.ActionExec, Path: "/bin/true"},
+				Line:   2,
+			},
+			"trace: command-end exec /bin/true status=0 line=2 id=12",
+		},
+		{
+			// And the session is deliberately not printed even when there is
+			// one. A trace is one shell writing to one stream, so it would be
+			// the same string on every line; the audit record carries it
+			// because a file several shells append to needs it.
+			"a session is not printed",
+			interp.Event{
+				Kind:    interp.EventAccess,
+				Session: "SESSIONUNDERTEST",
+				Action:  interp.Action{ID: "3", Kind: interp.ActionStat, Path: "/p"},
+				Line:    1,
+			},
+			"trace: access stat /p line=1 id=3",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := formatEvent(tc.e); got != tc.want {
@@ -367,6 +394,15 @@ func TestAGatedRunDeniesAndReports(t *testing.T) {
 	// consumer redirecting the script's stdout must not collect it.
 	if strings.Contains(out.String(), "trace:") {
 		t.Errorf("out = %q, want the trace kept off the shell's output stream", out.String())
+	}
+	// And every line carries the id of the action it is about. This is the
+	// half a formatting test cannot show: the field exists on the value, and
+	// until a running shell puts it on the line nobody watching a trace can
+	// pair a start with its end.
+	for _, line := range strings.Split(strings.TrimSpace(trace.String()), "\n") {
+		if !strings.Contains(line, " id=") {
+			t.Errorf("trace line %q carries no action id", line)
+		}
 	}
 }
 

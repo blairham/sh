@@ -225,8 +225,13 @@ Four properties, each of which was a requirement:
 - **Safe as a filename, on every filesystem.** No case folding to worry
   about — the alphabet is uppercase throughout — and nothing that needs
   quoting in a shell.
-- **No dependency.** `crypto/rand` and `encoding/base32` are the
-  standard library.
+- **No dependency.** `math/rand/v2` and `encoding/base32` are the
+  standard library. Not `crypto/rand`, and that is a shell-specific
+  choice rather than a shortcut: what is wanted is uniqueness rather
+  than unpredictability, and measured on macOS the first
+  `crypto/rand.Read` in a process permanently opens a descriptor —
+  which in a shell is not an implementation detail, because descriptor
+  3 is the first number a script parks with `exec 3>f`.
 
 A content hash was the other candidate and is wrong here: two identical
 commands run an hour apart are two blocks, not one, and the whole point
@@ -234,7 +239,9 @@ of a block is *when* and *where* as much as *what*.
 
 A session gets an id by the same construction, so `session` sorts and
 compares like a block id and a store can be split by session with
-`grep`.
+`grep`. The construction lives in `internal/event` — `event.NewID` — so
+that the id a block record carries and the id an audit record carries
+are made the same way and by the same code.
 
 Retrieval addresses a block by its full id or by a **recency number** —
 `1` is the most recent block. Prefix matching, which a content-hash id
@@ -403,35 +410,42 @@ what was typed. Only the repl has that, because only the repl has a
 notion of a typed line at all — a script has statements and no lines a
 person chose. So the repl supplies it, and `interp` is right not to.
 
-### What the event schema cannot carry, and what blocks does instead
+### What the event schema could not carry, and how that was closed
 
-Two things a block needs are genuinely absent, and both are the same
-absence the ACP design already names.
+Two things a block needs were genuinely absent when this landed, and
+both were the same absence the ACP design named. Both are now fields of
+the event schema, added within version 1 — see
+`docs/design/sandboxing.md`.
 
-1. **There is no id on an action or an event.** `EventCommandStart` and
-   `EventCommandEnd` are paired by ordering, and ordering is what
+1. **There was no id on an action or an event.** `EventCommandStart` and
+   `EventCommandEnd` were paired by ordering, and ordering is what
    concurrency breaks — a background job and each half of a pipeline
    emit from their own goroutines. `seq` is documented as a total order
    of *emission* and explicitly not a causal one, which is right for a
-   log and leaves this without an answer. Blocks does not need it for
-   the *outer* pairing, because the repl owns the boundaries of a typed
-   line and does its own timing; it needs it to say **which events
-   belong to which block**, and today it cannot. An audit stream and a
-   block store recorded from one session cannot be joined.
+   log and left this without an answer. Blocks never needed it for the
+   *outer* pairing, because the repl owns the boundaries of a typed line
+   and does its own timing; it needed it to say **which events belong to
+   which block**.
 
-   This is the same field ACP asks for, for the same reason, so it is
-   one field serving two consumers: a per-action id on `Event`, and the
-   same id on the `Action` a `Gate` is consulted about. If it arrives, a
-   block record gains an `events` field naming the ids it covers, which
-   is an added field and not a version bump.
+   `interp.Action.ID` is that field, and the same string is on the
+   `Action` a `Gate` is consulted about and on every `Event` that action
+   produces. A block record may now gain an `events` field naming the
+   ids it covers, which would be an added field and not a version bump.
 
-2. **There is no session identity.** Nothing on a record says which
-   shell wrote it. Blocks needs one — the store is multi-session and
-   append-only — so it generates its own and puts it on the block record
-   as `session`. An audit stream merged from two sessions has the same
-   problem and no such field.
+2. **There was no session identity.** Nothing on an event said which
+   shell wrote it, so blocks generated its own and put it on the block
+   record as `session` — and an audit stream from the same run had no
+   such field at all, which is exactly the pair of records that most
+   wanted joining.
 
-Neither is worked around by inventing a parallel event type. Blocks
+   The identity is now the front end's: `driver` makes one per
+   invocation and hands the same string to the Runner and to the prompt,
+   so the `session` on a block record and the `session` on an event
+   record of the same run are one value. `blocks` no longer makes one,
+   and `event.NewID` is where the construction lives — one generator, so
+   two consumers cannot produce ids that look joinable and are not.
+
+Neither was worked around by inventing a parallel event type. Blocks
 records what only the repl knows and reads the rest from the same
 source everyone else does.
 
@@ -442,12 +456,26 @@ The store is inspected through `cmd/sh`, following the route
 by the binary that exists to exercise seams.
 
     sh -blocks-list          # the recent blocks, one per line
+    sh -blocks-list=100      # more of them
     sh -blocks-show 1        # the most recent block, record and body
     sh -blocks-show <id>     # a block by id
 
-`-blocks-list` prints time, status, duration, cwd and the command. A
-failing block is the one people are looking for, so status is early on
-the line rather than at the end of it.
+`-blocks-list` prints time, status, duration, id, cwd and the command,
+in that order. The time is first because this is a log and that is how a
+log is scanned; the status is second because a block that failed is the
+one somebody came looking for; the command is last because it is the
+only field with no bound on its length.
+
+The count on `-blocks-list` is attached with `=` rather than taken as
+the following word, and that is not a style choice: the scan stops at
+the first word that is not one of this binary's flags, so a bare count
+would eat a script operand. `-blocks-show` has no such problem, since
+its argument is required.
+
+Both read a store instead of running a shell, so they end the
+invocation — through whatever gate the same command line asked for,
+because a policy that hides the store has to hide it from the tool that
+reads it too. A refused store reads as an empty one.
 
 This is deliberately not a builtin. A builtin would have to live in
 `interp`, which has no history, no store and no business acquiring

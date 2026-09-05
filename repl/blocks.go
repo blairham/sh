@@ -6,12 +6,12 @@ package repl
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/blairham/sh/internal/blocks"
 	"github.com/blairham/sh/internal/boundary"
+	"github.com/blairham/sh/internal/event"
 )
 
 // A block is a command and its output as one unit, and this is where a session
@@ -37,55 +37,37 @@ import (
 //     and went on writing a richer record would be doing the opposite of what
 //     was asked in the one moment it matters most.
 
-// blocksDirVar names the store, and an empty value turns it off — the same
-// idiom an empty HISTFILE already is, so there is one thing to learn.
-//
-// SH_-prefixed rather than HIST-shaped because it is ours: no shell in the
-// panel has a variable by this name, so it cannot collide with something an
-// existing rc file sets and means differently.
-const blocksDirVar = "SH_BLOCKS_DIR"
-
 // blocksStore is the store this session records into, and a store that is
 // turned off when it should record nothing.
 //
-// Built once per session. The id is made here rather than by the store so that
-// a test can see the same value the records carry.
+// Built once per session. The session id is the front end's — the same string
+// the Runner carries and the same one every event of this run is stamped with
+// — rather than one made here, which is what lets a block and the audit
+// records of the commands inside it be joined. Made here once, it agreed with
+// nothing: a store and an audit stream from one session described the same
+// commands under two identities.
+//
+// Empty is a session the front end gave no identity, which is honest rather
+// than a reason to invent one; the records still read, they just cannot be
+// joined to anything.
 func (s Shell) blocksStore() *blocks.Store {
-	return blocks.Open(s.blocksDir(), boundary.Boundary{Gate: s.Gate, Events: s.Events},
-		blocks.NewID(s.now()))
+	return blocks.Open(s.blocksDir(),
+		boundary.Boundary{Gate: s.Gate, Events: s.Events, Session: s.Session},
+		s.Session)
 }
 
 // blocksDir resolves where the store lives, and empty means no store.
 //
 // Through the shell's own variables rather than the process environment, for
 // the reason HISTFILE is: a session can set them at the prompt and mean it.
-//
-// A state directory rather than a dotfile in the home directory, and the
-// reason is the output half: the index is small and the bodies are not, so
-// this is a growing directory of arbitrary size, which is what a state
-// directory is for.
+// The rules themselves are the store's — a tool that inspects a store asks the
+// same function with the environment — so the two cannot answer differently
+// about where a person's blocks are.
 func (s Shell) blocksDir() string {
 	if s.Runner == nil {
 		return ""
 	}
-	// The one off switch that governs both files. Asked first, because a
-	// session that is not recording lines must not be recording blocks
-	// whatever else it was told.
-	if h, ok := s.Runner.GetVar("HISTFILE"); ok && h == "" {
-		return ""
-	}
-	if dir, ok := s.Runner.GetVar(blocksDirVar); ok {
-		return dir
-	}
-	if state, ok := s.Runner.GetVar("XDG_STATE_HOME"); ok && state != "" {
-		return filepath.Join(state, "sh", "blocks")
-	}
-	home, _ := s.Runner.GetVar("HOME")
-	if home == "" {
-		// Nowhere to put it, which is the same answer the history file gives.
-		return ""
-	}
-	return filepath.Join(home, ".local", "state", "sh", "blocks")
+	return blocks.DirFrom(s.Runner.GetVar)
 }
 
 // openBlock is what a session starts recording a block with: the moment it
@@ -126,6 +108,36 @@ func (s Shell) blockCwd() string {
 	return dir
 }
 
+// captureOutput installs the capture this session keeps, or nothing.
+//
+// Installed once, at the start, rather than around each command, and the
+// reason is background jobs rather than tidiness: what a child sees is decided
+// by the writer the Runner holds when it is *started*, and a job started under
+// capture goes on writing to that writer after the block it started in has
+// closed. Swapping the writer between commands would make `sleep 10 &` lose
+// its output to a sink nobody is reading. Installing once means a background
+// job's output lands in whichever block is open when it arrives, which is what
+// a terminal does with it too.
+//
+// The consequence is that setting SH_BLOCKS_OUTPUT at the prompt takes effect
+// in the next session and not the next command.
+func (s Shell) captureOutput() *blocks.Capture {
+	if s.Runner == nil {
+		return nil
+	}
+	on, max := blocks.CaptureFrom(s.Runner.GetVar)
+	if !on {
+		return nil
+	}
+	c := blocks.NewCapture(max)
+	// The Runner's streams and not the session's. What the editor draws is not
+	// a command's output, and a block that held the prompt would be recording
+	// the shell talking to itself.
+	s.Runner.Stdout = c.Stream(s.Runner.Stdout)
+	s.Runner.Stderr = c.Stream(s.Runner.Stderr)
+	return c
+}
+
 // closeBlock records what came of it.
 //
 // A blank line is not a block. Every shell in the panel treats a bare newline
@@ -139,13 +151,17 @@ func (s Shell) blockCwd() string {
 // cannot be written would complain after every command — which is a broken
 // prompt rather than a useful diagnostic. The store is an addition to a shell
 // that works without it.
-func (s Shell) closeBlock(ctx context.Context, store *blocks.Store, b openBlock) {
+func (s Shell) closeBlock(ctx context.Context, store *blocks.Store, cap *blocks.Capture, b openBlock) {
 	if strings.TrimSpace(b.command) == "" {
+		// Taken anyway, so that whatever a background job printed while nobody
+		// was typing joins the next real block instead of being attributed to
+		// a newline.
+		s.takeOutput(cap)
 		return
 	}
 	end := s.now()
-	_ = store.Append(ctx, blocks.Record{
-		ID:      blocks.NewID(b.start),
+	_ = store.Record(ctx, blocks.Record{
+		ID:      event.NewID(b.start),
 		Command: b.command,
 		Cwd:     b.cwd,
 		Start:   b.start,
@@ -155,5 +171,15 @@ func (s Shell) closeBlock(ctx context.Context, store *blocks.Store, b openBlock)
 		// than the thing being measured has is a unit that will be believed.
 		DurationMs: end.Sub(b.start).Milliseconds(),
 		Status:     s.status(),
-	})
+	}, s.takeOutput(cap))
+}
+
+// takeOutput is what this block printed, and nothing when the session is not
+// capturing.
+func (s Shell) takeOutput(cap *blocks.Capture) blocks.Output {
+	if cap == nil {
+		return blocks.Output{}
+	}
+	text, total, truncated := cap.Take()
+	return blocks.Output{Text: text, Bytes: total, Truncated: truncated}
 }

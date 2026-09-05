@@ -58,10 +58,10 @@ func (r *Runner) publishInheritedFds(ctx context.Context) {
 		// The gate is not asked, and the record is emitted anyway — see
 		// ActionInherit, which says why the one without the other is the
 		// honest answer here.
-		r.emit(ctx, Event{Kind: EventAccess, Action: Action{
+		r.emit(ctx, Event{Kind: EventAccess, Action: r.act(Action{
 			Kind: ActionInherit,
 			Path: inheritedPath(fd),
-		}})
+		})})
 	}
 }
 

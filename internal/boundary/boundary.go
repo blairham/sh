@@ -27,7 +27,9 @@ package boundary
 
 import (
 	"context"
+	"time"
 
+	"github.com/blairham/sh/internal/event"
 	"github.com/blairham/sh/interp"
 )
 
@@ -37,6 +39,14 @@ import (
 type Boundary struct {
 	Gate   interp.Gate
 	Events interp.Sink
+	// Session identifies the run these accesses belong to, and is the same
+	// string the Runner carries — the front end hands one value to both.
+	//
+	// It matters here more than it looks. What this package opens is a shell's
+	// *own* files, and one of them is the store that records what the shell
+	// ran: without the session on these records, the audit stream's account of
+	// the block store being written could not be joined to the blocks in it.
+	Session string
 }
 
 // Open reports whether the front end may open path, recording it either way.
@@ -46,7 +56,7 @@ type Boundary struct {
 // different things by it. A script the shell cannot read is a failure it names
 // and exits over; a startup file it cannot read is not a failure at all.
 func (b Boundary) Open(ctx context.Context, path string, write bool) bool {
-	a := interp.Action{Kind: interp.ActionOpen, Path: path, Write: write}
+	a := interp.Action{ID: b.id(), Kind: interp.ActionOpen, Path: path, Write: write}
 	if b.Gate != nil && b.Gate.Allow(ctx, a) == interp.Deny {
 		b.emit(ctx, interp.Event{Kind: interp.EventDenied, Action: a})
 		return false
@@ -65,5 +75,30 @@ func (b Boundary) emit(ctx context.Context, e interp.Event) {
 	if b.Events == nil {
 		return
 	}
+	// The session is put on here for the reason interp puts it on in emit():
+	// one place, so no call site can produce a record that belongs to nothing.
+	e.Session = b.Session
 	b.Events.Emit(ctx, e)
+}
+
+// id names one front-end access, so the consultation and the record of it are
+// provably the same access — the promise interp.Action.ID makes, kept on this
+// side of the boundary too.
+//
+// Minted rather than counted, which is the opposite of interp's choice and for
+// the opposite reason. There a counter is forced by the hot path: a PATH search
+// stats a candidate per directory. Out here a run makes a handful of these — a
+// script, a startup file or two, a history file, a block store — so there is
+// nothing to economize, and an id that needs no coordination is what lets the
+// several places that build a Boundary go on building one independently. A
+// shared counter would have to be threaded through every one of them, and the
+// first that forgot would issue a duplicate.
+//
+// Nothing is minted when nothing is watching, which is the same nil check the
+// rest of this package costs a shell without a policy.
+func (b Boundary) id() string {
+	if b.Gate == nil && b.Events == nil {
+		return ""
+	}
+	return event.NewID(time.Now())
 }

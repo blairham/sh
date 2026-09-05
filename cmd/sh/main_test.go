@@ -186,3 +186,71 @@ func TestTheSharedFrontEndCarriesTheScriptsParameters(t *testing.T) {
 		t.Errorf("out = %q, want %q", got, want)
 	}
 }
+
+// -acp is this binary's flag rather than a shell's, so the shared front end
+// must never see it — and, like the others, the scan stops at the first word
+// that is not ours, so a script's own `-acp` argument is the script's.
+func TestACPFlag(t *testing.T) {
+	own, rest, err := readOwnFlags([]string{"-acp"})
+	if err != nil {
+		t.Fatalf("readOwnFlags: %v", err)
+	}
+	if !own.acp {
+		t.Error("-acp was not read")
+	}
+	if len(rest) != 0 {
+		t.Errorf("rest = %v, want nothing left for the shell", rest)
+	}
+
+	own, rest, err = readOwnFlags([]string{"script.sh", "-acp"})
+	if err != nil {
+		t.Fatalf("readOwnFlags: %v", err)
+	}
+	if own.acp {
+		t.Error("a script's own -acp argument was eaten")
+	}
+	if !slices.Equal(rest, []string{"script.sh", "-acp"}) {
+		t.Errorf("rest = %v, want both words left for the shell", rest)
+	}
+}
+
+// A session's directory and its program both arrive as messages, so there is
+// no invocation to read. An operand here would be silently ignored, which is
+// the failure where somebody's `-c` never runs and nothing says why.
+func TestACPTakesNoOperands(t *testing.T) {
+	sh, err := pickDialect("core")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := serveACP(sh, []string{"-c", "echo hi"}); code == 0 {
+		t.Error("operands were accepted; they would have been ignored")
+	}
+}
+
+// -acp-connect takes the command that starts an agent, and the scan stops at
+// it: the agent's own flags are the agent's, not ours. `npx pkg --acp` must
+// reach the agent with its `--acp` intact.
+func TestACPConnectFlag(t *testing.T) {
+	own, rest, err := readOwnFlags([]string{"-acp-allow", "-acp-connect", "npx", "pkg", "--acp"})
+	if err != nil {
+		t.Fatalf("readOwnFlags: %v", err)
+	}
+	if !own.acpConnect || !own.acpAllow {
+		t.Fatalf("flags = %+v, want both read", own)
+	}
+	if !slices.Equal(rest, []string{"npx", "pkg", "--acp"}) {
+		t.Errorf("rest = %v, want the agent's whole command line", rest)
+	}
+}
+
+// With no command there is nothing to connect to, and saying so beats hanging
+// on a pipe nobody is on the other end of.
+func TestACPConnectNeedsACommand(t *testing.T) {
+	sh, err := pickDialect("core")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := connectACP(sh, false, nil); code == 0 {
+		t.Error("connecting to nothing reported success")
+	}
+}

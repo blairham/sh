@@ -11,7 +11,7 @@ import "testing"
 // looks wrong — it only grows, for as long as the session lasts.
 func TestTakeProcSubsForgetsWhatItHandedOver(t *testing.T) {
 	r := newTestRunner(t, &Runner{})
-	r.procSubs = []string{"a", "b"}
+	r.procSubs = []procSubPipe{{path: "a"}, {path: "b"}}
 	if got := r.takeProcSubs(); len(got) != 2 {
 		t.Fatalf("took %v, want both pipes", got)
 	}

@@ -56,6 +56,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"ArrayLiteralSubscriptIsAKey", s.ArrayLiteralSubscriptIsAKey, interp.No},
 		{"FatalErrorStatusIsOne", s.FatalErrorStatusIsOne, interp.Yes},
 		{"RedirectErrorOnSpecialBuiltinFatal", s.RedirectErrorOnSpecialBuiltinFatal, interp.No},
+		{"MultiDigitDuplicationTargetIsAnError", s.MultiDigitDuplicationTargetIsAnError, interp.No},
 		{"EchoInterpretsEscapes", s.EchoInterpretsEscapes, interp.No},
 		{"LengthOfSpecialIsCount", s.LengthOfSpecialIsCount, interp.Yes},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.Yes},
@@ -162,5 +163,19 @@ func TestALocalCarriesTheExportAttribute(t *testing.T) {
 	out, _ := answersRun(t, `export FOO=bar; f() { local FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f; /usr/bin/env | grep '^FOO='`)
 	if !strings.Contains(out, "FOO=baz") || !strings.Contains(out, "FOO=bar") {
 		t.Errorf("got %q, want the local's value inside and the outer value after", out)
+	}
+}
+
+// A duplication target wider than one digit is a number like any other here:
+// the descriptor is looked at, the failure is the descriptor's, and the script
+// runs on. One shell in the panel refuses the word instead, and asserting this
+// side as behavior is what keeps the preset from drifting into that answer.
+func TestAWideDuplicationTargetIsReadAsANumber(t *testing.T) {
+	out, st := answersRun(t, "echo hi >&10\necho after\n")
+	if !strings.Contains(out, "10: Bad file descriptor") {
+		t.Errorf("out %q, want the descriptor's own failure", out)
+	}
+	if !strings.Contains(out, "after") || st != 0 {
+		t.Errorf("out %q status %d, want the script to have carried on", out, st)
 	}
 }

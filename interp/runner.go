@@ -403,6 +403,19 @@ type Runner struct {
 	// running its script" wants this; only the re-raise wants killedBy.
 	stoppedBySignal bool
 
+	// diedOfSig is the signal that ended the command whose status `status`
+	// now holds, and zero where that status came from an ordinary exit.
+	//
+	// It is narrower than killedBy, which is only about a signal *this shell*
+	// took and has to re-raise; an external command killed by SIGTERM sets
+	// this and not that. It exists because a status is a lossy record of a
+	// signal death — 143 could as easily be `exit 143` — and one shell
+	// reports the signal itself where a pipeline substitutes the status.
+	//
+	// Cleared at the top of every command, so it can only ever describe the
+	// command the status describes.
+	diedOfSig syscall.Signal
+
 	// status is the exit status of the last command run.
 	status int
 	// ctl carries break, continue and return out of a construct. They are
@@ -1581,6 +1594,10 @@ func (r *Runner) pipeline(ctx context.Context, p *syntax.Pipeline) error {
 }
 
 func (r *Runner) command(ctx context.Context, c syntax.Command) error {
+	// Whatever ended the last command is not what ends this one. Cleared
+	// here rather than beside each assignment to status, because this is the
+	// one door every command goes through.
+	r.diedOfSig = 0
 	if r.noexec {
 		// `set -n` — commands are read and never executed, and nothing turns
 		// it back off: even `set +n` is a command. Syntax errors still
@@ -2052,6 +2069,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	case errors.As(err, &ee):
 		r.status = r.exitStatus(err)
 		if sig, killed := killedBy(err); killed {
+			r.diedOfSig = sig
 			r.reportKilled(sig, cmd.Process.Pid)
 		}
 	default:
@@ -2118,6 +2136,7 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 	status, stopped := r.waitResult(w)
 	r.status = status
 	if w.Killed {
+		r.diedOfSig = w.Signal
 		// Told the signal directly rather than through an error: this path
 		// exists because only the caller's own wait can see a command that
 		// *stopped*, and it reports what ended one just the same.

@@ -37294,6 +37294,50 @@
         "TimedOut": false
       }
     },
+    "signal-death/a-hangup-that-exits-runs-the-exit-trap": {
+      "bash": {
+        "Stdout": "bye",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "bye",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "bye",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 1,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "bye",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "bye",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "signal-death/a-signal-with-no-meaning-of-its-own-is-fatal-too": {
       "bash": {
         "Stdout": "",
@@ -37467,6 +37511,50 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 6,
+        "TimedOut": false
+      }
+    },
+    "signal-death/hangup-is-an-exit-in-one-shell": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 1,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
         "TimedOut": false
       }
     },

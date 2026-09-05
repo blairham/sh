@@ -2315,6 +2315,41 @@ var Corpus = []Case{
 		Why:     "the found-an-operand wording reached through a range rather than through `$(( ))`, which is where the two are held together: the shell that blames an offset along with the rest of the range also *reads* the rest of the range, so `${x:1+:2}` is its found case where `${x:1+}` is its ran-out one. A length has nothing after it and is the plain case in every column",
 	},
 	{
+		ID: "param/a-substring-offset-that-names-a-variable", Category: "parameter expansion",
+		Snippet: `x=abcdef; i=2; echo "[${x:i:2}]"; echo after`,
+		Why:     "the ordinary way to walk a string, and one shell does not read it as a range at all: a range there is also its history-modifier syntax, so a segment beginning with a letter is a modifier and `i` names none of them — refused at 1, with the command abandoned. The other three evaluate the expression and answer `cd`, and we answered `cd` in every dialect, which is the silent half: a script that shell would have stopped ran on with a plausible substring",
+	},
+	{
+		ID: "param/a-substring-offset-that-is-a-modifier", Category: "parameter expansion",
+		Snippet: `x=/tmp/Dir/File.Txt; h=9; echo "[${x:h}]"`,
+		Why:     "the same spelling where the letter *is* a modifier, which is what makes this a reading rather than a refusal: one shell answers the head of the path and the other three the substring from offset 9, because `h` is a variable to them. The variable is set on purpose — with `h` unset the three would answer from offset 0 and the case would look like a disagreement about the whole string rather than about what `h` means",
+	},
+	{
+		ID: "param/a-substring-offset-that-does-not-begin-with-a-letter", Category: "parameter expansion",
+		Snippet: `x=abcdef; _q=1; echo "[${x:_q:2}] [${x: _q:2}] [${x:(_q):2}]"`,
+		Why:     "the boundary of that reading, measured three ways: an underscore is not a letter, a leading space puts the letter second, and a parenthesis does the same — so all three are ranges rather than modifiers, and the shell that has modifiers answers them exactly as bash does. It says the rule is about the first byte and not about the segment containing a name. ksh93 is the odd column and for an unrelated reason: it refuses a parenthesized offset outright, naming it with the parentheses backslashed",
+	},
+	{
+		ID: "param/a-substring-length-that-names-a-variable", Category: "parameter expansion",
+		Snippet: `x=abcdef; i=2; echo "[${x:2:i}]"; echo after`,
+		Why:     "the length is the same question as the offset, and the shell with modifiers reads it the same way — the segment begins with a letter, so it is a modifier and not a count. Pinned separately because the offset and the length are evaluated by different call sites and a fix that caught one silently left the other",
+	},
+	{
+		ID: "param/a-substring-modifier-after-an-offset", Category: "parameter expansion",
+		Snippet: `x=/tmp/Dir/File.Txt; t=3; echo "[${x:2:t}]"`,
+		Why:     "an offset and then a modifier, which is what shows the two readings are segments of one range rather than alternatives: the shell with modifiers takes the substring and then the tail of it, and the other three take two characters. It is also what a chain has to agree with — `${x:h:t}` is two modifiers by the same rule",
+	},
+	{
+		ID: "param/a-substring-modifier-chain", Category: "parameter expansion",
+		Snippet: `x=/tmp/Dir/File.Txt; h=9; t=9; echo "[${x:h:t}]"`,
+		Why:     "two modifiers in one range, applied left to right — the head and then the tail of it. The parser splits a range once, so a chain arrives as one segment and a word holding the rest, and this is the case that says the rest is split again rather than evaluated whole",
+	},
+	{
+		ID: "param/a-substring-modifier-with-something-after-it", Category: "parameter expansion",
+		Snippet: `x=/tmp/Dir/File.Txt; echo "[${x:ha}]"; echo after`,
+		Why:     "a segment is one modifier and the letter is the whole of it, so a good modifier with a letter after it is refused — and refused *without naming anything*, where an unknown first letter is named. The two shapes of one sentence are why this is a case: `${x:i:2}` names `i` and this names nothing, and a single wording would have to pick one",
+	},
+	{
 		ID: "param/a-substring-offset-on-a-subscripted-parameter", Category: "parameter expansion",
 		Snippet: `a=(p q r); echo "[${a[@]:1+}]"; echo after`,
 		Why:     "the parameter a diagnostic names is the name and its subscript, not the name alone — `a[@]` — in the one shell that names it at all. The list form of the substring reaches the same evaluation as the string form, so this also says the two spellings share it",

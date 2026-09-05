@@ -603,6 +603,187 @@ func TestArgv0ReachesTheBinaryOnTheScriptRoute(t *testing.T) {
 	}
 }
 
+// TestGradedOnRefusalCasesAreActuallyRefused is the guard that keeps the
+// relaxation from becoming a way to pass.
+//
+// The mode forgives the wording of a diagnostic, which is only defensible on a
+// case where every shell genuinely declines. Put the flag on a case the panel
+// *runs* and it would forgive an ordinary difference instead — so the claim
+// the flag makes is checked here against the golden record, which is checked
+// in. That costs no shells and runs everywhere, and it fails at the moment
+// someone marks the wrong case rather than at the moment a score quietly
+// improves.
+//
+// The record is the right authority for it. matchesRefusal already refuses to
+// pass a case whose reference did not refuse, so a misused flag cannot make
+// conformance green; what it could do without this is sit in the corpus
+// looking like a claim that had been checked.
+func TestGradedOnRefusalCasesAreActuallyRefused(t *testing.T) {
+	golden, err := Load(filepath.Join("testdata", "golden.json"))
+	if err != nil {
+		t.Fatalf("golden record: %v", err)
+	}
+	marked := 0
+	for _, c := range Corpus {
+		if !c.GradedOnRefusal {
+			continue
+		}
+		marked++
+		row, ok := golden.Results[c.ID]
+		if !ok {
+			// A brand new case has nothing recorded yet; `make oracle` is what
+			// puts it there, and until then there is nothing to check it
+			// against.
+			continue
+		}
+		for _, shell := range golden.Shells {
+			res, ok := row[shell.Name]
+			if !ok {
+				continue
+			}
+			if !refused(res) {
+				t.Errorf("%s is GradedOnRefusal but %s did not refuse it: %s\n"+
+					"\tthe flag forgives the wording of a refusal, so a case the panel runs must not carry it",
+					c.ID, shell.Name, describe(res))
+			}
+		}
+	}
+	if marked == 0 {
+		t.Error("no case carries GradedOnRefusal; the mode has no coverage and this guard proves nothing")
+	}
+}
+
+// TestARefusalIsNotForgivenUnlessBothSidesRefused fixes the boundary of the
+// relaxation, which is the whole of its safety.
+//
+// Every row here is a case the exact comparison would fail. The question is
+// which of them the refusal mode should *also* fail, and the answer is all but
+// one: it forgives a wording, and nothing else.
+func TestARefusalIsNotForgivenUnlessBothSidesRefused(t *testing.T) {
+	refusal := Result{Stdout: "", Stderr: "sh: -c: option requires an argument", Status: 2}
+	for _, tc := range []struct {
+		name string
+		want Result
+		got  Result
+		ok   bool
+	}{
+		{
+			// The case the mode exists for: two shells that declined alike
+			// and said so in their own words.
+			name: "same refusal, different words",
+			want: refusal,
+			got:  Result{Stderr: "our-sh: -c needs an operand", Status: 2},
+			ok:   true,
+		},
+		{
+			// The bug the motivating case was written to catch. Running what
+			// the reference declined to run is not a wording difference.
+			name: "we ran what the reference refused",
+			want: refusal,
+			got:  Result{Stdout: "hi", Status: 0},
+		},
+		{
+			// A silent failure has not diagnosed anything, and "it complained
+			// on stderr" is half the claim being graded.
+			name: "we refused without saying anything",
+			want: refusal,
+			got:  Result{Status: 2},
+		},
+		{
+			// The status is still exact. Two shells that refuse with
+			// different numbers have not behaved the same way.
+			name: "refused with a different status",
+			want: refusal,
+			got:  Result{Stderr: "our-sh: no", Status: 1},
+		},
+		{
+			// Standard output is still exact, which is what stops the mode
+			// forgiving a stream of output nobody produced — bash's `set -o`
+			// table on the attached-command-string case is exactly this.
+			name: "refused alike but printed something extra",
+			want: Result{Stdout: "allexport\toff", Stderr: "sh: - : invalid option", Status: 1},
+			got:  Result{Stderr: "our-sh: - : invalid option", Status: 1},
+		},
+		{
+			// The flag on a case that is not a refusal. It fails rather than
+			// passing loosely: a misused flag has to be louder than a correct
+			// one, not quieter.
+			name: "the reference did not refuse at all",
+			want: Result{Stdout: "hi", Status: 0},
+			got:  Result{Stdout: "different", Status: 0},
+		},
+		{
+			// A shell that never finished declined nothing, and a case that
+			// hangs has stopped measuring.
+			name: "a timeout is not a refusal",
+			want: Result{TimedOut: true, Status: -1},
+			got:  Result{TimedOut: true, Status: -1, Stderr: "our-sh: no"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := Case{ID: "t", GradedOnRefusal: true}
+			if matches(tc.want, tc.got) {
+				t.Fatal("the exact comparison already passes this, so it says nothing about the relaxation")
+			}
+			ok, relaxed := verdict(c, tc.want, tc.got)
+			if ok != tc.ok {
+				t.Errorf("verdict = %v, want %v", ok, tc.ok)
+			}
+			if relaxed != tc.ok {
+				t.Errorf("relaxed = %v, want %v: a pass here is only ever a relaxed one", relaxed, tc.ok)
+			}
+			// And the flag is the only thing that grants it: the same two
+			// results without it must fail, or the mode is not opt-in.
+			if ok, _ := verdict(Case{ID: "t"}, tc.want, tc.got); ok {
+				t.Error("passed without GradedOnRefusal; the relaxation is not opt-in")
+			}
+		})
+	}
+}
+
+// TestAnExactMatchIsNeverCountedAsRelaxed keeps the discount honest.
+//
+// The count has to mean "this much of the score is currently being forgiven".
+// Counting every flagged case would make it measure how the corpus is labeled
+// instead, and it would grow when a dialect got *better* — the number moving
+// the wrong way at the moment the gap closes.
+func TestAnExactMatchIsNeverCountedAsRelaxed(t *testing.T) {
+	same := Result{Stderr: "sh: -c: option requires an argument", Status: 2}
+	ok, relaxed := verdict(Case{ID: "t", GradedOnRefusal: true}, same, same)
+	if !ok || relaxed {
+		t.Errorf("verdict = (%v, %v), want (true, false): an exact match needs no relaxation", ok, relaxed)
+	}
+}
+
+// TestTheRecordMarksARelaxedRow is the visibility requirement, which is the
+// condition the mode was allowed on.
+//
+// A reader of the generated tables has to be able to tell which rows are
+// graded loosely. Without that, the objection to the mode stands — it would be
+// indistinguishable from a score that is quietly wrong.
+func TestTheRecordMarksARelaxedRow(t *testing.T) {
+	cases := []Case{
+		{ID: "loose", Category: "invocation", Snippet: "echo hi", GradedOnRefusal: true},
+		{ID: "strict", Category: "invocation", Snippet: "echo hi"},
+	}
+	run := &Run{
+		Shells:  []ShellRecord{{Name: "dash", Version: "x"}},
+		Results: map[string]map[string]Result{"loose": {"dash": {Status: 2, Stderr: "no"}}, "strict": {"dash": {Stdout: "hi"}}},
+	}
+	md := run.Markdown(cases)
+	for _, line := range strings.Split(md, "\n") {
+		if strings.Contains(line, "`loose`") && !strings.Contains(line, "(refusal)") {
+			t.Errorf("a relaxed row is not marked: %q", line)
+		}
+		if strings.Contains(line, "`strict`") && strings.Contains(line, "(refusal)") {
+			t.Errorf("an exactly graded row is marked as relaxed: %q", line)
+		}
+	}
+	if !strings.Contains(md, "**(refusal)**") {
+		t.Error("the mark never appears at all")
+	}
+}
+
 // TestSyntaxErrorCasesAreGraded is the point of grading them at all.
 //
 // They were skipped alongside the cases whose reference races, and the two

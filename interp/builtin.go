@@ -5,7 +5,6 @@ package interp
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -636,9 +635,22 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 	if strings.ContainsRune(opts, 'f') {
 		return r.exportFuncs(args)
 	}
-	if strings.ContainsRune(opts, 'p') {
+	if strings.ContainsRune(opts, 'p') || (opts == "" && len(args) == 0) {
 		// The listing: exported names alone, in the dialect's shape. An
 		// operand narrows it to that name's declaration.
+		//
+		// `export` with nothing at all is the same listing. POSIX says so and
+		// every shell in the panel does it — measured with one name exported
+		// under a scrubbed environment, dash, bash 5.3, bash 3.2, ksh93 and
+		// zsh all write the exported names out. This printed nothing, which
+		// is why its failed write had nothing to fail: `export >&-` answered
+		// 0 in silence where dash and bash report the write.
+		//
+		// The *shape* of the bare listing is not always `-p`'s: dash and both
+		// bash builds write the same thing either way, and ksh93 and zsh drop
+		// the leading `export` word for the bare form alone. That split is
+		// recorded in the corpus and left for a dialect to answer; the
+		// listing every shell has is worth more than the silence it replaces.
 		return r.declarePrintForm(args, r.sem().ExportListing,
 			func(d declaration) bool { return d.exported })
 	}
@@ -1231,7 +1243,11 @@ func biPwd(r *Runner, _ context.Context, args []string) int {
 			dir = resolved
 		}
 	}
-	_, _ = fmt.Fprintln(r.stdout(), dir)
+	// Through printf, which records a failed write for the dispatcher to fold
+	// into the status. Writing the stream directly discarded the error, so
+	// `pwd >&-` answered 0 in silence where dash says `pwd: pwd: I/O error`
+	// and bash `pwd: write error: Bad file descriptor`, both with status 1.
+	r.printf("%s\n", dir)
 	return 0
 }
 
@@ -1811,8 +1827,10 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 	if code != 0 {
 		return code
 	}
-	if strings.ContainsRune(opts, 'p') && len(args) == 0 {
-		// The listing: readonly names alone, in the dialect's shape.
+	if (strings.ContainsRune(opts, 'p') || opts == "") && len(args) == 0 {
+		// The listing: readonly names alone, in the dialect's shape. `-p` and
+		// nothing at all list alike, which is the same rule `export` follows
+		// and is measured the same way.
 		return r.declarePrintForm(nil, r.sem().ReadonlyListing,
 			func(d declaration) bool { return d.readonly })
 	}

@@ -916,6 +916,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `export/an-exported-name-reaches-a-real-child` | `E=2~X=1` | `E=2~X=1` | `E=2~X=1` | `E=2~X=1` | `E=2~X=1` | `E=2~X=1` |
 | `export/a-prefix-over-an-imported-name` | `TERM=prefixed~TERM=dumb` | `TERM=prefixed~TERM=dumb` | `TERM=prefixed~TERM=dumb` | `TERM=prefixed~TERM=dumb` | `TERM=prefixed~TERM=dumb` | `TERM=prefixed~TERM=dumb` |
 | `export/p-names-what-is-exported` | `1` | `1` | `1` | `1` | `1` | `1` |
+| `export/no-operands-lists-what-is-exported` | `export MYNAME='1'` | `declare -x MYNAME="1"` | `export MYNAME="1"` | `declare -x MYNAME="1"` | `MYNAME=1` | `MYNAME=1` |
+| `readonly/no-operands-lists-what-is-readonly` | `readonly RONAME='2'` | `declare -r RONAME="2"` | `readonly RONAME="2"` | `declare -r RONAME="2"` | `RONAME=2` | `RONAME=2` |
 | `readonly/p-names-what-is-readonly` | `1` | `1` | `1` | `1` | `1` | `1` |
 | `hash/bare-and-r-succeed-everywhere` | `st=0~r=0` | `hash: hash table empty~st=0~r=0` | `st=0~r=0` | `hash: hash table empty~st=0~r=0` | `st=0~r=0` | `st=0~r=0` |
 | `hash/a-missing-name-diverges` | `st=1` **2>** `<shell>: 1: hash: nosuchcmd-xyz: not found` | `st=1` **2>** `<shell>: line 1: hash: nosuchcmd-xyz: not found` | `st=1` **2>** `<shell>: line 1: hash: nosuchcmd-xyz: not found` | `st=1` **2>** `<shell>: line 0: hash: nosuchcmd-xyz: not found` | `st=0` | `st=1` **2>** `<shell>:hash:1: no such command: nosuchcmd-xyz` |
@@ -1326,6 +1328,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `export/p-names-what-is-exported` — the listing must name the exported variable in one of the two spellings the shells use — the grep finds either, and found neither before
   ```sh
   export V=1; export -p | grep -c -E "^(declare -x|export) V="
+  ```
+- `export/no-operands-lists-what-is-exported` — `export` with nothing after it lists, in all five: POSIX says so and the panel agrees that something is written. This wrote nothing at all, which is also why `export >&-` had no failed write to report. The *shape* is where they part, and it is not the shape `-p` uses: dash and both bash builds write the same line either way, while ksh93 and zsh drop the leading `export` and write a plain assignment for the bare form alone. The grep keeps the case to one line, so the split is the whole of what is recorded
+  ```sh
+  export MYNAME=1; export | grep MYNAME
+  ```
+- `readonly/no-operands-lists-what-is-readonly` — the same rule for `readonly`, and the same split in the same two shells — with zsh's `-p` form being `typeset -r` rather than `readonly`, so its bare form differs from its own `-p` by more than a missing word
+  ```sh
+  readonly RONAME=2; readonly | grep RONAME
   ```
 - `readonly/p-names-what-is-readonly` — the same question through readonly -p, whose spelling zsh alone moves to typeset -r
   ```sh
@@ -4456,6 +4466,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/read-write-opens-without-truncating` | `keep~st=0~made` | `keep~st=0~made` | `keep~st=0~made` | `keep~st=0~made` | `keep~st=0~made` | `keep~st=0~made` |
 | `redir/a-write-to-a-closed-descriptor-fails` | `st=1` **2>** `<shell>: 1: echo: echo: I/O error` | `st=1` **2>** `<shell>: line 1: echo: write error: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: echo: write error: Bad file descriptor` | `hi~st=1` **2>** `<shell>: line 0: echo: write error: Bad file descriptor` | `st=1` | `st=0` |
 | `redir/a-group-writing-to-a-closed-descriptor` | `st=1` **2>** `<shell>: 1: echo: echo: I/O error~<shell>: 1: echo: echo: I/O error` | `st=1` **2>** `<shell>: line 1: echo: write error: Bad file descriptor~<shell>: line 1: echo: write error: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: echo: write error: Bad file descriptor~<shell>: line 1: echo: write error: Bad file descriptor` | `a~b~st=1` **2>** `<shell>: line 0: echo: write error: Bad file descriptor~<shell>: line 0: echo: write error: Bad file descriptor` | `st=1` | `st=0` **2>** `<shell>:1: write error: bad file descriptor~<shell>:1: write error: bad file descriptor` |
+| `redir/pwd-writing-to-a-closed-descriptor` | `st=1~<shell>: 1: pwd: pwd: I/O error` | `st=1~<shell>: line 1: pwd: write error: Bad file descriptor` | `st=1~<shell>: line 1: pwd: write error: Bad file descriptor` | `st=1~<shell>: line 0: pwd: write error: Bad file descriptor` | `st=0` | `st=0` |
+| `redir/times-writing-to-a-closed-descriptor` | `st=1~<shell>: 1: times: times: I/O error` | `st=1~<shell>: line 1: times: write error: Bad file descriptor` | `st=1~<shell>: line 1: times: write error: Bad file descriptor` | `st=0` | `st=1~<shell>: 1: cannot open [Bad file descriptor]` | `st=0` |
+| `redir/export-writing-to-a-closed-descriptor` | `st=1~<shell>: 1: export: export: I/O error` | `st=1~<shell>: line 1: export: write error: Bad file descriptor` | `st=1~<shell>: line 1: export: write error: Bad file descriptor` | `st=0` | `st=0` | `st=0` |
+| `redir/readonly-writing-to-a-closed-descriptor` | `st=1~<shell>: 1: readonly: readonly: I/O error` | `st=1~<shell>: line 1: readonly: write error: Bad file descriptor` | `st=1~<shell>: line 1: readonly: write error: Bad file descriptor` | `st=0` | `st=0` | `st=0` |
 | `redir/exec-opens-a-high-descriptor` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` |
 | `redir/a-two-digit-descriptor-number` | **2>** `<shell>: 1: exec: 10: not found` *(status 127)* | `hi` | `hi` | `hi` | **2>** `<shell>: exec: 10: not found` *(status 127)* | **2>** `<shell>:1: command not found: 10` *(status 127)* |
 | `redir/digits-before-a-redirection-that-are-not-a-number` | `st=0~x 10` | `x~st=0` | `x~st=0` | `x~st=0` | `st=0~x 10` | `st=0~x 10` |
@@ -4636,6 +4650,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `redir/a-group-writing-to-a-closed-descriptor` — the failure is per write, never fatal: each echo inside the group fails on its own — bash and dash complain twice — and the group reports the last one. zsh says `write error` here where it said nothing for a simple command's own `>&-`, and still answers 0
   ```sh
   { echo a; echo b; } >&-; echo "st=$?"
+  ```
+- `redir/pwd-writing-to-a-closed-descriptor` — the same question as `redir/a-write-to-a-closed-descriptor-fails` asked of a builtin that is not `echo`, and the panel does not answer it the same way: dash and both bash builds report the failed write and fail the command, and ksh93 and zsh both answer 0 in silence — where ksh93 *does* report `echo`'s. So whether a builtin's failed write fails the command is not one answer per shell; ksh93 gives one answer for `echo` and the opposite for `pwd`
+  ```sh
+  ( pwd >&- ) 2>e >/dev/null; echo "st=$?"; cat e
+  ```
+- `redir/times-writing-to-a-closed-descriptor` — the third of the panel's answers on the same question: dash, bash 5.3 and ksh93 all fail the command, bash 3.2 and zsh do not, and ksh93 words it as a failure to *open* rather than to write — `cannot open [Bad file descriptor]`, with no builtin named. bash 3.2's 0 is its queued write rather than a decision: the text is still in its buffer when the builtin returns
+  ```sh
+  ( times >&- ) 2>e >/dev/null; echo "st=$?"; cat e
+  ```
+- `redir/export-writing-to-a-closed-descriptor` — `export` with no operands writes the exported names, so it is a builtin whose output exists without being asked for — and the failed write is reported by dash and bash 5.3 and by nobody else. It is here because the listing itself was missing: writing nothing, this had no write to fail and answered 0 everywhere
+  ```sh
+  ( export >&- ) 2>e >/dev/null; echo "st=$?"; cat e
+  ```
+- `redir/readonly-writing-to-a-closed-descriptor` — the same for `readonly`, which lists the same way and had the same silence. The name is set first because a shell with nothing readonly writes nothing, and a case where the write never happens cannot say whether a failed one is reported
+  ```sh
+  readonly RO=1; ( readonly >&- ) 2>e >/dev/null; echo "st=$?"; cat e
   ```
 - `redir/exec-opens-a-high-descriptor` — `exec 3>file` holds the file on a descriptor of its own — stdout stays where it was, and only what is aimed at 3 reaches the file
   ```sh

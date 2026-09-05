@@ -708,3 +708,18 @@ func TestBashReadsNoProfileWithAScriptToRun(t *testing.T) {
 		t.Error("the POSIX preset no longer reads it, so this preset overrides nothing")
 	}
 }
+
+// TestDollarDashInteractiveStartupLetters. Measured 2026-09-05 on bash 5.3.15
+// with a scratch HOME: `bash -i script.sh` reports `hiBH`, so the interactive
+// set adds the history-expansion letter and keeps the rest. `i` is not in the
+// field — it is unanimous and comes from the runner — and neither is `m`: this
+// shell's monitor is off there, which `set -o` confirms.
+//
+// bash 3.2 answers `hiB` for the same invocation and `hiBHc` for `-i -c`, so
+// it disagrees with itself as well as with 5.3. 5.3 is the panel member that
+// counts.
+func TestDollarDashInteractiveStartupLetters(t *testing.T) {
+	if got, want := bash.Semantics().InteractiveOptionLetters, "hBH"; got != want {
+		t.Errorf("InteractiveOptionLetters = %q, want %q", got, want)
+	}
+}

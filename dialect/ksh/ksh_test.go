@@ -638,3 +638,25 @@ func TestARedirectionInAnUncompoundedBodyIsRefused(t *testing.T) {
 		}
 	}
 }
+
+// TestDollarDashInteractiveStartupLetters, and this is the shell that decides
+// the shape of the axis. Measured 2026-09-05: `ksh -i script.sh` reports
+// `imBE` where a script reports `hB`, so the `h` is *dropped* — `set -o` says
+// `trackall on` for the script and off when interactive — and `rc` comes on,
+// which is the `E`. A field of letters to append could not have said any of
+// that.
+//
+// The `m` is deliberately absent from the field. It is a monitor that is
+// really running — `set -o` reports `monitor on` under `-i script.sh` in this
+// shell and off in bash and zsh — so the letter belongs to the runner's state.
+// That the shell turns job control on there and this front end does not is
+// recorded in docs/spec/invocation.md as measured and not modeled.
+func TestDollarDashInteractiveStartupLetters(t *testing.T) {
+	got := ksh.Semantics().InteractiveOptionLetters
+	if want := "BE"; got != want {
+		t.Errorf("InteractiveOptionLetters = %q, want %q", got, want)
+	}
+	if strings.ContainsRune(got, 'm') {
+		t.Error("the monitor letter must come from the monitor, not from a startup string")
+	}
+}

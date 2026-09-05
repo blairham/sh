@@ -92,6 +92,16 @@ func Semantics() interp.Semantics {
 	// -c, a script file and standard input alike, before the letters that
 	// describe the route.
 	s.DefaultOptionLetters = "hB"
+	// And `hiBH` for `-i script.sh`, so the interactive set adds the
+	// history-expansion letter and keeps everything else — measured
+	// 2026-09-05 on bash 5.3.15, where `set -o` reports `histexpand on`
+	// and `history on` there and both off for a script. `i` is not written
+	// here: it is unanimous and comes from the runner.
+	//
+	// bash 3.2 answers `hiB` for the same invocation and `hiBHc` for `-i
+	// -c`, so it disagrees with itself by route as well as with its later
+	// build. 5.3 is the panel member that counts, as it is everywhere else.
+	s.InteractiveOptionLetters = "hBH"
 	// `bash -c 'echo $-'` reports `hBc`; ksh93 agrees and dash and zsh do
 	// not. The `s` of the standard-input route is not added under `-c`
 	// here — ksh93 alone does that.

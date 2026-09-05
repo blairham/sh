@@ -23,7 +23,7 @@ import (
 // entitled to see. They were latent while nothing supplied a gate, and #460
 // stopped them being latent.
 func (sh Shell) boundary() boundary.Boundary {
-	return boundary.Boundary{Gate: sh.Gate, Events: sh.Events}
+	return boundary.Boundary{Gate: sh.Gate, Events: sh.Events, Session: sh.Session}
 }
 
 // readFile is os.ReadFile through this shell's gate.

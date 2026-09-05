@@ -11,6 +11,7 @@ import (
 
 	"github.com/blairham/sh/internal/blocks"
 	"github.com/blairham/sh/internal/boundary"
+	"github.com/blairham/sh/internal/event"
 )
 
 // A block is a command and its output as one unit, and this is where a session
@@ -39,11 +40,20 @@ import (
 // blocksStore is the store this session records into, and a store that is
 // turned off when it should record nothing.
 //
-// Built once per session. The id is made here rather than by the store so that
-// a test can see the same value the records carry.
+// Built once per session. The session id is the front end's — the same string
+// the Runner carries and the same one every event of this run is stamped with
+// — rather than one made here, which is what lets a block and the audit
+// records of the commands inside it be joined. Made here once, it agreed with
+// nothing: a store and an audit stream from one session described the same
+// commands under two identities.
+//
+// Empty is a session the front end gave no identity, which is honest rather
+// than a reason to invent one; the records still read, they just cannot be
+// joined to anything.
 func (s Shell) blocksStore() *blocks.Store {
-	return blocks.Open(s.blocksDir(), boundary.Boundary{Gate: s.Gate, Events: s.Events},
-		blocks.NewID(s.now()))
+	return blocks.Open(s.blocksDir(),
+		boundary.Boundary{Gate: s.Gate, Events: s.Events, Session: s.Session},
+		s.Session)
 }
 
 // blocksDir resolves where the store lives, and empty means no store.
@@ -151,7 +161,7 @@ func (s Shell) closeBlock(ctx context.Context, store *blocks.Store, cap *blocks.
 	}
 	end := s.now()
 	_ = store.Record(ctx, blocks.Record{
-		ID:      blocks.NewID(b.start),
+		ID:      event.NewID(b.start),
 		Command: b.command,
 		Cwd:     b.cwd,
 		Start:   b.start,

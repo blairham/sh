@@ -5,8 +5,11 @@ package oracle
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -607,6 +610,178 @@ func TestExecDoesNotInheritTheDevelopersEnvironment(t *testing.T) {
 	got := Exec(context.Background(), found[0], Case{ID: "t", Snippet: `echo "[${ORACLE_LEAK_CANARY-clean}]"`})
 	if got.Stdout != "[clean]" {
 		t.Errorf("environment leaked into the run: %q", got.Stdout)
+	}
+}
+
+// ignoreTheWayNohupDoes puts the process in the state a caller that ignores
+// signals hands the harness, and puts it back afterwards. SIG_IGN is what
+// survives exec — that is the whole of what `nohup` does — so this is the
+// real condition rather than an approximation of it.
+func ignoreTheWayNohupDoes(t *testing.T, sigs ...syscall.Signal) {
+	t.Helper()
+	for _, sig := range sigs {
+		signal.Ignore(sig)
+		// Put it back the way the harness leaves it — taken over — rather
+		// than with signal.Reset. Reset after a Notify restores the
+		// disposition the *process started with*, and Go reports the result
+		// as not ignored while leaving SIG_IGN in place at the operating
+		// system, so a shell a later test runs still sees `trap -- '' SIGHUP`
+		// and no amount of asking would have said so. That cost an afternoon
+		// once, as a failure in the test that ran next.
+		t.Cleanup(func() { signal.Notify(ignoredSink, sig) })
+	}
+}
+
+func TestExecDoesNotInheritTheCallersSignalDispositions(t *testing.T) {
+	// The sibling of the environment scrub, by a route that is easier to
+	// miss. An ignored disposition survives exec, so a harness launched under
+	// `nohup` hands every shell it measures a SIGHUP that is already ignored:
+	// the shell reports `trap -- '' SIGHUP` and outlives `kill -HUP $$` to
+	// print what came after. That makes the conformance number a function of
+	// how the harness was launched, and two runs that disagree read as a
+	// flaky implementation.
+	found, _ := Resolve(context.Background())
+	if len(found) == 0 {
+		t.Skip("no reference shells on this machine")
+	}
+	// SIGHUP is the one `nohup` sets, and SIGQUIT is one a background job in
+	// a non-interactive shell gets. The job-control four are deliberately not
+	// here: an ignore this process sets is reported, so they would pass
+	// without saying anything about the case that actually leaks — which
+	// TestTheJobControlSignalsAreAKnownGapAndStillAre measures instead.
+	ignoreTheWayNohupDoes(t, syscall.SIGHUP, syscall.SIGQUIT)
+
+	for _, sh := range found {
+		t.Run(sh.Name, func(t *testing.T) {
+			got := Exec(context.Background(), sh, Case{ID: "t", Snippet: `trap`})
+			if got.Stdout != "" {
+				t.Errorf("the caller's dispositions reached the shell: trap said %q", got.Stdout)
+			}
+			// The sharper half: reporting it is a wording, outliving it is a
+			// different measurement. Every shell in the panel either dies of
+			// an untrapped hangup or exits on it, and none of them prints.
+			got = Exec(context.Background(), sh, Case{ID: "t", Snippet: `kill -HUP $$; echo after`})
+			if got.Stdout != "" {
+				t.Errorf("the shell survived a hangup it should not have: %q", got.Stdout)
+			}
+		})
+	}
+}
+
+func TestTheHarnessKeepsIgnoringWhatItsCallerIgnored(t *testing.T) {
+	// The scrub is allowed to change what the *children* inherit and nothing
+	// else. A caller that said "ignore hangups" said it about this process
+	// too, and a harness that started dying of them under `nohup` would have
+	// traded one launch-dependent behavior for a worse one. If this is wrong
+	// the test binary is killed rather than failed, which is as loud as it
+	// gets.
+	ignoreTheWayNohupDoes(t, syscall.SIGHUP)
+	scrubSignalDispositions()
+	if err := syscall.Kill(os.Getpid(), syscall.SIGHUP); err != nil {
+		t.Fatalf("kill: %v", err)
+	}
+	if signal.Ignored(syscall.SIGHUP) {
+		t.Error("the scrub left the disposition at SIG_IGN, so a child would still inherit it")
+	}
+}
+
+func TestTheScrubDisarmsItselfAndLeavesTheRestAlone(t *testing.T) {
+	// Nothing guards the scrub against being run per case, because it needs
+	// no guard: a signal it has taken over stops being reported as ignored.
+	// Running it every time is what lets it catch a disposition that arrives
+	// after the first measurement.
+	ignoreTheWayNohupDoes(t, syscall.SIGHUP)
+
+	first := scrubSignalDispositions()
+	if len(first) != 1 || first[0] != syscall.SIGHUP {
+		t.Fatalf("took over %v, want only SIGHUP — a signal the caller left alone must not be touched", first)
+	}
+	if again := scrubSignalDispositions(); len(again) != 0 {
+		t.Errorf("took over %v on a second call; the loop did not disarm", again)
+	}
+}
+
+func TestAJobControlSignalIsCoveredWhereTheRuntimeReportsIt(t *testing.T) {
+	// The four job-control signals are listed with the rest even though an
+	// *inherited* ignore for them is never reported, so nothing more has to
+	// be done the day a Go release starts reporting one. This exercises the
+	// state where it already is reported — an ignore this process set itself
+	// — which is the only way to reach that path today.
+	found, _ := Resolve(context.Background())
+	if len(found) == 0 {
+		t.Skip("no reference shells on this machine")
+	}
+	ignoreTheWayNohupDoes(t, syscall.SIGTSTP)
+	if !signal.Ignored(syscall.SIGTSTP) {
+		t.Fatal("could not set up the state this test measures")
+	}
+	for _, sh := range found {
+		got := Exec(context.Background(), sh, Case{ID: "t", Snippet: `trap`})
+		if got.Stdout != "" {
+			t.Errorf("%s: a reported job-control disposition reached the shell: %q", sh.Name, got.Stdout)
+		}
+	}
+	// Asked of the runtime as well as of the panel, because three of the six
+	// shells do not report an inherited ignore through `trap` and a machine
+	// with only those would pass the loop above without measuring anything.
+	if signal.Ignored(syscall.SIGTSTP) {
+		t.Error("the scrub left SIGTSTP ignored, so a child would still inherit it")
+	}
+}
+
+// jobControlChildEnv marks the re-executed half of the test below.
+const jobControlChildEnv = "ORACLE_JOB_CONTROL_CHILD"
+
+func TestJobControlGapChild(t *testing.T) {
+	if os.Getenv(jobControlChildEnv) != "1" {
+		t.Skip("the child half of TestTheJobControlSignalsAreAKnownGapAndStillAre")
+	}
+	// The launcher ignored these four before this binary started. Whether the
+	// runtime admits it is the whole question.
+	for _, sig := range []syscall.Signal{syscall.SIGTSTP, syscall.SIGTTIN, syscall.SIGTTOU} {
+		fmt.Printf("job-control gap: %v reported-as-ignored=%v\n", sig, signal.Ignored(sig))
+	}
+}
+
+func TestTheJobControlSignalsAreAKnownGapAndStillAre(t *testing.T) {
+	// An inverted test: it pins a limit rather than a fix, so the limit cannot
+	// quietly stop being true.
+	//
+	// The Go runtime keeps an inherited SIG_IGN for SIGTSTP, SIGTTIN, SIGTTOU
+	// and SIGCONT — stopping a process that was started with stopping turned
+	// off would be wrong — and does not report that it has, so the scrub
+	// cannot detect the condition. They are listed with the rest anyway, so
+	// the day a Go release starts reporting them nothing more is needed. This
+	// fails on that day, which is the notice to delete it.
+	//
+	// It asks the runtime and not a shell. An earlier version measured the
+	// panel instead — does any shell still see the ignore — and was red on a
+	// macOS runner for a legitimate reason: bash 3.2, dash and ksh93 do not
+	// report an inherited ignore through `trap` at all, so the answer was
+	// about which shells happened to be installed rather than about Go. A
+	// check that is red for a legitimate reason is one people learn to
+	// ignore.
+	//
+	// The disposition has to come from a launcher: signal.Ignore records the
+	// runtime's own state and signal.Ignored answers truthfully about it
+	// afterwards, so the interesting case cannot be built in this process.
+	exe, err := os.Executable()
+	if err != nil {
+		t.Skip("cannot find this test binary to re-execute")
+	}
+	cmd := exec.Command("/bin/sh", "-c",
+		`trap '' TSTP TTIN TTOU; exec "$1" -test.run='^TestJobControlGapChild$' -test.v`, "sh", exe)
+	cmd.Env = append(os.Environ(), jobControlChildEnv+"=1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("the child failed: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "job-control gap:") {
+		t.Fatalf("the child skipped instead of measuring anything:\n%s", out)
+	}
+	if !strings.Contains(string(out), "reported-as-ignored=false") {
+		t.Errorf("the runtime now reports an inherited ignore for the job-control signals: "+
+			"the gap this works around is closed, so delete this test\n%s", out)
 	}
 }
 

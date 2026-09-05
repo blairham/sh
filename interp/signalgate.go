@@ -43,7 +43,7 @@ func (r *Runner) killProcess(pid int, sig syscall.Signal) error {
 // target was still there is the answer rather than the act — `kill -0` exists
 // to ask exactly that question.
 func (r *Runner) signalAllowed(pid int, sig syscall.Signal) bool {
-	a := Action{Kind: ActionSignal, PID: pid, Signal: sig}
+	a := r.act(Action{Kind: ActionSignal, PID: pid, Signal: sig})
 	if r.Gate != nil && r.Gate.Allow(r.ctx, a) == Deny {
 		r.emit(r.ctx, Event{Kind: EventDenied, Action: a})
 		return false

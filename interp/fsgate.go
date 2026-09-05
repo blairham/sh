@@ -41,7 +41,7 @@ func (r *Runner) stat(path string) (os.FileInfo, error) {
 	if r.Gate == nil && r.Events == nil {
 		return os.Stat(path)
 	}
-	if r.probeDenied(Action{Kind: ActionStat, Path: path}) {
+	if r.probeDenied(r.act(Action{Kind: ActionStat, Path: path})) {
 		// The errno the kernel gives for a path that is not there, not
 		// fs.ErrNotExist: a caller that prints the reason must print the
 		// same sentence for both, or the refusal identifies itself.
@@ -56,7 +56,7 @@ func (r *Runner) lstat(path string) (os.FileInfo, error) {
 	if r.Gate == nil && r.Events == nil {
 		return os.Lstat(path)
 	}
-	if r.probeDenied(Action{Kind: ActionStat, Path: path}) {
+	if r.probeDenied(r.act(Action{Kind: ActionStat, Path: path})) {
 		return nil, &fs.PathError{Op: "lstat", Path: path, Err: syscall.ENOENT}
 	}
 	return os.Lstat(path)
@@ -70,7 +70,7 @@ func (r *Runner) readLink(path string) (string, error) {
 	if r.Gate == nil && r.Events == nil {
 		return os.Readlink(path)
 	}
-	if r.probeDenied(Action{Kind: ActionStat, Path: path}) {
+	if r.probeDenied(r.act(Action{Kind: ActionStat, Path: path})) {
 		return "", &fs.PathError{Op: "readlink", Path: path, Err: syscall.ENOENT}
 	}
 	return os.Readlink(path)
@@ -83,7 +83,7 @@ func (r *Runner) readDir(path string) ([]os.DirEntry, error) {
 	if r.Gate == nil && r.Events == nil {
 		return os.ReadDir(path)
 	}
-	if r.probeDenied(Action{Kind: ActionReadDir, Path: path}) {
+	if r.probeDenied(r.act(Action{Kind: ActionReadDir, Path: path})) {
 		return nil, &fs.PathError{Op: "readdirent", Path: path, Err: syscall.ENOENT}
 	}
 	return os.ReadDir(path)

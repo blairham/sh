@@ -43,6 +43,7 @@ const Version = 1
 // called out.
 const (
 	MethodInitialize        = "initialize"
+	MethodAuthenticate      = "authenticate"
 	MethodNewSession        = "session/new"
 	MethodPrompt            = "session/prompt"
 	MethodCancel            = "session/cancel"
@@ -77,6 +78,18 @@ type InitializeRequest struct {
 type ClientCapabilities struct {
 	FS       FileSystemCapabilities `json:"fs"`
 	Terminal bool                   `json:"terminal"`
+	Auth     AuthCapabilities       `json:"auth"`
+}
+
+// AuthCapabilities is what a client can do about being authenticated, and it
+// governs which *kinds* of authentication method an agent may offer back.
+//
+// There is one, and it is opt-in for a reason worth stating: a terminal method
+// is not a message but a relaunch of the agent's own program on a terminal a
+// person types into, so a client that cannot do that must not claim it. An
+// agent told otherwise offers a login that goes nowhere.
+type AuthCapabilities struct {
+	Terminal bool `json:"terminal"`
 }
 
 // FileSystemCapabilities is the client's offer to read and write files on the
@@ -124,14 +137,63 @@ type MCPCapabilities struct {
 	SSE  bool `json:"sse"`
 }
 
-// AuthMethod is one way of authenticating to an agent. The list is always
-// empty here: a local shell authenticates by being a process the person
-// already started.
+// AuthMethod is one way of authenticating to an agent.
+//
+// The union is discriminated on `type`, and an **absent type means agent** —
+// a default rather than an unknown, which is the schema's own wording and the
+// reason Kind exists rather than a bare field read.
+//
+// The two kinds are not two spellings of one thing. *Agent* auth is a message:
+// the agent is asked to authenticate itself and does whatever it does, which
+// is usually a browser and a callback server of its own. *Terminal* auth is
+// not a message at all — the client runs the agent's **own program again**,
+// with these arguments appended and these environment variables set, on a
+// terminal a person can type into, and a zero exit status is the whole of the
+// answer. The schema is explicit that a terminal method must never be passed
+// to `authenticate`, so the two are dispatched on Kind rather than tried in
+// turn.
+//
+// Args and Env are therefore meaningful only for the terminal kind: they are
+// the extra half of an invocation the client already knows how to make. A
+// client that does not know how the agent was launched cannot make one, which
+// is what the AuthCapabilities opt-in above is for.
 type AuthMethod struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
+	Type        string            `json:"type,omitempty"`
+	ID          string            `json:"id"`
+	Name        string            `json:"name"`
+	Description string            `json:"description,omitempty"`
+	Args        []string          `json:"args,omitempty"`
+	Env         map[string]string `json:"env,omitempty"`
 }
+
+// The authentication method kinds.
+const (
+	AuthAgent    = "agent"
+	AuthTerminal = "terminal"
+)
+
+// Kind is the method's discriminator with the schema's default filled in.
+//
+// A method that names no type is an agent method, and that is worth a function
+// rather than a field read because it is what the published agents actually
+// send: measured, all four of Gemini's arrive with no `type` at all, and a
+// client dispatching on the raw field would find "" and match neither kind.
+func (m AuthMethod) Kind() string {
+	if m.Type == "" {
+		return AuthAgent
+	}
+	return m.Type
+}
+
+// AuthenticateRequest names which of the advertised methods to use.
+type AuthenticateRequest struct {
+	MethodID string `json:"methodId"`
+}
+
+// AuthenticateResponse is empty, and is an object rather than nothing for the
+// same reason the write response is: a later revision with something to say
+// there has somewhere to say it.
+type AuthenticateResponse struct{}
 
 // NewSessionRequest asks for a new session in a directory.
 //

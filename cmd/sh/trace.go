@@ -152,6 +152,18 @@ func formatEvent(e interp.Event) string {
 	if e.File != "" {
 		fmt.Fprintf(&b, " file=%s", e.File)
 	}
+	if e.Action.ID != "" {
+		// Last, and only when there is one. It is what pairs a start with its
+		// end by eye, which ordering cannot do here: a background job and each
+		// half of a pipeline write from their own goroutines, so the line after
+		// a start is very often another command's.
+		//
+		// The session is deliberately not printed. A trace is one shell writing
+		// to one stream, so it would be the same string on every line — the
+		// audit record carries it because a file several shells append to needs
+		// it, and this is not that.
+		fmt.Fprintf(&b, " id=%s", e.Action.ID)
+	}
 	return b.String()
 }
 

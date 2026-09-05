@@ -27,6 +27,13 @@ func zeroTimeoutRun(t *testing.T, in *os.File, style ReadZeroTimeoutStyle, src s
 	sem := permissive()
 	sem.ReadOptions = "rd:n:N:t:u:"
 	sem.ReadZeroTimeout = style
+	// Both shells with a *reading* style also leave the name alone when a
+	// read runs out of time — a `-t 0` that gives up reaches the same arm a
+	// `-t 0.2` that expired does, and measured, ksh93 and zsh answer it the
+	// same way there as here. ReadTimeoutKeepsWhatArrived is asked in
+	// readoptions_test.go, where both answers are exercised; fixing it here
+	// keeps these tests about the style.
+	sem.ReadTimeoutKeepsWhatArrived = No
 	r := &Runner{
 		Stdin: in, Stdout: &buf, Stderr: &buf,
 		Semantics: &sem, Dir: t.TempDir(), Name: "testsh",
@@ -85,6 +92,12 @@ func ended(t *testing.T) *os.File {
 // The discriminating column is the third: a partial line waiting with the rest
 // of it still to come. One style reads nothing there, one gives up and keeps
 // nothing, and one commits to finishing the line.
+//
+// The middle column is measured rather than deduced, and it moved: a `-t 0`
+// with nothing waiting runs out of time, and running out of time leaves the
+// name alone in both shells with a reading style — `v=[old]`, not `v=[]`.
+// The last column is an end of input rather than a timeout, and there every
+// shell assigns, so a variable that held something is emptied.
 func TestZeroTimeoutIsThreeQuestionsNotOne(t *testing.T) {
 	const src = `v=old; read -t 0 v; echo "st=$? v=[$v]"`
 	for _, c := range []struct {
@@ -100,12 +113,12 @@ func TestZeroTimeoutIsThreeQuestionsNotOne(t *testing.T) {
 		{
 			"taking what is waiting reads it",
 			ReadZeroTimeoutTakesWhatIsWaiting,
-			"st=0 v=[hello]", "st=1 v=[]", "st=1 v=[]",
+			"st=0 v=[hello]", "st=1 v=[old]", "st=1 v=[]",
 		},
 		{
 			"finishing what it started reads it too",
 			ReadZeroTimeoutFinishesWhatItStarted,
-			"st=0 v=[hello]", "st=1 v=[]", "st=1 v=[]",
+			"st=0 v=[hello]", "st=1 v=[old]", "st=1 v=[]",
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -145,8 +158,9 @@ func TestAPollLeavesTheInputForTheNextRead(t *testing.T) {
 }
 
 // TestAPartialLineSeparatesTheTwoStylesThatRead: with `ab` waiting and the
-// rest of the line still to come, one style gives up and keeps nothing while
-// the other commits to the line it began.
+// rest of the line still to come, one style gives up — leaving the variable
+// exactly as it was, because giving up is a timeout and not an end of input —
+// while the other commits to the line it began.
 //
 // The two cases have separate streams rather than one with a timer on it,
 // because a timer is what would make this a race: the style that gives up
@@ -160,7 +174,7 @@ func TestAPartialLineSeparatesTheTwoStylesThatRead(t *testing.T) {
 		restArrives bool
 		want        string
 	}{
-		{"giving up keeps nothing", ReadZeroTimeoutTakesWhatIsWaiting, false, "st=1 v=[]"},
+		{"giving up touches no name", ReadZeroTimeoutTakesWhatIsWaiting, false, "st=1 v=[old]"},
 		{"committing finishes the line", ReadZeroTimeoutFinishesWhatItStarted, true, "st=0 v=[abc]"},
 	} {
 		t.Run(c.name, func(t *testing.T) {

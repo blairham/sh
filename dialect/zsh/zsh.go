@@ -180,6 +180,7 @@ func Semantics() interp.Semantics {
 	// seconds.
 	s.ReadOptions = "rsnpAd:t:u:"
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutFinishesWhatItStarted
+	s.ReadTimeoutKeepsWhatArrived = interp.No
 	s.ArithLeadingZeroIsOctal = interp.No
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes

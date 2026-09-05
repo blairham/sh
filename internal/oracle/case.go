@@ -5261,6 +5261,36 @@ out=$(CDPATH=./pool cd sub)
 		Why:     "ksh93 refuses with `unknown option` and its whence usage line at 2, the same shape its other builtins use; zsh's whence reads -z as its own flag set differs",
 	},
 	{
+		ID: "whence/c-is-the-csh-listing", Category: "builtins",
+		Snippet: `alias ll="ls -l"; whence -c ll; whence -c echo; whence -c if; whence -c ls; whence -c nosuchcmd431; echo "st=$?"`,
+		Why:     "zsh's -c is a fourth shape, and it is not the bare one with words added: an alias is `ll: aliased to ls -l`, a builtin `echo: shell built-in command`, a reserved word `if: shell reserved word`, and a file its bare path. ksh93 has no -c at all, so the two builtins under one spelling diverge on the letter as well as on the wording",
+	},
+	{
+		ID: "whence/a-lists-every-resolution", Category: "builtins",
+		Snippet: `whence -a echo; echo "st=$?"; whence -a nosuchcmd431; echo "st=$?"`,
+		Why:     "-a is every resolution rather than the first: the builtin and then the PATH hit, in that order. ksh93 has the letter and this build does not implement it, which the row records as the refusal it is",
+	},
+	{
+		ID: "whence/w-is-the-bare-kind", Category: "builtins",
+		Snippet: `alias ll="ls -l"; f() { :; }; whence -w ll; whence -w f; whence -w echo; whence -w if; whence -w ls; whence -w nosuchcmd431; echo "st=$?"`,
+		Why:     "-w is zsh's own vocabulary for the kinds, and it is not `type -t`'s: a file is `command` here where the shell with -t says `file`, and a name that is nothing answers `none` rather than saying nothing. All six kinds in one row, because what is being pinned is the vocabulary rather than any one lookup",
+	},
+	{
+		ID: "whence/where-is-whence-with-c-and-a", Category: "builtins",
+		Snippet: `alias ll="ls -l"; where echo; where ll; where nosuchcmd431; echo "st=$?"`,
+		Why:     "zsh's second name for the same question, and it is exactly `whence -ca` — the csh listing over every resolution. Nothing else in the panel has a `where` at all",
+	},
+	{
+		ID: "whence/where-takes-no-options", Category: "builtins",
+		Snippet: `where -v echo; echo "st=$?"`,
+		Why:     "and it is a name rather than a synonym with flags: `where -v` is a bad option, not the sentence `whence -v` writes. A shell that implemented it by handing its arguments to whence would pass every other row here and fail this one",
+	},
+	{
+		ID: "whence/nothing-to-ask-about", Category: "builtins",
+		Snippet: `whence; echo "st=$?"`,
+		Why:     "the two shells with the builtin part company over an empty operand list: zsh says nothing and reports 1, ksh93 prints its usage line and reports 2. The quiet one is the trap — a script testing the status sees a plain miss",
+	},
+	{
 		ID: "print/joins-expands-and-ends-the-line", Category: "builtins",
 		Snippet: `print hello world; print -n ab; print cd`,
 		Why:     "ksh93's echo: operands joined with single spaces, a newline after, and -n withholding it. zsh has print too; bash and dash do not, which is the dialect boundary this case records",

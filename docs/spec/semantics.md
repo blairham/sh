@@ -2355,7 +2355,11 @@ It is worth stating because the two look contradictory from outside and
 `core.md`'s boundary reads as forbidding the first.
 
 **Registered in the dialect.** `dialect/zsh/setopt.go`,
-`dialect/ksh/whence.go`, `dialect/ksh/print.go`, `dialect/bash/caller.go`.
+`dialect/zsh/whence.go`, `dialect/ksh/whence.go`, `dialect/ksh/print.go`,
+`dialect/bash/caller.go`. Two of those are the *same spelling* in two
+shells and two separate files, which is the placement earning its keep: a
+shared `whence` would have to hold both option sets, both statuses and
+both streams, and the shells agree about none of them.
 The command is that shell's own idea — its option namespace, its escape
 set, its stack format — and nothing in the core would have a use for it.
 
@@ -2424,6 +2428,43 @@ What was built, all through the extension seam — registered builtins in each
   bare mode delegating to the same lookup `command -v` uses, `-v` to the
   core `type`, whose ksh wording was already `whence`'s, and aliases spoken
   for in the dialect because the core's lookup cannot see them.
+- **zsh `whence` and `where`** (dialect/zsh/whence.go): bare, `-v`, `-c`,
+  `-a`, `-p`, `-w`, `-f`, and `where` as `whence -ca` under a name that
+  parses no options at all. **Not ksh93's builtin under the same
+  spelling** — it is measured separately and differs in every part that
+  could differ, which is the whole reason it is a second implementation
+  rather than a registration of the first:
+
+  |  | zsh | ksh93 |
+  | --- | --- | --- |
+  | a miss goes to | standard output | standard error |
+  | an unknown letter | `bad option: -z`, status 1 | `unknown option` plus a usage line, status 2 |
+  | no operand at all | silence, status 1 | the usage line, status 2 |
+  | letters it has | `-c -m -w -f -s -x` | `-q` |
+  | a second name | `where` | — |
+
+  The four output shapes, each measured on an alias, a function, a reserved
+  word, a builtin, a file and a name that is nothing:
+
+  | shape | alias | function | reserved | builtin | file | nothing |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | bare | the value | the name | the name | the name | the path | silence |
+  | `-v` | `N is an alias for V` | the `type` sentence | the `type` sentence | the `type` sentence | the `type` sentence | `N not found` |
+  | `-c` | `N: aliased to V` | the body | `N: shell reserved word` | `N: shell built-in command` | the path | `N not found` |
+  | `-w` | `N: alias` | `N: function` | `N: reserved` | `N: builtin` | `N: command` | `N: none` |
+
+  `-v` *is* this shell's `type`, measured, so its sentences come from the
+  dialect's Diagnostics rather than from a second copy of them. The
+  resolution order is alias, then whatever the shell would run, and the
+  alias part is the one thing the core cannot answer: whether a word
+  expands as an alias is the parser's fact rather than the runner's.
+
+  The lookup itself is the core's, through `interp.Runner.ResolveName` —
+  which is new for this, and generic on purpose. Every shell resolves a
+  name the same way and none of them says so in the same words, so what a
+  dialect with a builtin of its own needs is the resolution and not a
+  sentence; a resolution redone in the dialect is one that can disagree
+  with the shell's own.
 - **ksh93 `print`** (dialect/ksh/print.go): the measured escape set with
   `\c` stopping everything, `-r`/`-e`/`-n`, `-u fd` through the runner's
   descriptor table, `-f` delegating to printf, `-s` consumed against a
@@ -2442,11 +2483,18 @@ than missing:
   startup mechanism; a non-interactive core sources files by name.
 - zsh `bindkey`, `vared`, `zle`: the line editor's, and the line editor's
   key handling is the front end's concern, not the interpreter's.
-- zsh's own `print` and `whence`: zsh has both — shared ksh ancestry — with
-  its own flags and wording (`bad file number: 9` where ksh93 brackets the
-  errno; alias values unquoted). This round measured and built ksh93's; the
-  zsh pair stays command-not-found, visible in the corpus's `print/` and
-  `whence/` cases as the recorded difference.
+- zsh's own `print`: zsh has one — shared ksh ancestry — with its own flags
+  and wording (`bad file number: 9` where ksh93 brackets the errno). Its
+  `whence` is built now, above; `print` stays command-not-found, visible in
+  the corpus's `print/` cases as the recorded difference.
+- zsh `whence -m`, `-s` and `-x`: `-m` reads the operands as *patterns* and
+  matches them against every name the shell could run, PATH included — the
+  answer on the measuring machine was sixty-four lines of /usr/bin, and
+  nothing here walks PATH; `-s` resolves a symlink, which would be the bare
+  answer for every name that is not one and silently wrong for one that is;
+  `-x` sets the tab width of a printed body. Each is refused as not
+  implemented rather than as unknown, the same distinction `compgen` draws
+  between an action a shell lacks and a typo.
 - zsh `setopt` names beyond the table: accepting an option we do not honor
   would be a promise; the honest subset refuses the rest out loud.
 - zsh `emulate -L`: function-local emulation needs a restore-on-return seam

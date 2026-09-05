@@ -517,6 +517,10 @@ func Diagnostics() interp.Diagnostics {
 		BuiltinUsageUnprefixed:   true,
 		BuiltinUsage: map[string]string{
 			"export": "export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
+			// The refusal lines a bad option earns from these two, measured
+			// with a letter nobody has (-q).
+			"command": "command: usage: command [-pVv] command [arg ...]",
+			"getopts": "getopts: usage: getopts optstring name [arg ...]",
 			// Not one line under two names: `typeset` loses the brackets
 			// around its name operand where `declare` keeps them. As
 			// written, both.

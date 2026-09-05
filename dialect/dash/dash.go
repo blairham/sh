@@ -80,6 +80,8 @@ func Semantics() interp.Semantics {
 	s.PrintfEmptyIsNotANumber = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
+	// No `%(fmt)T`: `%(` is a directive this shell does not have.
+	s.PrintfTimeConversion = interp.No
 	s.PrintfQuote = interp.PrintfQuoteAbsent
 	// The three `$'…'` axes are left unanswered on purpose: dash has no
 	// `$'…'` at all — `$'a\tb'` is the six characters it was written as,

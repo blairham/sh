@@ -309,6 +309,21 @@ type Runner struct {
 	// from in the dialects that have it.
 	started time.Time
 
+	// Clock is what this shell calls now. Nil is the wall clock.
+	//
+	// A hook rather than a call to time.Now() at each site, for the reason
+	// RANDOM has one: a value the shell *produces* has to be sayable from
+	// outside, or nothing that depends on it can be tested twice with the
+	// same answer. `printf '%(%Y)T' -1` is the first thing that needed it,
+	// and a corpus case cannot ask it — which is why the case pins a fixed
+	// epoch and this hook pins the rest.
+	//
+	// It is not the process-wide state the library rule is about: reading a
+	// clock changes nothing and two Runners cannot fight over it. What it is
+	// about is a Runner answering from ambient state that its embedder
+	// cannot see or set.
+	Clock func() time.Time
+
 	// optChar is how far into a clustered option `getopts` has read — `-ab`
 	// is two options in one word, and OPTIND cannot say which of them is
 	// next because it counts words. lastOptind is what this builtin last set
@@ -1023,7 +1038,7 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	r.ensureImportedFunctions()
 	r.publishInheritedFds(ctx)
 	if r.started.IsZero() {
-		r.started = time.Now()
+		r.started = r.Now()
 	}
 	r.programEnd = f.End().Line + 1
 	abandoned := 0

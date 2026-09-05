@@ -2058,6 +2058,11 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `printf/quote-diverges` | `[st=2` **2>** `<shell>: 1: printf: %q: invalid directive` | `[a\ b]~st=0` | `[a\ b]~st=0` | `[a\ b]~st=0` | `['a b']~st=0` | `[a\ b]~st=0` |
 | `printf/unknown-verb-diverges` | `[st=2` **2>** `<shell>: 1: printf: %z: invalid directive` | `[st=1` **2>** `<shell>: line 1: printf: `]': invalid format character` | `[st=1` **2>** `<shell>: line 1: printf: `]': invalid format character` | `[st=1` **2>** `<shell>: line 0: printf: `]': invalid format character` | `[st=1` **2>** `<shell>: printf: ]: unknown format specifier` | `[st=1` **2>** `<shell>:printf:1: %z: invalid directive` |
 | `printf/no-format-at-all` | `st=2` **2>** `<shell>: 1: printf: usage: printf format [arg ...]` | `st=2` **2>** `printf: usage: printf [-v var] format [arguments]` | `st=2` **2>** `printf: usage: printf [-v var] format [arguments]` | `st=2` **2>** `printf: usage: printf [-v var] format [arguments]` | `st=2` **2>** `Usage: printf [ options ] format [string ...]` | `st=1` **2>** `<shell>:printf:1: not enough arguments` |
+| `printf/a-date-conversion-and-the-shells-without-one` | `st=2` **2>** `<shell>: 1: printf: %(: invalid directive` | `%~st=0` | `%~st=0` | `st=1` **2>** `<shell>: line 0: printf: `(': invalid format character` | `%~st=1` **2>** `<shell>: printf: warning: invalid argument of type T` | `st=1` **2>** `<shell>:printf:1: %(: invalid directive` |
+| `printf/a-date-through-a-fixed-epoch` | `st=2~no such conversion` | `st=0~the year the epoch falls in` | `st=0~the year the epoch falls in` | `st=1~no such conversion` | `st=1~some other year` | `st=1~no such conversion` |
+| `printf/a-date-with-a-zone-and-a-whole-timestamp` | `no such conversion` | `the epoch, in UTC` | `the epoch, in UTC` | `no such conversion` | `some other date` | `no such conversion` |
+| `printf/a-date-with-an-empty-format-and-a-width` | `something else` | `the time of day, then a padded year` | `the time of day, then a padded year` | `something else` | `something else` | `something else` |
+| `printf/a-date-from-something-that-is-not-a-number` | `st=2~no such conversion` **2>** `<shell>: 1: printf: %(: invalid directive` | `st=1~the epoch zero` **2>** `<shell>: line 1: printf: abc: invalid number` | `st=1~the epoch zero` **2>** `<shell>: line 1: printf: abc: invalid number` | `st=1~no such conversion` **2>** `<shell>: line 0: printf: `(': invalid format character` | `st=1~some other year` **2>** `<shell>: printf: warning: invalid argument of type T` | `st=1~no such conversion` **2>** `<shell>:printf:1: %(: invalid directive` |
 | `printf/backslash-c-means-three-things` | ` a \ c b Z ` | ` a \ c b Z ` | ` a \ c b Z ` | ` a \ c b Z ` | ` a 002 Z ` | ` a ` |
 
 - `printf/assigns-with-v` — `printf -v name` puts the formatted text in a variable and prints nothing, which is how a script formats a value without a command substitution and a subshell. bash and zsh have it; dash and ksh93 reject it as an unknown option, and each words that differently
@@ -2107,6 +2112,26 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `printf/no-format-at-all` — four usages, two of them printed with no shell name in front, and zsh alone not treating it as worth a different status from any other failure
   ```sh
   printf; echo "st=$?"
+  ```
+- `printf/a-date-conversion-and-the-shells-without-one` — `%(fmt)T` writes an epoch through a date format, and one shell in the panel has it as bash does: the other four meet `%(` with three wordings and two statuses. The format here is a literal `%` on purpose, so that the row is about the conversion being *read* and every column is the same on every run — ksh93's own `%T` takes a date string and answers a number with a warning and the time it is now
+  ```sh
+  printf "%(%%)T\n" 1000000000; echo "st=$?"
+  ```
+- `printf/a-date-through-a-fixed-epoch` — the epoch is fixed and the answer compared rather than printed, for two reasons: the conversion's other operands are `now` and `when this shell started`, neither of which a recorded case could be asked twice — and the one shell with a `%T` of its own writes the current year here, which is a fact that would go stale in January
+  ```sh
+  x=$(printf "%(%Y)T" 1000000000 2>/dev/null); echo "st=$?"; case $x in 2001) echo "the year the epoch falls in";; "") echo "no such conversion";; *) echo "some other year";; esac
+  ```
+- `printf/a-date-with-a-zone-and-a-whole-timestamp` — a format worth writing, and the zone it is read in: `$TZ` decides, so a case that did not set it would record the zone of whichever machine ran it
+  ```sh
+  export TZ=UTC; x=$(printf "%(%Y-%m-%dT%H:%M:%S %Z)T" 1000000000 2>/dev/null); case $x in "2001-09-09T01:46:40 UTC") echo "the epoch, in UTC";; "") echo "no such conversion";; *) echo "some other date";; esac
+  ```
+- `printf/a-date-with-an-empty-format-and-a-width` — an empty format is the C locale's time of day, and a width belongs to the *result* rather than to the date. Two operands as well, so the format runs twice and the second year is the second epoch's
+  ```sh
+  export TZ=UTC; x=$(printf "[%()T][%12(%Y)T]" 1000000000 1100000000 2>/dev/null); case $x in "[01:46:40][        2004]") echo "the time of day, then a padded year";; "") echo "no such conversion";; *) echo "something else";; esac
+  ```
+- `printf/a-date-from-something-that-is-not-a-number` — an operand that is not an epoch: the shell with the conversion complains and writes the epoch zero anyway, which is what its numeric conversions do with a word that is not a number. The complaint is on standard error and stays in the record
+  ```sh
+  export TZ=UTC; x=$(printf "%(%Y)T" abc); echo "st=$?"; case $x in 1970) echo "the epoch zero";; "") echo "no such conversion";; *) echo "some other year";; esac
   ```
 - `printf/backslash-c-means-three-things` — read as bytes rather than as text, because that is the only way to tell ksh93's control character from zsh's stopping: bash and dash write two literal characters, ksh93 reads \cX as control-X, and zsh ends the output there
   ```sh
@@ -2796,7 +2821,7 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `xtrace/assignments-per-line-diverges` | **2>** `+ a=1 b=2` | **2>** `+ a=1~+ b=2` | **2>** `+ a=1~+ b=2` | **2>** `+ a=1~+ b=2` | **2>** `+ a=1~+ b=2` | **2>** `+<shell>:1> a=1 b=2 ` |
 | `xtrace/disabling-set-diverges` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` | `done` **2>** `+<shell>:1> set +x` |
 | `xtrace/compound-header-diverges` | `1~2` **2>** `+ echo 1~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ echo 1~+ echo 2` | `1~2` **2>** `+<shell>:1> i=1~+<shell>:1> echo 1~+<shell>:1> i=2~+<shell>:1> echo 2` |
-| `xtrace/pipeline-order-diverges` | `a` **2>** `+ cat~+ echo a` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+<shell>:1> echo a~+<shell>:1> cat` |
+| `xtrace/pipeline-order-diverges` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ cat~+ echo a` | `a` **2>** `+<shell>:1> echo a~+<shell>:1> cat` |
 | `nounset/unset-variable-is-an-error` | **2>** `<script>: 2: NOPE: parameter not set` *(status 2)* | **2>** `<script>: line 2: NOPE: unbound variable` *(status 1)* | **2>** `<script>: line 2: NOPE: unbound variable` *(status 1)* | **2>** `<script>: line 2: NOPE: unbound variable` *(status 1)* | **2>** `<script>: line 2: NOPE: parameter not set` *(status 1)* | **2>** `<script>:2: NOPE: parameter not set` *(status 1)* |
 | `shopt/nullglob-empties-a-miss` | `zz*zz~done` | `~done` | `~done` | `~done` | `zz*zz~done` | **2>** `<shell>:1: no matches found: zz*zz` *(status 1)* |
 | `shopt/globstar-crosses-directories` | `**/f` | `d/e/f` | `d/e/f` | `**/f` | `**/f` | `d/e/f` |

@@ -411,6 +411,25 @@ type Semantics struct {
 	// anyway. An argument that is *missing* is never an error in any of them.
 	PrintfEmptyIsNotANumber Answer
 
+	// PrintfTimeConversion gives `printf` a `%(fmt)T`: an epoch through a
+	// date format, with the format written inside the conversion. bash 5.3's
+	// alone among the panel — dash and zsh call `%(` a directive they do not
+	// have, and bash 3.2 an invalid format character.
+	//
+	// The operand is seconds since the epoch, and two numbers are not times:
+	// -1 is now and -2 is when the shell started. A missing operand is now
+	// as well, and an empty format is the C locale's time of day.
+	//
+	// ksh93 also has a `%T`, and it is not this one: its operand is a date
+	// *string* — `now`, `tomorrow` — and a number earns a warning and the
+	// current time instead. Answered No there and recorded in
+	// docs/spec/semantics.md rather than modeled, because reading a date the
+	// way ksh93 reads one is its own feature.
+	//
+	// Asked only where a format actually carries a `%(`, so a dialect
+	// without the conversion is never questioned about `%s`.
+	PrintfTimeConversion Answer
+
 	// PrintfQuote is how `%q` quotes, which is three answers and an absence
 	// rather than a switch — see PrintfQuoteStyle.
 	PrintfQuote PrintfQuoteStyle

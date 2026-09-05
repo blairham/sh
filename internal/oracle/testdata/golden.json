@@ -35,8 +35,8 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "LINENO=4",
-        "Stderr": "\u003cscript\u003e: line 3: two: command not found",
+        "Stdout": "one~LINENO=4",
+        "Stderr": "\u003cscript\u003e: line 3: nosuchcmd: command not found",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -211,9 +211,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "",
-        "Stderr": "\u003cscript\u003e: line 2: a: command not found",
-        "Status": 127,
+        "Stdout": "hit",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
@@ -739,8 +739,8 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "LINENO=5",
-        "Stderr": "\u003cscript\u003e: line 4: three: command not found",
+        "Stdout": "one~two~three~LINENO=5",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -5447,9 +5447,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "st=1~after",
+        "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 1: export: `a[0]': not a valid identifier",
-        "Status": 0,
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       },
@@ -5667,9 +5667,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "st=1~after",
+        "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 1: readonly: `a[0]': not a valid identifier",
-        "Status": 0,
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       },
@@ -5711,9 +5711,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "survived",
+        "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 2: r: readonly variable",
-        "Status": 0,
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       },
@@ -5755,9 +5755,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "two",
+        "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 2: r: readonly variable",
-        "Status": 0,
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       },
@@ -5799,9 +5799,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "two",
+        "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 2: r: readonly variable",
-        "Status": 0,
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       },
@@ -5843,9 +5843,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "st=1",
+        "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 2: r: readonly variable",
-        "Status": 0,
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       },
@@ -5887,9 +5887,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "st=1",
+        "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 2: r: readonly variable",
-        "Status": 0,
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       },
@@ -5931,9 +5931,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "end",
+        "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 2: r: readonly variable",
-        "Status": 0,
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       },
@@ -6195,9 +6195,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "end",
+        "Stdout": "",
         "Stderr": "\u003cscript\u003e: line 1: trap: -Q: invalid option~trap: usage: trap [-Plp] [[action] signal_spec ...]",
-        "Status": 0,
+        "Status": 2,
         "Signal": 0,
         "TimedOut": false
       },
@@ -6459,9 +6459,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "end",
-        "Stderr": "",
-        "Status": 0,
+        "Stdout": "",
+        "Stderr": "trap: usage: trap [-Plp] [[action] signal_spec ...]",
+        "Status": 2,
         "Signal": 0,
         "TimedOut": false
       },
@@ -6503,9 +6503,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "end",
+        "Stdout": "",
         "Stderr": "trap: usage: trap [-Plp] [[action] signal_spec ...]",
-        "Status": 0,
+        "Status": 2,
         "Signal": 0,
         "TimedOut": false
       },
@@ -6547,7 +6547,7 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "trap -- 'echo hi' SIGINT~end",
+        "Stdout": "trap -- - EXIT~trap -- - HUP~trap -- 'echo hi' INT~trap -- - QUIT~trap -- - ILL~trap -- - TRAP~trap -- - ABRT~trap -- - EMT~trap -- - FPE~trap -- - KILL~trap -- - BUS~trap -- - SEGV~trap -- - SYS~trap -- - PIPE~trap -- - ALRM~trap -- - TERM~trap -- - URG~trap -- - STOP~trap -- - TSTP~trap -- - CONT~trap -- - CHLD~trap -- - TTIN~trap -- - TTOU~trap -- - IO~trap -- - XCPU~trap -- - XFSZ~trap -- - VTALRM~trap -- - PROF~trap -- - WINCH~trap -- - INFO~trap -- - USR1~trap -- - USR2~trap -- - DEBUG~trap -- - ERR~trap -- - RETURN~end",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -6591,7 +6591,7 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "trap -- ':' SIGINT~end",
+        "Stdout": "trap -- ':' INT~end",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -6635,7 +6635,7 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "trap -- 'echo hi' SIGINT~end",
+        "Stdout": "trap -- 'echo hi' INT~end",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -13851,9 +13851,9 @@
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "[1]~[1]",
+        "Stdout": "[1]",
         "Stderr": "\u003cscript\u003e: line 3: c: readonly variable",
-        "Status": 0,
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       },
@@ -34478,6 +34478,50 @@
         "TimedOut": false
       }
     },
+    "redir/closing-a-descriptor-through-an-element": {
+      "bash": {
+        "Stdout": "st=0~after=1",
+        "Stderr": "\u003cshell\u003e: line 1: 3: Bad file descriptor",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~after=1",
+        "Stderr": "\u003cshell\u003e: line 1: 3: Bad file descriptor",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: exec: {a[1]}: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: a[1]=3: not found~\u003cshell\u003e: 1: exec: {a[1]}: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~after=1",
+        "Stderr": "\u003cshell\u003e: 3: cannot open [Bad file descriptor]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: no matches found: {a[1]}",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "redir/closing-through-a-name-that-holds-nothing": {
       "bash": {
         "Stdout": "st=1",
@@ -35266,6 +35310,50 @@
         "Stdout": "keep~st=0~made",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/the-picked-descriptors-name-may-be-an-element": {
+      "bash": {
+        "Stdout": "a1=10~written",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a1=10~written",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: exec: {a[1]}: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: exec: {a[1]}: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a1=10~written",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: no matches found: {a[1]}",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -37514,6 +37602,50 @@
         "TimedOut": false
       }
     },
+    "signal-death/a-hangup-that-exits-runs-the-exit-trap": {
+      "bash": {
+        "Stdout": "bye",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "bye",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "bye",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 1,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "bye",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "bye",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "signal-death/a-signal-with-no-meaning-of-its-own-is-fatal-too": {
       "bash": {
         "Stdout": "",
@@ -37687,6 +37819,50 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 6,
+        "TimedOut": false
+      }
+    },
+    "signal-death/hangup-is-an-exit-in-one-shell": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 1,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 1,
+        "Signal": 0,
         "TimedOut": false
       }
     },

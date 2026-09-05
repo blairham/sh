@@ -221,7 +221,6 @@ func command(ctx context.Context, sh Found, c Case, dir string) *exec.Cmd {
 	}
 
 	args := append([]string(nil), sh.Args...)
-	named := true
 	switch {
 	case len(c.Args) > 0:
 		for _, a := range c.Args {
@@ -235,20 +234,31 @@ func command(ctx context.Context, sh Found, c Case, dir string) *exec.Cmd {
 		}
 	case c.Script:
 		args = append(args, script())
-		// The script route does not honor Argv0, and that is measured rather
-		// than chosen: bash invoked as sh makes a readonly reassignment fatal,
-		// so honoring it here rewrites what twenty recorded rows say bash-as-sh
-		// does. The column is therefore plain bash for a Script case and the
-		// named shell everywhere else. Straightening that out means re-recording
-		// those rows and deciding which answer the column should have been
-		// giving, which is its own change rather than a side effect of this one.
-		named = false
 	default:
 		args = append(args, "-c", c.Snippet)
 	}
 
 	cmd := exec.CommandContext(ctx, sh.Path, args...)
-	if named && sh.Argv0 != "" {
+	// Every route is invoked under the name its panel entry gives it. Which
+	// shell a column names is settled by argv[0] and by nothing else, so a
+	// route that skipped this recorded a *different shell* under the same
+	// heading: the script route did, and the column headed bash-as-sh held
+	// plain bash for every case that runs from a file. That is the
+	// mislabeled-column hazard MustReport exists to prevent, and it is the
+	// kind that never looks wrong — the rows were consistent with each other
+	// and disagreed only with their own heading.
+	//
+	// It mattered by more than a name. Honoring it moved 18 of the 79 rows,
+	// 13 of them in the recorded status, in four families: a failed special
+	// builtin is fatal, so a readonly reassignment stops the script (status
+	// 0 against the truthful 1); aliases are expanded in a non-interactive
+	// script, so a command that was not found is found; `trap` prints INT
+	// rather than SIGINT; and `trap` takes the POSIX usage. Every one of the
+	// 18 old values was byte-identical to the plain-bash cell beside it,
+	// which is the bug stated as evidence. A column whose Why is "argv[0]
+	// alone changes the language" was the one column not being told its
+	// argv[0].
+	if sh.Argv0 != "" {
 		cmd.Args[0] = sh.Argv0
 	}
 	// Standard input is closed unless the case asked for some. A nil Stdin is

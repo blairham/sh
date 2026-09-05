@@ -322,7 +322,10 @@ func (l *Lexer) tryIONumber() (Token, bool) {
 // receives its number.
 //
 // The name must be one a variable could have; `{a,b}>f` has a comma and is a
-// word, which is what keeps this clear of brace expansion.
+// word, which is what keeps this clear of brace expansion. Where the dialect
+// says so it may be a subscripted one — `{a[1]}>&-` names an element — and
+// the comma rule survives that, because a subscript ends at its own `]` and
+// what follows has to be the closing brace.
 func (l *Lexer) tryFdVariable() (Token, bool) {
 	if !l.dialect.FdVariableRedirections || l.peek() != '{' {
 		return Token{}, false
@@ -337,7 +340,17 @@ func (l *Lexer) tryFdVariable() (Token, bool) {
 		}
 		break
 	}
-	if n == 1 || l.peekAt(n) != '}' {
+	if n == 1 {
+		return Token{}, false
+	}
+	if l.peekAt(n) == '[' {
+		sub, ok := l.fdVariableSubscript(n)
+		if !ok {
+			return Token{}, false
+		}
+		n = sub
+	}
+	if l.peekAt(n) != '}' {
 		return Token{}, false
 	}
 	// The same strict adjacency an IO number has: anything but a
@@ -357,6 +370,43 @@ func (l *Lexer) tryFdVariable() (Token, bool) {
 		Text:  text,
 		Spans: []Span{{Kind: Literal, Value: text, Quoting: Unquoted, Pos: start}},
 	}, true
+}
+
+// fdVariableSubscript reads the `[...]` of `{a[1]}`, reporting how far the
+// token now reaches and whether there was a subscript there at all.
+//
+// It is deliberately narrow about what may stand between the brackets. The
+// whole token becomes one literal span, so nothing in it is ever expanded —
+// and a subscript that says `$i` and means the two characters would be worse
+// than one that is not a subscript at all. What is left is what needs no
+// expansion: a name, a numeral, an expression built from them. `{a[$i]}` is
+// therefore an ordinary word here, which is the one spelling bash reads and
+// this does not; ksh93 takes the token and then refuses the `$` in the
+// arithmetic, so there is no answer that is everyone's.
+//
+// A subscript is also never empty and never nested: `{a[]}` and `{a[b[1]]}`
+// are words, so a bracket that opens one has to close it before the brace.
+func (l *Lexer) fdVariableSubscript(open int) (int, bool) {
+	if !l.dialect.FdVariableSubscript {
+		return 0, false
+	}
+	n := open + 1
+	for {
+		c := l.peekAt(n)
+		if c == ']' {
+			break
+		}
+		if c == '_' || c == '+' || c == '-' || c == '*' || c == '/' || c == '%' ||
+			(c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') {
+			n++
+			continue
+		}
+		return 0, false
+	}
+	if n == open+1 {
+		return 0, false
+	}
+	return n + 1, true
 }
 
 // operators, longest first. Longest match wins, so the order is the algorithm

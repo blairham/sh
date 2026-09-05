@@ -412,6 +412,34 @@ type Semantics struct {
 	// dies by it.
 	QuitIgnoredWhenNotInteractive Answer
 
+	// HangupIsAnOrderlyExit makes an untrapped SIGHUP end the shell the way
+	// `exit 1` would rather than by the signal's default action.
+	//
+	//	kill -HUP $$; echo after
+	//
+	// reports 1 in zsh and 129 in bash, dash and ksh93, and prints nothing
+	// after it anywhere. The number is the visible half; the discipline
+	// behind it is the whole answer, and three further measurements say so:
+	// the shell's caller sees an ordinary exit rather than a death by
+	// SIGHUP, the EXIT trap runs, and an `exit 5` inside that trap wins the
+	// status the way it would after any other ending.
+	//
+	// That the EXIT trap runs is what makes this an axis of its own rather
+	// than a number to special-case. ExitTrapRunsOnSignalDeath asks whether
+	// dying counts as exiting, and zsh answers no — `trap 'echo bye' EXIT;
+	// kill -TERM $$` prints nothing there. `kill -HUP $$` prints bye in the
+	// same shell, which is only consistent if SIGHUP never produced a death
+	// to ask the question about.
+	//
+	// It is one signal, and only this one. Measured across the nineteen
+	// signals whose default action ends a process — HUP, INT, QUIT, ILL,
+	// TRAP, ABRT, FPE, BUS, SEGV, SYS, PIPE, ALRM, TERM, USR1, USR2, XCPU,
+	// XFSZ, VTALRM and PROF — the panel is unanimous on every one except
+	// QUIT, which QuitIgnoredWhenNotInteractive covers, and this. An
+	// external SIGHUP is answered the same way, so it is a disposition
+	// rather than something the `kill` builtin does on its way past.
+	HangupIsAnOrderlyExit Answer
+
 	// ExitArgument is how strict `exit` is about what it is given, and it is
 	// an ordering rather than a side:
 	//

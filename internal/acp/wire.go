@@ -1,12 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Blair Hamilton
 // SPDX-License-Identifier: Apache-2.0
 
-// Package acp serves the Agent Client Protocol on behalf of a shell.
+// Package acp speaks the Agent Client Protocol, in both directions.
 //
 // The gate and the event stream are the shell's permission-and-audit surface,
-// and docs/design/acp.md is the design this implements: the shell is the ACP
-// *Agent*, an editor is the Client, gate consultations become
-// session/request_permission and the event stream becomes session/update.
+// and docs/design/acp.md is the design this implements. ACP has two roles and
+// this shell is both: an editor drives it as an *Agent*, and it drives a
+// coding agent as a *Client*. Gate consultations become permission requests
+// and the event stream becomes session updates one way round; the agent's own
+// requests pass through the same gate the other way round.
+//
+// **Nothing in this package has a side.** JSON-RPC is symmetric — a Conn
+// answers and calls out, whichever end of a connection it is — and one party
+// writes the message shapes the other reads. Turning a permission option into
+// a decision is the same function whoever chose the option. The role-specific
+// part is only which methods a peer answers and which capabilities are its to
+// claim, and that lives above this.
 //
 // The revision is **protocol version 1**, wire schema v1, over stdio —
 // newline-delimited JSON-RPC 2.0. Every shape in this file was taken from the
@@ -83,7 +92,8 @@ type InitializeResponse struct {
 	AgentInfo         *Implementation   `json:"agentInfo,omitempty"`
 }
 
-// AgentCapabilities is what this agent claims, which is deliberately little.
+// AgentCapabilities is what an agent claims. What *this* shell claims when it
+// is the agent is deliberately little.
 //
 // loadSession is false because a shell's session is its variables, functions,
 // working directory and descriptors, and none of that is in the update stream:
@@ -332,9 +342,10 @@ const (
 	OptionRejectAlways = "reject-always"
 )
 
-// PermissionOptions is the set offered for every escalated action: all four
+// PermissionOptions is the set an escalated action is offered with: all four
 // kinds, always, so that a person can settle a repeated question once without
-// the agent having to guess which questions repeat.
+// anything having to guess which questions repeat. Written by whichever side
+// is asking, read by whichever side is answering.
 func PermissionOptions() []PermissionOption {
 	return []PermissionOption{
 		{OptionID: OptionAllowOnce, Name: "Allow", Kind: KindAllowOnce},

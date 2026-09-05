@@ -16480,6 +16480,44 @@
         "TimedOut": false
       }
     },
+    "jobs/an-option-no-shell-has": {
+      "bash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: line 1: jobs: -Q: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: line 1: jobs: -Q: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: line 0: jobs: -Q: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: 1: jobs: Illegal option -Q",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: jobs: -Q: unknown option~Usage: jobs [-lnp] [job ...]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:jobs:1: bad option: -Q",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "jobs/bg-with-no-job-control": {
       "bash": {
         "Stdout": "st=1",
@@ -16514,6 +16552,234 @@
       "zsh": {
         "Stdout": "st=1",
         "Stderr": "\u003cshell\u003e:bg:1: no job control in this shell.",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/dash-l-and-dash-p-the-last-one-wins": {
+      "bash": {
+        "Stdout": "-pl: a listing~-lp: ids",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "-pl: a listing~-lp: ids",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "-pl: a listing~-lp: ids",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "-pl: a listing~-lp: ids",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "-pl: a listing~-lp: ids",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "-pl: a listing~-lp: a listing",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/dash-l-puts-the-process-id-in-the-listing": {
+      "bash": {
+        "Stdout": "[1]+ PID Running sleep 0.4 \u0026",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[1]+ PID Running sleep 0.4 \u0026",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[1]+ PID Running sleep 0.4 \u0026",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[1] + PID Running ",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[1] + PID\t Running \u003ccommand unknown\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[1] + PID running sleep 0.4",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/dash-p-is-the-process-ids-alone": {
+      "bash": {
+        "Stdout": "the job's process id alone",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "the job's process id alone",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "the job's process id alone",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "the job's process id alone",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "the job's process id alone",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a listing with the id in it",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/dash-r-lists-the-running-ones": {
+      "bash": {
+        "Stdout": "[1]+  Running                    sleep 0.4 \u0026~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[1]+  Running                    sleep 0.4 \u0026~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[1]+  Running                 sleep 0.4 \u0026~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: 1: jobs: Illegal option -r",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: jobs: -r: unknown option~Usage: jobs [-lnp] [job ...]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[1]  + running    sleep 0.4~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/dash-s-is-a-letter-two-shells-do-not-have": {
+      "bash": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: 1: jobs: Illegal option -s",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: jobs: -s: unknown option~Usage: jobs [-lnp] [job ...]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/two-job-specs-in-the-order-written": {
+      "bash": {
+        "Stdout": "[2]+  Running                    sleep 0.5 \u0026~[1]-  Running                    sleep 0.4 \u0026",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[2]+  Running                    sleep 0.5 \u0026~[1]-  Running                    sleep 0.4 \u0026",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[2]+  Running                 sleep 0.5 \u0026~[1]-  Running                 sleep 0.4 \u0026",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[2] + Running                    ~[1] - Running                    ",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[2] +  Running                 \u003ccommand unknown\u003e~[1] -  Running                 \u003ccommand unknown\u003e",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[2]  + running    sleep 0.5~[1]  - running    sleep 0.4",
+        "Stderr": "",
         "Status": 0,
         "TimedOut": false
       }

@@ -253,6 +253,32 @@ everyone else's is a line. It is why `exec 0<` mid-program behaves as it does
 in dash too — the rest of the block runs first, and *then* the file becomes the
 program.
 
+### How much is fetched is not how much is taken
+
+The unit above is what the shell is *entitled to take*. How many system calls
+it costs to take it is a separate question, and the answer turns on whether
+the descriptor can be rewound rather than on which shell is running.
+
+Measured, same panel and same date, by running each program in the table above
+twice — once piped in, once as `sh < program` from a regular file. **Every
+shell produces byte-identical output and status on both routes**, for all nine
+programs. That is the observation the fetch rests on: a shell may read as far
+ahead as it likes on a descriptor it can put back, because putting it back is
+indistinguishable from never having read.
+
+On a pipe it is not indistinguishable, because an over-read cannot be given
+back. There the line has to be taken a byte at a time, and that is what the
+cost of this route is:
+
+| a 20 000-line, 249 KB program, best of seven, macOS 25.5 | |
+| --- | --- |
+| bash 5.3, `< file` | 0.055 s |
+| bash 5.3, piped | 0.127 s |
+
+The two-fold difference between a real bash's own two routes is the same fact
+from the other side: the rewindable one is cheaper, and it is cheaper by about
+what a system call per byte costs.
+
 ### Why it matters
 
 `curl … | sh` is this route. Taking the whole input for every dialect — which
@@ -263,5 +289,14 @@ input and the data the script was reading was executed as commands instead.
 
 `driver`'s `program`, which is the only thing that reads a program. The
 descriptor is asked for on every refill rather than captured once, because the
-script may point it somewhere else; the line reader takes one byte at a time,
-because reading past the line is exactly the bug.
+script may point it somewhere else.
+
+The line reader has the two fetches. Where the descriptor rewinds it reads a
+buffer and pushes back everything past the newline, relative to the read that
+caused the overshoot — relative rather than to a computed position, because
+between two lines the script has run a command and a command that read
+descriptor 0 has moved it. Where the descriptor does not rewind it takes one
+byte at a time, because reading past the line is exactly the bug. Whether it
+rewinds is asked of the descriptor once and remembered against it, since a
+pipe, a socket and a terminal are all `*os.File` and the type answers nothing
+(#567).

@@ -546,6 +546,13 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `jobs/a-finished-background-job` | `[1] + Done                       ~---` | `[1]+  Done                       sleep 0.05~---` | `[1]+  Done                       sleep 0.05~---` | `---` | `[1] +  Running                 <command unknown>~---` | `---` |
 | `jobs/a-background-job-that-failed` | `[1] + Done(1)                    ` | `[1]+  Exit 1                     false` | `[1]+  Done(1)                    false` | *(no output, status 0)* | `[1] +  Running                 <command unknown>` | *(no output, status 0)* |
 | `jobs/two-jobs-and-which-end-it-starts-from` | `[2] + Running                    ~[1] - Running                    ` | `[1]-  Running                    sleep 0.4 &~[2]+  Running                    sleep 0.4 &` | `[1]-  Running                    sleep 0.4 &~[2]+  Running                    sleep 0.4 &` | `[1]-  Running                 sleep 0.4 &~[2]+  Running                 sleep 0.4 &` | `[2] +  Running                 <command unknown>~[1] -  Running                 <command unknown>` | `[1]  - running    sleep 0.4~[2]  + running    sleep 0.4` |
+| `jobs/dash-p-is-the-process-ids-alone` | `the job's process id alone` | `the job's process id alone` | `the job's process id alone` | `the job's process id alone` | `the job's process id alone` | `a listing with the id in it` |
+| `jobs/dash-l-puts-the-process-id-in-the-listing` | `[1] + PID Running ` | `[1]+ PID Running sleep 0.4 &` | `[1]+ PID Running sleep 0.4 &` | `[1]+ PID Running sleep 0.4 &` | `[1] + PID	 Running <command unknown>` | `[1] + PID running sleep 0.4` |
+| `jobs/dash-l-and-dash-p-the-last-one-wins` | `-pl: a listing~-lp: ids` | `-pl: a listing~-lp: ids` | `-pl: a listing~-lp: ids` | `-pl: a listing~-lp: ids` | `-pl: a listing~-lp: ids` | `-pl: a listing~-lp: a listing` |
+| `jobs/dash-r-lists-the-running-ones` | `st=2` **2>** `<shell>: 1: jobs: Illegal option -r` | `[1]+  Running                    sleep 0.4 &~st=0` | `[1]+  Running                    sleep 0.4 &~st=0` | `[1]+  Running                 sleep 0.4 &~st=0` | `st=2` **2>** `<shell>: jobs: -r: unknown option~Usage: jobs [-lnp] [job ...]` | `[1]  + running    sleep 0.4~st=0` |
+| `jobs/dash-s-is-a-letter-two-shells-do-not-have` | `st=2` **2>** `<shell>: 1: jobs: Illegal option -s` | `st=0` | `st=0` | `st=0` | `st=2` **2>** `<shell>: jobs: -s: unknown option~Usage: jobs [-lnp] [job ...]` | `st=0` |
+| `jobs/an-option-no-shell-has` | `st=2` **2>** `<shell>: 1: jobs: Illegal option -Q` | `st=2` **2>** `<shell>: line 1: jobs: -Q: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]` | `st=2` **2>** `<shell>: line 1: jobs: -Q: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]` | `st=2` **2>** `<shell>: line 0: jobs: -Q: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]` | `st=2` **2>** `<shell>: jobs: -Q: unknown option~Usage: jobs [-lnp] [job ...]` | `st=1` **2>** `<shell>:jobs:1: bad option: -Q` |
+| `jobs/two-job-specs-in-the-order-written` | `[2] + Running                    ~[1] - Running                    ` | `[2]+  Running                    sleep 0.5 &~[1]-  Running                    sleep 0.4 &` | `[2]+  Running                    sleep 0.5 &~[1]-  Running                    sleep 0.4 &` | `[2]+  Running                 sleep 0.5 &~[1]-  Running                 sleep 0.4 &` | `[2] +  Running                 <command unknown>~[1] -  Running                 <command unknown>` | `[2]  + running    sleep 0.5~[1]  - running    sleep 0.4` |
 | `read/a-failing-read-still-assigns` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` |
 | `read/a-final-line-without-a-newline` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` |
 | `read/an-unterminated-last-line-is-dropped` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` |
@@ -707,6 +714,34 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `jobs/two-jobs-and-which-end-it-starts-from` — dash and ksh93 print the most recent first and bash and zsh the oldest, and the number stays with the job either way — `%2` has to mean the same thing at both ends. Also where the `+` and `-` markers become visible
   ```sh
   sleep 0.4 & sleep 0.4 & jobs
+  ```
+- `jobs/dash-p-is-the-process-ids-alone` — the `kill $(jobs -p)` idiom, and the one place the letter splits: dash, bash and ksh93 print process ids and nothing else, zsh reads the same letter as the job's process *group* and prints its ordinary rows. Compared against `$!` rather than printed, because a process id is not the same twice. Through a file rather than a pipe: a subshell has no job table in dash or zsh
+  ```sh
+  sleep 0.4 & jobs -p >p.txt; read x <p.txt; case $x in "$!") echo "the job's process id alone";; *"$!"*) echo "a listing with the id in it";; *) echo "neither: [$x]";; esac; wait
+  ```
+- `jobs/dash-l-puts-the-process-id-in-the-listing` — the one `jobs` letter all five have, and each puts the id somewhere different — after the marker, or eating one of the two spaces behind it, or with a tab after it. Runs of spaces are squeezed because dash narrows its state column by the width of the id, so the untouched line would depend on how many digits this machine's process ids have
+  ```sh
+  sleep 0.4 & jobs -l >l.txt; sed -e "s/ [0-9][0-9]*/ PID/" l.txt | tr -s " "; wait
+  ```
+- `jobs/dash-l-and-dash-p-the-last-one-wins` — the two format letters are exclusive, and the last one given decides rather than either winning outright — unanimous in the three shells whose `-p` is the ids alone, and moot in the one whose is not
+  ```sh
+  sleep 0.4 & jobs -pl >a.txt; read x <a.txt; case $x in "$!") echo "-pl: ids";; *) echo "-pl: a listing";; esac; jobs -lp >b.txt; read y <b.txt; case $y in "$!") echo "-lp: ids";; *) echo "-lp: a listing";; esac; wait
+  ```
+- `jobs/dash-r-lists-the-running-ones` — a state filter bash and zsh have and dash and ksh93 have never heard of — an illegal option in the two without it, which is why the letter set has to be the dialect's rather than the engine's
+  ```sh
+  sleep 0.4 & jobs -r; echo "st=$?"; wait
+  ```
+- `jobs/dash-s-is-a-letter-two-shells-do-not-have` — the other half of the same split, with nothing stopped to list: silence and 0 where the letter exists, a refusal and 2 where it does not. Absence is the answer here rather than a divergence in behavior
+  ```sh
+  jobs -s; echo "st=$?"
+  ```
+- `jobs/an-option-no-shell-has` — the refusal itself: four wordings, two of them with a usage line naming the letters that shell really does have, and 2 everywhere but zsh. An option silently ignored is the failure this pins against
+  ```sh
+  jobs -Q; echo "st=$?"
+  ```
+- `jobs/two-job-specs-in-the-order-written` — operands settle the order themselves — `%2 %1` lists 2 then 1 in all five, including the two whose bare listing starts from the newest — and each row keeps the job's own number rather than counting from the start of the listing
+  ```sh
+  sleep 0.4 & sleep 0.5 & jobs %2 %1; wait
   ```
 - `read/a-failing-read-still-assigns` — end of input clears the variables rather than leaving what was there, which is what stops `while read -r l` from leaving the last line behind for the code after the loop. Unanimous across the panel, so it is the core's answer and not an axis
   ```sh

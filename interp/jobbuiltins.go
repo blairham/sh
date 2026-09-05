@@ -77,29 +77,69 @@ func biDisown(r *Runner, _ context.Context, args []string) int {
 	return 0
 }
 
+// jobsForm is what a `jobs` listing prints per job: the state row, the same
+// row with the process id in it, or the process id alone.
+//
+// The three are chosen by `-l` and `-p`, and the *last* letter given decides
+// in every shell that has both — `jobs -pl` is the long listing and
+// `jobs -lp` the process ids, in dash, bash and ksh93 alike. Unanimous, so
+// not an axis.
+type jobsForm int
+
+const (
+	jobsStateRow jobsForm = iota
+	jobsLongRow
+	jobsPidsAlone
+)
+
 func biJobs(r *Runner, _ context.Context, args []string) int {
-	args, _, code := r.builtinOptions("jobs", args, "lpnrs")
+	// The letters are the dialect's. A shared set would have this engine
+	// accept `jobs -r` in dash, which refuses it — the failure mode #469
+	// was: an option nobody reads is an option silently ignored.
+	letters := r.sem().JobsOptions
+	if letters == "" {
+		letters = "lp"
+	}
+	args, opts, code := r.builtinOptions("jobs", args, letters)
 	if code != 0 {
 		return code
 	}
+	form, code := r.jobsForm(opts)
+	if code != 0 {
+		return code
+	}
+	wanted, code := r.jobStateFilter(opts)
+	if code != 0 {
+		return code
+	}
+
+	// Operands name jobs, and every shell in the panel lists them in the
+	// order they were written rather than in the listing's own order — so
+	// `jobs %1 %2` and `jobs %2 %1` differ, in the two dialects whose bare
+	// listing starts from the newest as much as in the other two.
+	//
+	// A spec that names nothing is reported *after* the jobs written before
+	// it have been listed, unanimously, which is why the complaint is held
+	// back rather than made where the lookup failed.
 	jobs := r.jobs
-	if len(args) > 0 {
-		j, code := r.findJob(args[0], "jobs")
-		if code != 0 {
-			return code
+	explicit := len(args) > 0
+	badSpec, badLookup := "", jobFound
+	if explicit {
+		jobs = make([]*Job, 0, len(args))
+		for _, a := range args {
+			j, found := r.findJobQuietly(a)
+			if found != jobFound {
+				badSpec, badLookup = a, found
+				break
+			}
+			jobs = append(jobs, j)
 		}
-		jobs = []*Job{j}
 	}
-	rows, code := r.jobRows(jobs)
-	if code != 0 {
+	if code := r.printJobs(jobs, form, wanted, explicit); code != 0 {
 		return code
 	}
-	showBg, code := r.showsBackgroundCommand(rows)
-	if code != 0 {
-		return code
-	}
-	for _, row := range rows {
-		r.printf("%s\n", r.jobLine(row.n, row.job, showBg))
+	if badLookup != jobFound {
+		return r.reportJobLookup(badSpec, badLookup, "jobs")
 	}
 	// The listing that reports a finished job is the listing that forgets
 	// it: every shell in the panel mentions one at most once, so a second
@@ -110,12 +150,134 @@ func biJobs(r *Runner, _ context.Context, args []string) int {
 	// not the same set: the dialect that leaves a finished job out of the
 	// listing has still finished with it, and forgetting only the printed
 	// ones would keep them forever in exactly that dialect.
+	//
+	// A listing that was not a listing of states does not count. Measured:
+	// `jobs -p` and `jobs -r` in bash both leave the finished job for the
+	// next bare `jobs` to report, where `jobs` and `jobs -l` consume it. So
+	// only a form that showed the job's state, and only with nothing
+	// filtered out, finishes with it.
+	if form == jobsPidsAlone || wanted != anyJobState {
+		return 0
+	}
 	for _, j := range jobs {
 		if j.Finished() {
 			r.Forget(j)
 		}
 	}
 	return 0
+}
+
+// printJobs writes the listing itself, once the form, the filter and the set
+// of jobs are settled.
+func (r *Runner) printJobs(jobs []*Job, form jobsForm, wanted jobState, explicit bool) int {
+	rows, code := r.jobRows(jobs, explicit)
+	if code != 0 {
+		return code
+	}
+	showBg, code := r.showsBackgroundCommand(rows)
+	if code != 0 {
+		return code
+	}
+	for _, row := range rows {
+		if !wanted.holds(row.job) {
+			continue
+		}
+		switch form {
+		case jobsPidsAlone:
+			if row.job.PID == 0 {
+				// A job with no process of its own — a builtin or a
+				// compound command on a cloned runner, where a real shell
+				// would have forked and had an id to print. Left out
+				// rather than printed as 0, because this listing is
+				// written to be *used*: `kill $(jobs -p)` with a 0 in it
+				// signals the whole process group.
+				continue
+			}
+			r.printf("%d\n", row.job.PID)
+		case jobsLongRow:
+			r.printf("%s\n", r.jobLineLong(row.n, row.job, showBg))
+		default:
+			r.printf("%s\n", r.jobLine(row.n, row.job, showBg))
+		}
+	}
+	return 0
+}
+
+// jobsForm reads `-l` and `-p` out of the letters that were given.
+func (r *Runner) jobsForm(opts string) (jobsForm, int) {
+	form := jobsStateRow
+	for i := len(opts) - 1; i >= 0; i-- {
+		switch opts[i] {
+		case 'l':
+			return jobsLongRow, 0
+		case 'p':
+			// zsh spells the process *group* with the same letter and
+			// prints its ordinary rows, which is why `kill $(jobs -p)`
+			// is a bash idiom and not a portable one.
+			if r.ask(r.sem().JobsPidsOnlyOption, "`jobs -p` printing process ids and nothing else") {
+				return jobsPidsAlone, 0
+			}
+			if r.unspecified {
+				return form, 2
+			}
+			return jobsLongRow, 0
+		}
+	}
+	return form, 0
+}
+
+// jobState is which jobs a listing was asked for: `-r` running, `-s` stopped,
+// or — with neither letter, and with both where the dialect adds them up —
+// whatever is there.
+type jobState int
+
+const (
+	anyJobState jobState = iota
+	runningJobs
+	stoppedJobs
+)
+
+// holds reports whether a job is one the filter asked for.
+//
+// A finished job is neither running nor stopped, and is left out by both
+// letters: measured in bash, where `jobs -r` says nothing about a job that
+// has ended and the next bare `jobs` still reports it.
+func (w jobState) holds(j *Job) bool {
+	switch w {
+	case runningJobs:
+		return !j.Stopped && !j.Finished()
+	case stoppedJobs:
+		return j.Stopped
+	}
+	return true
+}
+
+// jobStateFilter reads `-r` and `-s`.
+func (r *Runner) jobStateFilter(opts string) (jobState, int) {
+	last := anyJobState
+	both := false
+	for i := 0; i < len(opts); i++ {
+		switch opts[i] {
+		case 'r':
+			both = both || last == stoppedJobs
+			last = runningJobs
+		case 's':
+			both = both || last == runningJobs
+			last = stoppedJobs
+		}
+	}
+	if !both {
+		return last, 0
+	}
+	// Both letters at once, which is the only place the two shells that
+	// have them disagree.
+	if r.ask(r.sem().JobsStateFiltersAccumulate, "`jobs -r -s` listing a job in either state") {
+		return anyJobState, 0
+	}
+	if r.unspecified {
+		return last, 2
+	}
+	return last, 0
 }
 
 // jobRow is a job together with the number it is listed under, which is its
@@ -128,9 +290,18 @@ type jobRow struct {
 
 // jobRows is what a `jobs` listing contains and in what order, both of which
 // the dialect answers.
-func (r *Runner) jobRows(jobs []*Job) ([]jobRow, int) {
+//
+// explicit says the jobs were named by operands, which settles the order
+// itself: `jobs %1 %2` and `jobs %2 %1` list them the way they were written
+// in every shell in the panel, including the two whose bare listing starts
+// from the newest.
+func (r *Runner) jobRows(jobs []*Job, explicit bool) ([]jobRow, int) {
 	rows := make([]jobRow, 0, len(jobs))
-	for i, j := range jobs {
+	for _, j := range jobs {
+		// The job's own number, not its place in this listing. `jobs %2`
+		// printed `[1]` before this, because a listing of one job counted
+		// from the start of the slice it had been handed.
+		i := r.jobNumber(j)
 		// Asked only where there is a finished job to leave out. A listing
 		// of running ones is the same in every shell, and refusing it
 		// because of a question nothing turned on would be refusing to work.
@@ -144,8 +315,11 @@ func (r *Runner) jobRows(jobs []*Job) ([]jobRow, int) {
 		}
 		rows = append(rows, jobRow{n: i, job: j})
 	}
-	// Likewise: one job is in the same place either way.
-	if len(rows) > 1 {
+	// Likewise: one job is in the same place either way. And a listing whose
+	// jobs were named by operands is already in the order it was asked for,
+	// in every shell in the panel — `jobs %1 %2` lists 1 then 2 in dash and
+	// ksh93 too, whose bare listing starts from the other end.
+	if len(rows) > 1 && !explicit {
 		if r.ask(r.sem().JobsListNewestFirst, "a `jobs` listing starting with the most recent") {
 			for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
 				rows[i], rows[j] = rows[j], rows[i]
@@ -170,15 +344,31 @@ func (r *Runner) jobLine(i int, j *Job, showBg bool) string {
 	return r.jobLineAs(i, j, showBg, false)
 }
 
-func (r *Runner) jobLineAs(i int, j *Job, showBg, noticing bool) string {
+// jobLineLong is the same row with the process id in it, which is what `-l`
+// adds. Every shell in the panel has the letter and every one of them puts
+// the id somewhere different, so the whole row is the dialect's format.
+func (r *Runner) jobLineLong(i int, j *Job, showBg bool) string {
 	dg := r.diag()
-	state := Wording(dg.JobRunning, "Running")
+	return Wording(dg.JobLineLong, "[%[1]d]%[2]s %[3]d %-24[4]s%[5]s",
+		i+1, r.jobMarker(j), j.PID, r.jobState(j, false), r.jobCommand(j, showBg))
+}
+
+func (r *Runner) jobLineAs(i int, j *Job, showBg, noticing bool) string {
+	return Wording(r.diag().JobLine, "[%[1]d]%[2]s  %-24[3]s%[4]s",
+		i+1, r.jobMarker(j), r.jobState(j, noticing), r.jobCommand(j, showBg))
+}
+
+// jobState is the state column: what a job is doing, worded the dialect's
+// way. noticing says the shell is reporting that the job ended rather than
+// listing one that has, which one dialect words differently.
+func (r *Runner) jobState(j *Job, noticing bool) string {
+	dg := r.diag()
 	switch {
 	case j.Stopped:
 		// One verb, the signal that stopped it, which only one dialect names.
-		state = Wording(dg.JobStopped, "Stopped", j.StopSig)
+		return Wording(dg.JobStopped, "Stopped", j.StopSig)
 	case j.Finished():
-		state = Wording(dg.JobDone, "Done")
+		state := Wording(dg.JobDone, "Done")
 		if noticing && dg.JobDoneNotice != "" {
 			state = dg.JobDoneNotice
 		}
@@ -187,9 +377,20 @@ func (r *Runner) jobLineAs(i int, j *Job, showBg, noticing bool) string {
 			// verb, the status, and no dialect words it without one.
 			state = Wording(dg.JobExited, "Exit %[1]d", j.Status)
 		}
+		return state
 	}
-	return Wording(dg.JobLine, "[%[1]d]%[2]s  %-24[3]s%[4]s",
-		i+1, r.jobMarker(j), state, r.jobCommand(j, showBg))
+	return Wording(dg.JobRunning, "Running")
+}
+
+// jobNumber is the number a job is listed under: its place in the table,
+// which is not its place in a listing that was asked for particular jobs.
+func (r *Runner) jobNumber(j *Job) int {
+	for i, other := range r.jobs {
+		if other == j {
+			return i
+		}
+	}
+	return 0
 }
 
 // jobCommand is the command column of a listing.
@@ -337,18 +538,26 @@ func (r *Runner) resume(args []string, name string) (*Job, int) {
 // command's text, and are questions — see JobSpecsByName.
 func (r *Runner) findJob(spec, name string) (*Job, int) {
 	j, code := r.findJobQuietly(spec)
-	switch code {
-	case jobFound:
+	if code == jobFound {
 		return j, 0
+	}
+	return nil, r.reportJobLookup(spec, code, name)
+}
+
+// reportJobLookup is findJob's second half, for a caller that has to say
+// something else before the complaint — `jobs %1 %9` lists job 1 and reports
+// the bad spec after it, in every shell in the panel.
+func (r *Runner) reportJobLookup(spec string, code int, name string) int {
+	switch code {
 	case jobSpecAmbiguous:
 		r.diagf("%s\n", Wording(r.diag().AmbiguousJobSpec,
 			"%[1]s: %[2]s: ambiguous job spec", name, strings.TrimPrefix(spec, "%")))
-		return nil, 1
+		return 1
 	case jobSpecUnanswered:
-		return nil, r.status
+		return r.status
 	}
 	r.diagf("%s\n", Wording(r.diag().NoSuchJob, "%[1]s: %[2]s: no such job", name, spec))
-	return nil, 1
+	return 1
 }
 
 // signalJob sends to the job's process group rather than to the one process.

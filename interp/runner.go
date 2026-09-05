@@ -78,6 +78,26 @@ type Runner struct {
 	// means, as distinct from which syntax they accept. Nil means bash's.
 	Semantics *Semantics
 
+	// Stdin, Stdout and Stderr are the shell's three streams, and nil means
+	// *empty* — a reader with nothing in it and a writer that discards —
+	// rather than the process's own.
+	//
+	// The same answer Env gives, for the same reason, and the reason is the
+	// whole of this package's contract: a Runner is embedded in other
+	// programs, and the process's streams belong to the program rather than
+	// to any shell inside it. A borrowed stdout is worse than a borrowed
+	// environment, because it is not read but *written*: an embedder that
+	// wired two of the three would find a script's output interleaved into
+	// its own terminal, with nothing to say where it came from.
+	//
+	// Silence is the safe failure here and noise is not, which is what makes
+	// this the answer rather than a convenience. A shell binary wires all
+	// three explicitly — driver does, at construction, exactly as it seeds
+	// Env and Dir — so nothing that is a shell is affected by what nil means.
+	//
+	// Where a stream is handed to a child process, nil goes across as nil,
+	// which os/exec spells /dev/null: the same emptiness, said the way a
+	// process says it.
 	Stdin          io.Reader
 	Stdout, Stderr io.Writer
 
@@ -221,6 +241,29 @@ type Runner struct {
 	exportedFuncs                      map[string]bool
 	importedFuncs                      bool
 	funcExportPrefix, funcExportSuffix string
+
+	// InheritedFiles are the descriptors this shell was *started* with beyond
+	// the three named streams — what `sh 3<&0 script` puts on 3 — laid out
+	// the way childFiles hands them back: entry i is descriptor 3+i, and a
+	// nil entry is a number nothing was inherited on.
+	//
+	// A fact the front end hands in, never one this package discovers, and
+	// that is the whole of why it is a field. Finding them means reading the
+	// *process's* open descriptors and asking which of them would survive an
+	// exec, and a Runner embedded in another program would then publish that
+	// program's own descriptors to a script it was asked to interpret — a
+	// database handle or a listening socket reachable as `<&3` because the
+	// embedder happened to hold one. So interp takes what it is given: driver
+	// looks, because a binary that *is* the shell is the one place the
+	// process-wide question is the right one to ask, and an embedder decides
+	// for itself by filling this in or leaving it empty.
+	//
+	// The files are the shell's own. driver duplicates each inherited
+	// descriptor rather than adopting it by number, so that closing one here
+	// is closing a copy: a caller's descriptor is the caller's to close, and
+	// a table entry that went out from under this process would leave every
+	// later child built on a descriptor that is no longer there.
+	InheritedFiles []*os.File
 
 	// JobControl says this shell reports its jobs to a person: it announces
 	// one when it is backgrounded and says so when it ends.
@@ -420,6 +463,10 @@ type Runner struct {
 	// number, so a script that hands a bare descriptor number to a child for
 	// the child's own use is not served by this.
 	fds map[int]any
+	// inheritedPublished says InheritedFiles has already been put into the
+	// table. Copied by clone with the rest of the struct, which is what keeps
+	// a subshell from publishing over the table it was cloned with.
+	inheritedPublished bool
 	// custom holds builtins registered by a shell built on this package. A
 	// nil value is an explicit removal.
 	custom map[string]Builtin
@@ -753,28 +800,53 @@ func (r *Runner) Verbose() bool { return r.verbose }
 // ExitStatus reports the status of the last command.
 func (r *Runner) ExitStatus() int { return r.status }
 
+// SetExitStatus sets the status of the last command, which is what `$?`
+// reports and what a shell that stops here exits with.
+//
+// It exists for the one thing a front end knows about a run that the runner
+// does not: that it ended without finishing. A panic caught at a run boundary
+// is the case — interp panics on an internal bug because it is a library, and
+// the shell around it decides the session survives — and the line that
+// panicked has to leave a status behind, or `$?` goes on answering for the
+// command before it and `&&` runs on as though nothing happened.
+func (r *Runner) SetExitStatus(status int) { r.status = status }
+
+// The three streams, resolved. A nil one is empty rather than the process's,
+// which the field comments give the reasoning for; these are where that is
+// implemented, and the reason they are functions at all.
+
 func (r *Runner) stdout() io.Writer {
 	if r.Stdout == nil {
-		return os.Stdout
+		return io.Discard
 	}
 	return r.Stdout
 }
 
-// stdin is the shell's input, defaulting to the process's own — the reading
-// half of what stdout and stderr already do.
+// stdin is the shell's input, empty where the caller supplied none — the
+// reading half of what stdout and stderr do.
 func (r *Runner) stdin() io.Reader {
 	if r.Stdin == nil {
-		return os.Stdin
+		return emptyReader{}
 	}
 	return r.Stdin
 }
 
 func (r *Runner) stderr() io.Writer {
 	if r.Stderr == nil {
-		return os.Stderr
+		return io.Discard
 	}
 	return r.Stderr
 }
+
+// emptyReader is a stream with nothing in it, which is what a nil Stdin means.
+//
+// A type of its own rather than a shared strings.Reader, because these streams
+// are read from more than one goroutine — a background job and each half of a
+// pipeline read on their own — and a reader with a position in it, however
+// certainly at its end, is state two of them would share. This one has none.
+type emptyReader struct{}
+
+func (emptyReader) Read([]byte) (int, error) { return 0, io.EOF }
 
 // errf writes a diagnostic to the shell's error stream.
 //
@@ -949,6 +1021,7 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	r.ensurePWD()
 	r.ensureSpecials()
 	r.ensureImportedFunctions()
+	r.publishInheritedFds(ctx)
 	if r.started.IsZero() {
 		r.started = time.Now()
 	}
@@ -1755,9 +1828,14 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	}
 	cmd.Dir = r.Dir
 	cmd.Env = env
+	// The fields rather than the resolved streams, so that a nil one reaches
+	// os/exec as nil and the child is given /dev/null. That is the same
+	// emptiness the shell's own reads and writes get, spelled the way a
+	// process spells it — and cheaper, since a non-file reader or writer
+	// makes os/exec build a pipe and copy through it.
 	cmd.Stdin = r.Stdin
-	cmd.Stdout = r.stdout()
-	cmd.Stderr = r.stderr()
+	cmd.Stdout = r.Stdout
+	cmd.Stderr = r.Stderr
 	// The descriptors past the three named streams, rebuilt into the child's
 	// own table — see childFiles for why that has to be done by hand and why
 	// the numbering is preserved rather than packed.

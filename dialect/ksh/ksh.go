@@ -273,6 +273,14 @@ func Semantics() interp.Semantics {
 	s.JobsListNewestFirst = interp.Yes
 	s.JobsListFinishedJobs = interp.Yes
 
+	// `jobs`' letters, as its own usage line gives them: `-lnp`. The state
+	// filters `-r` and `-s` are unknown options here, and `-n` rides
+	// UnimplementedOptionLetters — ksh93 reads it as the jobs that have
+	// stopped or ended since it last said, which is not bash's reading of
+	// the same letter.
+	s.JobsOptions = "lp"
+	s.JobsPidsOnlyOption = interp.Yes
+
 	// Whether a `&` job's command appears in a `jobs` listing.
 	s.JobsShowBackgroundCommand = interp.No
 
@@ -357,6 +365,9 @@ func Diagnostics() interp.Diagnostics {
 		// column earlier than a running job's `Running`, and the two lines
 		// end in the same place.
 		JobLine: "[%[1]d] %[2]s %-25[3]s%[4]s",
+		// `jobs -l`: the process id after the marker with a tab behind it,
+		// and the same 25-wide state column.
+		JobLineLong: "[%[1]d] %[2]s %[3]d\t%-25[4]s%[5]s",
 		// The process id and the words, with a colon between them and no
 		// command after: this shell names the line and the process but does
 		// not say back what was running.
@@ -512,6 +523,12 @@ func Diagnostics() interp.Diagnostics {
 			// implemented as its measured refusal — see ReadNoCoprocess.
 			"read": "-CSv",
 			"type": "-qv",
+			// `jobs -n`: the jobs that have stopped or ended since this
+			// shell last said so, which needs a record of what it has
+			// already reported — and reads differently from bash's letter
+			// of the same name, which counts a job that has only just
+			// started as a change.
+			"jobs": "-n",
 			// typeset's letters this engine does not hold: the verbatim
 			// function listings (-f and the floats' -F), namerefs, padding
 			// and alignment, mappings and the rest of its usage line.
@@ -552,8 +569,10 @@ func Diagnostics() interp.Diagnostics {
 				"               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]\n" +
 				"               [name[=value]...]\n" +
 				"   Or: typeset [ options ] -f [name...]",
-			"wait":  "Usage: wait [ options ] [job ...]",
-			"jobs":  "Usage: jobs [ options ] [job ...]",
+			"wait": "Usage: wait [ options ] [job ...]",
+			// The letters spelled out, unlike `wait`'s and `shift`'s, which
+			// really do say "[ options ]". Measured with `jobs -Q`.
+			"jobs":  "Usage: jobs [-lnp] [job ...]",
 			"shift": "Usage: shift [ options ] [n]",
 			"unset": "Usage: unset [-nfv] name...",
 		},

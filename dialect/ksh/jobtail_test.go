@@ -53,3 +53,26 @@ func TestTypePAndF(t *testing.T) {
 		t.Errorf("got %q, want a silent 1 for -p on nothing", out)
 	}
 }
+
+// `jobs` takes `-lnp` here, as its own usage line says: `-p` is the process
+// ids alone, `-n` rides the unimplemented letters, and the state filters
+// bash has are unknown options.
+func TestJobsOptionLetters(t *testing.T) {
+	out, _ := runKsh(t, t.TempDir(), `/bin/sleep 0.3 & echo "bang=$!"
+jobs -p
+wait`)
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 2 || lines[1] != strings.TrimPrefix(lines[0], "bang=") {
+		t.Errorf("got %q, want the job's process id and nothing else", out)
+	}
+
+	out, _ = runKsh(t, t.TempDir(), `jobs -n; echo n=$?
+jobs -r; echo r=$?`)
+	if !strings.Contains(out, "jobs: -n is not implemented yet") {
+		t.Errorf("got %q, want the letter ksh93 has named as missing", out)
+	}
+	if !strings.Contains(out, "jobs: -r: unknown option") ||
+		!strings.Contains(out, "Usage: jobs [-lnp] [job ...]") || !strings.Contains(out, "r=2") {
+		t.Errorf("got %q, want -r refused with the usage line at 2", out)
+	}
+}

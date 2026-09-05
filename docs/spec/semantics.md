@@ -736,6 +736,63 @@ prose rather than as a case because the output cannot be golden: bash and
 ksh93 announce the killed writer by its process id, which is different on
 every run.
 
+## A capability the corpus cannot hand a case
+
+The corpus can give a case its own argv (`Case.Args`) and its own standard
+input (`Case.Stdin`), and it still cannot give one a *fourth* descriptor.
+Every case is run by one harness that builds one `exec.Cmd`, and nothing
+in a Case says "and open this on 3" — so the whole of what a shell does
+with a descriptor its caller opened is outside what `make oracle` can
+re-run. The obvious workaround makes it worse: a snippet could invoke
+`"$0"` recursively with a redirection, but one panel column is deliberately
+invoked with `argv[0]` of `sh`, and `"$0"` there is whatever `/bin/sh`
+happens to be on the machine — bash on macOS, dash on Debian. That is the
+mislabeled-column trap `MustReport` exists to prevent, reintroduced by a
+snippet.
+
+So it is prose, measured and re-measured against bash 5.3, bash 3.2, dash,
+ksh93 and zsh (macOS, 2026-09-05). The invocation throughout is
+`echo hello | <shell> 3<&0 case.sh`, which opens descriptor 3 on the pipe
+before the shell starts:
+
+    exec <&3; read x; echo "got:$x"        got:hello — unanimous
+    read x <&3; echo "got:$x"              got:hello — unanimous
+    exec 4<&3; read x <&4                  got:hello — unanimous
+    exec 3<&3; read x <&3                  got:hello — unanimous
+    read x <&7                             7: bad file descriptor — unanimous
+    exec 3<&-; read x <&3                  3: bad file descriptor — unanimous
+    exec 3>&-; read x <&3                  3: bad file descriptor — unanimous,
+                                           and the close reports 0 whichever
+                                           direction it is written
+    exec 3<&-; exec 3<&-                   0 — closing a closed one is not an
+                                           error, as closing an unopened one
+                                           is not
+    sh -c 'read y <&3'                     the child reads it — unanimous
+    exec 3<&-; sh -c 'read y <&3'          the child finds it closed — unanimous
+    exec 9<&3 3<&-; sh -c '… >&3'          the same, with the descriptor moved
+                                           rather than dropped
+    exec sh -c 'read y <&3'                the replacement reads it — unanimous
+
+Nothing splits the panel, which is the finding: an inherited descriptor is
+an ordinary member of the table from the moment the shell starts, and every
+question that has an answer for `exec 3<file` has the same answer for one
+the caller opened. There is no axis here, so no preset gains a field — see
+"Rules for adding an axis": a unanimous answer is a *behavior*, and asking
+about it would refuse the construct in the core over a question that
+decides nothing.
+
+Two things about it are ours rather than the panel's, because a shell
+written in Go has to rebuild what fork and exec give a shell in C. The
+descriptors have to be found, and close-on-exec is the discriminator: the
+Go runtime opens every descriptor of its own close-on-exec, so one that
+would survive an exec is one the process was handed. And they have to be
+found by the *binary* rather than by the interpreter — `interp` is a
+library, and a Runner embedded in some other program would otherwise
+publish that program's own files to a script it was asked to interpret.
+`interp.Runner.InheritedFiles` is therefore a fact the front end hands in,
+laid out exactly as the outbound table is: entry i is descriptor 3+i, and
+a gap is a number nothing arrived on.
+
 ## An axis that is only about one of two names
 
 `typeset` and `local` do the same thing and do not have the same rule.
@@ -2303,6 +2360,80 @@ zsh's at 127 — and ksh93's *silence at 0* (`WaitReportsAMissingJob`).
 `kill %9` is its own complaint, not a malformed pid
 (`Diagnostics.KillNoSuchJob`) — and real ksh93 dies of it, a segmentation
 fault this engine deliberately does not reproduce.
+
+**`jobs`' option letters** were read and thrown away until #469. No case
+in the corpus passed the builtin an option, so `jobs -p` printed the
+whole listing and `kill $(jobs -p)` killed nothing — the failure mode an
+ignored option always is, and a sharper one here than elsewhere: a name
+`IsBuiltin` recognizes never reaches the exec seam, so a builtin that
+misreads its options *shadows* the program on the machine rather than
+falling through to it.
+
+Oracle runs, 2026-09-05. The letter sets are not nested, so they are
+`Semantics.JobsOptions` rather than one string in the engine:
+
+| letter | dash | bash 5.3 / 3.2 | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `-l` | listing + id | listing + id | listing + id | listing + id |
+| `-p` | ids alone | ids alone | ids alone | listing + group id |
+| `-r` | illegal option | running only | unknown option | running only |
+| `-s` | illegal option | stopped only | unknown option | stopped only |
+| `-n` | illegal option | changed since | since last notice | bad option |
+| `-x` | illegal option | run a command | unknown option | bad option |
+| `-d` `-z` `-Z` | illegal option | invalid option | unknown option | zsh's own |
+| a jobspec | yes | yes | yes | yes |
+
+Implemented: `-l`, `-p`, `-r`, `-s`, and jobspec operands. Three things
+came out of the measurement that the issue did not have:
+
+- **`-l` and `-p` are exclusive and the last one given wins** —
+  `jobs -pl` is the long listing and `jobs -lp` the ids, in dash, bash
+  and ksh93 alike. Unanimous, so not an axis.
+- **Operands settle their own order and keep their own numbers.**
+  `jobs %2 %1` lists 2 then 1 in all five, including the two whose bare
+  listing starts from the newest — so the newest-first rotation applies
+  only to a listing nobody asked particular jobs for. And each row
+  carries the *job's* number: `jobs %2` printed `[1]` here before this,
+  because a listing of one job counted from the start of the slice it
+  had been handed.
+- **A bad spec is reported after the rows written before it**, which was
+  the other way around.
+
+Two axes, asked where the panel splits:
+
+- `JobsPidsOnlyOption` — whether `-p` is the process ids and nothing
+  else. dash, bash and ksh93 yes; zsh reads the same letter as the job's
+  process *group* and prints its ordinary rows, which is why
+  `kill $(jobs -p)` is a bash idiom rather than a portable one.
+- `JobsStateFiltersAccumulate` — `jobs -rs`, both filters at once: zsh
+  lists a job in either state, bash lets the last letter decide. Asked
+  only when both letters arrive, because one alone means the same thing
+  in both, and the two dialects without the letters cannot reach it.
+
+And one rule that is neither: **a listing that was not a listing of
+states does not finish with a job.** Measured in bash, `jobs -p` and
+`jobs -r` both leave a job that has ended for the next bare `jobs` to
+report, where `jobs` and `jobs -l` consume it.
+
+Deliberately out of scope, refused by name through
+`UnimplementedOptionLetters` rather than accepted and dropped:
+
+- **`-n`** (bash, ksh93) needs a record of what the shell has already
+  reported, *and* the two shells do not agree on what it means: a job
+  that has only just started is a change in bash and is not one in
+  ksh93. Two features behind one letter.
+- **`-x`** (bash) is not a listing at all — it runs a command with the
+  job specs among its arguments replaced by process ids.
+- **`-d`, `-z`, `-Z`** (zsh) are the job's directory and the process
+  title, neither of which this engine holds.
+
+Two divergences are recorded rather than modeled. A job with no process
+of its own — a builtin or a compound command, which runs on a cloned
+Runner here where a real shell forks — is left out of a `-p` listing
+entirely, because that listing is written to be *used* and a `0` in it
+would send `kill` at the whole process group. And ksh93 alone finishes
+with a job after `jobs -p`, where dash and bash keep it for the next
+listing; the engine follows the two that agree.
 
 **`wait -n`** is bash's: block until whichever job finishes first, report
 its status, 127 in silence with no jobs at all

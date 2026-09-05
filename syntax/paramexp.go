@@ -164,8 +164,21 @@ type ParamExpr struct {
 	// Bad marks an expansion whose operator the grammar did not recognize,
 	// in a dialect that diagnoses that when the expansion is reached rather
 	// than when it is read. Src holds the inside of the braces for the
-	// report; every other field on a Bad node is meaningless.
+	// report; every other field on a Bad node is meaningless — except Name
+	// and Index, which are read before the operator is and stay filled in.
 	Bad bool
+	// BadTransform narrows Bad to the `@` family in a grammar that *has* the
+	// family: the operator was read as `@` and what followed it is not one
+	// of the letters. Every other unreadable operator leaves this false,
+	// including `@` in a grammar without the family, where the whole
+	// construct is unknown rather than the letter.
+	//
+	// The distinction is not cosmetic. Where the family exists, a bad letter
+	// is a failure of the *expansion* — checked against the value, at the
+	// point the value is read — and it carries the status a failed expansion
+	// carries, while every other unreadable operator is a failure to read
+	// the word. Measured: the two exit differently from the same invocation.
+	BadTransform bool
 	// Src is the raw text between the braces, kept for the diagnostic.
 	Src string
 
@@ -280,7 +293,12 @@ func (p *Parser) parseParamExp(src string, start Pos) *ParamExpr {
 			// it `${x@Q}: bad substitution` only when the expansion is
 			// reached, while `${x^^}` in the same branch is a parse-time
 			// syntax error there.
+			//
+			// A grammar that *has* the family marks the narrower failure on
+			// the node as well: there the letter is the only thing wrong,
+			// and the run decides what to do about it against the value.
 			e.Bad, e.Src = true, src
+			e.BadTransform = p.dialect.ParamTransformations && s[0] == '@'
 			return e
 		}
 		// The operator itself travels with the failure: one dialect does not

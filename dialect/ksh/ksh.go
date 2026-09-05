@@ -460,7 +460,12 @@ func Diagnostics() interp.Diagnostics {
 		// defers to run time — measured, `${x@Q}` in a branch never taken is
 		// silent — and when reached it is reported as a bad substitution
 		// after all, not with the parse wording above.
-		BadSubstitutionAtRun:   "${%[1]s}: bad substitution",
+		// The whole word as it was written, quotes and all: `echo
+		// "[${x@QQ}]"` is refused as `"[${x@QQ}]": bad substitution` and
+		// `echo pre${x@QQ}post` as `pre${x@QQ}post: bad substitution`, so
+		// what is named is the source of the word rather than the `${…}`.
+		BadSubstitutionAtRun:   "%[1]s: bad substitution",
+		BadSubstitutionNames:   interp.NamesTheWholeWord,
 		FunctionNameInvalid:    "%[1]s: invalid function name",
 		FunctionNameDiscipline: "%[1]s: invalid discipline function",
 		SyntaxUnexpected:       "syntax error at line %[3]d: `%[1]s' unexpected",

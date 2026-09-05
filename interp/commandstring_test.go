@@ -65,7 +65,7 @@ func cmdStringStatus(t *testing.T, src string, commandString bool, answer int) i
 	var buf strings.Builder
 	sem := PosixSemantics()
 	sem.FatalErrorStatusIsOne = Yes
-	dg := Diagnostics{UnsetParameterStatusFromCommandString: answer}
+	dg := Diagnostics{ExpansionFailureStatusFromCommandString: answer}
 	r := &Runner{
 		Semantics: &sem, Diagnostics: &dg, Name: "sh", CommandString: commandString,
 		Stdout: &buf, Stderr: &buf,

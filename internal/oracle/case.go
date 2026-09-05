@@ -2633,6 +2633,26 @@ echo "st=$?"`,
 		Why:     "the operator is @ followed by one letter: doubling a letter that is valid on its own is a bad substitution, so the family cannot be extended by repetition the way zsh's (q) can. And bash checks the letter only once it has a value — an *unset* name yields empty and status 0 for the very same spelling, so a probe that forgets to set the variable measures nothing. The three shells without the family reject both",
 	},
 	{
+		ID: "param/bad-substitution-names-the-word", Category: "parameter expansion",
+		Snippet: `x=a; echo "pre${x@QQ}post"`,
+		Why:     "what the sentence names is the *word*, not the ${…} inside it: bash writes `pre${x@QQ}post: bad substitution` and ksh93 the same word in its own quotes, while dash and zsh name nothing at all — three answers across the four. One command, because the first failure ends the line",
+	},
+	{
+		ID: "param/bad-substitution-names-only-one-quoting", Category: "parameter expansion",
+		Snippet: `x=a; echo 'lit'"${x@QQ}"`,
+		Why:     "the same question where the word changes quoting in the middle, which is what separates the two shells that name a word: bash stops at the change and blames ${x@QQ} alone, ksh93 blames 'lit'\"${x@QQ}\" whole. A separate row because the first bad word ends the command, so the two spellings cannot share one",
+	},
+	{
+		ID: "param/bad-substitution-stops-at-the-first", Category: "parameter expansion",
+		Snippet: `x=a; printf "[%s]" "${x@QQ}" "${x@ZZ}" "${x@YY}"; echo " after"`,
+		Why:     "one diagnostic per command and not one per bad word — every column abandons the command at the first expansion it cannot answer. This implementation expanded the remaining words and reported each of them, which is four lines where a script's log expects one",
+	},
+	{
+		ID: "param/an-unset-name-stops-at-the-first-too", Category: "parameter expansion",
+		Snippet: `set -u; printf "[%s]" "$a" "$b"; echo " after"`,
+		Why:     "the same rule reached through a different failure: `set -u` on two unset names names only the first. Kept beside the bad-substitution row because the two shared one cause — the command expanded every word before deciding not to run",
+	},
+	{
 		ID: "param/an-array-length-without-a-subscript", Category: "parameter expansion",
 		Snippet: `a=(hello by z); echo "${#a[@]} ${#a}"`,
 		Why:     "zsh counts the elements for a bare ${#a}; bash and ksh93 measure element zero — probed with distinct lengths, because (one two three) hides the difference behind a three",

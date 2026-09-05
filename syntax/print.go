@@ -38,6 +38,56 @@ func Print(f *File) string {
 // PrintCommand renders one command, which is what a function's body is.
 func PrintCommand(c Command) string { return PrintWith(c, Layout{}) }
 
+// PrintWord renders one word as source that parses to the same word, quotes
+// and all.
+//
+// A diagnostic wants this: a grammar that names the word an unreadable
+// expansion sits in has to be able to say the word, and by the time anything
+// has failed the word has been taken apart into spans.
+func PrintWord(w *Word) string {
+	if w == nil {
+		return ""
+	}
+	var p printer
+	p.word(w)
+	return p.b.String()
+}
+
+// PrintWordQuotingRun renders the run of spans around index i that share its
+// quoting, *without* the quote characters that surrounded the run.
+//
+// The run rather than the word, because that is the unit one grammar's
+// diagnostics name: `echo 'lit'"${x@QQ}"` blames `${x@QQ}` alone while `echo
+// "pre${x@QQ}post"` blames all of `pre${x@QQ}post`. Both are one word, and
+// what separates them is that the first changes quoting in the middle.
+//
+// Literal text goes in as it stands. There are no quotes around the result to
+// protect anything from, so escaping it would add characters that were never
+// written — `"\"${x@QQ}\""` names `"${x@QQ}"`, measured.
+func PrintWordQuotingRun(w *Word, i int) string {
+	if w == nil || i < 0 || i >= len(w.Spans) {
+		return ""
+	}
+	q := w.Spans[i].Quoting
+	lo, hi := i, i+1
+	for lo > 0 && w.Spans[lo-1].Quoting == q {
+		lo--
+	}
+	for hi < len(w.Spans) && w.Spans[hi].Quoting == q {
+		hi++
+	}
+	var p printer
+	p.raw = true
+	for j := lo; j < hi; j++ {
+		if w.Spans[j].Kind == Literal {
+			p.str(w.Spans[j].Value)
+			continue
+		}
+		p.withNext(w.Spans, j, func() { p.span(w.Spans[j]) })
+	}
+	return p.b.String()
+}
+
 // Layout is how a printed block is arranged.
 //
 // Every field is a junction where the shells differ, and the type exists so

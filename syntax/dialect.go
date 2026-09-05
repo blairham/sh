@@ -358,15 +358,18 @@ type Dialect struct {
 	// ArithExplicitBase enables the `base#digits` form. Absent from dash.
 	ArithExplicitBase bool
 
-	// ArithLeadingZeroIsOctal decides whether `0100` is sixty-four or one
-	// hundred. It is true everywhere but zsh, and it is the quietest
-	// divergence measured: nothing warns, both answers are plausible
-	// numbers, and file modes are written with leading zeros.
+	// Whether `0100` is sixty-four or one hundred is deliberately *not* a
+	// field here. A literal is kept as written, so the tree bakes in no
+	// answer and nothing in the parser has the question to ask; the answer
+	// is `interp.Semantics.ArithLeadingZeroIsOctal`, which evaluation reads.
 	//
-	// Nothing in the parser reads this — a literal is kept as written, so
-	// the tree does not bake in an answer — but the field belongs with the
-	// others, and evaluation needs it.
-	ArithLeadingZeroIsOctal bool
+	// A `syntax.Dialect` field of the same name stood here and was removed
+	// (#564). Nothing read it, and being unread it was also *wrong*: it was
+	// documented as "true everywhere but zsh" while the `zsh` preset — which
+	// starts from Core, where it was set — carried true, the opposite of
+	// zsh's own answer. A flag no parser consults cannot be corrected by
+	// anything failing, so it drifts, and it is indistinguishable from one
+	// whose consumer was lost in a refactor.
 
 	// ArithFloat enables floating point, which ksh93 and zsh have and POSIX
 	// does not.
@@ -592,11 +595,10 @@ func Core() Dialect {
 		ParamSubstitution:       true,
 		ParamSubstring:          true,
 
-		ArithIncDec:             true,
-		ArithComma:              true,
-		ArithExponent:           true,
-		ArithExplicitBase:       true,
-		ArithLeadingZeroIsOctal: true,
+		ArithIncDec:       true,
+		ArithComma:        true,
+		ArithExponent:     true,
+		ArithExplicitBase: true,
 	}
 }
 

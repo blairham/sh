@@ -1625,6 +1625,17 @@ type Diagnostics struct {
 	// braces stripped.
 	FdVariableWithoutADescriptor string
 
+	// MultiDigitDuplicationTarget is `>&10` in the dialect that will not
+	// take a duplication target wider than one digit — see
+	// Semantics.MultiDigitDuplicationTargetIsAnError. One verb: the target as
+	// it was written.
+	//
+	// The one shell that refuses names nothing at all and words it as a
+	// syntax error, which is why the field exists rather than a shared
+	// sentence with a hole in it: `Syntax error: Bad fd number`, said at the
+	// line the redirection is on, with no number and no file in it.
+	MultiDigitDuplicationTarget string
+
 	// FdNumberOverLimit is a redirection whose descriptor number is at or
 	// above the process's limit on open files, where the dialect refuses one
 	// — see Semantics.FdNumberBoundedByOpenFileLimit. One verb: the number.

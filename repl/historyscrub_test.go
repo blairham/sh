@@ -95,7 +95,7 @@ func TestTheNoticeSaysWhyAndWhich(t *testing.T) {
 	var pending strings.Builder
 
 	line := "export AWS_ACCESS_KEY_ID=" + fakeKeyID
-	if _, _, ready := sh.take(&pending, sh.recording(e.remember), line); !ready {
+	if _, _, _, ready := sh.take(&pending, sh.recording(e.remember), line); !ready {
 		t.Fatal("a complete line was not ready")
 	}
 	notice := out.String()
@@ -134,7 +134,7 @@ func TestTheNoticeSaysWhyAndWhich(t *testing.T) {
 	// An ordinary line says nothing at all. A notice on a line that is fine
 	// is the same failure as a missing one, in the other direction.
 	out.Reset()
-	if _, _, ready := sh.take(&pending, sh.recording(e.remember), "grep -r token ."); !ready {
+	if _, _, _, ready := sh.take(&pending, sh.recording(e.remember), "grep -r token ."); !ready {
 		t.Fatal("a complete line was not ready")
 	}
 	if out.Len() != 0 {

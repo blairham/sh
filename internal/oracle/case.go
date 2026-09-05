@@ -4067,6 +4067,17 @@ echo unreachable`,
 		Why:     "the same rule on an ordinary array, which is where it belongs: zsh joins and the other two take the first element",
 	},
 	{
+		// The doubling loop is how a builtin is made to write more than a
+		// pipe will hold using nothing but the shell: 2^17 bytes against a
+		// buffer of 64K, so the write must block and the reader has already
+		// gone. A fixed literal that large would be a corpus file nobody can
+		// read, and an external `yes` would be measuring the *command's*
+		// death rather than a builtin's.
+		ID: "pipeline/a-builtin-writing-into-a-pipe-nobody-reads", Category: "pipeline status",
+		Snippet: `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; { echo "$v"; echo reached >&2; } | true; echo after`,
+		Why:     "the quiet death, and the one no other case reaches: a builtin whose output goes into a pipe nobody is reading is killed by SIGPIPE where it stands, so `reached` never runs and nothing is said about it — unanimous in all four, and the point of the `>&2` is that a shell which merely swallowed the write would still print it. This is `yes | head` seen from the writing end, and it is the case the corpus was missing while `printf x | { read -d : v; }` measured the same thing by accident: there the write is small enough to fit, so whether it beats the reader's exit is the machine's to decide and the score wandered by one",
+	},
+	{
 		ID: "cmd/close-brace-as-an-ordinary-word", Category: "command language",
 		Snippet: `echo }`,
 		Why:     "`}` is reserved only where a command may begin in three of the four, so as an argument it is an ordinary brace — and in zsh it is reserved wherever a word may stand, which is a parse error here and is the same rule that lets `{ echo a }` close without a terminator",

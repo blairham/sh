@@ -175,6 +175,10 @@ func Semantics() interp.Semantics {
 	s.UlimitHasProcessCount = interp.No
 	s.UlimitSetsBothLimits = interp.Yes
 	s.BadOptionToSpecialBuiltinFatal = interp.Yes
+	// And so is a redirection that cannot be made, which is POSIX's rule
+	// verbatim: `exec 3>/nope/x` stops the script, at 2 like every other
+	// fatal error here.
+	s.RedirectErrorOnSpecialBuiltinFatal = interp.Yes
 	s.LocalOutsideAFunctionIsAnError = interp.Yes
 	s.LocalOutsideAFunctionIsFatal = interp.Yes
 	// A special builtin's failure is fatal, and a bad name is one — for all

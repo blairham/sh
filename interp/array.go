@@ -99,6 +99,24 @@ func (r *Runner) storeArray(name string, a Array) {
 	}
 }
 
+// elemPos resolves a subscript as written to a position in the store.
+//
+// The subscript's meaning is the dialect's — `a[5]` is the sixth element in
+// one shell and the fifth in another — so this is where the base is asked, at
+// the edge where a script wrote a number. A negative subscript asks nothing:
+// `a[-1]=x` replaces the last element in all three shells with arrays, the one
+// whose subscripts count from 1 included, so the base plays no part in it.
+// Measured against a sparse array, the end it counts from is one past the
+// highest *subscript*, not the element count.
+func (r *Runner) elemPos(a Array, idx int) (int, bool) {
+	if idx < 0 {
+		pos := a.pastTheEnd() + idx
+		return pos, pos >= 0
+	}
+	pos := idx - r.arrayBase()
+	return pos, pos >= 0
+}
+
 // setArrayElem assigns one element. Any subscript at or above the base is
 // legal, whether or not anything below it has been assigned, and a negative
 // one counts back from the end.
@@ -107,23 +125,32 @@ func (r *Runner) setArrayElem(name string, idx int, value string) {
 	if a == nil {
 		a = Array{}
 	}
-	// The subscript's meaning is the dialect's — `a[5]` is the sixth element
-	// in one shell and the fifth in another — so this is where the base is
-	// asked, at the edge where a script wrote a number. A negative subscript
-	// asks nothing: `a[-1]=x` replaces the last element in all three shells
-	// with arrays, the one whose subscripts count from 1 included, so the
-	// base plays no part in it. Measured against a sparse array, the end it
-	// counts from is one past the highest *subscript*, not the element count.
-	pos := idx - r.arrayBase()
-	if idx < 0 {
-		pos = a.pastTheEnd() + idx
-	}
-	if pos < 0 {
+	pos, ok := r.elemPos(a, idx)
+	if !ok {
 		r.diagf("%s[%d]: index out of range\n", name, idx)
 		return
 	}
 	a[pos] = value
 	r.storeArray(name, a)
+}
+
+// appendArrayElem is `a[i]+=v`: the value joins what the element already
+// holds rather than replacing it.
+//
+// A different operation from `a+=(v)`, which adds an element after the last
+// one, and the two are told apart by the subscript alone. Measured unanimous
+// in the three shells with arrays, the one that counts from 1 included — so
+// the base is asked here exactly as it is for a plain element assignment and
+// nothing else about the form is a question.
+//
+// An unset element has nothing to append to, so the same spelling stores the
+// value as it stands: `a=(x y); a[5]+=Q` leaves `Q` at subscript 5, not an
+// error and not an empty string joined to anything.
+func (r *Runner) appendArrayElem(name string, idx int, value string) {
+	if pos, ok := r.elemPos(r.Arrays[name], idx); ok {
+		value = r.Arrays[name][pos] + value
+	}
+	r.setArrayElem(name, idx, value)
 }
 
 // appendArray adds elements after the highest subscript.

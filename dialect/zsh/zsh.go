@@ -164,6 +164,7 @@ func Semantics() interp.Semantics {
 	// spelling is not modeled, so here it reads the word after it as its
 	// seconds.
 	s.ReadOptions = "rsnpAd:t:u:"
+	s.ReadZeroTimeout = interp.ReadZeroTimeoutFinishesWhatItStarted
 	s.ArithLeadingZeroIsOctal = interp.No
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes

@@ -2063,6 +2063,44 @@ The letters themselves diverge before the behaviors do:
   The same input under `-N 5` reports 1 in both, bash keeping `ab` and
   ksh93 assigning nothing — `ReadExactCountKeepsPartial`. Wholly empty
   input is st=1 with nothing assigned everywhere.
+- **A timeout of zero is not a timeout.** `-t 0` is a question about the
+  state of the stream, and every dialect with the letter treats it as one.
+  Measured three ways (oracle runs, 2026-09-05): a whole line already
+  waiting, nothing waiting at all, and `ab` waiting with the rest of the
+  line half a second behind it.
+
+        shell   line waiting     nothing   `ab` waiting
+        bash    0, nothing read  1         0, nothing read
+        ksh93   0, line read     1         1, nothing kept
+        zsh     0, line read     1         0, `abc` read
+        dash    has no -t at all
+
+  The first two columns are the same everywhere, which is why this looked
+  like one behavior. The third separates them, and so does what happens
+  next: after bash's `-t 0` the following `read` still finds the first
+  line, and after ksh93's and zsh's it finds the *second*. That is the
+  difference that matters to a script — a shell that polls can be asked
+  the same question in a loop, and a shell that reads eats what it was
+  watching for one line at a time.
+
+  It is `Semantics.ReadZeroTimeout`, three named answers plus the refusal,
+  asked only where the timeout is written as zero. The end of a stream is
+  *ready* to the shell that polls — a read there returns at once, with
+  nothing — so an empty file gives status 0 there and 1 in the two that
+  read (measured: `read/a-zero-timeout-and-what-it-does-to-the-stream`,
+  `read/a-zero-timeout-at-the-end-of-the-input`).
+
+  The status for "nothing waiting" is 1 and not the number an expired
+  `-t` reports, which is the second reason this is not a timeout: the
+  shell that polls answers 1 here and 142 for a deadline that ran out.
+
+  Answering it needs the one question a shell asks a stream without
+  touching it — whether a read would return at once — and a read is
+  exactly what would destroy the thing being asked about. `interp`
+  asks the descriptor with a zero-length wait and never reads
+  (`inputready.go`); anything a Runner holds in memory answers
+  immediately by construction and counts as ready, which is also the
+  answer where a descriptor cannot be asked.
 - **Silence.** `printf 'x\n' | read -s v` reads x, prints nothing and
   reports 0 in bash, ksh93 and zsh: away from a terminal `-s` is a no-op
   that must still parse. dash refuses it.

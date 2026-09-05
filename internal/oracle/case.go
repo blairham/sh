@@ -1648,6 +1648,16 @@ var Corpus = []Case{
 		Why:     "every other read case feeds a pipe or a here-string built inside the snippet, so what the *shell* was started with was never read at all. Here it is the shell's own input: two lines arrive in order and the third read finds the end, reporting 1 with the variable cleared rather than left holding the line before",
 	},
 	{
+		ID: "read/a-zero-timeout-and-what-it-does-to-the-stream", Category: "builtins",
+		Snippet: `printf "a\nb\n" > f; exec < f; read -t 0 v; echo "st=$? v=[$v]"; read w; echo "w=[$w]"`,
+		Why:     "a timeout of zero is not a deadline that has already passed: one shell answers whether input is waiting and reads nothing, so the next read still finds the first line, while two read the line and leave the second for it. The second read is the whole point — the status alone cannot tell a poll from a read, and a poll that consumed what it reported would have a loop eating its own input. The input is a file rather than a pipe because a file is always ready, which makes the case a fact rather than a race",
+	},
+	{
+		ID: "read/a-zero-timeout-at-the-end-of-the-input", Category: "builtins",
+		Snippet: `: > f; exec < f; read -t 0 v; echo "st=$? v=[$v]"`,
+		Why:     "the end of a stream is *ready* to the shell that polls — a read there would return at once, with nothing — so it reports success where the shells that read report the end of input. Two answers to the same question from one empty file",
+	},
+	{
 		ID: "redir/a-target-that-is-not-one-word", Category: "redirection",
 		Snippet: `e="a b"; echo hi > $e; echo "st=$?"`,
 		Why:     "a redirection target is expanded and then, in three of the four, neither split nor matched — so `> $e` writes to a file called `a b`. bash expands it as an ordinary word and refuses anything that is not exactly one, naming the target *as written*. Doing bash's expansion and taking the first field is the answer nobody gives, and it wrote to `a`",
@@ -1958,6 +1968,26 @@ var Corpus = []Case{
 		ID: "array/removing-one-element", Category: "expansion",
 		Snippet: `a=(p q r); unset "a[2]"; echo "n=${#a[@]} all=[${a[@]}]"`,
 		Why:     "the same question reached from the other side, and `unset a[i]` had been doing nothing at all: the subscript was read as part of the name, so a name that was never in the table was deleted from it. What the hole then looks like is the same axis",
+	},
+	{
+		ID: "array/appending-to-an-element", Category: "expansion",
+		Snippet: `a=(x y); a[-1]+=Q; printf "[%s]" "${a[@]}"; echo; a+=(z); printf "[%s]" "${a[@]}"; echo`,
+		Why:     "`+=` is two operations sharing a spelling and the subscript is what tells them apart: with one it joins the element it names, without one it adds an element after the last. Both halves in one case because the bug was that the first did what neither does — it replaced the element — and a case showing only the array form would have passed throughout. The subscript is `-1` so the case says nothing about the array base: the last element is the last element in all three shells with arrays. bash 3.2 refuses it, which is about having no negative subscripts rather than about appending — `array/appending-to-an-element-inherits-the-base` is the row it answers",
+	},
+	{
+		ID: "array/appending-to-an-element-inherits-the-base", Category: "expansion",
+		Snippet: `a=(x y); a[1]+=Q; printf "[%s]" "${a[@]}"; echo`,
+		Why:     "the base axis reaches the append: the same numeral names the second element in two shells and the first in the third, exactly as a plain `a[1]=Q` does. Appending is therefore not a form with a subscript rule of its own, which is the claim worth pinning before anything special-cases it",
+	},
+	{
+		ID: "array/appending-to-an-unset-element", Category: "expansion",
+		Snippet: `a[3]+=Q; echo "[${a[3]}]"`,
+		Why:     "an element that was never assigned has nothing to append to, and all three place the value as it stands rather than refusing. Unanimous, and it is the half a fix is most likely to get wrong by reading an absent element as an error instead of as an empty one",
+	},
+	{
+		ID: "array/appending-to-an-associative-element", Category: "expansion",
+		Snippet: `typeset -A m; m[k]+=x; m[k]+=Q; echo "[${m[k]}]"`,
+		Why:     "the declared form appends by key just as the indexed form appends by subscript — unanimous in the three that have the attribute. Both assignments are written with `+=` so that the first one also stands as the unset-key case, and so that dash, which has neither, reports the two identically",
 	},
 	{
 		ID: "assoc/a-string-subscript", Category: "expansion",

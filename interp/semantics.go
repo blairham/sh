@@ -126,6 +126,12 @@ type Semantics struct {
 	// coprocess as the source in ksh93 and zsh. Empty means `r`, the one
 	// letter POSIX gives the builtin.
 	ReadOptions string
+	// ReadZeroTimeout is what `read -t 0` asks of the stream — a poll, a
+	// read of what is already waiting, or a read that commits once it has
+	// begun. Asked only where `-t 0` is actually written; every other
+	// timeout is a deadline and needs no answer. See ReadZeroTimeoutStyle
+	// for the measurements.
+	ReadZeroTimeout ReadZeroTimeoutStyle
 	// ReadPartialCountSucceeds decides `read -n N` when the input ends
 	// after some but fewer than N characters: ksh93 calls the read a
 	// success and bash reports 1, both keeping what arrived. Asked only

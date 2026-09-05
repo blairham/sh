@@ -166,6 +166,7 @@ func Semantics() interp.Semantics {
 	// process` and 1, the variables untouched. A short -n is a success
 	// here; a short -N reports 1 and leaves the variable empty.
 	s.ReadOptions = "rspAd:n:N:t:u:"
+	s.ReadZeroTimeout = interp.ReadZeroTimeoutTakesWhatIsWaiting
 	s.ReadPartialCountSucceeds = interp.Yes
 	s.ReadExactCountKeepsPartial = interp.No
 	// typeset in a keyword function hides the caller's value, as bash's

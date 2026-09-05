@@ -1120,6 +1120,21 @@ var Corpus = []Case{
 		Why:     "a command killed by a signal has no exit status of its own, so the signal goes in the number: 128 + 13 in bash, dash and zsh, and 256 + 13 in ksh93. PIPE is the signal to ask with — it is one of only two the panel does not announce (INT is the other), so the case is about the number and not about three wordings, and unlike INT it does not end the script in ksh93",
 	},
 	{
+		ID: "signal-death/the-shell-dies-by-the-signal-rather-than-exiting", Category: "traps and exit",
+		Snippet: `kill -TERM $$; echo after`,
+		Why:     "the discipline the record could not see until it kept the signal: a shell with no trap for a fatal signal does not exit with 128 plus the number, it *re-raises the signal at itself*, so its own caller is told the shell was killed and by which one. `sh -c 'kill -TERM $$'; echo $?` says 143 either way, which is why every earlier case had to nest a child and read the parent shell's arithmetic instead of the death",
+	},
+	{
+		ID: "signal-death/an-uncatchable-signal-ends-it-outright", Category: "traps and exit",
+		Snippet: `kill -KILL $$; echo after`,
+		Why:     "the same death by a signal no shell can trap, handle or re-raise deliberately — the kernel ends it — which is what says the row above is the shell's own discipline and not simply what happens to a process that is signaled",
+	},
+	{
+		ID: "signal-death/a-handled-signal-is-not-a-death", Category: "traps and exit",
+		Snippet: `trap "echo caught" TERM; kill -TERM $$; echo after`,
+		Why:     "the control: the same signal with a trap for it runs the handler and the shell carries on to exit normally, so the two rows above are about the *absence* of a handler rather than about the signal arriving",
+	},
+	{
 		ID: "signal-death/an-ordinary-failure-is-untouched", Category: "traps and exit",
 		Snippet: `sh -c 'exit 3'; echo "st=$?"`,
 		Why:     "a command that exits by itself reports what it exited with, unanimously — which is what says the encoding above is about being killed rather than about failing",

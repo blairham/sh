@@ -362,6 +362,31 @@ type Semantics struct {
 	// exiting.
 	ExitTrapRunsOnSignalDeath Answer
 
+	// QuitIgnoredWhenNotInteractive makes an untrapped SIGQUIT do nothing at
+	// all rather than end the shell.
+	//
+	//	kill -QUIT $$; echo after
+	//
+	// prints after and exits 0 in bash 5.3 and zsh, and kills the shell with
+	// SIGQUIT in dash and ksh93. It is asked only where those disagree — an
+	// untrapped QUIT in a shell that is not interactive — because every other
+	// case is unanimous: all five in the panel ignore it with `-i`, and a QUIT
+	// with a trap runs the handler everywhere.
+	//
+	// Two things are worth recording beside the split. The first is that this
+	// is a *version* divergence as much as a shell one: bash 3.2 dies by
+	// SIGQUIT where bash 5.3 ignores it, so the two bash columns of the corpus
+	// differ here and a claim about "bash" that does not say which build is
+	// incomplete. The second is that where it is ignored it is ignored
+	// properly rather than deferred — measured with a signal sent from another
+	// process, bash 5.3 and zsh survive that too.
+	//
+	// What `trap - QUIT` then means is a further question this does not
+	// answer, and the panel splits differently on it: after a handler is
+	// installed and removed again, bash 5.3 still ignores the signal and zsh
+	// dies by it.
+	QuitIgnoredWhenNotInteractive Answer
+
 	// ExitArgument is how strict `exit` is about what it is given, and it is
 	// an ordering rather than a side:
 	//

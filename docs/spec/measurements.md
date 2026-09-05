@@ -2313,6 +2313,9 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `signal-death/status-encodes-the-signal` | `st=141~after` | `st=141~after` | `st=141~after` | `st=141~after` | `st=269~after` | `st=141~after` |
 | `signal-death/the-shell-dies-by-the-signal-rather-than-exiting` | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* |
 | `signal-death/an-uncatchable-signal-ends-it-outright` | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* |
+| `signal-death/a-signal-with-no-meaning-of-its-own-is-fatal-too` | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* |
+| `signal-death/dying-by-a-signal-says-nothing` | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* |
+| `signal-death/quit-is-not-fatal-in-every-shell` | *(no output, killed by signal 3 (quit))* | `after` | `after` | *(no output, killed by signal 3 (quit))* | *(no output, killed by signal 3 (quit))* | `after` |
 | `signal-death/a-handled-signal-is-not-a-death` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
 | `signal-death/an-ordinary-failure-is-untouched` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` |
 | `umask/reads-the-mask` | `0022` | `0022` | `0022` | `0022` | `0022` | `022` |
@@ -2409,6 +2412,18 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `signal-death/an-uncatchable-signal-ends-it-outright` — the same death by a signal no shell can trap, handle or re-raise deliberately — the kernel ends it — which is what says the row above is the shell's own discipline and not simply what happens to a process that is signaled
   ```sh
   kill -KILL $$; echo after
+  ```
+- `signal-death/a-signal-with-no-meaning-of-its-own-is-fatal-too` — the same discipline for a signal the shell is not expected to have an opinion about: USR1 has no default meaning beyond ending the process, and every shell in the panel is killed by it. It is here because ours was not — Go's runtime forwards a signal it classifies as killing and silently discards the rest, so USR1, USR2, ALRM, PIPE, XCPU, XFSZ, VTALRM and PROF raised at ourselves did nothing and the shell hung waiting for a death that was never coming, at ten seconds of harness timeout each
+  ```sh
+  kill -USR1 $$; echo after
+  ```
+- `signal-death/dying-by-a-signal-says-nothing` — a shell killed by a signal writes no diagnostic of its own — both streams are empty in all four — and ABRT is the sharp way to ask, because it is one of the signals Go's runtime treats as a crash: it printed a full goroutine dump to standard error and exited 2 where a shell must print nothing at all and be killed by the signal. The same leak internal/panicguard exists to stop, arriving by another road
+  ```sh
+  kill -ABRT $$; echo after
+  ```
+- `signal-death/quit-is-not-fatal-in-every-shell` — the one fatal signal the panel disagrees about: bash 5.3 and zsh take QUIT's default action away and print after with status 0, where dash, ksh93 — and bash 3.2, so the two bash columns differ — are killed by it. Measured with a signal from another process too, so it is a disposition rather than a deferral, and it disappears with `-i`, where all five ignore it
+  ```sh
+  kill -QUIT $$; echo after
   ```
 - `signal-death/a-handled-signal-is-not-a-death` — the control: the same signal with a trap for it runs the handler and the shell carries on to exit normally, so the two rows above are about the *absence* of a handler rather than about the signal arriving
   ```sh

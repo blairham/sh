@@ -35842,6 +35842,50 @@
         "TimedOut": false
       }
     },
+    "signal-death/a-signal-with-no-meaning-of-its-own-is-fatal-too": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 30,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 30,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 30,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 30,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 30,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 30,
+        "TimedOut": false
+      }
+    },
     "signal-death/an-ordinary-failure-is-untouched": {
       "bash": {
         "Stdout": "st=3",
@@ -35927,6 +35971,94 @@
         "Stderr": "",
         "Status": -1,
         "Signal": 9,
+        "TimedOut": false
+      }
+    },
+    "signal-death/dying-by-a-signal-says-nothing": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 6,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 6,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 6,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 6,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 6,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 6,
+        "TimedOut": false
+      }
+    },
+    "signal-death/quit-is-not-fatal-in-every-shell": {
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 3,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 3,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": -1,
+        "Signal": 3,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
         "TimedOut": false
       }
     },

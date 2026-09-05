@@ -10,6 +10,13 @@ standard error after a bold **2>**. The two streams are captured apart,
 so a diagnostic that moved from one to the other shows up here as a
 changed cell rather than as no change at all. Newlines are shown as `~`.
 
+A case marked **(refusal)** is *graded* on the fact that the shell said
+no — same outcome, same standard output, and a diagnostic on standard
+error from both sides — rather than on the words it said no in, which
+are a dialect's own. Only the grading is relaxed: the cells below are
+what each shell actually printed, and the drift check still compares
+every byte of them.
+
 ## Panel
 
 | shell | build |
@@ -769,6 +776,11 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `jobs/dash-r-lists-the-running-ones` | `st=2` **2>** `<shell>: 1: jobs: Illegal option -r` | `[1]+  Running                    sleep 0.4 &~st=0` | `[1]+  Running                    sleep 0.4 &~st=0` | `[1]+  Running                 sleep 0.4 &~st=0` | `st=2` **2>** `<shell>: jobs: -r: unknown option~Usage: jobs [-lnp] [job ...]` | `[1]  + running    sleep 0.4~st=0` |
 | `jobs/dash-s-is-a-letter-two-shells-do-not-have` | `st=2` **2>** `<shell>: 1: jobs: Illegal option -s` | `st=0` | `st=0` | `st=0` | `st=2` **2>** `<shell>: jobs: -s: unknown option~Usage: jobs [-lnp] [job ...]` | `st=0` |
 | `jobs/an-option-no-shell-has` | `st=2` **2>** `<shell>: 1: jobs: Illegal option -Q` | `st=2` **2>** `<shell>: line 1: jobs: -Q: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]` | `st=2` **2>** `<shell>: line 1: jobs: -Q: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]` | `st=2` **2>** `<shell>: line 0: jobs: -Q: invalid option~jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]` | `st=2` **2>** `<shell>: jobs: -Q: unknown option~Usage: jobs [-lnp] [job ...]` | `st=1` **2>** `<shell>:jobs:1: bad option: -Q` |
+| `jobs/a-subshell-and-the-parents-jobs` | `no jobs` | `no jobs` | `no jobs` | `no jobs` | `the parent's job` | `no jobs` |
+| `jobs/a-pipeline-element-and-the-parents-jobs` | `no jobs` | `the parent's job` | `the parent's job` | `the parent's job` | `the parent's job` | `no jobs` |
+| `jobs/a-group-in-a-pipeline-and-the-parents-jobs` | `no jobs` | `no jobs` | `no jobs` | `no jobs` | `the parent's job` | `no jobs` |
+| `jobs/a-substitution-and-the-parents-jobs` | `no jobs` | `the parent's job` | `the parent's job` | `the parent's job` | `the parent's job` | `no jobs` |
+| `jobs/a-subshell-lists-a-job-it-started-itself` | `its own` | `its own` | `its own` | `its own` | `its own` | `its own` |
 | `jobs/two-job-specs-in-the-order-written` | `[2] + Running                    ~[1] - Running                    ` | `[2]+  Running                    sleep 0.5 &~[1]-  Running                    sleep 0.4 &` | `[2]+  Running                    sleep 0.5 &~[1]-  Running                    sleep 0.4 &` | `[2]+  Running                 sleep 0.5 &~[1]-  Running                 sleep 0.4 &` | `[2] +  Running                 <command unknown>~[1] -  Running                 <command unknown>` | `[2]  + running    sleep 0.5~[1]  - running    sleep 0.4` |
 | `read/a-failing-read-still-assigns` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` |
 | `read/a-final-line-without-a-newline` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` |
@@ -976,6 +988,26 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `jobs/an-option-no-shell-has` — the refusal itself: four wordings, two of them with a usage line naming the letters that shell really does have, and 2 everywhere but zsh. An option silently ignored is the failure this pins against
   ```sh
   jobs -Q; echo "st=$?"
+  ```
+- `jobs/a-subshell-and-the-parents-jobs` — ksh93 alone hands a subshell the jobs the shell around it started; bash, dash and zsh hand it an empty table. Through a file rather than by printing the id, because a process id is not the same twice — and with commands after the `( … )`, because a subshell that is the last thing a script does need not be a subshell at all: without them dash answers the parent's job instead
+  ```sh
+  sleep 0.4 & first=$!; (jobs -p) >s.txt; x=; read x <s.txt; case $x in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "something else";; esac; wait
+  ```
+- `jobs/a-pipeline-element-and-the-parents-jobs` — `jobs -p | cat` is the idiom the question is really about, and it splits the panel differently from the row above: bash and ksh93 list the parent's job here, dash and zsh list nothing. Two rows, two different pairs, which is why one yes-or-no cannot hold both
+  ```sh
+  sleep 0.4 & first=$!; jobs -p | cat >s.txt; x=; read x <s.txt; case $x in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "something else";; esac; wait
+  ```
+- `jobs/a-group-in-a-pipeline-and-the-parents-jobs` — the same pipeline with braces around the same builtin, and bash changes its answer: a simple command as an element keeps the parent's jobs there and a compound one does not. ksh93 still lists and dash and zsh still do not, so this is the row that says bash's answer is neither of the other two
+  ```sh
+  sleep 0.4 & first=$!; { jobs -p; } | cat >s.txt; x=; read x <s.txt; case $x in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "something else";; esac; wait
+  ```
+- `jobs/a-substitution-and-the-parents-jobs` — command substitution goes with the simple pipeline element rather than with the parentheses it is written like — bash and ksh93 list, dash and zsh do not. `cat <(jobs -p)` is measured the same way in the three shells that have it
+  ```sh
+  sleep 0.4 & first=$!; case "$(jobs -p)" in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "something else";; esac; wait
+  ```
+- `jobs/a-subshell-lists-a-job-it-started-itself` — the control for all four rows above: whatever a shell hands a subshell of the parent's table, a job the subshell starts for itself is listed there — unanimously. Without it an empty listing would be evidence that `jobs` does not work in a subshell rather than that the table is emptied on the way in
+  ```sh
+  sleep 0.4 & first=$!; (sleep 0.4 & jobs -p >s.txt; wait); x=; read x <s.txt; case $x in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "its own";; esac; wait
   ```
 - `jobs/two-job-specs-in-the-order-written` — operands settle the order themselves — `%2 %1` lists 2 then 1 in all five, including the two whose bare listing starts from the newest — and each row keeps the job's own number rather than counting from the start of the listing
   ```sh
@@ -3171,6 +3203,9 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `opt/command-tracking-has-two-long-names` | *(no output, status 2)* | `hashall=0~trackall=2` | `hashall=0` *(status 2)* | `hashall=0~trackall=1` | *(no output, status 2)* | `hashall=0~trackall=0` |
 | `opt/an-unknown-long-name-is-refused` | **2>** `<shell>: 1: set: Illegal option -o zzznosuch` *(status 2)* | `on=2~off=2` **2>** `<shell>: line 1: set: zzznosuch: invalid option name~<shell>: line 1: set: zzznosuch: invalid option name` | **2>** `<shell>: line 1: set: zzznosuch: invalid option name` *(status 2)* | `on=1~off=1` **2>** `<shell>: line 0: set: zzznosuch: invalid option name~<shell>: line 0: set: zzznosuch: invalid option name` | **2>** `<shell>: set: zzznosuch: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: zzznosuch` *(status 1)* |
 | `opt/an-unknown-letter-is-refused` | **2>** `<shell>: 1: set: Illegal option -q` *(status 2)* | `st=2~alive` **2>** `<shell>: line 1: set: -q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` | **2>** `<shell>: line 1: set: -q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` *(status 2)* | `st=2~alive` **2>** `<shell>: line 0: set: -q: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]` | **2>** `<shell>: set: -q: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: bad option: -q` *(status 1)* |
+| `opt/a-refused-letter-echoes-the-sign` | **2>** `<shell>: 1: set: Illegal option -q` *(status 2)* | `st=2` **2>** `<shell>: line 1: set: +q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` | **2>** `<shell>: line 1: set: +q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` *(status 2)* | `st=2` **2>** `<shell>: line 0: set: +q: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]` | **2>** `<shell>: set: +q: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: bad option: -q` *(status 1)* |
+| `opt/an-unknown-letter-at-an-invocation` | **2>** `<shell>: 0: Illegal option -q` *(status 2)* | **2>** `<shell>: -q: invalid option~Usage:	<shell> [GNU long option] [option] ...~	<shell> [GNU long option] [option] script-file ...~GNU long options:~	--debug~	--debugger~	--dump-po-strings~	--dump-strings~	--help~	--init-file~	--login~	--noediting~	--noprofile~	--norc~	--posix~	--pretty-print~	--rcfile~	--restricted~	--verbose~	--version~Shell options:~	-ilrsD or -c command or -O shopt_option		(invocation only)~	-abefhkmnptuvxBCEHPT or -o option` *(status 2)* | **2>** `<shell>: -q: invalid option~Usage:	<shell> [GNU long option] [option] ...~	sh [GNU long option] [option] script-file ...~GNU long options:~	--debug~	--debugger~	--dump-po-strings~	--dump-strings~	--help~	--init-file~	--login~	--noediting~	--noprofile~	--norc~	--posix~	--pretty-print~	--rcfile~	--restricted~	--verbose~	--version~Shell options:~	-ilrsD or -c command or -O shopt_option		(invocation only)~	-abefhkmnptuvxBCEHPT or -o option` *(status 2)* | **2>** `<shell>: -q: invalid option~Usage:	<shell> [GNU long option] [option] ...~	<shell> [GNU long option] [option] script-file ...~GNU long options:~	--debug~	--debugger~	--dump-po-strings~	--dump-strings~	--help~	--init-file~	--login~	--noediting~	--noprofile~	--norc~	--posix~	--protected~	--rcfile~	--restricted~	--verbose~	--version~	--wordexp~Shell options:~	-irsD or -c command or -O shopt_option		(invocation only)~	-abefhkmnptuvxBCHP or -o option` *(status 2)* | **2>** `<shell>: -q: unknown option~Usage: <shell> [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>: bad option: -q` *(status 1)* |
+| `opt/an-unknown-long-name-at-an-invocation` | **2>** `<shell>: 0: Illegal option -o zzznosuch` *(status 2)* | **2>** `<shell>: line 0: <shell>: zzznosuch: invalid option name` *(status 2)* | **2>** `<shell>: line 0: sh: zzznosuch: invalid option name` *(status 2)* | **2>** `<shell>: line 0: <shell>: zzznosuch: invalid option name` *(status 2)* | **2>** `<shell>: zzznosuch: bad option(s)~Usage: <shell> [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>: no such option: zzznosuch` *(status 1)* |
 | `opt/turning-off-a-name-a-shell-does-not-implement` | **2>** `<shell>: 1: set: Illegal option -o posix` *(status 2)* | `st=0~st=0` | `st=0~st=0` | `st=0~st=0` | **2>** `<shell>: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: posix` *(status 1)* |
 | `opt/noglob-does-not-stop-matching` | `match` | `match` | `match` | `match` | `match` | `match` |
 | `opt/an-option-can-be-turned-back-off` | `a.txt` | `a.txt` | `a.txt` | `a.txt` | `a.txt` | `a.txt` |
@@ -3367,6 +3402,18 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `opt/an-unknown-letter-is-refused` — the letter half of the question the long name asks, and the panel answers the two identically — `-q`, `-j`, `-z` and `-A` are the letters all six refuse, and each shell reports for `set -q` exactly what it reports for `set -o zzznosuch` and ends the script or does not in the same way. bash alone carries on, at 2; dash and ksh93 stop at 2 and zsh at 1. The letter had no dialect answer at all until #483: it reported 2 everywhere and never stopped a script, so the same shell answered its own two spellings differently
   ```sh
   set -q; echo "st=$?"; echo alive
+  ```
+- `opt/a-refused-letter-echoes-the-sign` — the other half of the letter's spelling: bash and ksh93 echo the `+` back where dash and zsh write `-q` whichever way they were asked, so the sign is a verb in two of the wordings and a literal in the other two
+  ```sh
+  set +q; echo "st=$?"
+  ```
+- `opt/an-unknown-letter-at-an-invocation` — the same refusal by the other route, and it is not the same sentence: nobody names `set` here, bash and ksh93 print the whole *shell* usage rather than the builtin's, and zsh drops the location its run-time form writes. The letter is first in the word deliberately — bash answers 1 with no usage block when a letter it has comes before the one it does not, which is a position axis nobody has asked for yet
+  ```sh
+  echo hi
+  ```
+- `opt/an-unknown-long-name-at-an-invocation` — the long spelling by the same route, and bash alone shapes it differently from its own letter: dash, ksh93 and zsh word both the same way here, while bash hands this one to the builtin and prints `<shell>: line 0: <shell>: …` — its own name standing where `set` would
+  ```sh
+  echo hi
   ```
 - `opt/turning-off-a-name-a-shell-does-not-implement` — the thirteenth line of Homebrew's own brew script is `set +o posix`, and it is the shape this implementation's accept-off/refuse-on policy exists for: turning off what a shell was never doing is a request that has been granted, where turning it *on* would be a promise. Recorded across the panel because the two names split it — bash has both, and the others have neither
   ```sh
@@ -3784,6 +3831,8 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `redir/a-group-writing-to-a-closed-descriptor` | `st=1` **2>** `<shell>: 1: echo: echo: I/O error~<shell>: 1: echo: echo: I/O error` | `st=1` **2>** `<shell>: line 1: echo: write error: Bad file descriptor~<shell>: line 1: echo: write error: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: echo: write error: Bad file descriptor~<shell>: line 1: echo: write error: Bad file descriptor` | `a~b~st=1` **2>** `<shell>: line 0: echo: write error: Bad file descriptor~<shell>: line 0: echo: write error: Bad file descriptor` | `st=1` | `st=0` **2>** `<shell>:1: write error: bad file descriptor~<shell>:1: write error: bad file descriptor` |
 | `redir/exec-opens-a-high-descriptor` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` |
 | `redir/exec-descriptor-reaches-an-external-child` | `child` | `child` | `child` | `child` | *(no output, status 0)* | `child` |
+| `redir/a-commands-own-redirection-crosses` | `st=0~own` | `st=0~own` | `st=0~own` | `st=0~own` | `st=0~own` | `st=0~own` |
+| `redir/restating-the-number-hands-an-exec-descriptor-over` | `st=0~restated` | `st=0~restated` | `st=0~restated` | `st=0~restated` | `st=0~restated` | `st=0~restated` |
 | `redir/exec-descriptor-reaches-a-replacement` | `repl` | `repl` | `repl` | `repl` | *(no output, status 0)* | `repl` |
 | `redir/a-replacements-descriptor-numbers-keep-their-gaps` | `five` | `five` | `five` | `five` | *(no output, status 0)* | `five` |
 | `redir/an-inherited-descriptor-keeps-its-number` | `five` | `five` | `five` | `five` | *(no output, status 0)* | `five` |
@@ -3930,6 +3979,14 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `redir/exec-descriptor-reaches-an-external-child` — a descriptor parked with `exec 3>file` is inherited by an external command, which is what the flock and shared-log idioms are built on — the child writes in every shell but ksh93, which alone keeps it to itself. The child's complaint is discarded because its wording is a fact about whatever /bin/sh is on the machine
   ```sh
   exec 3>f; /bin/sh -c "echo child >&3" 2>/dev/null; exec 3>&-; cat f
+  ```
+- `redir/a-commands-own-redirection-crosses` — the boundary of the shell that keeps `exec`'s descriptors to itself: a redirection the *command* carries crosses in every shell, ksh93 included, so what that shell withholds is what `exec` opened rather than what the table holds
+  ```sh
+  /bin/sh -c "echo own >&3" 3>f 2>/dev/null; echo "st=$?"; cat f
+  ```
+- `redir/restating-the-number-hands-an-exec-descriptor-over` — the same boundary read from the other side, and unanimous: `exec 3>f` alone leaves the child nothing in ksh93, and naming 3 again on the command hands it over there — so the rule is about which redirection list opened the descriptor and not about the number
+  ```sh
+  exec 3>f; /bin/sh -c "echo restated >&3" 3>&3 2>/dev/null; echo "st=$?"; cat f
   ```
 - `redir/exec-descriptor-reaches-a-replacement` — the same descriptor and the harder seam: `exec cmd` replaces the shell rather than forking one, so nothing renumbers the table on the way across and the command inherits the *process's* descriptors. The replacement writes in every shell but ksh93, exactly as a child does, and the reading is done by the replacement because there is no shell left to do it. The complaint is discarded for the reason the child's is
   ```sh
@@ -5622,6 +5679,10 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `invoke/a-script-under-a-directory-that-is-not-there` | **2>** `<shell>: 0: cannot open nodir/nosuch.sh: No such file` *(status 2)* | **2>** `<shell>: nodir/nosuch.sh: No such file or directory` *(status 127)* | **2>** `<shell>: nodir/nosuch.sh: No such file or directory` *(status 127)* | **2>** `<shell>: nodir/nosuch.sh: No such file or directory` *(status 127)* | **2>** `<shell>: nodir/nosuch.sh: not found` *(status 127)* | **2>** `<shell>: can't open input file: nodir/nosuch.sh` *(status 127)* |
 | `invoke/a-script-that-is-there-runs` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` |
 | `invoke/a-script-is-not-interactive` | `not` | `not` | `not` | `not` | `not` | `not` |
+| `invoke/a-command-string-attached-to-the-letter` **(refusal)** | **2>** `<shell>: 0: Illegal option -h` *(status 2)* | `allexport      	off~braceexpand    	on~emacs          	on~errexit        	on~errtrace       	off~functrace      	off~hashall        	on~histexpand     	off~history        	off~ignoreeof      	off~interactive-comments	on~keyword        	off~monitor        	off~noclobber      	off~noexec         	off~noglob         	off~nolog          	off~notify         	off~nounset        	off~onecmd         	off~physical       	off~pipefail       	off~posix          	off~privileged     	off~verbose        	off~vi             	off~xtrace         	off` **2>** `<shell>: - : invalid option` *(status 1)* | `allexport      	off~braceexpand    	on~emacs          	on~errexit        	on~errtrace       	off~functrace      	off~hashall        	on~histexpand     	off~history        	off~ignoreeof      	off~interactive-comments	on~keyword        	off~monitor        	off~noclobber      	off~noexec         	off~noglob         	off~nolog          	off~notify         	off~nounset        	off~onecmd         	off~physical       	off~pipefail       	off~posix          	off~privileged     	off~verbose        	off~vi             	off~xtrace         	off` **2>** `<shell>: - : invalid option` *(status 1)* | `allexport      	off~braceexpand    	on~emacs          	on~errexit        	on~errtrace       	off~functrace      	off~hashall        	on~histexpand     	on~history        	on~ignoreeof      	off~interactive-comments	on~keyword        	off~monitor        	off~noclobber      	off~noexec         	off~noglob         	off~nolog          	off~notify         	off~nounset        	off~onecmd         	off~physical       	off~pipefail       	off~posix          	off~privileged     	off~verbose        	off~vi             	off~xtrace         	off` **2>** `<shell>: - : invalid option` *(status 1)* | **2>** `<shell>:  hi: bad option(s)~Usage: ksh [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>: no such option:  hi` *(status 1)* |
+| `invoke/c-with-nothing-after-it` **(refusal)** | **2>** `<shell>: 0: -c requires an argument` *(status 2)* | **2>** `<shell>: -c: option requires an argument` *(status 2)* | **2>** `<shell>: -c: option requires an argument` *(status 2)* | **2>** `<shell>: -c: option requires an argument` *(status 2)* | **2>** `<shell>: -c requires argument~Usage: ksh [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>: string expected after -c` *(status 1)* |
+| `invoke/an-option-letter-that-is-not-one` **(refusal)** | **2>** `<shell>: 0: Illegal option -Z` *(status 2)* | **2>** `<shell>: -Z: invalid option~Usage:	<shell> [GNU long option] [option] ...~	<shell> [GNU long option] [option] script-file ...~GNU long options:~	--debug~	--debugger~	--dump-po-strings~	--dump-strings~	--help~	--init-file~	--login~	--noediting~	--noprofile~	--norc~	--posix~	--pretty-print~	--rcfile~	--restricted~	--verbose~	--version~Shell options:~	-ilrsD or -c command or -O shopt_option		(invocation only)~	-abefhkmnptuvxBCEHPT or -o option` *(status 2)* | **2>** `<shell>: -Z: invalid option~Usage:	sh [GNU long option] [option] ...~	sh [GNU long option] [option] script-file ...~GNU long options:~	--debug~	--debugger~	--dump-po-strings~	--dump-strings~	--help~	--init-file~	--login~	--noediting~	--noprofile~	--norc~	--posix~	--pretty-print~	--rcfile~	--restricted~	--verbose~	--version~Shell options:~	-ilrsD or -c command or -O shopt_option		(invocation only)~	-abefhkmnptuvxBCEHPT or -o option` *(status 2)* | **2>** `<shell>: -Z: invalid option~Usage:	<shell> [GNU long option] [option] ...~	<shell> [GNU long option] [option] script-file ...~GNU long options:~	--debug~	--debugger~	--dump-po-strings~	--dump-strings~	--help~	--init-file~	--login~	--noediting~	--noprofile~	--norc~	--posix~	--protected~	--rcfile~	--restricted~	--verbose~	--version~	--wordexp~Shell options:~	-irsD or -c command or -O shopt_option		(invocation only)~	-abefhkmnptuvxBCHP or -o option` *(status 2)* | **2>** `<shell>: -Z: unknown option~Usage: ksh [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>: can't open input file: echo hi` *(status 127)* |
+| `invoke/a-long-option-name-that-is-not-one` **(refusal)** | **2>** `<shell>: 0: Illegal option -o nosuchoption` *(status 2)* | **2>** `<shell>: line 0: <shell>: nosuchoption: invalid option name` *(status 2)* | **2>** `<shell>: line 0: sh: nosuchoption: invalid option name` *(status 2)* | **2>** `<shell>: line 0: <shell>: nosuchoption: invalid option name` *(status 2)* | **2>** `<shell>: nosuchoption: bad option(s)~Usage: ksh [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>: no such option: nosuchoption` *(status 1)* |
 
 - `invoke/errexit-with-a-script` — the first line of most scripts, spelled on the command line instead: a set option given at invocation has to reach the runner, and abandon the script at the failure rather than run to the end
   ```sh
@@ -5769,4 +5830,20 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `invoke/a-script-is-not-interactive` — the negative half of #472: `i` belongs in $- only where the shell is interactive, and a script operand is not — unanimous. Membership rather than the spelling, for the same reason invoke/errexit-reaches-the-option-letters uses it. The positive half cannot live here: bash and dash announce that job control is off when -i has no terminal, and bash's line carries a pid, so `-i` under the harness is not a recordable fact
   ```sh
   case $- in *i*) echo interactive ;; *) echo not ;; esac
+  ```
+- `invoke/a-command-string-attached-to-the-letter` **(refusal)** — `sh -c'echo hi'` — the command string written against the letter rather than as its own word, which is how a hand and a generated command line both get it wrong. All six refuse it: `-c` takes its operand as a separate word, so the rest of this one is read as more option letters and `echo hi` is not a run of them. We ran it. That is the bug this case exists for, and it is caught here against every reference, because a shell that ran the string writes `hi` to standard output and standard output is still compared exactly. bash is the reason the row is marked: it answers by writing its entire `set -o` table to standard *output* as part of the usage, so against a bash reference this reports a real gap until we write the table too — the relaxation forgives a diagnostic's wording and declines to forgive a stream of output nobody produced
+  ```sh
+  echo hi
+  ```
+- `invoke/c-with-nothing-after-it` **(refusal)** — the option that requires an argument, given none — deliberately no placeholder, because what is pinned is the shell refusing before it has a program at all. Unanimous in behavior and unanimous in nothing else: five of the six exit 2 and zsh exits 1, and all six word it differently, which is the pair of facts that makes this gradable only on the refusal. A front end that treated a missing operand as an empty command string would exit 0 having done nothing
+  ```sh
+  echo this never arrives
+  ```
+- `invoke/an-option-letter-that-is-not-one` **(refusal)** — a letter no shell has. Four of them say so and stop; zsh is the divergence worth recording — it accepts `-Z` as one of its own and then fails on the operand as a script it cannot open, at 127 rather than 2. So the panel is unanimous that this fails and split on why, which is a fact the row keeps in full even though the grading only asks whether the shell declined
+  ```sh
+  echo hi
+  ```
+- `invoke/a-long-option-name-that-is-not-one` **(refusal)** — the same question one level in: `-o` is a valid letter and its operand is not a valid name, so the refusal comes from the option table rather than from the letter table. All six decline before running the command string, which is the part that matters — a shell that warned and carried on would print `hi` and standard output would catch it
+  ```sh
+  echo hi
   ```

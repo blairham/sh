@@ -616,13 +616,56 @@ The letter asked neither question until #483. It reported the front end's own
 way to carry an answer back — and `set -q` inside a dash script carried on
 where dash stops.
 
-**The wording is not modeled and the statuses are.** The panel spells this
-four ways — `-q: invalid option`, `Illegal option -q`, `-q: unknown option`,
-`bad option: -q` — and at an *invocation* bash and ksh93 name themselves
-rather than `set` and add a usage block that a run-time `set` does not get.
-This shell says `set: -q is not implemented` throughout. That is a real gap
-and it is visible in `make conformance` as a case agreeing on status and
-disagreeing on words; #598 has the four wordings and the two shapes.
+**The wording is the dialect's too, and it is a different sentence on each
+route.** Measured 2026-09-05, both spellings, both signs.
+
+Inside a script, where the builtin is speaking:
+
+| shell | `set -q` | `set -o zzznosuch` |
+| --- | --- | --- |
+| bash 5.3 | `<shell>: line 1: set: -q: invalid option` and `set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]` | `<shell>: line 1: set: zzznosuch: invalid option name`, no usage |
+| dash | `<shell>: 1: set: Illegal option -q` | `<shell>: 1: set: Illegal option -o zzznosuch` |
+| ksh93 | `<shell>: set: -q: unknown option` and `Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` | the same usage line, under `set: zzznosuch: bad option(s)` |
+| zsh | `<shell>:set:1: bad option: -q` | `<shell>:set:1: no such option: zzznosuch` |
+
+At an invocation, where nothing has been read:
+
+| shell | `sh -q -c cmd` | `sh -o zzznosuch -c cmd` |
+| --- | --- | --- |
+| bash 5.3 | `<shell>: -q: invalid option` and the whole `Usage:\t<shell> [GNU long option] …` block | `<shell>: line 0: <shell>: zzznosuch: invalid option name`, no usage |
+| dash | `<shell>: 0: Illegal option -q` | `<shell>: 0: Illegal option -o zzznosuch` |
+| ksh93 | `ksh: -q: unknown option` and `Usage: ksh [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]` | the same usage line, under `ksh: zzznosuch: bad option(s)` |
+| zsh | `<shell>: bad option: -q` — no location, where the run-time form has `set:1:` | `<shell>: no such option: zzznosuch` |
+
+Three things follow, and each is a dialect answer rather than a rule:
+
+- **The sign is a verb in two of the four.** bash and ksh93 echo the `+` of
+  `set +q` back; dash and zsh write `-q` whichever way they were asked. So
+  `Diagnostics.SetInvalidOptionLetter` takes both the spelling as written and
+  the bare letter, and each wording uses the one it means.
+- **The usage line follows the letter, and the name only in ksh93.** bash's
+  letter is refused the way any of its builtins' bad letters are, usage line
+  and all; its bad `-o` name earns a sentence of its own with nothing under
+  it. `Diagnostics.SetInvalidOptionNameUsage` is that difference.
+- **At an invocation nobody names `set`.** Three of the four say the same
+  sentence with the builtin's name gone, after the plain invocation prefix —
+  which is where dash's nought comes from, the same `0:` its unopenable-script
+  diagnostic writes. The usage block is the *shell's* there rather than
+  `set`'s (`Diagnostics.InvocationUsage`), and ksh93 names itself in it by the
+  last element of the word it was invoked by where bash spells the whole of
+  it. bash is the exception on the long spelling alone: it hands that one to
+  the builtin and prints its own name where `set`'s would stand, location
+  included — `Diagnostics.InvocationNameRefusalNamesTheShell`.
+
+**A letter the dialect *has* is a different answer.** `set -b` is bash's and
+this shell does not implement it; calling it invalid would tell a script
+something untrue about bash. Those letters ride
+`Diagnostics.UnimplementedOptionLetters["set"]` and are said to be missing,
+which is the rule every other builtin's letters already follow. Measured
+2026-09-05 by asking each shell for all fifty-two letters in both signs:
+bash has `abefhkmnoprtuvxBCEHPT`, dash `abefimnosuvxCEIV`, ksh93
+`abefhkmnoprstuvxABCGH`, and zsh has every letter but `b`, `c`, `j`, `q` and
+`z`.
 
 **One wrinkle is measured and deliberately not modeled.** bash exits **1**,
 with no usage block, when a letter it *has* comes before the bad one in the

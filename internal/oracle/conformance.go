@@ -29,6 +29,15 @@ type Match struct {
 	Want   Result
 	Got    Result
 	OK     bool
+
+	// Relaxed marks a verdict that needed Case.GradedOnRefusal to be a pass:
+	// the two sides refused alike and worded it differently, and an exact
+	// comparison would have called that a divergence.
+	//
+	// It is recorded per match rather than only counted, because a reader has
+	// to be able to see *which* rows were forgiven. A relaxation nobody can
+	// enumerate is indistinguishable from a score that is wrong.
+	Relaxed bool
 }
 
 // Report is the outcome of a conformance run.
@@ -49,9 +58,17 @@ type Report struct {
 	// precisely rather than approximated. Nothing here makes that judgment
 	// yet; the record now carries what it would need.
 	SameStatus int
-	Total      int
-	Missing    []string
-	NotBuilt   bool
+
+	// Relaxed counts the passes that needed Case.GradedOnRefusal. It is not a
+	// second score but a discount on the first one, and it is printed for
+	// that reason: a grading relaxation that does not appear in the report is
+	// a way to make a diverging case look green, which is the thing this mode
+	// must not become.
+	Relaxed int
+
+	Total    int
+	Missing  []string
+	NotBuilt bool
 }
 
 // RunConformance runs every case through the binary at path and compares it
@@ -85,6 +102,71 @@ func graded(c Case) bool { return !c.ReferenceRaces }
 // shell that hung until the harness gave up all score as the same behavior.
 func matches(want, got Result) bool {
 	return want.Stdout == got.Stdout && want.Stderr == got.Stderr && sameOutcome(want, got)
+}
+
+// refused reports whether a run is a refusal: it ended badly, and it said so.
+//
+// Both halves are required, and the second is the one the merged capture
+// could not have asked for. "Exited nonzero" alone is any failure, including
+// a script that ran and whose last command was false; a shell that *declined*
+// also writes a diagnostic, and a diagnostic belongs on standard error. So
+// this is the precise form of a claim the harness could previously only
+// approximate — and it is a claim about behavior rather than about wording,
+// which is what makes it safe to grade on.
+//
+// A timeout is not a refusal. A shell that never finished did not decline
+// anything; it is the one outcome that must never be forgiven, because the
+// case that hangs is the case that has stopped measuring.
+func refused(r Result) bool {
+	return !r.TimedOut && (r.Status != 0 || r.Signal != 0) && r.Stderr != ""
+}
+
+// matchesRefusal grades a case on the refusal rather than on its wording.
+//
+// It forgives exactly one thing: the words of the diagnostic. Everything the
+// exact comparison asks for is still asked for — the same outcome, and the
+// same standard output, byte for byte — and two requirements are *added* that
+// the exact comparison does not make, namely that both sides actually refused.
+//
+// That is what keeps it from becoming a way to make a divergence look green.
+// The mode is not "compare less"; it is "compare a different, still-falsifiable
+// thing". Three ways it fails where a loose reading of "graded on the refusal"
+// would pass:
+//
+//   - The reference did not refuse. Then the flag is on a case that is not a
+//     refusal at all, and the verdict is a failure rather than a free pass —
+//     a misused flag has to be louder than a correct one, not quieter.
+//   - We did not refuse. Running what a shell declined to run is the whole
+//     bug this mode exists to pin, so it cannot be the thing the mode hides.
+//   - We refused silently. Saying nothing is not a wording difference, and an
+//     implementation that exits 2 with an empty standard error has not
+//     diagnosed anything.
+//
+// Standard output stays exact deliberately, and it costs something: bash
+// answers `-cecho hi` by writing its whole `set -o` table to standard output,
+// so a case pinning that shape reports a real gap against a bash reference
+// until we write the table too. That is the right answer. Dropping the stream
+// would forgive a shell that *ran* the command string, which is precisely the
+// divergence the case was written to catch.
+func matchesRefusal(want, got Result) bool {
+	return refused(want) && refused(got) && sameOutcome(want, got) && want.Stdout == got.Stdout
+}
+
+// verdict grades one case, which is the only place the grading mode is read.
+//
+// It reports whether the two agreed and whether the agreement needed the
+// relaxation. A case that matches exactly is never counted as relaxed, even
+// when it carries the flag: the count has to mean "this much is currently
+// being forgiven", or it measures the corpus's labeling instead of the
+// implementation's agreement.
+func verdict(c Case, want, got Result) (ok, relaxed bool) {
+	if matches(want, got) {
+		return true, false
+	}
+	if c.GradedOnRefusal && matchesRefusal(want, got) {
+		return true, true
+	}
+	return false, false
 }
 
 // sameOutcome reports whether two runs ended the same way, ignoring what they
@@ -132,12 +214,15 @@ func RunConformance(ctx context.Context, path, against string, args []string, ca
 		}
 		want := Exec(ctx, ref, c)
 		got := Exec(ctx, ours, c)
-		ok := matches(want, got)
-		rep.Matches = append(rep.Matches, Match{CaseID: c.ID, Want: want, Got: got, OK: ok})
+		ok, relaxed := verdict(c, want, got)
+		rep.Matches = append(rep.Matches, Match{CaseID: c.ID, Want: want, Got: got, OK: ok, Relaxed: relaxed})
 		rep.Total++
 		switch {
 		case ok:
 			rep.Passed++
+			if relaxed {
+				rep.Relaxed++
+			}
 		case sameOutcome(want, got):
 			rep.SameStatus++
 		}
@@ -165,11 +250,26 @@ func (r *Report) Summary(verbose bool) string {
 		fmt.Fprintf(&b, "  plus %d agreeing on the exit status but not the wording — %.0f%% behavioral\n",
 			r.SameStatus, behav)
 	}
+	if r.Relaxed > 0 {
+		// Said in the summary and not only under -v, because this is the part
+		// of the score that was not earned by an exact match. A reader who
+		// sees only the percentage should still be told how much of it rests
+		// on a relaxation, and which cases those are is one flag away.
+		fmt.Fprintf(&b, "  of which %d passed on the refusal rather than the wording (-v lists them)\n", r.Relaxed)
+	}
 	if len(r.Missing) > 0 {
 		fmt.Fprintf(&b, "panel members absent here: %s\n", strings.Join(r.Missing, ", "))
 	}
 	if !verbose {
 		return b.String()
+	}
+	if r.Relaxed > 0 {
+		b.WriteString("\ngraded on the refusal, not the wording:\n")
+		for _, m := range r.Matches {
+			if m.Relaxed {
+				fmt.Fprintf(&b, "  %s\n    want %s\n    got  %s\n", m.CaseID, describe(m.Want), describe(m.Got))
+			}
+		}
 	}
 	b.WriteString("\nnot matching:\n")
 	for _, m := range r.Matches {

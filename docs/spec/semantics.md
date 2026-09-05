@@ -532,6 +532,63 @@ The status those two refusals carry is *not* the fatal-error axis. bash
 exits 1 for a fatal error and 2 for this, and dash exits 2 for both; a
 usage error is its own thing, and unanimous where it happens at all.
 
+## A third axis that is an ordering, and the boundary it is asked at
+
+What a subshell sees of the jobs the shell around it started, with
+`sleep 1 &` already running and commands after the probe so that nothing
+is the last thing a script does:
+
+    (jobs -p); echo T          ksh93 → the pid   bash, dash, zsh → nothing
+    jobs -p | cat; echo T      bash, ksh93 → the pid   dash, zsh → nothing
+
+Two rows and two different pairs, so no yes-or-no holds both. `Semantics.
+SubshellJobTable` is a policy with three values: cleared everywhere (dash,
+zsh), kept everywhere (ksh93), and kept where the subshell was made for a
+simple command or a substitution while cleared where it was made for a
+compound (bash).
+
+The `; echo T` is load-bearing, and leaving it off is how the question
+gets the wrong answer. `(jobs -p)` alone prints the pid in dash, because a
+subshell that is the last thing a script does need not be a subshell at
+all; with anything after it, dash prints nothing. A probe for a fact about
+subshells has to make sure it has one.
+
+The boundaries, measured one at a time:
+
+| boundary | bash | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `( … )` | none | none | the job | none |
+| a simple command as a pipeline element | the job | none | the job | none |
+| a compound command as a pipeline element | none | none | the job | none |
+| `$( … )` and `` ` ` `` | the job | none | the job | none |
+| `<( … )` | the job | — | the job | none |
+| a `&` job | none | none | none | none |
+
+The last row is unanimous and is therefore *not* asked about: a background
+job sees nothing anywhere, and an axis consulted where nothing disagrees is
+an axis that can be answered wrongly.
+
+Two rows are measured and deliberately not modeled. bash also clears the
+table for a **function** and for **`eval`** used as a pipeline element,
+both of which are simple commands as far as any syntax can tell — `f(){
+jobs -p; }; f | cat` prints nothing there where `jobs -p | cat` prints the
+pid. Modeling that would mean a boundary changing kind partway through
+running the command it was made for, which is a worse thing to own than
+two rows of a table.
+
+This is the clearest case so far of the corollary that **where a real
+shell relies on a process boundary, we have to reconstruct the boundary by
+hand**. A fork gives the child whatever the parent's table was, or nothing,
+because the shell decides on the far side of it. Our subshells are cloned
+Runners in one process, so the table arrived by simply being copied along
+with the variables — not a decision anyone made, and invisible until a
+script piped `jobs` somewhere.
+
+It is a different question from the one `trapContext` answers, and the two
+split the same clones differently: `( … )` and `$( … )` are one boundary
+for a trap listing and two for a job table. Two names rather than one with
+two meanings.
+
 ## A prediction that measurement contradicted
 
 `set -e` was expected to produce axes. Its exemptions are where shells are
@@ -1009,6 +1066,65 @@ rewriting the process's descriptors is process-wide state, and a Runner
 embedded in another program may not touch it. So `interp` decides which
 descriptors are the script's to hand out and hands that slice to
 `Runner.ReplaceProcess`, in the layout both other halves already use.
+
+### Whether a descriptor `exec` parked is handed over at all
+
+`ExecOpenedFdReachesACommand`. Four of the five hand it over and ksh93
+keeps it, which is the shape of a conflict rather than a subset: there is
+no reading under which one answer contains the other, so it is a field on
+the vector rather than a core answer with a dialect apologising for it.
+
+**POSIX decides nothing.** The Shell Command Language says which of the
+standard descriptors a utility is entered with and is silent about the
+rest, so both answers conform and there is no standard to defer to. The
+dissenting shell's manual states its rule outright — a file descriptor
+number greater than 2 opened by `exec`'s redirection list is closed when
+it invokes another program — so this is a documented language decision
+rather than a build's accident, which is what a recorded divergence would
+have implied.
+
+The rule is narrower than "that shell hands nothing over", and the whole
+of the boundary was measured (macOS, 2026-09-05):
+
+    exec 3>f; sh -c '… >&3'          four write; ksh93's child finds 3
+                                     closed
+    exec {v}>f; sh -c '… >&$v'       the same split — a number the shell
+                                     picked is no different
+    exec 9<&3; sh -c 'read <&9'      with 3 inherited: four read it, ksh93
+                                     finds 9 closed — and its *3* still
+                                     reads, so a duplicate carries the mark
+                                     and the original does not
+    sh -c 'read <&3' (3 inherited)   unanimous: the caller's descriptor
+                                     crosses everywhere
+    sh -c '… >&3' 3>f                unanimous: a command's own redirection
+                                     crosses everywhere
+    exec 3>f; sh -c '… >&3' 3>&3     unanimous: naming the number again on
+                                     the command hands it over even there
+    exec 2>f; sh -c '… >&2'          unanimous: the rule starts above 2
+
+The last three are why the axis is asked about a *mark* rather than about
+the table. A descriptor is `exec`'s when `exec`'s own redirection list
+opened it; the mark travels with a duplication, and a command redirecting
+the same number takes it off for that command and no longer. The corpus
+records the two unanimous rows as
+`redir/a-commands-own-redirection-crosses` and
+`redir/restating-the-number-hands-an-exec-descriptor-over`, because
+"everyone crosses here" is the half that says what the axis is not about.
+
+It is read where the outbound table is built, once, so an external child
+and a process replacement get the same answer — and they were measured to
+give the same one, which makes this one divergence rather than two. It is
+asked only when the table actually holds such a descriptor: an axis
+consulted on the common path would refuse every external command in a
+Runner that had not chosen a dialect, over a question that decides nothing
+for a script with no parked descriptors.
+
+A fifth panel member does not change it. The question is whether the
+dissenter gets its own answer, not how large the majority is, so a shell
+that agreed with the four would leave the axis exactly as it is and one
+that agreed with ksh93 would answer `No` beside it. What a fifth member
+could change is a *core* answer that rested on a bare majority, and this
+one does not: the core follows four shells and the standard's silence.
 
 ## An axis that is only about one of two names
 

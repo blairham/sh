@@ -928,6 +928,37 @@ type Diagnostics struct {
 	// ksh93 follows it with the usage line it keeps in BuiltinUsage.
 	SetInvalidOptionName string
 
+	// SetInvalidOptionLetter is an option letter this shell does not have.
+	// Two verbs: the letter as the script spelled it, sign and all, and the
+	// letter on its own.
+	//
+	//	bash   set: -q: invalid option
+	//	dash   set: Illegal option -q
+	//	ksh93  set: -q: unknown option
+	//	zsh    set: bad option: -q
+	//
+	// Two verbs rather than one because the sign splits the panel: `set +q`
+	// is echoed back as `+q` by bash and ksh93 and as `-q` by dash and zsh,
+	// which those two say by writing the `-` into the wording and taking the
+	// bare letter. Measured 2026-09-05 on `-q`, `-j`, `-z` and `-A`, the
+	// letters all six of bash 5.3, bash 3.2, bash-as-`sh`, dash, ksh93 and
+	// zsh refuse. zsh's `set:` comes from the location, as everywhere else.
+	//
+	// A letter the dialect *has* and this shell has not implemented is a
+	// different answer and belongs in UnimplementedOptionLetters under
+	// "set", not here.
+	SetInvalidOptionLetter string
+
+	// SetInvalidOptionNameUsage repeats BuiltinUsage["set"] under a refused
+	// `set -o` name, as well as under a refused letter.
+	//
+	// ksh93 alone. bash prints its `set` usage line after a bad *letter* —
+	// which is what it does after any builtin's bad letter — and not after a
+	// bad option name, whose complaint is a sentence of its own. dash and
+	// zsh print no usage line for either. So the letter always gets one
+	// where the dialect has one, and this says whether the name does too.
+	SetInvalidOptionNameUsage bool
+
 	// SetInvalidOptionStatus is what a refused `set` option reports —
 	// either spelling. Zero means 2, which is three of the four; zsh
 	// answers 1.
@@ -1299,6 +1330,33 @@ type Diagnostics struct {
 	// is what "no line yet" is in a shell that counts from one, so this is a
 	// switch rather than a verb.
 	InvocationNamesTheUnreadLine bool
+
+	// InvocationUsage is the shell's own usage block, written under a `set`
+	// option the invocation was refused. Two verbs: the name the shell was
+	// invoked by, and that name's last path element.
+	//
+	// Two verbs because the panel's two shells that print one disagree about
+	// which they write. Measured 2026-09-05 through a symbolic link named
+	// `myksh`: bash spells the whole word it was invoked by — a path, when
+	// that is what was typed — and ksh93 spells only the last element of it.
+	//
+	// Distinct from BuiltinUsage["set"], which is what the *builtin* prints:
+	// at an invocation these two shells print their own usage instead, and
+	// the block is a fact about the shell rather than about `set`.
+	InvocationUsage string
+
+	// InvocationNameRefusalNamesTheShell reports a refused `set -o` name at
+	// an invocation exactly as the builtin would, with the shell's own name
+	// standing where the builtin's would:
+	//
+	//	<shell>: line 0: <shell>: zzznosuch: invalid option name
+	//
+	// bash alone, and only for the long spelling — its refused *letter* is
+	// its command-line parser speaking, with no location and no second name.
+	// dash, ksh93 and zsh word both spellings the same way at an invocation:
+	// the sentence with nothing naming `set`, after the plain invocation
+	// prefix. Measured 2026-09-05.
+	InvocationNameRefusalNamesTheShell bool
 
 	// ScriptLocation is Location for a script read from a file, when the two
 	// differ. ksh93 is the only shell in the panel where they do: `ksh -c`

@@ -240,6 +240,7 @@ func Semantics() interp.Semantics {
 	s.SIGPrefixAccepted = interp.Yes
 	s.RedirectsWriteToEveryTarget = interp.Yes
 	s.KillStatus = interp.KillStatusFailureCount
+	s.SubshellJobTable = interp.SubshellJobsCleared
 	s.PrintfEmptyIsNotANumber = interp.No
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfBackslashC = interp.PrintfBackslashCStops
@@ -431,7 +432,11 @@ func Diagnostics() interp.Diagnostics {
 		DeclareNoSuchVariable:    "no such variable: %[1]s",
 		LocationNamesTheFunction: true,
 		SetInvalidOptionName:     "no such option: %[1]s",
-		SetInvalidOptionStatus:   1,
+		// The bare letter with a dash written in front of it: this shell
+		// echoes `-q` for `set +q` as dash does, rather than the sign it was
+		// asked with. `set` is named in the location, not in the sentence.
+		SetInvalidOptionLetter: "bad option: -%[2]s",
+		SetInvalidOptionStatus: 1,
 		// A denied `set -m` echoes the spelling it was asked with — `-m` or
 		// `monitor` — and fails at 1, fatally like every `set` failure here.
 		MonitorDenied:       "can't change option: %[1]s",
@@ -478,6 +483,13 @@ func Diagnostics() interp.Diagnostics {
 		},
 		SubscriptRefusalNamesBuiltin: map[string]bool{"readonly": true},
 		UnimplementedOptionLetters: map[string]string{
+			// zsh gives a single letter to far more of its options than the
+			// rest of the panel does: measured 2026-09-05, it refuses only
+			// b, c, j, q and z of the fifty-two, and has the other
+			// forty-seven. These are the ones it has and this shell does
+			// not, so a script asking for one is told it is missing rather
+			// than told this shell knows better than zsh what zsh has.
+			"set": "dgiklprstwyABDEFGHIJKLMNOPQRSTUVWXYZ",
 			// read's letters about a terminal or the line editor — raw -k
 			// keys, -q's one keystroke, -e/-E echoing, -z and the zle pair
 			// -c/-l. The -p coprocess is implemented as its measured

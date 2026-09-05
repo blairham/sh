@@ -201,6 +201,37 @@ script.sh`** (`m` in its row, absent from the other three). So being
 interactive and having job control are not the same fact, which is why
 `Interactive` and `JobControl` are separate fields rather than one.
 
+### The order of the letters is the shell's, and it is not the order they were set in
+
+Everything above reads `$-` as *membership*, which is what a script does
+and what the axes model. The **string** is a separate fact and no shell
+in the panel builds it the same way. Measured 2026-09-05, `set -f; set
+-u; set -e` and then `echo "[$-]"`
+(`special/dollar-dash-orders-the-letters-its-own-way`):
+
+| shell | `$-` |
+| --- | --- |
+| dash | `ufe` |
+| bash 5.3, bash-as-`sh`, bash 3.2 | `efhuBc` |
+| ksh93 | `cefhsuB` |
+| zsh | `569Xefu` |
+
+None of them is the order the options were written in, and only two
+resemble each other. bash sorts the lowercase letters and keeps the ones
+it started with as a suffix; ksh93 sorts everything it holds; zsh puts
+its digits first; and dash's `ufe` is neither sorted nor chronological —
+it is its own option table's order, which is a fact about a table nobody
+outside dash can see.
+
+So a script may test `case $- in *e*)` and may not compare `$-` against a
+string, and an implementation has no order to inherit: it has to pick
+one, per dialect, the way it picks the letters. The whole string is also
+recorded by route in `special/dollar-dash-in-full` and
+`special/dollar-dash-in-full-from-a-script`, which is where the
+route-dependence above shows up as text rather than as membership — ksh93
+carries `s` for a command string and drops it for a script, landing on
+exactly bash's `hB`.
+
 ## Where it lives
 
 `driver.Interactively` is the prompt decision and is the only place that

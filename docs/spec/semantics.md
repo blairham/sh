@@ -736,6 +736,58 @@ prose rather than as a case because the output cannot be golden: bash and
 ksh93 announce the killed writer by its process id, which is different on
 every run.
 
+## A conversion the corpus cannot ask for twice
+
+`printf '%(fmt)T'` writes an epoch through a date format, with the format
+inside the conversion. Oracle runs, 2026-09-05, and it is **bash 5.3's
+alone** in the panel: dash and zsh call `%(` a directive they do not have
+(status 2 and 1, two wordings), bash 3.2 an invalid format character, and
+ksh93 has a `%T` under the same letter that is not this one at all.
+
+    printf '%(%Y)T\n' 1000000000        bash  2001
+    printf '%()T\n'    1000000000       bash  01:46:40 — the C locale's
+                                               time of day
+    printf '[%12(%Y)T]\n' 1000000000    bash  [        2001] — the width
+                                               is the result's, not the
+                                               date's
+
+The operand is seconds since the epoch, and **two numbers are not times**:
+`-1` is now and `-2` is when the shell started. A missing operand is now as
+well. That is why the corpus pins a *fixed* epoch and nothing else — a case
+that asked for the current year would record the year it was recorded in —
+and why the engine grew `Runner.Clock`: a hook, nil meaning the wall clock,
+so the two forms the corpus cannot ask about are pinned in
+`interp/printftime_test.go` instead. It is the same shape `RANDOM` has,
+and for the same reason: a value the shell *produces* has to be sayable
+from outside or nothing that depends on it can be tested twice.
+
+The zone is **the Runner's `$TZ`**, not the process's. Measured: `TZ=UTC`
+without an export changes the answer, so an exported-only lookup would be
+wrong as well as ambient — the `PATH` rule, in a second place. An unset TZ
+is the machine's zone; an empty one, and a name no zone database has, are
+both UTC.
+
+`strftime` is ours, written from the POSIX conversion specifications and
+checked against a live shell in the C locale, because Go has none. Two
+things about it are the platform's rather than the shell's, and are
+recorded rather than pinned: a conversion no strftime has keeps its letter
+and loses the `%` on the system this was measured on, and glibc has
+letters this does not.
+
+`ksh93`'s `%T` is deferred rather than missed. Its operand is a date
+*string* — `now`, `tomorrow`, a date written out — and a number earns
+`printf: warning: invalid argument of type T` and the time it is now.
+Reading a date the way ksh93 reads one is its own feature with its own
+grammar, so `PrintfTimeConversion` is No there and four corpus rows show
+the ksh93 column diverging, which is the honest record of an unbuilt
+feature rather than a silent one.
+
+One thing measured on the way that is **not** this conversion and is
+worth its own change: bash reads the C length modifiers — `%zX`, `%ld`,
+`%jd` — and this engine calls them unknown conversions. That is why bash
+names `T` in `printf '%T'` where it names the character *after* `z` in
+`printf '%z]'`: `z` is a modifier there and `T` is a verb.
+
 ## A capability the corpus cannot hand a case
 
 The corpus can give a case its own argv (`Case.Args`) and its own standard
@@ -2011,6 +2063,44 @@ The letters themselves diverge before the behaviors do:
   The same input under `-N 5` reports 1 in both, bash keeping `ab` and
   ksh93 assigning nothing — `ReadExactCountKeepsPartial`. Wholly empty
   input is st=1 with nothing assigned everywhere.
+- **A timeout of zero is not a timeout.** `-t 0` is a question about the
+  state of the stream, and every dialect with the letter treats it as one.
+  Measured three ways (oracle runs, 2026-09-05): a whole line already
+  waiting, nothing waiting at all, and `ab` waiting with the rest of the
+  line half a second behind it.
+
+        shell   line waiting     nothing   `ab` waiting
+        bash    0, nothing read  1         0, nothing read
+        ksh93   0, line read     1         1, nothing kept
+        zsh     0, line read     1         0, `abc` read
+        dash    has no -t at all
+
+  The first two columns are the same everywhere, which is why this looked
+  like one behavior. The third separates them, and so does what happens
+  next: after bash's `-t 0` the following `read` still finds the first
+  line, and after ksh93's and zsh's it finds the *second*. That is the
+  difference that matters to a script — a shell that polls can be asked
+  the same question in a loop, and a shell that reads eats what it was
+  watching for one line at a time.
+
+  It is `Semantics.ReadZeroTimeout`, three named answers plus the refusal,
+  asked only where the timeout is written as zero. The end of a stream is
+  *ready* to the shell that polls — a read there returns at once, with
+  nothing — so an empty file gives status 0 there and 1 in the two that
+  read (measured: `read/a-zero-timeout-and-what-it-does-to-the-stream`,
+  `read/a-zero-timeout-at-the-end-of-the-input`).
+
+  The status for "nothing waiting" is 1 and not the number an expired
+  `-t` reports, which is the second reason this is not a timeout: the
+  shell that polls answers 1 here and 142 for a deadline that ran out.
+
+  Answering it needs the one question a shell asks a stream without
+  touching it — whether a read would return at once — and a read is
+  exactly what would destroy the thing being asked about. `interp`
+  asks the descriptor with a zero-length wait and never reads
+  (`inputready.go`); anything a Runner holds in memory answers
+  immediately by construction and counts as ready, which is also the
+  answer where a descriptor cannot be asked.
 - **Silence.** `printf 'x\n' | read -s v` reads x, prints nothing and
   reports 0 in bash, ksh93 and zsh: away from a terminal `-s` is a no-op
   that must still parse. dash refuses it.

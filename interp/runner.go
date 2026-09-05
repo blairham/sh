@@ -309,6 +309,21 @@ type Runner struct {
 	// from in the dialects that have it.
 	started time.Time
 
+	// Clock is what this shell calls now. Nil is the wall clock.
+	//
+	// A hook rather than a call to time.Now() at each site, for the reason
+	// RANDOM has one: a value the shell *produces* has to be sayable from
+	// outside, or nothing that depends on it can be tested twice with the
+	// same answer. `printf '%(%Y)T' -1` is the first thing that needed it,
+	// and a corpus case cannot ask it — which is why the case pins a fixed
+	// epoch and this hook pins the rest.
+	//
+	// It is not the process-wide state the library rule is about: reading a
+	// clock changes nothing and two Runners cannot fight over it. What it is
+	// about is a Runner answering from ambient state that its embedder
+	// cannot see or set.
+	Clock func() time.Time
+
 	// optChar is how far into a clustered option `getopts` has read — `-ab`
 	// is two options in one word, and OPTIND cannot say which of them is
 	// next because it counts words. lastOptind is what this builtin last set
@@ -1023,7 +1038,7 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	r.ensureImportedFunctions()
 	r.publishInheritedFds(ctx)
 	if r.started.IsZero() {
-		r.started = time.Now()
+		r.started = r.Now()
 	}
 	r.programEnd = f.End().Line + 1
 	abandoned := 0
@@ -2366,11 +2381,26 @@ func (r *Runner) assign(a *syntax.Assign) {
 		// never evaluated: `m[1+1]=x` stores under the three characters.
 		// This is the switch the attribute exists to throw — the same text
 		// on an undeclared name falls through to the arithmetic reading.
-		r.setAssocElem(a.Name, r.subscriptText(a.Index), r.expandAssignValue(a.Value))
+		key := r.subscriptText(a.Index)
+		value := r.expandAssignValue(a.Value)
+		if a.Append {
+			// `m[k]+=v` joins the element it names, the same operation the
+			// indexed form performs on a subscript — an unset key leaves
+			// nothing in front of the value.
+			value = r.AssocArrays[a.Name][key] + value
+		}
+		r.setAssocElem(a.Name, key, value)
 	case a.Index != nil:
 		idx, err := r.parseNum(strings.TrimSpace(r.joinWord(a.Index)))
 		if err != nil {
 			r.diagf("%s: bad array subscript\n", a.Name)
+			return
+		}
+		if a.Append {
+			// `a[0]+=Q` appends to element 0. Distinct from `a+=(Q)`, which
+			// adds an element after the last: the subscript is what says
+			// which of the two `+=` means.
+			r.appendArrayElem(a.Name, idx, r.expandAssignValue(a.Value))
 			return
 		}
 		r.setArrayElem(a.Name, idx, r.expandAssignValue(a.Value))

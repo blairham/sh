@@ -204,6 +204,27 @@ func (r *Runner) Assigned(name string) (string, bool) {
 // panel uses.
 func Randoms() string { return strconv.Itoa(rand.IntN(32768)) }
 
+// Now is what this shell calls the current time: the Clock hook where one is
+// set, and the wall clock otherwise. Every place in the engine that needs the
+// time of day goes through it, so an embedder that must not be at the mercy
+// of the clock has one place to say so.
+func (r *Runner) Now() time.Time {
+	if r.Clock != nil {
+		return r.Clock()
+	}
+	return time.Now()
+}
+
+// StartedAt is when this runner began, which is what `SECONDS` counts from
+// and what `printf '%(fmt)T' -2` writes. Before the first Run it is the
+// current time, so the value is never the zero one.
+func (r *Runner) StartedAt() time.Time {
+	if r.started.IsZero() {
+		return r.Now()
+	}
+	return r.started
+}
+
 // Uptime is what `SECONDS` counts, from when the runner was made.
 func (r *Runner) Uptime() time.Duration {
 	if r.started.IsZero() {

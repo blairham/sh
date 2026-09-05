@@ -1225,7 +1225,28 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	}
 
 	next := directByteSource(in)
-	if timed {
+	switch {
+	case timed && timeout == 0:
+		// A timeout of zero is a question about the stream rather than a
+		// deadline that has already passed, and the panel answers it three
+		// ways — see ReadZeroTimeoutStyle.
+		if src, reads := r.zeroTimeoutSource(in); reads {
+			next = src
+			break
+		}
+		if r.sem().ReadZeroTimeout != ReadZeroTimeoutPolls {
+			r.diagf("what `read -t 0` asks of the stream: the shells disagree here and no dialect was chosen\n")
+			r.status = 2
+			r.unspecified = true
+			return 2
+		}
+		// The status is the whole answer: nothing is read and no name is
+		// touched, in either direction.
+		if inputWaiting(in) {
+			return 0
+		}
+		return 1
+	case timed:
 		var stop func()
 		next, stop = r.timedByteSource(ctx, in, timeout)
 		defer stop()
@@ -1403,11 +1424,10 @@ func directByteSource(in io.Reader) func() (byte, int) {
 // be called once the segment is read.
 func (r *Runner) timedByteSource(ctx context.Context, in io.Reader, timeout time.Duration) (next func() (byte, int), stop func()) {
 	if timeout <= 0 {
-		// Out of time before the first byte: `read -t 0` lands here, so it
-		// reports the timeout rather than polling. bash answers the poll
-		// with whether input is waiting, which a blocking reader cannot say
-		// without the read this path exists to avoid — a measured, deferred
-		// difference.
+		// No time at all, which is out of time before the first byte. A
+		// timeout that is *written* as zero never reaches here — it is a
+		// question about the stream rather than a deadline, and is answered
+		// by ReadZeroTimeout — so this is the guard and not the behavior.
 		return func() (byte, int) { return 0, evTimeout }, func() {}
 	}
 	tctx, cancel := context.WithTimeout(ctx, timeout)

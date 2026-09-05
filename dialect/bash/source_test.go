@@ -450,3 +450,25 @@ func TestABadBuiltinOption(t *testing.T) {
 		t.Errorf("said %q, want usage=true", out)
 	}
 }
+
+// TestPrintfTimeConversion: `%(fmt)T`, which is this dialect's alone in the
+// panel. The zone is fixed in the script rather than taken from whatever the
+// machine running the test is set to.
+func TestPrintfTimeConversion(t *testing.T) {
+	dir := t.TempDir()
+	out, _ := runBash(t, dir, `TZ=UTC
+printf '%(%Y-%m-%dT%H:%M:%S %Z)T\n' 1000000000
+printf '[%()T][%12(%Y)T]\n' 1000000000 1100000000
+printf '%(%Y)T\n' abc; echo "bad=$?"`)
+	for _, want := range []string{
+		"2001-09-09T01:46:40 UTC\n",
+		"[01:46:40][        2004]\n",
+		// The complaint, and then the epoch zero anyway.
+		"printf: abc: invalid number\n",
+		"1970\nbad=1\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("got %q, want %q in it", out, want)
+		}
+	}
+}

@@ -171,24 +171,51 @@ The two-element answer for `a=($x)` is the `SplitParamExpansion` axis
 from `semantics.md` reaching into the literal; it is one rule, not a
 second one for arrays.
 
-Three corners split the panel and each is silent:
+Two corners split the panel and each is silent:
 
 | probe | bash 5 | ksh93 | zsh |
 | --- | --- | --- | --- |
 | `a=(); echo ${#a[@]}` | 0 | **1** | 0 |
-| `a=(x y); a[0]+=Q` | `xQ` | `xQ` | **refused** |
 | `a=([2]=c [0]=a)` | placed | placed | **refused** |
 
 `a=()` is an *empty array* in bash and zsh. In ksh93 it declares a
 compound variable instead — `typeset -p a` answers `typeset -C a=()`,
 `${#a[@]}` is 1, and `${a[0]}` renders as the two-line text `(` `)`.
-zsh refuses an append to a single element (`assignment to invalid
-subscript range`) and refuses a subscript written inside the literal
-(`bad subscript for direct array assignment`), both at status 1.
+zsh refuses a subscript written inside the literal (`bad subscript for
+direct array assignment`) at status 1.
+
+`a[i]+=v` is **not** one of the corners, which an earlier reading of
+`a=(x y); a[0]+=Q` had it be: zsh refuses that line, but for the
+subscript rather than for the append. `0` is below zsh's first
+subscript, so the same refusal (`assignment to invalid subscript
+range`) answers a plain `a[0]=Q`; write `a[1]+=Q` or `a[-1]+=Q` and zsh
+joins the element like the other two. Measured 2026-09-05:
+
+| probe | bash 5 | bash 3.2 | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `a=(x y); a[-1]+=Q` | `x yQ` | refused | `x yQ` | `x yQ` |
+| `a=(x y); a[1]+=Q` | `x yQ` | `x yQ` | `x yQ` | `xQ y` |
+| `a[3]+=Q; echo "${a[3]}"` | `Q` | `Q` | `Q` | `Q` |
+| `typeset -A m; m[k]+=x; m[k]+=Q` | `xQ` | no `-A` | `xQ` | `xQ` |
+
+So appending to an element is unanimous in the three shells with
+arrays, and the only thing about it that is a question is *which*
+element a numeral names. An element that was never assigned has nothing
+to append to, and all three place the value as it stands rather than
+refusing. dash has no arrays and reads every line above as a command
+name.
+
+bash 3.2 is not a fourth answer in either row it declines: it has no
+negative subscripts at all (`a[-1]: bad array subscript`, the same
+refusal a plain `a[-1]=Q` gets there) and no associative arrays for
+`-A` to declare, so what it says is about those two features rather
+than about appending, which it does exactly as bash 5 does.
 
 The subscript on the left of an assignment inherits the array-base axis:
 `a[1]=Q` replaces the *second* element in bash and ksh93 and the first
-in zsh, exactly as `${a[1]}` reads it.
+in zsh, exactly as `${a[1]}` reads it — and the second row above says
+`a[1]+=Q` inherits it too, so appending is not a form with a subscript
+rule of its own.
 
 An array assignment may also be an **operand** of a declaration utility
 — `typeset a=(x y)`, `local a=(x y)`, `readonly a=(p q)` — which is a
@@ -199,13 +226,16 @@ measured: `decl/an-array-assignment-as-an-operand`,
 
 Corpus: `core/append-to-an-array`, `core/array-star-joins`,
 `array/a-subscript-past-the-end`, `array/removing-one-element`,
+`array/appending-to-an-element`,
+`array/appending-to-an-element-inherits-the-base`,
+`array/appending-to-an-unset-element`,
+`array/appending-to-an-associative-element`,
 `pat/an-array-literal-is-not-a-group`.
 
-**Two of the rows above are ahead of the implementation**, and are
-recorded so the gap is a known one: a subscript inside a literal is kept
-as literal text here rather than placed (`a=([2]=c)` leaves one element
-reading `[2]=c`), and `a[i]+=v` replaces the element instead of
-appending to it. Both are unanimous in the two shells that answer them.
+**One row above is ahead of the implementation**, and is recorded so the
+gap is a known one: a subscript inside a literal is kept as literal text
+here rather than placed (`a=([2]=c)` leaves one element reading
+`[2]=c`), which is unanimous in the two shells that answer it.
 
 ## Grouping: `( )` and `{ }`
 

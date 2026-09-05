@@ -166,6 +166,7 @@ func Semantics() interp.Semantics {
 	// process` and 1, the variables untouched. A short -n is a success
 	// here; a short -N reports 1 and leaves the variable empty.
 	s.ReadOptions = "rspAd:n:N:t:u:"
+	s.ReadZeroTimeout = interp.ReadZeroTimeoutTakesWhatIsWaiting
 	s.ReadPartialCountSucceeds = interp.Yes
 	s.ReadExactCountKeepsPartial = interp.No
 	// typeset in a keyword function hides the caller's value, as bash's
@@ -215,6 +216,11 @@ func Semantics() interp.Semantics {
 	s.PrintfEmptyIsNotANumber = interp.No
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfBackslashC = interp.PrintfBackslashCControl
+	// ksh93's `%T` is a different conversion under the same letter: its
+	// operand is a date *string* and a number earns a warning and the current
+	// time. Not the one bash has, and not modeled — see
+	// docs/spec/semantics.md.
+	s.PrintfTimeConversion = interp.No
 	s.PrintfQuote = interp.PrintfQuoteSingle
 	// The same `\c` as the printf format, and the arithmetic is bit 6
 	// toggled rather than bash's five-bit mask: `$'\c1'` is `q`, not 0x11.

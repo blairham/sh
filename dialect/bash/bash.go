@@ -139,6 +139,7 @@ func Semantics() interp.Semantics {
 	// descriptor. A short -n keeps its text and reports 1; a short -N keeps
 	// its text too.
 	s.ReadOptions = "rsa:d:n:N:p:t:u:"
+	s.ReadZeroTimeout = interp.ReadZeroTimeoutPolls
 	s.ReadPartialCountSucceeds = interp.No
 	s.ReadExactCountKeepsPartial = interp.Yes
 	// A directory the PATH search walked past leaves no trace: with nothing
@@ -203,6 +204,10 @@ func Semantics() interp.Semantics {
 	s.PrintfEmptyIsNotANumber = interp.Yes
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
+	// `%(fmt)T`: an epoch through a date format, with -1 for now and -2 for
+	// when the shell started. This shell alone in the panel — 3.2 has it not
+	// either, which is why the two bash columns of the corpus differ here.
+	s.PrintfTimeConversion = interp.Yes
 	s.PrintfQuote = interp.PrintfQuoteBackslash
 	// `$'\cA'` is 0x01 and `$'\c1'` is 0x11: the character uppercased and
 	// masked to five bits, with `\c?` reading as DEL since 5.x.

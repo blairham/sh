@@ -1522,6 +1522,13 @@ func (l *Lexer) scanBareParam(q Quoting) Span {
 	open := l.pos()
 	l.advance() // $
 	begin := l.off
+	if l.dialect.BareSubscript && l.peek() == '#' && isBareLengthTarget(l.peekAt(1)) {
+		// `$#name` is that parameter's length, so the `#` is an operator here
+		// and the parameter is what follows it. Without the flag — and with
+		// it, where nothing a length can be taken of follows — the `#` is
+		// itself the parameter, and the rest of the word is literal text.
+		l.advance()
+	}
 	switch c := l.peek(); {
 	case c >= '0' && c <= '9':
 		l.advance()
@@ -1538,7 +1545,85 @@ func (l *Lexer) scanBareParam(q Quoting) Span {
 			l.advance()
 		}
 	}
+	l.bareSubscript(l.src[begin:l.off], q)
 	return Span{Kind: ParamExp, Value: l.src[begin:l.off], Quoting: q, Pos: open}
+}
+
+// isBareLengthTarget reports whether c may follow the `#` of `$#name`.
+//
+// A name, a digit, `@` or `*`. Measured on zsh 5.9.2: `$#a` is an array's
+// count, `$#0` and `$#1` are the lengths of those parameters, and `$#@` and
+// `$#*` are the number of positional parameters — while `$##` prints the
+// count and then a `#`, and `$#!` the count and then a `!`, so the two
+// specials that would make the inner text ambiguous are also the two the
+// shell itself leaves out.
+func isBareLengthTarget(c byte) bool {
+	return c == '@' || c == '*' || (c >= '0' && c <= '9') || isNameStart(c)
+}
+
+// takesBareSubscript reports whether the parameter a bare `$` just named may
+// carry a `[ … ]` after it.
+//
+// name is the inner text scanned so far, which is the parameter with the `#`
+// of a length still on the front of it: `$#a[2]` is the length of the second
+// element, so the subscript belongs to `a` and is read here.
+//
+// A name, `@` or `*`. The positional digits are excluded because the shell
+// excludes them — `set -- abcd; echo $1[2]` prints `abcd[2]` — and the other
+// specials because the span could not record the result: `#` and `!` already
+// mean an operator at the front of a `${ … }`, and the rest are single-valued
+// parameters no script subscripts.
+func takesBareSubscript(name string) bool {
+	name = strings.TrimPrefix(name, "#")
+	if name == "@" || name == "*" {
+		return true
+	}
+	if name == "" || !isNameStart(name[0]) {
+		return false
+	}
+	return true
+}
+
+// bareSubscript reads the `[ … ]` a bare parameter carries where the dialect
+// has them, leaving the cursor after the closing bracket.
+//
+// The brackets are balanced, because a subscript may hold another — `$a[$b[1]]`
+// — and the scan gives up where the word would end: an unquoted `[` that never
+// closes before the word does is not a subscript at all, and its characters
+// stay literal. That is one step short of the shell, which commits to the
+// subscript and reports an invalid one at run time; the shape still fails
+// either way, and the difference is the wording of a diagnostic for input
+// nobody writes.
+//
+// Where the word ends is the *quoting's* question and not a fixed set of
+// characters, which is measured on both sides: inside double quotes a blank
+// and a **newline** are ordinary text and `"$a[1\n]"` is the first element,
+// while unquoted either one ends the word and the brackets are literal. A
+// scan that stopped at every newline would have been wrong for the quoted
+// half and was — nothing caught it until the line was mutated away and the
+// shell was asked.
+func (l *Lexer) bareSubscript(name string, q Quoting) {
+	if !l.dialect.BareSubscript || l.peek() != '[' || !takesBareSubscript(name) {
+		return
+	}
+	depth := 0
+	for i := l.off; i < len(l.src); i++ {
+		switch c := l.src[i]; {
+		case c == '[':
+			depth++
+		case c == ']':
+			if depth--; depth == 0 {
+				for l.off <= i {
+					l.advance()
+				}
+				return
+			}
+		case q == DoubleQuoted && c == '"':
+			return
+		case q != DoubleQuoted && l.isWordEnd(c):
+			return
+		}
+	}
 }
 
 // openingOf is how a span's kind is written, for saying what is unfinished.

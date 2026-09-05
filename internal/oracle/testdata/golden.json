@@ -26120,14 +26120,14 @@
     },
     "jobs/a-background-job-that-failed": {
       "bash": {
-        "Stdout": "[1]+  Exit 1                     false",
+        "Stdout": "[1] Exit 1                     false",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "[1]+  Done(1)                    false",
+        "Stdout": "[1] Done(1)                    false",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -26141,14 +26141,14 @@
         "TimedOut": false
       },
       "dash": {
-        "Stdout": "[1] + Done(1)                    ",
+        "Stdout": "[1] Done(1)                    ",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "ksh93": {
-        "Stdout": "[1] +  Running                 \u003ccommand unknown\u003e",
+        "Stdout": "[1] Running                 \u003ccommand unknown\u003e",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -26164,14 +26164,14 @@
     },
     "jobs/a-finished-background-job": {
       "bash": {
-        "Stdout": "[1]+  Done                       sleep 0.05~---",
+        "Stdout": "[1] Done                       sleep 0.05~---",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "bash-as-sh": {
-        "Stdout": "[1]+  Done                       sleep 0.05~---",
+        "Stdout": "[1] Done                       sleep 0.05~---",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -26185,14 +26185,14 @@
         "TimedOut": false
       },
       "dash": {
-        "Stdout": "[1] + Done                       ~---",
+        "Stdout": "[1] Done                       ~---",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },
       "ksh93": {
-        "Stdout": "[1] +  Running                 \u003ccommand unknown\u003e~---",
+        "Stdout": "[1] Running                 \u003ccommand unknown\u003e~---",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,
@@ -26244,6 +26244,50 @@
       },
       "zsh": {
         "Stdout": "no jobs",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "jobs/a-job-that-is-neither-current-nor-previous": {
+      "bash": {
+        "Stdout": "[1][ ] Exit 1                     false",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[1][ ] Done(1)                    false",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[2][+] Done                       ~[1][+] Done(1)                    ",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
         "Stderr": "",
         "Status": 0,
         "Signal": 0,

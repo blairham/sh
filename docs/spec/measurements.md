@@ -849,8 +849,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `readonly/reassignment-by-a-declaration` | **2>** `<shell>: 1: export: x: is read only` *(status 2)* | `after` **2>** `<shell>: line 1: x: readonly variable` | **2>** `<shell>: line 1: x: readonly variable` *(status 1)* | `after` **2>** `<shell>: x: readonly variable` | **2>** `<shell>: x: is read only` *(status 1)* | **2>** `<shell>:1: read-only variable: x` *(status 1)* |
 | `readonly/reassignment-from-a-command-string` | **2>** `<shell>: 1: x: is read only` *(status 2)* | **2>** `<shell>: line 1: x: readonly variable` *(status 1)* | **2>** `<shell>: line 1: x: readonly variable` *(status 127)* | **2>** `<shell>: x: readonly variable` *(status 1)* | **2>** `<shell>: x: is read only` *(status 1)* | **2>** `<shell>:1: read-only variable: x` *(status 1)* |
 | `jobs/a-running-background-job` | `[1] + Running                    ` | `[1]+  Running                    sleep 0.4 &` | `[1]+  Running                    sleep 0.4 &` | `[1]+  Running                 sleep 0.4 &` | `[1] +  Running                 <command unknown>` | `[1]  + running    sleep 0.4` |
-| `jobs/a-finished-background-job` | `[1] + Done                       ~---` | `[1]+  Done                       sleep 0.05~---` | `[1]+  Done                       sleep 0.05~---` | `---` | `[1] +  Running                 <command unknown>~---` | `---` |
-| `jobs/a-background-job-that-failed` | `[1] + Done(1)                    ` | `[1]+  Exit 1                     false` | `[1]+  Done(1)                    false` | *(no output, status 0)* | `[1] +  Running                 <command unknown>` | *(no output, status 0)* |
+| `jobs/a-finished-background-job` | `[1] Done                       ~---` | `[1] Done                       sleep 0.05~---` | `[1] Done                       sleep 0.05~---` | `---` | `[1] Running                 <command unknown>~---` | `---` |
+| `jobs/a-background-job-that-failed` | `[1] Done(1)                    ` | `[1] Exit 1                     false` | `[1] Done(1)                    false` | *(no output, status 0)* | `[1] Running                 <command unknown>` | *(no output, status 0)* |
+| `jobs/a-job-that-is-neither-current-nor-previous` | `[2][+] Done                       ~[1][+] Done(1)                    ` | `[1][ ] Exit 1                     false` | `[1][ ] Done(1)                    false` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `jobs/two-jobs-and-which-end-it-starts-from` | `[2] + Running                    ~[1] - Running                    ` | `[1]-  Running                    sleep 0.4 &~[2]+  Running                    sleep 0.4 &` | `[1]-  Running                    sleep 0.4 &~[2]+  Running                    sleep 0.4 &` | `[1]-  Running                 sleep 0.4 &~[2]+  Running                 sleep 0.4 &` | `[2] +  Running                 <command unknown>~[1] -  Running                 <command unknown>` | `[1]  - running    sleep 0.4~[2]  + running    sleep 0.4` |
 | `jobs/dash-p-is-the-process-ids-alone` | `the job's process id alone` | `the job's process id alone` | `the job's process id alone` | `the job's process id alone` | `the job's process id alone` | `a listing with the id in it` |
 | `jobs/dash-l-puts-the-process-id-in-the-listing` | `[1] + PID Running ` | `[1]+ PID Running sleep 0.4 &` | `[1]+ PID Running sleep 0.4 &` | `[1]+ PID Running sleep 0.4 &` | `[1] + PID	 Running <command unknown>` | `[1] + PID running sleep 0.4` |
@@ -1047,13 +1048,17 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   sleep 0.4 & jobs
   ```
-- `jobs/a-finished-background-job` — reported once and then forgotten, in every shell that reports it at all — the second listing is empty. zsh never mentions it and ksh93 still calls it Running, which is not a reaping race: it says so after `wait` too
+- `jobs/a-finished-background-job` — reported once and then forgotten, in every shell that reports it at all — the second listing is empty. zsh never mentions it and ksh93 still calls it Running, which is not a reaping race: it says so after `wait` too. The marker is normalized away by the same expression as the failed-job row below, and for the same reason: this job has finished too, so what the listing says about which job is current is not a fact about the job that finished
   ```sh
-  sleep 0.05 & sleep 0.5; jobs; echo "---"; jobs
+  m='s/^\(\[[0-9][0-9]*\]\) *[-+]* */\1 /'; sleep 0.05 & sleep 0.5; jobs >a.txt; sed -e "$m" a.txt; echo "---"; jobs >b.txt; sed -e "$m" b.txt
   ```
-- `jobs/a-background-job-that-failed` — the status reaches the listing, and the two shells that say so disagree about how: `Exit 1` against `Done(1)`
+- `jobs/a-background-job-that-failed` — the status reaches the listing, and the two shells that say so disagree about how: `Exit 1` against `Done(1)`. The current-job marker is normalized to one space rather than recorded, because it answers a different question and does not answer it the same way twice: bash spelled it `[1]+` in every one of 2,900 measured runs of this snippet and `[1] ` once in three runs of the record check, which is rare enough that a regeneration bakes in whichever it saw and every later check then fails for a reason unrelated to what changed. What the marker does mean is pinned by the row below, where the blank is reachable on purpose. Through a file rather than a pipe, because a subshell has no job table in dash or zsh and `jobs | sed` would empty two of the columns instead of normalizing them
   ```sh
-  false & sleep 0.3; jobs
+  false & sleep 0.3; jobs >j.txt; sed -e "s/^\(\[[0-9][0-9]*\]\) *[-+]* */\1 /" j.txt
+  ```
+- `jobs/a-job-that-is-neither-current-nor-previous` — the marker belongs to the job table and not to the job. With a second job started and waited for, bash has nothing left to call current and writes a *blank* where the `+` would be — the other spelling the failed-job row above was seeing at random, here on purpose and the same 200 times out of 200. dash marks both of its rows `+` rather than keeping a previous job at all, and the three shells that print nothing have forgotten both. The marker is bracketed because a blank one is invisible beside a `+`, and a reader cannot check what they cannot see
+  ```sh
+  false & sleep 0.05 & wait %2; jobs >j.txt; sed -e "s/^\(\[[0-9][0-9]*\]\) *\([-+]\) */\1[\2] /;s/^\(\[[0-9][0-9]*\]\)  */\1[ ] /" j.txt
   ```
 - `jobs/two-jobs-and-which-end-it-starts-from` — dash and ksh93 print the most recent first and bash and zsh the oldest, and the number stays with the job either way — `%2` has to mean the same thing at both ends. Also where the `+` and `-` markers become visible
   ```sh

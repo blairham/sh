@@ -144,7 +144,10 @@ func TestARefusedNameIsWordedByTheDialect(t *testing.T) {
 		},
 		{
 			"a shell that follows it with a usage line",
-			Diagnostics{BuiltinUsage: map[string]string{"set": "Usage: set [-abc]"}},
+			Diagnostics{
+				BuiltinUsage:              map[string]string{"set": "Usage: set [-abc]"},
+				SetInvalidOptionNameUsage: true,
+			},
 			[]string{"invalid option name", "Usage: set [-abc]", "st=2"},
 			"",
 		},
@@ -233,7 +236,7 @@ func TestSetTraceLettersAreAnAxis(t *testing.T) {
 		sem.SetHasTraceLetters = No
 		r.Semantics = &sem
 	})
-	if !strings.Contains(out, "not implemented") || !strings.Contains(out, "st=2") {
+	if !strings.Contains(out, "set: -T: invalid option") || !strings.Contains(out, "st=2") {
 		t.Errorf("out=%q, want the dialect without the letters to refuse at 2", out)
 	}
 }
@@ -380,7 +383,7 @@ func TestTheHLetterIsAnAxis(t *testing.T) {
 	refused := CoreSemantics()
 	refused.SetHasTheHLetter = No
 	out, _ = run(t, "set -h\necho \"st=$?\"\n", declare(refused))
-	if !strings.Contains(out, "not implemented") || !strings.Contains(out, "st=2") {
+	if !strings.Contains(out, "set: -h: invalid option") || !strings.Contains(out, "st=2") {
 		t.Errorf("out=%q, want the dialect without the letter to refuse at 2", out)
 	}
 }
@@ -507,4 +510,187 @@ func TestSetOptionLettersReportsAStatus(t *testing.T) {
 	if got := r.SetOptionLetters("eq", true); got != 1 {
 		t.Errorf("a bundle ending in a refused letter gave %d, want 1", got)
 	}
+}
+
+// The words a refused option *letter* is given are the dialect's, and the
+// panel spells them four ways. Named by what each answer does rather than by
+// the shell that gives it: this package knows no shells.
+//
+// The sign is the part that needs two verbs. Two of the panel echo back the
+// `+` of `set +q` and two write `-q` whichever way they were asked, so a
+// wording takes the spelling as written and the bare letter and uses the one
+// it means (#598).
+func TestARefusedLetterIsWordedByTheDialect(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		dg   Diagnostics
+		want []string
+		gone string
+	}{
+		{
+			"a shell that echoes the sign it was asked with",
+			Diagnostics{SetInvalidOptionLetter: "set: %[1]s: unknown option"},
+			[]string{"set: -q: unknown option", "set: +j: unknown option"},
+			"invalid option",
+		},
+		{
+			"a shell that writes a dash whichever it was asked with",
+			Diagnostics{SetInvalidOptionLetter: "set: Illegal option -%[2]s"},
+			[]string{"set: Illegal option -q", "set: Illegal option -j"},
+			"+j",
+		},
+		{
+			"a shell that follows the letter with the builtin's usage line",
+			Diagnostics{BuiltinUsage: map[string]string{"set": "Usage: set [-abc]"}},
+			[]string{"set: -q: invalid option", "Usage: set [-abc]"},
+			"",
+		},
+		{
+			"and the default, which needs neither",
+			Diagnostics{},
+			[]string{"set: -q: invalid option", "set: +j: invalid option"},
+			"Usage:",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out := runWorded(t, "set -q\nset +j\n", c.dg)
+			for _, w := range c.want {
+				if !strings.Contains(out, w) {
+					t.Errorf("said %q, want it to contain %q", out, w)
+				}
+			}
+			if c.gone != "" && strings.Contains(out, c.gone) {
+				t.Errorf("said %q, want no %q in it", out, c.gone)
+			}
+		})
+	}
+}
+
+// TestTheUsageLineFollowsTheLetterAndNotAlwaysTheName: the two spellings do
+// not agree about the usage line, where they agree about everything else a
+// refusal reports. One of the panel prints the builtin's usage under a bad
+// letter — as it does under any builtin's bad letter — and not under a bad
+// `-o` name, whose complaint is a sentence of its own; another prints it
+// under both.
+func TestTheUsageLineFollowsTheLetterAndNotAlwaysTheName(t *testing.T) {
+	usage := Diagnostics{BuiltinUsage: map[string]string{"set": "Usage: set [-abc]"}}
+	both := usage
+	both.SetInvalidOptionNameUsage = true
+	if got := runWorded(t, "set -o bogus\n", usage); strings.Contains(got, "Usage:") {
+		t.Errorf("said %q, want no usage line under a refused name for a shell that prints none there", got)
+	}
+	if got := runWorded(t, "set -o bogus\n", both); !strings.Contains(got, "Usage: set [-abc]") {
+		t.Errorf("said %q, want the usage line repeated under the name", got)
+	}
+	if got := runWorded(t, "set -q\n", usage); !strings.Contains(got, "Usage: set [-abc]") {
+		t.Errorf("said %q, want the usage line under the letter either way", got)
+	}
+}
+
+// TestALetterTheDialectHasIsCalledMissingRatherThanUnknown: telling a script
+// that `set -b` is an invalid option, in a dialect that has `-b` and where
+// this shell simply does not, would be a different and worse answer than
+// telling it the truth. The same rule every other builtin's letters follow —
+// see Diagnostics.UnimplementedOptionLetters.
+func TestALetterTheDialectHasIsCalledMissingRatherThanUnknown(t *testing.T) {
+	dg := Diagnostics{
+		SetInvalidOptionLetter:     "set: %[1]s: unknown option",
+		UnimplementedOptionLetters: map[string]string{"set": "b"},
+		BuiltinUsage:               map[string]string{"set": "Usage: set [-abc]"},
+	}
+	out := runWorded(t, "set -b\n", dg)
+	if !strings.Contains(out, "set: -b is not implemented yet") {
+		t.Errorf("said %q, want the letter called missing", out)
+	}
+	if strings.Contains(out, "unknown option") || strings.Contains(out, "Usage:") {
+		t.Errorf("said %q, want neither the dialect's refusal nor its usage line — the shell is not refusing it", out)
+	}
+	// A letter the dialect does not have either is still refused the
+	// dialect's way, so the list narrows the answer rather than replacing it.
+	if got := runWorded(t, "set -q\n", dg); !strings.Contains(got, "set: -q: unknown option") {
+		t.Errorf("said %q, want the dialect's refusal for a letter it really does not have", got)
+	}
+}
+
+// An option refused at an *invocation* is not the same sentence as one
+// refused by the builtin, and the difference is not only where it happened:
+// nothing names `set` there, and a dialect with a usage block of its own
+// prints that rather than the builtin's (#598).
+//
+// Driven through SetOptionLetters and SetNamedOption, which are the front
+// end's only way in and therefore what marks the route.
+func TestAnOptionRefusedAtAnInvocationDoesNotNameTheBuiltin(t *testing.T) {
+	newRunner := func(dg Diagnostics) (*Runner, *strings.Builder) {
+		var errs strings.Builder
+		sem := PosixSemantics()
+		sem.BadSetOptionNameFatal = No
+		return &Runner{
+			Stdout: &strings.Builder{}, Stderr: &errs,
+			Semantics: &sem, Diagnostics: &dg, Name: "/opt/x/mysh",
+		}, &errs
+	}
+	t.Run("the sentence loses the builtin's name and the location", func(t *testing.T) {
+		r, errs := newRunner(Diagnostics{SetInvalidOptionLetter: "set: Illegal option -%[2]s"})
+		r.SetOptionLetters("q", true)
+		if got, want := errs.String(), "/opt/x/mysh: Illegal option -q\n"; got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+	t.Run("a dialect that writes the line it has not reached still does", func(t *testing.T) {
+		r, errs := newRunner(Diagnostics{
+			SetInvalidOptionLetter:       "set: Illegal option -%[2]s",
+			InvocationNamesTheUnreadLine: true,
+			Location:                     LocationColonLine,
+		})
+		r.SetOptionLetters("q", true)
+		if got, want := errs.String(), "/opt/x/mysh: 0: Illegal option -q\n"; got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+	t.Run("the shell's usage block stands in for the builtin's", func(t *testing.T) {
+		r, errs := newRunner(Diagnostics{
+			BuiltinUsage:    map[string]string{"set": "Usage: set [-abc]"},
+			InvocationUsage: "Usage: %[2]s [-abc] — %[1]s",
+		})
+		r.SetOptionLetters("q", true)
+		want := "/opt/x/mysh: -q: invalid option\nUsage: mysh [-abc] — /opt/x/mysh\n"
+		if got := errs.String(); got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	})
+	t.Run("a dialect that hands the long spelling to the builtin", func(t *testing.T) {
+		r, errs := newRunner(Diagnostics{
+			InvocationNameRefusalNamesTheShell: true,
+			InvocationUsage:                    "Usage: %[2]s [-abc]",
+			Location:                           LocationLineWord,
+		})
+		r.SetNamedOption("bogus", true)
+		want := "/opt/x/mysh: line 0: /opt/x/mysh: bogus: invalid option name\n"
+		if got := errs.String(); got != want {
+			t.Errorf("got %q, want %q — the builtin's own report, with the shell's name where the builtin's would be", got, want)
+		}
+		// The letter is that dialect's command-line parser speaking and
+		// keeps the invocation shape, which is the whole reason the flag
+		// asks about the name alone.
+		r2, errs2 := newRunner(Diagnostics{
+			InvocationNameRefusalNamesTheShell: true,
+			InvocationUsage:                    "Usage: %[2]s [-abc]",
+			Location:                           LocationLineWord,
+		})
+		r2.SetOptionLetters("q", true)
+		want2 := "/opt/x/mysh: -q: invalid option\nUsage: mysh [-abc]\n"
+		if got := errs2.String(); got != want2 {
+			t.Errorf("got %q, want %q", got, want2)
+		}
+	})
+	t.Run("and inside a script the builtin is named as it always was", func(t *testing.T) {
+		dg := Diagnostics{
+			SetInvalidOptionLetter: "set: Illegal option -%[2]s",
+			InvocationUsage:        "Usage: %[2]s [-abc]",
+		}
+		if got := runWorded(t, "set -q\n", dg); !strings.Contains(got, "set: Illegal option -q") ||
+			strings.Contains(got, "Usage:") {
+			t.Errorf("said %q, want the builtin's own wording and no shell usage block", got)
+		}
+	})
 }

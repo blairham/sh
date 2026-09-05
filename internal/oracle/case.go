@@ -4595,6 +4595,21 @@ echo unreachable`,
 		Why:     "the letter half of the question the long name asks, and the panel answers the two identically — `-q`, `-j`, `-z` and `-A` are the letters all six refuse, and each shell reports for `set -q` exactly what it reports for `set -o zzznosuch` and ends the script or does not in the same way. bash alone carries on, at 2; dash and ksh93 stop at 2 and zsh at 1. The letter had no dialect answer at all until #483: it reported 2 everywhere and never stopped a script, so the same shell answered its own two spellings differently",
 	},
 	{
+		ID: "opt/a-refused-letter-echoes-the-sign", Category: "shell options",
+		Snippet: `set +q; echo "st=$?"`,
+		Why:     "the other half of the letter's spelling: bash and ksh93 echo the `+` back where dash and zsh write `-q` whichever way they were asked, so the sign is a verb in two of the wordings and a literal in the other two",
+	},
+	{
+		ID: "opt/an-unknown-letter-at-an-invocation", Category: "shell options",
+		Snippet: `echo hi`, Args: []string{"-q", "-c", ArgSnippet},
+		Why: "the same refusal by the other route, and it is not the same sentence: nobody names `set` here, bash and ksh93 print the whole *shell* usage rather than the builtin's, and zsh drops the location its run-time form writes. The letter is first in the word deliberately — bash answers 1 with no usage block when a letter it has comes before the one it does not, which is a position axis nobody has asked for yet",
+	},
+	{
+		ID: "opt/an-unknown-long-name-at-an-invocation", Category: "shell options",
+		Snippet: `echo hi`, Args: []string{"-o", "zzznosuch", "-c", ArgSnippet},
+		Why: "the long spelling by the same route, and bash alone shapes it differently from its own letter: dash, ksh93 and zsh word both the same way here, while bash hands this one to the builtin and prints `<shell>: line 0: <shell>: …` — its own name standing where `set` would",
+	},
+	{
 		ID: "opt/turning-off-a-name-a-shell-does-not-implement", Category: "shell options",
 		Snippet: `set +o posix; echo "st=$?"; set +o history; echo "st=$?"`,
 		Why:     "the thirteenth line of Homebrew's own brew script is `set +o posix`, and it is the shape this implementation's accept-off/refuse-on policy exists for: turning off what a shell was never doing is a request that has been granted, where turning it *on* would be a promise. Recorded across the panel because the two names split it — bash has both, and the others have neither",

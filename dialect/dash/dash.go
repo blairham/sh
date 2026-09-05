@@ -270,6 +270,18 @@ func Diagnostics() interp.Diagnostics {
 		// whichever way it was asked.
 		ParamNullOrNotSet:    "parameter not set or null",
 		SetInvalidOptionName: "set: Illegal option -o %[1]s",
+		// The sign is part of the sentence for the same reason `-o` is:
+		// this shell writes `-q` for `set +q` as well as for `set -q`, so
+		// the wording takes the bare letter and spells the dash itself.
+		SetInvalidOptionLetter: "set: Illegal option -%[2]s",
+		UnimplementedOptionLetters: map[string]string{
+			// `set` letters dash has and this shell does not: -b job
+			// notices, -i interactive, -s reading standard input, and the
+			// three about its line editor and end-of-file — -E emacs, -V
+			// vi, -I ignoreeof. Measured 2026-09-05 by asking dash for
+			// every letter of the alphabet in both cases and both signs.
+			"set": "bisEIV",
+		},
 		// Said whichever spelling asked, so the verb goes unused; status 0,
 		// the field's default, is what makes it a remark rather than an
 		// error.

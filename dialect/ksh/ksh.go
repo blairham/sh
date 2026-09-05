@@ -427,10 +427,21 @@ func Diagnostics() interp.Diagnostics {
 		ParamNull:            "parameter null",
 		UnsetBadFunctionName: "unset: %[1]s: invalid function name",
 		SetInvalidOptionName: "set: %[1]s: bad option(s)",
-		SignalDescriptions:   signalDescriptions(),
-		JobRunning:           " Running",
-		JobStopped:           "Stopped",
-		JobUnknownCommand:    "<command unknown>",
+		// The letter as the script spelled it: `set +q` is refused as `+q`
+		// here, as it is in bash.
+		SetInvalidOptionLetter: "set: %[1]s: unknown option",
+		// The one shell in the panel that repeats `set`'s usage line under
+		// a bad option *name* as well as under a bad letter.
+		SetInvalidOptionNameUsage: true,
+		// At an invocation ksh93 prints its own usage instead, and names
+		// itself by the last element of the word it was invoked by — where
+		// bash spells the whole path. Measured through a link named
+		// `myksh`, which is what it called itself.
+		InvocationUsage:    "Usage: %[2]s [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]",
+		SignalDescriptions: signalDescriptions(),
+		JobRunning:         " Running",
+		JobStopped:         "Stopped",
+		JobUnknownCommand:  "<command unknown>",
 		// ksh93 lists a job that has already ended as "Running", and it is
 		// not a reaping race — it still says so after `wait`. Recorded as
 		// the word ksh uses rather than corrected, which would be inventing
@@ -572,6 +583,14 @@ func Diagnostics() interp.Diagnostics {
 		WaitBadJobStatus:          1,
 		// ksh93 has `--version` here, which this shell does not.
 		UnimplementedOptionLetters: map[string]string{
+			// `set` letters ksh93 has and this shell does not: -b job
+			// notices, -k assignment-anywhere, -p privileged, -r
+			// restricted, -s sorting the positional parameters, -t one
+			// command, -A assigning an array, and -B -G -H, its brace
+			// expansion, globstar and history-expansion switches. Measured
+			// 2026-09-05 by asking ksh93 for every letter of the alphabet
+			// in both cases and both signs.
+			"set": "bkprstABGH",
 			// ksh93 answers --version on most builtins, and has its own
 			// letters for these two.
 			"wait": "-",

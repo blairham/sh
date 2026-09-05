@@ -133,13 +133,6 @@ func Exec(ctx context.Context, sh Found, c Case) Result {
 	// from the developer's shell would make the record depend on whose
 	// machine produced it. Standard input is the same argument and is
 	// settled in command(), which knows what the case asked for.
-	cmd.Env = []string{
-		"PATH=/usr/bin:/bin:/usr/sbin:/sbin",
-		"HOME=" + dir,
-		"LC_ALL=C",
-		"TERM=dumb",
-	}
-
 	// A buffer per stream rather than one shared one. os/exec sends both to
 	// the same pipe when they are the same writer, which is what
 	// CombinedOutput does and what this exists not to do.
@@ -357,6 +350,26 @@ func command(ctx context.Context, sh Found, c Case, dir string) *exec.Cmd {
 	}
 
 	cmd := exec.CommandContext(ctx, sh.Path, args...)
+	// A snippet must not inherit a user's environment: HOME, IFS or PATH from
+	// the developer's shell would make the record depend on whose machine
+	// produced it. A case may *add* to these four and may override one of
+	// them by naming it — which is execve's own rule for a repeated name and
+	// the only reading that lets a case ask about HOME — but it cannot lose
+	// them by accident. Built here rather than in Exec so that a value may
+	// name the scratch script the same way an argument does.
+	cmd.Env = []string{
+		"PATH=/usr/bin:/bin:/usr/sbin:/sbin",
+		"HOME=" + dir,
+		"LC_ALL=C",
+		"TERM=dumb",
+	}
+	for _, kv := range c.Env {
+		kv = strings.ReplaceAll(kv, ArgSnippet, c.Snippet)
+		if strings.Contains(kv, ArgScript) {
+			kv = strings.ReplaceAll(kv, ArgScript, script())
+		}
+		cmd.Env = append(cmd.Env, kv)
+	}
 	// Every route is invoked under the name its panel entry gives it. Which
 	// shell a column names is settled by argv[0] and by nothing else, so a
 	// route that skipped this recorded a *different shell* under the same

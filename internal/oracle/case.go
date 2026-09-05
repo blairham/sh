@@ -186,6 +186,16 @@ type Case struct {
 	// Such a case is still worth recording: the divergence is real and the
 	// measurement documents it. It is simply not evidence about anybody's
 	// conformance, so it is not graded and not checked for drift.
+	//
+	// And not resampled. Neither of those two exemptions stopped `make
+	// oracle` from writing down whichever answer the coin gave, which was
+	// the *only* way such a row could move and made every move noise — a
+	// regeneration in a pull request about something else carrying a diff a
+	// reviewer then has to recognize and dismiss. So a regeneration keeps
+	// what is recorded for a marked row, per shell, for as long as the shell
+	// is the same build; see Run.KeepRacingRows, which also has the measured
+	// flip rates. To resample deliberately, delete the row from the golden
+	// record and regenerate.
 	ReferenceRaces bool
 
 	// Unfinished marks a case whose input is legitimately *unfinished* even
@@ -1519,7 +1529,7 @@ var Corpus = []Case{
 		ID: "xtrace/pipeline-order-diverges", Category: "shell options",
 		Snippet:        `set -x; echo a | cat`,
 		ReferenceRaces: true,
-		Why:            "ksh93 usually prints the last element first, which follows from its running that one in the current shell — but only usually: its two processes race to their trace points, 26 runs in 400 come out the other way, and that is a fact about ksh93 rather than about anything measured against it",
+		Why:            "ksh93 usually prints the last element first, which follows from its running that one in the current shell — but only usually: its two processes race to their trace points, 41 runs in 400 come out the other way. Nor is that ksh93's alone, which is what the row looked like until every column was counted rather than the loudest one: bash 5 reorders 5 times in 200, bash 3.2 once in 400 and zsh once in 200, so four of the six columns were seen to answer both ways and only dash held still. A pipeline's elements are separate processes and nothing sequences their trace points, so the order is the scheduler's and not the shell's — a fact about how the trace is emitted rather than about anything measured against it",
 	},
 	{
 		ID: "nounset/unset-variable-is-an-error", Category: "shell options",
@@ -2335,6 +2345,26 @@ var Corpus = []Case{
 		Why:     "where the next append lands, which is what shows the difference between the two shells that clear rather than only counting it: bash has nothing left and `z` is the whole array, zsh has one empty element left and `z` goes after it. A count alone cannot tell an emptied array from one holding a single empty string, and a script that resets a list and pushes onto it sees the difference on the first read",
 	},
 	{
+		ID: "array/removing-the-last-element", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[3]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the same axis as `array/unsetting-every-element` at a span of one, and the only place its two readings can be told apart. `array/removing-one-element` cannot see it: a removed subscript in the middle reads back empty under a dense reading, so removing and blanking leave the same array there. At the *end* they do not — removing shrinks the extent and blanking does not — and the length was coming back one short in the shell that blanks, which puts every later count and every append one place out. The subscript is `3` so the base decides who is being asked: it is the last element where the first is 1 and one past the end where the first is 0, which is why the two columns hold the same length for opposite reasons",
+	},
+	{
+		ID: "array/removing-the-last-element-then-appending", Category: "expansion",
+		Snippet: `a=(p q r); unset "a[3]"; a+=(z); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "where the next append lands, which is the half a script feels rather than counts: the blanked element still holds a place, so `z` goes after it and the list a script built by pushing is one longer than it thinks. The same probe `array/unsetting-every-element-then-appending` uses on the whole array, at one element",
+	},
+	{
+		ID: "array/removing-the-only-element", Category: "expansion",
+		Snippet: `a=(only); unset "a[1]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "an array of one, where blanking and removing part company most sharply — one comes back holding an empty element and the other is untouched, because `1` is the first element under one base and the second under the other. It says that a blanked array is not an empty one, which is the same distinction `array/unsetting-every-element-of-a-scalar` draws from the other side",
+	},
+	{
+		ID: "array/removing-an-element-from-the-end", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[-2]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "an end-relative subscript, which the shell that blanks does not act on at all beyond `-1` — the array comes back whole where the shells that remove take the middle element away. Pinned because the blanking rule would otherwise be applied to every negative subscript by symmetry, and it is not. bash 3.2 has no negative subscripts and reports a bad one, which is the same absence `array/appending-to-an-element` records",
+	},
+	{
 		ID: "array/unsetting-every-element-of-a-scalar", Category: "expansion",
 		Snippet: `a=hello; unset "a[@]"; echo "st=$? [$a]"`,
 		Why:     "the same spelling on a name that is no array, which is where the two readings show what they mean: bash means take every element away, a scalar has none, and it refuses and says so at 1; zsh means the span becomes one empty string, a scalar is one such span, and it comes back empty at 0. ksh93 reports its bad subscript and leaves the value alone. Nobody turns the scalar into an array",
@@ -2530,6 +2560,21 @@ echo "st=$?"`,
 		ID: "redir/exec-opens-a-high-descriptor", Category: "redirection",
 		Snippet: `exec 3>f; echo hi; echo aside >&3; exec 3>&-; cat f`,
 		Why:     "`exec 3>file` holds the file on a descriptor of its own — stdout stays where it was, and only what is aimed at 3 reaches the file",
+	},
+	{
+		ID: "redir/a-two-digit-descriptor-number", Category: "redirection",
+		Snippet: `exec 10>f; echo hi >&10; exec 10>&-; cat f`,
+		Why:     "how many digits a descriptor number may have is not unanimous: bash reads ten as a number, and to dash, ksh93 and zsh the digits are an ordinary word, so the line runs a command called `10` with its output in the file. Those three still reach descriptors above nine through `exec {v}>f`, which is what makes this a question about the token rather than about the table",
+	},
+	{
+		ID: "redir/digits-before-a-redirection-that-are-not-a-number", Category: "redirection",
+		Snippet: `echo x 10>f; echo "st=$?"; cat f`,
+		Why:     "the same split read from the quiet side, and the reason it is a grammar flag rather than a refusal: where the digits are a word nothing is reported and a different command runs — `x 10` into the file, against `x` on the terminal and an empty file",
+	},
+	{
+		ID: "redir/a-descriptor-number-over-the-open-file-limit", Category: "redirection",
+		Snippet: `ulimit -n 64; exec 70>fresh; echo "st=$?"; ls fresh`,
+		Why:     "no shell in the panel has a ceiling of its own — the bound is the kernel's limit on open files, and only some shells hand its refusal back. The limit is moved by the case rather than assumed, so the row is about the rule and not about the machine's default. bash refuses and still creates the file; the other three cannot write a two-digit number at all and run a command called `70`",
 	},
 	{
 		ID: "redir/exec-descriptor-reaches-an-external-child", Category: "redirection",

@@ -17,6 +17,13 @@ are a dialect's own. Only the grading is relaxed: the cells below are
 what each shell actually printed, and the drift check still compares
 every byte of them.
 
+A case marked **(unordered)** is one the reference shells answer two
+ways at random, because the shell being measured races with itself.
+Its cells are one sample rather than the answer, so they are *kept* by
+a regeneration instead of resampled: re-rolling a coin on every run is
+the only way such a row can move, and every move is noise. Nothing
+grades it and nothing drift-checks it either, for the same reason.
+
 ## Panel
 
 | shell | build |
@@ -241,6 +248,10 @@ every byte of them.
 | `array/unsetting-every-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[] n=0` | `[] n=0` | `[] n=0` | `[p][q][r] n=3` **2>** `<shell>: unset: @: arithmetic syntax error` | `[] n=1` |
 | `array/unsetting-every-element-with-a-star` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[] n=0` | `[] n=0` | `[] n=0` | `[p][q][r] n=3` **2>** `<shell>: unset: *: arithmetic syntax error` | `[] n=1` |
 | `array/unsetting-every-element-then-appending` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[z] n=1` | `[z] n=1` | `[z] n=1` | `[p][q][z] n=3` **2>** `<shell>: unset: @: arithmetic syntax error` | `[][z] n=2` |
+| `array/removing-the-last-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][y][z] n=3` | `[x][y][z] n=3` | `[x][y][z] n=3` | `[x][y][z] n=3` | `[x][y][] n=3` |
+| `array/removing-the-last-element-then-appending` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[p][q][r][z] n=4` | `[p][q][r][z] n=4` | `[p][q][r][z] n=4` | `[p][q][r][z] n=4` | `[p][q][][z] n=4` |
+| `array/removing-the-only-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[only] n=1` | `[only] n=1` | `[only] n=1` | `[only] n=1` | `[] n=1` |
+| `array/removing-an-element-from-the-end` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][z] n=2` | `[x][z] n=2` | `[x][y][z] n=3` **2>** `<shell>: line 0: [-2]: bad array subscript` | `[x][z] n=2` | `[x][y][z] n=3` |
 | `array/unsetting-every-element-of-a-scalar` | **2>** `<shell>: 1: unset: a[@]: bad variable name` *(status 2)* | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 0: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: unset: @: arithmetic syntax error` | `st=0 []` |
 | `array/a-quoted-gap-is-one-field` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=3` | `n=3` | `n=3` | `n=3` | `n=3` |
 | `array/a-quoted-gap-keeps-its-place` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][][y]` | `[x][][y]` | `[x][][y]` | `[x][][y]` | `[][x][y]` |
@@ -564,6 +575,22 @@ every byte of them.
 - `array/unsetting-every-element-then-appending` — where the next append lands, which is what shows the difference between the two shells that clear rather than only counting it: bash has nothing left and `z` is the whole array, zsh has one empty element left and `z` goes after it. A count alone cannot tell an emptied array from one holding a single empty string, and a script that resets a list and pushes onto it sees the difference on the first read
   ```sh
   a=(p q); unset "a[@]"; a+=(z); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/removing-the-last-element` — the same axis as `array/unsetting-every-element` at a span of one, and the only place its two readings can be told apart. `array/removing-one-element` cannot see it: a removed subscript in the middle reads back empty under a dense reading, so removing and blanking leave the same array there. At the *end* they do not — removing shrinks the extent and blanking does not — and the length was coming back one short in the shell that blanks, which puts every later count and every append one place out. The subscript is `3` so the base decides who is being asked: it is the last element where the first is 1 and one past the end where the first is 0, which is why the two columns hold the same length for opposite reasons
+  ```sh
+  a=(x y z); unset "a[3]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/removing-the-last-element-then-appending` — where the next append lands, which is the half a script feels rather than counts: the blanked element still holds a place, so `z` goes after it and the list a script built by pushing is one longer than it thinks. The same probe `array/unsetting-every-element-then-appending` uses on the whole array, at one element
+  ```sh
+  a=(p q r); unset "a[3]"; a+=(z); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/removing-the-only-element` — an array of one, where blanking and removing part company most sharply — one comes back holding an empty element and the other is untouched, because `1` is the first element under one base and the second under the other. It says that a blanked array is not an empty one, which is the same distinction `array/unsetting-every-element-of-a-scalar` draws from the other side
+  ```sh
+  a=(only); unset "a[1]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/removing-an-element-from-the-end` — an end-relative subscript, which the shell that blanks does not act on at all beyond `-1` — the array comes back whole where the shells that remove take the middle element away. Pinned because the blanking rule would otherwise be applied to every negative subscript by symmetry, and it is not. bash 3.2 has no negative subscripts and reports a bad one, which is the same absence `array/appending-to-an-element` records
+  ```sh
+  a=(x y z); unset "a[-2]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
   ```
 - `array/unsetting-every-element-of-a-scalar` — the same spelling on a name that is no array, which is where the two readings show what they mean: bash means take every element away, a scalar has none, and it refuses and says so at 1; zsh means the span becomes one empty string, a scalar is one such span, and it comes back empty at 0. ksh93 reports its bad subscript and leaves the value alone. Nobody turns the scalar into an array
   ```sh
@@ -3224,7 +3251,7 @@ every byte of them.
 | `xtrace/assignments-per-line-diverges` | **2>** `+ a=1 b=2` | **2>** `+ a=1~+ b=2` | **2>** `+ a=1~+ b=2` | **2>** `+ a=1~+ b=2` | **2>** `+ a=1~+ b=2` | **2>** `+<shell>:1> a=1 b=2 ` |
 | `xtrace/disabling-set-diverges` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` | `done` **2>** `+<shell>:1> set +x` |
 | `xtrace/compound-header-diverges` | `1~2` **2>** `+ echo 1~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ echo 1~+ echo 2` | `1~2` **2>** `+<shell>:1> i=1~+<shell>:1> echo 1~+<shell>:1> i=2~+<shell>:1> echo 2` |
-| `xtrace/pipeline-order-diverges` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ cat~+ echo a` | `a` **2>** `+<shell>:1> echo a~+<shell>:1> cat` |
+| `xtrace/pipeline-order-diverges` **(unordered)** | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ cat~+ echo a` | `a` **2>** `+<shell>:1> echo a~+<shell>:1> cat` |
 | `nounset/unset-variable-is-an-error` | **2>** `<script>: 2: NOPE: parameter not set` *(status 2)* | **2>** `<script>: line 2: NOPE: unbound variable` *(status 1)* | **2>** `<script>: line 2: NOPE: unbound variable` *(status 1)* | **2>** `<script>: line 2: NOPE: unbound variable` *(status 1)* | **2>** `<script>: line 2: NOPE: parameter not set` *(status 1)* | **2>** `<script>:2: NOPE: parameter not set` *(status 1)* |
 | `shopt/nullglob-empties-a-miss` | `zz*zz~done` | `~done` | `~done` | `~done` | `zz*zz~done` | **2>** `<shell>:1: no matches found: zz*zz` *(status 1)* |
 | `shopt/globstar-crosses-directories` | `**/f` | `d/e/f` | `d/e/f` | `**/f` | `**/f` | `d/e/f` |
@@ -3298,7 +3325,7 @@ every byte of them.
   ```sh
   set -x; for i in 1 2; do echo $i; done
   ```
-- `xtrace/pipeline-order-diverges` — ksh93 usually prints the last element first, which follows from its running that one in the current shell — but only usually: its two processes race to their trace points, 26 runs in 400 come out the other way, and that is a fact about ksh93 rather than about anything measured against it
+- `xtrace/pipeline-order-diverges` **(unordered)** — ksh93 usually prints the last element first, which follows from its running that one in the current shell — but only usually: its two processes race to their trace points, 41 runs in 400 come out the other way. Nor is that ksh93's alone, which is what the row looked like until every column was counted rather than the loudest one: bash 5 reorders 5 times in 200, bash 3.2 once in 400 and zsh once in 200, so four of the six columns were seen to answer both ways and only dash held still. A pipeline's elements are separate processes and nothing sequences their trace points, so the order is the scheduler's and not the shell's — a fact about how the trace is emitted rather than about anything measured against it
   ```sh
   set -x; echo a | cat
   ```
@@ -3886,6 +3913,9 @@ every byte of them.
 | `redir/a-write-to-a-closed-descriptor-fails` | `st=1` **2>** `<shell>: 1: echo: echo: I/O error` | `st=1` **2>** `<shell>: line 1: echo: write error: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: echo: write error: Bad file descriptor` | `hi~st=1` **2>** `<shell>: line 0: echo: write error: Bad file descriptor` | `st=1` | `st=0` |
 | `redir/a-group-writing-to-a-closed-descriptor` | `st=1` **2>** `<shell>: 1: echo: echo: I/O error~<shell>: 1: echo: echo: I/O error` | `st=1` **2>** `<shell>: line 1: echo: write error: Bad file descriptor~<shell>: line 1: echo: write error: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: echo: write error: Bad file descriptor~<shell>: line 1: echo: write error: Bad file descriptor` | `a~b~st=1` **2>** `<shell>: line 0: echo: write error: Bad file descriptor~<shell>: line 0: echo: write error: Bad file descriptor` | `st=1` | `st=0` **2>** `<shell>:1: write error: bad file descriptor~<shell>:1: write error: bad file descriptor` |
 | `redir/exec-opens-a-high-descriptor` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` |
+| `redir/a-two-digit-descriptor-number` | **2>** `<shell>: 1: exec: 10: not found` *(status 127)* | `hi` | `hi` | `hi` | **2>** `<shell>: exec: 10: not found` *(status 127)* | **2>** `<shell>:1: command not found: 10` *(status 127)* |
+| `redir/digits-before-a-redirection-that-are-not-a-number` | `st=0~x 10` | `x~st=0` | `x~st=0` | `x~st=0` | `st=0~x 10` | `st=0~x 10` |
+| `redir/a-descriptor-number-over-the-open-file-limit` | **2>** `<shell>: 1: exec: 70: not found` *(status 127)* | `st=1~fresh` **2>** `<shell>: line 1: 70: Bad file descriptor` | **2>** `<shell>: line 1: 70: Bad file descriptor` *(status 1)* | `st=1~fresh` **2>** `<shell>: 70: Bad file descriptor` | **2>** `<shell>: exec: 70: not found` *(status 127)* | **2>** `<shell>:1: command not found: 70` *(status 127)* |
 | `redir/exec-descriptor-reaches-an-external-child` | `child` | `child` | `child` | `child` | *(no output, status 0)* | `child` |
 | `redir/a-commands-own-redirection-crosses` | `st=0~own` | `st=0~own` | `st=0~own` | `st=0~own` | `st=0~own` | `st=0~own` |
 | `redir/restating-the-number-hands-an-exec-descriptor-over` | `st=0~restated` | `st=0~restated` | `st=0~restated` | `st=0~restated` | `st=0~restated` | `st=0~restated` |
@@ -4038,6 +4068,18 @@ every byte of them.
 - `redir/exec-opens-a-high-descriptor` — `exec 3>file` holds the file on a descriptor of its own — stdout stays where it was, and only what is aimed at 3 reaches the file
   ```sh
   exec 3>f; echo hi; echo aside >&3; exec 3>&-; cat f
+  ```
+- `redir/a-two-digit-descriptor-number` — how many digits a descriptor number may have is not unanimous: bash reads ten as a number, and to dash, ksh93 and zsh the digits are an ordinary word, so the line runs a command called `10` with its output in the file. Those three still reach descriptors above nine through `exec {v}>f`, which is what makes this a question about the token rather than about the table
+  ```sh
+  exec 10>f; echo hi >&10; exec 10>&-; cat f
+  ```
+- `redir/digits-before-a-redirection-that-are-not-a-number` — the same split read from the quiet side, and the reason it is a grammar flag rather than a refusal: where the digits are a word nothing is reported and a different command runs — `x 10` into the file, against `x` on the terminal and an empty file
+  ```sh
+  echo x 10>f; echo "st=$?"; cat f
+  ```
+- `redir/a-descriptor-number-over-the-open-file-limit` — no shell in the panel has a ceiling of its own — the bound is the kernel's limit on open files, and only some shells hand its refusal back. The limit is moved by the case rather than assumed, so the row is about the rule and not about the machine's default. bash refuses and still creates the file; the other three cannot write a two-digit number at all and run a command called `70`
+  ```sh
+  ulimit -n 64; exec 70>fresh; echo "st=$?"; ls fresh
   ```
 - `redir/exec-descriptor-reaches-an-external-child` — a descriptor parked with `exec 3>file` is inherited by an external command, which is what the flock and shared-log idioms are built on — the child writes in every shell but ksh93, which alone keeps it to itself. The child's complaint is discarded because its wording is a fact about whatever /bin/sh is on the machine
   ```sh

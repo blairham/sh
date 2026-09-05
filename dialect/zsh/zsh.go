@@ -312,7 +312,7 @@ func Semantics() interp.Semantics {
 	// for `[@]`: `unset a[2]` leaves an empty element in place too. A scalar
 	// is one such span and comes back empty; an array with nothing in it has
 	// no span and gains no element.
-	s.UnsetArrayAt = interp.UnsetArrayAtLeavesOneEmptyElement
+	s.UnsetArraySpan = interp.UnsetArraySpanLeavesOneEmptyElement
 	// The complaint is the builtin's rather than the script's: `unset` reports
 	// 1 and the next command still runs.
 	s.BadSubscriptToUnsetFatal = interp.No
@@ -404,6 +404,13 @@ func Semantics() interp.Semantics {
 	// approximated.
 	s.BareLocalListing = interp.BareLocalListsEveryParameter
 	s.SetListing = interp.SetListingEveryParameter
+
+	// A descriptor number the process cannot hold is not checked here: with
+	// `ulimit -n 6`, `exec 8>f` reports success and prints nothing, where
+	// bash and ksh93 hand the kernel's refusal back. Rarely reachable, since
+	// a number this shell reads is one digit and the shell picks its own for
+	// `{name}>f`.
+	s.FdNumberBoundedByOpenFileLimit = interp.No
 
 	return s
 }

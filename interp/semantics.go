@@ -1488,6 +1488,28 @@ type Semantics struct {
 	// holds no descriptor number. ksh93 says nothing and reports success.
 	FdVariableBadCloseIsAnError Answer
 
+	// FdNumberBoundedByOpenFileLimit refuses a redirection whose descriptor
+	// number is at or above the process's soft limit on open files. bash and
+	// ksh93 do; dash and zsh accept the number and let whatever comes next
+	// fail on it, or not at all.
+	//
+	// There is no *language* bound anywhere in the panel — no shell has a
+	// ceiling of its own, and the one that bites is the kernel's `ulimit -n`.
+	// bash reports the errno it gets: with the limit at 20, `exec 20>f` is
+	// `20: Bad file descriptor` and status 1, `exec 19>f` is silent, and
+	// lowering the limit lowers the ceiling exactly. ksh93 refuses the same
+	// numbers in its own words. dash and zsh answer 0 for `exec 8>f` under a
+	// limit of 6 and leave the descriptor unusable, which is the shape of not
+	// asking rather than of a different answer.
+	//
+	// It is asked at the disagreement rather than on every redirection: a
+	// number below the limit is nobody's question, and a Runner with no
+	// GetRlimit has no limit to be asked about. Reached most often through
+	// MultiDigitFdNumber, which is what lets a script write a number that
+	// large at all — under the three shells that read one digit, the only way
+	// to a descriptor above nine is to let the shell pick it.
+	FdNumberBoundedByOpenFileLimit Answer
+
 	// JobControlAbsenceIsReportedFirst refuses `bg` and `fg` before
 	// reading the operand when there is no job control — bash and zsh; dash
 	// and ksh93 read their operands and options first and complain about
@@ -2083,13 +2105,17 @@ type Semantics struct {
 	// a[1]` needs no answer from anyone.
 	BadSubscriptToUnsetFatal Answer
 
-	// UnsetArrayAt is what `unset a[@]` and `unset a[*]` do, and the panel
-	// gives three answers rather than two — see UnsetArrayAtPolicy.
+	// UnsetArraySpan is what `unset` does to the elements a subscript names,
+	// and the panel gives three answers rather than two — see
+	// UnsetArraySpanPolicy.
 	//
-	// Asked only for those two spellings. Every other subscript is an
-	// expression in all three shells with arrays, so `unset a[1]` never
-	// reaches the question.
-	UnsetArrayAt UnsetArrayAtPolicy
+	// One field for `unset a[@]` and for `unset a[3]`, because in the shell
+	// that parts from the rest they are one rule: `unset` of a span replaces
+	// that span with a single empty element, so `a[3]` is a span of one and
+	// comes back blank in place while `[@]` is the whole array and comes back
+	// as one empty element. Measured across spans of one, two and all — see
+	// docs/spec/measurements.md.
+	UnsetArraySpan UnsetArraySpanPolicy
 }
 
 // NameOperands is what a builtin takes where it wants a name.
@@ -2408,6 +2434,10 @@ func PosixSemantics() Semantics {
 		CdpathAnnouncesTheDirectory:      Yes,
 		FdVariableOutlivesTheCommand:     Yes,
 		FdVariableBadCloseIsAnError:      Yes,
+		// The standard says nothing about a ceiling, so this follows the
+		// panel: bash and ksh93 hand the kernel's refusal back, dash and zsh
+		// report success on a number the process cannot hold.
+		FdNumberBoundedByOpenFileLimit: Yes,
 		// The standard is silent and four of the five hand the descriptor
 		// over, which is what the flock and shared-log idioms are built on.
 		ExecOpenedFdReachesACommand:        Yes,
@@ -2785,8 +2815,9 @@ func (r *Runner) bracketPolicy() BracketPolicy {
 	return p
 }
 
-// UnsetArrayAtPolicy is what `unset a[@]` — and `unset a[*]`, which every
-// shell measured treats identically — does to the array.
+// UnsetArraySpanPolicy is what `unset` does to the span of elements a
+// subscript names — `a[@]` and `a[*]`, which every shell measured treats
+// identically, and `a[3]`, which names a span of one.
 //
 // Three answers rather than a switch, and the third is not a variation on the
 // other two: one shell does not read `@` as a spelling for "every element" at
@@ -2794,51 +2825,75 @@ func (r *Runner) bracketPolicy() BracketPolicy {
 // not one. That is a different question from what is left behind, and folding
 // it into a boolean would have had to call it "does not clear", which says
 // nothing about why.
-type UnsetArrayAtPolicy int
+//
+// The two readings of the whole-array spelling reach the single subscript
+// unchanged, which is why there is one field and not two. Removing every
+// element the subscript names removes the one `a[3]` names; replacing the span
+// with a single empty element replaces a span of one with a blank in the same
+// place, so the array keeps its length. The third answer parts from the other
+// two only over whether `@` is an expression, and `3` is one in every reading,
+// so at a single subscript it removes like the first.
+type UnsetArraySpanPolicy int
 
 const (
-	// UnsetArrayAtUnspecified is no answer, and is refused like any other.
-	UnsetArrayAtUnspecified UnsetArrayAtPolicy = iota
-	// UnsetArrayAtIsASubscript reads the brackets as it reads any other
+	// UnsetArraySpanUnspecified is no answer. It is refused for the
+	// whole-array spelling, where the panel genuinely disagrees about the
+	// result. A single subscript takes it as removal, because a preset with
+	// no arrays of its own has already committed to that reading — see
+	// UnsetTakesASubscript, where the POSIX preset has `unset a[0]` name an
+	// element and remove it.
+	UnsetArraySpanUnspecified UnsetArraySpanPolicy = iota
+	// UnsetArraySpanIsAnExpression reads the brackets as it reads any other
 	// subscript: ksh93, where `@` is not an expression and the operand is
-	// reported as a bad one.
-	UnsetArrayAtIsASubscript
-	// UnsetArrayAtRemovesEveryElement leaves the array with nothing in it:
-	// bash, in both builds measured. A name that is not an array is reported
-	// rather than emptied, and one that holds nothing at all is quietly left
-	// alone.
-	UnsetArrayAtRemovesEveryElement
-	// UnsetArrayAtLeavesOneEmptyElement replaces what the subscript names
+	// reported as a bad one. A subscript that *is* an expression names its
+	// element and the element is removed.
+	UnsetArraySpanIsAnExpression
+	// UnsetArraySpanRemovesTheElements takes away every subscript the span
+	// names: bash, in both builds measured, where `a[@]` leaves the array
+	// with nothing in it and `a[3]` leaves a hole. A name that is not an
+	// array is reported rather than emptied, and one that holds nothing at
+	// all is quietly left alone.
+	UnsetArraySpanRemovesTheElements
+	// UnsetArraySpanLeavesOneEmptyElement replaces what the subscript names
 	// with a single empty element: zsh, where `unset` of a span is the span
-	// becoming one empty string rather than the subscripts going away — so a
-	// three-element array comes back holding one empty element and a scalar
-	// comes back empty.
-	UnsetArrayAtLeavesOneEmptyElement
+	// becoming one empty string rather than the subscripts going away. A
+	// three-element array under `[@]` comes back holding one empty element, a
+	// scalar comes back empty, and a single subscript comes back blank in
+	// place with the array's length unchanged.
+	UnsetArraySpanLeavesOneEmptyElement
 )
 
-func (p UnsetArrayAtPolicy) String() string {
+func (p UnsetArraySpanPolicy) String() string {
 	switch p {
-	case UnsetArrayAtIsASubscript:
+	case UnsetArraySpanIsAnExpression:
 		return "a subscript"
-	case UnsetArrayAtRemovesEveryElement:
+	case UnsetArraySpanRemovesTheElements:
 		return "removes every element"
-	case UnsetArrayAtLeavesOneEmptyElement:
+	case UnsetArraySpanLeavesOneEmptyElement:
 		return "leaves one empty element"
 	}
 	return "unspecified"
 }
 
-// unsetArrayAt resolves the axis, and only for the two spellings that raise
-// it: `unset a[1]` names one element in all three and needs no answer.
-func (r *Runner) unsetArrayAt() UnsetArrayAtPolicy {
-	p := r.sem().UnsetArrayAt
-	if p == UnsetArrayAtUnspecified {
+// unsetArraySpan resolves the axis for the whole-array spelling, where an
+// unanswered dialect is refused rather than guessed at: the three answers
+// leave three different arrays behind.
+func (r *Runner) unsetArraySpan() UnsetArraySpanPolicy {
+	p := r.sem().UnsetArraySpan
+	if p == UnsetArraySpanUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
 			"`unset a[@]`: the shells disagree here and no dialect was chosen"))
 		r.status = 2
 		r.unspecified = true
 	}
 	return p
+}
+
+// unsetBlanksInPlace resolves the same axis for a single subscript, where
+// there is nothing to refuse: two of the three answers remove the element and
+// no answer at all means removal too.
+func (r *Runner) unsetBlanksInPlace() bool {
+	return r.sem().UnsetArraySpan == UnsetArraySpanLeavesOneEmptyElement
 }
 
 // ask reads one axis.

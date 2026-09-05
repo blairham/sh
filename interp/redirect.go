@@ -184,6 +184,13 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				r.redirErr = true
 				return closers, nil
 			}
+			// The number, before the duplication that would use it. There is
+			// no file here for a refusal to have created, which is the whole
+			// of why this side is checked earlier than the other.
+			if r.refuseFdOverLimit(fd) || r.unspecified {
+				r.redirErr = true
+				return closers, nil
+			}
 			if fd > 2 && !persists {
 				saveFds()
 			}
@@ -313,6 +320,15 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		// trail fed by the error path alone held every file the shell could
 		// not open and none it could.
 		r.emit(ctx, Event{Kind: EventAccess, Action: action})
+		// And only now the number, because the order is measured: under a
+		// limit of twenty, `exec 20>fresh` complains and the file is there
+		// afterwards. The open happens and the descriptor it produces is what
+		// cannot be moved to the number the script asked for.
+		if r.refuseFdOverLimit(fd) || r.unspecified {
+			_ = f.Close()
+			r.redirErr = true
+			return closers, nil
+		}
 		if !persists {
 			// A descriptor that outlives the command must not be closed
 			// when it ends, which is the same exemption `exec` already has
@@ -481,6 +497,48 @@ func (d Diagnostics) openReason(err error, creating bool) string {
 	// that lowercases everything. Go's own errno strings are lowercase, which
 	// is why this went through neither before and matched nobody.
 	return d.reasonText(reason(err))
+}
+
+// refuseFdOverLimit reports a descriptor number this process could not hold,
+// where the dialect is one that looks.
+//
+// No shell in the panel has a ceiling of its own. The one that bites is the
+// kernel's limit on open files, and two of the five hand the errno straight
+// back: with `ulimit -n 20`, bash answers `exec 20>f` with `20: Bad file
+// descriptor` and status 1 while `exec 19>f` is silent, and ksh93 refuses the
+// same numbers in its own words. dash and zsh report success and leave the
+// descriptor unusable, so the number is not checked there at all.
+//
+// Three things keep the axis off the common path, and each of them is a
+// question this would otherwise ask about every redirection in every script.
+// The named streams are always there; a Runner with no GetRlimit has no limit
+// to be asked about, and a library that was given none is not the place to
+// invent one; and a number below the limit is nobody's disagreement. What is
+// left is exactly the case the panel splits on.
+//
+// A number the *shell* picked is checked too, and that is measured rather than
+// assumed: `ulimit -n 6; exec {v}>f` fails in all three shells that have the
+// construct, because the number they pick is over the limit like any other.
+// They word it three ways — `cannot duplicate fd`, `cannot open`, `cannot move
+// fd 3` — and this says what it says about a number the script wrote, which is
+// the shape of the failure without the sentence. Only reachable under a limit
+// below ten, since that is where the picking starts.
+func (r *Runner) refuseFdOverLimit(fd int) bool {
+	if fd <= 2 || r.GetRlimit == nil {
+		return false
+	}
+	soft, _, err := r.GetRlimit(ResourceOpenFiles)
+	if err != nil || soft == RlimitInfinity || int64(fd) < soft {
+		return false
+	}
+	if !r.ask(r.sem().FdNumberBoundedByOpenFileLimit,
+		"a descriptor number at the process's limit on open files") {
+		return false
+	}
+	r.diagf("%s\n", Wording(r.diag().FdNumberOverLimit, "%[1]d: %[2]s",
+		fd, r.diag().reasonText(reason(syscall.EBADF))))
+	r.status = r.diag().redirectFailureStatus()
+	return true
 }
 
 // errBadFd is what a duplication reports when the number it names is not

@@ -495,6 +495,21 @@ type Semantics struct {
 	// to tell the middle one from the last: ksh93's output *looks* truncated
 	// next to zsh's until the control character is read as a byte.
 	PrintfBackslashC PrintfBackslashCPolicy
+	// PrintfUnfinishedConversionIsAPercent writes a bare `%` for a format
+	// that ended before its conversion character, and reports success,
+	// rather than complaining about a conversion it could not read.
+	//
+	//	printf 'a%'    bash  a, and `%': missing format character   st=1
+	//	printf 'a%5'   zsh   a, and %5: invalid directive           st=1
+	//	printf 'a%ll'  dash  a, and missing format character        st=2
+	//	printf 'a%5'   ksh93 a%                                     st=0
+	//
+	// The whole unfinished conversion becomes the one character: `a%5` and
+	// `a%ll` are both `a%` there, so the prefix that was scanned is dropped
+	// rather than written back.
+	//
+	// Asked only where a format actually ends inside a conversion.
+	PrintfUnfinishedConversionIsAPercent Answer
 	// PrintfLengthModifiers is which C length modifiers a conversion may
 	// carry between its precision and its verb — `%zX`, `%ld`, `%jd`.
 	//

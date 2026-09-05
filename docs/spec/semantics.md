@@ -1015,11 +1015,96 @@ Two things ksh93 does here are **not** modeled, and neither belongs to
 this axis:
 
 - ksh93 will read a width *after* a modifier — `printf '%l5d' 42` is a
-  padded 42 there and an error in bash and zsh. That is its free-order
-  conversion prefix and has nothing to do with modifiers: `printf '%5-d'`
-  and `printf '%5 d'` work in ksh93 too, with no modifier in them at all.
+  padded 42 there and an error in bash and zsh. That belongs to the shape
+  of its conversion prefix, below, and has nothing to do with modifiers:
+  `printf '%5-d'` and `printf '%5 d'` work in ksh93 too, with no modifier
+  in either of them.
 - ksh93 appends a newline to any output holding a byte above the ASCII
   range, in a format and inside `$'…'` alike.
+
+### ksh93's conversion prefix, and why it is not one axis
+
+The note above once read that ksh93's prefix is **free-order** — that it
+loops over flags, width and precision until it finds a verb, where the
+rest of the panel walks the four parts once. That is half right, and the
+half that is wrong is the half that would have to be implemented.
+
+What holds. A flag after the width is read and acted on, and a width after
+a length modifier likewise:
+
+    printf '[%5-d]' 42    ksh93 [42   ]   bash `-': invalid format character
+    printf '[%5 d]' 42    ksh93 [   42]   bash ` ': invalid format character
+    printf '[%5+d]' 42    ksh93 [  +42]   bash `+': invalid format character
+    printf '[%l5d]' 42    ksh93 [   42]   bash `5': invalid format character
+
+What does not. The second `.` is **not** a second precision that a
+free-order reader would fold into the first. It is ksh93's output *base*,
+which is a conversion feature of its own and not a question about order:
+
+    printf '[%..36d]'  1295   ksh93 [zz]     1295 is zz in base 36
+    printf '[%..2d]'   5      ksh93 [101]    and 101 in base 2
+    printf '[%.3.16d]' 255    ksh93 [0ff]    base 16, padded to a precision of 3
+    printf '[%.0.8d]'  64     ksh93 [100]    base 8
+    printf '[%5.2.3d]' 42     ksh93 [ 1120]  base 3, precision 2, width 5
+
+`[ 1120]` was what made the prefix look like it was being read twice. It
+is 42 written in base 3.
+
+And the order is not free even among the parts that are reordered: the
+same precision and the same flag give two different results depending on
+which side of each other they are written.
+
+    printf '[%-.3d]' 42   ksh93 [042]   the precision survives
+    printf '[%.3-d]' 42   ksh93 [42]    written after it, the minus loses it
+
+So "does this shell read the prefix in any order" is the wrong shape for
+the question, the way "does this shell add 128" was the wrong shape for
+the pipefail one. Implementing it needs ksh93's output base as a feature
+and a rule for what a flag does to a precision already read, neither of
+which is an axis over prefix order. It stays unmodeled, and now with the
+measurement that says why rather than a claim that was never checked.
+
+### A format that ends before its conversion character
+
+`printf 'a%'` has no conversion character to complain about, and the panel
+answers it four ways — none of which is the ordinary bad-conversion
+complaint with an empty name:
+
+    printf 'a%'    bash   a, and `%': missing format character     st=1
+                   zsh    a, and %: invalid directive              st=1
+                   dash   a, and missing format character          st=2
+                   ksh93  a%                                       st=0
+    printf 'a%5'   bash   `%5': missing format character
+                   zsh    %5: invalid directive
+                   dash   missing format character
+                   ksh93  a%
+    printf 'a%ll'  bash   `%ll': missing format character
+                   zsh    %ll: invalid directive
+                   dash   %l: invalid directive
+                   ksh93  a%
+
+Three things are in there, and each is modeled separately.
+
+- bash has a **second wording**, `missing format character`, and it names
+  the *whole directive* in it where its ordinary bad-conversion complaint
+  names the conversion character alone. That is `PrintfMissingVerb`, a
+  diagnostic beside `PrintfBadVerb` rather than the same one spelled with
+  an empty name. It takes one verb, the directive, because there is no
+  character in it to name.
+- dash names nothing at all for `%`, `%5` and `%.` — its wording simply
+  takes no verb — and reports 2 where the others report 1, which is
+  `PrintfMissingVerbStatus`. Its `%ll` line is not this case: dash has no
+  length modifiers, so nothing ran out there and the `l` is an ordinary
+  conversion it could not read.
+- ksh93 does not complain. It writes a bare `%` for the whole unfinished
+  conversion — `a%5` and `a%ll` are both `a%`, so the prefix it scanned is
+  dropped rather than written back — and reports success. That is
+  `PrintfUnfinishedConversionIsAPercent`, asked only where a format
+  actually ends inside a conversion.
+
+Only the *last* conversion can be the unfinished one, so a doubled percent
+earlier in the format is unrelated: `printf 'a%%b%'` writes `a%b` in all
+four before any of this applies.
 
 ## A capability the corpus cannot hand a case
 

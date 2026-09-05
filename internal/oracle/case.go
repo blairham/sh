@@ -1230,6 +1230,46 @@ var Corpus = []Case{
 		Why:     "the shells with the C99 set skip a run of the letters rather than a list of spellings, so nonsense like `lll` and `hl` is accepted; the shell with C89's set takes exactly one letter and refuses both",
 	},
 	{
+		ID: "printf/a-format-that-ends-at-the-percent", Category: "printf",
+		Snippet: `printf 'a%'; echo " st=$?"`,
+		Why:     "four answers to a format that ran out before its conversion character, and not one of them is the ordinary bad-conversion complaint: bash has a second wording for it, zsh spells its usual one with the directive, dash names nothing and reports 2, and ksh93 writes a literal % and succeeds",
+	},
+	{
+		ID: "printf/a-format-that-ends-after-a-width", Category: "printf",
+		Snippet: `printf 'a%5'; echo " st=$?"`,
+		Why:     "the same with a prefix to name, which is what shows bash and zsh naming the whole directive rather than a conversion character there is none of — and shows ksh93 dropping the prefix, since `a%5` is `a%` and not `a%5`",
+	},
+	{
+		ID: "printf/a-format-that-ends-after-a-length-modifier", Category: "printf",
+		Snippet: `printf 'a%ll'; echo " st=$?"`,
+		Why:     "the modifier belongs to the directive, so the shells that name it say `%ll`. dash has no modifiers at all, so for it the format did not run out — the `l` is the conversion it could not read, and it says so instead",
+	},
+	{
+		ID: "printf/a-trailing-percent-after-a-doubled-one", Category: "printf",
+		Snippet: `printf 'a%%b%'; echo " st=$?"`,
+		Why:     "a doubled percent earlier in the format is unrelated to one that ends it: everything before the last % is written by every shell, and only the trailing one is the unfinished conversion",
+	},
+	{
+		ID: "printf/a-flag-after-the-width", Category: "printf",
+		Snippet: `printf '[%5-d][%5 d]' 42 42; echo " st=$?"`,
+		Why:     "ksh93 reads a flag after the width and acts on it — left-justified in five, then the space flag — where the rest of the panel wants flags first and reports the flag character as a conversion it could not read. No length modifier is in either directive, so this is about the shape of the prefix and nothing to do with the modifier set",
+	},
+	{
+		ID: "printf/a-second-dot-is-an-output-base", Category: "printf",
+		Snippet: `printf '[%..36d][%..2d]' 1295 5; echo " st=$?"`,
+		Why:     "the field after a second dot is ksh93's output base and not a second precision: 1295 in base 36 is zz and 5 in base 2 is 101. The rest of the panel stops at the second dot and calls it a conversion it could not read",
+	},
+	{
+		ID: "printf/an-output-base-beside-a-precision", Category: "printf",
+		Snippet: `printf '[%.3.16d]' 255; echo " st=$?"`,
+		Why:     "both fields at once, which is how the base is told from a precision that happens to look like one: 255 in base 16 padded to three digits is 0ff, where a second precision could only have produced a decimal",
+	},
+	{
+		ID: "printf/a-flag-after-a-precision-drops-it", Category: "printf",
+		Snippet: `printf '[%.3-d][%-.3d]' 42 42; echo " st=$?"`,
+		Why:     "the two spellings are not the same directive in ksh93 even though both hold a precision of 3 and a minus: written after the precision the minus loses it and 42 stays 42, written before it the precision survives and 42 is 042 — so the prefix is not simply read in any order",
+	},
+	{
 		ID: "printf/an-unknown-conversion-names-the-character", Category: "printf",
 		Snippet: `printf "%v]xY" 1; echo "st=$?"`,
 		Why:     "a conversion no shell in the panel has, with a tail after it, which is what separates naming the conversion character from naming what follows it: two shells say `v` and two say `%v`, and none of them names the `]`",

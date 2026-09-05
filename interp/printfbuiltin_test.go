@@ -19,6 +19,7 @@ func printfSem() Semantics {
 	s.PrintfBackslashC = PrintfBackslashCLiteral
 	s.PrintfQuote = PrintfQuoteBackslash
 	s.PrintfLengthModifiers = PrintfLengthModifiersAbsent
+	s.PrintfUnfinishedConversionIsAPercent = No
 	return s
 }
 
@@ -71,20 +72,23 @@ func TestPrintfLengthModifiersAreAskedOnlyWhenOneIsThere(t *testing.T) {
 	}
 }
 
-// A format that runs out before it reaches a conversion character has no
-// character to name, so the two wordings collapse onto the directive.
-func TestPrintfBadVerbWithNoConversionCharacterAtAll(t *testing.T) {
+// A format that runs out before it reaches a conversion character is its own
+// complaint, with a wording beside the bad-conversion one rather than that
+// one spelled with an empty name. One verb: the whole directive, since there
+// is no conversion character in it to name.
+func TestPrintfMissingVerbNamesTheWholeDirective(t *testing.T) {
 	for _, tc := range []struct{ name, wording, src, want string }{
-		{"nothing after the percent", "printf: [%[1]s]: no", `printf "a%"`, "sh: printf: []: no\na"},
-		{"nothing after a width", "printf: [%[1]s]: no", `printf "a%5"`, "sh: printf: []: no\na"},
-		{"nothing after a modifier", "printf: [%[1]s]: no", `printf "a%ll"`, "sh: printf: []: no\na"},
-		{"the directive is still whole", "printf: %[2]s: no", `printf "a%5"`, "sh: printf: %5: no\na"},
-		{"the modifier belongs to it", "printf: %[2]s: no", `printf "a%ll"`, "sh: printf: %ll: no\na"},
+		{"nothing after the percent", "printf: %[1]s: no", `printf "a%"`, "sh: printf: %: no\na"},
+		{"nothing after a width", "printf: %[1]s: no", `printf "a%5"`, "sh: printf: %5: no\na"},
+		{"nothing after a modifier", "printf: %[1]s: no", `printf "a%ll"`, "sh: printf: %ll: no\na"},
+		{"nothing after a precision", "printf: %[1]s: no", `printf "a%."`, "sh: printf: %.: no\na"},
+		{"a wording may name nothing at all", "printf: no", `printf "a%5"`, "sh: printf: no\na"},
+		{"only the last conversion is unfinished", "printf: %[1]s: no", `printf "a%%b%"`, "sh: printf: %: no\na%b"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sem := printfSem()
 			sem.PrintfLengthModifiers = PrintfLengthModifiersC99
-			diag := Diagnostics{PrintfBadVerb: tc.wording}
+			diag := Diagnostics{PrintfMissingVerb: tc.wording}
 			out, _ := run(t, tc.src, func(r *Runner) {
 				r.Semantics = &sem
 				r.Diagnostics = &diag
@@ -93,6 +97,67 @@ func TestPrintfBadVerbWithNoConversionCharacterAtAll(t *testing.T) {
 				t.Errorf("got %q, want %q", out, tc.want)
 			}
 		})
+	}
+}
+
+// The two complaints are separate: a conversion nobody has still gets the
+// bad-conversion wording, and a format that ran out never does.
+func TestPrintfMissingVerbIsNotTheBadVerbComplaint(t *testing.T) {
+	sem := printfSem()
+	diag := Diagnostics{
+		PrintfBadVerb:           "printf: bad %[2]s",
+		PrintfMissingVerb:       "printf: missing %[1]s",
+		PrintfBadVerbStatus:     1,
+		PrintfMissingVerbStatus: 2,
+	}
+	set := func(r *Runner) {
+		r.Semantics = &sem
+		r.Diagnostics = &diag
+	}
+	if out, st := run(t, `printf "a%v"`, set); out != "sh: printf: bad %v\na" || st != 1 {
+		t.Errorf("a conversion nobody has: got %q status %d", out, st)
+	}
+	if out, st := run(t, `printf "a%5"`, set); out != "sh: printf: missing %5\na" || st != 2 {
+		t.Errorf("a format that ran out: got %q status %d", out, st)
+	}
+}
+
+// One shell does not treat it as an error at all: the whole unfinished
+// conversion becomes a single literal percent, prefix and all, and the
+// command succeeds.
+func TestPrintfUnfinishedConversionCanBeALiteralPercent(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfLengthModifiers = PrintfLengthModifiersC99
+	sem.PrintfUnfinishedConversionIsAPercent = Yes
+	for _, tc := range []struct{ src, want string }{
+		{`printf "a%"`, "a%"},
+		{`printf "a%5"`, "a%"},
+		{`printf "a%ll"`, "a%"},
+		{`printf "a%%b%"`, "a%b%"},
+	} {
+		out, st := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+		if out != tc.want || st != 0 {
+			t.Errorf("%s: got %q status %d, want %q and 0", tc.src, out, st, tc.want)
+		}
+	}
+}
+
+// The axis is asked only where a format actually ends inside a conversion.
+func TestPrintfUnfinishedConversionIsAskedOnlyWhenOneIsThere(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfUnfinishedConversionIsAPercent = Unspecified
+
+	if out, st := run(t, `printf "[%d]" 42`, func(r *Runner) { r.Semantics = &sem }); out != "[42]" || st != 0 {
+		t.Errorf("a format that finishes: got %q status %d, want [42] and 0", out, st)
+	}
+	// Compared whole rather than searched, because a refusal is one answer:
+	// asking the axis, being refused and then complaining as well would
+	// still contain the refusal, and would tell a reader the format was
+	// wrong on top of telling them nothing chose.
+	out, st := run(t, `printf "a%5"`, func(r *Runner) { r.Semantics = &sem })
+	want := "sh: a format that ends inside a conversion: the shells disagree here and no dialect was chosen\na"
+	if st != 2 || out != want {
+		t.Errorf("a format that does not: got %q status %d, want %q and 2", out, st, want)
 	}
 }
 

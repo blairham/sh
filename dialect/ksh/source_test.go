@@ -393,3 +393,21 @@ func TestABadBuiltinOption(t *testing.T) {
 		t.Errorf("said %q, want usage=true", out)
 	}
 }
+
+// A format that ends before its conversion character is not an error here:
+// the whole unfinished conversion becomes one literal percent and the
+// command succeeds.
+func TestPrintfUnfinishedConversionIsALiteralPercent(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf 'a%'`, "a%"},
+		{`printf 'a%5'`, "a%"},
+		{`printf 'a%ll'`, "a%"},
+		{`printf 'a%%b%'`, "a%b%"},
+	} {
+		out, st := runKsh(t, dir, tc.src+"\n")
+		if out != tc.want || st != 0 {
+			t.Errorf("%s: said %q status %d, want %q and 0", tc.src, out, st, tc.want)
+		}
+	}
+}

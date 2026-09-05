@@ -37030,6 +37030,226 @@
         "TimedOut": false
       }
     },
+    "printf/a-flag-after-a-precision-drops-it": {
+      "bash": {
+        "Stdout": "[ st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `-': invalid format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[ st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `-': invalid format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[ st=1",
+        "Stderr": "\u003cshell\u003e: line 0: printf: `-': invalid format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[ st=2",
+        "Stderr": "\u003cshell\u003e: 1: printf: %.3-: invalid directive",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[42][042] st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[ st=1",
+        "Stderr": "\u003cshell\u003e:printf:1: %.3-: invalid directive",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/a-flag-after-the-width": {
+      "bash": {
+        "Stdout": "[ st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `-': invalid format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[ st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `-': invalid format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[ st=1",
+        "Stderr": "\u003cshell\u003e: line 0: printf: `-': invalid format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[ st=2",
+        "Stderr": "\u003cshell\u003e: 1: printf: %5-: invalid directive",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[42   ][   42] st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[ st=1",
+        "Stderr": "\u003cshell\u003e:printf:1: %5-: invalid directive",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/a-format-that-ends-after-a-length-modifier": {
+      "bash": {
+        "Stdout": "a st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `%ll': missing format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `%ll': missing format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a st=1",
+        "Stderr": "\u003cshell\u003e: line 0: printf: `%ll': missing format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a st=2",
+        "Stderr": "\u003cshell\u003e: 1: printf: %l: invalid directive",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a% st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a st=1",
+        "Stderr": "\u003cshell\u003e:printf:1: %ll: invalid directive",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/a-format-that-ends-after-a-width": {
+      "bash": {
+        "Stdout": "a st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `%5': missing format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `%5': missing format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a st=1",
+        "Stderr": "\u003cshell\u003e: line 0: printf: `%5': missing format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a st=2",
+        "Stderr": "\u003cshell\u003e: 1: printf: missing format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a% st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a st=1",
+        "Stderr": "\u003cshell\u003e:printf:1: %5: invalid directive",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/a-format-that-ends-at-the-percent": {
+      "bash": {
+        "Stdout": "a st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `%': missing format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `%': missing format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a st=1",
+        "Stderr": "\u003cshell\u003e: line 0: printf: `%': missing format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a st=2",
+        "Stderr": "\u003cshell\u003e: 1: printf: missing format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a% st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a st=1",
+        "Stderr": "\u003cshell\u003e:printf:1: %: invalid directive",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "printf/a-length-modifier-c99-added": {
       "bash": {
         "Stdout": "[FF][42][42][42]~st=0",
@@ -37245,6 +37465,138 @@
       "zsh": {
         "Stdout": "[st=1",
         "Stderr": "\u003cshell\u003e:printf:1: %ll: invalid directive",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/a-second-dot-is-an-output-base": {
+      "bash": {
+        "Stdout": "[ st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `.': invalid format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[ st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `.': invalid format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[ st=1",
+        "Stderr": "\u003cshell\u003e: line 0: printf: `.': invalid format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[ st=2",
+        "Stderr": "\u003cshell\u003e: 1: printf: %..: invalid directive",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[zz][101] st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[ st=1",
+        "Stderr": "\u003cshell\u003e:printf:1: %..: invalid directive",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/a-trailing-percent-after-a-doubled-one": {
+      "bash": {
+        "Stdout": "a%b st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `%': missing format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "a%b st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `%': missing format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "a%b st=1",
+        "Stderr": "\u003cshell\u003e: line 0: printf: `%': missing format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "a%b st=2",
+        "Stderr": "\u003cshell\u003e: 1: printf: missing format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "a%b% st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "a%b st=1",
+        "Stderr": "\u003cshell\u003e:printf:1: %: invalid directive",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/an-output-base-beside-a-precision": {
+      "bash": {
+        "Stdout": "[ st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `.': invalid format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[ st=1",
+        "Stderr": "\u003cshell\u003e: line 1: printf: `.': invalid format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[ st=1",
+        "Stderr": "\u003cshell\u003e: line 0: printf: `.': invalid format character",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[ st=2",
+        "Stderr": "\u003cshell\u003e: 1: printf: %.3.: invalid directive",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[0ff] st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[ st=1",
+        "Stderr": "\u003cshell\u003e:printf:1: %.3.: invalid directive",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

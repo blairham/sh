@@ -276,6 +276,9 @@ func Semantics() interp.Semantics {
 	s.PrintfEmptyIsNotANumber = interp.No
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfBackslashC = interp.PrintfBackslashCControl
+	// `printf 'a%5'` is `a%` here and reports success: the unfinished
+	// conversion becomes one literal character and the prefix is dropped.
+	s.PrintfUnfinishedConversionIsAPercent = interp.Yes
 	// The same set bash takes, and ignored the same way. ksh93 will also
 	// read a width *after* the modifier — `%l5d` is a padded 42 there — but
 	// that is its free-order conversion prefix rather than this axis: `%5-d`

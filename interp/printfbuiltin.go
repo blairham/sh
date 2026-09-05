@@ -209,14 +209,22 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, bool) {
 				continue
 			}
 			if verb == 0 {
+				if spec != "" {
+					return used, r.printfBadVerb(format[:i], badVerbName(format, i)), true
+				}
 				// An empty prefix is a format that ran out before it
 				// reached a conversion character — `%`, `%5`, `%ll` at the
-				// end — so there is no character to name.
-				name := ""
-				if spec != "" {
-					name = badVerbName(format, i)
+				// end. There is no character to name, and one shell does not
+				// treat it as an error at all: it writes a bare `%` for the
+				// whole unfinished conversion, prefix and all, and succeeds.
+				if r.ask(r.sem().PrintfUnfinishedConversionIsAPercent, "a format that ends inside a conversion") {
+					b.writeByte('%')
+					return used, 0, true
 				}
-				return used, r.printfBadVerb(format[:i], name), true
+				if r.unspecified {
+					return used, r.status, true
+				}
+				return used, r.printfMissingVerb(format[:i]), true
 			}
 			text, code, stop := r.printfVerb(spec, verb, timeFmt, next)
 			if code != 0 {
@@ -534,6 +542,23 @@ func (r *Runner) printfBadVerb(conversion, verb string) int {
 	}
 	r.diagf("%s\n", Wording(d.PrintfBadVerb, "printf: %[2]s: invalid directive", verb, conversion))
 	return orDefault(d.PrintfBadVerbStatus, 1)
+}
+
+// printfMissingVerb reports a format that ended before its conversion
+// character, which is a different complaint from a conversion nobody has —
+// and in one shell a different *wording* of it as well.
+//
+// One verb: the whole directive as written, `%5` and not `5`, because there
+// is no conversion character in it to name. bash uses it, zsh spells its
+// ordinary bad-conversion complaint with it, and dash names nothing at all
+// and so takes the verb and drops it.
+func (r *Runner) printfMissingVerb(conversion string) int {
+	d := r.diag()
+	if i := strings.LastIndexByte(conversion, '%'); i >= 0 {
+		conversion = conversion[i:]
+	}
+	r.diagf("%s\n", Wording(d.PrintfMissingVerb, "printf: %[1]s: missing format character", conversion))
+	return orDefault(d.PrintfMissingVerbStatus, 1)
 }
 
 func (r *Runner) printfReport(kind printfErrorKind, operand string) int {

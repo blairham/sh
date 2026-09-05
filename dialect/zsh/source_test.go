@@ -434,3 +434,17 @@ func TestABadBuiltinOption(t *testing.T) {
 		t.Errorf("said %q, want usage=false", out)
 	}
 }
+
+// The same complaint as an unknown conversion, spelled with the directive.
+func TestPrintfMissingFormatCharacter(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf 'a%'`, "%: invalid directive"},
+		{`printf 'a%5'`, "%5: invalid directive"},
+	} {
+		out, st := runZsh(t, dir, tc.src+"\n")
+		if !strings.Contains(out, tc.want) || st != 1 {
+			t.Errorf("%s: said %q status %d, want %q and 1", tc.src, out, st, tc.want)
+		}
+	}
+}

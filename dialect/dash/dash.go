@@ -103,6 +103,7 @@ func Semantics() interp.Semantics {
 	s.PrintfEmptyIsNotANumber = interp.No
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
+	s.PrintfUnfinishedConversionIsAPercent = interp.No
 	// None: `%ld` is the conversion `l`, which dash does not have.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersAbsent
 	// No `%(fmt)T`: `%(` is a directive this shell does not have.
@@ -430,10 +431,12 @@ func Diagnostics() interp.Diagnostics {
 		CdStatus:          2,
 		PrintfBadNumber:   "printf: %[1]s: expected numeric value",
 		// Every complaint about an argument is 2 here, as it is elsewhere.
-		PrintfBadVerbStatus: 2,
-		PrintfBadVerb:       "printf: %[2]s: invalid directive",
-		PrintfBadOption:     "printf: Illegal option %[1]s",
-		UmaskBadMask:        "umask: Illegal number: %[1]s",
+		PrintfBadVerbStatus:     2,
+		PrintfBadVerb:           "printf: %[2]s: invalid directive",
+		PrintfMissingVerb:       "printf: missing format character",
+		PrintfMissingVerbStatus: 2,
+		PrintfBadOption:         "printf: Illegal option %[1]s",
+		UmaskBadMask:            "umask: Illegal number: %[1]s",
 		// No shell and no line in front of either, which dash does almost
 		// nowhere else.
 		AliasNotFound:             "%[1]s: %[2]s not found",

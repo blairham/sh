@@ -491,3 +491,20 @@ printf '%(%Y)T\n' abc; echo "bad=$?"`)
 		}
 	}
 }
+
+// A format that ends before its conversion character has a second wording
+// here, and it names the whole directive where the ordinary bad-conversion
+// complaint names the character.
+func TestPrintfMissingFormatCharacter(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf 'a%'`, "printf: `%': missing format character"},
+		{`printf 'a%5'`, "printf: `%5': missing format character"},
+		{`printf 'a%ll'`, "printf: `%ll': missing format character"},
+	} {
+		out, st := runBash(t, dir, tc.src+"\n")
+		if !strings.Contains(out, tc.want) || st != 1 {
+			t.Errorf("%s: said %q status %d, want %q and 1", tc.src, out, st, tc.want)
+		}
+	}
+}

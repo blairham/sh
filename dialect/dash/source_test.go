@@ -404,3 +404,13 @@ func TestABadBuiltinOption(t *testing.T) {
 		t.Errorf("said %q, want usage=false", out)
 	}
 }
+
+// The complaint names nothing at all here, and reports 2 where the others
+// report 1.
+func TestPrintfMissingFormatCharacter(t *testing.T) {
+	dir := t.TempDir()
+	out, st := runDash(t, dir, `printf 'a%5'`+"\n")
+	if !strings.Contains(out, "printf: missing format character") || st != 2 {
+		t.Errorf("said %q status %d, want an unnamed complaint and 2", out, st)
+	}
+}

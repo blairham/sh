@@ -260,6 +260,9 @@ func Semantics() interp.Semantics {
 	s.PrintfEmptyIsNotANumber = interp.Yes
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
+	// A format that ends inside a conversion is an error here, with a
+	// second wording of its own — see PrintfMissingVerb.
+	s.PrintfUnfinishedConversionIsAPercent = interp.No
 	// `%zX`, `%ld`, `%jd` and any run of the letters, all of them read and
 	// thrown away: `%hhd` with 300 is 300.
 	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC99
@@ -618,6 +621,7 @@ func Diagnostics() interp.Diagnostics {
 		CdOldpwdNotSet:              "cd: OLDPWD not set",
 		PrintfBadNumber:             "printf: %[1]s: invalid number",
 		PrintfBadVerb:               "printf: `%[1]s': invalid format character",
+		PrintfMissingVerb:           "printf: `%[1]s': missing format character",
 		PrintfBadOption:             "printf: %[1]s: invalid option",
 		TrapBarePrintNeedsCondition: "trap: -P requires at least one signal name",
 		PrintfBadOptionShowsUsage:   true,

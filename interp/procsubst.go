@@ -104,37 +104,50 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 			return "", false
 		}
 		sub.Stdin = end
-		go func() {
-			defer func() { _ = end.Close() }()
+		r.spawn(func() {
 			// Through the clone, which this goroutine owns: the record of
 			// the open that the gate already allowed.
 			sub.emit(ctx, Event{Kind: EventAccess, Action: action})
 			if _, err := sub.Run(ctx, f); err != nil {
 				sub.diagf("%v\n", err)
 			}
-		}()
+		}, func() {
+			// However the goroutine ended: this end closing is the
+			// end-of-file the substituted command's reader is waiting for,
+			// and skipping it would leave the command that named the path
+			// waiting for one that is never coming.
+			_ = end.Close()
+		})
 	} else {
 		// `<(cmd)` writes cmd's output into the pipe, so this end is the
 		// writer — and a writer has to wait for its reader, which is why
 		// this half is on a goroutine and the other half is not. The wait
 		// is bounded now rather than endless; openFifoWriteEnd is where
 		// that is done and why.
-		go func() {
-			end, err := openFifoWriteEnd(path)
-			if err != nil {
+		var end *os.File
+		r.spawn(func() {
+			var err error
+			if end, err = openFifoWriteEnd(path); err != nil {
 				// Nobody opened the other end — the command did not use the
 				// path it was given, and the pipe went with it. There is
 				// nothing to run and nothing to report: `echo <(true)`
 				// prints a path and is not an error anywhere.
 				return
 			}
-			defer func() { _ = end.Close() }()
 			sub.emit(ctx, Event{Kind: EventAccess, Action: action})
 			sub.Stdout = end
 			if _, err := sub.Run(ctx, f); err != nil {
 				sub.diagf("%v\n", err)
 			}
-		}()
+		}, func() {
+			// The same close as the other direction, and the same reason:
+			// it is the end-of-file the command that named the path is
+			// reading until. Nil when nobody ever opened the other end, so
+			// there was nothing to close.
+			if end != nil {
+				_ = end.Close()
+			}
+		})
 	}
 
 	r.procSubs = append(r.procSubs, procSubPipe{path: path, hold: hold})

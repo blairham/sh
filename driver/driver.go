@@ -810,6 +810,14 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// And which run this is, so every event it emits says so. Set beside
 		// the sink because it is only meaningful to something reading one.
 		Session: sh.Session,
+		// And the guard, for the goroutines a shell runs beside itself.
+		// Outside the KeepProcess block below, because this is not a
+		// process hook: it changes nothing about the process and is the
+		// same decision the guard around every route already makes — that
+		// an interpreter bug is a diagnostic and a status rather than a
+		// crash. An embedder that has told this front end to keep the
+		// process is exactly the caller who most wants it.
+		GuardConcurrent: sh.guardConcurrent(),
 	}
 	r.Dir = sh.Dir
 	if r.Dir == "" {

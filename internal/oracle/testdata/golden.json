@@ -25414,6 +25414,50 @@
         "TimedOut": false
       }
     },
+    "opt/a-refused-letter-echoes-the-sign": {
+      "bash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: line 1: set: +q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: set: +q: invalid option~set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: line 0: set: +q: invalid option~set: usage: set [--abefhkmnptuvxBCHP] [-o option] [arg ...]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -q",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: +q: unknown option~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: bad option: -q",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "opt/an-expansions-result-is-not-globbed-under-noglob": {
       "bash": {
         "Stdout": "*.txt",
@@ -25502,6 +25546,50 @@
         "TimedOut": false
       }
     },
+    "opt/an-unknown-letter-at-an-invocation": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -q: invalid option~Usage:\t\u003cshell\u003e [GNU long option] [option] ...~\t\u003cshell\u003e [GNU long option] [option] script-file ...~GNU long options:~\t--debug~\t--debugger~\t--dump-po-strings~\t--dump-strings~\t--help~\t--init-file~\t--login~\t--noediting~\t--noprofile~\t--norc~\t--posix~\t--pretty-print~\t--rcfile~\t--restricted~\t--verbose~\t--version~Shell options:~\t-ilrsD or -c command or -O shopt_option\t\t(invocation only)~\t-abefhkmnptuvxBCEHPT or -o option",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -q: invalid option~Usage:\t\u003cshell\u003e [GNU long option] [option] ...~\tsh [GNU long option] [option] script-file ...~GNU long options:~\t--debug~\t--debugger~\t--dump-po-strings~\t--dump-strings~\t--help~\t--init-file~\t--login~\t--noediting~\t--noprofile~\t--norc~\t--posix~\t--pretty-print~\t--rcfile~\t--restricted~\t--verbose~\t--version~Shell options:~\t-ilrsD or -c command or -O shopt_option\t\t(invocation only)~\t-abefhkmnptuvxBCEHPT or -o option",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -q: invalid option~Usage:\t\u003cshell\u003e [GNU long option] [option] ...~\t\u003cshell\u003e [GNU long option] [option] script-file ...~GNU long options:~\t--debug~\t--debugger~\t--dump-po-strings~\t--dump-strings~\t--help~\t--init-file~\t--login~\t--noediting~\t--noprofile~\t--norc~\t--posix~\t--protected~\t--rcfile~\t--restricted~\t--verbose~\t--version~\t--wordexp~Shell options:~\t-irsD or -c command or -O shopt_option\t\t(invocation only)~\t-abefhkmnptuvxBCHP or -o option",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 0: Illegal option -q",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -q: unknown option~Usage: \u003cshell\u003e [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: bad option: -q",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "opt/an-unknown-letter-is-refused": {
       "bash": {
         "Stdout": "st=2~alive",
@@ -25541,6 +25629,50 @@
       "zsh": {
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:set:1: bad option: -q",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "opt/an-unknown-long-name-at-an-invocation": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: \u003cshell\u003e: zzznosuch: invalid option name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: sh: zzznosuch: invalid option name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 0: \u003cshell\u003e: zzznosuch: invalid option name",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 0: Illegal option -o zzznosuch",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: zzznosuch: bad option(s)~Usage: \u003cshell\u003e [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: no such option: zzznosuch",
         "Status": 1,
         "Signal": 0,
         "TimedOut": false

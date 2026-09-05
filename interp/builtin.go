@@ -240,7 +240,7 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 				if r.unspecified {
 					return false
 				}
-				return r.badSetOptionLetter(opt)
+				return r.badSetOptionLetter(opt, on)
 			}
 			if r.ask(r.sem().SetHLetterTracksCommands, "which option `set -h` abbreviates") {
 				// The same state the hashall and trackall table entries
@@ -259,7 +259,7 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 				if r.unspecified {
 					return false
 				}
-				return r.badSetOptionLetter(opt)
+				return r.badSetOptionLetter(opt, on)
 			}
 			if opt == 'E' {
 				r.errtrace = on
@@ -275,7 +275,7 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 				r.noglob = on
 			}
 		default:
-			return r.badSetOptionLetter(opt)
+			return r.badSetOptionLetter(opt, on)
 		}
 	}
 	return true
@@ -304,35 +304,97 @@ func (r *Runner) setLetters(letters string, on bool) bool {
 // everybody and never ended a script, so `zsh -q` exited 2 where zsh exits 1
 // and `set -q` in a dash script carried on where dash stops (#483).
 //
-// The wording is still ours rather than the dialect's, and that is a separate
-// gap: the panel spells this four ways — `-q: invalid option`,
-// `Illegal option -q`, `-q: unknown option`, `bad option: -q` — and at an
-// invocation bash and ksh93 name themselves rather than `set` and add a usage
-// block. See docs/spec/invocation.md and #598.
-func (r *Runner) badSetOptionLetter(opt rune) bool {
-	r.diagf("set: -%c is not implemented\n", opt)
-	status := orDefault(r.diag().SetInvalidOptionStatus, 2)
-	r.setOptionStatus = status
-	if r.ask(r.sem().BadSetOptionNameFatal, "a refused `set` option letter ending the script") {
-		r.status = status
-		r.fatalQuiet()
+// The words are the dialect's, in Diagnostics.SetInvalidOptionLetter, because
+// the panel spells this four ways — `-q: invalid option`, `Illegal option -q`,
+// `-q: unknown option`, `bad option: -q` (#598). The sign rides in the wording
+// rather than being one: bash and ksh93 echo back the `+` of `set +q` and dash
+// and zsh write `-q` whichever was asked, so the format takes the spelling as
+// written and the bare letter and each dialect uses the one it says.
+//
+// A letter the dialect really has and this shell has not implemented is said
+// to be missing instead, the way every other builtin's is — see
+// Diagnostics.UnimplementedOptionLetters. Telling a script that `set -b` is
+// invalid in a bash that has it would be a worse answer than telling it the
+// truth.
+func (r *Runner) badSetOptionLetter(opt rune, on bool) bool {
+	d := r.diag()
+	sign := "+"
+	if on {
+		sign = "-"
 	}
-	return false
+	spelled, bare := sign+string(opt), string(opt)
+	msg := Wording(d.SetInvalidOptionLetter, "set: %[1]s: invalid option", spelled, bare)
+	usage := true
+	if has := d.UnimplementedOptionLetters["set"]; strings.ContainsRune(has, opt) {
+		msg, usage = "set: "+spelled+" is not implemented yet", false
+	}
+	r.saySetRefusal(msg, usage, false)
+	return r.setRefusalStatus("a refused `set` option letter ending the script")
 }
 
 func (r *Runner) badSetOptionName(name string) bool {
 	d := r.diag()
-	r.diagf("%s\n", Wording(d.SetInvalidOptionName, "set: %[1]s: invalid option name", name))
-	if usage := d.BuiltinUsage["set"]; usage != "" {
-		if d.BuiltinUsageUnprefixed {
-			r.errf("%s\n", usage)
-		} else {
-			r.diagf("%s\n", usage)
+	msg := Wording(d.SetInvalidOptionName, "set: %[1]s: invalid option name", name)
+	r.saySetRefusal(msg, d.SetInvalidOptionNameUsage, true)
+	return r.setRefusalStatus("an unknown `set -o` name ending the script")
+}
+
+// saySetRefusal writes one refused `set` option, and takes the whole of the
+// difference between the two routes it can arrive by.
+//
+// Inside a script it is the builtin speaking: the dialect's location, `set`
+// named where the dialect names it, and the builtin's own usage line under it
+// where the dialect prints one.
+//
+// At an invocation nothing has been read, and the panel says so — measured
+// 2026-09-05 on `-q` and on `-o zzznosuch`. Three of the four drop the
+// builtin's name and its location alike and print their own name and the
+// sentence, which is `invocationPrefix` and the same wording with the leading
+// `set: ` taken off. The usage block is the *shell's* there rather than
+// `set`'s, so it comes from a field of its own. bash is the exception on the
+// long spelling only, and reports it exactly as the builtin would with its own
+// name standing where `set` would — location and all, `bash: line 0: bash:
+// zzznosuch: invalid option name`.
+func (r *Runner) saySetRefusal(msg string, usage, isName bool) {
+	d := r.diag()
+	if !r.atInvocation {
+		r.diagf("%s\n", msg)
+		if usage {
+			r.sayBuiltinUsage(d.BuiltinUsage["set"])
 		}
+		return
 	}
-	status := orDefault(d.SetInvalidOptionStatus, 2)
+	if rest, ok := strings.CutPrefix(msg, "set: "); ok && isName && d.InvocationNameRefusalNamesTheShell {
+		r.diagf("%s: %s\n", r.name(), rest)
+		return
+	}
+	r.errf("%s%s\n", d.invocationPrefix(r.name()), strings.TrimPrefix(msg, "set: "))
+	if u := d.InvocationUsage; u != "" {
+		r.errf("%s\n", Wording(u, u, r.name(), filepath.Base(r.name())))
+	}
+}
+
+// sayBuiltinUsage writes a usage line the way the dialect writes one: after
+// its own location, or on a line of its own where the dialect prints no
+// prefix in front of it.
+func (r *Runner) sayBuiltinUsage(usage string) {
+	if usage == "" {
+		return
+	}
+	if r.diag().BuiltinUsageUnprefixed {
+		r.errf("%s\n", usage)
+	} else {
+		r.diagf("%s\n", usage)
+	}
+}
+
+// setRefusalStatus records what a refused `set` option reports and ends the
+// script where the dialect says such a refusal is fatal. One place for both
+// spellings, because the panel answers them identically (#483).
+func (r *Runner) setRefusalStatus(why string) bool {
+	status := orDefault(r.diag().SetInvalidOptionStatus, 2)
 	r.setOptionStatus = status
-	if r.ask(r.sem().BadSetOptionNameFatal, "an unknown `set -o` name ending the script") {
+	if r.ask(r.sem().BadSetOptionNameFatal, why) {
 		r.status = status
 		r.fatalQuiet()
 	}

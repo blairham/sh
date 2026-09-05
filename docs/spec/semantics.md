@@ -1987,7 +1987,6 @@ than missing:
 - bash `dirs` and `disown`: claimed by the core-builtin sweep (#430)
   alongside the job-spec and directory-stack work they sit on, and recorded
   there rather than twice.
-||||||| parent of 7c686d6 (builtins: the declaration long tail — declare -f/-F/-g/-l/-u, local options, bare set and local listings, command -V)
 
 ## The declaration long tail: letters, listings, and one letter with an axis inside it
 

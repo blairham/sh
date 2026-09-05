@@ -1035,7 +1035,7 @@ func (r *Runner) assignSubscript(e *syntax.ParamExpr, v string) {
 		r.setAssocElem(e.Name, idx, v)
 		return
 	}
-	n, err := r.parseNum(idx)
+	n, err := r.subscriptValue(idx)
 	if err != nil {
 		return
 	}
@@ -1170,11 +1170,16 @@ func sliceElems(elems []string, off int, lenWord *syntax.Word, r *Runner) []stri
 }
 
 // numOf evaluates a word as a number, for a substring's offset and length.
+//
+// An expression rather than a numeral, for the reason a subscript is one:
+// `${x:1+1:2}` is `cd` of `abcdef` in every shell on the panel that has
+// substrings, and taking a numeral alone made it `ab` — an offset of 0, which
+// is a wrong answer that looks like a right one.
 func (r *Runner) numOf(w *syntax.Word) int {
 	if w == nil {
 		return 0
 	}
-	n, err := r.parseNum(strings.TrimSpace(r.joinWord(w)))
+	n, err := r.subscriptValue(r.joinWord(w))
 	if err != nil {
 		return 0
 	}

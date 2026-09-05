@@ -142,6 +142,12 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			if rd.N == nil && rd.Op == syntax.TokLessAmp {
 				fd = 0
 			}
+			// One dialect will not take a duplication target wider than a
+			// single digit, and refuses before it looks at what is open.
+			if r.refuseWideDupTarget(name) || r.unspecified {
+				r.redirErr = true
+				return closers, nil
+			}
 			if fdVar != "" {
 				if name == "-" {
 					// `exec {name}>&-` closes the descriptor the variable
@@ -264,7 +270,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			// where it was. Every shell reports that it cannot open "".
 			path = filepath.Join(r.Dir, path)
 		}
-		action := Action{Kind: ActionOpen, Path: path, Write: flags != os.O_RDONLY}
+		action := r.act(Action{Kind: ActionOpen, Path: path, Write: flags != os.O_RDONLY})
 		if !r.allowed(ctx, action) {
 			// A refused open is an open that did not happen, and the command
 			// must not run without it. Returning quietly let it run with the
@@ -369,11 +375,25 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 func (r *Runner) eachTarget(fd int, f io.Writer, opened map[int]io.Writer) io.Writer {
 	if prev, ok := opened[fd]; ok &&
 		r.ask(r.sem().RedirectsWriteToEveryTarget, "a command redirecting one stream to several files") {
-		f = io.MultiWriter(prev, f)
+		// Marked as what it is rather than left to be recognized by type. A
+		// stream over several files is the one shape that cannot be handed to
+		// a process replacement as a descriptor number, and the shell that
+		// built it is the only thing that knows; inferring it from "not an
+		// *os.File" would sweep in an embedder's buffer, which is a different
+		// case with a different answer. See namedStreamsCanBePlaced.
+		f = multiTarget{io.MultiWriter(prev, f)}
 	}
 	opened[fd] = f
 	return f
 }
+
+// multiTarget is a stream the shell built out of more than one target, under
+// the dialect that writes to every one of them.
+//
+// It is a marker before it is a writer: the io.Writer inside is an ordinary
+// multi-writer and does the work, and the type exists so that `exec cmd` can
+// tell this stream from a file without guessing.
+type multiTarget struct{ io.Writer }
 
 type closerFunc func() error
 
@@ -538,6 +558,50 @@ func (r *Runner) refuseFdOverLimit(fd int) bool {
 	r.diagf("%s\n", Wording(r.diag().FdNumberOverLimit, "%[1]d: %[2]s",
 		fd, r.diag().reasonText(reason(syscall.EBADF))))
 	r.status = r.diag().redirectFailureStatus()
+	return true
+}
+
+// refuseWideDupTarget is one dialect's refusal of `>&10`.
+//
+// The other four read the number and fail at run time if nothing is open
+// there — `10: Bad file descriptor`, status 1, and the script carries on.
+// This one will not take the *word* at all, whatever it names.
+//
+// Three things about it were measured rather than assumed, and each one
+// decides where the check lives:
+//
+//   - **It is not a parse refusal**, though it is worded as one. `sh -n -c
+//     'echo hi >&10'` accepts the input and exits 0, and a script whose
+//     second line has it prints its first line before stopping. So the
+//     question belongs to the semantics vector and to the dialect's
+//     wording, not to syntax.Dialect: the grammar takes it everywhere.
+//   - **It is the width and not the value.** `>&08` names descriptor 8 and
+//     is refused just the same, so this cannot be folded into the axis about
+//     numbers the open-file limit will not give out.
+//   - **It is the expanded word.** `n=10; echo hi >&$n` is refused where
+//     `n=9` is not, so the check has to come after the target is expanded,
+//     which is where it is.
+//
+// The refusal ends the script, and that travels with the answer rather than
+// being an axis of its own: one shell in the panel refuses, and it stops.
+// The status is the fatal one the vector already carries.
+//
+// Reading the *file* is what settled the panel, not the child's status: one
+// bash build parks its own saved streams at descriptor 10, so `echo hi >&10`
+// prints `hi` there and reports success without anything crossing a
+// boundary. `<&10` in the same build is `Bad file descriptor`, which is the
+// tell.
+func (r *Runner) refuseWideDupTarget(target string) bool {
+	if len(target) < 2 || !allDigits(target) {
+		return false
+	}
+	if !r.ask(r.sem().MultiDigitDuplicationTargetIsAnError,
+		"a duplication target of more than one digit") {
+		return false
+	}
+	r.diagf("%s\n", Wording(r.diag().MultiDigitDuplicationTarget,
+		"%[1]s: bad file descriptor number", target))
+	r.fatalQuiet()
 	return true
 }
 

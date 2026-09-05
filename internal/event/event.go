@@ -28,8 +28,11 @@ package event
 
 import (
 	"context"
+	"encoding/base32"
+	"encoding/binary"
 	"encoding/json"
 	"io"
+	"math/rand/v2"
 	"sync"
 	"time"
 
@@ -42,6 +45,71 @@ import (
 // a field, an event name or an action name does not, because a consumer is
 // required to ignore what it does not recognize — see Record.
 const Version = 1
+
+// idEncoding is base32 with the extended-hex alphabet and no padding.
+//
+// The alphabet is 0-9 then A-V, which is ordered, so sorting the encoded
+// strings sorts the bytes underneath them. That is the whole reason for
+// choosing it over standard base32, whose alphabet starts at A and puts the
+// digits last: an id has a timestamp at the front, and this is what makes
+// sorting a set of them chronological.
+var idEncoding = base32.HexEncoding.WithPadding(base32.NoPadding)
+
+// IDLength is how long an id always is: sixteen bytes in base32 is 26
+// characters. Fixed rather than a range, which is what lets a short decimal
+// number mean something else without ambiguity where a consumer accepts both.
+const IDLength = 26
+
+// NewID makes an identity: eight bytes of Unix nanoseconds, big-endian, then
+// eight random bytes, encoded as 26 characters.
+//
+// It lives here rather than beside any one consumer because identity is part
+// of the contract this package owns, and the failure it prevents is precise:
+// two consumers of one run that generate ids their own way produce records
+// that *look* joinable and are not, which is worse than records with no ids at
+// all. One generator is what makes a session id written by one consumer the
+// same string another can look for.
+//
+// Four properties, each of which was a requirement. It sorts by time, per
+// idEncoding. It is unique across sessions without coordination, because two
+// shells writing in the same nanosecond differ in 64 random bits — and nothing
+// having to hold a counter is what makes an append-only multi-session record
+// possible at all. It is safe as a filename on every filesystem, being
+// uppercase throughout so a case-folding one cannot collide two of them. And
+// it needs nothing outside the standard library.
+//
+// A content hash was the other candidate and is wrong for this: two identical
+// commands run an hour apart are two of whatever is being identified, and when
+// and where they ran is as much of the thing as what was in it.
+//
+// This is not what numbers an action. An action id is a small counter on the
+// Runner — see interp.Action.ID — because a PATH search stats a candidate per
+// directory and paying for randomness there would tax every shell that merely
+// asked to watch itself. The pair of a session id from here and an action's
+// counter is what is unique everywhere.
+//
+// The randomness is math/rand/v2 and deliberately not crypto/rand, which is a
+// choice a shell has a specific reason to make. What is wanted here is
+// uniqueness and not unpredictability — an id names a record in the caller's
+// own files, and nothing decides anything on the strength of being unable to
+// guess one — and the global source in math/rand/v2 is seeded from the runtime
+// at startup, so two shells that begin in the same nanosecond still differ in
+// 64 bits.
+//
+// What crypto/rand costs is a descriptor. Measured on macOS, the first
+// crypto/rand.Read in a process permanently opens one, and in a *shell* that
+// number is not an implementation detail: descriptor 3 is the first one a
+// script parks with `exec 3>f`, and the process's table is what a replacement
+// inherits. A shell that had quietly spent 3 on its random source would place
+// the script's file over it — which is exactly what happened to the Go
+// runtime's own poller when this was tried, and the process died before it
+// could exec.
+func NewID(t time.Time) string {
+	var b [16]byte
+	binary.BigEndian.PutUint64(b[:8], uint64(t.UnixNano()))
+	binary.BigEndian.PutUint64(b[8:], rand.Uint64())
+	return idEncoding.EncodeToString(b[:])
+}
 
 // Record is one event as it goes on the wire.
 //
@@ -69,6 +137,23 @@ const Version = 1
 type Record struct {
 	V   int   `json:"v"`
 	Seq int64 `json:"seq"`
+	// Session identifies the shell this record came from, and ActionID
+	// identifies the action within it. Together they are what makes two
+	// records of one run joinable — an audit stream and whatever else a front
+	// end keeps — which nothing in version 1 could express when it landed.
+	//
+	// Both are added fields rather than a version bump, which is rule 3 being
+	// used rather than described: a consumer written against the original
+	// fifteen reads a record carrying these exactly as it did before.
+	//
+	// ActionID is not Seq and the two must not be confused. Seq orders
+	// *emission* within one stream and is a different number on every record;
+	// ActionID names one action and is the *same* on every record about it, so
+	// a command's start, its end and the refusal that preceded them share one.
+	// It is unique within a session and not beyond it, which is why the pair is
+	// what a consumer joins on.
+	Session  string `json:"session,omitempty"`
+	ActionID string `json:"actionId,omitempty"`
 	// Time is when the record was written, which is a function call after the
 	// action: a Sink is called synchronously on the goroutine that emitted.
 	// Stating the mechanism is better than implying a precision the record
@@ -103,7 +188,10 @@ type Record struct {
 // is 0 and whose Time is the zero time, which is honest about having neither.
 func Of(e interp.Event) Record {
 	r := Record{
-		V:      Version,
+		V:        Version,
+		Session:  e.Session,
+		ActionID: e.Action.ID,
+
 		Event:  e.Kind.String(),
 		Action: e.Action.Kind.String(),
 		Path:   e.Action.Path,

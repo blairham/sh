@@ -236,7 +236,7 @@ func biDot(r *Runner, ctx context.Context, args []string) int {
 	// through the unreadable-file diagnostic rather than allowed()'s generic
 	// refusal, so a file the policy withholds is reported the way a file the
 	// kernel withholds is — same wording shape, same fatality axis.
-	action := Action{Kind: ActionOpen, Path: path}
+	action := r.act(Action{Kind: ActionOpen, Path: path})
 	if r.openQuietlyDenied(action) {
 		return r.dotFailed(args[0], errRefused)
 	}

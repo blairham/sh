@@ -2084,6 +2084,36 @@ type Semantics struct {
 	// `export`, `readonly` and `unset`.
 	BadOptionToSpecialBuiltinFatal Answer
 
+	// MultiDigitDuplicationTargetIsAnError refuses `>&10` — a duplication
+	// whose *target* is written with more than one digit. True in dash
+	// alone; the other four read the number and fail at run time with `10:
+	// Bad file descriptor` if nothing is open there, at status 1, and the
+	// script carries on.
+	//
+	// The companion question, how many digits may stand *before* the
+	// operator, is the grammar's and has the opposite dissenter: bash alone
+	// reads `exec 10>f` as a redirection where the other three run a command
+	// called `10` (Dialect.MultiDigitFdNumber). Two questions that split the
+	// panel the other way round cannot be one flag read from both ends.
+	//
+	// It is not a parse refusal, though the shell that has it words it as a
+	// syntax error: `sh -n -c 'echo hi >&10'` accepts the input and exits 0,
+	// and a script prints its earlier lines before stopping on this one. The
+	// grammar takes the construct everywhere, so this is a semantics axis.
+	//
+	// The width is what is refused and not the value — `>&08` names
+	// descriptor 8 and is refused too — which is what keeps this separate
+	// from FdNumberBoundedByOpenFileLimit. And it is the *expanded* word:
+	// `n=10; echo hi >&$n` is refused where `n=9` is not.
+	//
+	// The refusal ends the script, which travels with the answer rather than
+	// being an axis of its own — one shell refuses and that shell stops. The
+	// status is FatalErrorStatusIsOne's, as every fatal error's is.
+	//
+	// Asked only where a target really is wider than one digit; `>&2` is
+	// nobody's question.
+	MultiDigitDuplicationTargetIsAnError Answer
+
 	// RedirectErrorOnSpecialBuiltinFatal ends a non-interactive shell when a
 	// redirection written on a *special* builtin cannot be made — a file that
 	// will not open, a descriptor that is not there, a number the open-file
@@ -2360,6 +2390,11 @@ func PosixSemantics() Semantics {
 		// POSIX makes a special builtin's failure fatal, and a bad option is
 		// one.
 		BadOptionToSpecialBuiltinFatal: Yes,
+		// XCU's `[n]>&word` takes "one or more digits", so the standard
+		// admits `>&10` and the preset follows it. The shell that refuses is
+		// the dissenter here, which is worth noting because it is usually
+		// the panel's POSIX-faithful member.
+		MultiDigitDuplicationTargetIsAnError: No,
 		// A redirection that cannot be made is a special builtin's failure
 		// as well, and the standard names it in so many words. Three of the
 		// five follow it, and the two that do not both reach this answer as

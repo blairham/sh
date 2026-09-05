@@ -71,6 +71,17 @@ type Shell struct {
 	Gate   interp.Gate
 	Events interp.Sink
 
+	// Session identifies this run, and is the same string the Runner carries
+	// and every event of this run is stamped with.
+	//
+	// It is here rather than made in this package because it is the *front
+	// end's* identity for a run: what a prompt records about a command and
+	// what the event stream records about the same command are two accounts of
+	// one session, and two identities made independently would leave them
+	// looking joinable and not being. Empty is a run the front end gave no
+	// identity, which records fine and joins to nothing.
+	Session string
+
 	// PanicTrace prints the stack of an interpreter bug caught while running
 	// a line, as well as the report that one was caught. The default is off
 	// because a trace at a prompt scrolls the session away and buries the
@@ -110,12 +121,17 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// documents having been made once with what goes between lines.
 	store := s.blocksStore()
 	defer func() { _ = store.Close() }()
+	// And what it keeps of what those commands printed, when the session asked
+	// for it. Nil is the default, and the reason it is the default is that a
+	// captured stream is not a terminal to the child on the other end of it —
+	// see blocks.Capture.Stream.
+	capture := s.captureOutput()
 	if !IsTerminal(s.In) {
 		// A prompt without a terminal is not a mistake to refuse: every shell
 		// in the panel, given `-i` on a pipe, still prints a prompt and runs
 		// the lines — it only says that job control is off. The *editor* is
 		// what needs a terminal, and it is the editor that goes away.
-		return s.runPlain(ctx, store)
+		return s.runPlain(ctx, store, capture)
 	}
 	state, err := makeRaw(s.In)
 	if err != nil {
@@ -188,7 +204,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		}
 		b := s.beginBlock(text)
 		done := s.run(ctx, state, stmts)
-		s.closeBlock(ctx, store, b)
+		s.closeBlock(ctx, store, capture, b)
 		if sig.took() {
 			// The terminal echoed `^C` where the cursor was and left it
 			// there, so the next prompt would land on top of it.
@@ -306,7 +322,7 @@ func (s Shell) reportFinishedJobs(continuing bool) {
 //
 // The prompt goes to the error stream, where a shell always puts it: the
 // output of `sh -i < script > out` is the commands' output and nothing else.
-func (s Shell) runPlain(ctx context.Context, store *blocks.Store) (int, error) {
+func (s Shell) runPlain(ctx context.Context, store *blocks.Store, capture *blocks.Capture) (int, error) {
 	in := bufio.NewReader(s.In)
 	var pending strings.Builder
 	for {
@@ -335,7 +351,7 @@ func (s Shell) runPlain(ctx context.Context, store *blocks.Store) (int, error) {
 		}
 		b := s.beginBlock(text)
 		done := s.runStmts(ctx, stmts)
-		s.closeBlock(ctx, store, b)
+		s.closeBlock(ctx, store, capture, b)
 		if done {
 			return s.status(), nil
 		}
@@ -488,7 +504,7 @@ func (s Shell) historyFile() historyFile {
 	h := historyFrom(s.Runner.GetVar, home)
 	// The session's boundary, so an open this package makes is asked about
 	// the same way one the interpreter makes is.
-	h.bound = boundary.Boundary{Gate: s.Gate, Events: s.Events}
+	h.bound = boundary.Boundary{Gate: s.Gate, Events: s.Events, Session: s.Session}
 	return h
 }
 

@@ -6,6 +6,7 @@ package blocks
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,8 @@ import (
 	"github.com/blairham/sh/internal/boundary"
 	"github.com/blairham/sh/internal/secret"
 	"github.com/blairham/sh/interp"
+
+	"github.com/blairham/sh/internal/event"
 )
 
 func at(sec int64) time.Time { return time.Unix(sec, 0).UTC() }
@@ -269,7 +272,7 @@ func TestADeletedBodyReadsAsNoOutput(t *testing.T) {
 // cannot be confused.
 func TestFindTakesAnIDOrARecencyNumber(t *testing.T) {
 	s, _ := newStore(t)
-	ids := []string{NewID(at(1000)), NewID(at(2000)), NewID(at(3000))}
+	ids := []string{event.NewID(at(1000)), event.NewID(at(2000)), event.NewID(at(3000))}
 	for i, id := range ids {
 		mustAppend(t, s, Record{ID: id, Command: string(rune('a' + i))})
 	}
@@ -295,7 +298,7 @@ func TestFindTakesAnIDOrARecencyNumber(t *testing.T) {
 // characters would one day resolve a real id as a recency number.
 func TestAnAllDigitIDIsStillAnID(t *testing.T) {
 	s, _ := newStore(t)
-	id := strings.Repeat("7", idLength)
+	id := strings.Repeat("7", event.IDLength)
 	mustAppend(t, s, Record{ID: id, Command: "the all-digit one"})
 	r, err := s.Find(t.Context(), id, 100)
 	if err != nil || r.Command != "the all-digit one" {
@@ -388,4 +391,20 @@ func TestARefusedIndexIsAskedAboutOnce(t *testing.T) {
 	if n != 1 {
 		t.Errorf("the gate was asked %d times about the index, want 1", n)
 	}
+}
+
+// readAll lists everything under a directory, so a test can say "the store
+// holds nothing" rather than "the index holds nothing".
+func readAll(dir string) ([]string, error) {
+	var found []string
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			found = append(found, p)
+		}
+		return nil
+	})
+	return found, err
 }

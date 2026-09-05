@@ -304,6 +304,9 @@ func Semantics() interp.Semantics {
 	// is printed and the script runs on. The starting value only — `emulate
 	// sh` and `emulate ksh` move it to the POSIX answer, and `emulate zsh`
 	// puts it back.
+	// Read as a number like any other; nothing about the width is
+	// refused.
+	s.MultiDigitDuplicationTargetIsAnError = interp.No
 	s.RedirectErrorOnSpecialBuiltinFatal = interp.No
 	// zsh takes it and sets a global instead of refusing.
 	s.LocalOutsideAFunctionIsAnError = interp.No

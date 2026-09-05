@@ -109,11 +109,11 @@ func runFdVar(t *testing.T, dir string, tweak func(*Semantics), src string) stri
 		tweak(&sem)
 	}
 	out := &strings.Builder{}
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dir: dir,
 		Stdout: out, Stderr: &strings.Builder{},
 		Vars: map[string]string{"PATH": lookBinPath(t)},
-	}
+	})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}

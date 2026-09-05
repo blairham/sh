@@ -85,7 +85,13 @@ func TestReadOwnFlagsWantsAPathToDeny(t *testing.T) {
 // behavior every binary had before these flags existed: interp allows
 // everything and discards every event, for one nil check.
 func TestInstallSeamsLeavesAPlainShellAlone(t *testing.T) {
-	sh := installSeams(driver.Shell{}, ownFlags{}, &bytes.Buffer{})
+	sh, closer, err := installSeams(driver.Shell{}, ownFlags{}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if closer != nil {
+		t.Error("a shell with no -audit must open no file")
+	}
 	if sh.Gate != nil {
 		t.Error("a shell with no -deny must carry no gate")
 	}
@@ -96,7 +102,10 @@ func TestInstallSeamsLeavesAPlainShellAlone(t *testing.T) {
 
 func TestInstallSeamsWiresWhatWasAskedFor(t *testing.T) {
 	var buf bytes.Buffer
-	sh := installSeams(driver.Shell{}, ownFlags{deny: []string{"/etc"}}, &buf)
+	sh, _, err := installSeams(driver.Shell{}, ownFlags{deny: []string{"/etc"}}, &buf)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if sh.Gate == nil {
 		t.Error("-deny must reach the shell's gate")
 	}
@@ -104,7 +113,10 @@ func TestInstallSeamsWiresWhatWasAskedFor(t *testing.T) {
 		t.Error("-deny alone must not install a sink")
 	}
 
-	sh = installSeams(driver.Shell{}, ownFlags{traceEvents: true}, &buf)
+	sh, _, err = installSeams(driver.Shell{}, ownFlags{traceEvents: true}, &buf)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if sh.Events == nil {
 		t.Error("-trace-events must reach the shell's sink")
 	}
@@ -323,7 +335,10 @@ func TestAGatedRunDeniesAndReports(t *testing.T) {
 	errs.Reset()
 	gated := base
 	gated.Stdout, gated.Stderr = &out, &errs
-	gated = installSeams(gated, own, &trace)
+	gated, _, err = installSeams(gated, own, &trace)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if code := driver.MainArgs(gated, append([]string{"sh"}, rest...)); code != 0 {
 		t.Fatalf("gated status %d: %s", code, errs.String())
 	}
@@ -375,7 +390,10 @@ func TestATracedRunRecordsASignal(t *testing.T) {
 	var out, errs, trace bytes.Buffer
 	sh := base
 	sh.Stdout, sh.Stderr = &out, &errs
-	sh = installSeams(sh, own, &trace)
+	sh, _, err = installSeams(sh, own, &trace)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if code := driver.MainArgs(sh, append([]string{"sh"}, rest...)); code != 0 {
 		t.Fatalf("status %d: %s", code, errs.String())
 	}

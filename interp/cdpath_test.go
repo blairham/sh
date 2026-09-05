@@ -41,10 +41,10 @@ func TestCdKeepsOrResolvesTheNameItWasGiven(t *testing.T) {
 			sem.CdRefusesUnknownOption = Yes
 			sem.CdLastPathOptionWins = Yes
 			out := &strings.Builder{}
-			r := &Runner{
+			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dir: dir,
 				Stdout: out, Stderr: &strings.Builder{},
-			}
+			})
 			runCd(t, r, c.cmd+"\npwd\n")
 			got := strings.TrimSpace(out.String())
 			if isResolved := !strings.Contains(got, "link"); isResolved != c.resolved {
@@ -77,10 +77,10 @@ func TestCdMayLetTheLastPathOptionWinOrNot(t *testing.T) {
 			sem.CdRefusesUnknownOption = Yes
 			sem.CdLastPathOptionWins = c.lastWins
 			out := &strings.Builder{}
-			r := &Runner{
+			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dir: dir,
 				Stdout: out, Stderr: &strings.Builder{},
-			}
+			})
 			runCd(t, r, c.cmd+"\npwd\n")
 			got := strings.TrimSpace(out.String())
 			if isResolved := !strings.Contains(got, "link"); isResolved != c.resolved {
@@ -114,10 +114,10 @@ func TestCdMayRefuseAnOptionItDoesNotHave(t *testing.T) {
 			sem.CdRefusesUnknownOption = c.refuses
 			sem.CdLastPathOptionWins = Yes
 			errs := &strings.Builder{}
-			r := &Runner{
+			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dir: dir,
 				Stdout: &strings.Builder{}, Stderr: errs,
-			}
+			})
 			runCd(t, r, "cd -Q link/sub\n")
 			if got := errs.String(); !strings.Contains(got, c.want) || strings.Contains(got, c.unwant) {
 				t.Errorf("said %q, want %q in it and %q not", got, c.want, c.unwant)
@@ -139,10 +139,10 @@ func TestCdWithOnePathOptionAsksNothing(t *testing.T) {
 	// Deliberately left unspecified: were it asked here, this would refuse.
 	sem.CdLastPathOptionWins = Unspecified
 	out, errs := &strings.Builder{}, &strings.Builder{}
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dir: dir,
 		Stdout: out, Stderr: errs,
-	}
+	})
 	runCd(t, r, "cd -P link/sub\npwd\n")
 	if errs.Len() != 0 {
 		t.Errorf("said %q, want nothing to be asked", errs.String())
@@ -161,10 +161,10 @@ func TestCdDashIsStillThePreviousDirectory(t *testing.T) {
 	sem.CdLastPathOptionWins = Yes
 	sem.CdDashPrintsTheDirectory = No
 	out := &strings.Builder{}
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh", Dir: dir,
 		Stdout: out, Stderr: &strings.Builder{},
-	}
+	})
 	runCd(t, r, "cd real\ncd real/../sub\ncd -\npwd\n")
 	if got := strings.TrimSpace(out.String()); !strings.HasSuffix(got, "real") {
 		t.Errorf("cd - left %q, want it back in real", got)

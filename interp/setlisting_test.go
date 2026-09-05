@@ -27,10 +27,10 @@ func listRun(t *testing.T, src string, set func(*Semantics)) (string, string, in
 		set(&sem)
 	}
 	var out, errs bytes.Buffer
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs, Semantics: &sem, Diagnostics: &Diagnostics{},
 		Dir: t.TempDir(), Name: "testsh",
-	}
+	})
 	r.SetFunctionLayout(syntax.Layout{
 		Indent: "  ", Nested: true, Lines: true,
 		BraceOpenSuffix: " ", OutermostBraceOpensALine: true,

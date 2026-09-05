@@ -39,7 +39,7 @@ func flagsRun(t *testing.T, src string) (string, string, int) {
 	var out, errs bytes.Buffer
 	// The dialect travels with the runner so nested input — a sourced file,
 	// an eval — parses the same grammar.
-	r := &Runner{Stdout: &out, Stderr: &errs, Dialect: &d, Semantics: &sem, Name: "testsh"}
+	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &errs, Dialect: &d, Semantics: &sem, Name: "testsh"})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)

@@ -26,7 +26,7 @@ func runSplit(t *testing.T, src string) (out, errOut string, status int) {
 	}
 	var o, e bytes.Buffer
 	sem := bash.Semantics()
-	r := &Runner{Stdout: &o, Stderr: &e, Semantics: &sem}
+	r := newTestRunner(t, &Runner{Stdout: &o, Stderr: &e, Semantics: &sem})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatal(rerr)

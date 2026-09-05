@@ -1139,3 +1139,82 @@ func TestRecordPinsBeforeItRenders(t *testing.T) {
 		t.Errorf("the saved record holds %q, want the value carried forward", s)
 	}
 }
+
+// TestNormalizeRewritesEveryLineOfAUsageBlock: the usage text names the shell
+// on more than one line, and only the first of them is anchored to `Usage:`.
+//
+// bash-as-sh is the column that shows it — a shell called by its path has both
+// lines caught by the path replacement, and only the one that reports the name
+// it was invoked under reaches the anchored rule at all. Left as it was, one
+// cell of the record read `sh` where every other read `<shell>`, which is a
+// difference a later reader has no way to tell from a finding (#667).
+func TestNormalizeRewritesEveryLineOfAUsageBlock(t *testing.T) {
+	sh := Found{Shell: Shell{Name: "bash-as-sh", Argv0: "sh"}, Path: "/opt/homebrew/bin/bash"}
+	// Measured: bash 5.3 invoked as `sh` with an option letter it has no
+	// meaning for, trimmed to the first line of what follows the block.
+	const refused = "sh: -Z: invalid option\n" +
+		"Usage:\tsh [GNU long option] [option] ...\n" +
+		"\tsh [GNU long option] [option] script-file ...\n" +
+		"GNU long options:\n" +
+		"\t--debug\n"
+
+	got := normalize(refused, sh, "/tmp/d")
+	for _, line := range strings.Split(got, "~") {
+		if strings.Contains(line, "sh [GNU") {
+			t.Errorf("a usage line still names the shell: %q", line)
+		}
+	}
+	if n := strings.Count(got, "<shell> [GNU"); n != 2 {
+		t.Errorf("%d usage lines were rewritten, want 2: %q", n, got)
+	}
+}
+
+// TestAUsageBlockEndsWhereTheIndentDoes: the rule is about usage text, not
+// about indentation. Matching an indented name anywhere would rewrite any
+// output that happens to list the shell's own name under a heading, which is
+// a much larger claim than the one being made.
+func TestAUsageBlockEndsWhereTheIndentDoes(t *testing.T) {
+	sh := Found{Shell: Shell{Name: "bash-as-sh", Argv0: "sh"}, Path: "/opt/homebrew/bin/bash"}
+	const refused = "Usage:\tsh [option] ...\n" +
+		"\tsh [option] script-file ...\n" +
+		"Files:\n" +
+		"\tsh is the one being reported on\n"
+
+	got := normalize(refused, sh, "/tmp/d")
+	if !strings.Contains(got, "\tsh is the one being reported on") {
+		t.Errorf("a line past the end of the block was rewritten: %q", got)
+	}
+	if strings.Count(got, "<shell> [option]") != 2 {
+		t.Errorf("the block itself was not rewritten: %q", got)
+	}
+}
+
+// TestAUsageBlockIsNotOpenedByAnIndentAlone: without a `Usage:` line there is
+// no block, so an indented name is left exactly as the shell printed it.
+func TestAUsageBlockIsNotOpenedByAnIndentAlone(t *testing.T) {
+	sh := Found{Shell: Shell{Name: "bash-as-sh", Argv0: "sh"}, Path: "/opt/homebrew/bin/bash"}
+	const listing = "shells:\n\tsh\n\tksh\n"
+	if got := normalize(listing, sh, "/tmp/d"); got != "shells:~\tsh~\tksh" {
+		t.Errorf("normalize = %q, want the listing untouched", got)
+	}
+}
+
+// TestAUsageBlockSurvivesALineThatDoesNotNameTheShell: what ends a block is
+// the indent stopping, not the name being absent from a line — the lines
+// after such a line are still usage text and still name the shell.
+//
+// Constructed rather than measured: no panel member lays its usage out this
+// way today, and the point is that the rule does not depend on that staying
+// true, since a rule that happens to work only on the exact shape in front of
+// it is one nobody can reason about when the shape changes.
+func TestAUsageBlockSurvivesALineThatDoesNotNameTheShell(t *testing.T) {
+	sh := Found{Shell: Shell{Name: "bash-as-sh", Argv0: "sh"}, Path: "/opt/homebrew/bin/bash"}
+	const refused = "Usage:\tsh [option] ...\n" +
+		"\t   or, with a file:\n" +
+		"\tsh [option] script-file ...\n"
+
+	got := normalize(refused, sh, "/tmp/d")
+	if n := strings.Count(got, "<shell> [option]"); n != 2 {
+		t.Errorf("%d usage lines were rewritten, want both across the line between them: %q", n, got)
+	}
+}

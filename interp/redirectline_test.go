@@ -45,10 +45,10 @@ func TestWhichLineAFailedOpenIsReportedAt(t *testing.T) {
 				// substrate's own shows none.
 				Location: LocationTightLine,
 			}
-			r := &Runner{
+			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Diagnostics: &dg, Name: "sh",
 				Stdout: &strings.Builder{}, Stderr: &errs,
-			}
+			})
 			f, err := syntax.Parse(src, syntax.Core())
 			if err != nil {
 				t.Fatal(err)
@@ -68,10 +68,10 @@ func TestOnlyTheOpeningTakesTheRedirectsLine(t *testing.T) {
 	var errs strings.Builder
 	sem := PosixSemantics()
 	dg := Diagnostics{RedirectFailureLine: LineOfRedirect, Location: LocationTightLine}
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &dg, Name: "sh",
 		Stdout: &strings.Builder{}, Stderr: &errs,
-	}
+	})
 	// The failed open is on line 2; the command that is not found is on 3.
 	f, err := syntax.Parse("echo one\ncat < /nonexistent/x\nnosuchcommand\n", syntax.Core())
 	if err != nil {
@@ -93,10 +93,10 @@ func redirLine(t *testing.T, at RedirectLine, src string) string {
 	var errs strings.Builder
 	sem := PosixSemantics()
 	dg := Diagnostics{RedirectFailureLine: at, Location: LocationTightLine}
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &dg, Name: "sh",
 		Stdout: &strings.Builder{}, Stderr: &errs,
-	}
+	})
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatal(err)

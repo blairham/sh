@@ -24,7 +24,7 @@ func redirRun(t *testing.T, dir string, dg Diagnostics, src string) (string, int
 	}
 	var buf bytes.Buffer
 	sem := permissive()
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Dir: dir, Name: "testsh"}
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Dir: dir, Name: "testsh"})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
@@ -92,12 +92,12 @@ func oneWayRun(t *testing.T, dir string, dg Diagnostics, src string) string {
 	}
 	var buf bytes.Buffer
 	sem := permissive()
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdin:     readerOnly{strings.NewReader("")},
 		Stdout:    writerOnly{&buf},
 		Stderr:    writerOnly{&buf},
 		Semantics: &sem, Diagnostics: &dg, Dir: dir, Name: "testsh",
-	}
+	})
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
 	}

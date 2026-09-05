@@ -36,7 +36,7 @@ PREFIX ?= /usr/local
 SHELLDIR ?= $(PREFIX)/libexec/sh
 SHELLS := sh bash zsh ksh dash
 
-.PHONY: all build test test-cover fmt vet lint tidy clean check corpus-guard oracle oracle-check conformance conformance-dialects smoke install uninstall
+.PHONY: all build test test-cover fmt vet lint tidy clean check corpus-guard oracle oracle-check conformance conformance-dialects smoke startup install uninstall
 
 all: build
 
@@ -133,3 +133,6 @@ conformance-dialects: ## Grade each dialect binary against the shell it claims t
 	@go run ./cmd/oracle -bin $(BINDIR)/our-zsh -against zsh $(ARGS)
 	@go run ./cmd/oracle -bin $(BINDIR)/our-dash -against dash $(ARGS)
 	@go run ./cmd/oracle -bin $(BINDIR)/our-ksh -against ksh93 $(ARGS)
+
+startup: ## Time process start to a prompt, and the -c path, against the real shells
+	@go test ./internal/startupcost/ -run XXX -bench . -benchtime 40x -count 3 $(ARGS)

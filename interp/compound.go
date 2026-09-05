@@ -289,7 +289,15 @@ func (r *Runner) loopControl() bool {
 
 func (r *Runner) caseClause(ctx context.Context, c *syntax.CaseClause) error {
 	return r.withRedirs(ctx, c.Redirs, func() error {
-		subject := strings.Join(r.expandWord(c.Word), " ")
+		// The subject expands but is neither field-split nor globbed, even
+		// unquoted — the same exemption `[[ ]]` operands and a scalar
+		// assignment value have, unanimous across the panel: a subject
+		// holding only a tab still reaches [[:blank:]], `g='*'; case $g`
+		// matches a literal star and never the directory listing, and a
+		// value with a space in it stays one subject. The ordinary word
+		// pipeline split the tab to zero fields, so the arm never fired —
+		// silently, status 0.
+		subject := strings.Join(r.expandWordNoSplit(c.Word), "")
 		// A case matching nothing exits 0.
 		r.status = 0
 		r.unspecified = false

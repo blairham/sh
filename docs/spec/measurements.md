@@ -3491,6 +3491,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `pat/an-unknown-character-class` | `no no` | `no no` | `no no` | `no lit` | `no no` | `no no` |
 | `pat/escaped-metacharacter-is-literal` | `escaped no` | `escaped no` | `escaped no` | `escaped no` | `escaped no` | `escaped no` |
 | `pat/quoting-decides-pattern-or-literal` | `pattern literal-no` | `pattern literal-no` | `pattern literal-no` | `pattern literal-no` | `pattern literal-no` | `pattern literal-no` |
+| `pat/case-subject-is-not-split` | `blank one-word` | `blank one-word` | `blank one-word` | `blank one-word` | `blank one-word` | `blank one-word` |
+| `pat/case-subject-is-not-globbed` | `literal empty` | `literal empty` | `literal empty` | `literal empty` | `literal empty` | `literal empty` |
 | `pat/extended-patterns-are-not-core` | `<shell>: 1: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case abc in @(abc\|xyz)) echo at;; esac'` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case abc in @(abc\|xyz)) echo at;; esac'` *(status 2)* | `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `case abc in @(abc\|xyz)) echo at;; esac'` *(status 2)* | `at` | *(no output, status 0)* |
 | `pat/extended-pattern-quantifiers` | `<shell>: 1: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case abc in ?(abc)) echo q;; esac; case aaa in +(a)) echo plus;; esac; case b in !(a)) echo bang;; esac'` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case abc in ?(abc)) echo q;; esac; case aaa in +(a)) echo plus;; esac; case b in !(a)) echo bang;; esac'` *(status 2)* | `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `case abc in ?(abc)) echo q;; esac; case aaa in +(a)) echo plus;; esac; case b in !(a)) echo bang;; esac'` *(status 2)* | `q~plus~bang` | *(no output, status 0)* |
 | `pat/extended-patterns-in-a-condition` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `yes` | `yes` | `<shell>: -c: line 0: syntax error in conditional expression: unexpected token `('~<shell>: -c: line 0: syntax error near `@(a'~<shell>: -c: line 0: `[[ abc == @(abc\|xyz) ]] && echo yes \|\| echo no'` *(status 2)* | `yes` | `no` |
@@ -3581,6 +3583,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `pat/quoting-decides-pattern-or-literal` — per-span quoting reaches all the way into matching, so a pattern is a word rather than a string
   ```sh
   p="a*b"; case "a*b" in $p) printf pattern;; esac; case axb in "$p") printf " literal-matched";; *) printf " literal-no";; esac
+  ```
+- `pat/case-subject-is-not-split` — an unquoted case subject expands but is never field-split, so a whitespace-only value still reaches its arm and a value with a space in it stays one subject — splitting sent the tab to the star arm silently, status 0
+  ```sh
+  t=$(printf "\t"); case $t in [[:blank:]]) printf blank;; *) printf other;; esac; m="a b"; case $m in "a b") printf " one-word";; a) printf " first-field";; *) printf " neither";; esac
+  ```
+- `pat/case-subject-is-not-globbed` — pathname expansion never touches the subject either — a value of * stays the character even in a directory it would match — and an unset subject is the empty string rather than no subject
+  ```sh
+  touch afile; g="*"; case $g in afile) printf globbed;; \*) printf literal;; esac; unset u; case $u in "") printf " empty";; *) printf " nonempty";; esac
   ```
 - `pat/extended-patterns-are-not-core` — ksh93 alone accepts them as written; dash and bash report a syntax error and zsh parses but does not match — three behaviors, so not core
   ```sh

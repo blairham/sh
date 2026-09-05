@@ -111,6 +111,31 @@ type Case struct {
 	// actually ran, which a second hand-kept copy would not.
 	Stdin string
 
+	// Env are environment entries added to the fixed four every case gets,
+	// in `NAME=value` form, and handed to both sides of a comparison.
+	//
+	// The environment is a **startup input** and not only a place variables
+	// live: a shell reads names out of it before the first line runs, and
+	// what it finds there changes what every command afterwards does. That is
+	// the class of behavior this exists for — an inherited list of options, a
+	// file to source before the script — and until now the corpus could not
+	// ask about it at all, because the harness hands every case the same four
+	// entries and a snippet cannot put anything in the environment of the
+	// shell that is already running it.
+	//
+	// The base four stay: a case adds to them rather than replacing them, so
+	// no case can quietly drop the PATH and HOME that keep the record from
+	// depending on whose machine produced it. An entry naming one of the four
+	// overrides it, which is what execve does with a duplicate and is the
+	// only reading that lets a case ask about HOME.
+	//
+	// ArgScript is honored in a value, wherever it appears, exactly as it is
+	// in Args and Stdin — which is what lets a case name a *file* to be read
+	// at startup without spelling its path, since the path is a scratch
+	// directory this run invented. The file holds the Snippet, and the case's
+	// Args then say what the shell is to run instead.
+	Env []string
+
 	// GradedOnRefusal grades a case on the fact that the shell said no,
 	// rather than on the words it said no in.
 	//
@@ -4671,6 +4696,26 @@ echo unreachable`,
 		Why:     "nothing failing is still 0, and a failure in the *first* element is the case a plain pipeline cannot see at all — 7 where the option is available and 0 where it is not",
 	},
 	{
+		ID: "pipefail/a-builtin-killed-by-a-signal", Category: "pipeline status",
+		Snippet: "if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi\nv=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done\n{ echo \"$v\"; } | true; echo \"st=$?\"\n",
+		Why:     "the status pipefail hands back for an element a signal killed, which is not the status that death reports everywhere else in the same shell: 141 in bash and zsh, and in ksh93 **13** rather than the 269 its own convention would give. The string is grown past a pipe buffer on purpose, so the write is certain to outlive the reader rather than fitting in the pipe and racing it",
+	},
+	{
+		ID: "pipefail/an-external-command-killed-by-a-signal", Category: "pipeline status",
+		Snippet: "if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi\nyes 2>/dev/null | head -1 >/dev/null; echo \"st=$?\"\n",
+		Why:     "the same question with a real process on the writing end rather than a builtin, and the same three answers — so the split is about the substitution and not about which side of the process boundary the death happened on",
+	},
+	{
+		ID: "pipefail/an-ordinary-failure-is-substituted-unchanged", Category: "pipeline status",
+		Snippet: "if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi\n(exit 42) | true; echo \"st=$?\"\n(exit 42) | { echo x >/dev/null; } | true; echo \"st=$?\"\n",
+		Why:     "the control: an element that merely *failed* is handed back as it stands in every shell with the option, first or middle. Without this the signal rows read as a difference about pipefail in general rather than about a signal death in particular",
+	},
+	{
+		ID: "pipefail/a-substituted-death-against-an-ordinary-one", Category: "pipeline status",
+		Snippet: "if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi\nv=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done\n{ echo \"$v\"; } | true; a=$?\nb=$( { sleep 5 & p=$!; kill -TERM $p; wait $p; echo $?; } 2>/dev/null )\necho \"substituted=$a foreground=$b\"\n",
+		Why:     "both encodings in one line, which is the whole point: ksh93 says 13 for the substituted death and 271 for the waited-for one, so its 256-plus-the-signal convention is intact and stops in exactly one place. bash and zsh say 141 and 143 and never distinguish the two. dash has neither the option nor a second answer. The job's own death notice is thrown away because it names a pid, and a pid is different on every run",
+	},
+	{
 		ID: "pipefail/turned-off-again", Category: "pipeline status",
 		Snippet: "if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; set +o pipefail; fi\n(exit 3) | true; echo \"st=$?\"\n",
 		Why:     "the option is an option: `set +o` puts the pipeline back to reporting its last element, so every shell answers 0 here — the one case where the panel agrees for two different reasons",
@@ -6515,5 +6560,76 @@ exit 7`,
 		Args:    []string{"-s", "-c", ArgSnippet},
 		Snippet: `case $- in *s*) echo has-s ;; *) echo no-s ;; esac`,
 		Why:     "-c wins about where the program comes from and does not take the letter away: all six run the command string and all six still show `s`. So the letter follows either the route or the spelling, and a shell that read only the route would lose it here",
+	},
+	// --- what the environment says at startup (#596). One shell in the panel
+	// reads two names out of it before the first line runs; the other three
+	// leave both as ordinary strings, which is what makes every row here
+	// evidence rather than a coincidence.
+	{
+		ID: "env/an-inherited-option-list-turns-an-option-on", Category: "invocation",
+		Env:     []string{"SHELLOPTS=nounset"},
+		Snippet: `case $- in *u*) echo has-u ;; *) echo no-u ;; esac`,
+		Why:     "the sharpest startup input a shell takes: a name in the environment changes what every command afterwards does. bash reads it and `$-` gains the letter; dash, ksh93 and zsh ignore the name entirely, which is the control",
+	},
+	{
+		ID: "env/an-inherited-option-list-outranks-the-invocations-own-option", Category: "invocation",
+		Env:     []string{"SHELLOPTS=nounset"},
+		Args:    []string{"+u", "-c", ArgSnippet},
+		Snippet: `case $- in *u*) echo has-u ;; *) echo no-u ;; esac`,
+		Why:     "the ordering, and it is the opposite of every other startup input: the environment is read *after* the argument vector, so `+u` written out does not undo it. The three that do not read the name answer `no-u` here and `no-u` in the row above, so this row is about the order rather than about the letter",
+	},
+	{
+		ID: "env/an-unknown-name-in-an-inherited-option-list", Category: "invocation",
+		Env:     []string{"SHELLOPTS=nosuchoption:nounset"},
+		Snippet: `case $- in *u*) echo has-u ;; *) echo no-u ;; esac`,
+		Why:     "one bad entry costs only itself: the complaint names line 0 — nothing has been read — and the good name in the same value is still applied. The wording is the plainest of the three shapes this refusal has, with nothing standing where `set` would",
+	},
+	{
+		ID: "env/the-option-list-follows-the-option-letters", Category: "invocation",
+		Snippet: `set -u; case ":$SHELLOPTS:" in *:nounset:*) echo listed ;; *) echo not-listed ;; esac`,
+		Why:     "the read direction of the binding, and the reason a stored copy would be a lie: the variable is produced when it is read, so an option set after startup is in it. Read as membership rather than as a string, for the reason `$-` is — what a shell has on by default is its own business",
+	},
+	{
+		ID: "env/the-option-list-drops-an-option-turned-off", Category: "invocation",
+		Snippet: `set -u; set +u; case ":$SHELLOPTS:" in *:nounset:*) echo listed ;; *) echo not-listed ;; esac`,
+		Why:     "the other half of the same binding, and the one a copy taken at startup would fail: turning the option off takes the name back out again",
+	},
+	{
+		ID: "env/the-option-list-uses-long-names", Category: "invocation",
+		Snippet: `set -f; case ":$SHELLOPTS:" in *:noglob:*) echo long ;; *:f:*) echo letter ;; *) echo neither ;; esac`,
+		Why:     "normalized rather than echoed: what goes in is a letter and what comes out is the long name, which is why nothing can usefully compare the whole string against what it exported",
+	},
+	{
+		ID: "env/the-option-list-is-readonly", Category: "invocation",
+		Snippet: `SHELLOPTS=whatever; echo after`,
+		Why:     "a name whose value is produced cannot be assigned to meaningfully, and the shell that has it refuses rather than accepting quietly. The refusal is its ordinary readonly one — wording, status and whether the script survives are all the dialect's — and the other three take the assignment as the ordinary variable it is for them",
+	},
+	{
+		ID: "env/a-file-named-for-a-non-interactive-shell-is-sourced", Category: "invocation",
+		Env:     []string{"BASH_ENV=" + ArgScript},
+		Args:    []string{"-c", "echo main"},
+		Snippet: `echo sourced`,
+		Why:     "the non-interactive counterpart of `$ENV`, and one shell's alone: bash sources the file before the command string and the other three do nothing with the name. The snippet is the *file*, which is why the argv runs something else",
+	},
+	{
+		ID: "env/that-file-sees-the-invocations-parameters", Category: "invocation",
+		Env:     []string{"BASH_ENV=" + ArgScript},
+		Args:    []string{"-c", "echo main", "name", "A"},
+		Snippet: `echo "[$0] n=$# [${1-}]"`,
+		Why:     "it is run *by* the shell that is about to run the program and sees what that shell sees, which is what puts it after the runner is built and after the operands are named — the same shape the login profile has",
+	},
+	{
+		ID: "env/that-file-can-end-the-shell", Category: "invocation",
+		Env:     []string{"BASH_ENV=" + ArgScript},
+		Args:    []string{"-c", "echo main"},
+		Snippet: `echo in-file; exit 3`,
+		Why:     "`exit 3` in it exits 3 and the program never runs, which is the other half of it being run by this shell rather than beside it",
+	},
+	{
+		ID: "env/a-file-named-for-a-non-interactive-shell-that-is-not-there", Category: "invocation",
+		Env:     []string{"BASH_ENV=/nonexistent-directory/nonexistent-file"},
+		Args:    []string{"-c", ArgSnippet},
+		Snippet: `echo main`,
+		Why:     "not a failure, in the shell that reads the name or in the three that do not. Every shell starts for the first time without one, and a complaint about it would be the first thing anybody saw",
 	},
 }

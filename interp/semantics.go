@@ -1697,6 +1697,37 @@ type Semantics struct {
 	// docs/spec/invocation.md.
 	LoginProfileWhenNonInteractive bool
 
+	// NonInteractiveStartupVariable names a variable whose value is expanded
+	// and sourced by a shell that is *not* going to prompt. Empty means the
+	// shell has no such file, which is three of the four.
+	//
+	// A name rather than a bool, for the reason the profile's own filename is
+	// not modeled as an axis: what a shell calls the thing is a per-dialect
+	// fact and not a disagreement about behavior. One shell in the panel has
+	// it, under a name of its own, and the other three do nothing at all with
+	// that name — measured 2026-09-05 on a script operand, `-c` and a program
+	// on standard input alike.
+	//
+	// It is the exact counterpart of `$ENV`, which the front end reads for
+	// every dialect and reads *only* when interactive. The two never overlap:
+	// the shell that has this reads this and not `$ENV` when it is not
+	// interactive, and reads neither at a prompt, where it has a file of its
+	// own name instead.
+	//
+	// Two more measured properties, both shared with the profile and both the
+	// reason it is sourced where it is. The value is expanded before it is
+	// opened, since `$HOME/…` is the usual spelling; and the file is run *by*
+	// the shell that is about to run the script, so it sees that shell's `$0`,
+	// `$#`, positional parameters and options, and an `exit 3` in it exits 3
+	// with the script never run. A file that is not there is not a failure.
+	//
+	// **POSIX mode suppresses it**, which is measured and is why this is one
+	// field rather than two. The shell that has it reads nothing when started
+	// with the standard's own posix option, and nothing when invoked as `sh` —
+	// the two spellings of the same mode. So the absence in the `sh` column is
+	// the mode again rather than a second fact about a second name.
+	NonInteractiveStartupVariable string
+
 	// ArrayLengthWithoutSubscriptIsCount makes `${#a}` of an array the
 	// number of elements, which is zsh's reading; bash and ksh93 measure
 	// the element the bare name yields. Asked only where the two answers
@@ -1862,6 +1893,36 @@ type Semantics struct {
 	// Narrower than it looks: an ordinary failing pipeline — `true | false` —
 	// stops all three, and this is only about the failure the option adds.
 	ErrexitSeesPipefailFailure Answer
+
+	// PipefailSubstitutesTheBareSignal reports an element pipefail chose over
+	// the pipeline's last one, and which died of a signal, as the signal's
+	// *number* rather than as the status a command killed by that signal
+	// reports.
+	//
+	// True in ksh93 alone, and it is not the same question as
+	// SignalDeathStatusIsTwoFiftySix. That axis is about every status a
+	// signal death produces, and ksh93 answers it consistently everywhere it
+	// was measured — a foreground command, a subshell, a command
+	// substitution, a `wait`, the shell dying by its own hand as its parent
+	// sees it, and the *last* element of a pipeline are all 256 + n there.
+	// This is the one place the convention stops: with `pipefail` set,
+	//
+	//	kill-me-with-TERM | cat     ksh93  15    bash/zsh  143
+	//	kill-me-with-PIPE | head -1  ksh93  13    bash/zsh  141
+	//	( exit 42 )       | cat      ksh93  42    bash/zsh   42
+	//	cat </dev/null | kill-me     ksh93 271    bash/zsh  143
+	//
+	// The last row is why this is about the *substitution* and not about the
+	// pipeline: an element that fails in the position the pipeline reports
+	// anyway keeps the ordinary encoding, and only the status pipefail went
+	// looking for is bare. An ordinary non-zero exit is unchanged either way,
+	// so a signal is the whole of the difference.
+	//
+	// Measured builtin and external, first and middle, in pipelines of two
+	// and of three, with SIGPIPE and SIGTERM. Absent rather than false in
+	// dash, which has no pipefail, and asked only where a substitution
+	// actually happened and actually was a signal death.
+	PipefailSubstitutesTheBareSignal Answer
 
 	// PrintfAssignsWithV makes `printf -v name fmt args` put the formatted
 	// text in a variable and print nothing. True in bash and zsh; dash and

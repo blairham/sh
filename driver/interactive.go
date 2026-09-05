@@ -72,6 +72,11 @@ func (sh Shell) session(argv, params []string, opts []optionSpec) int {
 	if code, ok := sh.applyOptions(r, opts); !ok {
 		return code
 	}
+	// And the environment's own option list, in the same place and for the
+	// same measured reasons as on the script routes: after the argument
+	// vector, before the files. A prompt reads it too — an inherited `xtrace`
+	// traces the lines a person types.
+	r.ApplyInheritedShellOptions()
 	// The prelude is the dialect's own; these are the user's, and come after
 	// it so a person's settings win over the shell's defaults.
 	if code := sh.startup(r, LoginShell(argv)); code != 0 {

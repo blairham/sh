@@ -93,7 +93,7 @@ func TestASubshellNeverReplacesTheProcess(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			called := false
 			out, _, _ := execRun(t, t.TempDir(), tc.src, func(r *Runner) {
-				r.ReplaceProcess = func(string, []string, []string) error {
+				r.ReplaceProcess = func(string, []string, []string, []*os.File) error {
 					called = true
 					return errors.New("must not be reached")
 				}
@@ -117,7 +117,7 @@ func TestReplaceProcessIsUsedWhenItIsSafe(t *testing.T) {
 	var gotPath string
 	var gotArgv []string
 	out, st, _ := execRun(t, t.TempDir(), `exec echo hi; echo NOT-REACHED`, func(r *Runner) {
-		r.ReplaceProcess = func(path string, argv, _ []string) error {
+		r.ReplaceProcess = func(path string, argv, _ []string, _ []*os.File) error {
 			gotPath, gotArgv = path, argv
 			// A real replacement does not return. Returning an error is how a
 			// test says "the image could not be replaced", which is the only
@@ -312,7 +312,7 @@ func TestExecOptionsAreADialectQuestion(t *testing.T) {
 	r := &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
 		Dir: t.TempDir(), Name: "testsh", Env: testPATH(),
-		ReplaceProcess: func(_ string, a, _ []string) error {
+		ReplaceProcess: func(_ string, a, _ []string, _ []*os.File) error {
 			argv = a
 			return os.ErrPermission
 		},

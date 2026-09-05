@@ -111,7 +111,15 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 		// The embedder has said this process is a shell and may stop being
 		// one. Nothing after this line runs if it succeeds.
 		r.emit(ctx, Event{Kind: EventCommandStart, Action: action})
-		err := r.ReplaceProcess(path, withArgv0(argv, argv0), r.environ())
+		// The descriptor table crosses here for the reason it crosses to an
+		// external child, and by the same slice: a replacement is what the
+		// script parked those descriptors *for*. `exec 3>h; exec /bin/sh -c
+		// 'echo repl >&3'` said "Bad file descriptor" where every shell in
+		// the panel but ksh93 writes, because Go opens everything
+		// close-on-exec and a Runner's descriptor 3 is not the process's 3.
+		// Placing them is the hook's half — it is the process's own table
+		// being rewritten, which a library may not touch.
+		err := r.ReplaceProcess(path, withArgv0(argv, argv0), r.environ(), r.childFiles())
 		// Only reached if the replacement failed, which is the one case where
 		// there is still a shell to report it.
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})

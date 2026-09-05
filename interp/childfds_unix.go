@@ -10,8 +10,17 @@ import "os"
 // The layout constants firstExtraFd and maxInheritedFd live in
 // inheritedfds.go, because they describe both directions of the same table.
 
-// childFiles rebuilds, for an external child, the descriptor table this shell
-// holds beyond the three named streams.
+// childFiles rebuilds, for whatever this shell is about to hand the table to,
+// the descriptors it holds beyond the three named streams.
+//
+// Two things read it, and they want the same answer. An external command is
+// given it by number through os/exec's ExtraFiles; a *replacement* — `exec
+// cmd`, the path that becomes the command rather than forking one — is given
+// it by ReplaceProcess, which places each entry on its number before execve.
+// The second is not a child and still inherits exactly what a child does:
+// `exec 3>h; exec /bin/sh -c 'echo repl >&3'` writes in bash, dash and zsh
+// just as the un-replaced form does, and the gaps and the exclusions below
+// are the same there too.
 //
 // The boundary has to be rebuilt by hand because Go opens everything
 // close-on-exec, so a descriptor the script put on 3 with `exec 3>f` reaches

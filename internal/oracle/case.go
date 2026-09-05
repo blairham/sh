@@ -2322,6 +2322,16 @@ echo "st=$?"`,
 		Why:     "a descriptor parked with `exec 3>file` is inherited by an external command, which is what the flock and shared-log idioms are built on — the child writes in every shell but ksh93, which alone keeps it to itself. The child's complaint is discarded because its wording is a fact about whatever /bin/sh is on the machine",
 	},
 	{
+		ID: "redir/exec-descriptor-reaches-a-replacement", Category: "redirection",
+		Snippet: `exec 3>f; exec /bin/sh -c "{ echo repl >&3; } 2>/dev/null; cat f"`,
+		Why:     "the same descriptor and the harder seam: `exec cmd` replaces the shell rather than forking one, so nothing renumbers the table on the way across and the command inherits the *process's* descriptors. The replacement writes in every shell but ksh93, exactly as a child does, and the reading is done by the replacement because there is no shell left to do it. The complaint is discarded for the reason the child's is",
+	},
+	{
+		ID: "redir/a-replacements-descriptor-numbers-keep-their-gaps", Category: "redirection",
+		Snippet: `exec 5>f; exec /bin/sh -c "{ echo five >&5; echo three >&3; } 2>/dev/null; cat f"`,
+		Why:     "the replacement's table is the shell's table by number rather than a packing of it: with 3 and 4 never opened, the file parked on 5 is on 5 there and 3 is closed rather than shifted down to fill the hole. Unanimous but for ksh93, which passes neither",
+	},
+	{
 		ID: "redir/an-inherited-descriptor-keeps-its-number", Category: "redirection",
 		Snippet: `exec 5>g; /bin/sh -c "echo three >&3" 2>/dev/null; /bin/sh -c "echo five >&5" 2>/dev/null; exec 5>&-; cat g`,
 		Why:     "the discriminating case for how the table crosses: with 3 and 4 never opened, the file parked on 5 is still on 5 in the child and 3 is a hole, so the file holds `five`. A table packed from the bottom would put it on 3 and the file would hold `three`",

@@ -1381,6 +1381,17 @@ func (l *Lexer) peekIsLeftParen() bool {
 	return i < len(l.src) && l.src[i] == '('
 }
 
+// peekIsRightParen reports whether the next thing in the input is a `)`,
+// blanks aside. Used where the `(` is already the current token, which is
+// what tells an anonymous function's empty parameter list from a subshell.
+func (l *Lexer) peekIsRightParen() bool {
+	i := l.off
+	for i < len(l.src) && isBlank(l.src[i]) {
+		i++
+	}
+	return i < len(l.src) && l.src[i] == ')'
+}
+
 func (l *Lexer) peekIsFuncParens() bool {
 	i := l.off
 	for i < len(l.src) && isBlank(l.src[i]) {

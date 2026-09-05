@@ -49,7 +49,10 @@ func Dialect() syntax.Dialect {
 	// rather than run and the body is empty. `i=0; while (( i<2 )); { echo
 	// $i; i=$((i+1)) }` counts up without stopping here, which is what says
 	// so.
-	d.ShortLoop = true
+	d.ShortForm = true
+	d.Repeat = true
+	d.Foreach = true
+	d.AnonymousFunction = true
 	// The same reach: a body may have nothing in it — `{ }`, `( )`, `while
 	// cond; do done`, and a condition too. Every shape, and this shell alone.
 	d.EmptyCompoundBody = true

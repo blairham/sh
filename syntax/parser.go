@@ -235,7 +235,18 @@ var reservedWords = map[string]bool{
 }
 
 func (p *Parser) atStopWord() bool {
-	return p.tok.Kind == TokWord && !p.tok.IsQuoted() && stopWords[p.tok.Literal()]
+	if p.tok.Kind != TokWord || p.tok.IsQuoted() {
+		return false
+	}
+	// `end` closes a `foreach`, and it is reserved wherever a command may
+	// begin rather than only inside one: measured, `end` alone and
+	// `end() { :; }` are both parse errors in the shell that has the loop,
+	// while `echo end` and `end=5` are not. So it is a stop word for that
+	// dialect and an ordinary word for the other four.
+	if p.dialect.Foreach && p.tok.Literal() == "end" {
+		return true
+	}
+	return stopWords[p.tok.Literal()]
 }
 
 // tokenText names a token the way a diagnostic should: the word itself when
@@ -806,6 +817,11 @@ func (p *Parser) parseCommand() Command {
 	switch {
 	case p.at(TokEOF), p.at(TokNewline), p.atStopWord():
 		return nil
+	case p.at(TokLeftParen) && p.dialect.AnonymousFunction && p.lex.peekIsRightParen():
+		// `()` where a command begins is an empty parameter list rather than
+		// a subshell with nothing in it — which every dialect refuses, so
+		// nothing is taken away by reading it this way.
+		return p.withRedirs(p.parseAnonFunc(false))
 	case p.at(TokLeftParen):
 		return p.withRedirs(p.parseSubshell())
 	case p.at(TokArithCmd):
@@ -818,12 +834,18 @@ func (p *Parser) parseCommand() Command {
 		return p.withRedirs(p.parseLoop())
 	case p.atWord("for"):
 		return p.withRedirs(p.parseFor())
+	case p.atWord("repeat") && p.dialect.Repeat:
+		return p.withRedirs(p.parseRepeat())
+	case p.atWord("foreach") && p.dialect.Foreach:
+		return p.withRedirs(p.parseForeach())
 	case p.atWord("select") && p.dialect.Select:
 		return p.withRedirs(p.parseSelect())
 	case p.atWord("case"):
 		return p.withRedirs(p.parseCase())
 	case p.atWord("[[") && p.dialect.DoubleBracket:
 		return p.withRedirs(p.parseTestClause())
+	case p.atWord("function") && p.dialect.AnonymousFunction && p.peekIsAnonBody():
+		return p.withRedirs(p.parseAnonFunc(true))
 	case p.atWord("function") && p.dialect.FunctionKeyword:
 		return p.parseFuncKeyword()
 	case p.atWord("coproc") && p.dialect.Coproc:
@@ -1468,6 +1490,53 @@ func (p *Parser) failRedirectAt(pos Pos, op Kind) {
 	}
 }
 
+// peekIsAnonBody reports whether `function` is followed straight by a body
+// rather than by a name, which is the keyword spelling of an anonymous
+// function.
+func (p *Parser) peekIsAnonBody() bool {
+	i := p.lex.off
+	for i < len(p.lex.src) && isBlank(p.lex.src[i]) {
+		i++
+	}
+	return i < len(p.lex.src) && (p.lex.src[i] == '{' || p.lex.src[i] == '(')
+}
+
+// parseAnonFunc reads `() body [word …]` and `function body [word …]`.
+//
+// The words after the body are the call's positional parameters, which is
+// what makes this a call and not only a definition: there is no name to
+// invoke it by later, so it runs where it stands. They are read the way a
+// simple command's arguments are, and stop where a command stops.
+func (p *Parser) parseAnonFunc(keyword bool) Command {
+	fn := &AnonFunc{Keyword: keyword, Start: p.tok.Pos}
+	p.next()
+	if !keyword {
+		if !p.at(TokRightParen) {
+			p.failUnexpectedOperand(")")
+			return fn
+		}
+		p.next()
+	}
+	p.skipNewlines()
+	fn.Body = p.parseCommand()
+	if fn.Body == nil {
+		if keyword {
+			p.fail("expected a body after `function`")
+			return fn
+		}
+		// `()` with nothing after it is the empty subshell it has always
+		// been rather than a function with no body — measured, `( ); echo
+		// ok` prints `ok` in the shell that has both readings, which is the
+		// EmptyCompoundBody rule and not this one. The parentheses have been
+		// consumed, so the node is built here rather than parsed again.
+		return &Subshell{Start: fn.Start, Stop: p.tok.Pos}
+	}
+	for p.tok.Kind == TokWord && !p.atStopWord() {
+		fn.Args = append(fn.Args, p.word())
+	}
+	return fn
+}
+
 func (p *Parser) parseFuncKeyword() Command {
 	fn := &FuncDecl{Keyword: true, Start: p.tok.Pos}
 	p.next()
@@ -1651,8 +1720,8 @@ func (p *Parser) parseForArith(start Pos) Command {
 	}
 	// This header ends itself too, so where a body may be short it may also
 	// be one command, or nothing.
-	if p.dialect.ShortLoop && !p.atWord("do") {
-		c.Body, c.Stop = p.shortLoopBody()
+	if p.dialect.ShortForm && !p.atWord("do") {
+		c.Body, c.Stop = p.shortFormBody()
 		return c
 	}
 
@@ -1686,7 +1755,7 @@ func (p *Parser) braceLoopBody() (body []*Stmt, stop Pos) {
 	return g.List, g.Stop
 }
 
-// shortLoopBody reads a body written where `do … done` stands, for a header
+// shortFormBody reads a body written where `do … done` stands, for a header
 // that has already ended: one command, or none at all.
 //
 // One rather than a list, and that is the construct rather than a
@@ -1698,7 +1767,7 @@ func (p *Parser) braceLoopBody() (body []*Stmt, stop Pos) {
 // reached far more often than it looks: it is what `while cond; { … }` means,
 // because the `;` puts the brace group in the condition list and leaves the
 // body with nothing.
-func (p *Parser) shortLoopBody() (body []*Stmt, stop Pos) {
+func (p *Parser) shortFormBody() (body []*Stmt, stop Pos) {
 	if p.braceBodyFollows() {
 		return p.braceLoopBody()
 	}
@@ -1742,6 +1811,17 @@ func (p *Parser) parseIf() Command {
 	defer p.opens("if")()
 	p.next()
 	c.Cond = p.parseBody()
+	// A condition that ended itself may be followed straight by the body,
+	// exactly as a loop's header may — the rule ShortForm stands for, which
+	// says nothing about looping. `if [[ -n x ]] { … }` and
+	// `if (( 1 )) echo A` are that rule reaching `if`; `if true { … }` is
+	// still refused, because `true` is a simple command and `{` is another
+	// of its words.
+	if body, stop, short := p.shortIf(c.Cond); short {
+		c.Then, c.Stop = body, stop
+		p.shortElse(c)
+		return c
+	}
 	p.requireSep("then")
 	// Recorded after it is consumed: until then the innermost thing awaiting
 	// a partner is the `if` itself, which is what one shell names for
@@ -1771,6 +1851,112 @@ func (p *Parser) parseIf() Command {
 	return c
 }
 
+// shortIf reads the body of an `if` whose condition ended itself, where the
+// dialect allows one without `then … fi`.
+//
+// It reports false wherever the long form still applies, so a condition that
+// did not end itself, a dialect without the flag, and a `then` standing where
+// it always could all fall through untouched. There is no separator to
+// consume first, and that is the measurement rather than a simplification:
+// `if [[ -z x ]] echo A; else echo B; fi` is an error in the shell that has
+// this, because the `;` ended the whole command and left `else` with nothing
+// to attach to.
+func (p *Parser) shortIf(cond []*Stmt) (body []*Stmt, stop Pos, short bool) {
+	if !p.dialect.ShortForm || !condEndedItself(cond) {
+		return nil, Pos{}, false
+	}
+	// `then` needs no test of its own: it is a stop word, so the long form
+	// falls through here with everything else the grammar could still want.
+	// Naming it as well was a line no test could distinguish.
+	if p.at(TokEOF) || p.atStopWord() {
+		return nil, Pos{}, false
+	}
+	body, stop = p.shortFormBody()
+	return body, stop, true
+}
+
+// shortElse reads the `elif` and `else` arms of a short `if`, which take the
+// same body by the same rule and end where it ends: there is no `fi`.
+func (p *Parser) shortElse(c *IfClause) {
+	for p.atWord("elif") && p.err == nil {
+		e := &Elif{Start: p.tok.Pos}
+		p.opensClause("elif")
+		p.next()
+		e.Cond = p.parseBody()
+		if !condEndedItself(e.Cond) {
+			p.failUnexpected("")
+			return
+		}
+		e.Then, c.Stop = p.shortFormBody()
+		c.Elifs = append(c.Elifs, e)
+	}
+	if p.atWord("else") && p.err == nil {
+		p.opensClause("else")
+		p.next()
+		c.HasElse = true
+		c.Else, c.Stop = p.shortFormBody()
+	}
+}
+
+// condEndedItself reports whether the condition just parsed closed on its own
+// — `(( … ))` and `[[ … ]]` do, a word does not.
+//
+// The list is what says so rather than the token that follows it: the parser
+// stopped where it stopped because nothing could continue the condition, and
+// the only lists that can be followed straight by a body are the ones whose
+// last command was a construct with its own end. A simple command swallows
+// what comes after it as another word, which is why `if true { … }` is a
+// syntax error in the shell that takes `if [[ -n x ]] { … }`.
+func condEndedItself(cond []*Stmt) bool {
+	if len(cond) == 0 {
+		return false
+	}
+	// Nothing here tests for a separator, and it looked as though something
+	// should: `if [[ -n x ]]; { echo A }` is an error where the same line
+	// without the `;` runs. It cannot reach here. A separator keeps the
+	// condition *list* going, so whatever follows becomes another statement
+	// of it and is the one this looks at — a brace group, which does not end
+	// a header — and a separator with nothing after it leaves the parser at
+	// end of input or at a stop word, which shortIf refuses before asking.
+	// A guard for it would be a line no test could distinguish, which is how
+	// it was found: removing it changed nothing anywhere.
+	return exprEndsItself(cond[len(cond)-1].Expr)
+}
+
+// exprEndsItself walks to the command the condition finished on: an and-or
+// list finishes on its right side and a pipeline on its last command.
+//
+// A pipeline was recorded as never ending itself, from `if [[ -n x ]] | cat
+// { … }` being a syntax error — but that is `cat` failing to end it, not the
+// pipe. `if true | [[ -n x ]] { … }` runs, which is the row that tells the
+// two apart, and it was found by mutation rather than by a script.
+func exprEndsItself(e Expr) bool {
+	switch x := e.(type) {
+	case *BinaryExpr:
+		return exprEndsItself(x.Y)
+	case *Pipeline:
+		return commandEndsItself(x.Cmds[len(x.Cmds)-1])
+	}
+	return false
+}
+
+// commandEndsItself is the whole of the rule: `(( … ))` and `[[ … ]]` close,
+// and a word does not.
+//
+// The set is what was measured rather than what is tidy. A group, a subshell
+// and a `case … esac` close too, and a *loop* does not — `if for i in a; do
+// true; done { … }` is a syntax error in the shell that takes every other
+// row, which is a fact about that shell rather than a rule anyone could
+// derive. A pipeline of more than one command is refused by exprEndsItself
+// above, for the same measured reason.
+func commandEndsItself(c Command) bool {
+	switch c.(type) {
+	case *TestClause, *ArithCmdClause, *Group, *Subshell, *CaseClause:
+		return true
+	}
+	return false
+}
+
 func (p *Parser) parseLoop() Command {
 	c := &LoopClause{Until: p.atWord("until"), Start: p.tok.Pos}
 	defer p.opens(loopWord(c.Until))()
@@ -1780,8 +1966,8 @@ func (p *Parser) parseLoop() Command {
 	// it has just ended: what stands here is either `do`, or the body, or
 	// nothing. The list is what decides — a `;` kept it going, so anything
 	// after one was tested rather than run.
-	if p.dialect.ShortLoop && !p.atWord("do") {
-		c.Body, c.Stop = p.shortLoopBody()
+	if p.dialect.ShortForm && !p.atWord("do") {
+		c.Body, c.Stop = p.shortFormBody()
 		return c
 	}
 	p.requireSep("do")
@@ -1857,8 +2043,8 @@ func (p *Parser) parseFor() Command {
 		c.Body, c.Stop = p.braceLoopBody()
 		return c
 	}
-	if p.dialect.ShortLoop && !p.atWord("do") {
-		c.Body, c.Stop = p.shortLoopBody()
+	if p.dialect.ShortForm && !p.atWord("do") {
+		c.Body, c.Stop = p.shortFormBody()
 		return c
 	}
 	p.expectWord("do")
@@ -1871,7 +2057,7 @@ func (p *Parser) parseFor() Command {
 // shortItemsFollow reports whether a `for` or `select` header's word list is
 // written in parentheses.
 func (p *Parser) shortItemsFollow() bool {
-	return p.dialect.ShortLoop && p.at(TokLeftParen)
+	return p.dialect.ShortForm && p.at(TokLeftParen)
 }
 
 // shortItems reads that list. The words are the ordinary ones — expanded,
@@ -1902,7 +2088,7 @@ func (p *Parser) shortItems() (items []*Word, end Pos) {
 // so a header that did not end itself, a dialect without the flag, and a `do`
 // standing where it always could all fall through untouched.
 func (p *Parser) shortBodyAfterHeader(headerEnded bool) (body []*Stmt, stop Pos, short bool) {
-	if !p.dialect.ShortLoop || !headerEnded {
+	if !p.dialect.ShortForm || !headerEnded {
 		return nil, Pos{}, false
 	}
 	if p.tok.Kind == TokSemi || p.tok.Kind == TokNewline {
@@ -1912,8 +2098,97 @@ func (p *Parser) shortBodyAfterHeader(headerEnded bool) (body []*Stmt, stop Pos,
 	if p.atWord("do") {
 		return nil, Pos{}, false
 	}
-	body, stop = p.shortLoopBody()
+	body, stop = p.shortFormBody()
 	return body, stop, true
+}
+
+// parseRepeat reads `repeat N` and its body.
+//
+// The header is one word and ends itself, so every body spelling the dialect
+// has is reachable: `do … done`, a brace group, one command, and — with a
+// separator between, which a `while` reads as more condition and this reads
+// as nothing at all — the same three again.
+func (p *Parser) parseRepeat() Command {
+	c := &RepeatClause{Start: p.tok.Pos}
+	defer p.opens("repeat")()
+	p.next()
+	c.Count = p.word()
+	if c.Count == nil {
+		p.failUnexpectedOperand("a count")
+		return c
+	}
+	c.Header = p.slice(c.Start, c.Count.End())
+	// A separator here is optional and belongs to the header rather than to
+	// a condition list, because there is no condition: `repeat 2; echo R`
+	// prints twice, where `while cond; echo R` would have tested the echo.
+	if p.tok.Kind == TokSemi || p.tok.Kind == TokNewline {
+		p.next()
+		p.skipNewlines()
+	}
+	if p.braceBodyFollows() {
+		c.Body, c.Stop = p.braceLoopBody()
+		return c
+	}
+	if p.dialect.ShortForm && !p.atWord("do") {
+		c.Body, c.Stop = p.shortFormBody()
+		return c
+	}
+	p.opensClause("do")
+	p.expectWord("do")
+	c.Body = p.parseBody()
+	c.Stop = p.tok.End
+	p.expectWord("done")
+	return c
+}
+
+// parseForeach reads `foreach name (a b) … end`, which is a `for` under two
+// other words.
+//
+// The tree is a ForClause, because the construct is one: the same loop
+// variable, the same list, the same body, and `break` and `continue` reaching
+// the same place. Only the words differ, and a printer that writes it back as
+// `for … do … done` writes something every dialect can read.
+func (p *Parser) parseForeach() Command {
+	c := &ForClause{Start: p.tok.Pos}
+	defer p.opens("foreach")()
+	p.next()
+	if p.tok.Kind != TokWord || !isName(p.tok.Literal()) {
+		if p.err == nil {
+			p.err = &Error{
+				Pos: p.tok.Pos, Kind: ErrForName,
+				Token: p.tokenLiteral(), Class: p.tokenClass(false),
+				Msg: "expected a name after `foreach`",
+			}
+		}
+		return c
+	}
+	c.Name = p.tok.Literal()
+	end := p.tok.End
+	p.next()
+	p.skipNewlines()
+	switch {
+	case p.at(TokLeftParen):
+		c.HasItems = true
+		c.Items, end = p.shortItems()
+	case p.atWord("in"):
+		c.HasItems = true
+		p.next()
+		for p.tok.Kind == TokWord && !p.atStopWord() {
+			c.Items = append(c.Items, p.word())
+		}
+		if n := len(c.Items); n > 0 {
+			end = c.Items[n-1].End()
+		}
+	}
+	c.Header = p.slice(c.Start, end)
+	if p.tok.Kind == TokSemi || p.tok.Kind == TokNewline {
+		p.next()
+		p.skipNewlines()
+	}
+	c.Body = p.parseBody()
+	c.Stop = p.tok.End
+	p.expectWord("end")
+	return c
 }
 
 // parseSelect reads the menu loop, whose header is a for-loop's.
@@ -1963,8 +2238,8 @@ func (p *Parser) parseSelect() Command {
 		c.Body, c.Stop = p.braceLoopBody()
 		return c
 	}
-	if p.dialect.ShortLoop && !p.atWord("do") {
-		c.Body, c.Stop = p.shortLoopBody()
+	if p.dialect.ShortForm && !p.atWord("do") {
+		c.Body, c.Stop = p.shortFormBody()
 		return c
 	}
 	p.expectWord("do")

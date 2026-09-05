@@ -26,7 +26,12 @@ func TestCausesGroupsAndRanks(t *testing.T) {
 		// something the parser still refuses.
 		write(t, dir, name, "#!/bin/zsh\n[[ -prefix - ]]\n")
 	}
-	write(t, dir, "d", "#!/bin/zsh\nrepeat 3 { echo x; }\n")
+	// A different gap, and one this parser is not about to close either: a
+	// bare alternation group where a *word* stands is that shell's glob
+	// syntax, and `docs/spec/grammar/conditions.md` implements it for a
+	// pattern operand and nowhere else. It was `repeat 3 { echo x; }` until
+	// that was implemented (#827).
+	write(t, dir, "d", "#!/bin/zsh\necho (aa|bb)\n")
 
 	rep := wild.Sweep(context.Background(), wild.Scope{Dirs: []string{dir}, Shells: wild.ZshScope},
 		zsh.Dialect(), "/usr/bin/true")

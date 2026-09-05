@@ -1621,6 +1621,11 @@ type Diagnostics struct {
 	// statement about the operator rather than about the token.
 	CondOperand string
 
+	// AnonymousFunctionName is what a function with no name is called where
+	// one is wanted — a frame, `$0`, a diagnostic. Empty means `(anon)`,
+	// which is what the one dialect with the construct says.
+	AnonymousFunctionName string
+
 	// SyntaxUnexpected is a token the grammar did not want. Three verbs:
 	// %[1]s the token, %[2]s what would have been valid where the parser
 	// knows, and %[3]d the line, for the dialect that has no location of its

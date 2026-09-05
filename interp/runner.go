@@ -1812,6 +1812,10 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		return r.testClause(ctx, x)
 	case *syntax.SelectClause:
 		return r.selectClause(ctx, x)
+	case *syntax.RepeatClause:
+		return r.repeatClause(ctx, x)
+	case *syntax.AnonFunc:
+		return r.anonFunc(ctx, x)
 	case *syntax.ArithCmdClause:
 		return r.arithCmd(ctx, x)
 	case *syntax.CoprocClause:

@@ -61,7 +61,7 @@ the *expectation* comes from whatever was waiting for it.
 The one exception is the shell with short loops, and it is the same rule
 rather than a hole in it: there a loop header that has ended is followed
 by its *body*, so the second command is not a second statement of the
-same list. See "Short loops" below. Its body is a whole statement,
+same list. See "Short forms" below. Its body is a whole statement,
 terminator included, and the loop is terminated by whatever the body
 took — `for i (a b) echo $i; echo end` parses there and
 `for i (a b) { echo $i; } echo end` does not, because a brace body is
@@ -594,6 +594,15 @@ for-loop's. Measured 2026-09-05:
 | `while true { …; }` | error | error | error | error | error |
 | `while true; { …; }` | error | error | error | error | **yes** |
 | `if true; { …; }` | error | error | error | error | error |
+| `if [[ -n x ]] { …; }` | error | error | error | error | **runs** |
+| `if (( 1 )) { …; }` | error | error | error | error | **runs** |
+| `if … { … } elif … { … } else { … }` | error | error | error | error | **runs** |
+| `if [[ -n x ]] echo A` | error | error | error | error | **runs** |
+| `if true { …; }` | error | error | error | error | error |
+| `repeat 3 { …; }`, `repeat 3 echo R` | error | error | error | error | **runs** |
+| `foreach f (a b); …; end` | error | error | error | error | **runs** |
+| `() { …; } p q` | error | error | error | error | **runs** |
+| `function { …; }` | error | error | error | error | **runs** |
 
 Grammar flag: `ForBraceBody` (on in the core, off for `posix` and
 `dash`). dash is the only panel shell that refuses the form, which is
@@ -609,7 +618,7 @@ form lacks the production; it is evidence about where a word list ends.
 
 **The brace body belongs to those two loops and to nothing else.**
 `while`, `until` and `if` refuse it, with or without a separator. One
-shell has a wider family of its own — see *Short loops* below, where the
+shell has a wider family of its own — see *Short forms* below, where the
 `while` row is answered — and `if` gets nothing anywhere.
 
 The group is the ordinary one and keeps every rule it already has: the
@@ -630,11 +639,20 @@ Corpus: `core/c-style-for-with-a-brace-body`,
 `core/a-list-for-brace-body-needs-a-separator`,
 `core/a-brace-body-is-not-a-while-body`.
 
-## Short loops
+## Short forms
 
-One shell writes a loop without `do … done`, and the family is wider than
-the brace body above. Measured 2026-09-05 (panel and machine as
-`../oracle.md`); the accepted rows are that shell's alone.
+One shell writes a compound command's body without the words that
+ordinarily open and close it, and the family is wider than the brace body
+above — wider, too, than loops, which is where this section stopped
+because the flag was called `ShortLoop` and `if` is not a loop (#827).
+Measured 2026-09-05 (panel and machine as `../oracle.md`); the accepted
+rows are that shell's alone.
+
+**Measured from a file, not through `-c`.** A command string whose last
+character is the `}` of a short body is a parse error in that shell,
+where the identical text with a trailing newline parses — so `-c` reports
+a grammar no script on disk has. Every case for this family runs from a
+file for that reason, and the harness writes one with the newline on it.
 
 | probe | dash | bash 3.2 | bash 5 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- |
@@ -650,8 +668,24 @@ the brace body above. Measured 2026-09-05 (panel and machine as
 | `while true { …; }` | error | error | error | error | error |
 | `for i in a b` | error | error | error | error | error |
 | `if true; { …; }` | error | error | error | error | error |
+| `if [[ -n x ]] { …; }` | error | error | error | error | **runs** |
+| `if (( 1 )) { …; }` | error | error | error | error | **runs** |
+| `if … { … } elif … { … } else { … }` | error | error | error | error | **runs** |
+| `if [[ -n x ]] echo A` | error | error | error | error | **runs** |
+| `if true { …; }` | error | error | error | error | error |
+| `repeat 3 { …; }`, `repeat 3 echo R` | error | error | error | error | **runs** |
+| `foreach f (a b); …; end` | error | error | error | error | **runs** |
+| `() { …; } p q` | error | error | error | error | **runs** |
+| `function { …; }` | error | error | error | error | **runs** |
 
-Grammar flag: `ShortLoop` — off in the core, on for `zsh` alone.
+Grammar flags: `ShortForm` — off in the core, on for `zsh` alone — plus
+`Repeat`, `Foreach` and `AnonymousFunction`, which are separate because
+they are separate questions: a shell could spell a `repeat` body only as
+`do … done`, and the words `repeat`, `foreach`, `end` and `()` are
+constructs rather than body spellings.
+
+It was `ShortLoop`, and the name is why this section's coverage stopped
+where it did. The rule it stands for says nothing about looping.
 
 **Two productions and one flag, because they are one rule:** a loop
 header that has *ended* may be followed straight by its body, and the
@@ -661,6 +695,29 @@ body may be left out. What ends a header is the whole of it —
 `for`, the parenthesized list closes and so does having no `in` clause;
 `for i in a b` closes on a separator and on nothing else, which is the
 same rule that makes `for i in a b { …; }` read `{` as another item.
+
+**`if` is the same rule and not a production of its own.** Its condition
+is its header, so `if [[ -n x ]] { … }` and `if (( 1 )) { … }` run and
+`if true { … }` does not — the same three lines that decide a `while`.
+The body is one command or a brace group, exactly as a loop's is, so
+`if [[ -n x ]] echo A; echo after` prints `A after` and the `;` belongs
+to the enclosing list. `elif` and `else` take their bodies the same way
+and the command ends where the last of them does: there is no `fi`, and
+a `;` before `else` ends the whole `if` and leaves the `else` with
+nothing to attach to.
+
+**What ends a condition is a measured set rather than a tidy one.** A
+group, a subshell and a `case … esac` close as well, a `!` in front
+changes nothing, and a **loop does not**: `if for i in a; do true; done
+{ … }` is a syntax error in the shell that takes every other row, which
+is a fact about that shell rather than a rule anyone could derive. A
+pipeline is judged on its **last** command: `if [[ -n x ]] | cat { … }`
+is refused because `cat` does not end a header, and
+`if true | [[ -n x ]] { … }` runs. That row was found by mutation — the
+rule had been written as "a pipeline never ends itself", which agrees
+with the first of the two for the wrong reason. Our parse error names the
+`{` where that shell names the `}` on the two loop rows; everything else
+agrees byte for byte.
 
 **`while cond; { …; }` is not a short body**, and this is the reading the
 shape invites and the measurement refuses. The `;` keeps the *condition
@@ -702,7 +759,63 @@ only an *omitted* body has no long spelling — `do done` is refused
 everywhere — so that one is printed short, with the parenthesized list,
 because `for i in a b` with nothing after it does not parse.
 
-Corpus: `core/a-tested-brace-group-is-not-a-body`,
+### `repeat`, `foreach` and a function with no name
+
+Three constructs rather than three body spellings, and each has a flag of
+its own.
+
+**`repeat N`** is a loop over a count. The word is expanded and read as
+an arithmetic expression **once**, before the first iteration — which is
+what makes it a count rather than a condition — and a word that is not a
+number, or is not positive, runs the body no times and reports success
+rather than failing. The header is one word and ends itself, so every
+body spelling is reachable: `do … done`, a brace group, one command, and
+each of those again after an optional separator, which here belongs to
+the header because there is no condition list for it to continue.
+`repeat` is a keyword only where a command may begin: `repeat=5` is an
+ordinary assignment.
+
+A count that is not an *expression* is a different answer again:
+`repeat '1+' { … }` is the same "bad math expression" the shell gives
+`$(( 1+ ))`, word for word. That shell stops the script over it and this
+one reports and carries on, which is the fatality of an arithmetic
+failure rather than anything about this loop, and is recorded here rather
+than modeled.
+
+**`foreach name (a b) … end`** is the `for` this section already
+describes under two other words. The tree is a `for`'s, so `break` and
+`continue` reach the same place and the printer writes it back as
+`for … do … done`, which every dialect can read. What it adds is `end`,
+and `end` is reserved **wherever a command may begin** in that shell
+rather than only inside the loop — `end` alone and `end() { :; }` are
+both parse errors there, while `echo end` and `end=5` are not. The
+terminator belongs to the opening word: `for f (a b); …; end` is refused.
+
+**`() { … } word …`** is a function with no name, defined and run where
+it stands, with the words after the body as its positional parameters.
+`function { … }` is the same thing spelled with the keyword. It is a
+*function* and not a group, which `local` is the test for, and the frame
+it pushes reports a name the shell invents — `(anon)`, which is what `$0`
+shows. `()` where a command begins is an empty parameter list rather than
+a subshell, and nothing is lost by reading it that way, because a
+subshell with nothing in it is a syntax error in all five.
+
+`()` with nothing after it is the empty subshell it has always been
+rather than a function with no body: `( ); echo ok` prints `ok` in the
+shell that has both readings, which is `EmptyCompoundBody` and not this
+rule. So the parentheses are read as a parameter list only when a body
+follows them.
+
+Corpus: `core/a-condition-that-ended-itself-takes-its-body`,
+`core/a-short-if-takes-elif-and-else-the-same-way`,
+`core/a-short-if-body-is-one-command`,
+`core/a-word-condition-does-not-end-itself`,
+`core/a-separator-after-a-condition-ends-the-if`,
+`core/a-count-loop`, `core/a-count-that-is-not-one-runs-nothing`,
+`core/a-loop-that-ends-with-end`,
+`core/a-function-with-no-name-runs-where-it-stands`,
+`core/a-nameless-function-is-a-function`,
+`core/a-tested-brace-group-is-not-a-body`,
 `core/a-while-condition-that-ends-itself-takes-a-body`,
 `core/a-short-loop-body-is-one-command`,
 `core/a-for-over-a-parenthesized-list`,

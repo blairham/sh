@@ -86,12 +86,17 @@ type Dialect struct {
 	// the C-style header ends itself, which is why that one form takes the
 	// brace with nothing between.
 	//
-	// A dialect with ShortLoop widens the *body* half of this to any single
+	// A dialect with ShortForm widens the *body* half of this to any single
 	// command, and adds `while` and `until` to the loops that may take one.
 	ForBraceBody bool
 
-	// ShortLoop is the family of loops written without `do … done`. One
-	// shell in the panel has it; the other four refuse every shape below.
+	// ShortForm is the family of compound commands whose body may be written
+	// without the words that ordinarily open and close it. One shell in the
+	// panel has it; the other four refuse every shape below.
+	//
+	// It was called ShortLoop, and the name was the reason its coverage
+	// stopped where it did: `if` is not a loop, and the rule the flag stands
+	// for has nothing to do with looping (#827).
 	//
 	// Two productions, and they are one flag because they are one feature —
 	// a loop header that has ended may be followed by its body directly:
@@ -123,7 +128,33 @@ type Dialect struct {
 	// written short is printed as `do … done`, which parses to the same tree
 	// under any dialect. Only an *omitted* body has no long spelling, so
 	// that one is printed back short.
-	ShortLoop bool
+	ShortForm bool
+
+	// Repeat is `repeat N`, a loop over a count rather than over a list or a
+	// condition. One shell in the panel has it; the other four read the word
+	// as an ordinary command name.
+	//
+	// It is a separate flag from ShortForm because the two are separate
+	// questions — a shell could have the construct and spell its body only
+	// as `do … done` — and because the word is a keyword only where a
+	// command may begin: `repeat=5` is an ordinary assignment there.
+	Repeat bool
+
+	// Foreach is `foreach name (a b) … end`, the same loop a `for` is under
+	// a different pair of words. One shell in the panel has it.
+	//
+	// `end` is the whole of what it adds: the list is the parenthesized one
+	// ShortForm already reads, and `for name (a b); …; end` is refused —
+	// measured — so the terminator belongs to the opening word rather than
+	// to the list.
+	Foreach bool
+
+	// AnonymousFunction is `() { … }` and `function { … }`: a function with
+	// no name, defined and run where it stands, with the words after it as
+	// its positional parameters. One shell in the panel has it; in the other
+	// four a `(` where a command begins opens a subshell and `()` is a
+	// syntax error.
+	AnonymousFunction bool
 
 	// AppendAssign enables `name+=value`, which appends rather than
 	// replacing. Absent from dash, where `x+=b` is a command called `x+=b`.

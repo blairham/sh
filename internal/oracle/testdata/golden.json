@@ -15264,6 +15264,234 @@
         "TimedOut": false
       }
     },
+    "invoke/a-command-reads-the-rest-of-a-program-on-standard-input": {
+      "bash": {
+        "Stdout": "one~NOT-A-COMMAND~echo end",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one~NOT-A-COMMAND~echo end",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one~NOT-A-COMMAND~echo end",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one~end",
+        "Stderr": "\u003cshell\u003e: 3: NOT-A-COMMAND: not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one~NOT-A-COMMAND~echo end",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~NOT-A-COMMAND~echo end",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/a-construct-over-several-lines-in-a-program-on-standard-input": {
+      "bash": {
+        "Stdout": "yes~done",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "yes~done",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "yes~done",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "yes~done",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "yes~done",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "yes~done",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/a-continued-line-in-a-program-on-standard-input": {
+      "bash": {
+        "Stdout": "one two~three",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one two~three",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one two~three",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one two~three",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one two~three",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one two~three",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/a-heredoc-in-a-program-on-standard-input": {
+      "bash": {
+        "Stdout": "body~after",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "body~after",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "body~after",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "body~after",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "body~after",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "body~after",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/a-read-at-the-end-of-a-program-on-standard-input": {
+      "bash": {
+        "Stdout": "1 []",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "1 []",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "1 []",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "1 []",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "1 []",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "1 []",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/a-read-takes-the-next-line-of-a-program-on-standard-input": {
+      "bash": {
+        "Stdout": "end",
+        "Stderr": "\u003cshell\u003e: line 2: DATA-LINE: command not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "end",
+        "Stderr": "\u003cshell\u003e: line 2: DATA-LINE: command not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "end",
+        "Stderr": "\u003cshell\u003e: line 2: DATA-LINE: command not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[]~end",
+        "Stderr": "\u003cshell\u003e: 3: DATA-LINE: not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "end",
+        "Stderr": "\u003cshell\u003e: line 2: DATA-LINE: not found",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "end",
+        "Stderr": "\u003cshell\u003e: command not found: DATA-LINE",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "invoke/a-script-is-not-interactive": {
       "bash": {
         "Stdout": "not",
@@ -15413,6 +15641,44 @@
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: can't open input file: nodir/nosuch.sh",
         "Status": 127,
+        "TimedOut": false
+      }
+    },
+    "invoke/a-while-read-loop-eats-the-rest-of-a-program-on-standard-input": {
+      "bash": {
+        "Stdout": "got:A~got:B~got:C",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "got:A~got:B~got:C",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "got:A~got:B~got:C",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 2: A: not found~\u003cshell\u003e: 3: B: not found~\u003cshell\u003e: 4: C: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "got:A~got:B~got:C",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "got:A~got:B~got:C",
+        "Stderr": "",
+        "Status": 0,
         "TimedOut": false
       }
     },
@@ -15679,6 +15945,44 @@
         "Stdout": "one",
         "Stderr": "",
         "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "invoke/exec-repoints-the-rest-of-a-program-on-standard-input": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 3: FIRST: command not found~\u003cshell\u003e: line 4: SECOND: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 3: FIRST: command not found~\u003cshell\u003e: line 4: SECOND: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 3: FIRST: command not found~\u003cshell\u003e: line 4: SECOND: command not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "never reached",
+        "Stderr": "\u003cshell\u003e: 4: FIRST: not found~\u003cshell\u003e: 5: SECOND: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 3: FIRST: not found~\u003cshell\u003e: line 4: SECOND: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: command not found: FIRST~\u003cshell\u003e: command not found: SECOND",
+        "Status": 127,
         "TimedOut": false
       }
     },

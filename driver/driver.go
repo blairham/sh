@@ -75,9 +75,11 @@ type Shell struct {
 	// case now that cd, pwd and read live in the core.
 	Register func(*interp.Runner)
 
-	// Stdin is where an interactive shell reads its lines from, and has to be
-	// a terminal for the editor to work. A script's input is the script, so
-	// nothing else here reads it.
+	// Stdin is where the shell reads from: the lines a person types, and the
+	// program itself where the invocation named nothing to run. It has to be
+	// a terminal for the editor to work, and it is handed to the Runner, so
+	// what the front end has not read of a program on it is what the script
+	// running on it finds — see program.
 	Stdin *os.File
 
 	// Stdout and Stderr default to the process's. Tests set them; a binary
@@ -207,6 +209,11 @@ func RunCommand(sh Shell, src string, operands []string) int {
 // RunStdin is Run for a script arriving on standard input, where there is
 // no $0 to name — two dialects change the shape of their prefixes on that
 // route rather than substituting a name.
+//
+// It takes the text rather than the descriptor, so it is the *diagnostics* of
+// that route and not the whole of it: a caller that has already read the
+// program has nothing left on the descriptor for the script to share, which is
+// the other half of what MainArgs does here. See program.
 func RunStdin(sh Shell, src string) int {
 	sh = sh.withDefaults(nil)
 	return sh.run(source{src: src, name: sh.Name, dg: sh.Diagnostics.ForStdin()})
@@ -298,7 +305,13 @@ type source struct {
 	// wholeFirst parses the whole input before running any of it, which one
 	// dialect does for a command string and no dialect does for a script.
 	wholeFirst bool
-	dg         interp.Diagnostics
+	// onStdin says the program itself arrives on standard input, so it is
+	// read as it runs rather than handed over as text. The shell holds one
+	// descriptor: what it has not read yet is still there for the script's
+	// own `read`, for a command the script runs, and for an `exec 0<` that
+	// points the descriptor somewhere else entirely.
+	onStdin bool
+	dg      interp.Diagnostics
 }
 
 // optionSpec is one run of set options the invocation asked for: the letters
@@ -524,13 +537,13 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 			// waits for an end-of-file that a person has not typed yet.
 			return source{prompt: true, name: sh.Name, params: args, dg: sh.Diagnostics, opts: inv.opts}, nil
 		}
-		// sh.Stdin, not os.Stdin: a Runner's streams are its own, and a
-		// front end that reaches past them is not usable by anything that
-		// embeds it — including its own tests, where the difference is that
-		// a test for the standard-input path silently reads the *test
-		// binary's* input and passes whatever it is given.
-		src, err := readAll(sh.Stdin)
-		return source{src: src, name: sh.Name, params: args, dg: sh.Diagnostics.ForStdin(), opts: inv.opts}, err
+		// Not read here. The program is on the same descriptor everything
+		// else the script does reads from, so how much of it the shell takes
+		// is a behavior rather than plumbing, and it is taken as the script
+		// runs — see program and Semantics.StdinProgramReadInBlocks. Reading
+		// it all here is what handed `read x` end of input and then ran the
+		// data line as a command.
+		return source{onStdin: true, name: sh.Name, params: args, dg: sh.Diagnostics.ForStdin(), opts: inv.opts}, nil
 	}
 	path := args[0]
 	b, err := os.ReadFile(path)
@@ -566,11 +579,6 @@ func commandSource(sh Shell, src string, operands []string) source {
 	return in
 }
 
-func readAll(r io.Reader) (string, error) {
-	b, err := io.ReadAll(r)
-	return string(b), err
-}
-
 // run parses and executes src. input is what the front end calls where the
 // script came from — "-c", or empty for a file or standard input — which one
 // dialect names in a parse failure's location.
@@ -598,7 +606,14 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, c
 		// environment it is handed rather than reach for shared state. This
 		// binary *is* the process, so the read is made once, where it is
 		// visible — the same split as ReplaceProcess below.
-		Env:    os.Environ(),
+		Env: os.Environ(),
+		// The shell's own descriptor rather than the process's, for the
+		// reason the other two are the caller's: a front end that reaches
+		// past its Shell is not usable by anything embedding it, and its own
+		// tests silently read the *test binary's* input instead. It matters
+		// twice over on the standard-input route, where this descriptor is
+		// also where the rest of the program is coming from.
+		Stdin:  sh.Stdin,
 		Stdout: sh.Stdout,
 		Stderr: sh.Stderr,
 		// The policy and the observer, carried straight through. Both are
@@ -658,11 +673,11 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, c
 
 func (sh Shell) run(in source) int {
 	src, name, input, dg := in.src, in.name, in.input, in.dg
-	p := syntax.NewParser(src, sh.Dialect)
 	// One dialect reads a command string whole before running any of it, and
 	// the rest run each line as they reach it. Parsing everything up front is
 	// how that is done: the failure is then reported before anything has run.
 	if in.wholeFirst {
+		p := syntax.NewParser(src, sh.Dialect)
 		p.Parse()
 		if err := p.Err(); err != nil {
 			// Input that ends unfinished is a syntax error rather than a
@@ -673,11 +688,10 @@ func (sh Shell) run(in source) int {
 			// can accompany a fatal failure, which is measured — a here
 			// document with neither its delimiter nor its enclosing `}`
 			// produces both, warning first.
-			sh.sayRemarks(dg, name, p, 0)
+			sh.sayRemarks(dg, name, p.Remarks(), 0)
 			sh.errf("%s", dg.ParseDiagnostic(name, input, err, src))
 			return dg.StatusForParseError(err)
 		}
-		p = syntax.NewParser(src, sh.Dialect)
 	}
 
 	r := sh.newRunner(name, in.params, dg, input == "-c")
@@ -687,6 +701,13 @@ func (sh Shell) run(in source) int {
 	// unanimous for `-i` on every route.
 	r.Interactive = in.interactive
 	r.SetScriptFile(in.file)
+	pr := wholeProgram(src, sh.Dialect)
+	if in.onStdin {
+		// The program is on the descriptor rather than in hand, so it is read
+		// as it runs. How much at a time is the dialect's answer, and it is
+		// the whole of what this route disagrees about.
+		pr.more = stdinProgram(r, sh.Semantics.StdinProgramReadInBlocks)
+	}
 	// Aliases are expanded when a line is *parsed*, and the table is the
 	// runner's, so the front end is the only place the two can be joined.
 	// This works because execute reads a line at a time: the `alias` on one
@@ -700,7 +721,7 @@ func (sh Shell) run(in source) int {
 	// unreachable until now — the field it read meant "took the prompt
 	// route", and the prompt route does not come through here.
 	if sh.Dialect.ExpandAliases || in.interactive {
-		p.Aliases = r.LookupAlias
+		pr.aliases = r.LookupAlias
 	}
 	if sh.Prelude != "" {
 		if code := sh.source(r, name); code != 0 {
@@ -717,7 +738,7 @@ func (sh Shell) run(in source) int {
 		return code
 	}
 
-	return sh.execute(r, p, in)
+	return sh.execute(r, pr, in)
 }
 
 // applyOptions installs the set options the invocation named, once the
@@ -749,7 +770,7 @@ func (sh Shell) applyOptions(r *interp.Runner, opts []optionSpec) (int, bool) {
 //
 // The EXIT trap fires either way, which is why the parse failure returns
 // through Finish rather than around it.
-func (sh Shell) execute(r *interp.Runner, p *syntax.Parser, in source) int {
+func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 	ctx := context.Background()
 	shown, echoed := 0, 0
 	// A builtin can change the grammar for the lines after it — a run-time
@@ -761,19 +782,27 @@ func (sh Shell) execute(r *interp.Runner, p *syntax.Parser, in source) int {
 	for {
 		if r.Dialect != dialect && r.Dialect != nil {
 			dialect = r.Dialect
-			p.SetDialect(*dialect)
+			pr.setDialect(*dialect)
 		}
-		line, ok := p.NextLine()
+		line, ok := pr.nextLine()
 		// Said as soon as it is known and before anything the line does,
 		// which is where the one shell that remarks puts it.
-		shown = sh.sayRemarks(in.dg, in.name, p, shown)
+		shown = sh.sayRemarks(in.dg, in.name, pr.remarks(), shown)
 		if !ok {
+			if err := pr.err(); err != nil {
+				// The input ended part-way through something. Reported here
+				// rather than below, because a program read as it runs has no
+				// line to hand back when the last of it is unfinished.
+				sh.errf("%s", in.dg.ParseDiagnostic(in.name, in.input, err, pr.src))
+				r.Finish(ctx)
+				return in.dg.StatusForParseError(err)
+			}
 			break
 		}
-		if err := p.Err(); err != nil {
+		if err := pr.err(); err != nil {
 			// The line did not parse, so none of it runs — not even the
 			// statements before the failure, which is measured.
-			sh.errf("%s", in.dg.ParseDiagnostic(in.name, in.input, err, in.src))
+			sh.errf("%s", in.dg.ParseDiagnostic(in.name, in.input, err, pr.src))
 			r.Finish(ctx)
 			return in.dg.StatusForParseError(err)
 		}
@@ -783,7 +812,7 @@ func (sh Shell) execute(r *interp.Runner, p *syntax.Parser, in source) int {
 			// here: the runner only says whether the option is on. Echoed up
 			// to the line the parser has consumed, so a here-document's body
 			// goes out with the line that owns it, and never twice.
-			echoed = sh.sayVerbose(in.src, line.Last.Line, echoed)
+			echoed = sh.sayVerbose(pr.src, line.Last.Line, echoed)
 		} else {
 			// Lines read while the option is off are spent, not saved: the
 			// line that says `set -v` is not echoed by the shell it turns on.
@@ -838,8 +867,7 @@ func (sh Shell) source(r *interp.Runner, name string) int {
 // The count is carried because a parser produces these as it reads, and the
 // loop asks after every line: without it the first remark would be repeated
 // for every line after the one that raised it.
-func (sh Shell) sayRemarks(dg interp.Diagnostics, name string, p *syntax.Parser, shown int) int {
-	rs := p.Remarks()
+func (sh Shell) sayRemarks(dg interp.Diagnostics, name string, rs []syntax.Remark, shown int) int {
 	for _, rk := range rs[min(shown, len(rs)):] {
 		if msg := dg.Remark(rk); msg != "" {
 			sh.errf("%s", dg.Report(name, rk.Pos.Line, msg+"\n"))

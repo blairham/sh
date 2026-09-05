@@ -1261,6 +1261,32 @@ type Semantics struct {
 	// at 2, where the other three read into REPLY.
 	ReadRequiresAVariableName Answer
 
+	// StdinProgramReadInBlocks takes a program arriving on standard input
+	// as much at a time as the descriptor will give, rather than a line at
+	// a time. Whatever the block swallowed has left the descriptor, so a
+	// `read`, an external command, or anything else the script points at
+	// standard input finds only what had not arrived yet.
+	//
+	// dash alone, measured: `printf 'read x\necho "[$x]"\nDATA\n' | sh`
+	// prints `[]` there and then runs `DATA` as a command, where bash,
+	// ksh93 and zsh hand the second line to `read` and never parse it.
+	// docs/spec/invocation.md has the grid, including the case that shows
+	// what the difference really is — `exec 0< file` mid-program replaces
+	// the *rest of the program* in the three, and only what follows the
+	// block in dash.
+	//
+	// A bool rather than an Answer, and deliberately: the panel is four to
+	// one, so a common denominator exists, and "refuse to read a piped
+	// script at all" is not an answer any shell could ship. False is
+	// reading by the line, which is what the substrate does.
+	//
+	// It is the standard-input route's question alone. A script named as an
+	// operand is opened separately from standard input, so nothing is
+	// shared and all four behave the same way; `-c` reads no descriptor at
+	// all. The sibling question for a command string is
+	// Diagnostics.CommandStringParsedWhole.
+	StdinProgramReadInBlocks bool
+
 	// ArrayLengthWithoutSubscriptIsCount makes `${#a}` of an array the
 	// number of elements, which is zsh's reading; bash and ksh93 measure
 	// the element the bare name yields. Asked only where the two answers

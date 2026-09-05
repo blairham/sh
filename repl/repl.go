@@ -335,14 +335,12 @@ func (s Shell) accept(pending *strings.Builder, remember func(string), line stri
 //
 // Counted rather than looked for: `echo \\` ends with a backslash that is
 // itself escaped, and is a finished command that prints one.
-func endsWithContinuation(text string) bool {
-	text = strings.TrimSuffix(text, "\n")
-	n := 0
-	for i := len(text) - 1; i >= 0 && text[i] == '\\'; i-- {
-		n++
-	}
-	return n%2 == 1
-}
+//
+// The counting is syntax's, because a prompt is no longer the only reader that
+// has to ask: a shell taking its program off a descriptor a line at a time
+// meets the same half-written command, and two answers to one question is how
+// they come to differ.
+func endsWithContinuation(text string) bool { return syntax.EndsWithContinuation(text) }
 
 // collect reads every statement the parser can make of the text.
 //

@@ -70,10 +70,45 @@ type Parser struct {
 const maxParamDepth = 64
 
 // NewParser returns a parser over src.
-func NewParser(src string, d Dialect) *Parser {
-	p := &Parser{lex: NewLexer(src, d), dialect: d}
+func NewParser(src string, d Dialect) *Parser { return NewParserAt(src, d, 1) }
+
+// NewParserAt returns a parser over src whose first line is numbered first.
+//
+// Input does not always arrive whole. A shell reading its program from a
+// descriptor takes a piece of it, runs that, and comes back for more — the
+// piece is all the parser has, and a diagnostic still has to name the line of
+// the *input* rather than the line of the piece. Nothing else changes: an
+// offset stays relative to src, because it is only ever used to quote the text
+// a node was written as, and that text is here.
+//
+// first is the number to give src's first line, so 1 is NewParser.
+func NewParserAt(src string, d Dialect, first int) *Parser {
+	lex := NewLexer(src, d)
+	if first > 0 {
+		// Before the first token is read: the lookahead carries a position,
+		// and a line set afterwards would leave that one token behind.
+		lex.line = first
+	}
+	p := &Parser{lex: lex, dialect: d}
 	p.next()
 	return p
+}
+
+// EndsWithContinuation reports whether text ends with a backslash joining it to
+// a line that has not arrived yet.
+//
+// A parser cannot answer this, and is right not to. `echo one \` at the end of
+// a *file* is a finished command — the continuation joins it to nothing — while
+// the same text at the end of what has been read so far is a command still
+// being written. Which one it is depends on whether there is more input, which
+// only the thing doing the reading knows.
+func EndsWithContinuation(text string) bool {
+	text = strings.TrimSuffix(text, "\n")
+	n := 0
+	for i := len(text) - 1; i >= 0 && text[i] == '\\'; i-- {
+		n++
+	}
+	return n%2 == 1
 }
 
 // Parse parses src completely.

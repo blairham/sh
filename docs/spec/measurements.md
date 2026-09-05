@@ -2392,6 +2392,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cmd/function-posix-form` | `posix` | `posix` | `posix` | `posix` | `posix` | `posix` |
 | `cmd/function-keyword-form` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `kw` | `kw` | `kw` | `kw` | `kw` |
 | `cmd/function-keyword-and-parens` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `both` | `both` | `both` | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `both` |
+| `cmd/a-subshell-that-opens-with-a-subshell` | `hi~st=0` | `hi~st=0` | `hi~st=0` | `hi~st=0` | `hi~st=0` | `hi~st=0` |
 | `cmd/an-empty-brace-group` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `{ }; echo ok'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `{ }; echo ok'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `}'~<shell>: -c: line 0: `{ }; echo ok'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `}' unexpected` *(status 3)* | `ok` |
 | `cmd/an-empty-subshell` | **2>** `<shell>: 1: Syntax error: ")" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `)'~<shell>: -c: line 1: `( ); echo ok'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `)'~<shell>: -c: line 1: `( ); echo ok'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `)'~<shell>: -c: line 0: `( ); echo ok'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `)' unexpected` *(status 3)* | `ok` |
 | `cmd/an-empty-loop-body` | **2>** `<shell>: 1: Syntax error: "done" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `done'~<shell>: -c: line 1: `while false; do done; echo ok'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `done'~<shell>: -c: line 1: `while false; do done; echo ok'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `done'~<shell>: -c: line 0: `while false; do done; echo ok'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `done' unexpected` *(status 3)* | `ok` |
@@ -2723,6 +2724,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cmd/function-keyword-and-parens` — the hybrid is rejected by ksh93, where the keyword originated, so it is not core
   ```sh
   function f() { echo both; }; f
+  ```
+- `cmd/a-subshell-that-opens-with-a-subshell` — one space is the whole difference from the case above, and it is unanimous — including in the shells that would otherwise have taken the two parentheses as one token
+  ```sh
+  ( (echo hi) ); echo "st=$?"
   ```
 - `cmd/an-empty-brace-group` — a compound command's body may not be empty: dash, both bash builds and ksh93 refuse the brace group and name the `}` they met where a command belonged, and zsh alone takes it. The core is the language every shell accepts, so an empty body is outside it and a dialect adds it back rather than the core allowing what four shells reject
   ```sh
@@ -3570,6 +3575,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `let/zero-is-a-failure` | `a=127~b=127` **2>** `<shell>: 1: let: not found~<shell>: 1: let: not found` | `a=0~b=1` | `a=0~b=1` | `a=0~b=1` | `a=0~b=1` | `a=0~b=1` |
 | `let/the-last-expression-decides` | `st=127 a= b=` **2>** `<shell>: 1: let: not found` | `st=0 a=0 b=1` | `st=0 a=0 b=1` | `st=0 a=0 b=1` | `st=0 a=0 b=1` | `st=0 a=0 b=1` |
 | `let/with-nothing-to-evaluate` | `st=127` **2>** `<shell>: 1: let: not found` | `st=1` **2>** `<shell>: line 1: let: expression expected` | `st=1` **2>** `<shell>: line 1: let: expression expected` | `st=1` **2>** `<shell>: line 0: let: expression expected` | `st=2` **2>** `Usage: let [ options ] [expr ...]` | `st=1` **2>** `<shell>:let:1: not enough arguments` |
+| `arith/a-command-expression-may-open-with-a-paren` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `arith/two-parens-at-command-position-are-not-a-subshell` | `hi~st=0` | `st=1` **2>** `<shell>: line 1: ((: echo hi: arithmetic syntax error in expression (error token is "hi")` | `st=1` **2>** `<shell>: line 1: ((: echo hi: arithmetic syntax error in expression (error token is "hi")` | `st=1` **2>** `<shell>: ((: echo hi: syntax error in expression (error token is "hi")` | **2>** `<shell>: echo hi: arithmetic syntax error` *(status 1)* | `st=2` **2>** `<shell>:1: bad math expression: operator expected at `hi'` |
 | `arith/bare-name-is-a-variable` | `[6][6]` | `[6][6]` | `[6][6]` | `[6][6]` | `[6][6]` | `[6][6]` |
 | `arith/unset-is-zero` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` | `[1]` |
 | `arith/precedence-follows-c` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` | `[7][9][2]` |
@@ -3649,6 +3656,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `let/with-nothing-to-evaluate` — three wordings and two statuses: bash and zsh report 1, ksh93 reports 2 and prints a bare usage line with no shell name in front of it
   ```sh
   let; echo "st=$?"
+  ```
+- `arith/a-command-expression-may-open-with-a-paren` — the other direction of the same ambiguity: at command position `(( (` is an arithmetic command whose expression is parenthesized, not three nested subshells. dash, which has no arithmetic command, is the contrast
+  ```sh
+  (( (1+2)*3 == 9 )); echo "st=$?"
+  ```
+- `arith/two-parens-at-command-position-are-not-a-subshell` — outside a condition the distinction really is textual: with no space the three shells that have (( )) read an arithmetic command and fail on `echo`, while dash runs the nested subshell and prints hi. Marked a syntax error because *we* refuse it while reading, where all three refuse it while running — `bash -n` takes the file and `false && ((echo hi))` reaches the echo after it in every one of them
+  ```sh
+  ((echo hi)); echo "st=$?"
   ```
 - `arith/bare-name-is-a-variable` — a bare name inside arithmetic is a variable reference, which is why the contents cannot be lexed as ordinary words
   ```sh
@@ -5283,6 +5298,15 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cond/double-bracket-andand` | **2>** `<shell>: 1: [[: not found` *(status 127)* | `andand` | `andand` | `andand` | `andand` | `andand` |
 | `cond/arith-command-status-inverted` | `nonzero=127~zero=127` **2>** `<shell>: 1: 1+1: not found~<shell>: 1: 0: not found` | `nonzero=0~zero=1` | `nonzero=0~zero=1` | `nonzero=0~zero=1` | `nonzero=0~zero=1` | `nonzero=0~zero=1` |
 | `cond/arith-command-comparison` | **2>** `<shell>: 1: 2: not found` *(status 127)* | `gt` | `gt` | `gt` | `gt` | `gt` |
+| `cond/touching-grouping-parens` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `cond/spacing-the-grouping-parens-changes-nothing` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `cond/touching-grouping-parens-after-oror` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `cond/touching-grouping-parens-after-andand` | **2>** `<shell>: 1: Syntax error: word unexpected` *(status 2)* | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `cond/touching-grouping-parens-after-not` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `cond/touching-grouping-parens-before-a-unary` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `cond/three-touching-grouping-parens` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `cond/a-regex-group-that-opens-with-a-group` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `cond/the-arithmetic-command-survives-the-condition` | `x=0` **2>** `<shell>: 1: [[: not found` | `x=1` | `x=1` | `x=1` | `x=1` | `x=1` |
 
 - `cond/a-pattern-operand-may-start-with-a-group` — the commonest idiom in one shell's completion files, and a syntax error in the other four. A bare group already belonged to a word *mid*-pattern there; what was missing is the first character, since `(` is in the operator table and a token beginning with one never reaches the word scanner. All three pattern operators take it, which is what says the rule is about the operand being a pattern rather than about `==` (#826)
   ```sh
@@ -5335,6 +5359,42 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cond/arith-command-comparison` — > inside (( )) is a comparison; in dash the whole thing is nested subshells running a command
   ```sh
   (( 2 > 1 )) && echo gt
+  ```
+- `cond/touching-grouping-parens` — inside [[ ]] no command may begin, so `((` is two grouping parentheses and not the arithmetic command — unanimous in bash 3.2 and 5.3, bash-as-sh, ksh93 and zsh, and the one line a real ~/.bashrc in the wild tripped over (#859)
+  ```sh
+  [[ ((1 -eq 1)) ]]; echo "st=$?"
+  ```
+- `cond/spacing-the-grouping-parens-changes-nothing` — the spaced form of the case above. It is the pair that makes the finding: a lexer that reads `((` as one token answers these two differently, and no shell does
+  ```sh
+  [[ ( (1 -eq 1) ) ]]; echo "st=$?"
+  ```
+- `cond/touching-grouping-parens-after-oror` — the shape that appears in the wild: a group after || whose first element is itself a group. Each structural position has to be checked separately because each is a different production
+  ```sh
+  [[ (1 -eq 1) || ((2 -eq 2) && (3 -eq 3)) ]]; echo "st=$?"
+  ```
+- `cond/touching-grouping-parens-after-andand` — the same after &&
+  ```sh
+  [[ 1 -eq 1 && ((2 -eq 2)) ]]; echo "st=$?"
+  ```
+- `cond/touching-grouping-parens-after-not` — the same after !, which is the third place a condition may begin
+  ```sh
+  [[ ! ((1 -eq 2)) ]]; echo "st=$?"
+  ```
+- `cond/touching-grouping-parens-before-a-unary` — `(( -z` is the shape that most looks like an arithmetic command and least is one: an arithmetic expression cannot start with `-z` at all, and every shell still reads two groups
+  ```sh
+  [[ (( -z "" )) ]]; echo "st=$?"
+  ```
+- `cond/three-touching-grouping-parens` — nesting is unbounded rather than a one-deep special case, so a fix that only looks one character ahead is caught here
+  ```sh
+  [[ (((1 -eq 1))) ]]; echo "st=$?"
+  ```
+- `cond/a-regex-group-that-opens-with-a-group` — the =~ operand owns its parentheses, so `((` there is the regular expression's and not the shell's either — the same confusion reached by a different route
+  ```sh
+  [[ xa =~ ((a)) ]]; echo "st=$?"
+  ```
+- `cond/the-arithmetic-command-survives-the-condition` — `((` is only two parentheses *inside* the brackets. One character past `]]` it is the arithmetic command again, which is what a fix written as a lexer mode has to give back
+  ```sh
+  x=0; [[ 1 -eq 1 ]] && (( x++ )); echo "x=$x"
   ```
 
 ## pattern matching

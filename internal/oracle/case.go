@@ -3687,6 +3687,66 @@ echo "st=$?"`,
 		Snippet: `(( 2 > 1 )) && echo gt`,
 		Why:     "> inside (( )) is a comparison; in dash the whole thing is nested subshells running a command",
 	},
+	{
+		ID: "cond/touching-grouping-parens", Category: "[[ ]] and (( ))",
+		Snippet: `[[ ((1 -eq 1)) ]]; echo "st=$?"`,
+		Why:     "inside [[ ]] no command may begin, so `((` is two grouping parentheses and not the arithmetic command — unanimous in bash 3.2 and 5.3, bash-as-sh, ksh93 and zsh, and the one line a real ~/.bashrc in the wild tripped over (#859)",
+	},
+	{
+		ID: "cond/spacing-the-grouping-parens-changes-nothing", Category: "[[ ]] and (( ))",
+		Snippet: `[[ ( (1 -eq 1) ) ]]; echo "st=$?"`,
+		Why:     "the spaced form of the case above. It is the pair that makes the finding: a lexer that reads `((` as one token answers these two differently, and no shell does",
+	},
+	{
+		ID: "cond/touching-grouping-parens-after-oror", Category: "[[ ]] and (( ))",
+		Snippet: `[[ (1 -eq 1) || ((2 -eq 2) && (3 -eq 3)) ]]; echo "st=$?"`,
+		Why:     "the shape that appears in the wild: a group after || whose first element is itself a group. Each structural position has to be checked separately because each is a different production",
+	},
+	{
+		ID: "cond/touching-grouping-parens-after-andand", Category: "[[ ]] and (( ))",
+		Snippet: `[[ 1 -eq 1 && ((2 -eq 2)) ]]; echo "st=$?"`,
+		Why:     "the same after &&",
+	},
+	{
+		ID: "cond/touching-grouping-parens-after-not", Category: "[[ ]] and (( ))",
+		Snippet: `[[ ! ((1 -eq 2)) ]]; echo "st=$?"`,
+		Why:     "the same after !, which is the third place a condition may begin",
+	},
+	{
+		ID: "cond/touching-grouping-parens-before-a-unary", Category: "[[ ]] and (( ))",
+		Snippet: `[[ (( -z "" )) ]]; echo "st=$?"`,
+		Why:     "`(( -z` is the shape that most looks like an arithmetic command and least is one: an arithmetic expression cannot start with `-z` at all, and every shell still reads two groups",
+	},
+	{
+		ID: "cond/three-touching-grouping-parens", Category: "[[ ]] and (( ))",
+		Snippet: `[[ (((1 -eq 1))) ]]; echo "st=$?"`,
+		Why:     "nesting is unbounded rather than a one-deep special case, so a fix that only looks one character ahead is caught here",
+	},
+	{
+		ID: "cond/a-regex-group-that-opens-with-a-group", Category: "[[ ]] and (( ))",
+		Snippet: `[[ xa =~ ((a)) ]]; echo "st=$?"`,
+		Why:     "the =~ operand owns its parentheses, so `((` there is the regular expression's and not the shell's either — the same confusion reached by a different route",
+	},
+	{
+		ID: "cond/the-arithmetic-command-survives-the-condition", Category: "[[ ]] and (( ))",
+		Snippet: `x=0; [[ 1 -eq 1 ]] && (( x++ )); echo "x=$x"`,
+		Why:     "`((` is only two parentheses *inside* the brackets. One character past `]]` it is the arithmetic command again, which is what a fix written as a lexer mode has to give back",
+	},
+	{
+		ID: "arith/a-command-expression-may-open-with-a-paren", Category: "arithmetic",
+		Snippet: `(( (1+2)*3 == 9 )); echo "st=$?"`,
+		Why:     "the other direction of the same ambiguity: at command position `(( (` is an arithmetic command whose expression is parenthesized, not three nested subshells. dash, which has no arithmetic command, is the contrast",
+	},
+	{
+		ID: "arith/two-parens-at-command-position-are-not-a-subshell", Category: "arithmetic", SyntaxError: true,
+		Snippet: `((echo hi)); echo "st=$?"`,
+		Why:     "outside a condition the distinction really is textual: with no space the three shells that have (( )) read an arithmetic command and fail on `echo`, while dash runs the nested subshell and prints hi. Marked a syntax error because *we* refuse it while reading, where all three refuse it while running — `bash -n` takes the file and `false && ((echo hi))` reaches the echo after it in every one of them",
+	},
+	{
+		ID: "cmd/a-subshell-that-opens-with-a-subshell", Category: "command language",
+		Snippet: `( (echo hi) ); echo "st=$?"`,
+		Why:     "one space is the whole difference from the case above, and it is unanimous — including in the shells that would otherwise have taken the two parentheses as one token",
+	},
 	// --- parameter expansion --------------------------------------------------
 	{
 		ID: "param/colon-extends-the-test-unset", Category: "parameter expansion",

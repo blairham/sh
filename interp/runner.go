@@ -780,6 +780,17 @@ func (r *Runner) Verbose() bool { return r.verbose }
 // ExitStatus reports the status of the last command.
 func (r *Runner) ExitStatus() int { return r.status }
 
+// SetExitStatus sets the status of the last command, which is what `$?`
+// reports and what a shell that stops here exits with.
+//
+// It exists for the one thing a front end knows about a run that the runner
+// does not: that it ended without finishing. A panic caught at a run boundary
+// is the case — interp panics on an internal bug because it is a library, and
+// the shell around it decides the session survives — and the line that
+// panicked has to leave a status behind, or `$?` goes on answering for the
+// command before it and `&&` runs on as though nothing happened.
+func (r *Runner) SetExitStatus(status int) { r.status = status }
+
 func (r *Runner) stdout() io.Writer {
 	if r.Stdout == nil {
 		return os.Stdout

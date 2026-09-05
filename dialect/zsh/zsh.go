@@ -389,8 +389,17 @@ func Diagnostics() interp.Diagnostics {
 		ArithFloatDigits:         17,
 		ArithFloatKeepsPoint:     true,
 		SelectPrompt:             "?# ",
-		Location:                 interp.LocationTightLine,
-		BadSubstitution:          "bad substitution",
+		// The reason before the name is zsh's shape everywhere, and here it
+		// drops the reason altogether: a script operand that is missing, one
+		// that is mode 000 and a directory all get the same sentence and the
+		// same 127. So zsh knows the file would not open and declines to say
+		// which way — the one shell in the panel that splits neither the
+		// wording nor the status.
+		ScriptNotFound:          "can't open input file: %[1]s",
+		ScriptNotFoundStatus:    127,
+		ScriptNotReadableStatus: 127,
+		Location:                interp.LocationTightLine,
+		BadSubstitution:         "bad substitution",
 		// The position is 1-based and counts from the `$`: `${(Y)x}` errors
 		// at 4, and a group that runs out of text errors just past the end.
 		ExpansionFlagsError: "error in flags near position %[1]d in '%[2]s'",

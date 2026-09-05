@@ -2311,3 +2311,82 @@ still has them to wait for and still reports 0 once they finish,
 measured the same way. `wait; check $?` is the supervisor loop this
 whole behavior exists for, and it only works if both halves hold — the
 signal reaches the status, and the jobs survive to be waited on again.
+
+## A script that will not open is not a usage error
+
+Oracle runs, 2026-09-05, on macOS: bash 5.3, dash, ksh93u+, zsh 5.9.2.
+Corpus rows `invoke/a-script-that-is-not-there`,
+`invoke/a-script-under-a-directory-that-is-not-there` and
+`invoke/an-empty-script-is-a-success`.
+
+A shell handed a script path it cannot read has failed to reach a
+program, not failed to understand its argument vector, and the panel
+numbers it that way. Six ways of failing were measured — a missing
+path, a path whose parent is missing, a dangling symlink, a mode-000
+file, a directory, and an empty-but-readable file as the control:
+
+| operand | bash 5.3 | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| missing path | 127 | 2 | 127 | 127 |
+| missing parent | 127 | 2 | 127 | 127 |
+| dangling symlink | 127 | 2 | 127 | 127 |
+| mode 000 | 126 | 2 | 126 | 127 |
+| a directory | 126 | **0** | 126 | 127 |
+| empty file | 0 | 0 | 0 | 0 |
+
+The first three rows are one failure — the operating system says
+`ENOENT` to all of them, and no shell in the panel distinguishes a
+missing leaf from a missing parent or from a symlink pointing at
+nothing. The next two are the second failure, `EACCES` and `EISDIR`,
+which bash and ksh93 treat alike.
+
+So there are two statuses and the panel gives three answers about them.
+bash and ksh93 split 127 for a path that names nothing against 126 for
+one that is there and will not open — a missing command's number and an
+unrunnable command's, which is what a script operand is. zsh knows the
+difference and declines to use it: 127 for all five. dash answers 2 for
+all five, the number it gives a usage error.
+
+The wordings split further, and none of the four shares one:
+
+    bash   <shell>: nosuch.sh: No such file or directory
+    dash   <shell>: 0: cannot open nosuch.sh: No such file
+    ksh93  <shell>: nosuch.sh: not found
+    zsh    <shell>: can't open input file: nosuch.sh
+
+    bash   <shell>: unread.sh: Permission denied
+    dash   <shell>: 0: cannot open unread.sh: Permission denied
+    ksh93  <shell>: unread.sh: cannot open [Permission denied]
+    zsh    <shell>: can't open input file: unread.sh
+
+Three things in there are each shell's habit rather than anything about
+this failure. dash writes the line it has not reached — `0:`, from a
+shell that counts from one — and spells `ENOENT` its own way, both of
+which it already does elsewhere. ksh93 brackets the reason, as its `cd`
+does. zsh puts the reason first everywhere else and here leaves it out
+altogether. Every shell names *itself* rather than the script, which
+follows from nothing having been read: there is no `$0` yet.
+
+This is `Diagnostics.ScriptNotFound` and `ScriptNotReadable` with a
+status each, plus `InvocationNamesTheUnreadLine` for dash's nought. It
+was one path returning any `os.ReadFile` error into the front end's
+generic input error, which exits 2 — dash's answer given to all four,
+and the reason `sh script-that-is-not-there` looked like a shell that
+had been invoked wrongly rather than one that could not find a program.
+
+### Two divergences recorded rather than reproduced, both about a directory
+
+**dash exits 0.** Given a directory it opens it, reads nothing, and
+succeeds in silence. Reproducing that would mean a shell that quietly
+does nothing when pointed at the wrong path, which is the failure mode
+the whole change exists to remove; this dialect reports it as a script
+that would not open, at dash's 2.
+
+**bash names the script twice.** `bash /tmp/d` on a directory prints
+`/tmp/d: /tmp/d: Is a directory` — the operand where the shell's own
+name goes. bash has taken the operand for its name by the time the read
+fails, which is an artifact of the order it does things in rather than a
+wording a dialect vector could hold. The status, 126, is reproduced.
+
+Neither is about a file whose *contents* are not a script; that is a
+separate question and has an issue of its own.

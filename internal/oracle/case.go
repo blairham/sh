@@ -4831,4 +4831,22 @@ out=$(CDPATH=./pool cd sub)
 		Snippet: `echo "0=[$0]|n=$#|[$*]"`,
 		Why:     "-s says the program is on standard input, so the words after it are parameters rather than a script path — the one route where $1 is set and $0 is still the shell. Without it the same two words would make `a` the script and `b` its first parameter",
 	},
+	{
+		ID: "invoke/a-script-that-is-not-there", Category: "invocation",
+		Args:    []string{"nosuch.sh"},
+		Snippet: `echo this file was never written`,
+		Why:     "an operand naming nothing, so the snippet never reaches the shell — the shape Case.Args exists to allow. The status is the split: bash, ksh93 and zsh answer with a missing command's 127 and dash with its usage 2, where a shell that folded this into the generic input error would answer 2 for all four",
+	},
+	{
+		ID: "invoke/a-script-under-a-directory-that-is-not-there", Category: "invocation",
+		Args:    []string{"nodir/nosuch.sh"},
+		Snippet: `echo this file was never written`,
+		Why:     "the same diagnosis reached a different way: it is the *parent* that is missing, and every shell in the panel words and numbers it exactly as it does a missing leaf rather than complaining about the directory",
+	},
+	{
+		ID: "invoke/a-script-that-is-there-runs", Category: "invocation",
+		Args:    []string{ArgScript},
+		Snippet: `echo ran; echo "st=$?"`,
+		Why:     "the control the two above need: the same route, with a path that opens, runs the file and reports 0. Without it a front end that called every script path unreadable would pass both failure cases. The truly empty script the pair also wants is not expressible here — the corpus requires a snippet that parses to at least one statement — so it is measured in docs/spec/semantics.md instead",
+	},
 }

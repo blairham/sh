@@ -381,15 +381,25 @@ func Diagnostics() interp.Diagnostics {
 		RedirectFailureLine: interp.LineBeforeRedirect,
 		// A target that expanded to nothing gets neither the reason nor the
 		// "create" wording, whichever direction the redirection was.
-		EmptyRedirectTarget:         "%[1]s: cannot open",
-		CannotCreate:                "%[1]s: cannot create [%[2]s]",
-		NoclobberRefusal:            "%[1]s: file already exists [%[2]s]",
-		ArithFailureStatus:          1,
-		ArithInfinity:               "inf",
-		ArithNotANumber:             "nan",
-		ArithFloatDigits:            15,
-		ArithFloatKeepsPoint:        false,
-		SelectPrompt:                "#? ",
+		EmptyRedirectTarget:  "%[1]s: cannot open",
+		CannotCreate:         "%[1]s: cannot create [%[2]s]",
+		NoclobberRefusal:     "%[1]s: file already exists [%[2]s]",
+		ArithFailureStatus:   1,
+		ArithInfinity:        "inf",
+		ArithNotANumber:      "nan",
+		ArithFloatDigits:     15,
+		ArithFloatKeepsPoint: false,
+		SelectPrompt:         "#? ",
+		// A script operand that names nothing is a command that is not there,
+		// worded and numbered as one — and one that is there and will not
+		// open gets the bracketed reason ksh93 puts around every errno, at
+		// the 126 an unrunnable command carries. It is the only shell in the
+		// panel that words the two differently without also numbering them
+		// differently from bash.
+		ScriptNotFound:              "%[1]s: not found",
+		ScriptNotFoundStatus:        127,
+		ScriptNotReadable:           "%[1]s: cannot open [%[2]s]",
+		ScriptNotReadableStatus:     126,
 		Location:                    interp.LocationLineWordAfterFirst,
 		TraceQuoting:                interp.QuoteDollar,
 		ScriptLocation:              interp.LocationLineWord,

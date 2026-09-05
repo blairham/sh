@@ -12570,6 +12570,102 @@
         "TimedOut": false
       }
     },
+    "invoke/a-script-that-is-not-there": {
+      "bash": {
+        "Output": "\u003cshell\u003e: nosuch.sh: No such file or directory",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: nosuch.sh: No such file or directory",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: nosuch.sh: No such file or directory",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 0: cannot open nosuch.sh: No such file",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: nosuch.sh: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e: can't open input file: nosuch.sh",
+        "Status": 127,
+        "TimedOut": false
+      }
+    },
+    "invoke/a-script-that-is-there-runs": {
+      "bash": {
+        "Output": "ran~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "ran~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "ran~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "ran~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "ran~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "ran~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/a-script-under-a-directory-that-is-not-there": {
+      "bash": {
+        "Output": "\u003cshell\u003e: nodir/nosuch.sh: No such file or directory",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: nodir/nosuch.sh: No such file or directory",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: nodir/nosuch.sh: No such file or directory",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 0: cannot open nodir/nosuch.sh: No such file",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: nodir/nosuch.sh: not found",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e: can't open input file: nodir/nosuch.sh",
+        "Status": 127,
+        "TimedOut": false
+      }
+    },
     "invoke/c-in-the-middle-of-a-bundle": {
       "bash": {
         "Output": "name|1|a",

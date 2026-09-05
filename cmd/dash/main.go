@@ -24,14 +24,15 @@ import (
 // shell is the whole of "which shell am I", as data.
 func shell() driver.Shell {
 	return driver.Shell{
-		Name:        "dash",
-		Dialect:     dash.Dialect(),
-		Semantics:   dash.Semantics(),
-		Diagnostics: dash.Diagnostics(),
-		Prelude:     dash.Prelude(),
-		Register:    dash.Apply,
-		PromptStyle: dash.PromptStyle(),
-		EditorStyle: dash.EditorStyle(),
+		Name:         "dash",
+		Dialect:      dash.Dialect(),
+		Semantics:    dash.Semantics(),
+		Diagnostics:  dash.Diagnostics(),
+		Prelude:      dash.Prelude(),
+		Register:     dash.Apply,
+		PromptStyle:  dash.PromptStyle(),
+		EditorStyle:  dash.EditorStyle(),
+		HistoryStyle: dash.HistoryStyle(),
 	}
 }
 

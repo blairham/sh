@@ -74,6 +74,11 @@ type Shell struct {
 	// the mark on a line abandoned with ^C. The zero value draws nothing.
 	EditorStyle repl.EditorStyle
 
+	// HistoryStyle is how this dialect draws a search of the session's
+	// history and what it declines to record in it. The zero value searches
+	// in the substrate's own wording and records everything.
+	HistoryStyle repl.HistoryStyle
+
 	// Register adds or removes builtins — the part of a dialect that shell
 	// cannot express. Nil means the dialect needs none, which is the common
 	// case now that cd, pwd and read live in the core.

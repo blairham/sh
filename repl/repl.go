@@ -57,6 +57,11 @@ type Shell struct {
 	// zero value draws nothing of its own.
 	Editor EditorStyle
 
+	// History is how this dialect draws a search of the session's history and
+	// what it declines to put in it. The zero value searches in the
+	// substrate's own wording and filters nothing.
+	History HistoryStyle
+
 	// Clock is what a prompt with the time in it reads. Nil is the real one.
 	Clock func() time.Time
 
@@ -155,17 +160,19 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	defer stop()
 
 	ed := s.newEditor()
-	// Where to add what this session types. The count of what was already
-	// there is kept so only the new lines are written back: the rest are in
-	// the file already, and appending them again doubles it every time a
-	// shell is opened.
 	ed.history = earlier
-	loaded := len(earlier)
+	// What this session will write, which is not the same list as what it can
+	// recall. The two used to be one — the new tail of the editor's history —
+	// and they cannot be, because a dialect exists in which an ignored line is
+	// still recallable and still not written. Kept here, so that the only
+	// thing the file's contents depend on is what went into this slice.
+	var added []string
 	defer func() {
-		if err := hist.save(ctx, ed.history[min(loaded, len(ed.history)):]); err != nil {
+		if err := hist.save(ctx, added); err != nil {
 			s.errf("%v\n", err)
 		}
 	}()
+	record := s.recording(ed, &added)
 	var pending strings.Builder
 	for {
 		line, err := ed.readLine(s.beforeReading(&pending))
@@ -187,7 +194,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		// 1, 5, 6. accept already keeps the history that way — it remembers
 		// the whole accumulated text as one line — and only the numbering
 		// disagreed with it.
-		stmts, text, perr, ready := s.take(&pending, s.recording(ed.remember), line)
+		stmts, text, perr, ready := s.take(&pending, record, line)
 		if !ready {
 			continue
 		}
@@ -628,16 +635,61 @@ func (s Shell) take(pending *strings.Builder, remember func(string), line string
 // missing — and a scrubber that also takes away the up arrow is one people
 // work around by turning it off. Nothing that was on the screen anyway is
 // being protected by forgetting it.
-func (s Shell) recording(remember func(string)) func(string) {
-	if remember == nil {
+//
+// The rest of what it does is the panel's own knobs, and they part company at
+// exactly one point. A line the session was told to ignore is left out of the
+// file by both shells; bash also leaves it out of the list, where zsh keeps
+// it. Which of the two this session does is HistoryStyle's to say, and the
+// credential rule above takes zsh's answer for its own reasons — so the two
+// paths look alike here and are decided separately, which is why they are
+// written separately rather than folded together.
+func (s Shell) recording(ed *editor, added *[]string) func(string) {
+	if ed == nil {
 		return nil
 	}
 	return func(line string) {
+		if strings.TrimSpace(line) == "" {
+			// A bare newline at the prompt is nothing happening, which every
+			// shell in the panel agrees about. Checked here as well as in
+			// remember, because these are two lists now: remember drops it
+			// from what can be recalled, and this drops it from what is
+			// written. It was one list once, and splitting them put a blank
+			// line in the file for every time somebody pressed return —
+			// invisible from inside the session, because load skips blank
+			// lines on the way back in, and the file grew anyway.
+			return
+		}
+		rules := s.historyRules()
 		if rule, found := secret.Default().Match(line); found {
 			s.errf("%s: history: not saving this line (matched %s)\n", or(s.Name, "sh"), rule)
+			ed.remember(line)
+			return
 		}
-		remember(line)
+		if rules.ignored(line, ed.newest()) {
+			if rules.keepIgnored {
+				ed.remember(line)
+			}
+			return
+		}
+		ed.remember(line)
+		*added = append(*added, line)
 	}
+}
+
+// historyRules is what this session was told to leave out, read from the
+// variables this dialect keeps it in.
+//
+// Read per accepted line rather than once at startup, for the reason HISTFILE
+// is read from the shell's own variables and not the process environment: a
+// person who types `HISTCONTROL=ignorespace` at the prompt means it from the
+// next line on, and a setting that only takes hold in the next session is one
+// they will believe is broken. Two variable lookups and a split is nothing
+// beside running the command that was typed.
+func (s Shell) historyRules() historyRules {
+	if s.Runner == nil {
+		return historyRules{}
+	}
+	return historyRulesFrom(s.History, s.Runner.GetVar, s.Runner.MatchPattern)
 }
 
 // newEditor is the line editor this shell types into.
@@ -661,6 +713,11 @@ func (s Shell) newEditor() *editor {
 		killBeforeCursorUsesWords:  s.Editor.KillWordBeforeCursorUsesWordCharacters,
 		forwardWordStopsBeforeNext: s.Editor.ForwardWordStopsBeforeTheNextWord,
 		transposeAtStart:           s.Editor.TransposeAtTheStartSwapsTheFirstTwo,
+		// And what a reverse search looks like, which the two shells with a
+		// line editor disagree about in wording and in placement alike.
+		searchPrompt: s.History.SearchPrompt,
+		searchFailed: s.History.SearchFailedPrompt,
+		searchBelow:  s.History.SearchBelowTheLine,
 		// The width comes from the input, which is the terminal; the output
 		// may be a file the session was started with, and its size is not the
 		// screen's.

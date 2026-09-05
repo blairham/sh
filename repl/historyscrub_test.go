@@ -35,7 +35,7 @@ var (
 // token sat there.
 func TestACredentialIsNotWrittenToTheHistoryFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hist")
-	h := historyFile{path: path, size: 100}
+	h := historyFile{path: path, size: 100, file: 100}
 	added := []string{
 		"echo one",
 		"export AWS_ACCESS_KEY_ID=" + fakeKeyID,
@@ -77,7 +77,7 @@ func TestACredentialIsNotWrittenToTheHistoryFile(t *testing.T) {
 // than an empty one that says a shell was here and reveals when.
 func TestNothingButCredentialsWritesNoFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hist")
-	if err := (historyFile{path: path, size: 100}).save(t.Context(), []string{"export GH_TOKEN=" + fakeToken}); err != nil {
+	if err := (historyFile{path: path, size: 100, file: 100}).save(t.Context(), []string{"export GH_TOKEN=" + fakeToken}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); err == nil {
@@ -93,9 +93,11 @@ func TestTheNoticeSaysWhyAndWhich(t *testing.T) {
 	e := &editor{}
 	sh := Shell{Runner: newTestRunner(nil), Dialect: syntax.Core(), Err: &out, Name: "sh"}
 	var pending strings.Builder
+	var added []string
+	record := sh.recording(e, &added)
 
 	line := "export AWS_ACCESS_KEY_ID=" + fakeKeyID
-	if _, _, _, ready := sh.take(&pending, sh.recording(e.remember), line); !ready {
+	if _, _, _, ready := sh.take(&pending, record, line); !ready {
 		t.Fatal("a complete line was not ready")
 	}
 	notice := out.String()
@@ -124,7 +126,7 @@ func TestTheNoticeSaysWhyAndWhich(t *testing.T) {
 	// And it still does not reach the file, which is the part that outlives
 	// the session.
 	path := filepath.Join(t.TempDir(), "hist")
-	if err := (historyFile{path: path, size: 100}).save(t.Context(), e.history); err != nil {
+	if err := (historyFile{path: path, size: 100, file: 100}).save(t.Context(), e.history); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); err == nil {
@@ -134,7 +136,7 @@ func TestTheNoticeSaysWhyAndWhich(t *testing.T) {
 	// An ordinary line says nothing at all. A notice on a line that is fine
 	// is the same failure as a missing one, in the other direction.
 	out.Reset()
-	if _, _, _, ready := sh.take(&pending, sh.recording(e.remember), "grep -r token ."); !ready {
+	if _, _, _, ready := sh.take(&pending, record, "grep -r token ."); !ready {
 		t.Fatal("a complete line was not ready")
 	}
 	if out.Len() != 0 {
@@ -148,7 +150,7 @@ func TestTheNoticeSaysWhyAndWhich(t *testing.T) {
 // A session without an editor has nothing to record into, and the wrapper
 // says so rather than manufacturing one.
 func TestNoHistoryMeansNoRecorder(t *testing.T) {
-	if got := (Shell{}).recording(nil); got != nil {
+	if got := (Shell{}).recording(nil, nil); got != nil {
 		t.Error("a shell with nowhere to remember produced a recorder")
 	}
 }

@@ -25,15 +25,30 @@ import (
 // it, and a rewrite makes the last one to exit the only one that happened —
 // which is the bug every shell's history has had at some point.
 
-// defaultHistorySize is how many lines are kept when HISTFILESIZE says
-// nothing. Enough to be worth searching and small enough to read at startup
-// without thinking about it.
+// defaultHistorySize is how many lines are kept when neither HISTSIZE nor
+// HISTFILESIZE says anything. Enough to be worth searching and small enough to
+// read at startup without thinking about it.
 const defaultHistorySize = 1000
 
 // historyFile is where the session's lines are kept, and how many.
 type historyFile struct {
 	path string
+
+	// size is HISTSIZE: how many lines the session can recall. It bounds the
+	// list the up arrow walks and the search looks through, which is a
+	// different question from how large the file is allowed to get, and is
+	// answered by a different variable.
+	//
+	// Measured on 2026-09-05: bash 5.3.15 started with `HISTSIZE=2` and four
+	// lines in the file lets the up arrow reach two of them and stops. Zero
+	// means the session remembers nothing, and then there is nothing to write
+	// either.
 	size int
+
+	// file is HISTFILESIZE: how many lines the file keeps. Its default is
+	// HISTSIZE's value, which is measured — bash's manual says so and bash
+	// with only HISTSIZE set trims to it.
+	file int
 	// bound is the session's gate and event sink, because this file is
 	// inside the boundary rather than beside it: HISTFILE is a shell
 	// variable, so the path is one a line typed at the prompt can change,
@@ -58,13 +73,26 @@ func historyFrom(get func(string) (string, bool), home string) historyFile {
 	}
 	// An empty path is what turns the history off, and both load and save
 	// check for it — so there is nothing to do here but carry it through.
-	size := defaultHistorySize
-	if v, ok := get("HISTFILESIZE"); ok {
-		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n >= 0 {
-			size = n
-		}
+	size := countFrom(get, "HISTSIZE", defaultHistorySize)
+	return historyFile{path: path, size: size, file: countFrom(get, "HISTFILESIZE", size)}
+}
+
+// countFrom reads one of the two size variables, or leaves the default alone.
+//
+// A value that is not a whole number is not a bound: bash given
+// `HISTSIZE=lots` keeps its previous answer rather than treating the setting
+// as zero, and zero is the one value that turns the history off — so reading
+// nonsense as zero would silently be the destructive reading.
+func countFrom(get func(string) (string, bool), name string, fallback int) int {
+	v, ok := get(name)
+	if !ok {
+		return fallback
 	}
-	return historyFile{path: path, size: size}
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || n < 0 {
+		return fallback
+	}
+	return n
 }
 
 // load reads the lines a previous session left.
@@ -112,7 +140,7 @@ func (h historyFile) load(ctx context.Context) []string {
 // and writing them again would double it every time a shell is opened.
 func (h historyFile) save(ctx context.Context, added []string) error {
 	added = withoutCredentials(added)
-	if h.path == "" || h.size == 0 || len(added) == 0 {
+	if h.path == "" || h.size == 0 || h.file == 0 || len(added) == 0 {
 		return nil
 	}
 	if !h.bound.Open(ctx, h.path, true) {
@@ -141,7 +169,71 @@ func (h historyFile) save(ctx context.Context, added []string) error {
 		_ = f.Close()
 		return err
 	}
-	return f.Close()
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return h.trim()
+}
+
+// trim brings the file back under HISTFILESIZE.
+//
+// This is the one time the file is rewritten rather than appended to, and the
+// exception is what makes the bound a bound: a limit that is never enforced is
+// a number in a variable. It happens only when the file is over it, so the
+// ordinary exit is still an append and two shells closing at once still both
+// keep their lines.
+//
+// A temporary file and a rename, so that a shell killed in the middle of this
+// leaves the old history rather than half of it. The temporary is made in the
+// same directory because a rename across filesystems is not one, and it is
+// created 0600 for the reason the history itself is.
+//
+// The bound is enforced when this shell writes, which is the only moment it
+// touches the file. bash instead rewrites the whole file from its in-memory
+// list at exit, so a bash that ran with a small HISTSIZE throws away what
+// earlier sessions wrote; that is a divergence and it is on purpose, because
+// silently deleting somebody's history is the worse of the two failures.
+func (h historyFile) trim() error {
+	f, err := os.Open(h.path)
+	if err != nil {
+		return nil
+	}
+	var lines []string
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	for sc.Scan() {
+		lines = append(lines, sc.Text())
+	}
+	_ = f.Close()
+	if len(lines) <= h.file {
+		return nil
+	}
+	lines = lines[len(lines)-h.file:]
+
+	dir := filepath.Dir(h.path)
+	tmp, err := os.CreateTemp(dir, ".sh_history-")
+	if err != nil {
+		return err
+	}
+	w := bufio.NewWriter(tmp)
+	for _, line := range lines {
+		_, _ = w.WriteString(line)
+		_ = w.WriteByte('\n')
+	}
+	if err := w.Flush(); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	if err := os.Rename(tmp.Name(), h.path); err != nil {
+		_ = os.Remove(tmp.Name())
+		return err
+	}
+	return nil
 }
 
 // withoutCredentials drops the lines that carry a secret.

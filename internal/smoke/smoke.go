@@ -289,18 +289,20 @@ func Run(ctx context.Context, d Dialect, cfg Config) Report {
 // second copy of the output. A row here that starts passing is reported as
 // fixed; a row not here that fails is reported as a regression.
 //
-// Four of the rows the daily-driver label lists as gaps are *not* here, and
+// Five of the rows the daily-driver label lists as gaps are *not* here, and
 // their absence is a measurement rather than an oversight. Filename completion
 // (#809) and up-arrow recall (#812's navigation half) already pass in both
 // dialects; so do ^Z and `fg` (#813), for a foreground job that is a single
-// external command — which is the case that issue describes. What #812 is
-// still owed is the search.
+// external command — which is the case that issue describes. `C-r` was the
+// last of #812 and has landed, so that row is graded like any other now: it
+// was the only failing row in the table, and its diagnostic is what named the
+// cause — `0x12` fell through the editor's control-byte guard, so the query
+// was typed into the line and run as a command.
 var known = map[string]string{
 	"rc file is read":           "#807",
 	"alias from the rc file":    "#807",
 	"function from the rc file": "#807",
 	"PS1 from the rc file":      "#807",
-	"C-r searches history":      "#812",
 }
 
 // Features is every row this suite grades, in the order it grades them.

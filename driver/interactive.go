@@ -173,9 +173,10 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		Report: func(err error) string {
 			return dg.ParseDiagnostic(name, "", err, "")
 		},
-		Style:  sh.PromptStyle,
-		Editor: sh.EditorStyle,
-		Name:   name,
+		Style:   sh.PromptStyle,
+		Editor:  sh.EditorStyle,
+		History: sh.HistoryStyle,
+		Name:    name,
 		// The same policy and observer the Runner is given, because a
 		// session gated for what a script does and ungated for what the
 		// prompt does has a hole shaped exactly like `HISTFILE=/somewhere`.

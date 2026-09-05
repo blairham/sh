@@ -22202,6 +22202,50 @@
         "TimedOut": false
       }
     },
+    "invoke/a-name-that-is-not-sh-does-not-start-in-posix-mode": {
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: line 1: /nope/x: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: line 1: /nope/x: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: /nope/x: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: cannot create /nope/x: Directory nonexistent",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: /nope/x: cannot create [No such file or directory]",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e:1: no such file or directory: /nope/x",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "invoke/a-read-at-the-end-of-a-program-on-standard-input": {
       "bash": {
         "Stdout": "1 []",
@@ -22902,6 +22946,226 @@
         "Stdout": "\u003cshell\u003e|2|name a",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/called-sh-and-a-script-operand-starts-in-posix-mode": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: /nope/x: No such file or directory",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: /nope/x: No such file or directory",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: line 1: /nope/x: No such file or directory",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e: 1: cannot create /nope/x: Directory nonexistent",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e[1]: /nope/x: cannot create [No such file or directory]",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cscript\u003e:1: no such file or directory: /nope/x",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/called-sh-and-then-leaving-posix-mode": {
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: line 1: /nope/x: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: line 1: /nope/x: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after",
+        "Stderr": "\u003cshell\u003e: /nope/x: No such file or directory",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: set: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:set:1: no such option: posix",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/called-sh-by-a-path-starts-in-posix-mode": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: /nope/x: No such file or directory",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: /nope/x: No such file or directory",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: /nope/x: No such file or directory",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: cannot create /nope/x: Directory nonexistent",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: /nope/x: cannot create [No such file or directory]",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: no such file or directory: /nope/x",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/called-sh-outranks-the-invocations-own-posix-option": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: /nope/x: No such file or directory",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: /nope/x: No such file or directory",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: /nope/x: No such file or directory",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 0: Illegal option -o posix",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: posix: bad option(s)~Usage: \u003cshell\u003e [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: no such option: posix",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/called-sh-starts-in-posix-mode": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: /nope/x: No such file or directory",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: /nope/x: No such file or directory",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: /nope/x: No such file or directory",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: cannot create /nope/x: Directory nonexistent",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: /nope/x: cannot create [No such file or directory]",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: no such file or directory: /nope/x",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }
@@ -23694,6 +23958,50 @@
         "Stdout": "name|2|a b",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/the-login-spelling-of-the-name-starts-in-posix-mode": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: /nope/x: No such file or directory",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: /nope/x: No such file or directory",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: /nope/x: No such file or directory",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: cannot create /nope/x: Directory nonexistent",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: /nope/x: cannot create [No such file or directory]",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: no such file or directory: /nope/x",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }

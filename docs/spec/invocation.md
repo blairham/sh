@@ -572,6 +572,105 @@ The profile is sourced after the invocation's options are applied and after
 the runner is built, which is what the two measurements above require, and it
 is the same order the prompt route already used (#482).
 
+## Called `sh`: the name starts the shell in POSIX mode
+
+**The rule.** A shell invoked under the standard's own name — `sh` — starts in
+POSIX mode. The name is the last element of `argv[0]` with one leading dash
+removed, so `sh`, `/bin/sh`, `./sh` and the login spelling `-sh` are all it.
+
+The mode itself is `Semantics.RedirectErrorOnSpecialBuiltinFatal` and whatever
+else is ever measured to move with it; see `semantics.md`. What is written down
+here is only where it *starts*, which is the front end's half: how a program
+arrived and what it was called is `driver`'s fact and nothing else's, the same
+reasoning that put `$0`, the alias route and login-ness there.
+
+**It is not an axis.** The same binary answers both ways depending on the word
+it was exec'd with, so a dialect field keyed on it would record the accident
+and lose the rule — which is exactly what #691 found when it moved the answer
+out of the panel's `bash-as-sh` column and into a mode. This is the other half
+of that: the dialect supplies where the mode starts and the front end overrides
+it when the name says `sh`.
+
+### Measured
+
+Panel: bash 5.3.15, bash 3.2.57, dash, ksh93u+ 2012-08-01, zsh 5.9.2, on macOS
+25.5 — measured 2026-09-05. Every row was run under a chosen `argv[0]` with a
+scratch `HOME`, the snippet `exec 3>/nope/x; echo after`, which is the axis the
+mode moves.
+
+| `argv[0]` | bash 5.3 | bash 3.2 | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- |
+| its own name | `after`, 0 | `after`, 0 | stops, 2 | stops, 1 | `after`, 0 |
+| `sh` | **stops, 1** | **stops, 1** | stops, 2 | stops, 1 | **stops, 1** |
+| `/bin/sh`, `./sh` | stops, 1 | — | — | — | stops, 1 |
+| `-sh` | stops, 1 | stops, 1 | — | — | stops, 1 |
+| `--sh` | `after`, 0 | — | — | — | — |
+| `shx`, `SH`, `bsh` | `after`, 0 | — | — | — | see below |
+
+**Two shells move and two have nowhere to move to.** dash and ksh93 keep the
+standard's rule under every name, so they answer alike in both rows; the
+evidence is bash and zsh, which are the two with a mode at all and which each
+change under the same word. `set -o` confirms it directly for bash — `posix on`
+called `sh`, `posix off` called `bash` — and `emulate` does for zsh, reporting
+`sh` and `zsh` respectively.
+
+**The two that move do not read the name the same way, and the core takes the
+narrower reading.** bash matches the basename exactly. zsh takes the *first
+letter* of it, after stripping a leading `-` and a leading `r`: `s` and `b`
+mean `sh`, `k` means `ksh`, `c` means `csh`, and anything else is zsh — so
+`bash`, `shx`, `shell` and even `s` are all sh emulation there while `ash`,
+`dash`, `fish`, `xsh` and `mysh` are not, and `rsh` is while `rzsh` is not. The
+front end reads `sh` and nothing else: it is the word both shells agree on, it
+is the only one anything is really invoked by, and taking zsh's extras would
+put a shell called `bash` into POSIX mode.
+
+**One dash and not any number.** `-/bin/sh` is the name and `--sh` is not,
+which is what makes the strip a login convention rather than general
+punctuation.
+
+### Where in startup it happens
+
+Last, and both halves are measured.
+
+**After the invocation's own options.** `sh +o posix -c 'exec 3>/nope/x; echo
+after'` still stops where `bash +o posix -c` the same string carries on. It is
+not the option loop being ignored — `+o errexit` on the same invocation is
+honored, and so is `-x` — so the name is read after the options and outranks
+the one of them it collides with.
+
+**After the startup files.** A `~/.profile` read by `-sh -l` reports `posix
+off`, and the script that follows it stops all the same. So the profile runs in
+the shell the dialect describes and the mode arrives after it.
+
+### Leaving it again
+
+The mode is a mode and not a written-down answer, which matters most on the way
+out. `sh -c 'set +o posix; exec 3>/nope/x; echo after'` prints `after` at 0 —
+the shell's *own* answer is back, not the standard's opposite — and entering it
+again stops it again.
+
+That is why the front end goes through the runner's own knob rather than
+writing the axis. Entering records the answer the dialect held; leaving puts
+that back. A front end that set the axis directly would leave nothing to
+restore *and* nothing to notice: the mode would read as off, and `set +o posix`
+would be granted by doing nothing at all, which is the one failure this shape
+prevents.
+
+### Where it lives
+
+`driver.PosixNamed`, beside `LoginShell` — the two facts read off the same
+word, asked in the same two places, since the prompt route never reaches where
+the script routes read them. `interp.Runner.SetPosixMode` is the knob, exported
+for exactly this: whether a shell *has* the name `set -o posix` is a dialect's
+answer and only one of the panel declares it, so a front end routing this
+through `SetNamedOption` would be refused by the second shell that needs it.
+The name and the mode are two questions.
+
+`Case.Argv0` is how the corpus asks it. `Case.Args` is what comes after
+`argv[0]` and can never be the word itself, so until it existed the only
+record of this was the panel's own `bash-as-sh` column — one shell, and for the
+whole corpus rather than for the case that means to ask.
+
 ## `+c`: the sign of the option letter
 
 **The rule.** Both signs of the `c` letter select the command string —

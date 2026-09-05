@@ -77,6 +77,14 @@ func (sh Shell) session(argv, params []string, opts []optionSpec) int {
 	if code := sh.startup(r, LoginShell(argv)); code != 0 {
 		return code
 	}
+	if PosixNamed(argv) {
+		// The other fact argv[0] carries, asked here for the reason
+		// LoginShell is asked here: the prompt route never reaches the place
+		// the script routes read it. Last for the same measured reason — the
+		// name wins over the invocation's own options, and the startup files
+		// run before the mode is on.
+		r.SetPosixMode(true)
+	}
 	s := sh.frontEnd(r, name, dg)
 	ctx := context.Background()
 	status, err := s.Run(ctx)

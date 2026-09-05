@@ -59,9 +59,19 @@ Grammar flag: `ArithExplicitBase` — core: on; `posix` and `dash`: off.
 
 Semantics axis: `ArithLeadingZeroIsOctal` — dash, bash and ksh93 yes,
 zsh no. Unanswered in the core, and it is the axis that decides `0100`.
-A `syntax.Dialect` field of the same name exists and is deliberately
-inert: a literal is kept as written so the tree bakes in no answer, and
-evaluation asks the semantics vector.
+
+**There is no grammar flag for it**, and there is nothing for one to do:
+a literal is kept as written, so the tree bakes in no answer and the
+parser never has the question. A `syntax.Dialect` field of the same name
+stood beside the axis and was removed (#564). It was documented as
+deliberately inert, which sounds harmless and is not: nothing read it, so
+nothing could correct it, and it had already drifted — the doc said "true
+everywhere but zsh" while the `zsh` preset, which starts from `Core()`
+where it was set, carried true. A field that is unread *and* wrong is
+indistinguishable from one whose consumer was lost in a refactor, which
+is the confusion #478 spent effort untangling. Grammar flags have a core
+default; semantics axes do not; a question with one answer per shell and
+no parser consequence is an axis.
 
 `ArithInvalidOctalDigitIsError` is the second half, and the reason one
 field could not carry both: `08` is an error in dash and bash, decimal

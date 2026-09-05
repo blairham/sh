@@ -4021,6 +4021,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/a-replacement-keeps-a-redirected-stdin` | `line` | `line` | `line` | `line` | `line` | `line` |
 | `redir/a-replacements-own-redirection-crosses` | **2>** `own` | **2>** `own` | **2>** `own` | **2>** `own` | **2>** `own` | **2>** `own` |
 | `redir/a-replacement-keeps-a-merged-stream` | *(no output, status 2)* | *(no output, status 2)* | *(no output, status 2)* | *(no output, status 2)* | *(no output, status 2)* | *(no output, status 2)* |
+| `redir/a-multi-target-stream-crosses-a-replacement` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `redir/a-closed-stdout-is-closed-for-a-replacement` | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* |
 | `redir/a-closed-stdin-is-closed-for-a-replacement` | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* |
 | `redir/an-inherited-descriptor-keeps-its-number` | `five` | `five` | `five` | `five` | *(no output, status 0)* | `five` |
@@ -4224,6 +4225,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `redir/a-replacement-keeps-a-merged-stream` — `>f 2>&1` is one file under two numbers rather than two targets, so a replacement that places files by number gets both — the count is the only channel left once every stream is in the file, and it is 2 in every shell. The command substitution is the replacement's, quoted so that the shell being replaced does not run it against a file it has only just truncated
   ```sh
   exec >f 2>&1; exec /bin/sh -c 'echo out; echo err >&2; exit $(grep -c . f)'
+  ```
+- `redir/a-multi-target-stream-crosses-a-replacement` — a repeated redirection of the same stream, and then a replacement. Nothing is said and the status is 0 in all six, which is the fact this pins: four of them put `hi` in the last file and zsh puts it in both, and neither hands the command a closed descriptor. The files themselves are not recorded here — the shell is gone before anything could read them — so the case grades the command having run at all, which is what a stream that is no single number once cost it
+  ```sh
+  exec >a >b; exec /bin/echo hi
   ```
 - `redir/a-closed-stdout-is-closed-for-a-replacement` — a stream the script closed stays closed across the replacement rather than falling back to the process's own: the command fails where it would otherwise have written, unanimously. The complaint is discarded because its wording is a fact about whatever /bin/echo is on the machine
   ```sh

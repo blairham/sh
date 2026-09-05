@@ -1116,12 +1116,40 @@ decision rather than a consequence:
   through a stream the script had redirected away from, which is the
   borrowing of process state this library exists not to do.
 
-One case is a known divergence and is neither reading: one dialect writes
-to *every* target of a repeated redirection, so `exec >a >b` leaves the
-runner a writer over two files and no single number to place. The command
-a replacement runs finds standard output closed there, where that shell
-gives it both files — which needs a copying process between the two, and
-is a larger thing than a table.
+One case is neither reading, and it is the one the two rules together got
+wrong: one dialect writes to *every* target of a repeated redirection, so
+`exec >a >b` leaves the runner a writer over two files and no single number
+to place. Read as "not a file, therefore nil, therefore closed", the command
+a replacement ran found standard output closed and failed —
+`echo: fflush: Bad file descriptor` — where that shell writes into both.
+
+The two rules are still right; what was missing was a third, ahead of them
+and narrower than either:
+
+- **A replacement is declined for a stream the shell built out of several
+  targets**, and for nothing else. It then stands in for the replacement
+  with the child route it already has for a subshell, which `os/exec` gives
+  a pipe and copies from, so both files get the bytes.
+
+The narrowness is the point. The test is a mark the shell puts on the stream
+when it combines the targets, not "this is not an `*os.File`" — that wider
+reading would have swept in an embedder's buffer, whose closed number is
+measured and deliberate and which a child route could not improve on
+anyway. A stream closed on purpose still crosses as a closed number, which
+is the row the panel is unanimous about.
+
+What that costs is the child route's own difference, written down where it
+is: the pid, the signal dispositions, and being the process the parent waits
+for. Measured, the shell being reproduced spends a process on this too — it
+forks a copier and keeps its own pid for the command, where we keep the pid
+for the shell and give the command a new one — so the number of processes
+agrees and which one is the command does not. Everything the corpus can see
+agrees.
+
+**Only the named streams.** A *numbered* descriptor with several targets —
+`exec 3>a 3>b` — is a different gap and an older one: it is not modeled at
+all here, replacement or not, and the last target simply wins. No route
+through `os/exec` would carry it either, because `ExtraFiles` is files.
 
 ### Whether a descriptor `exec` parked is handed over at all
 

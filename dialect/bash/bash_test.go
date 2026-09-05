@@ -195,6 +195,47 @@ func TestUnterminatedNamesTheConstructAndItsLine(t *testing.T) {
 	}
 }
 
+// TestUnterminatedWithNothingOpenSaysSoAndStopsThere: `f()` given no body at
+// all runs out of input with the parens already closed, so there is no
+// construct to name — measured, bash prints the diagnosis and nothing after
+// it, rather than the same sentence with an empty construct in it.
+func TestUnterminatedWithNothingOpenSaysSoAndStopsThere(t *testing.T) {
+	for _, src := range []string{"f()", "function f"} {
+		_, err := syntax.Parse(src, bash.Dialect())
+		want := "syntax error: unexpected end of file"
+		if got := bash.Diagnostics().ParseFailure(err); got != want {
+			t.Errorf("%q: got %q, want %q", src, got, want)
+		}
+	}
+}
+
+// TestAFunctionBodyThatIsNotCompoundIsAnUnexpectedToken: bash alone refuses a
+// simple command as a body, and words the refusal as a token in the wrong
+// place — which is what earns it the echoed second line, and what names the
+// word, the assignment or the redirection operator the body began with.
+func TestAFunctionBodyThatIsNotCompoundIsAnUnexpectedToken(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"f() echo hi; f", "syntax error near unexpected token `echo'"},
+		{"f() x=1; f", "syntax error near unexpected token `x=1'"},
+		{"f() >out; f", "syntax error near unexpected token `>'"},
+		{"f() ;", "syntax error near unexpected token `;'"},
+	} {
+		_, err := syntax.Parse(tc.src, bash.Dialect())
+		if got := bash.Diagnostics().ParseFailure(err); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
+		}
+		// And the whole report, which is the part that was missing: the
+		// message, then the source line quoted back.
+		full := bash.Diagnostics().ParseDiagnostic("bash", "-c", err, tc.src)
+		if n := strings.Count(full, "\n"); n != 2 {
+			t.Errorf("%q: report = %q, want two lines", tc.src, full)
+		}
+		if !strings.Contains(full, "`"+tc.src+"'") {
+			t.Errorf("%q: report = %q, want the offending line echoed", tc.src, full)
+		}
+	}
+}
+
 // TestBorrowedTextIsNamedTwoWays is the reason the naming is two fields.
 //
 // bash puts a sourced file's path where its own name goes and labels `eval`

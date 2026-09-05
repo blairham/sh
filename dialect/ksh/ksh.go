@@ -452,6 +452,9 @@ func Diagnostics() interp.Diagnostics {
 		ForNameStatus: 1,
 		ForName:       "%[1]s: invalid variable name",
 		Unterminated:  "syntax error at line %[6]d: `%[3]s' unmatched",
+		// Nothing is unmatched when nothing was open, so the end of input is
+		// named as the thing that was unexpected instead.
+		UnterminatedNoConstruct: "syntax error at line %[6]d: `end of file' unexpected",
 		// Only the substitutions can go unmatched here — a quote the input
 		// runs out inside is closed and run, which is the grammar flag.
 		// The `"` case is a `${` that began inside a double quote, and it

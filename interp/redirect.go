@@ -473,6 +473,17 @@ func (d Diagnostics) openReason(err error, creating bool) string {
 	return d.reasonText(reason(err))
 }
 
+// errBadFd is what a duplication reports when the number it names is not
+// open.
+//
+// The text is the errno's, not a spelling of its own, so it goes through the
+// same wording as every other strerror a redirection quotes: the substrate
+// capitalizes it and the dialect that lowercases everything gets to. Written
+// out here in lowercase, it matched that one dialect and nobody else.
+func (r *Runner) errBadFd(fd int) error {
+	return fmt.Errorf("%d: %s", fd, r.diag().reasonText(reason(syscall.EBADF)))
+}
+
 // dupFd points one descriptor at another, or closes it.
 //
 // 0, 1 and 2 are the named streams; everything above them lives in the
@@ -510,7 +521,7 @@ func (r *Runner) dupFd(fd int, target string) error {
 	default:
 		v, held := r.fds[m]
 		if !held {
-			return fmt.Errorf("%d: bad file descriptor", m)
+			return r.errBadFd(m)
 		}
 		src = v
 	}
@@ -518,13 +529,13 @@ func (r *Runner) dupFd(fd int, target string) error {
 	case 0:
 		rd, ok := src.(io.Reader)
 		if !ok {
-			return fmt.Errorf("%d: bad file descriptor", m)
+			return r.errBadFd(m)
 		}
 		r.Stdin = rd
 	case 2, 1:
 		w, ok := src.(io.Writer)
 		if !ok {
-			return fmt.Errorf("%d: bad file descriptor", m)
+			return r.errBadFd(m)
 		}
 		if fd == 2 {
 			r.Stderr = w

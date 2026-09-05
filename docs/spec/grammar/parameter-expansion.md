@@ -267,6 +267,16 @@ though its *other* unrecognized operators are refused while reading. An
 family is deferred to run time everywhere, including the one shell that
 otherwise refuses at parse time.
 
+**bash checks the letter only once it has a value.** `${u@QQ}` on an
+*unset* `u` is empty at status 0 — no diagnostic at all — while the same
+spelling on a set name is `[${x@QQ}]: bad substitution`, naming the whole
+**word** rather than the expansion, abandoning the line, and exiting 127.
+The three shells without the family reject both spellings alike. Two
+consequences worth stating: a probe that forgets to set the variable
+measures nothing, and a script cannot use an invalid letter to detect
+whether the shell has the family, because the answer depends on the
+variable rather than on the shell.
+
 Measured on bash 5.3, all with the variable set unless said otherwise; an
 unset variable yields empty for every letter, with `set -u` complaining
 first as it would for `$x`:
@@ -290,8 +300,20 @@ and `$` left alone: `has\backslash` → `'has\backslash'`. Any control
 character (or byte that is not character-shaped) switches the whole value
 to `$'…'`: `\a \b \t \n \v \f \r` by name, ESC as `\E`, `'` as `\'`,
 `\` as `\\`, `"` kept plain, anything else unprintable as three-digit
-octal **per byte** — DEL is `$'\177'`, U+0085 is `$'\302\205'`. Printable
-multibyte text stays as written: `café` → `'café'`.
+octal **per byte** — DEL is `$'\177'`, U+0085 is `$'\302\205'`.
+
+**Whether printable multibyte text survives is a question about the
+locale, not about `@Q`.** In a UTF-8 locale `café` → `'café'`; under
+`LC_ALL=C`, which is what the oracle runs with (`oracle.md`), the same
+value is `$'caf\303\251'`, because no byte of it is character-shaped to a
+shell reading one byte at a time. **This implementation does not have a
+locale** and always takes the UTF-8 reading, so it answers `'café'` where
+a `LC_ALL=C` bash answers with the octal. That is a deliberate divergence
+rather than a gap: a Go program decoding UTF-8 is the behavior a user of
+this library gets on every machine, and the alternative is a locale
+database this substrate has no other reason to carry. It is also why no
+corpus row pins a multibyte `@Q` — a row would record the C-locale answer
+and grade the implementation against an environment it does not model.
 
 **Transformations distribute over a whole array.** `"${a[@]@Q}"` is one
 quoted word per element and `"${a[*]@Q}"` joins them; the same holds for
@@ -300,7 +322,9 @@ letter. An empty or unset array is zero fields, status 0.
 
 **`@A` writes the statement that would recreate the variable.** A name
 with no attributes is `x='a b'` (the value `@Q`-quoted); attributes put
-`declare -irx v='1'` in front, the letters ordered `a A i r x`; a name
+`declare -irx v='1'` in front, the letters in a fixed order rather than
+the order they were set — measured `a A i r t x l u`, so `declare -xril`
+prints `irxl` and `declare -tirx` prints `irtx`; a name
 whose value is unset drops the `='…'` half — `declare -A h` for an
 associative table read without a subscript. A positional parameter has no
 name to write and yields empty, while `"${@@A}"` yields the words
@@ -318,9 +342,57 @@ pairs as *separate* fields, values unquoted: `0` `one` `1` `t w`. A
 scalar, a scalar read as `${x[@]}`, and the positional parameters all
 answer with the `@Q` quoting and no keys at all.
 
+**bash 3.2 does not refuse the family on an `[@]` subscript — it ignores
+it.** `${x@Q}` on a scalar is a bad substitution there, as expected of a
+build predating the operator, but `${a[@]@Q}`, `${a[@]@U}` and
+`${a[@]@K}` all yield the array's *plain elements*, status 0. The
+subscript swallows the trailing `@`-letter rather than the expansion
+being rejected, so a script that means to detect the missing feature by
+watching for the error gets no error and quietly wrong values instead.
+Recorded by `param/transform-distributes-over-an-array` and
+`param/transform-keys-and-values`.
+
 Citation: oracle runs against bash 5.3.15, ksh93u+ 2012-08-01, zsh 5.9.2
-and dash on 2026-09-04; the corpus rows under `param/transform-…` pin the
-panel's answers.
+and dash on 2026-09-05. The corpus rows under `param/transform-…` pin the
+panel's answers for every letter — `transform-quotes-for-reuse` (`Q`),
+`transform-expands-escapes` (`E`), `transform-prompt-escapes` (`P`),
+`transform-writes-an-assignment` (`A` and `a`),
+`transform-keys-and-values` (`K` and `k`), `transform-case-letters`
+(`L`, `U`, `u`) — plus `transform-takes-exactly-one-letter` for the
+one-letter rule, `transform-distributes-over-an-array` for the
+distribution, and `transform-deferred-in-a-branch-never-taken` for when
+the rejection happens.
+
+Two claims above are deliberately **not** pinned, and both for the same
+reason: their answer is not a property of the shell. `@P` on `\t` or
+`\w` records the clock or the directory, so the row probes `\n` and `\\`
+only; and multibyte `@Q` records the locale, as above.
+
+### What this implementation answers
+
+Nine of the ten letters are implemented from the table above. **`@P` is
+refused out loud** — `${x@P}: the @P transformation is not implemented` —
+because prompt expansion is the front end's language, over state (`\u`,
+`\w`, `\h`, the clock) the interpreter does not hold, and returning the
+value unchanged would be right only for a value carrying no escape:
+a silent wrong answer for every value that carries one. The corpus row
+`param/transform-prompt-escapes` therefore records a conformance
+difference on purpose, which is the honest shape for a deferred feature.
+
+Two smaller differences are recorded here rather than smoothed over,
+because they were found by the rows above and are not yet decided:
+
+- **The diagnostic names the expansion, where bash names the word.**
+  `${x@QQ}: bad substitution` against bash's `[${x@QQ}]: bad
+  substitution`, and status 1 against bash's 127.
+- **A bad substitution is diagnosed whether or not the name is set**,
+  where bash is silent for an unset one. Matching bash here would mean
+  making the validity of an operator depend on whether a variable happens
+  to have a value, which is a quirk to copy deliberately if at all.
+
+Both are tracked in issue #577 rather than settled — along with a third
+the zsh-flag rows found: where a command has several unreadable words we
+diagnose each and bash abandons at the first.
 
 ## Parenthesized expansion flags — zsh only
 
@@ -413,6 +485,24 @@ Details, each measured:
   counts from the `$`. A missing closing parenthesis is diagnosed the same
   way at the first character that is not a flag: `${(Ux}` errors at
   position 5.
+
+### What the corpus pins
+
+The table above is measured, and the rows that hold the panel to it are
+`param/expansion-flags-are-one-dialects` (`(U)`, and the three-way split
+on the shells without the construct), `-split-and-join` (`(s)`, `(j)`),
+`-quote-four-ways` (`(q)` through `(qqqq)`), `-split-at-newlines`
+(`(f)`), `-at-keeps-array-fields` (`(@)`, against the IFS join a quoted
+array otherwise gets), `-name-indirection` (`(P)`),
+`-keys-and-values` (`(k)`, `(kv)`), `-run-after-the-operator` (the
+ordering rule and `(P)`'s exception to it), and
+`param/prompt-percent-names-the-script` (`(%)`).
+
+`(k)` is pinned with a **single** pair. zsh yields hash order for more
+than one and does not promise it, so a row with two keys would record a
+coin flip as evidence; the sorted order this implementation yields is
+stated above and asserted in its own unit test rather than against the
+panel.
 
 ### What this implementation refuses
 

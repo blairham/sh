@@ -275,3 +275,96 @@ func TestAnUnansweredRouteLetterIsSilent(t *testing.T) {
 		t.Errorf("got %q at %d, want %q at 0 with nothing said about the unchosen route letters", out, st, "has-e\n")
 	}
 }
+
+// TestDollarDashTakesTheInteractiveLettersInsteadOfTheDefaultOnes.
+//
+// The second startup vector, and the reason it is a replacement rather than a
+// list of letters to add: one shell in the panel turns an option *off* when it
+// is interactive, so what an interactive shell starts with is a different set
+// and not a longer one. The letters here are made up, because which real shell
+// reports what is asserted in dialect/.
+func TestDollarDashTakesTheInteractiveLettersInsteadOfTheDefaultOnes(t *testing.T) {
+	sem := CoreSemantics()
+	sem.DefaultOptionLetters = "789Z"
+	// A set that keeps one of the four, drops three and adds one — which no
+	// "letters to add" field could express.
+	sem.InteractiveOptionLetters = "7Q"
+	for _, tc := range []struct {
+		name        string
+		interactive bool
+		want        string
+	}{
+		{"interactive", true, "[7Qi]\n"},
+		{"not", false, "[789Z]\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, `echo "[$-]"`, func(r *Runner) {
+				r.Semantics = &sem
+				r.Interactive = tc.interactive
+			})
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// TestAnUnansweredInteractiveVectorLeavesTheDefaultLettersStanding, which is
+// one of the four panel members' real answer and the zero value's meaning:
+// a shell whose `$-` is the same set either way says nothing here.
+func TestAnUnansweredInteractiveVectorLeavesTheDefaultLettersStanding(t *testing.T) {
+	sem := CoreSemantics()
+	sem.DefaultOptionLetters = "789Z"
+	out, _ := run(t, `echo "[$-]"`, func(r *Runner) {
+		r.Semantics = &sem
+		r.Interactive = true
+	})
+	if want := "[789Zi]\n"; out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}
+
+// TestTheInteractiveLettersAreStillOnlyTheStartingPoint. A `set` after startup
+// adds to whichever of the two vectors was chosen, exactly as it adds to the
+// default one — the vector says where `$-` begins and never what it ends as.
+func TestTheInteractiveLettersAreStillOnlyTheStartingPoint(t *testing.T) {
+	sem := CoreSemantics()
+	sem.DefaultOptionLetters = "789Z"
+	sem.InteractiveOptionLetters = "7Q"
+	out, _ := run(t, `set -e; echo "[$-]"`, func(r *Runner) {
+		r.Semantics = &sem
+		r.Interactive = true
+	})
+	if want := "[7Qie]\n"; out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}
+
+// TestTheMonitorLetterComesFromTheMonitorAndNotFromTheVector.
+//
+// One shell in the panel shows `m` only when it is interactive, and it shows it
+// because job control is really on there. Writing the letter into the
+// interactive vector would report a monitor that is not running, so the vector
+// must not carry it and the letter has to keep coming from the runner's own
+// state — asserted from both sides here, since a vector that quietly carried it
+// would pass the first half alone.
+func TestTheMonitorLetterComesFromTheMonitorAndNotFromTheVector(t *testing.T) {
+	sem := CoreSemantics()
+	sem.InteractiveOptionLetters = "Q"
+	src := `case $- in *m*) echo has-m ;; *) echo no-m ;; esac`
+	out, _ := run(t, src, func(r *Runner) {
+		r.Semantics = &sem
+		r.Interactive = true
+	})
+	if want := "no-m\n"; out != want {
+		t.Errorf("interactive with no monitor: got %q, want %q", out, want)
+	}
+	out, _ = run(t, "set -m\n"+src, func(r *Runner) {
+		r.Semantics = &sem
+		r.Interactive = true
+		r.JobControl = true
+	})
+	if want := "has-m\n"; out != want {
+		t.Errorf("with the monitor really on: got %q, want %q", out, want)
+	}
+}

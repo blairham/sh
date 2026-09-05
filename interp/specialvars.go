@@ -94,7 +94,7 @@ func (r *Runner) ensureSpecials() {
 // and so needs no axis; the noglob letter is the one the shells disagree on.
 func (r *Runner) optionLetters() string {
 	var b strings.Builder
-	b.WriteString(r.sem().DefaultOptionLetters)
+	b.WriteString(r.startupOptionLetters())
 	if r.Interactive {
 		// Measured unanimous and so no axis: every shell in the panel puts
 		// `i` here for an interactive shell and none of them puts it there
@@ -151,6 +151,28 @@ func (r *Runner) optionLetters() string {
 		b.WriteByte('C')
 	}
 	return b.String()
+}
+
+// startupOptionLetters is the letters `$-` begins with: the options this shell
+// turned on for itself before the script had a chance to.
+//
+// Two strings and not one plus an addition, because one shell in the panel
+// turns an option *off* when it is interactive — its `$-` goes from `hB` to
+// `imBE`, dropping the command-tracking letter — so what an interactive shell
+// starts with is a different set rather than a longer one. A dialect that has
+// nothing separate to say leaves the second empty and gets the first for both,
+// which is one of the four.
+//
+// The letters that describe the invocation rather than an option follow this
+// and are not in either string: `i` for being interactive at all, `c` and `s`
+// for the route, and `m` for a monitor that is really running.
+func (r *Runner) startupOptionLetters() string {
+	if r.Interactive {
+		if letters := r.sem().InteractiveOptionLetters; letters != "" {
+			return letters
+		}
+	}
+	return r.sem().DefaultOptionLetters
 }
 
 // showsS reports whether `$-` carries the `s` of the standard-input route.

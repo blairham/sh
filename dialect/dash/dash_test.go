@@ -537,3 +537,14 @@ func TestDashReadsTheProfileWithAScriptToRun(t *testing.T) {
 		t.Error("the substrate's own answer reads a file out of a home directory, want it not to")
 	}
 }
+
+// TestDollarDashInteractiveStartupLetters, which is the control for the other
+// three. Measured 2026-09-05: `dash -i script.sh` reports `i` and nothing
+// else, so the interactive set is the same empty set and there is nothing for
+// a second string to say. dash is the one shell in the panel that adds nothing
+// at a prompt, which is what makes the other three's additions evidence.
+func TestDollarDashInteractiveStartupLetters(t *testing.T) {
+	if got := dash.Semantics().InteractiveOptionLetters; got != "" {
+		t.Errorf("InteractiveOptionLetters = %q, want empty", got)
+	}
+}

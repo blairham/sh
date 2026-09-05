@@ -853,6 +853,18 @@ type Diagnostics struct {
 	// identical failure in an expansion without one.
 	UnsetBadSubscript string
 
+	// UnsetSubscriptBeforeTheFirstElement is what `unset a[i]` says about a
+	// subscript that lands before the array's first element. Two verbs: the
+	// name, and the subscript *as written*.
+	//
+	// A field of its own rather than BadArraySubscript used twice, because
+	// two of the three shells that reach the boundary word the `unset` route
+	// differently from the assignment: one drops the array's name and keeps
+	// the bare subscript, and both put the builtin's name in front. The third
+	// says the same sentence by both routes, which is what makes a shared
+	// field look adequate until it is measured.
+	UnsetSubscriptBeforeTheFirstElement string
+
 	// UnsetNotAnArray is what `unset a[@]` says when the name holds a value
 	// that is not an array. One verb: the name.
 	//

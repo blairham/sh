@@ -222,6 +222,29 @@ type Runner struct {
 	importedFuncs                      bool
 	funcExportPrefix, funcExportSuffix string
 
+	// InheritedFiles are the descriptors this shell was *started* with beyond
+	// the three named streams — what `sh 3<&0 script` puts on 3 — laid out
+	// the way childFiles hands them back: entry i is descriptor 3+i, and a
+	// nil entry is a number nothing was inherited on.
+	//
+	// A fact the front end hands in, never one this package discovers, and
+	// that is the whole of why it is a field. Finding them means reading the
+	// *process's* open descriptors and asking which of them would survive an
+	// exec, and a Runner embedded in another program would then publish that
+	// program's own descriptors to a script it was asked to interpret — a
+	// database handle or a listening socket reachable as `<&3` because the
+	// embedder happened to hold one. So interp takes what it is given: driver
+	// looks, because a binary that *is* the shell is the one place the
+	// process-wide question is the right one to ask, and an embedder decides
+	// for itself by filling this in or leaving it empty.
+	//
+	// The files are the shell's own. driver duplicates each inherited
+	// descriptor rather than adopting it by number, so that closing one here
+	// is closing a copy: a caller's descriptor is the caller's to close, and
+	// a table entry that went out from under this process would leave every
+	// later child built on a descriptor that is no longer there.
+	InheritedFiles []*os.File
+
 	// JobControl says this shell reports its jobs to a person: it announces
 	// one when it is backgrounded and says so when it ends.
 	//
@@ -420,6 +443,10 @@ type Runner struct {
 	// number, so a script that hands a bare descriptor number to a child for
 	// the child's own use is not served by this.
 	fds map[int]any
+	// inheritedPublished says InheritedFiles has already been put into the
+	// table. Copied by clone with the rest of the struct, which is what keeps
+	// a subshell from publishing over the table it was cloned with.
+	inheritedPublished bool
 	// custom holds builtins registered by a shell built on this package. A
 	// nil value is an explicit removal.
 	custom map[string]Builtin
@@ -753,6 +780,17 @@ func (r *Runner) Verbose() bool { return r.verbose }
 // ExitStatus reports the status of the last command.
 func (r *Runner) ExitStatus() int { return r.status }
 
+// SetExitStatus sets the status of the last command, which is what `$?`
+// reports and what a shell that stops here exits with.
+//
+// It exists for the one thing a front end knows about a run that the runner
+// does not: that it ended without finishing. A panic caught at a run boundary
+// is the case — interp panics on an internal bug because it is a library, and
+// the shell around it decides the session survives — and the line that
+// panicked has to leave a status behind, or `$?` goes on answering for the
+// command before it and `&&` runs on as though nothing happened.
+func (r *Runner) SetExitStatus(status int) { r.status = status }
+
 func (r *Runner) stdout() io.Writer {
 	if r.Stdout == nil {
 		return os.Stdout
@@ -949,6 +987,7 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	r.ensurePWD()
 	r.ensureSpecials()
 	r.ensureImportedFunctions()
+	r.publishInheritedFds(ctx)
 	if r.started.IsZero() {
 		r.started = time.Now()
 	}

@@ -92,7 +92,12 @@ func (s sinks) Emit(ctx context.Context, e interp.Event) {
 }
 
 // loadPolicy reads the policy file named on the command line.
-func loadPolicy(name string) (interp.Gate, error) {
+//
+// The concrete type rather than the interface, because the caller has one more
+// question for it than a Gate can answer: which of its rules gained a second
+// name when they were read. A boundary that normalizes silently is a boundary
+// whose meaning is not in the file it came from.
+func loadPolicy(name string) (*policy.Policy, error) {
 	p, err := policy.ParseFile(name)
 	if err != nil {
 		return nil, fmt.Errorf("policy: %w", err)

@@ -5,6 +5,7 @@ package policy_test
 
 import (
 	"context"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -403,4 +404,107 @@ func TestAnInterpreterInTheAllowlistEndsThePolicy(t *testing.T) {
 	// process that will make the same read outside the boundary.
 	want(t, p, interp.Deny, open("/etc/passwd", false))
 	want(t, p, interp.Allow, exec("/bin/sh"))
+}
+
+// A rule about a place the platform has two names for refuses both of them.
+//
+// This is #538. On macOS `/tmp` is a symbolic link to `/private/tmp`, so a
+// person who writes `deny path /tmp/**` — the name they type every day — was
+// writing a rule that a shell which had resolved the path walked straight
+// past. "The policy matched nothing" and "the policy allowed it" look identical
+// from outside, which is what made it a correctness failure and not a nuisance.
+//
+// The interpreter presents both spellings in ordinary use: `cat /tmp/x` reaches
+// the gate as `/tmp/x`, and `cd -P /tmp; cat x` reaches it as `/private/tmp/x`.
+// So the rule covers both names rather than being rewritten to one, which would
+// close one hole by opening the other.
+func TestARuleUnderAPlatformAliasCoversBothNames(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("no platform aliases here — see internal/policy/alias_other.go")
+	}
+	for _, written := range []string{"/tmp/secrets/**", "/private/tmp/secrets/**"} {
+		t.Run(written, func(t *testing.T) {
+			p, err := policy.Parse(strings.NewReader(
+				"version 1\ndefault allow\ndeny path " + written + "\n"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, path := range []string{
+				"/tmp/secrets/key", "/private/tmp/secrets/key",
+			} {
+				got := p.Allow(t.Context(), interp.Action{Kind: interp.ActionOpen, Path: path})
+				if got != interp.Deny {
+					t.Errorf("%q: decision = %v, want Deny — the two names are one place",
+						path, got)
+				}
+			}
+			// And the neighbor is untouched, so this is a widening onto the
+			// same place and not onto a different one.
+			for _, path := range []string{"/tmpfoo/secrets/key", "/tmp/other/key"} {
+				got := p.Allow(t.Context(), interp.Action{Kind: interp.ActionOpen, Path: path})
+				if got != interp.Allow {
+					t.Errorf("%q: decision = %v, want Allow", path, got)
+				}
+			}
+		})
+	}
+}
+
+// The expansion is reportable, because a rule whose meaning is not in the file
+// is a rule an operator cannot review.
+func TestANormalizedRuleSaysWhatItTurnedInto(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("no platform aliases here")
+	}
+	p, err := policy.Parse(strings.NewReader(
+		"version 1\ndefault allow\ndeny path /tmp/**\ndeny path /srv/**\ndeny signal\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := p.Normalized()
+	if len(got) != 1 {
+		t.Fatalf("normalized %d rules (%v), want only the one under an alias", len(got), got)
+	}
+	if got[0].Pattern != "/tmp/**" || got[0].Alias != "/private/tmp/**" {
+		t.Errorf("got %+v, want /tmp/** also covering /private/tmp/**", got[0])
+	}
+	if s := got[0].String(); !strings.Contains(s, "/tmp/**") || !strings.Contains(s, "also /private/tmp/**") {
+		t.Errorf("String() = %q, want both names in it", s)
+	}
+}
+
+// A policy that named no alias reports nothing, so the report is a signal
+// rather than a line every run carries.
+func TestAPolicyWithNoAliasNormalizesNothing(t *testing.T) {
+	p, err := policy.Parse(strings.NewReader(
+		"version 1\ndefault allow\ndeny path /srv/build/**\ndeny signal\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := p.Normalized(); len(got) != 0 {
+		t.Errorf("normalized %v, want nothing", got)
+	}
+}
+
+// An allowed exec under an alias still permits the stat that finds it.
+//
+// The exec-implies-stat rule reads the rule set a second way, and a rule that
+// covered both names for matching and one for that path would answer two
+// different questions about one program.
+func TestAnAllowedExecUnderAnAliasIsAlsoFindable(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("no platform aliases here")
+	}
+	p, err := policy.Parse(strings.NewReader(
+		"version 1\ndefault deny\nallow exec /tmp/bin/**\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/tmp/bin/tool", "/private/tmp/bin/tool"} {
+		for _, k := range []interp.ActionKind{interp.ActionExec, interp.ActionStat} {
+			if got := p.Allow(t.Context(), interp.Action{Kind: k, Path: path}); got != interp.Allow {
+				t.Errorf("%v %q: decision = %v, want Allow", k, path, got)
+			}
+		}
+	}
 }

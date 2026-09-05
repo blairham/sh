@@ -5,6 +5,7 @@ package driver
 
 import (
 	"io"
+	"os"
 
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
@@ -44,3 +45,19 @@ func (sh Shell) SayVerboseForTest(src string, upTo, line, off int, echo bool) (i
 func (sh Shell) FrontEndForTest(r *interp.Runner, name string, dg interp.Diagnostics) repl.Shell {
 	return sh.frontEnd(r, name, dg)
 }
+
+// ReplaceProcessForTest is replaceProcess, reachable from the package's
+// external tests.
+//
+// Exposed because what it does to the *process* — stopping the collector for
+// the window before the execve and starting it again if the execve fails — is
+// not visible in any shell's output, and the exec it is named for does not
+// return. Handed a path that cannot be executed, it takes the failure path,
+// which is the one a test can be in the same process as.
+func ReplaceProcessForTest(path string, argv, env []string, files []*os.File) error {
+	return replaceProcess(path, argv, env, files)
+}
+
+// AtPlacementForTest fills in the seam that stands on both sides of the
+// descriptor placement.
+func AtPlacementForTest(f func(where string)) { atPlacement = f }

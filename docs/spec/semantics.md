@@ -2162,3 +2162,51 @@ only about how they fail it in a script. Deferred, with this paragraph
 as the record; a shell embedding this engine that needs it can register
 the builtin through the extension seam. Filed as part of #430's scope
 decision.
+
+## A `wait` a trapped signal cuts short
+
+Oracle runs, 2026-09-04, on macOS: bash 5.3, bash 3.2, dash, ksh93u+,
+zsh 5.9.2. Corpus rows `trap/wait-cut-short-by-a-signal`,
+`trap/wait-for-a-job-cut-short-by-a-signal` and
+`trap/wait-is-not-cut-short-by-an-ignored-signal`.
+
+    trap 'echo T' USR1; (sleep 0.3; kill -USR1 $$) & wait; echo "st=$?"
+
+`wait` is the only builtin that blocks long enough for a signal's
+*timing* to be visible, and POSIX has one cut short by a trapped signal
+return rather than resume, with a status above 128. The panel agrees
+that it returns: measured against a background job outliving the signal
+by three seconds, all five builds came back inside the signal's own
+200ms rather than at the end of the job. The handler runs first and the
+status arrives second — `T` then `st=`, unanimously — which is the
+between-commands rule already recorded above, not a special case.
+
+The status splits twice, and the two questions are separate:
+
+- **Bare `wait`** reports what a command killed by that signal reports,
+  so it rides `SignalDeathStatusIsTwoFiftySix` rather than a second copy
+  of the arithmetic: 158 for USR1 in bash 3.2, bash 5.3, dash and zsh,
+  and 286 in ksh93 — 256 + 30, exactly its own encoding for a command
+  USR1 killed. Confirmed across INT (258) and USR2 (287) there, so it is
+  the encoding and not a special case for one signal.
+- **`wait` naming a job** — `wait $!` or `wait %1` — keeps that answer
+  in four of the five and drops to a plain **1** in ksh93, which is
+  `WaitForAJobFailsWhenInterrupted`. Same shell, two forms, two
+  encodings; nothing about how the job is *spelled* changes it.
+
+The signal number is the host's: USR1 is 30 on this machine and 10 on
+Linux, so the recorded statuses are facts about the platform as much as
+about the shells.
+
+Two boundaries pin what the case is evidence about. An **ignored**
+signal — `trap '' USR1` — has no handler to run, does not interrupt, and
+leaves `wait` reporting 0 in all five, so the divergence is about a
+*trapped* arrival rather than about an arrival. And a wait nobody
+interrupted is untouched: bare `wait` still reports 0 however its jobs
+exited, and `wait $!` still reports the job's own status.
+
+An interrupted `wait` also does not consume its jobs: a second `wait`
+still has them to wait for and still reports 0 once they finish,
+measured the same way. `wait; check $?` is the supervisor loop this
+whole behavior exists for, and it only works if both halves hold — the
+signal reaches the status, and the jobs survive to be waited on again.

@@ -25658,6 +25658,102 @@
         "TimedOut": false
       }
     },
+    "trap/wait-cut-short-by-a-signal": {
+      "bash": {
+        "Output": "T~st=158",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "T~st=158",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "T~st=158",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "T~st=158",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "T~st=286",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "T~st=158",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/wait-for-a-job-cut-short-by-a-signal": {
+      "bash": {
+        "Output": "T~st=158",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "T~st=158",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "T~st=158",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "T~st=158",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "T~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "T~st=158",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/wait-is-not-cut-short-by-an-ignored-signal": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "type/a-body-with-a-construct-in-it": {
       "bash": {
         "Output": "f is a function~f () ~{ ~    if true; then~        echo y;~    fi~}",

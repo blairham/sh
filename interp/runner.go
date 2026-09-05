@@ -231,6 +231,22 @@ type Runner struct {
 	// person to tell.
 	JobControl bool
 
+	// Interactive says this shell is an interactive one, which `$-` reports
+	// as `i` and which a script reads to tell a session from a batch run.
+	//
+	// The front end's to set, and it is a fact carried *in* rather than one
+	// interp discovers: a library Runner has no standing to ask the process
+	// whether anybody is watching, and the answer would be wrong anyway —
+	// the embedder's standard input is not this shell's invocation. `-i`,
+	// or nothing to run and a terminal, is the whole of the question and
+	// `driver` is where it is asked.
+	//
+	// Not the same as JobControl, though a prompt sets both. This one says
+	// what the shell *is*; that one says there is somebody to announce a job
+	// to. Measured, ksh93 is the only shell in the panel that turns the
+	// monitor on for `-i script.sh`, so the two do not move together.
+	Interactive bool
+
 	// Dynamic holds parameters whose value is produced when they are read,
 	// rather than stored: `LINENO` is wherever execution has reached, and
 	// `RANDOM` is a different number every time. A dialect fills in the ones

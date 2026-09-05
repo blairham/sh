@@ -12858,6 +12858,38 @@
         "TimedOut": false
       }
     },
+    "invoke/a-script-is-not-interactive": {
+      "bash": {
+        "Output": "not",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "not",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "not",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "not",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "not",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "not",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "invoke/a-script-that-is-not-there": {
       "bash": {
         "Output": "\u003cshell\u003e: nosuch.sh: No such file or directory",

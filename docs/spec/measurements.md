@@ -4894,6 +4894,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `invoke/a-script-that-is-not-there` | `<shell>: 0: cannot open nosuch.sh: No such file` *(status 2)* | `<shell>: nosuch.sh: No such file or directory` *(status 127)* | `<shell>: nosuch.sh: No such file or directory` *(status 127)* | `<shell>: nosuch.sh: No such file or directory` *(status 127)* | `<shell>: nosuch.sh: not found` *(status 127)* | `<shell>: can't open input file: nosuch.sh` *(status 127)* |
 | `invoke/a-script-under-a-directory-that-is-not-there` | `<shell>: 0: cannot open nodir/nosuch.sh: No such file` *(status 2)* | `<shell>: nodir/nosuch.sh: No such file or directory` *(status 127)* | `<shell>: nodir/nosuch.sh: No such file or directory` *(status 127)* | `<shell>: nodir/nosuch.sh: No such file or directory` *(status 127)* | `<shell>: nodir/nosuch.sh: not found` *(status 127)* | `<shell>: can't open input file: nodir/nosuch.sh` *(status 127)* |
 | `invoke/a-script-that-is-there-runs` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` |
+| `invoke/a-script-is-not-interactive` | `not` | `not` | `not` | `not` | `not` | `not` |
 
 - `invoke/errexit-with-a-script` — the first line of most scripts, spelled on the command line instead: a set option given at invocation has to reach the runner, and abandon the script at the failure rather than run to the end
   ```sh
@@ -4965,4 +4966,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `invoke/a-script-that-is-there-runs` — the control the two above need: the same route, with a path that opens, runs the file and reports 0. Without it a front end that called every script path unreadable would pass both failure cases. The truly empty script the pair also wants is not expressible here — the corpus requires a snippet that parses to at least one statement — so it is measured in docs/spec/semantics.md instead
   ```sh
   echo ran; echo "st=$?"
+  ```
+- `invoke/a-script-is-not-interactive` — the negative half of #472: `i` belongs in $- only where the shell is interactive, and a script operand is not — unanimous. Membership rather than the spelling, for the same reason invoke/errexit-reaches-the-option-letters uses it. The positive half cannot live here: bash and dash announce that job control is off when -i has no terminal, and bash's line carries a pid, so `-i` under the harness is not a recordable fact
+  ```sh
+  case $- in *i*) echo interactive ;; *) echo not ;; esac
   ```

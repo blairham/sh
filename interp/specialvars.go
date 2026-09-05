@@ -95,6 +95,16 @@ func (r *Runner) ensureSpecials() {
 func (r *Runner) optionLetters() string {
 	var b strings.Builder
 	b.WriteString(r.sem().DefaultOptionLetters)
+	if r.Interactive {
+		// Measured unanimous and so no axis: every shell in the panel puts
+		// `i` here for an interactive shell and none of them puts it there
+		// for anything else — `-i` on every route including `-c` and a
+		// script operand, and a terminal with nothing to run. It is not a
+		// `set` option and no letter of `set` turns it on, which is why it
+		// is read from the fact the front end carried in rather than from a
+		// field the option table writes.
+		b.WriteByte('i')
+	}
 	if r.allexport {
 		b.WriteByte('a')
 	}

@@ -12282,6 +12282,70 @@
         "TimedOut": false
       }
     },
+    "invoke/c-in-the-middle-of-a-bundle": {
+      "bash": {
+        "Output": "name|1|a",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "name|1|a",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "name|1|a",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "name|1|a",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "name|1|a",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "name|1|a",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "invoke/c-outranks-standard-input": {
+      "bash": {
+        "Output": "hi|0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "hi|0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "hi|0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "hi|0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "hi|0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "hi|0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "invoke/end-of-options-before-a-script": {
       "bash": {
         "Output": "\u003cscript\u003e|2|a",
@@ -12310,6 +12374,38 @@
       },
       "zsh": {
         "Output": "\u003cscript\u003e|2|a",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/end-of-options-between-c-and-its-string": {
+      "bash": {
+        "Output": "name|1|a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "name|1|a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "name|1|a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "name|1|a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "name|1|a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "name|1|a",
         "Status": 0,
         "TimedOut": false
       }
@@ -12375,6 +12471,70 @@
       "zsh": {
         "Output": "one",
         "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "invoke/options-between-c-and-its-string": {
+      "bash": {
+        "Output": "name|1|a",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "name|1|a",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "name|1|a",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "name|1|a",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "name|1|a",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "name|1|a",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "invoke/plus-c-still-runs-the-command": {
+      "bash": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "hi",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "hi",
+        "Status": 0,
         "TimedOut": false
       }
     },

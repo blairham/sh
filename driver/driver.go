@@ -309,7 +309,16 @@ type invocation struct {
 	// other, not a terminator — measured, all four shells still read
 	// options after it: `sh -s -e arg` sets errexit and makes `arg` `$1`.
 	fromStdin bool
-	opts      []optionSpec
+	// sawC is `-c`: the script is a command string taken from the first
+	// operand rather than read from a file or from standard input. A flag
+	// rather than the string itself, because the letter and its operand are
+	// read at different times — `sh -ce cmd` says `c` in the middle of a
+	// bundle and the string is still two letters away, and `sh -c -x cmd`
+	// puts a whole other option word between them. Measured and unanimous:
+	// all four shells keep reading options after the `c` and take the
+	// command string from the first operand, whichever sign the word had.
+	sawC bool
+	opts []optionSpec
 }
 
 func (sh Shell) input(argv []string) (source, error) {
@@ -321,10 +330,10 @@ func (sh Shell) input(argv []string) (source, error) {
 	var inv invocation
 
 	// Hand-parsed rather than with the flag package, because a shell's
-	// conventions are not Go's: options stop at the first operand, `-c` takes
-	// either the rest of its word or the next argument, a `+` turns an
-	// option off, and the words after a command string must not be claimed
-	// as more flags.
+	// conventions are not Go's: options stop at the first operand, `-c` says
+	// the first operand is a command string rather than a path, a `+` turns
+	// an option off, and the words after a command string must not be
+	// claimed as more flags.
 	for len(args) > 0 {
 		a := args[0]
 		switch {
@@ -335,12 +344,9 @@ func (sh Shell) input(argv []string) (source, error) {
 			// through to standard input.
 			return sh.operands(args[1:], inv)
 		case len(a) >= 2 && (a[0] == '-' || a[0] == '+'):
-			rest, src, done, err := sh.optionWord(a, args[1:], &inv)
+			rest, err := sh.optionWord(a, args[1:], &inv)
 			if err != nil {
 				return source{}, err
-			}
-			if done {
-				return src, nil
 			}
 			args = rest
 		default:
@@ -352,14 +358,19 @@ func (sh Shell) input(argv []string) (source, error) {
 
 // optionWord reads one word of options — a single letter, a bundle, either
 // sign — recording what it finds on inv. It returns the arguments still to
-// read, or the source itself when a letter ends the loop the way `-c` does.
+// read.
+//
+// No letter ends the option loop. `-c` in particular does not: it records
+// that the command string is coming and reading continues, because the panel
+// is unanimous that `sh -c -x cmd` sets xtrace and runs `cmd`, and that
+// `sh -c -- cmd` runs `cmd` too. What ends the loop is an operand.
 //
 // The letters this front end owns are the ones that say where the script
 // comes from — `c`, `i`, `s` — and they bundle with the rest: `sh -ec cmd`
 // is unanimous across the panel. Every other letter is a `set` option and
 // stays text here; whether the shell has it is the dialect's question,
 // answered by the same machinery `set` uses once the runner exists.
-func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []string, src source, done bool, err error) {
+func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []string, err error) {
 	on := a[0] == '-'
 	body := a[1:]
 	letters := ""
@@ -371,25 +382,20 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 	}
 	for k := 0; k < len(body); k++ {
 		switch ch := body[k]; {
-		case ch == 'c' && on:
-			// The command string: the rest of this word if there is any —
-			// `-c'echo hi'` as a single word, which getopt allows — and the
-			// next argument otherwise. Anything after the command word is a
-			// positional parameter rather than another option. The letters
-			// before it in a bundle still count: `sh -ec cmd` is errexit
-			// and a command, in all four shells.
-			flush()
-			if cmd := body[k+1:]; cmd != "" {
-				s := commandSource(sh, cmd, args)
-				s.opts = inv.opts
-				return nil, s, true, nil
-			}
-			if len(args) < 1 {
-				return nil, source{}, false, errors.New("-c requires an argument")
-			}
-			s := commandSource(sh, args[0], args[1:])
-			s.opts = inv.opts
-			return nil, s, true, nil
+		case ch == 'c':
+			// The command string comes from the first *operand*, and this
+			// letter only records that it is coming. The rest of the word is
+			// more option letters, not the string: no shell in the panel
+			// accepts an attached `-c<string>` — bash reads the tail as
+			// letters and refuses the space in `-cecho hi`, and dash, ksh93
+			// and zsh each refuse it in their own words. So `sh -ce cmd` and
+			// `sh -ec cmd` are the same invocation, and both are errexit
+			// plus a command string, which is what all four do.
+			//
+			// Both signs, and that is measured rather than assumed: all four
+			// run the command for `sh +c cmd`. Reading `+c` as a set letter
+			// instead opened the command string as a script file.
+			inv.sawC = true
 		case ch == 'i' && on:
 			inv.forcePrompt = true
 		case ch == 's' && on:
@@ -403,7 +409,7 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 			// of the word as the name, bash and dash read it as more
 			// letters — so the core takes neither side.
 			if k != len(body)-1 {
-				return nil, source{}, false, fmt.Errorf("unknown option %q", a)
+				return nil, fmt.Errorf("unknown option %q", a)
 			}
 			flush()
 			if len(args) < 1 {
@@ -412,10 +418,10 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 				// with "string expected after -o". A listing at invocation
 				// is not worth the machinery until something needs it, and
 				// refusing is the honest half of a split panel.
-				return nil, source{}, false, fmt.Errorf("%s requires an argument", a)
+				return nil, fmt.Errorf("%s requires an argument", a)
 			}
 			inv.opts = append(inv.opts, optionSpec{spec: args[0], isName: true, on: on})
-			return args[1:], source{}, false, nil
+			return args[1:], nil
 		default:
 			// A set option's letter, ours to carry and the dialect's to
 			// judge. An unknown one is refused before anything runs, just
@@ -425,12 +431,24 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 		}
 	}
 	flush()
-	return args, source{}, false, nil
+	return args, nil
 }
 
-// operands handles what is left once the options are gone: a script path, or
-// nothing at all, which means standard input.
+// operands handles what is left once the options are gone: the command string
+// for `-c`, a script path, or nothing at all, which means standard input.
 func (sh Shell) operands(args []string, inv invocation) (source, error) {
+	if inv.sawC {
+		// `-c` wins over both of the other routes, which is measured rather
+		// than a precedence invented here: all four shells run the command
+		// for `sh -cs cmd` and for `sh -ci cmd` — neither reading standard
+		// input nor prompting — and take the string from the first operand.
+		if len(args) == 0 {
+			return source{}, errors.New("-c requires an argument")
+		}
+		s := commandSource(sh, args[0], args[1:])
+		s.opts = inv.opts
+		return s, nil
+	}
 	if inv.fromStdin || len(args) == 0 {
 		// Standard input, and standard input from a terminal is a person:
 		// all four prompt for `sh -s` there and read a script for `echo x |

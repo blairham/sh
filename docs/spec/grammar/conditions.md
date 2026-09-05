@@ -177,7 +177,16 @@ one for lists.
 ## What this does not cover
 
 `-v` and `-o`, which test a variable and a shell option rather than a
-file and exist in some of the panel only. The parser refuses them along
-with everything else it does not list, which is the rule: an operator is
-either implemented or refused at parse, never parsed and then refused at
-run time. Recorded so their absence is a decision.
+file and exist in some of the panel only.
+
+`-O`, `-G` and `-N`, which are file tests the listed set does not carry:
+the file is owned by the effective uid, the file is owned by the
+effective gid, and the file has been modified since it was last read.
+The first two are unanimous and `-N` is bash, ksh93 and zsh — dash
+answers `test: -N: unexpected operator` with status 2 — so this is a gap
+in what is implemented rather than a divergence to model.
+
+The parser refuses all five along with everything else it does not list,
+which is the rule: an operator is either implemented or refused at parse,
+never parsed and then refused at run time. Recorded so their absence is a
+decision.

@@ -255,8 +255,20 @@ The POSIX form is universal. The `function` keyword is core but absent
 from dash. The hybrid — keyword *and* parentheses — is rejected by ksh93,
 which is where the keyword originated, so it is not core.
 
-A function body is a **compound command**, so it can be any of them, not
-only a brace group, and it can carry its own redirections.
+A function body may be **any compound command**, not only a brace group,
+and it carries its own redirections. Whether it *must* be one is where
+the panel splits:
+
+    f() echo hi; f     bash: syntax error near unexpected token `echo'
+                       dash, ksh93, zsh: hi
+
+bash alone requires the compound command; the other three take a simple
+command as a one-command body and run it (measured:
+`cmd/function-body-simple-command`). The core is the wider form, since
+three of the four accept it, and the strictness is a grammar flag:
+`FuncBodyMustBeCompound` (off in the core, on for `bash`). The flag is
+about the POSIX form only; the keyword form's shapes are the table
+above.
 
 **A function name may carry `-` and `.`** — `f-g()`, `a.b()` — and the
 panel splits by *stage* rather than by yes and no: bash and zsh define

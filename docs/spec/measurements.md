@@ -3411,6 +3411,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `subst/does-not-end-the-word` | `[ab] n=1` | `[ab] n=1` | `[ab] n=1` | `[ab] n=1` | `[ab] n=1` | `[ab] n=1` |
 | `subst/result-is-split-and-text-attaches` | `[xa][by] n=2` | `[xa][by] n=2` | `[xa][by] n=2` | `[xa][by] n=2` | `[xa][by] n=2` | `[xa][by] n=2` |
 | `subst/paren-in-quotes-does-not-close` | `[)]` | `[)]` | `[)]` | `[)]` | `[)]` | `[)]` |
+| `subst/brace-in-quotes-does-not-close` | `[a}b]` | `[a}b]` | `[a}b]` | `[a}b]` | `[a}b]` | `[a}b]` |
 | `subst/nesting` | `[deep]` | `[deep]` | `[deep]` | `[deep]` | `[deep]` | `[deep]` |
 | `subst/arith-vs-subshell` | `[3] [sub]` | `[3] [sub]` | `[3] [sub]` | `[3] [sub]` | `[3] [sub]` | `[3] [sub]` |
 | `subst/backticks-nest-with-escaping` | `[deep]` | `[deep]` | `[deep]` | `[deep]` | `[deep]` | `[deep]` |
@@ -3426,6 +3427,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `subst/paren-in-quotes-does-not-close` — the rule that decides the implementation: counting parens truncates the substitution and silently changes the program
   ```sh
   echo "[$(echo ")" )]"
+  ```
+- `subst/brace-in-quotes-does-not-close` — the same rule one construct over: counting braces stops at the quoted } and leaves the rest of the expansion behind as text
+  ```sh
+  printf "[%s]" "${x:-"a}b"}"
   ```
 - `subst/nesting` — nesting works because the scan tracks quoting, not because of a separate rule
   ```sh

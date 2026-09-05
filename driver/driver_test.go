@@ -120,7 +120,60 @@ func TestArgumentForms(t *testing.T) {
 		want string
 	}{
 		{"-c and its argument", []string{"testsh", "-c", "echo hi"}, "hi\n"},
-		{"-c joined to its argument", []string{"testsh", "-cecho hi"}, "hi\n"},
+		{
+			// `c` in the middle of a bundle is still `-c`, and the letters
+			// after it are still option letters. Reading the rest of the
+			// word as the command string instead ran a command called `e`
+			// with the string as `$0`; the panel is unanimous that this is
+			// `-c -e` and that the string is the first operand.
+			"-c in the middle of a bundle",
+			[]string{"testsh", "-ce", "echo hi"},
+			"hi\n",
+		},
+		{
+			// The mirror image, which already worked and must keep working:
+			// `c` last in the bundle is the same invocation as `-ce`.
+			"-c at the end of a bundle",
+			[]string{"testsh", "-ec", "echo hi"},
+			"hi\n",
+		},
+		{
+			// `+c` is `-c` — measured, all four shells run the command.
+			// Sign-gating it made `c` a set letter to turn off and then
+			// opened the command string as a script file.
+			"+c runs the command too",
+			[]string{"testsh", "+c", "echo hi"},
+			"hi\n",
+		},
+		{
+			// Options may come between `-c` and the command string. An agent
+			// harness writes this, and all four shells read it: the option
+			// loop does not stop at `c`, it stops at the first operand.
+			"options after -c and before the command string",
+			[]string{"testsh", "-c", "-x", "echo hi"},
+			"hi\n",
+		},
+		{
+			// `--` between them too, which is the same rule seen from the
+			// other side: it ends the options, and the first operand after
+			// it is the command string rather than a path.
+			"-- between -c and the command string",
+			[]string{"testsh", "-c", "--", "echo hi"},
+			"hi\n",
+		},
+		{
+			// `-c` beats `-s` and `-i` about *where the program comes from*:
+			// all four run the command rather than reading standard input or
+			// prompting.
+			"-c beats -s",
+			[]string{"testsh", "-sc", "echo hi"},
+			"hi\n",
+		},
+		{
+			"-c beats -i",
+			[]string{"testsh", "-ic", "echo hi"},
+			"hi\n",
+		},
 		{
 			// The words after the command are positional parameters, not more
 			// options. Claiming them as flags is the misparse this guards.
@@ -150,6 +203,57 @@ func TestArgumentForms(t *testing.T) {
 				t.Errorf("output = %q, want %q (stderr %q)", out, tc.want, errs)
 			}
 		})
+	}
+}
+
+// TestAnAttachedCommandStringIsRefused pins that `-c<string>` written as one
+// word is not an invocation, which is measured rather than reasoned: no shell
+// in the panel accepts it. bash reads the tail as more option letters and
+// refuses the space in `-cecho hi`; dash, ksh93 and zsh each refuse it in
+// their own words. Running it was a misreading of what getopt allows — a
+// shell's own option scanner is not getopt, and `c` is not an option that
+// takes an attached value in any of them.
+func TestAnAttachedCommandStringIsRefused(t *testing.T) {
+	out, _, code := runArgs(t, shell(), "testsh", "-cecho hi")
+	if code == 0 {
+		t.Error("an attached command string should not be accepted")
+	}
+	if out != "" {
+		t.Errorf("stdout = %q, want the command never to have run", out)
+	}
+}
+
+// TestABundledCTakesItsCommandStringFromTheFirstOperand is the whole of the
+// fix in one invocation: the letters around `c` are options, the first operand
+// is the command string, the second is `$0` and the rest are parameters.
+func TestABundledCTakesItsCommandStringFromTheFirstOperand(t *testing.T) {
+	out, errs, code := runArgs(t, shell(), "testsh",
+		"-ce", `echo "0=$0 n=$# 1=$1"; false`, "name", "a")
+	// `e` was a real option: the failing command at the end ends the shell.
+	if code != 1 {
+		t.Errorf("status %d, want 1 — the bundled -e should have applied (stderr %q)", code, errs)
+	}
+	if want := "0=name n=1 1=a\n"; out != want {
+		t.Errorf("output = %q, want %q (stderr %q)", out, want, errs)
+	}
+}
+
+// TestCWithNoOperandIsRefused pins that `-c` alone is a usage error rather
+// than a shell that reads standard input. All four refuse it; only the wording
+// and the status differ, so only the refusal is asserted.
+func TestCWithNoOperandIsRefused(t *testing.T) {
+	for _, argv := range [][]string{
+		{"testsh", "-c"},
+		{"testsh", "-ec"},
+		{"testsh", "-c", "-e"},
+	} {
+		_, errs, code := runArgs(t, shell(), argv...)
+		if code == 0 {
+			t.Errorf("%q: status 0, want a refusal", argv)
+		}
+		if !strings.Contains(errs, "-c") {
+			t.Errorf("%q: stderr = %q, want it to name -c", argv, errs)
+		}
 	}
 }
 

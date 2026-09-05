@@ -4253,6 +4253,36 @@ This is the shape used to declare a local before assigning it
 conditionally, so the difference is silent: the function reads the
 caller's value where it expected nothing.
 
+**`LocalInheritsTheExportAttribute`** — bash yes · dash yes · ksh93 no · zsh no
+
+Gives a local declaration the export attribute of the name it shadows,
+so a child sees the local's value under that name. Asked only where the
+shadowed name is exported — explicitly or by having been inherited — and
+only where a scope was actually taken; a local declared `-x` says so
+outright and asks nothing.
+
+Measured through a real child, because what the attribute decides is
+what a command is told: `export FOO=bar; f() { local FOO=baz; env; }`
+shows the child `FOO=baz` in bash and dash and no `FOO` at all in zsh.
+The same split holds for a name that arrived in the environment rather
+than being exported by hand, which is the same question by the other
+route.
+
+ksh93 has no `local`, so the question reaches it only through `typeset`
+in a keyword function — where the child is told nothing, as in zsh. It
+gets there from further away: that shell's `typeset` takes the export
+attribute off any name it assigns, at the top level as well as in a
+function, and only the local half is modeled.
+
+Two neighbors are *not* this axis. What a valueless declaration leaves
+visible is `ValuelessDeclarationHidesTheOuterValue`, and the two compose:
+`local FOO` over an exported `FOO` shows dash's child the outer value,
+because dash hides nothing, and shows zsh's child nothing, because zsh
+exports nothing. bash is the residue and is a split within one shell —
+5.3 hands the child the outer value where its unset local has none of
+its own, and 3.2 hands it nothing — so it is recorded rather than
+modeled.
+
 
 ### `unset`
 

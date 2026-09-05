@@ -60,6 +60,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"ShiftPastEndFatal", s.ShiftPastEndFatal, interp.Yes},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.Yes},
 		{"TraceShowsItsOwnDisabling", s.TraceShowsItsOwnDisabling, interp.No},
+		{"LocalInheritsTheExportAttribute", s.LocalInheritsTheExportAttribute, interp.No},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)
@@ -139,5 +140,19 @@ func TestNoTestWordingSpellsItsOwnName(t *testing.T) {
 	}
 	if got := d.TestMissingBracket; got != "" && !strings.ContainsAny(got, "[]") {
 		t.Errorf("TestMissingBracket = %q: want a bracket in it", got)
+	}
+}
+
+// TestATypesetLocalDoesNotCarryTheExportAttribute: there is no `local` here,
+// so the question is asked through `typeset` in a keyword function — where a
+// child is told nothing about the shadowed name, and the outer name is
+// exported again once the function returns.
+func TestATypesetLocalDoesNotCarryTheExportAttribute(t *testing.T) {
+	out, _ := answersRun(t, `export FOO=bar; function f { typeset FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f; /usr/bin/env | grep '^FOO='`)
+	if strings.Contains(out, "FOO=baz") {
+		t.Errorf("got %q, want the child told nothing under the name", out)
+	}
+	if !strings.Contains(out, "(none)") || !strings.Contains(out, "FOO=bar") {
+		t.Errorf("got %q, want nothing inside and the outer value after", out)
 	}
 }

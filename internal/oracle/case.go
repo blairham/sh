@@ -3620,6 +3620,21 @@ echo unreachable`,
 		Why:     "the same question through `typeset` in a keyword function, which is the form ksh93 gives a scope: ksh93 hides the value as bash's local does",
 	},
 	{
+		ID: "declare/local-shadowing-an-exported-name", Category: "declarations",
+		Snippet: `export FOO=bar; f() { local FOO=baz; env | grep '^FOO=' || echo "(none)"; }; f; env | grep '^FOO='`,
+		Why:     "whether the local inherits the export attribute of the name it shadows: bash and dash hand the child the local's value, zsh hands it nothing at all under that name, and ksh93 has no `local` to ask with. Read through a real child rather than through a listing, because what the attribute decides is what a command is told",
+	},
+	{
+		ID: "declare/local-shadowing-an-imported-name", Category: "declarations",
+		Snippet: `f() { local TERM=changed; env | grep '^TERM=' || echo "(none)"; }; f; env | grep '^TERM='`,
+		Why:     "the same question where the name arrived in the environment rather than being exported by hand, which is the route that made the two answers one: an imported name is exported by having been imported, so the local either inherits that or does not, and the split is the same either way",
+	},
+	{
+		ID: "declare/typeset-local-shadowing-an-exported-name", Category: "declarations",
+		Snippet: `export FOO=bar; function f { typeset FOO=baz; env | grep '^FOO=' || echo "(none)"; }; f; env | grep '^FOO='`,
+		Why:     "the same question through `typeset` in a keyword function, which is the only form that asks it of ksh93 — and it answers as zsh does, by a road of its own: this shell's `typeset` takes the attribute off any name it assigns, at the top level as well as in a function",
+	},
+	{
 		ID: "declare/integer-attribute-evaluates-a-later-assignment", Category: "declarations",
 		Snippet: `typeset -i n; n=5+2; echo "[$n]"`,
 		Why:     "the attribute belongs to the name, so an ordinary assignment made afterwards is an expression — which is the whole point of it",

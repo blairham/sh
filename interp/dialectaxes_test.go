@@ -196,3 +196,45 @@ func TestBraceRangeNegativeStepReversalIsAnAxis(t *testing.T) {
 		t.Errorf("status %d, want the unanswered axis refused", st)
 	}
 }
+
+func TestALocalInheritingTheExportAttributeIsAnAxis(t *testing.T) {
+	// Read through a real child rather than through a listing: what the axis
+	// decides is what a command is told, and a shell can hold the attribute
+	// and still hand the entry over, or the other way about.
+	const shadow = `export FOO=bar; f() { local FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f`
+	out, _ := axisRun(t, shadow, func(s *Semantics) { s.LocalInheritsTheExportAttribute = Yes })
+	if !strings.Contains(out, "FOO=baz") {
+		t.Errorf("got %q, want the child told the local's value", out)
+	}
+	out, _ = axisRun(t, shadow, func(s *Semantics) { s.LocalInheritsTheExportAttribute = No })
+	if !strings.Contains(out, "(none)") {
+		t.Errorf("got %q, want the child told nothing under the name", out)
+	}
+	// Taking the attribute off is the local's, and it goes back with the
+	// value when the function returns.
+	out, _ = axisRun(t, `export FOO=bar; f() { local FOO=baz; }; f; /usr/bin/env | grep '^FOO=' || echo "(none)"`,
+		func(s *Semantics) { s.LocalInheritsTheExportAttribute = No })
+	if !strings.Contains(out, "FOO=bar") {
+		t.Errorf("got %q, want the outer name exported again", out)
+	}
+	// A local naming the attribute itself answers the question outright.
+	out, _ = axisRun(t, `export FOO=bar; f() { local -x FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f`,
+		func(s *Semantics) {
+			s.LocalInheritsTheExportAttribute = No
+			s.LocalOptions = "x"
+		})
+	if !strings.Contains(out, "FOO=baz") {
+		t.Errorf("got %q, want the letter to say so outright", out)
+	}
+	// A name nothing exported asks nothing, so an unanswered axis is not
+	// reached and the child is told nothing either way.
+	out, st := axisRun(t, `FOO=bar; f() { local FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f`, func(*Semantics) {})
+	if st != 0 || !strings.Contains(out, "(none)") {
+		t.Errorf("got %q status %d, want no question and no entry", out, st)
+	}
+	// And where it is exported, an unanswered axis is refused rather than
+	// guessed at: the declaration is not made at all.
+	if _, st := axisRun(t, `export FOO=bar; f() { local FOO=baz; }; f`, func(*Semantics) {}); st != 2 {
+		t.Errorf("status %d, want the unanswered axis refused", st)
+	}
+}

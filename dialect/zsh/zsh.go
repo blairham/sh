@@ -129,6 +129,11 @@ func Semantics() interp.Semantics {
 	s.SelectEofPrintsNewline = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.Yes
 	s.TypesetLocalNeedsKeywordFunction = interp.No
+	// A local does not inherit the export attribute of the name it shadows.
+	// Measured with a real child: `export FOO=bar; f() { local FOO=baz; env;
+	// }` shows the child no FOO at all here, where bash and dash show it the
+	// local's value.
+	s.LocalInheritsTheExportAttribute = interp.No
 	s.SplitParamExpansion = interp.No
 	s.GlobExpansionResults = interp.No
 	s.GlobNoMatchIsError = interp.Yes

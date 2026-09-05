@@ -1588,6 +1588,12 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 		// the dialect that took this as a global: there is nothing to put
 		// back, and it becomes a plain assignment.
 		r.shadow(name)
+		r.localExportAttribute(name, f.export)
+		if r.unspecified {
+			// The declaration is not made at all: reporting the unanswered
+			// axis and then assigning anyway is the silent wrong answer.
+			return r.status
+		}
 		if f.assoc && !f.remove {
 			// After the shadow, the same order `typeset -A` keeps: the
 			// caller's absence comes back when the function returns.

@@ -58,6 +58,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},
 		{"TraceAssignmentsSeparately", s.TraceAssignmentsSeparately, interp.No},
 		{"TraceShowsItsOwnDisabling", s.TraceShowsItsOwnDisabling, interp.Yes},
+		{"LocalInheritsTheExportAttribute", s.LocalInheritsTheExportAttribute, interp.No},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)
@@ -175,5 +176,26 @@ func TestNoTestWordingSpellsItsOwnName(t *testing.T) {
 	}
 	if got := d.TestMissingBracket; got != "" && !strings.ContainsAny(got, "[]") {
 		t.Errorf("TestMissingBracket = %q: want a bracket in it", got)
+	}
+}
+
+// TestALocalDoesNotCarryTheExportAttribute: a local shadowing an exported
+// name hands a child nothing at all under that name here, where bash and dash
+// hand it the local's value. The attribute is the local's to lose — the outer
+// name is exported again the moment the function returns.
+func TestALocalDoesNotCarryTheExportAttribute(t *testing.T) {
+	out, _ := answersRun(t, `export FOO=bar; f() { local FOO=baz; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f; /usr/bin/env | grep '^FOO='`)
+	if strings.Contains(out, "FOO=baz") {
+		t.Errorf("got %q, want the child told nothing under the name", out)
+	}
+	if !strings.Contains(out, "(none)") || !strings.Contains(out, "FOO=bar") {
+		t.Errorf("got %q, want nothing inside and the outer value after", out)
+	}
+	// A local declared without a value is set-and-empty here, and is not
+	// exported either — so this is the same answer by the other road, where
+	// bash and dash both tell the child something.
+	out, _ = answersRun(t, `export FOO=bar; f() { local FOO; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f`)
+	if !strings.Contains(out, "(none)") {
+		t.Errorf("valueless: got %q, want the child told nothing", out)
 	}
 }

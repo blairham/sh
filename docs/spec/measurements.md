@@ -4896,6 +4896,14 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `invoke/standard-input-that-is-not-a-terminal` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `invoke/the-program-arrives-on-standard-input` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` | `0=[sh]\|n=0` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` |
 | `invoke/dash-s-makes-every-operand-a-parameter` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[sh]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` |
+| `invoke/a-read-takes-the-next-line-of-a-program-on-standard-input` | `[]~end` **2>** `<shell>: 3: DATA-LINE: not found` | `end` **2>** `<shell>: line 2: DATA-LINE: command not found` | `end` **2>** `<shell>: line 2: DATA-LINE: command not found` | `end` **2>** `<shell>: line 2: DATA-LINE: command not found` | `end` **2>** `<shell>: line 2: DATA-LINE: not found` | `end` **2>** `<shell>: command not found: DATA-LINE` |
+| `invoke/a-read-at-the-end-of-a-program-on-standard-input` | `1 []` | `1 []` | `1 []` | `1 []` | `1 []` | `1 []` |
+| `invoke/a-while-read-loop-eats-the-rest-of-a-program-on-standard-input` | **2>** `<shell>: 2: A: not found~<shell>: 3: B: not found~<shell>: 4: C: not found` *(status 127)* | `got:A~got:B~got:C` | `got:A~got:B~got:C` | `got:A~got:B~got:C` | `got:A~got:B~got:C` | `got:A~got:B~got:C` |
+| `invoke/a-command-reads-the-rest-of-a-program-on-standard-input` | `one~end` **2>** `<shell>: 3: NOT-A-COMMAND: not found` | `one~NOT-A-COMMAND~echo end` | `one~NOT-A-COMMAND~echo end` | `one~NOT-A-COMMAND~echo end` | `one~NOT-A-COMMAND~echo end` | `one~NOT-A-COMMAND~echo end` |
+| `invoke/exec-repoints-the-rest-of-a-program-on-standard-input` | `never reached` **2>** `<shell>: 4: FIRST: not found~<shell>: 5: SECOND: not found` *(status 127)* | **2>** `<shell>: line 3: FIRST: command not found~<shell>: line 4: SECOND: command not found` *(status 127)* | **2>** `<shell>: line 3: FIRST: command not found~<shell>: line 4: SECOND: command not found` *(status 127)* | **2>** `<shell>: line 3: FIRST: command not found~<shell>: line 4: SECOND: command not found` *(status 127)* | **2>** `<shell>: line 3: FIRST: not found~<shell>: line 4: SECOND: not found` *(status 127)* | **2>** `<shell>: command not found: FIRST~<shell>: command not found: SECOND` *(status 127)* |
+| `invoke/a-heredoc-in-a-program-on-standard-input` | `body~after` | `body~after` | `body~after` | `body~after` | `body~after` | `body~after` |
+| `invoke/a-continued-line-in-a-program-on-standard-input` | `one two~three` | `one two~three` | `one two~three` | `one two~three` | `one two~three` | `one two~three` |
+| `invoke/a-construct-over-several-lines-in-a-program-on-standard-input` | `yes~done` | `yes~done` | `yes~done` | `yes~done` | `yes~done` | `yes~done` |
 | `invoke/a-script-that-is-not-there` | **2>** `<shell>: 0: cannot open nosuch.sh: No such file` *(status 2)* | **2>** `<shell>: nosuch.sh: No such file or directory` *(status 127)* | **2>** `<shell>: nosuch.sh: No such file or directory` *(status 127)* | **2>** `<shell>: nosuch.sh: No such file or directory` *(status 127)* | **2>** `<shell>: nosuch.sh: not found` *(status 127)* | **2>** `<shell>: can't open input file: nosuch.sh` *(status 127)* |
 | `invoke/a-script-under-a-directory-that-is-not-there` | **2>** `<shell>: 0: cannot open nodir/nosuch.sh: No such file` *(status 2)* | **2>** `<shell>: nodir/nosuch.sh: No such file or directory` *(status 127)* | **2>** `<shell>: nodir/nosuch.sh: No such file or directory` *(status 127)* | **2>** `<shell>: nodir/nosuch.sh: No such file or directory` *(status 127)* | **2>** `<shell>: nodir/nosuch.sh: not found` *(status 127)* | **2>** `<shell>: can't open input file: nodir/nosuch.sh` *(status 127)* |
 | `invoke/a-script-that-is-there-runs` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` | `ran~st=0` |
@@ -4959,6 +4967,50 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `invoke/dash-s-makes-every-operand-a-parameter` — -s says the program is on standard input, so the words after it are parameters rather than a script path — the one route where $1 is set and $0 is still the shell. Without it the same two words would make `a` the script and `b` its first parameter
   ```sh
   echo "0=[$0]|n=$#|[$*]"
+  ```
+- `invoke/a-read-takes-the-next-line-of-a-program-on-standard-input` — the split this route turns on, and the reason it matters: bash, ksh93 and zsh read the program a line at a time off the descriptor, so `read x` takes the *next line of the program*, `echo` is never parsed, and DATA-LINE is the first thing run — at line 2, because a line handed to `read` is never counted. dash takes the program in blocks and keeps what it took, so `read` finds end of input, prints [] and DATA-LINE runs at line 3. Taking the whole input for everyone was the bug (#470): a payload piped after a `curl | sh` script was executed as commands
+  ```sh
+  read x
+  echo "[$x]"
+  ```
+- `invoke/a-read-at-the-end-of-a-program-on-standard-input` — the half of the split that is unanimous: with nothing after it there is nothing to take, so `read` reports end of input at 1 and leaves the variable empty in all four. It is the control for the case above — the difference there is what the *rest of the program* is, not how `read` behaves
+  ```sh
+  read x; echo "$? [$x]"
+  ```
+- `invoke/a-while-read-loop-eats-the-rest-of-a-program-on-standard-input` — the shape a script piped to a shell is actually written in, and the sharpest reading of the same split: three shells feed the loop the three lines that follow it and dash runs all three as commands. One loop, two entirely different programs, decided by nothing in the text
+  ```sh
+  while read -r l; do echo "got:$l"; done
+  ```
+- `invoke/a-command-reads-the-rest-of-a-program-on-standard-input` — not a builtin's doing: an external command inherits the descriptor the program is on, so `cat` prints the rest of the program instead of running it — in bash, ksh93 and zsh alike. dash's block has already taken those bytes, so cat sees end of input and the lines run. The descriptor is shared with everything the script starts, which is why this is a property of the route and not of `read`
+  ```sh
+  echo one
+  cat
+  ```
+- `invoke/exec-repoints-the-rest-of-a-program-on-standard-input` — what the sharing really is: the program *is* the descriptor, so pointing descriptor 0 at a file half way through replaces the rest of the program with that file's contents — bash, ksh93 and zsh all run FIRST and SECOND as commands and never see the line after the `exec`. dash runs its remaining block first and only then reads the file, which is the same rule with a bigger unit rather than a different rule
+  ```sh
+  printf 'FIRST\nSECOND\n' > d.txt
+  exec 0< d.txt
+  ```
+- `invoke/a-heredoc-in-a-program-on-standard-input` — unanimous, and the case that stops a line-at-a-time reader from being wrong: a here-document's body arrives on the same descriptor as the program and belongs to the command that opened it, so a reader that treated every line as a command would run `body` and `EOF`. All four print the body once and carry on
+  ```sh
+  cat <<EOF
+  body
+  EOF
+  echo after
+  ```
+- `invoke/a-continued-line-in-a-program-on-standard-input` — unanimous, and the other way a line-at-a-time reader goes wrong: a trailing backslash joins the line to the one after it, and a reader that ran each line as it arrived would print `one` and then fail on `two`. A parser cannot answer this — the same text at the end of the input is a finished command — so only the reader can
+  ```sh
+  echo one \
+  two
+  echo three
+  ```
+- `invoke/a-construct-over-several-lines-in-a-program-on-standard-input` — unanimous: a construct is read until it finishes however many lines that takes, on this route as on any other. The unit a shell runs is the whole construct and not the line, which a reader that takes one line at a time has to be told rather than discover
+  ```sh
+  if true
+  then
+  	echo yes
+  fi
+  echo done
   ```
 - `invoke/a-script-that-is-not-there` — an operand naming nothing, so the snippet never reaches the shell — the shape Case.Args exists to allow. The status is the split: bash, ksh93 and zsh answer with a missing command's 127 and dash with its usage 2, where a shell that folded this into the generic input error would answer 2 for all four
   ```sh

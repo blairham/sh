@@ -2006,13 +2006,18 @@ var Corpus = []Case{
 	},
 	{
 		ID: "jobs/a-finished-background-job", Category: "builtins",
-		Snippet: `sleep 0.05 & sleep 0.5; jobs; echo "---"; jobs`,
-		Why:     "reported once and then forgotten, in every shell that reports it at all — the second listing is empty. zsh never mentions it and ksh93 still calls it Running, which is not a reaping race: it says so after `wait` too",
+		Snippet: `m='s/^\(\[[0-9][0-9]*\]\) *[-+]* */\1 /'; sleep 0.05 & sleep 0.5; jobs >a.txt; sed -e "$m" a.txt; echo "---"; jobs >b.txt; sed -e "$m" b.txt`,
+		Why:     "reported once and then forgotten, in every shell that reports it at all — the second listing is empty. zsh never mentions it and ksh93 still calls it Running, which is not a reaping race: it says so after `wait` too. The marker is normalized away by the same expression as the failed-job row below, and for the same reason: this job has finished too, so what the listing says about which job is current is not a fact about the job that finished",
 	},
 	{
 		ID: "jobs/a-background-job-that-failed", Category: "builtins",
-		Snippet: `false & sleep 0.3; jobs`,
-		Why:     "the status reaches the listing, and the two shells that say so disagree about how: `Exit 1` against `Done(1)`",
+		Snippet: `false & sleep 0.3; jobs >j.txt; sed -e "s/^\(\[[0-9][0-9]*\]\) *[-+]* */\1 /" j.txt`,
+		Why:     "the status reaches the listing, and the two shells that say so disagree about how: `Exit 1` against `Done(1)`. The current-job marker is normalized to one space rather than recorded, because it answers a different question and does not answer it the same way twice: bash spelled it `[1]+` in every one of 2,900 measured runs of this snippet and `[1] ` once in three runs of the record check, which is rare enough that a regeneration bakes in whichever it saw and every later check then fails for a reason unrelated to what changed. What the marker does mean is pinned by the row below, where the blank is reachable on purpose. Through a file rather than a pipe, because a subshell has no job table in dash or zsh and `jobs | sed` would empty two of the columns instead of normalizing them",
+	},
+	{
+		ID: "jobs/a-job-that-is-neither-current-nor-previous", Category: "builtins",
+		Snippet: `false & sleep 0.05 & wait %2; jobs >j.txt; sed -e "s/^\(\[[0-9][0-9]*\]\) *\([-+]\) */\1[\2] /;s/^\(\[[0-9][0-9]*\]\)  */\1[ ] /" j.txt`,
+		Why:     "the marker belongs to the job table and not to the job. With a second job started and waited for, bash has nothing left to call current and writes a *blank* where the `+` would be — the other spelling the failed-job row above was seeing at random, here on purpose and the same 200 times out of 200. dash marks both of its rows `+` rather than keeping a previous job at all, and the three shells that print nothing have forgotten both. The marker is bracketed because a blank one is invisible beside a `+`, and a reader cannot check what they cannot see",
 	},
 	{
 		ID: "jobs/two-jobs-and-which-end-it-starts-from", Category: "builtins",

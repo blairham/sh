@@ -1623,6 +1623,16 @@ var Corpus = []Case{
 		Why:     "every other read case feeds a pipe or a here-string built inside the snippet, so what the *shell* was started with was never read at all. Here it is the shell's own input: two lines arrive in order and the third read finds the end, reporting 1 with the variable cleared rather than left holding the line before",
 	},
 	{
+		ID: "read/a-zero-timeout-and-what-it-does-to-the-stream", Category: "builtins",
+		Snippet: `printf "a\nb\n" > f; exec < f; read -t 0 v; echo "st=$? v=[$v]"; read w; echo "w=[$w]"`,
+		Why:     "a timeout of zero is not a deadline that has already passed: one shell answers whether input is waiting and reads nothing, so the next read still finds the first line, while two read the line and leave the second for it. The second read is the whole point — the status alone cannot tell a poll from a read, and a poll that consumed what it reported would have a loop eating its own input. The input is a file rather than a pipe because a file is always ready, which makes the case a fact rather than a race",
+	},
+	{
+		ID: "read/a-zero-timeout-at-the-end-of-the-input", Category: "builtins",
+		Snippet: `: > f; exec < f; read -t 0 v; echo "st=$? v=[$v]"`,
+		Why:     "the end of a stream is *ready* to the shell that polls — a read there would return at once, with nothing — so it reports success where the shells that read report the end of input. Two answers to the same question from one empty file",
+	},
+	{
 		ID: "redir/a-target-that-is-not-one-word", Category: "redirection",
 		Snippet: `e="a b"; echo hi > $e; echo "st=$?"`,
 		Why:     "a redirection target is expanded and then, in three of the four, neither split nor matched — so `> $e` writes to a file called `a b`. bash expands it as an ordinary word and refuses anything that is not exactly one, naming the target *as written*. Doing bash's expansion and taking the first field is the answer nobody gives, and it wrote to `a`",

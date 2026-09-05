@@ -139,6 +139,7 @@ func Semantics() interp.Semantics {
 	// descriptor. A short -n keeps its text and reports 1; a short -N keeps
 	// its text too.
 	s.ReadOptions = "rsa:d:n:N:p:t:u:"
+	s.ReadZeroTimeout = interp.ReadZeroTimeoutPolls
 	s.ReadPartialCountSucceeds = interp.No
 	s.ReadExactCountKeepsPartial = interp.Yes
 	// A directory the PATH search walked past leaves no trace: with nothing

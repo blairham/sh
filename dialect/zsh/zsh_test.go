@@ -24,10 +24,20 @@ func parses(t *testing.T, src string) bool {
 }
 
 func TestGrammar(t *testing.T) {
-	// Does not expand them in a script; the prompt is a different
-	// question and the front end answers it.
-	if got, want := zsh.Dialect().ExpandAliases, false; got != want {
+	// The route decides: measured 2026-09-05, `zsh -c` leaves an alias
+	// alone and a script file and standard input both expand it. The prompt
+	// is a fourth question and the front end answers it.
+	if got, want := zsh.Dialect().ExpandAliases, syntax.AliasFromScriptFile|syntax.AliasOnStandardInput; got != want {
 		t.Errorf("ExpandAliases = %v, want %v", got, want)
+	}
+	if !zsh.Dialect().ExpandAliases.Has(syntax.AliasFromScriptFile) ||
+		zsh.Dialect().ExpandAliases.Has(syntax.AliasFromCommandString) {
+		t.Error("the two routes that differ are what the set is for")
+	}
+	// And a body's newlines are lines of the program: $LINENO after a
+	// two-line body reads 6 against a physical 5.
+	if !zsh.Dialect().AliasBodyCountsLines {
+		t.Error("AliasBodyCountsLines = false, want true")
 	}
 	for _, tc := range []struct {
 		src  string

@@ -16,8 +16,12 @@ import (
 func Dialect() syntax.Dialect {
 	d := syntax.Core()
 	// bash expands them interactively and needs `shopt -s expand_aliases`
-	// otherwise, which is not modeled yet.
-	d.ExpandAliases = false
+	// otherwise, which is not modeled yet — so no route, rather than a route
+	// this shell only takes with an option set. Measured on all three.
+	d.ExpandAliases = syntax.AliasOnNoRoute
+	// And a body's newlines do not count: bash alone leaves the whole of an
+	// expanded body on the line the alias word was written on.
+	d.AliasBodyCountsLines = false
 	// The utilities that take an array assignment as an operand. bash has
 	// all five.
 	d.DeclarationUtilities = map[string]bool{
@@ -70,6 +74,10 @@ func Semantics() interp.Semantics {
 	// that a non-interactive shell reads no startup file unless `--login`
 	// was written out, and this front end has no `--login` to write.
 	s.LoginProfileWhenNonInteractive = false
+	// `-c` and `-s` together: the command string names the operands here,
+	// so `sh -sc CMD name a` has `$0` of `name` and one parameter — the
+	// same answer in the 3.2 macOS ships. ksh93 and zsh let `-s` name them.
+	s.StdinOptionNamesTheOperands = interp.No
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
 	// Measured: `echo $-` reports `hB` — hashall and braceexpand — under
@@ -203,6 +211,10 @@ func Semantics() interp.Semantics {
 	// bash reports success if it signaled anything at all, where the others
 	// count failures one way or another.
 	s.ExitTrapRunsOnSignalDeath = interp.Yes
+	// 5.3 ignores an untrapped QUIT when it is not interactive, where 3.2
+	// dies by it — a divergence between two builds of the same shell, and
+	// this preset is 5.3.
+	s.QuitIgnoredWhenNotInteractive = interp.Yes
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	s.KillListAcceptsName = interp.Yes
 	s.SIGPrefixAccepted = interp.Yes

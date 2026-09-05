@@ -16,7 +16,13 @@ import (
 func Dialect() syntax.Dialect {
 	d := syntax.Core()
 	// zsh does not expand under `-c` even with the option set.
-	d.ExpandAliases = false
+	// Measured 2026-09-05: `zsh -c 'alias hi=...; hi'` does not expand and
+	// the same two lines in a file, or on standard input, do. The route is
+	// the whole of the difference — nothing about the shell changes.
+	d.ExpandAliases = syntax.AliasFromScriptFile | syntax.AliasOnStandardInput
+	// And a body's newlines are lines of the program, as they are in the two
+	// that expand by every route.
+	d.AliasBodyCountsLines = true
 	// zsh has all five, like bash.
 	d.DeclarationUtilities = map[string]bool{
 		"declare": true, "typeset": true, "local": true,
@@ -44,6 +50,10 @@ func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.No
+	// `-c` and `-s` together: `-s` names the operands here, so `sh -sc CMD
+	// name a` keeps the shell in `$0` and makes both operands parameters.
+	// bash and dash let the command string name them instead.
+	s.StdinOptionNamesTheOperands = interp.Yes
 	// The reading side of the same option: zsh's short spelling of noglob
 	// is `-F`, and that capital is what its `$-` reports.
 	s.NoglobLetterIsF = interp.No
@@ -211,6 +221,7 @@ func Semantics() interp.Semantics {
 	// A status that carries a count rather than a verdict: two dead targets
 	// is 2.
 	s.ExitTrapRunsOnSignalDeath = interp.No
+	s.QuitIgnoredWhenNotInteractive = interp.Yes
 	// zsh alone: a bare `exit` there reports what the trap's own last
 	// command did, so `trap "false; exit" 0` exits 1.
 	s.ExitInTrapReportsEarlierStatus = interp.No

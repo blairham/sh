@@ -279,6 +279,70 @@ func TestDieBySignalIsAskedLast(t *testing.T) {
 	}
 }
 
+// TestAnIgnoredFatalSignalIsNotADeath covers the axis for a signal one side of
+// the panel takes the default action away from.
+//
+// Three questions in one, because the axis is only the middle of them: a shell
+// that answers "it still ends me" is killed as any fatal signal kills it, one
+// that answers "it does not" carries on with a status of 0, and an interactive
+// shell carries on whatever it answers — that last part is unanimous, so the
+// axis is not consulted there at all.
+func TestAnIgnoredFatalSignalIsNotADeath(t *testing.T) {
+	const src = "kill -QUIT $$\necho after\n"
+	for _, c := range []struct {
+		name        string
+		answer      Answer
+		interactive bool
+		wantOut     string
+		wantStatus  int
+	}{
+		{"ends the shell", No, false, "", 128 + int(syscall.SIGQUIT)},
+		{"does nothing", Yes, false, "after\n", 0},
+		{"never ends an interactive shell", No, true, "after\n", 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f, err := syntax.Parse(src, syntax.Core())
+			if err != nil {
+				t.Fatal(err)
+			}
+			var o, e bytes.Buffer
+			sem := killSem()
+			sem.QuitIgnoredWhenNotInteractive = c.answer
+			r := &Runner{
+				Stdout: &o, Stderr: &e, Semantics: &sem, Name: "testsh",
+				Interactive: c.interactive,
+			}
+			st, rerr := r.Run(context.Background(), f)
+			if rerr != nil {
+				t.Fatal(rerr)
+			}
+			if o.String() != c.wantOut {
+				t.Errorf("output %q, want %q", o.String(), c.wantOut)
+			}
+			if st != c.wantStatus {
+				t.Errorf("status %d, want %d", st, c.wantStatus)
+			}
+			if e.String() != "" {
+				t.Errorf("diagnostic %q, want none", e.String())
+			}
+		})
+	}
+}
+
+// And a signal nobody ignores never reaches the axis, so leaving it unanswered
+// is not a way to break every other death.
+func TestAnUnansweredIgnoreAxisDoesNotReachOtherSignals(t *testing.T) {
+	sem := killSem()
+	sem.QuitIgnoredWhenNotInteractive = Unspecified
+	out, errs, st := killRun(t, "kill -TERM $$\necho after\n", sem, Diagnostics{})
+	if out != "" || errs != "" {
+		t.Errorf("output %q and %q, want neither", out, errs)
+	}
+	if want := 128 + int(syscall.SIGTERM); st != want {
+		t.Errorf("status %d, want %d", st, want)
+	}
+}
+
 // TestNoDeathWithoutAHandlerToDoIt is the default a library gets.
 func TestNoDeathWithoutAHandlerToDoIt(t *testing.T) {
 	sem := killSem()

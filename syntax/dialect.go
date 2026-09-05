@@ -3,6 +3,36 @@
 
 package syntax
 
+// AliasRoutes is a set of the ways a non-interactive program reaches a shell,
+// for the one grammar question whose answer depends on which of them it was.
+//
+// The routes are the front end's — a command string, a file, standard input —
+// and this package names them anyway, because [Dialect.ExpandAliases] is the
+// question and a question has to be askable where it is answered. The parser
+// never reads the set; whoever knows how the program arrived does, and passes
+// the table of aliases in or leaves it nil.
+type AliasRoutes uint8
+
+const (
+	// AliasFromCommandString is a program given as an argument: `-c`.
+	AliasFromCommandString AliasRoutes = 1 << iota
+	// AliasFromScriptFile is a program read from a path named as an operand.
+	AliasFromScriptFile
+	// AliasFromStandardInput is a program read from the descriptor, whether
+	// by `-s` or by there being no operand and no terminal.
+	AliasOnStandardInput
+	// AliasOnEveryRoute is what a shell that does not distinguish them
+	// answers, which is two of the four.
+	AliasOnEveryRoute = AliasFromCommandString | AliasFromScriptFile | AliasOnStandardInput
+	// AliasOnNoRoute is the empty set, spelled so a dialect can say it
+	// deliberately rather than by leaving a field out.
+	AliasOnNoRoute AliasRoutes = 0
+)
+
+// Has reports whether route is in the set. A caller asks with exactly one
+// route, which is what it knows.
+func (a AliasRoutes) Has(route AliasRoutes) bool { return a&route != 0 }
+
 // Dialect says which constructs the lexer accepts.
 //
 // Fields are named for the construct rather than for the shell that wants it,
@@ -217,22 +247,53 @@ type Dialect struct {
 	// they stay exactly what they are where it is off.
 	ParamTransformations bool
 
-	// ExpandAliases expands an alias in a *non-interactive* shell. True in
-	// dash and ksh93, which expand by every route; bash needs
-	// `shopt -s expand_aliases` and expands by none without it. All four
-	// expand interactively, which is the front end's to know rather than
-	// this — it is what decides there is a person at the keyboard.
+	// ExpandAliases is the set of *non-interactive* routes this dialect
+	// expands an alias on. dash and ksh93 answer every route; bash answers
+	// none without `shopt -s expand_aliases`. All four expand interactively,
+	// which is the front end's to know rather than this — it is what decides
+	// there is a person at the keyboard.
 	//
-	// zsh does not fit the boolean, measured 2026-09-05: it declines under
-	// `-c` and expands from a script file and from standard input. This flag
-	// is false for zsh, which is right for `-c` and wrong for the other two
-	// routes; the answer wants to be route-aware the way "is this
-	// interactive" already is, and that is not built. Issue #583.
+	// A set rather than a boolean because one answer is not a property of
+	// the shell at all. Measured 2026-09-05, the same two lines by all three
+	// routes:
+	//
+	//	shell   -c    script file   standard input
+	//	bash    no    no            no
+	//	dash    yes   yes           yes
+	//	ksh93   yes   yes           yes
+	//	zsh     no    yes           yes
+	//
+	// A boolean gets one of zsh's three right and the two it gets wrong are
+	// the ones a real script uses. The same measurement found bash in POSIX
+	// mode splitting the other way — `sh -c` expands and `sh script.sh` does
+	// not — so the route is a dimension of the question rather than one
+	// shell's quirk.
 	//
 	// Whether a word *is* expanded, and into what, is not a dialect question:
 	// every shell that expands agrees on the whole algorithm, so that is the
 	// core's behavior and lives in alias.go.
-	ExpandAliases bool
+	ExpandAliases AliasRoutes
+
+	// AliasBodyCountsLines counts the newlines inside a substituted alias
+	// body as lines of the input, so that every later line shifts by one per
+	// newline and a command written on the body's second line is reported
+	// there.
+	//
+	// It is the one place the two substitution models are visible from
+	// outside. dash, ksh93 and zsh splice the body's *text*, so its newlines
+	// are input lines; bash splices tokens and the whole body sits on the
+	// line the alias word was written on. Measured 2026-09-05 with `$LINENO`
+	// after a two-line body physically on line 5 — bash 5, the other three 6
+	// — and again with a three-line body, which shifts by two; and with a
+	// command that fails inside the body, reported on the body's own line by
+	// the three and on the alias word's line by bash. The shift is per
+	// *expansion*: using the alias twice shifts twice, and defining it and
+	// never using it shifts nothing.
+	//
+	// True in the core, which is the majority of the panel and of the
+	// dialects that expand at all. Unreachable where ExpandAliases is empty,
+	// since nothing is ever spliced.
+	AliasBodyCountsLines bool
 
 	// ParamExpansionFlags enables the parenthesized flag group that may open
 	// an expansion: `${(U)x}`, `${(s.:.)x}`, `${(%):-%x}`. One shell in the
@@ -433,7 +494,11 @@ func Core() Dialect {
 		DeclarationUtilities: map[string]bool{
 			"export": true, "readonly": true, "local": true, "typeset": true,
 		},
-		ArraySubscript:          true,
+		ArraySubscript: true,
+		// Three of the four count an alias body's newlines as input lines,
+		// and so do all three of the dialects that expand aliases at all.
+		// Unreachable until a dialect says it expands them.
+		AliasBodyCountsLines:    true,
 		FunctionNamePunctuation: true,
 		ParamSubstitution:       true,
 		ParamSubstring:          true,

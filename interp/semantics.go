@@ -362,6 +362,31 @@ type Semantics struct {
 	// exiting.
 	ExitTrapRunsOnSignalDeath Answer
 
+	// QuitIgnoredWhenNotInteractive makes an untrapped SIGQUIT do nothing at
+	// all rather than end the shell.
+	//
+	//	kill -QUIT $$; echo after
+	//
+	// prints after and exits 0 in bash 5.3 and zsh, and kills the shell with
+	// SIGQUIT in dash and ksh93. It is asked only where those disagree — an
+	// untrapped QUIT in a shell that is not interactive — because every other
+	// case is unanimous: all five in the panel ignore it with `-i`, and a QUIT
+	// with a trap runs the handler everywhere.
+	//
+	// Two things are worth recording beside the split. The first is that this
+	// is a *version* divergence as much as a shell one: bash 3.2 dies by
+	// SIGQUIT where bash 5.3 ignores it, so the two bash columns of the corpus
+	// differ here and a claim about "bash" that does not say which build is
+	// incomplete. The second is that where it is ignored it is ignored
+	// properly rather than deferred — measured with a signal sent from another
+	// process, bash 5.3 and zsh survive that too.
+	//
+	// What `trap - QUIT` then means is a further question this does not
+	// answer, and the panel splits differently on it: after a handler is
+	// installed and removed again, bash 5.3 still ignores the signal and zsh
+	// dies by it.
+	QuitIgnoredWhenNotInteractive Answer
+
 	// ExitArgument is how strict `exit` is about what it is given, and it is
 	// an ordering rather than a side:
 	//
@@ -1401,6 +1426,31 @@ type Semantics struct {
 	// all. The sibling question for a command string is
 	// Diagnostics.CommandStringParsedWhole.
 	StdinProgramReadInBlocks bool
+
+	// StdinOptionNamesTheOperands lets the standard-input option name the
+	// operands of an invocation that also carries a command string — `sh -sc
+	// CMD name a`. The stdin option's rule is that no operand is `$0`: the
+	// shell keeps its own name and every operand is a positional parameter,
+	// so `$0` is the shell and `$#` is 2. The command string's rule is that
+	// the first operand is `$0` and only the rest are parameters, so `$0` is
+	// `name` and `$#` is 1.
+	//
+	// Yes in ksh93 and zsh, no in bash and dash — measured with `-sc`, `-s
+	// -c` and `-c -s` alike, since order and bundling change nothing.
+	//
+	// Asked only when both are given, which is the only place the panel
+	// disagrees. Where the program comes from is not this question: all four
+	// run the command string, and the corpus pins that separately. Either
+	// option alone is unanimous too — the command string names the first
+	// operand `$0`, and standard input leaves `$0` as the shell — and with
+	// no operands at all the two rules agree by having nothing to name.
+	//
+	// It has no answer in PosixSemantics, and that is the honest zero
+	// rather than an omission: the standard gives `-c` and `-s` separate
+	// synopses and says the second is assumed only when the first is absent,
+	// so it never describes an invocation carrying both. A 2-2 split with no
+	// standard to break it is refused until a dialect chooses.
+	StdinOptionNamesTheOperands Answer
 
 	// LoginProfileWhenNonInteractive has a login shell read its login
 	// profile even when there is a script to run rather than a person to

@@ -3,6 +3,8 @@
 
 package syntax
 
+import "strings"
+
 // Alias expansion, which happens when a line is *read* and not when it runs.
 //
 // That is why it lives here rather than in the interpreter: an alias may hold
@@ -12,21 +14,21 @@ package syntax
 //
 // It is a token-level substitution rather than a textual splice, and that
 // choice is measured rather than assumed. Every diagnostic about a command
-// that came from an alias names the line the *alias word* was written on,
-// never a line inside the alias body — bash, dash and ksh93 all report line 3
-// for `alias bad=nosuchcmd` on line 2 used on line 3, and `$LINENO` inside a
-// body reads the same. So a token from an expansion carries the position of
-// the word it replaced, every position still points into the real input, and
+// that came from a *single-line* alias names the line the alias word was
+// written on — bash, dash and ksh93 all report line 3 for `alias
+// bad=nosuchcmd` on line 2 used on line 3, and `$LINENO` inside such a body
+// reads the same. So a token from an expansion carries the position of the
+// word it replaced, every position still points into the real input, and
 // there is no position mapping to keep.
 //
-// The one place the two models differ from outside is a body containing a
-// newline: dash, ksh93 and zsh count it and every later line shifts by one,
-// where bash does not. Measured 2026-09-05 with $LINENO on the line after a
-// two-line alias body — 5 in bash, 6 in the other three, against a physical
-// line 5. This parser does not count it either, so it matches bash and
-// diverges from the two dialects it expands aliases for; recorded rather
-// than fixed here, and there is no axis for it yet. See
-// docs/spec/grammar/tokenization.md and issue #583.
+// The one place the two models are visible from outside is a body containing
+// a newline, and [Dialect.AliasBodyCountsLines] is the axis. Where it is on,
+// the body's newlines are lines of the input: a command on the body's second
+// line is reported there, and every later line of the file shifts by one per
+// newline in every body that was expanded. That is still a token
+// substitution here — the tokens are given lines rather than the text being
+// spliced — which is what keeps positions pointing into the real input while
+// the numbering matches. See docs/spec/grammar/tokenization.md.
 
 // Aliases answers whether a word names an alias, and what it stands for.
 //
@@ -90,14 +92,29 @@ func (p *Parser) spliceAlias(value string) {
 	at := p.tok.Pos
 	end := p.tok.End
 	sub := NewLexer(value, p.dialect)
+	// The body's own newlines, where the dialect counts them: a token on the
+	// body's second line is reported one line below the alias word, and
+	// everything read after this expansion moves down by as many lines as the
+	// body had. The offsets stay the alias word's, so the text a diagnostic
+	// quotes is still text that is really there.
+	counts := p.dialect.AliasBodyCountsLines
 	var toks []Token
 	for {
 		t := sub.Next()
 		if t.Kind == TokEOF {
 			break
 		}
-		t.Pos, t.End = at, end
+		pos, stop := at, end
+		if counts {
+			pos.Line += t.Pos.Line - 1
+			stop.Line += t.End.Line - 1
+		}
+		t.Pos, t.End = pos, stop
 		toks = append(toks, t)
+	}
+	if counts {
+		p.lex.shiftLines(strings.Count(value, "\n"))
+		p.aliasLineShift += strings.Count(value, "\n")
 	}
 	// A value that is empty or all blanks leaves nothing behind, and the
 	// command becomes whatever followed it.

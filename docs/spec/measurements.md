@@ -2338,6 +2338,9 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `signal-death/status-encodes-the-signal` | `st=141~after` | `st=141~after` | `st=141~after` | `st=141~after` | `st=269~after` | `st=141~after` |
 | `signal-death/the-shell-dies-by-the-signal-rather-than-exiting` | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* |
 | `signal-death/an-uncatchable-signal-ends-it-outright` | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* |
+| `signal-death/a-signal-with-no-meaning-of-its-own-is-fatal-too` | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* |
+| `signal-death/dying-by-a-signal-says-nothing` | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* |
+| `signal-death/quit-is-not-fatal-in-every-shell` | *(no output, killed by signal 3 (quit))* | `after` | `after` | *(no output, killed by signal 3 (quit))* | *(no output, killed by signal 3 (quit))* | `after` |
 | `signal-death/a-handled-signal-is-not-a-death` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
 | `signal-death/an-ordinary-failure-is-untouched` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` |
 | `umask/reads-the-mask` | `0022` | `0022` | `0022` | `0022` | `0022` | `022` |
@@ -2434,6 +2437,18 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `signal-death/an-uncatchable-signal-ends-it-outright` — the same death by a signal no shell can trap, handle or re-raise deliberately — the kernel ends it — which is what says the row above is the shell's own discipline and not simply what happens to a process that is signaled
   ```sh
   kill -KILL $$; echo after
+  ```
+- `signal-death/a-signal-with-no-meaning-of-its-own-is-fatal-too` — the same discipline for a signal the shell is not expected to have an opinion about: USR1 has no default meaning beyond ending the process, and every shell in the panel is killed by it. It is here because ours was not — Go's runtime forwards a signal it classifies as killing and silently discards the rest, so USR1, USR2, ALRM, PIPE, XCPU, XFSZ, VTALRM and PROF raised at ourselves did nothing and the shell hung waiting for a death that was never coming, at ten seconds of harness timeout each
+  ```sh
+  kill -USR1 $$; echo after
+  ```
+- `signal-death/dying-by-a-signal-says-nothing` — a shell killed by a signal writes no diagnostic of its own — both streams are empty in all four — and ABRT is the sharp way to ask, because it is one of the signals Go's runtime treats as a crash: it printed a full goroutine dump to standard error and exited 2 where a shell must print nothing at all and be killed by the signal. The same leak internal/panicguard exists to stop, arriving by another road
+  ```sh
+  kill -ABRT $$; echo after
+  ```
+- `signal-death/quit-is-not-fatal-in-every-shell` — the one fatal signal the panel disagrees about: bash 5.3 and zsh take QUIT's default action away and print after with status 0, where dash, ksh93 — and bash 3.2, so the two bash columns differ — are killed by it. Measured with a signal from another process too, so it is a disposition rather than a deferral, and it disappears with `-i`, where all five ignore it
+  ```sh
+  kill -QUIT $$; echo after
   ```
 - `signal-death/a-handled-signal-is-not-a-death` — the control: the same signal with a trap for it runs the handler and the shell carries on to exit normally, so the two rows above are about the *absence* of a handler rather than about the signal arriving
   ```sh
@@ -5244,7 +5259,11 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `alias/not-on-the-line-that-defines-it` | `st=127` **2>** `<shell>: 1: a: not found` | `st=127` **2>** `<shell>: line 1: a: command not found` | `st=127` **2>** `<shell>: line 1: a: command not found` | `st=127` **2>** `<shell>: a: command not found` | `st=127` **2>** `<shell>: a: not found` | `st=127` **2>** `<shell>:1: command not found: a` |
 | `alias/a-diagnostic-names-the-use-site` | **2>** `<shell>: 2: nosuchcmd: not found` *(status 127)* | **2>** `<shell>: line 2: bad: command not found` *(status 127)* | **2>** `<shell>: line 2: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 1: bad: command not found` *(status 127)* | **2>** `<shell>: line 2: nosuchcmd: not found` *(status 127)* | **2>** `<shell>:2: command not found: bad` *(status 127)* |
 | `alias/a-script-file-is-a-different-route` | `hit` | **2>** `<script>: line 2: a: command not found` *(status 127)* | **2>** `<script>: line 2: a: command not found` *(status 127)* | **2>** `<script>: line 2: a: command not found` *(status 127)* | `hit` | `hit` |
+| `alias/standard-input-is-a-route-too` | `hit` | **2>** `<shell>: line 2: a: command not found` *(status 127)* | `hit` | **2>** `<shell>: line 2: a: command not found` *(status 127)* | `hit` | `hit` |
 | `alias/a-body-newline-shifts-later-lines` | `one~two~LINENO=6` | `one~two~LINENO=5` | `one~two~LINENO=5` | `one~two~LINENO=5` | `one~two~LINENO=6` | `one~two~LINENO=6` |
+| `alias/a-body-newline-shifts-a-diagnostic-too` | `one~LINENO=5` **2>** `<script>: 4: nosuchcmd: not found` | `LINENO=4` **2>** `<script>: line 3: two: command not found` | `LINENO=4` **2>** `<script>: line 3: two: command not found` | `LINENO=4` **2>** `<script>: line 3: two: command not found` | `one~LINENO=5` **2>** `<script>: line 4: nosuchcmd: not found` | `one~LINENO=5` **2>** `<script>:4: command not found: nosuchcmd` |
+| `alias/two-newlines-shift-by-two` | `one~two~three~LINENO=7` | `LINENO=5` **2>** `<script>: line 4: three: command not found` | `LINENO=5` **2>** `<script>: line 4: three: command not found` | `LINENO=5` **2>** `<script>: line 4: three: command not found` | `one~two~three~LINENO=7` | `one~two~three~LINENO=7` |
+| `alias/an-alias-never-used-shifts-nothing` | `LINENO=3` | `LINENO=3` | `LINENO=3` | `LINENO=3` | `LINENO=3` | `LINENO=3` |
 | `alias/defines-and-lists-one` | `a='echo x'` | `alias a='echo x'` | `a='echo x'` | `alias a='echo x'` | `a='echo x'` | `a='echo x'` |
 | `alias/a-value-that-needs-no-quotes` | `b='ls'` | `alias b='ls'` | `b='ls'` | `alias b='ls'` | `b=ls` | `b=ls` |
 | `alias/a-value-holding-a-quote` | `q='it'"'"'s'` | `alias q='it'\''s'` | `q='it'\''s'` | `alias q='it'\''s'` | `q=$'it\'s'` | `q='it'\''s'` |
@@ -5283,17 +5302,43 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
   alias bad='nosuchcmd'
   bad
   ```
-- `alias/a-script-file-is-a-different-route` — the same two lines as `alias/expands-a-command-word`, from a file instead of -c, and zsh changes its answer: it declines to expand under -c and expands from a script file. So whether aliases expand is a property of *how the program arrived* rather than of the shell, which one boolean on the dialect cannot say — issue #583
+- `alias/a-script-file-is-a-different-route` — the same two lines as `alias/expands-a-command-word`, from a file instead of -c, and zsh changes its answer: it declines to expand under -c and expands from a script file. So whether aliases expand is a property of *how the program arrived* rather than of the shell, which one boolean on the dialect cannot say
   ```sh
   alias a='echo hit'
   a
   ```
-- `alias/a-body-newline-shifts-later-lines` — the one place a token-level splice is distinguishable from a textual one, and the shopt line is there so bash expands too and can be compared. The last line is physically line 5: bash reports 5, and dash, ksh93 and zsh all report 6 because they counted the newline inside the alias body. There is no axis for it and this shell reports 5 in every dialect — issue #583
+- `alias/standard-input-is-a-route-too` — the third of the three routes, and the one that completes the table: zsh expands here as it does from a file and unlike under -c, so the two rows beside this one are a pair rather than a curiosity. `--` is what says the program is not on the argv
+  ```sh
+  alias a='echo hit'
+  a
+  ```
+- `alias/a-body-newline-shifts-later-lines` — the one place a token-level splice is distinguishable from a textual one, and the shopt line is there so bash expands too and can be compared. The last line is physically line 5: bash reports 5, and dash, ksh93 and zsh all report 6 because they counted the newline inside the alias body
   ```sh
   shopt -s expand_aliases 2>/dev/null
   alias two='echo one
   echo two'
   two
+  echo "LINENO=$LINENO"
+  ```
+- `alias/a-body-newline-shifts-a-diagnostic-too` — the same shift seen from the other side: the failing command is on the body's *second* line, so the three that count the newline report it a line further down than the alias word — 4 against bash's 3 — and $LINENO after it moves with it. A diagnostic naming a line inside a body is the half `alias/a-diagnostic-names-the-use-site` cannot show, because a one-line body has no second line to name
+  ```sh
+  alias two='echo one
+  nosuchcmd'
+  two
+  echo "LINENO=$LINENO"
+  ```
+- `alias/two-newlines-shift-by-two` — the shift is per newline rather than per expansion that had one: a three-line body moves the line after it by two. Pinned because one newline cannot tell a count from a flag
+  ```sh
+  alias three='echo one
+  echo two
+  echo three'
+  three
+  echo "LINENO=$LINENO"
+  ```
+- `alias/an-alias-never-used-shifts-nothing` — and the shift belongs to the *expansion*, not to the definition: the same two-line body, never used, leaves the line after it where it was written. Unanimous, which is what makes it the control for the two rows above
+  ```sh
+  alias two='echo one
+  echo two'
   echo "LINENO=$LINENO"
   ```
 - `alias/defines-and-lists-one` — the shape of a listing, and it is not unanimous: bash writes `alias ` in front so the line reads back as a command, and the other three write only the assignment
@@ -5340,6 +5385,10 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `invoke/end-of-options-between-c-and-its-string` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` |
 | `invoke/plus-c-still-runs-the-command` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
 | `invoke/c-outranks-standard-input` | `hi\|0` | `hi\|0` | `hi\|0` | `hi\|0` | `hi\|0` | `hi\|0` |
+| `invoke/c-with-s-names-the-operands` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `<shell>\|2\|name a` | `<shell>\|2\|name a` |
+| `invoke/c-with-s-unbundled` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `<shell>\|2\|name a` | `<shell>\|2\|name a` |
+| `invoke/c-before-s-names-the-operands` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `<shell>\|2\|name a` | `<shell>\|2\|name a` |
+| `invoke/c-with-s-and-no-operands` | `<shell>\|0\|` | `<shell>\|0\|` | `sh\|0\|` | `<shell>\|0\|` | `<shell>\|0\|` | `<shell>\|0\|` |
 | `invoke/standard-input-that-is-not-a-terminal` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `invoke/the-program-arrives-on-standard-input` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` | `0=[sh]\|n=0` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` |
 | `invoke/dash-s-makes-every-operand-a-parameter` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[sh]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` |
@@ -5402,6 +5451,22 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `invoke/c-outranks-standard-input` — -s and -c in one bundle: all four run the command rather than reading standard input, so a shell that let -s win would print nothing and still exit 0
   ```sh
   echo "hi|$#"
+  ```
+- `invoke/c-with-s-names-the-operands` — the same bundle with operands after it, which is where the panel splits 2-2: bash and dash apply the command string's rule and make `name` $0, ksh93 and zsh apply the standard-input rule and let no operand be $0, so the shell keeps its own name and both operands are parameters. Only the naming splits — all four run the command string, which the case above pins
+  ```sh
+  echo "$0|$#|$*"
+  ```
+- `invoke/c-with-s-unbundled` — the same question spelled as two words, which changes nothing anywhere: whichever rule a shell applies, it applies it to the bundle and to the pair alike
+  ```sh
+  echo "$0|$#|$*"
+  ```
+- `invoke/c-before-s-names-the-operands` — and in the other order, where the letter that comes first might have been expected to win and does not — the answer is the shell's rather than the invocation's
+  ```sh
+  echo "$0|$#|$*"
+  ```
+- `invoke/c-with-s-and-no-operands` — the same invocation with nothing for the two rules to disagree about: with no operand past the command string all four keep the shell's own name and no parameters, which is why the question is only asked where an operand follows
+  ```sh
+  echo "$0|$#|$*"
   ```
 - `invoke/standard-input-that-is-not-a-terminal` — the harness gives every child the null device for standard input, and the null device is a character device — which is exactly what made the prompt decision say terminal, ask it for raw mode, and exit 2 with `operation not supported by device` (#509). No shell in the panel prompts here: -s says read standard input, standard input ends at once, and the shell exits 0 having said nothing. Deliberately no placeholder — what is pinned is what a shell does before it reads anything, and the snippet is written down as the thing that would have run
   ```sh

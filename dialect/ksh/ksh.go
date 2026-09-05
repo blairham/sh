@@ -17,7 +17,10 @@ import (
 func Dialect() syntax.Dialect {
 	d := syntax.Core()
 	// ksh93 expands them in a script too.
-	d.ExpandAliases = true
+	d.ExpandAliases = syntax.AliasOnEveryRoute
+	// And a body's newlines are lines of the program: `$LINENO` after a
+	// two-line body reads one more than the physical line.
+	d.AliasBodyCountsLines = true
 	// ksh93 has neither `local` nor `declare`, so `local a=(x)` is the same
 	// syntax error there that `echo a=(x)` is — the rule follows the name
 	// into the shell that has it.
@@ -68,6 +71,10 @@ func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
+	// `-c` and `-s` together: `-s` names the operands here, so `sh -sc CMD
+	// name a` keeps the shell in `$0` and makes both operands parameters.
+	// bash and dash let the command string name them instead.
+	s.StdinOptionNamesTheOperands = interp.Yes
 	// Measured from a script file, where `echo $-` reports `hB`; ksh93's
 	// route letters — `c` under -c, `s` when reading a command string or
 	// standard input — are the front end's and stay unmodeled.
@@ -218,6 +225,7 @@ func Semantics() interp.Semantics {
 	// zsh still search the current directory.
 	s.EmptyPathIsTheCurrentDirectory = interp.No
 	s.ExitTrapRunsOnSignalDeath = interp.Yes
+	s.QuitIgnoredWhenNotInteractive = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	s.KillListAcceptsName = interp.Yes
 	s.SIGPrefixAccepted = interp.Yes

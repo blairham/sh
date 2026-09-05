@@ -264,6 +264,11 @@ type session struct {
 	mu     sync.Mutex
 	stop   context.CancelFunc
 	inTurn bool
+
+	// report is where an update goes. Nil is the connection, which is what a
+	// session on a real one has; a test that is about the mapping rather than
+	// about the wire fills it in and reads the values.
+	report func(any)
 }
 
 // run is one prompt turn.
@@ -315,6 +320,10 @@ func (s *session) cancel() {
 // There is nowhere to report a failed notification to except the connection
 // that just failed.
 func (s *session) notify(u any) {
+	if s.report != nil {
+		s.report(u)
+		return
+	}
 	_ = s.agent.conn.Notify(MethodSessionUpdate, SessionNotification{SessionID: s.id, Update: u})
 }
 
@@ -392,6 +401,14 @@ func (s *session) Emit(_ context.Context, e interp.Event) {
 			return
 		}
 		s.finish(e, StatusCompleted, nil, "")
+	default:
+		// A kind this shell has not seen. Reported rather than dropped,
+		// which is the event contract's own rule for a name a consumer does
+		// not know: record it and carry on. ActionSignal arriving after the
+		// other five is the worked example — a consumer that silently
+		// ignored what it did not recognize would have shown a client a
+		// shell that never signaled anything.
+		s.finish(e, StatusCompleted, map[string]any{"event": e.Kind.String()}, "")
 	}
 }
 

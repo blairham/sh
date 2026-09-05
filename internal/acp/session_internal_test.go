@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/blairham/sh/driver"
+	"github.com/blairham/sh/interp"
 )
 
 // Two properties of a session that a client cannot see from outside, and that
@@ -140,5 +141,38 @@ func TestFlushSendsAnUnfinishedCharacter(t *testing.T) {
 	c.Flush()
 	if len(pieces) != 2 {
 		t.Errorf("pieces = %q, want the held-back bytes to have been sent", pieces)
+	}
+}
+
+// An event kind this shell has not seen is reported rather than dropped.
+//
+// The event contract's fourth stability rule: new event and action names may
+// be added within a version, and a consumer must not fail on one it does not
+// know — the useful default is to record it and carry on. ActionSignal
+// arriving after the other five is the worked example, and a consumer that
+// silently ignored what it did not recognize would have shown a client a shell
+// that never signaled anything.
+func TestAnUnknownEventKindIsStillReported(t *testing.T) {
+	t.Parallel()
+	s := newTestSession(t)
+	var sent []any
+	s.agent.conn = nil
+	s.report = func(u any) { sent = append(sent, u) }
+
+	// A kind past every one this package knows about, which is exactly the
+	// shape of the next one to be added.
+	s.Emit(t.Context(), interp.Event{
+		Kind:   interp.EventAccess + 40,
+		Action: interp.Action{Kind: interp.ActionOpen, Path: "/tmp/x"},
+	})
+	if len(sent) != 1 {
+		t.Fatalf("%d updates sent for an unknown event kind, want 1", len(sent))
+	}
+	notice, ok := sent[0].(Notice)
+	if !ok {
+		t.Fatalf("update = %T, want a tool call notice", sent[0])
+	}
+	if notice.Title == "" || notice.ToolCallID == "" {
+		t.Errorf("notice = %+v, want it to name what happened", notice)
 	}
 }

@@ -14,7 +14,7 @@ re-run rather than trusted.
 
     tokenization.md    input to tokens, and where quoting is recorded
     commands.md        tokens to commands: precedence and structure
-    substitutions.md   where $( ), ${ }, $(( )) and ` ` end
+    substitutions.md   where $( ), ${ }, $(( )), ` ` and <( ) end
     parameter-expansion.md  what the operators inside ${ } mean
     patterns.md        the matching language, shared by three consumers
     arithmetic.md      what is inside $(( )) and (( ))

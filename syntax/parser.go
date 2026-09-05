@@ -668,7 +668,9 @@ func (p *Parser) parseCommand() Command {
 //
 // The name is only a name when a compound command follows it — with a simple
 // command the first word is the command, which is why `coproc cat` runs cat
-// rather than defining a coprocess called cat that runs nothing.
+// rather than defining a coprocess called cat that runs nothing. Measured:
+// bash reports `MY: command not found` for `coproc MY cat`. The construct is
+// specified in the `coproc` section of docs/spec/grammar/commands.md.
 func (p *Parser) parseCoproc() Command {
 	c := &CoprocClause{Coproc: p.tok.Pos}
 	p.next()
@@ -1019,9 +1021,11 @@ func (p *Parser) parseAssign(name string) *Assign {
 	// `a=(1 2)` is an array, and the parenthesis has to be adjacent. With a
 	// space it is not a subshell — measured, against the comment that used
 	// to stand here: `a= (echo x)` is a syntax error in dash, bash and zsh,
-	// and only ksh93 accepts it. The adjacency check still matters, because
-	// it decides *which* error, and the non-adjacent form now falls through
-	// to the paren-after-a-word rule in parseSimple.
+	// and only ksh93 accepts it, reading it as the literal and leaving `a`
+	// holding `echo` and `x`. The adjacency check still matters, because it
+	// decides *which* error, and the non-adjacent form now falls through to
+	// the paren-after-a-word rule in parseSimple. Specified in the array
+	// assignment section of docs/spec/grammar/commands.md.
 	if a.Value == nil && p.at(TokLeftParen) && p.tok.Pos.Offset == a.Stop.Offset {
 		if !p.dialect.ArrayLiteral {
 			p.failUnexpected("")
@@ -1275,6 +1279,10 @@ func (p *Parser) peekIsArithCmd() bool {
 // The three expressions arrive as one token — the lexer keeps `(( … ))` whole
 // because what is inside is arithmetic and not a command list — so they are
 // split here on the semicolons the arithmetic grammar has no use for.
+//
+// Specified in the C-style `for` section of docs/spec/grammar/commands.md,
+// which also records the one shape this does not accept: the panel takes a
+// brace group as the body where this requires `do … done`.
 func (p *Parser) parseForArith(start Pos) Command {
 	c := &ForArithClause{Start: start}
 	p.next() // for

@@ -220,6 +220,7 @@ func Semantics() interp.Semantics {
 	// dies by it — a divergence between two builds of the same shell, and
 	// this preset is 5.3.
 	s.QuitIgnoredWhenNotInteractive = interp.Yes
+	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	s.KillListAcceptsName = interp.Yes
 	s.SIGPrefixAccepted = interp.Yes

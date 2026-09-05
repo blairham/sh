@@ -2451,6 +2451,8 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `signal-death/a-signal-with-no-meaning-of-its-own-is-fatal-too` | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* | *(no output, killed by signal 30 (user defined signal 1))* |
 | `signal-death/dying-by-a-signal-says-nothing` | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* | *(no output, killed by signal 6 (abort trap))* |
 | `signal-death/quit-is-not-fatal-in-every-shell` | *(no output, killed by signal 3 (quit))* | `after` | `after` | *(no output, killed by signal 3 (quit))* | *(no output, killed by signal 3 (quit))* | `after` |
+| `signal-death/hangup-is-an-exit-in-one-shell` | *(no output, killed by signal 1 (hangup))* | *(no output, killed by signal 1 (hangup))* | *(no output, killed by signal 1 (hangup))* | *(no output, killed by signal 1 (hangup))* | *(no output, killed by signal 1 (hangup))* | *(no output, status 1)* |
+| `signal-death/a-hangup-that-exits-runs-the-exit-trap` | *(no output, killed by signal 1 (hangup))* | `bye` *(killed by signal 1 (hangup))* | `bye` *(killed by signal 1 (hangup))* | `bye` *(killed by signal 1 (hangup))* | `bye` *(killed by signal 1 (hangup))* | `bye` *(status 1)* |
 | `signal-death/a-handled-signal-is-not-a-death` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
 | `signal-death/an-ordinary-failure-is-untouched` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` | `st=3` |
 | `umask/reads-the-mask` | `0022` | `0022` | `0022` | `0022` | `0022` | `022` |
@@ -2559,6 +2561,14 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `signal-death/quit-is-not-fatal-in-every-shell` — the one fatal signal the panel disagrees about: bash 5.3 and zsh take QUIT's default action away and print after with status 0, where dash, ksh93 — and bash 3.2, so the two bash columns differ — are killed by it. Measured with a signal from another process too, so it is a disposition rather than a deferral, and it disappears with `-i`, where all five ignore it
   ```sh
   kill -QUIT $$; echo after
+  ```
+- `signal-death/hangup-is-an-exit-in-one-shell` — the second fatal signal the panel disagrees about, and the only other one: zsh reports 1 where bash, dash and ksh93 are killed by SIGHUP and report 129. Nothing prints after it anywhere, so the disagreement is about how the shell ended rather than about whether it did — and 1 is not 128 plus anything, which is the first sign that zsh is exiting rather than dying. Measured across all nineteen signals whose default action ends a process: this and QUIT are the whole of the split
+  ```sh
+  kill -HUP $$; echo after
+  ```
+- `signal-death/a-hangup-that-exits-runs-the-exit-trap` — what says the row above is an exit and not merely a different number. zsh does not run the EXIT trap when a signal kills it — `trap 'echo bye' EXIT; kill -TERM $$` prints nothing there — and it prints bye here, so SIGHUP produced no death for that question to be asked about. bash and ksh93 print bye because dying counts as exiting for them, and dash prints nothing for either signal, which is why the trap alone cannot tell the two apart and the status beside it can
+  ```sh
+  trap 'echo bye' EXIT; kill -HUP $$; echo after
   ```
 - `signal-death/a-handled-signal-is-not-a-death` — the control: the same signal with a trap for it runs the handler and the shell carries on to exit normally, so the two rows above are about the *absence* of a handler rather than about the signal arriving
   ```sh

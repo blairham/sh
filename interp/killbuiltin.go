@@ -258,12 +258,12 @@ func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) 
 			sent++
 			continue
 		}
-		if r.killedBy != "" {
-			// This shell has just killed itself. Nothing after the signal
+		if r.stoppedBySignal {
+			// This shell has just ended itself. Nothing after the signal
 			// runs, including the rest of these targets, and the status is
-			// the one a process killed by a signal carries — returned rather
-			// than only assigned, because the dispatcher takes what a builtin
-			// returns as the command's status.
+			// the one signalDeath settled — returned rather than only
+			// assigned, because the dispatcher takes what a builtin returns
+			// as the command's status.
 			return r.status
 		}
 		if err := r.sendSignal(pid, name, sig); err != nil {
@@ -273,7 +273,7 @@ func (r *Runner) killTargets(name string, sig syscall.Signal, targets []string) 
 		}
 		sent++
 	}
-	if r.killedBy != "" {
+	if r.stoppedBySignal {
 		return r.status
 	}
 	return r.killStatus(sent, failed)
@@ -453,11 +453,31 @@ func fatalSignal(name string) bool {
 // The status is the one a process killed by a signal reports, and it is set
 // here rather than left to the driver because the driver will not get the
 // chance if the kernel is quicker.
+//
+// Except where the ending is not a death at all. One shell in the panel ends
+// on an untrapped SIGHUP the way `exit 1` ends it, and recording no death is
+// the whole of that: nothing sets killedBy, so the driver raises nothing, the
+// EXIT trap runs without ExitTrapRunsOnSignalDeath being asked, and an `exit`
+// inside that trap still takes the status. Both routes here — the raise, and
+// a subshell's raise collected by the parent — pass through this function,
+// which is why the answer is read here rather than at either of them.
 func (r *Runner) signalDeath(name string, sig syscall.Signal) {
+	r.stoppedBySignal = true
+	if name == "HUP" && r.ask(r.sem().HangupIsAnOrderlyExit,
+		"whether an untrapped HUP exits the shell rather than killing it") {
+		r.status = hangupExitStatus
+		r.ctl = controlExit
+		return
+	}
 	r.killedBy, r.killedBySig = name, sig
 	r.status = 128 + int(sig)
 	r.ctl = controlExit
 }
+
+// hangupExitStatus is what a shell that treats SIGHUP as an exit exits with.
+// Measured, and it is a constant rather than the signal's number: it stays 1
+// whatever the previous command reported.
+const hangupExitStatus = 1
 
 // killStatus answers what the whole command reports, which is an axis with
 // three answers rather than a majority and an exception.

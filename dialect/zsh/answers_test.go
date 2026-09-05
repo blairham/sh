@@ -60,6 +60,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"TraceShowsItsOwnDisabling", s.TraceShowsItsOwnDisabling, interp.Yes},
 		{"LocalInheritsTheExportAttribute", s.LocalInheritsTheExportAttribute, interp.No},
 		{"StdinOptionNamesTheOperands", s.StdinOptionNamesTheOperands, interp.Yes},
+		{"HangupIsAnOrderlyExit", s.HangupIsAnOrderlyExit, interp.Yes},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)
@@ -205,5 +206,36 @@ func TestALocalDoesNotCarryTheExportAttribute(t *testing.T) {
 	out, _ = answersRun(t, `export FOO=bar; f() { local FOO; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f`)
 	if !strings.Contains(out, "(none)") {
 		t.Errorf("valueless: got %q, want the child told nothing", out)
+	}
+}
+
+// TestAHangupEndsTheShellWithoutKillingIt is the composite this preset is
+// alone in: an untrapped SIGHUP ends the script with 1 rather than with 128
+// plus the number, and it runs the EXIT trap on the way out even though this
+// shell does not run it for a signal that kills — which is the pair of facts
+// that makes it an exit rather than a differently numbered death.
+func TestAHangupEndsTheShellWithoutKillingIt(t *testing.T) {
+	out, st := answersRun(t, "kill -HUP $$\necho after\n")
+	if out != "" {
+		t.Errorf("output %q, want the script to have stopped", out)
+	}
+	if st != 1 {
+		t.Errorf("status %d, want 1", st)
+	}
+	out, st = answersRun(t, "trap 'echo bye' EXIT\nkill -HUP $$\necho after\n")
+	if out != "bye\n" {
+		t.Errorf("output %q, want the EXIT trap and nothing after", out)
+	}
+	if st != 1 {
+		t.Errorf("status %d, want 1", st)
+	}
+	// The control, in the same preset: a signal that does kill leaves the
+	// EXIT trap unrun and reports 128 plus the number.
+	out, st = answersRun(t, "trap 'echo bye' EXIT\nkill -TERM $$\necho after\n")
+	if out != "" {
+		t.Errorf("output %q, want nothing — a death does not run the trap here", out)
+	}
+	if st != 128+15 {
+		t.Errorf("status %d, want 143", st)
 	}
 }

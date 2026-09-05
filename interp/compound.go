@@ -89,7 +89,10 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 		sub := r.clone()
 		sub.inheritJobs(jobBoundaryCompound)
 		err := sub.runList(ctx, c.List)
-		r.status = sub.status
+		// The status and what produced it travel together: a subshell whose
+		// last command a signal killed is a signal death out here too, and
+		// a pipeline substituting the status has to know that.
+		r.status, r.diedOfSig = sub.status, sub.diedOfSig
 		return err
 	})
 }

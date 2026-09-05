@@ -5682,6 +5682,62 @@ cannot arise there and is never asked.
 Narrower than it looks: an ordinary failing pipeline — `true | false` —
 stops all three, and this is only about the failure the option adds.
 
+**`PipefailSubstitutesTheBareSignal`** — bash no · dash unspecified · ksh93 yes · zsh no
+
+Reports an element `pipefail` chose over the pipeline's last one, and
+which died of a signal, as the signal's **number** rather than as the
+status a command killed by that signal reports.
+
+It looks like a second reading of `SignalDeathStatusIsTwoFiftySix` and
+is not. Measured over the whole family, ksh93 answers *that* one
+consistently everywhere — with `/bin/bash` 3.2.57, `/opt/homebrew/bin/bash`
+5.3.15, `/bin/ksh` 93u+ 2012-08-01, `/opt/homebrew/bin/zsh` 5.9.2 and
+`/bin/dash`, a child raising signal *n*:
+
+    context                                bash/zsh/dash   ksh93
+    foreground command                     128+n           256+n
+    inside ( … )                           128+n           256+n
+    inside $( … )                          128+n           256+n
+    `cmd & wait $!`                        128+n           256+n
+    the shell itself, as its parent sees   128+n           256+n
+    the LAST element of a pipeline         128+n           256+n
+    an EARLIER element, through pipefail   128+n           **n**
+
+Measured across HUP, INT, QUIT, ABRT, FPE, BUS, SEGV, PIPE, ALRM, TERM,
+USR1 and XCPU for the first row, and with SIGPIPE and SIGTERM for the
+last — 13 and 15 in ksh93 where the same deaths are 269 and 271 one row
+up. So it is neither "does this shell add 128 at all" (it does add
+something, consistently) nor a rule about SIGPIPE (SIGTERM behaves the
+same way).
+
+The last two rows are why this belongs to the *substitution*: an element
+that fails in the position the pipeline reports anyway keeps the ordinary
+encoding, and only the status pipefail went looking for is bare. Both
+halves of that were measured in one script —
+
+    { echo "$big"; } | true; a=$?      # substituted
+    sleep 5 & p=$!; kill -TERM $p
+    wait $p; b=$?                      # waited for
+
+    bash 3.2 / bash 5.3 / zsh   a=141  b=143
+    ksh93                       a=13   b=271
+
+An ordinary non-zero exit is substituted unchanged in every shell with
+the option — `(exit 42) | true` is 42 in all three — so a signal is the
+whole of the difference. Builtin and external, first and middle, in
+pipelines of two and of three, all give the same answer, so it is not
+about which side of the process boundary the death happened on either.
+
+Absent rather than false in dash, which has no pipefail. Asked only where
+a substitution actually happened *and* was a signal death, so every other
+pipeline runs in a core with no dialect.
+
+Reaching this needed a status to remember what produced it, since 143 is
+`exit 143` as readily as SIGTERM: `Runner.diedOfSig` carries the signal
+beside the status, is cleared at the top of every command so it can only
+describe the one the status describes, and travels out of a subshell with
+the status it belongs to.
+
 **`PipefailOption`** — bash yes · dash no · ksh93 yes · zsh yes
 
 Is whether `set -o pipefail` exists, making a pipeline report its last

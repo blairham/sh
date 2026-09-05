@@ -894,6 +894,21 @@ var Corpus = []Case{
 		Why:     "the terminator between the header and the body is optional before the brace exactly as it is before `do`, which is what says the brace stands where `do` stands rather than being glued to the header",
 	},
 	{
+		ID: "core/c-style-for-takes-a-redirection", Category: "command language",
+		Snippet: `for ((i=0;i<2;i++)); do echo "$i"; done > f; echo end; cat f`,
+		Why:     "a redirection after a compound command covers the whole of it, and the C-style loop is no exception — the quiet failure is that a node with nowhere to keep one leaves the operator standing as a statement of its own, which truncates the file, redirects nothing, and says not a word. dash has no C-style loop and refuses the header",
+	},
+	{
+		ID: "core/c-style-for-with-a-brace-body-takes-a-redirection", Category: "command language",
+		Snippet: `for ((i=0;i<2;i++)) { echo "$i"; } > f; echo end; cat f`,
+		Why:     "the same on the brace-bodied spelling, which is where the suffix is easiest to lose: the body ends in a `}` rather than a keyword and the redirection reads as the brace group's",
+	},
+	{
+		ID: "core/c-style-for-takes-an-input-redirection", Category: "command language",
+		Snippet: `printf 'L1\nL2\n' > d; for ((i=0;i<2;i++)); do read x; echo "got=$x"; done < d`,
+		Why:     "the reading half, and the one that shows the redirection outlives an iteration: the second `read` continues where the first left off, which it could not do if the file were opened per pass",
+	},
+	{
 		ID: "core/a-list-for-with-a-brace-body", Category: "command language",
 		Snippet: `for i in a b; { printf "%s" "$i"; }; echo`,
 		Why:     "the same production on the ordinary `for`, which is the half easiest to miss: the brace body is not the C-style loop's alone. It needs the separator, and the next case says why — this is the one three of the four accept and dash refuses, dash being the only panel shell without the form",

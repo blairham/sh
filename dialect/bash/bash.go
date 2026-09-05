@@ -104,6 +104,9 @@ func Semantics() interp.Semantics {
 	s.AmbiguousJobNameIsRefused = interp.Yes
 	s.WaitReportsAMissingJob = interp.Yes
 	s.WaitNWaitsForTheNextJob = interp.Yes
+	// A trapped signal cuts a `wait` short with 128 plus the signal, and the
+	// form that names a job answers the same as the bare one.
+	s.WaitForAJobFailsWhenInterrupted = interp.No
 	s.DisownRemovesTheJob = interp.Yes
 	s.CommandRejectsUnknownOption = interp.Yes
 	s.GetoptsRejectsUnknownOption = interp.Yes

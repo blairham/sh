@@ -114,6 +114,10 @@ func Semantics() interp.Semantics {
 	s.AmbiguousJobNameIsRefused = interp.No
 	s.WaitReportsAMissingJob = interp.No
 	s.WaitNWaitsForTheNextJob = interp.No
+	// The lone divergence on an interrupted wait: a bare one reports this
+	// shell's own 256 plus the signal, and one that names a job — `wait $!`
+	// or `wait %1` — reports a plain 1 instead.
+	s.WaitForAJobFailsWhenInterrupted = interp.Yes
 	s.DisownRemovesTheJob = interp.No
 	// Both Yes, re-measured with a letter ksh93 does not own (-q): the first
 	// probes used -x and -a, which are real ksh93 options, and recorded No

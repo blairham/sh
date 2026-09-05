@@ -815,6 +815,18 @@ type Semantics struct {
 	// job finishes first and report its status, 127 with no jobs at all.
 	// bash's letter alone; the other three refuse or misread it.
 	WaitNWaitsForTheNextJob Answer
+	// WaitForAJobFailsWhenInterrupted has a `wait` that names a job report a
+	// plain 1 when a trapped signal cuts it short, rather than the status
+	// that signal encodes. True in ksh93 alone, and only with an operand:
+	// `wait $!` and `wait %1` both report 1 there where its *bare* `wait`
+	// reports 286 for USR1 — 256 plus the signal, its own encoding for a
+	// command a signal killed.
+	//
+	// bash 3.2, bash 5.3, dash and zsh make no distinction between the two
+	// forms and report 158 for either, so the preset follows the four that
+	// agree. Measured with a background job outliving the signal, so the
+	// answer is about the interruption and not about the job's own status.
+	WaitForAJobFailsWhenInterrupted Answer
 	// DisownRemovesTheJob makes `disown` take the job out of the table, so
 	// a later `jobs` no longer lists it: bash and zsh. ksh93's disown only
 	// shields the job from the HUP an exiting shell would send — a signal
@@ -1917,8 +1929,12 @@ func PosixSemantics() Semantics {
 		AmbiguousJobNameIsRefused: Yes,
 		WaitReportsAMissingJob:    Yes,
 		WaitNWaitsForTheNextJob:   No,
-		DotMissingFileFatal:       Yes,
-		DotWithNoOperandIsAnError: Yes,
+		// POSIX has an interrupted `wait` report a status above 128 and does
+		// not carve out the form that names a job; four of the five measured
+		// builds agree.
+		WaitForAJobFailsWhenInterrupted: No,
+		DotMissingFileFatal:             Yes,
+		DotWithNoOperandIsAnError:       Yes,
 		// The standard gives `.` a filename and nothing else; passing
 		// positional parameters to a sourced file is an extension three of
 		// the four grew. And it reads the file from PATH, with no mention of

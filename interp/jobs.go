@@ -197,10 +197,25 @@ func (r *Runner) FinishedJobNotices() []string {
 	return lines
 }
 
+// waitFor blocks for one job, or gives up on it because a trapped signal
+// arrived, and reports which of the two happened.
+//
+// The handler is *not* run here. It runs where every other handler does, at
+// the top of the next statement, which is what keeps `wait; echo $?` printing
+// the trap's output first and the signal's status second in that order.
+func (r *Runner) waitFor(j *Job) (status int, sig syscall.Signal, interrupted bool) {
+	if sig, hit := r.awaitOrTrap(j.done); hit {
+		return 0, sig, true
+	}
+	return j.Status, 0, false
+}
+
 // biWait waits for background jobs.
 //
 // With no arguments it waits for all of them and reports 0, which is what
-// every shell in the panel does regardless of how the jobs exited.
+// every shell in the panel does regardless of how the jobs exited — unless a
+// trapped signal cuts the wait short, which is the one thing that gives a
+// bare `wait` a status of its own.
 func biWait(r *Runner, _ context.Context, args []string) int {
 	args, next, code := r.waitOptions(args)
 	if code != 0 {
@@ -211,7 +226,11 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 	}
 	if len(args) == 0 {
 		for _, j := range r.jobs {
-			j.Wait()
+			if _, sig, hit := r.waitFor(j); hit {
+				// The jobs are left alone: the wait did not finish, so a
+				// later `wait` still has them to wait for.
+				return r.interruptedWaitStatus(sig, false)
+			}
 		}
 		r.jobs = nil
 		return 0
@@ -232,7 +251,11 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 		found := false
 		for _, j := range r.jobs {
 			if j.PID == pid {
-				last = j.Wait()
+				st, sig, hit := r.waitFor(j)
+				if hit {
+					return r.interruptedWaitStatus(sig, true)
+				}
+				last = st
 				found = true
 			}
 		}
@@ -313,12 +336,43 @@ func (r *Runner) waitNext() int {
 	return st
 }
 
+// interruptedWaitStatus is what `wait` reports when a trapped signal cut it
+// short. named says the wait had an operand rather than being a bare one.
+//
+// Two questions, and only the second is new. A bare `wait` reports what a
+// command killed by that signal reports, which is an encoding this package
+// already asks about: 128 plus the signal in most of the panel and 256 plus
+// it in one shell, and that shell answers this the same way — 286 for USR1,
+// exactly its answer for a command USR1 killed. A `wait` that names a job
+// splits differently, and the axis is asked there.
+func (r *Runner) interruptedWaitStatus(sig syscall.Signal, named bool) int {
+	if named {
+		if r.ask(r.sem().WaitForAJobFailsWhenInterrupted,
+			"the status of an interrupted `wait` that names a job") {
+			return 1
+		}
+		if r.unspecified {
+			return r.status
+		}
+	}
+	st := r.signalDeathStatus(sig)
+	if r.unspecified {
+		return r.status
+	}
+	return st
+}
+
 // waitJobSpec waits for the job a `%` spec names.
 func (r *Runner) waitJobSpec(spec string) int {
 	j, code := r.findJobQuietly(spec)
 	switch code {
 	case jobFound:
-		st := j.Wait()
+		st, sig, hit := r.waitFor(j)
+		if hit {
+			// The wait did not finish, so the job is not finished with
+			// either and stays in the table for the next one.
+			return r.interruptedWaitStatus(sig, true)
+		}
 		r.Forget(j)
 		return st
 	case jobSpecAmbiguous:

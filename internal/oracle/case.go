@@ -1131,6 +1131,21 @@ var Corpus = []Case{
 		Why:     "zsh shows the handler the status from before the command that triggered it; the other three show that command's own",
 	},
 	{
+		ID: "trap/wait-cut-short-by-a-signal", Category: "traps and exit",
+		Snippet: `trap 'echo T' USR1; (sleep 0.3; kill -USR1 $$) & wait; echo "st=$?"`,
+		Why:     "the async delivery path, which every other trap case misses: the signal comes from a background job rather than from the shell's own line, and it has to reach a `wait` that is already blocked. The handler runs and then `wait` reports the signal — 128 + USR1 in bash, dash and zsh, 256 + USR1 in ksh93 — where a wait nobody interrupted reports 0. `wait; check $?` is the supervisor loop every job-runner script is built on, so a 0 here is silence in place of the whole point",
+	},
+	{
+		ID: "trap/wait-for-a-job-cut-short-by-a-signal", Category: "traps and exit",
+		Snippet: `trap 'echo T' USR1; (sleep 0.3; kill -USR1 $$) & wait $!; echo "st=$?"`,
+		Why:     "naming the job splits the panel where the bare form did not: bash, dash and zsh answer exactly as above and ksh93 drops its own 256 encoding for a plain 1 (WaitForAJobFailsWhenInterrupted). `wait %1` is the same answer in all four, so the axis is about having an operand and not about how it is spelled",
+	},
+	{
+		ID: "trap/wait-is-not-cut-short-by-an-ignored-signal", Category: "traps and exit",
+		Snippet: `trap '' USR1; (sleep 0.3; kill -USR1 $$) & wait; echo "st=$?"`,
+		Why:     "the control, and the line between the two: an ignored signal has no handler to run, so it does not interrupt anything and `wait` still reports 0 in all four. Without it the case above would be evidence about a signal arriving rather than about a *trapped* one arriving",
+	},
+	{
 		ID: "trap/exit-runs-at-the-end", Category: "traps and exit",
 		Snippet: `trap 'echo bye' EXIT; echo hi`,
 		Why:     "the EXIT trap runs after the script, not where it was set",

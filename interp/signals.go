@@ -71,7 +71,16 @@ var signalNumbers = func() map[string]string {
 type signalState struct {
 	mu    sync.Mutex
 	traps map[string]string
-	ch    chan os.Signal
+	// ch is where the runtime forwards a signal that came from outside this
+	// process. Allocated with the state rather than on the first trap, and
+	// buffered so a burst is not lost between commands: a builtin blocked in
+	// `wait` selects on it, and a field that only appears part-way through
+	// the wait is one the waiter is already past reading.
+	ch chan os.Signal
+	// wake is a nudge for a builtin blocked on something else — one token per
+	// arrival, dropped when one is already outstanding, because the waiter
+	// re-reads pending rather than counting tokens.
+	wake chan struct{}
 	// pending is what the shell already knows has arrived, ahead of the
 	// runtime telling it. Only `kill` puts anything here — see selfSignaled.
 	pending []string
@@ -88,9 +97,40 @@ type signalState struct {
 // sigs returns the shared state, creating it on first use.
 func (r *Runner) sigs() *signalState {
 	if r.signals == nil {
-		r.signals = &signalState{traps: map[string]string{}}
+		r.signals = &signalState{
+			traps: map[string]string{},
+			ch:    make(chan os.Signal, 32),
+			wake:  make(chan struct{}, 1),
+		}
 	}
 	return r.signals
+}
+
+// poke tells a waiter to look again. Never blocks: one outstanding token says
+// everything ten would.
+func (s *signalState) poke() {
+	select {
+	case s.wake <- struct{}{}:
+	default:
+	}
+}
+
+// drainForwarded moves what the runtime has handed over onto the pending list,
+// with the lock already held.
+//
+// Appending is what keeps the order the shell recorded itself in front: those
+// are already on the list, and a forwarded arrival goes behind them.
+func (s *signalState) drainForwarded() {
+	for {
+		select {
+		case sig := <-s.ch:
+			if name, ok := signalName(sig); ok {
+				s.pending = append(s.pending, name)
+			}
+		default:
+			return
+		}
+	}
 }
 
 // signalWord is what a `trap` condition turned out to name, which is three
@@ -169,10 +209,6 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 		signal.Ignore(sig)
 	default:
 		s.traps[name] = *body
-		if s.ch == nil {
-			// Buffered so a burst is not lost between commands.
-			s.ch = make(chan os.Signal, 32)
-		}
 		signal.Notify(s.ch, sig)
 	}
 }
@@ -202,6 +238,10 @@ func (r *Runner) selfSignaled(name string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.pending = append(s.pending, name)
+	// A background job sending this is the shape the issue was reported as:
+	// the arrival has to reach a `wait` that is already blocked, and nothing
+	// else here would tell it.
+	s.poke()
 }
 
 // recordSharedDeath notes a fatal signal a subshell sent the process, for
@@ -243,19 +283,80 @@ func (r *Runner) takePending() []string {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.drainForwarded()
 	got := s.pending
 	s.pending = nil
-	if s.ch == nil {
-		return got
+	return got
+}
+
+// pendingTrap reports an arrival that has a handler waiting to run, and the
+// signal it names.
+//
+// It looks without taking: running a handler belongs between commands, and a
+// builtin that came back *because* of an arrival has not run it. The status it
+// reports is the only thing it takes from the arrival.
+//
+// An ignored signal — a trap with an empty body — is not one of these, which
+// is measured: with `trap ” USR1` set, every shell in the panel waits the
+// background job out and reports 0.
+func (r *Runner) pendingTrap() (syscall.Signal, bool) {
+	s := r.signals
+	if s == nil {
+		return 0, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.drainForwarded()
+	for _, name := range s.pending {
+		if body, ok := s.traps[name]; ok && body != "" {
+			return trappableSignals[name], true
+		}
+	}
+	return 0, false
+}
+
+// awaitOrTrap blocks until done is closed, or until a trapped signal arrives,
+// and reports the signal when one did.
+//
+// This is what makes `wait` interruptible, and `wait` is the only builtin that
+// blocks long enough for the difference to be visible. POSIX has a wait cut
+// short by a trapped signal report a status above 128 rather than resume, and
+// the panel bears that out: with a background job outliving the signal by
+// three seconds, every shell measured came back inside the signal's own 200ms
+// rather than at the end of the job.
+//
+// A subshell is left to block. Its traps are its own table and what is in the
+// shared state belongs to the shell at the top, so a subshell returning from
+// one would be reacting to a signal it is never going to handle.
+func (r *Runner) awaitOrTrap(done <-chan struct{}) (syscall.Signal, bool) {
+	s := r.signals
+	if s == nil || r.inSubshell {
+		<-done
+		return 0, false
 	}
 	for {
+		if sig, ok := r.pendingTrap(); ok {
+			return sig, true
+		}
 		select {
-		case sig := <-s.ch:
-			if name, ok := signalName(sig); ok {
-				got = append(got, name)
+		case <-done:
+			// Asked once more rather than returned on, because a select
+			// offered both would choose between them at random. The job in
+			// the reported shape sends the signal as its last act and ends a
+			// moment later, so both are ready by the time anything looks —
+			// and every shell in the panel reports the signal rather than the
+			// job, which is only reproducible if the arrival wins outright.
+			if sig, ok := r.pendingTrap(); ok {
+				return sig, true
 			}
-		default:
-			return got
+			return 0, false
+		case <-s.wake:
+		case sig := <-s.ch:
+			s.mu.Lock()
+			if name, ok := signalName(sig); ok {
+				s.pending = append(s.pending, name)
+			}
+			s.mu.Unlock()
 		}
 	}
 }
@@ -326,8 +427,9 @@ func (r *Runner) stopSignals() {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.ch != nil {
-		signal.Stop(s.ch)
-		s.ch = nil
-	}
+	// The channel stays where it is: it is read without the lock by a waiter
+	// selecting on it, so it is allocated once and never replaced. Stopping
+	// it is what releases the handlers, and an unsubscribed channel simply
+	// never fires again.
+	signal.Stop(s.ch)
 }

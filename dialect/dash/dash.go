@@ -133,6 +133,9 @@ func Semantics() interp.Semantics {
 	s.JobSpecsByName = interp.No
 	s.WaitReportsAMissingJob = interp.Yes
 	s.WaitNWaitsForTheNextJob = interp.No
+	// A trapped signal cuts a `wait` short with 128 plus the signal, and the
+	// form that names a job answers the same as the bare one.
+	s.WaitForAJobFailsWhenInterrupted = interp.No
 	s.CommandRejectsUnknownOption = interp.Yes
 	s.GetoptsRejectsUnknownOption = interp.No
 	s.ShiftCountIsArithmetic = interp.No

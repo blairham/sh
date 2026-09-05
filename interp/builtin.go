@@ -944,8 +944,15 @@ func biCd(r *Runner, _ context.Context, args []string) int {
 		// A path that cannot be resolved is left as written: what to say
 		// about a directory that is not there is the question below, and it
 		// answers with what the operating system said rather than with
-		// anything this step could add.
-		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		// anything this step could add. A symlink cycle arrives here that
+		// way and reads as ELOOP from the stat, which is what the panel
+		// says a cycle is — under `-P` and under `-L` alike, since the
+		// chdir hits it either way.
+		//
+		// Through the gate, one component at a time: resolving is a walk
+		// over the filesystem and a script chose the path, so a policy has
+		// to see each step of it. See physicalpath.go.
+		if resolved, err := r.physicalPath(dir); err == nil {
 			dir = resolved
 		}
 	}
@@ -1041,8 +1048,10 @@ func biPwd(r *Runner, _ context.Context, args []string) int {
 	if physical {
 		// Where the directory *is*, not the name it was reached by. A path
 		// that cannot be resolved is printed as held, the same answer `cd
-		// -P` gives for one.
-		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		// -P` gives for one — and through the gate a component at a time,
+		// because `pwd -P` is a question about the filesystem and a policy
+		// that hides part of it must be able to refuse the answer.
+		if resolved, err := r.physicalPath(dir); err == nil {
 			dir = resolved
 		}
 	}

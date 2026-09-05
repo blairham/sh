@@ -64,6 +64,18 @@ somebody else's process and no audit trail recorded that it had. Two
 independent sweeps found it, which says the claim above is the kind that
 has to be re-checked against the code rather than read.
 
+The same sweep found the other shape of the same mistake, and it is
+worth naming because nothing about it looks like a hole. `cd -P` and
+`pwd -P` report where a directory *is* rather than the name it was
+reached by, which means following every symlink on the way; the standard
+library will do that in one call, and that call lstats and reads each
+component through the os package. So the gate saw one stat — of the
+answer, on a path it had no say in reaching — while a subtree it was
+refusing had already been walked through and reported on. The lesson is
+that an action can leave the boundary inside a library call that looks
+like arithmetic on a string: the walk is now written out over the gated
+primitives, one component at a time.
+
 The exemptions are deliberate and each is documented on the action
 vocabulary itself. The scaffolding a process substitution stands on —
 the temporary directory made for its pipes, the mkfifo, their removal —

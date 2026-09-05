@@ -309,6 +309,11 @@ func Semantics() interp.Semantics {
 	s.UnsetNameOperands = interp.PlainNamesOnly
 	s.DeclarationTakesASubscript = interp.Yes
 	s.UnsetTakesASubscript = interp.Yes
+	// `@` is not a spelling for the whole array here. The brackets hold an
+	// arithmetic expression as they do everywhere else, `@` is not one, and
+	// the operand is reported as a bad subscript with the array left as it
+	// was — the only shell in the panel that does not clear it.
+	s.UnsetArrayAt = interp.UnsetArrayAtIsASubscript
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.Yes

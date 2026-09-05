@@ -3273,8 +3273,9 @@ type's own values are documented beside it in `interp/semantics.go`:
 `ListingQuotingStyle`, `PrintfQuoteStyle`, `NameOperands`,
 `ExitArgumentPolicy`, `TrapBodyLineStyle`, `SelectMenuLayout`,
 `DeclarationListingForm`, `KillStatusStyle`, `BracketPolicy`,
-`DollarSingleControlPolicy`, `DollarSingleUnknownPolicy`. Where an entry
-below says "see X", X is one of those.
+`DollarSingleControlPolicy`, `DollarSingleUnknownPolicy`,
+`UnsetArrayAtPolicy`. Where an entry below says "see X", X is one of
+those.
 
 **This catalog is not the whole of the vector.** The axes with their own
 sections earlier in this document — word splitting, array base, the
@@ -4579,6 +4580,60 @@ modeled.
 
 
 ### `unset`
+
+**`UnsetArrayAt`** — bash removes every element · dash unspecified · ksh93 a subscript · zsh leaves one empty element
+
+Is what `unset a[@]` — and `unset a[*]`, which every column answers
+identically — does to an indexed array. Three answers, and the third is
+not a variation on the other two, so it is a policy type
+(`UnsetArrayAtPolicy`) rather than a switch:
+
+    a=(p q r); unset "a[@]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+
+    bash 5.3, bash 3.2   [] n=0
+    ksh93                unset: @: arithmetic syntax error   [p][q][r] n=3
+    zsh                  [] n=1
+
+bash empties the array. ksh93 has no whole-array reading here at all: the
+brackets hold an arithmetic expression as they do everywhere else, `@` is
+not one, and the operand is reported as a bad subscript with the array
+left standing. zsh replaces what the subscript names with a single empty
+element, which is not a rule about `[@]` but this shell's reading of
+`unset` on a *span* — `unset a[2]` leaves an empty element in place too,
+and `unset a[1,3]` leaves exactly one.
+
+Two consequences follow from that, and they are what tell the two
+clearing shells apart:
+
+    a=(p q); unset "a[@]"; a+=(z)    bash → [z] n=1     zsh → [][z] n=2
+    a=hello; unset "a[@]"            bash → refused, 1  zsh → [] at 0
+
+A count alone cannot separate an emptied array from one holding a single
+empty string; where the next append lands can. And on a name that holds a
+scalar the two readings say what they mean: bash has no elements to take
+away and refuses at 1 with `unset: %s: not an array variable`
+(`Diagnostics.UnsetNotAnArray`, identical in bash 3.2), while zsh treats
+the scalar as the single span it is and empties it without a word.
+
+The reading is the *indexed* array's alone. With the keyed attribute on,
+`@` is a key like any other and nothing was stored under it, so
+`typeset -A m; m[k]=v; m[j]=w; unset "m[@]"` leaves both elements in all
+three shells that have the attribute — including the two that clear an
+indexed array through the same spelling.
+
+Asked only for those two spellings, so `unset a[1]` never reaches it.
+dash has no arrays and answers `UnsetTakesASubscript` with no, so the
+operand is a bad name there and the axis is never consulted; the POSIX
+preset leaves it unspecified, because the panel gives three answers and
+no reading of the standard picks one.
+
+The spelling used to do nothing at all. `@` is not an arithmetic
+expression, so the subscript failed to evaluate and the element nobody
+named was quietly not removed: the array came back whole at status 0, in
+the shape a script writes to start a list over. It is a different question
+from `EmptyArrayAtIsOneEmptyField`, which is about how many *fields* a
+quoted `"${a[@]}"` of an empty array makes and is answered after this one
+has already decided whether the array is empty.
 
 **`UnsetEndsTheProducedPipelineStatus`** — bash no · dash unspecified · ksh93 unspecified · zsh yes
 

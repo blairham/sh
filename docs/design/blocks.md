@@ -171,6 +171,37 @@ version and a consumer ignores what it does not recognize; an absent
 field means the zero value. They are the same rules because they are the
 same unit, and a consumer that has learned one has learned both.
 
+The reader implements all four rather than only writing to them. A
+record whose `v` is newer is skipped, so an old shell opening a store a
+newer one has appended to shows everything it can rather than failing;
+an unrecognized *field* is ignored, which is what makes an added field a
+change nobody has to coordinate; and a record with no `status` at all is
+skipped, because reading one would report a success that never happened.
+
+That last is where this differs from the event schema in mechanism while
+agreeing with it in intent. There, `status` is a pointer because a status
+is present only for the end of a command, so absence is ordinary and
+must be told from zero. Here every block has one — a block always exited
+with something — so the field is a plain `int` that is always written,
+and the distinction is needed only on the way back in, where a missing
+one means the line is truncated or foreign.
+
+Two field-level differences from the event record are deliberate:
+
+- **There is no `seq`.** A sequence number is a total order of
+  *emission* and explicitly not a causal one, which is right for a log
+  and is the wrong thing for a block to lean on. A block's order is the
+  order of the file, and its identity is an id that sorts by start time.
+- **The timestamp is `start`, not `time`.** An event's `time` is when
+  the record was written. A block's is when the command began, with a
+  duration beside it. Reusing the name for the other meaning is the one
+  thing the stability rules forbid outright.
+
+The index is opened the way `cmd/sh -audit` opens its file — `O_APPEND`,
+`0600`, unbuffered, one write per record straight through — because the
+two have the same problem: a trail that erases the previous run, or that
+loses what a buffer held when the shell died, is not a trail.
+
 `output` is a **stored path** rather than a derived one. The reader
 never recomputes the layout from the id, so the sharding above is an
 implementation detail that can change without a version bump, and a

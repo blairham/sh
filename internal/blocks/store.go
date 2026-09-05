@@ -6,7 +6,6 @@ package blocks
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -285,8 +284,8 @@ func (s *Store) Load(ctx context.Context, n int) []Record {
 		if line == "" {
 			continue
 		}
-		var r Record
-		if err := json.Unmarshal([]byte(line), &r); err != nil {
+		r, ok := decode(line)
+		if !ok {
 			continue
 		}
 		recs = append(recs, r)

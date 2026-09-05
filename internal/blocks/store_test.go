@@ -139,6 +139,53 @@ func TestOneUnreadableLineDoesNotLoseTheRest(t *testing.T) {
 	}
 }
 
+// A record from a version this one does not know is skipped rather than read
+// wrongly or allowed to end the read — the event schema's rule that a consumer
+// refuses a version it does not recognize, applied to a file an older shell may
+// well open after a newer one has written to it.
+//
+// A record with *unknown fields* is the opposite case and is read: that is what
+// makes an added field a change nobody has to coordinate.
+func TestAFutureRecordIsSkippedAndAnUnknownFieldIsNot(t *testing.T) {
+	s, dir := newStore(t)
+	mustAppend(t, s, Record{ID: "A", Command: "known"})
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.OpenFile(filepath.Join(dir, IndexName), os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := []string{
+		// A version from the future, which this reader cannot promise to read
+		// correctly.
+		`{"v":99,"id":"B","command":"from the future","status":0}` + "\n",
+		// A field nobody here has heard of, on a version that is understood.
+		`{"v":1,"id":"C","command":"with an extra","status":0,"somethingNew":42}` + "\n",
+		// No status at all: truncated or foreign, and reading it would report
+		// a success that never happened.
+		`{"v":1,"id":"D","command":"no status"}` + "\n",
+	}
+	for _, line := range lines {
+		if _, err := f.WriteString(line); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	got := Open(dir, boundary.Boundary{}, "READER").Load(t.Context(), 100)
+	var commands []string
+	for _, r := range got {
+		commands = append(commands, r.Command)
+	}
+	want := []string{"known", "with an extra"}
+	if strings.Join(commands, "|") != strings.Join(want, "|") {
+		t.Errorf("read back %v, want %v", commands, want)
+	}
+}
+
 // A command line carrying a credential is not recorded at all. The store must
 // not become the copy of the history that the history file refused to keep.
 func TestACommandWithACredentialIsNotRecorded(t *testing.T) {

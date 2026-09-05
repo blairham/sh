@@ -19,7 +19,27 @@
 //
 // The written form is JSON Lines, one object per line, for the reason the
 // event stream chose it: a stream is appendable, tailable, greppable, and
-// survives a torn write with the loss of one record.
+// survives a torn write with the loss of one record. The index is opened the
+// way cmd/sh opens an audit file — O_APPEND, 0600, unbuffered, one write per
+// record straight through — because the two files have the same problem: a
+// trail that erases the previous run, or that loses what a buffer held when
+// the shell died, is not a trail.
+//
+// The shape follows the event schema deliberately rather than resembling it by
+// accident. `v` names the version and carries the same stability rules; a
+// consumer ignores fields it does not recognize and refuses a version it does
+// not know; and the field names that mean the same thing are spelled the same
+// way. Two differences are on purpose:
+//
+//   - There is no `seq`. A stream's sequence number is a total order of
+//     *emission* and explicitly not a causal one, which is right for a log and
+//     is the wrong thing to lean on here. A block's order is the order of the
+//     file, and its identity is an id that sorts by the time it started.
+//
+//   - The timestamp is `start` rather than `time`. An event's `time` is when
+//     the *record* was written; a block's is when the command began, and it
+//     has a duration beside it. Reusing the name for the other meaning is the
+//     one thing the stability rules forbid outright.
 //
 // # Two files, never one
 //
@@ -126,6 +146,47 @@ func NewID(t time.Time) string {
 	// rather than reporting one — so there is nothing to handle here.
 	_, _ = rand.Read(b[8:])
 	return idEncoding.EncodeToString(b[:])
+}
+
+// decode reads one line back, reporting whether it is a record this version
+// understands.
+//
+// Three ways a line is not one, and all three are skipped rather than reported
+// — a store is a file several sessions append to, so a reader that failed on
+// one bad line would be a reader that a single torn write could disable.
+//
+//  1. It is not JSON. A record is written with one Write under O_APPEND, so
+//     that means a concurrent writer tore it or something else wrote here.
+//  2. Its version is one we do not know. The event schema's rule is that a
+//     consumer refuses a version it does not recognize, and this is that rule:
+//     an old shell reading a newer store skips what it cannot promise to read
+//     correctly and still shows everything it can. Unknown *fields* are the
+//     opposite case and are ignored, which encoding/json already does — that
+//     is what makes an added field a non-breaking change.
+//  3. It has no status. Every record this package writes has one, because a
+//     block always exited with something; a record without one is truncated or
+//     foreign, and reading it would silently report a *success*. This is the
+//     same care the event schema takes by making its status a pointer, arrived
+//     at from the other side: there a status is present only for the end of a
+//     command, so absence is ordinary and a pointer distinguishes it from zero.
+//     Here presence is universal, so the field can be a plain int that is
+//     always written, and the pointer is needed only on the way back in.
+func decode(line string) (Record, bool) {
+	var probe struct {
+		V      *int `json:"v"`
+		Status *int `json:"status"`
+	}
+	if err := json.Unmarshal([]byte(line), &probe); err != nil {
+		return Record{}, false
+	}
+	if probe.V == nil || *probe.V > Version || probe.Status == nil {
+		return Record{}, false
+	}
+	var r Record
+	if err := json.Unmarshal([]byte(line), &r); err != nil {
+		return Record{}, false
+	}
+	return r, true
 }
 
 // encode renders a record as the single line it is written as.

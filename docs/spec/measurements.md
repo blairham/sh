@@ -2691,6 +2691,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `printf/a-length-modifier-c99-added` | `[st=2` **2>** `<shell>: 1: printf: %z: invalid directive` | `[FF][42][42][42]~st=0` | `[FF][42][42][42]~st=0` | `[FF][42][42][42]~st=0` | `[FF][42][42][42]~st=0` | `[st=1` **2>** `<shell>:printf:1: %z: invalid directive` |
 | `printf/a-length-modifier-is-read-and-thrown-away` | `[st=2` **2>** `<shell>: 1: printf: %h: invalid directive` | `[300][9223372036854775807]~st=0` | `[300][9223372036854775807]~st=0` | `[300][9223372036854775807]~st=0` | `[300][9223372036854775807]~st=0` | `[st=1` **2>** `<shell>:printf:1: %hh: invalid directive` |
 | `printf/a-run-of-length-modifiers` | `[st=2` **2>** `<shell>: 1: printf: %l: invalid directive` | `[42][42]~st=0` | `[42][42]~st=0` | `[42][42]~st=0` | `[42][42]~st=0` | `[st=1` **2>** `<shell>:printf:1: %ll: invalid directive` |
+| `printf/a-format-that-ends-at-the-percent` | `a st=2` **2>** `<shell>: 1: printf: missing format character` | `a st=1` **2>** `<shell>: line 1: printf: `%': missing format character` | `a st=1` **2>** `<shell>: line 1: printf: `%': missing format character` | `a st=1` **2>** `<shell>: line 0: printf: `%': missing format character` | `a% st=0` | `a st=1` **2>** `<shell>:printf:1: %: invalid directive` |
+| `printf/a-format-that-ends-after-a-width` | `a st=2` **2>** `<shell>: 1: printf: missing format character` | `a st=1` **2>** `<shell>: line 1: printf: `%5': missing format character` | `a st=1` **2>** `<shell>: line 1: printf: `%5': missing format character` | `a st=1` **2>** `<shell>: line 0: printf: `%5': missing format character` | `a% st=0` | `a st=1` **2>** `<shell>:printf:1: %5: invalid directive` |
+| `printf/a-format-that-ends-after-a-length-modifier` | `a st=2` **2>** `<shell>: 1: printf: %l: invalid directive` | `a st=1` **2>** `<shell>: line 1: printf: `%ll': missing format character` | `a st=1` **2>** `<shell>: line 1: printf: `%ll': missing format character` | `a st=1` **2>** `<shell>: line 0: printf: `%ll': missing format character` | `a% st=0` | `a st=1` **2>** `<shell>:printf:1: %ll: invalid directive` |
+| `printf/a-trailing-percent-after-a-doubled-one` | `a%b st=2` **2>** `<shell>: 1: printf: missing format character` | `a%b st=1` **2>** `<shell>: line 1: printf: `%': missing format character` | `a%b st=1` **2>** `<shell>: line 1: printf: `%': missing format character` | `a%b st=1` **2>** `<shell>: line 0: printf: `%': missing format character` | `a%b% st=0` | `a%b st=1` **2>** `<shell>:printf:1: %: invalid directive` |
+| `printf/a-flag-after-the-width` | `[ st=2` **2>** `<shell>: 1: printf: %5-: invalid directive` | `[ st=1` **2>** `<shell>: line 1: printf: `-': invalid format character` | `[ st=1` **2>** `<shell>: line 1: printf: `-': invalid format character` | `[ st=1` **2>** `<shell>: line 0: printf: `-': invalid format character` | `[42   ][   42] st=0` | `[ st=1` **2>** `<shell>:printf:1: %5-: invalid directive` |
+| `printf/a-second-dot-is-an-output-base` | `[ st=2` **2>** `<shell>: 1: printf: %..: invalid directive` | `[ st=1` **2>** `<shell>: line 1: printf: `.': invalid format character` | `[ st=1` **2>** `<shell>: line 1: printf: `.': invalid format character` | `[ st=1` **2>** `<shell>: line 0: printf: `.': invalid format character` | `[zz][101] st=0` | `[ st=1` **2>** `<shell>:printf:1: %..: invalid directive` |
+| `printf/an-output-base-beside-a-precision` | `[ st=2` **2>** `<shell>: 1: printf: %.3.: invalid directive` | `[ st=1` **2>** `<shell>: line 1: printf: `.': invalid format character` | `[ st=1` **2>** `<shell>: line 1: printf: `.': invalid format character` | `[ st=1` **2>** `<shell>: line 0: printf: `.': invalid format character` | `[0ff] st=0` | `[ st=1` **2>** `<shell>:printf:1: %.3.: invalid directive` |
+| `printf/a-flag-after-a-precision-drops-it` | `[ st=2` **2>** `<shell>: 1: printf: %.3-: invalid directive` | `[ st=1` **2>** `<shell>: line 1: printf: `-': invalid format character` | `[ st=1` **2>** `<shell>: line 1: printf: `-': invalid format character` | `[ st=1` **2>** `<shell>: line 0: printf: `-': invalid format character` | `[42][042] st=0` | `[ st=1` **2>** `<shell>:printf:1: %.3-: invalid directive` |
 | `printf/an-unknown-conversion-names-the-character` | `st=2` **2>** `<shell>: 1: printf: %v: invalid directive` | `st=1` **2>** `<shell>: line 1: printf: `v': invalid format character` | `st=1` **2>** `<shell>: line 1: printf: `v': invalid format character` | `st=1` **2>** `<shell>: line 0: printf: `v': invalid format character` | `st=1` **2>** `<shell>: printf: v: unknown format specifier` | `st=1` **2>** `<shell>:printf:1: %v: invalid directive` |
 | `printf/no-format-at-all` | `st=2` **2>** `<shell>: 1: printf: usage: printf format [arg ...]` | `st=2` **2>** `printf: usage: printf [-v var] format [arguments]` | `st=2` **2>** `printf: usage: printf [-v var] format [arguments]` | `st=2` **2>** `printf: usage: printf [-v var] format [arguments]` | `st=2` **2>** `Usage: printf [ options ] format [string ...]` | `st=1` **2>** `<shell>:printf:1: not enough arguments` |
 | `printf/a-date-conversion-and-the-shells-without-one` | `st=2` **2>** `<shell>: 1: printf: %(: invalid directive` | `%~st=0` | `%~st=0` | `st=1` **2>** `<shell>: line 0: printf: `(': invalid format character` | `%~st=1` **2>** `<shell>: printf: warning: invalid argument of type T` | `st=1` **2>** `<shell>:printf:1: %(: invalid directive` |
@@ -2772,6 +2780,38 @@ grades it and nothing drift-checks it either, for the same reason.
 - `printf/a-run-of-length-modifiers` — the shells with the C99 set skip a run of the letters rather than a list of spellings, so nonsense like `lll` and `hl` is accepted; the shell with C89's set takes exactly one letter and refuses both
   ```sh
   printf "[%llld][%hld]\n" 42 42; echo "st=$?"
+  ```
+- `printf/a-format-that-ends-at-the-percent` — four answers to a format that ran out before its conversion character, and not one of them is the ordinary bad-conversion complaint: bash has a second wording for it, zsh spells its usual one with the directive, dash names nothing and reports 2, and ksh93 writes a literal % and succeeds
+  ```sh
+  printf 'a%'; echo " st=$?"
+  ```
+- `printf/a-format-that-ends-after-a-width` — the same with a prefix to name, which is what shows bash and zsh naming the whole directive rather than a conversion character there is none of — and shows ksh93 dropping the prefix, since `a%5` is `a%` and not `a%5`
+  ```sh
+  printf 'a%5'; echo " st=$?"
+  ```
+- `printf/a-format-that-ends-after-a-length-modifier` — the modifier belongs to the directive, so the shells that name it say `%ll`. dash has no modifiers at all, so for it the format did not run out — the `l` is the conversion it could not read, and it says so instead
+  ```sh
+  printf 'a%ll'; echo " st=$?"
+  ```
+- `printf/a-trailing-percent-after-a-doubled-one` — a doubled percent earlier in the format is unrelated to one that ends it: everything before the last % is written by every shell, and only the trailing one is the unfinished conversion
+  ```sh
+  printf 'a%%b%'; echo " st=$?"
+  ```
+- `printf/a-flag-after-the-width` — ksh93 reads a flag after the width and acts on it — left-justified in five, then the space flag — where the rest of the panel wants flags first and reports the flag character as a conversion it could not read. No length modifier is in either directive, so this is about the shape of the prefix and nothing to do with the modifier set
+  ```sh
+  printf '[%5-d][%5 d]' 42 42; echo " st=$?"
+  ```
+- `printf/a-second-dot-is-an-output-base` — the field after a second dot is ksh93's output base and not a second precision: 1295 in base 36 is zz and 5 in base 2 is 101. The rest of the panel stops at the second dot and calls it a conversion it could not read
+  ```sh
+  printf '[%..36d][%..2d]' 1295 5; echo " st=$?"
+  ```
+- `printf/an-output-base-beside-a-precision` — both fields at once, which is how the base is told from a precision that happens to look like one: 255 in base 16 padded to three digits is 0ff, where a second precision could only have produced a decimal
+  ```sh
+  printf '[%.3.16d]' 255; echo " st=$?"
+  ```
+- `printf/a-flag-after-a-precision-drops-it` — the two spellings are not the same directive in ksh93 even though both hold a precision of 3 and a minus: written after the precision the minus loses it and 42 stays 42, written before it the precision survives and 42 is 042 — so the prefix is not simply read in any order
+  ```sh
+  printf '[%.3-d][%-.3d]' 42 42; echo " st=$?"
   ```
 - `printf/an-unknown-conversion-names-the-character` — a conversion no shell in the panel has, with a tail after it, which is what separates naming the conversion character from naming what follows it: two shells say `v` and two say `%v`, and none of them names the `]`
   ```sh

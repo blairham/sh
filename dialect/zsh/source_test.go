@@ -435,6 +435,20 @@ func TestABadBuiltinOption(t *testing.T) {
 	}
 }
 
+// The same complaint as an unknown conversion, spelled with the directive.
+func TestPrintfMissingFormatCharacter(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf 'a%'`, "%: invalid directive"},
+		{`printf 'a%5'`, "%5: invalid directive"},
+	} {
+		out, st := runZsh(t, dir, tc.src+"\n")
+		if !strings.Contains(out, tc.want) || st != 1 {
+			t.Errorf("%s: said %q status %d, want %q and 1", tc.src, out, st, tc.want)
+		}
+	}
+}
+
 // `\x` reads at most two digits as one byte, and an empty digit run as a
 // zero rather than as an escape left standing.
 func TestPrintfHexEscapeIsAByteOrANul(t *testing.T) {

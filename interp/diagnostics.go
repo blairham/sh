@@ -299,6 +299,19 @@ type Diagnostics struct {
 	PrintfBadVerb string
 	// PrintfBadVerbStatus is what that reports. Zero means 1.
 	PrintfBadVerbStatus int
+	// PrintfMissingVerb is a format that ended before its conversion
+	// character — `%`, `%5`, `%ll` with nothing after them. One verb: the
+	// whole directive as written, since there is no conversion character in
+	// it to name.
+	//
+	// It is a separate wording and not the bad-conversion one with an empty
+	// name. bash has a second complaint for it, `missing format character`,
+	// and names the directive in it where its ordinary one names the
+	// character; zsh reuses `invalid directive`; dash names nothing at all,
+	// so its wording takes no verb.
+	PrintfMissingVerb string
+	// PrintfMissingVerbStatus is what that reports. Zero means 1.
+	PrintfMissingVerbStatus int
 	// PrintfMissingHexDigit is a `\x` in a format with no hexadecimal digit
 	// after it. No verbs.
 	//

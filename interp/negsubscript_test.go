@@ -70,12 +70,19 @@ func TestANegativeSubscriptOutOfRange(t *testing.T) {
 	if out != "[]" || st != 0 {
 		t.Errorf("read gave %q status %d, want [] and 0", out, st)
 	}
-	out, _ = run(t, `a=(x); a[-5]=q; echo "[${a[@]}]"`, nil)
-	if !strings.Contains(out, "out of range") {
-		t.Errorf("write said %q, want the subscript refused", out)
+	// Writing through one is refused, and the refusal ends the script: the
+	// `echo` after it never runs, which is what every shell that refuses the
+	// subscript does. It used to report and carry on at 0, so the next
+	// command read an array the assignment had not touched.
+	out, st = run(t, `a=(x); a[-5]=q; echo "[${a[@]}]"`, nil)
+	if !strings.Contains(out, "a[-5]") {
+		t.Errorf("write said %q, want the subscript named", out)
 	}
-	if !strings.Contains(out, "[x]") {
-		t.Errorf("write left %q, want the array untouched", out)
+	if strings.Contains(out, "[x]") {
+		t.Errorf("write left %q, want nothing after the refusal", out)
+	}
+	if st == 0 {
+		t.Errorf("write status 0, want a failure")
 	}
 }
 

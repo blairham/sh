@@ -1306,6 +1306,18 @@ type Semantics struct {
 	// axis is absent rather than false there.
 	ArrayBaseIsZero Answer
 
+	// NegativeSubscriptPastTheStartInserts places a new element in front of
+	// every other when a negative subscript counts back past the first one:
+	// `a=(p q); a[-3]=x` leaves three elements with `x` at the head, however
+	// far past the start the subscript reached. True in zsh alone; bash and
+	// ksh93 refuse the subscript and end the script.
+	//
+	// Asked only for a *negative* subscript that lands before the first
+	// element, which is the only spelling that can. A non-negative one below
+	// the base — `a[0]` where the first element is 1 — is refused by every
+	// shell measured, zsh included, so it needs no answer from anyone.
+	NegativeSubscriptPastTheStartInserts Answer
+
 	// ArrayLiteralSubscriptIsAKey reads a subscript written inside an array
 	// literal as the text between the brackets rather than as an arithmetic
 	// expression — and, because the two go together, makes such a literal

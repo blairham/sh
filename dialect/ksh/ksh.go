@@ -318,6 +318,9 @@ func Semantics() interp.Semantics {
 	// And the complaint is the builtin's: `unset` reports 1 and the script
 	// goes on, which is what makes `unset a[@]` survivable here.
 	s.BadSubscriptToUnsetFatal = interp.No
+	// A negative subscript past the first element is refused here too, and
+	// the refusal ends the script.
+	s.NegativeSubscriptPastTheStartInserts = interp.No
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.Yes
@@ -427,8 +430,10 @@ func Diagnostics() interp.Diagnostics {
 		// The process id and the words, with a colon between them and no
 		// command after: this shell names the line and the process but does
 		// not say back what was running.
-		KilledCommandNotice:  "%[1]d: %[2]s",
-		ParamNull:            "parameter null",
+		KilledCommandNotice: "%[1]d: %[2]s",
+		ParamNull:           "parameter null",
+		// The array alone is named, not the subscript that was written.
+		BadArraySubscript:    "%[1]s: subscript out of range",
 		UnsetBadFunctionName: "unset: %[1]s: invalid function name",
 		// The builtin names itself in front of the arithmetic sentence, which
 		// it does not do for the identical failure in an expansion.

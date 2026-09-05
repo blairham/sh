@@ -220,6 +220,12 @@ every byte of them.
 | `array/a-subscript-holding-a-command-substitution` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][Q]` | `[x][Q]` | `[x][Q]` | `[x][Q]` | `[Q][y]` |
 | `array/appending-through-a-subscript-holding-an-expansion` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[xQ][y]` |
 | `array/a-subscript-where-there-are-no-arrays` | `done` **2>** `<shell>: 1: a[1]=Q: not found` | `done` | `done` | `done` | `done` | `done` |
+| `array/a-subscript-below-the-first-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][q] ok` | `[x][q] ok` | `[x][q] ok` | `[x][q] ok` | **2>** `<shell>:1: a: assignment to invalid subscript range` *(status 1)* |
+| `array/appending-below-the-first-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[pQ][q] ok` | `[pQ][q] ok` | `[pQ][q] ok` | `[pQ][q] ok` | **2>** `<shell>:1: a: assignment to invalid subscript range` *(status 1)* |
+| `array/a-negative-subscript-past-the-start` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a[-3]: bad array subscript` *(status 1)* | **2>** `<shell>: line 1: a[-3]: bad array subscript` *(status 127)* | **2>** `<shell>: a[-3]: bad array subscript` *(status 1)* | **2>** `<shell>: a: subscript out of range` *(status 1)* | `[x][p][q] n=3` |
+| `array/a-negative-subscript-on-an-array-with-nothing-in-it` | **2>** `<shell>: 1: a[-1]=x: not found~<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: a[-1]: bad array subscript` *(status 1)* | **2>** `<shell>: line 1: a[-1]: bad array subscript` *(status 127)* | **2>** `<shell>: a[-1]: bad array subscript` *(status 1)* | **2>** `<shell>: a: subscript out of range` *(status 1)* | `[x] ok` |
+| `array/a-refused-subscript-is-named-as-written` | `ok` **2>** `<shell>: 1: a[x-2]=v: not found` | **2>** `<shell>: line 1: a[x-2]: bad array subscript` *(status 1)* | **2>** `<shell>: line 1: a[x-2]: bad array subscript` *(status 127)* | **2>** `<shell>: a[x-2]: bad array subscript` *(status 1)* | **2>** `<shell>: a: subscript out of range` *(status 1)* | `ok` |
+| `array/a-literal-subscript-below-the-first-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[p] ok` | `[p] ok` | `[p] ok` | `[p] ok` | **2>** `<shell>:1: bad subscript for direct array assignment: 0` *(status 1)* |
 | `array/a-subscript-that-will-not-evaluate` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: b c: arithmetic syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: line 1: b c: arithmetic syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: b c: syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: b c: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operator expected at `c'` *(status 1)* |
 | `array/a-subscript-that-will-not-parse` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
 | `array/a-length-through-a-subscript-that-will-not-evaluate` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: b c: arithmetic syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: line 1: b c: arithmetic syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: b c: syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: b c: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operator expected at `c'` *(status 1)* |
@@ -474,6 +480,30 @@ every byte of them.
 - `array/a-subscript-where-there-are-no-arrays` — the other side of the same gate. Where the dialect has no subscript the word is not an assignment at all and the shell looks for a command by that name, which is the answer the shell without arrays gives — so accepting the shape everywhere would have made this one silently assign instead of reporting. Three shells assign and say nothing; the fourth reports on standard error and carries on
   ```sh
   a[1]=Q; echo done
+  ```
+- `array/a-subscript-below-the-first-element` — an assignment before the array's first element is refused, and the refusal ends the script at 1. Which subscript reaches it is the array base and nothing else: where the first element is 1 this writes nothing and stops, and where it is 0 the same numeral names the first element and nothing is wrong at all. It used to be a wording of our own at status 0 with the script running on, so the element was not written and everything after read the array as though it had been
+  ```sh
+  a=(p q); a[0]=x; printf "[%s]" "${a[@]}"; echo " ok"
+  ```
+- `array/appending-below-the-first-element` — `+=` is the same assignment reaching the same refusal rather than a form with a rule of its own, so the shell that refuses `a[0]=x` refuses this identically and the two that do not join the first element. It is the half a fix is likeliest to miss, because the append reads the element before it writes one
+  ```sh
+  a=(p q); a[0]+=Q; printf "[%s]" "${a[@]}"; echo " ok"
+  ```
+- `array/a-negative-subscript-past-the-start` — the same boundary reached from the other side, and the one spelling the panel disagrees about: bash and ksh93 refuse a negative subscript that counts back past the first element and end the script, where zsh places one in front of every other and the array grows by exactly one. That is the axis; the refusal itself is not
+  ```sh
+  a=(p q); a[-3]=x; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/a-negative-subscript-on-an-array-with-nothing-in-it` — with no elements to count back from, `-1` is past the start already — so this is the shortest reachable form of the refusal in the two shells whose first element is 0, and the shortest form of the placement in the one that places. No array is built first, which is what makes it a statement about the boundary rather than about any particular length
+  ```sh
+  a[-1]=x; printf "[%s]" "${a[@]}"; echo " ok"
+  ```
+- `array/a-refused-subscript-is-named-as-written` — what the refusal names, which is three answers: bash quotes the subscript back as it was written — `a[x-2]`, not the -1 it came to — ksh93 names the array alone, and zsh has nothing to refuse here because a negative subscript counts back from the last element there. The expression is what tells the written text from the evaluated number; a bare `-2` could not
+  ```sh
+  x=1; a[x-2]=v; echo ok
+  ```
+- `array/a-literal-subscript-below-the-first-element` — the same refusal reached through a literal, which the shell that refuses it words differently from the plain form — naming the subscript and the kind of assignment rather than the array. Two spellings of one rule needing two sentences is why the wording is a field of its own rather than the plain one used twice
+  ```sh
+  a=([0]=p); printf "[%s]" "${a[@]}"; echo " ok"
   ```
 - `array/a-subscript-that-will-not-evaluate` — a subscript is an expression, so one that does not read is the failure `$((b c))` is — the identical sentence in all four, the command abandoned, and a non-zero status. It expanded to nothing at status 0 and the script carried on, which is the worst shape available: an empty string is a plausible value for a real element, so nothing downstream could tell. `after` is printed so the case records that the input unit is given up on rather than only that a line went to standard error
   ```sh

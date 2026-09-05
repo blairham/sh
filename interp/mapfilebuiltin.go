@@ -169,7 +169,7 @@ func biMapfile(r *Runner, _ context.Context, name string, args []string) int {
 		return 0
 	}
 	for i, e := range elems {
-		r.setArrayElem(target, origin+i, e)
+		r.setArrayElem(target, origin+i, itoa(origin+i), e)
 	}
 	if _, ok := r.Arrays[target]; !ok {
 		// Nothing arrived and nothing was there: the name still becomes an

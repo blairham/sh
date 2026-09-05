@@ -4,6 +4,8 @@
 package interp_test
 
 import (
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -20,31 +22,43 @@ import (
 // this package accumulates one of each per substitution nobody opened, for as
 // long as it runs.
 //
-// Counted by stack frame rather than by total goroutines, because the total
-// is everything else the suite is doing at the same time. That makes the
-// matcher the weak point — a renamed function would count nothing and pass —
-// so the second half of each case runs a substitution that is *still going*
-// when the command returns and requires the count to see it. A matcher that
-// cannot find a running one is not evidence about a parked one.
+// Counted by stack frame rather than by total goroutines, because the total is
+// everything else the suite is doing at the same time. That makes the matcher
+// the weak point — a renamed function would count nothing and pass — so each
+// case first runs a substitution that is *still going* when the command
+// returns and requires the count to see it. A matcher that cannot find a
+// running one is not evidence about a parked one.
+//
+// What keeps that one running is a file rather than a sleep, and the
+// difference is a failure this had on a loaded machine: a substitution asked
+// to sleep for four hundred milliseconds is only still going if the foreground
+// beat it to the finish, and on a busy runner under -race it did not. A
+// substituted command that waits for a file the test has not written yet
+// cannot finish early, whatever the machine is doing.
 func TestASubstitutionNobodyOpensLeavesNoGoroutineBehind(t *testing.T) {
-	for _, tc := range []struct{ name, unopened, running string }{
+	for _, tc := range []struct {
+		name, unopened string
+		// running is a command with a substitution that will not finish
+		// until the file named %s exists.
+		running string
+	}{
 		// `<(cmd)`: the shell holds the writing end, which is the case the
 		// goroutine dumps caught — two of them parked in OpenFile(O_WRONLY),
 		// one belonging to a test that had already finished.
 		{
 			name:     "reading from one",
 			unopened: `echo <(true) >/dev/null`,
-			// Opened and let go of rather than read to the end: `cat` would
-			// wait for the substitution to finish, and the count has to be
-			// taken while one is still going.
-			running: `true < <(sleep 0.4; echo hi)`,
+			// The path is opened and let go of rather than read to the end:
+			// `cat` would wait for the substitution to finish, and the count
+			// has to be taken while one is still going.
+			running: `true < <(` + waitForFileScript + `)`,
 		},
 		// `>(cmd)`: the shell holds the reading end, and waited for a writer
 		// that a command which ignores the path never becomes.
 		{
 			name:     "writing into one",
 			unopened: `echo >(true) >/dev/null`,
-			running:  `echo hi > >(sleep 0.4; cat >/dev/null)`,
+			running:  `echo hi > >(` + waitForFileScript + `)`,
 		},
 		// The same end, with a substituted command that reads rather than
 		// one that ignores its input. Nothing is ever going to write to it,
@@ -54,18 +68,37 @@ func TestASubstitutionNobodyOpensLeavesNoGoroutineBehind(t *testing.T) {
 		{
 			name:     "writing into one that reads",
 			unopened: `echo >(cat) >/dev/null`,
-			running:  `echo hi > >(sleep 0.4; cat >/dev/null)`,
+			running:  `echo hi > >(` + waitForFileScript + `; cat >/dev/null)`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			before := substitutionGoroutines()
-			if _, st := run(t, tc.running, nil); st != 0 {
+			release := filepath.Join(t.TempDir(), "go-ahead")
+
+			// A quiet baseline rather than whatever the count happens to be.
+			// Taking the number as it stands and asking for more than it
+			// afterwards was a race of its own: a substitution from the case
+			// before, or from another test in this package, can still be
+			// finishing when the number is read, and then finish before it
+			// is read again — which is a rise and a fall recorded as no rise
+			// at all. Nothing here can be relative to a number that moves,
+			// so the test waits for the one number that does not.
+			if n := waitForGoroutines(0); n != 0 {
+				t.Fatalf("%d goroutines already in a substitution, want a quiet start", n)
+			}
+
+			if _, st := run(t, strings.ReplaceAll(tc.running, "%s", release), nil); st != 0 {
 				t.Fatalf("status %d, want the substitution to run", st)
 			}
-			if n := substitutionGoroutines(); n <= before {
+			if n := substitutionGoroutines(); n < 1 {
 				t.Fatalf("%d goroutines in a substitution with one still running, "+
-					"want more than the %d there were — the frame this counts by is gone, "+
-					"so the leak below cannot be seen either", n, before)
+					"want at least the one — the frame this counts by is gone, "+
+					"so the leak below cannot be seen either", n)
+			}
+			if err := os.WriteFile(release, nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if n := waitForGoroutines(0); n != 0 {
+				t.Fatalf("%d goroutines still in a substitution that was let go, want none", n)
 			}
 
 			for range 5 {
@@ -73,27 +106,39 @@ func TestASubstitutionNobodyOpensLeavesNoGoroutineBehind(t *testing.T) {
 					t.Fatalf("status %d, want a path nobody opens to be no error", st)
 				}
 			}
-			if n := waitForGoroutines(before); n > before {
-				t.Errorf("%d goroutines left in a substitution, want the %d there were before — "+
-					"a path nobody opened parked one for good", n, before)
+			if n := waitForGoroutines(0); n != 0 {
+				t.Errorf("%d goroutines left in a substitution, want none — "+
+					"a path nobody opened parked one for good", n)
 			}
 		})
 	}
 }
 
+// waitForFileScript is a substituted command that will not finish until the
+// test says so. `%s` is the file to wait for.
+const waitForFileScript = `while [ ! -e %s ]; do sleep 0.02; done`
+
 // substitutionGoroutines counts the goroutines a process substitution is
 // running on, by the frame every one of them has.
+//
+// The buffer is grown rather than guessed at. runtime.Stack truncates to what
+// it is given and says nothing about having done so beyond filling it, and a
+// truncated dump counts what it happened to reach — which reads as no
+// substitution running at all, and is the same answer this asks for.
 func substitutionGoroutines() int {
-	buf := make([]byte, 1<<22)
-	n := runtime.Stack(buf, true)
-	return strings.Count(string(buf[:n]), "interp.(*Runner).procSub.func")
+	for size := 1 << 20; ; size *= 2 {
+		buf := make([]byte, size)
+		if n := runtime.Stack(buf, true); n < size {
+			return strings.Count(string(buf[:n]), "interp.(*Runner).procSub.func")
+		}
+	}
 }
 
 // waitForGoroutines gives the substitutions still finishing a moment to
 // finish, so the count is of what is parked rather than of what is in
 // flight. Generous, because the answer it is used for is 0 or forever.
 func waitForGoroutines(want int) int {
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(20 * time.Second)
 	for {
 		n := substitutionGoroutines()
 		if n <= want || time.Now().After(deadline) {

@@ -89,6 +89,17 @@ func TestASubshellNeverReplacesTheProcess(t *testing.T) {
 	for _, tc := range []struct{ name, src string }{
 		{"a subshell", `( exec echo inner ); echo after`},
 		{"a pipeline element, which is a subshell by another name", `exec echo inner | cat; echo after`},
+		// The other two the shell runs beside itself, and they are here
+		// because something else now rests on it: `driver`'s replacement
+		// stops the garbage collector while it places the descriptor table,
+		// and the guard a front end puts on these goroutines
+		// (Runner.GuardConcurrent) would recover a panic raised inside that
+		// window and carry on with the collector still stopped. It cannot,
+		// and this is why — every one of them runs a clone, and a clone does
+		// not reach the hook at all. A coprocess is the same clone and is
+		// left out only because its grammar is a dialect's.
+		{"a background job", `exec echo inner & wait -n; echo after`},
+		{"a process substitution", `cat <(exec echo inner); echo after`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			called := false

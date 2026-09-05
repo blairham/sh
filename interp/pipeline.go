@@ -272,8 +272,15 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 
 	for i, cmd := range p.Cmds[:last] {
 		wg.Add(1)
-		go func(i int, cmd syntax.Command) {
-			defer wg.Done()
+		// A failing status until this element has one of its own, so an
+		// element that stops without finishing is not read as having
+		// succeeded. It is the pipeline's whole answer when it is the last
+		// element, and pipefail's when it is any of them, and the zero value
+		// of the slice is 0 — so an interpreter bug caught outside this
+		// package would otherwise be reported to the script as a pipeline
+		// that worked.
+		statuses[i] = internalErrorStatus
+		r.spawn(func() {
 			start := time.Now()
 			errs[i] = subs[i].command(ctx, cmd)
 			if timing != nil {
@@ -281,20 +288,26 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			}
 			statuses[i] = subs[i].status
 			signals[i] = subs[i].diedOfSig
+		}, func() {
+			// Done last, because it is what releases the shell to read
+			// everything above.
+			defer wg.Done()
 			// An element that never reached a trace point must still let the
 			// next one print, or the pipeline deadlocks on its own logging.
 			subs[i].releaseTraceTurn()
 
 			// Closing the write end is what tells the next element its input
 			// has finished. Without it the pipeline deadlocks, which is the
-			// classic way to get this wrong.
+			// classic way to get this wrong — and however this element
+			// ended, because the element downstream is reading and the shell
+			// is waiting for both.
 			if writers[i] != nil {
 				_ = writers[i].Close()
 			}
 			if readers[i] != nil {
 				_ = readers[i].Close()
 			}
-		}(i, cmd)
+		})
 	}
 	if inCurrent {
 		// The last element runs here, on the shell itself, so what it
@@ -304,30 +317,47 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 			r.traceWait, r.traceDone, r.traceOnce = gates[i-1], gates[i], &sync.Once{}
 			defer func() { r.traceWait, r.traceDone, r.traceOnce = nil, nil, nil }()
 		}
-		savedIn, savedOut, savedErr := r.Stdin, r.Stdout, r.Stderr
-		savedCPU := r.elemCPU
-		if readers[i] != nil {
-			r.Stdin = readers[i]
-		}
-		r.Stdout, r.Stderr = sharedOut, sharedErr
-		if timing != nil {
-			r.elemCPU = &timing.elems[i].cpu
-		}
-		// No naming needed here: this element runs on the shell itself
-		// rather than on a copy, so the dispatch records it the way it
-		// records any other command. Verified by mutation, not assumed.
-		start := time.Now()
-		errs[i] = r.command(ctx, p.Cmds[i])
-		if timing != nil {
-			timing.elems[i].wall = time.Since(start)
-		}
-		statuses[i] = r.status
-		signals[i] = r.diedOfSig
-		r.Stdin, r.Stdout, r.Stderr = savedIn, savedOut, savedErr
-		r.elemCPU = savedCPU
-		if readers[i] != nil {
-			_ = readers[i].Close()
-		}
+		// In a scope of its own so its defer runs *here* and not at the end
+		// of the pipeline. What it puts back is the shell's own — this
+		// element runs on the shell rather than on a copy — and it has to be
+		// put back before the wait below: the element upstream may be
+		// blocked writing into the pipe this one was reading, and closing
+		// that reader is what releases it. A cleanup deferred to the end of
+		// the function would sit behind the wait for the goroutine it is
+		// what releases.
+		//
+		// Deferred rather than written straight through for the reason
+		// everything else in this file is: a bug in the element leaves a
+		// session with a standard output that is a closed pipe, and the
+		// element upstream writing into one nothing will ever read.
+		func() {
+			savedIn, savedOut, savedErr := r.Stdin, r.Stdout, r.Stderr
+			savedCPU := r.elemCPU
+			defer func() {
+				r.Stdin, r.Stdout, r.Stderr = savedIn, savedOut, savedErr
+				r.elemCPU = savedCPU
+				if readers[i] != nil {
+					_ = readers[i].Close()
+				}
+			}()
+			if readers[i] != nil {
+				r.Stdin = readers[i]
+			}
+			r.Stdout, r.Stderr = sharedOut, sharedErr
+			if timing != nil {
+				r.elemCPU = &timing.elems[i].cpu
+			}
+			// No naming needed here: this element runs on the shell itself
+			// rather than on a copy, so the dispatch records it the way it
+			// records any other command. Verified by mutation, not assumed.
+			start := time.Now()
+			errs[i] = r.command(ctx, p.Cmds[i])
+			if timing != nil {
+				timing.elems[i].wall = time.Since(start)
+			}
+			statuses[i] = r.status
+			signals[i] = r.diedOfSig
+		}()
 	}
 	wg.Wait()
 

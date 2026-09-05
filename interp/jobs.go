@@ -111,6 +111,20 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// such guarantee. The shell creates the concurrency, so it guards them.
 	sub.Stdout = r.lockedStdout()
 	sub.Stderr = r.lockedStderr()
+	// Both sides, or neither. A lock one party takes and the other does not
+	// excludes nothing, and the shell that started the job is the other
+	// party: it carries straight on to the next command while the job runs.
+	// Guarding only the job left the parent writing the caller's io.Writer
+	// raw, which the race detector found on the trap case where a handler
+	// runs on the shell while the job that signaled it is still alive —
+	// though `sleep 1 & echo hi` is the same shape without any of that.
+	//
+	// It stays wrapped afterwards rather than being restored the way a
+	// pipeline restores it, because there is nothing to restore it at: the
+	// job outlives the statement that started it, and the wrapper delegates,
+	// so a stream that is still guarded once the job has gone costs a mutex
+	// nobody contends.
+	r.Stdout, r.Stderr = sub.Stdout, sub.Stderr
 	// And its input, for the same reason in the other direction: a
 	// background job and whatever runs next both read the shell's stdin, and
 	// os/exec copies from a caller's io.Reader on a goroutine of its own.

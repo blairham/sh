@@ -23,91 +23,91 @@ import (
 
 // tracker matches the events of one action to the tool call that reports it.
 //
-// It exists because interp.Event carries no identity for the action it belongs
-// to, so a start and an end are matched by *ordering* — and ordering is
-// exactly what concurrency breaks, since a background job and each half of a
-// pipeline emit from their own goroutines. A fingerprint of what the action
-// was, with a queue per fingerprint, is right whenever two identical commands
-// are not in flight at once, and picks the wrong one of them when they are.
+// It is a set of open tool calls keyed by interp.Action.ID, and that is the
+// whole of it now that the field exists (#719, landed in #730). The id is the
+// same string on the Action the gate was consulted about and on every event
+// that action produces, which is exactly the promise this needs: a permission
+// request and the records of what it approved are provably one action rather
+// than two records that look alike.
 //
-// The failure is cosmetic: the wrong tool call is marked complete, and no
-// decision changes. It is still wrong, and the fix is a per-action id on the
-// event — see docs/design/acp.md, which asks for one rather than inventing a
-// second event schema here.
+// It replaces a fingerprint of kind, path, argv and the write flag, with a
+// queue per fingerprint. That was right whenever two identical commands were
+// not in flight at once and picked the wrong one of them when they were —
+// which concurrency arranges routinely, since a background job and each half
+// of a pipeline emit from their own goroutines. Nothing here invents an id;
+// asking for one rather than minting a second scheme was the point, because
+// two id schemes that do not agree are worse than none.
+//
+// An event with no id is not matched at all, and that is deliberate rather
+// than a fallback: an empty id means the Runner had neither a gate nor a sink
+// and so produced no events either, so the case does not arise from the
+// interpreter. Keying an empty id would collapse every such action into one
+// bucket and mark the wrong tool call complete — the failure the fingerprint
+// had, brought back by a defensive default. An unmatched end becomes a
+// standalone completed tool call instead, which is visible.
 type tracker struct {
 	mu   sync.Mutex
 	n    int
-	open map[string][]string
+	open map[string]string
 }
 
-// fingerprint is what an action is, as a key.
+// callID is the tool call id for an action.
 //
-// The action and nothing else. The event also carries the line and the file it
-// came from, which would discriminate better, and they are deliberately left
-// out: the gate is consulted with an Action alone, before any event exists, so
-// a key that included them could never match the tool call a permission
-// request opened to the events for the action it approved.
-func fingerprint(e interp.Event) string {
-	a := e.Action
-	var b strings.Builder
-	b.WriteString(a.Kind.String())
-	b.WriteByte(0)
-	b.WriteString(a.Path)
-	b.WriteByte(0)
-	b.WriteString(strings.Join(a.Args, "\x00"))
-	if a.Kind == interp.ActionOpen {
-		b.WriteByte(0)
-		b.WriteString(strconv.FormatBool(a.Write))
+// The protocol's id and the interpreter's are deliberately the same string
+// where there is one: a client's transcript and the audit stream then join on
+// a value both already carry, rather than on a fingerprint that agrees by
+// luck. Where there is none — nothing else in this package can produce that,
+// but a caller building an Event by hand can — a counter stands in, so every
+// tool call still has the id the protocol requires.
+func (t *tracker) callID(e interp.Event) string {
+	if id := e.Action.ID; id != "" {
+		return id
 	}
-	if a.Kind == interp.ActionSignal {
-		b.WriteByte(0)
-		b.WriteString(strconv.Itoa(a.PID))
-		b.WriteByte(0)
-		b.WriteString(strconv.Itoa(int(a.Signal)))
-	}
-	return b.String()
+	t.n++
+	return "call-" + strconv.Itoa(t.n)
 }
 
 // begin opens a tool call for an action and returns its id.
 func (t *tracker) begin(e interp.Event) string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.n++
-	id := "call-" + strconv.Itoa(t.n)
-	if t.open == nil {
-		t.open = map[string][]string{}
+	id := t.callID(e)
+	if e.Action.ID == "" {
+		// The one place an action with no identity is refused, and it is the
+		// only one that needs to be: nothing else writes to the map, so a
+		// lookup of "" finds nothing without a check of its own.
+		return id
 	}
-	k := fingerprint(e)
-	t.open[k] = append(t.open[k], id)
+	if t.open == nil {
+		t.open = map[string]string{}
+	}
+	t.open[e.Action.ID] = id
 	return id
 }
 
-// head is the oldest open tool call for an action, left open.
+// head is the open tool call for an action, left open.
+//
+// Neither this nor end checks for the empty id, and that is deliberate rather
+// than an omission: begin is the only thing that writes, it refuses to store
+// one, so a lookup of "" finds nothing on its own. Repeating the check here
+// would make each of the three copies individually removable without changing
+// any answer — which is a guard that cannot be graded.
 func (t *tracker) head(e interp.Event) (string, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	q := t.open[fingerprint(e)]
-	if len(q) == 0 {
-		return "", false
-	}
-	return q[0], true
+	id, ok := t.open[e.Action.ID]
+	return id, ok
 }
 
-// end closes the oldest open tool call for an action and returns its id.
+// end closes the open tool call for an action and returns its id.
 func (t *tracker) end(e interp.Event) (string, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	k := fingerprint(e)
-	q := t.open[k]
-	if len(q) == 0 {
+	id, ok := t.open[e.Action.ID]
+	if !ok {
 		return "", false
 	}
-	id := q[0]
-	if len(q) == 1 {
-		delete(t.open, k)
-	} else {
-		t.open[k] = q[1:]
-	}
+	delete(t.open, e.Action.ID)
 	return id, true
 }
 

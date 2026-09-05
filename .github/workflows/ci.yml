@@ -172,9 +172,23 @@ jobs:
       run: sudo apt-get update -qq && sudo apt-get install -y -qq dash ksh zsh
     - name: Report drift without failing on it
       if: needs.changes.outputs.code == 'true'
-      # The golden record is generated on one machine and a runner does not
-      # have the same builds of the same shells, so some differences here are
-      # legitimate. A check that is red for a legitimate reason is one people
-      # learn to ignore. `make oracle-check` is the gate locally, where the
-      # panel matches the record.
+      # Report-only, and now for a measured reason rather than an assumed
+      # one. The golden record is generated on one machine and a runner does
+      # not have the same builds of the same shells: on this runner, against
+      # a record made on macOS, **380 of 1122 cases differ** and bash 3.2 is
+      # not installable at all. Making this blocking would fail every build,
+      # which is the flakiness a gate must not have, and a check that is red
+      # for a legitimate reason is one people learn to ignore.
+      #
+      # The half that *can* block does, and it blocks somewhere else. Whether
+      # the corpus, the golden record and the rendered measurements agree
+      # with each other needs no shells and has the same answer on every
+      # machine, so it is a test — TestTheCommittedRecordAndDocumentAgree —
+      # and runs in the required Build and test job. That is what catches a
+      # case added, removed or renamed without regenerating, and prose edited
+      # after the regeneration.
+      #
+      # What is left here is the one question only a panel can answer, and
+      # only a panel that matches the record can answer it: `make check`
+      # locally.
       run: go run ./cmd/oracle -check || true

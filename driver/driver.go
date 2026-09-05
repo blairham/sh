@@ -1104,6 +1104,12 @@ func (sh Shell) executeLines(
 				sh.errf("%s", in.dg.ParseDiagnostic(in.diagName(), in.input, err, pr.text()))
 				return in.dg.StatusForParseError(err), endingParseFailure
 			}
+			// Whatever is left once the last line has been handed out is
+			// still input the shell read, and `set -v` writes back what it
+			// reads. Blank lines and comments *between* commands come out
+			// with the line after them; the ones after the last command have
+			// no line after them and were dropped outright.
+			sh.sayVerboseRest(pr.text(), echoed, r.Verbose())
 			break
 		}
 		if err := pr.err(); err != nil {
@@ -1191,6 +1197,36 @@ func (sh Shell) sayVerbose(src string, upTo int, at verbosePos, echo bool) verbo
 	// counted anyway rather than echoed again when more arrives.
 	at.line = upTo
 	return at
+}
+
+// sayVerboseRest accounts for the physical lines left over once the last
+// logical line has been handed out, which is the tail of the input: the blank
+// lines and comments after the final command, and a program that is nothing
+// but those.
+//
+// It walks to the end of the text rather than to a line number, because there
+// is no line to name — a line number is what the parser hands back for input
+// it turned into a command, and this is exactly the input it did not. The end
+// of the text is the only bound there is.
+//
+// Not called where the shell stopped early. A script that runs `exit` is done
+// reading, and three of the four echo nothing after it; a line that failed to
+// parse is a separate question with its own answer.
+func (sh Shell) sayVerboseRest(src string, at verbosePos, echo bool) {
+	for at.off < len(src) {
+		rest := src[at.off:]
+		text := rest
+		if i := strings.IndexByte(rest, '\n'); i >= 0 {
+			text, at.off = rest[:i], at.off+i+1
+		} else {
+			// The piece after the last newline. One past the end says it has
+			// been taken, which is the same convention sayVerbose keeps.
+			at.off = len(src) + 1
+		}
+		if echo {
+			sh.errf("%s\n", text)
+		}
+	}
 }
 
 // source runs the prelude on an existing runner, which is how a prelude is

@@ -56,6 +56,20 @@ type Lexer struct {
 	// operator order.
 	pending       []*Redirect
 	pendingQuoted []bool
+
+	// heredocEnd is where the last here-document body read here finished:
+	// the line that closed it, which is the delimiter's own line, or the
+	// last line there was where the input ended before the delimiter did.
+	//
+	// It exists because a here-document's body and its delimiter are
+	// physical lines of the *command* that owns them, and nothing else in a
+	// token says so. The newline token that triggers the read is positioned
+	// where the command's first line ended, and the body is consumed behind
+	// it — so a caller counting the lines a command occupied sees one line
+	// where a script shows three. `set -v` is the caller that minds: it
+	// writes the input back as it is read, and it echoed the delimiter after
+	// running the command rather than with it.
+	heredocEnd Pos
 }
 
 // queueHeredoc registers a redirection whose body is still to be read. The
@@ -671,11 +685,13 @@ func (l *Lexer) scanWord(start Pos) Token {
 			spans = append(spans, l.scanParens(CommandSubst, Unquoted))
 
 		case l.startsProcSubst():
-			// Unquoted only, and that is not an omission: `"<(cmd)"` is the
-			// five characters in every shell in the panel, dash included,
-			// because what it produces is a *path* and a quoted path is
-			// still a path — there would be nothing for the quoting to
-			// change. Measured; see docs/spec/grammar/substitutions.md.
+			// Unquoted only, and that is not an omission: `"<(echo hi)"` is
+			// its own ten characters of text in every shell in the panel,
+			// dash included, because what it produces is a *path* and a
+			// quoted path is still a path — there would be nothing for the
+			// quoting to change. Measured, and pinned by the corpus case
+			// procsub/quoted-is-not-a-substitution; see
+			// docs/spec/grammar/substitutions.md.
 			flush()
 			spans = append(spans, l.scanParens(procSubstKind(c), Unquoted))
 
@@ -1402,11 +1418,17 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 				At:    r.OpPos,
 				Token: delim,
 			})
+			// The body ran to the end of the input, so the last line there
+			// was is the last line this command occupied.
+			l.markHeredocEnd(lastLine)
 			break
 		}
 		linePos := l.pos()
 		line, done := l.heredocLine(strip)
 		if done == delim {
+			// The delimiter's own line is the command's last, and it is not
+			// part of the body.
+			l.markHeredocEnd(linePos)
 			break
 		}
 		lastLine = linePos
@@ -1424,6 +1446,15 @@ func (l *Lexer) readOneHeredoc(r *Redirect, quoted bool) {
 		Spans: []Span{{Kind: Literal, Value: body.String(), Quoting: q, Pos: start}},
 		Start: start,
 		Stop:  l.pos(),
+	}
+}
+
+// markHeredocEnd records how far a here-document reached, keeping the furthest
+// of several on one line: `cat <<A <<B` is closed by B's delimiter and not by
+// A's, and they are read in the order their operators appeared.
+func (l *Lexer) markHeredocEnd(at Pos) {
+	if at.Offset > l.heredocEnd.Offset {
+		l.heredocEnd = at
 	}
 }
 

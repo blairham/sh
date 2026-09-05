@@ -85,7 +85,45 @@ type Dialect struct {
 	// another *item*, so the loop then meets `}` where `do` belongs. Only
 	// the C-style header ends itself, which is why that one form takes the
 	// brace with nothing between.
+	//
+	// A dialect with ShortLoop widens the *body* half of this to any single
+	// command, and adds `while` and `until` to the loops that may take one.
 	ForBraceBody bool
+
+	// ShortLoop is the family of loops written without `do … done`. One
+	// shell in the panel has it; the other four refuse every shape below.
+	//
+	// Two productions, and they are one flag because they are one feature —
+	// a loop header that has ended may be followed by its body directly:
+	//
+	//	while (( i < 2 )) echo $i        a body of one command
+	//	while (( i < 2 )) { … }          which may be a brace group
+	//	until [[ -n $x ]] { … }          and `until` equally
+	//	for i (a b) { echo $i }          a parenthesized word list
+	//	for i (a b) echo $i              with the same short body
+	//	select x (a b) { … }             and `select`, whose header is a for's
+	//	while false                      the body omitted altogether
+	//
+	// **The header has to end itself, and a separator is the opposite of
+	// help.** `while true { … }` is a syntax error because `true` is a simple
+	// command and `{` is another of its words; `while (( i < 2 )) { … }`
+	// works because `(( … ))` closes. And `while true; { … }` is not this
+	// production at all — the `;` continues the *condition list*, so the
+	// brace group becomes the last command tested and the body is empty.
+	// That is measurable rather than a reading: `i=0; while (( i<2 )); {
+	// echo $i; i=$((i+1)) }` counts up forever, where the body reading
+	// would print 0 and 1 and stop. The one-command body is what makes the
+	// omitted body reachable, so the two are not separable.
+	//
+	// For a `for`, "ended" means the parenthesized list, or no `in` clause
+	// at all. `for i in a b` still needs a separator or `do`, which is the
+	// same rule that makes `for i in a b { … }` read `{` as another item.
+	//
+	// A production of the grammar and not of the printer: a body that was
+	// written short is printed as `do … done`, which parses to the same tree
+	// under any dialect. Only an *omitted* body has no long spelling, so
+	// that one is printed back short.
+	ShortLoop bool
 
 	// AppendAssign enables `name+=value`, which appends rather than
 	// replacing. Absent from dash, where `x+=b` is a command called `x+=b`.
@@ -358,15 +396,18 @@ type Dialect struct {
 	// ArithExplicitBase enables the `base#digits` form. Absent from dash.
 	ArithExplicitBase bool
 
-	// ArithLeadingZeroIsOctal decides whether `0100` is sixty-four or one
-	// hundred. It is true everywhere but zsh, and it is the quietest
-	// divergence measured: nothing warns, both answers are plausible
-	// numbers, and file modes are written with leading zeros.
+	// Whether `0100` is sixty-four or one hundred is deliberately *not* a
+	// field here. A literal is kept as written, so the tree bakes in no
+	// answer and nothing in the parser has the question to ask; the answer
+	// is `interp.Semantics.ArithLeadingZeroIsOctal`, which evaluation reads.
 	//
-	// Nothing in the parser reads this — a literal is kept as written, so
-	// the tree does not bake in an answer — but the field belongs with the
-	// others, and evaluation needs it.
-	ArithLeadingZeroIsOctal bool
+	// A `syntax.Dialect` field of the same name stood here and was removed
+	// (#564). Nothing read it, and being unread it was also *wrong*: it was
+	// documented as "true everywhere but zsh" while the `zsh` preset — which
+	// starts from Core, where it was set — carried true, the opposite of
+	// zsh's own answer. A flag no parser consults cannot be corrected by
+	// anything failing, so it drifts, and it is indistinguishable from one
+	// whose consumer was lost in a refactor.
 
 	// ArithFloat enables floating point, which ksh93 and zsh have and POSIX
 	// does not.
@@ -592,11 +633,10 @@ func Core() Dialect {
 		ParamSubstitution:       true,
 		ParamSubstring:          true,
 
-		ArithIncDec:             true,
-		ArithComma:              true,
-		ArithExponent:           true,
-		ArithExplicitBase:       true,
-		ArithLeadingZeroIsOctal: true,
+		ArithIncDec:       true,
+		ArithComma:        true,
+		ArithExponent:     true,
+		ArithExplicitBase: true,
 	}
 }
 

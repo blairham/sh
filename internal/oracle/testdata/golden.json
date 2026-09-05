@@ -16602,6 +16602,70 @@
         "TimedOut": false
       }
     },
+    "pat/case-subject-is-not-globbed": {
+      "bash": {
+        "Output": "literal empty",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "literal empty",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "literal empty",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "literal empty",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "literal empty",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "literal empty",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "pat/case-subject-is-not-split": {
+      "bash": {
+        "Output": "blank one-word",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "blank one-word",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "blank one-word",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "blank one-word",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "blank one-word",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "blank one-word",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "pat/character-class": {
       "bash": {
         "Output": "class",

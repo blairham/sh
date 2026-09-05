@@ -102,6 +102,38 @@ func TestCaseMatching(t *testing.T) {
 	}
 }
 
+func TestCaseSubjectIsNeitherSplitNorGlobbed(t *testing.T) {
+	// The subject expands but keeps the exemption `[[ ]]` operands and a
+	// scalar assignment value have: no field splitting and no pathname
+	// expansion, even unquoted. The ordinary word pipeline split a
+	// whitespace-only value to zero fields, so its arm never fired.
+	tests := []struct{ name, src, want string }{
+		{
+			"whitespace-only subject reaches its arm",
+			`t=$(printf "\t"); case $t in [[:blank:]]) echo m;; *) echo split;; esac`, "m\n",
+		},
+		{
+			"a value with a space stays one subject",
+			`m="a b"; case $m in "a b") echo m;; a) echo first-field;; *) echo neither;; esac`, "m\n",
+		},
+		{
+			"a glob character stays a character",
+			`g="*"; case $g in \*) echo m;; *) echo globbed;; esac`, "m\n",
+		},
+		{
+			"an unset subject is the empty string",
+			`case $u in "") echo m;; *) echo no;; esac`, "m\n",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, _ := run(t, tc.src, nil); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestCaseFallthroughFollowsEachArmsTerminator(t *testing.T) {
 	// A body reached by `;&` still owns its terminator: another `;&`
 	// keeps falling, `;;` stops, and the end of the item list stops.

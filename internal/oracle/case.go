@@ -2504,6 +2504,16 @@ echo unreachable`,
 		Why:     "per-span quoting reaches all the way into matching, so a pattern is a word rather than a string",
 	},
 	{
+		ID: "pat/case-subject-is-not-split", Category: "pattern matching",
+		Snippet: `t=$(printf "\t"); case $t in [[:blank:]]) printf blank;; *) printf other;; esac; m="a b"; case $m in "a b") printf " one-word";; a) printf " first-field";; *) printf " neither";; esac`,
+		Why:     "an unquoted case subject expands but is never field-split, so a whitespace-only value still reaches its arm and a value with a space in it stays one subject — splitting sent the tab to the star arm silently, status 0",
+	},
+	{
+		ID: "pat/case-subject-is-not-globbed", Category: "pattern matching",
+		Snippet: `touch afile; g="*"; case $g in afile) printf globbed;; \*) printf literal;; esac; unset u; case $u in "") printf " empty";; *) printf " nonempty";; esac`,
+		Why:     "pathname expansion never touches the subject either — a value of * stays the character even in a directory it would match — and an unset subject is the empty string rather than no subject",
+	},
+	{
 		ID: "pat/extended-patterns-are-not-core", SyntaxError: true, Category: "pattern matching",
 		Snippet: `case abc in @(abc|xyz)) echo at;; esac`,
 		Why:     "ksh93 alone accepts them as written; dash and bash report a syntax error and zsh parses but does not match — three behaviors, so not core",

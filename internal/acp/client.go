@@ -152,13 +152,10 @@ func (c *Client) Agent() InitializeResponse { return c.agent }
 // NewSession opens a session in a directory.
 func (c *Client) NewSession(ctx context.Context, cwd string) (string, error) {
 	var resp NewSessionResponse
-	err := c.conn.Call(ctx, MethodNewSession, NewSessionRequest{
-		Cwd: cwd,
-		// Required by the schema and empty rather than absent: an agent that
-		// reads null for a list is an agent we broke for no reason. This
-		// shell is not an MCP host.
-		MCPServers: []json.RawMessage{},
-	}, &resp)
+	// No MCP servers: this shell is not an MCP host. The list is still
+	// written, as an empty array — see NewSessionRequest, where leaving it out
+	// was a real refusal from a real agent rather than a hypothetical one.
+	err := c.conn.Call(ctx, MethodNewSession, NewSessionRequest{Cwd: cwd}, &resp)
 	return resp.SessionID, err
 }
 

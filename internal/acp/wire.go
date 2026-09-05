@@ -29,7 +29,10 @@
 // each one.
 package acp
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // Version is the ACP protocol revision this package speaks. It is bumped only
 // for breaking changes to the protocol; everything else is negotiated through
@@ -132,13 +135,38 @@ type AuthMethod struct {
 
 // NewSessionRequest asks for a new session in a directory.
 //
-// mcpServers is required by the schema and ignored by this agent, which is why
-// it is kept as raw JSON: decoding a shape we will not act on would be
-// pretending to support it, and refusing a request that carries one would
-// break clients that always send an empty list.
+// mcpServers is required by the schema and ignored by this shell's agent side,
+// which is why it is kept as raw JSON: decoding a shape we will not act on
+// would be pretending to support it, and refusing a request that carries one
+// would break clients that always send a list.
+//
+// It carries no omitempty, and that is not a style choice. An empty list and
+// an absent field are the same thing to Go and are not the same thing to an
+// agent: measured against the published Claude adapter, `{"cwd":"/tmp"}`
+// answers `-32602` with `mcpServers: Required value is missing`, while
+// `{"cwd":"/tmp","mcpServers":[]}` opens a session. A required field is
+// written even when it is empty.
 type NewSessionRequest struct {
 	Cwd        string            `json:"cwd"`
-	MCPServers []json.RawMessage `json:"mcpServers,omitempty"`
+	MCPServers []json.RawMessage `json:"mcpServers"`
+}
+
+// MarshalJSON writes the required list as an empty array rather than as null.
+//
+// The same hazard one step further in: a nil slice is not omitted once
+// omitempty is gone, it is written as `null`, and an agent that requires a
+// list is no happier with null than with nothing.
+func (r NewSessionRequest) MarshalJSON() ([]byte, error) {
+	type request NewSessionRequest
+	out := request(r)
+	if out.MCPServers == nil {
+		out.MCPServers = []json.RawMessage{}
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return nil, fmt.Errorf("acp: session/new: %w", err)
+	}
+	return b, nil
 }
 
 // NewSessionResponse names the session that was made.

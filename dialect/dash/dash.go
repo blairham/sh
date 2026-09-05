@@ -178,6 +178,10 @@ func Semantics() interp.Semantics {
 	// And so is a redirection that cannot be made, which is POSIX's rule
 	// verbatim: `exec 3>/nope/x` stops the script, at 2 like every other
 	// fatal error here.
+	// The one shell in the panel that will not take a duplication target
+	// wider than one digit — `>&10` and `>&08` alike, and `>&$n` once the
+	// word has expanded to one. It words it as a syntax error and stops.
+	s.MultiDigitDuplicationTargetIsAnError = interp.Yes
 	s.RedirectErrorOnSpecialBuiltinFatal = interp.Yes
 	s.LocalOutsideAFunctionIsAnError = interp.Yes
 	s.LocalOutsideAFunctionIsFatal = interp.Yes
@@ -255,6 +259,11 @@ func Semantics() interp.Semantics {
 // Diagnostics is how dash reports failure.
 func Diagnostics() interp.Diagnostics {
 	return interp.Diagnostics{
+		// A duplication target wider than one digit is refused before the
+		// descriptor is looked at, and worded as a syntax error even though
+		// the parse succeeded — no number, no file, one sentence.
+		MultiDigitDuplicationTarget: "Syntax error: Bad fd number",
+
 		TypeKeyword:  "%[1]s is a shell keyword",
 		TypeFunction: "%[1]s is a shell function",
 		// No shell name and no location in front of it, alone among the

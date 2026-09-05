@@ -294,6 +294,9 @@ func Semantics() interp.Semantics {
 	// prints `after` at status 0. It is the starting value rather than a
 	// fixed one — `set -o posix` moves it, which is the whole of the
 	// bash-as-`sh` column; see the posix option below.
+	// bash reads the number and fails at run time if nothing is open there:
+	// `10: Bad file descriptor`, status 1, and the script carries on.
+	s.MultiDigitDuplicationTargetIsAnError = interp.No
 	s.RedirectErrorOnSpecialBuiltinFatal = interp.No
 	s.LocalOutsideAFunctionIsAnError = interp.Yes
 	s.LocalOutsideAFunctionIsFatal = interp.No

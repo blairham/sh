@@ -108,6 +108,9 @@ func (r *Runner) optionLetters() string {
 	if r.noexec {
 		b.WriteByte('n')
 	}
+	if r.monitor {
+		b.WriteByte('m')
+	}
 	if r.verbose {
 		b.WriteByte('v')
 	}

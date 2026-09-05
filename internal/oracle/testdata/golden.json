@@ -12506,6 +12506,70 @@
         "TimedOut": false
       }
     },
+    "opt/pipefail-appears-in-the-plus-o-listing": {
+      "bash": {
+        "Output": "pipefail",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "pipefail",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "pipefail",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "pipefail",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "opt/pipefail-turned-on-is-listed-on": {
+      "bash": {
+        "Output": "pipefail",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "pipefail",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "pipefail",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "pipefail",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "pipefail",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "opt/set-e-carries-the-err-trap": {
       "bash": {
         "Output": "ERR~ERR~done",
@@ -12570,6 +12634,38 @@
         "TimedOut": false
       }
     },
+    "opt/set-m-in-a-script": {
+      "bash": {
+        "Output": "st=0~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: set: can't access tty; job control turned off~st=0~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0~done",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:set:1: can't change option: -m",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "opt/set-n-reads-and-never-runs": {
       "bash": {
         "Output": "",
@@ -12598,6 +12694,38 @@
       },
       "zsh": {
         "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "opt/set-o-lists-a-pipefail-row": {
+      "bash": {
+        "Output": "pipefail       \toff",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "pipefail       \toff",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "pipefail       \toff",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "pipefail                 off",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "pipefail              off",
         "Status": 0,
         "TimedOut": false
       }
@@ -12634,6 +12762,70 @@
         "TimedOut": false
       }
     },
+    "opt/set-o-monitor-is-the-same-request": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: set: can't access tty; job control turned off~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:set:1: can't change option: monitor",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "opt/set-o-noexec-reads-and-never-runs": {
+      "bash": {
+        "Output": "before",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "before",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "before",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "before",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "before",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "before",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "opt/set-o-noglob-is-unanimous": {
       "bash": {
         "Output": "*.txt",
@@ -12662,6 +12854,38 @@
       },
       "zsh": {
         "Output": "*.txt",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "opt/set-o-verbose-echoes-what-is-read": {
+      "bash": {
+        "Output": "before~echo after~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "before~echo after~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "before~echo after~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "before~echo after~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "before~echo after~~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "before~echo after~after",
         "Status": 0,
         "TimedOut": false
       }

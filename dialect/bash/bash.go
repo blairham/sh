@@ -531,6 +531,7 @@ func Apply(r *interp.Runner) {
 		"keyword",
 		"onecmd",
 		"physical",
+		"pipefail",
 		"posix",
 		"privileged",
 	)

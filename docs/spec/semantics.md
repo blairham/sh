@@ -1400,6 +1400,42 @@ That is the second time a fix has revealed the *next* thing behind it, and
 the argument for giving the sweep a run mode: a parse-only check finds what
 cannot be read, and says nothing about what cannot be done.
 
+## Two more letters the panel does not read alike
+
+The same shape as `-f`, twice over, measured for the `set` option table.
+
+`set -h` is an option letter in three shells and means no one thing. bash
+abbreviates hashall with it and ksh93 trackall — the same idea, command
+tracking, under two long names — while zsh's `-h` is histignoredups, a
+history option that leaves command hashing alone. dash refuses the letter
+outright, fatally, as it refuses any `set` letter it does not have:
+
+    set -h; echo st=$?      st=0 in bash, ksh93 and zsh
+                            set: Illegal option -h, exit 2, in dash
+
+Two axes: whether the letter exists at all, and which option it abbreviates.
+The long names raise no question — `set -o hashall`, `set -o trackall` and
+`set -o histignoredups` each belong to the dialects that list them and to no
+other.
+
+`set -m` splits the panel three ways, and the split is about the terminal.
+Measured with none — which is what a script has, and how the oracle runs:
+
+    set -m; echo st=$?      st=0, silently, in bash and ksh93
+                            set: can't access tty; job control turned off,
+                              then st=0, in dash — a remark, not a failure,
+                              and the option stays off
+                            set: can't change option: -m, exit 1, fatally,
+                              in zsh — and `set -o monitor` echoes the
+                              spelling that asked: can't change option: monitor
+
+With a terminal all four grant it. What granting means in a script is less
+than it sounds: even with the option on, no shell in the panel announces a
+background job to a script — the notices belong to a prompt — and background
+jobs here already run in process groups of their own, which is the half of
+the promise that is behavioral. So the axis is whether monitor *needs* the
+terminal, and the two refusal shapes are the dialect's wording and status.
+
 ## Two routes to the same element
 
 `${a[1]}` is substituted into an expression before it is read. `a[1]` is read

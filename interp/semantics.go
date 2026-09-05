@@ -1169,6 +1169,32 @@ type Semantics struct {
 	// only a refusal is honest elsewhere.
 	SetHasTraceLetters Answer
 
+	// SetHasTheHLetter gives `set` the -h letter at all. Three of the four
+	// have it and no two mean quite the same thing by it — which option it
+	// abbreviates is SetHLetterTracksCommands — while dash refuses the
+	// letter outright, fatally, the way it refuses any letter it does not
+	// have.
+	SetHasTheHLetter Answer
+
+	// SetHLetterTracksCommands makes `set -h` the short spelling of command
+	// tracking — the option bash lists as hashall and ksh93 as trackall,
+	// permission to remember where commands were found. zsh answers no: its
+	// -h abbreviates histignoredups, a history option, and leaves command
+	// hashing alone. Asked only where the letter is written, like
+	// SetFTurnsOffGlobbing: the long names raise no question.
+	SetHLetterTracksCommands Answer
+
+	// MonitorNeedsATerminal ties turning `set -m` on to having a terminal.
+	// Measured in shells run with none, which is what a script has: bash
+	// and ksh93 grant the option silently; dash remarks `can't access tty;
+	// job control turned off` and reports success with the option left off;
+	// zsh refuses it at 1, fatally. The two refusal shapes are the
+	// dialect's own wording and status — Diagnostics.MonitorDenied and
+	// MonitorDeniedStatus. A runner whose front end gave it a person to
+	// report jobs to (JobControl) has a terminal, so the question is asked
+	// only without one. Turning the option *off* is granted everywhere.
+	MonitorNeedsATerminal Answer
+
 	// PunctuatedFunctionNameIsRefused stops the script when a function
 	// whose name carries `-` or `.` is defined. ksh93 alone: bash and zsh
 	// define and run it, and dash never parses the definition at all.
@@ -1793,6 +1819,14 @@ func PosixSemantics() Semantics {
 		// POSIX has no such names; refusal is one shell's own answer.
 		PunctuatedFunctionNameIsRefused: No,
 		SetHasTraceLetters:              No,
+		// POSIX names -h itself, as command tracking: "locate and remember
+		// utilities invoked by functions as those functions are defined".
+		// dash is the one shell that refuses the letter, and overrides.
+		SetHasTheHLetter:         Yes,
+		SetHLetterTracksCommands: Yes,
+		// POSIX ties -m to process groups and job notices, not to a
+		// terminal; the two shells that want one override.
+		MonitorNeedsATerminal:           No,
 		TildePlusMinusExpands:           No,
 		UnderscoreTracksTheLastArgument: No,
 		// The majority answers: full bases, wrapping overflow, zero for an

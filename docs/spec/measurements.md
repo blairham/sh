@@ -2246,6 +2246,13 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `opt/set-f-turns-off-pathname-expansion` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `a.txt b.txt` |
 | `opt/set-o-lists-the-table` | `errexit         off` | `errexit        	off` | `errexit        	off` | `errexit        	off` | `errexit                  off` | `errexit               off` |
 | `opt/set-plus-o-writes-input-back` | `set +o errexit` | `set +o allexport` | `set +o allexport` | `set +o allexport` | `set --default --braceexpand --multiline --trackall --viraw` | `set +o noaliases` |
+| `opt/set-o-noexec-reads-and-never-runs` | `before` | `before` | `before` | `before` | `before` | `before` |
+| `opt/set-o-verbose-echoes-what-is-read` | `before~echo after~after` | `before~echo after~after` | `before~echo after~after` | `before~echo after~after` | `before~echo after~~after` | `before~echo after~after` |
+| `opt/pipefail-appears-in-the-plus-o-listing` | *(no output, status 0)* | `pipefail` | `pipefail` | `pipefail` | *(no output, status 0)* | `pipefail` |
+| `opt/pipefail-turned-on-is-listed-on` | *(no output, status 0)* | `pipefail` | `pipefail` | `pipefail` | `pipefail` | `pipefail` |
+| `opt/set-o-lists-a-pipefail-row` | *(no output, status 1)* | `pipefail       	off` | `pipefail       	off` | `pipefail       	off` | `pipefail                 off` | `pipefail              off` |
+| `opt/set-m-in-a-script` | `<shell>: 1: set: can't access tty; job control turned off~st=0~done` | `st=0~done` | `st=0~done` | `st=0~done` | `st=0~done` | `<shell>:set:1: can't change option: -m` *(status 1)* |
+| `opt/set-o-monitor-is-the-same-request` | `<shell>: 1: set: can't access tty; job control turned off~st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>:set:1: can't change option: monitor` *(status 1)* |
 | `opt/set-o-noglob-is-unanimous` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` |
 | `opt/noglob-does-not-stop-matching` | `match` | `match` | `match` | `match` | `match` | `match` |
 | `opt/an-option-can-be-turned-back-off` | `a.txt` | `a.txt` | `a.txt` | `a.txt` | `a.txt` | `a.txt` |
@@ -2390,6 +2397,42 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `opt/set-plus-o-writes-input-back` — +o writes re-inputtable set commands in three shells; ksh93's one line names only what is on, --default first
   ```sh
   set +o | head -1
+  ```
+- `opt/set-o-noexec-reads-and-never-runs` — the long spelling of `set -n`, and it behaves identically in all four: everything after it is read and never run, and the script still ends at 0 — the same option under its other name, which was refused as unimplemented here while the letter worked
+  ```sh
+  echo before
+  set -o noexec
+  echo after
+  ```
+- `opt/set-o-verbose-echoes-what-is-read` — the long spelling of `set -v`: input is written back to stderr as it is read, and never the line that turned it on. From a file all four agree; a -c string is read differently — bash echoes it where dash and zsh do not — so the case pins the route every script uses
+  ```sh
+  echo before
+  set -o verbose
+  echo after
+  ```
+- `opt/pipefail-appears-in-the-plus-o-listing` — the option is in the listings of the shells that have it, off or on: bash and zsh write the re-inputtable `set +o pipefail` line even while it is off. ksh93's one `+o` line names only what is on, and dash has no such option, so both are silent here — the grep -o keeps the question about the name rather than about four line layouts
+  ```sh
+  set +o | grep -o pipefail | head -1
+  ```
+- `opt/pipefail-turned-on-is-listed-on` — the other state: once on, ksh93's active-options line names it too, so all three shells with the option now answer and only dash stays silent
+  ```sh
+  if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi
+  set +o | grep -o pipefail | head -1
+  ```
+- `opt/set-o-lists-a-pipefail-row` — the `set -o` table has a pipefail row wherever the option exists — three column widths, all saying off — and no row at all in dash, whose grep comes up empty at 1
+  ```sh
+  set -o | grep pipefail
+  ```
+- `opt/set-m-in-a-script` — job control in a shell with no terminal splits the panel three ways: bash and ksh93 grant it silently at 0, dash declines it in a remark — `can't access tty; job control turned off` — and still reports 0, and zsh refuses it outright at 1, fatally, so nothing after runs
+  ```sh
+  set -m
+  echo "st=$?"
+  echo done
+  ```
+- `opt/set-o-monitor-is-the-same-request` — the long spelling gets each shell's same answer, and zsh's refusal echoes the spelling that asked — `monitor` here where the case above says `-m`
+  ```sh
+  set -o monitor
+  echo "st=$?"
   ```
 - `opt/set-o-noglob-is-unanimous` — the long name means the same thing in all four, which is what makes it the spelling that needs no dialect — and the pair with the case above is the whole of the axis
   ```sh

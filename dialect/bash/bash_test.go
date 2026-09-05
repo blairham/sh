@@ -94,6 +94,11 @@ func TestSemantics(t *testing.T) {
 		{"CdRefusesUnknownOption", s.CdRefusesUnknownOption, interp.Yes},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.Yes},
 		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.No},
+		// `set -h` is command tracking here, and `set -m` is granted to a
+		// script with no terminal — measured, silently.
+		{"SetHasTheHLetter", s.SetHasTheHLetter, interp.Yes},
+		{"SetHLetterTracksCommands", s.SetHLetterTracksCommands, interp.Yes},
+		{"MonitorNeedsATerminal", s.MonitorNeedsATerminal, interp.No},
 		{"ReturnOutsideAFunctionIsRefused", s.ReturnOutsideAFunctionIsRefused, interp.Yes},
 		{"LoneDashIsAnOption", s.LoneDashIsAnOption, interp.No},
 		{"ReadonlyReassignmentFatalFromCommandString", s.ReadonlyReassignmentFatalFromCommandString, interp.Yes},
@@ -516,8 +521,13 @@ func TestSetOptionNamesBashHas(t *testing.T) {
 		{"braceexpand", true},
 		{"hashall", true},
 		{"privileged", true},
+		// Real here, and in the listings because it is declared.
+		{"pipefail", true},
 		// Common to all four, so it needs no declaring and must still work.
 		{"noexec", true},
+		// Other shells' names for what this one spells its own way.
+		{"trackall", false},
+		{"histignoredups", false},
 		// Not an option anywhere.
 		{"bogusname", false},
 	} {

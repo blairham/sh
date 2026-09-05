@@ -100,6 +100,11 @@ func TestSemantics(t *testing.T) {
 		{"CdRefusesUnknownOption", s.CdRefusesUnknownOption, interp.Yes},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.Yes},
 		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.Yes},
+		// `set -h` is command tracking — trackall, this shell's name for
+		// it — and `set -m` is granted to a script with no terminal.
+		{"SetHasTheHLetter", s.SetHasTheHLetter, interp.Yes},
+		{"SetHLetterTracksCommands", s.SetHLetterTracksCommands, interp.Yes},
+		{"MonitorNeedsATerminal", s.MonitorNeedsATerminal, interp.No},
 		{"ReturnOutsideAFunctionIsRefused", s.ReturnOutsideAFunctionIsRefused, interp.No},
 		{"LoneDashIsAnOption", s.LoneDashIsAnOption, interp.No},
 		{"ReadonlyReassignmentFatalFromCommandString", s.ReadonlyReassignmentFatalFromCommandString, interp.Yes},

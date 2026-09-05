@@ -35,6 +35,12 @@ func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
 	s.CommandNotFoundStatusIsNotFound = interp.Yes
 	s.SetFTurnsOffGlobbing = interp.Yes
+	// The one shell that refuses the -h letter POSIX names.
+	s.SetHasTheHLetter = interp.No
+	// Job control wants the tty: with none, `set -m` earns the remark
+	// `can't access tty; job control turned off` — a remark, measured, not
+	// a failure: the option stays off and `set` still reports 0.
+	s.MonitorNeedsATerminal = interp.Yes
 	// DefaultOptionLetters stays empty on purpose: measured, dash's `$-`
 	// starts blank however it is invoked, save the route letter `s` on
 	// standard input, which no dialect models.
@@ -202,6 +208,10 @@ func Diagnostics() interp.Diagnostics {
 		// whichever way it was asked.
 		ParamNullOrNotSet:    "parameter not set or null",
 		SetInvalidOptionName: "set: Illegal option -o %[1]s",
+		// Said whichever spelling asked, so the verb goes unused; status 0,
+		// the field's default, is what makes it a remark rather than an
+		// error.
+		MonitorDenied: "set: can't access tty; job control turned off",
 		// Backticks alone: this shell numbers a `$( … )` body from the file
 		// like the other three, and a backquoted one from one.
 		BackquotedSubstitutionRestartsLines: true,

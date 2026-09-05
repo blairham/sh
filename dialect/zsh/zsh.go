@@ -47,6 +47,13 @@ func Semantics() interp.Semantics {
 	// The reading side of the same option: zsh's short spelling of noglob
 	// is `-F`, and that capital is what its `$-` reports.
 	s.NoglobLetterIsF = interp.No
+	// `set -h` is histignoredups here — a history option — not the command
+	// tracking the letter abbreviates in bash and ksh93.
+	s.SetHLetterTracksCommands = interp.No
+	// Job control wants the terminal: with none, `set -m` is refused —
+	// `can't change option: -m`, at 1, fatally like every `set` failure
+	// here. Measured; bash and ksh93 grant the same request silently.
+	s.MonitorNeedsATerminal = interp.Yes
 	// Measured: `echo $-` reports `569X` under -c, a script file and
 	// standard input alike — letters from zsh's own single-letter option
 	// namespace, which shares almost nothing with the other shells'.
@@ -312,6 +319,10 @@ func Diagnostics() interp.Diagnostics {
 		LocationNamesTheFunction:   true,
 		SetInvalidOptionName:       "no such option: %[1]s",
 		SetInvalidOptionNameStatus: 1,
+		// A denied `set -m` echoes the spelling it was asked with — `-m` or
+		// `monitor` — and fails at 1, fatally like every `set` failure here.
+		MonitorDenied:       "can't change option: %[1]s",
+		MonitorDeniedStatus: 1,
 		// zsh knows `-f` — it means functions to its own typeset — so what
 		// it refuses is the combination, and it says so without naming the
 		// letter it names in every other refusal.
@@ -527,8 +538,10 @@ func Apply(r *interp.Runner) {
 		"braceexpand",
 		"hashall",
 		"histexpand",
+		"histignoredups",
 		"onecmd",
 		"physical",
+		"pipefail",
 		"privileged",
 	)
 	// The statuses of the last pipeline's elements. The core keeps the

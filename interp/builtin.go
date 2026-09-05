@@ -150,7 +150,7 @@ func biSet(r *Runner, _ context.Context, args []string) int {
 		// letters and still apply.
 		if letters, ok := strings.CutSuffix(a[1:], "o"); ok {
 			if !r.setLetters(letters, on) {
-				return 2
+				return r.setOptionFailure()
 			}
 			if i+1 >= len(args) {
 				// With no name to set, `-o` lists the options and `+o`
@@ -165,7 +165,9 @@ func biSet(r *Runner, _ context.Context, args []string) int {
 			continue
 		}
 		if !r.setLetters(a[1:], on) {
-			return 2
+			// 2 unless the refusal recorded a status of its own, which a
+			// denied `set -m` does in one dialect.
+			return r.setOptionFailure()
 		}
 	}
 	// `set -C` alone sets an option and leaves the parameters alone; only an
@@ -174,6 +176,26 @@ func biSet(r *Runner, _ context.Context, args []string) int {
 		r.Params = append([]string(nil), args[i:]...)
 	}
 	return 0
+}
+
+// setLetterNames maps the letters every shell in the panel spells the same
+// way to the long names they abbreviate, so both spellings of an option run
+// through the one table and cannot drift apart. The letters missing from it
+// are the ones some shell reads differently — f, h, E and T — which stay in
+// the switch below, each behind the axis that says whose reading applies.
+var setLetterNames = map[rune]string{
+	'C': "noclobber",
+	// The letter for allexport, which POSIX gives and all four have.
+	'a': "allexport",
+	'e': "errexit",
+	'm': "monitor",
+	// One-way: all four shells ignore `set +n` once it is on — and with it
+	// on, the `set +n` never runs anyway. The table entry says so.
+	'n': "noexec",
+	'u': "nounset",
+	// POSIX, all four: write input back as it is read.
+	'v': "verbose",
+	'x': "xtrace",
 }
 
 // setLetters applies the short spelling, reporting whether every letter was
@@ -185,28 +207,43 @@ func biSet(r *Runner, _ context.Context, args []string) int {
 // would be worse than refusing the whole line.
 func (r *Runner) setLetters(letters string, on bool) bool {
 	for _, opt := range letters {
-		switch opt {
-		case 'C':
-			r.noclobber = on
-		case 'e':
-			r.errexit = on
-		case 'a':
-			// The letter for allexport, which POSIX gives and all four have.
-			r.allexport = on
-		case 'u':
-			r.nounset = on
-		case 'x':
-			r.xtrace = on
-		case 'n':
-			// One-way: all four shells ignore `set +n` once it is on — and
-			// with it on, the `set +n` never runs anyway.
-			if on {
-				r.noexec = true
+		if name, ok := setLetterNames[opt]; ok {
+			o := commonSetOptions[name]
+			if o.try != nil {
+				sign := "-"
+				if !on {
+					sign = "+"
+				}
+				if !o.try(r, on, sign+string(opt)) {
+					return false
+				}
+				continue
 			}
-		case 'v':
-			// POSIX, all four: write input back as it is read. The echoing
-			// itself lives in the front end, which holds the raw text.
-			r.verbose = on
+			o.apply(r, on)
+			continue
+		}
+		switch opt {
+		case 'h':
+			// A letter three shells have and no two mean identically: bash
+			// and ksh93 abbreviate command tracking with it (hashall,
+			// trackall), zsh a history option (histignoredups), and dash
+			// refuses it outright.
+			if !r.ask(r.sem().SetHasTheHLetter, "`set -h` being an option letter at all") {
+				if r.unspecified {
+					return false
+				}
+				r.diagf("set: -%c is not implemented\n", opt)
+				return false
+			}
+			if r.ask(r.sem().SetHLetterTracksCommands, "which option `set -h` abbreviates") {
+				// The same state the hashall and trackall table entries
+				// write, so the letter and the names cannot disagree.
+				r.tracksCommands = on
+			} else if r.unspecified {
+				return false
+			} else {
+				r.histIgnoreDups = on
+			}
 		case 'E', 'T':
 			// bash's trap-carriage letters. zsh spells different options
 			// with the same letters and dash and ksh93 have neither, so a
@@ -288,6 +325,11 @@ func (r *Runner) setOption(name string, on bool) bool {
 	o, ok := r.lookupSetOption(name)
 	if !ok {
 		return r.badSetOptionName(name)
+	}
+	if o.try != nil {
+		// A request the dialect may refuse, handed the spelling it was asked
+		// with — the refusal echoes it back.
+		return o.try(r, on, name)
 	}
 	if o.apply != nil {
 		o.apply(r, on)

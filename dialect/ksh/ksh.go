@@ -552,7 +552,9 @@ func Apply(r *interp.Runner) {
 		"braceexpand",
 		"histexpand",
 		"keyword",
+		"pipefail",
 		"privileged",
+		"trackall",
 	)
 	// ksh93 has a `builtin` of its own and it is a different command: it
 	// *registers* builtins rather than running one. With no operands it

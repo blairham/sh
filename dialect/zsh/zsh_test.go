@@ -106,6 +106,11 @@ func TestSemantics(t *testing.T) {
 		{"CdRefusesUnknownOption", s.CdRefusesUnknownOption, interp.No},
 		{"CdLastPathOptionWins", s.CdLastPathOptionWins, interp.No},
 		{"BadSetOptionNameFatal", s.BadSetOptionNameFatal, interp.Yes},
+		// `set -h` is a history option here, not command tracking, and
+		// `set -m` wants the terminal this shell ties job control to.
+		{"SetHasTheHLetter", s.SetHasTheHLetter, interp.Yes},
+		{"SetHLetterTracksCommands", s.SetHLetterTracksCommands, interp.No},
+		{"MonitorNeedsATerminal", s.MonitorNeedsATerminal, interp.Yes},
 		{"ReturnOutsideAFunctionIsRefused", s.ReturnOutsideAFunctionIsRefused, interp.No},
 		{"LoneDashIsAnOption", s.LoneDashIsAnOption, interp.Yes},
 		{"ReadonlyReassignmentFatalFromCommandString", s.ReadonlyReassignmentFatalFromCommandString, interp.Yes},
@@ -161,6 +166,14 @@ func TestDiagnostics(t *testing.T) {
 	// The same answer dash gives: where the command began.
 	if got, want := zsh.Diagnostics().RedirectFailureLine, interp.LineOfCommand; got != want {
 		t.Errorf("RedirectFailureLine = %v, want %v", got, want)
+	}
+	// A denied `set -m` echoes the spelling that asked and fails at 1 —
+	// fatally, but that is BadSetOptionNameFatal's answer, not this one's.
+	if got, want := zsh.Diagnostics().MonitorDenied, "can't change option: %[1]s"; got != want {
+		t.Errorf("MonitorDenied = %q, want %q", got, want)
+	}
+	if got, want := zsh.Diagnostics().MonitorDeniedStatus, 1; got != want {
+		t.Errorf("MonitorDeniedStatus = %d, want %d", got, want)
 	}
 }
 

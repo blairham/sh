@@ -104,6 +104,19 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				fd = n
 			}
 		}
+		// A here-document and a here-string are input the shell already
+		// holds, so there is no file to open and nothing for the gate to
+		// see — the bytes never leave this process on their way in. Before
+		// the target is computed, because their word is a *body* rather than
+		// a filename: reading it as a target asked the ordinary-word axis
+		// about a word no shell reads that way — `<<< $two` is one line of
+		// input in all four, never an ambiguous redirect.
+		if rd.Op.IsHeredoc() || rd.Op == syntax.TokTLess {
+			body := r.heredocBody(rd)
+			r.Stdin = strings.NewReader(body)
+			continue
+		}
+
 		name, bad := r.redirectTarget(rd)
 		if bad {
 			return closers, nil
@@ -175,15 +188,6 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			if fdVar != "" {
 				r.setVar(fdVar, itoa(fd))
 			}
-			continue
-		}
-
-		// A here-document and a here-string are input the shell already
-		// holds, so there is no file to open and nothing for the gate to
-		// see — the bytes never leave this process on their way in.
-		if rd.Op.IsHeredoc() || rd.Op == syntax.TokTLess {
-			body := r.heredocBody(rd)
-			r.Stdin = strings.NewReader(body)
 			continue
 		}
 
@@ -377,6 +381,10 @@ func (r *Runner) redirectTarget(rd *syntax.Redirect) (string, bool) {
 
 	if !r.ask(r.sem().RedirectTargetIsAnOrdinaryWord, "a redirection target expanded as an ordinary word") {
 		if r.unspecified {
+			// Refused, so the command must not run: acting on either reading
+			// after saying the shells disagree would be answering the
+			// question anyway.
+			r.redirErr = true
 			return "", true
 		}
 		// Expanded and no more: whatever it came to is the name, spaces and

@@ -73,7 +73,7 @@ func (r *Runner) expandOneWord(w *syntax.Word) []string {
 			fields = append(fields, parts[1:]...)
 			continue
 		}
-		text, split := r.expandSpan(s)
+		text, split := r.expandSpan(s, splitByDialect)
 		if !split {
 			fields[len(fields)-1] += text
 			any = any || text != "" || s.Quoting != syntax.Unquoted
@@ -122,6 +122,10 @@ func (r *Runner) expandOneWord(w *syntax.Word) []string {
 // A tilde still expands. Not splitting is not the same as not expanding, and
 // leaving it out made `[[ -f ~/x ]]` false in a home directory that has the
 // file — which every shell with `[[ ]]` answers true.
+//
+// splitNever, because not splitting here is unanimous: asking the axis anyway
+// made the bare core refuse `x=$two` and `[[ $two = "a b" ]]` over a question
+// every shell in the panel answers the same way in these positions.
 func (r *Runner) expandWordNoSplit(w *syntax.Word) []string {
 	if w == nil {
 		return nil
@@ -133,7 +137,7 @@ func (r *Runner) expandWordNoSplit(w *syntax.Word) []string {
 			b.WriteString(strings.Join(parts, " "))
 			continue
 		}
-		text, _ := r.expandSpan(s)
+		text, _ := r.expandSpan(s, splitNever)
 		b.WriteString(text)
 	}
 	return []string{globUnescape(b.String())}
@@ -148,6 +152,13 @@ func (r *Runner) expandWordNoSplit(w *syntax.Word) []string {
 // because splitting is quoting-aware — `"$e"` with a space in it is one field
 // and `$e` is two — so the unsplit text cannot be recovered by joining the
 // fields, and the fields cannot be recovered by splitting the text.
+//
+// The fields view splits without consulting the splitting axis: it exists to
+// show what the ordinary-word reading *would* be, and whether that reading
+// applies is the redirection's own axis, asked by the caller exactly where
+// the two views differ. Asking here as well made the bare core refuse
+// `> $two` for splitting — the wrong axis, and asked even when the target
+// was one word under both readings.
 func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields []string, plain string) {
 	if w == nil {
 		return nil, ""
@@ -169,7 +180,7 @@ func (r *Runner) expandRedirectTargetViews(w *syntax.Word) (fields []string, pla
 			fields = append(fields, parts[1:]...)
 			continue
 		}
-		text, split := r.expandSpan(s)
+		text, split := r.expandSpan(s, splitAlways)
 		b.WriteString(text)
 		if !split {
 			fields[len(fields)-1] += text
@@ -551,10 +562,42 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 	return out, true
 }
 
+// splitPolicy says what the context a span is expanded in does with a result
+// that could split into fields.
+//
+// An ordinary word asks the dialect's axis. The contexts that never split —
+// an assignment's value, `[[ ]]` operands, a case subject, a here-document
+// body — must not ask it, because the exemption there is unanimous across the
+// panel and an unanswered axis refuses only where the shells genuinely
+// disagree; asking anyway made the bare core refuse `x=$two` on a question no
+// shell answers differently. The redirection target's ordinary-word view
+// splits without asking, because whether that view applies at all is the
+// redirection's own axis, asked where the two readings differ.
+type splitPolicy uint8
+
+const (
+	splitByDialect splitPolicy = iota // an ordinary word: the axis decides
+	splitNever                        // a unanimously exempt context
+	splitAlways                       // the ordinary-word view of a redirection target
+)
+
+// answer resolves the policy against the dialect's own answer. A context that
+// never splits, or always does, needs nothing from anyone — which is what
+// keeps the refusal for the axis at genuine disagreements only.
+func (sp splitPolicy) answer(a Answer) Answer {
+	switch sp {
+	case splitNever:
+		return No
+	case splitAlways:
+		return Yes
+	}
+	return a
+}
+
 // expandSpan expands one span, reporting whether its result is subject to
 // field splitting. Only unquoted expansions are; literal text never is,
 // however it was written.
-func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
+func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy) (text string, split bool) {
 	unquoted := s.Quoting == syntax.Unquoted
 	switch s.Kind {
 	case syntax.Literal:
@@ -575,10 +618,10 @@ func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
 		return globEscape(s.Value), false
 	case syntax.ParamExp:
 		v := r.expandParam(s.Param)
-		return r.expansionResult(v, unquoted, r.sem().SplitParamExpansion, "splitting an unquoted parameter expansion")
+		return r.expansionResult(v, unquoted, sp.answer(r.sem().SplitParamExpansion), "splitting an unquoted parameter expansion")
 	case syntax.CommandSubst:
 		v := r.commandSubst(r.ctx, s)
-		return r.expansionResult(v, unquoted, r.sem().SplitCommandSubstitution, "splitting an unquoted command substitution")
+		return r.expansionResult(v, unquoted, sp.answer(r.sem().SplitCommandSubstitution), "splitting an unquoted command substitution")
 	case syntax.ProcSubstIn, syntax.ProcSubstOut:
 		// A path, and a path is never split or globbed however it was
 		// written: what came back is a name this shell just made, not text
@@ -645,7 +688,7 @@ func (r *Runner) expandSpan(s syntax.Span) (text string, split bool) {
 			r.expandErr = true
 			return "", false
 		}
-		return r.expansionResult(r.formatNum(v), unquoted, r.sem().SplitParamExpansion, "splitting an unquoted arithmetic expansion")
+		return r.expansionResult(r.formatNum(v), unquoted, sp.answer(r.sem().SplitParamExpansion), "splitting an unquoted arithmetic expansion")
 	}
 	return "", false
 }
@@ -1416,9 +1459,11 @@ func (r *Runner) specialLength() int {
 func (r *Runner) expandRawText(text string) string {
 	var b strings.Builder
 	// The lexer leaves an expansion's inside raw, so parseSpans fills it in —
-	// the same handoff a word goes through.
+	// the same handoff a word goes through. splitNever: a here-document's
+	// body is one blob of input rather than fields, in every shell in the
+	// panel, so the splitting axis has nothing to ask.
 	for _, s := range r.parseSpans(syntax.HeredocSpans(text, r.dialect())) {
-		out, _ := r.expandSpan(s)
+		out, _ := r.expandSpan(s, splitNever)
 		// expandSpan marks a literal's metacharacters for the glob stage,
 		// and a here-document has no glob stage — the text is input, not a
 		// pattern. Without this a backslash in the body came out doubled.

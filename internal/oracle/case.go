@@ -227,6 +227,16 @@ var Corpus = []Case{
 		Why:     "an operator in expanded text is data, not syntax",
 	},
 	{
+		ID: "expand/an-assignment-value-is-not-split", Category: "expansion",
+		Snippet: `two="a b"; x=$two; IFS=:; y="p:q"; z=$y; printf "<%s><%s>" "$x" "$z"`,
+		Why:     "an assignment's value expands but is never field-split, whatever IFS holds — the same exemption the case subject and `[[ ]]` operands have, so the splitting question does not arise in this position",
+	},
+	{
+		ID: "expand/an-assignment-value-from-a-command-is-not-split", Category: "expansion",
+		Snippet: `x=$(echo a b); printf "<%s>" "$x"`,
+		Why:     "the exemption covers a command substitution's result too, which the splitting question otherwise governs — the value is stored with its space, unanimous",
+	},
+	{
 		ID: "expand/glob-applies-to-expansion", Category: "expansion",
 		Snippet: `cd /; x="et*"; set -- $x; printf "[%s]" "$@"`,
 		Why:     "globbing runs after splitting, so an expansion result is matched — except in zsh",
@@ -1448,6 +1458,11 @@ var Corpus = []Case{
 		ID: "redir/a-quoted-target-with-a-space", Category: "redirection",
 		Snippet: `e="a b"; echo hi > "$e"; cat "a b"; rm -f "a b"`,
 		Why:     "quoting settles it in every dialect, including the one that refuses the unquoted form: splitting is what bash objects to, not the space",
+	},
+	{
+		ID: "redir/a-here-string-is-one-line", Category: "redirection",
+		Snippet: `two="a b"; cat <<< $two`,
+		Why:     "a here-string's word expands but is never split — one line of input with its space kept, in every shell that has the construct. dash's row is its parser refusing `<<<`, not an opinion about splitting; the word is a body rather than a filename, so the ordinary-word question a target gets never arises here",
 	},
 	{
 		ID: "exec/a-command-is-named-as-it-was-written", Category: "commands",

@@ -9946,6 +9946,70 @@
         "TimedOut": false
       }
     },
+    "expand/an-assignment-value-from-a-command-is-not-split": {
+      "bash": {
+        "Output": "\u003ca b\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003ca b\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003ca b\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003ca b\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003ca b\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003ca b\u003e",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "expand/an-assignment-value-is-not-split": {
+      "bash": {
+        "Output": "\u003ca b\u003e\u003cp:q\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003ca b\u003e\u003cp:q\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003ca b\u003e\u003cp:q\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003ca b\u003e\u003cp:q\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003ca b\u003e\u003cp:q\u003e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003ca b\u003e\u003cp:q\u003e",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "expand/brace": {
       "bash": {
         "Output": "1 2 3",
@@ -19382,6 +19446,38 @@
       },
       "zsh": {
         "Output": "\u003cshell\u003e:1: write error: bad file descriptor~\u003cshell\u003e:1: write error: bad file descriptor~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/a-here-string-is-one-line": {
+      "bash": {
+        "Output": "a b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "a b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "a b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: redirection unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "a b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "a b",
         "Status": 0,
         "TimedOut": false
       }

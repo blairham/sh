@@ -156,6 +156,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `expand/results-not-rescanned-quote` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` | `[a"b]` |
 | `expand/results-not-rescanned-dollar` | `$HOME` | `$HOME` | `$HOME` | `$HOME` | `$HOME` | `$HOME` |
 | `expand/results-not-rescanned-semicolon` | `[a;b]` | `[a;b]` | `[a;b]` | `[a;b]` | `[a;b]` | `[a;b]` |
+| `expand/an-assignment-value-is-not-split` | `<a b><p:q>` | `<a b><p:q>` | `<a b><p:q>` | `<a b><p:q>` | `<a b><p:q>` | `<a b><p:q>` |
+| `expand/an-assignment-value-from-a-command-is-not-split` | `<a b>` | `<a b>` | `<a b>` | `<a b>` | `<a b>` | `<a b>` |
 | `expand/glob-applies-to-expansion` | `[etc]` | `[etc]` | `[etc]` | `[etc]` | `[etc]` | `[et*]` |
 | `expand/glob-not-applied-when-quoted` | `[et*]` | `[et*]` | `[et*]` | `[et*]` | `[et*]` | `[et*]` |
 | `expand/glob-literal-pattern` | `[etc]` | `[etc]` | `[etc]` | `[etc]` | `[etc]` | `[etc]` |
@@ -206,6 +208,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `expand/results-not-rescanned-semicolon` — an operator in expanded text is data, not syntax
   ```sh
   x="a;b"; set -- $x; printf "[%s]" "$@"
+  ```
+- `expand/an-assignment-value-is-not-split` — an assignment's value expands but is never field-split, whatever IFS holds — the same exemption the case subject and `[[ ]]` operands have, so the splitting question does not arise in this position
+  ```sh
+  two="a b"; x=$two; IFS=:; y="p:q"; z=$y; printf "<%s><%s>" "$x" "$z"
+  ```
+- `expand/an-assignment-value-from-a-command-is-not-split` — the exemption covers a command substitution's result too, which the splitting question otherwise governs — the value is stored with its space, unanimous
+  ```sh
+  x=$(echo a b); printf "<%s>" "$x"
   ```
 - `expand/glob-applies-to-expansion` — globbing runs after splitting, so an expansion result is matched — except in zsh
   ```sh
@@ -3003,6 +3013,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `redir/a-target-that-expands-to-nothing` | `<shell>: 1: cannot create : Directory nonexistent~st=2` | `<shell>: line 1: $e: ambiguous redirect~st=1` | `<shell>: line 1: $e: ambiguous redirect~st=1` | `<shell>: $e: ambiguous redirect~st=1` | `<shell>: : cannot open~st=1` | `<shell>:1: no such file or directory: ~st=1` |
 | `redir/a-target-holding-a-pattern` | `nomatch-*` | `nomatch-*` | `nomatch-*` | `nomatch-*` | `nomatch-*` | `nomatch-*` |
 | `redir/a-quoted-target-with-a-space` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
+| `redir/a-here-string-is-one-line` | `<shell>: 1: Syntax error: redirection unexpected` *(status 2)* | `a b` | `a b` | `a b` | `a b` | `a b` |
 | `heredoc/no-delimiter-and-a-warning` | `body` | `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `X')~body` | `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `X')~body` | `body` | `body` | `body` |
 | `heredoc/no-delimiter-and-no-body` | *(no output, status 0)* | `<script>: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | `<script>: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `heredoc/a-body-that-runs-to-the-end` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` |
@@ -3069,6 +3080,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `redir/a-quoted-target-with-a-space` — quoting settles it in every dialect, including the one that refuses the unquoted form: splitting is what bash objects to, not the space
   ```sh
   e="a b"; echo hi > "$e"; cat "a b"; rm -f "a b"
+  ```
+- `redir/a-here-string-is-one-line` — a here-string's word expands but is never split — one line of input with its space kept, in every shell that has the construct. dash's row is its parser refusing `<<<`, not an opinion about splitting; the word is a body rather than a filename, so the ordinary-word question a target gets never arises here
+  ```sh
+  two="a b"; cat <<< $two
   ```
 - `heredoc/no-delimiter-and-a-warning` — one shell remarks on a here-document whose delimiter never arrived and three say nothing. The remark is located where the input ran out and names the line the here-document began on, which is two different lines and the reason a parse-time remark carries two positions
   ```sh

@@ -104,6 +104,12 @@ func TestAPromptReadsLoginFromItsOwnArgv(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("HOME", home)
+	// Which file a login shell reads is the dialect's, so the shell under
+	// test has to name one: a vector nobody filled in reads nothing, which
+	// is what keeps every other test in this package out of the developer's
+	// own home directory.
+	sh := shell()
+	sh.Semantics.LoginStartupFiles = ".profile"
 	for _, tc := range []struct {
 		name, arg0 string
 		want       bool
@@ -112,7 +118,7 @@ func TestAPromptReadsLoginFromItsOwnArgv(t *testing.T) {
 		{"an ordinary one does not", "testsh", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			out, _, _ := runPiped(t, "", tc.arg0, "-i")
+			out, _, _ := runPipedShell(t, sh, "", tc.arg0, "-i")
 			if got := strings.Contains(out, "from-profile"); got != tc.want {
 				t.Errorf("read .profile = %v, want %v (out %q)", got, tc.want, out)
 			}

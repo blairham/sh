@@ -58,6 +58,13 @@ func Semantics() interp.Semantics {
 	// and nothing else, so the interactive set is the same empty set. dash is
 	// the one shell in the panel that adds nothing at a prompt, which is what
 	// makes the other three's additions evidence rather than a coincidence.
+	// Login-ness written out, and the short spelling only: measured
+	// 2026-09-05, `dash -l -c cmd` reads `~/.profile` and `dash --login`
+	// is refused outright with `Illegal option --` at status 2, where the
+	// other three take both. dash has no escape hatch of any kind, which is
+	// also measured — a startup file that breaks it is escaped by moving
+	// the file.
+	s.StartupFileOptions = interp.StartupFileOptions{Login: "-l"}
 	s.CommandStringShowsCInDollarDash = interp.No
 	s.CommandStringShowsSInDollarDash = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No

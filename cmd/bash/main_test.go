@@ -124,3 +124,145 @@ func TestAScriptIsNamedByItsPath(t *testing.T) {
 		t.Errorf("diagnostic %q does not name the script %q", got, path)
 	}
 }
+
+// TestAPersonsRunCommandsFileIsRead is #807 measured against the binary rather
+// than against the library, which is the distinction that matters here: the
+// dialect's prelude is shell, so it moves shell state exactly the way a script
+// does, and a startup rule that works with no prelude can still do nothing in
+// the shell a person runs.
+//
+// The file is a realistic one — an alias, a function, an export and a prompt —
+// because those are the four things that were silently missing, and each of
+// them travels by a different mechanism.
+func TestAPersonsRunCommandsFileIsRead(t *testing.T) {
+	home := scratchHome(t)
+	writeHomeFile(t, home, ".bashrc", strings.Join([]string{
+		"alias ll='echo alias-ran'",
+		"myfunc() { echo function-ran; }",
+		"export FROMRC=yes",
+		"PS1='rc> '",
+	}, "\n")+"\n")
+
+	out, errs, code := prompt(t, "ll\nmyfunc\necho \"FROMRC=$FROMRC\"\n", "bash", "-i")
+	if code != 0 {
+		t.Fatalf("status %d, stderr %q", code, errs)
+	}
+	for _, want := range []string{"alias-ran", "function-ran", "FROMRC=yes"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("out = %q, want %q — the run-commands file did not take effect", out, want)
+		}
+	}
+	// The prompt is written to the error stream, so a PS1 set by the file
+	// shows up there rather than in the output.
+	if !strings.Contains(errs, "rc> ") {
+		t.Errorf("err = %q, want the prompt the file set", errs)
+	}
+}
+
+// The person's file comes *after* the dialect's prelude, so what they wrote
+// wins over what the shell shipped. The prelude is shell too, and a startup
+// order that put it second would quietly undo every redefinition in a
+// `~/.bashrc` — which is the shape that made a `$_` fix work in the core and
+// do nothing in any binary.
+func TestTheRunCommandsFileWinsOverThePrelude(t *testing.T) {
+	home := scratchHome(t)
+	// `pushd` is a prelude function, so redefining it is the sharpest test
+	// there is of which of the two ran last.
+	writeHomeFile(t, home, ".bashrc", "pushd() { echo mine-not-the-preludes; }\n")
+	out, errs, code := prompt(t, "pushd /\n", "bash", "-i")
+	if code != 0 {
+		t.Fatalf("status %d, stderr %q", code, errs)
+	}
+	if !strings.Contains(out, "mine-not-the-preludes") {
+		t.Errorf("out = %q, want the person's definition to have won", out)
+	}
+}
+
+// A login shell reads the profile chain and not the run-commands file, which is
+// this dialect's answer and the reason every tutorial tells a person to source
+// one from the other by hand.
+func TestALoginShellReadsTheProfileChain(t *testing.T) {
+	home := scratchHome(t)
+	writeHomeFile(t, home, ".bashrc", "echo read-rc\n")
+	writeHomeFile(t, home, ".bash_profile", "echo read-profile\n")
+	writeHomeFile(t, home, ".profile", "echo read-dot-profile\n")
+
+	out, _, _ := prompt(t, "", "-bash", "-i")
+	if !strings.Contains(out, "read-profile") || strings.Contains(out, "read-rc") {
+		t.Errorf("out = %q, want the profile alone", out)
+	}
+	if strings.Contains(out, "read-dot-profile") {
+		t.Errorf("out = %q, want only the first link of the chain", out)
+	}
+	// Asked for on the command line rather than inferred from argv[0], which
+	// is the only way a person at a keyboard can say it.
+	out, _, _ = prompt(t, "", "bash", "--login", "-i")
+	if !strings.Contains(out, "read-profile") {
+		t.Errorf("out = %q, want --login to have made it a login shell", out)
+	}
+}
+
+// A file that breaks has to be escapable, or a person whose `~/.bashrc` fails
+// every time the shell starts has no shell to repair it from.
+func TestABrokenRunCommandsFileIsEscapable(t *testing.T) {
+	home := scratchHome(t)
+	writeHomeFile(t, home, ".bashrc", "if\n")
+
+	if _, errs, code := prompt(t, "", "bash", "-i"); code == 0 || !strings.Contains(errs, ".bashrc") {
+		t.Errorf("a broken file gave status %d and %q, want it reported", code, errs)
+	}
+	out, _, code := prompt(t, "echo alive\n", "bash", "--norc", "-i")
+	if code != 0 || !strings.Contains(out, "alive") {
+		t.Errorf("--norc gave status %d and %q, want a working session", code, out)
+	}
+	// And a file named in its place is read instead.
+	writeHomeFile(t, home, "other", "echo from-the-named-file\n")
+	out, _, _ = prompt(t, "", "bash", "--rcfile", filepath.Join(home, "other"), "-i")
+	if !strings.Contains(out, "from-the-named-file") {
+		t.Errorf("out = %q, want the named file", out)
+	}
+}
+
+// scratchHome points HOME at a directory of this test's own. A test that read
+// the developer's real home directory would be measuring their machine.
+func scratchHome(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	// The startup inputs a developer's own shell may have exported. t.Setenv
+	// registers the restore; the unset that follows is what is wanted, and
+	// there is no t.Unsetenv.
+	for _, name := range []string{"ENV", "BASH_ENV", "ZDOTDIR"} {
+		t.Setenv(name, "")
+		_ = os.Unsetenv(name)
+	}
+	return dir
+}
+
+func writeHomeFile(t *testing.T, home, name, body string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(home, name), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// prompt drives the binary's own shell value through an interactive session,
+// with the typed lines on a pipe standing in for a person.
+func prompt(t *testing.T, typed string, argv ...string) (out, errs string, code int) {
+	t.Helper()
+	var o, e bytes.Buffer
+	sh := shell()
+	sh.Stdout, sh.Stderr = &o, &e
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		_, _ = w.WriteString(typed)
+		_ = w.Close()
+	}()
+	t.Cleanup(func() { _ = r.Close() })
+	sh.Stdin = r
+	code = driver.MainArgs(sh, argv)
+	return o.String(), e.String(), code
+}

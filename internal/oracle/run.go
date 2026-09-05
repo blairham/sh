@@ -458,6 +458,13 @@ func normalize(s string, sh Found, dir string) string {
 		s = tracePrefix(sh.Argv0).ReplaceAllString(s, "+<shell>:")
 		s = usageBlock(s, sh.Argv0)
 	}
+	// A shell asked to be interactive with no terminal names the process
+	// group it could not set, which is this run's own process id: a different
+	// number every time, and one that says nothing about the shell. Masked
+	// rather than dropped, because *that it named one* is part of the
+	// complaint — and left in, it made every regeneration of the record a
+	// diff on every case that asks about `-i`.
+	s = processGroupID.ReplaceAllString(s, "process group (N)")
 	s = strings.TrimRight(s, "\n")
 	// Newlines are shown as ~ so a result stays one table cell. Real output
 	// containing ~ is rare enough that the ambiguity has not bitten; if it
@@ -468,6 +475,10 @@ func normalize(s string, sh Found, dir string) string {
 // digitRuns is the masking a snippet applies to its own output, spelled the
 // same way `sed -E "s/[0-9]+/N/g"` spells it.
 var digitRuns = regexp.MustCompile(`[0-9]+`)
+
+// processGroupID matches the process id in a job-control complaint. See
+// normalize, which explains why it is masked rather than kept.
+var processGroupID = regexp.MustCompile(`process group \(\d+\)`)
 
 // diagPrefix matches a shell naming itself at the start of a diagnostic.
 // tracePrefix matches a shell naming itself inside a `set -x` line, which is

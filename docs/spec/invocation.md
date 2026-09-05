@@ -629,35 +629,158 @@ field was left at its default.
 The interactive rows ask nothing, because all four read a profile there. Only
 the script routes had a question.
 
-Three things in the table are **not** modeled, and all three predate the axis:
+One thing in the table is **not** modeled: the **system-wide file**.
+`/etc/profile` is not read at all, on any route. Everything else in it is,
+and the rest of this section is how.
 
-- **Which file.** The front end reads `~/.profile` for every dialect, which
-  is dash's, ksh93's and POSIX's name for it, where bash reads
-  `~/.bash_profile` and zsh reads `~/.zshenv`, `~/.zprofile` and `~/.zlogin`.
-  Modeling it is a per-dialect list of names rather than an axis.
-- **The system-wide file.** `/etc/profile` is not read at all, on any route.
-- **`-l` and `--login`.** The front end has no such option, so the only way
-  to be a login shell here is `argv[0]`. Adding it would also need a decision
-  about `--login`, which dash refuses outright.
+### Which file, per dialect
 
-The interactive file is `$ENV` rather than a name of our own, and that is a
-separate decision: dash and ksh93 both read `$ENV` when interactive and read
-nothing else, while `~/.bashrc` and `~/.zshrc` are names those shells own.
-This binary is not those shells, so it reads the one that is nobody's brand.
+`~/.profile` for every dialect was the whole of it, and it made a person's
+`~/.bashrc` unreachable — the file was never opened by any route, so an
+interactive session read none of an alias, a function, an `export` or a `PS1`
+that somebody had written (#807). The names are the dialect's, in four slots:
+
+| slot | when | bash | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- |
+| unconditional | always | — | — | — | `.zshenv` |
+| profile | login | `.bash_profile`, `.bash_login`, `.profile` | `.profile` | `.profile` | `.zprofile` |
+| run-commands | interactive | `.bashrc` | `$ENV` | `$ENV` | `.zshrc` |
+| late profile | login, after the run-commands file | — | — | — | `.zlogin` |
+
+Read in that order, which is measured: `zsh -l -i` reads `.zshenv`,
+`.zprofile`, `.zshrc` and `.zlogin`, so a person's `.zlogin` sees what their
+`.zshrc` did.
+
+Three properties of the table are behavior rather than naming, and each is a
+field of its own:
+
+- **The profile is a chain and exactly one link runs.** bash reads the first
+  of its three that exists and looks at no other. Measured by removing them
+  one at a time: with all three present it reads `.bash_profile`, with that
+  gone `.bash_login`, with both gone `.profile`. Every other shell has one
+  name, for which the rule reduces to itself.
+  `Semantics.LoginStartupFiles`, whitespace-separated, most preferred first.
+- **An interactive login shell reads the run-commands file in one shell and
+  not the other.** `zsh -l -i` reads `.zshrc`; `bash -l -i` reads
+  `.bash_profile` and stops, which is why every bash tutorial tells a person
+  to source `~/.bashrc` from their `~/.bash_profile` by hand. This is the
+  panel's one disagreement about ordering and the reason the four
+  combinations of login and interactive are not four independent facts.
+  `Semantics.InteractiveStartupFileWhenLogin`. It is asked only where the
+  dialect has a file of its own name: a shell whose run-commands file is
+  `$ENV` reads it in both cases, so `-sh -i` reads `~/.profile` and then
+  `$ENV` in dash, ksh93 and bash-as-`sh` alike.
+- **One dialect looks for all four under a directory a variable names.**
+  `ZDOTDIR` redirects every zsh file rather than one of them, and it is read
+  afresh for each — which is what lets a person's own `~/.zshenv` set it and
+  have the rest follow. Set to the empty string it is *not* the home
+  directory: measured, such a shell reads none of its files.
+  `Semantics.StartupDirectoryVariable`.
+
+### `$ENV`, and what POSIX mode does to the run-commands file
+
+`$ENV` is the standard's interactive startup file, and it is read by a shell
+that has no file of its own name — dash, ksh93 and the POSIX preset — **and by
+any shell in POSIX mode**. Measured: `bash -i` reads `~/.bashrc` and does
+nothing with `$ENV`, while bash invoked as `sh` reads `$ENV` and does nothing
+with `~/.bashrc`. The same holds for zsh under that name.
+
+That makes this the interactive half of what
+`Semantics.NonInteractiveStartupVariable` records for `$BASH_ENV`, and the two
+halves differ in one respect worth stating: the non-interactive file is
+**suppressed** in POSIX mode and the interactive one is **substituted**. The
+standard has an interactive startup file and no other kind, so there is
+something for the mode to fall back to here and nothing there.
+
+The mode is asked of the *runner* and of how the shell was **named**, not of a
+second axis — the same reasoning as #691 and #733. Both, because they are not
+the same moment: being called `sh` turns the mode on after the startup files
+have run, which is measured (`set -o` in a file read by `-sh -i` reports
+`posix off`), so a front end that only asked the runner would pick its file
+before the answer existed.
+
 `$ENV` is expanded before it is opened, since `$HOME/.shrc` is the usual
-spelling.
+spelling. bash 5.3 goes further under `--posix` and reads *no profile at all*,
+where bash 3.2 and bash-as-`sh` both read one; that is a difference between
+two builds of one shell rather than a rule, so the `sh` answer — the one the
+whole panel agrees on — is what is implemented.
+
+ksh93 has one more measured default that is not modeled: with `ENV` unset
+entirely it falls back to `$HOME/.kshrc`. That is a per-build default of a
+variable rather than a startup slot, and no other shell in the panel has one.
+
+### The invocation options
+
+Four kinds, and they are the reason any of this is repairable. **A startup
+file that breaks has to be escapable**: a shell whose only `~/.zshrc` fails
+every time it starts is a shell a person cannot repair from.
+
+| | bash | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| make it a login shell | `-l`, `--login` | `-l` | `-l`, `--login` | `-l`, `--login` |
+| skip every startup file | — | — | — | `-f`, `--no-rcs` |
+| skip the profile | `--noprofile` | — | — | — |
+| skip the run-commands file | `--norc` | — | — | — |
+| name the run-commands file | `--rcfile F`, `--init-file F` | — | — | — |
+
+`Semantics.StartupFileOptions`, whitespace-separated spellings per role. A
+single-dash entry of one letter also matches inside a bundle, so `-if` is `-i`
+and `-f`; a double-dash entry matches a whole word. dash refuses `--login`
+outright — `dash: 0: Illegal option --`, status 2 — which is why it names only
+the short spelling.
+
+`-f` is not the POSIX `-f`. zsh spends the letter on its escape hatch and
+still expands patterns under it — measured, `zsh -f -c 'echo /etc/pas*'`
+prints the file — which is why the spelling is per-dialect data rather than a
+letter this front end has an opinion about. And its reach is *every* file:
+`zsh -f -l -i` reads no `.zshenv`, no `.zprofile`, no `.zshrc` and no
+`.zlogin`.
+
+**An explicit login option is stronger than a dashed `argv[0]`.** It reads the
+profile even where there is a script to run and the dialect says a login shell
+started by argv[0] would not: `bash --login -c cmd` reads its profile where
+`exec -a -bash bash -c cmd` reads nothing. So
+`LoginProfileWhenNonInteractive` is about login-ness *inferred* from argv[0],
+and the option overrides it. `--noprofile` beats both.
+
+`--rcfile` **replaces** the run-commands file and loses to everything that was
+already going to skip one: `bash --norc --rcfile f -i` reads neither, in either
+order, and `bash --rcfile f -l -i` reads its profile, because a login bash was
+not going to read a run-commands file at all.
+
+Two measured behaviors of bash are deliberately **not** reproduced. Its long
+options are only recognized *before* the single-letter ones — `bash -i --norc`
+treats `--norc` as a script path and fails to open it — which is a parser
+accident rather than a rule, and the core accepts them anywhere. And bash's
+usage block, which the Diagnostics vector reproduces verbatim because it is a
+measured diagnostic, lists a dozen long options this front end does not have
+(`--debug`, `--help`, `--posix`, `--restricted`, `--version` and the rest);
+trimming it would make the dialect stop sounding like the shell it names, so
+the text is left as bash's own.
+
+A long option the dialect does not name is **refused** rather than read as a
+bundle of letters, which is measured and unanimous across the panel. That is
+not only a better diagnostic: the letters of `--rcfile` include a `c`, so a
+shell reading it as a bundle would take the next word as a command string and
+run it.
 
 ### Where it lives
 
-`driver`'s `startup`, and `loginProfile` beside it. They are two functions
-rather than one with a flag because the *script* routes want the first and
-must not have the second: reaching the profile through `startup` would have
-brought `$ENV` with it, and a script inheriting the settings someone wrote for
-their keyboard is exactly what `$ENV` exists not to do.
+`driver`'s `startup`, one function reached by every route.
 
-The profile is sourced after the invocation's options are applied and after
-the runner is built, which is what the two measurements above require, and it
-is the same order the prompt route already used (#482).
+It was two — one the prompt used and one the script routes reached past — and
+that split is exactly what made `~/.bashrc` unreachable. The routes do not
+differ in *which* files they read, only in what they are: the unconditional
+file is read by a script as much as by a prompt, and `-i` makes a shell
+interactive on every route, so `sh -i script.sh` and `sh -i -c cmd` both read
+the run-commands file. Measured on both.
+
+The files are sourced after the dialect's prelude, after the invocation's
+options are applied and after the runner is built, which is what the
+measurements above require and is the same order the prompt route already used
+(#482). After the prelude matters on its own: the prelude is shell and moves
+shell state exactly as a script does, so a person redefining a prelude
+function in their `~/.bashrc` wins only because theirs runs second.
 
 ## Called `sh`: the name starts the shell in POSIX mode
 

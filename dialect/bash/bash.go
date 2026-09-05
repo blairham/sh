@@ -90,6 +90,31 @@ func Semantics() interp.Semantics {
 	// own name take over, and not read in POSIX mode — `bash --posix` and
 	// bash invoked as `sh` read neither this nor `$ENV`.
 	s.NonInteractiveStartupVariable = "BASH_ENV"
+	// And the files it reads by name. Measured 2026-09-05 through a
+	// pseudo-terminal with a scratch home directory holding a marker for
+	// every name any shell in the panel reads.
+	//
+	// The profile is a chain and exactly one link of it runs: with all three
+	// present bash reads `~/.bash_profile`, with that one absent it reads
+	// `~/.bash_login`, and with both absent `~/.profile`. bash 3.2 agrees.
+	s.LoginStartupFiles = ".bash_profile .bash_login .profile"
+	// `bash -i` reads `~/.bashrc` and nothing else, and does not read `$ENV`
+	// — that is the same file under POSIX mode, where `~/.bashrc` goes
+	// unread; the front end asks the mode rather than the dialect.
+	s.InteractiveStartupFile = ".bashrc"
+	// The panel's holdout on ordering, and the reason every bash tutorial
+	// tells a person to source `~/.bashrc` from their `~/.bash_profile` by
+	// hand: `bash -l -i` reads the profile and stops. zsh reads both.
+	s.InteractiveStartupFileWhenLogin = interp.No
+	// The escape hatches, all three spelled long. `--rcfile` and
+	// `--init-file` are the same option, measured to behave identically, and
+	// both are carried because a person's muscle memory has one of them.
+	s.StartupFileOptions = interp.StartupFileOptions{
+		Login:               "-l --login",
+		SuppressLogin:       "--noprofile",
+		SuppressInteractive: "--norc",
+		NameInteractive:     "--rcfile --init-file",
+	}
 	// `-c` and `-s` together: the command string names the operands here,
 	// so `sh -sc CMD name a` has `$0` of `name` and one parameter — the
 	// same answer in the 3.2 macOS ships. ksh93 and zsh let `-s` name them.

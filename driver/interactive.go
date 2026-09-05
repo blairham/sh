@@ -23,19 +23,20 @@ func Interactive(sh Shell) int { return InteractiveArgs(sh, os.Args) }
 // InteractiveArgs is Interactive with the argument vector given rather than
 // taken from the process, which is what makes it testable without a
 // subprocess — the same split as Main and MainArgs, and for the same reason.
-func InteractiveArgs(sh Shell, argv []string) int { return sh.interactive(argv, nil, nil) }
+func InteractiveArgs(sh Shell, argv []string) int { return sh.interactive(argv, source{}) }
 
-// interactive is InteractiveArgs with the positional parameters and the set
-// options the invocation supplied, which only the front end reading it knows.
+// interactive is InteractiveArgs with what reading the invocation produced —
+// the positional parameters, the set options, and what was said about the
+// startup files — which only the front end reading it knows.
 //
 // The guard here is the backstop and not the working one: repl catches a panic
 // per typed line, which is what keeps a session alive, and this catches what
 // happens on either side of the loop — the dialect's prelude, the runner being
 // built, the EXIT trap at the end. A session that cannot be started is at
 // least a session that says why.
-func (sh Shell) interactive(argv, params []string, opts []optionSpec) (status int) {
+func (sh Shell) interactive(argv []string, in source) (status int) {
 	sh = sh.withDefaults(argv)
-	if sh.guard().Do(func() { status = sh.session(argv, params, opts) }) {
+	if sh.guard().Do(func() { status = sh.session(argv, in) }) {
 		return panicguard.Status
 	}
 	return status
@@ -43,9 +44,17 @@ func (sh Shell) interactive(argv, params []string, opts []optionSpec) (status in
 
 // session is interactive once the defaults are filled in and a guard is
 // around it.
-func (sh Shell) session(argv, params []string, opts []optionSpec) int {
+func (sh Shell) session(argv []string, in source) int {
 	dg := sh.Diagnostics
 	name := sh.Name
+	params, opts := in.params, in.opts
+	// The three facts the startup files are chosen by, stated here because
+	// this route never reaches the place the script routes read them. A
+	// prompt is interactive by definition and whether it was reached through
+	// `-i` or by finding a terminal, and the other two are argv[0]'s.
+	in.interactive = true
+	in.login = LoginShell(argv)
+	in.posix = PosixNamed(argv)
 	// A prompt reads its program from standard input, which is what it is
 	// however it was reached: `sh`, `sh -s` and `sh -i` at a terminal all
 	// show `s` in `$-` across the panel.
@@ -79,10 +88,10 @@ func (sh Shell) session(argv, params []string, opts []optionSpec) int {
 	r.ApplyInheritedShellOptions()
 	// The prelude is the dialect's own; these are the user's, and come after
 	// it so a person's settings win over the shell's defaults.
-	if code := sh.startup(r, LoginShell(argv)); code != 0 {
+	if code := sh.startup(r, in); code != 0 {
 		return code
 	}
-	if PosixNamed(argv) {
+	if in.posix {
 		// The other fact argv[0] carries, asked here for the reason
 		// LoginShell is asked here: the prompt route never reaches the place
 		// the script routes read it. Last for the same measured reason — the

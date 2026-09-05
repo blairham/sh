@@ -114,6 +114,15 @@ func Exec(ctx context.Context, sh Found, c Case) Result {
 	ctx, cancel := context.WithTimeout(ctx, RunTimeout)
 	defer cancel()
 
+	// The case's own name for the shell wins over the panel entry's, and it
+	// is applied to the whole Found so that the normalization below strips
+	// the name that was actually used. Overwritten on the copy Exec was
+	// handed, which is a value: the panel itself is not edited by running a
+	// case against it.
+	if c.Argv0 != "" {
+		sh.Argv0 = c.Argv0
+	}
+
 	// The other half of the scrub below: a shell inherits how it was launched
 	// through its signal dispositions as surely as through its environment.
 	scrubSignalDispositions()

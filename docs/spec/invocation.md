@@ -301,6 +301,59 @@ rewinds is asked of the descriptor once and remembered against it, since a
 pipe, a socket and a terminal are all `*os.File` and the type answers nothing
 (#567).
 
+## A parse failure on standard input does not end every shell
+
+**The rule.** A line the shell cannot parse is reported and the shell stops —
+except in zsh, and except when the program arrived on **standard input**, where
+zsh reports the line and reads the next one.
+
+    printf 'echo one\n{ fi; }\necho three\n' | sh
+
+    dash  → one, the complaint, status 2
+    bash  → one, the complaint, status 2
+    ksh93 → one, the complaint, status 3
+    zsh   → one, the complaint, three, status 0
+
+`Diagnostics.StdinProgramSurvivesAParseFailure` is the answer, beside
+`CommandStringParsedWhole` because it is the same kind of question — how the
+front end reads a program, per route, for one dialect — and this is the route
+that one does not cover.
+
+**It is the route and not the text.** The same three lines in a file stop zsh
+too, with nothing after the complaint and status 1. That is why the answer
+cannot be folded into the parse failure's status, which knows nothing about how
+the program arrived, and why the front end is where it is asked.
+
+**The status is left behind, not chosen.** Whatever runs after the bad line
+reports as it always would:
+
+    printf '{ fi; }\nexit 7\n'   | zsh   → 7
+    printf '{ fi; }\nfalse\n'    | zsh   → 1
+    printf 'echo one\n{ fi; }\n' | zsh   → 1
+
+The last is the shell being left with the parse status because nothing ran
+after the failure. So the mechanism is: record `StatusForParseError`, then read
+on — not "exit 0 after a bad line", which the first two rows disprove.
+
+**Recovery is per line and repeats.** Two bad lines are two complaints and two
+recoveries, ending in 0. A failure inside a construct spanning several lines
+recovers the same way: `echo one`, `if :; then`, `  fi fi`, `fi`, `echo five`
+piped in produces two complaints and then `five`.
+
+The implementation has one requirement worth stating, because getting it wrong
+loops forever rather than failing: the parser keeps its error until the pending
+text is *replaced*, so the failed line has to be retired before the next one is
+read. That is `program.fill(true)`, the same call the reader makes when
+everything in hand has been parsed.
+
+### Measured
+
+Panel: bash 5.3.15, bash 3.2.57, dash, ksh93u+ 2012-08-01, zsh 5.9.2, on macOS
+25.5 — measured 2026-09-05. Recorded as
+`syntax/standard-input-reads-on-past-a-parse-failure` and the three rows around
+it: the file route as the control, `exit 7` after the bad line for the status,
+and a program whose last line is the bad one for the other half of it.
+
 ## Writing the input back: `set -v`
 
 **The rule.** Under `-v` the shell writes each **physical line of its input**

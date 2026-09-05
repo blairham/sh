@@ -5817,6 +5817,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `pipefail/errexit-does-not-always-see-it` | `reached` | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | `reached` | *(no output, status 1)* |
 | `pipefail/last-failure-not-last-element` | `st=0~st=0` | `st=4~st=3` | `st=4~st=3` | `st=4~st=3` | `st=4~st=3` | `st=4~st=3` |
 | `pipefail/all-succeeding-is-zero` | `st=0~st=0` | `st=0~st=7` | `st=0~st=7` | `st=0~st=7` | `st=0~st=7` | `st=0~st=7` |
+| `pipefail/a-builtin-killed-by-a-signal` | `st=0` | `st=141` | `st=141` | `st=141` | `st=13` | `st=141` |
+| `pipefail/an-external-command-killed-by-a-signal` | `st=0` | `st=141` | `st=141` | `st=141` | `st=13` | `st=141` |
+| `pipefail/an-ordinary-failure-is-substituted-unchanged` | `st=0~st=0` | `st=42~st=42` | `st=42~st=42` | `st=42~st=42` | `st=42~st=42` | `st=42~st=42` |
+| `pipefail/a-substituted-death-against-an-ordinary-one` | `substituted=0 foreground=143` | `substituted=141 foreground=143` | `substituted=141 foreground=143` | `substituted=141 foreground=143` | `substituted=13 foreground=271` | `substituted=141 foreground=143` |
 | `pipefail/turned-off-again` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `pipestatus/every-element` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[1 0 1]` | `[1 0 1]` | `[1 0 1]` | `[]` | `[]` |
 | `pipestatus/lowercase-is-zsh` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[]` | `[]` | `[]` | `[]` | `[1 0 1]` |
@@ -5857,6 +5861,31 @@ grades it and nothing drift-checks it either, for the same reason.
   if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi
   true | true | true; echo "st=$?"
   (exit 7) | true | true; echo "st=$?"
+  ```
+- `pipefail/a-builtin-killed-by-a-signal` — the status pipefail hands back for an element a signal killed, which is not the status that death reports everywhere else in the same shell: 141 in bash and zsh, and in ksh93 **13** rather than the 269 its own convention would give. The string is grown past a pipe buffer on purpose, so the write is certain to outlive the reader rather than fitting in the pipe and racing it
+  ```sh
+  if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi
+  v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done
+  { echo "$v"; } | true; echo "st=$?"
+  ```
+- `pipefail/an-external-command-killed-by-a-signal` — the same question with a real process on the writing end rather than a builtin, and the same three answers — so the split is about the substitution and not about which side of the process boundary the death happened on
+  ```sh
+  if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi
+  yes 2>/dev/null | head -1 >/dev/null; echo "st=$?"
+  ```
+- `pipefail/an-ordinary-failure-is-substituted-unchanged` — the control: an element that merely *failed* is handed back as it stands in every shell with the option, first or middle. Without this the signal rows read as a difference about pipefail in general rather than about a signal death in particular
+  ```sh
+  if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi
+  (exit 42) | true; echo "st=$?"
+  (exit 42) | { echo x >/dev/null; } | true; echo "st=$?"
+  ```
+- `pipefail/a-substituted-death-against-an-ordinary-one` — both encodings in one line, which is the whole point: ksh93 says 13 for the substituted death and 271 for the waited-for one, so its 256-plus-the-signal convention is intact and stops in exactly one place. bash and zsh say 141 and 143 and never distinguish the two. dash has neither the option nor a second answer. The job's own death notice is thrown away because it names a pid, and a pid is different on every run
+  ```sh
+  if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi
+  v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done
+  { echo "$v"; } | true; a=$?
+  b=$( { sleep 5 & p=$!; kill -TERM $p; wait $p; echo $?; } 2>/dev/null )
+  echo "substituted=$a foreground=$b"
   ```
 - `pipefail/turned-off-again` — the option is an option: `set +o` puts the pipeline back to reporting its last element, so every shell answers 0 here — the one case where the panel agrees for two different reasons
   ```sh

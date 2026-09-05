@@ -18,5 +18,11 @@ func EditorStyle() repl.EditorStyle {
 		// that is not `y` or `n` rather than taking it as an answer.
 		ListQuery:                   "Display all %[1]d possibilities? (y or n)",
 		ListQueryAcceptsOnlyYesOrNo: true,
+		// Every field about words is left at its zero value on purpose, and
+		// they are bash's measured answers rather than an absence of one: a
+		// word is letters and digits, `^U` kills only what is before the
+		// cursor, `^W` is delimited by whitespace, `M-f` stops at the end of
+		// the word rather than before the next, and `^T` at the start of the
+		// line does nothing. zsh disagrees with all five.
 	}
 }

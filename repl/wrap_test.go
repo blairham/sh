@@ -136,3 +136,20 @@ func TestWithoutAWidthTheOldDrawingStands(t *testing.T) {
 		t.Errorf("want the single-row redraw, got %q", out.String())
 	}
 }
+
+// A line that ends exactly at the right-hand edge has a row below it, and the
+// newline still has to come from there.
+//
+// The forced wrap put a space on that row, so it is drawn even though the
+// arithmetic that counts the line stops at the edge. Counting the edge as the
+// row above leaves the next thing printed on top of it.
+func TestALineEndingAtTheEdgeEndsBelowThatRow(t *testing.T) {
+	// Two columns of prompt and eight characters is exactly ten, and ^A puts
+	// the cursor back onto the first row.
+	out := typedAtWith(t, 10, "$ ", "12345678\x01\r")
+	i := strings.LastIndex(out, "\x1b[1B")
+	j := strings.LastIndex(out, "\r\n")
+	if i < 0 || i > j {
+		t.Errorf("want a move down before the final newline, got %q", out)
+	}
+}

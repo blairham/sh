@@ -190,16 +190,103 @@ only where `-s` was written. That is a shell disagreeing with its own
 later build rather than a panel disagreement, so it is recorded here and
 not modeled; the bash dialect follows 5.3, as it does everywhere else.
 
-**The letters a shell adds only when interactive are a second vector,
-also unmodeled.** bash adds `H`, zsh adds `Z`, and ksh93 trades `h` for
-`m` and `E`; dash adds nothing. That is per-dialect startup state rather
-than one axis, and it is a different question from whether the shell is
-interactive at all.
+### The letters an interactive shell starts with are a second vector
 
-**ksh93 is the only shell that turns the monitor on for `-i
-script.sh`** (`m` in its row, absent from the other three). So being
-interactive and having job control are not the same fact, which is why
-`Interactive` and `JobControl` are separate fields rather than one.
+**The rule.** What `$-` begins with is `Semantics.DefaultOptionLetters` for a
+script and `Semantics.InteractiveOptionLetters` for an interactive shell, and
+the second **replaces** the first rather than adding to it. An empty second
+string means the shell has no separate answer and the first stands for both.
+
+It is a different question from whether the shell is interactive at all, which
+is unanimous and needs no axis; this is what being interactive *turns on*, and
+the panel disagrees about it four ways.
+
+#### Measured
+
+Same panel and date. `sh -i script.sh` with a scratch `HOME`, so the shell is
+interactive without a terminal — which is the whole of the condition, measured:
+`-i` alone is enough and no prompt is needed.
+
+| shell | a script | `-i script.sh` | what moved |
+| --- | --- | --- | --- |
+| bash 5.3 | `hB` | `hiBH` | adds `H` |
+| bash 3.2 | `hB` | `hiB` | adds nothing |
+| dash | *(empty)* | `i` | adds nothing |
+| ksh93 | `hB` | `imBE` | **drops `h`**, adds `m` and `E` |
+| zsh | `569X` | `569XZi` | adds `Z` |
+
+**ksh93 is why the field replaces rather than appends.** A "letters to add"
+field would have recorded three shells correctly and one wrongly, and the one
+it got wrong is the only one that makes the shape visible. What moved is real
+and was checked from the other side with `set -o`: `trackall` is on for a
+script and off when interactive, which is the `h`; `rc` — the option that reads
+`$ENV` — comes on only when interactive, which is the `E`.
+
+bash's `H` is the same check: `histexpand` and `history` are both off for a
+script and on under `-i`, and the letter is `histexpand`'s.
+
+**bash 3.2 dissents against its own later build**, and by route as well: it
+answers `hiB` for `-i script.sh` and `hiBHc` for `-i -c`. 5.3 is the panel
+member that counts, as it is everywhere else.
+
+#### `m` is not in the field, and must not be
+
+**ksh93 is the only shell that turns the monitor on for `-i script.sh`**, and
+it really turns it on: `set -o` reports `monitor on` there, and off in bash and
+zsh. Every shell in the panel that reports `m` reports it *because* the monitor
+is running — `set -m; echo $-` shows the letter in bash and ksh93 alike.
+
+So the letter has to come from `Runner.monitor` or not at all. Writing it into
+a startup string would report a monitor that is not there, and being
+interactive and having job control would stop being separate facts — which is
+exactly why `Interactive` and `JobControl` are separate fields.
+
+**Measured and not modeled:** the front end sets `JobControl` for a prompt and
+not for `-i script.sh`, which follows three of the four, so our ksh answers
+`iBE` there where the real one answers `imBE`. Turning job control on for an
+interactive shell with a script to run is one shell against three and a change
+to what the shell *does* rather than to what it says about itself, so it is a
+question of its own.
+
+#### What the corpus cannot say about this
+
+Nothing here is a corpus case, and the reason is recorded on
+`invoke/a-script-is-not-interactive`: `-i` away from a terminal makes bash and
+dash announce that job control is off, and bash's line carries a pid, so the
+output is not the same twice. The evidence is the table above, the per-dialect
+answers in `dialect/*/`, and the front end's own test that the invocation
+chooses between the two vectors.
+
+### The order of the letters is the shell's, and it is not the order they were set in
+
+Everything above reads `$-` as *membership*, which is what a script does
+and what the axes model. The **string** is a separate fact and no shell
+in the panel builds it the same way. Measured 2026-09-05, `set -f; set
+-u; set -e` and then `echo "[$-]"`
+(`special/dollar-dash-orders-the-letters-its-own-way`):
+
+| shell | `$-` |
+| --- | --- |
+| dash | `ufe` |
+| bash 5.3, bash-as-`sh`, bash 3.2 | `efhuBc` |
+| ksh93 | `cefhsuB` |
+| zsh | `569Xefu` |
+
+None of them is the order the options were written in, and only two
+resemble each other. bash sorts the lowercase letters and keeps the ones
+it started with as a suffix; ksh93 sorts everything it holds; zsh puts
+its digits first; and dash's `ufe` is neither sorted nor chronological —
+it is its own option table's order, which is a fact about a table nobody
+outside dash can see.
+
+So a script may test `case $- in *e*)` and may not compare `$-` against a
+string, and an implementation has no order to inherit: it has to pick
+one, per dialect, the way it picks the letters. The whole string is also
+recorded by route in `special/dollar-dash-in-full` and
+`special/dollar-dash-in-full-from-a-script`, which is where the
+route-dependence above shows up as text rather than as membership — ksh93
+carries `s` for a command string and drops it for a script, landing on
+exactly bash's `hB`.
 
 ## Where it lives
 

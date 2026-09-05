@@ -864,6 +864,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `jobs/a-substitution-and-the-parents-jobs` | `no jobs` | `the parent's job` | `the parent's job` | `the parent's job` | `the parent's job` | `no jobs` |
 | `jobs/a-subshell-lists-a-job-it-started-itself` | `its own` | `its own` | `its own` | `its own` | `its own` | `its own` |
 | `jobs/two-job-specs-in-the-order-written` | `[2] + Running                    ~[1] - Running                    ` | `[2]+  Running                    sleep 0.5 &~[1]-  Running                    sleep 0.4 &` | `[2]+  Running                    sleep 0.5 &~[1]-  Running                    sleep 0.4 &` | `[2]+  Running                 sleep 0.5 &~[1]-  Running                 sleep 0.4 &` | `[2] +  Running                 <command unknown>~[1] -  Running                 <command unknown>` | `[2]  + running    sleep 0.5~[1]  - running    sleep 0.4` |
+| `read/interrupted-by-a-trapped-signal` | `T~st=1 l=[]` | `T~st=0 l=[late]` | `T~st=130 l=[]` | `T~st=0 l=[late]` | `T~st=258 l=[]` | `T~st=0 l=[late]` |
 | `read/a-failing-read-still-assigns` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` | `st=1 l=[]` |
 | `read/a-final-line-without-a-newline` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` | `st=1 l=[x]` |
 | `read/an-unterminated-last-line-is-dropped` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` | `<a>` |
@@ -936,6 +937,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `read/with-no-variable-diverges` | `r=2 REPLY=[]` **2>** `<shell>: 1: read: arg count` | `r=0 REPLY=[x]` | `r=0 REPLY=[x]` | `r=0 REPLY=[x]` | `r=0 REPLY=[x]` | `r=0 REPLY=[x]` |
 | `builtin/ksh93s-registers-names` | `st=127` **2>** `<shell>: 1: builtin: not found` | `hi~st=0` | `hi~st=0` | `hi~st=0` | `st=1` **2>** `builtin: hi: not found` | `hi~st=0` |
 | `fc/with-no-history` | `st=0` | `st=0` | `st=0` | `st=0` | `st=1` **2>** `<shell>: hist: 1-0: invalid range` | `st=1` **2>** `<shell>:fc:1: no such event: 1` |
+| `shift/past-the-end-with-a-count` | **2>** `<shell>: 1: shift: can't shift that many` *(status 2)* | `st=1 n=2 rest=[a b]` | `st=1 n=2 rest=[a b]` **2>** `<shell>: line 1: shift: 5: shift count out of range` | `st=1 n=2 rest=[a b]` | **2>** `<shell>: shift: 5: bad number` *(status 1)* | `st=1 n=2 rest=[a b]` **2>** `<shell>:shift:1: shift count must be <= $#` |
+| `shift/a-negative-count` | **2>** `<shell>: 1: shift: Illegal number: -1` *(status 2)* | `st=1 n=3` **2>** `<shell>: line 1: shift: -1: shift count out of range` | `st=1 n=3` **2>** `<shell>: line 1: shift: -1: shift count out of range` | `st=1 n=3` **2>** `<shell>: line 0: shift: -1: shift count out of range` | **2>** `<shell>: shift: -1: unknown option~Usage: shift [ options ] [n]` *(status 2)* | `st=1 n=3` **2>** `<shell>:shift:1: argument to shift must be non-negative` |
+| `shift/a-double-dash-before-the-count` | **2>** `<shell>: 1: shift: Illegal number: --` *(status 2)* | `st=0 n=1 rest=[c]` | `st=0 n=1 rest=[c]` | `st=0 n=1 rest=[c]` | `st=0 n=1 rest=[c]` | `st=0 n=1 rest=[c]` |
 | `shift/a-leading-dash-that-is-not-a-number` | **2>** `<shell>: 1: shift: Illegal number: -x` *(status 2)* | `st=2` **2>** `<shell>: line 1: shift: -x: numeric argument required` | **2>** `<shell>: line 1: shift: -x: numeric argument required` *(status 2)* | **2>** `<shell>: line 0: shift: -x: numeric argument required` *(status 1)* | **2>** `<shell>: shift: -x: unknown option~Usage: shift [ options ] [n]` *(status 2)* | `st=1` **2>** `<shell>:shift:1: bad option: -x` |
 | `shift/a-count-that-is-an-expression` | **2>** `<shell>: 1: shift: Illegal number: 1+1` *(status 2)* | `[a b c] st=2` **2>** `<shell>: line 1: shift: 1+1: numeric argument required` | **2>** `<shell>: line 1: shift: 1+1: numeric argument required` *(status 2)* | **2>** `<shell>: line 0: shift: 1+1: numeric argument required` *(status 1)* | `[c] st=0` | `[c] st=0` |
 | `shift/a-count-that-is-a-name` | **2>** `<shell>: 1: shift: Illegal number: nosuchname` *(status 2)* | `[a b c] st=2` **2>** `<shell>: line 1: shift: nosuchname: numeric argument required` | **2>** `<shell>: line 1: shift: nosuchname: numeric argument required` *(status 2)* | **2>** `<shell>: line 0: shift: nosuchname: numeric argument required` *(status 1)* | `[a b c] st=0` | `[a b c] st=0` |
@@ -1102,6 +1106,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `jobs/two-job-specs-in-the-order-written` — operands settle the order themselves — `%2 %1` lists 2 then 1 in all five, including the two whose bare listing starts from the newest — and each row keeps the job's own number rather than counting from the start of the listing
   ```sh
   sleep 0.4 & sleep 0.5 & jobs %2 %1; wait
+  ```
+- `read/interrupted-by-a-trapped-signal` — a `read` waiting on a pipe when a trapped signal arrives, which is where the prior reading of `$?` after an interrupt — 130, measured against bash — turns out to be one of four answers. bash 5.3, bash 3.2 and zsh run the handler and *resume* the read, so the line that arrives afterwards is read and the status is 0; the same bash 5.3 called `sh` abandons it at 130; dash abandons it at 1; ksh93 answers 258. The late write is what makes the case terminate at all rather than recording three timeouts, and it is what makes the resuming shells observably different from a shell that merely returned 0
+  ```sh
+  mkfifo p; exec 3<>p; trap "echo T" INT; (sleep 0.3; kill -INT $$; sleep 0.5; echo late >p) & read -r l <&3; echo "st=$? l=[$l]"; wait
   ```
 - `read/a-failing-read-still-assigns` — end of input clears the variables rather than leaving what was there, which is what stops `while read -r l` from leaving the last line behind for the code after the loop. Unanimous across the panel, so it is the core's answer and not an axis
   ```sh
@@ -1402,6 +1410,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `fc/with-no-history` — the name must exist — builtin fc was reporting something untrue — and with no history bash and dash answer silence at 0, zsh no-such-event at 1, and ksh93 reads a history file this shell keeps no equivalent of
   ```sh
   fc -l; echo "st=$?"
+  ```
+- `shift/past-the-end-with-a-count` — a count larger than `$#`, which the prior reading of this — measured against bash alone — had as 'moves nothing and answers 1'. That is bash and zsh; dash and ksh93 *end the script*, which is `ShiftPastEndFatal` arriving with a count rather than without one, and the two say so in different words at different statuses. And the same bash 5.3 binary is silent as `bash` and prints `shift count out of range` as `sh`, so the diagnostic is argv[0]'s and not the build's. `shift/an-operand-that-was-never-given` is the no-count half
+  ```sh
+  set -- a b; shift 5; echo "st=$? n=$# rest=[$*]"
+  ```
+- `shift/a-negative-count` — a count that cannot be one, and it divides the panel on *what kind of thing* the word is before it divides them on the answer: ksh93 reads `-1` as an option and refuses it as one, dash reads it as a number it calls illegal, and bash and zsh read it as a count that is out of range — three complaints, and fatal in the two where a special builtin's failure is. In the four that carry on, `$#` is untouched; the two that end the script end it before anything could be read back, which is the one thing this shape cannot say about them
+  ```sh
+  set -- a b c; shift -1; echo "st=$? n=$#"
+  ```
+- `shift/a-double-dash-before-the-count` — the end-of-options marker in front of the count: five take it and shift two, and dash calls `--` an illegal number — it has no option parsing here for `--` to end. It is the counterpart of `shift/a-leading-dash-that-is-not-a-number`, which asks what a dash word that is *not* the marker does, and together they say which shells read options at all
+  ```sh
+  set -- a b c; shift -- 2; echo "st=$? n=$# rest=[$*]"
   ```
 - `shift/a-leading-dash-that-is-not-a-number` — two of the four read it as an *option* and refuse it as one; the other two read it as the count and complain about the number. Same input, two kinds of complaint — and both end the script where a special builtin's failure is fatal
   ```sh
@@ -2020,6 +2040,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | --- | --- | --- | --- | --- | --- | --- |
 | `special/ifs-has-a-default` | ` \t \n ` | ` \t \n ` | ` \t \n ` | ` \t \n ` | ` \t \n ` | ` \t \n \0 ` |
 | `special/underscore-follows-the-last-argument` | `[]~[]` | `[two]~[]` | `[two]~[]` | `[two]~[]` | `[]~[]` | `[two]~[]` |
+| `special/underscore-after-a-declaration-command` | `a=[]~b=[]` | `a=[]~b=[y=2]` | `a=[]~b=[y=2]` | `a=[]~b=[y]` | `a=[]~b=[]` | `a=[]~b=[export]` |
+| `special/underscore-at-startup` | `[]` | `[<shell>]` | `[sh]` | `[<shell>]` | `[]` | `[]` |
+| `special/dollar-dash-in-full` | `[]` | `[hBc]` | `[hBc]` | `[hBc]` | `[chsB]` | `[569X]` |
+| `special/dollar-dash-in-full-from-a-script` | `[]` | `[hB]` | `[hB]` | `[hB]` | `[hB]` | `[569X]` |
+| `special/dollar-dash-orders-the-letters-its-own-way` | `[ufe]` | `[efhuBc]` | `[efhuBc]` | `[efhuBc]` | `[cefhsuB]` | `[569Xefu]` |
 | `special/lineno-is-where-you-are` | `1~1` | `1~1` | `1~1` | `0~0` | `1~1` | `1~1` |
 | `special/random-is-absent-from-dash` | `none` | `have` | `have` | `have` | `have` | `have` |
 | `special/uid-is-bash-and-zsh` | `none` | `have` | `have` | `have` | `none` | `have` |
@@ -2034,9 +2059,29 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   printf '%s' "$IFS" | od -An -c | tr -s " "
   ```
-- `special/underscore-follows-the-last-argument` — bash and zsh move $_ to the previous command's last argument and to empty after a bare assignment; dash and ksh93 leave it at the shell's own path forever
+- `special/underscore-follows-the-last-argument` — bash and zsh move $_ to the previous command's last argument and to empty after a bare assignment; dash and ksh93 answer with nothing at all, because they keep no such parameter and `$_` is an ordinary unset name there. This reason said they leave it at the shell's own path, which the row beside it has never shown — the harness writes a shell's path as `<shell>` and both cells are empty. A wrong sentence over a right measurement is the failure `oracle-check` cannot see, since it compares behavior and not prose (#706)
   ```sh
   echo one two >/dev/null; echo "[$_]"; x=5; echo "[$_]"
+  ```
+- `special/underscore-after-a-declaration-command` — what a *declaration* command leaves in $_, and the panel gives four answers to it: bash 5.3 binds the assignment word as written, `y=2`; bash 3.2 binds the name alone, `y`; zsh binds the command word, `export`; dash and ksh93 keep no $_ at all. A bare assignment leaves it empty everywhere that has one, which is the first line and the control. The bash-to-bash disagreement is the point — a claim about this recorded against one build would have been wrong for the other
+  ```sh
+  x=1; echo "a=[$_]"; export y=2; echo "b=[$_]"
+  ```
+- `special/underscore-at-startup` — before any command has run, $_ holds how the shell was *invoked*: bash writes the path it was started as, and the same binary called `sh` writes `sh`, which is argv[0] rather than the path — so the parameter carries the invocation and not the executable. dash, ksh93 and zsh leave it empty. Run from a script rather than -c because that is the route where the answer is a path at all
+  ```sh
+  echo "[$_]"
+  ```
+- `special/dollar-dash-in-full` — the whole of $- rather than a test for one letter in it. The `invoke/dollar-dash-*` cases ask whether `c` or `s` is present, which is the axis; this records what each shell actually carries, and the answers share almost nothing: dash writes *nothing at all* for a command string, bash `hBc`, ksh93 `chsB`, and zsh a set of digits. So there is no common alphabet to write a default over, and a claim about `$-` that does not name a shell is not a claim
+  ```sh
+  echo "[$-]"
+  ```
+- `special/dollar-dash-in-full-from-a-script` — the same string by the other route, and it moves in three of the six: the `c` goes, and ksh93 loses its `s` as well and lands on exactly bash's `hB`. Two shells that agree on one route and not on another is why a `$-` answer has to be recorded per route, and it is the pair with the case above that says so
+  ```sh
+  echo "[$-]"
+  ```
+- `special/dollar-dash-orders-the-letters-its-own-way` — three options turned on in a written order, and no shell reports them in it. bash sorts the lowercase letters and keeps its own suffix (`efhuBc`); ksh93 sorts including the letters it already had (`cefhsuB`); zsh puts its digits first (`569Xefu`); dash answers `ufe`, which is neither the order they were set in nor alphabetical but its own option table's. The order is therefore a property of the shell and never a fact about `$-`, which is worth pinning because a reader of any one row would assume otherwise
+  ```sh
+  set -f; set -u; set -e; echo "[$-]"
   ```
 - `special/lineno-is-where-you-are` — produced when it is read rather than stored, which is the whole of the distinction: a stored copy would be the line the shell started on
   ```sh
@@ -2153,6 +2198,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/a-tested-brace-group-is-not-a-body` | **2>** `<shell>: 1: Syntax error: end of file unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file from `while' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file from `while' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: syntax error at line 1: `while' unmatched` *(status 3)* | `0~1~2~3` |
 | `core/a-while-condition-that-ends-itself-takes-a-body` | **2>** `<shell>: 1: Syntax error: "{" unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `{'~<shell>: -c: line 1: `i=0; while (( i < 2 )) { echo $i; i=$((i+1)); }; echo end'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `{'~<shell>: -c: line 1: `i=0; while (( i < 2 )) { echo $i; i=$((i+1)); }; echo end'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `{'~<shell>: -c: line 0: `i=0; while (( i < 2 )) { echo $i; i=$((i+1)); }; echo end'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `{' unexpected` *(status 3)* | `0~1~end` |
 | `core/a-short-loop-body-is-one-command` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `i=0; while (( i < 2 )) echo $((i++)); echo end'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `i=0; while (( i < 2 )) echo $((i++)); echo end'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `echo'~<shell>: -c: line 0: `i=0; while (( i < 2 )) echo $((i++)); echo end'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `echo' unexpected` *(status 3)* | `0~1~end` |
+| `core/two-commands-need-a-separator-between-them` | **2>** `<shell>: 1: Syntax error: word unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `(echo a) echo b'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `(echo a) echo b'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `echo'~<shell>: -c: line 0: `(echo a) echo b'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `echo' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `echo'` *(status 1)* |
+| `core/a-compound-does-not-absorb-the-word-after-it` | **2>** `<shell>: 1: Syntax error: word unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `echo one; { :; } echo x'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `echo one; { :; } echo x'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `echo'~<shell>: -c: line 0: `echo one; { :; } echo x'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `echo' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `echo'` *(status 1)* |
+| `core/a-separator-is-needed-after-a-redirected-compound` | **2>** `<shell>: 1: Syntax error: word unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `{ :; } 2>/dev/null echo b'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `{ :; } 2>/dev/null echo b'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `echo'~<shell>: -c: line 0: `{ :; } 2>/dev/null echo b'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `echo' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `echo'` *(status 1)* |
+| `core/the-missing-separator-is-named-inside-a-group` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting "}")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `{ (echo a) echo b; }'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `{ (echo a) echo b; }'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `echo'~<shell>: -c: line 0: `{ (echo a) echo b; }'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `echo' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `echo'` *(status 1)* |
+| `core/two-subshells-with-nothing-between-them` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `(echo a) (echo b)'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `(echo a) (echo b)'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `(echo a) (echo b)'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `('` *(status 1)* |
+| `core/a-missing-separator-inside-a-loop-body` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting "done")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `while true; do (echo a) echo b; done'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `while true; do (echo a) echo b; done'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `echo'~<shell>: -c: line 0: `while true; do (echo a) echo b; done'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `echo' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `echo'` *(status 1)* |
 | `core/a-for-over-a-parenthesized-list` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `for i (a b) { echo "$i"; }; for j (p q) echo "$j"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `for i (a b) { echo "$i"; }; for j (p q) echo "$j"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `for i (a b) { echo "$i"; }; for j (p q) echo "$j"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `a~b~p~q` |
 | `core/a-for-header-that-ends-itself-needs-no-body` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `if true; then for i (a b); fi; echo no-body; for j (p q) echo body'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `if true; then for i (a b); fi; echo no-body; for j (p q) echo body'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `if true; then for i (a b); fi; echo no-body; for j (p q) echo body'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `no-body~body~body` |
 | `core/a-short-loop-redirection-is-the-bodys` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `for i (a b) > f$i; ls'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `for i (a b) > f$i; ls'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `for i (a b) > f$i; ls'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `fa~fb` |
@@ -2268,6 +2319,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `core/a-short-loop-body-is-one-command` — the body of a short loop need not be a brace group, and it is exactly one command: the `; echo end` after it is outside the loop, so `end` prints once rather than per iteration. A second command inside would need a separator, and a separator there is the enclosing list's
   ```sh
   i=0; while (( i < 2 )) echo $((i++)); echo end
+  ```
+- `core/two-commands-need-a-separator-between-them` — the list production's separator is required, and this is the shortest text that shows it. Every shell in the panel names the second command's word and refuses the line; the reading that takes it is two statements, which would print a and b — a *different program*, so the wrong answer here is silent rather than noisy. Nothing shows the rule until a compound is written, because a simple command's words absorb whatever follows and `true echo x` is one command with an argument
+  ```sh
+  (echo a) echo b
+  ```
+- `core/a-compound-does-not-absorb-the-word-after-it` — the same rule with a statement in front of it, so that the refusal cannot be a property of the line's first command. `echo one` never runs either: the panel parses the whole `-c` string before running any of it, so a failure anywhere in it discards everything. The construct is a brace group here rather than a subshell to show that the rule is about the *list* and not about parentheses
+  ```sh
+  echo one; { :; } echo x
+  ```
+- `core/a-separator-is-needed-after-a-redirected-compound` — a redirection after a compound command belongs to the compound and does not reopen it, so a word after the redirection is still a second command with nothing between. Worth pinning apart from the bare form because the suffix is the one place a parser might keep reading words — and if it did, `echo b` would become an argument of nothing
+  ```sh
+  { :; } 2>/dev/null echo b
+  ```
+- `core/the-missing-separator-is-named-inside-a-group` — where the failure is reported when the list is a construct's rather than the program's. All five name the token the list stopped on, and the one shell that prints an expectation adds the closer that was waiting — `(expecting "}")` here, `")"` in a subshell and `"done"` in a loop, so the token comes from the list and the expectation from whatever enclosed it
+  ```sh
+  { (echo a) echo b; }
+  ```
+- `core/two-subshells-with-nothing-between-them` — the same missing separator where the token that follows is an operator rather than a word. It changes what the diagnostics say — the shell that classifies a token calls this one `"("` where the rows above are `word` — so it grades the class as well as the refusal
+  ```sh
+  (echo a) (echo b)
+  ```
+- `core/a-missing-separator-inside-a-loop-body` — a `do … done` body is an ordinary list and needs the separator an ordinary list needs. Paired with the short-loop rows below, which are the one place the panel splits: the shell with short loops reads a command after an *ended header* as the loop's body, and even there a `do … done` body is this
+  ```sh
+  while true; do (echo a) echo b; done
   ```
 - `core/a-for-over-a-parenthesized-list` — the short `for`, in both its body spellings. The parentheses say what `in` says and end the header as `in` does not, which is why this one takes a brace body with nothing between where `for i in a b { … }` cannot. One shell parses it and four call the `(` a syntax error
   ```sh
@@ -2835,6 +2910,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `umask/a-mask-it-cannot-read` | `st=2` **2>** `<shell>: 1: umask: Illegal number: 9999` | `st=1` **2>** `<shell>: line 1: umask: 9999: octal number out of range` | `st=1` **2>** `<shell>: line 1: umask: 9999: octal number out of range` | `st=1` **2>** `<shell>: line 0: umask: 9999: octal number out of range` | `st=1` **2>** `<shell>: umask: 9999: bad number` | `st=1` **2>** `<shell>:umask:1: bad umask` |
 | `ulimit/reads-the-file-size-limit` | `unlimited~unlimited` | `unlimited~unlimited` | `unlimited~unlimited` | `unlimited~unlimited` | `unlimited~unlimited` | `unlimited~unlimited` |
 | `ulimit/hard-and-soft` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` | `unlimited~unlimited~unlimited` |
+| `ulimit/setting-with-neither-letter-moves-both` | `s=100 hard_moved=yes` | `s=100 hard_moved=yes` | `s=100 hard_moved=yes` | `s=100 hard_moved=yes` | `s=100 hard_moved=yes` | `s=100 hard_moved=no` |
+| `ulimit/the-file-size-block` | `size=512` **2>** `Filesize limit exceeded: 25` | `size=600` | `size=512` | `size=600` | `size=512` | `size=512` |
 | `ulimit/unlimited-is-a-word` | `unlimited` | `unlimited` | `unlimited` | `unlimited` | `unlimited` | `unlimited` |
 | `ulimit/setting-then-reading` | `3600~3600` | `3600~3600` | `3600~3600` | `3600~3600` | `3600~3600` | `3600~unlimited` |
 | `ulimit/a-limit-it-cannot-read` | `st=2` **2>** `<shell>: 1: ulimit: bad number` | `st=1` **2>** `<shell>: line 1: ulimit: abc: invalid number` | `st=1` **2>** `<shell>: line 1: ulimit: abc: invalid number` | `st=1` **2>** `<shell>: line 0: ulimit: abc: invalid number` | `st=1` **2>** `<shell>: ulimit: abc: parameter not set` | `st=1` **2>** `<shell>:ulimit:1: invalid number: abc` |
@@ -2992,6 +3069,14 @@ grades it and nothing drift-checks it either, for the same reason.
 - `ulimit/hard-and-soft` — `-H` and `-S` choose which of the two limits is read, and neither means the soft one — so the third line repeats the second. CPU time rather than open files: the file-descriptor limit is the one resource whose value differs between our process and bash's, for reasons outside either shell
   ```sh
   ulimit -Ht; ulimit -St; ulimit -t
+  ```
+- `ulimit/setting-with-neither-letter-moves-both` — `ulimit -n 100` with neither -H nor -S sets *both* limits in five of the six and only the soft one in zsh — which matters because lowering both is a door that cannot be reopened, while lowering the soft limit alone can be undone. The hard limit is compared rather than printed: its starting value is a property of the machine, and a row that recorded it would record where it was generated
+  ```sh
+  ulimit -n 100; h=$(ulimit -H -n); s=$(ulimit -S -n); echo "s=$s hard_moved=$([ "$h" = 100 ] && echo yes || echo no)"
+  ```
+- `ulimit/the-file-size-block` — how many bytes a block is, asked of the file system rather than of the builtin: one block, six hundred bytes written, and the file is 600 where a block is 1024 and 512 where it is 512. The prior reading of this, taken from bash alone, was that a block is 1024 bytes — true for bash 5.3 and bash 3.2 as `bash`, and false for dash, ksh93, zsh *and the same bash 5.3 called `sh`*, all of which use POSIX's 512. So the unit is argv[0]'s to decide, which is not a shape a one-shell measurement could have found. Written in a subshell whose group carries the redirection, because the shell that reaps a child killed by SIGXFSZ announces it with a process id in the text
+  ```sh
+  { ( ulimit -f 1; printf "%0600d" 0 > f ); } 2>/dev/null; ls -l f | awk "{print \"size=\" \$5}"
   ```
 - `ulimit/unlimited-is-a-word` — no limit is printed as `unlimited` rather than as a very large number, in all four — and is read back from that word too, which is what lets a script save and restore one
   ```sh
@@ -4211,6 +4296,8 @@ grades it and nothing drift-checks it either, for the same reason.
 | `heredoc/no-delimiter-and-a-warning` | `body` | `body` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | `body` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | `body` | `body` | `body` |
 | `heredoc/no-delimiter-and-no-body` | *(no output, status 0)* | **2>** `<script>: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | **2>** `<script>: line 2: warning: here-document at line 1 delimited by end-of-file (wanted `X')` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `heredoc/a-body-that-runs-to-the-end` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` | `[body]` |
+| `heredoc/the-delimiter-is-the-whole-line` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` **2>** `<script>: line 5: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `line~EOF x~echo "st=0"` **2>** `<script>: line 5: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` | `line~EOF x~echo "st=0"` |
+| `heredoc/a-delimiter-that-closes-a-command-substitution` | **2>** `<script>: 6: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | `v=[a] st=0` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `v=[a] st=0` **2>** `<script>: line 3: warning: here-document at line 1 delimited by end-of-file (wanted `EOF')` | `v=[a] st=0` | `v=[a] st=0` | **2>** `<script>:6: parse error near `v=$(cat <<EOF'` *(status 1)* |
 | `heredoc/a-delimiter-that-never-matches` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` | `[a)~ EOF]` |
 | `redir/open-failure-wording` | `st=2` **2>** `<shell>: 1: cannot open nosuchfile: No such file` | `st=1` **2>** `<shell>: line 1: nosuchfile: No such file or directory` | `st=1` **2>** `<shell>: line 1: nosuchfile: No such file or directory` | `st=1` **2>** `<shell>: nosuchfile: No such file or directory` | `st=1` **2>** `<shell>: nosuchfile: cannot open [No such file or directory]` | `st=1` **2>** `<shell>:1: no such file or directory: nosuchfile` |
 | `redir/failure-line-when-the-redirect-is-elsewhere` | `one~st=2` **2>** `<shell>: 2: cannot open nosuchfile: No such file` | `one~st=1` **2>** `<shell>: line 5: nosuchfile: No such file or directory` | `one~st=1` **2>** `<shell>: line 5: nosuchfile: No such file or directory` | `one~st=1` **2>** `<shell>: line 4: nosuchfile: No such file or directory` | `one~st=1` **2>** `<shell>: line 4: nosuchfile: cannot open [No such file or directory]` | `one~st=1` **2>** `<shell>:2: no such file or directory: nosuchfile` |
@@ -4326,6 +4413,20 @@ grades it and nothing drift-checks it either, for the same reason.
   body
   EOF
   ); echo "[$x]"
+  ```
+- `heredoc/the-delimiter-is-the-whole-line` — the delimiter is compared against the *physical line as written*, so `EOF x` is body and not a terminator — unanimously, in a shape that would read as a terminator to anything matching a prefix. The body then runs to the end of the input, which is why the last line is printed rather than run, and bash 5.3 alone remarks that the document ended at end of file where bash 3.2 says nothing. Prior work of our own had this as a rule about prefixes, and the prefix reading is exactly what is false
+  ```sh
+  cat <<EOF
+  line
+  EOF x
+  echo "st=$?"
+  ```
+- `heredoc/a-delimiter-that-closes-a-command-substitution` — the one place a line that merely *begins* with the delimiter ends the body: `EOF)` inside `$( )`, where the parenthesis that closes the substitution is what follows it. bash and ksh93 take it and the body is `a`; dash and zsh refuse the whole construct, dash wanting the `)` and zsh naming the assignment. So the prefix rule the case above disproves is real for this one shape and in only two of the six — and `EOF junk` in the same position is body in every one of them, which is how the two shapes tell each other apart
+  ```sh
+  v=$(cat <<EOF
+  a
+  EOF)
+  echo "v=[$v] st=$?"
   ```
 - `heredoc/a-delimiter-that-never-matches` — the terminator has a leading space, so it is not the delimiter and the body runs to the end of the input. Every shell takes it and runs the command — this made it a syntax error. Standard error is still discarded here, and the reason changed: the warning about it is now produced, but this body is inside a backquoted substitution, which the one shell that warns re-parses while carrying its line counter on from the outer input — so a three-line script is remarked on at line 5. The two cases above pin the warning where the lines are the file's own
   ```sh

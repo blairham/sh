@@ -511,6 +511,24 @@ what reaches the newline.
 
 The body ends at a line **exactly equal** to the delimiter. `EOFX` does
 not end an `EOF` heredoc, and neither does a line with trailing spaces.
+`EOF x` — the delimiter, a space, and a word — is body in all six, and so
+is `EOF junk` inside a command substitution
+(`heredoc/the-delimiter-is-the-whole-line`). Prior work of our own had
+this recorded as a rule about a line that *begins* with the delimiter,
+and the prefix reading is what these two disprove.
+
+**One shape is the exception, and it is the `)` of a command
+substitution.** `EOF)` on its own line inside `$( … )` ends the body and
+closes the substitution in bash 5.3, bash 3.2 and ksh93; dash and zsh
+refuse the construct outright, dash saying it wanted the `)` and zsh
+naming the assignment. The case is
+`heredoc/a-delimiter-that-closes-a-command-substitution`.
+
+So the exception is not "a prefix ends the body" but "the substitution's
+closer may follow the delimiter" — four of the six columns take it and
+two refuse — and it is the only place the whole-line rule bends. bash
+also *warns* there that the document was delimited by end of file, which
+is the same remark `<<-` with a space-indented delimiter earns below.
 
 **Several heredocs on one line are collected in operator order**:
 

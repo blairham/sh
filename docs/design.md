@@ -179,7 +179,9 @@ implementation would reach for.
 [design/sandboxing.md](design/sandboxing.md) is the shipped policy that
 fills the seam: the policy format, the default posture, what a refusal
 looks like, and the event schema its consumers share. The agent-protocol
-consumer of that seam is designed in [design/acp.md](design/acp.md).
+consumer of that seam is designed in [design/acp.md](design/acp.md), and
+[design/blocks.md](design/blocks.md) is the at-rest form of the same
+unit: a command and its output, recorded.
 
 ## The process model is decided now
 

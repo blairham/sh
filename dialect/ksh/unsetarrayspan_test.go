@@ -17,7 +17,7 @@ func TestUnsetOfEveryElementIsAnOrdinarySubscript(t *testing.T) {
 	for _, sub := range []string{"@", "*"} {
 		src := `a=(p q r); unset "a[` + sub + `]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`
 		out, st := runKsh(t, t.TempDir(), src)
-		want := "ksh: unset: " + sub + ": more tokens expected\nst=1\n[p][q][r] n=3\n"
+		want := "ksh: unset: " + sub + ": arithmetic syntax error\nst=1\n[p][q][r] n=3\n"
 		if out != want || st != 0 {
 			t.Errorf("[%s] = %q (status %d), want %q", sub, out, st, want)
 		}
@@ -28,8 +28,20 @@ func TestUnsetOfEveryElementIsAnOrdinarySubscript(t *testing.T) {
 // reading to reach it.
 func TestUnsetOfEveryElementLeavesAScalarAlone(t *testing.T) {
 	out, st := runKsh(t, t.TempDir(), `a=hello; unset "a[@]"; echo "[$a]"`)
-	want := "ksh: unset: @: more tokens expected\n[hello]\n"
+	want := "ksh: unset: @: arithmetic syntax error\n[hello]\n"
 	if out != want || st != 0 {
 		t.Errorf("got %q (status %d), want %q", out, st, want)
+	}
+}
+
+// A subscript that *is* an expression names its element and the element goes
+// away, so unsetting the last one shortens the array — the reading this shell
+// shares with bash and not with zsh, reached through the same field.
+// Measured against ksh93 93u+ 2012-08-01 (2026-09-05).
+func TestUnsetOfTheLastElementRemovesIt(t *testing.T) {
+	out, st := runKsh(t, t.TempDir(),
+		`a=(x y z); unset "a[2]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`)
+	if out != "[x][y] n=2\n" || st != 0 {
+		t.Errorf("got %q (status %d), want %q", out, st, "[x][y] n=2\n")
 	}
 }

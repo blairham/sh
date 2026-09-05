@@ -3473,21 +3473,69 @@ means reproducing that shell's modifier table and the order it tries it
 in, which is a feature rather than an axis — #662, filed on its own rather
 than guessed at here.
 
-### Recorded rather than reproduced: what "operand expected" means
+### What "operand expected" means — two failures, not one
 
-Two of the panel word the *reason* by whether the expression ran out or
-found something it could not use, and this implementation gives the
-end-of-input wording for both:
+Issue #661. Two of the panel word the *reason* by whether the expression
+ran out or found something it could not use. Measured 2026-09-05 across
+bash 5.3.15, bash 3.2.57, ksh93u+ 2012-08-01, zsh 5.9.2 and dash:
 
     $((1+))    ksh93  more tokens expected        zsh  operand expected at end of string
+    $((~))     ksh93  more tokens expected        zsh  operand expected at end of string
     $((%))     ksh93  arithmetic syntax error     zsh  operand expected at `%'
+    $((1+&2))  ksh93  arithmetic syntax error     zsh  operand expected at `&2'
     $((@))     ksh93  arithmetic syntax error     zsh  illegal character: @
 
-bash words all three the same, which is why nothing had noticed. It is
-not this section's failure — `$((%))` has the same divergence and reaches
-no subscript — but it is what the `unset a[@]` rows under #648 and the
-substring-offset row here still differ on, so it is written down where
-they are — #661.
+bash words all of them identically —
+`arithmetic syntax error: operand expected (error token is "…")`, and bash
+3.2 the same without the leading `arithmetic` — and dash names the whole
+expression and says `expecting primary` whatever happened. That is why one
+field served for years: bash is the column a conformance number is usually
+read against, and it cannot see the difference.
+
+The parser is the only place the two can be told apart, and it already
+separated them without knowing it. Reading a value returns nothing at the
+end of the text *without* reporting anything, so the frame that wanted the
+operand names the operator it was left holding — `ErrArithOperandEnd`,
+token `+`. Where there is text that cannot begin a value, the reading
+reports it itself, naming everything from the refused byte to the end of
+the expression — `ErrArithOperand`, token `&2`. The two tokens differ
+because the two shells that name anything name different things.
+
+`Diagnostics.ArithOperandExpected` is the found wording and
+`ArithExpressionRanOut` the other; an empty second field means "the same
+as the first", which is what bash and dash want.
+
+**A dialect that blames past the expression read past it.** ksh93 reports
+a failing substring offset together with everything after it in the range
+— `${x:1+:2}` is `1+:2` — because it reads `offset:length` as one string.
+So what ran out for this parser did not run out for that shell: it found
+a `:`. Naming the whole range and reading the whole range are one fact,
+so the blamed text is enough to know it and there is no second flag to
+keep in step:
+
+    ${x:1+}      ksh93  1+: more tokens expected
+    ${x:2:1+}    ksh93  1+: more tokens expected      a length has nothing after it
+    ${x:1+:2}    ksh93  1+:2: arithmetic syntax error
+
+#### Still recorded rather than reproduced: zsh's third wording
+
+zsh has a third sentence for a byte that is not part of any arithmetic
+token — `illegal character: @` — and it is not modeled. It is not a
+question of *which* byte alone; it is also where the byte stands:
+
+    $((@))       illegal character: @          nothing read yet
+    $((1 @))     illegal character: @          where an operator belonged
+    $((1+@))     operand expected at `@'       where an operand belonged
+    $((+@))      operand expected at `@'       after a unary operator too
+    $((1 :))     operand expected at end of string    `:` *is* a math token
+    $((1 2))     operator expected at `2'      a value where an operator belonged
+
+The refused set measured is `@ { } ; '`; every other byte tried is either
+a math token or can begin a value. Reproducing the sentence therefore
+needs that shell's lexical table *and* a rule about position, which is a
+lexer's internals rather than a grammar question, and this repository
+learns behavior by running binaries. `arith/an-operand-a-lexer-refuses-outright`
+records it: three of the four columns pass and the zsh column is the work.
 
 ## A subscript before the first element
 
@@ -3602,7 +3650,7 @@ type's own values are documented beside it in `interp/semantics.go`:
 `ExitArgumentPolicy`, `TrapBodyLineStyle`, `SelectMenuLayout`,
 `DeclarationListingForm`, `KillStatusStyle`, `BracketPolicy`,
 `DollarSingleControlPolicy`, `DollarSingleUnknownPolicy`,
-`UnsetArrayAtPolicy`. Where an entry below says "see X", X is one of
+`UnsetArraySpanPolicy`. Where an entry below says "see X", X is one of
 those.
 
 **This catalog is not the whole of the vector.** The axes with their own
@@ -4692,6 +4740,56 @@ it — two of the three that have the grammar; ksh93 takes it back with
 the command's other redirections, so the number the variable holds is
 already dead.
 
+**`FdNumberBoundedByOpenFileLimit`** — bash yes · dash no · ksh93 yes · zsh no
+
+Refuses a redirection whose descriptor number is at or above the
+process's soft limit on open files.
+
+**No shell in the panel has a ceiling of its own.** There is no language
+constant to look for; the bound is the kernel's, and the shells differ
+only in whether they hand its refusal back. Measured on macOS,
+2026-09-05, by moving the limit rather than by finding the default —
+which is what shows it is the limit and not a number somebody chose:
+
+    ulimit -n 20; exec 19>f     silent, status 0, in all five
+    ulimit -n 20; exec 20>f     bash: `20: Bad file descriptor`, status 1
+    ulimit -n 20; exec 20<f     the same — the direction does not matter
+    ulimit -n 20; echo hi 20>f  the same, on a command's own redirection
+    ulimit -n 6;  exec 8>f      bash: `8: Bad file descriptor`
+                                ksh93: `bad file unit number [Invalid
+                                       argument]`, and the shell ends
+                                dash, zsh: status 0, and the descriptor
+                                       is unusable afterwards
+    ulimit -n 20; exec 20>fresh the file is created either way: the open
+                                happens and it is the *number* that
+                                cannot be had
+
+bash and ksh93 report the errno they were given, and they were given
+different ones — EBADF against EINVAL — which is why the wording is a
+Diagnostics field (`FdNumberOverLimit`) rather than one sentence with the
+number substituted in. dash and zsh do not ask, which is the shape of not
+looking rather than of a different answer: the redirection reports
+success and then nothing aimed at that number works.
+
+Reached most often through `MultiDigitFdNumber`, since a script that may
+write only one digit can only get here under a limit below ten. It is why
+`exec 1000000>f` was accepted here and refused by both bash builds, which
+is what this axis was opened for.
+
+A number the *shell* picks is checked too, and that is measured rather
+than assumed: `ulimit -n 6; exec {v}>f` fails in all three shells that
+have the construct, since the number they pick is over the limit like any
+other. They word it three ways — `cannot duplicate fd`, `cannot open`,
+`cannot move fd 3` — and we say what we say about a number the script
+wrote, which is the shape of the failure without the sentence. It is
+reachable only under a limit below ten, where the picking starts.
+
+The axis is asked at the disagreement and never on the common path: a
+number below the limit is nobody's question, and a Runner with no
+`GetRlimit` has no limit to be asked about — a library that was handed no
+limits is not the place to invent one. Recorded as
+`redir/a-descriptor-number-over-the-open-file-limit`.
+
 **`RedirectTargetIsAnOrdinaryWord`** — bash yes · dash no · ksh93 no · zsh no
 
 Expands a redirection's target the way an argument is expanded — split
@@ -4838,6 +4936,20 @@ environment. True in bash alone: the other three have no way to carry a
 function at all, and each rejects the option as an option — two of them
 fatally.
 
+**`ExportTakesTheAttributeOff`** — bash yes · dash no · ksh93 no · zsh no
+
+Gives `export` its `-n`, which takes the export attribute off a name and
+leaves the name itself alone. True in bash alone. What the letter *means*
+is not in question anywhere it exists — the name stays set in the shell
+and stops reaching a child — so the axis is about availability and there
+is no wording beside it: a dialect that says no sends `-n` down the
+ordinary unknown-option path and collects its own refusal. Measured
+2026-09-05: `dash: 1: export: Illegal option -n` and the script ends,
+`ksh: export: -n: unknown option` with a usage line and the script ends,
+`zsh:export:1: bad option: -n` with `export` failing at 1 and the script
+carrying on. The POSIX preset says no from the text, which spells
+`export` with `-p` and nothing else.
+
 **`ExportListing`** — bash DeclareListingClustered · dash DeclareListingCommandWord · ksh93 DeclareListingCommandWord · zsh DeclareListingCommandWord
 
 Is the shape `export -p` writes: bash spells each name as a clustered
@@ -4954,12 +5066,13 @@ Asked only for an operand whose subscript actually failed. dash has no
 subscript to evaluate — `UnsetTakesASubscript` is no there — so the axis
 is absent rather than false.
 
-**`UnsetArrayAt`** — bash removes every element · dash unspecified · ksh93 a subscript · zsh leaves one empty element
+**`UnsetArraySpan`** — bash removes every element · dash unspecified · ksh93 a subscript · zsh leaves one empty element
 
-Is what `unset a[@]` — and `unset a[*]`, which every column answers
-identically — does to an indexed array. Three answers, and the third is
-not a variation on the other two, so it is a policy type
-(`UnsetArrayAtPolicy`) rather than a switch:
+Is what `unset` does to the span of elements a subscript names — `a[@]`
+and `a[*]`, which every column answers identically, and `a[3]`, which
+names a span of one. Three answers, and the third is not a variation on
+the other two, so it is a policy type (`UnsetArraySpanPolicy`) rather
+than a switch:
 
     a=(p q r); unset "a[@]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
 
@@ -4994,11 +5107,44 @@ The reading is the *indexed* array's alone. With the keyed attribute on,
 three shells that have the attribute — including the two that clear an
 indexed array through the same spelling.
 
-Asked only for those two spellings, so `unset a[1]` never reaches it.
+A single subscript is the same axis at a span of one, which is why there
+is one field and not two:
+
+    a=(x y z); unset "a[3]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+
+    bash 5.3, bash 3.2, ksh93   [x][y][z] n=3
+    zsh                         [x][y][] n=3
+
+The base decides which column is being asked. `3` is the last element
+where the first is 1 and one past the end where the first is 0, so bash
+and ksh93 hold their length because nothing was named and zsh holds its
+length because the element it named was blanked rather than removed. Ask
+bash and ksh93 for *their* last element and it goes:
+
+    a=(x y z); unset "a[2]"     bash, ksh93 → [x][y] n=2
+    a=(x y z); unset "a[2]"     zsh         → [x][][z] n=3
+
+The end is the only place the two readings can be told apart. In the
+middle of an array they cannot: a dense reader finds a removed subscript
+empty on its own, so `unset a[2]` on `(p q r)` reads back as `[p][][r]`
+under both. That is what let the wrong answer stand — the corpus had the
+middle case and it passed — and it is why `array/removing-the-last-element`
+exists.
+
+Two end-relative wrinkles, measured rather than reasoned. Only `-1` acts
+under the blanking reading: `unset a[-2]` on `(x y z)` leaves all three
+where the removing shells take the middle one away. And bash 3.2 has no
+negative subscripts at all, reporting `[-2]: bad array subscript` where
+bash 5.3 removes.
+
 dash has no arrays and answers `UnsetTakesASubscript` with no, so the
-operand is a bad name there and the axis is never consulted; the POSIX
-preset leaves it unspecified, because the panel gives three answers and
-no reading of the standard picks one.
+operand is a bad name there and the axis is never consulted. The POSIX
+preset leaves it unspecified: the panel gives three answers to the
+whole-array spelling and no reading of the standard picks one, so that
+spelling is refused by name. A *single* subscript is not refused, because
+the preset has already committed to removal there — see
+`UnsetTakesASubscript`, where POSIX has `unset a[0]` name an element and
+take it away.
 
 The spelling used to do nothing at all. `@` is not an arithmetic
 expression, so the subscript failed to evaluate and the element nobody

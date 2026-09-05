@@ -312,7 +312,7 @@ func Semantics() interp.Semantics {
 	// for `[@]`: `unset a[2]` leaves an empty element in place too. A scalar
 	// is one such span and comes back empty; an array with nothing in it has
 	// no span and gains no element.
-	s.UnsetArrayAt = interp.UnsetArrayAtLeavesOneEmptyElement
+	s.UnsetArraySpan = interp.UnsetArraySpanLeavesOneEmptyElement
 	// The complaint is the builtin's rather than the script's: `unset` reports
 	// 1 and the next command still runs.
 	s.BadSubscriptToUnsetFatal = interp.No
@@ -355,6 +355,11 @@ func Semantics() interp.Semantics {
 	// `${a[*]#a}` on `(aa ab)` is `a ab` where the other two say `a b`.
 	s.OperatorDistributesOverStarSubscript = interp.No
 	s.ExportCarriesFunctions = interp.No
+	// No `-n` either, and unlike `-f` it is a letter this shell has simply
+	// never heard of — so it earns the ordinary `bad option: -n` rather
+	// than the ExportFunctionOptionRefused wording, and `export` fails at 1
+	// with the script carrying on.
+	s.ExportTakesTheAttributeOff = interp.No
 	s.AnnouncesBackgroundJob = interp.Yes
 	s.ReportsACommandKilledBySignal = interp.No
 	s.ReportsAnyKilledPipelineElement = interp.No
@@ -404,6 +409,13 @@ func Semantics() interp.Semantics {
 	// approximated.
 	s.BareLocalListing = interp.BareLocalListsEveryParameter
 	s.SetListing = interp.SetListingEveryParameter
+
+	// A descriptor number the process cannot hold is not checked here: with
+	// `ulimit -n 6`, `exec 8>f` reports success and prints nothing, where
+	// bash and ksh93 hand the kernel's refusal back. Rarely reachable, since
+	// a number this shell reads is one digit and the shell picks its own for
+	// `{name}>f`.
+	s.FdNumberBoundedByOpenFileLimit = interp.No
 
 	return s
 }
@@ -572,9 +584,13 @@ func Diagnostics() interp.Diagnostics {
 		FcNoSuchEvent:                "no such event: 1",
 		NoJobControl:                 "no job control in this shell.",
 		FdVariableWithoutADescriptor: "parameter %[1]s does not contain a file descriptor",
-		ArithOperandExpected:         "bad math expression: operand expected at end of string",
-		ArithOperatorExpected:        "bad math expression: operator expected at `%[1]s'",
-		SyntaxUnexpected:             "parse error near `%[1]s'",
+		// The same split ksh93 makes, said the other way round: the text
+		// that could not be an operand is named where there is one, and the
+		// end of the string is named where there is not.
+		ArithOperandExpected:  "bad math expression: operand expected at `%[1]s'",
+		ArithExpressionRanOut: "bad math expression: operand expected at end of string",
+		ArithOperatorExpected: "bad math expression: operator expected at `%[1]s'",
+		SyntaxUnexpected:      "parse error near `%[1]s'",
 		// zsh names itself and stops when a function's body never began.
 		// `f() ;` reports as zsh: parse error near `;' where `if true` — an
 		// input that ran out just as much — reports the line as well, as

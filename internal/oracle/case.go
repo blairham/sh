@@ -186,6 +186,16 @@ type Case struct {
 	// Such a case is still worth recording: the divergence is real and the
 	// measurement documents it. It is simply not evidence about anybody's
 	// conformance, so it is not graded and not checked for drift.
+	//
+	// And not resampled. Neither of those two exemptions stopped `make
+	// oracle` from writing down whichever answer the coin gave, which was
+	// the *only* way such a row could move and made every move noise — a
+	// regeneration in a pull request about something else carrying a diff a
+	// reviewer then has to recognize and dismiss. So a regeneration keeps
+	// what is recorded for a marked row, per shell, for as long as the shell
+	// is the same build; see Run.KeepRacingRows, which also has the measured
+	// flip rates. To resample deliberately, delete the row from the golden
+	// record and regenerate.
 	ReferenceRaces bool
 
 	// Unfinished marks a case whose input is legitimately *unfinished* even
@@ -1519,7 +1529,7 @@ var Corpus = []Case{
 		ID: "xtrace/pipeline-order-diverges", Category: "shell options",
 		Snippet:        `set -x; echo a | cat`,
 		ReferenceRaces: true,
-		Why:            "ksh93 usually prints the last element first, which follows from its running that one in the current shell — but only usually: its two processes race to their trace points, 26 runs in 400 come out the other way, and that is a fact about ksh93 rather than about anything measured against it",
+		Why:            "ksh93 usually prints the last element first, which follows from its running that one in the current shell — but only usually: its two processes race to their trace points, 41 runs in 400 come out the other way. Nor is that ksh93's alone, which is what the row looked like until every column was counted rather than the loudest one: bash 5 reorders 5 times in 200, bash 3.2 once in 400 and zsh once in 200, so four of the six columns were seen to answer both ways and only dash held still. A pipeline's elements are separate processes and nothing sequences their trace points, so the order is the scheduler's and not the shell's — a fact about how the trace is emitted rather than about anything measured against it",
 	},
 	{
 		ID: "nounset/unset-variable-is-an-error", Category: "shell options",
@@ -2095,6 +2105,11 @@ var Corpus = []Case{
 		Why:     "one shell carries a function to its children and the other three have no way to: there is nothing but a string in an environment, so the source goes in and is parsed again at the other end. The count rather than the text, because what the entry holds is a shell's own spelling of a body",
 	},
 	{
+		ID: "export/the-n-option-takes-the-attribute-off", Category: "builtins",
+		Snippet: `V=1; export V; export -n V; echo "st=$?"; env | grep -c "^V="; echo alive`,
+		Why:     "the letter itself is the question, not what it does: bash has `-n` and the other three refuse it as an option, in three different ways and two of them fatally. Left out of #459 deliberately, because that change was about the export attribute and this row would have been recording an option-surface gap instead — which it now is, on purpose. Read through a real child, since what `-n` buys is that the name stays set in the shell and stops reaching one",
+	},
+	{
 		ID: "export/a-name-that-is-not-a-function", Category: "builtins",
 		Snippet: `export -f nope; echo "st=$?"`,
 		Why:     "a name that is not a function now will not become one by being exported. The shells that have the option refuse it and the ones that do not read `-f` as something else entirely, which is the more interesting half",
@@ -2280,6 +2295,11 @@ var Corpus = []Case{
 		Why:     "the length rather than the offset, which is what separates the two namings: the shell that blames an offset along with the rest of the range has nothing after a length and names it alone. Extending the text before *evaluating* it rather than only before reporting it invented a second failure, so the pair is what pins that the extension is a wording and not a reading",
 	},
 	{
+		ID: "param/a-substring-length-with-an-operand-it-found", Category: "parameter expansion",
+		Snippet: `x=abcdef; echo "[${x:2:%}]"; echo after`,
+		Why:     "the found-an-operand wording reached through a range rather than through `$(( ))`, which is where the two are held together: the shell that blames an offset along with the rest of the range also *reads* the rest of the range, so `${x:1+:2}` is its found case where `${x:1+}` is its ran-out one. A length has nothing after it and is the plain case in every column",
+	},
+	{
 		ID: "param/a-substring-offset-on-a-subscripted-parameter", Category: "parameter expansion",
 		Snippet: `a=(p q r); echo "[${a[@]:1+}]"; echo after`,
 		Why:     "the parameter a diagnostic names is the name and its subscript, not the name alone — `a[@]` — in the one shell that names it at all. The list form of the substring reaches the same evaluation as the string form, so this also says the two spellings share it",
@@ -2333,6 +2353,26 @@ var Corpus = []Case{
 		ID: "array/unsetting-every-element-then-appending", Category: "expansion",
 		Snippet: `a=(p q); unset "a[@]"; a+=(z); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
 		Why:     "where the next append lands, which is what shows the difference between the two shells that clear rather than only counting it: bash has nothing left and `z` is the whole array, zsh has one empty element left and `z` goes after it. A count alone cannot tell an emptied array from one holding a single empty string, and a script that resets a list and pushes onto it sees the difference on the first read",
+	},
+	{
+		ID: "array/removing-the-last-element", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[3]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the same axis as `array/unsetting-every-element` at a span of one, and the only place its two readings can be told apart. `array/removing-one-element` cannot see it: a removed subscript in the middle reads back empty under a dense reading, so removing and blanking leave the same array there. At the *end* they do not — removing shrinks the extent and blanking does not — and the length was coming back one short in the shell that blanks, which puts every later count and every append one place out. The subscript is `3` so the base decides who is being asked: it is the last element where the first is 1 and one past the end where the first is 0, which is why the two columns hold the same length for opposite reasons",
+	},
+	{
+		ID: "array/removing-the-last-element-then-appending", Category: "expansion",
+		Snippet: `a=(p q r); unset "a[3]"; a+=(z); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "where the next append lands, which is the half a script feels rather than counts: the blanked element still holds a place, so `z` goes after it and the list a script built by pushing is one longer than it thinks. The same probe `array/unsetting-every-element-then-appending` uses on the whole array, at one element",
+	},
+	{
+		ID: "array/removing-the-only-element", Category: "expansion",
+		Snippet: `a=(only); unset "a[1]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "an array of one, where blanking and removing part company most sharply — one comes back holding an empty element and the other is untouched, because `1` is the first element under one base and the second under the other. It says that a blanked array is not an empty one, which is the same distinction `array/unsetting-every-element-of-a-scalar` draws from the other side",
+	},
+	{
+		ID: "array/removing-an-element-from-the-end", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[-2]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "an end-relative subscript, which the shell that blanks does not act on at all beyond `-1` — the array comes back whole where the shells that remove take the middle element away. Pinned because the blanking rule would otherwise be applied to every negative subscript by symmetry, and it is not. bash 3.2 has no negative subscripts and reports a bad one, which is the same absence `array/appending-to-an-element` records",
 	},
 	{
 		ID: "array/unsetting-every-element-of-a-scalar", Category: "expansion",
@@ -2530,6 +2570,21 @@ echo "st=$?"`,
 		ID: "redir/exec-opens-a-high-descriptor", Category: "redirection",
 		Snippet: `exec 3>f; echo hi; echo aside >&3; exec 3>&-; cat f`,
 		Why:     "`exec 3>file` holds the file on a descriptor of its own — stdout stays where it was, and only what is aimed at 3 reaches the file",
+	},
+	{
+		ID: "redir/a-two-digit-descriptor-number", Category: "redirection",
+		Snippet: `exec 10>f; echo hi >&10; exec 10>&-; cat f`,
+		Why:     "how many digits a descriptor number may have is not unanimous: bash reads ten as a number, and to dash, ksh93 and zsh the digits are an ordinary word, so the line runs a command called `10` with its output in the file. Those three still reach descriptors above nine through `exec {v}>f`, which is what makes this a question about the token rather than about the table",
+	},
+	{
+		ID: "redir/digits-before-a-redirection-that-are-not-a-number", Category: "redirection",
+		Snippet: `echo x 10>f; echo "st=$?"; cat f`,
+		Why:     "the same split read from the quiet side, and the reason it is a grammar flag rather than a refusal: where the digits are a word nothing is reported and a different command runs — `x 10` into the file, against `x` on the terminal and an empty file",
+	},
+	{
+		ID: "redir/a-descriptor-number-over-the-open-file-limit", Category: "redirection",
+		Snippet: `ulimit -n 64; exec 70>fresh; echo "st=$?"; ls fresh`,
+		Why:     "no shell in the panel has a ceiling of its own — the bound is the kernel's limit on open files, and only some shells hand its refusal back. The limit is moved by the case rather than assumed, so the row is about the rule and not about the machine's default. bash refuses and still creates the file; the other three cannot write a two-digit number at all and run a command called `70`",
 	},
 	{
 		ID: "redir/exec-descriptor-reaches-an-external-child", Category: "redirection",
@@ -3441,6 +3496,26 @@ echo unreachable`,
 		ID: "arith/a-name-shaped-value-is-chased", Category: "arithmetic",
 		Snippet: `a=b; b=3; echo $((a)); echo "st=$?"`,
 		Why:     "bash, ksh93 and zsh resolve a value that names another variable until it is a number; dash calls b an illegal number and stops",
+	},
+	{
+		ID: "arith/an-operand-the-expression-ran-out-of", SyntaxError: true, Category: "arithmetic",
+		Snippet: `echo "[$((1+))]"; echo "st=$?"`,
+		Why:     "an operand was wanted and the text ended, which two of the panel word apart from an operand that was wanted and found: ksh93 says more tokens expected and zsh names the end of the string. The pair with `arith/an-operand-the-expression-found` is the whole of it — either row alone passes under one wording for both, which is what let the end-of-input sentence stand for every operand failure in two dialects",
+	},
+	{
+		ID: "arith/an-operand-the-expression-found", SyntaxError: true, Category: "arithmetic",
+		Snippet: `echo "[$((%))]"; echo "st=$?"`,
+		Why:     "the other half: a token is there and it cannot begin a value. ksh93 drops to its bare arithmetic syntax error and zsh names the text — ``operand expected at `%'`` — where both said the expression had run out. bash words the two identically, which is why the bash column cannot see this at all and why the failure survived every conformance read",
+	},
+	{
+		ID: "arith/an-operand-found-after-an-operator", SyntaxError: true, Category: "arithmetic",
+		Snippet: `echo "[$((1+&2))]"; echo "st=$?"`,
+		Why:     "the found case reached mid-expression rather than at its start, and the text named runs to the end of the expression rather than being the one refused byte — `&2`, which is what the two shells that name anything name. It also says the distinction is not about where in the expression the failure is: the same operator wanting the same operand is worded one way here and the other way in `arith/an-operand-the-expression-ran-out-of`",
+	},
+	{
+		ID: "arith/an-operand-a-lexer-refuses-outright", SyntaxError: true, Category: "arithmetic",
+		Snippet: `echo "[$((@))]"; echo "st=$?"`,
+		Why:     "a byte that is not part of any arithmetic token, which zsh alone words a third way — `illegal character: @` rather than the operand sentence it gives `%`. The row is recorded rather than reproduced: the third wording turns on where in the expression the byte stands as well as on which byte it is, since `$((1+@))` gets the operand sentence and `$((1 @))` and `$((@))` do not, and that is a lexer's table rather than a grammar rule. bash, ksh93 and dash word it exactly as they word `%`, so three of the four columns pass",
 	},
 	{
 		ID: "arith/the-error-names-what-was-consumed", Category: "arithmetic",

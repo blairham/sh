@@ -202,6 +202,10 @@ func Semantics() interp.Semantics {
 	// Whether a backgrounded job is announced to whoever is typing.
 	// Whether `export -f` carries a function to a child.
 	s.ExportCarriesFunctions = interp.No
+	// And whether it has `-n` at all. It does not: measured, dash answers
+	// `export: Illegal option -n` and the script ends there, `export` being
+	// a special builtin.
+	s.ExportTakesTheAttributeOff = interp.No
 	s.AnnouncesBackgroundJob = interp.No
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.Yes
@@ -233,6 +237,13 @@ func Semantics() interp.Semantics {
 	// all, so `-t` is a name — but the axis is answered rather than left
 	// looking forgotten.
 	s.TypeNamesTheKindWithDashT = interp.No
+
+	// A descriptor number the process cannot hold is not checked here: with
+	// `ulimit -n 6`, `exec 8>f` reports success and the descriptor is
+	// unusable afterwards, where bash and ksh93 hand the kernel's refusal
+	// back. Unreachable for a two-digit number, which this shell does not
+	// read as one at all.
+	s.FdNumberBoundedByOpenFileLimit = interp.No
 
 	return s
 }

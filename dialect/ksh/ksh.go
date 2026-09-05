@@ -320,7 +320,7 @@ func Semantics() interp.Semantics {
 	// arithmetic expression as they do everywhere else, `@` is not one, and
 	// the operand is reported as a bad subscript with the array left as it
 	// was — the only shell in the panel that does not clear it.
-	s.UnsetArrayAt = interp.UnsetArrayAtIsASubscript
+	s.UnsetArraySpan = interp.UnsetArraySpanIsAnExpression
 	// And the complaint is the builtin's: `unset` reports 1 and the script
 	// goes on, which is what makes `unset a[@]` survivable here.
 	s.BadSubscriptToUnsetFatal = interp.No
@@ -350,6 +350,9 @@ func Semantics() interp.Semantics {
 	// An operator on `${a[*]}` trims each element before the join here.
 	s.OperatorDistributesOverStarSubscript = interp.Yes
 	s.ExportCarriesFunctions = interp.No
+	// No `-n` either: measured, `export: -n: unknown option` with the usage
+	// line under it, and the script ends there.
+	s.ExportTakesTheAttributeOff = interp.No
 	s.AnnouncesBackgroundJob = interp.Yes
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.No
@@ -404,6 +407,11 @@ func Semantics() interp.Semantics {
 	// redirects itself.
 	s.ExecOpenedFdReachesACommand = interp.No
 	s.FdVariableBadCloseIsAnError = interp.No
+	// And a number the process cannot hold is refused, as it is in bash and
+	// unlike dash and zsh — in this shell's own words and quoting a different
+	// errno: with `ulimit -n 6`, `exec 8>f` is `bad file unit number [Invalid
+	// argument]`.
+	s.FdNumberBoundedByOpenFileLimit = interp.Yes
 
 	return s
 }
@@ -476,6 +484,11 @@ func Diagnostics() interp.Diagnostics {
 		// staying empty.
 		// Measured: ksh93 reports a failed open at the line before the redirect.
 		RedirectFailureLine: interp.LineBeforeRedirect,
+		// A descriptor number the process cannot hold names the thing rather
+		// than the number, and quotes the errno the other refusing shell does
+		// not: `ulimit -n 6; exec 8>f` is `bad file unit number [Invalid
+		// argument]` here and `8: Bad file descriptor` in bash.
+		FdNumberOverLimit: "bad file unit number [Invalid argument]",
 		// A target that expanded to nothing gets neither the reason nor the
 		// "create" wording, whichever direction the redirection was.
 		EmptyRedirectTarget:  "%[1]s: cannot open",
@@ -517,8 +530,12 @@ func Diagnostics() interp.Diagnostics {
 		// range: `${x:1+:2}` names `1+:2`. A failing length has nothing after
 		// it and is named on its own.
 		SubstringErrorNamesTheWholeRange: true,
-		ArithOperandExpected:             "more tokens expected",
-		ArithOperatorExpected:            "arithmetic syntax error",
+		// An operand failure is two sentences here, and which one is said
+		// turns on whether the expression ran out or found something it
+		// could not use: `$((1+))` against `$((%))`.
+		ArithOperandExpected:  "arithmetic syntax error",
+		ArithExpressionRanOut: "more tokens expected",
+		ArithOperatorExpected: "arithmetic syntax error",
 		// A digit the base does not have is the same sentence.
 		DigitTooGreatForBase: "arithmetic syntax error",
 		// ksh93 does not call this a bad substitution: it is a syntax error

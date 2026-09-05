@@ -303,6 +303,13 @@ func (l *Lexer) tryIONumber() (Token, bool) {
 	if c := l.peekAt(n); c != '<' && c != '>' {
 		return Token{}, false
 	}
+	// And width, where the dialect reads only one digit as a number. The
+	// digits are then an ordinary word and the operator a redirection with no
+	// number of its own, which is what makes `exec 10>f` a command called
+	// `10` in three of the five shells.
+	if n > 1 && !l.dialect.MultiDigitFdNumber {
+		return Token{}, false
+	}
 	start := l.pos()
 	digits := l.src[l.off : l.off+n]
 	for range n {

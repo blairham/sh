@@ -579,13 +579,22 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 
 // biExport marks a name for the environment, and assigns when given a value.
 func biExport(r *Runner, _ context.Context, args []string) int {
-	// `-f` is offered only where the dialect has it. Where it does not, it
-	// goes through the ordinary unknown-option path and gets that shell's
-	// own refusal, which in two of them ends the script.
-	letters := "pn"
-	// Asked only where there is an `-f` to decide about. `export A=1` is the
-	// same in all four, and refusing it over a question nothing turned on
-	// would be refusing to export anything.
+	// `-f` and `-n` are offered only where the dialect has them. Where it
+	// does not, each goes through the ordinary unknown-option path and gets
+	// that shell's own refusal, which in two of them ends the script.
+	letters := "p"
+	// Asked only where there is an `-n` to decide about, for the reason `-f`
+	// is below: `export A=1` is the same in all four, and refusing it over a
+	// question nothing turned on would be refusing to export anything.
+	if hasOption(args, 'n') {
+		takes := r.ask(r.sem().ExportTakesTheAttributeOff, "`export -n`")
+		if r.unspecified {
+			return 2
+		}
+		if takes {
+			letters += "n"
+		}
+	}
 	if hasOption(args, 'f') {
 		carries := r.ask(r.sem().ExportCarriesFunctions, "`export -f`")
 		if r.unspecified {
@@ -593,7 +602,7 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 		}
 		switch {
 		case carries:
-			letters = "pfn"
+			letters += "f"
 		case r.diag().ExportFunctionOptionRefused != "":
 			// A dialect that knows the letter and will not do it, which is
 			// not the same as one that has never heard of it — and says so

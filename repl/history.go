@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/blairham/sh/internal/secret"
 )
 
 // The history that outlives the session.
@@ -92,6 +94,7 @@ func (h historyFile) load() []string {
 // Only what it added: the lines it read at the start are already in the file,
 // and writing them again would double it every time a shell is opened.
 func (h historyFile) save(added []string) error {
+	added = withoutCredentials(added)
 	if h.path == "" || h.size == 0 || len(added) == 0 {
 		return nil
 	}
@@ -116,4 +119,34 @@ func (h historyFile) save(added []string) error {
 		return err
 	}
 	return f.Close()
+}
+
+// withoutCredentials drops the lines that carry a secret.
+//
+// This is the write path, and putting the rule here rather than only where a
+// line is typed is the point: the file is the thing that outlives the
+// session, gets copied into a backup, gets read by whoever ends up with the
+// machine. Everything that reaches disk goes through this function, so
+// "the history file never held a credential" is a property of the file rather
+// than a property of one loop remembering to ask.
+//
+// Rejected rather than redacted, which is the split the rules are built for.
+// A command line carrying a secret usually *is* the secret — `export
+// TOKEN=…` is nothing else — so a redacted skeleton of it recalls nothing
+// anyone wanted, and dropping the line whole is proportionate. Output is the
+// opposite case and is redacted instead; the same table answers both.
+//
+// Silent here, deliberately. A history that quietly loses lines is its own
+// confusion, so the person is told at the moment they type the line — see
+// Shell.recording — where the notice lands next to the thing it is about
+// instead of arriving in a rush as the shell exits.
+func withoutCredentials(added []string) []string {
+	kept := added[:0:0]
+	for _, line := range added {
+		if _, found := secret.Default().Match(line); found {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return kept
 }

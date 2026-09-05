@@ -53,6 +53,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"ArithNameValueRecurses", s.ArithNameValueRecurses, interp.Yes},
 		{"ArithInvalidOctalDigitIsError", s.ArithInvalidOctalDigitIsError, interp.No},
 		{"ArrayBaseIsZero", s.ArrayBaseIsZero, interp.Yes},
+		{"ArrayLiteralSubscriptIsAKey", s.ArrayLiteralSubscriptIsAKey, interp.Yes},
 		{"FatalErrorStatusIsOne", s.FatalErrorStatusIsOne, interp.Yes},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.Yes},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.No},

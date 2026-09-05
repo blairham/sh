@@ -181,6 +181,7 @@ func Semantics() interp.Semantics {
 	s.LastPipelineElementInCurrentShell = interp.Yes
 	s.ShiftPastEndFatal = interp.No
 	s.ArrayBaseIsZero = interp.No
+	s.ArrayLiteralSubscriptIsAKey = interp.No
 	s.DollarZeroInFunctionIsFunctionName = interp.Yes
 	s.BuiltinSyntaxErrorFatal = interp.No
 	s.DotMissingFileFatal = interp.No

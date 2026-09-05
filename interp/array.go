@@ -122,18 +122,57 @@ func (r *Runner) elemPos(a Array, idx int) (int, bool) {
 // setArrayElem assigns one element. Any subscript at or above the base is
 // legal, whether or not anything below it has been assigned, and a negative
 // one counts back from the end.
-func (r *Runner) setArrayElem(name string, idx int, value string) {
+//
+// sub is the subscript as it was written, because that is what one dialect's
+// refusal names — `a[x-2]: bad array subscript`, not the `-1` it came to.
+//
+// A subscript that lands *before* the first element is refused, and the
+// refusal ends the script at 1 in every shell measured. It used to be a
+// wording of our own at status 0 with the script running on, which is the
+// silent half of a wrong answer: the element was not written and the next
+// command read the array as though it had been.
+//
+// Which subscript reaches this is the array base and nothing else. Where the
+// first element is 0 it is a negative one that counts back past the start;
+// where the first element is 1 it is `a[0]`, which is below it. Neither shell
+// has both, and that is why one rule needs two spellings to show it.
+func (r *Runner) setArrayElem(name string, idx int, sub, value string) {
 	a := r.Arrays[name]
 	if a == nil {
 		a = Array{}
 	}
 	pos, ok := r.elemPos(a, idx)
 	if !ok {
-		r.diagf("%s[%d]: index out of range\n", name, idx)
+		if idx < 0 && r.ask(r.sem().NegativeSubscriptPastTheStartInserts,
+			"a negative subscript past the first element placing one in front of it") {
+			r.storeArray(name, insertAtTheFront(a, value))
+			return
+		}
+		if r.unspecified {
+			return
+		}
+		r.fatal("%s\n", Wording(r.diag().BadArraySubscript,
+			"%[1]s[%[2]s]: bad array subscript", name, sub))
 		return
 	}
 	a[pos] = value
 	r.storeArray(name, a)
+}
+
+// insertAtTheFront puts value before every element there is, moving the rest
+// up one.
+//
+// The answer one shell gives a negative subscript that runs past the start:
+// however far past, it lands in front and the array grows by exactly one, so
+// `a=(p q)` takes `a[-3]`, `a[-4]` and `a[-5]` to the same place. The others
+// refuse it, which is the axis rather than this arithmetic.
+func insertAtTheFront(a Array, value string) Array {
+	out := make(Array, len(a)+1)
+	for _, pos := range a.subscripts() {
+		out[pos+1] = a[pos]
+	}
+	out[0] = value
+	return out
 }
 
 // appendArrayElem is `a[i]+=v`: the value joins what the element already
@@ -148,11 +187,11 @@ func (r *Runner) setArrayElem(name string, idx int, value string) {
 // An unset element has nothing to append to, so the same spelling stores the
 // value as it stands: `a=(x y); a[5]+=Q` leaves `Q` at subscript 5, not an
 // error and not an empty string joined to anything.
-func (r *Runner) appendArrayElem(name string, idx int, value string) {
+func (r *Runner) appendArrayElem(name string, idx int, sub, value string) {
 	if pos, ok := r.elemPos(r.Arrays[name], idx); ok {
 		value = r.Arrays[name][pos] + value
 	}
-	r.setArrayElem(name, idx, value)
+	r.setArrayElem(name, idx, sub, value)
 }
 
 // unsetArrayElem removes one subscript.

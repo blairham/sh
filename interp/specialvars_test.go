@@ -198,3 +198,80 @@ func TestUnderscoreFollowsTheLastArgumentIsAnAxis(t *testing.T) {
 		t.Errorf("out=%q, want the axis off to leave $_ alone", out)
 	}
 }
+
+// The route letters, which arrive on the Runner the way `i` does and for the
+// same reason: where the program came from is a fact about the invocation,
+// and a library Runner would otherwise read the embedder's command line.
+//
+// `s` for the standard-input route is unanimous across the panel and so has
+// no axis. `c` for a command string is two against two, and `s` under `-c` is
+// one shell against three; both are named axes here rather than shells, as
+// this package requires (#551).
+func TestDollarDashShowsTheRouteItWasInvokedBy(t *testing.T) {
+	const src = `case $- in *c*) echo has-c ;; *) echo no-c ;; esac
+case $- in *s*) echo has-s ;; *) echo no-s ;; esac`
+	for _, tc := range []struct {
+		name     string
+		route    Route
+		stdinOpt bool
+		showsC   Answer
+		showsS   Answer
+		want     string
+	}{
+		{
+			"a script file shows neither, whatever the axes say",
+			RouteScriptFile, false, Yes, Yes, "no-c\nno-s\n",
+		},
+		{
+			"standard input shows `s` with no axis asked",
+			RouteStandardInput, false, Unspecified, Unspecified, "no-c\nhas-s\n",
+		},
+		{
+			"a command string, in a shell that shows the letter",
+			RouteCommandString, false, Yes, No, "has-c\nno-s\n",
+		},
+		{
+			"a command string, in a shell that does not",
+			RouteCommandString, false, No, No, "no-c\nno-s\n",
+		},
+		{
+			"a command string, in the shell that also shows `s` there",
+			RouteCommandString, false, Yes, Yes, "has-c\nhas-s\n",
+		},
+		{
+			"`-s` written, and a command string supplying the program anyway",
+			RouteCommandString, true, No, No, "no-c\nhas-s\n",
+		},
+		{
+			"a Runner nobody told, which is neither route",
+			RouteUnspecified, false, Yes, Yes, "no-c\nno-s\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := CoreSemantics()
+			sem.CommandStringShowsCInDollarDash = tc.showsC
+			sem.CommandStringShowsSInDollarDash = tc.showsS
+			out, _ := run(t, src, func(r *Runner) {
+				r.Semantics = &sem
+				r.Route, r.StandardInputOption = tc.route, tc.stdinOpt
+			})
+			if out != tc.want {
+				t.Errorf("%v: got %q, want %q", tc.route, out, tc.want)
+			}
+		})
+	}
+}
+
+// TestAnUnansweredRouteLetterIsSilent: both route axes are read rather than
+// asked, which is the one place in this package that matters. `case $- in
+// *e*)` is the ordinary errexit check and it runs in scripts that have chosen
+// no dialect; refusing the whole expansion over a letter nobody asked for
+// would break every one of them.
+func TestAnUnansweredRouteLetterIsSilent(t *testing.T) {
+	sem := CoreSemantics()
+	out, st := run(t, `set -e; case $- in *e*) echo has-e ;; *) echo no-e ;; esac`,
+		func(r *Runner) { r.Semantics, r.Route = &sem, RouteCommandString })
+	if out != "has-e\n" || st != 0 {
+		t.Errorf("got %q at %d, want %q at 0 with nothing said about the unchosen route letters", out, st, "has-e\n")
+	}
+}

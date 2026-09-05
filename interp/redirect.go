@@ -767,7 +767,7 @@ func (r *Runner) setFdVar(ref, value string) {
 		// answers with FdVariableBadCloseIsAnError on the way in.
 		return
 	}
-	r.setArrayElem(base, idx, value)
+	r.setArrayElem(base, idx, sub, value)
 }
 
 // redirWrote records that the redirections being applied have just written a

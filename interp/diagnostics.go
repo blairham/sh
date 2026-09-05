@@ -831,6 +831,21 @@ type Diagnostics struct {
 	// with every message.
 	UnsetFunctionNotFound string
 
+	// BadArraySubscript is what an assignment says about a subscript that
+	// lands before the array's first element. Two verbs: the name, and the
+	// subscript *as written* — bash names `a[x-2]`, not the `-1` it evaluated
+	// to, where ksh93 and zsh name the array alone.
+	BadArraySubscript string
+
+	// BadArrayLiteralSubscript is the same refusal reached through an array
+	// literal, `a=([0]=p)`, which two of the three word differently from the
+	// plain form. Three verbs: the name, the subscript as written, and the
+	// value — bash names the element as it stands in the parentheses,
+	// `[-1]=p`, and zsh names the subscript alone. Empty falls back to
+	// BadArraySubscript, which is the honest answer for a dialect that has
+	// not been measured to word the two apart.
+	BadArrayLiteralSubscript string
+
 	// UnsetBadSubscript wraps the sentence about an `unset` operand whose
 	// subscript would not evaluate. One verb: that sentence, already worded by
 	// ArithError. Empty leaves it to stand alone, which is what bash and zsh
@@ -1264,6 +1279,29 @@ type Diagnostics struct {
 	// read a line at a time in all four, which is why this asks only about
 	// the command string.
 	CommandStringParsedWhole bool
+
+	// StdinProgramSurvivesAParseFailure reports a line that did not parse and
+	// then reads the next one, rather than ending the shell, when the program
+	// itself arrived on standard input.
+	//
+	//	printf 'echo one\n{ fi; }\necho three\n' | sh
+	//
+	// prints one, the complaint, and *three* in zsh, and exits 0. bash, dash
+	// and ksh93 stop at the complaint and exit with their parse status. It is
+	// the route rather than the text that decides: the same three lines in a
+	// file stop zsh too, and exit 1.
+	//
+	// The status is not forced. What ran last reports as it always would —
+	// `false` at the end is 1 and `exit 7` is 7 — and where nothing runs after
+	// the failure the shell is left with StatusForParseError, which is why the
+	// program above ending at the bad line exits 1 while the one with a good
+	// line after it exits 0. Two failures in one program are two complaints
+	// and two recoveries.
+	//
+	// Beside CommandStringParsedWhole because it is the same kind of question
+	// — how the front end reads a program, per route, for one dialect — and
+	// this is the route that one does not cover.
+	StdinProgramSurvivesAParseFailure bool
 	// NamesTheInputInLocation puts *where the script came from* between the
 	// shell's name and the line, for a parse failure only: bash writes
 	// `bash: -c: line 1:` when it read the script from -c and plain

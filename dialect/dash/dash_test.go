@@ -466,11 +466,24 @@ func TestABackquotedBodyIsNumberedFromOne(t *testing.T) {
 }
 
 // `$-` starts empty here, measured under -c and a script file alike — the
-// only letter dash ever adds by itself is the route letter `s` on standard
-// input, which no dialect models.
+// only letter dash ever adds by itself is the `s` of the standard-input
+// route, which is unanimous and comes from Runner.Route.
 func TestDollarDashStartupLetters(t *testing.T) {
 	if got := dash.Semantics().DefaultOptionLetters; got != "" {
 		t.Errorf("DefaultOptionLetters = %q, want empty", got)
+	}
+}
+
+// Neither route letter under `-c`: measured 2026-09-05, `dash -c 'echo $-'`
+// prints an empty line, where bash and ksh93 show `c` and ksh93 also shows
+// `s`.
+func TestDollarDashRouteLetters(t *testing.T) {
+	s := dash.Semantics()
+	if got := s.CommandStringShowsCInDollarDash; got != interp.No {
+		t.Errorf("CommandStringShowsCInDollarDash = %v, want No", got)
+	}
+	if got := s.CommandStringShowsSInDollarDash; got != interp.No {
+		t.Errorf("CommandStringShowsSInDollarDash = %v, want No", got)
 	}
 }
 

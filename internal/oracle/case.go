@@ -44,20 +44,34 @@ type Case struct {
 	// invocation.
 	//
 	// The snippet still has to reach the shell, and Args says where it goes.
-	// At most one element may be a placeholder, and it is replaced before
-	// the shell sees it:
+	// At most one placeholder may appear, and it is replaced before the shell
+	// sees it:
 	//
-	//	ArgSnippet  the Snippet as a single word — where `-c` wants its
-	//	            operand, or `-o name -c` does, or a bundle ending in c.
+	//	ArgSnippet  the Snippet — where `-c` wants its operand, or
+	//	            `-o name -c` does, or a bundle ending in c.
 	//	ArgScript   the path of a file holding the Snippet: the same file
 	//	            Script writes, in the same scratch directory, and it
 	//	            normalizes to <script> in the recorded output.
 	//
-	// A case with neither placeholder never hands the shell its Snippet at
-	// all, and that is deliberate rather than an oversight: an invocation
-	// that must fail before it reads anything — a script path that does not
-	// exist — is one of the shapes worth pinning, and it still wants a
-	// Snippet written down as the thing that would have run.
+	// A placeholder is replaced **wherever it appears**, rather than only as
+	// a whole word, which is the same rule Stdin has always followed. That
+	// matters because `-c` takes its command string as its own word only when
+	// it is written that way: `sh -c'echo hi'` attaches the string to the
+	// letter, and an invocation needing the snippet inside a larger word is
+	// spelled `"-c" + ArgSnippet`.
+	//
+	// Requiring a whole word meant such a case had to write the text twice —
+	// once in Snippet and once literally in Args — and nothing checked that
+	// the two stayed in step, so an edit to either one silently made the case
+	// test something other than what it recorded. Interpolation removes the
+	// second copy rather than guarding it (#535).
+	//
+	// A case with no placeholder never hands the shell its Snippet at all,
+	// and that is deliberate rather than an oversight: an invocation that
+	// must fail before it reads anything — a script path that does not exist,
+	// `-c` with nothing after it — is one of the shapes worth pinning, and it
+	// still wants a Snippet written down as the thing that would have run.
+	// It is also how the program arrives on standard input; see Stdin.
 	//
 	// Args and Script are exclusive. Script is the shorthand for
 	// []string{ArgScript}, and setting both is a harness error rather than a
@@ -2199,6 +2213,36 @@ var Corpus = []Case{
 		ID: "array/a-subscript-where-there-are-no-arrays", Category: "expansion",
 		Snippet: `a[1]=Q; echo done`,
 		Why:     "the other side of the same gate. Where the dialect has no subscript the word is not an assignment at all and the shell looks for a command by that name, which is the answer the shell without arrays gives — so accepting the shape everywhere would have made this one silently assign instead of reporting. Three shells assign and say nothing; the fourth reports on standard error and carries on",
+	},
+	{
+		ID: "array/a-subscript-below-the-first-element", Category: "expansion",
+		Snippet: `a=(p q); a[0]=x; printf "[%s]" "${a[@]}"; echo " ok"`,
+		Why:     "an assignment before the array's first element is refused, and the refusal ends the script at 1. Which subscript reaches it is the array base and nothing else: where the first element is 1 this writes nothing and stops, and where it is 0 the same numeral names the first element and nothing is wrong at all. It used to be a wording of our own at status 0 with the script running on, so the element was not written and everything after read the array as though it had been",
+	},
+	{
+		ID: "array/appending-below-the-first-element", Category: "expansion",
+		Snippet: `a=(p q); a[0]+=Q; printf "[%s]" "${a[@]}"; echo " ok"`,
+		Why:     "`+=` is the same assignment reaching the same refusal rather than a form with a rule of its own, so the shell that refuses `a[0]=x` refuses this identically and the two that do not join the first element. It is the half a fix is likeliest to miss, because the append reads the element before it writes one",
+	},
+	{
+		ID: "array/a-negative-subscript-past-the-start", Category: "expansion",
+		Snippet: `a=(p q); a[-3]=x; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the same boundary reached from the other side, and the one spelling the panel disagrees about: bash and ksh93 refuse a negative subscript that counts back past the first element and end the script, where zsh places one in front of every other and the array grows by exactly one. That is the axis; the refusal itself is not",
+	},
+	{
+		ID: "array/a-negative-subscript-on-an-array-with-nothing-in-it", Category: "expansion",
+		Snippet: `a[-1]=x; printf "[%s]" "${a[@]}"; echo " ok"`,
+		Why:     "with no elements to count back from, `-1` is past the start already — so this is the shortest reachable form of the refusal in the two shells whose first element is 0, and the shortest form of the placement in the one that places. No array is built first, which is what makes it a statement about the boundary rather than about any particular length",
+	},
+	{
+		ID: "array/a-refused-subscript-is-named-as-written", Category: "expansion",
+		Snippet: `x=1; a[x-2]=v; echo ok`,
+		Why:     "what the refusal names, which is three answers: bash quotes the subscript back as it was written — `a[x-2]`, not the -1 it came to — ksh93 names the array alone, and zsh has nothing to refuse here because a negative subscript counts back from the last element there. The expression is what tells the written text from the evaluated number; a bare `-2` could not",
+	},
+	{
+		ID: "array/a-literal-subscript-below-the-first-element", Category: "expansion",
+		Snippet: `a=([0]=p); printf "[%s]" "${a[@]}"; echo " ok"`,
+		Why:     "the same refusal reached through a literal, which the shell that refuses it words differently from the plain form — naming the subscript and the kind of assignment rather than the array. Two spellings of one rule needing two sentences is why the wording is a field of its own rather than the plain one used twice",
 	},
 	{
 		ID: "array/a-subscript-that-will-not-evaluate", Category: "expansion",
@@ -5467,6 +5511,43 @@ out=$(CDPATH=./pool cd sub)
 		Why:         "one end of file, three sentences and a silence: bash wants the matching mark, dash calls the string unterminated, zsh calls the opener unmatched — and ksh93 closes the quote, runs the command, and prints abc",
 	},
 	{
+		ID: "syntax/standard-input-reads-on-past-a-parse-failure", Category: "diagnostics",
+		SyntaxError: true,
+		Args:        []string{"--"},
+		Stdin:       ArgSnippet + "\n",
+		Snippet: `echo one
+{ fi; }
+echo three`,
+		Why: "the program arriving on standard input, where zsh alone reports the bad line and then reads the next one: it prints one, the complaint, and three, and exits 0 where the other three stop at the complaint. `--` is what says the program is not on the argv",
+	},
+	{
+		ID: "syntax/a-file-stops-at-the-same-parse-failure", Category: "diagnostics",
+		SyntaxError: true,
+		Script:      true,
+		Snippet: `echo one
+{ fi; }
+echo three`,
+		Why: "the same three lines from a file, and zsh stops: nothing after the complaint and status 1. Which says the row above is about the *route* rather than about the text, and is the reason the answer cannot live with the parse status",
+	},
+	{
+		ID: "syntax/reading-on-does-not-invent-a-status", Category: "diagnostics",
+		SyntaxError: true,
+		Args:        []string{"--"},
+		Stdin:       ArgSnippet + "\n",
+		Snippet: `{ fi; }
+exit 7`,
+		Why: "the shell that reads on does not force a status either: what runs after the bad line reports as it always would, so this is 7 there. In the other three nothing after the complaint runs at all and the status is the parse failure's",
+	},
+	{
+		ID: "syntax/reading-on-with-nothing-left-to-read", Category: "diagnostics",
+		SyntaxError: true,
+		Args:        []string{"--"},
+		Stdin:       ArgSnippet + "\n",
+		Snippet: `echo one
+{ fi; }`,
+		Why: "the other half of the status: where the bad line is the last one there is nothing to report but the failure, so the shell that reads on still exits with the parse status. Together with the row above this says the status is left behind rather than chosen",
+	},
+	{
 		ID: "syntax/an-unmatched-command-substitution", Category: "diagnostics",
 		SyntaxError: true,
 		Snippet:     `echo $(echo`,
@@ -5903,7 +5984,7 @@ out=$(CDPATH=./pool cd sub)
 	// exactly what kept the sharpest of them out of the corpus (#534).
 	{
 		ID: "invoke/a-command-string-attached-to-the-letter", Category: "invocation",
-		Args:            []string{"-cecho hi"},
+		Args:            []string{"-c" + ArgSnippet},
 		Snippet:         `echo hi`,
 		GradedOnRefusal: true,
 		Why: "`sh -c'echo hi'` — the command string written against the letter rather than as its own word, which is how a hand and a generated command line both get it wrong. All six refuse it: `-c` takes its operand as a separate word, so the rest of this one is read as more option letters and `echo hi` is not a run of them. We ran it. That is the bug this case exists for, and it is caught here against every reference, because a shell that ran the string writes `hi` to standard output and standard output is still compared exactly. " +
@@ -5929,5 +6010,43 @@ out=$(CDPATH=./pool cd sub)
 		Snippet:         `echo hi`,
 		GradedOnRefusal: true,
 		Why:             "the same question one level in: `-o` is a valid letter and its operand is not a valid name, so the refusal comes from the option table rather than from the letter table. All six decline before running the command string, which is the part that matters — a shell that warned and carried on would print `hi` and standard output would catch it",
+	},
+	{
+		ID: "invoke/a-script-has-neither-route-letter", Category: "invocation",
+		Args:    []string{ArgScript},
+		Snippet: `case $- in *c*) echo has-c ;; *) echo no-c ;; esac; case $- in *s*) echo has-s ;; *) echo no-s ;; esac`,
+		Why:     "the baseline the other rows are read against: a script named on the command line is neither a command string nor standard input, and no shell in the panel puts either letter there. Membership rather than the spelling, because the spelling is what splits — no two shells order $- alike",
+	},
+	{
+		ID: "invoke/dollar-dash-shows-c-for-a-command-string", Category: "invocation",
+		Args:    []string{"-c", ArgSnippet},
+		Snippet: `case $- in *c*) echo has-c ;; *) echo no-c ;; esac`,
+		Why:     "two against two, which is what makes it an axis rather than a rule: bash and ksh93 put `c` in $- for a program given as a command string and dash and zsh do not. There is no majority to follow, so the preset takes the POSIX text — $- is the option flags specified on invocation, and -c is one",
+	},
+	{
+		ID: "invoke/dollar-dash-and-the-s-letter-for-a-command-string", Category: "invocation",
+		Args:    []string{"-c", ArgSnippet},
+		Snippet: `case $- in *s*) echo has-s ;; *) echo no-s ;; esac`,
+		Why:     "the corner that keeps `s` from being modeled as `the program came from standard input` outright: ksh93 alone also shows it under -c. Read down its rows and ksh93's rule is `no script file was named` where the other three's is the standard-input route, and this is the one invocation where the two rules differ",
+	},
+	{
+		ID: "invoke/dollar-dash-shows-s-for-a-program-on-standard-input", Category: "invocation",
+		Args:    []string{"--"},
+		Stdin:   ArgSnippet + "\n",
+		Snippet: `case $- in *s*) echo has-s ;; *) echo no-s ;; esac`,
+		Why:     "the unanimous half, and the reason it could be implemented without waiting for the -c corner to be settled: a program arriving on standard input puts `s` in $- whether -s was written or not. bash 3.2 is the one dissent and it is a shell disagreeing with its own later build rather than a panel split — it shows the letter only where -s was written",
+	},
+	{
+		ID: "invoke/dollar-dash-shows-s-for-the-s-option", Category: "invocation",
+		Args:    []string{"-s"},
+		Stdin:   ArgSnippet + "\n",
+		Snippet: `case $- in *s*) echo has-s ;; *) echo no-s ;; esac`,
+		Why:     "the same letter with the option written out, which is where all six agree including bash 3.2 — the pair with the row above is what tells the route from the spelling",
+	},
+	{
+		ID: "invoke/dollar-dash-keeps-s-when-a-command-string-overrides-it", Category: "invocation",
+		Args:    []string{"-s", "-c", ArgSnippet},
+		Snippet: `case $- in *s*) echo has-s ;; *) echo no-s ;; esac`,
+		Why:     "-c wins about where the program comes from and does not take the letter away: all six run the command string and all six still show `s`. So the letter follows either the route or the spelling, and a shell that read only the route would lose it here",
 	},
 }

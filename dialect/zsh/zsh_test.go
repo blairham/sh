@@ -532,6 +532,18 @@ func TestACommandStringIsReadWhole(t *testing.T) {
 	}
 }
 
+// TestAProgramOnStandardInputSurvivesAParseFailure: the other route this
+// shell reads differently. A line that will not parse is reported and the
+// next line is read anyway, so `printf 'echo one\n{ fi; }\necho three\n' |
+// zsh` prints three and exits 0 where the other three stop. Only on that
+// route: the same program in a file stops this shell too, which is why the
+// answer cannot live with the parse status.
+func TestAProgramOnStandardInputSurvivesAParseFailure(t *testing.T) {
+	if !zsh.Diagnostics().StdinProgramSurvivesAParseFailure {
+		t.Error("zsh reads on past a parse failure on standard input")
+	}
+}
+
 // TestTheRefusalOfANonBuiltinNamesNoBuiltin: zsh names the speaking builtin in
 // a diagnostic's location — `zsh:cd:1:`, `zsh:shift:1:` — and does not here.
 // The message is about a name that is *not* a builtin, so there is no builtin
@@ -601,6 +613,20 @@ func TestDiagnosticsNameTheFunction(t *testing.T) {
 func TestDollarDashStartupLetters(t *testing.T) {
 	if got, want := zsh.Semantics().DefaultOptionLetters, "569X"; got != want {
 		t.Errorf("DefaultOptionLetters = %q, want %q", got, want)
+	}
+}
+
+// Neither route letter under `-c`: measured 2026-09-05 on 5.9.2, `zsh -c
+// 'echo $-'` reports `569X` and nothing more, where bash and ksh93 add `c`.
+// The `s` of the standard-input route is unanimous and comes from
+// Runner.Route, so there is no axis for it here.
+func TestDollarDashRouteLetters(t *testing.T) {
+	s := zsh.Semantics()
+	if got := s.CommandStringShowsCInDollarDash; got != interp.No {
+		t.Errorf("CommandStringShowsCInDollarDash = %v, want No", got)
+	}
+	if got := s.CommandStringShowsSInDollarDash; got != interp.No {
+		t.Errorf("CommandStringShowsSInDollarDash = %v, want No", got)
 	}
 }
 

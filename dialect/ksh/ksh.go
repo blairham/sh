@@ -89,10 +89,16 @@ func Semantics() interp.Semantics {
 	// three read `+c` as `-c` and name `$0` from the first operand. All four
 	// run the command string either way.
 	s.PlusSignedCommandStringIsDollarZero = true
-	// Measured from a script file, where `echo $-` reports `hB`; ksh93's
-	// route letters — `c` under -c, `s` when reading a command string or
-	// standard input — are the front end's and stay unmodeled.
+	// Measured from a script file, where `echo $-` reports `hB`. The
+	// letters describing the route come from Runner.Route.
 	s.DefaultOptionLetters = "hB"
+	// `ksh -c 'echo $-'` reports `chsB` — both route letters, where bash
+	// shows `c` alone and dash and zsh show neither. Read down its rows and
+	// ksh93's rule for `s` is "no script file was named" where the other
+	// three's is "the program came from standard input"; this is the one
+	// invocation where those two differ.
+	s.CommandStringShowsCInDollarDash = interp.Yes
+	s.CommandStringShowsSInDollarDash = interp.Yes
 	s.ArithIntegerOperatorRefusesFloat = interp.Yes
 	// A negative exponent is a float answer here, not a refusal: `2**-1`
 	// is 0.5.
@@ -318,6 +324,9 @@ func Semantics() interp.Semantics {
 	// And the complaint is the builtin's: `unset` reports 1 and the script
 	// goes on, which is what makes `unset a[@]` survivable here.
 	s.BadSubscriptToUnsetFatal = interp.No
+	// A negative subscript past the first element is refused here too, and
+	// the refusal ends the script.
+	s.NegativeSubscriptPastTheStartInserts = interp.No
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.Yes
@@ -432,8 +441,10 @@ func Diagnostics() interp.Diagnostics {
 		// The process id and the words, with a colon between them and no
 		// command after: this shell names the line and the process but does
 		// not say back what was running.
-		KilledCommandNotice:  "%[1]d: %[2]s",
-		ParamNull:            "parameter null",
+		KilledCommandNotice: "%[1]d: %[2]s",
+		ParamNull:           "parameter null",
+		// The array alone is named, not the subscript that was written.
+		BadArraySubscript:    "%[1]s: subscript out of range",
 		UnsetBadFunctionName: "unset: %[1]s: invalid function name",
 		// The builtin names itself in front of the arithmetic sentence, which
 		// it does not do for the identical failure in an expansion.

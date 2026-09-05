@@ -327,7 +327,31 @@ type source struct {
 	// own `read`, for a command the script runs, and for an `exec 0<` that
 	// points the descriptor somewhere else entirely.
 	onStdin bool
-	dg      interp.Diagnostics
+	// stdinOption says the invocation wrote `-s`, which is nearly the same
+	// fact as onStdin and separate for the one spelling where it is not:
+	// `sh -s -c cmd` runs the command string and still shows `s` in `$-`,
+	// unanimously across the panel.
+	stdinOption bool
+	dg          interp.Diagnostics
+}
+
+// invocationRoute is which of the three routes the program came by, for the
+// runner. The same three cases aliasRoute splits on and the same reason: a
+// fact about the invocation rather than about the language.
+//
+// A prompt is not among them, and not because it has no route — it is the
+// standard-input route with a person on the other end — but because it never
+// reaches here. The prompt branch hands off to interactive before run is
+// called, and session says so itself, beside the two other facts it states
+// about a session.
+func (s source) invocationRoute() interp.Route {
+	switch {
+	case s.onStdin:
+		return interp.RouteStandardInput
+	case s.file != "":
+		return interp.RouteScriptFile
+	}
+	return interp.RouteCommandString
 }
 
 // aliasRoute is which of the three non-interactive routes this program
@@ -545,6 +569,10 @@ func (sh Shell) operands(args []string, inv invocation) (source, error) {
 	// every route, and a prompt is interactive whether or not `-i` was
 	// given. Measured, all four shells agree on both.
 	in.interactive = inv.forcePrompt || in.prompt
+	// `-s` as written, carried here for the same reason and in the same
+	// place: it survives a route that overrode it, and `sh -s -c cmd` shows
+	// `s` in `$-` in all four shells while running the command string.
+	in.stdinOption = inv.fromStdin
 	return in, nil
 }
 
@@ -680,15 +708,16 @@ func commandSource(sh Shell, src string, operands []string) source {
 // about every hook: an interactive shell that could not `exec`, or whose
 // `umask` did nothing, would be a different shell from the one that runs the
 // same lines from a file.
-func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, commandString bool) *interp.Runner {
+func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, route interp.Route) *interp.Runner {
 	r := &interp.Runner{
-		// Where the program came from, which one dialect answers a failed
-		// expansion by.
-		CommandString: commandString,
-		Dialect:       &sh.Dialect,
-		Semantics:     &sh.Semantics,
-		Diagnostics:   &dg,
-		Name:          name,
+		// Where the program came from. Three things read it: the status one
+		// dialect gives a failed expansion, the fatality another gives a
+		// readonly reassignment, and the route letters in `$-`.
+		Route:       route,
+		Dialect:     &sh.Dialect,
+		Semantics:   &sh.Semantics,
+		Diagnostics: &dg,
+		Name:        name,
 		// `$1` onward. A nil slice and an empty one mean the same thing to
 		// the interpreter, so nothing distinguishes "no operands" from
 		// "operands that were all consumed as the name".
@@ -811,7 +840,10 @@ func (sh Shell) runInput(in source) int {
 		}
 	}
 
-	r := sh.newRunner(name, in.params, dg, input == "-c")
+	r := sh.newRunner(name, in.params, dg, in.invocationRoute())
+	// `-s` as written, which `$-` shows even where `-c` supplied the
+	// program instead.
+	r.StandardInputOption = in.stdinOption
 	// What the invocation decided, handed to the runner rather than looked
 	// up by it: interp is a library and has no standing to ask the process
 	// whether anyone is watching. `$-` reports it as `i`, which is measured
@@ -935,6 +967,13 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 				// The input ended part-way through something. Reported here
 				// rather than below, because a program read as it runs has no
 				// line to hand back when the last of it is unfinished.
+				// No readOn here, and it is not an oversight: this branch
+				// is reached when the parser could return nothing at all,
+				// which on this route means the input ran out part-way
+				// through a construct. There is nothing left to read on to,
+				// so the shell that reads on and the shell that stops end
+				// the same way — measured, an unterminated quote piped in
+				// is one complaint and status 1 in all four.
 				sh.errf("%s", in.dg.ParseDiagnostic(in.name, in.input, err, pr.text()))
 				r.Finish(ctx)
 				return in.dg.StatusForParseError(err)
@@ -945,6 +984,9 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 			// The line did not parse, so none of it runs — not even the
 			// statements before the failure, which is measured.
 			sh.errf("%s", in.dg.ParseDiagnostic(in.name, in.input, err, pr.text()))
+			if sh.readOn(r, pr, in, err) {
+				continue
+			}
 			r.Finish(ctx)
 			return in.dg.StatusForParseError(err)
 		}
@@ -1054,4 +1096,30 @@ func (sh Shell) sayRemarks(dg interp.Diagnostics, name string, rs []syntax.Remar
 		}
 	}
 	return len(rs)
+}
+
+// readOn settles whether a line that did not parse ends the shell, and leaves
+// the reader ready for the next line where it does not.
+//
+// One dialect carries on, and only where the program itself arrived on
+// standard input: the same lines in a file stop it. The route is the whole of
+// the condition, which is why this is asked here rather than folded into the
+// parse failure's status — see Diagnostics.StdinProgramSurvivesAParseFailure
+// for the measurement.
+//
+// The status is recorded rather than returned. What runs after the failure
+// reports as it always would, so `false` on the line after a bad one still
+// exits 1 and `exit 7` still exits 7; the parse status is what is left when
+// nothing runs after it at all, which is the same shell exiting 1 for a
+// program whose last line is the bad one.
+//
+// The failed text has to be retired before reading on, because the parser
+// keeps its error until the pending text is replaced — otherwise the next turn
+// of the loop would find the same failure and report it again forever.
+func (sh Shell) readOn(r *interp.Runner, pr *program, in source, err error) bool {
+	if !in.onStdin || !in.dg.StdinProgramSurvivesAParseFailure {
+		return false
+	}
+	r.SetExitStatus(in.dg.StatusForParseError(err))
+	return pr.fill(true)
 }

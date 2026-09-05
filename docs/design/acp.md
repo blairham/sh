@@ -255,6 +255,58 @@ with `@agentclientprotocol/sdk`, which is where `AuthMethodTerminal`,
 `AuthMethodAgent`, `AuthCapabilities` and `AuthenticateRequest` are defined,
 rather than from prose or from any SDK's source.
 
+### `terminal/*`, and what the gate can see because of it
+
+An agent that cannot ask a client to run something runs it itself: its own
+fork, its own exec, its own argv, and **no gate anywhere sees it**. That is not
+a gap at the edge of the design — it is the whole of it. A shell's policy on a
+coding agent that cannot see the commands the agent runs is a policy on the
+agent's file reads and nothing else.
+
+So the five methods are implemented and advertised, for the same reason `fs/*`
+is and one step further along the same argument:
+
+| inbound | what happens |
+| --- | --- |
+| `terminal/create` | `ActionExec` with the argv, through the gate, then `exec.Cmd` |
+| `terminal/output` | what it has written so far, and its exit status if it has one |
+| `terminal/wait_for_exit` | blocks until it ends, or until the request's context does |
+| `terminal/kill` | `ActionSignal` through the gate, then `SIGKILL` |
+| `terminal/release` | recorded, not gated — see below |
+
+**A refused `terminal/create` is a command that never started**, and the agent
+is told so as an error rather than an empty terminal, because a terminal id
+that names nothing is a thing it would then poll.
+
+**Release is recorded and not gated, and kill is gated.** They both end a
+process, so the difference has to be argued rather than assumed. `terminal/kill`
+is the agent reaching a running process it chose to reach, which is exactly the
+`ActionSignal` case. `terminal/release` is the protocol's only way to say "I am
+finished with this", and the signal inside it is *the client ending something
+the client started*, on the same rule `internal/boundary` already draws: an
+access is inside the boundary when the path — here the process — was chosen by
+whoever the policy is about. Refusing a release would also leave this client
+holding the process forever, with the agent given no other way out.
+
+**Both of the command's streams become one.** A terminal has one, an agent
+asking for output is asking what a person would have seen on a screen, and
+splitting them would invent a distinction the protocol does not have.
+
+**`outputByteLimit` truncates from the front, at a character boundary**, which
+the protocol requires in so many words. The retained slice is copied rather
+than resliced: a reslice leaves the dropped prefix alive in the array
+underneath, so a long-running command would hold every byte it ever wrote,
+which is the one thing a limit exists to prevent.
+
+**A terminal outlives the request that made it and dies with the connection.**
+The context a handler is given is the connection's, which is the right lifetime
+for a process the agent will come back to — and it means an agent that
+disconnects mid-command does not leave one running.
+
+The environment is inherited and then written over rather than replaced. A
+command started with only the agent's few variables has no `PATH`, so every
+`terminal/create` would fail for a reason nothing on the wire explains.
+
 ### Where the gate sits on this side
 
 Every inbound request that would touch the world is an `interp.Action`
@@ -485,6 +537,27 @@ from the specification alone:
 4. **`-32601` is a fact, not a failure.** Gemini answers it for every
    optional method. A client must treat method-not-found as "this agent
    does not do that" and carry on.
+5. **An agent may decline a capability it was offered**, and two of them
+   do. Measured with `terminal: true` and both file methods advertised,
+   asked in as many words to run a shell command: **Claude Agent 0.75.1
+   and Codex 1.10.0 both ran it in their own process** and called no
+   client method at all. Claude Agent reported it as a `tool_call` of
+   kind `execute` with the command in `rawInput` and its output in
+   `rawOutput`; Codex reported a `tool_call` whose content names a
+   `terminal` — with a `terminalId` of its own minting, not one this
+   client issued.
+
+   This is the sharpest limit on the whole client-side thesis and it is
+   not a defect in the implementation: the gate can only see what an
+   agent *asks* for, and an adapter that shells out for itself asks for
+   nothing. `terminal/*` is what makes the honest route exist, and
+   whether an agent takes it is the agent's. Gemini CLI is native ACP
+   rather than an adapter and is the one most likely to; measuring that
+   needs a credential and is **#729**.
+
+   The consequence for a person is worth stating plainly: against those
+   two adapters today, `-deny` and the audit trail cover what the agent
+   asks *us* to read and write, and do not cover the commands it runs.
 
 The differences are recorded here rather than discovered per agent
 because they are the compatibility surface, and because "they all speak

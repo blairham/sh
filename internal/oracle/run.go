@@ -458,6 +458,22 @@ func normalize(s string, sh Found, dir string) string {
 		s = tracePrefix(sh.Argv0).ReplaceAllString(s, "+<shell>:")
 		s = usageBlock(s, sh.Argv0)
 	}
+	// And a shell that names itself by neither: zsh writes a constant `zsh:`
+	// however it was invoked. See Shell.SelfName for the measurement.
+	//
+	// Real zsh normalized anyway, because its binary's basename is the same
+	// word — so the rule looked complete while covering only the panel. What
+	// it did not cover was the implementation under test, which is built to a
+	// path named for the run: our zsh printed the correct fixed `zsh:` and
+	// the harness left it standing against the reference's `<shell>:`, so 281
+	// rows were graded on the name of a build directory. Understating zsh by
+	// 22 points made it read as the weak dialect and hid the failures that
+	// are really there.
+	if sh.SelfName != "" {
+		s = diagPrefix(sh.SelfName).ReplaceAllString(s, "<shell>:")
+		s = tracePrefix(sh.SelfName).ReplaceAllString(s, "+<shell>:")
+		s = usageBlock(s, sh.SelfName)
+	}
 	// A shell asked to be interactive with no terminal names the process
 	// group it could not set, which is this run's own process id: a different
 	// number every time, and one that says nothing about the shell. Masked

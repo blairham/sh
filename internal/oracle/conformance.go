@@ -202,7 +202,23 @@ func RunConformance(ctx context.Context, path, against string, args []string, ca
 			// graded against. The core driver takes -dialect; a dialect
 			// binary already is one and takes nothing.
 			Args: args,
-			Why:  "the implementation under test",
+			// The same rule as the reference, because it is the same fact.
+			// A shell being graded against zsh is claiming to be zsh, and
+			// zsh names itself with a fixed word rather than by argv[0], so
+			// the word is the shell's own name on both sides and normalize
+			// must erase it on both sides. Taking it from the reference
+			// rather than declaring it here keeps one statement of the fact:
+			// a panel entry says how the shell it names writes its own name.
+			//
+			// This does not let a wrong name pass. Which *word* the
+			// implementation picks is not gradable here at all and never
+			// was — the harness already rewrites the binary's own basename,
+			// so a shell naming itself by argv[0] and a shell naming itself
+			// by a constant reach this comparison spelled alike. The claim
+			// is pinned where it can be: driver.TestSelfNameNamesTheShellAnd
+			// NotTheScript and dialect/zsh's selfname_test.
+			SelfName: ref.SelfName,
+			Why:      "the implementation under test",
 		},
 		Path: path,
 	}

@@ -547,12 +547,33 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 				return splitFields(joined, ifs, set), true
 			}
 			if s.Quoting != syntax.Unquoted {
-				if len(elems) == 0 && e.Op == syntax.ParamNone &&
-					r.ask(r.sem().EmptyArrayAtIsOneEmptyField, `a quoted "${a[@]}" of an empty array`) {
-					// One dialect hands the quotes a field to keep: an empty
-					// array is one empty argument there, which is the reason
-					// careful scripts write "${a[@]+"${a[@]}"}".
-					return []string{""}, true
+				if len(elems) == 0 && e.Op == syntax.ParamNone {
+					if !wholeArraySubscript(r.subscriptText(e.Index)) {
+						// A subscript naming *one* element is one field
+						// whatever the element turned out to be, exactly as
+						// `"$unset"` is one empty field. Quoting is the whole
+						// guarantee, and it does not depend on the element
+						// being there.
+						//
+						// This asked the empty-array axis instead, so a gap
+						// produced no field at all and every argument after
+						// it moved up one — `set -- "${a[0]}" "${a[1]}"
+						// "${a[5]}"` on a sparse array gave `$#` of 2, and a
+						// script reading `$3` afterwards read what it thought
+						// was `$4`. Two different questions: how many fields
+						// an *empty list* makes, and how many a quoted
+						// expansion of *one* element makes. Only the first is
+						// a dialect's.
+						return []string{""}, true
+					}
+					if r.ask(r.sem().EmptyArrayAtIsOneEmptyField,
+						`a quoted "${a[@]}" of an empty array`) {
+						// One dialect hands the quotes a field to keep: an
+						// empty array is one empty argument there, which is
+						// the reason careful scripts write
+						// "${a[@]+"${a[@]}"}".
+						return []string{""}, true
+					}
 				}
 				return escapeAll(elems), true
 			}

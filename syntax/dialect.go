@@ -134,6 +134,29 @@ type Dialect struct {
 	// POSIX form's do not.
 	FuncBodyMustBeCompound bool
 
+	// FuncBodyTakesNoRedirection refuses a redirection in a function body
+	// that is not compound: ksh93 takes `f() echo hi` and refuses `f() >out`,
+	// `f() echo hi >out` and `f() x=1 >out`, blaming the operator itself —
+	// `` `>' unexpected ``, and `` `>&' `` for `2>&1`. A braced body is not
+	// this rule and `f() { :; } >out` is accepted there.
+	//
+	// It is narrower than FuncBodyMustBeCompound rather than a weaker form of
+	// it, which is what makes it a second flag: the shell that wants a
+	// compound body refuses the simple command outright, and this one takes
+	// the command and refuses only what it redirects. Two of the four accept
+	// both, so the panel is three ways here and not two.
+	FuncBodyTakesNoRedirection bool
+
+	// EmptyParensAreOneToken lexes `()` as a single token where the rest of
+	// the panel reads two, which is visible only when a diagnostic names the
+	// last token it read: zsh answers `f()` with ``parse error near `()' ``
+	// where naming the closing paren alone would say `` `)' ``.
+	//
+	// A granularity fact rather than a wording one, which is why it is here
+	// and not in Diagnostics — the two halves of `f( )` are not this token in
+	// that shell either, and it declines to read that as a definition at all.
+	EmptyParensAreOneToken bool
+
 	// FunctionNamePunctuation lets a POSIX-form or keyword-form function
 	// name carry `-` and `.` — `f-g()` and `a.b()` — which bash, ksh93 and
 	// zsh all parse. dash refuses the name outright (`Bad function name`),

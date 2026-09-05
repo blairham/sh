@@ -1310,7 +1310,18 @@ func (p *Parser) parseFuncPosix() Command {
 		p.fail("Bad function name")
 		return fn
 	}
+	if p.dialect.EmptyParensAreOneToken {
+		// The parens are empty by construction here — anything between them
+		// was refused above — so joining them is a matter of saying so. It
+		// stands until the next token is read, which is exactly as long as it
+		// is the last thing seen.
+		p.lastText = "()"
+	}
+	// Whether the body was allowed to start on a later line, which one dialect
+	// reports differently from a body that never started at all.
+	atParens := p.tok.Pos.Line
 	p.skipNewlines()
+	sameLine := p.tok.Pos.Line == atParens
 	// The body's first token, kept before the body is read. Both ways of
 	// refusing a body below name it, and neither can be decided until the
 	// parser has moved on: `f() >out` is only known not to be compound once
@@ -1318,15 +1329,42 @@ func (p *Parser) parseFuncPosix() Command {
 	body := p.tok
 	p.funcBody = true
 	if fn.Body = p.parseCommand(); fn.Body == nil {
+		hadError := p.err != nil
 		p.failUnexpectedAt(body, "", false)
+		if se, ok := p.err.(*Error); ok && !hadError && sameLine {
+			se.FuncBody = true
+		}
 		return fn
 	}
 	if p.dialect.FuncBodyMustBeCompound {
 		if _, isSimple := fn.Body.(*SimpleCmd); isSimple {
 			p.failUnexpectedAt(body, "", false)
+			return fn
+		}
+	}
+	if p.dialect.FuncBodyTakesNoRedirection {
+		// The operator rather than the body's first token: this dialect takes
+		// the command and objects to what it redirects, so `f() echo hi >out`
+		// is refused at the `>` with the `echo` already accepted.
+		if simple, isSimple := fn.Body.(*SimpleCmd); isSimple && len(simple.Redirs) > 0 {
+			r := simple.Redirs[0]
+			p.failRedirectAt(r.OpPos, r.Op)
 		}
 	}
 	return fn
+}
+
+// failRedirectAt records a redirection operator the grammar did not want,
+// named by the operator and not by what follows it.
+func (p *Parser) failRedirectAt(pos Pos, op Kind) {
+	if p.err != nil {
+		return
+	}
+	p.err = &Error{
+		Pos: pos, Kind: ErrUnexpected,
+		Token: op.String(), Class: ClassOperator, Redirect: true,
+		Msg: op.String() + " unexpected",
+	}
 }
 
 func (p *Parser) parseFuncKeyword() Command {

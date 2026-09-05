@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/blairham/sh/dialect/bash"
@@ -59,6 +60,36 @@ func TestPrintedSourceStillMeansTheSameThing(t *testing.T) {
 	}
 }
 
+// guardedBuffer is a buffer that may be read while the shell is still writing
+// it.
+//
+// `Run` returning does not mean every goroutine the script started has
+// finished: a background job outlives the script that started it, which is
+// what a background job is for, and in a real shell it is a separate process
+// that goes on writing to the terminal after the shell has gone. Here it is a
+// goroutine holding the caller's io.Writer, so reading that writer the
+// instant Run returns is a read racing a write.
+//
+// The shell's own lock cannot help — it guards the writers it hands out, and
+// this is the far side of one. So the buffer carries its own, and the same
+// lock covers the String that reads it.
+type guardedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (g *guardedBuffer) Write(p []byte) (int, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.buf.Write(p)
+}
+
+func (g *guardedBuffer) String() string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.buf.String()
+}
+
 // runUnderBash runs a snippet the way the conformance harness would, and
 // returns what it printed and reported.
 func runUnderBash(t *testing.T, src string) (string, int) {
@@ -67,7 +98,7 @@ func runUnderBash(t *testing.T, src string) (string, int) {
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
 	}
-	var out bytes.Buffer
+	var out guardedBuffer
 	dir := t.TempDir()
 	sem, dg := bash.Semantics(), bash.Diagnostics()
 	r := &interp.Runner{

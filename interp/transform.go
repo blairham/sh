@@ -31,7 +31,7 @@ func (r *Runner) transformParam(e *syntax.ParamExpr, name, value string, set boo
 		}
 		return quoteForInput(value)
 	case 'E':
-		return expandDollarSingle(value)
+		return r.expandDollarSingle(value)
 	case 'P':
 		r.refuseTransform(e)
 		return ""

@@ -754,6 +754,51 @@ var Corpus = []Case{
 		Why:     "read as bytes, because the failure mode was a literal backslash-t that looks almost right in a terminal — the quoting was recorded and nothing decoded it",
 	},
 	{
+		ID: "core/dollar-single-control-character", Category: "quoting",
+		Snippet: `printf '[%s]' $'\cA\cz' | od -An -c | tr -s " "`,
+		Why:     "the escape that reached the output as a backslash, a c and a letter: bash and ksh93 decode it, zsh is the one shell with $'…' and no \\c in it, and dash has no $'…' at all — four columns and three different answers to one snippet",
+	},
+	{
+		ID: "core/dollar-single-control-arithmetic", Category: "quoting",
+		Snippet: `printf '[%s]' $'\c1\c?\c[' | od -An -c | tr -s " "`,
+		Why:     "where the two decoding rules part: both uppercase and then agree over @ through _, so a case built only from letters cannot tell masking the low five bits from toggling bit 6 — `\\c1` is 0x11 in bash and `q` in ksh93, and `\\c?` is where bash 3.2 differs from bash 5.3",
+	},
+	{
+		ID: "core/dollar-single-nul-truncates", Category: "quoting",
+		Snippet: `x=$'a\0b'; printf '[%s][%s]' "$x" "${#x}" | od -An -c | tr -s " "`,
+		Why:     "a decoded NUL ends the text where a shell holds words as C strings and is an ordinary byte where it counts them — the length is recorded beside the bytes because a truncated word and a word with a NUL in it print the same way anywhere the NUL is invisible",
+	},
+	{
+		ID: "core/dollar-single-nul-ends-the-span-only", Category: "quoting",
+		Snippet: `printf '[%s]' $'a\0b'ccc | od -An -c | tr -s " "`,
+		Why:     "what the NUL truncates is the quoted span and not the word: the characters after the closing quote were never inside it, so `accc` rather than `a` — the distinction a case built from a bare $'…' cannot make",
+	},
+	{
+		ID: "core/dollar-single-esc-escape", Category: "quoting",
+		Snippet: `printf '[%s]' $'\e[m\E' | od -An -c | tr -s " "`,
+		Why:     "both spellings of the escape character, which POSIX has for neither and every shell with $'…' decodes — the escape that makes a color sequence writable without a literal control character in the source",
+	},
+	{
+		ID: "core/dollar-single-hex-escape", Category: "quoting",
+		Snippet: `printf '[%s]' $'\x41\x4a\x9' | od -An -c | tr -s " "`,
+		Why:     "one and two hex digits both, because the length is not fixed and a reader that demands two would silently take the `\\x9` of `\\x9Z` as 0x9Z",
+	},
+	{
+		ID: "core/dollar-single-octal-escape", Category: "quoting",
+		Snippet: `printf '[%s]' $'\101\0101\1' | od -An -c | tr -s " "`,
+		Why:     "the octal forms, and the reason they are one rule rather than two: `\\0101` is not four digits after a zero but three from the zero onward, so it is a backspace and then a `1`",
+	},
+	{
+		ID: "core/dollar-single-unicode-escape", Category: "quoting",
+		Snippet: `printf '[%s]' $'\u41\u0041\U00000058' | od -An -c | tr -s " "`,
+		Why:     "the code-point escapes, both widths and fewer digits than either allows — and the one place in this table where bash 3.2 keeps the text as written instead, which is what makes the pair a dated answer rather than a disputed one; the code points stay inside ASCII because what a shell does with a wider one depends on the locale and this record is made under LC_ALL=C",
+	},
+	{
+		ID: "core/dollar-single-unknown-escape", Category: "quoting",
+		Snippet: `printf '[%s]' $'\q\8' | od -An -c | tr -s " "`,
+		Why:     "a backslash before a character no escape claims: bash keeps both, ksh93 and zsh drop the backslash — the axis `\\c` falls to in the one shell that has no `\\c`",
+	},
+	{
 		ID: "core/append-assignment", Category: "parameters",
 		Snippet: `x=a; x+=b; echo "[$x]"`,
 		Why:     "dash has no += and reads the whole word as a command name, which is the divergence — the other three append",

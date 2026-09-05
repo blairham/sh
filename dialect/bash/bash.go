@@ -196,6 +196,11 @@ func Semantics() interp.Semantics {
 	s.PrintfReportsBadNumber = interp.Yes
 	s.PrintfBackslashC = interp.PrintfBackslashCLiteral
 	s.PrintfQuote = interp.PrintfQuoteBackslash
+	// `$'\cA'` is 0x01 and `$'\c1'` is 0x11: the character uppercased and
+	// masked to five bits, with `\c?` reading as DEL since 5.x.
+	s.DollarSingleBackslashC = interp.DollarSingleControlMasked
+	s.DollarSingleUnknownEscape = interp.DollarSingleUnknownKeepsBackslash
+	s.DollarSingleNulTruncates = interp.Yes
 	s.GetoptsAssignmentRestartsWord = interp.Yes
 	s.GetoptsClearsOptarg = interp.No
 	s.CdWithoutHomeIsAnError = interp.Yes

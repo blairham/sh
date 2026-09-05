@@ -6842,6 +6842,102 @@
         "TimedOut": false
       }
     },
+    "core/dollar-single-control-arithmetic": {
+      "bash": {
+        "Output": " [ 021 177 033 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": " [ 021 177 033 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": " [ 021 037 033 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": " [ $ \\ c 1 \\ c ? \\ c [ ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": " [ q 177 033 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": " [ c 1 c ? c [ ] ",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "core/dollar-single-control-character": {
+      "bash": {
+        "Output": " [ 001 032 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": " [ 001 032 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": " [ 001 032 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": " [ $ \\ c A \\ c z ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": " [ 001 032 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": " [ c A c z ] ",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "core/dollar-single-esc-escape": {
+      "bash": {
+        "Output": " [ 033 [ m 033 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": " [ 033 [ m 033 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": " [ 033 [ m 033 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": " [ $ \\ e [ m \\ E ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": " [ 033 [ m 033 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": " [ 033 [ m 033 ] ",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "core/dollar-single-expands-escapes": {
       "bash": {
         "Output": " [ a \\t b ] ",
@@ -6870,6 +6966,198 @@
       },
       "zsh": {
         "Output": " [ a \\t b ] ",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "core/dollar-single-hex-escape": {
+      "bash": {
+        "Output": " [ A J \\t ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": " [ A J \\t ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": " [ A J \\t ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": " [ $ \\ x 4 1 \\ x 4 a \\ x 9 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": " [ A J \\t ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": " [ A J \\t ] ",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "core/dollar-single-nul-ends-the-span-only": {
+      "bash": {
+        "Output": " [ a c c c ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": " [ a c c c ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": " [ a c c c ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": " [ $ a \\ 0 b c c c ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": " [ a c c c ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": " [ a \\0 b c c c ] ",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "core/dollar-single-nul-truncates": {
+      "bash": {
+        "Output": " [ a ] [ 1 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": " [ a ] [ 1 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": " [ a ] [ 1 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": " [ $ a \\ 0 b ] [ 5 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": " [ a ] [ 1 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": " [ a \\0 b ] [ 3 ] ",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "core/dollar-single-octal-escape": {
+      "bash": {
+        "Output": " [ A \\b 1 001 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": " [ A \\b 1 001 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": " [ A \\b 1 001 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": " [ $ \\ 1 0 1 \\ 0 1 0 1 \\ 1 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": " [ A \\b 1 001 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": " [ A \\b 1 001 ] ",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "core/dollar-single-unicode-escape": {
+      "bash": {
+        "Output": " [ A A X ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": " [ A A X ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": " [ \\ u 4 1 \\ u 0 0 4 1 \\ U 0 0 0~ 0 0 0 5 8 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": " [ $ \\ u 4 1 \\ u 0 0 4 1 \\ U 0 0~ 0 0 0 0 5 8 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": " [ A A X ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": " [ A A X ] ",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "core/dollar-single-unknown-escape": {
+      "bash": {
+        "Output": " [ \\ q \\ 8 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": " [ \\ q \\ 8 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": " [ \\ q \\ 8 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": " [ $ \\ q \\ 8 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": " [ q 8 ] ",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": " [ q 8 ] ",
         "Status": 0,
         "TimedOut": false
       }

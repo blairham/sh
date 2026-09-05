@@ -7930,6 +7930,102 @@
         "TimedOut": false
       }
     },
+    "dirstack/push-list-pop": {
+      "bash": {
+        "Output": "/tmp ~~/tmp ~~~~p=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "/tmp ~~/tmp ~~~~p=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "/tmp ~~/tmp ~~~~p=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: pushd: not found~\u003cshell\u003e: 1: dirs: not found~\u003cshell\u003e: 1: popd: not found~p=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: pushd: not found~\u003cshell\u003e: dirs: not found~\u003cshell\u003e: popd: not found~p=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "/tmp ~~p=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "disown/lets-go-or-only-shields": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: disown: not found~[1] + Running                    ~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[1] +  Running                 \u003ccommand unknown\u003e~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "disown/with-nothing-held": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: disown: current: no such job~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: disown: current: no such job~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: disown: current: no such job~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: disown: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:disown:1: no current job~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "dot/arguments-diverge": {
       "bash": {
         "Output": "got=INNER~after=OUTER",
@@ -12086,6 +12182,166 @@
       },
       "zsh": {
         "Output": "[1]  - running    sleep 0.4~[2]  + running    sleep 0.4",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "jobspec/kill-a-job-that-is-not-there": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: kill: %9: no such job~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: kill: %9: no such job~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: kill: %9: no such job~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: kill: No such job: %9~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": -1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:kill:1: %9: no such job~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "jobspec/wait-a-name-that-names-nothing": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: wait: %nosuchname: no such job~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: wait: %nosuchname: no such job~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: wait: %nosuchname: no such job~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: wait: No such job: %nosuchname~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:wait:1: job not found: nosuchname~st=127",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "jobspec/wait-a-number-that-names-nothing": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: wait: %5: no such job~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: wait: %5: no such job~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: wait: %5: no such job~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: wait: No such job: %5~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:wait:1: %5: no such job~st=127",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "jobspec/wait-by-number": {
+      "bash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "jobspec/wait-for-the-next-job": {
+      "bash": {
+        "Output": "st=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=3",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: wait: -n: invalid option~wait: usage: wait [n]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: wait: Illegal option -n~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: wait: -n: unknown option~Usage: wait [ options ] [job ...]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:wait:1: job not found: -n~st=127",
         "Status": 0,
         "TimedOut": false
       }
@@ -24922,6 +25178,38 @@
         "TimedOut": false
       }
     },
+    "type/a-lists-a-keyword": {
+      "bash": {
+        "Output": "if is a shell keyword~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "if is a shell keyword~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "if is a shell keyword~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "-a: not found~if is a shell keyword~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "if is a keyword~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "if is a reserved word~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "type/a-name-that-is-nothing": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: type: nope: not found~st=1",
@@ -24950,6 +25238,38 @@
       },
       "zsh": {
         "Output": "nope not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "type/capital-p-on-a-name-that-is-nothing": {
+      "bash": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "-P: not found~nosuchzz_qq: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: whence: -P: unknown option~Usage: whence [-afpqv] name  ...~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:type:1: bad option: -P~st=1",
         "Status": 0,
         "TimedOut": false
       }
@@ -25014,6 +25334,70 @@
       },
       "zsh": {
         "Output": "\u003cshell\u003e:type:1: bad option: -t~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "type/f-skips-or-prints-the-function": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: type: f: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: type: f: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: type: f: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "-f: not found~f is a shell function~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "f is an undefined function~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "f () {~\t:~}~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "type/p-on-a-name-that-is-nothing": {
+      "bash": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "-p: not found~nosuchzz_qq: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "nosuchzz_qq not found~st=1",
         "Status": 0,
         "TimedOut": false
       }
@@ -25206,6 +25590,38 @@
       },
       "zsh": {
         "Output": "unlimited~unlimited~unlimited",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "ulimit/one-row-of-the-table": {
+      "bash": {
+        "Output": "file size                   (blocks, -f) 12345~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "file size                   (blocks, -f) 12345~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "file size               (blocks, -f) 12345~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "file(blocks)         12345~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "file size (blocks)             (-f)  12345~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "-f: file size (blocks)              12345~st=0",
         "Status": 0,
         "TimedOut": false
       }

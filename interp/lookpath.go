@@ -279,3 +279,29 @@ func (r *Runner) cannotRun(err error, how naming) int {
 	r.diagf("%s\n", Wording(format, how.fallback, name))
 	return 127
 }
+
+// lookPathAll is the search `type -a` makes: every runnable candidate on
+// PATH, in PATH order, duplicates and all — the shells that list them do not
+// deduplicate either. A name with a slash is its own answer, the same rule
+// the single search applies.
+func (r *Runner) lookPathAll(name string) []string {
+	if strings.ContainsRune(name, '/') {
+		full := r.absolute(name)
+		if r.runnable(full) == nil {
+			return []string{full}
+		}
+		return nil
+	}
+	var hits []string
+	path, _ := r.getVar("PATH")
+	for _, dir := range r.pathElements(path) {
+		if dir == "" {
+			dir = "."
+		}
+		candidate := r.absolute(filepath.Join(dir, name))
+		if r.runnable(candidate) == nil {
+			hits = append(hits, candidate)
+		}
+	}
+	return hits
+}

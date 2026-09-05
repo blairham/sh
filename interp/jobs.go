@@ -202,9 +202,12 @@ func (r *Runner) FinishedJobNotices() []string {
 // With no arguments it waits for all of them and reports 0, which is what
 // every shell in the panel does regardless of how the jobs exited.
 func biWait(r *Runner, _ context.Context, args []string) int {
-	args, code := r.waitOptions(args)
+	args, next, code := r.waitOptions(args)
 	if code != 0 {
 		return code
+	}
+	if next {
+		return r.waitNext()
 	}
 	if len(args) == 0 {
 		for _, j := range r.jobs {
@@ -215,6 +218,13 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 	}
 	last := 0
 	for _, a := range args {
+		if strings.HasPrefix(a, "%") {
+			last = r.waitJobSpec(a)
+			if r.unspecified {
+				return r.status
+			}
+			continue
+		}
 		pid, ok := atoi(a)
 		if !ok {
 			return r.waitBadJob(a)
@@ -246,32 +256,88 @@ func biWait(r *Runner, _ context.Context, args []string) int {
 // an option they do not know, in the words and with the usage line their bad
 // options already use.
 //
-// Ending them at `--` is unanimous. The letters the three *do* have — bash's
-// -n, -f and -p, ksh93's --version — are not implemented here, and say so
-// rather than being taken as a job and reported as missing.
-func (r *Runner) waitOptions(args []string) ([]string, int) {
-	// One step rather than a loop: every option here is the whole of what
-	// this builtin was asked, so nothing is read twice. `--` hands back what
-	// follows it and the rest return.
+// Ending them at `--` is unanimous. `-n` — wait for whichever job finishes
+// first — is one dialect's and implemented; its remaining letters (-f, -p)
+// and ksh93's --version are not, and say so rather than being taken as a job
+// and reported as missing.
+func (r *Runner) waitOptions(args []string) (rest []string, next bool, code int) {
 	if len(args) > 0 {
 		a := args[0]
 		if len(a) < 2 || a[0] != '-' {
-			return args, 0
+			return args, false, 0
 		}
 		if a == "--" {
-			return args[1:], 0
+			return args[1:], false, 0
+		}
+		if a == "-n" {
+			// Asked on the exact word: in the shell with no options at all
+			// the same word is a job spec, and the axis below decides that.
+			if r.ask(r.sem().WaitNWaitsForTheNextJob, "`wait -n` waiting for the next job to finish") {
+				return args[1:], true, 0
+			}
+			if r.unspecified {
+				return nil, false, 2
+			}
 		}
 		if !r.ask(r.sem().WaitReadsOptions, "`wait -x` read as an option rather than as a job") {
-			return args, 0
+			return args, false, 0
 		}
 		if r.unspecified {
-			return nil, 2
+			return nil, false, 2
 		}
-		// `wait` has no options this shell implements, so every letter is
-		// either one the dialect has and we lack, or unknown.
-		return nil, r.refuseOption("wait", a, "")
+		// Past -n, `wait` has no options this shell implements, so every
+		// letter is either one the dialect has and we lack, or unknown.
+		return nil, false, r.refuseOption("wait", a, "")
 	}
-	return args, 0
+	return args, false, 0
+}
+
+// waitNext is `wait -n`: block until whichever job finishes first and report
+// its status, forgetting it the way a plain wait for it would. With nothing
+// to wait for the answer is a missing command's 127 and no words at all —
+// measured in the one shell with the letter.
+func (r *Runner) waitNext() int {
+	if len(r.jobs) == 0 {
+		return 127
+	}
+	first := make(chan *Job, len(r.jobs))
+	for _, j := range r.jobs {
+		go func(j *Job) {
+			j.Wait()
+			first <- j
+		}(j)
+	}
+	j := <-first
+	st := j.Status
+	r.Forget(j)
+	return st
+}
+
+// waitJobSpec waits for the job a `%` spec names.
+func (r *Runner) waitJobSpec(spec string) int {
+	j, code := r.findJobQuietly(spec)
+	switch code {
+	case jobFound:
+		st := j.Wait()
+		r.Forget(j)
+		return st
+	case jobSpecAmbiguous:
+		r.diagf("%s\n", Wording(r.diag().AmbiguousJobSpec,
+			"%[1]s: %[2]s: ambiguous job spec", "wait", strings.TrimPrefix(spec, "%")))
+		return orDefault(r.diag().WaitNoSuchJobStatus, 127)
+	case jobSpecUnanswered:
+		return r.status
+	}
+	// A spec that names nothing: said and failed, or — in one shell —
+	// nothing at all and 0.
+	if !r.ask(r.sem().WaitReportsAMissingJob, "`wait` reporting a job spec that names nothing") {
+		if r.unspecified {
+			return r.status
+		}
+		return 0
+	}
+	r.diagf("%s\n", Wording(r.diag().WaitNoSuchJob, "wait: %[1]s: no such job", spec))
+	return orDefault(r.diag().WaitNoSuchJobStatus, 127)
 }
 
 // waitBadJob is an operand that names neither a process nor a job.

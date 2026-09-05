@@ -127,6 +127,12 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskTakesTheStickyLetter = interp.No
 	s.ShiftReadsOptions = interp.No
 	s.WaitReadsOptions = interp.Yes
+	// Only numbers, `%%`, `%+` and `%-` resolve here: a `%name` is a job
+	// that is not there. `wait` complains about it with its own wording and
+	// status, and there is no -n and no disown at all.
+	s.JobSpecsByName = interp.No
+	s.WaitReportsAMissingJob = interp.Yes
+	s.WaitNWaitsForTheNextJob = interp.No
 	s.CommandRejectsUnknownOption = interp.Yes
 	s.GetoptsRejectsUnknownOption = interp.No
 	s.ShiftCountIsArithmetic = interp.No
@@ -341,6 +347,9 @@ func Diagnostics() interp.Diagnostics {
 		ShiftBadNumber:        "shift: Illegal number: %[1]s",
 		WaitBadJob:            "wait: Illegal number: %[1]s",
 		WaitBadJobStatus:      2,
+		WaitNoSuchJob:         "wait: No such job: %[1]s",
+		WaitNoSuchJobStatus:   2,
+		KillNoSuchJob:         "kill: No such job: %[1]s",
 		LocalOutsideAFunction: "local: not in a function",
 		// One wording for all three, naming the part in front of any `=`.
 		BuiltinBadName: map[string]string{
@@ -356,7 +365,20 @@ func Diagnostics() interp.Diagnostics {
 		BuiltinBadNameNumeric: map[string]string{
 			"local": "%[2]s: bad variable name",
 		},
-		BuiltinBadNameStatus:    2,
+		BuiltinBadNameStatus: 2,
+		// `ulimit -a`, row for row as the engine writes it.
+		UlimitListing: []interp.UlimitListingRow{
+			{Prefix: "time(seconds)        ", Res: interp.ResourceCPUTime, Scale: 1},
+			{Prefix: "file(blocks)         ", Res: interp.ResourceFileSize},
+			{Prefix: "data(kbytes)         ", Res: interp.ResourceData, Scale: 1024},
+			{Prefix: "stack(kbytes)        ", Res: interp.ResourceStack, Scale: 1024},
+			{Prefix: "coredump(blocks)     ", Res: interp.ResourceCore},
+			{Prefix: "memory(kbytes)       ", Res: interp.ResourceResidentSet, Scale: 1024},
+			{Prefix: "locked memory(kbytes) ", Res: interp.ResourceLockedMemory, Scale: 1024},
+			{Prefix: "process              ", Res: interp.ResourceProcesses, Scale: 1},
+			{Prefix: "nofiles              ", Res: interp.ResourceOpenFiles, Scale: 1},
+			{Prefix: "vmemory(kbytes)      ", Res: interp.ResourceAddressSpace, Scale: 1024},
+		},
 		PrintfUsage:             "printf: usage: printf format [arg ...]",
 		TrapBadSignal:           "trap: %[1]s: bad trap",
 		TrapBadSignalUnprefixed: true,
@@ -412,6 +434,9 @@ func Apply(r *interp.Runner) {
 	// because three of the four do; the one that does not takes it away, the
 	// same way ksh93 takes `local` away.
 	r.Unregister("typeset")
+	// dash has no disown: real process groups or not, the name is simply
+	// not a builtin there and resolves like any other missing command.
+	r.Unregister("disown")
 	// And no `let`. The other three evaluate arithmetic with it; dash has
 	// only `$(( ))`, and reports `let: not found` like any other command it
 	// has never heard of.

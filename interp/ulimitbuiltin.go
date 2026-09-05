@@ -22,10 +22,71 @@ func init() {
 	builtins["ulimit"] = biUlimit
 }
 
+// UlimitListingRow is one line of `ulimit -a`, whose table no two shells lay
+// out alike: the labels, the order, which rows exist at all and what unit
+// each is counted in are all the dialect's. The prefix is everything before
+// the value, spacing included, so a row is the prefix and then the number.
+type UlimitListingRow struct {
+	// Prefix is the label column exactly as the engine writes it.
+	Prefix string
+	// Fixed, when non-empty, is the whole value: the rows about pipe and
+	// socket buffers, and the ones an engine lists as unsupported, are not
+	// resource limits and never move.
+	Fixed string
+	// Res and Scale are the live rows' inputs — the resource, and what one
+	// printed unit is worth, zero meaning the dialect's block unit.
+	Res   Resource
+	Scale int64
+}
+
+// ulimitListing is `ulimit -a`: every row the dialect lists, soft limits
+// unless -H asked for the hard ones — the same choice a single report makes.
+func (r *Runner) ulimitListing(hard bool) int {
+	rows := r.diag().UlimitListing
+	if len(rows) == 0 {
+		r.diagf("how `ulimit -a` is laid out: the shells disagree here and no dialect was chosen\n")
+		r.status = 2
+		r.unspecified = true
+		return 2
+	}
+	blockUnit := int64(512)
+	if r.ask(r.sem().UlimitBlockIsKilobyte, "`ulimit -f` counting in 1024-byte blocks") {
+		blockUnit = kilobyte
+	}
+	if r.unspecified {
+		return r.status
+	}
+	for _, row := range rows {
+		if row.Fixed != "" {
+			r.printf("%s%s\n", row.Prefix, row.Fixed)
+			continue
+		}
+		unit := row.Scale
+		if unit == 0 {
+			unit = blockUnit
+		}
+		soft, max, err := r.GetRlimit(row.Res)
+		if err != nil {
+			r.diagf("ulimit: %v\n", err)
+			return 1
+		}
+		v := soft
+		if hard {
+			v = max
+		}
+		if v == RlimitInfinity {
+			r.printf("%sunlimited\n", row.Prefix)
+			continue
+		}
+		r.printf("%s%d\n", row.Prefix, v/unit)
+	}
+	return 0
+}
+
 func biUlimit(r *Runner, _ context.Context, args []string) int {
 	// `-H` and `-S` choose which limit is read or written; without either,
 	// reading gives the soft one and writing sets both. Unanimous.
-	var hard, soft bool
+	var hard, soft, all bool
 	// The default resource is `-f`, which is why bare `ulimit` reports the
 	// file-size limit rather than a summary.
 	res, scale := ResourceFileSize, int64(0)
@@ -41,6 +102,10 @@ func biUlimit(r *Runner, _ context.Context, args []string) int {
 				hard = true
 			case 'S':
 				soft = true
+			case 'a':
+				// The whole table, in the dialect's own layout — see
+				// UlimitListingRow. All four shells have the letter.
+				all = true
 			default:
 				var found bool
 				res, scale, found = lookupResource(c)
@@ -56,6 +121,9 @@ func biUlimit(r *Runner, _ context.Context, args []string) int {
 	if r.GetRlimit == nil || r.SetRlimit == nil {
 		r.diagf("ulimit: this shell was not given any limits to read or change\n")
 		return 2
+	}
+	if all {
+		return r.ulimitListing(hard)
 	}
 	unit := scale
 	if unit == 0 {

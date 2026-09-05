@@ -97,6 +97,14 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskTakesTheStickyLetter = interp.Yes
 	s.ShiftReadsOptions = interp.No
 	s.WaitReadsOptions = interp.Yes
+	// Job specs by command text, with a second match refused as ambiguous;
+	// `wait` complains about a spec that names nothing, has -n, and
+	// `disown` takes the job out of the table.
+	s.JobSpecsByName = interp.Yes
+	s.AmbiguousJobNameIsRefused = interp.Yes
+	s.WaitReportsAMissingJob = interp.Yes
+	s.WaitNWaitsForTheNextJob = interp.Yes
+	s.DisownRemovesTheJob = interp.Yes
 	s.CommandRejectsUnknownOption = interp.Yes
 	s.GetoptsRejectsUnknownOption = interp.Yes
 	s.ShiftCountIsArithmetic = interp.No
@@ -274,6 +282,13 @@ func Semantics() interp.Semantics {
 	// The one shell in the panel with `-t` at all: one bare word per name,
 	// and silence with status 1 for a name that is nothing.
 	s.TypeNamesTheKindWithDashT = interp.Yes
+	// The rest of type's letters, all implemented here: -a for every
+	// resolution, -p speaking only where the plain answer would have been a
+	// file, -P forcing the PATH search, -f leaving functions out.
+	s.TypeOptions = "afpPt"
+	s.TypePSearchesPathPastTheShell = interp.No
+	s.TypePathAnswerIsASentence = interp.No
+	s.TypeFSaysTheFunctionBack = interp.No
 
 	// The letters `declare` and `local` read — one set under two names
 	// here, with `-F` naming functions rather than setting a float's
@@ -424,20 +439,42 @@ func Diagnostics() interp.Diagnostics {
 		PrintfBadOptionShowsUsage:   true,
 		LetNoExpression:             "let: expression expected",
 		UlimitBadOption:             "ulimit: -%[1]s: invalid option",
-		UlimitBadNumber:             "ulimit: %[1]s: invalid number",
-		BuiltinBadOption:            "%[1]s: %[2]s: invalid option",
-		WaitBadJob:                  "wait: `%[1]s': not a pid or valid job spec",
-		WaitBadJobStatus:            1,
-		WaitNotOurChild:             "wait: pid %[1]d is not a child of this shell",
+		// `ulimit -a`, row for row as the engine writes it. The pipe row is
+		// not a resource limit and never moves; its value is this machine
+		// family's constant.
+		UlimitListing: []interp.UlimitListingRow{
+			{Prefix: "core file size              (blocks, -c) ", Res: interp.ResourceCore},
+			{Prefix: "data seg size               (kbytes, -d) ", Res: interp.ResourceData, Scale: 1024},
+			{Prefix: "file size                   (blocks, -f) ", Res: interp.ResourceFileSize},
+			{Prefix: "max locked memory           (kbytes, -l) ", Res: interp.ResourceLockedMemory, Scale: 1024},
+			{Prefix: "max memory size             (kbytes, -m) ", Res: interp.ResourceResidentSet, Scale: 1024},
+			{Prefix: "open files                          (-n) ", Res: interp.ResourceOpenFiles, Scale: 1},
+			{Prefix: "pipe size                (512 bytes, -p) ", Fixed: "1"},
+			{Prefix: "stack size                  (kbytes, -s) ", Res: interp.ResourceStack, Scale: 1024},
+			{Prefix: "cpu time                   (seconds, -t) ", Res: interp.ResourceCPUTime, Scale: 1},
+			{Prefix: "max user processes                  (-u) ", Res: interp.ResourceProcesses, Scale: 1},
+			{Prefix: "virtual memory              (kbytes, -v) ", Res: interp.ResourceAddressSpace, Scale: 1024},
+		},
+		UlimitBadNumber:    "ulimit: %[1]s: invalid number",
+		BuiltinBadOption:   "%[1]s: %[2]s: invalid option",
+		WaitBadJob:         "wait: `%[1]s': not a pid or valid job spec",
+		WaitNoSuchJob:      "wait: %[1]s: no such job",
+		AmbiguousJobSpec:   "%[1]s: %[2]s: ambiguous job spec",
+		KillNoSuchJob:      "kill: %[1]s: no such job",
+		DisownNoCurrentJob: "disown: current: no such job",
+		WaitBadJobStatus:   1,
+		WaitNotOurChild:    "wait: pid %[1]d is not a child of this shell",
 		UnimplementedOptionLetters: map[string]string{
 			// Options these builtins have here and this shell does not.
-			"wait": "nfp",
+			"wait": "fp",
+			// disown's sweepers: -a for every job, -h for HUP shielding
+			// alone, -r for the running ones.
+			"disown": "ahr",
 			// What is left of read's letters: readline editing and the text
 			// -i seeds it with — about a line editor this runner does not
 			// hold. The -p prompt is implemented: parsed always, printed
 			// only to a terminal, which is the measured whole of it.
 			"read": "Eei",
-			"type": "afpP",
 			// The nameref and trace attributes, under both of the builtin's
 			// names — and `local`'s extras: the same two, `-I` inheritance,
 			// and the function letters, which this shell takes and ignores

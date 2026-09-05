@@ -92,7 +92,7 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 		// `type`'s sentence with `command`'s name on the complaint: the
 		// found wordings are shared and only the missing one is this
 		// builtin's own — see Diagnostics.CommandVNotFound.
-		return r.describeName(args[0], false,
+		return r.describeName(args[0], false, false,
 			Wording(r.diag().CommandVNotFound, "command: %[1]s: not found", args[0]))
 	}
 	if verbose {

@@ -22,6 +22,59 @@ func init() {
 	builtins["jobs"] = biJobs
 	builtins["fg"] = biFg
 	builtins["bg"] = biBg
+	builtins["disown"] = biDisown
+}
+
+// biDisown is the shell letting go of a job.
+//
+// What letting go *means* is the axis: two shells take the job out of the
+// table, so `jobs` no longer lists it, and one only shields it from the HUP
+// an exiting interactive shell would send — a signal this engine never
+// forwards — so its listing keeps the job. dash has no disown at all, and
+// unregisters it. See Semantics.DisownRemovesTheJob.
+func biDisown(r *Runner, _ context.Context, args []string) int {
+	// The letters the dialects have — bash's -a, -h, -r — are not
+	// implemented; they ride UnimplementedOptionLetters and are refused by
+	// name.
+	if len(args) > 0 && len(args[0]) > 1 && args[0][0] == '-' {
+		if args[0] == "--" {
+			args = args[1:]
+		} else {
+			return r.refuseOption("disown", args[0], "")
+		}
+	}
+	var jobs []*Job
+	if len(args) == 0 {
+		// The current job, and with none the complaint is the dialect's —
+		// or, in one shell, a bare failing status. Empty means silence: the
+		// engine measured saying nothing says nothing here on purpose.
+		if r.lastJob == nil {
+			if w := r.diag().DisownNoCurrentJob; w != "" {
+				r.diagf("%s\n", w)
+			}
+			return 1
+		}
+		jobs = []*Job{r.lastJob}
+	}
+	for _, a := range args {
+		j, code := r.findJob(a, "disown")
+		if code != 0 {
+			return code
+		}
+		jobs = append(jobs, j)
+	}
+	if !r.ask(r.sem().DisownRemovesTheJob, "`disown` taking the job out of the `jobs` table") {
+		if r.unspecified {
+			return r.status
+		}
+		// Shielded from a HUP this engine never sends: nothing to do, and
+		// saying so would be inventing output.
+		return 0
+	}
+	for _, j := range jobs {
+		r.Forget(j)
+	}
+	return 0
 }
 
 func biJobs(r *Runner, _ context.Context, args []string) int {
@@ -280,14 +333,22 @@ func (r *Runner) resume(args []string, name string) (*Job, int) {
 //
 // `%1` by number, `%%` and `%+` for the current one, `%-` for the one before
 // it, and a bare number for the same. Unanimous across the panel, which is why
-// none of it is a dialect question.
+// none of it is a dialect question. `%name` and `%?text` resolve by the
+// command's text, and are questions — see JobSpecsByName.
 func (r *Runner) findJob(spec, name string) (*Job, int) {
 	j, code := r.findJobQuietly(spec)
-	if code != 0 {
-		r.diagf("%s\n", Wording(r.diag().NoSuchJob, "%[1]s: %[2]s: no such job", name, spec))
+	switch code {
+	case jobFound:
+		return j, 0
+	case jobSpecAmbiguous:
+		r.diagf("%s\n", Wording(r.diag().AmbiguousJobSpec,
+			"%[1]s: %[2]s: ambiguous job spec", name, strings.TrimPrefix(spec, "%")))
 		return nil, 1
+	case jobSpecUnanswered:
+		return nil, r.status
 	}
-	return j, 0
+	r.diagf("%s\n", Wording(r.diag().NoSuchJob, "%[1]s: %[2]s: no such job", name, spec))
+	return nil, 1
 }
 
 // signalJob sends to the job's process group rather than to the one process.
@@ -312,6 +373,16 @@ func (r *Runner) signalJob(j *Job, sig syscall.Signal) error {
 // a process, or a shell with no way to send to a group.
 var errNoJobProcess = errors.New("this job has no process to resume")
 
+// What a job lookup came back with. Codes rather than a boolean because an
+// ambiguous name and a missing one are different complaints, and an
+// unanswered axis is neither.
+const (
+	jobFound = iota
+	jobMissing
+	jobSpecAmbiguous
+	jobSpecUnanswered
+)
+
 // findJobQuietly is findJob without the complaint, for a caller that words its
 // own — `kill %9` is `kill`'s error to report, not this one's.
 func (r *Runner) findJobQuietly(spec string) (*Job, int) {
@@ -319,18 +390,58 @@ func (r *Runner) findJobQuietly(spec string) (*Job, int) {
 	switch text {
 	case "", "%", "+":
 		if r.lastJob == nil {
-			return nil, 1
+			return nil, jobMissing
 		}
-		return r.lastJob, 0
+		return r.lastJob, jobFound
 	case "-":
 		if len(r.jobs) < 2 {
-			return nil, 1
+			return nil, jobMissing
 		}
-		return r.jobs[len(r.jobs)-2], 0
+		return r.jobs[len(r.jobs)-2], jobFound
 	}
 	n, ok := atoi(text)
-	if !ok || n < 1 || n > len(r.jobs) {
-		return nil, 1
+	if !ok {
+		return r.findJobByName(text)
 	}
-	return r.jobs[n-1], 0
+	if n < 1 || n > len(r.jobs) {
+		return nil, jobMissing
+	}
+	return r.jobs[n-1], jobFound
+}
+
+// findJobByName resolves `%name` — the job whose command begins with the
+// text — and `%?text`, the one whose command contains it.
+func (r *Runner) findJobByName(text string) (*Job, int) {
+	if !r.ask(r.sem().JobSpecsByName, "a job named by its command — `%name`") {
+		if r.unspecified {
+			return nil, jobSpecUnanswered
+		}
+		// Every such spec is a job that is not there, which is the measured
+		// answer of the shell that resolves only numbers here.
+		return nil, jobMissing
+	}
+	contains := strings.HasPrefix(text, "?")
+	pattern := strings.TrimPrefix(text, "?")
+	var matches []*Job
+	for _, j := range r.jobs {
+		if (contains && strings.Contains(j.Command, pattern)) ||
+			(!contains && strings.HasPrefix(j.Command, pattern)) {
+			matches = append(matches, j)
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return nil, jobMissing
+	case 1:
+		return matches[0], jobFound
+	}
+	// A second match is the disagreement: refused as ambiguous, or the most
+	// recent match taken.
+	if r.ask(r.sem().AmbiguousJobNameIsRefused, "`%name` matching more than one job being refused") {
+		return nil, jobSpecAmbiguous
+	}
+	if r.unspecified {
+		return nil, jobSpecUnanswered
+	}
+	return matches[len(matches)-1], jobFound
 }

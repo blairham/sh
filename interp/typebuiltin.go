@@ -22,58 +22,81 @@ func biType(r *Runner, _ context.Context, args []string) int {
 	// all and reads it as a name, which is why this is asked rather than
 	// assumed: `type -- ls` prints `--: not found` there and then goes on to
 	// answer about `ls`.
-	names, kind, code := r.typeOperands(args)
+	names, m, code := r.typeOperands(args)
 	if code != 0 {
 		return code
 	}
 	status := 0
 	for _, name := range names {
-		if bad := r.typeOne(name, kind); bad != 0 {
+		if bad := r.typeOneMode(name, m); bad != 0 {
 			status = bad
 		}
 	}
 	return status
 }
 
-// typeOperands separates the options from the names, and says whether `-t`
-// asked for the bare kind instead of the sentence.
-func (r *Runner) typeOperands(args []string) (names []string, kind bool, code int) {
+// typeMode is what the option letters asked for.
+type typeMode struct {
+	// kind is `-t`: the bare kind word instead of the sentence.
+	kind bool
+	// all is `-a`: every resolution the name has, PATH hits included.
+	all bool
+	// path is `-p`: the path alone — with two axes inside it, see
+	// TypePSearchesPathPastTheShell and TypePathAnswerIsASentence.
+	path bool
+	// pathSearch is `-P`: the PATH search whatever the shell would say,
+	// which one dialect alone spells.
+	pathSearch bool
+	// noFuncs is `-f`: functions left out of the search — or, in the
+	// dialect where TypeFSaysTheFunctionBack answers yes, printed whole.
+	noFuncs bool
+}
+
+// typeOperands separates the options from the names.
+func (r *Runner) typeOperands(args []string) (names []string, m typeMode, code int) {
 	// Asked only where there is a `--` to decide about. `type ls` is the
 	// same in all four, and refusing it over a question nothing turned on
 	// would be refusing to answer.
 	if len(args) == 0 || len(args[0]) < 2 || args[0][0] != '-' {
-		return args, false, 0
+		return args, m, 0
 	}
 	if !r.ask(r.sem().TypeEndsOptionsWithDashDash, "`type --` ending the options") {
 		if r.unspecified {
-			return nil, false, 2
+			return nil, m, 2
 		}
 		// No options anywhere, so every operand is a name — `--` included.
-		return args, false, 0
+		return args, m, 0
 	}
 	if args[0] == "--" {
-		return args[1:], false, 0
+		return args[1:], m, 0
 	}
-	// `-t` is the one option implemented, so the letters this shell knows
-	// are `t` or nothing, and which is the dialect's answer. Asked only
-	// where a `t` rides in the option words: any other letter is refused
-	// identically whichever way the answer goes — the ones the dialect
-	// really has are named as missing and the rest as unknown — so the
-	// question would decide nothing there.
-	known := ""
-	if typeOptionWordsCarryT(args) {
+	// The letters are the dialect's — TypeOptions, plus `-t` where the axis
+	// that predates the optstring answers for it. The `t` question is asked
+	// only where a `t` rides in the option words: any other letter is
+	// refused identically whichever way the answer goes — the ones the
+	// dialect really has are named as missing and the rest as unknown — so
+	// the question would decide nothing there.
+	known := r.sem().TypeOptions
+	if !strings.ContainsRune(known, 't') && typeOptionWordsCarryT(args) {
 		if r.ask(r.sem().TypeNamesTheKindWithDashT, "`type -t` naming the bare kind") {
-			known = "t"
+			known += "t"
 		}
 		if r.unspecified {
-			return nil, false, 2
+			return nil, m, 2
 		}
 	}
 	rest, opts, code := r.builtinOptions("type", args, known)
 	if code != 0 {
-		return nil, false, code
+		return nil, m, code
 	}
-	return rest, strings.ContainsRune(opts, 't'), 0
+	m = typeMode{
+		kind:       strings.ContainsRune(opts, 't'),
+		all:        strings.ContainsRune(opts, 'a'),
+		path:       strings.ContainsRune(opts, 'p'),
+		pathSearch: strings.ContainsRune(opts, 'P'),
+		noFuncs:    strings.ContainsRune(opts, 'f'),
+	}
+	return rest, m, 0
 }
 
 // typeOptionWordsCarryT says whether a `t` rides in the leading option words —
@@ -90,6 +113,36 @@ func typeOptionWordsCarryT(args []string) bool {
 	return false
 }
 
+// typeOneMode dispatches one name to the shape its letters asked for.
+func (r *Runner) typeOneMode(name string, m typeMode) int {
+	if m.all {
+		return r.typeAll(name, m)
+	}
+	if m.pathSearch {
+		return r.typeBarePath(name, m.kind)
+	}
+	if m.path {
+		return r.typePath(name, m)
+	}
+	if m.noFuncs {
+		if fn, ok := r.funcs[name]; ok {
+			// `-f` splits: two shells use it to leave functions out of the
+			// search, and one turns it around and *prints* the function —
+			// the definition alone, no sentence in front of it.
+			says := r.ask(r.sem().TypeFSaysTheFunctionBack, "`type -f` printing the function whole")
+			if r.unspecified {
+				return 2
+			}
+			if says {
+				r.printf("%s\n", r.listedFunction(name, fn))
+				return 0
+			}
+		}
+		return r.describeName(name, m.kind, true, r.typeNotFoundWording(name))
+	}
+	return r.typeOne(name, m.kind)
+}
+
 // typeOne accounts for one name — as a sentence, or as `-t`'s bare kind —
 // and reports a status if it could not.
 //
@@ -100,16 +153,150 @@ func typeOptionWordsCarryT(args []string) bool {
 // aliases expand is the parser's fact — see syntax.Dialect.ExpandAliases —
 // and the runner holds only the table.
 func (r *Runner) typeOne(name string, kind bool) int {
-	return r.describeName(name, kind,
-		Wording(r.diag().TypeNotFound, "type: %[1]s: not found", name))
+	return r.describeName(name, kind, false, r.typeNotFoundWording(name))
+}
+
+func (r *Runner) typeNotFoundWording(name string) string {
+	return Wording(r.diag().TypeNotFound, "type: %[1]s: not found", name)
+}
+
+// typePath is `-p`: the path alone. Which names it answers for, and in what
+// shape, are the two axes measured inside the letter.
+func (r *Runner) typePath(name string, m typeMode) int {
+	past := r.ask(r.sem().TypePSearchesPathPastTheShell, "`type -p` searching PATH past the shell's own answer")
+	if r.unspecified {
+		return 2
+	}
+	if !past {
+		// This engine's `-p` speaks only where the plain answer would have
+		// been a file: a function, builtin or keyword is silence and 0.
+		if _, ok := r.funcs[name]; ok && !m.noFuncs {
+			return 0
+		}
+		if _, ok := r.lookupBuiltin(name); ok {
+			return 0
+		}
+		if reservedWord(name) {
+			return 0
+		}
+	}
+	sentence := r.ask(r.sem().TypePathAnswerIsASentence, "`type -p` answering with a sentence")
+	if r.unspecified {
+		return 2
+	}
+	path, err := r.lookPath(name)
+	if err != nil {
+		if sentence {
+			return r.typeNotFound(m.kind, r.typeNotFoundWording(name))
+		}
+		// A miss is silence and the failing status in the bare-path shells.
+		return orDefault(r.diag().TypeNotFoundStatus, 1)
+	}
+	switch {
+	case m.kind:
+		r.printf("file\n")
+	case sentence:
+		r.printf("%s\n", Wording(r.diag().TypeExternal, "%[1]s is %[2]s", name, path))
+	default:
+		r.printf("%s\n", path)
+	}
+	return 0
+}
+
+// typeBarePath is `-P`: the PATH search whatever the shell would say, the
+// bare path or silence — one dialect's letter, so there is no second shape
+// to ask about.
+func (r *Runner) typeBarePath(name string, kind bool) int {
+	path, err := r.lookPath(name)
+	if err != nil {
+		return orDefault(r.diag().TypeNotFoundStatus, 1)
+	}
+	if kind {
+		r.printf("file\n")
+		return 0
+	}
+	r.printf("%s\n", path)
+	return 0
+}
+
+// typeAll is `-a`: every resolution the name has — the shell's own answer
+// and then every PATH hit, in PATH order, duplicates and all.
+func (r *Runner) typeAll(name string, m typeMode) int {
+	dg := r.diag()
+	found := false
+	if fn, ok := r.funcs[name]; ok && !m.noFuncs {
+		found = true
+		if m.kind {
+			r.printf("function\n")
+		} else {
+			shows := r.ask(r.sem().TypePrintsFunctionBody, "`type` printing a function's body")
+			if r.unspecified {
+				return 2
+			}
+			r.printf("%s\n", Wording(dg.TypeFunction, "%[1]s is a function", name))
+			if shows {
+				r.printf("%s\n", r.listedFunction(name, fn))
+			}
+		}
+	}
+	switch _, ok := r.lookupBuiltin(name); {
+	case ok:
+		found = true
+		if m.kind {
+			r.printf("builtin\n")
+		} else {
+			r.printf("%s\n", Wording(dg.TypeBuiltin, "%[1]s is a shell builtin", name))
+		}
+	case reservedWord(name):
+		found = true
+		if m.kind {
+			r.printf("keyword\n")
+		} else {
+			r.printf("%s\n", Wording(dg.TypeKeyword, "%[1]s is a shell keyword", name))
+		}
+	}
+	// The reserved-name guard the plain answer has, for the same reason;
+	// past it, the listing's file lines are worded the same way by every
+	// shell that has the letter — measured, and *not* this dialect's
+	// TypeExternal: the engine that calls a plain answer a tracked alias
+	// writes `ls is /bin/ls` here like the others.
+	if !r.reservedBuiltin(name) {
+		for _, path := range r.lookPathAll(name) {
+			found = true
+			if m.kind {
+				r.printf("file\n")
+			} else {
+				r.printf("%s is %s\n", name, path)
+			}
+		}
+	}
+	if found {
+		return 0
+	}
+	return r.typeNotFound(m.kind, r.typeNotFoundWording(name))
+}
+
+// typeNotFound is the tail every mode shares: the complaint — or `-t`'s
+// silence — and the dialect's status.
+func (r *Runner) typeNotFound(kind bool, notFound string) int {
+	dg := r.diag()
+	if kind {
+		return orDefault(dg.TypeNotFoundStatus, 1)
+	}
+	if dg.TypeNotFoundUnprefixed {
+		r.errf("%s\n", notFound)
+	} else {
+		r.diagf("%s\n", notFound)
+	}
+	return orDefault(dg.TypeNotFoundStatus, 1)
 }
 
 // describeName is the sentence itself, shared with `command -V`, which asks
 // `type`'s question with a complaint of its own for a name that is nothing —
 // the one line the two spell differently, so it arrives already worded.
-func (r *Runner) describeName(name string, kind bool, notFound string) int {
+func (r *Runner) describeName(name string, kind, skipFuncs bool, notFound string) int {
 	dg := r.diag()
-	if fn, ok := r.funcs[name]; ok {
+	if fn, ok := r.funcs[name]; ok && !skipFuncs {
 		if kind {
 			r.printf("function\n")
 			return 0

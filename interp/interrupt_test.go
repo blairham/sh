@@ -7,6 +7,7 @@ import (
 	"context"
 	"io"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 
@@ -18,6 +19,7 @@ import (
 // under test whatever shape it is, rather than after a command count that
 // differs from one shape to the next.
 type ticker struct {
+	mu      sync.Mutex
 	printed int
 	after   int
 	armed   bool
@@ -25,14 +27,22 @@ type ticker struct {
 
 func (k *ticker) register(r *Runner) {
 	r.Register("tick", func(r *Runner, _ context.Context, _ []string) int {
+		k.mu.Lock()
 		k.printed++
-		_, _ = io.WriteString(r.Out(), "tick\n")
-		if k.printed == k.after {
+		reached := k.printed == k.after
+		if reached {
 			k.armed = true
 		}
+		k.mu.Unlock()
+		// Written after the lock is dropped, and to the Runner's own stream:
+		// a background job holds a guarded copy of it, which is what makes
+		// two of these safe to run at once.
+		_, _ = io.WriteString(r.Out(), "tick\n")
 		return 0
 	})
 	r.TakeInterrupt = func() bool {
+		k.mu.Lock()
+		defer k.mu.Unlock()
 		if !k.armed {
 			return false
 		}
@@ -139,9 +149,27 @@ func TestACommandKilledByAnInterruptGivesUpTheLine(t *testing.T) {
 // asking the shell to stop.
 func TestACommandKilledBySomethingElseDoesNot(t *testing.T) {
 	f := &fakeJobs{waits: []Wait{{Signal: syscall.SIGTERM, Killed: true}}}
-	out, _, _ := jobSession(t, f, echoCmd+"\necho after", true, func(*Semantics, *Diagnostics) {})
+	out, _, _ := jobSession(t, f, echoCmd+"; echo after", true, func(*Semantics, *Diagnostics) {})
 	if !strings.Contains(out, "after") {
 		t.Errorf("printed %q, want the line to have gone on", out)
+	}
+}
+
+// A job put back in front is a foreground command again, so an interrupt ends
+// its line the same way — and says what ended it, which is what the prompt
+// reads to start on a line of its own. `fg` had neither: it forgot the job and
+// reported a status, and the next prompt landed on the `^C`.
+func TestAnInterruptedFgGivesUpTheLine(t *testing.T) {
+	f := &fakeJobs{waits: []Wait{stopped, {Signal: syscall.SIGINT, Killed: true}}}
+	out, st, r := jobSession(t, f, echoCmd+"\nfg; echo after", true, func(*Semantics, *Diagnostics) {})
+	if strings.Contains(out, "after") {
+		t.Errorf("printed %q, want the rest of the line given up", out)
+	}
+	if want := 128 + int(syscall.SIGINT); st != want {
+		t.Errorf("status = %d, want %d", st, want)
+	}
+	if !r.LastCommandWasInterrupted() {
+		t.Error("the shell does not know the line was interrupted, so the prompt lands on the ^C")
 	}
 }
 
@@ -159,6 +187,8 @@ func TestAStopEndsTheLoopsItIsInside(t *testing.T) {
 	}{
 		{"inside a loop", "for i in 1 2 3; do echo tick; " + echoCmd + "; done; echo after", 1},
 		{"inside nested loops", "for i in 1 2; do for j in 1 2; do echo tick; " + echoCmd + "; done; done; echo after", 1},
+		{"inside a while loop", "i=0; while [ $i -lt 3 ]; do i=$((i+1)); echo tick; " + echoCmd + "; done; echo after", 1},
+		{"inside a C-style loop", "for ((i = 0; i < 3; i++)); do echo tick; " + echoCmd + "; done; echo after", 1},
 		{"not in a loop at all", "echo tick; " + echoCmd + "; echo tick; echo after", 2},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -172,6 +202,51 @@ func TestAStopEndsTheLoopsItIsInside(t *testing.T) {
 				t.Errorf("printed %q, want the rest of the line to have run", out)
 			}
 		})
+	}
+}
+
+// A background job runs on a clone of this Runner, and must not answer the
+// question the foreground is about to ask: an interrupt taken there is one the
+// person typing never sees, and the line they meant to stop carries on.
+//
+// `wait` is what makes this a fact rather than a race. The job's second
+// command asks while the shell is blocked, so a clone that answered has
+// answered by the time the foreground looks.
+func TestABackgroundJobDoesNotTakeTheInterrupt(t *testing.T) {
+	out, _, _ := interruptedRun(t, "{ tick; :; } & wait; tick; echo after", 1)
+	if strings.Contains(out, "after") {
+		t.Errorf("printed %q — the background job took the interrupt", out)
+	}
+	if got := strings.Count(out, "tick"); got != 1 {
+		t.Errorf("printed %q — %d ticks, want the one the job printed", out, got)
+	}
+}
+
+// An interrupt taken at the *first* command of a line drops the rest of it
+// too.
+//
+// Giving up a line means naming the line to give up, and the number is
+// recorded as each command is reached — so an interrupt read before that
+// happened named line zero, matched no statement, and let everything after it
+// run as though nothing had happened. Found by the background-job test above,
+// which is the only shape where the arrival lands that early.
+func TestAnInterruptAtTheFirstCommandDropsTheRestOfTheLine(t *testing.T) {
+	f := &fakeJobs{waits: []Wait{{Status: 0}}}
+	out, st, _ := jobSessionWith(t, f, "echo one; echo after", true, func(r *Runner) {
+		asked := false
+		r.TakeInterrupt = func() bool {
+			if asked {
+				return false
+			}
+			asked = true
+			return true
+		}
+	})
+	if out != "" {
+		t.Errorf("printed %q, want nothing at all", out)
+	}
+	if want := 128 + int(syscall.SIGINT); st != want {
+		t.Errorf("status = %d, want %d", st, want)
 	}
 }
 

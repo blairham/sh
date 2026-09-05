@@ -1702,12 +1702,6 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 	// here rather than beside each assignment to status, because this is the
 	// one door every command goes through.
 	r.diedOfSig = 0
-	// And the same door is where an interrupt has to be noticed, because for
-	// a loop of the shell's own commands there is no other: nothing in `while
-	// :; do echo tick; done` blocks, waits or returns to anywhere else.
-	if r.takeInterrupt() {
-		return nil
-	}
 	if r.noexec {
 		// `set -n` — commands are read and never executed, and nothing turns
 		// it back off: even `set +n` is a command. Syntax errors still
@@ -1727,6 +1721,20 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		// the difference; an embedder building a tree by hand can, and this
 		// package is a library.
 		r.line = r.lineOf(c.Pos())
+	}
+	// And this door is where an interrupt has to be noticed, because for a
+	// loop of the shell's own commands there is no other: nothing in `while
+	// :; do echo tick; done` blocks, waits or returns to anywhere else.
+	//
+	// *After* the line is recorded, and that is not tidiness. Giving up the
+	// line means naming the line to give up, and on the first command of a
+	// chunk the number is still zero — so an interrupt taken there matched no
+	// statement, and everything after it on the line ran as though nothing
+	// had happened.
+	if r.takeInterrupt() {
+		return nil
+	}
+	if c != nil {
 		// And what the command *is*, for the one message that says a
 		// command back rather than naming it: a signal that ends one is
 		// reported with the command written out.

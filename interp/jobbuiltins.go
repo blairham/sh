@@ -494,6 +494,16 @@ func biFg(r *Runner, _ context.Context, args []string) int {
 		return 1
 	}
 	status, stopped := r.waitResult(w)
+	if w.Killed {
+		// What ended it, for the same two readers `runWatched` tells: the
+		// prompt starts a fresh line after the `^C` the terminal echoed, and
+		// an interrupt gives up the line. A job put back in front is a
+		// foreground command again, so it answers both the same way.
+		r.diedOfSig = w.Signal
+		if w.Signal == syscall.SIGINT && r.Interactive {
+			defer r.abandonForInterrupt()
+		}
+	}
 	if stopped {
 		// Stopped again, so it stays a job rather than being forgotten — and
 		// says so, exactly as the first ^Z did. It is the current job again

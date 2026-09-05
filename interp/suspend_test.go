@@ -45,6 +45,9 @@ func jobSessionShaped(t *testing.T, f *fakeJobs, src string, jobControl bool, sh
 	sem.JobsListFinishedJobs = Yes
 	sem.JobsShowBackgroundCommand = Yes
 	sem.StoppedJobsHoldTheExit = Yes
+	// A `&` job in one of these is scaffolding rather than the subject, so the
+	// announcement is answered here and not left to complain.
+	sem.AnnouncesBackgroundJob = No
 	dg := Diagnostics{}
 	shape(&sem, &dg)
 	r := newTestRunner(t, &Runner{

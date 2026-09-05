@@ -111,6 +111,31 @@ type Case struct {
 	// actually ran, which a second hand-kept copy would not.
 	Stdin string
 
+	// Env are environment entries added to the fixed four every case gets,
+	// in `NAME=value` form, and handed to both sides of a comparison.
+	//
+	// The environment is a **startup input** and not only a place variables
+	// live: a shell reads names out of it before the first line runs, and
+	// what it finds there changes what every command afterwards does. That is
+	// the class of behavior this exists for — an inherited list of options, a
+	// file to source before the script — and until now the corpus could not
+	// ask about it at all, because the harness hands every case the same four
+	// entries and a snippet cannot put anything in the environment of the
+	// shell that is already running it.
+	//
+	// The base four stay: a case adds to them rather than replacing them, so
+	// no case can quietly drop the PATH and HOME that keep the record from
+	// depending on whose machine produced it. An entry naming one of the four
+	// overrides it, which is what execve does with a duplicate and is the
+	// only reading that lets a case ask about HOME.
+	//
+	// ArgScript is honored in a value, wherever it appears, exactly as it is
+	// in Args and Stdin — which is what lets a case name a *file* to be read
+	// at startup without spelling its path, since the path is a scratch
+	// directory this run invented. The file holds the Snippet, and the case's
+	// Args then say what the shell is to run instead.
+	Env []string
+
 	// GradedOnRefusal grades a case on the fact that the shell said no,
 	// rather than on the words it said no in.
 	//
@@ -962,6 +987,36 @@ var Corpus = []Case{
 		ID: "core/a-short-loop-body-is-one-command", Category: "command language", SyntaxError: true,
 		Snippet: `i=0; while (( i < 2 )) echo $((i++)); echo end`,
 		Why:     "the body of a short loop need not be a brace group, and it is exactly one command: the `; echo end` after it is outside the loop, so `end` prints once rather than per iteration. A second command inside would need a separator, and a separator there is the enclosing list's",
+	},
+	{
+		ID: "core/two-commands-need-a-separator-between-them", Category: "command language", SyntaxError: true,
+		Snippet: `(echo a) echo b`,
+		Why:     "the list production's separator is required, and this is the shortest text that shows it. Every shell in the panel names the second command's word and refuses the line; the reading that takes it is two statements, which would print a and b — a *different program*, so the wrong answer here is silent rather than noisy. Nothing shows the rule until a compound is written, because a simple command's words absorb whatever follows and `true echo x` is one command with an argument",
+	},
+	{
+		ID: "core/a-compound-does-not-absorb-the-word-after-it", Category: "command language", SyntaxError: true,
+		Snippet: `echo one; { :; } echo x`,
+		Why:     "the same rule with a statement in front of it, so that the refusal cannot be a property of the line's first command. `echo one` never runs either: the panel parses the whole `-c` string before running any of it, so a failure anywhere in it discards everything. The construct is a brace group here rather than a subshell to show that the rule is about the *list* and not about parentheses",
+	},
+	{
+		ID: "core/a-separator-is-needed-after-a-redirected-compound", Category: "command language", SyntaxError: true,
+		Snippet: `{ :; } 2>/dev/null echo b`,
+		Why:     "a redirection after a compound command belongs to the compound and does not reopen it, so a word after the redirection is still a second command with nothing between. Worth pinning apart from the bare form because the suffix is the one place a parser might keep reading words — and if it did, `echo b` would become an argument of nothing",
+	},
+	{
+		ID: "core/the-missing-separator-is-named-inside-a-group", Category: "command language", SyntaxError: true,
+		Snippet: `{ (echo a) echo b; }`,
+		Why:     "where the failure is reported when the list is a construct's rather than the program's. All five name the token the list stopped on, and the one shell that prints an expectation adds the closer that was waiting — `(expecting \"}\")` here, `\")\"` in a subshell and `\"done\"` in a loop, so the token comes from the list and the expectation from whatever enclosed it",
+	},
+	{
+		ID: "core/two-subshells-with-nothing-between-them", Category: "command language", SyntaxError: true,
+		Snippet: `(echo a) (echo b)`,
+		Why:     "the same missing separator where the token that follows is an operator rather than a word. It changes what the diagnostics say — the shell that classifies a token calls this one `\"(\"` where the rows above are `word` — so it grades the class as well as the refusal",
+	},
+	{
+		ID: "core/a-missing-separator-inside-a-loop-body", Category: "command language", SyntaxError: true,
+		Snippet: `while true; do (echo a) echo b; done`,
+		Why:     "a `do … done` body is an ordinary list and needs the separator an ordinary list needs. Paired with the short-loop rows below, which are the one place the panel splits: the shell with short loops reads a command after an *ended header* as the loop's body, and even there a `do … done` body is this",
 	},
 	{
 		ID: "core/a-for-over-a-parenthesized-list", Category: "command language", SyntaxError: true,
@@ -6505,5 +6560,76 @@ exit 7`,
 		Args:    []string{"-s", "-c", ArgSnippet},
 		Snippet: `case $- in *s*) echo has-s ;; *) echo no-s ;; esac`,
 		Why:     "-c wins about where the program comes from and does not take the letter away: all six run the command string and all six still show `s`. So the letter follows either the route or the spelling, and a shell that read only the route would lose it here",
+	},
+	// --- what the environment says at startup (#596). One shell in the panel
+	// reads two names out of it before the first line runs; the other three
+	// leave both as ordinary strings, which is what makes every row here
+	// evidence rather than a coincidence.
+	{
+		ID: "env/an-inherited-option-list-turns-an-option-on", Category: "invocation",
+		Env:     []string{"SHELLOPTS=nounset"},
+		Snippet: `case $- in *u*) echo has-u ;; *) echo no-u ;; esac`,
+		Why:     "the sharpest startup input a shell takes: a name in the environment changes what every command afterwards does. bash reads it and `$-` gains the letter; dash, ksh93 and zsh ignore the name entirely, which is the control",
+	},
+	{
+		ID: "env/an-inherited-option-list-outranks-the-invocations-own-option", Category: "invocation",
+		Env:     []string{"SHELLOPTS=nounset"},
+		Args:    []string{"+u", "-c", ArgSnippet},
+		Snippet: `case $- in *u*) echo has-u ;; *) echo no-u ;; esac`,
+		Why:     "the ordering, and it is the opposite of every other startup input: the environment is read *after* the argument vector, so `+u` written out does not undo it. The three that do not read the name answer `no-u` here and `no-u` in the row above, so this row is about the order rather than about the letter",
+	},
+	{
+		ID: "env/an-unknown-name-in-an-inherited-option-list", Category: "invocation",
+		Env:     []string{"SHELLOPTS=nosuchoption:nounset"},
+		Snippet: `case $- in *u*) echo has-u ;; *) echo no-u ;; esac`,
+		Why:     "one bad entry costs only itself: the complaint names line 0 — nothing has been read — and the good name in the same value is still applied. The wording is the plainest of the three shapes this refusal has, with nothing standing where `set` would",
+	},
+	{
+		ID: "env/the-option-list-follows-the-option-letters", Category: "invocation",
+		Snippet: `set -u; case ":$SHELLOPTS:" in *:nounset:*) echo listed ;; *) echo not-listed ;; esac`,
+		Why:     "the read direction of the binding, and the reason a stored copy would be a lie: the variable is produced when it is read, so an option set after startup is in it. Read as membership rather than as a string, for the reason `$-` is — what a shell has on by default is its own business",
+	},
+	{
+		ID: "env/the-option-list-drops-an-option-turned-off", Category: "invocation",
+		Snippet: `set -u; set +u; case ":$SHELLOPTS:" in *:nounset:*) echo listed ;; *) echo not-listed ;; esac`,
+		Why:     "the other half of the same binding, and the one a copy taken at startup would fail: turning the option off takes the name back out again",
+	},
+	{
+		ID: "env/the-option-list-uses-long-names", Category: "invocation",
+		Snippet: `set -f; case ":$SHELLOPTS:" in *:noglob:*) echo long ;; *:f:*) echo letter ;; *) echo neither ;; esac`,
+		Why:     "normalized rather than echoed: what goes in is a letter and what comes out is the long name, which is why nothing can usefully compare the whole string against what it exported",
+	},
+	{
+		ID: "env/the-option-list-is-readonly", Category: "invocation",
+		Snippet: `SHELLOPTS=whatever; echo after`,
+		Why:     "a name whose value is produced cannot be assigned to meaningfully, and the shell that has it refuses rather than accepting quietly. The refusal is its ordinary readonly one — wording, status and whether the script survives are all the dialect's — and the other three take the assignment as the ordinary variable it is for them",
+	},
+	{
+		ID: "env/a-file-named-for-a-non-interactive-shell-is-sourced", Category: "invocation",
+		Env:     []string{"BASH_ENV=" + ArgScript},
+		Args:    []string{"-c", "echo main"},
+		Snippet: `echo sourced`,
+		Why:     "the non-interactive counterpart of `$ENV`, and one shell's alone: bash sources the file before the command string and the other three do nothing with the name. The snippet is the *file*, which is why the argv runs something else",
+	},
+	{
+		ID: "env/that-file-sees-the-invocations-parameters", Category: "invocation",
+		Env:     []string{"BASH_ENV=" + ArgScript},
+		Args:    []string{"-c", "echo main", "name", "A"},
+		Snippet: `echo "[$0] n=$# [${1-}]"`,
+		Why:     "it is run *by* the shell that is about to run the program and sees what that shell sees, which is what puts it after the runner is built and after the operands are named — the same shape the login profile has",
+	},
+	{
+		ID: "env/that-file-can-end-the-shell", Category: "invocation",
+		Env:     []string{"BASH_ENV=" + ArgScript},
+		Args:    []string{"-c", "echo main"},
+		Snippet: `echo in-file; exit 3`,
+		Why:     "`exit 3` in it exits 3 and the program never runs, which is the other half of it being run by this shell rather than beside it",
+	},
+	{
+		ID: "env/a-file-named-for-a-non-interactive-shell-that-is-not-there", Category: "invocation",
+		Env:     []string{"BASH_ENV=/nonexistent-directory/nonexistent-file"},
+		Args:    []string{"-c", ArgSnippet},
+		Snippet: `echo main`,
+		Why:     "not a failure, in the shell that reads the name or in the three that do not. Every shell starts for the first time without one, and a complaint about it would be the first thing anybody saw",
 	},
 }

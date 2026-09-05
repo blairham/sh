@@ -616,6 +616,12 @@ type Runner struct {
 	// SetOptionLetters and SetNamedOption, which are the front end's only
 	// way in.
 	atInvocation bool
+	// fromEnvironment is the third of those: an option name that arrived in
+	// the environment rather than in an argument vector or a script. It is
+	// the plainest refusal of the three — the location and the sentence, with
+	// nothing standing where `set` would and no usage block — and it is set
+	// for the length of one call in ApplyInheritedShellOptions.
+	fromEnvironment bool
 	// allexport marks every assignment for the environment: `set -a`.
 	allexport bool
 	// extraOptions are the `set -o` names this dialect has beyond the ones
@@ -824,6 +830,10 @@ type Runner struct {
 	// regexMatchName is what the dialect calls the record of what the last
 	// `=~` captured. With no name, nothing is recorded — see regexmatch.go.
 	regexMatchName string
+	// shellOptsName is what the dialect calls the variable holding the long
+	// names of the options that are on. With no name there is no such
+	// variable and nothing is seeded from the environment — see shellopts.go.
+	shellOptsName string
 	// readonly names refuse assignment.
 	readonly map[string]bool
 	// integer names evaluate what is assigned to them: with the attribute,
@@ -2174,6 +2184,18 @@ func (r *Runner) environ() []string {
 			// what came in rather than joining it below. Handing a child the
 			// same name twice is not a tidiness question: the stale entry is
 			// the *first* of the two, and execve leaves it that way.
+			continue
+		}
+		if k == r.shellOptsName && k != "" {
+			// The option record is produced, so what a child must be handed
+			// is this shell's options *now* and not the string this shell was
+			// launched with. Nothing else in Vars can supersede it — it is
+			// readonly and never stored — so this entry is the only place the
+			// stale value could reach a command, and it is where it did:
+			// a shell handed `xtrace` that then ran `set +x` would still have
+			// been turning tracing on in everything it started. Measured, the
+			// shell that has this variable hands the recomputed value down.
+			out = append(out, k+"="+r.shellOptions())
 			continue
 		}
 		out = append(out, kv)

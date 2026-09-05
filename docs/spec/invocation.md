@@ -828,51 +828,158 @@ ksh93 answer 2 either way and zsh 1 either way, so bash is alone and only in
 one of the two orders. An axis for the position of a letter within a bundle
 would be a field asked once.
 
-## Two bash startup inputs this shell does not have
+## Two startup inputs the environment carries
 
-Recorded because an absence nobody wrote down is one that gets implemented
-twice, or not at all. Neither `SHELLOPTS` nor `BASH_ENV` is read anywhere in
-this tree, and until now nothing said whether that was a decision.
+Neither is an axis: one shell in the panel reads both names and the other three
+do nothing at all with either, so what is modeled is a per-dialect *name* and
+not a disagreement about behavior.
 
 ### Measured
 
-Same panel and date. A scratch `HOME`, `PATH` set to one nonexistent
-directory, running a script file so that the shell is not interactive.
+Panel: bash 5.3.15, bash 3.2.57, bash-as-`sh`, dash, ksh93u+ 2012-08-01, zsh
+5.9.2, on macOS 25.5 — measured 2026-09-05. A scratch `HOME`, `PATH` set to one
+nonexistent directory, running a script file so that the shell is not
+interactive. bash-as-`sh` is the same 5.3 binary through a link named `sh`.
 
 | | bash 5.3 | bash 3.2 | bash-as-`sh` | dash | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
 | `BASH_ENV=f` sources f | **yes** | **yes** | no | no | no | no |
 | `$0` inside it | the script | `bash` | — | — | — | — |
-| `SHELLOPTS=xtrace:nounset` in the environment | **applied**: `$-` gains `ux` | **applied** | **applied** | ignored | ignored | ignored |
+| `SHELLOPTS=xtrace:nounset` inherited | **applied**: `$-` gains `ux` | **applied** | **applied** | ignored | ignored | ignored |
 | `SHELLOPTS` after startup | rewritten, sorted, with the shell's own defaults | same | same, plus `posix` | the string as given | the string as given | the string as given |
 | assigning to `SHELLOPTS` | refused, `readonly variable`, 1 | refused, 1 | refused, 127, fatal | ordinary variable, 0 | ordinary variable, 0 | ordinary variable, 0 |
 
-`BASH_ENV` is the non-interactive counterpart of `$ENV`, and the two do not
-overlap: bash reads `BASH_ENV` and not `$ENV` when it is not interactive, and
-bash-as-`sh` reads neither. dash, ksh93 and zsh read neither, so this is one
-shell's feature rather than an axis — which is also why bash 3.2 differing
-about `$0` inside the file is a version wrinkle rather than a split.
+## The file a shell reads when it is not going to prompt
 
-`SHELLOPTS` is not a variable that happens to be read at startup. It is bound
-to `$-` in both directions, readonly, normalized to a sorted list, and
-populated with the options the shell has on by default; the environment merely
-seeds it. It is also the sharpest security-relevant input a shell takes, since
-an inherited `SHELLOPTS=xtrace` changes what every non-interactive bash on the
-machine writes to standard error.
+**The rule.** A shell that has such a file names the variable holding its path,
+and the front end expands that value and sources it before the program runs —
+on a script operand, on `-c` and on a program arriving on standard input alike.
+`Semantics.NonInteractiveStartupVariable`, empty for a shell that has none.
 
-### The decision
+It is the exact counterpart of `$ENV`, and the two never overlap: the shell that
+has this reads this and not `$ENV` when it is not interactive, and reads neither
+at a prompt, where it has a file of its own name instead. That is the whole
+reason it is a second function beside `loginProfile` rather than a flag on
+`startup` — reaching it through `startup` would bring `$ENV` with it, which is
+what `$ENV` exists not to do.
 
-**Both are out of scope for now, and this is the statement of it.**
+### What it sees, and when
 
-`BASH_ENV` would be small — a per-dialect variable *name* whose value is
-sourced on the script routes, the shape `loginProfile` already has. It waits
-on nothing but a reason to want it.
+The same three things the login profile sees, and for the same reason — it is
+run *by* the shell that is about to run the program:
 
-`SHELLOPTS` is not small. A two-way binding to `$-`, a readonly variable the
-dialect installs, the name-to-letter mapping in both directions, and a
-decision about the defaults would all have to arrive together, and a partial
-one — importing the value without keeping it in step — would be worse than
-none, because a script reading `SHELLOPTS` would be told something untrue.
+- `$0`, `$#` and the positional parameters are the invocation's. On `-c` with
+  operands, `$0` is the name operand and `$1` onward are the rest.
+- The invocation's options are already in effect, so `-x` traces its lines.
+- `exit 3` in it exits 3 and the program never runs. A file that is not there
+  is not a failure, and neither is an empty or unset value.
 
-Filed as #596 rather than left here, so that the absence is tracked and not
-only stated.
+### POSIX mode suppresses it
+
+Measured, and it is why this is one field rather than two: the shell that has
+the file reads nothing when started with the standard's own posix option, and
+nothing when invoked as `sh`. Those are two spellings of one mode, so the
+absence in the `sh` column is not a second fact about a second name — it is the
+mode, which the front end asks the runner about (`interp.Runner.PosixMode`)
+rather than deriving a second time from the invocation. See "Called `sh`" above
+and #691.
+
+| non-interactive, with `BASH_ENV` set | reads it? |
+| --- | --- |
+| bash 5.3 | **yes** |
+| bash 3.2 | **yes** |
+| bash 5.3 `--posix` | no |
+| bash 5.3 as `sh` | no |
+| dash, ksh93, zsh | no |
+
+**One version wrinkle, measured and not modeled.** bash 3.2 gives the sourced
+file `$0` = the shell's own name where bash 5.3 gives it the script's path. 5.3
+is the panel member that counts, and every other answer about the file is the
+same in both.
+
+## The option list the environment carries
+
+**The rule.** A shell that has it names the variable
+(`interp.Runner.SetShellOptions`), and the variable is then bound to the option
+state in both directions: reading it gives the long names of every option that
+is on, and what it *held at startup* has already turned those options on.
+
+It is not a variable that happens to be read at startup. Four properties, and a
+partial implementation of them would be worse than none — a script reading a
+stale copy would be told something untrue about what the shell is doing, which
+is the one failure this name has that plain absence does not:
+
+- **Produced, not stored.** `set -x` changes what it says and `set +x` changes
+  it back, because the value is computed when it is read. This is the half a
+  copy taken at startup gets wrong.
+- **Normalized.** Sorted, long names, the shell's own defaults included — so
+  what comes back out is never what went in, and the way to read it is
+  membership: `case ":$SHELLOPTS:" in *:xtrace:*)`, exactly as `$-` is read.
+- **Readonly.** Assignment is refused, in the dialect's ordinary readonly
+  wording and with its ordinary fatality; there is no sentence of its own.
+- **Seeded from the environment**, which is the part that matters most: an
+  inherited `xtrace` changes what every non-interactive shell below it writes
+  to standard error.
+
+### Where in startup the seeding happens
+
+**After the argument vector and before the files**, both measured, and the
+first of those is the opposite of every other startup input:
+
+- `SHELLOPTS=xtrace sh +x -c '…'` still traces. The environment wins over an
+  option written out, so it is read second.
+- A `~/.profile` read by a shell launched with `SHELLOPTS=xtrace` is itself
+  traced, and so is the non-interactive startup file above. So it is read
+  before them.
+
+A prompt reads it too: an inherited `xtrace` traces the lines a person types.
+
+### An unknown name costs only itself
+
+Measured: a name the shell does not have draws a complaint at **line 0** —
+nothing has been read — and every good name in the same value is still applied.
+The shell carries on at status 0. An empty piece between two colons is a name
+of nothing and draws the same complaint.
+
+The wording is the third shape this refusal has, and it is the plainest of
+them. All three are the same sentence with a different amount in front of it:
+
+| where the name came from | what is said |
+| --- | --- |
+| a script's own `set -o zzz` | `<shell>: line 1: set: zzz: invalid option name` |
+| an invocation's `-o zzz` | `<shell>: line 0: <shell>: zzz: invalid option name` |
+| the environment | `<shell>: line 0: zzz: invalid option name` |
+
+### What a child is handed
+
+The value a command inherits is **recomputed**, not the string this shell was
+launched with. Measured: a shell handed `xtrace` that then runs `set +x` hands
+its children a list without it. The entry the shell was born with is the only
+place a stale value could reach a command, so that is where it is replaced.
+
+The export attribute itself is ordinary: the name reaches a child because it
+arrived in the environment, or because a script exported it, and not otherwise.
+
+### Two defaults differ from the shell that has this, on purpose
+
+The names in the list are this shell's own state and not a claim about anyone
+else's. `hashall` is off here because nothing is hashed, and `emacs` is on
+because the line editor really does read those keys — both already recorded in
+`interp/setoptions.go`. Reporting either one the other way round to match a
+listing would be the lie this whole design avoids, which is also why every
+corpus case here asks about membership of a name it set itself.
+
+### Where it lives
+
+`interp/shellopts.go` — the produced value, the readonly mark and
+`ApplyInheritedShellOptions`, which the front end calls. It is a call rather
+than something the Runner does for itself because it is a startup action: a
+library Runner handed an environment is not entitled to change its embedder's
+options on the strength of a name in it.
+
+`Case.Env` is how the corpus asks about either of these. The harness hands every
+case the same four entries, and a snippet cannot put anything into the
+environment of the shell already running it, so until this existed neither
+startup input could be graded at all — only described. A value may name the
+scratch script with `ArgScript`, which is what lets a case point the startup
+file at its own snippet.

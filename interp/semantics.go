@@ -1736,6 +1736,37 @@ type Semantics struct {
 	// docs/spec/invocation.md.
 	LoginProfileWhenNonInteractive bool
 
+	// NonInteractiveStartupVariable names a variable whose value is expanded
+	// and sourced by a shell that is *not* going to prompt. Empty means the
+	// shell has no such file, which is three of the four.
+	//
+	// A name rather than a bool, for the reason the profile's own filename is
+	// not modeled as an axis: what a shell calls the thing is a per-dialect
+	// fact and not a disagreement about behavior. One shell in the panel has
+	// it, under a name of its own, and the other three do nothing at all with
+	// that name — measured 2026-09-05 on a script operand, `-c` and a program
+	// on standard input alike.
+	//
+	// It is the exact counterpart of `$ENV`, which the front end reads for
+	// every dialect and reads *only* when interactive. The two never overlap:
+	// the shell that has this reads this and not `$ENV` when it is not
+	// interactive, and reads neither at a prompt, where it has a file of its
+	// own name instead.
+	//
+	// Two more measured properties, both shared with the profile and both the
+	// reason it is sourced where it is. The value is expanded before it is
+	// opened, since `$HOME/…` is the usual spelling; and the file is run *by*
+	// the shell that is about to run the script, so it sees that shell's `$0`,
+	// `$#`, positional parameters and options, and an `exit 3` in it exits 3
+	// with the script never run. A file that is not there is not a failure.
+	//
+	// **POSIX mode suppresses it**, which is measured and is why this is one
+	// field rather than two. The shell that has it reads nothing when started
+	// with the standard's own posix option, and nothing when invoked as `sh` —
+	// the two spellings of the same mode. So the absence in the `sh` column is
+	// the mode again rather than a second fact about a second name.
+	NonInteractiveStartupVariable string
+
 	// ArrayLengthWithoutSubscriptIsCount makes `${#a}` of an array the
 	// number of elements, which is zsh's reading; bash and ksh93 measure
 	// the element the bare name yields. Asked only where the two answers

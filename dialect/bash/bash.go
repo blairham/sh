@@ -82,6 +82,14 @@ func Semantics() interp.Semantics {
 	// that a non-interactive shell reads no startup file unless `--login`
 	// was written out, and this front end has no `--login` to write.
 	s.LoginProfileWhenNonInteractive = false
+	// And the file it reads instead, on those same non-interactive routes.
+	// Measured 2026-09-05 with a scratch HOME: `BASH_ENV=f bash script.sh`,
+	// `bash -c` and a program piped in all source f, in bash 5.3 and in the
+	// 3.2 macOS ships, where dash, ksh93 and zsh do nothing with the name.
+	// It is not read at a prompt, which is where `$ENV` and a file of bash's
+	// own name take over, and not read in POSIX mode — `bash --posix` and
+	// bash invoked as `sh` read neither this nor `$ENV`.
+	s.NonInteractiveStartupVariable = "BASH_ENV"
 	// `-c` and `-s` together: the command string names the operands here,
 	// so `sh -sc CMD name a` has `$0` of `name` and one parameter — the
 	// same answer in the 3.2 macOS ships. ksh93 and zsh let `-s` name them.
@@ -814,6 +822,11 @@ func Apply(r *interp.Runner) {
 	// core keeps the record and this names it; ksh93 and zsh keep their
 	// captures under names and shapes of their own, never this one.
 	r.SetRegexMatch("BASH_REMATCH")
+	// The long names of the options that are on, as a readonly produced
+	// variable bound to the option state in both directions. The core keeps
+	// the state and this names it; the other three leave the name an ordinary
+	// string and read nothing out of it at startup, which is measured.
+	r.SetShellOptions("SHELLOPTS")
 	// Parameters bash provides and the others do not all have. Which
 	// variables a shell supplies is the same kind of question as which
 	// builtins it has, so it is answered here rather than as an axis.

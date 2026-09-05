@@ -2153,6 +2153,12 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/a-tested-brace-group-is-not-a-body` | **2>** `<shell>: 1: Syntax error: end of file unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file from `while' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file from `while' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: syntax error at line 1: `while' unmatched` *(status 3)* | `0~1~2~3` |
 | `core/a-while-condition-that-ends-itself-takes-a-body` | **2>** `<shell>: 1: Syntax error: "{" unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `{'~<shell>: -c: line 1: `i=0; while (( i < 2 )) { echo $i; i=$((i+1)); }; echo end'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `{'~<shell>: -c: line 1: `i=0; while (( i < 2 )) { echo $i; i=$((i+1)); }; echo end'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `{'~<shell>: -c: line 0: `i=0; while (( i < 2 )) { echo $i; i=$((i+1)); }; echo end'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `{' unexpected` *(status 3)* | `0~1~end` |
 | `core/a-short-loop-body-is-one-command` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `i=0; while (( i < 2 )) echo $((i++)); echo end'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `i=0; while (( i < 2 )) echo $((i++)); echo end'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `echo'~<shell>: -c: line 0: `i=0; while (( i < 2 )) echo $((i++)); echo end'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `echo' unexpected` *(status 3)* | `0~1~end` |
+| `core/two-commands-need-a-separator-between-them` | **2>** `<shell>: 1: Syntax error: word unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `(echo a) echo b'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `(echo a) echo b'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `echo'~<shell>: -c: line 0: `(echo a) echo b'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `echo' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `echo'` *(status 1)* |
+| `core/a-compound-does-not-absorb-the-word-after-it` | **2>** `<shell>: 1: Syntax error: word unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `echo one; { :; } echo x'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `echo one; { :; } echo x'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `echo'~<shell>: -c: line 0: `echo one; { :; } echo x'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `echo' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `echo'` *(status 1)* |
+| `core/a-separator-is-needed-after-a-redirected-compound` | **2>** `<shell>: 1: Syntax error: word unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `{ :; } 2>/dev/null echo b'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `{ :; } 2>/dev/null echo b'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `echo'~<shell>: -c: line 0: `{ :; } 2>/dev/null echo b'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `echo' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `echo'` *(status 1)* |
+| `core/the-missing-separator-is-named-inside-a-group` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting "}")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `{ (echo a) echo b; }'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `{ (echo a) echo b; }'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `echo'~<shell>: -c: line 0: `{ (echo a) echo b; }'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `echo' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `echo'` *(status 1)* |
+| `core/two-subshells-with-nothing-between-them` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `(echo a) (echo b)'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `(echo a) (echo b)'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `(echo a) (echo b)'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `('` *(status 1)* |
+| `core/a-missing-separator-inside-a-loop-body` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting "done")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `while true; do (echo a) echo b; done'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `while true; do (echo a) echo b; done'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `echo'~<shell>: -c: line 0: `while true; do (echo a) echo b; done'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `echo' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `echo'` *(status 1)* |
 | `core/a-for-over-a-parenthesized-list` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `for i (a b) { echo "$i"; }; for j (p q) echo "$j"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `for i (a b) { echo "$i"; }; for j (p q) echo "$j"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `for i (a b) { echo "$i"; }; for j (p q) echo "$j"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `a~b~p~q` |
 | `core/a-for-header-that-ends-itself-needs-no-body` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `if true; then for i (a b); fi; echo no-body; for j (p q) echo body'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `if true; then for i (a b); fi; echo no-body; for j (p q) echo body'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `if true; then for i (a b); fi; echo no-body; for j (p q) echo body'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `no-body~body~body` |
 | `core/a-short-loop-redirection-is-the-bodys` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `for i (a b) > f$i; ls'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `for i (a b) > f$i; ls'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `for i (a b) > f$i; ls'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `fa~fb` |
@@ -2268,6 +2274,30 @@ grades it and nothing drift-checks it either, for the same reason.
 - `core/a-short-loop-body-is-one-command` — the body of a short loop need not be a brace group, and it is exactly one command: the `; echo end` after it is outside the loop, so `end` prints once rather than per iteration. A second command inside would need a separator, and a separator there is the enclosing list's
   ```sh
   i=0; while (( i < 2 )) echo $((i++)); echo end
+  ```
+- `core/two-commands-need-a-separator-between-them` — the list production's separator is required, and this is the shortest text that shows it. Every shell in the panel names the second command's word and refuses the line; the reading that takes it is two statements, which would print a and b — a *different program*, so the wrong answer here is silent rather than noisy. Nothing shows the rule until a compound is written, because a simple command's words absorb whatever follows and `true echo x` is one command with an argument
+  ```sh
+  (echo a) echo b
+  ```
+- `core/a-compound-does-not-absorb-the-word-after-it` — the same rule with a statement in front of it, so that the refusal cannot be a property of the line's first command. `echo one` never runs either: the panel parses the whole `-c` string before running any of it, so a failure anywhere in it discards everything. The construct is a brace group here rather than a subshell to show that the rule is about the *list* and not about parentheses
+  ```sh
+  echo one; { :; } echo x
+  ```
+- `core/a-separator-is-needed-after-a-redirected-compound` — a redirection after a compound command belongs to the compound and does not reopen it, so a word after the redirection is still a second command with nothing between. Worth pinning apart from the bare form because the suffix is the one place a parser might keep reading words — and if it did, `echo b` would become an argument of nothing
+  ```sh
+  { :; } 2>/dev/null echo b
+  ```
+- `core/the-missing-separator-is-named-inside-a-group` — where the failure is reported when the list is a construct's rather than the program's. All five name the token the list stopped on, and the one shell that prints an expectation adds the closer that was waiting — `(expecting "}")` here, `")"` in a subshell and `"done"` in a loop, so the token comes from the list and the expectation from whatever enclosed it
+  ```sh
+  { (echo a) echo b; }
+  ```
+- `core/two-subshells-with-nothing-between-them` — the same missing separator where the token that follows is an operator rather than a word. It changes what the diagnostics say — the shell that classifies a token calls this one `"("` where the rows above are `word` — so it grades the class as well as the refusal
+  ```sh
+  (echo a) (echo b)
+  ```
+- `core/a-missing-separator-inside-a-loop-body` — a `do … done` body is an ordinary list and needs the separator an ordinary list needs. Paired with the short-loop rows below, which are the one place the panel splits: the shell with short loops reads a command after an *ended header* as the loop's body, and even there a `do … done` body is this
+  ```sh
+  while true; do (echo a) echo b; done
   ```
 - `core/a-for-over-a-parenthesized-list` — the short `for`, in both its body spellings. The parentheses say what `in` says and end the header as `in` does not, which is why this one takes a brace body with nothing between where `for i in a b { … }` cannot. One shell parses it and four call the `(` a syntax error
   ```sh
@@ -6239,6 +6269,17 @@ grades it and nothing drift-checks it either, for the same reason.
 | `invoke/dollar-dash-shows-s-for-a-program-on-standard-input` | `has-s` | `has-s` | `has-s` | `no-s` | `has-s` | `has-s` |
 | `invoke/dollar-dash-shows-s-for-the-s-option` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` |
 | `invoke/dollar-dash-keeps-s-when-a-command-string-overrides-it` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` |
+| `env/an-inherited-option-list-turns-an-option-on` | `no-u` | `has-u` | `has-u` | `has-u` | `no-u` | `no-u` |
+| `env/an-inherited-option-list-outranks-the-invocations-own-option` | `no-u` | `has-u` | `has-u` | `has-u` | `no-u` | `no-u` |
+| `env/an-unknown-name-in-an-inherited-option-list` | `no-u` | `has-u` **2>** `<shell>: line 0: nosuchoption: invalid option name` | `has-u` **2>** `<shell>: line 0: nosuchoption: invalid option name` | `has-u` **2>** `<shell>: line 0: nosuchoption: invalid option name` | `no-u` | `no-u` |
+| `env/the-option-list-follows-the-option-letters` | **2>** `<shell>: 1: SHELLOPTS: parameter not set` *(status 2)* | `listed` | `listed` | `listed` | **2>** `<shell>: SHELLOPTS: parameter not set` *(status 1)* | **2>** `<shell>:1: SHELLOPTS: parameter not set` |
+| `env/the-option-list-drops-an-option-turned-off` | `not-listed` | `not-listed` | `not-listed` | `not-listed` | `not-listed` | `not-listed` |
+| `env/the-option-list-uses-long-names` | `neither` | `long` | `long` | `long` | `neither` | `neither` |
+| `env/the-option-list-is-readonly` | `after` | **2>** `<shell>: line 1: SHELLOPTS: readonly variable` *(status 1)* | **2>** `<shell>: line 1: SHELLOPTS: readonly variable` *(status 127)* | **2>** `<shell>: SHELLOPTS: readonly variable` *(status 1)* | `after` | `after` |
+| `env/a-file-named-for-a-non-interactive-shell-is-sourced` | `main` | `sourced~main` | `main` | `sourced~main` | `main` | `main` |
+| `env/that-file-sees-the-invocations-parameters` | `main` | `[name] n=1 [A]~main` | `main` | `[<shell>] n=0 []~main` | `main` | `main` |
+| `env/that-file-can-end-the-shell` | `main` | `in-file` *(status 3)* | `main` | `in-file` *(status 3)* | `main` | `main` |
+| `env/a-file-named-for-a-non-interactive-shell-that-is-not-there` | `main` | `main` | `main` | `main` | `main` | `main` |
 
 - `set/posix-mode-makes-a-failed-redirection-fatal` — the same binary, both answers: bash 5.3 and bash 3.2 print `after` without this line and stop at 1 with it, which is the bash-as-`sh` column reached at run time. The other three have no such name and refuse the `set` instead, each in its own words
   ```sh
@@ -6434,4 +6475,48 @@ grades it and nothing drift-checks it either, for the same reason.
 - `invoke/dollar-dash-keeps-s-when-a-command-string-overrides-it` — -c wins about where the program comes from and does not take the letter away: all six run the command string and all six still show `s`. So the letter follows either the route or the spelling, and a shell that read only the route would lose it here
   ```sh
   case $- in *s*) echo has-s ;; *) echo no-s ;; esac
+  ```
+- `env/an-inherited-option-list-turns-an-option-on` — the sharpest startup input a shell takes: a name in the environment changes what every command afterwards does. bash reads it and `$-` gains the letter; dash, ksh93 and zsh ignore the name entirely, which is the control
+  ```sh
+  case $- in *u*) echo has-u ;; *) echo no-u ;; esac
+  ```
+- `env/an-inherited-option-list-outranks-the-invocations-own-option` — the ordering, and it is the opposite of every other startup input: the environment is read *after* the argument vector, so `+u` written out does not undo it. The three that do not read the name answer `no-u` here and `no-u` in the row above, so this row is about the order rather than about the letter
+  ```sh
+  case $- in *u*) echo has-u ;; *) echo no-u ;; esac
+  ```
+- `env/an-unknown-name-in-an-inherited-option-list` — one bad entry costs only itself: the complaint names line 0 — nothing has been read — and the good name in the same value is still applied. The wording is the plainest of the three shapes this refusal has, with nothing standing where `set` would
+  ```sh
+  case $- in *u*) echo has-u ;; *) echo no-u ;; esac
+  ```
+- `env/the-option-list-follows-the-option-letters` — the read direction of the binding, and the reason a stored copy would be a lie: the variable is produced when it is read, so an option set after startup is in it. Read as membership rather than as a string, for the reason `$-` is — what a shell has on by default is its own business
+  ```sh
+  set -u; case ":$SHELLOPTS:" in *:nounset:*) echo listed ;; *) echo not-listed ;; esac
+  ```
+- `env/the-option-list-drops-an-option-turned-off` — the other half of the same binding, and the one a copy taken at startup would fail: turning the option off takes the name back out again
+  ```sh
+  set -u; set +u; case ":$SHELLOPTS:" in *:nounset:*) echo listed ;; *) echo not-listed ;; esac
+  ```
+- `env/the-option-list-uses-long-names` — normalized rather than echoed: what goes in is a letter and what comes out is the long name, which is why nothing can usefully compare the whole string against what it exported
+  ```sh
+  set -f; case ":$SHELLOPTS:" in *:noglob:*) echo long ;; *:f:*) echo letter ;; *) echo neither ;; esac
+  ```
+- `env/the-option-list-is-readonly` — a name whose value is produced cannot be assigned to meaningfully, and the shell that has it refuses rather than accepting quietly. The refusal is its ordinary readonly one — wording, status and whether the script survives are all the dialect's — and the other three take the assignment as the ordinary variable it is for them
+  ```sh
+  SHELLOPTS=whatever; echo after
+  ```
+- `env/a-file-named-for-a-non-interactive-shell-is-sourced` — the non-interactive counterpart of `$ENV`, and one shell's alone: bash sources the file before the command string and the other three do nothing with the name. The snippet is the *file*, which is why the argv runs something else
+  ```sh
+  echo sourced
+  ```
+- `env/that-file-sees-the-invocations-parameters` — it is run *by* the shell that is about to run the program and sees what that shell sees, which is what puts it after the runner is built and after the operands are named — the same shape the login profile has
+  ```sh
+  echo "[$0] n=$# [${1-}]"
+  ```
+- `env/that-file-can-end-the-shell` — `exit 3` in it exits 3 and the program never runs, which is the other half of it being run by this shell rather than beside it
+  ```sh
+  echo in-file; exit 3
+  ```
+- `env/a-file-named-for-a-non-interactive-shell-that-is-not-there` — not a failure, in the shell that reads the name or in the three that do not. Every shell starts for the first time without one, and a complaint about it would be the first thing anybody saw
+  ```sh
+  echo main
   ```

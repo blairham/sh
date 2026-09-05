@@ -16,6 +16,64 @@ Panel measurements as in `../oracle.md`.
 Each level binds tighter than the one above it. Two consequences are
 measured below and are the ones implementations get wrong.
 
+## Two commands need a separator between them
+
+The `[ ; | & | newline ]` in the list production is required and not
+decoration: a command standing straight after one that has *ended itself*
+is a syntax error in every shell in the panel. Measured 2026-09-05 with
+`-n`, on dash, bash 3.2.57 (`/bin/bash`), bash 5.3.15
+(`/opt/homebrew/bin/bash`), bash 5.3.15 invoked as `sh`, ksh93u+ and
+zsh 5.9.2 (`/opt/homebrew/bin/zsh`):
+
+| probe | dash | bash 3.2 | bash 5 | bash as sh | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `(( 1 )) echo x` | error | error | error | error | error | error |
+| `{ :; } echo x` | error | error | error | error | error | error |
+| `(echo a) echo b` | error | error | error | error | error | error |
+| `if true; then :; fi echo z` | error | error | error | error | error | error |
+| `for i in a; do :; done echo w` | error | error | error | error | error | error |
+| `case a in a) :;; esac echo u` | error | error | error | error | error | error |
+| `f() { :; } echo t` | error | error | error | error | error | error |
+| `(echo a) (echo b)` | error | error | error | error | error | error |
+| `(echo a) >/dev/null echo b` | error | error | error | error | error | error |
+| `[[ -n x ]] echo y` | *n/a* | error | error | error | error | error |
+
+Unanimous, and the `[[ ]]` row is only *n/a* in dash because there
+`[[ -n x ]]` is a simple command whose words absorb `echo y`. That is the
+whole reason the rule is invisible until a compound is written: a simple
+command takes the next word as an argument, so `true echo x` is one
+command and there is nothing to refuse. It shows on every compound,
+because a compound has closed and cannot absorb anything.
+
+The consequence is not only the refusal. Where the text is a *different
+program* the wrong reading is silent — `(echo a) echo b` would run two
+commands where every shell in the panel refuses the line — so a typo they
+all catch at parse time would run.
+
+Two shells name the closer they were waiting for. dash prints
+`(expecting ")")` inside a subshell, `(expecting "}")` inside a brace
+group, `(expecting "done")` inside a loop and `(expecting "fi")` inside
+an `if`, and only when the enclosing construct had something in it:
+`( echo a; fi )` is `"fi" unexpected (expecting ")")` there and `( fi )`
+is `"fi" unexpected`. So the token is named where the list stopped and
+the *expectation* comes from whatever was waiting for it.
+
+The one exception is the shell with short loops, and it is the same rule
+rather than a hole in it: there a loop header that has ended is followed
+by its *body*, so the second command is not a second statement of the
+same list. See "Short loops" below. Its body is a whole statement,
+terminator included, and the loop is terminated by whatever the body
+took — `for i (a b) echo $i; echo end` parses there and
+`for i (a b) { echo $i; } echo end` does not, because a brace body is
+closed by its own `}` and leaves nothing between the two commands.
+
+Corpus: `core/two-commands-need-a-separator-between-them`,
+`core/a-compound-does-not-absorb-the-word-after-it`,
+`core/a-separator-is-needed-after-a-redirected-compound`,
+`core/the-missing-separator-is-named-inside-a-group`,
+`core/two-subshells-with-nothing-between-them`,
+`core/a-missing-separator-inside-a-loop-body`.
+
 ## `&&` and `||` have equal precedence and associate left
 
 This is **not** C's rule, where `&&` binds tighter than `||`. In the

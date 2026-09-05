@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/blairham/sh/internal/event"
 )
 
 // What goes to a stream still reaches it. The capture is the addition, and a
@@ -166,7 +168,7 @@ func TestATinyCapStillKeepsSomething(t *testing.T) {
 func TestRecordWritesTheBodyAndNamesIt(t *testing.T) {
 	s, _ := newStore(t)
 	err := s.Record(t.Context(),
-		Record{ID: NewID(at(1000)), Command: "build", Start: at(1000)},
+		Record{ID: event.NewID(at(1000)), Command: "build", Start: at(1000)},
 		Output{Text: "the log\n", Bytes: 900, Truncated: true})
 	if err != nil {
 		t.Fatal(err)
@@ -190,7 +192,7 @@ func TestRecordWritesTheBodyAndNamesIt(t *testing.T) {
 func TestACredentialLeavesNoBodyEither(t *testing.T) {
 	s, dir := newStore(t)
 	err := s.Record(t.Context(),
-		Record{ID: NewID(at(1000)), Command: "export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE"},
+		Record{ID: event.NewID(at(1000)), Command: "export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE"},
 		Output{Text: "some output", Bytes: 11})
 	if err != nil {
 		t.Fatal(err)

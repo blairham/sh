@@ -616,6 +616,20 @@ func TestDollarDashStartupLetters(t *testing.T) {
 	}
 }
 
+// Neither route letter under `-c`: measured 2026-09-05 on 5.9.2, `zsh -c
+// 'echo $-'` reports `569X` and nothing more, where bash and ksh93 add `c`.
+// The `s` of the standard-input route is unanimous and comes from
+// Runner.Route, so there is no axis for it here.
+func TestDollarDashRouteLetters(t *testing.T) {
+	s := zsh.Semantics()
+	if got := s.CommandStringShowsCInDollarDash; got != interp.No {
+		t.Errorf("CommandStringShowsCInDollarDash = %v, want No", got)
+	}
+	if got := s.CommandStringShowsSInDollarDash; got != interp.No {
+		t.Errorf("CommandStringShowsSInDollarDash = %v, want No", got)
+	}
+}
+
 // TestDollarSingleAnswers covers the three `$'…'` axes, and zsh is the
 // minority on all three.
 //

@@ -418,14 +418,29 @@ type Runner struct {
 	// almost always; a clone inherits it, so a subshell inside a timed
 	// element still bills that element.
 	elemCPU *cpuAccum
-	// CommandString says the program came from an argument — `-c` — rather
-	// than from a file or from standard input.
+	// Route is where the program came from: a command string, a script
+	// file, or standard input.
 	//
-	// Set by the front end, because that is what reads the invocation. One
-	// dialect answers a failed expansion with a different status depending
-	// on it, and on nothing else: the same two lines exit 127 given with
-	// `-c` and 1 read from a file.
-	CommandString bool
+	// Set by the front end, because that is what reads the invocation — the
+	// same fact Interactive is, and carried in for the same reason. Three
+	// things read it and each reads a different pair of the three: one
+	// dialect answers a failed expansion with a different status under `-c`
+	// than from a file, one answers a readonly reassignment differently the
+	// same way, and `$-` shows `c` and `s` for two of the routes in some
+	// shells and not others.
+	//
+	// One field rather than a bool per route, because they are answers to
+	// one question and a second name for it is the one that would drift.
+	Route Route
+
+	// StandardInputOption says the invocation wrote `-s`.
+	//
+	// Nearly the same fact as Route being RouteStandardInput, and separate
+	// for the one invocation where it is not: `sh -s -c cmd` runs the
+	// command string in all four shells and still puts `s` in `$-` in all
+	// four. So the letter follows either the route or the spelling, and the
+	// spelling has to survive a route that overrode it.
+	StandardInputOption bool
 
 	// inFunc is the name of the function being run, for `$0`.
 	inFunc string
@@ -1035,7 +1050,7 @@ func (r *Runner) fatalExpansion(format string, args ...any) {
 // itself, as fatalQuiet is to fatal.
 func (r *Runner) fatalExpansionQuiet() {
 	r.fatalQuiet()
-	if n := r.diag().ExpansionFailureStatusFromCommandString; n != 0 && r.CommandString {
+	if n := r.diag().ExpansionFailureStatusFromCommandString; n != 0 && r.Route == RouteCommandString {
 		r.status = n
 	}
 }
@@ -1707,7 +1722,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			// then reported success for having done so.
 			return nil
 		}
-		if !r.substRan && !r.expandErr && !r.assignFailed {
+		if !r.substRan && !r.expandErr && !r.assignFailed && !r.unspecified {
 			// Nothing in them reported, so the assignment itself does, and
 			// an assignment that happens cannot fail. One that was *refused*
 			// did fail, which is what assignFailed carries: the dialect that
@@ -1716,7 +1731,10 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			//
 			// After the fatal check above, not before: an assignment that
 			// stopped the script has a status of its own and this would
-			// report success for it.
+			// report success for it. An assignment *refused* for want of a
+			// dialect is the same case reached the other way — the check
+			// above this block runs before the assignments do, so without
+			// the guard here a refused subscript reported success.
 			r.status = 0
 		}
 		// `>b` with no command still opens the file, and truncates it if it
@@ -2288,7 +2306,7 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 		defer func() { r.inBuiltin = outer }()
 		fatal := r.sem().ReadonlyReassignmentFatal
 		switch {
-		case form == assignedAlone && r.CommandString:
+		case form == assignedAlone && r.Route == RouteCommandString:
 			fatal = r.sem().ReadonlyReassignmentFatalFromCommandString
 		case form == assignedByDeclaration:
 			// A third answer, and a different set of shells from either of
@@ -2475,10 +2493,10 @@ func (r *Runner) assign(a *syntax.Assign) {
 			// `a[0]+=Q` appends to element 0. Distinct from `a+=(Q)`, which
 			// adds an element after the last: the subscript is what says
 			// which of the two `+=` means.
-			r.appendArrayElem(a.Name, idx, r.expandAssignValue(a.Value))
+			r.appendArrayElem(a.Name, idx, text, r.expandAssignValue(a.Value))
 			return
 		}
-		r.setArrayElem(a.Name, idx, r.expandAssignValue(a.Value))
+		r.setArrayElem(a.Name, idx, text, r.expandAssignValue(a.Value))
 	default:
 		value := r.expandAssignValue(a.Value)
 		if r.assocDeclared(a.Name) {

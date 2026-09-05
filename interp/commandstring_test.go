@@ -67,7 +67,7 @@ func cmdStringStatus(t *testing.T, src string, commandString bool, answer int) i
 	sem.FatalErrorStatusIsOne = Yes
 	dg := Diagnostics{ExpansionFailureStatusFromCommandString: answer}
 	r := &Runner{
-		Semantics: &sem, Diagnostics: &dg, Name: "sh", CommandString: commandString,
+		Semantics: &sem, Diagnostics: &dg, Name: "sh", Route: routeFor(commandString),
 		Stdout: &buf, Stderr: &buf,
 	}
 	f, err := syntax.Parse(src, syntax.Core())
@@ -107,7 +107,7 @@ func TestAReadonlyReassignmentMayAnswerByHowTheShellStarted(t *testing.T) {
 			sem.FatalErrorStatusIsOne = Yes
 			r := &Runner{
 				Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
-				CommandString: c.commandString, Stdout: &buf, Stderr: &buf,
+				Route: routeFor(c.commandString), Stdout: &buf, Stderr: &buf,
 			}
 			f, err := syntax.Parse("readonly x=1\nx=2\necho after\n", syntax.Core())
 			if err != nil {
@@ -137,7 +137,7 @@ func TestOnlyAnAssignmentStandingAloneAsksTheOtherQuestion(t *testing.T) {
 	sem.FatalErrorStatusIsOne = Yes
 	r := &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
-		CommandString: true, Stdout: &buf, Stderr: &buf,
+		Route: RouteCommandString, Stdout: &buf, Stderr: &buf,
 	}
 	// `export x=2` is an assignment, but not one standing as a command of
 	// its own — and the dialect that splits is not fatal for it by either
@@ -185,7 +185,7 @@ func TestAReadonlyReassignmentByADeclaration(t *testing.T) {
 				sem.FatalErrorStatusIsOne = Yes
 				r := &Runner{
 					Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
-					CommandString: c.commandString, Stdout: &buf, Stderr: &buf,
+					Route: routeFor(c.commandString), Stdout: &buf, Stderr: &buf,
 				}
 				f, err := syntax.Parse(src, syntax.Core())
 				if err != nil {
@@ -291,4 +291,15 @@ func TestWhatADeclarationSaysAboutAReadonlyName(t *testing.T) {
 			}
 		})
 	}
+}
+
+// routeFor turns the two-way question these tests ask — was the program a
+// command string — into the route the runner carries. A script file is the
+// other side rather than "no route": the axes below are the difference
+// between `-c` and a file, and a Runner nobody told is neither.
+func routeFor(commandString bool) Route {
+	if commandString {
+		return RouteCommandString
+	}
+	return RouteScriptFile
 }

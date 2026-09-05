@@ -105,6 +105,14 @@ func (r *Runner) optionLetters() string {
 		// field the option table writes.
 		b.WriteByte('i')
 	}
+	if r.Route == RouteCommandString && r.sem().CommandStringShowsCInDollarDash == Yes {
+		// A command string, in the two shells that say so. No majority to
+		// follow — see Semantics.CommandStringShowsCInDollarDash.
+		b.WriteByte('c')
+	}
+	if r.showsS() {
+		b.WriteByte('s')
+	}
 	if r.allexport {
 		b.WriteByte('a')
 	}
@@ -143,6 +151,29 @@ func (r *Runner) optionLetters() string {
 		b.WriteByte('C')
 	}
 	return b.String()
+}
+
+// showsS reports whether `$-` carries the `s` of the standard-input route.
+//
+// Two of the three ways it gets there are unanimous and so need no axis,
+// measured 2026-09-05 across bash 5.3, dash, ksh93 and zsh:
+//
+//   - The program arriving on standard input — `sh -s`, `sh` with no
+//     operands reading a pipe or a file, and a shell at a prompt, which is
+//     the same route with a person on the other end.
+//   - `-s` written even where something else supplied the program: all four
+//     run the command string for `sh -s -c cmd` and all four still show `s`.
+//
+// bash 3.2 is the dissent on the first, and it is a shell disagreeing with
+// its own later build rather than a panel split: it shows `s` only where
+// `-s` was written. Recorded in docs/spec/invocation.md, not modeled.
+//
+// The third way is the split: ksh93 alone shows `s` under `-c` as well.
+func (r *Runner) showsS() bool {
+	if r.Route == RouteStandardInput || r.StandardInputOption {
+		return true
+	}
+	return r.Route == RouteCommandString && r.sem().CommandStringShowsSInDollarDash == Yes
 }
 
 // setVarQuietly assigns without going through the readonly check or the

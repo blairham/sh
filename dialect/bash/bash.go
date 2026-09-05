@@ -85,9 +85,14 @@ func Semantics() interp.Semantics {
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
 	// Measured: `echo $-` reports `hB` — hashall and braceexpand — under
-	// -c, a script file and standard input alike, before the route letters
-	// the semantics field deliberately leaves out.
+	// -c, a script file and standard input alike, before the letters that
+	// describe the route.
 	s.DefaultOptionLetters = "hB"
+	// `bash -c 'echo $-'` reports `hBc`; ksh93 agrees and dash and zsh do
+	// not. The `s` of the standard-input route is not added under `-c`
+	// here — ksh93 alone does that.
+	s.CommandStringShowsCInDollarDash = interp.Yes
+	s.CommandStringShowsSInDollarDash = interp.No
 	s.ArrayScalarIsTheWholeArray = interp.No
 	// A subscript inside a literal is an expression: `a=([1+1]=c)` lands at 2.
 	s.ArrayLiteralSubscriptIsAKey = interp.No
@@ -301,6 +306,10 @@ func Semantics() interp.Semantics {
 	// A subscript that will not evaluate ends the script here, as a bad
 	// expression does wherever one is written.
 	s.BadSubscriptToUnsetFatal = interp.Yes
+	// A negative subscript that counts back past the first element is
+	// refused rather than placed in front of it, and the refusal ends the
+	// script. Measured in both bash builds.
+	s.NegativeSubscriptPastTheStartInserts = interp.No
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No
@@ -474,6 +483,14 @@ func Diagnostics() interp.Diagnostics {
 		UnboundVariable:         "%s: unbound variable",
 		UnboundPositional:       "$%s: unbound variable",
 		NumericArgument:         "%[1]s: %[2]s: numeric argument required",
+		// A subscript before the first element, named as it was written:
+		// `a[x-2]`, not the -1 it evaluated to. Identical in bash 3.2.
+		BadArraySubscript: "%[1]s[%[2]s]: bad array subscript",
+		// Through a literal the element is named as it stands between the
+		// parentheses, with no array name in front of it. bash 3.2 says the
+		// same and does not end the script, which is the one place the two
+		// builds differ here.
+		BadArrayLiteralSubscript: "[%[2]s]=%[3]s: bad array subscript",
 		// `unset a[@]` where `a` holds a scalar. Identical in bash 3.2.
 		UnsetNotAnArray:       "unset: %[1]s: not an array variable",
 		ArithError:            `%[1]s: %[2]s (error token is "%[3]s")`,

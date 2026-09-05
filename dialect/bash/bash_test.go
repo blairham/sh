@@ -632,11 +632,30 @@ func TestDeclareReportsARefusedName(t *testing.T) {
 }
 
 // The letters `$-` starts with, measured identical under -c, a script file
-// and standard input; the route letters (`c`, `s`, `i`) are the front end's
-// and deliberately absent.
+// and standard input; the letters that describe the route come from
+// Runner.Route and are asserted below.
 func TestDollarDashStartupLetters(t *testing.T) {
 	if got, want := bash.Semantics().DefaultOptionLetters, "hB"; got != want {
 		t.Errorf("DefaultOptionLetters = %q, want %q", got, want)
+	}
+}
+
+// The two route axes. Measured on bash 5.3.15, 2026-09-05: `bash -c 'echo
+// $-'` reports `hBc` — the `c` and not the `s`, where ksh93 shows both and
+// dash and zsh show neither.
+//
+// `s` for the standard-input route is unanimous and has no axis, so there is
+// nothing here to assert about it. bash 3.2 is the one shell that dissents on
+// it and it dissents against bash 5.3 rather than against the panel — it
+// shows the letter only where `-s` was written. Recorded in
+// docs/spec/invocation.md; this dialect follows 5.3, as it does everywhere.
+func TestDollarDashRouteLetters(t *testing.T) {
+	s := bash.Semantics()
+	if got := s.CommandStringShowsCInDollarDash; got != interp.Yes {
+		t.Errorf("CommandStringShowsCInDollarDash = %v, want Yes", got)
+	}
+	if got := s.CommandStringShowsSInDollarDash; got != interp.No {
+		t.Errorf("CommandStringShowsSInDollarDash = %v, want No", got)
 	}
 }
 

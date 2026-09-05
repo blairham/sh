@@ -87,13 +87,26 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.Word, appendTo 
 		}
 		idx, err := r.subscriptValue(e.sub)
 		if err != nil {
-			r.diagf("%s: bad array subscript\n", name)
-			continue
+			// The last of the places a subscript is read, and the one #649
+			// missed: it kept a wording of its own and carried on, where the
+			// two shells that evaluate a literal's subscript report the
+			// arithmetic failure and end the script. The third reads the
+			// text as a key and never reaches this.
+			r.fatal("%s\n", r.subscriptFailure(e.sub, err))
+			return
 		}
 		pos, ok := r.elemPos(a, idx)
 		if !ok {
-			r.diagf("%s[%d]: index out of range\n", name, idx)
-			continue
+			// Before the first element. Refused and fatal, as the plain form
+			// is — and worded apart from it by both shells that get here:
+			// one names the element as written and the other the subscript.
+			wording := r.diag().BadArrayLiteralSubscript
+			if wording == "" {
+				wording = r.diag().BadArraySubscript
+			}
+			r.fatal("%s\n", Wording(wording,
+				"%[1]s[%[2]s]: bad array subscript", name, e.sub, e.value))
+			return
 		}
 		a[pos] = e.value
 		// A bare element after a subscripted one continues from there rather

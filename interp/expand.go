@@ -1035,7 +1035,7 @@ func (r *Runner) assignSubscript(e *syntax.ParamExpr, v string) {
 	if !ok {
 		return
 	}
-	r.setArrayElem(e.Name, n, v)
+	r.setArrayElem(e.Name, n, idx, v)
 }
 
 // wholeArraySubscript reports whether a subscript names the whole array rather

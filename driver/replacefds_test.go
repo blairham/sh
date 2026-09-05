@@ -7,7 +7,6 @@ package driver_test
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,68 +28,48 @@ func runAsShellReplacingItself(t *testing.T, name, src string, ran func(out stri
 	if err := os.WriteFile(script, []byte(src), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	var out string
-	for attempt := 1; ; attempt++ {
-		cmd := exec.Command(os.Args[0], "-test.run="+name)
-		cmd.Env = append(os.Environ(), helperScript+"="+script)
-		// Deliberately no ExtraFiles: descriptor 3 is unopened here, so what
-		// the replacement finds on it is the script's doing and nothing
-		// else's.
-		b, err := cmd.CombinedOutput()
-		// A status is deliberately not asserted, and not even tolerated
-		// silently by accident: what comes back is the *replacement's*
-		// status, and a replacement that could not write to a descriptor
-		// reports 1 in bash and 2 in dash — /bin/sh being one on macOS and
-		// the other on Debian. That is a fact about the machine, so every
-		// assertion here is about what was written instead.
-		var exit *exec.ExitError
-		if err != nil && !errors.As(err, &exit) {
-			t.Fatalf("the shell half could not be started: %v\n%s", err, b)
-		}
-		out = string(b)
-		if ran(out) || attempt == replacementAttempts {
-			if attempt > 1 {
-				// Said on stderr rather than through t.Logf, and that is the
-				// whole point of saying it here: CI runs `go test` without
-				// -v, which prints nothing a passing test logged. The rate is
-				// the number worth watching — a retry is rare, and a rise in
-				// how often one is needed is the first sign the window has
-				// grown — so it has to survive a quiet run.
-				fmt.Fprintf(os.Stderr, "%s: the replacement ran on attempt %d of %d — see #731\n",
-					name, attempt, replacementAttempts)
-			}
-			return out
-		}
+	cmd := exec.Command(os.Args[0], "-test.run="+name)
+	cmd.Env = append(os.Environ(), helperScript+"="+script)
+	// Deliberately no ExtraFiles: descriptor 3 is unopened here, so what
+	// the replacement finds on it is the script's doing and nothing
+	// else's.
+	b, err := cmd.CombinedOutput()
+	// A status is deliberately not asserted, and not even tolerated
+	// silently by accident: what comes back is the *replacement's*
+	// status, and a replacement that could not write to a descriptor
+	// reports 1 in bash and 2 in dash — /bin/sh being one on macOS and
+	// the other on Debian. That is a fact about the machine, so every
+	// assertion here is about what was written instead.
+	var exit *exec.ExitError
+	if err != nil && !errors.As(err, &exit) {
+		t.Fatalf("the shell half could not be started: %v\n%s", err, b)
 	}
+	out := string(b)
+	if !ran(out) {
+		// One attempt, and this is where the retry that used to be here
+		// went. #845 tried a replacement five times because #731 could kill
+		// the shell before it became the command, and no code could stop it:
+		// `exec 5>f` had to put the file on 5, and 5 was where this shell's
+		// own startup left the runtime's epoll descriptor.
+		//
+		// driver/lowfds_unix.go stopped it, so the retry is gone. Both halves
+		// of that matter. A retry that is no longer needed is a retry that
+		// hides the next regression of the thing it was added for — the
+		// window reopening would look like a slower test rather than a
+		// failure — and the retry's removal is the only assertion that can
+		// say the collision is designed out rather than merely rarer.
+		//
+		// Measured before removing it: on Linux, with the window held open
+		// for 20ms so the race is not a race, a script parking on descriptor
+		// 5 lost the replacement 25 times out of 25 before that change and 0
+		// of 25 after; 100 further runs bounded to one CPU needed no retry.
+		// On darwin, where the runtime's signal pipe made it certain rather
+		// than racy, 25 of 25 became 0 of 25.
+		t.Fatalf("the replacement never ran, which is the shell dying where it was about"+
+			" to become the command — see #731:\n%s", out)
+	}
+	return out
 }
-
-// replacementAttempts is how many times a replacement is tried before its
-// absence is taken for an answer.
-//
-// A run that never reached the replacement did not answer the question this
-// package asks, and #731 is a way for that to happen which no code here can
-// prevent. `exec 5>f; exec cmd` has to put the script's file on descriptor 5,
-// and 5 is where this shell's own startup leaves the Go runtime's epoll
-// descriptor — measured, and the reason is in replace.go. Between that dup3
-// and the execve, another thread polls the number on a timer of its own and
-// finds a regular file:
-//
-//	runtime: epollwait on fd 5 failed with 22
-//	fatal error: runtime: netpoll failed
-//
-// #838 emptied that window of everything this repository puts in it — an
-// strace is the dup3 and then the execve, adjacent, with nothing allocating
-// between them. What is left belongs to the kernel: execve on a multithreaded
-// process kills the other threads *inside* the call, and until it has, they
-// are still running against a table that has already changed. No Go code can
-// shorten that, which is why this is a retry and not a fix.
-//
-// It is not a weakening, and the difference is worth stating. Every attempt
-// has to miss before an assertion does, so a real break still fails; each
-// retry is logged, so the rate is visible in a CI log rather than swallowed;
-// and the run that *does* reach the replacement is graded exactly as strictly
-// as before.
-const replacementAttempts = 5
 
 // wrote reports whether a replacement left something in a file, which is the
 // usual sign that it ran at all.

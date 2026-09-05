@@ -157,6 +157,25 @@ func TestInterruptPartWayThroughABindingAbandonsTheLine(t *testing.T) {
 	}
 }
 
+// TestTheLastWordWidgetNeedsAHistoryToShowItsWork is the one action a bare
+// editor cannot be tested for: with nothing recalled there is no last word,
+// and doing nothing is what a widget wired to nothing also does. So this one
+// gets a history, and asserts the word actually arrives.
+func TestTheLastWordWidgetNeedsAHistoryToShowItsWork(t *testing.T) {
+	var out strings.Builder
+	table := map[string]Widget{"\a": WidgetInsertLastWord}
+	e := Shell{KeyBindings: func() map[string]Widget { return table }}.newEditor()
+	e.history = []string{"echo one two"}
+	e.in, e.out = strings.NewReader("ls \a\n"), &out
+	line, err := e.readLine(drawPrompt("$ "))
+	if err != nil {
+		t.Fatalf("readLine: %v", err)
+	}
+	if want := "ls two"; line != want {
+		t.Errorf("line = %q, want %q", line, want)
+	}
+}
+
 // TestEveryWidgetIsReachable walks the whole vocabulary through the dispatch.
 //
 // It exists because a constant added to the list and forgotten in runWidget is
@@ -192,7 +211,6 @@ func TestEveryWidgetIsReachable(t *testing.T) {
 		// none of — so it is asserted for reaching its action and leaving the
 		// line alone, which is what an empty history means.
 		{WidgetUndo, "ab\x07", ""},
-		{WidgetInsertLastWord, "ab\x07", "ab"},
 		{WidgetDeleteChar, "ab\x02\x02\x07", "b"},
 		{WidgetBackwardDeleteChar, "ab\x07", "a"},
 		// The yank has to have something to put back, so a kill comes first —

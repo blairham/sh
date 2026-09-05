@@ -2587,6 +2587,96 @@ survives only for a word that begins with `--`: `export --foo` is
 `bad option: -o` — zsh skipped the dashes, took `f` as one of export's own
 letters, and stopped on the `o` it does not know.
 
+### `--help` is an option one shell answers and the rest refuse
+
+It looks like a courtesy and it is the most-run builtin call there is.
+macOS ships fifteen commands in `/usr/bin` as the same stub —
+`builtin $(basename $0) "$@"` — so `/usr/bin/alias --help` *is* a shell
+builtin call, and it is how a person or a script pokes at one. Every
+disagreement the real-script run sweep found was this: 22 of 48 runs
+across 15 scripts (#815, #825).
+
+Measured 2026-09-05, panel and machine as `../spec/oracle.md`:
+
+| probe | dash | bash 3.2 | bash 5 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- |
+| `alias --help` | `--help not found`, 1 | `alias: --: invalid option`, 2 | **synopsis on stdout**, 2 | `Usage: alias …` on stderr, 2 | `bad option: -h`, 1 |
+| `bg --help` | `Illegal option --`, 2 | `bg: no job control`, 1 | **synopsis on stdout**, 2 | `Usage: bg …` on stderr, 2 | `no job control …`, 1 |
+| `true --help` | 0, silent | 0, silent | 0, silent | 0, silent | 0, silent |
+| `echo --help` | prints `--help` | prints `--help` | prints `--help` | prints `--help` | prints `--help` |
+| `alias --help=x` | takes the assignment | `--: invalid option`, 2 | `--: invalid option`, 2 | its whole option list | `bad option: -h`, 1 |
+| `alias -- --help` | `-- not found` | `--help: not found`, 1 | `--help: not found`, 1 | 0 | 1 |
+
+Four facts, and each is a separate way to get it wrong:
+
+1. **The answer goes to standard output.** Every refusal here goes to
+   standard error, so the stream is what a script uses to tell an answer
+   from a complaint — and it is why this is not simply another wording of
+   the bad-option refusal it sits beside.
+2. **It ends the builtin with 2 all the same.** Printing help is not
+   success in bash: `alias --help` exits 2, the same status a bad option
+   earns, which is why a script cannot tell the two apart by status.
+3. **It is answered before anything the builtin cannot do.** `bg --help`
+   answers in a shell with no job control at all, so the option is read
+   before the precondition rather than after it.
+4. **It has to be the exact word, standing where an option stands.** An
+   abbreviation is not it, `--help=x` is not it, and a `--help` past the
+   `--` that ends the options is an operand. Nor is one that a letter has
+   already claimed: `read -d --help` hands `--help` to `-d` as its
+   delimiter and reads on. That last one is why the shared option reader
+   answers this rather than a scan of the argument list — only the reader
+   knows which letters take an argument.
+
+Diagnostics: `BuiltinHelp`, a map from builtin name to the answer, and
+`BuiltinHelpStatus`. A name with no entry has no answer and `--help` is
+then the ordinary option nobody has, which is what three of the five do
+for every builtin — so the map says *whether* as well as *what*, and no
+separate axis is needed. `BuiltinHelpStatus` defaults to 2 rather than to
+0 on purpose: the option reader tells its callers "this builtin is
+finished" with a nonzero code and has no other way to say it, so a help
+status of zero would print the answer and then run the builtin anyway.
+
+**What is implemented is the synopsis and not the block.** bash follows
+the synopsis with a paragraph of description, a list of its options and
+an "Exit Status" note. That is documentation prose rather than shell
+behavior, and this tree carries no other project's text — see
+`CLEANROOM.md` — so it is deliberately not reproduced. What a script can
+act on is implemented: that the option is recognized, that the answer is
+on standard output, that it comes first, and that the status is 2. The
+corpus cases are written as a first line and a status for the same
+reason. ksh93's answer is a third shape again — a short usage on standard
+error — and is not modeled.
+
+The synopsis is not written twice. Measured over every builtin bash has:
+the first line of `help NAME` is exactly the usage line a bad option to
+NAME earns, with the `usage: ` taken out — `alias: alias [-p]
+[name[=value] ... ]` against `alias: usage: alias [-p] [name[=value]
+... ]` — so `dialect/bash` derives one from the other.
+
+### The usage line after a bad option is missing from no builtin
+
+The same measurement found the neighboring gap. bash and ksh93 print a
+usage line under a bad-option complaint for *every* builtin, and six of
+ours printed the complaint with nothing under it: `alias`, `unalias`,
+`cd`, `fc`, `hash` and `ulimit`. Five of those reach the shared option
+reader, which looks the line up in `BuiltinUsage` and found no entry;
+`ulimit` refuses on its own, because its letters are resource names
+rather than a fixed set, and was not asking for the line at all.
+
+`umask` is the third shape and was wrong in a different way: it spelled
+the offending word out itself, so it was the one builtin in the shell
+that answered `umask: --version: invalid option` where every other one
+answers `umask: --: invalid option`. Which part of a `--` word a
+complaint names is `BadOptionNaming`, a rule about the dialect and not
+about the builtin, and it now goes through the same reader as the rest.
+
+Corpus: `help/a-builtin-answers-the-help-option`,
+`help/the-help-option-comes-before-what-the-builtin-cannot-do`,
+`help/a-builtin-with-nothing-to-say-takes-it-as-a-word`,
+`help/the-help-option-is-the-whole-word-and-stands-where-an-option-stands`,
+`help/a-bad-option-is-followed-by-the-builtins-usage`,
+`help/a-bad-option-to-umask-is-named-the-way-the-dialect-names-one`.
+
 ## read's options are the dialect's letters
 
 `Semantics.ReadOptions`, in the getopts spelling — a `:` after a letter

@@ -112,6 +112,12 @@ func biUlimit(r *Runner, _ context.Context, args []string) int {
 				if !found || !r.hasResource(res) {
 					r.diagf("%s\n", Wording(r.diag().UlimitBadOption,
 						"ulimit: -%[1]s: invalid option", string(c)))
+					// The usage line every other builtin's refusal is
+					// followed by, in the dialects that print one. This
+					// builtin has a refusal of its own — the letters are
+					// resources rather than a fixed set — and had been
+					// left out of the line that comes after it (#825).
+					r.builtinUsageLine("ulimit")
 					return orDefault(r.diag().UlimitBadOptionStatus, 2)
 				}
 			}

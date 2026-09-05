@@ -66,6 +66,16 @@ func (r *Runner) builtinOptionsArg(name string, args []string, known string) (re
 		if a == "--" {
 			return args[1:], opts, optArg, 0
 		}
+		if a == helpOption {
+			// Here rather than before the loop, so it is only `--help`
+			// standing where an *option* stands. `-- --help` has already
+			// returned above, an operand ends the loop below, and a letter
+			// that takes an argument has taken this word as one — measured,
+			// `read -d --help` reads until a `-` rather than printing help.
+			if status, ok := r.builtinHelpAnswer(name); ok {
+				return nil, opts, optArg, status
+			}
+		}
 		// Where the letters start. One dialect skips every leading dash
 		// before reading the bundle; see BadOptionNaming.
 		start := 1

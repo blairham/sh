@@ -38,8 +38,14 @@ func biUmask(r *Runner, _ context.Context, args []string) int {
 			continue
 		default:
 			d := r.diag()
+			// Named the way every other builtin's bad option is named, which
+			// is the dialect's rule and not this builtin's: `umask --version`
+			// is `--` in bash and `-v` in zsh, exactly as `export --version`
+			// is. Spelling the whole word here made this the one builtin
+			// that answered `umask: --version: invalid option`.
+			_, name := r.badOption(args[0], "S")
 			r.diagf("%s\n", Wording(d.UmaskBadOption,
-				"umask: %[1]s: invalid option", args[0]))
+				"umask: %[1]s: invalid option", name))
 			if d.UmaskUsage != "" {
 				if d.UmaskUsageUnprefixed {
 					r.errf("%s\n", d.UmaskUsage)

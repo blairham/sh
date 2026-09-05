@@ -521,10 +521,12 @@ and the prefix reading is what these two disprove.
 substitution.** `EOF)` on its own line inside `$( … )` ends the body and
 closes the substitution in bash 5.3, bash 3.2 and ksh93; dash and zsh
 refuse the construct outright, dash saying it wanted the `)` and zsh
-naming the assignment (`heredoc/a-delimiter-that-closes-a-command-
-substitution`). So the exception is not "a prefix ends the body" but
-"the substitution's closer may follow the delimiter", it is two shells
-against two, and it is the only place the whole-line rule bends. bash
+naming the assignment. The case is
+`heredoc/a-delimiter-that-closes-a-command-substitution`.
+
+So the exception is not "a prefix ends the body" but "the substitution's
+closer may follow the delimiter" — four of the six columns take it and
+two refuse — and it is the only place the whole-line rule bends. bash
 also *warns* there that the document was delimited by end of file, which
 is the same remark `<<-` with a space-indented delimiter earns below.
 

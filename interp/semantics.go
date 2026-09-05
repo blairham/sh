@@ -1658,6 +1658,21 @@ type Semantics struct {
 	// those.
 	JobControlAbsenceIsReportedFirst Answer
 
+	// StoppedJobsHoldTheExit keeps an interactive shell alive when leaving
+	// would abandon a job that is stopped: the shell says so and stays, and
+	// the attempt has to be made a second time.
+	//
+	// bash and zsh; dash and ksh93 leave at once and the job is left stopped
+	// with nothing able to name it. Measured through a pseudo-terminal —
+	// `sleep 40`, ^Z, `exit` — for `exit` and for the end of input alike,
+	// which behave the same in both shells that hold.
+	//
+	// What counts as having been told is measured too, and it is not simply
+	// "warned once": a `jobs` listing counts, so `exit` straight after one
+	// leaves; any other command does not, so `echo hi` between the ^Z and the
+	// `exit` still warns; and a job stopping afterwards starts it over.
+	StoppedJobsHoldTheExit Answer
+
 	// CdpathAnnouncesTheDirectory prints where CDPATH sent a `cd`, when
 	// the winning entry was not a plain dot — three of the four; zsh moves
 	// in silence.
@@ -2929,9 +2944,13 @@ func PosixSemantics() Semantics {
 		TerminalTestRequiresANumber:      Yes,
 		FcEmptyHistoryIsAnError:          No,
 		JobControlAbsenceIsReportedFirst: No,
-		CdpathAnnouncesTheDirectory:      Yes,
-		FdVariableOutlivesTheCommand:     Yes,
-		FdVariableBadCloseIsAnError:      Yes,
+		// The standard describes `exit` as exiting and says nothing about a
+		// job left stopped, so the base leaves; bash and zsh, which stay and
+		// warn, override.
+		StoppedJobsHoldTheExit:       No,
+		CdpathAnnouncesTheDirectory:  Yes,
+		FdVariableOutlivesTheCommand: Yes,
+		FdVariableBadCloseIsAnError:  Yes,
 		// The standard says nothing about a ceiling, so this follows the
 		// panel: bash and ksh93 hand the kernel's refusal back, dash and zsh
 		// report success on a number the process cannot hold.

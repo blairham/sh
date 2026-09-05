@@ -6050,3 +6050,145 @@ Not a wording difference: where it is absent the name is not an option
 at all, so `set -o pipefail` fails and the pipeline goes on reporting
 its last element — which is the answer a script guarding against a
 failure upstream is specifically trying not to get.
+
+## Suspend and resume: what ^Z, `fg` and `bg` say, and what a stopped job does to an exit
+
+Measured through a pseudo-terminal on 2026-09-05 — bash 5.3.15, zsh
+5.9.2, dash and ksh93u+ — because none of it exists anywhere else: a
+shell reads its stopped-job state off a terminal it owns, and `-c` and a
+script file cannot reach any of it. Each shell was driven in a session of
+its own with a scratch `HOME`, the sequence `sleep 40`, ^Z, `jobs`, `fg`,
+^Z, `bg`, `exit`, `exit`, waiting on the next prompt between steps.
+
+**^Z prints a notice where the stop happened**, not before the next
+prompt. `sleep 5; echo after` suspended with ^Z prints the notice and
+*then* `after` in all four, so it belongs to the stop rather than to the
+prompt — unlike the notice a job that *ended* gets, which every shell
+holds back until the prompt.
+
+Three of the four print the `jobs` listing's own row. zsh prints a
+sentence that names itself and no job number at all:
+
+    bash    [1]+  Stopped                    sleep 40
+    dash    [1] + Suspended: 18              sleep 40
+    ksh93   [1] + Stopped                    sleep 40
+    zsh     zsh: suspended  sleep 40
+
+`Diagnostics.JobStoppedNotice` is empty for the first three and zsh's
+sentence for the fourth.
+
+**Whether it starts on a line of its own splits two and two.** The
+terminal echoed `^Z` where the cursor was and left it there. bash and zsh
+write a newline first; dash and ksh93 write the row straight after the
+echo, so the screen reads `^Z[1] + Stopped …`. That is
+`Diagnostics.JobStoppedNoticeOnANewLine`, and it is the same debt the
+prompt pays after a `^C`.
+
+**`fg` names the command alone in three of the four**, and zsh prints a
+listing row with a state that appears in no listing:
+
+    bash, dash, ksh93   sleep 40
+    zsh                 [1]  + continued  sleep 40
+
+**`bg` differs in all four**, which is why it is a format rather than a
+flag:
+
+    bash    [1]+ sleep 40 &
+    dash    [1] sleep 40
+    ksh93   [1]<tab>sleep 40&
+    zsh     [1]  + continued  sleep 40
+
+**A stopped job holds the exit in bash and zsh and not in dash or
+ksh93.** The two that hold say so and stay; the attempt has to be made a
+second time, and the end of input behaves exactly as `exit` does:
+
+    bash    There are stopped jobs.
+    zsh     zsh: you have suspended jobs.
+
+The status afterwards is the sharper half. bash's held `exit` reports 1 —
+a builtin that failed, which `echo $?` on the next line shows — and zsh's
+reports 0. A held ^D changes no status at all in either, so a session
+ended by ^D ^D exits 146, the status the stopped `sleep` left behind.
+
+**What suppresses the second warning is the thing immediately before
+it**, and both shells agree:
+
+    ^Z, exit, exit                    warns, then leaves
+    ^Z, echo hi, exit                 warns
+    ^Z, jobs, exit                    leaves at once
+    ^Z, jobs, true, exit              warns
+    ^Z, jobs, sleep 41, ^Z, exit      warns
+    ^Z, jobs -p, exit                 leaves at once
+
+So a `jobs` listing counts as the shell having shown you the same thing —
+in any form, `jobs -p` included — and only for the very next line. A
+sticky "has been warned" flag gets the first four rows right and the
+fifth and sixth wrong, which is why `Runner` carries what the *previous*
+chunk said rather than what has ever been said.
+
+`Semantics.StoppedJobsHoldTheExit` is the axis; the POSIX base leaves,
+since the standard describes `exit` as exiting and says nothing about a
+job left behind, and bash and zsh override.
+
+## Interrupting what the shell is running itself: ^C and ^Z against a compound command
+
+Measured through a pseudo-terminal on 2026-09-05, bash 5.3.15 and zsh 5.9.2,
+with a scratch `HOME` and each line waited on to its next prompt.
+
+The shape that matters is a command the shell executes *itself* — a loop, an
+`if`, a function body — rather than a process it started. `while :; do echo
+tick; sleep 1; done` typed at a prompt is two different things at two
+different moments: while `sleep` runs, the terminal belongs to the sleep's
+process group and a ^C goes there; while the shell runs `echo` and the loop
+around it, the terminal belongs to the shell and the ^C is a signal at the
+shell itself. A shell that answers only the first goes round again either way.
+
+**^C is unanimous and it gives up the whole line.**
+
+    while :; do echo tick; sleep 1; done; echo AFTER    ^C → no AFTER, $? = 130
+    while :; do echo tick; done                          ^C → stops, $? = 130
+    if sleep 10; then echo YES; fi; echo AFTER-IF        ^C → neither, $? = 130
+    f() { sleep 10; echo INFN; }; f; echo AFTER-FN       ^C → neither, $? = 130
+    sleep 10; echo AFTER                                 ^C → no AFTER, $? = 130
+
+Loops, conditionals, function bodies and the plain list all end, and so do the
+commands written after them on the same line. That is exactly what
+`controlAbandon` already meant for a refused assignment to a readonly name, so
+it is the same mechanism rather than a second one.
+
+**^Z is not the same rule, and here the two shells part company.**
+
+bash breaks out of the loops the stop was inside and carries on with the line:
+
+    while :; do echo tick; sleep 1; done; echo AFTER-LOOP   ^Z → AFTER-LOOP, $? = 0
+    if sleep 10; then echo YES; fi; echo AFTER-IF           ^Z → AFTER-IF, no YES
+    f() { sleep 10; echo INFN; }; f; echo AFTER-FN          ^Z → INFN and AFTER-FN
+    sleep 10; echo AFTER                                    ^Z → AFTER, $? = 0
+
+So a stop is not an interrupt: the only construct it ends is a loop, and the
+`if` above skips its `then` because the stopped condition reported 146 rather
+than because anything was abandoned.
+
+zsh instead suspends **the construct itself** as a job. Every one of those
+lines stops dead at 146 with nothing after it run, and `jobs` afterwards shows
+an extra entry with an empty command beside the stopped `sleep` — the loop or
+the function, suspended and resumable. That needs a fork of the shell's own
+execution state, which this engine has no way to make: our subshells are
+cloned Runners in one process. bash's rule is what is implemented, and zsh
+gets it too; the alternative on offer was leaving the loop running, which is
+the runaway this section exists to fix.
+
+**A trap changes it and the two disagree again.** With `trap 'echo CAUGHT'
+INT` set, bash's ^C on the loop prints nothing, ends the line and reports 130 —
+the handler does not run at all — while zsh runs the handler and the loop goes
+on ticking. Neither is reproduced here; the engine treats a trapped interrupt
+as an untrapped one, which is bash's ending.
+
+**Where the two halves live.** The interrupt that reached the *command* is read
+off the wait: `runWatched` sees a child killed by SIGINT and gives up the line.
+The interrupt that reached the *shell* can only be heard by the binary —
+`interp` installs no signal handlers, because a library that did would be
+taking them from the program around it — so `Runner.TakeInterrupt` is a hook
+the front end fills in, asked at the top of every command. That is the only
+place a loop of builtins can be stopped: nothing in `while :; do echo tick;
+done` blocks, waits, or returns anywhere else.

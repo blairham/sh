@@ -36,6 +36,13 @@ type Job struct {
 	// the shell had nothing to record — a job with no process of its own.
 	Command string
 
+	// polled says nothing is blocked on this job's process, so the shell has
+	// to ask after it rather than being told. True of what ^Z leaves behind:
+	// the command was in the foreground, so no goroutine is waiting on it the
+	// way one waits on a `&` job, and once `bg` has let it go there is nobody
+	// left to notice it end. See Runner.reapJobs.
+	polled bool
+
 	done chan struct{}
 	once sync.Once
 	// ready is closed once the PID is known, or once the job has finished
@@ -196,6 +203,10 @@ func (r *Runner) FinishedJobNotices() []string {
 	if !r.JobControl {
 		return nil
 	}
+	// Before the notices are built rather than after: a job `bg` let go of
+	// finishes only when the shell asks, and asking afterwards would report it
+	// one prompt later than it ended.
+	r.reapJobs()
 	var lines []string
 	kept := r.jobs[:0]
 	for i, j := range r.jobs {
@@ -226,10 +237,42 @@ func (r *Runner) FinishedJobNotices() []string {
 // the top of the next statement, which is what keeps `wait; echo $?` printing
 // the trap's output first and the signal's status second in that order.
 func (r *Runner) waitFor(j *Job) (status int, sig syscall.Signal, interrupted bool) {
+	// A job nothing is waiting on has to be waited for here, or this would
+	// block on a channel no goroutine is ever going to close. That is what ^Z
+	// leaves behind — see reapJobs — and between commands this shell is the
+	// only waiter, so blocking on the process is not racing anything.
+	r.waitOutPolledJob(j)
 	if sig, hit := r.awaitOrTrap(j.done); hit {
 		return 0, sig, true
 	}
 	return j.Status, 0, false
+}
+
+// waitOutPolledJob blocks on the process of a job the shell has been asking
+// after, until it is no longer running.
+func (r *Runner) waitOutPolledJob(j *Job) {
+	if !j.polled || j.PID == 0 || j.Finished() || r.WaitForCommand == nil {
+		return
+	}
+	for {
+		w, err := r.WaitForCommand(j.PID)
+		if err != nil {
+			j.Stopped = false
+			j.finish(r.status)
+			return
+		}
+		status, stopped := r.waitResult(w)
+		if stopped {
+			// Stopped again while being waited for, which is where zsh's
+			// `wait %1` sits for good. Recorded and waited on again rather
+			// than answered, because the job has not ended.
+			j.Stopped, j.StopSig = true, int(w.Signal)
+			continue
+		}
+		j.Stopped = false
+		j.finish(status)
+		return
+	}
 }
 
 // biWait waits for background jobs.
@@ -442,13 +485,159 @@ func (r *Runner) addStoppedJob(pid int, argv []string, sig syscall.Signal) {
 		Stopped: true,
 		StopSig: int(sig),
 		Command: strings.Join(argv, " "),
+		polled:  true,
 		done:    make(chan struct{}),
 		ready:   make(chan struct{}),
 	}
 	job.markReady()
 	r.jobs = append(r.jobs, job)
 	r.lastJob = job
+	r.announceStopped(job)
 }
+
+// announceStopped says the job in front of the shell stopped.
+//
+// Immediately rather than before the next prompt, which is what separates it
+// from the notice a job that *ended* gets: measured, `sleep 5; echo after`
+// stopped with ^Z prints the notice and then `after` in every shell in the
+// panel, so the notice belongs where the stop happened and not where the
+// prompt is drawn.
+//
+// Only where there is somebody to tell, the same rule announceJob follows: a
+// script is told nothing about its jobs by any shell in the panel.
+func (r *Runner) announceStopped(j *Job) {
+	// A new stop is something the person has not been shown, whether or not
+	// an earlier one was — measured, a `jobs` listing followed by a second ^Z
+	// makes bash warn about stopped jobs at the next `exit` all over again.
+	r.toldOfStoppedJobs, r.tellingOfStoppedJobs = false, false
+	if !r.JobControl {
+		return
+	}
+	dg := r.diag()
+	if dg.JobStoppedNoticeOnANewLine {
+		// The terminal echoed `^Z` where the cursor was and left it there, so
+		// two of the four start the notice on a line of its own and the other
+		// two write it straight after the echo. The same shape as the newline
+		// the prompt writes after a ^C, and measured the same way.
+		r.errf("\n")
+	}
+	i := r.jobNumber(j)
+	if w := dg.JobStoppedNotice; w != "" {
+		r.errf("%s\n", Wording(w, "", i+1, r.jobMarker(j), r.name(), j.Command))
+		return
+	}
+	// Nothing said otherwise, so the notice is the listing's own row, which is
+	// what three of the four print.
+	r.errf("%s\n", r.jobLineAs(i, j, true, false))
+}
+
+// reapJobs asks after the jobs nothing is waiting on, and is how a job that
+// `bg` let go of ever finishes.
+//
+// A `&` job is waited for by the goroutine that started it, and a job `fg`
+// put back in front is waited for by `fg` itself. What ^Z leaves behind has
+// neither: the command was in the foreground, the wait for it returned when
+// it stopped, and after `bg` there is nobody left to notice it end. Without
+// this a resumed job is listed as `Running` for the rest of the session,
+// never reports that it finished, and never lets go of its process.
+//
+// A poll rather than a waiter, because the shell asking is the only arrangement
+// with exactly one reaper: this runs between commands, where nothing else in
+// this shell is waiting for anything, so there is no race over who collects
+// the status.
+func (r *Runner) reapJobs() {
+	if r.PollCommand == nil {
+		return
+	}
+	for _, j := range r.jobs {
+		if !j.polled || j.PID == 0 || j.Finished() {
+			continue
+		}
+		w, changed, err := r.PollCommand(j.PID)
+		if err != nil {
+			// The process is gone and this shell cannot say with what status —
+			// most often because something outside reaped it. Finishing it is
+			// the honest answer: keeping it would leave a job in the table
+			// that nothing can ever resume or report.
+			j.Stopped = false
+			j.finish(r.status)
+			continue
+		}
+		if !changed {
+			continue
+		}
+		if w.Stopped {
+			j.Stopped, j.StopSig = true, int(w.Signal)
+			continue
+		}
+		status, _ := r.waitResult(w)
+		j.Stopped = false
+		j.finish(status)
+	}
+}
+
+// HoldsExitForStoppedJobs reports whether this shell should stay rather than
+// exit, because leaving now would abandon a job that is stopped — and says so
+// when it does.
+//
+// Exported because both ways out of a session reach it and only one of them is
+// in this package: `exit` is a builtin, and the end of input is the front
+// end's. Measured, the two are the same warning in the same words.
+//
+// Once, and what "once" means is measured rather than assumed. The warning
+// itself counts as having been told, so a second `exit` leaves; so does a
+// `jobs` listing, which is the shell showing the same thing on purpose; and a
+// job stopping afterwards starts the count again. Any other command in between
+// does not — bash and zsh both warn again after an `echo`.
+func (r *Runner) HoldsExitForStoppedJobs() bool {
+	if !r.JobControl || r.toldOfStoppedJobs {
+		return false
+	}
+	stopped := false
+	for _, j := range r.jobs {
+		if j.Stopped && !j.Finished() {
+			stopped = true
+			break
+		}
+	}
+	if !stopped {
+		return false
+	}
+	if !r.ask(r.sem().StoppedJobsHoldTheExit, "an exit held back by a stopped job") {
+		// Unspecified is left to the caller: the axis has already complained,
+		// and a shell that cannot say whether to stay had better leave than
+		// refuse to.
+		return false
+	}
+	// Both, and the second is what carries it to the next chunk: `exit` twice
+	// leaves, and the end of input twice leaves without any chunk running
+	// between the two.
+	r.toldOfStoppedJobs, r.tellingOfStoppedJobs = true, true
+	// Written plainly rather than through the dialect's location prefix: one
+	// of the two shells that says this names itself in the sentence and the
+	// other names nobody at all, and neither writes the line number a prompt's
+	// diagnostics carry.
+	r.errf("%s\n", Wording(r.diag().StoppedJobsAtExit, "there are stopped jobs", r.name()))
+	return true
+}
+
+// LastCommandWasInterrupted reports whether the command that just ran ended
+// because it was interrupted.
+//
+// For the shell around it, and for one thing only: the terminal echoed `^C`
+// where the cursor was and left it there, so the next prompt has to start on a
+// line of its own. That is the same debt a stopped job's notice pays, and the
+// two are answered in different places because a stop is something this
+// package prints and an interrupt is not.
+//
+// Asked of the command rather than of the process, and that is the whole
+// reason it exists. A shell that hands the terminal to what it runs is no
+// longer in the foreground group, so the ^C never reaches it and a handler of
+// its own hears nothing — which is exactly the arrangement job control puts it
+// in. What ended the command is the fact; hearing the signal was only ever a
+// proxy for it, and one that stopped being true the moment `fg` and `bg` could
+// work at all.
+func (r *Runner) LastCommandWasInterrupted() bool { return r.diedOfSig == syscall.SIGINT }
 
 // Jobs is what this shell is keeping track of, oldest first.
 //

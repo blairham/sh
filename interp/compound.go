@@ -154,10 +154,21 @@ func (r *Runner) loop(ctx context.Context, c *syntax.LoopClause) error {
 		// something of its own to say: the condition can *see* it —
 		// `false; while [ $? -eq 0 ]; do …` does not run in any shell in
 		// the panel, and resetting first made it run in ours.
+		defer r.enteringLoop()()
 		body := 0
 		for {
 			if err := r.condList(ctx, c.Cond); err != nil {
 				return err
+			}
+			if r.ctl != controlNone {
+				// The condition gave up rather than answering — an
+				// interrupt at the prompt, a refused assignment — so there
+				// is no answer to read and the status it left is the loop's.
+				// Reading it as a condition instead put the loop's own
+				// bookkeeping over the top of it, so `while :; do …; done`
+				// interrupted reported 0 where the same interrupt in a `for`
+				// reported 130.
+				return nil
 			}
 			done := r.status == 0
 			if c.Until {
@@ -199,6 +210,7 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 		// one. `false; for i in a b; do echo $?; done` prints 1 and then 0
 		// in every shell in the panel — the first iteration sees what
 		// preceded the loop — and a reset written up here printed 0 twice.
+		defer r.enteringLoop()()
 		body := 0
 		for _, it := range items {
 			r.setVar(c.Name, it)
@@ -246,6 +258,7 @@ func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) e
 		if _, ok := r.forArithPart(c.Init, c.InitText); !ok {
 			return nil
 		}
+		defer r.enteringLoop()()
 		for {
 			if c.Cond != nil || c.CondText != "" {
 				v, ok := r.forArithPart(c.Cond, c.CondText)

@@ -271,6 +271,35 @@ type Runner struct {
 	// shell without this hook hangs on ^Z rather than returning to a prompt.
 	WaitForCommand func(pid int) (Wait, error)
 
+	// PollCommand is WaitForCommand without the waiting: it reports whether a
+	// command this shell started has changed state since it was last asked,
+	// and `changed` is false when it has not.
+	//
+	// It is what a job `bg` resumed is finished by. Nothing is blocked on such
+	// a job — ^Z left it behind a wait that already returned — so the shell
+	// has to ask, and it asks between commands, where it is the only waiter
+	// and there is no race over who reaps the child.
+	//
+	// Nil means this shell cannot ask, and a resumed job then stays listed as
+	// running until something waits for it by name.
+	PollCommand func(pid int) (w Wait, changed bool, err error)
+
+	// TakeInterrupt, when set, reports whether the person at the keyboard has
+	// interrupted the shell since it was last asked, and forgets it.
+	//
+	// The front end's to answer because only the front end can hear it. interp
+	// installs no signal handlers — a library that did would be taking them
+	// from the program around it — so a ^C aimed at *this process*, which is
+	// what one is whenever the shell is running something of its own rather
+	// than an external command, is invisible here. Without it a loop of
+	// builtins typed at a prompt cannot be stopped by anything short of
+	// closing the terminal.
+	//
+	// Consulted at the top of every command, and only in an interactive
+	// shell: what a *script* does with an interrupt is a different question,
+	// answered by the signal itself rather than by somebody typing.
+	TakeInterrupt func() bool
+
 	// Foreground, when set, hands the terminal to a process group for as long
 	// as it runs, and takes it back afterwards. A pgid of 0 means the shell
 	// itself.
@@ -484,6 +513,11 @@ type Runner struct {
 	// control flow rather than errors, so they are not returned as ones.
 	ctl      control
 	ctlDepth int
+	// loopDepth is how many loops execution is inside right now, which is
+	// what a ^Z has to break out of — see breakLoopsForAStop. Dynamic rather
+	// than lexical: a loop that calls a function that loops is two, because
+	// what the stop is inside is what matters.
+	loopDepth int
 	// ctx is the context of the current Run, so expansion can reach it. A
 	// command substitution runs commands, and threading a context through
 	// every expander signature to reach one place would be worse.
@@ -663,6 +697,20 @@ type Runner struct {
 	// jobs are the background commands started by this shell.
 	jobs    []*Job
 	lastJob *Job
+	// toldOfStoppedJobs says the chunk *before* this one showed the person
+	// the jobs that are stopped, so the shell will not hold its exit for them
+	// again; tellingOfStoppedJobs is this chunk saying so, and becomes the
+	// other at the next one.
+	//
+	// Two fields because what suppresses the warning is the thing immediately
+	// before it and not anything that has ever happened. Measured through a
+	// pseudo-terminal: ^Z then `exit` warns and a second `exit` leaves; ^Z
+	// then `jobs` then `exit` leaves, because the listing is the shell showing
+	// the same thing on purpose; and ^Z, `jobs`, any other command, `exit`
+	// warns again. One sticky flag gets the first three right and the fourth
+	// wrong.
+	toldOfStoppedJobs    bool
+	tellingOfStoppedJobs bool
 	// bg is set on the runner *inside* a background job, so the process it
 	// starts can be recorded against the job.
 	bg *Job
@@ -1270,6 +1318,10 @@ func (r *Runner) Run(ctx context.Context, f *syntax.File) (int, error) {
 // Nothing is torn down here. Finish does that, once, however many chunks ran.
 func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	r.ctx = ctx
+	// A chunk is a typed line, and whether the shell has just shown the person
+	// its stopped jobs is a fact about the line before this one — see the two
+	// fields for what that buys over remembering it forever.
+	r.toldOfStoppedJobs, r.tellingOfStoppedJobs = r.tellingOfStoppedJobs, false
 	r.ensurePWD()
 	r.ensureSpecials()
 	r.ensureImportedFunctions()
@@ -1709,6 +1761,20 @@ func (r *Runner) command(ctx context.Context, c syntax.Command) error {
 		// the difference; an embedder building a tree by hand can, and this
 		// package is a library.
 		r.line = r.lineOf(c.Pos())
+	}
+	// And this door is where an interrupt has to be noticed, because for a
+	// loop of the shell's own commands there is no other: nothing in `while
+	// :; do echo tick; done` blocks, waits or returns to anywhere else.
+	//
+	// *After* the line is recorded, and that is not tidiness. Giving up the
+	// line means naming the line to give up, and on the first command of a
+	// chunk the number is still zero — so an interrupt taken there matched no
+	// statement, and everything after it on the line ran as though nothing
+	// had happened.
+	if r.takeInterrupt() {
+		return nil
+	}
+	if c != nil {
 		// And what the command *is*, for the one message that says a
 		// command back rather than naming it: a signal that ends one is
 		// reported with the command written out.
@@ -2236,6 +2302,18 @@ func (r *Runner) runWatched(ctx context.Context, cmd *exec.Cmd, argv []string, a
 		// Still there, so it becomes a job rather than a result. The prompt
 		// comes back and the command is waiting to be told to go on.
 		r.addStoppedJob(pid, argv, w.Signal)
+		// And the loops it was inside end, or a ^Z would leave the shell
+		// going round again with the command it was waiting for suspended —
+		// which is a loop that runs *faster* for having been suspended, and
+		// cannot be stopped at all.
+		r.breakLoopsForAStop()
+	}
+	if w.Killed && w.Signal == syscall.SIGINT && r.Interactive {
+		// The interrupt went to the command rather than to this shell — the
+		// terminal was its process group's — so there was no signal here to
+		// hear, and what it did is the only evidence. Same ending either way:
+		// the line is given up.
+		r.abandonForInterrupt()
 	}
 	r.emit(ctx, Event{Kind: EventCommandEnd, Action: action, Status: r.status})
 	return nil

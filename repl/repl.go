@@ -146,6 +146,12 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// otherwise leave the terminal with echo off, which is a broken terminal
 	// and not merely a crash.
 	defer func() { _ = state.restore() }()
+	// Raw mode took the kernel's newline translation with it, so this loop
+	// does it — see crlf. On the copy of the Shell this loop runs on, which is
+	// what keeps it off the piped loop above, off the Runner's own streams
+	// (those are written with the terminal in its own discipline, where the
+	// kernel is still translating) and off the shell the caller handed in.
+	s.Out, s.Err = translating(s.Out), translating(s.Err)
 
 	// A command runs with the terminal back in its own line discipline, so
 	// ^C then reaches the foreground process group as a signal — and this
@@ -158,6 +164,14 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// dies and the shell still does not.
 	sig, stop := catchInterrupt()
 	defer stop()
+	// And the interpreter asks the same handler what it heard, because a ^C
+	// that arrives while the shell is running a loop of its own arrives *here*
+	// — the shell holds the terminal, so the signal is this process's — and
+	// interp installs no handlers of its own. Cleared on the way out: the
+	// Runner is the caller's, and a hook left pointing at this session's
+	// handler would outlive the handler.
+	s.Runner.TakeInterrupt = sig.take
+	defer func() { s.Runner.TakeInterrupt = nil }()
 
 	ed := s.newEditor()
 	ed.history = earlier
@@ -184,6 +198,13 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 			pending.Reset()
 			continue
 		case errors.Is(err, io.EOF):
+			if s.heldForStoppedJobs(state) {
+				// The end of input is a request to leave, and a shell with a
+				// stopped job answers it the way it answers `exit`: it says so
+				// and stays. The session goes on rather than returning, so a
+				// second ^D is what actually ends it.
+				continue
+			}
 			return s.status(), nil
 		case err != nil:
 			return s.status(), err
@@ -212,7 +233,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		b := s.beginBlock(text)
 		done := s.run(ctx, state, stmts)
 		s.closeBlock(ctx, store, capture, b)
-		if sig.took() {
+		if s.interrupted(sig) {
 			// The terminal echoed `^C` where the cursor was and left it
 			// there, so the next prompt would land on top of it.
 			s.write("\n")
@@ -239,6 +260,42 @@ func (s Shell) run(ctx context.Context, state *terminalState, stmts []*syntax.Fi
 		}
 	}()
 	return s.runStmts(ctx, stmts)
+}
+
+// interrupted reports whether the line that just ran was ended by a ^C, which
+// is what the next prompt has to start on a line of its own for.
+//
+// Two questions rather than one, and the second is the load-bearing half. The
+// shell only *hears* the signal while it still holds the terminal — a builtin,
+// a loop of its own. An external command runs in a process group the ^C goes
+// to instead, and this shell is not in it, so there the interrupt is visible
+// only in what the command died of. Asking the first question alone put the
+// prompt on top of the `^C` for every real command from the moment job control
+// started handing the terminal over.
+func (s Shell) interrupted(sig *interrupts) bool {
+	return sig.took() || s.Runner.LastCommandWasInterrupted()
+}
+
+// heldForStoppedJobs asks the interpreter whether the end of input should end
+// the session, with the terminal in its own line discipline while it answers.
+//
+// The discipline is the whole reason this is not the call written inline. The
+// warning is the interpreter's to word and to write, and it writes it to the
+// session's error stream — which here is a terminal in raw mode, where OPOST
+// is off and a newline is a line feed and nothing else. The next prompt then
+// starts wherever the message ended, twenty-three columns in. Restoring for
+// the length of it is the same thing running a command does, and for the same
+// reason: this is the shell speaking to the person rather than drawing a line.
+func (s Shell) heldForStoppedJobs(state *terminalState) bool {
+	if err := state.restore(); err != nil {
+		s.errf("%v\n", err)
+	}
+	defer func() {
+		if _, err := makeRaw(s.In); err != nil {
+			s.errf("%v\n", err)
+		}
+	}()
+	return s.Runner.HoldsExitForStoppedJobs()
 }
 
 // runStmts executes the statements of one accepted line, reporting whether the
@@ -352,6 +409,13 @@ func (s Shell) runPlain(ctx context.Context, store *blocks.Store, capture *block
 			// End of input ends the session, exactly as ^D does at a
 			// terminal. A final line without a newline is still a line,
 			// which is why this asks about the text and not only the error.
+			if s.Runner.HoldsExitForStoppedJobs() {
+				// And it is held back for a stopped job exactly as ^D is —
+				// the same call in both loops, so they cannot disagree about
+				// it. Once: the hold records that it said so, so the next
+				// read, which ends at once, leaves.
+				continue
+			}
 			return s.status(), nil
 		}
 		line = strings.TrimSuffix(line, "\n")

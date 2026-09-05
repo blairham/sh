@@ -220,6 +220,10 @@ func Semantics() interp.Semantics {
 	// set -E and -T carry the traps set -Eeuo pipefail scripts rely on.
 	s.SetHasTraceLetters = interp.Yes
 	s.JobControlAbsenceIsReportedFirst = interp.Yes
+	// A stopped job holds the exit back: the shell says so and stays,
+	// and the next attempt leaves. Measured through a pseudo-terminal for
+	// `exit` and for ^D alike.
+	s.StoppedJobsHoldTheExit = interp.Yes
 	s.TildePlusMinusExpands = interp.Yes
 	s.UnderscoreTracksTheLastArgument = interp.Yes
 	// Alone in the panel, bash writes `$_` before the first command runs,
@@ -531,6 +535,21 @@ func Diagnostics() interp.Diagnostics {
 		JobDone:                             "Done",
 		JobExited:                           "Exit %[1]d",
 		JobRunningShowsAmpersand:            true,
+		// ^Z prints the listing's own row — JobStoppedNotice is left empty
+		// for that — under a newline of its own, because the terminal has
+		// just echoed `^Z` where the cursor was.
+		JobStoppedNoticeOnANewLine: true,
+		// `fg` names the command alone, which is the empty default. `bg`
+		// puts the row's head in front of it and the `&` after: measured,
+		// `[1]- sleep 40 &`, with one space after the marker rather than the
+		// two a listing row has.
+		JobResumedInBackground: "[%[1]d]%[2]s %[3]s &",
+		// No name and no punctuation before it, and the held `exit` reports
+		// 1 — measured through a pseudo-terminal: `echo $?` after the
+		// refusal says 1, where the ^D that was refused leaves the status
+		// alone.
+		StoppedJobsAtExit:       "There are stopped jobs.",
+		StoppedJobsAtExitStatus: 1,
 		// No verb at all: the name, then the OS string. Same either way —
 		// bash does not distinguish opening from creating.
 		CannotOpen: "%[1]s: %[2]s",

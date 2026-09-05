@@ -104,6 +104,17 @@ func biJobs(r *Runner, _ context.Context, args []string) int {
 	if code != 0 {
 		return code
 	}
+	// What `bg` let go of may have ended since the last prompt, and a listing
+	// that did not ask would report it as still running.
+	r.reapJobs()
+	// A listing is the shell showing the person their stopped jobs, which is
+	// the whole of what the warning at exit is for — measured, `exit` after a
+	// `jobs` exits at once in bash and in zsh, where `exit` after any other
+	// command warns first. Set on the way in, and set for `jobs -p` too: the
+	// form that prints only process ids clears it just the same. This chunk's
+	// flag rather than the one `exit` reads: a listing suppresses the warning
+	// for the line after it, and not for a line after that.
+	r.tellingOfStoppedJobs = true
 	form, code := r.jobsForm(opts)
 	if code != 0 {
 		return code
@@ -458,7 +469,7 @@ func biFg(r *Runner, _ context.Context, args []string) int {
 	}
 	// Named on the way in, which is how a shell says which job it just put
 	// back in front of you when you did not say.
-	r.printf("%s\n", j.Command)
+	r.printf("%s\n", r.resumeNotice(j, r.diag().JobResumedInForeground, j.Command))
 	if err := r.signalJob(j, syscall.SIGCONT); err != nil {
 		r.diagf("fg: %v\n", err)
 		return 1
@@ -483,13 +494,41 @@ func biFg(r *Runner, _ context.Context, args []string) int {
 		return 1
 	}
 	status, stopped := r.waitResult(w)
+	if w.Killed {
+		// What ended it, for the same two readers `runWatched` tells: the
+		// prompt starts a fresh line after the `^C` the terminal echoed, and
+		// an interrupt gives up the line. A job put back in front is a
+		// foreground command again, so it answers both the same way.
+		r.diedOfSig = w.Signal
+		if w.Signal == syscall.SIGINT && r.Interactive {
+			defer r.abandonForInterrupt()
+		}
+	}
 	if stopped {
-		// Stopped again, so it stays a job rather than being forgotten.
-		j.Stopped = true
+		// Stopped again, so it stays a job rather than being forgotten — and
+		// says so, exactly as the first ^Z did. It is the current job again
+		// too: the one `fg` with no operand would pick is the one that just
+		// stopped.
+		j.Stopped, j.StopSig = true, int(w.Signal)
+		r.lastJob = j
+		r.announceStopped(j)
 		return status
 	}
 	r.Forget(j)
 	return status
+}
+
+// resumeNotice is what `fg` or `bg` says about the job it resumed.
+//
+// Three verbs — the number, the marker and the command — and a fallback the
+// caller supplies, because the two builtins differ in what a dialect that
+// says nothing of its own prints: `fg` names the command alone and `bg` puts
+// the `&` back after it.
+func (r *Runner) resumeNotice(j *Job, wording, fallback string) string {
+	if wording == "" {
+		return fallback
+	}
+	return Wording(wording, "", r.jobNumber(j)+1, r.jobMarker(j), j.Command)
 }
 
 func biBg(r *Runner, _ context.Context, args []string) int {
@@ -503,7 +542,7 @@ func biBg(r *Runner, _ context.Context, args []string) int {
 	}
 	j.Stopped = false
 	// `&` after it, which is what says the shell is not waiting.
-	r.printf("%s &\n", j.Command)
+	r.printf("%s\n", r.resumeNotice(j, r.diag().JobResumedInBackground, j.Command+" &"))
 	return 0
 }
 

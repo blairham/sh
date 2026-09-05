@@ -835,6 +835,57 @@ type Diagnostics struct {
 	// what to print in its place.
 	JobUnknownCommand string
 
+	// JobStoppedNotice is what an interactive shell says when the job in
+	// front of it stopped — what ^Z prints. Four verbs: the job number, the
+	// marker, the shell's own name and the command.
+	//
+	// Empty prints the `jobs` listing's own row, which is what three of the
+	// four do: `[1]+  Stopped   sleep 40` in bash, and the same shape in
+	// dash and ksh93 with each one's own state word. zsh writes a sentence
+	// instead and names itself in it, which no listing row does.
+	JobStoppedNotice string
+
+	// JobStoppedNoticeOnANewLine starts that notice on a line of its own.
+	//
+	// The terminal echoed `^Z` where the cursor was and left it there. bash
+	// and zsh write a newline before the notice, so it lands under the echo;
+	// dash and ksh93 write it straight after, on the same line. Measured
+	// through a pseudo-terminal, which is the only place the difference
+	// exists.
+	JobStoppedNoticeOnANewLine bool
+
+	// JobResumedInForeground is how `fg` names the job it put back in front.
+	// Three verbs: the number, the marker and the command.
+	//
+	// Empty prints the command alone, which is what three of the four do.
+	// zsh prints a listing row with a state of its own — `[1]  + continued
+	// sleep 3` — and that word appears nowhere else, which is why this is a
+	// format rather than a fourth entry beside JobRunning and JobStopped.
+	JobResumedInForeground string
+
+	// JobResumedInBackground is the same for `bg`, and here all four differ:
+	// bash writes the row's head and the command with an `&` after it, dash
+	// the number and the command, ksh93 a tab between them and no space
+	// before the `&`, and zsh the same `continued` row it prints for `fg`.
+	//
+	// Empty prints the command with ` &` after it.
+	JobResumedInBackground string
+
+	// StoppedJobsAtExit is the warning an interactive shell gives when
+	// leaving would abandon a stopped job — see
+	// Semantics.StoppedJobsHoldTheExit, which is what decides whether it
+	// stays at all. One verb: the shell's own name.
+	//
+	// Written without the location prefix every other diagnostic carries:
+	// one of the two shells that says this names itself in the sentence and
+	// the other names nobody, and neither writes a line number.
+	StoppedJobsAtExit string
+
+	// StoppedJobsAtExitStatus is what the `exit` that was held back reports.
+	// Zero is what zsh answers, which is also the shape of a dialect that
+	// never holds an exit at all; bash answers 1, a builtin that failed.
+	StoppedJobsAtExitStatus int
+
 	// EmptyRedirectTarget replaces CannotOpen and CannotCreate where the
 	// target expanded to nothing. One verb: the name, which is empty — it is
 	// there so the shape matches the other two rather than because it says

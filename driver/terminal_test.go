@@ -15,6 +15,7 @@ import (
 
 	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/internal/pty"
+	"github.com/blairham/sh/repl"
 )
 
 // The prompt decision is "is this a terminal", and a character device is not
@@ -154,6 +155,62 @@ func TestAPromptAtATerminalReadsAndRunsALine(t *testing.T) {
 	case <-time.After(sessionBudget):
 		_ = control.Close() // unblock the read the shell is sitting in
 		t.Fatalf("the session did not end; drawn so far: %q", drawn.text())
+	}
+}
+
+// A colored prompt reaches the terminal as color, and the markers that said
+// which part of it was color do not reach it at all.
+//
+// The only place this can be asked. The bytes a session puts on the wire are
+// what a person sees, and every other test in this package reads a pipe, where
+// the editor does not exist: a prompt that drew its non-printing markers
+// literally would put two control characters on the screen at every prompt and
+// pass every one of them.
+//
+// Measured against real bash through a pty, one code per prompt: `\[X\]` drew
+// X and neither bracket, `\e` drew a single 1b, and `PS1=$'\001\033[31m\002X'`
+// drew the color and the X with neither marker byte on the wire.
+func TestAColoredPromptDrawsColorAndNoMarkers(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	control, tty := terminal(t)
+	sh := shell()
+	// The shape of every colored prompt there is: a bracketed sequence, some
+	// text, and a bracketed sequence turning it off again.
+	sh.PromptStyle = repl.PromptStyle{
+		Expand: true,
+		Escape: '\\',
+		Codes: map[rune]repl.PromptField{
+			'[': repl.FieldNonPrintingStart,
+			']': repl.FieldNonPrintingEnd,
+		},
+		Sequences: map[rune]string{'e': "\x1b"},
+		Unknown:   repl.KeepBoth,
+	}
+	sh.Stdin, sh.Stdout, sh.Stderr = tty, tty, tty
+
+	drawn := watch(t, control)
+	done := make(chan int, 1)
+	go func() { done <- driver.MainArgs(sh, []string{"testsh"}) }()
+
+	drawn.awaitReadyForInput(t)
+	write(t, control, `PS1='\[\e[32m\]green> \[\e[0m\]'`+"\r")
+	// The color is the mark: it is drawn only by the prompt that follows the
+	// assignment, and the echo of the line holds the codes rather than the
+	// sequences they draw.
+	drawn.await(t, "\x1b[32mgreen> \x1b[0m")
+
+	write(t, control, "\x04") // ^D at the prompt this test just waited for
+	select {
+	case <-done:
+	case <-time.After(sessionBudget):
+		_ = control.Close()
+		t.Fatalf("the session did not end; drawn so far: %q", drawn.text())
+	}
+	// Everything the session drew, including the prompt above: not one marker
+	// character in any of it.
+	if got := drawn.text(); strings.ContainsAny(got, "\x01\x02") {
+		t.Errorf("a non-printing marker reached the terminal: %q", got)
 	}
 }
 

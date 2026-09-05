@@ -67,7 +67,7 @@ func TestNoPaddingAfterTheLastOnARow(t *testing.T) {
 func TestListingDrawsTheColumns(t *testing.T) {
 	var out strings.Builder
 	e := &editor{out: &out, width: func() int { return 7 }}
-	e.list([]string{"a", "b", "c", "d"}, "$ ")
+	e.list([]string{"a", "b", "c", "d"}, drawPrompt("$ "))
 	if got := out.String(); got != "\r\na  c\r\nb  d\r\n" {
 		t.Errorf("drew %q, want the two rows", got)
 	}

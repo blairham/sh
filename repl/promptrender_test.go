@@ -81,6 +81,151 @@ func TestWhatACodeDraws(t *testing.T) {
 	})
 }
 
+// The fields that tell two shells' answers apart.
+//
+// Each pair here is one thing a prompt draws that the panel draws two ways, so
+// a dialect cannot be given the other one without a prompt being wrong every
+// time it is drawn.
+func TestTheFieldsThePanelDisagreesAbout(t *testing.T) {
+	vars := map[string]string{"HOME": "/home/someone", "PWD": "/home/someone"}
+	style := PromptStyle{
+		Escape: '\\',
+		Codes: map[rune]PromptField{
+			'W': FieldCwdBase, 'C': FieldCwdBaseFull,
+			't': FieldTime24, 'u': FieldTime24Unpadded,
+			'A': FieldTime24HM, 'T': FieldTime24HMUnpadded,
+			'D': FieldDateMonthDayYear, 'd': FieldDateYearMonthDay,
+			'?': FieldExitStatus,
+		},
+	}
+	r := newTestRunner(vars)
+	r.SetExitStatus(3)
+	s := Shell{Runner: r, Style: style, Clock: at(t, 6, 11, 43)}
+	for _, tc := range []struct{ code, want string }{
+		// In the home directory itself the two last-component codes part
+		// company: measured, bash's `\W` and zsh's `%c` drew `~` there where
+		// zsh's `%C` drew the directory's own name.
+		{`\W`, "~"},
+		{`\C`, "someone"},
+		// bash pads the hour and zsh does not.
+		{`\t`, "06:11:43"},
+		{`\u`, "6:11:43"},
+		{`\A`, "06:11"},
+		{`\T`, "6:11"},
+		{`\D`, "09/02/26"},
+		{`\d`, "26-09-02"},
+		{`\?`, "3"},
+	} {
+		t.Run(tc.code, func(t *testing.T) {
+			if got := s.render(tc.code); got != tc.want {
+				t.Errorf("%s drew %q, want %q", tc.code, got, tc.want)
+			}
+		})
+	}
+	// One directory down they agree, which is why the home directory is where
+	// this had to be measured.
+	s.Runner.SetVar("PWD", "/home/someone/work")
+	for _, code := range []string{`\W`, `\C`} {
+		if got := s.render(code); got != "work" {
+			t.Errorf("%s drew %q below home, want work", code, got)
+		}
+	}
+	// With no directory to name, neither draws one. A shell whose PWD has not
+	// been set has no last component, and `.` is a directory rather than the
+	// absence of one.
+	nowhere := Shell{Runner: newTestRunner(nil), Style: style}
+	for _, code := range []string{`\W`, `\C`} {
+		if got := nowhere.render(code); got != "" {
+			t.Errorf("%s drew %q with no directory, want nothing", code, got)
+		}
+	}
+	// Midnight keeps its digit: an unpadded hour has the zero taken off
+	// rather than replaced. Measured, zsh drew 0:17:07.
+	midnight := s
+	midnight.Clock = at(t, 0, 17, 7)
+	if got := midnight.render(`\u`); got != "0:17:07" {
+		t.Errorf("drew %q at midnight, want 0:17:07", got)
+	}
+}
+
+// The three shapes a code can have that are not a field.
+func TestACodeThatDrawsWhatTheDialectSays(t *testing.T) {
+	s := Shell{
+		Runner: newTestRunner(nil),
+		Style: PromptStyle{
+			Escape:    '\\',
+			Sequences: map[rune]string{'e': "\x1b", 'a': "\a"},
+			Colors:    map[rune]PromptColor{'F': Foreground, 'K': Background},
+			Octal:     true,
+			Unknown:   KeepBoth,
+		},
+	}
+	for _, tc := range []struct{ in, want string }{
+		// A fixed string the dialect named.
+		{`\e[32m`, "\x1b[32m"},
+		{`\a`, "\a"},
+		// A color, and the argument it takes.
+		{`\F{red}`, "\x1b[31m"},
+		{`\K{blue}`, "\x1b[44m"},
+		{`\F{9}`, "\x1b[91m"},
+		{`\F{200}`, "\x1b[38;5;200m"},
+		{`\F{bogus}`, "\x1b[39m"},
+		// No braces is the empty argument, and the letters after it are text:
+		// measured, zsh drew `%Fred` as black and then `red`.
+		{`\Fred`, "\x1b[30mred"},
+		{`\F`, "\x1b[30m"},
+		{`\F{}`, "\x1b[30m"},
+		// Three octal digits are the byte they name, and any shorter run is
+		// not a number at all.
+		{`\007`, "\a"},
+		{`\101`, "A"},
+		{`\1011`, "A1"},
+		{`\10`, `\10`},
+		{`\1`, `\1`},
+		{`\00`, `\00`},
+		{`\8`, `\8`},
+		{`\400`, "\x00"},
+		// Octal digits, so a run of three that holds an 8 or a 9 is not a
+		// number: measured, bash drew `\189`, `\888` and `\099` as written,
+		// and `\1234` as `S4` — the first three digits and then a `4`.
+		{`\189`, `\189`},
+		{`\888`, `\888`},
+		{`\099`, `\099`},
+		{`\1234`, "S4"},
+	} {
+		t.Run(tc.in, func(t *testing.T) {
+			if got := s.render(tc.in); got != tc.want {
+				t.Errorf("drew %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// A letter in more than one table is read from the first of them, which is
+// what lets a dialect give a code of its own to a letter the substrate has a
+// field for.
+func TestTheTablesAreReadInOrder(t *testing.T) {
+	s := Shell{
+		Runner:  newTestRunner(map[string]string{"USER": "someone"}),
+		Style:   PromptStyle{Escape: '\\', Codes: map[rune]PromptField{'u': FieldUser}},
+		Clock:   at(t, 1, 2, 3),
+		Session: "",
+	}
+	s.Style.Sequences = map[rune]string{'u': "sequence"}
+	s.Style.Colors = map[rune]PromptColor{'u': Foreground}
+	if got := s.render(`\u`); got != "someone" {
+		t.Errorf("drew %q, want the field", got)
+	}
+	delete(s.Style.Codes, 'u')
+	if got := s.render(`\u`); got != "sequence" {
+		t.Errorf("drew %q, want the sequence", got)
+	}
+	delete(s.Style.Sequences, 'u')
+	if got := s.render(`\u{red}`); got != "\x1b[31m" {
+		t.Errorf("drew %q, want the color", got)
+	}
+}
+
 // A code with no entry in the table gets one of three answers, and the panel
 // gives all three: bash draws `\q` for `\q`, ksh93 draws `q`, zsh draws
 // nothing at all for `%q`.

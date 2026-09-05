@@ -40,8 +40,41 @@ type PromptStyle struct {
 	// is a row of the table rather than a rule above it.
 	Codes map[rune]PromptField
 
-	// Unknown is what happens to an escape whose code is not in Codes. The
-	// three shells that have a language give three different answers.
+	// Sequences is what a code draws that the substrate has no name for: a
+	// fixed string the dialect supplies, written to the terminal as it stands.
+	//
+	// bash's `\e` and `\a` are two of these — measured, they draw one byte
+	// each, 1b and 07 — and so is the whole of zsh's visual language, where
+	// `%B` draws `\e[1m` and `%U` draws `\e[4m`. They are here rather than in
+	// Codes because there is nothing to compute: the dialect knows what it
+	// wants written, and a PromptField for "bold" would be the substrate
+	// learning one shell's vocabulary for what is really a terminal's.
+	//
+	// Read after Codes, so a letter in both is the field.
+	Sequences map[rune]string
+
+	// Colors is the codes that set a color, and which half of the screen each
+	// sets. The code takes an argument in braces — zsh spells the foreground
+	// `%F{red}` — and the sequence itself is the terminal's rather than the
+	// dialect's, which is why only the layer is asked for here.
+	//
+	// Read after Sequences. A code in here with no braces after it takes the
+	// empty argument, which is measurable rather than an omission: zsh draws
+	// `%F` and `%F{}` alike as `\e[30m`, and `%Fred` as `\e[30m` and then the
+	// three letters.
+	Colors map[rune]PromptColor
+
+	// Octal says three octal digits after the escape are the byte they name,
+	// which is how bash spells a character it has no letter for.
+	//
+	// Exactly three, measured: `\007` drew the bell and `\101` drew `A`, while
+	// `\0`, `\1`, `\10`, `\00` and `\8` were all left as they were written.
+	// A value above 255 is taken low byte first — `\400` drew a NUL.
+	Octal bool
+
+	// Unknown is what happens to an escape whose code is not in Codes,
+	// Sequences or Colors. The three shells that have a language give three
+	// different answers.
 	Unknown UnknownCode
 
 	// History is a character that draws the history number on its own and
@@ -142,11 +175,18 @@ const (
 	FieldHost
 	FieldHostFull
 	// FieldCwd is the working directory with the home directory written `~`,
-	// FieldCwdFull is the path untouched, and FieldCwdBase is its last
-	// component alone.
+	// FieldCwdFull is the path untouched, FieldCwdBase is the last component
+	// of the abbreviated one and FieldCwdBaseFull the last component of the
+	// untouched one.
+	//
+	// The last two differ only at the home directory itself, and there they
+	// differ every time a prompt is drawn there: measured in it, bash's `\W`
+	// and zsh's `%c` draw `~`, while zsh's `%C` draws the directory's name.
+	// Two codes of one shell disagreeing is what says this is two fields.
 	FieldCwd
 	FieldCwdFull
 	FieldCwdBase
+	FieldCwdBaseFull
 	// FieldPrivilege says whether this is root: `#` when it is, and the
 	// dialect's own character when it is not.
 	FieldPrivilege
@@ -170,9 +210,19 @@ const (
 	FieldTime24HM
 	FieldTime12AMPM
 	FieldTime12Padded
+	// And the same two clocks with the hour not padded at all, which is a
+	// difference between the shells rather than between the codes: measured
+	// against both at six in the morning, bash's `\t` drew 06:11:40 and zsh's
+	// `%*` drew 6:11:43, and bash's `\A` drew 06:11 against zsh's `%T` 6:11.
+	FieldTime24Unpadded
+	FieldTime24HMUnpadded
 	// The date: bash's `\d` is "Wed Sep 02" and zsh's `%w` is "Wed 2".
 	FieldDate
 	FieldDateShort
+	// And zsh's two numeric dates, measured on the sixth of September 2026:
+	// `%W` drew 09/06/26 and `%D` drew 26-09-06.
+	FieldDateMonthDayYear
+	FieldDateYearMonthDay
 	// FieldEscape is the escape character itself, for the table row that
 	// spells it doubled.
 	FieldEscape
@@ -198,4 +248,37 @@ const (
 	// FieldTerminalName is the terminal's name without its directory:
 	// `ttys013` rather than `/dev/ttys013`.
 	FieldTerminalName
+	// FieldExitStatus is what the last command exited with, which zsh spells
+	// `%?` and bash leaves to `$?` and an expansion.
+	FieldExitStatus
+	// FieldNonPrintingStart and FieldNonPrintingEnd bracket text that
+	// instructs the terminal rather than filling any of it. bash spells them
+	// `\[` and `\]`, zsh `%{` and `%}`.
+	//
+	// They are the most consequential rows in the table and the least visible.
+	// Everything the editor does with a line — which row the cursor is on,
+	// how far back a redraw has to come, whether the line wrapped at all —
+	// counts from how wide the prompt is, and a color is bytes that are not a
+	// column. Miscount them and every long line is drawn over itself, which
+	// reads to a person as a broken shell rather than as a wrong prompt.
+	//
+	// Codes rather than a rule above the table for the usual reason: the
+	// letters are the dialect's, and a dialect without the notion says
+	// nothing and gets nothing.
+	FieldNonPrintingStart
+	FieldNonPrintingEnd
+)
+
+// PromptColor is which half of the screen a color code paints.
+//
+// The sequence itself is not asked for, because it is the terminal's answer
+// rather than the dialect's: see promptcolor.go.
+type PromptColor int
+
+const (
+	// Foreground is the text's own color, and the zero value so that a code
+	// listed without a layer is the common one.
+	Foreground PromptColor = iota
+	// Background is the color behind it.
+	Background
 )

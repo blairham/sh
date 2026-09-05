@@ -12,16 +12,22 @@ import "github.com/blairham/sh/repl"
 // it stands, and it takes `setopt PROMPT_SUBST` to change that.
 //
 // It has its own language instead, spelled with a percent sign — `%n` for the
-// user name, `%~` for the directory — which is a separate question and is not
-// settled here.
+// user name, `%~` for the directory, `%F{red}` for a color and `%{ %}` around
+// anything the terminal is meant to read rather than draw.
+//
+// Two shapes measured and deliberately absent, both of which need a mechanism
+// rather than a row in a table: the braces after `%D`, which hold a strftime
+// format, and the ternary `%(x.true.false)`, which asks a question about the
+// shell and picks one of two texts. Until they have one, `%D{%F}` draws the
+// plain date and then the braces as the text they are, and the ternary is
+// dropped the way any code this table does not know is.
 //
 // Measured through a pty rather than taken from documentation: the panel
 // disagrees about this, and the disagreement is why the field exists.
 func PromptStyle() repl.PromptStyle {
 	return repl.PromptStyle{
 		Expand: false,
-		// Measured, one code per prompt. The clock codes (%t %* %w) and the full
-		// date are measured and not yet drawable.
+		// Measured, one code per prompt, through a pty against zsh 5.9.2.
 		Escape: '%',
 		Codes: map[rune]repl.PromptField{
 			'n': repl.FieldUser,
@@ -29,13 +35,57 @@ func PromptStyle() repl.PromptStyle {
 			'M': repl.FieldHostFull,
 			'~': repl.FieldCwd,
 			'd': repl.FieldCwdFull,
-			'C': repl.FieldCwdBase,
+			'/': repl.FieldCwdFull,
+			// `%c` and `%.` are the last component of the abbreviated path and
+			// `%C` of the unabbreviated one: in the home directory itself the
+			// first two drew `~` and the third drew the directory's own name.
+			'c': repl.FieldCwdBase,
+			'.': repl.FieldCwdBase,
+			'C': repl.FieldCwdBaseFull,
 			'#': repl.FieldPrivilege,
 			'%': repl.FieldEscape,
 			't': repl.FieldTime12Padded,
-			'*': repl.FieldTime24,
+			'@': repl.FieldTime12Padded,
+			// zsh's clock does not pad the hour where bash's does: measured at
+			// six in the morning, `%*` drew 6:11:43 and `%T` drew 6:11.
+			'*': repl.FieldTime24Unpadded,
+			'T': repl.FieldTime24HMUnpadded,
 			'w': repl.FieldDateShort,
+			'W': repl.FieldDateMonthDayYear,
+			'D': repl.FieldDateYearMonthDay,
+			'?': repl.FieldExitStatus,
+			'j': repl.FieldJobCount,
+			// Both draw the history number; measured on successive prompts,
+			// each drew the one the line about to be typed will have.
+			'!': repl.FieldHistoryNumber,
+			'h': repl.FieldHistoryNumber,
+			'y': repl.FieldTerminalName,
 			'_': repl.FieldOpenState,
+			// zsh's own non-printing markers. Measured: `%{X%}` drew X and
+			// neither marker, and unlike bash's, a marker with no partner is
+			// dropped rather than written to the terminal.
+			'{': repl.FieldNonPrintingStart,
+			'}': repl.FieldNonPrintingEnd,
+		},
+		// The visual codes, measured one at a time as the exact bytes each put
+		// on the wire. `%b` is not bold-off but everything-off — it drew
+		// `\e[0m` where `%u` drew `\e[24m` — which is why these are strings
+		// the dialect names rather than a notion the substrate has.
+		Sequences: map[rune]string{
+			'B': "\x1b[1m",
+			'b': "\x1b[0m",
+			'U': "\x1b[4m",
+			'u': "\x1b[24m",
+			'S': "\x1b[7m",
+			's': "\x1b[27m",
+			'f': "\x1b[39m",
+			'k': "\x1b[49m",
+			'E': "\x1b[K",
+		},
+		// `%F{red}` drew `\e[31m` and `%K{blue}` drew `\e[44m`.
+		Colors: map[rune]repl.PromptColor{
+			'F': repl.Foreground,
+			'K': repl.Background,
 		},
 		// `%q` drew nothing at all.
 		Unknown: repl.DropBoth,

@@ -77,6 +77,21 @@ func (s Shell) table(text string) string {
 			b.WriteString(s.field(field))
 			continue
 		}
+		if seq, ok := s.Style.Sequences[code]; ok {
+			b.WriteString(seq)
+			continue
+		}
+		if layer, ok := s.Style.Colors[code]; ok {
+			arg, next := colorArgument(runes, i+1)
+			i = next
+			b.WriteString(colorSequence(layer, arg))
+			continue
+		}
+		if v, ok := octalByte(s.Style.Octal, runes, i); ok {
+			b.WriteByte(v)
+			i += 2
+			continue
+		}
 		switch s.Style.Unknown {
 		case DropEscape:
 			b.WriteRune(code)
@@ -87,6 +102,51 @@ func (s Shell) table(text string) string {
 		}
 	}
 	return b.String()
+}
+
+// colorArgument reads the braces after a color code, and says where the code
+// ended.
+//
+// No braces is the empty argument and the code ends where it was, which is
+// measured: zsh drew `%Fred` as the color for an empty argument and then the
+// three letters, so the letters after an unbraced code are text.
+//
+// An opening brace with no closing one is the rest of the prompt, for the
+// reason an unterminated anything is: there is no later text for it to be
+// text of.
+func colorArgument(runes []rune, i int) (string, int) {
+	if i >= len(runes) || runes[i] != '{' {
+		return "", i - 1
+	}
+	for j := i + 1; j < len(runes); j++ {
+		if runes[j] == '}' {
+			return string(runes[i+1 : j]), j
+		}
+	}
+	return string(runes[i+1:]), len(runes) - 1
+}
+
+// octalByte reads three octal digits as the byte they name.
+//
+// Three exactly. Measured against bash: `\007` drew the bell and `\101` drew
+// `A`, while `\0`, `\1`, `\10`, `\00` and `\8` were each drawn as the two
+// characters written — so a shorter run is not a shorter number, it is not a
+// number at all and falls through to whatever the dialect does with a code it
+// does not know.
+//
+// The low byte of the value, so `\400` is a NUL, which is what bash drew.
+func octalByte(enabled bool, runes []rune, i int) (byte, bool) {
+	if !enabled || i+2 >= len(runes) {
+		return 0, false
+	}
+	v := 0
+	for _, r := range runes[i : i+3] {
+		if r < '0' || r > '7' {
+			return 0, false
+		}
+		v = v*8 + int(r-'0')
+	}
+	return byte(v), true
 }
 
 // field is what one code draws.
@@ -110,11 +170,12 @@ func (s Shell) field(f PromptField) string {
 	case FieldCwdFull:
 		return s.varOr("PWD", "")
 	case FieldCwdBase:
-		cwd := s.varOr("PWD", "")
-		if cwd == "/" {
-			return "/"
-		}
-		return path.Base(cwd)
+		// The last component of the *abbreviated* path, so the home directory
+		// itself is `~` and not its own name. Measured: in it, bash's `\W` and
+		// zsh's `%c` both drew `~`, and one directory down both drew `sub`.
+		return lastComponent(abbreviate(s.varOr("PWD", ""), s.varOr("HOME", "")))
+	case FieldCwdBaseFull:
+		return lastComponent(s.varOr("PWD", ""))
 	case FieldPrivilege:
 		if os.Geteuid() == 0 {
 			return "#"
@@ -149,6 +210,15 @@ func (s Shell) field(f PromptField) string {
 		return itoa(s.liveJobs())
 	case FieldTerminalName:
 		return s.terminalName()
+	case FieldNonPrintingStart:
+		return markStart
+	case FieldNonPrintingEnd:
+		return markEnd
+	case FieldExitStatus:
+		if s.Runner == nil {
+			return "0"
+		}
+		return itoa(s.Runner.ExitStatus())
 	case FieldTime24:
 		return s.now().Format("15:04:05")
 	case FieldTime12:
@@ -166,10 +236,18 @@ func (s Shell) field(f PromptField) string {
 			t = " " + t
 		}
 		return t
+	case FieldTime24Unpadded:
+		return unpadHour(s.now().Format("15:04:05"))
+	case FieldTime24HMUnpadded:
+		return unpadHour(s.now().Format("15:04"))
 	case FieldDate:
 		return s.now().Format("Mon Jan 02")
 	case FieldDateShort:
 		return s.now().Format("Mon 2")
+	case FieldDateMonthDayYear:
+		return s.now().Format("01/02/06")
+	case FieldDateYearMonthDay:
+		return s.now().Format("06-01-02")
 	}
 	return ""
 }
@@ -198,6 +276,26 @@ func (s Shell) hostName() string {
 	}
 	hostOnce.Do(func() { host, _ = os.Hostname() })
 	return host
+}
+
+// unpadHour takes the leading zero off an hour below ten.
+//
+// Go's 24-hour layouts pad and it has no form that does not, so it is done
+// here. Measured against zsh through a pty at two hours it can be told apart
+// at: `%*` drew 6:11:43 at six in the morning and 0:17:07 after midnight,
+// where bash's `\t` drew 06:11:40 and 00:17:08. Midnight is the case that says
+// this takes a zero off rather than replacing it with a space or with nothing:
+// zero o'clock keeps a digit.
+func unpadHour(clock string) string { return strings.TrimPrefix(clock, "0") }
+
+// lastComponent is the final component of a path, and nothing at all for no
+// path — where path.Base answers `.`, which is a directory and not the absence
+// of one.
+func lastComponent(dir string) string {
+	if dir == "" {
+		return ""
+	}
+	return path.Base(dir)
 }
 
 // abbreviate writes the home directory as `~`.

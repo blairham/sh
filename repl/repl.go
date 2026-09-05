@@ -284,13 +284,25 @@ func (s Shell) runEach(ctx context.Context, stmts []*syntax.File) bool {
 // One place, used by both loops. They differ in how a line is read and in
 // nothing else that happens first, and having written this twice is how the
 // editor's copy came to be the one nothing exercised.
-func (s Shell) beforeReading(pending *strings.Builder) string {
+//
+// A drawnPrompt rather than the text, and here rather than in the editor,
+// because both loops write it: the markers a dialect's non-printing codes
+// leave behind have to come out whether or not there is a terminal to draw on,
+// and a second place that turned a rendered prompt into bytes would be a
+// second place to forget.
+//
+// PS2 is read exactly as PS1 is, which is measured rather than assumed: with
+// PS2 set to a prompt of codes, bash 5.3.15 and 3.2.57 drew the user, the
+// directory, the privilege character and a bracketed color at the
+// continuation prompt, zsh 5.9.2 drew the same from its own language, and both
+// re-ran a command substitution in it.
+func (s Shell) beforeReading(pending *strings.Builder) drawnPrompt {
 	continuing := pending.Len() > 0
 	s.reportFinishedJobs(continuing)
 	if continuing {
-		return s.prompt("PS2", or(s.Style.DefaultContinued, "> "))
+		return drawPrompt(s.prompt("PS2", or(s.Style.DefaultContinued, "> ")))
 	}
-	return s.prompt("PS1", or(s.Style.Default, "$ "))
+	return drawPrompt(s.prompt("PS1", or(s.Style.Default, "$ ")))
 }
 
 // reportFinishedJobs says what ended while the last command was running.
@@ -326,7 +338,7 @@ func (s Shell) runPlain(ctx context.Context, store *blocks.Store, capture *block
 	in := bufio.NewReader(s.In)
 	var pending strings.Builder
 	for {
-		s.errf("%s", s.beforeReading(&pending))
+		s.errf("%s", s.beforeReading(&pending).text)
 
 		line, err := in.ReadString('\n')
 		if line == "" && err != nil {

@@ -40,6 +40,7 @@ func TestPromptCodes(t *testing.T) {
 		'$': repl.FieldPrivilege, 't': repl.FieldTime24, 'T': repl.FieldTime12,
 		'A': repl.FieldTime24HM, '@': repl.FieldTime12AMPM, 'd': repl.FieldDate,
 		'\\': repl.FieldEscape,
+		'[':  repl.FieldNonPrintingStart, ']': repl.FieldNonPrintingEnd,
 	} {
 		if got := st.Codes[code]; got != want {
 			t.Errorf("\\%c drew field %v, want %v", code, got, want)
@@ -48,6 +49,39 @@ func TestPromptCodes(t *testing.T) {
 	// Not a tab. bash's \t is the time, and nothing carries over from C.
 	if st.Codes['t'] == repl.FieldTab {
 		t.Error("\\t is the time in bash, not a tab")
+	}
+	// The clock pads its hour here, which is the half of the difference this
+	// dialect owns: measured at six in the morning, bash drew 06:11:40 for
+	// `\t` and 06:11 for `\A`.
+	if st.Codes['t'] == repl.FieldTime24Unpadded || st.Codes['A'] == repl.FieldTime24HMUnpadded {
+		t.Error("bash's clock is unpadded, and it pads")
+	}
+	// `\W` is the last component of the *abbreviated* path: measured in the
+	// home directory itself, bash drew `~` rather than the directory's name.
+	if st.Codes['W'] != repl.FieldCwdBase {
+		t.Errorf("\\W draws %v, want the abbreviated last component", st.Codes['W'])
+	}
+}
+
+// The two characters a prompt cannot hold literally, measured as one byte
+// each, and the octal escape that names any of the others.
+//
+// `\e` is what every colored bash prompt is written with, so without it
+// `\[\e[32m\]` draws the six characters rather than turning anything green.
+func TestPromptSequences(t *testing.T) {
+	st := bash.PromptStyle()
+	for code, want := range map[rune]string{'e': "\x1b", 'a': "\a"} {
+		if got := st.Sequences[code]; got != want {
+			t.Errorf("\\%c drew %q, want %q", code, got, want)
+		}
+	}
+	if !st.Octal {
+		t.Error("three octal digits are not read; measured, \\007 drew the bell")
+	}
+	// zsh's visual language is not bash's: `%B` is a percent code, and bash
+	// has no letter that draws a color of its own.
+	if len(st.Colors) != 0 {
+		t.Errorf("bash has color codes %v, and its colors are written by hand", st.Colors)
 	}
 }
 

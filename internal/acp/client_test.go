@@ -675,3 +675,106 @@ func (r *recorder) events() []interp.Event {
 	defer r.mu.Unlock()
 	return append([]interp.Event(nil), r.got...)
 }
+
+// An agent asks a person through the client, and the client's answer is what
+// the person chose. The mode it can serve is the mode it claimed.
+func TestAnElicitationReachesWhoeverAnswers(t *testing.T) {
+	t.Parallel()
+	var asked acp.CreateElicitationRequest
+	c := &acp.Client{
+		Info: acp.Implementation{Name: "test-client", Version: "1"},
+		Elicit: func(_ context.Context, req acp.CreateElicitationRequest) (acp.CreateElicitationResponse, error) {
+			asked = req
+			return acp.CreateElicitationResponse{
+				Action: acp.ElicitAccept, Content: map[string]any{"name": "Blair"},
+			}, nil
+		},
+	}
+	fake := &agentSide{}
+	conn := against(t, c, fake)
+
+	var resp acp.CreateElicitationResponse
+	if err := conn.Call(t.Context(), acp.MethodCreateElicitation, acp.CreateElicitationRequest{
+		Message: "who are you", Mode: acp.ElicitForm, SessionID: "s1",
+		RequestedSchema: &acp.ElicitationSchema{
+			Type:       "object",
+			Properties: map[string]acp.ElicitationProperty{"name": {Type: acp.PropertyString}},
+		},
+	}, &resp); err != nil {
+		t.Fatalf("elicitation/create: %v", err)
+	}
+	if asked.Message != "who are you" || asked.RequestedSchema == nil {
+		t.Errorf("the question reached the answerer as %+v", asked)
+	}
+	if resp.Action != acp.ElicitAccept || resp.Content["name"] != "Blair" {
+		t.Errorf("answer = %+v, want what the person chose", resp)
+	}
+}
+
+// A mode this client never claimed is refused rather than guessed at. URL
+// elicitation means a browser and a completion notification, which is a
+// different mechanism from a form at a terminal.
+func TestAnElicitationModeWeDoNotServeIsRefused(t *testing.T) {
+	t.Parallel()
+	c := &acp.Client{
+		Info: acp.Implementation{Name: "test-client", Version: "1"},
+		Elicit: func(context.Context, acp.CreateElicitationRequest) (acp.CreateElicitationResponse, error) {
+			return acp.CreateElicitationResponse{Action: acp.ElicitAccept}, nil
+		},
+	}
+	conn := against(t, c, &agentSide{})
+	err := conn.Call(t.Context(), acp.MethodCreateElicitation, acp.CreateElicitationRequest{
+		Message: "log in here", Mode: acp.ElicitURL, URL: "https://example.invalid/",
+	}, nil)
+	if err == nil {
+		t.Error("a mode this client never claimed was served")
+	}
+}
+
+// A client that cannot reach a person neither claims elicitation nor answers
+// it. The hook is the claim, so the two cannot disagree.
+func TestElicitationIsClaimedOnlyWhenItCanBeServed(t *testing.T) {
+	t.Parallel()
+	for _, able := range []bool{true, false} {
+		t.Run(map[bool]string{true: "offered", false: "withheld"}[able], func(t *testing.T) {
+			t.Parallel()
+			c := &acp.Client{Info: acp.Implementation{Name: "test-client", Version: "1"}}
+			if able {
+				c.Elicit = func(context.Context, acp.CreateElicitationRequest) (acp.CreateElicitationResponse, error) {
+					return acp.CreateElicitationResponse{Action: acp.ElicitAccept}, nil
+				}
+			}
+			fake := &agentSide{}
+			conn := against(t, c, fake)
+			if _, err := c.Initialize(t.Context()); err != nil {
+				t.Fatalf("initialize: %v", err)
+			}
+			var req struct {
+				Capabilities acp.ClientCapabilities `json:"clientCapabilities"`
+			}
+			if err := json.Unmarshal(fake.params(0), &req); err != nil {
+				t.Fatalf("the agent could not read what it was sent: %v", err)
+			}
+			claimed := req.Capabilities.Elicitation != nil && req.Capabilities.Elicitation.Form != nil
+			if claimed != able {
+				t.Errorf("elicitation claimed = %v, want %v", claimed, able)
+			}
+			// And only the mode that can be served. A url elicitation means a
+			// browser and a completion notification, which is a different
+			// mechanism from a form at a terminal; claiming it would have the
+			// agent send one this client then refuses.
+			if req.Capabilities.Elicitation != nil && req.Capabilities.Elicitation.URL != nil {
+				t.Error("the url mode was claimed and is not served")
+			}
+			err := conn.Call(t.Context(), acp.MethodCreateElicitation,
+				acp.CreateElicitationRequest{Message: "?", Mode: acp.ElicitForm}, nil)
+			if able {
+				if err != nil {
+					t.Errorf("elicitation/create: %v", err)
+				}
+			} else if !acp.Unsupported(err) {
+				t.Errorf("err = %v, want method not found for a capability never claimed", err)
+			}
+		})
+	}
+}

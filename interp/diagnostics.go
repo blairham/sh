@@ -6,6 +6,7 @@ package interp
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"strings"
 	"syscall"
 
@@ -1120,6 +1121,60 @@ type Diagnostics struct {
 	// which EchoesLine decides.
 	EchoesTheOffendingLine bool
 
+	// ScriptNotFound is what a shell says when the script operand names
+	// nothing at all. Two verbs, positional because the shells order them
+	// differently and two do not use the second: %[1]s is the path as the
+	// operand wrote it and %[2]s the reason.
+	//
+	//	bash   <shell>: nosuch.sh: No such file or directory
+	//	dash   <shell>: 0: cannot open nosuch.sh: No such file
+	//	ksh93  <shell>: nosuch.sh: not found
+	//	zsh    <shell>: can't open input file: nosuch.sh
+	//
+	// Empty means the substrate's own, `%[1]s: %[2]s`.
+	ScriptNotFound string
+
+	// ScriptNotFoundStatus is what that reports. Zero means the substrate's
+	// own, which is 127 — the number a command that is not there carries, and
+	// what bash, ksh93 and zsh answer. dash alone says 2, treating an operand
+	// it could not open as a usage error rather than as a program it could
+	// not run.
+	ScriptNotFoundStatus int
+
+	// ScriptNotReadable is the same for a script that *is* there and would
+	// not open: no read permission, or a path that is not a file at all.
+	// Same two verbs.
+	//
+	//	bash   <shell>: unread.sh: Permission denied
+	//	dash   <shell>: 0: cannot open unread.sh: Permission denied
+	//	ksh93  <shell>: unread.sh: cannot open [Permission denied]
+	//	zsh    <shell>: can't open input file: unread.sh
+	//
+	// Empty means "the same as ScriptNotFound", which is what dash and zsh
+	// want — neither tells the two failures apart in words, and zsh does not
+	// tell them apart in the status either.
+	ScriptNotReadable string
+
+	// ScriptNotReadableStatus is what that reports. Zero means the
+	// substrate's own, which is 126 — the number a command that exists and
+	// will not run carries, and what bash and ksh93 answer. zsh reports 127
+	// for this as well as for a missing file, and dash 2 for both.
+	//
+	// Measured on a mode-000 file and on a directory, which are the two ways
+	// a path that is there refuses to be read. A file whose *contents* are
+	// not a script is a different question, and not this one.
+	ScriptNotReadableStatus int
+
+	// InvocationNamesTheUnreadLine writes a line number into a diagnostic
+	// about the invocation itself — the script operand that would not open,
+	// reported before any line has been read.
+	//
+	// dash alone: `<shell>: 0: cannot open …`, where bash, ksh93 and zsh
+	// print their name and nothing else. The number is always nought, which
+	// is what "no line yet" is in a shell that counts from one, so this is a
+	// switch rather than a verb.
+	InvocationNamesTheUnreadLine bool
+
 	// ScriptLocation is Location for a script read from a file, when the two
 	// differ. ksh93 is the only shell in the panel where they do: `ksh -c`
 	// names no location at all, and `ksh script` says "line 2". Zero means
@@ -1851,6 +1906,62 @@ func (d Diagnostics) ForStdin() Diagnostics {
 		d.BuiltinLocation = d.StdinBuiltinLocation
 	}
 	return d
+}
+
+// ScriptDiagnostic is what a shell prints when the script it was asked to run
+// could not be read at all — the whole line, with the trailing newline on it.
+//
+// It is rendered here rather than in the front end for the reason every other
+// wording is: which words a shell uses, and whether it writes a line it has
+// not reached, are the dialect's answers. The front end owns only the fact
+// that there was a script operand and that opening it failed.
+//
+// shell is what the shell calls itself — its own name, never the script's,
+// which is measured: nothing has been read, so there is no `$0` yet.
+func (d Diagnostics) ScriptDiagnostic(shell, path string, err error) string {
+	format := d.ScriptNotFound
+	if !errors.Is(err, fs.ErrNotExist) && d.ScriptNotReadable != "" {
+		format = d.ScriptNotReadable
+	}
+	msg := Wording(format, "%[1]s: %[2]s", path, d.openReason(err, false))
+	return d.invocationPrefix(shell) + msg + "\n"
+}
+
+// ScriptStatus is what a shell exits with when the script operand would not
+// open.
+//
+// Two numbers rather than one, and the pair is the point: bash and ksh93
+// answer 127 for a path that is not there and 126 for one that is there and
+// will not open — a missing command's number against an unrunnable one's.
+// zsh gives 127 to both and dash 2 to both, which they say by setting the two
+// fields to one value rather than by this asking a different question of them.
+func (d Diagnostics) ScriptStatus(err error) int {
+	if errors.Is(err, fs.ErrNotExist) {
+		if d.ScriptNotFoundStatus != 0 {
+			return d.ScriptNotFoundStatus
+		}
+		return 127
+	}
+	if d.ScriptNotReadableStatus != 0 {
+		return d.ScriptNotReadableStatus
+	}
+	return 126
+}
+
+// invocationPrefix is the start of a diagnostic about the invocation, where
+// there is no line to name because nothing has been read.
+//
+// Three of the four print their name alone; the one that counts lines with a
+// bare number writes the nought it has not left yet, which is what its own
+// location style already spells.
+func (d Diagnostics) invocationPrefix(shell string) string {
+	if shell == "" {
+		shell = "sh"
+	}
+	if d.InvocationNamesTheUnreadLine {
+		return d.prefix(shell, "", false, 0)
+	}
+	return shell + ": "
 }
 
 // Report renders a complete diagnostic for a shell called name at line.

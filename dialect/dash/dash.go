@@ -243,6 +243,17 @@ func Diagnostics() interp.Diagnostics {
 		JobDone:    "Done",
 		JobExited:  "Done(%[1]d)",
 		Location:   interp.LocationColonLine,
+		// The one shell in the panel that tells neither failure from the
+		// other: a script operand that is missing and one that will not open
+		// share a wording and a status, and the status is the 2 it gives a
+		// usage error rather than the 127 or 126 the other three reach for.
+		// The reason is its own — `No such file`, from FileNotFound — and it
+		// writes the line it has not reached yet, `<shell>: 0: cannot open …`,
+		// which nothing else in the panel does.
+		ScriptNotFound:               "cannot open %[1]s: %[2]s",
+		ScriptNotFoundStatus:         2,
+		ScriptNotReadableStatus:      2,
+		InvocationNamesTheUnreadLine: true,
 		// dash names what it wanted instead, and calls the token by its
 		// class rather than by name.
 		// A bad digit is not a diagnosis dash reaches at all: the literal

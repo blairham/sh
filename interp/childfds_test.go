@@ -4,10 +4,16 @@
 package interp_test
 
 import (
+	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	. "github.com/blairham/sh/interp"
+
+	"github.com/blairham/sh/syntax"
 )
 
 // A descriptor the script parked with `exec 3>f` is the script's to hand out,
@@ -78,3 +84,92 @@ wait "$COPROC_PID"
 		t.Errorf("the coprocess feed reached an external child: %q", out)
 	}
 }
+
+// runForReplacement runs src with the process-replacement hook installed and
+// hands back the descriptor table `exec cmd` asked it to carry.
+//
+// The hook returns an error, which is the only thing a test can do with it: a
+// real replacement never comes back, so "the image could not be replaced" is
+// the one outcome that leaves a shell to make assertions in.
+func runForReplacement(t *testing.T, dir, src string, coproc bool) []*os.File {
+	t.Helper()
+	d := syntax.Core()
+	d.Coproc = coproc
+	f, err := syntax.Parse(src, d)
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	var buf bytes.Buffer
+	sem := permissive()
+	called := false
+	var got []*os.File
+	r := &Runner{
+		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &Diagnostics{},
+		Dir: dir, Name: "testsh", Env: testPATH(),
+		ReplaceProcess: func(_ string, _, _ []string, files []*os.File) error {
+			called, got = true, files
+			return os.ErrPermission
+		},
+	}
+	if _, err := r.Run(context.Background(), f); err != nil {
+		t.Fatalf("run %q: %v", src, err)
+	}
+	if !called {
+		t.Fatalf("the replacement hook was never reached: %q", buf.String())
+	}
+	return got
+}
+
+// A replacement is handed the table an external child is handed, because it
+// inherits exactly what a child inherits: `exec 3>f; exec cmd` leaves the
+// descriptor open for cmd in every shell in the panel but ksh93. The
+// interpreter's half of that is the table; putting it on those numbers is the
+// hook's, because a Runner may not rewrite the process's own descriptors.
+func TestAReplacementIsHandedTheTableAChildIsHanded(t *testing.T) {
+	dir := t.TempDir()
+	five := filepath.Join(dir, "five")
+	files := runForReplacement(t, dir, `exec 5>`+five+`; exec /bin/echo replaced`, false)
+
+	// The numbers are the shell's, so the gap below five is a hole rather
+	// than a packing: entry i is descriptor 3+i.
+	if len(files) != 3 {
+		t.Fatalf("table has %d entries, want 3 — descriptors 3, 4 and 5", len(files))
+	}
+	if files[0] != nil || files[1] != nil {
+		t.Errorf("descriptors 3 and 4 were never opened and must be holes: %v", files[:2])
+	}
+	if files[2] == nil {
+		t.Fatal("the descriptor the script parked on 5 did not reach the table")
+	}
+	// And it is the file the script parked, rather than merely something.
+	if _, err := files[2].WriteString("through the table\n"); err != nil {
+		t.Fatalf("the table's entry for 5 is not writable: %v", err)
+	}
+	if b, _ := os.ReadFile(five); string(b) != "through the table\n" {
+		t.Errorf("entry for 5 wrote %q, want the file the script opened", b)
+	}
+}
+
+// The coprocess exclusion holds on this side too, and bash says so on the
+// harder half: with a coprocess running, a replacement finds nothing open on
+// the number the shell reports in NAME[1], nor on a 3 duplicated from it,
+// though the shell itself still writes through that 3. A replacement holding
+// the write end open is a coprocess that never reads end-of-file, which is
+// the whole reason the mark exists.
+func TestACoprocessDescriptorDoesNotReachAReplacement(t *testing.T) {
+	dir := t.TempDir()
+	files := runForReplacement(t, dir, `coproc /bin/cat
+v=${COPROC[1]}
+exec 3>&$v
+exec /bin/echo replaced
+`, true)
+	for i, f := range files {
+		if f != nil {
+			t.Errorf("descriptor %d reached a replacement from the coprocess's feed", firstExtraFdForTest+i)
+		}
+	}
+}
+
+// firstExtraFdForTest is interp's layout constant, spelled out here because
+// this is an external test package: entry i of the table is descriptor 3+i.
+const firstExtraFdForTest = 3

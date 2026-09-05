@@ -213,6 +213,13 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `array/a-subscript-holding-a-command-substitution` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][Q]` | `[x][Q]` | `[x][Q]` | `[x][Q]` | `[Q][y]` |
 | `array/appending-through-a-subscript-holding-an-expansion` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[xQ][y]` |
 | `array/a-subscript-where-there-are-no-arrays` | `done` **2>** `<shell>: 1: a[1]=Q: not found` | `done` | `done` | `done` | `done` | `done` |
+| `array/reading-a-subscript-is-arithmetic` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[z]` | `[z]` | `[z]` | `[z]` | `[y]` |
+| `array/a-subscript-reads-a-variable` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[z]` | `[z]` | `[z]` | `[z]` | `[y]` |
+| `array/an-unset-name-in-a-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x]` | `[x]` | `[x]` | `[x]` | `[]` |
+| `array/an-element-length-by-expression` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[3]` | `[3]` | `[3]` | `[3]` | `[2]` |
+| `array/assigning-through-an-expression-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[Q]~[x][y][Q] n=3` | `[Q]~[x][y][Q] n=3` | `[Q]~[x][y][Q] n=3` | `[Q]~[x][y][Q] n=3` | `[y]~[x][y] n=2` |
+| `array/unsetting-an-element-by-expression` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][y] n=2` | `[x][y] n=2` | `[x][y] n=2` | `[x][y] n=2` | `[x][][z] n=3` |
+| `array/an-unset-operand-subscript-expands` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][z]` | `[x][z]` | `[x][z]` | `[x][y][z]` **2>** `<shell>: unset: $i: arithmetic syntax error` | `[][y][z]` |
 | `assoc/a-string-subscript` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: Bad substitution` *(status 2)* | `v k` | `v k` | `v 0` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `v k` | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `assoc/the-subscript-is-not-arithmetic` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[1+1]=x: not found~<shell>: 1: Bad substitution` *(status 2)* | `[x]` | `[x]` | `[x]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[x]` | `[x]` |
 | `assoc/values-in-some-order` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[b]=2: not found~<shell>: 1: m[a]=1: not found~<shell>: 1: Bad substitution~<shell>: 1: Bad substitution` *(status 2)* | `1 2 n=2` | `1 2 n=2` | `1 n=1` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `1 2 n=2` | `1 2 n=2` |
@@ -443,6 +450,34 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `array/a-subscript-where-there-are-no-arrays` — the other side of the same gate. Where the dialect has no subscript the word is not an assignment at all and the shell looks for a command by that name, which is the answer the shell without arrays gives — so accepting the shape everywhere would have made this one silently assign instead of reporting. Three shells assign and say nothing; the fourth reports on standard error and carries on
   ```sh
   a[1]=Q; echo done
+  ```
+- `array/reading-a-subscript-is-arithmetic` — a subscript being read is an expression, exactly as one being written through is. It took a numeral and nothing else, so this expanded to the empty string with status 0 — and `a[1+1]=v` had already learned to store where `${a[1+1]}` could not look, which is two spellings of one subscript naming two different elements. zsh answers the element before, which is the base rather than a different reading
+  ```sh
+  a=(x y z); echo "[${a[1+1]}]"
+  ```
+- `array/a-subscript-reads-a-variable` — the same question with a name in it, which is how a loop indexes relative to where it is. A bare name inside a subscript is an arithmetic operand and needs no `$`, so this is the spelling that separates evaluating the text from expanding it
+  ```sh
+  a=(x y z); i=1; echo "[${a[i+1]}]"
+  ```
+- `array/an-unset-name-in-a-subscript` — an unset name in an expression is zero, so the subscript is the first element rather than an error — unanimous in the three with arrays once the base is allowed for, which is why zsh finds nothing where the other two find the first. It is the row that says the subscript goes through the arithmetic reading rather than through a numeral test that happens to fail softly
+  ```sh
+  a=(x y z); echo "[${a[k]}]"
+  ```
+- `array/an-element-length-by-expression` — the length operator reaches the element the expression names, so a subscript that did not evaluate reported the length of nothing — `0`, which is a plausible answer for a real element and so hides the failure completely
+  ```sh
+  a=(xx yy zzz); echo "[${#a[1+1]}]"
+  ```
+- `array/assigning-through-an-expression-subscript` — `${a[i]:=v}` assigns to the element the subscript names, so the expression has to be evaluated before the store as well as before the read. The subscript is past the end so the assignment happens, which is what tells this apart from a case that only reads. zsh finds an element there and assigns nothing, which is the base again
+  ```sh
+  a=(x y); echo "[${a[1+1]:=Q}]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/unsetting-an-element-by-expression` — removing an element names it by expression too, and this did nothing at all: the operand was rejected for not being a numeral and then deleted as a whole variable that was never there, so the array came back unchanged with status 0. What the hole then looks like is the sparse-array axis, the same one `array/removing-one-element` records
+  ```sh
+  a=(x y z); unset "a[1+1]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/an-unset-operand-subscript-expands` — the operand reached `unset` unexpanded — it was in single quotes — and two of the three still substitute into it, because an arithmetic expression is expanded before it is read wherever one is written. ksh93 does not and says so, which is the divergence worth having recorded rather than discovered
+  ```sh
+  a=(x y z); i=1; unset 'a[$i]'; printf "[%s]" "${a[@]}"; echo
   ```
 - `assoc/a-string-subscript` — the declaration that turns a subscript from an expression into a key. bash and ksh93 store under the letter and answer it back; zsh has the arrays but rejects `${!m[@]}` outright; dash has none of it — the issue's own snippet, spelled with the name all three declarers share
   ```sh
@@ -3272,6 +3307,7 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
 | `param/unset-positional-takes-a-default` | `[default]` | `[default]` | `[default]` | `[default]` | `[default]` | `[default]` |
+| `param/a-substring-offset-is-an-expression` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[cd]` | `[cd]` | `[cd]` | `[cd]` | `[cd]` |
 | `param/colon-extends-the-test-unset` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` |
 | `param/colon-extends-the-test-empty` | `[D][]` | `[D][]` | `[D][]` | `[D][]` | `[D][]` | `[D][]` |
 | `param/plus-is-the-mirror` | `[][][A][][A][A]` | `[][][A][][A][A]` | `[][][A][][A][A]` | `[][][A][][A][A]` | `[][][A][][A][A]` | `[][][A][][A][A]` |
@@ -3341,6 +3377,10 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `param/unset-positional-takes-a-default` — an out-of-range positional is unset rather than empty, so the plain default form fires for it
   ```sh
   echo "[${1-default}]"
+  ```
+- `param/a-substring-offset-is-an-expression` — the same numeral-only reading, reached through the substring rather than through a subscript: unanimous in all four with substrings, and taking the numeral alone gave an offset of 0 — `ab`, which is a real substring of the right length and so looks like an answer rather than a failure
+  ```sh
+  x=abcdef; echo "[${x:1+1:2}]"
   ```
 - `param/colon-extends-the-test-unset` — with the variable unset both forms fire, so this row alone proves nothing — it is the pair with the next case that does
   ```sh
@@ -3634,6 +3674,8 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `redir/a-group-writing-to-a-closed-descriptor` | `st=1` **2>** `<shell>: 1: echo: echo: I/O error~<shell>: 1: echo: echo: I/O error` | `st=1` **2>** `<shell>: line 1: echo: write error: Bad file descriptor~<shell>: line 1: echo: write error: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: echo: write error: Bad file descriptor~<shell>: line 1: echo: write error: Bad file descriptor` | `a~b~st=1` **2>** `<shell>: line 0: echo: write error: Bad file descriptor~<shell>: line 0: echo: write error: Bad file descriptor` | `st=1` | `st=0` **2>** `<shell>:1: write error: bad file descriptor~<shell>:1: write error: bad file descriptor` |
 | `redir/exec-opens-a-high-descriptor` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` |
 | `redir/exec-descriptor-reaches-an-external-child` | `child` | `child` | `child` | `child` | *(no output, status 0)* | `child` |
+| `redir/exec-descriptor-reaches-a-replacement` | `repl` | `repl` | `repl` | `repl` | *(no output, status 0)* | `repl` |
+| `redir/a-replacements-descriptor-numbers-keep-their-gaps` | `five` | `five` | `five` | `five` | *(no output, status 0)* | `five` |
 | `redir/an-inherited-descriptor-keeps-its-number` | `five` | `five` | `five` | `five` | *(no output, status 0)* | `five` |
 | `redir/a-dup-prefix-is-that-commands-alone` | `st=2` **2>** `<shell>: 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: 6: Bad file descriptor` | `st=1` **2>** `<shell>: 6: cannot open [Bad file descriptor]` | `st=1` **2>** `<shell>:1: 6: bad file descriptor` |
 | `redir/merge-then-file` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` |
@@ -3776,6 +3818,14 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `redir/exec-descriptor-reaches-an-external-child` — a descriptor parked with `exec 3>file` is inherited by an external command, which is what the flock and shared-log idioms are built on — the child writes in every shell but ksh93, which alone keeps it to itself. The child's complaint is discarded because its wording is a fact about whatever /bin/sh is on the machine
   ```sh
   exec 3>f; /bin/sh -c "echo child >&3" 2>/dev/null; exec 3>&-; cat f
+  ```
+- `redir/exec-descriptor-reaches-a-replacement` — the same descriptor and the harder seam: `exec cmd` replaces the shell rather than forking one, so nothing renumbers the table on the way across and the command inherits the *process's* descriptors. The replacement writes in every shell but ksh93, exactly as a child does, and the reading is done by the replacement because there is no shell left to do it. The complaint is discarded for the reason the child's is
+  ```sh
+  exec 3>f; exec /bin/sh -c "{ echo repl >&3; } 2>/dev/null; cat f"
+  ```
+- `redir/a-replacements-descriptor-numbers-keep-their-gaps` — the replacement's table is the shell's table by number rather than a packing of it: with 3 and 4 never opened, the file parked on 5 is on 5 there and 3 is closed rather than shifted down to fill the hole. Unanimous but for ksh93, which passes neither
+  ```sh
+  exec 5>f; exec /bin/sh -c "{ echo five >&5; echo three >&3; } 2>/dev/null; cat f"
   ```
 - `redir/an-inherited-descriptor-keeps-its-number` — the discriminating case for how the table crosses: with 3 and 4 never opened, the file parked on 5 is still on 5 in the child and 3 is a hole, so the file holds `five`. A table packed from the bottom would put it on 3 and the file would hold `three`
   ```sh
@@ -5088,6 +5138,7 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `pipestatus/unset-then-another-pipeline-in-zsh` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[]` | `[]` | `[]` | `[]` | `[]` |
 | `pipestatus/read-as-a-plain-parameter` | `[]` | `[1]` | `[1]` | `[1]` | `[]` | `[]` |
 | `pipestatus/plain-parameter-on-an-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x]` | `[x]` | `[x]` | `[x]` | `[x y z]` |
+| `pipeline/a-builtin-writing-into-a-pipe-nobody-reads` | `after` | `after` | `after` | `after` | `after` | `after` |
 
 - `set/o-at-the-end-of-a-bundle` — `-o` is nearly always the last letter of a bundle rather than a word of its own — `set -euo pipefail` is the line at the top of a great many scripts — and the letters before it are ordinary letters that still apply. noglob rather than pipefail because every shell in the panel has it, so the case is about where the `o` sits and not about which options exist
   ```sh
@@ -5163,6 +5214,10 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `pipestatus/plain-parameter-on-an-array` — the same rule on an ordinary array, which is where it belongs: zsh joins and the other two take the first element
   ```sh
   a=(x y z); echo "[$a]"
+  ```
+- `pipeline/a-builtin-writing-into-a-pipe-nobody-reads` — the quiet death, and the one no other case reaches: a builtin whose output goes into a pipe nobody is reading is killed by SIGPIPE where it stands, so `reached` never runs and nothing is said about it — unanimous in all four, and the point of the `>&2` is that a shell which merely swallowed the write would still print it. This is `yes | head` seen from the writing end, and it is the case the corpus was missing while `printf x | { read -d : v; }` measured the same thing by accident: there the write is small enough to fit, so whether it beats the reader's exit is the machine's to decide and the score wandered by one
+  ```sh
+  v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; { echo "$v"; echo reached >&2; } | true; echo after
   ```
 
 ## builtin names

@@ -2140,6 +2140,46 @@ var Corpus = []Case{
 		Why:     "the other side of the same gate. Where the dialect has no subscript the word is not an assignment at all and the shell looks for a command by that name, which is the answer the shell without arrays gives — so accepting the shape everywhere would have made this one silently assign instead of reporting. Three shells assign and say nothing; the fourth reports on standard error and carries on",
 	},
 	{
+		ID: "array/reading-a-subscript-is-arithmetic", Category: "expansion",
+		Snippet: `a=(x y z); echo "[${a[1+1]}]"`,
+		Why:     "a subscript being read is an expression, exactly as one being written through is. It took a numeral and nothing else, so this expanded to the empty string with status 0 — and `a[1+1]=v` had already learned to store where `${a[1+1]}` could not look, which is two spellings of one subscript naming two different elements. zsh answers the element before, which is the base rather than a different reading",
+	},
+	{
+		ID: "array/a-subscript-reads-a-variable", Category: "expansion",
+		Snippet: `a=(x y z); i=1; echo "[${a[i+1]}]"`,
+		Why:     "the same question with a name in it, which is how a loop indexes relative to where it is. A bare name inside a subscript is an arithmetic operand and needs no `$`, so this is the spelling that separates evaluating the text from expanding it",
+	},
+	{
+		ID: "array/an-unset-name-in-a-subscript", Category: "expansion",
+		Snippet: `a=(x y z); echo "[${a[k]}]"`,
+		Why:     "an unset name in an expression is zero, so the subscript is the first element rather than an error — unanimous in the three with arrays once the base is allowed for, which is why zsh finds nothing where the other two find the first. It is the row that says the subscript goes through the arithmetic reading rather than through a numeral test that happens to fail softly",
+	},
+	{
+		ID: "array/an-element-length-by-expression", Category: "expansion",
+		Snippet: `a=(xx yy zzz); echo "[${#a[1+1]}]"`,
+		Why:     "the length operator reaches the element the expression names, so a subscript that did not evaluate reported the length of nothing — `0`, which is a plausible answer for a real element and so hides the failure completely",
+	},
+	{
+		ID: "array/assigning-through-an-expression-subscript", Category: "expansion",
+		Snippet: `a=(x y); echo "[${a[1+1]:=Q}]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "`${a[i]:=v}` assigns to the element the subscript names, so the expression has to be evaluated before the store as well as before the read. The subscript is past the end so the assignment happens, which is what tells this apart from a case that only reads. zsh finds an element there and assigns nothing, which is the base again",
+	},
+	{
+		ID: "array/unsetting-an-element-by-expression", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[1+1]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "removing an element names it by expression too, and this did nothing at all: the operand was rejected for not being a numeral and then deleted as a whole variable that was never there, so the array came back unchanged with status 0. What the hole then looks like is the sparse-array axis, the same one `array/removing-one-element` records",
+	},
+	{
+		ID: "array/an-unset-operand-subscript-expands", Category: "expansion",
+		Snippet: `a=(x y z); i=1; unset 'a[$i]'; printf "[%s]" "${a[@]}"; echo`,
+		Why:     "the operand reached `unset` unexpanded — it was in single quotes — and two of the three still substitute into it, because an arithmetic expression is expanded before it is read wherever one is written. ksh93 does not and says so, which is the divergence worth having recorded rather than discovered",
+	},
+	{
+		ID: "param/a-substring-offset-is-an-expression", Category: "parameter expansion",
+		Snippet: `x=abcdef; echo "[${x:1+1:2}]"`,
+		Why:     "the same numeral-only reading, reached through the substring rather than through a subscript: unanimous in all four with substrings, and taking the numeral alone gave an offset of 0 — `ab`, which is a real substring of the right length and so looks like an answer rather than a failure",
+	},
+	{
 		ID: "cmd/a-name-broken-by-an-expansion", Category: "commands",
 		Snippet: `b=X; a$b=c; echo "rc=$?"`,
 		Why:     "a name interrupted by an expansion is not a name, unanimously in all five: the word is a command name and the expansion happens first, so the diagnostic reports `aX=c`. It is the boundary the subscript form has to stop at — a scan that follows the `=` across spans wherever it finds one would turn this into an assignment to `a`",
@@ -2290,6 +2330,16 @@ echo "st=$?"`,
 		ID: "redir/exec-descriptor-reaches-an-external-child", Category: "redirection",
 		Snippet: `exec 3>f; /bin/sh -c "echo child >&3" 2>/dev/null; exec 3>&-; cat f`,
 		Why:     "a descriptor parked with `exec 3>file` is inherited by an external command, which is what the flock and shared-log idioms are built on — the child writes in every shell but ksh93, which alone keeps it to itself. The child's complaint is discarded because its wording is a fact about whatever /bin/sh is on the machine",
+	},
+	{
+		ID: "redir/exec-descriptor-reaches-a-replacement", Category: "redirection",
+		Snippet: `exec 3>f; exec /bin/sh -c "{ echo repl >&3; } 2>/dev/null; cat f"`,
+		Why:     "the same descriptor and the harder seam: `exec cmd` replaces the shell rather than forking one, so nothing renumbers the table on the way across and the command inherits the *process's* descriptors. The replacement writes in every shell but ksh93, exactly as a child does, and the reading is done by the replacement because there is no shell left to do it. The complaint is discarded for the reason the child's is",
+	},
+	{
+		ID: "redir/a-replacements-descriptor-numbers-keep-their-gaps", Category: "redirection",
+		Snippet: `exec 5>f; exec /bin/sh -c "{ echo five >&5; echo three >&3; } 2>/dev/null; cat f"`,
+		Why:     "the replacement's table is the shell's table by number rather than a packing of it: with 3 and 4 never opened, the file parked on 5 is on 5 there and 3 is closed rather than shifted down to fill the hole. Unanimous but for ksh93, which passes neither",
 	},
 	{
 		ID: "redir/an-inherited-descriptor-keeps-its-number", Category: "redirection",
@@ -4075,6 +4125,17 @@ echo unreachable`,
 		ID: "pipestatus/plain-parameter-on-an-array", Category: "pipeline status",
 		Snippet: `a=(x y z); echo "[$a]"`,
 		Why:     "the same rule on an ordinary array, which is where it belongs: zsh joins and the other two take the first element",
+	},
+	{
+		// The doubling loop is how a builtin is made to write more than a
+		// pipe will hold using nothing but the shell: 2^17 bytes against a
+		// buffer of 64K, so the write must block and the reader has already
+		// gone. A fixed literal that large would be a corpus file nobody can
+		// read, and an external `yes` would be measuring the *command's*
+		// death rather than a builtin's.
+		ID: "pipeline/a-builtin-writing-into-a-pipe-nobody-reads", Category: "pipeline status",
+		Snippet: `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; { echo "$v"; echo reached >&2; } | true; echo after`,
+		Why:     "the quiet death, and the one no other case reaches: a builtin whose output goes into a pipe nobody is reading is killed by SIGPIPE where it stands, so `reached` never runs and nothing is said about it — unanimous in all four, and the point of the `>&2` is that a shell which merely swallowed the write would still print it. This is `yes | head` seen from the writing end, and it is the case the corpus was missing while `printf x | { read -d : v; }` measured the same thing by accident: there the write is small enough to fit, so whether it beats the reader's exit is the machine's to decide and the score wandered by one",
 	},
 	{
 		ID: "cmd/close-brace-as-an-ordinary-word", Category: "command language",

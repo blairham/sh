@@ -125,7 +125,16 @@ type Runner struct {
 	//
 	// It returns only on failure — a successful replacement does not come
 	// back — and the error it returns is reported as the exec having failed.
-	ReplaceProcess func(path string, argv, env []string) error
+	//
+	// files is the descriptor table the replacement is to be given beyond the
+	// three named streams, laid out exactly as InheritedFiles is read and as
+	// childFiles hands one to an external child: entry i is descriptor 3+i,
+	// and a nil entry is a number that must not be open there. It is a
+	// separate argument rather than something the hook can work out for
+	// itself, because the numbers are the *script's* — a Runner's descriptor
+	// 3 is some other number in the process, and which descriptors are the
+	// script's to hand out is a question only this package can answer.
+	ReplaceProcess func(path string, argv, env []string, files []*os.File) error
 
 	// DieBySignal ends this process with the signal a script sent it and had
 	// no handler for, and nil — the default — stops the script with 128 plus
@@ -2414,7 +2423,7 @@ func (r *Runner) assign(a *syntax.Assign) {
 		}
 		r.setAssocElem(a.Name, key, value)
 	case a.Index != nil:
-		idx, err := r.writtenSubscript(r.joinWord(a.Index))
+		idx, err := r.subscriptValue(r.joinWord(a.Index))
 		if err != nil {
 			r.diagf("%s: bad array subscript\n", a.Name)
 			return

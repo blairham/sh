@@ -4028,6 +4028,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/the-picked-descriptors-name-may-be-an-element` | **2>** `<shell>: 1: exec: {a[1]}: not found` *(status 127)* | `a1=10~written` | `a1=10~written` | **2>** `<shell>: line 0: exec: {a[1]}: not found` *(status 127)* | `a1=10~written` | **2>** `<shell>:1: no matches found: {a[1]}` *(status 1)* |
 | `redir/closing-a-descriptor-through-an-element` | **2>** `<shell>: 1: a[1]=3: not found~<shell>: 1: exec: {a[1]}: not found` *(status 127)* | `st=0~after=1` **2>** `<shell>: line 1: 3: Bad file descriptor` | `st=0~after=1` **2>** `<shell>: line 1: 3: Bad file descriptor` | **2>** `<shell>: line 0: exec: {a[1]}: not found` *(status 127)* | `st=0~after=1` **2>** `<shell>: 3: cannot open [Bad file descriptor]` | **2>** `<shell>:1: no matches found: {a[1]}` *(status 1)* |
 | `redir/noclobber-names-its-refusal` | `st=2` **2>** `<shell>: 1: cannot create f: File exists` | `st=1` **2>** `<shell>: line 1: f: cannot overwrite existing file` | `st=1` **2>** `<shell>: line 1: f: cannot overwrite existing file` | `st=1` **2>** `<shell>: f: cannot overwrite existing file` | `st=1` **2>** `<shell>: f: file already exists [File exists]` | `st=1` **2>** `<shell>:1: file exists: f` |
+| `redir/exec-with-a-redirection-that-cannot-be-made` | **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` *(status 2)* | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | `after` **2>** `<shell>: /nope/x: No such file or directory` | **2>** `<shell>: /nope/x: cannot create [No such file or directory]` *(status 1)* | `after` **2>** `<shell>:1: no such file or directory: /nope/x` |
+| `redir/a-failed-redirection-on-a-colon` | **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` *(status 2)* | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | `after` **2>** `<shell>: /nope/x: No such file or directory` | **2>** `<shell>: /nope/x: cannot create [No such file or directory]` *(status 1)* | `after` **2>** `<shell>:1: no such file or directory: /nope/x` |
+| `redir/a-failed-redirection-on-an-ordinary-command` | `after` **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: cannot create [No such file or directory]` | `after` **2>** `<shell>:1: no such file or directory: /nope/x` |
+| `redir/a-failed-redirection-on-a-compound-command` | `after` **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: cannot create [No such file or directory]` | `after` **2>** `<shell>:1: no such file or directory: /nope/x` |
+| `redir/a-failed-redirection-inside-a-subshell` | `after` **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` | `inner~after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `inner~after` **2>** `<shell>: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: cannot create [No such file or directory]` | `inner~after` **2>** `<shell>:1: no such file or directory: /nope/x` |
 
 - `procsub/reads-a-command-as-a-file` — `<(cmd)` runs cmd and expands to a path its output can be read from — the last of the core language, and the clearest case of a dialect being a runtime switch: bash 3.2 has it as `bash` and loses it as `sh`. dash has it in neither guise and reports the `(` as unexpected
   ```sh
@@ -4319,6 +4324,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `redir/noclobber-names-its-refusal` — the refusal is unanimous and the sentence is not: bash cannot overwrite an existing file, ksh93 says it already exists with the errno in brackets, dash and zsh word it as any other failed create
   ```sh
   set -C; echo a > f; echo b > f; echo "st=$?"
+  ```
+- `redir/exec-with-a-redirection-that-cannot-be-made` — POSIX makes a redirection error on a special builtin fatal to a non-interactive shell, and the panel splits three to two over it: dash stops at 2, ksh93 and bash-as-`sh` stop at 1, and bash and zsh complain and print `after`. The bash and bash-as-`sh` rows are the same binary, which is what says the answer belongs to posix mode rather than to a shell
+  ```sh
+  exec 3>/nope/x; echo after
+  ```
+- `redir/a-failed-redirection-on-a-colon` — the same rule reached without `exec`: `:` is a special builtin too, and every column answers exactly as it does above — so the rule is about which builtin carries the redirection and not about replacing the shell
+  ```sh
+  : 3>/nope/x; echo after
+  ```
+- `redir/a-failed-redirection-on-an-ordinary-command` — the boundary, and it is unanimous: on a builtin POSIX does not mark special nothing stops anywhere, so a rule written as `a failed redirection is fatal` would be wrong in five columns at once
+  ```sh
+  true 3>/nope/x; echo after
+  ```
+- `redir/a-failed-redirection-on-a-compound-command` — the other half of the boundary: a redirection written on a group belongs to the group and not to any builtin, so every column complains and carries on — including the three that stop for the identical redirection on `exec`
+  ```sh
+  { echo x; } 3>/nope/x; echo after
+  ```
+- `redir/a-failed-redirection-inside-a-subshell` — what `ends the shell` means where there is a process boundary: the three that stop lose `inner` and still print `after` at status 0, so the subshell ends and the parent does not — which our cloned-runner subshells have to reconstruct by hand
+  ```sh
+  ( exec 3>/nope/x; echo inner ); echo after
   ```
 
 ## commands
@@ -5859,6 +5884,8 @@ grades it and nothing drift-checks it either, for the same reason.
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
+| `set/posix-mode-makes-a-failed-redirection-fatal` | **2>** `<shell>: 1: set: Illegal option -o posix` *(status 2)* | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: posix` *(status 1)* |
+| `set/leaving-posix-mode-restores-the-shells-own-answer` | **2>** `<shell>: 1: set: Illegal option -o posix` *(status 2)* | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: No such file or directory` | **2>** `<shell>: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: posix` *(status 1)* |
 | `invoke/errexit-with-a-script` | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* |
 | `invoke/a-bundle-of-set-letters` | **2>** `<script>: 1: nope: parameter not set` *(status 2)* | **2>** `<script>: line 1: nope: unbound variable` *(status 1)* | **2>** `<script>: line 1: nope: unbound variable` *(status 1)* | **2>** `<script>: line 1: nope: unbound variable` *(status 1)* | **2>** `<script>: line 1: nope: parameter not set` *(status 1)* | **2>** `<script>:1: nope: parameter not set` *(status 1)* |
 | `invoke/the-long-option-name` | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* |
@@ -5903,6 +5930,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `invoke/dollar-dash-shows-s-for-the-s-option` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` |
 | `invoke/dollar-dash-keeps-s-when-a-command-string-overrides-it` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` |
 
+- `set/posix-mode-makes-a-failed-redirection-fatal` — the same binary, both answers: bash 5.3 and bash 3.2 print `after` without this line and stop at 1 with it, which is the bash-as-`sh` column reached at run time. The other three have no such name and refuse the `set` instead, each in its own words
+  ```sh
+  set -o posix; exec 3>/nope/x; echo after
+  ```
+- `set/leaving-posix-mode-restores-the-shells-own-answer` — the round trip, which is what makes it a mode rather than a one-way door: bash goes back to printing `after` at 0. Turning it off is also the direction a shell without a posix mode can honestly grant, and the thirteenth line of Homebrew's own script
+  ```sh
+  set -o posix; set +o posix; exec 3>/nope/x; echo after
+  ```
 - `invoke/errexit-with-a-script` — the first line of most scripts, spelled on the command line instead: a set option given at invocation has to reach the runner, and abandon the script at the failure rather than run to the end
   ```sh
   echo one

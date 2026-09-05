@@ -527,8 +527,12 @@ func Diagnostics() interp.Diagnostics {
 		// range: `${x:1+:2}` names `1+:2`. A failing length has nothing after
 		// it and is named on its own.
 		SubstringErrorNamesTheWholeRange: true,
-		ArithOperandExpected:             "more tokens expected",
-		ArithOperatorExpected:            "arithmetic syntax error",
+		// An operand failure is two sentences here, and which one is said
+		// turns on whether the expression ran out or found something it
+		// could not use: `$((1+))` against `$((%))`.
+		ArithOperandExpected:  "arithmetic syntax error",
+		ArithExpressionRanOut: "more tokens expected",
+		ArithOperatorExpected: "arithmetic syntax error",
 		// A digit the base does not have is the same sentence.
 		DigitTooGreatForBase: "arithmetic syntax error",
 		// ksh93 does not call this a bad substitution: it is a syntax error

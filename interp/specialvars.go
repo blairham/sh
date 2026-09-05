@@ -13,7 +13,7 @@ import (
 
 // The parameters a shell provides without a script setting them.
 //
-// Four of them are unanimous across the panel and belong here; the rest are
+// Five of them are unanimous across the panel and belong here; the rest are
 // not, and belong to whichever dialects have them. Which *variables* a shell
 // provides is the same kind of question as which builtins it has — neither
 // grammar nor a conflict about meaning — so it is answered through the same
@@ -23,7 +23,7 @@ import (
 // script began `if [ $UID -ne 0 ]`, and with UID unset that is `[ -ne 0 ]` —
 // which is not the same test and does not fail in the same way.
 //
-// Two of the four have to be produced when they are read rather than stored:
+// Two of the five have to be produced when they are read rather than stored:
 // LINENO is wherever execution has reached, and `$-` is whatever `set` has
 // done by the time it is read — a stored copy of either would describe the
 // line, and the options, the shell started with. That is what Dynamic is for.
@@ -59,6 +59,20 @@ func (r *Runner) ensureSpecials() {
 	}
 	if _, ok := r.Vars["PPID"]; !ok && !r.removed["PPID"] {
 		r.setVarQuietly("PPID", strconv.Itoa(os.Getppid()))
+	}
+	if _, ok := r.Vars["OPTIND"]; !ok && !r.removed["OPTIND"] {
+		// The index the next `getopts` will read, which is 1 before the
+		// builtin has ever run — unanimous across the panel, so it is a
+		// starting value here rather than an axis. Writing it here and not
+		// inside `getopts` is the whole point: a script that tests OPTIND
+		// before entering its loop, or that is handed no options at all,
+		// reads a number in every real shell and read nothing here.
+		//
+		// It is written into Vars rather than left to the environment
+		// because the panel *overwrites* what the environment brought:
+		// `OPTIND=7 sh -c 'echo $OPTIND'` prints 1 in all six, so an
+		// inherited value must not show through.
+		r.setVarQuietly("OPTIND", "1")
 	}
 	if _, ok := r.Dynamic["LINENO"]; !ok {
 		r.Dynamic["LINENO"] = func(r *Runner) string {

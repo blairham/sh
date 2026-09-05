@@ -2579,6 +2579,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | --- | --- | --- | --- | --- | --- | --- |
 | `getopts/loop-reads-each-option` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` |
 | `getopts/optind-starts-at-one` | `OPTIND=[1]` | `OPTIND=[1]` | `OPTIND=[1]` | `OPTIND=[1]` | `OPTIND=[1]` | `OPTIND=[1]` |
+| `getopts/optind-ignores-an-inherited-value` | `OPTIND=[1]` | `OPTIND=[1]` | `OPTIND=[1]` | `OPTIND=[1]` | `OPTIND=[1]` | `OPTIND=[1]` |
 | `getopts/a-function-with-its-own-optind` | `[a][b] rest=3~[b][a] rest=3~outer OPTIND=1` | `[a][b] rest=3~[b][a] rest=3~outer OPTIND=1` | `[a][b] rest=3~[b][a] rest=3~outer OPTIND=1` | `[a][b] rest=3~[b][a] rest=3~outer OPTIND=1` | `[a][b] rest=3~ rest=3~outer OPTIND=3` **2>** `<shell>: local: not found~<shell>: local: not found` | `[a][b] rest=3~[b][a] rest=3~outer OPTIND=1` |
 | `getopts/clustered-options` | `[a][b] ind=2` | `[a][b] ind=2` | `[a][b] ind=2` | `[a][b] ind=2` | `[a][b] ind=2` | `[a][b] ind=2` |
 | `getopts/argument-attached-or-apart` | `[b][val]~[b][val]` | `[b][val]~[b][val]` | `[b][val]~[b][val]` | `[b][val]~[b][val]` | `[b][val]~[b][val]` | `[b][val]~[b][val]` |
@@ -2594,6 +2595,10 @@ grades it and nothing drift-checks it either, for the same reason.
   set -- -a -b x; while getopts "ab:" o; do echo "[$o:${OPTARG-}]"; done; echo "ind=$OPTIND"
   ```
 - `getopts/optind-starts-at-one` — OPTIND is 1 before anything has called getopts, in all six — it is initialized when the shell starts rather than when the builtin first runs. A script that reads it to decide how many operands to `shift` past does so *after* the loop, but one that tests it before entering the loop, or that runs no options at all, reads whatever startup left. Found by the function case beside it, which is why a one-line case sits in front of a nine-line one
+  ```sh
+  echo "OPTIND=[$OPTIND]"
+  ```
+- `getopts/optind-ignores-an-inherited-value` — the startup value is written rather than merely defaulted: an OPTIND in the environment is overwritten with 1 by all six, so a shell that stops at `unset means 1` still answers 7 here and a script that inherited one from its caller would start its scan in the middle. It is the half of the startup value that reading the variable alone cannot see, since both a fresh shell and a leaking one print a number
   ```sh
   echo "OPTIND=[$OPTIND]"
   ```

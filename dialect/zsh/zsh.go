@@ -173,6 +173,11 @@ func Semantics() interp.Semantics {
 	// CDPATH moves in silence here.
 	s.CdpathAnnouncesTheDirectory = interp.No
 	s.LinenoCountsFromTheFunction = interp.Yes
+	// A substring range is this shell's history-modifier syntax as well, and
+	// a segment beginning with an unquoted letter is read as a modifier
+	// rather than as an arithmetic offset — so `${x:i:2}` is refused where
+	// the other three take a substring. Measured against zsh 5.9.2.
+	s.SubstringRangeReadsModifiers = interp.Yes
 	s.EchoInterpretsEscapes = interp.Yes
 	// echo reads -n, -e and -E, and -e wins over -E whatever the order.
 	s.EchoOptions = "neE"
@@ -587,10 +592,15 @@ func Diagnostics() interp.Diagnostics {
 		// The same split ksh93 makes, said the other way round: the text
 		// that could not be an operand is named where there is one, and the
 		// end of the string is named where there is not.
-		ArithOperandExpected:  "bad math expression: operand expected at `%[1]s'",
-		ArithExpressionRanOut: "bad math expression: operand expected at end of string",
-		ArithOperatorExpected: "bad math expression: operator expected at `%[1]s'",
-		SyntaxUnexpected:      "parse error near `%[1]s'",
+		// A substring range that begins with a letter is a modifier list
+		// here, and an unknown modifier is named unless the segment began
+		// with a known one — `${x:i}` names `i` and `${x:ha}` names nothing.
+		UnrecognizedModifier:      "unrecognized modifier `%[1]s'",
+		UnrecognizedModifierAlone: "unrecognized modifier",
+		ArithOperandExpected:      "bad math expression: operand expected at `%[1]s'",
+		ArithExpressionRanOut:     "bad math expression: operand expected at end of string",
+		ArithOperatorExpected:     "bad math expression: operator expected at `%[1]s'",
+		SyntaxUnexpected:          "parse error near `%[1]s'",
 		// zsh names itself and stops when a function's body never began.
 		// `f() ;` reports as zsh: parse error near `;' where `if true` — an
 		// input that ran out just as much — reports the line as well, as

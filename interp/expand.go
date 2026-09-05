@@ -1000,7 +1000,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		return r.replaceWith(value, r.patternOf(e.Arg), r.joinWord(e.Arg2), e)
 
 	case syntax.ParamSubstring:
-		return substring(value, r.numOf(e.Arg, e, e.Arg2), e, r)
+		return r.substringRange(value, e)
 
 	case syntax.ParamUpper, syntax.ParamLower, syntax.ParamToggle,
 		syntax.ParamUpperFirst, syntax.ParamLowerFirst, syntax.ParamToggleFirst:
@@ -1393,6 +1393,45 @@ func replace(value, pattern, with string, e *syntax.ParamExpr, o patternOpts) st
 		i = end
 	}
 	return b.String()
+}
+
+// substringRange is `${x:…}`, which is a substring in three of the panel and
+// is *either* a substring or a modifier list in the fourth.
+//
+// The reading is decided before anything is evaluated, because in the shell
+// that has both the two spellings are identical: `${x:h}` is a modifier there
+// and arithmetic on an unset `h` everywhere else. Asked only where a segment
+// actually begins with an unquoted letter, so `${x:1:2}` needs no answer from
+// anyone.
+func (r *Runner) substringRange(value string, e *syntax.ParamExpr) string {
+	if rangeSegmentIsAModifier(e.Arg) {
+		if !r.ask(r.sem().SubstringRangeReadsModifiers,
+			"a substring range beginning with a letter being a modifier list") {
+			// Not this dialect's reading, so the letter is a name in an
+			// expression like any other.
+			return substring(value, r.numOf(e.Arg, e, e.Arg2), e, r)
+		}
+		out, ok := r.applyModifiers(value, modifierSegments(e.Arg, e.Arg2), e)
+		if !ok {
+			return ""
+		}
+		return out
+	}
+	// The offset is a number and the length may still be a modifier, applied
+	// to what the offset left: `${x:2:t}` is the tail of `${x:2}`.
+	if e.Arg2 != nil && rangeSegmentIsAModifier(e.Arg2) &&
+		r.ask(r.sem().SubstringRangeReadsModifiers,
+			"a substring range beginning with a letter being a modifier list") {
+		sliced := substring(value, r.numOf(e.Arg, e, nil), &syntax.ParamExpr{
+			Name: e.Name, Op: e.Op, Arg: e.Arg,
+		}, r)
+		out, ok := r.applyModifiers(sliced, modifierSegments(e.Arg2, nil), e)
+		if !ok {
+			return ""
+		}
+		return out
+	}
+	return substring(value, r.numOf(e.Arg, e, e.Arg2), e, r)
 }
 
 // substring takes a slice of the value.

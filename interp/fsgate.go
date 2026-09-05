@@ -10,12 +10,20 @@ import (
 	"syscall"
 )
 
-// Every stat and directory read in the interpreter comes through here, so the
-// whole category passes the gate and reaches the event stream. It matters
-// because a probe is an oracle: `[ -f /etc/shadow ]` learns something real
-// about the filesystem, `echo /**` enumerates it, and a PATH search stats a
-// candidate in every directory PATH names — none of which a policy could see,
-// let alone refuse, while these went to the os package directly.
+// Every stat, link read and directory read in the interpreter comes through
+// here, so the whole category passes the gate and reaches the event stream. It
+// matters because a probe is an oracle: `[ -f /etc/shadow ]` learns something
+// real about the filesystem, `echo /**` enumerates it, and a PATH search stats
+// a candidate in every directory PATH names — none of which a policy could
+// see, let alone refuse, while these went to the os package directly.
+//
+// That claim has to be re-checked against the code rather than read, and it
+// was false once: `cd -P` and `pwd -P` handed a script-chosen path to
+// filepath.EvalSymlinks, which lstats and reads every component of it through
+// the os package. A policy hiding a subtree could not stop `cd -P` walking
+// into it and reporting what it found, and nothing recorded the walk. The
+// resolution loop in physicalpath.go replaced that call, so the sentence above
+// is a statement about the code again.
 //
 // A refusal is quiet, unlike a refused exec or open. Those stop a command
 // that cannot honestly run without them, and say so; a probe's caller only
@@ -52,6 +60,20 @@ func (r *Runner) lstat(path string) (os.FileInfo, error) {
 		return nil, &fs.PathError{Op: "lstat", Path: path, Err: syscall.ENOENT}
 	}
 	return os.Lstat(path)
+}
+
+// readLink is os.Readlink through the gate. Reading where a link points is
+// the same question about the link that lstat asks — what is this component,
+// and what is behind it — so it is the same action to the policy, and a path
+// the policy hides answers the way a path that is not a link answers.
+func (r *Runner) readLink(path string) (string, error) {
+	if r.Gate == nil && r.Events == nil {
+		return os.Readlink(path)
+	}
+	if r.probeDenied(Action{Kind: ActionStat, Path: path}) {
+		return "", &fs.PathError{Op: "readlink", Path: path, Err: syscall.ENOENT}
+	}
+	return os.Readlink(path)
 }
 
 // readDir is os.ReadDir through the gate. A denied directory reads as empty,

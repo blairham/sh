@@ -44,6 +44,15 @@ const (
 	// or CDPATH search tries, glob descent deciding what is a directory,
 	// `.`'s search for a readable file.
 	//
+	// Reading where a symlink points is the same action, because it is the
+	// same question about the same component. `cd -P` and `pwd -P` are the
+	// callers that matter: reporting where a directory *is* means following
+	// every link on the way there, so each component of that walk is a stat
+	// of its own rather than one stat of the answer. A single stat is what
+	// this used to be, with the walk done by the standard library outside
+	// the boundary, and a policy refusing a subtree could neither stop
+	// `cd -P` crossing it nor learn that it had.
+	//
 	// A denied stat answers as a missing path does, quietly: the file tests
 	// go false, glob drops the candidate, a search walks on, and `cd` fails
 	// the way it fails for a directory that is not there. No diagnostic and

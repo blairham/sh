@@ -2147,6 +2147,64 @@ action we cannot generate is a promise we cannot keep:
   a question, where the other two register and adjust completion
   specifications for an interactive line editor this core does not own.
 
+## `mapfile`, and a delimiter that is not a character
+
+Issue #488: `mapfile` — and `readarray`, the same command under its other
+name — reads a stream into an indexed array, one element per delimiter.
+bash alone has it; dash, ksh93 and zsh answer command-not-found, and so
+does bash 3.2, which predates it. Measured 2026-09-05 against bash 5.3.15,
+bash 3.2.57, dash, ksh93u+ 2012-08-01 and zsh 5.9.2; the corpus rows are
+`mapfile/`, `readarray/`.
+
+It earns a builtin rather than a prelude function for the reason `read`
+does: `printf … | while read` runs its loop in a subshell and the variable
+it set is gone at the other end of the pipe, and an array is the case where
+that hurts most. `mapfile -t arr < file` puts the array in the shell that
+asked for it.
+
+The letters, each measured:
+
+- **`-t`** strips the delimiter from every element. Without it the
+  delimiter is kept: `printf 'a\n' | mapfile x` leaves `${#x[0]}` at 2,
+  and `printf 'a:' | mapfile -d : y` leaves `${#y[0]}` at 2 likewise.
+- **`-d`** renames the delimiter, and only its argument's **first byte**
+  speaks — `-d xy` splits on `x`. An **empty** argument is not "no
+  delimiter" but **NUL**, which is the whole point of the letter:
+  `find -print0 | mapfile -d '' -t` is the one file-name-safe read a shell
+  has. It is a genuine special case rather than a first-byte reading of the
+  empty string, so the code cannot express it as `word[0]`.
+- **NUL is stripped from the element whether or not `-t` was given.**
+  `printf 'a\0' | mapfile -d '' x` leaves `${#x[0]}` at 1, against the 2 a
+  `:` delimiter gives — a value cannot carry a NUL, so keeping it was never
+  on offer.
+- **`-n`** caps how many elements arrive, and **`0` is no cap** rather than
+  none, so an absent `-n` and `-n 0` land in the same place. The cap is
+  measured on the *stream*, not only the array: `printf '1\n2\n3\n' |
+  { mapfile -t -n 1 a; read rest; }` leaves `rest` at `2`, so the read
+  stops at the cap instead of draining and discarding. This
+  implementation reads a byte at a time for that reason.
+- **`-s`** throws away that many elements before the first one kept.
+- **`-O`** writes from a given subscript into whatever the array already
+  holds; without it the array is replaced outright.
+- **`-u`** reads a descriptor from the shell's own table rather than
+  standard input — `exec 3<f; mapfile -u 3 -t arr` — which is how the
+  command is used without a pipe putting it in a subshell. A number nothing
+  is open at is `mapfile: 9: invalid file descriptor: Bad file
+  descriptor`, status 1.
+
+The operand is the array name, `MAPFILE` with none, and operands after the
+first are ignored. A name that is not an identifier is `` `bad name':
+not a valid identifier `` and a name already declared associative is
+`h: not an indexed array`, both status 1. An unknown letter is the
+dialect's usage refusal at status 2, carrying whichever of the two names
+the script used — `readarray -q` says `readarray`.
+
+**`-C` and `-c` are deferred**, not silently accepted: the callback letters
+run shell code every *quantum* elements, which is a second evaluation
+context inside a read, and the dialect's letter table refuses them by name.
+Parsing and ignoring them would be the wrong answer, because a script that
+passes `-C` is asking for something to happen.
+
 ## The declaration long tail: letters, listings, and one letter with an axis inside it
 
 Oracle runs, 2026-09-04, bash 5.3, dash, ksh93u+, zsh 5.9.2. The corpus

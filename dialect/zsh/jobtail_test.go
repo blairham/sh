@@ -105,3 +105,79 @@ func TestJobsStateFiltersAddUp(t *testing.T) {
 		t.Errorf("got %q, want the running job listed through -rs", out)
 	}
 }
+
+// Rotation is measured as identical to the other shell's, down to which
+// entry the shell ends up in — what differs here is the silence and the
+// wording of a refusal, which is one sentence where bash has two.
+func TestDirectoryStackRotates(t *testing.T) {
+	home := t.TempDir()
+	out, _ := runZsh(t, home, zsh.Prelude()+`
+HOME=`+home+`
+cd /
+pushd /tmp >/dev/null; pushd /usr >/dev/null
+pushd +1; dirs; echo "pwd=$PWD"
+pushd -0; dirs; echo "pwd=$PWD"
+popd +1; dirs; echo "pwd=$PWD"`)
+	for _, want := range []string{
+		"/tmp / /usr\npwd=/tmp\n",
+		"/usr /tmp /\npwd=/usr\n",
+		"/usr /\npwd=/usr\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("got %q, want %q in it", out, want)
+		}
+	}
+}
+
+// One sentence for an index that is out of range and for a stack with
+// nothing in it, where bash has two — and a bare `pushd` with nothing pushed
+// goes home rather than refusing.
+func TestDirectoryStackRefusals(t *testing.T) {
+	home := t.TempDir()
+	out, _ := runZsh(t, home, zsh.Prelude()+`
+HOME=`+home+`
+cd /
+pushd /tmp >/dev/null
+pushd +9; echo "r=$?"
+popd -9; echo "o=$?"
+popd >/dev/null; pushd +1; echo "e=$?"
+dirs -q; echo "q=$?"
+pushd; echo "h=$? pwd=$PWD"`)
+	for _, want := range []string{
+		"pushd: no such entry in dir stack\nr=1\n",
+		"popd: no such entry in dir stack\no=1\n",
+		"pushd: no such entry in dir stack\ne=1\n",
+		"dirs: bad option: -q\nq=1\n",
+		"h=0 pwd=" + home + "\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("got %q, want %q in it", out, want)
+		}
+	}
+}
+
+// `dirs`' letters bundle here, `-v` numbers with a tab, and an operand is a
+// new stack rather than an index into the old one.
+func TestDirsLetters(t *testing.T) {
+	home := t.TempDir()
+	out, _ := runZsh(t, home, zsh.Prelude()+`
+HOME=`+home+`
+cd
+pushd / >/dev/null; pushd /tmp >/dev/null
+dirs -p; echo "--"
+dirs -v; echo "--"
+dirs -lp; echo "--"
+dirs /a /b; dirs; echo "--"
+dirs -c; dirs; echo "c=$?"`)
+	for _, want := range []string{
+		"/tmp\n/\n~\n--\n",
+		"0\t/tmp\n1\t/\n2\t~\n--\n",
+		"/tmp\n/\n" + home + "\n--\n",
+		"/tmp /a /b\n--\n",
+		"/tmp\nc=0\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("got %q, want %q in it", out, want)
+		}
+	}
+}

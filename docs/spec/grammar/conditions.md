@@ -26,6 +26,28 @@ All unanimous. Every one of those is a case where the `[ … ]` builtin
 needs its argument quoted and this does not, because the words never
 become arguments.
 
+### A newline inside continues the condition
+
+Because it is parsed, a newline in the middle is not a command
+terminator. It is skipped wherever the grammar is still waiting for
+something, which the three shells with `[[ ]]` agree on at every
+structural point — after `[[`, after `&&`, `||` and `!`, on both sides
+of a group's parentheses, and before `]]`:
+
+    [[
+    -n x ]] && echo ok            →  ok, in bash 5.3, bash 3.2, ksh93, zsh
+    [[ -n x &&
+    -n y ]] && echo ok            →  ok
+    [[ -n x
+    ]] && echo ok                 →  ok
+
+**Not after a binary operator.** `[[ 1 ==` followed by a newline is an
+error in bash (`unexpected argument 'newline' to conditional binary
+operator`) and in ksh93 (`` `newline' unexpected ``); only zsh takes it.
+That one position is left refused, because it is what the two agree on
+and accepting it would let a genuinely truncated condition through
+silently.
+
 ## The right side of `==` is a pattern
 
     [[ abc == a*   ]]   →  matches

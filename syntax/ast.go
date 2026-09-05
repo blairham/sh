@@ -245,8 +245,9 @@ type Redirect struct {
 	// body. For a here-document it is the delimiter.
 	Word *Word
 	// Heredoc is the body, which is read from the lines after the command
-	// rather than from the token stream. Nil until here-documents are
-	// implemented; the field exists so the shape is settled.
+	// rather than from the token stream. Nil for every redirection that is
+	// not a here-document — including `<<<`, which shares a prefix with `<<`
+	// and nothing else: a here-string's input is its Word, on the same line.
 	Heredoc *Word
 }
 

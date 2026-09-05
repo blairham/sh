@@ -2537,6 +2537,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `printf/empty-operand-is-bash-only` | `[0]~st=0` | `[0]~st=1` **2>** `<shell>: line 1: printf: : invalid number` | `[0]~st=1` **2>** `<shell>: line 1: printf: : invalid number` | `[0]~st=0` | `[0]~st=0` | `[0]~st=0` |
 | `printf/quote-diverges` | `[st=2` **2>** `<shell>: 1: printf: %q: invalid directive` | `[a\ b]~st=0` | `[a\ b]~st=0` | `[a\ b]~st=0` | `['a b']~st=0` | `[a\ b]~st=0` |
 | `printf/unknown-verb-diverges` | `[st=2` **2>** `<shell>: 1: printf: %z: invalid directive` | `[st=1` **2>** `<shell>: line 1: printf: `]': invalid format character` | `[st=1` **2>** `<shell>: line 1: printf: `]': invalid format character` | `[st=1` **2>** `<shell>: line 0: printf: `]': invalid format character` | `[st=1` **2>** `<shell>: printf: ]: unknown format specifier` | `[st=1` **2>** `<shell>:printf:1: %z: invalid directive` |
+| `printf/a-length-modifier-on-a-conversion` | `[st=2` **2>** `<shell>: 1: printf: %l: invalid directive` | `[42][   42][1.500000]~st=0` | `[42][   42][1.500000]~st=0` | `[42][   42][1.500000]~st=0` | `[42][   42][1.500000]~st=0` | `[42][   42][1.500000]~st=0` |
+| `printf/a-length-modifier-c99-added` | `[st=2` **2>** `<shell>: 1: printf: %z: invalid directive` | `[FF][42][42][42]~st=0` | `[FF][42][42][42]~st=0` | `[FF][42][42][42]~st=0` | `[FF][42][42][42]~st=0` | `[st=1` **2>** `<shell>:printf:1: %z: invalid directive` |
+| `printf/a-length-modifier-is-read-and-thrown-away` | `[st=2` **2>** `<shell>: 1: printf: %h: invalid directive` | `[300][9223372036854775807]~st=0` | `[300][9223372036854775807]~st=0` | `[300][9223372036854775807]~st=0` | `[300][9223372036854775807]~st=0` | `[st=1` **2>** `<shell>:printf:1: %hh: invalid directive` |
+| `printf/a-run-of-length-modifiers` | `[st=2` **2>** `<shell>: 1: printf: %l: invalid directive` | `[42][42]~st=0` | `[42][42]~st=0` | `[42][42]~st=0` | `[42][42]~st=0` | `[st=1` **2>** `<shell>:printf:1: %ll: invalid directive` |
+| `printf/an-unknown-conversion-names-the-character` | `st=2` **2>** `<shell>: 1: printf: %v: invalid directive` | `st=1` **2>** `<shell>: line 1: printf: `v': invalid format character` | `st=1` **2>** `<shell>: line 1: printf: `v': invalid format character` | `st=1` **2>** `<shell>: line 0: printf: `v': invalid format character` | `st=1` **2>** `<shell>: printf: v: unknown format specifier` | `st=1` **2>** `<shell>:printf:1: %v: invalid directive` |
 | `printf/no-format-at-all` | `st=2` **2>** `<shell>: 1: printf: usage: printf format [arg ...]` | `st=2` **2>** `printf: usage: printf [-v var] format [arguments]` | `st=2` **2>** `printf: usage: printf [-v var] format [arguments]` | `st=2` **2>** `printf: usage: printf [-v var] format [arguments]` | `st=2` **2>** `Usage: printf [ options ] format [string ...]` | `st=1` **2>** `<shell>:printf:1: not enough arguments` |
 | `printf/a-date-conversion-and-the-shells-without-one` | `st=2` **2>** `<shell>: 1: printf: %(: invalid directive` | `%~st=0` | `%~st=0` | `st=1` **2>** `<shell>: line 0: printf: `(': invalid format character` | `%~st=1` **2>** `<shell>: printf: warning: invalid argument of type T` | `st=1` **2>** `<shell>:printf:1: %(: invalid directive` |
 | `printf/a-date-through-a-fixed-epoch` | `st=2~no such conversion` | `st=0~the year the epoch falls in` | `st=0~the year the epoch falls in` | `st=1~no such conversion` | `st=1~some other year` | `st=1~no such conversion` |
@@ -2589,9 +2594,29 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   printf "[%q]\n" "a b"; echo "st=$?"
   ```
-- `printf/unknown-verb-diverges` — half the panel names the character *after* the one it could not read and half names the conversion, with four wordings and three statuses between them
+- `printf/unknown-verb-diverges` — half the panel names the conversion character alone and half names the whole directive as written, with four wordings and three statuses between them. `z` is a length modifier in three of them, so the character they cannot read here is the `]`
   ```sh
   printf "[%z]\n" x; echo "st=$?"
+  ```
+- `printf/a-length-modifier-on-a-conversion` — the C length modifiers every shell with any of them takes, in the place C puts them — after the precision and before the verb. The one shell with none reads the `l` as the conversion and says so
+  ```sh
+  printf "[%ld][%5ld][%Lf]\n" 42 42 1.5; echo "st=$?"
+  ```
+- `printf/a-length-modifier-c99-added` — the C99 additions, which is where the panel splits three ways rather than two: two shells take them, one takes only C89's `h`, `l` and `L` and calls these invalid directives, and one takes none at all
+  ```sh
+  printf "[%zX][%jd][%lld][%hhd]\n" 255 42 42 42; echo "st=$?"
+  ```
+- `printf/a-length-modifier-is-read-and-thrown-away` — an accepted modifier never narrows or widens anything: 300 through `%hhd` is 300 and not 44, and the largest signed 64-bit value survives `%lld` — so this is about what a format may say and never about what it means
+  ```sh
+  printf "[%hhd][%lld]\n" 300 9223372036854775807; echo "st=$?"
+  ```
+- `printf/a-run-of-length-modifiers` — the shells with the C99 set skip a run of the letters rather than a list of spellings, so nonsense like `lll` and `hl` is accepted; the shell with C89's set takes exactly one letter and refuses both
+  ```sh
+  printf "[%llld][%hld]\n" 42 42; echo "st=$?"
+  ```
+- `printf/an-unknown-conversion-names-the-character` — a conversion no shell in the panel has, with a tail after it, which is what separates naming the conversion character from naming what follows it: two shells say `v` and two say `%v`, and none of them names the `]`
+  ```sh
+  printf "%v]xY" 1; echo "st=$?"
   ```
 - `printf/no-format-at-all` — four usages, two of them printed with no shell name in front, and zsh alone not treating it as worth a different status from any other failure
   ```sh

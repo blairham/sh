@@ -3454,24 +3454,83 @@ wording rather than a reading. Extending the text before *evaluating* it
 instead invents a second failure — `${x:2:1+}` reported that `2:1+` would
 not parse and then that `1+` would not, where the shell reports one.
 
-### Recorded rather than reproduced: zsh's substring modifiers
+### A substring range is a modifier list where the letter decides
 
-zsh alone refuses a substring offset that begins with a bare name, because
-`${x:…}` is also its history-modifier syntax and the name is read as a
-modifier:
+Issue #662. `${x:…}` is a substring in three of the panel and is *also*
+zsh's history-modifier syntax, applied to a parameter. The two spellings
+share every byte of their punctuation, so which one a range is has to be
+decided before either is evaluated — and the rule, measured, is the first
+byte and nothing else:
 
     x=abcdef; i=2; echo "${x:i:2}"
 
     bash 5.3, bash 3.2, ksh93   cd
     zsh                         unrecognized modifier `i'   (status 1)
 
-The core follows the three that agree. zsh's rule is not a switch that can
-be answered yes or no: `${x:i+1:2}` is refused naming `i`, `${x:abc:2}` is
-refused naming nothing at all, `${x:_q:2}` is *accepted* as offset 0, and
-`${x:$i:2}`, `${x: i:2}` and `${x:(i):2}` are all accepted. Reproducing it
-means reproducing that shell's modifier table and the order it tries it
-in, which is a feature rather than an axis — #662, filed on its own rather
-than guessed at here.
+A range segment beginning with an **unquoted letter** is a modifier list.
+Everything else is the arithmetic it looks like, which is why each of
+these is a substring in all four:
+
+    ${x:_q:2}    an underscore is not a letter
+    ${x: i:2}    a leading space puts the letter second
+    ${x:(i):2}   as does a parenthesis
+    ${x:$i:2}    the expansion happened before the reading
+    ${x:"h"}     the letter was quoted
+
+`SubstringRangeReadsModifiers` is the axis, asked only where a segment
+does begin with a letter, so `${x:1:2}` needs no answer from anyone. It
+is a *reading* and not a refusal: `${x:h}` is the head of a path there
+and the substring from the offset `h` holds everywhere else.
+
+A range is segments, split on its colons, and the two readings are
+segments of one range rather than alternatives. Segments are an offset
+and then a length while they do not begin with a letter; from the first
+that does, each is one modifier applied in order to what is left:
+
+    ${x:h}       the head
+    ${x:h:t}     the head, then the tail of it
+    ${x:h:t:r}   three, left to right
+    ${x:2:t}     the substring from 2, then the tail of it
+    ${x:h:2}     refused — `2` is a segment where a modifier belonged
+
+A segment is one modifier and the letter is the whole of it, so the
+refusal has two shapes, measured: an unknown *first* letter is named and
+a leftover after a known one is not.
+
+    ${x:i}     unrecognized modifier `i'
+    ${x:ha}    unrecognized modifier          `h' is one and `a' is left over
+
+`Diagnostics.UnrecognizedModifier` and `UnrecognizedModifierAlone` are the
+two, a second field rather than an empty verb because the sentences do not
+differ by a substitution — one ends in a quoted name and the other ends.
+
+The letters this shell accepts, measured one at a time against zsh 5.9.2:
+`a c e h l q r s t u A P Q`. Every other letter is refused, named.
+
+#### Recorded rather than reproduced: seven of the thirteen
+
+Six are performed here, and they are the six that are a pure function of
+the string:
+
+    :h  everything before the last slash, trailing slashes off first,
+        `.` where there is none — `/a/b//` → `/a`, `a/` → `.`, `/` → `/`
+    :t  everything after it — `/a/b//` → `b`, `/` → nothing
+    :r  the value with its suffix taken off, counting a leading dot:
+        `.hidden` → nothing, `x/.hidden` → `x/`, `a/b.c/d` unchanged
+    :e  what `:r` takes off, without its dot
+    :l  lowercase        :u  uppercase
+
+The other seven are recognized and **refused out loud** rather than
+guessed at, because each needs something a string does not carry: `:a`
+the working directory, `:A` and `:P` the disk, `:c` the command search,
+`:q` and `:Q` that shell's quoting table — `a b*c` quotes to `a\ b\*c` and
+a newline to `$'\n'` — and `:s` a pattern rather than a letter. Refusing
+is the choice `set` makes for an option letter it has and does not do:
+passing the value through would be promising one that was never computed.
+
+Two shapes are also left: `${x:1:5:t}`, a modifier after both an offset
+and a length, and `${x:h2}`, where a digit after a modifier is swallowed
+where `${x:h:2}` is refused.
 
 ### What "operand expected" means — two failures, not one
 

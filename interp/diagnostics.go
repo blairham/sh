@@ -1744,6 +1744,23 @@ type Diagnostics struct {
 	// say both.
 	SubstringRangeError string
 
+	// UnrecognizedModifier is the reason when a substring range read as a
+	// modifier list names one the dialect does not have. One verb: the
+	// segment as written.
+	//
+	// Only reachable where SubstringRangeReadsModifiers is yes, so only one
+	// dialect fills it in.
+	UnrecognizedModifier string
+	// UnrecognizedModifierAlone is the same complaint with nothing named,
+	// which is what the shell says when the segment *began* with a modifier
+	// and has text left over — `${x:ha}`, where `h` is one and `a` following
+	// it in the same segment is not. No verbs.
+	//
+	// A second field rather than an empty verb, because the two sentences do
+	// not differ by a substitution: one ends in a quoted name and the other
+	// ends.
+	UnrecognizedModifierAlone string
+
 	// SubstringErrorNamesTheWholeRange blames a failing offset together with
 	// everything written after it: `${x:1+:2}` is `1+:2` rather than `1+`.
 	// ksh93 alone, which reads `offset:length` as one string and reports from

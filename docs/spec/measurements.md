@@ -3555,6 +3555,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `param/a-substring-offset-that-will-not-evaluate` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: x: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: x: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: x: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+:2: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
 | `param/a-substring-length-that-will-not-evaluate` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: x: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: x: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: x: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
 | `param/a-substring-length-with-an-operand-it-found` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: x: %: arithmetic syntax error: operand expected (error token is "%")` *(status 1)* | **2>** `<shell>: line 1: x: %: arithmetic syntax error: operand expected (error token is "%")` *(status 1)* | **2>** `<shell>: x: %: syntax error: operand expected (error token is "%")` *(status 1)* | **2>** `<shell>: %: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at `%'` *(status 1)* |
+| `param/a-substring-offset-that-names-a-variable` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[cd]~after` | `[cd]~after` | `[cd]~after` | `[cd]~after` | **2>** `<shell>:1: unrecognized modifier `i'` *(status 1)* |
+| `param/a-substring-offset-that-is-a-modifier` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[File.Txt]` | `[File.Txt]` | `[File.Txt]` | `[File.Txt]` | `[/tmp/Dir]` |
+| `param/a-substring-offset-that-does-not-begin-with-a-letter` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[bc] [bc] [bc]` | `[bc] [bc] [bc]` | `[bc] [bc] [bc]` | **2>** `<shell>: \(_q\):2: arithmetic syntax error` *(status 1)* | `[bc] [bc] [bc]` |
+| `param/a-substring-length-that-names-a-variable` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[cd]~after` | `[cd]~after` | `[cd]~after` | `[cd]~after` | **2>** `<shell>:1: unrecognized modifier `i'` *(status 1)* |
+| `param/a-substring-modifier-after-an-offset` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[mp/]` | `[mp/]` | `[mp/]` | `[mp/]` | `[File.Txt]` |
+| `param/a-substring-modifier-chain` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[File.Txt]` | `[File.Txt]` | `[File.Txt]` | `[File.Txt]` | `[Dir]` |
+| `param/a-substring-modifier-with-something-after-it` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[/tmp/Dir/File.Txt]~after` | `[/tmp/Dir/File.Txt]~after` | `[/tmp/Dir/File.Txt]~after` | `[/tmp/Dir/File.Txt]~after` | **2>** `<shell>:1: unrecognized modifier` *(status 1)* |
 | `param/a-substring-offset-on-a-subscripted-parameter` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a[@]: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: a[@]: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: a[@]: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
 | `param/a-substring-offset-is-an-expression` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[cd]` | `[cd]` | `[cd]` | `[cd]` | `[cd]` |
 | `param/colon-extends-the-test-unset` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` |
@@ -3638,6 +3645,34 @@ grades it and nothing drift-checks it either, for the same reason.
 - `param/a-substring-length-with-an-operand-it-found` — the found-an-operand wording reached through a range rather than through `$(( ))`, which is where the two are held together: the shell that blames an offset along with the rest of the range also *reads* the rest of the range, so `${x:1+:2}` is its found case where `${x:1+}` is its ran-out one. A length has nothing after it and is the plain case in every column
   ```sh
   x=abcdef; echo "[${x:2:%}]"; echo after
+  ```
+- `param/a-substring-offset-that-names-a-variable` — the ordinary way to walk a string, and one shell does not read it as a range at all: a range there is also its history-modifier syntax, so a segment beginning with a letter is a modifier and `i` names none of them — refused at 1, with the command abandoned. The other three evaluate the expression and answer `cd`, and we answered `cd` in every dialect, which is the silent half: a script that shell would have stopped ran on with a plausible substring
+  ```sh
+  x=abcdef; i=2; echo "[${x:i:2}]"; echo after
+  ```
+- `param/a-substring-offset-that-is-a-modifier` — the same spelling where the letter *is* a modifier, which is what makes this a reading rather than a refusal: one shell answers the head of the path and the other three the substring from offset 9, because `h` is a variable to them. The variable is set on purpose — with `h` unset the three would answer from offset 0 and the case would look like a disagreement about the whole string rather than about what `h` means
+  ```sh
+  x=/tmp/Dir/File.Txt; h=9; echo "[${x:h}]"
+  ```
+- `param/a-substring-offset-that-does-not-begin-with-a-letter` — the boundary of that reading, measured three ways: an underscore is not a letter, a leading space puts the letter second, and a parenthesis does the same — so all three are ranges in all four columns and answer alike. It says the rule is about the first byte and not about the segment containing a name
+  ```sh
+  x=abcdef; _q=1; echo "[${x:_q:2}] [${x: _q:2}] [${x:(_q):2}]"
+  ```
+- `param/a-substring-length-that-names-a-variable` — the length is the same question as the offset, and the shell with modifiers reads it the same way — the segment begins with a letter, so it is a modifier and not a count. Pinned separately because the offset and the length are evaluated by different call sites and a fix that caught one silently left the other
+  ```sh
+  x=abcdef; i=2; echo "[${x:2:i}]"; echo after
+  ```
+- `param/a-substring-modifier-after-an-offset` — an offset and then a modifier, which is what shows the two readings are segments of one range rather than alternatives: the shell with modifiers takes the substring and then the tail of it, and the other three take two characters. It is also what a chain has to agree with — `${x:h:t}` is two modifiers by the same rule
+  ```sh
+  x=/tmp/Dir/File.Txt; t=3; echo "[${x:2:t}]"
+  ```
+- `param/a-substring-modifier-chain` — two modifiers in one range, applied left to right — the head and then the tail of it. The parser splits a range once, so a chain arrives as one segment and a word holding the rest, and this is the case that says the rest is split again rather than evaluated whole
+  ```sh
+  x=/tmp/Dir/File.Txt; h=9; t=9; echo "[${x:h:t}]"
+  ```
+- `param/a-substring-modifier-with-something-after-it` — a segment is one modifier and the letter is the whole of it, so a good modifier with a letter after it is refused — and refused *without naming anything*, where an unknown first letter is named. The two shapes of one sentence are why this is a case: `${x:i:2}` names `i` and this names nothing, and a single wording would have to pick one
+  ```sh
+  x=/tmp/Dir/File.Txt; echo "[${x:ha}]"; echo after
   ```
 - `param/a-substring-offset-on-a-subscripted-parameter` — the parameter a diagnostic names is the name and its subscript, not the name alone — `a[@]` — in the one shell that names it at all. The list form of the substring reaches the same evaluation as the string form, so this also says the two spellings share it
   ```sh

@@ -509,3 +509,62 @@ func TestMultiByteOutputSurvivesChunking(t *testing.T) {
 		t.Errorf("stdout = %q, want %q", got, word)
 	}
 }
+
+// A file the shell reads is reported and is *not* asked about. That pair is
+// the whole of the escalation decision: an access a person cannot usefully be
+// asked about at the rate it happens is still an access worth showing them.
+func TestAReadOpenIsReportedWithoutBeingAskedAbout(t *testing.T) {
+	t.Parallel()
+	c, id, dir := connect(t, nil)
+	if err := os.WriteFile(filepath.Join(dir, "f"), []byte("data\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	prompt(t, c, id, "read line < f; echo \"[$line]\"")
+	if got := c.text(acp.StreamStdout); got != "[data]\n" {
+		t.Errorf("stdout = %q, want the file to have been read", got)
+	}
+	if c.questions() != 0 {
+		t.Errorf("%d permission requests for a read, want none", c.questions())
+	}
+	var found map[string]any
+	for _, u := range c.calls() {
+		if u["kind"] == acp.KindRead {
+			found = u
+		}
+	}
+	if found == nil {
+		t.Fatalf("the read was not reported to the client: %v", c.calls())
+	}
+	if title, _ := found["title"].(string); !strings.Contains(title, "f") {
+		t.Errorf("title = %q, want it to name the file", title)
+	}
+}
+
+// A command that ran and failed is a failed tool call carrying its status, and
+// the turn around it still ended normally: a failing command is a turn that
+// completed, not a turn that stopped.
+func TestAFailingCommandIsAFailedToolCallAndAnOrdinaryTurn(t *testing.T) {
+	t.Parallel()
+	c, id, _ := connect(t, nil)
+
+	if got := prompt(t, c, id, "/usr/bin/false"); got != acp.StopEndTurn {
+		t.Errorf("stopReason = %q, want %q", got, acp.StopEndTurn)
+	}
+	var end map[string]any
+	for _, u := range c.calls() {
+		if _, ok := u["rawOutput"]; ok {
+			end = u
+		}
+	}
+	if end == nil {
+		t.Fatalf("no tool call reported an outcome: %v", c.calls())
+	}
+	if end["status"] != acp.StatusFailed {
+		t.Errorf("status = %v, want %q", end["status"], acp.StatusFailed)
+	}
+	raw, _ := end["rawOutput"].(map[string]any)
+	if raw["exitStatus"] != float64(1) {
+		t.Errorf("exitStatus = %v, want 1", raw["exitStatus"])
+	}
+}

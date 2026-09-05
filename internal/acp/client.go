@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/blairham/sh/internal/boundary"
 	"github.com/blairham/sh/interp"
@@ -78,8 +79,22 @@ type Client struct {
 	// an agent is offered a login this client cannot run.
 	Relaunch func(ctx context.Context, args []string, env map[string]string) error
 
+	// Terminals says whether to advertise terminal/*, and it is the sharper
+	// half of Files. An agent that cannot ask us to run something runs it
+	// itself, and no gate anywhere sees the argv; off is for a caller that
+	// accepts that.
+	Terminals bool
+
 	conn  *Conn
 	agent InitializeResponse
+
+	// mu guards the terminals this client is running for the agent. They are
+	// reached from more than one goroutine by construction: every inbound
+	// request is handled on its own, so an agent may be creating one while it
+	// waits on another.
+	mu           sync.Mutex
+	running      map[string]*terminal
+	nextTerminal int
 }
 
 // Connect wires this client to an agent's streams.
@@ -110,6 +125,24 @@ func (c *Client) Handle(ctx context.Context, method string, params json.RawMessa
 		return c.readFile(ctx, params)
 	case MethodWriteTextFile:
 		return c.writeFile(ctx, params)
+	case MethodCreateTerminal:
+		return c.createTerminal(ctx, params)
+	}
+	// The four that name a terminal this client already made. Behind one
+	// check, because an id can only exist if create was served, so serving
+	// them while create is withheld would be answering about a thing that
+	// cannot be.
+	if c.Terminals {
+		switch method {
+		case MethodTerminalOutput:
+			return c.terminalOutput(params)
+		case MethodWaitForExit:
+			return c.waitForExit(ctx, params)
+		case MethodKillTerminal:
+			return c.killTerminal(ctx, params)
+		case MethodReleaseTerminal:
+			return c.releaseTerminal(ctx, params)
+		}
 	}
 	// Everything else is a capability we did not advertise. A client that
 	// answered a method it never claimed would be telling the agent
@@ -150,6 +183,10 @@ func (c *Client) Initialize(ctx context.Context) (InitializeResponse, error) {
 	// served but not advertised, or advertised but not served, is made
 	// unrepresentable.
 	req.Capabilities.Auth = AuthCapabilities{Terminal: c.Relaunch != nil}
+	// The sharper half of the file capability. An agent that was not told it
+	// can ask us to run something runs it itself, and there is no argv for any
+	// gate to see.
+	req.Capabilities.Terminal = c.Terminals
 	var resp InitializeResponse
 	if err := c.conn.Call(ctx, MethodInitialize, req, &resp); err != nil {
 		return resp, err

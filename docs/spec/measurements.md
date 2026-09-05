@@ -2514,6 +2514,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `printf/a-date-with-an-empty-format-and-a-width` | `something else` | `the time of day, then a padded year` | `the time of day, then a padded year` | `something else` | `something else` | `something else` |
 | `printf/a-date-from-something-that-is-not-a-number` | `st=2~no such conversion` **2>** `<shell>: 1: printf: %(: invalid directive` | `st=1~the epoch zero` **2>** `<shell>: line 1: printf: abc: invalid number` | `st=1~the epoch zero` **2>** `<shell>: line 1: printf: abc: invalid number` | `st=1~no such conversion` **2>** `<shell>: line 0: printf: `(': invalid format character` | `st=1~some other year` **2>** `<shell>: printf: warning: invalid argument of type T` | `st=1~no such conversion` **2>** `<shell>:printf:1: %(: invalid directive` |
 | `printf/backslash-c-means-three-things` | ` a \ c b Z ` | ` a \ c b Z ` | ` a \ c b Z ` | ` a \ c b Z ` | ` a 002 Z ` | ` a ` |
+| `printf/backslash-c-with-a-digit` | ` a \ c 1 Z ` | ` a \ c 1 Z ` | ` a \ c 1 Z ` | ` a \ c 1 Z ` | ` a q Z ` | ` a ` |
+| `printf/backslash-c-with-a-symbol-outside-the-letters` | ` a \ c ~ Z : a \ c ? Z ` | ` a \ c ~ Z : a \ c ? Z ` | ` a \ c ~ Z : a \ c ? Z ` | ` a \ c ~ Z : a \ c ? Z ` | ` a > Z : a 177 Z ` | ` a ` |
+| `printf/backslash-c-controls-a-decoded-escape` | ` a \ c \t Z ` | ` a \ c \t Z ` | ` a \ c \t Z ` | ` a \ c \t Z ` | ` a I Z ` | ` a ` |
+| `printf/backslash-c-at-the-end-of-a-format` | ` a \ c \ ` | ` a \ c \ ` | ` a \ c \ ` | ` a \ c \ ` | ` a @ ` | ` a ` |
 
 - `printf/assigns-with-v` — `printf -v name` puts the formatted text in a variable and prints nothing, which is how a script formats a value without a command substitution and a subshell. bash and zsh have it; dash and ksh93 reject it as an unknown option, and each words that differently
   ```sh
@@ -2586,6 +2590,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `printf/backslash-c-means-three-things` — read as bytes rather than as text, because that is the only way to tell ksh93's control character from zsh's stopping: bash and dash write two literal characters, ksh93 reads \cX as control-X, and zsh ends the output there
   ```sh
   printf "a\cbZ" | od -An -c | tr -s " "
+  ```
+- `printf/backslash-c-with-a-digit` — a letter cannot tell the two control arithmetics apart, because clearing the top bits and toggling bit 6 agree over @ through _. A digit is outside that span and separates them: masking gives 0x11 and toggling gives q, and the shell that reads the escape at all does the second
+  ```sh
+  printf "a\c1Z" | od -An -c | tr -s " "
+  ```
+- `printf/backslash-c-with-a-symbol-outside-the-letters` — the other side of the span, and the DEL that a masking shell would have to special-case: toggling bit 6 makes ~ into > and ? into 0x7f without one
+  ```sh
+  printf "a\c~Z:a\c?Z" | od -An -c | tr -s " "
+  ```
+- `printf/backslash-c-controls-a-decoded-escape` — what \c applies to is read before it is controlled, so the argument here is a tab and not a backslash followed by a t. The same reading the quoted-escape form does, which is the point: one rule, and a format is not a second dialect of it
+  ```sh
+  printf "a\c\tZ" | od -An -c | tr -s " "
+  ```
+- `printf/backslash-c-at-the-end-of-a-format` — a backslash with nothing after it escapes the end of the format, so what \c controls is a NUL rather than the backslash itself — an @ and not a control-backslash for the shell that reads the escape
+  ```sh
+  printf 'a\c\' | od -An -c | tr -s " "
   ```
 
 ## kill

@@ -25,6 +25,8 @@
 //	sh -parse 'a && b'           # dump the syntax tree
 //	sh -trace-events script.sh   # print every gated action to stderr
 //	sh -deny /etc script.sh      # refuse every action at or under /etc
+//	sh -deny signal script.sh    # refuse every signal the shell sends
+//	sh -deny exec:/usr/bin/** …  # refuse one kind, under one subtree
 //	sh -policy p.policy script.sh  # run it under a declarative policy
 //	sh -audit log.jsonl script.sh  # record every action as JSON, one per line
 //	sh -acp                        # serve the Agent Client Protocol on stdio
@@ -61,6 +63,12 @@
 // something. -policy and -audit are the shipped half: a declarative rule set
 // read from a file, and the event stream written down in the schema its
 // consumers share. docs/design/sandboxing.md is the specification for both.
+//
+// The two halves share a rule language rather than each having one. A -deny
+// value is a policy rule minus its decision word, spelled with a colon because
+// a flag value is one shell word, and a bare path is the shorthand it has
+// always had. Two rule languages over one gate would be two answers to the same
+// question, and the one nobody exercises is the one that is wrong.
 //
 // Neither half contains a *process*. The boundary is drawn around the
 // interpreter: a policy refuses what the shell itself opens, stats and runs,

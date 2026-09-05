@@ -307,6 +307,10 @@ func Semantics() interp.Semantics {
 	s.UlimitHasProcessCount = interp.Yes
 	s.UlimitSetsBothLimits = interp.Yes
 	s.BadOptionToSpecialBuiltinFatal = interp.Yes
+	// A redirection that cannot be made is a special builtin's failure too,
+	// and this shell keeps the POSIX rule without needing a mode to be in:
+	// `exec 3>/nope/x` stops the script at 1.
+	s.RedirectErrorOnSpecialBuiltinFatal = interp.Yes
 	// Fatal to `export` and `readonly` and not to `unset`, which prints the
 	// same kind of complaint, returns 1 and carries on. Not `unset` being
 	// less special: a bad *option* to it is fatal, just above.
@@ -447,8 +451,11 @@ func Diagnostics() interp.Diagnostics {
 		KilledCommandNotice: "%[1]d: %[2]s",
 		ParamNull:           "parameter null",
 		// The array alone is named, not the subscript that was written.
-		BadArraySubscript:    "%[1]s: subscript out of range",
-		UnsetBadFunctionName: "unset: %[1]s: invalid function name",
+		BadArraySubscript: "%[1]s: subscript out of range",
+		// The same sentence from `unset`, with the builtin named in front of
+		// it as this shell names it in front of the arithmetic one below.
+		UnsetSubscriptBeforeTheFirstElement: "unset: %[1]s: subscript out of range",
+		UnsetBadFunctionName:                "unset: %[1]s: invalid function name",
 		// The builtin names itself in front of the arithmetic sentence, which
 		// it does not do for the identical failure in an expansion.
 		UnsetBadSubscript:    "unset: %[1]s",

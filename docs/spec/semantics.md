@@ -63,6 +63,7 @@ Measured 2026-08-29, macOS arm64. Panel and method: `oracle.md`.
 | readonly reassignment | fatal | **continues** | fatal | fatal |
 | `shift` past the end | fatal | **survives** | fatal | **survives** |
 | unparseable text in a special builtin | **fatal** | survives | survives | survives |
+| failed redirection on a special builtin | **fatal** | survives *(fatal under `set -o posix`)* | **fatal** | survives *(fatal under `emulate sh`)* |
 | `.` cannot open its file | **fatal** | survives | **fatal** | survives |
 | `.` with no operand | **not an error** | 2, survives | 2, fatal | 1, survives |
 | `.` passes positional parameters | **no** | yes | yes | yes |
@@ -3650,13 +3651,77 @@ there (`ArrayLiteralSubscriptIsAKey`).
 does *not* end the script, where 5.3 does. The plain form is fatal in both.
 The preset follows 5.3.
 
+### The same boundary reached from `unset`
+
+Issue #700. `unset a[i]` reaches the identical boundary and was silent at
+status 0 there, so a script that asked to remove something out of reach
+was told it had. Measured 2026-09-05 across the same five binaries, on
+`a=(x y z)`:
+
+    unset "a[0]"     bash 5.3, bash 3.2, ksh93 → [y z], the first element
+                     zsh                       → refused, st=1, [x y z]
+
+    unset "a[-4]"    bash 5.3  unset: [-4]: bad array subscript, st=1
+                     ksh93     unset: a: subscript out of range,  st=1
+                     zsh                       → silent, st=0, [x y z]
+
+Two things about it are the same as the assignment's and one is not.
+
+**Same:** which spelling reaches the boundary is `ArrayBaseIsZero` and
+nothing else. Where the first element is 1, `a[0]` is below it; where it is
+0, only a negative subscript counting back past the start can be.
+
+**Same:** that the blanking shell is silent on the negative spelling is not
+a second rule and not a new axis. `UnsetArraySpan` already says that
+blanking replaces a span *that is there* — the reading `unset a[-2]` is
+recorded under, where the array comes back whole — and a subscript past the
+start names no span at all. The removing answers reach only the negative
+spelling, their first element being 0; the blanking answer reaches only the
+non-negative one. One rule, one axis apiece, no third.
+
+**Not the same:** the ending. The assignment stops the script; `unset`
+leaves a **failed builtin** behind and the next command runs, in all three.
+That is a shape a script can test, so the status is returned rather than
+thrown, and reusing the assignment's fatal path here would have been a new
+bug rather than a fix.
+
+The wording is a field of its own, `UnsetSubscriptBeforeTheFirstElement`,
+because two of the three word this route differently from the assignment:
+bash drops the array's name and keeps the bare subscript — still **as it
+was written**, `unset "a[x-9]"` naming `[x-9]` — and both bash and ksh93
+put the builtin's name in front of a sentence neither prefixes for an
+assignment. zsh says the same sentence by both routes, and does **not**
+put the builtin in the location, where it does for messages of its own.
+
+Under the blanking answer a scalar is the single element it is — a span of
+one is what `unset a[i]` means there — so `a=v; unset "a[0]"` reaches the
+boundary and is refused. The removing answers read a scalar without
+looking at the subscript at all, which is `UnsetNotAnArray`'s question. A
+name holding nothing at all has no first element for a subscript to be
+before, and is left alone without a word everywhere.
+
+**bash 3.2 has no negative array subscripts at all.** `unset "a[-1]"` on a
+three-element array is `[-1]: bad array subscript` there — with no `unset:`
+in front of it — where 5.3 removes the last element; `-4` is refused by
+both, for different reasons. It is an absence of the spelling rather than a
+wording, and it is the same absence `array/removing-an-element-from-the-end`
+and `array/appending-to-an-element` already record. The preset follows 5.3,
+so bash 3.2 is a column in the golden record and not a dialect.
+
 ### Not fixed here, recorded rather than reproduced
 
-- `unset` and *reading* through a subscript past the start are their own
-  shapes and their own three answers — `unset a[-5]` is a failed builtin
-  in bash and ksh93 and silent success in zsh, and `${a[-5]}` is empty at
-  0 in bash and zsh and fatal in ksh93. Neither is an assignment, which is
-  what this section is about.
+- *Reading* through a subscript past the start is its own shape and its
+  own three answers — `${a[-5]}` is empty at 0 in bash and zsh and fatal
+  in ksh93. It is neither an assignment nor an `unset`.
+- ksh93's `a=()` is a **compound variable**, `typeset -C a=()`, and not an
+  empty indexed array: `${#a[@]}` is 1 for it and `unset "a[-1]"` says
+  nothing. We model `a=()` as an empty array, so our ksh refuses that one
+  spelling where ksh93 does not. The difference is what `a=()` builds
+  rather than where the boundary is.
+- zsh blanks a **scalar** through an in-range subscript — `a=v; unset
+  "a[1]"` leaves `a` empty at 0 — where we leave the value standing. It is
+  the blanking reading applied to a name that is no array, and a separate
+  gap from this boundary.
 - zsh refuses **any** negative subscript inside a literal — `a=(p q
   [-1]=x)` is `bad subscript for direct array assignment: -1` — where bash
   reads it end-relative and places it. So a literal's subscript is not
@@ -5312,6 +5377,51 @@ builtin's failure is fatal; bash and zsh report it and carry on.
 A different question from BuiltinSyntaxErrorFatal, which is about text
 that would not *parse* and is true for dash alone. Measured across
 `export`, `readonly` and `unset`.
+
+**`RedirectErrorOnSpecialBuiltinFatal`** — bash no · dash yes · ksh93 yes · zsh no
+
+Ends a non-interactive shell when a redirection written on a *special*
+builtin cannot be made. POSIX states it outright, and the reach is one
+rule rather than several: `exec 3>/nope/x`, `: 3>/nope/x`,
+`eval : 3>/nope/x` and `. /dev/null 3>/nope/x` stop wherever any of them
+does, and so does a descriptor number the open-file limit refuses.
+
+The failure is the redirection's, so the builtin never runs and the
+status of the shell that stops is `FatalErrorStatusIsOne`'s — dash 2,
+the rest 1 — which is why this axis carries no status of its own.
+
+The boundary was measured from both sides and is unanimous. A regular
+builtin (`true 3>/nope/x`), an external command, and a *compound*
+command's own redirection (`{ echo x; } 3>/nope/x`) stop nothing in any
+column. Inside a subshell it ends the subshell and the parent runs on;
+inside a function it ends the shell.
+
+**This axis is posix mode, and that is where the answer lives.** The
+panel splits three to two — dash, ksh93 and bash-as-`sh` stop, bash and
+zsh carry on — and the two disagreeing bash columns are the same binary,
+so the difference cannot be attached to a shell. It is reachable at run
+time in both shells that have such a mode, which is what turns an
+accident of `argv[0]` into a rule:
+
+| probe | answer |
+| --- | --- |
+| `bash -c 'exec 3>/nope/x; echo after'` | prints `after`, status 0 |
+| `bash -c 'set -o posix; exec 3>/nope/x; echo after'` | stops, status 1 |
+| `sh -c 'set +o posix; exec 3>/nope/x; echo after'` (bash as `sh`) | prints `after`, status 0 |
+| `zsh -c 'emulate sh; exec 3>/nope/x; echo after'` | stops, status 1 |
+| `zsh -c 'emulate zsh; exec 3>/nope/x; echo after'` | prints `after`, status 0 |
+| `sh -c 'exec 3>/nope/x; echo after'` (zsh as `sh`) | stops, status 1 |
+
+Both bash builds move, seventeen years apart, and so does a second
+binary — so a dialect's field here is where the shell *starts* and its
+own posix knob is what moves it. `set -o posix` is a real option in the
+core's table for that reason, and `emulate sh` and `emulate ksh` carry
+it in the zsh dialect beside the three axes they already moved.
+
+Nothing is attached to `argv[0]`. Starting in posix mode because the
+shell was called `sh` is a fact about an *invocation*, and the front end
+does not read it yet; recording it as the axis would have written the
+accident down and lost the rule.
 
 **`BuiltinWriteErrorFailsTheCommand`** — bash yes · dash yes · ksh93 yes · zsh no
 

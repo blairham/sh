@@ -2425,6 +2425,21 @@ var Corpus = []Case{
 		Why:     "an end-relative subscript, which the shell that blanks does not act on at all beyond `-1` — the array comes back whole where the shells that remove take the middle element away. Pinned because the blanking rule would otherwise be applied to every negative subscript by symmetry, and it is not. bash 3.2 has no negative subscripts and reports a bad one, which is the same absence `array/appending-to-an-element` records",
 	},
 	{
+		ID: "array/unsetting-below-the-first-element", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[0]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "`array/a-subscript-below-the-first-element`'s boundary reached from `unset` rather than from an assignment, and the base decides who is being asked exactly as it does there: where the first element is 1 this names nothing and is refused, and where it is 0 the same numeral is the first element and it is removed. What the two routes do *not* share is the ending — the assignment stops the script and this leaves a failed builtin behind for the next command to test — so a fix that reused the fatal path would have been a new bug. It was silent at 0, which told a script it had removed something out of reach",
+	},
+	{
+		ID: "array/unsetting-past-the-start", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[-4]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the same boundary from the other side, which is the only side the shells whose first element is 0 can reach it from. The shell that blanks is silent here rather than refusing, and that is not a second rule: blanking replaces a span that is there, and a subscript counting back past the start names none — the same reading `array/removing-an-element-from-the-end` records at `-2`. bash 3.2 refuses it for having no negative subscripts at all, which is a different reason for the same line",
+	},
+	{
+		ID: "array/an-unset-subscript-refused-is-named-as-written", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[x-9]"; echo "st=$?"; echo "n=${#a[@]}"`,
+		Why:     "what the refusal names on this route, which is not what it names on the assignment's: bash keeps the subscript as written but drops the array in front of it, ksh93 names the array alone, and both put the builtin's name before the sentence where neither does for an assignment. The expression is what tells the written text from the -9 it came to. zsh has nothing to refuse, a negative subscript reaching nothing being silent there",
+	},
+	{
 		ID: "array/unsetting-every-element-of-a-scalar", Category: "expansion",
 		Snippet: `a=hello; unset "a[@]"; echo "st=$? [$a]"`,
 		Why:     "the same spelling on a name that is no array, which is where the two readings show what they mean: bash means take every element away, a scalar has none, and it refuses and says so at 1; zsh means the span becomes one empty string, a scalar is one such span, and it comes back empty at 0. ksh93 reports its bad subscript and leaves the value alone. Nobody turns the scalar into an array",
@@ -5678,6 +5693,41 @@ exit 7`,
 		ID: "redir/noclobber-names-its-refusal", Category: "redirection",
 		Snippet: `set -C; echo a > f; echo b > f; echo "st=$?"`,
 		Why:     "the refusal is unanimous and the sentence is not: bash cannot overwrite an existing file, ksh93 says it already exists with the errno in brackets, dash and zsh word it as any other failed create",
+	},
+	{
+		ID: "redir/exec-with-a-redirection-that-cannot-be-made", Category: "redirection",
+		Snippet: `exec 3>/nope/x; echo after`,
+		Why:     "POSIX makes a redirection error on a special builtin fatal to a non-interactive shell, and the panel splits three to two over it: dash stops at 2, ksh93 and bash-as-`sh` stop at 1, and bash and zsh complain and print `after`. The bash and bash-as-`sh` rows are the same binary, which is what says the answer belongs to posix mode rather than to a shell",
+	},
+	{
+		ID: "redir/a-failed-redirection-on-a-colon", Category: "redirection",
+		Snippet: `: 3>/nope/x; echo after`,
+		Why:     "the same rule reached without `exec`: `:` is a special builtin too, and every column answers exactly as it does above — so the rule is about which builtin carries the redirection and not about replacing the shell",
+	},
+	{
+		ID: "redir/a-failed-redirection-on-an-ordinary-command", Category: "redirection",
+		Snippet: `true 3>/nope/x; echo after`,
+		Why:     "the boundary, and it is unanimous: on a builtin POSIX does not mark special nothing stops anywhere, so a rule written as `a failed redirection is fatal` would be wrong in five columns at once",
+	},
+	{
+		ID: "redir/a-failed-redirection-on-a-compound-command", Category: "redirection",
+		Snippet: `{ echo x; } 3>/nope/x; echo after`,
+		Why:     "the other half of the boundary: a redirection written on a group belongs to the group and not to any builtin, so every column complains and carries on — including the three that stop for the identical redirection on `exec`",
+	},
+	{
+		ID: "redir/a-failed-redirection-inside-a-subshell", Category: "redirection",
+		Snippet: `( exec 3>/nope/x; echo inner ); echo after`,
+		Why:     "what `ends the shell` means where there is a process boundary: the three that stop lose `inner` and still print `after` at status 0, so the subshell ends and the parent does not — which our cloned-runner subshells have to reconstruct by hand",
+	},
+	{
+		ID: "set/posix-mode-makes-a-failed-redirection-fatal", Category: "invocation",
+		Snippet: `set -o posix; exec 3>/nope/x; echo after`,
+		Why:     "the same binary, both answers: bash 5.3 and bash 3.2 print `after` without this line and stop at 1 with it, which is the bash-as-`sh` column reached at run time. The other three have no such name and refuse the `set` instead, each in its own words",
+	},
+	{
+		ID: "set/leaving-posix-mode-restores-the-shells-own-answer", Category: "invocation",
+		Snippet: `set -o posix; set +o posix; exec 3>/nope/x; echo after`,
+		Why:     "the round trip, which is what makes it a mode rather than a one-way door: bash goes back to printing `after` at 0. Turning it off is also the direction a shell without a posix mode can honestly grant, and the thirteenth line of Homebrew's own script",
 	},
 	{
 		ID: "shift/an-operand-that-was-never-given", Category: "builtins",

@@ -853,6 +853,18 @@ type Diagnostics struct {
 	// identical failure in an expansion without one.
 	UnsetBadSubscript string
 
+	// UnsetSubscriptBeforeTheFirstElement is what `unset a[i]` says about a
+	// subscript that lands before the array's first element. Two verbs: the
+	// name, and the subscript *as written*.
+	//
+	// A field of its own rather than BadArraySubscript used twice, because
+	// two of the three shells that reach the boundary word the `unset` route
+	// differently from the assignment: one drops the array's name and keeps
+	// the bare subscript, and both put the builtin's name in front. The third
+	// says the same sentence by both routes, which is what makes a shared
+	// field look adequate until it is measured.
+	UnsetSubscriptBeforeTheFirstElement string
+
 	// UnsetNotAnArray is what `unset a[@]` says when the name holds a value
 	// that is not an array. One verb: the name.
 	//
@@ -901,6 +913,33 @@ type Diagnostics struct {
 	// ParamNull is the word for a parameter that is *there and empty*, where
 	// a shell tells that from one that is absent. ksh93 alone.
 	ParamNull string
+
+	// SelfName is what the shell calls itself in a diagnostic, whatever it was
+	// invoked as.
+	//
+	// Three of the four name themselves by argv[0], verbatim and however long
+	// it is, which is what an empty value here means and what `$0` reports on
+	// the two routes that have no other name for it. Measured by handing each
+	// shell an argv[0] of its own:
+	//
+	//	exec -a weirdname bash <<< 'if'
+	//	weirdname: line 2: syntax error: unexpected end of file
+	//
+	//	exec -a weirdname zsh <<< 'if'
+	//	zsh: parse error near `\n'
+	//
+	// So it is not a shortening of argv[0] — a symlink named `myzsh`, and a
+	// symlink named `sh`, both still say `zsh`, and `exec -a` says so most
+	// plainly. The name is fixed, and `$0` is unaffected: it still reports the
+	// path the shell was invoked by, which is why this is a separate answer
+	// rather than a different value for Runner.Name.
+	//
+	// It applies only where the shell names *itself*, which is the two routes
+	// that have no file: `-c` and standard input. A script is named by its
+	// own path — measured, all four print the script and not the shell — so
+	// the script route keeps Runner.Name, which is the path. That is the same
+	// three-way split `$0` is decided by rather than a second rule.
+	SelfName string
 
 	// LocationNamesTheCurrentFile puts the file a failing line was read from
 	// where the shell's name would go: a sourced file while it runs, and the

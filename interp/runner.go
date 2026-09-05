@@ -514,6 +514,13 @@ type Runner struct {
 	// no history there are no duplicates to ignore, so either state is kept
 	// truthfully.
 	histIgnoreDups bool
+	// posixMode is `set -o posix`, and posixSaved is the answer the axes it
+	// moves held before it was turned on, so turning it off restores the
+	// dialect's rather than asserting the standard's opposite. Two fields
+	// rather than a saved vector: an option changed *while* posix mode is on
+	// is not part of the mode and must survive leaving it.
+	posixMode  bool
+	posixSaved Answer
 
 	// fds are the descriptors beyond the three named streams — what
 	// `exec 6>&1` saves and `>&6` finds again. Values are the io.Reader or
@@ -1056,7 +1063,21 @@ func (r *Runner) fatalExpansionQuiet() {
 }
 
 // name is what the shell calls itself in a diagnostic.
+//
+// Usually `$0`, which is the path it was invoked by — but one dialect answers
+// with a fixed name instead, and the two are genuinely different questions:
+// there, `$0` is still the whole path and only the diagnostic is short. That
+// is why the answer is read from Diagnostics rather than written into
+// Runner.Name, which would change `$0` with it.
 func (r *Runner) name() string {
+	// Only where the shell is what is being named. On the script route Name
+	// is the script's path, and every shell in the panel prints that — the
+	// dialect that shortens its own name shortens only its own. It is the
+	// same three-way split `$0` is decided by, which is why the route is the
+	// question rather than some second field saying the name is a file.
+	if n := r.diag().SelfName; n != "" && r.Route != RouteScriptFile {
+		return n
+	}
 	if r.Name == "" {
 		return "sh"
 	}
@@ -1806,6 +1827,16 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	if r.redirErr {
 		// The open failed — noclobber, a missing directory, a permission.
 		// The status is already set and the command does not run.
+		//
+		// On a *special* builtin that is a fatal error to a non-interactive
+		// shell wherever the POSIX rule is being kept, so the shell stops
+		// rather than reaching the next command. Asked only there: on
+		// anything else no shell in the panel stops, so there is nothing to
+		// ask about `true 3>/nope/x`.
+		if specialBuiltins[argv[0]] &&
+			r.ask(r.sem().RedirectErrorOnSpecialBuiltinFatal, "a failed redirection on a special builtin ending the script") {
+			r.fatalQuiet()
+		}
 		return nil
 	}
 

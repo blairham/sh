@@ -317,12 +317,19 @@ func (p *printer) command(c Command) {
 		}
 		p.str(word + " ")
 		p.stmts(x.Cond)
-		p.opener("do", p.layout.DoAfterCommandOnItsOwnLine)
-		p.body(x.Body, true)
-		p.keyword("done")
+		if len(x.Body) > 0 {
+			p.opener("do", p.layout.DoAfterCommandOnItsOwnLine)
+			p.body(x.Body, true)
+			p.keyword("done")
+		}
 		p.redirs(x.Redirs)
 	case *ForClause:
 		p.str("for " + x.Name)
+		if len(x.Body) == 0 {
+			p.parenItems(x.HasItems, x.Items)
+			p.redirs(x.Redirs)
+			return
+		}
 		p.items(x.HasItems, x.Items)
 		p.doKeyword()
 		p.body(x.Body, true)
@@ -330,6 +337,11 @@ func (p *printer) command(c Command) {
 		p.redirs(x.Redirs)
 	case *SelectClause:
 		p.str("select " + x.Name)
+		if len(x.Body) == 0 {
+			p.parenItems(x.HasItems, x.Items)
+			p.redirs(x.Redirs)
+			return
+		}
 		p.items(x.HasItems, x.Items)
 		p.doKeyword()
 		p.body(x.Body, true)
@@ -338,9 +350,12 @@ func (p *printer) command(c Command) {
 	case *CaseClause:
 		p.caseClause(x)
 	case *ForArithClause:
-		p.str("for ((" + x.InitText + "; " + x.CondText + "; " + x.PostText + ")); do")
-		p.body(x.Body, true)
-		p.keyword("done")
+		p.str("for ((" + x.InitText + "; " + x.CondText + "; " + x.PostText + "))")
+		if len(x.Body) > 0 {
+			p.str("; do")
+			p.body(x.Body, true)
+			p.keyword("done")
+		}
 		p.redirs(x.Redirs)
 	case *TestClause:
 		p.str("[[ ")
@@ -438,6 +453,28 @@ func (p *printer) items(has bool, items []*Word) {
 		p.str(" ")
 		p.word(w)
 	}
+}
+
+// parenItems writes the same list in the short loop's parentheses.
+//
+// Only reached for a loop whose body is empty, and that is the whole reason
+// the spelling exists here. `do … done` cannot hold no commands — every shell
+// in the panel refuses `do done` — so a tree with an empty body has no long
+// form to be printed as, and `for i in a b` with nothing after it is a syntax
+// error in the shell that produced it. The parentheses end the header, which
+// is what lets the body be absent.
+func (p *printer) parenItems(has bool, items []*Word) {
+	if !has {
+		return
+	}
+	p.str(" (")
+	for i, w := range items {
+		if i > 0 {
+			p.str(" ")
+		}
+		p.word(w)
+	}
+	p.str(")")
 }
 
 func (p *printer) ifClause(x *IfClause) {

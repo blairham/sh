@@ -270,7 +270,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 			// where it was. Every shell reports that it cannot open "".
 			path = filepath.Join(r.Dir, path)
 		}
-		action := Action{Kind: ActionOpen, Path: path, Write: flags != os.O_RDONLY}
+		action := r.act(Action{Kind: ActionOpen, Path: path, Write: flags != os.O_RDONLY})
 		if !r.allowed(ctx, action) {
 			// A refused open is an open that did not happen, and the command
 			// must not run without it. Returning quietly let it run with the

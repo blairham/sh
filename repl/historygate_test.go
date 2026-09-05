@@ -7,9 +7,13 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
+	"time"
 
+	"github.com/blairham/sh/internal/blocks"
 	"github.com/blairham/sh/internal/boundary"
+	"github.com/blairham/sh/internal/event"
 	"github.com/blairham/sh/interp"
 )
 
@@ -98,5 +102,60 @@ func TestAnUngatedHistoryIsReadAndWritten(t *testing.T) {
 	}
 	if string(body) != "echo earlier\necho typed\n" {
 		t.Errorf("history = %q, want the new line appended", body)
+	}
+}
+
+// Every file the session opens for itself names the run it belongs to.
+//
+// The history and the block store are the two, and both are assembled here
+// from the same Shell as the Runner's own seams. A session identity threaded
+// to one and not the other produces exactly the state this whole field exists
+// to end: two records of one session that describe the same commands and
+// cannot be lined up.
+func TestTheSessionsOwnFilesCarryTheRunsIdentity(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "history")
+	if err := os.WriteFile(path, []byte("echo earlier\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var got []interp.Event
+	sink := interp.SinkFunc(func(_ context.Context, e interp.Event) { got = append(got, e) })
+	r := newTestRunner(map[string]string{
+		"HISTFILE":     path,
+		"HISTFILESIZE": "10",
+		blocks.DirVar:  filepath.Join(dir, "blocks"),
+	})
+	s := Shell{Runner: r, Events: sink, Session: "SESSIONUNDERTEST"}
+
+	if lines := s.historyFile().load(t.Context()); len(lines) != 1 {
+		t.Fatalf("history read as %q, want the earlier line", lines)
+	}
+	store := s.blocksStore()
+	defer func() { _ = store.Close() }()
+	if err := store.Record(t.Context(), blocks.Record{
+		V: blocks.Version, ID: event.NewID(time.Unix(1_757_000_000, 0)), Command: "true",
+	}, blocks.Output{}); err != nil {
+		t.Fatal(err)
+	}
+	if store.Session() != "SESSIONUNDERTEST" {
+		t.Errorf("the store writes as session %q, want the run's", store.Session())
+	}
+
+	if len(got) == 0 {
+		t.Fatal("the session opened nothing, so the assertion is vacuous")
+	}
+	var paths []string
+	for _, e := range got {
+		paths = append(paths, e.Action.Path)
+		if e.Session != "SESSIONUNDERTEST" {
+			t.Errorf("the record for %s says session %q, want the run's",
+				e.Action.Path, e.Session)
+		}
+		if e.Action.ID == "" {
+			t.Errorf("the record for %s carries no action id", e.Action.Path)
+		}
+	}
+	if !slices.Contains(paths, path) {
+		t.Errorf("opened %q, want the history file among them", paths)
 	}
 }

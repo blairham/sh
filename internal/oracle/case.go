@@ -834,6 +834,31 @@ var Corpus = []Case{
 		Why:     "a loop on a condition rather than over a list; dash does not have it and says so about the loop variable rather than about the parenthesis",
 	},
 	{
+		ID: "core/c-style-for-with-a-brace-body", Category: "command language",
+		Snippet: `for ((i=0;i<3;i++)) { printf "%s" "$i"; }; echo`,
+		Why:     "a brace group may stand where `do … done` stands, and every shell that has the C-style form at all accepts it — so it is a production of this construct rather than a dialect's addition. Unanimous, which is why it is core; dash has no C-style loop to give a body to and says so about the loop variable, exactly as it does for `core/c-style-for`",
+	},
+	{
+		ID: "core/c-style-for-brace-body-after-a-separator", Category: "command language",
+		Snippet: `for ((i=0;i<2;i++)); { printf "%s" "$i"; }; echo`,
+		Why:     "the terminator between the header and the body is optional before the brace exactly as it is before `do`, which is what says the brace stands where `do` stands rather than being glued to the header",
+	},
+	{
+		ID: "core/a-list-for-with-a-brace-body", Category: "command language",
+		Snippet: `for i in a b; { printf "%s" "$i"; }; echo`,
+		Why:     "the same production on the ordinary `for`, which is the half easiest to miss: the brace body is not the C-style loop's alone. It needs the separator, and the next case says why — this is the one three of the four accept and dash refuses, dash being the only panel shell without the form",
+	},
+	{
+		ID: "core/a-list-for-brace-body-needs-a-separator", Category: "command language", SyntaxError: true,
+		Snippet: `for i in a b { echo "$i"; }`,
+		Why:     "the same line without the `;`, refused by all four — and not because the brace body is refused there. With nothing between, `{` is another *item* of the list, so the loop reads on and meets `}` where `do` belongs, which is what every one of the four then names. The C-style header takes the brace with nothing between because `))` has already ended it",
+	},
+	{
+		ID: "core/a-brace-body-is-not-a-while-body", Category: "command language", SyntaxError: true,
+		Snippet: `while true; { echo hi; break; }`,
+		Why:     "the production belongs to the loops built on a `for` header and to nothing else. Written with the separator, so that it is the same shape the list `for` accepts and the difference is the construct rather than the punctuation. Three refuse it; zsh accepts it as a short loop of its own, which is the divergence this case records",
+	},
+	{
 		ID: "core/for-wants-a-name", Category: "command language", SyntaxError: true,
 		Snippet: `for 1x in a; do echo; done`,
 		Why:     "four wordings for one refusal, and only one of them blames the word rather than saying something about names",

@@ -54,6 +54,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"ArithNameValueRecurses", s.ArithNameValueRecurses, interp.Yes},
 		{"FatalErrorStatusIsOne", s.FatalErrorStatusIsOne, interp.Yes},
 		{"RedirectErrorOnSpecialBuiltinFatal", s.RedirectErrorOnSpecialBuiltinFatal, interp.No},
+		{"MultiDigitDuplicationTargetIsAnError", s.MultiDigitDuplicationTargetIsAnError, interp.No},
 		{"EchoInterpretsEscapes", s.EchoInterpretsEscapes, interp.Yes},
 		{"RegexQuotingMakesLiteral", s.RegexQuotingMakesLiteral, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},

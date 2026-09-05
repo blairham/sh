@@ -125,11 +125,25 @@ func TestInstallSeamsWiresWhatWasAskedFor(t *testing.T) {
 	}
 }
 
+// denyGate builds the gate -deny installs, or fails the test.
+func denyGate(t *testing.T, values ...string) interp.Gate {
+	t.Helper()
+	g, err := denyRules(values)
+	if err != nil {
+		t.Fatalf("-deny %q: %v", values, err)
+	}
+	return g
+}
+
 // Whole path components. A prefix matched by characters would refuse a
 // neighboring directory because its name starts the same way, which is never
 // what a person naming a directory meant.
-func TestDenyPrefixesMatchesWholeComponents(t *testing.T) {
-	d := denyPrefixes{"/etc", "/var/lib/"}
+//
+// The bare-path form is the shorthand, and it means `deny path <p>/**`: `**`
+// matches zero or more components, so the directory itself is covered as well
+// as everything under it.
+func TestABarePathDeniesTheDirectoryAndEverythingUnderIt(t *testing.T) {
+	d := denyGate(t, "/etc", "/var/lib/")
 	for _, tc := range []struct {
 		path string
 		want interp.Decision
@@ -143,6 +157,11 @@ func TestDenyPrefixesMatchesWholeComponents(t *testing.T) {
 		{"/var/libexec", interp.Allow},
 		{"/usr/bin/cat", interp.Allow},
 		{"", interp.Allow},
+		// Cleaned before matching, which the prefix list this replaced did not
+		// do: `..` walked straight out of a rule that the policy file's own
+		// matcher held. Two matchers over one gate is two answers, and this is
+		// the one that was wrong.
+		{"/srv/../etc/passwd", interp.Deny},
 	} {
 		got := d.Allow(context.Background(), interp.Action{Kind: interp.ActionStat, Path: tc.path})
 		if got != tc.want {
@@ -151,25 +170,53 @@ func TestDenyPrefixesMatchesWholeComponents(t *testing.T) {
 	}
 }
 
-// An empty prefix would otherwise deny the whole filesystem by matching every
-// path, which is what an unset flag reaching here would look like.
-func TestDenyPrefixesIgnoresAnEmptyPrefix(t *testing.T) {
-	d := denyPrefixes{""}
-	if got := d.Allow(context.Background(), interp.Action{Path: "/anything"}); got != interp.Allow {
-		t.Errorf("decision = %v, want an empty prefix to name nothing", got)
+// A value that names nothing is refused rather than accepted as a rule that
+// can never fire.
+//
+// This is the parser's rule and it now reaches the flag: a policy that
+// silently matches nothing is indistinguishable from a policy that allows, and
+// that is the worst outcome a security surface has. The empty value is the
+// case an unset flag would produce, and it used to be *ignored* — a whole
+// filesystem's worth of difference decided by a `continue`.
+func TestADenyValueThatNamesNothingIsRefused(t *testing.T) {
+	for _, tc := range []struct{ name, value string }{
+		{"empty", ""},
+		{"a relative path", "etc/passwd"},
+		{"a selector nobody has", "network"},
+		{"a selector with no pattern", "exec"},
+		{"a pattern after signal, which names a process", "signal:/proc/1"},
+		{"inherit, which is recorded and never gated", "inherit"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := denyRules([]string{tc.value}); err == nil {
+				t.Errorf("-deny %q was accepted, want a rule that can never fire refused", tc.value)
+			}
+		})
 	}
 }
 
-// Every kind of action, so a person can watch the difference between a refusal
-// that stops a command and one that quietly answers "not there".
-func TestDenyPrefixesCoversEveryKindOfAction(t *testing.T) {
-	d := denyPrefixes{"/secret"}
-	for _, k := range []interp.ActionKind{
-		interp.ActionExec, interp.ActionOpen, interp.ActionStat, interp.ActionReadDir,
-	} {
-		if got := d.Allow(context.Background(), interp.Action{Kind: k, Path: "/secret/f"}); got != interp.Deny {
-			t.Errorf("%v: decision = %v, want Deny", k, got)
-		}
+// A selector narrows a rule to one kind, which the path-prefix list could not
+// express at all: every rule it held named a path, and every kind that has one
+// was refused together.
+func TestASelectorNarrowsADenyToOneKind(t *testing.T) {
+	d := denyGate(t, "exec:/secret/**")
+	if got := d.Allow(context.Background(),
+		interp.Action{Kind: interp.ActionExec, Path: "/secret/f"}); got != interp.Deny {
+		t.Errorf("exec: decision = %v, want Deny", got)
+	}
+	if got := d.Allow(context.Background(),
+		interp.Action{Kind: interp.ActionStat, Path: "/secret/f"}); got != interp.Allow {
+		t.Errorf("stat: decision = %v, want the other kinds left alone", got)
+	}
+}
+
+// A colon in a pattern is a colon in a pattern: only the first one separates
+// the selector from what follows, because a path may legally contain them.
+func TestOnlyTheFirstColonSeparatesTheSelector(t *testing.T) {
+	d := denyGate(t, "path:/tmp/a:b/**")
+	if got := d.Allow(context.Background(),
+		interp.Action{Kind: interp.ActionOpen, Path: "/tmp/a:b/f"}); got != interp.Deny {
+		t.Errorf("decision = %v, want the path with a colon in it denied", got)
 	}
 }
 
@@ -438,5 +485,85 @@ func TestATracedRunRecordsASignal(t *testing.T) {
 	want := "trace: access signal pid=" + strconv.Itoa(os.Getpid()) + " signal=0"
 	if !strings.Contains(trace.String(), want) {
 		t.Errorf("trace =\n%s\nwant %s", trace.String(), want)
+	}
+}
+
+// A shipped binary can refuse a signal, through the flag a person types.
+//
+// This is the gap #520 names, closed and then graded end to end. `-deny` held
+// a list of paths and a signal names a process, so `-trace-events` could
+// *watch* a signal and nothing anybody could run could refuse one — a hole in
+// the debug surface with the property #460 warns about, which is that it looks
+// exactly like a shell that works.
+//
+// The script asks the shell to signal itself with `kill -0 $$`, which is the
+// existence probe and the one signal that genuinely reaches the kernel while
+// aimed here. A refusal answers EPERM, which is the errno for a process this
+// one may not signal, so the script sees what it would see from the kernel and
+// the observer sees the refusal.
+func TestAShippedBinaryCanRefuseASignal(t *testing.T) {
+	base, err := pickDialect("core")
+	if err != nil {
+		t.Fatal(err)
+	}
+	base.Name = "sh"
+
+	// The control first. Ungated the probe succeeds, so the assertion below is
+	// about the rule and not about a shell that cannot signal at all.
+	run := func(t *testing.T, argv []string) (out, errs, trace string, code int) {
+		t.Helper()
+		own, rest, err := readOwnFlags(argv)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var o, e, tr bytes.Buffer
+		sh := base
+		sh.Stdout, sh.Stderr = &o, &e
+		sh, _, err = installSeams(sh, own, &tr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		code = driver.MainArgs(sh, append([]string{"sh"}, rest...))
+		return o.String(), e.String(), tr.String(), code
+	}
+
+	const src = "kill -0 $$ && echo sent || echo refused"
+	if out, errs, _, _ := run(t, []string{"-c", src}); !strings.Contains(out, "sent") {
+		t.Fatalf("ungated out = %q err = %q, want the probe to succeed", out, errs)
+	}
+
+	out, _, trace, _ := run(t, []string{"-trace-events", "-deny", "signal", "-c", src})
+	if !strings.Contains(out, "refused") {
+		t.Errorf("out = %q, want the denied signal to fail the builtin", out)
+	}
+	if !strings.Contains(trace, "trace: denied signal pid=") {
+		t.Errorf("trace =\n%s\nwant the refusal recorded", trace)
+	}
+	// And a path rule does not touch it, which is the whole reason a selector
+	// had to exist: no pattern can name a process.
+	out, _, _, _ = run(t, []string{"-deny", "/nowhere-this-test-uses", "-c", src})
+	if !strings.Contains(out, "sent") {
+		t.Errorf("out = %q, want a path rule to leave signals alone", out)
+	}
+}
+
+// A -deny value the flag cannot read ends the invocation rather than starting
+// an ungated shell.
+//
+// The same failure the policy file already refuses to have, on the other route.
+// A shell that reported a bad rule and ran anyway would be running with the
+// boundary the person wrote absent, which is the shape the sandboxing work
+// found once already: an installSeams error dropped on the floor left the shell
+// running ungated with a policy it had failed to read.
+func TestABadDenyValueStopsTheShell(t *testing.T) {
+	got := sandboxed(t, "core", "-deny", "network:/x", "-c", "echo ran")
+	if strings.Contains(got.out, "ran") {
+		t.Errorf("out = %q, want the script not to run under a rule that would not parse", got.out)
+	}
+	if got.code == 0 {
+		t.Error("status 0, want a failure")
+	}
+	if !strings.Contains(got.errs, "-deny network:/x") {
+		t.Errorf("err = %q, want the value named in the diagnostic", got.errs)
 	}
 }

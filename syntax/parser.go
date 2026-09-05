@@ -209,13 +209,13 @@ func (p *Parser) atStopWord() bool {
 	return p.tok.Kind == TokWord && !p.tok.IsQuoted() && stopWords[p.tok.Literal()]
 }
 
-// tokenText names the current token the way a diagnostic should: the word
-// itself when there is one, and the operator's spelling otherwise.
-func (p *Parser) tokenText() string {
-	if p.tok.Kind == TokWord {
-		return `"` + p.tok.Literal() + `"`
+// tokenText names a token the way a diagnostic should: the word itself when
+// there is one, and the operator's spelling otherwise.
+func tokenText(tok Token) string {
+	if tok.Kind == TokWord {
+		return `"` + tok.Literal() + `"`
 	}
-	return `"` + p.tok.Kind.String() + `"`
+	return `"` + tok.Kind.String() + `"`
 }
 
 // opener is a construct or clause the parser is currently inside.
@@ -361,36 +361,53 @@ func (p *Parser) failUnexpected(expected string) {
 }
 
 func (p *Parser) failUnexpectedAs(expected string, plain bool) {
+	p.failUnexpectedAt(p.tok, expected, plain)
+}
+
+// failUnexpectedAt records a token the grammar did not want when the parser
+// has already read past it.
+//
+// A rule that can only be checked once more input has been consumed — the
+// function body that has to be compound, which is not known to be simple
+// until it has been parsed — still has to name the token where the trouble
+// began, and point the echo of the offending line at *its* line rather than
+// at wherever the parser ended up. So the token travels rather than being
+// read off the parser's current position.
+func (p *Parser) failUnexpectedAt(tok Token, expected string, plain bool) {
 	if p.err != nil {
 		return
 	}
-	if p.at(TokEOF) {
+	if tok.Kind == TokEOF {
 		p.ranOut()
 		p.err = p.unterminated(expected)
 		return
 	}
 	p.err = &Error{
-		Pos: p.tok.Pos, Kind: ErrUnexpected,
-		Token: p.tokenLiteral(), Class: p.tokenClass(plain), Expected: expected,
-		Redirect: p.tok.Kind.IsRedirect(),
-		Msg:      p.tokenText() + " unexpected",
+		Pos: tok.Pos, Kind: ErrUnexpected,
+		Token: tokenLiteral(tok), Class: tokenClass(tok, plain), Expected: expected,
+		Redirect: tok.Kind.IsRedirect(),
+		Msg:      tokenText(tok) + " unexpected",
 	}
 }
 
 // tokenLiteral is the token as a diagnostic writes it, without the quotes a
 // message may add of its own.
-func (p *Parser) tokenLiteral() string {
-	if p.tok.Kind == TokWord {
-		return p.tok.Literal()
+func (p *Parser) tokenLiteral() string { return tokenLiteral(p.tok) }
+
+func tokenLiteral(tok Token) string {
+	if tok.Kind == TokWord {
+		return tok.Literal()
 	}
-	return p.tok.Kind.String()
+	return tok.Kind.String()
 }
 
-func (p *Parser) tokenClass(plain bool) TokenClass {
-	if p.tok.Kind != TokWord {
+func (p *Parser) tokenClass(plain bool) TokenClass { return tokenClass(p.tok, plain) }
+
+func tokenClass(tok Token, plain bool) TokenClass {
+	if tok.Kind != TokWord {
 		return ClassOperator
 	}
-	if !plain && !p.tok.IsQuoted() && reservedWords[p.tok.Literal()] {
+	if !plain && !tok.IsQuoted() && reservedWords[tok.Literal()] {
 		return ClassReserved
 	}
 	return ClassWord
@@ -1171,18 +1188,19 @@ func (p *Parser) parseFuncPosix() Command {
 		return fn
 	}
 	p.skipNewlines()
+	// The body's first token, kept before the body is read. Both ways of
+	// refusing a body below name it, and neither can be decided until the
+	// parser has moved on: `f() >out` is only known not to be compound once
+	// the redirection has been parsed as a command of its own.
+	body := p.tok
 	p.funcBody = true
 	if fn.Body = p.parseCommand(); fn.Body == nil {
-		p.fail("expected a body for function %q", fn.Name)
+		p.failUnexpectedAt(body, "", false)
 		return fn
 	}
 	if p.dialect.FuncBodyMustBeCompound {
-		if sc, isSimple := fn.Body.(*SimpleCmd); isSimple {
-			token := "newline"
-			if len(sc.Args) > 0 {
-				token = sc.Args[0].Literal()
-			}
-			p.fail("syntax error near unexpected token `%s'", token)
+		if _, isSimple := fn.Body.(*SimpleCmd); isSimple {
+			p.failUnexpectedAt(body, "", false)
 		}
 	}
 	return fn
@@ -1211,9 +1229,10 @@ func (p *Parser) parseFuncKeyword() Command {
 		}
 	}
 	p.skipNewlines()
+	body := p.tok
 	p.funcBody = true
 	if fn.Body = p.parseCommand(); fn.Body == nil {
-		p.fail("expected a body for function %q", fn.Name)
+		p.failUnexpectedAt(body, "", false)
 	}
 	return fn
 }

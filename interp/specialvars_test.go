@@ -100,6 +100,45 @@ func TestDollarDashStartsWithTheDialectsDefaultLetters(t *testing.T) {
 	}
 }
 
+// `i` is in `$-` when the front end said the shell is interactive, and only
+// then. No axis: the panel is unanimous both ways, and there is no `set`
+// letter that turns it on, so the fact has to arrive from outside.
+//
+// It arrives on the Runner rather than being discovered, which is the rule
+// this package lives by: a library has no standing to ask the process whether
+// anybody is watching, and the process would answer about the *embedder's*
+// invocation rather than about this shell's.
+func TestDollarDashSaysInteractiveOnlyWhenItWasToldSo(t *testing.T) {
+	const src = `echo "[$-]"; case $- in *i*) echo yes ;; *) echo no ;; esac`
+	for _, tc := range []struct {
+		name        string
+		interactive bool
+		want        string
+	}{
+		{"told so", true, "[i]\nyes\n"},
+		{"not told", false, "[]\nno\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := CoreSemantics()
+			out, _ := run(t, src, func(r *Runner) {
+				r.Semantics, r.Interactive = &sem, tc.interactive
+			})
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+
+	// And it is not a `set` option, so neither sign of it is a letter the
+	// option table knows: an interactive shell cannot be turned into a
+	// non-interactive one halfway through, which is unanimous.
+	out, _ := run(t, `set +i 2>/dev/null; case $- in *i*) echo yes ;; *) echo no ;; esac`,
+		func(r *Runner) { r.Interactive = true })
+	if !strings.Contains(out, "yes") {
+		t.Errorf("got %q, want `set +i` to leave the shell interactive", out)
+	}
+}
+
 // Which letter noglob shows is an axis: POSIX names `f`, and one shell in the
 // panel reports the capital because that is its own short spelling.
 func TestNoglobLetterFollowsTheAxis(t *testing.T) {

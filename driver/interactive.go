@@ -36,6 +36,12 @@ func (sh Shell) interactive(argv, params []string, opts []optionSpec) int {
 	// no shell in the panel announces a background job to `sh -c`, and a
 	// Runner embedded in another program has nobody to announce one to.
 	r.JobControl = true
+	// And a prompt is interactive by definition, whether or not `-i` said
+	// so: measured, all four shells put `i` in `$-` at a terminal with
+	// nothing to run. Set beside JobControl and not folded into it — the two
+	// answer different questions, and ksh93 is alone in turning the monitor
+	// on for `-i script.sh`.
+	r.Interactive = true
 	if sh.Prelude != "" {
 		if code := sh.source(r, name); code != 0 {
 			return code
@@ -86,6 +92,13 @@ func (sh Shell) interactive(argv, params []string, opts []optionSpec) int {
 // pipe or a closed descriptor either — `docs/spec/invocation.md` has the
 // grid. Only `-i`, which is `forcePrompt` and never reaches here, overrides
 // it.
+//
+// It is not the same question as whether the shell is *interactive*, and the
+// two were once one field. `sh -i script.sh` runs the script and does not
+// prompt afterwards — three of the four panel shells exit there — but it is
+// interactive while it does, which `$-` reports and which decides whether
+// aliases expand. That fact is `source.interactive`; this is only whether to
+// draw a prompt.
 func Interactively(sh Shell, hasWork bool) bool {
 	if hasWork {
 		return false

@@ -80,16 +80,104 @@ agreement and one direction of its disagreement.
 - **`-i` always puts `i` in `$-`** — in all four, on every route,
   including `-c` and a script operand, and whether or not a prompt is
   ever drawn. Without `-i`, `i` appears only where the shell decided to
-  prompt on its own. That the substrate does not yet do this is #472 and
-  is not settled here.
+  prompt on its own. See "Interactive, and `$-`" below.
 
-### Where it lives
+## Interactive, and `$-`
 
-`driver.Interactively` is the decision and is the only place that makes
-it, so a dialect binary has a prompt by existing rather than by copying
-one. The ioctl behind it is `repl.IsTerminal`, next to the rest of the
-termios code, because a second implementation of "is this a terminal" is
-how the two answers drift apart.
+**The rule.** A shell is interactive when `-i` was given, or when it
+decided to prompt on its own. That is a wider question than whether it
+prompts: `-i script.sh` runs the script *and* is interactive while it
+does, which is why the two are separate facts and not one. Being
+interactive has two observable consequences the panel agrees on — `i`
+appears in `$-`, and aliases are expanded whatever the dialect would do
+in a script.
+
+The front end decides it and hands it to the runner as
+`interp.Runner.Interactive`, beside `JobControl`. `interp` never asks the
+process: a Runner embedded in another program would be told about the
+*embedder's* invocation, which is not this shell's.
+
+### Measured
+
+Same panel and date as above. `$-` read as membership rather than as a
+string, because the spelling is the part that splits — see below.
+
+| route | bash 5.3 | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `sh script.sh` | `hB` | *(empty)* | `hB` | `569X` |
+| `sh -i script.sh` | `hiBH` | `i` | `imBE` | `569XZi` |
+| `sh -c cmd` | `hBc` | *(empty)* | `chsB` | `569X` |
+| `sh -i -c cmd` | `hiBHc` | `i` | `icmsBE` | `569XZi` |
+| `sh -s` < pipe | `hBs` | `s` | `hsB` | `569Xs` |
+| `sh -i -s` < pipe | `hiBHs` | `si` | `imsBE` | `569Xis` |
+| `sh` < pipe | `hBs` | `s` | `hsB` | `569Xs` |
+| `sh -i` < pipe | `hiBHs` | `si` | `imsBE` | `569XZis` |
+| `sh` < file | `hBs` | `s` | `hsB` | `569Xs` |
+| `sh` at a terminal | `hiBHs` | `si` | `imsBE` | `569XZis` |
+| `sh -i` at a terminal | `hiBHs` | `si` | `imsBE` | `569XZis` |
+| `sh -s` at a terminal | `hiBHs` | `si` | `imsBE` | `569XZis` |
+
+The terminal rows were driven through a pseudo-terminal pair. Every row
+was measured with a scratch `HOME` and no startup files, because an
+interactive shell reads them and a developer's `.zshrc` is not evidence
+about zsh. zsh needs an empty `~/.zshrc` to exist at all, or
+`zsh-newuser-install` runs instead of the shell and eats the first
+keystroke.
+
+**`i` is unanimous in both directions** and so needs no axis: present in
+every `-i` row and in every terminal row, absent in every other row, in
+all four. It is implemented.
+
+Alias expansion goes with it, also unanimous: `alias hi='echo aliased';
+hi` in a script run as `sh -i script.sh` prints `aliased` in all four.
+bash is the one that does *not* expand it without `-i`, which is what
+makes the row evidence rather than a coincidence of three shells that
+always expand.
+
+### What is not implemented, and why
+
+**`c` and `s` split the panel and are left unmodeled.** Reading down the
+table:
+
+- `c` for a command string: bash and ksh93 show it, dash and zsh do not.
+  A clean two-two split with no majority to follow.
+- `s` for the standard-input route: all four show it, whether `-s` was
+  written or not, and including at a prompt — that half is unanimous.
+  But ksh93 alone also shows `s` under `-c`, where the other three show
+  nothing, so the letter cannot be modeled as "the input came from
+  standard input" without taking a side on `-c`.
+
+Neither is implemented and neither has an axis: `i` was the question
+issue #472 asked, and inventing an axis for a letter nothing has needed
+yet would be answering a question nobody put. The corpus reads `$-` as
+membership (`case $- in *i*)`) precisely so that a case does not depend
+on the spelling.
+
+**The letters a shell adds only when interactive are a second vector,
+also unmodeled.** bash adds `H`, zsh adds `Z`, and ksh93 trades `h` for
+`m` and `E`; dash adds nothing. That is per-dialect startup state rather
+than one axis, and it is a different question from whether the shell is
+interactive at all.
+
+**ksh93 is the only shell that turns the monitor on for `-i
+script.sh`** (`m` in its row, absent from the other three). So being
+interactive and having job control are not the same fact, which is why
+`Interactive` and `JobControl` are separate fields rather than one.
+
+## Where it lives
+
+`driver.Interactively` is the prompt decision and is the only place that
+makes it, so a dialect binary has a prompt by existing rather than by
+copying one. The ioctl behind it is `repl.IsTerminal`, next to the rest
+of the termios code, because a second implementation of "is this a
+terminal" is how the two answers drift apart.
+
+Being interactive is the other fact, and it is carried rather than
+decided twice: `driver` sets it once, on the way out of reading the
+operands, and hands it to `interp.Runner.Interactive`. It was decided
+per route once, in the one branch that had nothing to run, and `sh -i
+script.sh` therefore ran the script with `-i` dropped on the floor
+(#472).
 
 `interp` asks a related question for `select` and `read -p` and answers
 it differently — a character device, excepting the null device — because

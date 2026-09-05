@@ -1145,6 +1145,53 @@ line of the same shape:
 Only after a token the grammar did not want. Input that simply ran out gets
 no echo — there is no offending line to point at.
 
+That last sentence is also a trap, because **a rule can decide late**. The
+body of a function is refused for not being compound only once the body has
+been *read*, so by the time the refusal is raised the parser is looking at
+whatever follows it. Recording that as a bare syntax failure loses two
+things at once: the echo, which is only offered to an unexpected-token
+failure, and the token itself. bash names the word, the assignment or the
+redirection operator the body began with:
+
+    f() echo hi; f     syntax error near unexpected token `echo'
+    f() x=1; f         syntax error near unexpected token `x=1'
+    f() >out; f        syntax error near unexpected token `>'
+
+So the token is saved before the body is parsed and the failure is raised
+against *it*, which also puts the echo on the body's own line rather than on
+the line the parser stopped at (measured: `cmd/function-body-simple-command`,
+`cmd/function-body-an-assignment`, `cmd/function-body-a-redirection`).
+
+`f() ;` is the same shape with no body for any grammar, refusing or
+permissive, and all four shells name the token rather than describing the
+function (measured: `cmd/function-with-no-body-at-all`).
+
+### End of input with nothing open
+
+`f()` runs out of input with the parens already closed, so there is no
+construct left to name — and two of the shells whose end-of-input sentence
+names one say something shorter rather than leaving a hole in it:
+
+    dash   Syntax error: end of file unexpected
+           (against `Syntax error: end of file unexpected (expecting "fi")`)
+    bash   syntax error: unexpected end of file
+           (against `… from `if' command on line 1`)
+    ksh93  syntax error at line 1: `end of file' unexpected
+           (against ``if' unmatched`)
+
+That is `Diagnostics.UnterminatedNoConstruct`, used when the failure carries
+no construct and left empty by a dialect whose one sentence never mentioned
+one (measured: `cmd/function-parens-then-end-of-input`).
+
+### A bad descriptor is an errno like any other
+
+`echo hi >&6` with nothing on 6 reports `Bad file descriptor`, which is the
+C strerror string and goes through the same `LowercaseReason` axis as every
+other reason a redirection quotes. Writing it out lowercase at the places
+that raise it — Go's own spelling of the errno — matched the one dialect
+that lowercases everything and nobody else (measured:
+`redir/a-dup-prefix-is-that-commands-alone`).
+
 ### A failure one shell finds later than we do
 
 Adding the origin to the location immediately broke a case that had been

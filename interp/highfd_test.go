@@ -81,7 +81,7 @@ func TestAPerCommandDupIsTakenBackAfterward(t *testing.T) {
 	if err != nil {
 		t.Fatalf("refused: %v", err)
 	}
-	if !strings.Contains(got, "bad file descriptor") || !strings.Contains(got, "st=1") {
+	if !strings.Contains(got, "Bad file descriptor") || !strings.Contains(got, "st=1") {
 		t.Errorf("output = %q, want the descriptor gone once the command ended", got)
 	}
 }
@@ -92,7 +92,7 @@ func TestASubshellsDescriptorsStayInTheSubshell(t *testing.T) {
 	if err != nil {
 		t.Fatalf("refused: %v", err)
 	}
-	if !strings.Contains(got, "bad file descriptor") || !strings.Contains(got, "st=1") {
+	if !strings.Contains(got, "Bad file descriptor") || !strings.Contains(got, "st=1") {
 		t.Errorf("output = %q, want the parent unaware of the subshell's descriptor", got)
 	}
 }
@@ -163,7 +163,7 @@ func TestDuplicatingAnUnopenedDescriptorStillFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("aborted where it used to report: %v", err)
 	}
-	if !strings.Contains(got, "bad file descriptor") || !strings.Contains(got, "st=1") {
+	if !strings.Contains(got, "Bad file descriptor") || !strings.Contains(got, "st=1") {
 		t.Errorf("said %q status %d, want a reported failure", got, st)
 	}
 }

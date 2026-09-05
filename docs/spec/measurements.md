@@ -1663,6 +1663,10 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `cmd/case-fallthrough-then-continue-matching` | **2>** `<shell>: 1: Syntax error: "&" unexpected` *(status 2)* | `one~two~four` | `one~two~four` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in a) echo one;& b) echo two;;& c) echo three;; a) echo four;; esac'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `&' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `&'` *(status 1)* |
 | `cmd/case-fallthrough-last-arm` | **2>** `<shell>: 1: Syntax error: "&" unexpected` *(status 2)* | `last` | `last` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in x) echo no;; a) echo last;& esac'` *(status 2)* | `last` | `last` |
 | `cmd/function-body-simple-command` | `hi` | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `f() echo hi; f'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `f() echo hi; f'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `echo'~<shell>: -c: line 0: `f() echo hi; f'` *(status 2)* | `hi` | `hi` |
+| `cmd/function-body-an-assignment` | *(no output, status 0)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `x=1'~<shell>: -c: line 1: `f() x=1; f'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `x=1'~<shell>: -c: line 1: `f() x=1; f'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `x=1'~<shell>: -c: line 0: `f() x=1; f'` *(status 2)* | *(no output, status 0)* | *(no output, status 0)* |
+| `cmd/function-body-a-redirection` | *(no output, status 0)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `>'~<shell>: -c: line 1: `f() >out; f'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `>'~<shell>: -c: line 1: `f() >out; f'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `>'~<shell>: -c: line 0: `f() >out; f'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `>' unexpected` *(status 3)* | *(no output, status 0)* |
+| `cmd/function-with-no-body-at-all` | **2>** `<shell>: 1: Syntax error: ";" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `f() ;'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `f() ;'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `f() ;'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `;' unexpected` *(status 3)* | **2>** `<shell>: parse error near `;'` *(status 1)* |
+| `cmd/function-parens-then-end-of-input` | **2>** `<shell>: 1: Syntax error: end of file unexpected` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: syntax error at line 1: `end of file' unexpected` *(status 3)* | **2>** `<shell>: parse error near `()'` *(status 1)* |
 | `cmd/function-name-with-a-dash` | **2>** `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `ok~after` | `ok~after` | `ok~after` | **2>** `<shell>: f-g: invalid function name` *(status 1)* | `ok~after` |
 | `cmd/function-name-with-a-dot` | **2>** `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `ok~after` | `ok~after` | `ok~after` | **2>** `<shell>: a.b: invalid discipline function` *(status 1)* | `ok~after` |
 | `cmd/function-posix-form` | `posix` | `posix` | `posix` | `posix` | `posix` | `posix` |
@@ -1783,6 +1787,22 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `cmd/function-body-simple-command` — bash alone wants a compound body after the parens; dash, ksh93 and zsh take the simple command as a one-command body and run it — being more permissive than bash here is the dangerous direction only for scripts aimed at bash
   ```sh
   f() echo hi; f
+  ```
+- `cmd/function-body-an-assignment` — the same refusal reached by a body that is not even a command name: the shell that wants a compound body names the assignment as the offending token, which the token has to be *saved* to do — the rule is only decided once the body has been read
+  ```sh
+  f() x=1; f
+  ```
+- `cmd/function-body-a-redirection` — a body of nothing but a redirection: the token blamed is the operator rather than the word after it, and two shells refuse it where two run it
+  ```sh
+  f() >out; f
+  ```
+- `cmd/function-with-no-body-at-all` — no grammar has a body here, refusing or permissive, and all four name the token rather than describing the function
+  ```sh
+  f() ;
+  ```
+- `cmd/function-parens-then-end-of-input` — the input runs out with the parens already closed, so there is no construct left open to name — the shell that names one in its end-of-input sentence has to say something shorter here
+  ```sh
+  f()
   ```
 - `cmd/function-name-with-a-dash` — four answers: bash and zsh define and run it, dash refuses the name at parse time, ksh93 parses and stops the script at the definition
   ```sh

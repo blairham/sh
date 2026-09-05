@@ -2180,6 +2180,41 @@ var Corpus = []Case{
 		Why:     "the same numeral-only reading, reached through the substring rather than through a subscript: unanimous in all four with substrings, and taking the numeral alone gave an offset of 0 — `ab`, which is a real substring of the right length and so looks like an answer rather than a failure",
 	},
 	{
+		ID: "array/a-quoted-gap-is-one-field", Category: "expansion",
+		Snippet: `a=(x); a[5]=y; set -- "${a[0]}" "${a[1]}" "${a[5]}"; echo "n=$#"`,
+		Why:     "quoting guarantees exactly one field, and it does not stop guaranteeing it because the element is not there — an unassigned subscript in quotes is one empty field, the same as `\"$unset\"`, unanimously in the three with arrays. It produced no field at all, so the count came back 2 and every argument after the gap moved up one: the script keeps running with everything off by one, which is the worst shape a wrong answer takes",
+	},
+	{
+		ID: "array/a-quoted-gap-keeps-its-place", Category: "expansion",
+		Snippet: `a=(x); a[5]=y; printf "[%s]" "${a[0]}" "${a[1]}" "${a[5]}"; echo`,
+		Why:     "the same three expansions read as arguments rather than counted, which is what shows *where* the missing field was: the empty one is between the two that are there. A count alone cannot say that, and the shifting is the whole harm. zsh puts the gap first because its first element is 1",
+	},
+	{
+		ID: "array/an-unquoted-gap-is-no-field", Category: "expansion",
+		Snippet: `a=(x); a[5]=y; set -- ${a[0]} ${a[1]} ${a[5]}; echo "n=$#"`,
+		Why:     "the other side, and the reason the first is about quoting rather than about arrays: unquoted, an empty expansion is no field at all and the count is 2 in all three. The pair is what says the rule is `\"$x\"` versus `$x` applied to an element",
+	},
+	{
+		ID: "array/a-subscript-on-a-name-that-is-no-array", Category: "expansion",
+		Snippet: `set -- "${b[3]}"; echo "n=$#"`,
+		Why:     "a subscript may be written on a name that was never an array, and quoted it is still one empty field rather than none — the same guarantee reached without any array at all, so a fix that only counted gaps inside one would miss it",
+	},
+	{
+		ID: "array/a-quoted-empty-array-is-not-the-same-question", Category: "expansion",
+		Snippet: `a=(); set -- "${a[@]}"; echo "n=$#"`,
+		Why:     "how many fields an empty *list* makes is a dialect's answer — two shells say none and ksh93 says one, which is why careful scripts write `\"${a[@]+\"${a[@]}\"}\"`. It is recorded next to the gap cases because the two were being answered by one test: asking this axis about a single subscript is what made a gap disappear, and only this spelling is entitled to ask it",
+	},
+	{
+		ID: "array/a-quoted-empty-array-with-a-star", Category: "expansion",
+		Snippet: `a=(); set -- "${a[*]}"; echo "n=$#"`,
+		Why:     "`[*]` joins, so a quoted one is a single field whether or not there is anything to join — one, unanimously, where `[@]` splits the panel. The two spellings differing on an empty array is the sharpest statement that the star is not the at",
+	},
+	{
+		ID: "assoc/a-missing-key-quoted-is-one-field", Category: "expansion",
+		Snippet: `typeset -A m; m[k]=v; set -- "${m[nokey]}"; echo "n=$#"`,
+		Why:     "the same guarantee where the subscript is a key rather than an index: a key nothing was stored under is one empty field in quotes, in all three that have the attribute. The declared path had its own reading of an absent element and gave no field either",
+	},
+	{
 		ID: "cmd/a-name-broken-by-an-expansion", Category: "commands",
 		Snippet: `b=X; a$b=c; echo "rc=$?"`,
 		Why:     "a name interrupted by an expansion is not a name, unanimously in all five: the word is a command name and the expansion happens first, so the diagnostic reports `aX=c`. It is the boundary the subscript form has to stop at — a scan that follows the `=` across spans wherever it finds one would turn this into an assignment to `a`",
@@ -2509,6 +2544,17 @@ echo "st=$?"`,
 		SyntaxError: true,
 		Snippet:     `f() >out; f`,
 		Why:         "a body of nothing but a redirection: the token blamed is the operator rather than the word after it, and two shells refuse it where two run it",
+	},
+	{
+		ID: "cmd/function-body-a-command-with-a-redirection", Category: "command language",
+		SyntaxError: true,
+		Snippet:     `f() echo hi >out; f`,
+		Why:         "the same refusal with a command in front of the operator, which says what the rule is: the shell that refuses `f() >out` is not asking for a command, it refuses a redirection in an uncompounded body at all — and it names the operator, with the `echo` already accepted. The two that run it write the line to the file and print nothing",
+	},
+	{
+		ID: "cmd/function-body-compound-with-a-redirection", Category: "command language",
+		Snippet: `f() { echo hi; } >out; f`,
+		Why:     "the control for the row above: braces make the same redirection acceptable everywhere, including in the shell that refuses it on a bare command, so that refusal is about the *body* and not about redirecting a function",
 	},
 	{
 		ID: "cmd/function-with-no-body-at-all", Category: "command language",

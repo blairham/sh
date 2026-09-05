@@ -649,3 +649,31 @@ func TestZshRefusesASetOptionAtOne(t *testing.T) {
 		t.Errorf("the substrate answers %d, want nothing — zero means the 2 the other three report", got)
 	}
 }
+
+// TestAFunctionBodyThatNeverBeganIsLocatedByNameAlone — zsh drops the line for
+// this one failure and keeps it for every other, including the end-of-input
+// failures it looks most like.
+//
+// It is the whole diagnostic rather than the wording, because the location is
+// what moves: ParseFailure says the same sentence either way.
+func TestAFunctionBodyThatNeverBeganIsLocatedByNameAlone(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{"f() ;", "zsh: parse error near `;'\n"},
+		{"f()", "zsh: parse error near `()'\n"},
+		{"f() &", "zsh: parse error near `&'\n"},
+		// The controls: a body that began and ran out, and an end of input
+		// with nothing to do with a function. Both keep the line.
+		{"f() {", "zsh:1: parse error near `{'\n"},
+		{"if true", "zsh:1: parse error near `true'\n"},
+		{"echo hi\nif true", "zsh:2: parse error near `true'\n"},
+	} {
+		_, err := syntax.Parse(tc.src, zsh.Dialect())
+		if err == nil {
+			t.Errorf("%q: parsed, want a syntax error", tc.src)
+			continue
+		}
+		if got := zsh.Diagnostics().ParseDiagnostic("zsh", "-c", err, tc.src); got != tc.want {
+			t.Errorf("%q: got %q, want %q", tc.src, got, tc.want)
+		}
+	}
+}

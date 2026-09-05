@@ -1,0 +1,102 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+package interp_test
+
+import (
+	"strings"
+	"testing"
+
+	. "github.com/blairham/sh/interp"
+)
+
+// A quoted expansion is exactly one field, and an element that is not there
+// does not change that: `"${a[5]}"` on a gap is one empty field, the same as
+// `"$unset"` is.
+//
+// It produced no field at all. That is the worst shape a wrong answer takes,
+// because nothing fails — `set -- "${a[0]}" "${a[1]}" "${a[5]}"` came back with
+// `$#` of 2 and every argument after the gap moved up one, so the script kept
+// running with everything off by one.
+func TestAQuotedGapIsOneField(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`a=(x); a[5]=y; set -- "${a[0]}" "${a[1]}" "${a[5]}"; echo "n=$#"`, "n=3"},
+		// Where the empty field lands, which a count alone cannot say.
+		{`a=(x); a[5]=y; printf "[%s]" "${a[0]}" "${a[1]}" "${a[5]}"`, "[x][][y]"},
+		// Past the end rather than inside a gap — the same question.
+		{`a=(x y); set -- "${a[9]}"; echo "n=$#"`, "n=1"},
+		// A subscript on a name that was never an array at all.
+		{`set -- "${b[3]}"; echo "n=$#"`, "n=1"},
+		// A key nothing was stored under, where the subscript is a key.
+		{`typeset -A m; m[k]=v; set -- "${m[nokey]}"; echo "n=$#"`, "n=1"},
+		// Inside a larger word the field was never lost, which is why this
+		// went unnoticed for as long as it did.
+		{`a=(x); echo "[p${a[9]}q]"`, "[pq]"},
+	} {
+		out, st := runArray(t, c.src)
+		if got := strings.TrimSpace(out); got != c.want {
+			t.Errorf("%s = %q, want %q", c.src, got, c.want)
+		}
+		if st != 0 {
+			t.Errorf("%s: status = %d, want 0", c.src, st)
+		}
+	}
+}
+
+// The other side, and the reason the rule is about quoting rather than about
+// arrays: unquoted, an empty expansion is no field at all.
+func TestAnUnquotedGapIsNoField(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`a=(x); a[5]=y; set -- ${a[0]} ${a[1]} ${a[5]}; echo "n=$#"`, "n=2"},
+		{`set -- ${b[3]}; echo "n=$#"`, "n=0"},
+	} {
+		if out, _ := runArray(t, c.src); strings.TrimSpace(out) != c.want {
+			t.Errorf("%s = %q, want %q", c.src, strings.TrimSpace(out), c.want)
+		}
+	}
+}
+
+// How many fields a quoted *empty array* makes is a different question, and
+// the only one of the two a dialect answers. Asking that axis about a single
+// subscript is what made a gap disappear.
+func TestAQuotedEmptyArrayIsTheAxisAlone(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		one  Answer
+		want string
+	}{
+		{"no field", No, "n=0"},
+		{"one empty field", Yes, "n=1"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out := runEmptyArrayAxis(t, c.one, `a=(); set -- "${a[@]}"; echo "n=$#"`)
+			if out != c.want {
+				t.Errorf("got %q, want %q", out, c.want)
+			}
+			// A single subscript is one field under either answer, because
+			// the axis is not its question.
+			gap := runEmptyArrayAxis(t, c.one,
+				`a=(x); a[5]=y; set -- "${a[0]}" "${a[1]}" "${a[5]}"; echo "n=$#"`)
+			if gap != "n=3" {
+				t.Errorf("a gap gave %q under this answer, want n=3", gap)
+			}
+			// `[*]` joins, so a quoted one is a single field with nothing to
+			// join — unanimous, and so not the axis either.
+			star := runEmptyArrayAxis(t, c.one, `a=(); set -- "${a[*]}"; echo "n=$#"`)
+			if star != "n=1" {
+				t.Errorf("a star gave %q under this answer, want n=1", star)
+			}
+		})
+	}
+}
+
+// runEmptyArrayAxis runs src with EmptyArrayAtIsOneEmptyField set to answer.
+func runEmptyArrayAxis(t *testing.T, answer Answer, src string) string {
+	t.Helper()
+	out, _ := runGrammar(t, src, nil, func(r *Runner) {
+		sem := *r.Semantics
+		sem.EmptyArrayAtIsOneEmptyField = answer
+		r.Semantics = &sem
+	})
+	return strings.TrimSpace(out)
+}

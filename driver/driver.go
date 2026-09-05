@@ -31,7 +31,9 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/blairham/sh/internal/event"
 	"github.com/blairham/sh/internal/panicguard"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
@@ -128,6 +130,22 @@ type Shell struct {
 	//
 	// Called from more than one goroutine, exactly as Gate is.
 	Events interp.Sink
+
+	// Session identifies this run to everything that records it: the event
+	// stream carries it on every record, and so does anything else the front
+	// end writes about the same commands.
+	//
+	// Left empty it is filled in here, once, with a fresh identity. That is
+	// the point of it being the front end's: a run has more than one account
+	// of itself — an audit stream, and whatever a prompt keeps of what it ran
+	// — and those are joinable only if one value reaches both. Generated at
+	// the same place the streams and the name are defaulted, because that is
+	// the one point every route passes through before anything is built, so
+	// the Runner and the prompt cannot end up with different answers.
+	//
+	// A caller that has its own idea of a session — an agent protocol with
+	// several shells behind one connection — sets it and this leaves it alone.
+	Session string
 
 	// KeepProcess stops `exec cmd` from replacing this process, which a
 	// binary being a shell does not want and a test does.
@@ -267,6 +285,14 @@ func (sh Shell) withDefaults(argv []string) Shell {
 	// left as the fallback for a test or for an argv with nothing in it.
 	if len(argv) > 0 && argv[0] != "" {
 		sh.Name = argv[0]
+	}
+	if sh.Session == "" {
+		// One identity for the run, made here so that everything built from
+		// this Shell shares it. A shell that recorded its commands under one
+		// id and its accesses under another would produce two accounts of one
+		// session that look joinable and are not, which is worse than two that
+		// do not claim to be.
+		sh.Session = event.NewID(time.Now())
 	}
 	return sh
 }
@@ -781,6 +807,9 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// make impossible.
 		Gate:   sh.Gate,
 		Events: sh.Events,
+		// And which run this is, so every event it emits says so. Set beside
+		// the sink because it is only meaningful to something reading one.
+		Session: sh.Session,
 	}
 	r.Dir = sh.Dir
 	if r.Dir == "" {

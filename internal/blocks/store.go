@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/blairham/sh/internal/boundary"
+	"github.com/blairham/sh/internal/event"
 	"github.com/blairham/sh/internal/secret"
 )
 
@@ -378,10 +379,10 @@ func (s *Store) Find(ctx context.Context, name string, limit int) (Record, error
 // base32hex's alphabet begins with the ten digits, so an id *can* be all
 // digits — vanishingly unlikely and not impossible — and a rule that read only
 // the characters would one day resolve a real id as the twelfth-most-recent
-// block. An id is always exactly idLength characters and a recency number is
+// block. An id is always exactly event.IDLength characters and a recency number is
 // never that long, so the two sets do not meet.
 func recency(name string) (int, bool) {
-	if name == "" || len(name) >= idLength {
+	if name == "" || len(name) >= event.IDLength {
 		return 0, false
 	}
 	n := 0

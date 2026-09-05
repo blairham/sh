@@ -75,6 +75,13 @@ func TestReadingOnDoesNotInventAStatus(t *testing.T) {
 		{"and a failing one still fails", "{ fi; }\nfalse\n", 1},
 		{"with nothing after it the failure is what is left", "echo one\n{ fi; }\n", 9},
 		{"as it is when the bad line is the only one", "{ fi; }\n", 9},
+		// The line after the bad one exists and runs nothing, so the shell
+		// reaches the end still carrying the failure's status rather than
+		// being handed it on the way out. This is the row that says the
+		// status is *recorded* — without that, the two rows above would
+		// still pass on the return value alone.
+		{"and it is carried past a line that runs nothing", "{ fi; }\n\n", 9},
+		{"a comment being such a line too", "{ fi; }\n# nothing here\n", 9},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			_, _, code := runStdinProgram(t, parseFailureShell(true), c.program)
@@ -111,6 +118,22 @@ func TestReadingOnRecoversInsideAConstruct(t *testing.T) {
 	}
 	if code != 0 {
 		t.Errorf("status %d, want 0", code)
+	}
+}
+
+// And the route is the whole of the condition: the same three lines in a file,
+// or in a command string, stop the same shell whichever way the axis is
+// answered.
+func TestACommandStringStopsAtABadLineWhateverTheAnswer(t *testing.T) {
+	for _, readOn := range []bool{false, true} {
+		out, _, code := runArgs(t, parseFailureShell(readOn), "testsh", "-c",
+			"echo one\n{ fi; }\necho three\n")
+		if want := "one\n"; out != want {
+			t.Errorf("readOn=%v: output %q, want %q", readOn, out, want)
+		}
+		if code != 9 {
+			t.Errorf("readOn=%v: status %d, want 9", readOn, code)
+		}
 	}
 }
 

@@ -215,6 +215,7 @@ func Semantics() interp.Semantics {
 	// A status that carries a count rather than a verdict: two dead targets
 	// is 2.
 	s.ExitTrapRunsOnSignalDeath = interp.No
+	s.QuitIgnoredWhenNotInteractive = interp.Yes
 	// zsh alone: a bare `exit` there reports what the trap's own last
 	// command did, so `trap "false; exit" 0` exits 1.
 	s.ExitInTrapReportsEarlierStatus = interp.No

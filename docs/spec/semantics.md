@@ -402,6 +402,82 @@ almost every time. Making `kill` a builtin removed that accidental
 padding, and the same case with the recording mutated out fails three
 hundred times in three hundred rather than three.
 
+## Handing the death to the driver is not the same as dying
+
+Measured 2026-09-05 against bash 5.3, bash 3.2, dash, ksh93 and zsh, and
+against our four dialect binaries on macOS 15 and Linux. Corpus rows
+`signal-death/*`.
+
+Every shell in the panel dies *by* an untrapped fatal signal: HUP, INT,
+ILL, TRAP, ABRT, EMT, FPE, BUS, SEGV, SYS, PIPE, ALRM, TERM, USR1, USR2,
+XCPU, XFSZ, VTALRM and PROF all end the shell with `WIFSIGNALED` true and
+that signal in the status, and none of them writes a byte first. The
+default-ignored signals — CHLD, CONT, URG, WINCH, INFO — do nothing and
+the script carries on, unanimously.
+
+Ours did not, and the reason is worth writing down because it is a
+property of the language this is written in rather than of shells. The Go
+runtime installs a handler for nearly every signal at startup and decides
+for itself what to do with one nothing is listening for. It classifies
+them three ways, and only the first is what a shell wants:
+
+| the runtime's class | signals | what it did |
+| --- | --- | --- |
+| killing | HUP, INT, TERM | ran the default action — correct |
+| throwing | QUIT, ABRT, ILL, TRAP, SYS, and the fault signals | wrote a full goroutine dump to standard error and exited 2 |
+| everything else | USR1, USR2, ALRM, PIPE, XCPU, XFSZ, VTALRM, PROF | **discarded it**, so the shell never died at all |
+
+The third row was a hang, not a wrong answer: the shell had already
+stopped the script and was parked waiting to be killed, and nothing was
+going to kill it. It cost ten seconds of harness timeout per case.
+
+`signal.Reset` does not fix either half. It undoes a previous `Notify` or
+`Ignore`, and an untrapped signal was passed to neither, so there is
+nothing to undo and the runtime's handler stays installed. The
+disposition has to be put back to the kernel's default by asking the
+kernel — `driver/die_darwin.go` and `driver/die_linux.go`, one small
+platform file each — and only then raised. All nineteen signals above
+then behave as the panel does, in under ten milliseconds and in silence.
+
+Two general points fall out. The first is that **a hook that hands work
+to another layer has not been tested until that layer has been watched
+doing it**: `interp` was correct throughout, the seam was correct, and
+the shell still would not die. The second is that recording *which*
+signal killed a shell is what made any of this visible — a timeout and a
+death were the same row until the oracle kept the signal, and one of
+these cases was scoring as a match against zsh's real SIGUSR1 death while
+our shell was hanging.
+
+## The one fatal signal that is not fatal
+
+    kill -QUIT $$; echo after
+
+    bash 5.3  → after, exit 0        dash   → killed by SIGQUIT
+    bash 3.2  → killed by SIGQUIT    ksh93  → killed by SIGQUIT
+    zsh       → after, exit 0
+
+bash 5.3 and zsh take SIGQUIT's default action away and put nothing in
+its place; dash, ksh93 and bash 3.2 leave it alone. `Semantics.
+QuitIgnoredWhenNotInteractive`.
+
+Three things pin it down as an axis rather than an accident. It holds for
+a signal sent from *another process*, so it is a disposition and not a
+deferral. It disappears with `-i`: all five ignore an untrapped QUIT in an
+interactive shell, which is unanimous and therefore not an axis — the
+question is asked only of a shell that is not interactive. And a trap
+overrides it everywhere, so this is about the absence of a handler.
+
+The bash column is a reminder that a shell is a version as well as a
+name: 3.2 and 5.3 disagree here under one word, which is why the corpus
+records both builds and why `Semantics` fields are never named after a
+shell.
+
+Removing the handler again is a further question, and the two shells that
+ignore QUIT answer it differently: after `trap 'x' QUIT; trap - QUIT`,
+bash 5.3 still ignores the signal and zsh dies by it. Not modeled — POSIX
+says `trap -` restores the disposition the shell *inherited*, which makes
+both defensible, and nothing in the corpus asks yet.
+
 ## A second axis that is an ordering
 
 `exit` is not equally fussy about what it is given:

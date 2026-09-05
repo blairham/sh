@@ -2158,6 +2158,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cmd/function-posix-form` | `posix` | `posix` | `posix` | `posix` | `posix` | `posix` |
 | `cmd/function-keyword-form` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `kw` | `kw` | `kw` | `kw` | `kw` |
 | `cmd/function-keyword-and-parens` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `both` | `both` | `both` | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `both` |
+| `cmd/an-empty-brace-group` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `{ }; echo ok'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `{ }; echo ok'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `}'~<shell>: -c: line 0: `{ }; echo ok'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `}' unexpected` *(status 3)* | `ok` |
+| `cmd/an-empty-subshell` | **2>** `<shell>: 1: Syntax error: ")" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `)'~<shell>: -c: line 1: `( ); echo ok'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `)'~<shell>: -c: line 1: `( ); echo ok'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `)'~<shell>: -c: line 0: `( ); echo ok'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `)' unexpected` *(status 3)* | `ok` |
+| `cmd/an-empty-loop-body` | **2>** `<shell>: 1: Syntax error: "done" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `done'~<shell>: -c: line 1: `while false; do done; echo ok'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `done'~<shell>: -c: line 1: `while false; do done; echo ok'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `done'~<shell>: -c: line 0: `while false; do done; echo ok'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `done' unexpected` *(status 3)* | `ok` |
+| `cmd/an-empty-command-substitution` | `[] ok` | `[] ok` | `[] ok` | `[] ok` | `[] ok` | `[] ok` |
+| `cmd/a-case-with-no-arms` | `ok` | `ok` | `ok` | `ok` | **2>** `<shell>: syntax error at line 1: `;' unexpected` *(status 3)* | `ok` |
 | `cmd/close-brace-as-an-ordinary-word` | `}` | `}` | `}` | `}` | `}` | **2>** `<shell>:1: parse error near `}'` *(status 1)* |
 | `cmd/reserved-word-inside-a-brace-group` | **2>** `<shell>: 1: Syntax error: "do" unexpected (expecting "}")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `do'~<shell>: -c: line 1: `{ echo a; do :; done; }'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `do'~<shell>: -c: line 1: `{ echo a; do :; done; }'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `do'~<shell>: -c: line 0: `{ echo a; do :; done; }'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `do' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `do'` *(status 1)* |
 | `cmd/reserved-word-in-an-empty-brace-group` | **2>** `<shell>: 1: Syntax error: "fi" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `fi'~<shell>: -c: line 1: `{ fi; }'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `fi'~<shell>: -c: line 1: `{ fi; }'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `fi'~<shell>: -c: line 0: `{ fi; }'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `fi' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `fi'` *(status 1)* |
@@ -2388,6 +2393,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cmd/function-keyword-and-parens` — the hybrid is rejected by ksh93, where the keyword originated, so it is not core
   ```sh
   function f() { echo both; }; f
+  ```
+- `cmd/an-empty-brace-group` — a compound command's body may not be empty: dash, both bash builds and ksh93 refuse the brace group and name the `}` they met where a command belonged, and zsh alone takes it. The core is the language every shell accepts, so an empty body is outside it and a dialect adds it back rather than the core allowing what four shells reject
+  ```sh
+  { }; echo ok
+  ```
+- `cmd/an-empty-subshell` — the same rule with parentheses, which is what shows it is a rule about bodies rather than about braces — and it is not a `}` this time, so a shell that special-cased the brace would take it. The same four refuse and the same one takes it
+  ```sh
+  ( ); echo ok
+  ```
+- `cmd/an-empty-loop-body` — the keyword form of the same rule: `done` where a command belongs. Worth its own case because a loop's body has a terminator of its own, so a parser could reach the end of it without ever asking whether anything was in it
+  ```sh
+  while false; do done; echo ok
+  ```
+- `cmd/an-empty-command-substitution` — the counter-case, and the line the rule stops at: a command substitution's body is a whole program rather than a compound command's body, and every shell in the panel takes an empty one. Without it a shell could refuse every empty thing and look right on four cases out of four
+  ```sh
+  x=$( ); echo "[$x] ok"
+  ```
+- `cmd/a-case-with-no-arms` — the other line the rule stops at, and the panel splits the other way here: a `case` with no arms is a list of *arms* rather than a command list, and dash, bash and zsh take it where ksh93 alone refuses. Recorded so the empty-body rule is not quietly widened to cover it
+  ```sh
+  case x in esac; echo ok
   ```
 - `cmd/close-brace-as-an-ordinary-word` — `}` is reserved only where a command may begin in three of the four, so as an argument it is an ordinary brace — and in zsh it is reserved wherever a word may stand, which is a parse error here and is the same rule that lets `{ echo a }` close without a terminator
   ```sh

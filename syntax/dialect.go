@@ -459,6 +459,28 @@ type Dialect struct {
 	// rather than a special case inside brace groups.
 	CloseBraceAlwaysReserved bool
 
+	// EmptyCompoundBody lets a compound command stand with nothing in it:
+	// `{ }`, `( )`, `while cond; do done`, `if cond; then fi`, and the
+	// condition as well as the body — `if ; then :; fi`.
+	//
+	// zsh alone, and it is every shape rather than a rule about braces:
+	// measured with `-n`, so that a parse is told apart from a loop that
+	// never ends, dash, bash 5.3, bash 3.2 and ksh93 refuse all of them and
+	// zsh takes all of them.
+	//
+	// Off in the core, which is what the common denominator means here: the
+	// core is the language every panel shell accepts, and `{ }` is outside
+	// that set because four of the five refuse it. A dialect adds it back,
+	// which is the additive direction a grammar flag is for.
+	//
+	// Two neighbors are deliberately not this flag. A `case` with no arms —
+	// `case x in esac` — is a list of *arms* rather than a command list, and
+	// the panel splits the other way there: dash, bash and zsh take it and
+	// ksh93 alone refuses. A command substitution's body — `x=$( )` — is a
+	// whole program rather than a compound command's body, and every shell
+	// in the panel takes an empty one.
+	EmptyCompoundBody bool
+
 	// RegexTakesAlternation makes a bare `|` part of a `=~` operand rather
 	// than the end of the word. bash and ksh93 say yes, so `[[ ab =~ a|b ]]`
 	// matches there; zsh says no and reports a parse error. Parentheses are

@@ -186,6 +186,16 @@ type Case struct {
 	// Such a case is still worth recording: the divergence is real and the
 	// measurement documents it. It is simply not evidence about anybody's
 	// conformance, so it is not graded and not checked for drift.
+	//
+	// And not resampled. Neither of those two exemptions stopped `make
+	// oracle` from writing down whichever answer the coin gave, which was
+	// the *only* way such a row could move and made every move noise — a
+	// regeneration in a pull request about something else carrying a diff a
+	// reviewer then has to recognize and dismiss. So a regeneration keeps
+	// what is recorded for a marked row, per shell, for as long as the shell
+	// is the same build; see Run.KeepRacingRows, which also has the measured
+	// flip rates. To resample deliberately, delete the row from the golden
+	// record and regenerate.
 	ReferenceRaces bool
 
 	// Unfinished marks a case whose input is legitimately *unfinished* even
@@ -1519,7 +1529,7 @@ var Corpus = []Case{
 		ID: "xtrace/pipeline-order-diverges", Category: "shell options",
 		Snippet:        `set -x; echo a | cat`,
 		ReferenceRaces: true,
-		Why:            "ksh93 usually prints the last element first, which follows from its running that one in the current shell — but only usually: its two processes race to their trace points, 26 runs in 400 come out the other way, and that is a fact about ksh93 rather than about anything measured against it",
+		Why:            "ksh93 usually prints the last element first, which follows from its running that one in the current shell — but only usually: its two processes race to their trace points, 41 runs in 400 come out the other way. Nor is that ksh93's alone, which is what the row looked like until every column was counted rather than the loudest one: bash 5 reorders 5 times in 200, bash 3.2 once in 400 and zsh once in 200, so four of the six columns were seen to answer both ways and only dash held still. A pipeline's elements are separate processes and nothing sequences their trace points, so the order is the scheduler's and not the shell's — a fact about how the trace is emitted rather than about anything measured against it",
 	},
 	{
 		ID: "nounset/unset-variable-is-an-error", Category: "shell options",

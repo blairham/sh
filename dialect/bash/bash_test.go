@@ -586,3 +586,27 @@ func TestDollarDashStartupLetters(t *testing.T) {
 		t.Errorf("DefaultOptionLetters = %q, want %q", got, want)
 	}
 }
+
+// TestDollarSingleAnswers covers the three `$'…'` axes.
+//
+// The `\c` answer is the one that separates bash from ksh93, and only away
+// from the letters: both uppercase first and then agree over `@` through `_`,
+// so `$'\cA'` is 0x01 either way and `$'\c1'` is 0x11 here and `q` there.
+func TestDollarSingleAnswers(t *testing.T) {
+	s := bash.Semantics()
+	for _, tc := range []struct {
+		axis string
+		got  any
+		want any
+	}{
+		{"DollarSingleBackslashC", s.DollarSingleBackslashC, interp.DollarSingleControlMasked},
+		{"DollarSingleUnknownEscape", s.DollarSingleUnknownEscape, interp.DollarSingleUnknownKeepsBackslash},
+		// C-string semantics: `$'a\0b'` is `a`, and the length of what was
+		// assigned is 1.
+		{"DollarSingleNulTruncates", s.DollarSingleNulTruncates, interp.Yes},
+	} {
+		if tc.got != tc.want {
+			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)
+		}
+	}
+}

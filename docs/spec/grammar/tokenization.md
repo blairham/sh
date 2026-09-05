@@ -88,10 +88,13 @@ Grammar flag: `DollarDoubleQuote` — core: off; `bash` and `ksh`: on.
 `$'...'` is single quotes with one difference: backslash escapes decode.
 `shell-matrix.md` records the form as core — bash, ksh93 and zsh all
 have it, and dash keeps every character literally, `$` included. The
-corpus pins the load-bearing failure mode
-(`core/dollar-single-expands-escapes`: the quoting was once recorded and
-nothing decoded it); the full set below was measured escape by escape on
-2026-09-04, same panel and machine as `shell-matrix.md`.
+form is core; the table it decodes is not one decision but several, and
+the whole set below was measured escape by escape on 2026-09-05, same
+panel and machine as `shell-matrix.md`. The corpus pins its shape: `\t`
+(`core/dollar-single-expands-escapes`, the load-bearing failure mode —
+the quoting was once recorded and nothing decoded it), `\e`, `\xHH`,
+`\NNN`, the code-point pair, `\cX` twice, the NUL, and an escape with no
+meaning.
 
 Unanimous across bash 3.2, bash 5.3, ksh93 and zsh, and decoded here:
 
@@ -103,6 +106,11 @@ Unanimous across bash 3.2, bash 5.3, ksh93 and zsh, and decoded here:
 | `\xHH` | the byte, one or two hex digits — `$'\x4'` is 0x04 |
 | `\NNN` | the byte, one to three octal digits — `$'\101'` is `A` |
 
+The octal form is one rule and not two: `\0101` is three digits counted
+from the zero onward, so it is a backspace and then a `1` rather than
+0x41. A value past a byte wraps into one — `$'\400'` is a zero byte,
+which is the truncation rule below and not a separate answer.
+
 Two escapes are decoded here on the current shells' agreement, with
 bash 3.2 keeping the text as written — dated, not vetoed, per
 `../core.md`:
@@ -112,24 +120,58 @@ bash 3.2 keeping the text as written — dated, not vetoed, per
 | `\uHHHH` | the code point, up to four hex digits, as UTF-8 | literal |
 | `\UHHHHHHHH` | the same, up to eight digits | literal (as `sh` and as `bash` alike) |
 
-Two decisions are recorded because the panel splits, and each follows
-bash:
+**What a shell does with a code point outside ASCII depends on the
+locale.** Under `LC_ALL=C`, bash 5.3 prints `$'é'` as the eight
+characters it was written as and zsh refuses it — `character not in
+range` — where in a UTF-8 locale both encode it. The corpus case stays
+inside ASCII for that reason; ours encodes as UTF-8 whatever the locale,
+which is a divergence recorded rather than fixed here.
 
-- **An escape with no meaning keeps both characters.** `$'\q'` is `\q`
-  in bash (3.2 and 5.3); ksh93 and zsh drop the backslash and keep the
-  `q`. Ours keeps both — dropping the backslash destroys information,
-  and the dominant scripting target keeps it.
+Three places the panel splits, and each is an axis on the semantics
+vector rather than a decision taken here:
+
+- **`\cX`, the control character** — `DollarSingleBackslashC`. bash and
+  ksh93 decode it and zsh has no such escape at all, so `$'\cA'` is
+  0x01, 0x01 and `cA`. The two that decode use *different arithmetic*,
+  which is invisible over letters: both uppercase the character first,
+  and then bash keeps its low five bits where ksh93 toggles bit 6. Those
+  agree over `@` through `_` — every letter and six symbols — and part
+  everywhere else, so `$'\c1'` is 0x11 in bash and `q` in ksh93. bash
+  5.3 special-cases `\c?` as DEL; bash 3.2 has no such case and gives
+  0x1f, the plain mask.
+- **An escape with no meaning** — `DollarSingleUnknownEscape`. `$'\q'`
+  is `\q` in bash (3.2 and 5.3) and `q` in ksh93 and zsh. This was a
+  recorded decision following bash until `\cX` made it answerable: zsh
+  reaches the rule *through* `\c`, so pinning `$'\cA'` for zsh pins this
+  too, and one of them had to become an axis for the other to be right.
+- **A NUL ends the text** — `DollarSingleNulTruncates`. bash and ksh93
+  hold a word as a C string, so `$'a\0b'` is `a` and `${#x}` is 1; zsh
+  counts its strings and keeps all three bytes. What ends is the *span*
+  and not the word — `$'a\0b'ccc` is `accc` — and every road to a zero
+  byte takes it: `\0`, `\x00`, `\u0000`, an octal value past a byte, and
+  `\c@`.
+
+One decision is still recorded rather than made an axis, because nothing
+reaches it through another rule:
+
 - **`\x` with no digit after it stays literal.** bash keeps `\xzz` as
   written; zsh reads a zero byte and keeps the `zz`; ksh93 emits a byte
   of its own. Ours is bash's answer, and the same rule covers a
   digitless `\u` and `\U`.
 
-One escape is measured and deliberately not decoded: **`\cX`**, the
-control character, which bash and ksh93 decode (`$'\cA'` is 0x01) and
-zsh treats as unknown. Ours treats it as unknown too — both characters
-kept — recorded here so the gap is a decision rather than an oversight;
-a script that needs a control character has `\x01` in every shell that
-has the form at all.
+**What `\c` applies to also differs, when the argument is itself an
+escape**, and it follows the same axis. bash takes the raw byte —
+`$'\c\t'` is control-backslash and then a `t` — with the one exception
+that a doubled backslash is read as the single character it stands for.
+ksh93 decodes first, so the same text is control-tab. It is the one
+place `DollarSingleBackslashC` decides more than arithmetic.
+
+One measured divergence is deliberately not implemented, recorded so the
+gap is a decision rather than an oversight:
+
+- **How many hex digits `\x` reads.** bash and zsh stop at two; ksh93
+  does not, so `$'\x00b'` is one byte 0x0b there and a truncating NUL in
+  bash. Ours stops at two everywhere.
 
 The form is specified here because it is a *quoting* rule: the decoded
 text is a *quoted span*, so no later stage splits or globs it —

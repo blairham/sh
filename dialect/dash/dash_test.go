@@ -463,3 +463,25 @@ func TestDollarDashStartupLetters(t *testing.T) {
 		t.Errorf("DefaultOptionLetters = %q, want empty", got)
 	}
 }
+
+// TestDollarSingleIsAbsent: dash has no `$'…'` at all, so the three axes that
+// say what its escapes mean are left unanswered on purpose.
+//
+// The grammar is what refuses the form, and the two facts belong in one test:
+// an answer here would be an invention, and it would also be unreachable,
+// which is the shape a wrong answer hides in.
+func TestDollarSingleIsAbsent(t *testing.T) {
+	if dash.Dialect().DollarSingleQuote {
+		t.Error("DollarSingleQuote is set, but dash reads $'a\\tb' as written")
+	}
+	s := dash.Semantics()
+	if got := s.DollarSingleBackslashC; got != interp.DollarSingleControlUnspecified {
+		t.Errorf("DollarSingleBackslashC = %v, want unspecified", got)
+	}
+	if got := s.DollarSingleUnknownEscape; got != interp.DollarSingleUnknownUnspecified {
+		t.Errorf("DollarSingleUnknownEscape = %v, want unspecified", got)
+	}
+	if got := s.DollarSingleNulTruncates; got != interp.Unspecified {
+		t.Errorf("DollarSingleNulTruncates = %v, want unspecified", got)
+	}
+}

@@ -4,6 +4,7 @@
 package repl
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,8 +33,8 @@ func blockShell(t *testing.T, script string, vars map[string]string) (Shell, str
 	if _, ok := vars["HISTFILE"]; !ok {
 		vars["HISTFILE"] = filepath.Join(dir, "hist")
 	}
-	if _, ok := vars[blocksDirVar]; !ok {
-		vars[blocksDirVar] = store
+	if _, ok := vars[blocks.DirVar]; !ok {
+		vars[blocks.DirVar] = store
 	}
 	r := newTestRunner(vars)
 	r.Dir = dir
@@ -168,7 +169,7 @@ func TestAnEmptyHISTFILETurnsBlocksOffToo(t *testing.T) {
 	dir := t.TempDir()
 	store := filepath.Join(dir, "blocks")
 	sh, _, done := blockShell(t, ":\n", map[string]string{
-		"HISTFILE": "", blocksDirVar: store,
+		"HISTFILE": "", blocks.DirVar: store,
 	})
 	defer done()
 	if _, err := sh.Run(t.Context()); err != nil {
@@ -185,7 +186,7 @@ func TestAnEmptyBlocksDirTurnsOnlyBlocksOff(t *testing.T) {
 	dir := t.TempDir()
 	hist := filepath.Join(dir, "hist")
 	sh, _, done := blockShell(t, ":\n", map[string]string{
-		"HISTFILE": hist, blocksDirVar: "",
+		"HISTFILE": hist, blocks.DirVar: "",
 	})
 	defer done()
 	if _, err := sh.Run(t.Context()); err != nil {
@@ -245,5 +246,119 @@ func TestTheLineFileIsUntouched(t *testing.T) {
 	}
 	if got := read(t, store); len(got) != 1 {
 		t.Errorf("the index holds %d records, want the one block", len(got))
+	}
+}
+
+// With capture on, a block keeps what it printed — and the person still sees
+// it, because the copy is the addition rather than a diversion.
+func TestABlockKeepsWhatItPrinted(t *testing.T) {
+	sh, store, done := blockShell(t, "echo one\necho two\n", map[string]string{
+		blocks.OutputVar: "1",
+	})
+	defer done()
+	var out strings.Builder
+	sh.Runner.Stdout = &out
+	if _, err := sh.Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "one\ntwo\n" {
+		t.Errorf("the session printed %q, want both lines on the stream", out.String())
+	}
+	got := read(t, store)
+	if len(got) != 2 {
+		t.Fatalf("recorded %d blocks", len(got))
+	}
+	reader := blocks.Open(store, boundary.Boundary{}, "READER")
+	for i, want := range []string{"one\n", "two\n"} {
+		if got[i].Output == "" {
+			t.Fatalf("block %d kept no output", i)
+		}
+		if got[i].OutputBytes != int64(len(want)) || got[i].Truncated {
+			t.Errorf("block %d reports %d bytes, truncated %v",
+				i, got[i].OutputBytes, got[i].Truncated)
+		}
+		if got[i].Streams != blocks.StreamsMerged {
+			t.Errorf("block %d says streams %q", i, got[i].Streams)
+		}
+		body, ok := reader.Body(t.Context(), got[i])
+		if !ok || body != want {
+			t.Errorf("block %d body is %q, %v — want %q", i, body, ok, want)
+		}
+	}
+}
+
+// One block's output does not leak into the next.
+func TestOutputDoesNotLeakBetweenBlocks(t *testing.T) {
+	sh, store, done := blockShell(t, "echo one\n:\n", map[string]string{
+		blocks.OutputVar: "1",
+	})
+	defer done()
+	sh.Runner.Stdout = &strings.Builder{}
+	if _, err := sh.Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	got := read(t, store)
+	if len(got) != 2 {
+		t.Fatalf("recorded %d blocks", len(got))
+	}
+	if got[1].Output != "" || got[1].OutputBytes != 0 {
+		t.Errorf("the silent block kept %q, %d bytes", got[1].Output, got[1].OutputBytes)
+	}
+}
+
+// Both of a command's streams reach one body, in write order. Two files would
+// lose the interleaving, which is often the information.
+func TestBothStreamsReachOneBody(t *testing.T) {
+	sh, store, done := blockShell(t, "{ echo out; echo err >&2; }\n", map[string]string{
+		blocks.OutputVar: "1",
+	})
+	defer done()
+	sh.Runner.Stdout, sh.Runner.Stderr = &strings.Builder{}, &strings.Builder{}
+	if _, err := sh.Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	got := read(t, store)
+	if len(got) != 1 {
+		t.Fatalf("recorded %d blocks", len(got))
+	}
+	body, ok := blocks.Open(store, boundary.Boundary{}, "READER").Body(t.Context(), got[0])
+	if !ok || body != "out\nerr\n" {
+		t.Errorf("body is %q, %v — want both streams in write order", body, ok)
+	}
+}
+
+// Off by default, because a captured stream is not a terminal to the child on
+// the other end of it. The command half still runs.
+func TestOutputIsNotKeptUnlessAsked(t *testing.T) {
+	sh, store, done := blockShell(t, "echo one\n", nil)
+	defer done()
+	if sh.captureOutput() != nil {
+		t.Fatal("a session with nothing set is capturing")
+	}
+	if _, err := sh.Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	got := read(t, store)
+	if len(got) != 1 {
+		t.Fatalf("recorded %d blocks", len(got))
+	}
+	if got[0].Output != "" || got[0].OutputBytes != 0 || got[0].Streams != "" {
+		t.Errorf("a session that was not asked kept %+v", got[0])
+	}
+}
+
+// With capture off the Runner keeps the streams it was given, which is the
+// whole reason it is off: an *os.File is inherited by a child as a descriptor
+// and anything else makes os/exec build a pipe.
+func TestWithoutCaptureTheStreamsAreLeftAlone(t *testing.T) {
+	sh, _, done := blockShell(t, ":\n", nil)
+	defer done()
+	var out strings.Builder
+	sh.Runner.Stdout = &out
+	if c := sh.captureOutput(); c != nil {
+		t.Fatal("a capture was installed without being asked for")
+	}
+	if sh.Runner.Stdout != io.Writer(&out) {
+		t.Error("the Runner's stream was replaced anyway")
 	}
 }

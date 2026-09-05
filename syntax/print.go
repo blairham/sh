@@ -335,6 +335,31 @@ func (p *printer) command(c Command) {
 		p.body(x.Body, true)
 		p.keyword("done")
 		p.redirs(x.Redirs)
+	case *AnonFunc:
+		// Printed as it was written: there is no long spelling, because a
+		// function with no name cannot be defined in one place and called in
+		// another.
+		if x.Keyword {
+			p.str("function ")
+		} else {
+			p.str("() ")
+		}
+		p.command(x.Body)
+		for _, a := range x.Args {
+			p.str(" ")
+			p.word(a)
+		}
+		p.redirs(x.Redirs)
+	case *RepeatClause:
+		// Printed with `do … done`, which parses to the same tree under any
+		// dialect that has the construct at all — the same choice a short
+		// loop body already makes.
+		p.str("repeat ")
+		p.word(x.Count)
+		p.doKeyword()
+		p.body(x.Body, true)
+		p.keyword("done")
+		p.redirs(x.Redirs)
 	case *SelectClause:
 		p.str("select " + x.Name)
 		if len(x.Body) == 0 {

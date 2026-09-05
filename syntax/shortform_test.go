@@ -17,7 +17,7 @@ import (
 // would test the family through a brace rule it never meets in practice.
 func short() syntax.Dialect {
 	d := syntax.Core()
-	d.ShortLoop = true
+	d.ShortForm = true
 	d.CloseBraceAlwaysReserved = true
 	return d
 }
@@ -233,7 +233,7 @@ func TestTheParenthesizedListIsTheInList(t *testing.T) {
 // /tmp/fa and /tmp/fb, so the redirection ran twice with `$i` set and is the
 // body; `for i (a b) { echo hi } > /tmp/f$i` writes /tmp/f, so that one was
 // expanded once before the loop and is the loop's.
-func TestAShortLoopTakesARedirection(t *testing.T) {
+func TestAShortFormTakesARedirection(t *testing.T) {
 	for _, c := range []struct {
 		src       string
 		onTheLoop int
@@ -314,7 +314,7 @@ func TestTheShortFamilyNeedsTheFlag(t *testing.T) {
 		"select x (a b) do echo $x; done",
 	} {
 		if _, err := syntax.Parse(src, syntax.Core()); err == nil {
-			t.Errorf("%q parsed without ShortLoop, want a syntax error", src)
+			t.Errorf("%q parsed without ShortForm, want a syntax error", src)
 		}
 	}
 	for _, src := range []string{
@@ -326,7 +326,7 @@ func TestTheShortFamilyNeedsTheFlag(t *testing.T) {
 		"select x in a b; do echo $x; done",
 	} {
 		if _, err := syntax.Parse(src, syntax.Core()); err != nil {
-			t.Errorf("%q no longer parses without ShortLoop: %v", src, err)
+			t.Errorf("%q no longer parses without ShortForm: %v", src, err)
 		}
 	}
 }
@@ -338,7 +338,7 @@ func TestTheShortFamilyNeedsTheFlag(t *testing.T) {
 // back parses, and printing it again gives the same text. The corpus cannot
 // ask them here, because it round-trips under Core and every case below is a
 // syntax error there.
-func TestPrintingAShortLoop(t *testing.T) {
+func TestPrintingAShortForm(t *testing.T) {
 	for _, c := range []struct{ src, want string }{
 		// A body that was written short has a long spelling and gets it. The
 		// text is not the input and is not meant to be; the tree is.

@@ -130,7 +130,7 @@ func TestASeparatedListStillParses(t *testing.T) {
 // separator reaching the enclosing list.
 func TestAShortBodySTerminatorTerminatesTheLoopToo(t *testing.T) {
 	d := syntax.Core()
-	d.ShortLoop = true
+	d.ShortForm = true
 	d.ForBraceBody = true
 	d.CloseBraceAlwaysReserved = true
 	d.ArithCommand = true

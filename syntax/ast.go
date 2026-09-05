@@ -412,6 +412,50 @@ func (c *SelectClause) Pos() Pos     { return c.Start }
 func (c *SelectClause) End() Pos     { return c.Stop }
 func (c *SelectClause) commandNode() {}
 
+// AnonFunc is `() { … }` — a function with no name, defined and run where it
+// stands, with the words after its body as its positional parameters.
+//
+// A function rather than a group, and the difference is observable: `local`
+// inside one is local, `$#` counts the words after the body, and a `return`
+// leaves it. Only the *name* is missing, which is why its own frame reports
+// one the shell invents.
+type AnonFunc struct {
+	Body Command
+	// Args are the words after the body, which become the positional
+	// parameters of the call.
+	Args  []*Word
+	Start Pos
+	// Keyword records that the `function` word was used in place of the
+	// empty parameter list, which is the other spelling.
+	Keyword bool
+	redirs
+}
+
+func (c *AnonFunc) Pos() Pos     { return c.Start }
+func (c *AnonFunc) End() Pos     { return c.Body.End() }
+func (c *AnonFunc) commandNode() {}
+
+// RepeatClause is `repeat N; do … done`, and the shorter spellings the same
+// dialect gives every loop.
+//
+// A count rather than a condition, which is what makes it a construct of its
+// own rather than a `for` in disguise: the word is evaluated as an arithmetic
+// expression once, before the first iteration, and a count that is not a
+// number or is not positive runs the body no times at all.
+type RepeatClause struct {
+	Count *Word
+	Body  []*Stmt
+	// Header is `repeat N` as written. See ForClause.Header.
+	Header string
+	Start  Pos
+	Stop   Pos
+	redirs
+}
+
+func (c *RepeatClause) Pos() Pos     { return c.Start }
+func (c *RepeatClause) End() Pos     { return c.Stop }
+func (c *RepeatClause) commandNode() {}
+
 // CoprocClause is `coproc [NAME] command`: the command runs in the
 // background with a pipe on each of its named streams, and the shell keeps
 // the near ends in the array the name names.

@@ -50,6 +50,9 @@ func Dialect() syntax.Dialect {
 	// $i; i=$((i+1)) }` counts up without stopping here, which is what says
 	// so.
 	d.ShortLoop = true
+	// The same reach: a body may have nothing in it — `{ }`, `( )`, `while
+	// cond; do done`, and a condition too. Every shape, and this shell alone.
+	d.EmptyCompoundBody = true
 	// Floating point, which POSIX has not and these two do.
 	d.ArithFloat = true
 	// A bare `(a|b)` inside a pattern word, which makes `@(abc|xyz)` a

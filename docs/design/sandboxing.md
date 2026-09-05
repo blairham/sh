@@ -157,15 +157,94 @@ is matched as `/etc/x` and a `..` cannot be used to walk out of a
 pattern.
 
 **Symlinks defeat a name-based rule, and this is a real limit.** The
-gate matches names; it does not resolve links, and it could not do so
-honestly — resolving would mean the policy performing filesystem reads
-of its own, outside the boundary, and the answer would still be a
-time-of-check race. So `deny read /etc/**` does not stop
-`cat /tmp/link` where `/tmp/link` points into `/etc`, unless `/tmp` was
-not allowed in the first place. The mitigation is the posture: allow a
-subtree you control rather than deny one you do not. The general
-solution is an OS backend that enforces on the resolved inode, which is
-above this layer.
+gate matches names; it does not resolve links *when a decision is made*,
+and it could not do so honestly — resolving there would mean the policy
+performing filesystem reads of its own, outside the boundary, and the
+answer would still be a time-of-check race, because an attacker's link
+can be replaced between the check and the open. So `deny read /etc/**`
+does not stop `cat /tmp/link` where `/tmp/link` points into `/etc`,
+unless `/tmp` was not allowed in the first place. The mitigation is the
+posture: allow a subtree you control rather than deny one you do not.
+The general solution is an OS backend that enforces on the resolved
+inode, which is above this layer.
+
+### Platform aliases are expanded once, when the rule is read
+
+One case looks like the limit above and is not, and it is worth
+separating carefully because the two answers are opposite.
+
+On macOS `/tmp` is a symbolic link to `/private/tmp`. Always, on every
+machine, installed by the operating system, and not something a script
+can change. So `deny path /tmp/**` — written by somebody using the name
+they type every day — was a rule a shell that had resolved the path
+walked straight past: `cd -P /tmp` puts the Runner's directory at
+`/private/tmp`, and every access from there reaches the gate under the
+other name. *The policy matched nothing*, which from outside is
+indistinguishable from *the policy allowed it*.
+
+There is no attacker in that and no filesystem read behind it, so it is
+answerable **when the rule is parsed** rather than when a decision is
+made. A pattern under a platform alias gains the other spelling beside
+it, from a table that is a compile-time constant, and the rule matches
+either. Per decision this costs one more pattern comparison and no
+system call at all, and there is no time-of-check race because nothing
+is looked up.
+
+**Both spellings are kept, rather than rewriting to the physical one.**
+That is what an OS backend does and it would be wrong here, because the
+two match different things. A backend matches *objects* — by the time
+the kernel decides, the name is gone. This matches *names as the
+interpreter presents them*, and the interpreter does not resolve links:
+`cat /tmp/x` arrives as `/tmp/x` and `cd -P /tmp; cat x` arrives as
+`/private/tmp/x`. Rewriting would close the second hole by opening the
+first. Keeping both is strictly a widening — no rule stops covering
+anything it covered before — which is what makes it safe to apply to
+policies already written.
+
+**The table is only what a platform ships unconditionally.** macOS has
+three: `/tmp`, `/var` and `/etc`, each into `/private`, in both
+directions. Everywhere else the table is empty, and that is a claim
+rather than a gap: a distribution merging `/bin` into `/usr/bin` is a
+*distribution's* arrangement, absent on machines that predate or decline
+it, and a table that assumed it would make one policy file mean two
+things with nothing in the file to say so. An ordinary symbolic link
+somebody made stays the recorded limit above.
+
+**What a rule normalized to is reported**, because a rule whose meaning
+is not in the file is a rule nobody can review. `cmd/sh` prints one line
+per normalized rule under `-trace-events` — the flag whose job is
+showing what the boundary is doing — and nothing at all otherwise:
+
+    policy: deny path /tmp/secrets/** (also /private/tmp/secrets/**)
+
+It is not prefixed `trace:`, because it is not an event. An event is
+something the shell did; this is something the policy is.
+
+#### What the enforcement backends do, measured
+
+Both backends a real sandbox would delegate to resolve at
+rule-*creation* time, which is the same answer arrived at from the
+kernel's side, and it is why this is the load-time question rather than
+the per-decision one.
+
+**Landlock** (Linux) never takes a pathname. A rule is an `O_PATH`
+descriptor handed to `landlock_add_rule`, so the name is resolved once
+while the ruleset is being built and the rule thereafter follows the
+object. There is no name left to resolve when a decision is made.
+
+**Seatbelt** (macOS) takes a path string, and measured with
+`sandbox-exec` on Darwin 25.5.0:
+
+| profile rule | access via `/tmp/x` | access via `/private/tmp/x` |
+| --- | --- | --- |
+| `(deny file-read* (subpath "/tmp/x"))` | allowed | allowed |
+| `(deny file-read* (subpath "/private/tmp/x"))` | refused | refused |
+
+So the alias failure is not ours alone: **a Seatbelt profile written
+with `/tmp` protects nothing either**, and one written with
+`/private/tmp` covers both spellings. A policy that disagreed with the
+kernel it delegates to would be worse than either, and this is the case
+where agreement was available.
 
 `cd -P` and `pwd -P` are the exception that shows the shape, and it is
 already handled: those walk each component through the gate rather than

@@ -581,6 +581,42 @@ func (p *Parser) parseListUntil(stopWhereTheListEnds bool) []*Stmt {
 	return out
 }
 
+// parseBody is parseList where the grammar requires the list to have
+// something in it, which is every compound command's body and every
+// condition — but not a `case` arm, whose body may be empty in all four, and
+// not a command substitution, which is a program rather than a body.
+//
+// The check is here rather than in parseList because parseList is also how
+// the places that *may* be empty read their contents, and because the answer
+// is one answer: an empty body is refused by dash, bash and ksh93 in every
+// shape and taken by zsh in every shape, so a shell asks once.
+//
+// The token the parser stopped on is what is named, which is what the panel
+// names: `}` for a brace group, `)` for a subshell, `fi` and `done` for the
+// keyword forms. Nothing is named as expected alongside it — an empty body
+// has nothing to be in the middle of, which is the same distinction
+// parseGroup already draws for a reserved word it cannot use.
+func (p *Parser) parseBody() []*Stmt {
+	return p.requireBody(p.parseList())
+}
+
+// requireBody is parseBody for a caller that read its list some other way —
+// a loop header, where whether the list stops at the body is a dialect's
+// answer of its own.
+func (p *Parser) requireBody(list []*Stmt) []*Stmt {
+	if len(list) != 0 || p.dialect.EmptyCompoundBody || p.err != nil {
+		return list
+	}
+	if p.at(TokEOF) {
+		// The input ran out rather than the body being empty, and what is
+		// waiting for more is the caller's to report — it knows which
+		// construct is open.
+		return list
+	}
+	p.failUnexpected("")
+	return list
+}
+
 // parseStmt reads one and-or list and its terminator.
 func (p *Parser) parseStmt() *Stmt {
 	expr := p.parseAndOr()
@@ -1437,7 +1473,7 @@ func (p *Parser) parseSubshell() Command {
 	c := &Subshell{Start: p.tok.Pos}
 	defer p.opens("(")()
 	p.next()
-	c.List = p.parseList()
+	c.List = p.parseBody()
 	if !p.at(TokRightParen) {
 		p.fail("expected )")
 		return c
@@ -1455,7 +1491,7 @@ func (p *Parser) parseGroup(funcBody bool) Command {
 	}
 	defer p.opens(word)()
 	p.next()
-	c.List = p.parseList()
+	c.List = p.parseBody()
 	if !p.atWord("}") {
 		if p.at(TokEOF) {
 			p.ranOut()
@@ -1576,7 +1612,7 @@ func (p *Parser) parseForArith(start Pos) Command {
 	p.requireSep("do")
 	p.opensClause("do")
 	p.expectWord("do")
-	c.Body = p.parseList()
+	c.Body = p.parseBody()
 	c.Stop = p.tok.End
 	p.expectWord("done")
 	return c
@@ -1654,30 +1690,30 @@ func (p *Parser) parseIf() Command {
 	c := &IfClause{Start: p.tok.Pos}
 	defer p.opens("if")()
 	p.next()
-	c.Cond = p.parseList()
+	c.Cond = p.parseBody()
 	p.requireSep("then")
 	// Recorded after it is consumed: until then the innermost thing awaiting
 	// a partner is the `if` itself, which is what one shell names for
 	// `if true` and not for `if true; then echo x`.
 	p.opensClause("then")
 	p.expectWord("then")
-	c.Then = p.parseList()
+	c.Then = p.parseBody()
 
 	for p.atWord("elif") && p.err == nil {
 		e := &Elif{Start: p.tok.Pos}
 		p.opensClause("elif")
 		p.next()
-		e.Cond = p.parseList()
+		e.Cond = p.parseBody()
 		p.requireSep("then")
 		p.expectWord("then")
-		e.Then = p.parseList()
+		e.Then = p.parseBody()
 		c.Elifs = append(c.Elifs, e)
 	}
 	if p.atWord("else") {
 		p.opensClause("else")
 		p.next()
 		c.HasElse = true
-		c.Else = p.parseList()
+		c.Else = p.parseBody()
 	}
 	c.Stop = p.tok.End
 	p.expectWord("fi")
@@ -1688,7 +1724,7 @@ func (p *Parser) parseLoop() Command {
 	c := &LoopClause{Until: p.atWord("until"), Start: p.tok.Pos}
 	defer p.opens(loopWord(c.Until))()
 	p.next()
-	c.Cond = p.parseListUntil(p.dialect.ShortLoop)
+	c.Cond = p.requireBody(p.parseListUntil(p.dialect.ShortLoop))
 	// Where the body may be short, the condition list is the whole header and
 	// it has just ended: what stands here is either `do`, or the body, or
 	// nothing. The list is what decides — a `;` kept it going, so anything
@@ -1705,7 +1741,7 @@ func (p *Parser) parseLoop() Command {
 	// shell rather than in this one, recorded rather than smoothed over.
 	p.opensClause("do")
 	p.expectWord("do")
-	c.Body = p.parseList()
+	c.Body = p.parseBody()
 	c.Stop = p.tok.End
 	p.expectWord("done")
 	return c
@@ -1775,7 +1811,7 @@ func (p *Parser) parseFor() Command {
 		return c
 	}
 	p.expectWord("do")
-	c.Body = p.parseList()
+	c.Body = p.parseBody()
 	c.Stop = p.tok.End
 	p.expectWord("done")
 	return c
@@ -1881,7 +1917,7 @@ func (p *Parser) parseSelect() Command {
 		return c
 	}
 	p.expectWord("do")
-	c.Body = p.parseList()
+	c.Body = p.parseBody()
 	c.Stop = p.tok.End
 	p.expectWord("done")
 	return c

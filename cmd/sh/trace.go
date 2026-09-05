@@ -53,12 +53,14 @@ import (
 // untidy in exactly the way that later reads as a leak.
 func installSeams(sh driver.Shell, own ownFlags, w io.Writer) (driver.Shell, io.Closer, error) {
 	var g gates
+	var normalized []*policy.Policy
 	if len(own.deny) > 0 {
 		d, err := denyRules(own.deny)
 		if err != nil {
 			return sh, nil, err
 		}
 		g = append(g, d)
+		normalized = append(normalized, d)
 	}
 	if own.policy != "" {
 		p, err := loadPolicy(own.policy)
@@ -66,6 +68,17 @@ func installSeams(sh driver.Shell, own ownFlags, w io.Writer) (driver.Shell, io.
 			return sh, nil, err
 		}
 		g = append(g, p)
+		normalized = append(normalized, p)
+	}
+	if own.traceEvents {
+		// Under the flag whose whole job is showing what the boundary is
+		// doing, and nowhere else. A rule that quietly covers a second path is
+		// a rule whose meaning is not in the file, and on a platform where
+		// `/tmp` is another name for `/private/tmp` that is every rule about
+		// either. Printing it on every run would be a shell that chatters; not
+		// printing it anywhere would be a policy that means something the
+		// person cannot read back.
+		reportNormalized(w, normalized)
 	}
 	var s sinks
 	if own.traceEvents {
@@ -98,6 +111,23 @@ func installSeams(sh driver.Shell, own ownFlags, w io.Writer) (driver.Shell, io.
 		sh.Events = s
 	}
 	return sh, closer, nil
+}
+
+// reportNormalized says what a rule turned into, for the rules that turned into
+// anything.
+//
+// Silent for a policy that named no platform alias, which is every policy on a
+// system that has none — so this is a line an operator sees exactly when there
+// is something about their own file they could not have known from reading it.
+func reportNormalized(w io.Writer, ps []*policy.Policy) {
+	for _, p := range ps {
+		for _, r := range p.Normalized() {
+			// Not prefixed "trace:", because it is not an event: an event is
+			// something the shell did, and this is something the policy is.
+			// The prefix is what a consumer filters on.
+			_, _ = fmt.Fprintf(w, "policy: %s\n", r)
+		}
+	}
 }
 
 // traceSink prints every event to a writer, one line each.
@@ -205,7 +235,7 @@ func formatEvent(e interp.Event) string {
 // matches zero or more components, so it covers /etc itself and everything
 // beneath. Globs work in it, which they did not before — that follows from
 // there being one pattern language rather than two.
-func denyRules(values []string) (interp.Gate, error) {
+func denyRules(values []string) (*policy.Policy, error) {
 	rules := make([]policy.Rule, 0, len(values))
 	for _, v := range values {
 		r, err := policy.ParseRule(interp.Deny, denyBody(v))

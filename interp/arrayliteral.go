@@ -85,7 +85,7 @@ func (r *Runner) assignArrayLiteral(name string, elems []*syntax.Word, appendTo 
 			}
 			continue
 		}
-		idx, err := r.writtenSubscript(e.sub)
+		idx, err := r.subscriptValue(e.sub)
 		if err != nil {
 			r.diagf("%s: bad array subscript\n", name)
 			continue
@@ -134,22 +134,4 @@ func isDecimalSubscript(s string) bool {
 	}
 	_, err := strconv.Atoi(s)
 	return err == nil
-}
-
-// writtenSubscript evaluates a subscript a script assigned *through*, which is
-// an arithmetic expression and not only a numeral: `a[1+1]=v` and `a=([i]=v)`
-// both name the element a bare `2` names.
-//
-// A numeral is answered without building a parser for it, which is the whole
-// of what the callers used to do and is still the common case.
-func (r *Runner) writtenSubscript(text string) (int, error) {
-	text = strings.TrimSpace(text)
-	if n, err := strconv.Atoi(text); err == nil {
-		return n, nil
-	}
-	tree, err := r.arithTree(nil, text)
-	if err != nil {
-		return 0, err
-	}
-	return r.evalArith(tree)
 }

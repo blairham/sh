@@ -5,6 +5,7 @@ package interp
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -293,7 +294,10 @@ func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 	case "@", "*":
 		return elems, true
 	default:
-		n, err := r.parseNum(idx)
+		// An expression, not a numeral: `${a[1+1]}` and `${a[i+1]}` name the
+		// element `${a[2]}` names. It took a numeral and nothing else, so
+		// every other spelling silently expanded to nothing.
+		n, err := r.subscriptValue(idx)
 		if err != nil {
 			return nil, true
 		}
@@ -365,6 +369,38 @@ func (r *Runner) subscriptText(w *syntax.Word) string {
 		return strings.TrimSpace(w.Spans[0].Value)
 	}
 	return strings.TrimSpace(r.joinWord(w))
+}
+
+// subscriptValue evaluates a subscript, which is an arithmetic expression and
+// not only a numeral: `${a[1+1]}`, `a[i]=v` and `unset a[i+1]` all name the
+// element a bare `2` names.
+//
+// One function for every path that reads a subscript as a number, because the
+// four of them disagreed while each had a reading of its own. Writing through
+// one evaluated — since the array literal learned to place its elements — and
+// reading one back, assigning through `${a[i]:=v}` and unsetting one all took
+// a numeral and nothing else, so `a[1+1]=v` stored where `${a[1+1]}` could not
+// look. Two spellings of the same subscript naming two different elements is
+// the sharpest form of the silent wrong answer, because the script that writes
+// and reads with the same expression sees an array that forgets what it stored.
+//
+// A numeral is answered without building a parser for it. That is what every
+// caller used to do and is still the common case, so the arithmetic evaluator
+// is reached only by a subscript that needs it.
+//
+// An unset name is 0 rather than an error, which is what the evaluator says
+// about any bare name — `${a[k]}` with `k` unset is the first element in every
+// shell on the panel that has arrays.
+func (r *Runner) subscriptValue(text string) (int, error) {
+	text = strings.TrimSpace(text)
+	if n, err := strconv.Atoi(text); err == nil {
+		return n, nil
+	}
+	tree, err := r.arithTree(nil, text)
+	if err != nil {
+		return 0, err
+	}
+	return r.evalArith(tree)
 }
 
 // arrayElementCount reports how many elements a name holds and whether it is

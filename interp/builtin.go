@@ -27,7 +27,6 @@ var builtins = map[string]Builtin{
 	"true":     biTrue,
 	"false":    biFalse,
 	"set":      biSet,
-	"unset":    biUnset,
 	"export":   biExport,
 	"echo":     biEcho,
 	"cd":       biCd,
@@ -45,6 +44,16 @@ var builtins = map[string]Builtin{
 	// `eval` and `.` are added in source.go's init rather than here — they
 	// run arbitrary shell, so they reach the dispatcher that reads this map,
 	// and Go calls a literal that closes that loop an initialization cycle.
+	// `unset` joined them, for the reason its init below gives.
+}
+
+// `unset a[i+1]` evaluates its subscript, and evaluating an expression
+// substitutes into it first — so a command substitution written in one reaches
+// the dispatcher that reads the map above, exactly as `eval` does. That is a
+// real capability rather than an accident of layering: the subscript is an
+// arithmetic expression, and every way of writing one is open to it.
+func init() {
+	builtins["unset"] = biUnset
 }
 
 // biBreak and biContinue transfer control out of a loop. They are recorded on
@@ -432,7 +441,7 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 				r.unsetAssocElem(base, sub)
 				continue
 			}
-			if idx, err := r.parseNum(sub); err == nil {
+			if idx, err := r.subscriptValue(sub); err == nil {
 				r.unsetArrayElem(base, idx)
 			}
 			continue
@@ -550,10 +559,17 @@ func firstOptionLetter(operand string) string {
 // Only for a name that really ends in one: `unset a` is the whole array and
 // `unset a[1]` is an element of it, and the two arrive as the same kind of
 // word. The subscript comes back as text because its reading is the base
-// name's to decide: numeric for an indexed array, any string at all for a
-// declared associative one — so `unset m[k]` is an element of `m` exactly
-// when `m` carries the attribute, and stays the bad name it always was when
-// it does not.
+// name's to decide: an expression for an indexed array, any string at all for
+// a declared associative one — so `unset m[k]` is an element of `m` when `m`
+// carries the attribute and an element numbered by whatever `k` evaluates to
+// when it does not.
+//
+// The split is where it stops. It used to reject anything that was not a
+// numeral, which made `unset a[i+1]` a bad *name* rather than a bad
+// subscript — a whole different complaint about a subscript that is fine.
+// Whether the text evaluates is the caller's question, asked where the
+// element is reached and not here, which is also what keeps a builtin out of
+// the arithmetic evaluator's reach until it means to use it.
 func (r *Runner) subscriptOperand(operand string) (string, string, bool) {
 	open := strings.IndexByte(operand, '[')
 	if open <= 0 || !strings.HasSuffix(operand, "]") {
@@ -561,11 +577,6 @@ func (r *Runner) subscriptOperand(operand string) (string, string, bool) {
 	}
 	base := operand[:open]
 	sub := strings.TrimSpace(operand[open+1 : len(operand)-1])
-	if !r.assocDeclared(base) {
-		if _, err := r.parseNum(sub); err != nil {
-			return "", "", false
-		}
-	}
 	return base, sub, true
 }
 

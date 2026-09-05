@@ -2407,7 +2407,7 @@ func (r *Runner) assign(a *syntax.Assign) {
 		}
 		r.setAssocElem(a.Name, key, value)
 	case a.Index != nil:
-		idx, err := r.writtenSubscript(r.joinWord(a.Index))
+		idx, err := r.subscriptValue(r.joinWord(a.Index))
 		if err != nil {
 			r.diagf("%s: bad array subscript\n", a.Name)
 			return

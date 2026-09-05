@@ -4478,6 +4478,26 @@ echo unreachable`,
 		Why:     "nothing failing is still 0, and a failure in the *first* element is the case a plain pipeline cannot see at all — 7 where the option is available and 0 where it is not",
 	},
 	{
+		ID: "pipefail/a-builtin-killed-by-a-signal", Category: "pipeline status",
+		Snippet: "if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi\nv=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done\n{ echo \"$v\"; } | true; echo \"st=$?\"\n",
+		Why:     "the status pipefail hands back for an element a signal killed, which is not the status that death reports everywhere else in the same shell: 141 in bash and zsh, and in ksh93 **13** rather than the 269 its own convention would give. The string is grown past a pipe buffer on purpose, so the write is certain to outlive the reader rather than fitting in the pipe and racing it",
+	},
+	{
+		ID: "pipefail/an-external-command-killed-by-a-signal", Category: "pipeline status",
+		Snippet: "if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi\nyes 2>/dev/null | head -1 >/dev/null; echo \"st=$?\"\n",
+		Why:     "the same question with a real process on the writing end rather than a builtin, and the same three answers — so the split is about the substitution and not about which side of the process boundary the death happened on",
+	},
+	{
+		ID: "pipefail/an-ordinary-failure-is-substituted-unchanged", Category: "pipeline status",
+		Snippet: "if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi\n(exit 42) | true; echo \"st=$?\"\n(exit 42) | { echo x >/dev/null; } | true; echo \"st=$?\"\n",
+		Why:     "the control: an element that merely *failed* is handed back as it stands in every shell with the option, first or middle. Without this the signal rows read as a difference about pipefail in general rather than about a signal death in particular",
+	},
+	{
+		ID: "pipefail/a-substituted-death-against-an-ordinary-one", Category: "pipeline status",
+		Snippet: "if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; fi\nv=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done\n{ echo \"$v\"; } | true; a=$?\nb=$( { sleep 5 & p=$!; kill -TERM $p; wait $p; echo $?; } 2>/dev/null )\necho \"substituted=$a foreground=$b\"\n",
+		Why:     "both encodings in one line, which is the whole point: ksh93 says 13 for the substituted death and 271 for the waited-for one, so its 256-plus-the-signal convention is intact and stops in exactly one place. bash and zsh say 141 and 143 and never distinguish the two. dash has neither the option nor a second answer. The job's own death notice is thrown away because it names a pid, and a pid is different on every run",
+	},
+	{
 		ID: "pipefail/turned-off-again", Category: "pipeline status",
 		Snippet: "if ( set -o pipefail ) 2>/dev/null; then set -o pipefail; set +o pipefail; fi\n(exit 3) | true; echo \"st=$?\"\n",
 		Why:     "the option is an option: `set +o` puts the pipeline back to reporting its last element, so every shell answers 0 here — the one case where the panel agrees for two different reasons",

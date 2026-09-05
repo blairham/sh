@@ -227,6 +227,9 @@ func Semantics() interp.Semantics {
 	s.MissingFileIsOlder = interp.No
 	s.TerminalTestRequiresANumber = interp.No
 	s.PipefailOption = interp.Yes
+	// A substituted element keeps the status its death produced, 128 plus
+	// the signal, the same as anywhere else.
+	s.PipefailSubstitutesTheBareSignal = interp.No
 	s.ErrexitSeesPipefailFailure = interp.Yes
 	// Alone in refusing an argument to `times`; dash and bash ignore it.
 	s.TimesRejectsArguments = interp.Yes

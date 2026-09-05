@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -106,6 +107,23 @@ type Runner struct {
 	Gate Gate
 	// Events receives what happened. Nil discards.
 	Events Sink
+
+	// Session identifies this shell to whatever is recording it, and is
+	// carried on every Event this Runner emits.
+	//
+	// Supplied rather than invented: a run's identity is the front end's to
+	// choose, because the front end is what has more than one record of the
+	// run to line up — an audit stream and whatever it keeps of what it ran.
+	// A Runner that generated its own would be a Runner whose identity nothing
+	// else could know, which is the opposite of what an identity is for, and
+	// it would put a source of randomness in a library that is meant to be
+	// reproducible. Empty is a run with no identity, which is honest.
+	//
+	// A subshell shares it. A cloned Runner is the same session by every
+	// meaning a consumer has for the word — one invocation, one policy, one
+	// audit stream — so this crosses clone unchanged, and so does the numbering
+	// behind Action.ID.
+	Session string
 
 	// ReplaceProcess makes `exec cmd` actually replace this process, and nil
 	// — the default — makes it run the command as a child and then stop the
@@ -227,7 +245,7 @@ type Runner struct {
 
 	// procSubs are the named pipes this command's process substitutions made,
 	// waiting to be removed once it is done with them.
-	procSubs    []string
+	procSubs    []procSubPipe
 	procSubSeq  int
 	procSubHome *procSubDirs
 	// substRan records that a command substitution reported a status during
@@ -809,6 +827,11 @@ type Runner struct {
 	// depth bounds function recursion, because a shell script can recurse
 	// and a stack overflow is not a diagnostic anyone can act on.
 	depth int
+	// actionIDs numbers this session's actions — see actionid.go. A pointer
+	// so that clone shares it rather than copying it: two subshells with
+	// counters of their own would hand two different actions the same id, and
+	// an id that is not unique is worse than none, because it looks joinable.
+	actionIDs *atomic.Uint64
 }
 
 // maxDepth bounds nested function calls.
@@ -1095,6 +1118,11 @@ func (r *Runner) emit(ctx context.Context, e Event) {
 	// arrangement diagf already relies on.
 	e.Line = r.line
 	e.File = r.currentFile()
+	// And which shell it came from, filled in the same one place and for the
+	// stronger version of the same reason: a consumer joining two records of
+	// one run needs this on every line, and a site that forgot it would
+	// produce a record that silently belongs to nothing.
+	e.Session = r.Session
 	r.Events.Emit(ctx, e)
 }
 
@@ -1130,6 +1158,9 @@ func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	r.ensurePWD()
 	r.ensureSpecials()
 	r.ensureImportedFunctions()
+	// Before the descriptors are published, because publishing them is itself
+	// an action and the first one this session records.
+	r.ensureActionIDs()
 	r.publishInheritedFds(ctx)
 	if r.started.IsZero() {
 		r.started = r.Now()
@@ -1931,7 +1962,7 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	if lookErr != nil {
 		path = argv[0]
 	}
-	action := Action{Kind: ActionExec, Path: path, Args: argv}
+	action := r.act(Action{Kind: ActionExec, Path: path, Args: argv})
 	if !r.allowed(ctx, action) {
 		return nil
 	}

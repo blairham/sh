@@ -82,7 +82,7 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 	if lookErr != nil {
 		path = argv[0]
 	}
-	action := Action{Kind: ActionExec, Path: path, Args: argv}
+	action := r.act(Action{Kind: ActionExec, Path: path, Args: argv})
 	if !r.allowed(ctx, action) {
 		// A denied action is a command that failed rather than a broken
 		// shell, and that is true here too: a refused `exec` leaves the shell
@@ -107,7 +107,13 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 	// Running it as a child and ending only this Runner is what a separate
 	// process would have looked like from outside, which is the whole of what
 	// a subshell has to preserve.
-	if r.ReplaceProcess != nil && !r.inSubshell {
+	//
+	// A stream that is not one descriptor takes the same road, for the same
+	// reason read from the other end: a replacement is handed *numbers*, and
+	// the dialect that writes to every target of a repeated redirection leaves
+	// `exec >a >b` a writer over two files, which is no number at all. See
+	// namedStreamsCanBePlaced.
+	if r.ReplaceProcess != nil && !r.inSubshell && r.namedStreamsCanBePlaced() {
 		// The embedder has said this process is a shell and may stop being
 		// one. Nothing after this line runs if it succeeds.
 		r.emit(ctx, Event{Kind: EventCommandStart, Action: action})
@@ -174,6 +180,56 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 	r.exitTrap = nil
 	r.ctl = controlExit
 	return status
+}
+
+// namedStreamsCanBePlaced reports whether 0, 1 and 2 can be handed to a
+// replacement as descriptor numbers.
+//
+// A replacement has no renumbering step: it becomes the command in this
+// process, so each stream has to *be* a descriptor before the execve. Almost
+// everything a stream can be still crosses on the table's own rules — a file
+// is placed, and anything that is not one arrives as a nil, which is a number
+// that must not be open there. `exec >&-; exec cmd` leaves the command a
+// closed descriptor in all five shells, and an embedder's buffer has no
+// number to hand over either.
+//
+// One shape breaks that reading, and it is the shell's own doing. Under the
+// dialect that writes to *every* target of a repeated redirection, `exec >a
+// >b` leaves standard output a writer over two files. Read as "not a file,
+// therefore nil, therefore closed", the command found standard output closed
+// and failed — `echo: fflush: Bad file descriptor` — where that shell writes
+// `hi` into both.
+//
+// So the replacement is declined for exactly that stream, and the shell
+// stands in for it with the child route it already has for a subshell:
+// os/exec gives a stream that is not a file a pipe and copies from it, so
+// both files get the bytes. What that costs is written down where the child
+// route is — the pid, the signal dispositions, and being the process the
+// parent waits for. Measured, the shell whose behavior this reproduces spends
+// a process on it too: it forks a copier and keeps its own pid for the
+// command, where we keep the pid for the shell and give the command a new
+// one. The number of processes agrees; which of them is the command does not.
+//
+// The test is the marker rather than the type, and that is the whole of why
+// multiTarget exists: "not an *os.File" would sweep in an embedder's buffer,
+// which is a different case whose answer — a closed number — is measured and
+// deliberate, and which no child route could improve on anyway.
+//
+// Only the named streams are asked about. A *numbered* descriptor with
+// several targets is not this question: it is not modeled here at all, in a
+// replacement or out of one, and no route through os/exec would carry it
+// either, because ExtraFiles is files.
+func (r *Runner) namedStreamsCanBePlaced() bool {
+	return !isMultiTarget(r.Stdin) &&
+		!isMultiTarget(r.Stdout) &&
+		!isMultiTarget(r.Stderr)
+}
+
+// isMultiTarget reports whether a stream is one the shell built out of
+// several targets.
+func isMultiTarget(v any) bool {
+	_, ok := v.(multiTarget)
+	return ok
 }
 
 // execCannotRun reports an exec that could not happen.

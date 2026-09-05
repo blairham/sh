@@ -4,43 +4,12 @@
 package zsh_test
 
 import (
-	"bytes"
-	"context"
 	"strings"
 	"testing"
 
 	"github.com/blairham/sh/dialect/zsh"
-	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
-
-// condRun is answersRun with the grammar handed to the runner as well as to
-// the parser.
-//
-// The matcher asks Runner.Dialect whether a bare `(a|b)` is a group, so a
-// runner built without one matches under the core grammar however the source
-// was parsed — which is a `[[ $k == a(b|c) ]]` that parses here and then does
-// not match. The dialect binaries set it; answersRun does not.
-func condRun(t *testing.T, src string) (string, int) {
-	t.Helper()
-	d := zsh.Dialect()
-	f, err := syntax.Parse(src, d)
-	if err != nil {
-		t.Fatalf("parse %q: %v", src, err)
-	}
-	var buf bytes.Buffer
-	sem, diag := zsh.Semantics(), zsh.Diagnostics()
-	r := &interp.Runner{
-		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag,
-		Dialect: &d, Name: "sh", Env: []string{"PATH=/usr/bin:/bin"},
-	}
-	zsh.Apply(r)
-	st, rerr := r.Run(context.Background(), f)
-	if rerr != nil {
-		return buf.String() + "unsupported: " + rerr.Error(), -1
-	}
-	return buf.String(), st
-}
 
 // parseFails reports whether this dialect refuses the source outright, which
 // answersRun cannot say: it fails the test on a parse error rather than
@@ -72,7 +41,7 @@ func TestAGroupMayStartAPatternOperand(t *testing.T) {
 		{`k=a; [[ $k == "(a|b)" ]] && echo hit || echo miss`, "miss"},
 		{`k="(a|b)"; [[ $k == "(a|b)" ]] && echo hit || echo miss`, "hit"},
 	} {
-		out, _ := condRun(t, tc.src)
+		out, _ := answersRun(t, tc.src)
 		if got := strings.TrimSpace(out); got != tc.want {
 			t.Errorf("%s: said %q, want %q", tc.src, got, tc.want)
 		}
@@ -100,7 +69,7 @@ func TestAPrintedPatternOperandStillMatches(t *testing.T) {
 			t.Fatalf("%s: %v", tc.src, err)
 		}
 		printed := syntax.Print(f)
-		out, _ := condRun(t, printed)
+		out, _ := answersRun(t, printed)
 		if got := strings.TrimSpace(out); got != tc.want {
 			t.Errorf("%s printed as %q, which said %q, want %q", tc.src, printed, got, tc.want)
 		}
@@ -130,7 +99,7 @@ func TestAGroupIsRefusedWhereNoPatternIsRead(t *testing.T) {
 		{`k=a; [[ $k == (a|b) ]]; (echo w)`, "w"},
 		{`k=a; [[ $k == (a|b) ]] && (echo y)`, "y"},
 	} {
-		out, _ := condRun(t, tc.src)
+		out, _ := answersRun(t, tc.src)
 		if got := strings.TrimSpace(out); got != tc.want {
 			t.Errorf("%s: said %q, want %q", tc.src, got, tc.want)
 		}
@@ -143,7 +112,7 @@ func TestAGroupIsRefusedWhereNoPatternIsRead(t *testing.T) {
 		{`(( 1 + 1 == 2 )) && echo hit || echo miss`, "hit"},
 		{`k=a; [[ $k =~ (a|b) ]] && echo hit || echo miss`, "hit"},
 	} {
-		out, _ := condRun(t, tc.src)
+		out, _ := answersRun(t, tc.src)
 		if got := strings.TrimSpace(out); got != tc.want {
 			t.Errorf("%s: said %q, want %q", tc.src, got, tc.want)
 		}

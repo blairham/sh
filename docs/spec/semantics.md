@@ -3073,6 +3073,32 @@ What was built, all through the extension seam — registered builtins in each
 - **bash `caller`** (dialect/bash/caller.go): the stack the three
   `BASH_*` arrays already name, one step up, `NULL` and `main` where bash
   puts them.
+- **zsh `zstyle`** (dialect/zsh/zstyle.go): the styles database, whole —
+  set, `-e`, `-d`, `-g`, `-L`, the bare listing, and the `-s`/`-a`/`-b`/
+  `-t`/`-T`/`-m` retrievals — with nothing reading it yet, because the
+  completion system that is its largest reader is #801 and much larger.
+  Storing what it is given is the point: a real rc file sets twenty styles
+  in its first twenty lines, and a database that refuses them fails every
+  one of those lines rather than the one feature behind them.
+
+  The order is the part worth getting right, because it is what "the most
+  specific pattern wins" means and both the listing and every lookup read
+  it. Measured by setting the same patterns in several orders: **more
+  colon-separated components first** (`:a:b:c:d:*` before `:m:n:*` before
+  `:q:*`, and the one-component `abcdefgh*` after the three-component
+  `:a:*`, so it is the component count and not the length of the literal
+  part), then **a pattern with no metacharacter before one with**, then
+  **the order they were set in**. The second key is subordinate to the
+  first rather than above it: `:x:y:z:*` still precedes the exact
+  `:a:b:c`. A lookup walks that order and takes the first pattern that
+  matches, so `*` — one component — is the fallback it is written to be.
+
+  Two sets of characters are involved and they are not the same set, which
+  is measured one punctuation character at a time: `*?[(|#^<` make a
+  pattern non-exact for the ordering and `~` does not, while `~` and `=`
+  are among those `-L` quotes.
+- **zsh `bindkey`** (dialect/zsh/bindkey.go): the line editor's key table.
+  See below for why this moved out of the not-built list.
 
 Deliberately **not** built, so the next sweep counts each as scoped rather
 than missing:
@@ -3081,8 +3107,47 @@ than missing:
   table of refusals.
 - zsh `autoload` (and `fpath`): function-file loading is an interactive
   startup mechanism; a non-interactive core sources files by name.
-- zsh `bindkey`, `vared`, `zle`: the line editor's, and the line editor's
-  key handling is the front end's concern, not the interpreter's.
+- zsh `vared` and `zle`: the line editor's, and the line editor's key
+  handling is the front end's concern, not the interpreter's. `bindkey` was
+  on this list for the same reason and has come off it, because the reason
+  stopped being true: the front end now *has* a key table worth binding to
+  (#811, #835), so `bindkey` is built, and it is built the way the rule
+  says rather than against it. `repl` names the *actions* — a Widget
+  vocabulary of what the editor does — and `dialect/zsh` maps this shell's
+  names onto them, which it has to, because the two shells with a line
+  editor disagree: the key that walks history back is `up-line-or-history`
+  here and `previous-history` there. Nothing under `repl/` names a widget
+  the way a shell spells it.
+
+  What reaches the editor is an **override layer** and not a keymap: only
+  what somebody rebound, with every other key going to the editor's own
+  dispatch. A full keymap in `repl` would be a second copy of the editor's
+  key handling, and two places to fix a key with one of them silently
+  ahead of the other. It is read through a function rather than copied in
+  at the start of a session, because `bindkey` is a command a person runs
+  at the prompt as much as one an rc file runs.
+
+  Three measured facts shaped the builtin. **An unknown widget is not an
+  error**: `bindkey '^X^T' no-such-widget` is status 0 and silence, the
+  binding is stored, and `bindkey '^X^T'` says it back — under a terminal
+  with the editor loaded as much as under `-c`. So a config binding a
+  plugin's widget is not a config that fails, and refusing it here would be
+  stricter than the shell being modeled. **`^?` is DEL** rather than the
+  0x1f that clearing the top three bits of `?` would give, which is the one
+  exception to what a caret means. And **the listing is sorted by the bytes
+  a key sends**, not by the caret spelling of them, which is why `^[^?`
+  comes after `^[f`.
+
+  What it does not do: the default keymaps are **this editor's keys and not
+  zsh's 117**. Listing `vi-match-bracket` for `^X^B` because zsh does would
+  name a widget nothing here performs, and `bindkey` is the question a
+  person asks to find out what a key does — so what it answers is what this
+  editor will actually do. The visible consequence is small and real:
+  `bindkey '^[[3~'` says `delete-char` here and `undefined-key` in zsh,
+  which reaches its Delete key through terminfo rather than through the
+  keymap. `-p`, `-R`, `-N`, `-A`, `-D` and `-d` — prefix bindings, key
+  ranges, and making, aliasing or destroying a keymap — are refused as not
+  implemented, the distinction `whence` draws between a gap and a typo.
 - zsh's own `print`: zsh has one — shared ksh ancestry — with its own flags
   and wording (`bad file number: 9` where ksh93 brackets the errno). Its
   `whence` is built now, above; `print` stays command-not-found, visible in
@@ -3105,7 +3170,9 @@ than missing:
   output, the all-resolutions walk and the function skip; each is refused
   as not implemented rather than unknown, which would be the worse answer.
 - ksh93 `hist`: interactive history editing, and there is no history.
-- bash `bind`: readline's, same reasoning as zsh's bindkey.
+- bash `bind`: readline's. The seam zsh's `bindkey` reaches the editor
+  through is the core's rather than zsh's, so this is now a matter of
+  measuring readline's names and wordings rather than of architecture.
 - bash `history` and `fc`'s editing half: no history file in a
   non-interactive core; `fc` itself already answers with its measured
   empty-history refusal.

@@ -141,6 +141,23 @@ func (r *Runner) SetVar(name, value string) { r.setVar(name, value) }
 // GetVar reads a shell variable, falling back to the environment.
 func (r *Runner) GetVar(name string) (string, bool) { return r.getVar(name) }
 
+// SetArray sets an indexed array from a list, and GetArray reads one back.
+//
+// The pair is here because a registered builtin whose answer is *several*
+// words has nowhere else to put it: SetVar would join them, which is the one
+// thing an array exists not to do. `read -a` needs none of this because it is
+// the core's own, and the gap only shows up from outside.
+//
+// Reaching into the Arrays map instead is what a caller does without them,
+// and it is wrong in a way that is invisible until a dialect changes: the
+// first element answers to subscript 1 in one shell and 0 in another, so a
+// list written in at 0 reads back short — or empty — under the other answer.
+// The base is this package's to know, and these two ask it.
+func (r *Runner) SetArray(name string, values []string) { r.setArray(name, values) }
+
+// GetArray is the list an indexed array holds, and whether there is one.
+func (r *Runner) GetArray(name string) ([]string, bool) { return r.arrayElems(name) }
+
 // BuiltinNames is every builtin this runner has, sorted.
 //
 // For a shell that has to offer them: a completer at a prompt needs to know

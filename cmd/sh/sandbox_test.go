@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -386,5 +387,121 @@ func TestAuditToADashIsStandardError(t *testing.T) {
 		// stream a person was watching stays empty — which is how this
 		// mistake is always noticed, and never before it has made a file.
 		t.Errorf("err = %q, want the audit stream on standard error", got.errs)
+	}
+}
+
+// The audit stream says which run it came from and which action each record is
+// about, which is what makes it joinable to anything else.
+//
+// A shipped binary is where this has to be shown. The fields exist in interp
+// and are written by internal/event, and until a flag put them in a file
+// nothing a person could point at ever carried one — which is the same argument
+// that put -policy and -audit here in the first place.
+func TestTheAuditStreamCarriesAnIdentity(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	log := filepath.Join(dir, "audit.jsonl")
+	out := filepath.Join(dir, "written")
+	got := sandboxed(t, "core", "-audit", log, "-c",
+		"/bin/echo one > "+out+"\n/bin/echo two\n")
+	if got.code != 0 {
+		t.Fatalf("status %d: %s", got.code, got.errs)
+	}
+	body, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type record struct {
+		Seq      int64  `json:"seq"`
+		Session  string `json:"session"`
+		ActionID string `json:"actionId"`
+		Event    string `json:"event"`
+		Action   string `json:"action"`
+		Path     string `json:"path"`
+	}
+	var records []record
+	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
+		var r record
+		if err := json.Unmarshal([]byte(line), &r); err != nil {
+			t.Fatalf("record %q did not decode: %v", line, err)
+		}
+		records = append(records, r)
+	}
+	if len(records) < 4 {
+		t.Fatalf("got %d records, want the two commands and the redirect", len(records))
+	}
+	// One run, one session, on every line: a file several shells append to is
+	// unreadable without it.
+	session := records[0].Session
+	if session == "" {
+		t.Fatal("the stream carries no session, so nothing can be joined to it")
+	}
+	for _, r := range records {
+		if r.Session != session {
+			t.Errorf("a %s record says session %q, want %q", r.Event, r.Session, session)
+		}
+		if r.ActionID == "" {
+			t.Errorf("a %s %s record carries no action id", r.Event, r.Action)
+		}
+	}
+	// A command's start and its end share an id, and two commands do not. That
+	// is the pairing ordering could not do: a background job and each half of a
+	// pipeline write from their own goroutines, so the record after a start is
+	// very often another command's.
+	byID := map[string][]string{}
+	for _, r := range records {
+		if r.Action == "exec" {
+			byID[r.ActionID] = append(byID[r.ActionID], r.Event)
+		}
+	}
+	if len(byID) != 2 {
+		t.Fatalf("two commands ran under %d action ids: %v", len(byID), byID)
+	}
+	for id, events := range byID {
+		if !slices.Contains(events, "command-start") || !slices.Contains(events, "command-end") {
+			t.Errorf("action %s has events %v, want a start and an end under one id", id, events)
+		}
+	}
+	// And the id is not the sequence number. They are different questions —
+	// which action, and where in the stream — and a consumer joining on seq
+	// would pair a start with whatever was emitted next.
+	for _, r := range records {
+		if r.ActionID == strconv.FormatInt(r.Seq, 10) && r.Event == "command-end" {
+			t.Errorf("a command-end has actionId %q and seq %d: the two have collapsed into one number",
+				r.ActionID, r.Seq)
+		}
+	}
+}
+
+// Two runs writing to one audit file are two sessions in it.
+//
+// This is the case the session field exists for. The file is appended rather
+// than truncated, so it holds more than one shell's records, and without an
+// identity per run a reader has one undifferentiated stream in which two shells'
+// action ids collide.
+func TestTwoRunsInOneAuditFileAreTwoSessions(t *testing.T) {
+	t.Parallel()
+	log := filepath.Join(t.TempDir(), "audit.jsonl")
+	for range 2 {
+		if got := sandboxed(t, "core", "-audit", log, "-c", "/bin/echo hi"); got.code != 0 {
+			t.Fatalf("status %d: %s", got.code, got.errs)
+		}
+	}
+	body, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
+		var r struct {
+			Session string `json:"session"`
+		}
+		if err := json.Unmarshal([]byte(line), &r); err != nil {
+			t.Fatalf("record %q did not decode: %v", line, err)
+		}
+		seen[r.Session] = true
+	}
+	if len(seen) != 2 {
+		t.Errorf("the file holds %d session(s), want one per run: %v", len(seen), seen)
 	}
 }

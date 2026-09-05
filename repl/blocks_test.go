@@ -53,6 +53,13 @@ func blockShell(t *testing.T, script string, vars map[string]string) (Shell, str
 	sh := Shell{
 		Runner: r, Dialect: syntax.Core(), In: f,
 		Out: &strings.Builder{}, Err: &strings.Builder{},
+		// The run's identity comes from the front end, so a test that wants
+		// records to carry one supplies it the way a front end does. A fixed
+		// string rather than a fresh id, because what is being asserted is
+		// that the store writes down *the one it was given* — a made-up one
+		// would pass against a store that invented its own, which is the bug
+		// this replaced.
+		Session: testSession,
 		Clock: func() time.Time {
 			tick = tick.Add(250 * time.Millisecond)
 			return tick
@@ -60,6 +67,10 @@ func blockShell(t *testing.T, script string, vars map[string]string) (Shell, str
 	}
 	return sh, store, func() { _ = f.Close() }
 }
+
+// testSession is the identity the front end hands this session, standing in
+// for the one driver makes per invocation.
+const testSession = "SESSIONUNDERTEST"
 
 // read is what the store holds afterwards, read back through a store of its
 // own so the test goes the same way a later session would.
@@ -92,9 +103,9 @@ func TestASessionRecordsItsBlocks(t *testing.T) {
 	if got[0].DurationMs != 250 {
 		t.Errorf("duration is %d, want the 250ms the clock advanced", got[0].DurationMs)
 	}
-	if got[0].Session == "" || got[0].Session != got[1].Session {
-		t.Errorf("sessions are %q and %q, want one non-empty id for the session",
-			got[0].Session, got[1].Session)
+	if got[0].Session != testSession || got[1].Session != testSession {
+		t.Errorf("sessions are %q and %q, want the front end's %q on both",
+			got[0].Session, got[1].Session, testSession)
 	}
 	if got[0].ID == got[1].ID {
 		t.Errorf("both blocks have id %q", got[0].ID)

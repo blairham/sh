@@ -198,6 +198,63 @@ where the gate does something no editor's gate can.
 - **`terminal/*`** — the same argument for commands, and additionally
   required for one agent's authentication (below).
 
+### Authenticating, and the two kinds that are not two spellings
+
+Authentication is the **first** thing that happens on this side, not the last,
+because two of the three agents refuse `session/new` with `-32000` until it
+has. `sh -acp-connect` therefore settles it between `initialize` and
+`session/new`, and `-acp-auth ID` names which of the advertised methods to use.
+
+**There is no default.** A client that picked a credential path on somebody's
+behalf would be guessing at their account, so a run without the flag attempts
+nothing and reports the list — with each method's kind, because the kind is
+what decides what a person has to *do* — and names the flag.
+
+The union is discriminated on `type`, and **an absent `type` means `agent`**:
+that is the schema's default rather than an unknown, and it is not academic —
+all four of Gemini's arrive with no `type` at all, so a client dispatching on
+the raw field would find `""` and match neither kind.
+
+| kind | what the client does |
+| --- | --- |
+| `agent` | calls `authenticate` with the method id and waits |
+| `terminal` | **does not call `authenticate` at all** |
+
+Terminal Auth is the one a shell is unusually well placed to serve, and it is
+not a message. The client runs the **agent's own program again** — same command,
+same arguments, plus the method's `args`, with its `env` set over the top — on a
+terminal a person can type into, and a zero exit status is the whole of the
+answer. The schema states plainly that a terminal method must never be passed
+to `authenticate`, so the two are dispatched on the kind rather than tried in
+turn.
+
+Three things follow, and each is a rule rather than a preference:
+
+1. **The capability and the ability to honor it are one field.** `internal/acp`
+   does not know how the agent was launched — only the caller that launched it
+   can reproduce that invocation — so the relaunch is a hook, and it is the
+   hook's presence that sets `clientCapabilities.auth.terminal`. There is no
+   arrangement in which an agent is offered a login this client cannot run.
+2. **`sh -acp-connect` offers it only where the process has a terminal**, on
+   both standard input and standard output. A login TUI reads keystrokes *and*
+   draws, and `sh -acp-connect … < script` has a terminal on exactly one of the
+   two.
+3. **A method the agent did not advertise is refused here**, without a message
+   being sent. It is the same rule as an option id we never offered, read the
+   other way round: the agent named the choices, so a choice it did not name is
+   not one.
+
+Measured against Gemini CLI 0.58.0, `authenticate` with `gemini-api-key` is
+answered `{"result":{}}` and `session/new` then still answers `-32000` —
+because the machine has no Gemini credential, which is a human action rather
+than code. The end-to-end verification is **#729**; the client-side method is
+this.
+
+The shapes for all of this were taken from the machine-readable schema shipped
+with `@agentclientprotocol/sdk`, which is where `AuthMethodTerminal`,
+`AuthMethodAgent`, `AuthCapabilities` and `AuthenticateRequest` are defined,
+rather than from prose or from any SDK's source.
+
 ### Where the gate sits on this side
 
 Every inbound request that would touch the world is an `interp.Action`
@@ -514,6 +571,10 @@ genuinely the maintainer's.
 9. **Terminal Auth is in scope for the client.** Without it Claude Agent
    cannot be authenticated from this shell at all, because `terminal` is
    the only method it offers.
+10. **No default authentication method.** `-acp-auth` names one or nothing is
+    attempted, rather than the client choosing when an agent offers exactly
+    one. Picking a credential path for somebody is a guess about their
+    account, and a guess that succeeds is worse than one that fails.
 
 ## Staging
 

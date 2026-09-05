@@ -52,9 +52,6 @@ package blocks
 
 import (
 	"bytes"
-	"crypto/rand"
-	"encoding/base32"
-	"encoding/binary"
 	"encoding/json"
 	"time"
 )
@@ -109,43 +106,6 @@ type Record struct {
 	OutputBytes int64  `json:"outputBytes,omitempty"`
 	Truncated   bool   `json:"truncated,omitempty"`
 	Streams     string `json:"streams,omitempty"`
-}
-
-// idEncoding is base32 with the extended-hex alphabet and no padding.
-//
-// The alphabet is 0-9 then A-V, which is ordered, so sorting the encoded
-// strings sorts the bytes underneath them. That is the whole reason for
-// choosing it over standard base32, whose alphabet starts at A and puts the
-// digits last: an id has a timestamp at the front, and this is what makes
-// `sort` over the index chronological.
-var idEncoding = base32.HexEncoding.WithPadding(base32.NoPadding)
-
-// idLength is how long an id always is: sixteen bytes in base32 is 26
-// characters. Fixed rather than a range, which is what lets a short decimal
-// number mean something else without ambiguity — see Store.Find.
-const idLength = 26
-
-// NewID makes an id for a block or a session: eight bytes of Unix nanoseconds,
-// big-endian, then eight random bytes, encoded as 26 characters.
-//
-// Four properties, each of which was a requirement. It sorts by time, per
-// idEncoding. It is unique across sessions without coordination, because two
-// shells writing in the same nanosecond differ in 64 random bits — and nothing
-// having to hold a counter is what makes an append-only multi-session store
-// possible at all. It is safe as a filename on every filesystem, being
-// uppercase throughout so a case-folding one cannot collide two of them. And
-// it needs nothing outside the standard library.
-//
-// A content hash was the other candidate and is wrong for this: two identical
-// commands run an hour apart are two blocks, and when and where they ran is as
-// much of a block as what was typed.
-func NewID(t time.Time) string {
-	var b [16]byte
-	binary.BigEndian.PutUint64(b[:8], uint64(t.UnixNano()))
-	// crypto/rand.Read never returns an error — it panics on a broken system
-	// rather than reporting one — so there is nothing to handle here.
-	_, _ = rand.Read(b[8:])
-	return idEncoding.EncodeToString(b[:])
 }
 
 // decode reads one line back, reporting whether it is a record this version

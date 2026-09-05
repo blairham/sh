@@ -1920,6 +1920,26 @@ var Corpus = []Case{
 		Why:     "the same question reached from the other side, and `unset a[i]` had been doing nothing at all: the subscript was read as part of the name, so a name that was never in the table was deleted from it. What the hole then looks like is the same axis",
 	},
 	{
+		ID: "array/appending-to-an-element", Category: "expansion",
+		Snippet: `a=(x y); a[-1]+=Q; printf "[%s]" "${a[@]}"; echo; a+=(z); printf "[%s]" "${a[@]}"; echo`,
+		Why:     "`+=` is two operations sharing a spelling and the subscript is what tells them apart: with one it joins the element it names, without one it adds an element after the last. Both halves in one case because the bug was that the first did what neither does — it replaced the element — and a case showing only the array form would have passed throughout. The subscript is `-1` so the case says nothing about the array base: the last element is the last element in all three shells with arrays. bash 3.2 refuses it, which is about having no negative subscripts rather than about appending — `array/appending-to-an-element-inherits-the-base` is the row it answers",
+	},
+	{
+		ID: "array/appending-to-an-element-inherits-the-base", Category: "expansion",
+		Snippet: `a=(x y); a[1]+=Q; printf "[%s]" "${a[@]}"; echo`,
+		Why:     "the base axis reaches the append: the same numeral names the second element in two shells and the first in the third, exactly as a plain `a[1]=Q` does. Appending is therefore not a form with a subscript rule of its own, which is the claim worth pinning before anything special-cases it",
+	},
+	{
+		ID: "array/appending-to-an-unset-element", Category: "expansion",
+		Snippet: `a[3]+=Q; echo "[${a[3]}]"`,
+		Why:     "an element that was never assigned has nothing to append to, and all three place the value as it stands rather than refusing. Unanimous, and it is the half a fix is most likely to get wrong by reading an absent element as an error instead of as an empty one",
+	},
+	{
+		ID: "array/appending-to-an-associative-element", Category: "expansion",
+		Snippet: `typeset -A m; m[k]+=x; m[k]+=Q; echo "[${m[k]}]"`,
+		Why:     "the declared form appends by key just as the indexed form appends by subscript — unanimous in the three that have the attribute. Both assignments are written with `+=` so that the first one also stands as the unset-key case, and so that dash, which has neither, reports the two identically",
+	},
+	{
 		ID: "assoc/a-string-subscript", Category: "expansion",
 		Snippet: `typeset -A m; m[k]=v; echo "${m[k]}" "${!m[@]}"`,
 		Why:     "the declaration that turns a subscript from an expression into a key. bash and ksh93 store under the letter and answer it back; zsh has the arrays but rejects `${!m[@]}` outright; dash has none of it — the issue's own snippet, spelled with the name all three declarers share",

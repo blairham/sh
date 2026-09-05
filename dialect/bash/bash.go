@@ -306,7 +306,7 @@ func Semantics() interp.Semantics {
 	// and `${#a[@]}` is 0. Measured in both bash builds, and the same for
 	// `a[*]`. A name that holds a scalar is refused rather than emptied, and
 	// one that holds nothing at all is quietly left alone.
-	s.UnsetArrayAt = interp.UnsetArrayAtRemovesEveryElement
+	s.UnsetArraySpan = interp.UnsetArraySpanRemovesTheElements
 	// A subscript that will not evaluate ends the script here, as a bad
 	// expression does wherever one is written.
 	s.BadSubscriptToUnsetFatal = interp.Yes

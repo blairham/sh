@@ -320,7 +320,7 @@ func Semantics() interp.Semantics {
 	// arithmetic expression as they do everywhere else, `@` is not one, and
 	// the operand is reported as a bad subscript with the array left as it
 	// was — the only shell in the panel that does not clear it.
-	s.UnsetArrayAt = interp.UnsetArrayAtIsASubscript
+	s.UnsetArraySpan = interp.UnsetArraySpanIsAnExpression
 	// And the complaint is the builtin's: `unset` reports 1 and the script
 	// goes on, which is what makes `unset a[@]` survivable here.
 	s.BadSubscriptToUnsetFatal = interp.No

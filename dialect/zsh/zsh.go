@@ -312,7 +312,7 @@ func Semantics() interp.Semantics {
 	// for `[@]`: `unset a[2]` leaves an empty element in place too. A scalar
 	// is one such span and comes back empty; an array with nothing in it has
 	// no span and gains no element.
-	s.UnsetArrayAt = interp.UnsetArrayAtLeavesOneEmptyElement
+	s.UnsetArraySpan = interp.UnsetArraySpanLeavesOneEmptyElement
 	// The complaint is the builtin's rather than the script's: `unset` reports
 	// 1 and the next command still runs.
 	s.BadSubscriptToUnsetFatal = interp.No

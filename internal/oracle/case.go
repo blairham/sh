@@ -2335,6 +2335,26 @@ var Corpus = []Case{
 		Why:     "where the next append lands, which is what shows the difference between the two shells that clear rather than only counting it: bash has nothing left and `z` is the whole array, zsh has one empty element left and `z` goes after it. A count alone cannot tell an emptied array from one holding a single empty string, and a script that resets a list and pushes onto it sees the difference on the first read",
 	},
 	{
+		ID: "array/removing-the-last-element", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[3]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "the same axis as `array/unsetting-every-element` at a span of one, and the only place its two readings can be told apart. `array/removing-one-element` cannot see it: a removed subscript in the middle reads back empty under a dense reading, so removing and blanking leave the same array there. At the *end* they do not — removing shrinks the extent and blanking does not — and the length was coming back one short in the shell that blanks, which puts every later count and every append one place out. The subscript is `3` so the base decides who is being asked: it is the last element where the first is 1 and one past the end where the first is 0, which is why the two columns hold the same length for opposite reasons",
+	},
+	{
+		ID: "array/removing-the-last-element-then-appending", Category: "expansion",
+		Snippet: `a=(p q r); unset "a[3]"; a+=(z); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "where the next append lands, which is the half a script feels rather than counts: the blanked element still holds a place, so `z` goes after it and the list a script built by pushing is one longer than it thinks. The same probe `array/unsetting-every-element-then-appending` uses on the whole array, at one element",
+	},
+	{
+		ID: "array/removing-the-only-element", Category: "expansion",
+		Snippet: `a=(only); unset "a[1]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "an array of one, where blanking and removing part company most sharply — one comes back holding an empty element and the other is untouched, because `1` is the first element under one base and the second under the other. It says that a blanked array is not an empty one, which is the same distinction `array/unsetting-every-element-of-a-scalar` draws from the other side",
+	},
+	{
+		ID: "array/removing-an-element-from-the-end", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[-2]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`,
+		Why:     "an end-relative subscript, which the shell that blanks does not act on at all beyond `-1` — the array comes back whole where the shells that remove take the middle element away. Pinned because the blanking rule would otherwise be applied to every negative subscript by symmetry, and it is not. bash 3.2 has no negative subscripts and reports a bad one, which is the same absence `array/appending-to-an-element` records",
+	},
+	{
 		ID: "array/unsetting-every-element-of-a-scalar", Category: "expansion",
 		Snippet: `a=hello; unset "a[@]"; echo "st=$? [$a]"`,
 		Why:     "the same spelling on a name that is no array, which is where the two readings show what they mean: bash means take every element away, a scalar has none, and it refuses and says so at 1; zsh means the span becomes one empty string, a scalar is one such span, and it comes back empty at 0. ksh93 reports its bad subscript and leaves the value alone. Nobody turns the scalar into an array",

@@ -3602,7 +3602,7 @@ type's own values are documented beside it in `interp/semantics.go`:
 `ExitArgumentPolicy`, `TrapBodyLineStyle`, `SelectMenuLayout`,
 `DeclarationListingForm`, `KillStatusStyle`, `BracketPolicy`,
 `DollarSingleControlPolicy`, `DollarSingleUnknownPolicy`,
-`UnsetArrayAtPolicy`. Where an entry below says "see X", X is one of
+`UnsetArraySpanPolicy`. Where an entry below says "see X", X is one of
 those.
 
 **This catalog is not the whole of the vector.** The axes with their own
@@ -5004,12 +5004,13 @@ Asked only for an operand whose subscript actually failed. dash has no
 subscript to evaluate — `UnsetTakesASubscript` is no there — so the axis
 is absent rather than false.
 
-**`UnsetArrayAt`** — bash removes every element · dash unspecified · ksh93 a subscript · zsh leaves one empty element
+**`UnsetArraySpan`** — bash removes every element · dash unspecified · ksh93 a subscript · zsh leaves one empty element
 
-Is what `unset a[@]` — and `unset a[*]`, which every column answers
-identically — does to an indexed array. Three answers, and the third is
-not a variation on the other two, so it is a policy type
-(`UnsetArrayAtPolicy`) rather than a switch:
+Is what `unset` does to the span of elements a subscript names — `a[@]`
+and `a[*]`, which every column answers identically, and `a[3]`, which
+names a span of one. Three answers, and the third is not a variation on
+the other two, so it is a policy type (`UnsetArraySpanPolicy`) rather
+than a switch:
 
     a=(p q r); unset "a[@]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
 
@@ -5044,11 +5045,44 @@ The reading is the *indexed* array's alone. With the keyed attribute on,
 three shells that have the attribute — including the two that clear an
 indexed array through the same spelling.
 
-Asked only for those two spellings, so `unset a[1]` never reaches it.
+A single subscript is the same axis at a span of one, which is why there
+is one field and not two:
+
+    a=(x y z); unset "a[3]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+
+    bash 5.3, bash 3.2, ksh93   [x][y][z] n=3
+    zsh                         [x][y][] n=3
+
+The base decides which column is being asked. `3` is the last element
+where the first is 1 and one past the end where the first is 0, so bash
+and ksh93 hold their length because nothing was named and zsh holds its
+length because the element it named was blanked rather than removed. Ask
+bash and ksh93 for *their* last element and it goes:
+
+    a=(x y z); unset "a[2]"     bash, ksh93 → [x][y] n=2
+    a=(x y z); unset "a[2]"     zsh         → [x][][z] n=3
+
+The end is the only place the two readings can be told apart. In the
+middle of an array they cannot: a dense reader finds a removed subscript
+empty on its own, so `unset a[2]` on `(p q r)` reads back as `[p][][r]`
+under both. That is what let the wrong answer stand — the corpus had the
+middle case and it passed — and it is why `array/removing-the-last-element`
+exists.
+
+Two end-relative wrinkles, measured rather than reasoned. Only `-1` acts
+under the blanking reading: `unset a[-2]` on `(x y z)` leaves all three
+where the removing shells take the middle one away. And bash 3.2 has no
+negative subscripts at all, reporting `[-2]: bad array subscript` where
+bash 5.3 removes.
+
 dash has no arrays and answers `UnsetTakesASubscript` with no, so the
-operand is a bad name there and the axis is never consulted; the POSIX
-preset leaves it unspecified, because the panel gives three answers and
-no reading of the standard picks one.
+operand is a bad name there and the axis is never consulted. The POSIX
+preset leaves it unspecified: the panel gives three answers to the
+whole-array spelling and no reading of the standard picks one, so that
+spelling is refused by name. A *single* subscript is not refused, because
+the preset has already committed to removal there — see
+`UnsetTakesASubscript`, where POSIX has `unset a[0]` name an element and
+take it away.
 
 The spelling used to do nothing at all. `@` is not an arithmetic
 expression, so the subscript failed to evaluate and the element nobody

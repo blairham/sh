@@ -1,11 +1,8 @@
-# ACP: an Agent Client Protocol front end
+# ACP: an Agent Client Protocol front end, both ways round
 
 The gate and the event stream are the shell's native permission-and-audit
 surface, and they were built for three consumers at once: a sandbox, an
 AI assistant, and an agent protocol. This is the design for the third.
-It is a **fourth consumer of `driver.Shell`**, beside `-c`, a script
-file and the prompt, and it adds no new question to the interpreter: it
-answers the two that are already there.
 
 Read `docs/design.md` first. The claim this document depends on is the
 one made there — that a policy enforced outside the interpreter does not
@@ -13,6 +10,36 @@ reach inside it — because it is what makes an agent front end honest.
 An editor that spawns `sh -c` and watches the pipe sees what a script
 chose to print. An ACP front end over this seam sees every exec, every
 open, every stat and every signal, including the ones inside an `eval`.
+
+## Two directions, one protocol
+
+ACP has two roles. An **Agent** does work and asks permission; a
+**Client** provides the environment, answers, and shows a person what is
+happening. This shell is both, in two different arrangements, and the
+whole point of the design is that it is one implementation rather than
+two:
+
+    editor  ──▶  sh --acp                       sh is the Agent
+    sh      ──▶  claude / gemini / codex        sh is the Client
+
+**Agent side.** An editor launches `sh --acp` as a subprocess and sends
+it shell to run. Gate consultations become permission requests to the
+editor; the event stream becomes session updates; execution goes through
+the existing driver routes. This is a fourth consumer of `driver.Shell`,
+beside `-c`, a script file and the prompt.
+
+**Client side.** The shell launches a coding agent as a subprocess and
+is the environment that agent runs inside. The agent asks *us* for
+permission, asks *us* to read and write files, asks *us* to run
+commands — and every one of those requests goes through the same gate.
+That is the part worth stating plainly: **an ACP client that is a shell
+can enforce a policy on an agent that no editor can**, because the file
+the agent reads is a file *we* open, through the boundary, and the
+command it runs is a command *we* start, through the boundary.
+
+The two roles are not a fork of each other. What follows is written as:
+the protocol facts, then the shared core, then what is role-specific,
+then the compatibility surface of the three agents we must talk to.
 
 ## Which revision, which transport, and how that was established
 
@@ -25,154 +52,179 @@ changes, and everything else is negotiated through capabilities.
 2.0 messages cross on the agent's standard input and standard output,
 UTF-8, one message per line, with no embedded newlines. The agent may
 write logs to standard error and **must not** write anything to standard
-output that is not an ACP message. That last sentence has a consequence
-for a shell and it is not a small one — see "The three streams" below.
+output that is not an ACP message. Both halves of that rule bind us,
+once each way round.
 
 Every message shape in this document was taken from the machine-readable
 schema rather than from prose: `schema/v1/schema.json` (170 definitions,
 each carrying `x-side` and `x-method`) and `schema/v1/meta.json`, which
 is the method table. The narrative pages —
 `docs/protocol/v1/{transports,initialization,prompt-turn,tool-calls}` —
-were read for the rules that a JSON schema cannot express, such as which
+were read for the rules a JSON schema cannot express, such as which
 party must answer a pending permission request when a turn is cancelled.
 Nothing here was inferred from an SDK's source.
 
 A version 2 exists and is **not** targeted. It is `2.0.0-alpha.3`, it
-drops `session/load`, `authenticate` and the whole `fs/*` and `terminal/*`
-client surface in favour of a reshaped one, and shipping a shell against
-an alpha would mean re-cutting the mapping when it moves. Version 1 is
-what clients speak today. The wire types live in one file for exactly
+reshapes authentication and drops the `fs/*` and `terminal/*` client
+surface in favour of a different one, and shipping against an alpha
+would mean re-cutting the mapping when it moves. Every agent we have
+measured speaks version 1. The wire types live in one file for exactly
 this reason: when v2 stabilizes, the mapping below is unchanged and only
 the encoding moves.
 
-## Which side of the protocol a shell is
+## What is shared, and what is role-specific
 
-The shell is the **Agent**. The editor is the Client.
+This is the table the implementation is organized around. "Shared" means
+one implementation serves both directions; a design in which the client
+side re-implements any of the first column is the failure to avoid.
 
-This falls out of the direction the two interesting messages travel.
-`session/request_permission` goes agent → client, which is a gate
-consultation asking a person. `session/update` goes agent → client,
-which is the event stream. `session/prompt` goes client → agent and
-carries the thing to run. A shell that were the *client* would be
-hosting somebody else's agent, which is a different program and not
-this issue.
+| concern | shared | role-specific |
+| --- | --- | --- |
+| JSON-RPC framing, ids, concurrency | **all of it** — a `Conn` is a peer, not a side | which methods it is given to answer |
+| message shapes | **all of it** — one party writes what the other reads | — |
+| the capability handshake | the negotiation, the version check, the refusal | which capabilities are ours to claim |
+| the permission option model | **all of it** — the four kinds, the ids, the meaning | who asks and who answers |
+| the session model | id, working directory, one turn at a time, cancellation | what a turn *is* |
+| gate and event plumbing | **all of it** — same `interp.Gate`, same `interp.Sink` | which actions reach it |
+| the shell itself | `driver.Session`, one per ACP session | — |
 
-So: an editor spawns `sh -acp`, sends it a command, watches what the
-shell does, and answers when the shell asks whether it may.
+Two things fall out of that table and are worth naming because they are
+easy to get wrong.
 
-## The subset a shell meaningfully serves
+**A `Conn` has no side.** JSON-RPC is symmetric: both parties answer
+requests and both make them. The transport is written once, takes a
+handler, and can call out while a handler is running — which is not an
+optimization but a requirement in *both* directions. An agent answers
+`session/prompt` by calling back with `session/request_permission`; a
+client answers `terminal/create` by calling back with nothing yet but
+will, and in the meantime it is still receiving `session/update`.
+
+**The permission mapping is direction-independent.** The four
+`PermissionOptionKind` values mean the same thing whoever is looking at
+them: two of them allow, two refuse, and one of each remembers. Turning
+an option id into an `interp.Decision` is the same function whether we
+chose the option (client side, from a person) or are asking somebody
+else to choose it (agent side).
+
+## The shell as Agent
+
+An editor spawns `sh --acp`, sends it a command, watches what the shell
+does, and answers when the shell asks whether it may.
+
+### The subset a shell meaningfully serves
 
 ACP is written for agents that talk to a model. A shell has no model, no
 plan and no token budget, and the honest subset is smaller than the
-protocol. What is implemented:
+protocol. Implemented: `initialize`, `session/new`, `session/prompt`,
+`session/cancel`; outbound, `session/update` and
+`session/request_permission`.
 
-| method | direction | what it means here |
-| --- | --- | --- |
-| `initialize` | client → agent | version and capability negotiation |
-| `session/new` | client → agent | a shell, with the client's `cwd` |
-| `session/prompt` | client → agent | run this text as shell |
-| `session/cancel` | client → agent (note) | interrupt the running turn |
-| `session/update` | agent → client (note) | what the shell just did |
-| `session/request_permission` | agent → client | the gate, asking a person |
-
-What is deliberately refused with JSON-RPC `-32601`, and why:
+Refused with `-32601`, each for a reason:
 
 - **`authenticate` / `logout`.** `authMethods` is empty. A local shell
-  authenticates by being a process the user already started; inventing
-  a login for it would be theatre.
-- **`session/load`, `session/resume`, `session/list`.** `loadSession`
-  is advertised false. Replaying a shell session is not replaying a
-  transcript — the state that matters is variables, functions, the
-  working directory and the descriptor table, none of which is in the
-  update stream. A load that restored the *text* and not the shell
-  would be a lie about what the client is looking at.
-- **`session/set_mode`, `session/set_config_option`.** There are no
-  modes and no options yet. The obvious candidate is the dialect, and
-  it is not free: a dialect is runtime state that `set -o posix`
-  re-reads mid-script, so exposing it as a session config option needs
-  a `current_mode_update` every time a script changes it. Worth doing,
-  worth doing on purpose.
+  authenticates by being a process the user already started.
+- **`session/load`, `session/resume`, `session/list`.** `loadSession` is
+  advertised false. A shell's session state is its variables, functions,
+  working directory and descriptor table, and none of that is in the
+  update stream: restoring the transcript would restore the *appearance*
+  of a session.
+- **`session/set_mode`, `session/set_config_option`.** The obvious
+  candidate is the dialect, and it is not free: a dialect is runtime
+  state that `set -o posix` re-reads mid-script, so exposing it as a
+  config option needs an update every time a script changes it. Worth
+  doing on purpose rather than by accident.
 - **MCP servers.** `session/new` carries `mcpServers`; ours is accepted
-  and ignored, with `mcpCapabilities` advertised false. A shell is not
-  an MCP host.
+  and ignored. A shell is not an MCP host.
 
-What is not used from the *client* side: `fs/read_text_file` and
-`fs/write_text_file` are not called even where the client advertises
-them, and this is the sharpest decision in the document. A shell reads
-files by opening them, through the gate, in the interpreter. Routing a
-`cat` through the client's file system capability would move that read
-*outside* the boundary this whole seam exists to draw, and the audit
-trail would lose it. The same holds for `terminal/*`: the shell has its
-own process model, decided in `docs/design.md`, and running a command
-through the client's terminal would put the process outside the gate.
-A client that wants those accesses represented sees them as tool calls
-and permission requests, which is a truer picture than borrowing the
-client's hands to do the work.
+**`fs/*` and `terminal/*` are not called even where the client
+advertises them.** A shell reads files by opening them, through the
+gate, in the interpreter. Routing a `cat` through the client's file
+system capability would move that read *outside* the boundary this whole
+seam exists to draw, and the audit trail would lose it.
 
-## What a prompt is, when the agent is a shell
+### What a prompt is, when the agent is a shell
 
-`session/prompt` carries an array of content blocks. The text blocks,
-joined with newlines, are the shell program for the turn. It is run by
-the `-c` route on the session's runner, which is `driver.RunCommand`'s
-shape: the origin is labelled `-c` in a parse failure's location, `$0`
-is the shell, and there are no positional parameters.
+The text blocks of `session/prompt`, joined with newlines, are the shell
+program for the turn. It runs on the session's `driver.Session`, which
+is the `-c` shape: the origin is labeled `-c` in a parse failure's
+location, `$0` is the shell, and there are no positional parameters.
+Non-text blocks are accepted and skipped, because the baseline requires
+an agent to tolerate a resource link and there is nothing useful a shell
+does with one.
 
-`promptCapabilities` are all advertised false, which is the baseline —
-text and `resource_link` — and non-text blocks are accepted and skipped
-rather than refused, because the baseline requires an agent to tolerate
-a resource link and there is nothing useful a shell does with one. A
-prompt with no text at all is an empty program and ends the turn with
-`end_turn` and nothing run, which is what an empty `-c` string does.
+`stopReason` is `end_turn` when the program finished, whatever its exit
+status — a failing command is a turn that completed — and `cancelled`
+when it was interrupted. `refusal` is reserved for a program that could
+not be parsed at all. `max_tokens` and `max_turn_requests` have no
+meaning here and are never sent.
 
-The response's `stopReason` is `end_turn` when the program finished,
-whatever its exit status — a failing command is a turn that completed,
-not a turn that stopped — and `cancelled` when the turn was interrupted.
-`refusal` is reserved for a program that could not be parsed at all;
-`max_tokens` and `max_turn_requests` have no meaning here and are never
-sent.
+**One turn at a time per session.** A second `session/prompt` while one
+is in flight is refused with `-32602`: the runner is a single shell, and
+interleaving two programs in it would give neither the variables it
+wrote. `driver.Session` says the same thing in its own words.
 
-**One turn at a time per session.** A second `session/prompt` for a
-session with a turn in flight is refused with `-32602`, because the
-runner is a single shell and interleaving two programs in it would give
-neither one the variables it wrote.
-
-## The three streams
+### The three streams
 
 An ACP agent may not write to standard output anything that is not a
 protocol message, and a shell's whole job is writing to standard output.
-The resolution is that the shell's stdout and stderr are **not the
-process's**. `driver.Shell` already takes them as `io.Writer` fields, so
-the session hands the runner writers of its own, and each write becomes
-a `session/update`:
+The resolution is that the shell's stdout and stderr are not the
+process's: `driver.Shell` takes them as `io.Writer` fields, so the
+session hands the runner writers of its own and each write becomes a
+`session/update` — `agent_message_chunk`, with the stream named in
+`_meta`, because v1 has no update kind that means "diagnostics" and
+`agent_thought_chunk` means a model's reasoning.
 
-- stdout → `agent_message_chunk`, a text content block;
-- stderr → `agent_message_chunk` as well, on the same turn.
+Standard input is empty; a `read` gets end of file. That is the
+deliberate answer to the interactive question below.
 
-Keeping stderr distinguishable is a real want and there is no honest
-place for it in v1's update vocabulary — `agent_thought_chunk` means
-model reasoning and would be a misuse. It is carried in `_meta` on the
-chunk, which is what `_meta` is for, and flagged below for review.
+## The shell as Client
 
-Standard *input* is empty. A `read` in an ACP session gets end of file.
-That is the deliberate answer to the interactive question below, not an
-oversight, and ACP has a proper home for it — `elicitation/create` — the
-day we want it.
+The shell launches an agent and provides its world. This is the half
+where the gate does something no editor's gate can.
 
-Bytes are not copied into the event stream, and `interp.Event` was
-designed not to carry them: the consumer that wants output taps the
-writer it supplied, which is exactly what this front end does.
+### What a client must implement
 
-## The gate becomes a permission request
+- **`session/update`** — receive and render. This is the agent telling
+  us what it is doing.
+- **`session/request_permission`** — the agent asking. Somebody has to
+  answer, and the answer is the same mapping the agent side produces,
+  read the other way round.
+- **`fs/read_text_file` / `fs/write_text_file`** — optional by the
+  protocol, and the reason to implement them is the whole argument
+  above: a file the agent asks *us* to read is a file that passes our
+  gate and lands in our audit trail, where a file the agent opens for
+  itself is invisible to us. Advertising them is how we pull the agent's
+  file access inside the boundary.
+- **`terminal/*`** — the same argument for commands, and additionally
+  required for one agent's authentication (below).
 
-This is the heart of it.
+### Where the gate sits on this side
 
-`interp.Gate` answers `Allow` or `Deny`, synchronously, from whatever
-goroutine reached the action. The ACP gate answers by asking a person
-over the wire, and blocks that goroutine until the client replies. A
-background job asking while the foreground asks is two concurrent
-requests, which JSON-RPC handles by construction — each carries its own
-id — so the gate keeps no lock across the round trip beyond the one that
-protects its memory of past answers.
+Every inbound request that would touch the world is an `interp.Action`
+before it is anything else:
+
+| inbound | action asked of the gate |
+| --- | --- |
+| `fs/read_text_file` | `ActionOpen`, `Write: false` |
+| `fs/write_text_file` | `ActionOpen`, `Write: true` |
+| `terminal/create` | `ActionExec` with the argv |
+| `terminal/kill` | `ActionSignal` |
+
+A denial is answered as the protocol allows an error to be answered, and
+recorded through the same `Sink`. The shape of the boundary is
+unchanged: `internal/boundary` already exists for exactly this — a front
+end asking the interpreter's gate about the front end's own accesses —
+and this is a fourth caller of it rather than a new mechanism.
+
+`session/request_permission` from the agent is the case where the gate
+is *not* the whole answer: the agent is asking about something it will
+do itself, in its own process, which our boundary does not cover. We
+show it to the person and send back what they chose. Where our own
+policy has already refused the underlying access, we may answer without
+asking, which is the composition rule below applied in the other
+direction.
+
+## The gate and the permission model
 
 ### Which actions reach a person
 
@@ -183,29 +235,22 @@ that rate is a prompt people click through, which is a *worse* boundary
 than an honest record, because it converts a considered answer into a
 reflex.
 
-So the escalation set defaults to the actions that change something
-outside the shell or start something the boundary can no longer see:
-
-- **`ActionExec`** — always. A command is the thing a person means to
-  approve, and once it is running its own accesses are its own.
-- **`ActionOpen` with `Write`** — always. This is the shell modifying
-  the file system in its own right.
-- **`ActionSignal`** — always. Reaching another process is the same
-  shape of act as starting one.
-
+The escalation set defaults to the actions that change something outside
+the shell or start something the boundary can no longer see:
+`ActionExec` always, `ActionOpen` with `Write`, and `ActionSignal`.
 Reads — a non-writing open, a stat, a directory read — are allowed and
 **recorded**, never asked about. `ActionInherit` is not gated at all, by
 the interpreter's own contract.
 
-The set is a value on the front end and not a constant, so a caller that
-wants everything escalated can have it. What it is *not* is a policy
-language: refusing reads by rule is the sandboxing work, and this front
-end composes with it rather than duplicating it.
+The set is a value rather than a constant, so a caller that wants
+everything escalated can have it. What it is not is a policy language:
+refusing reads by rule is `docs/design/sandboxing.md`, and this composes
+with that rather than duplicating it.
 
 ### Composition with a real policy
 
-The ACP gate wraps an inner `interp.Gate`, which is nil today and is a
-sandbox policy tomorrow. The order is:
+The ACP gate wraps an inner `interp.Gate` — nil today, a sandbox policy
+tomorrow:
 
 1. the inner gate is consulted first; if it denies, the action is denied
    and **no one is asked**. A policy refusal is not negotiable, and
@@ -215,14 +260,11 @@ sandbox policy tomorrow. The order is:
    answer covers it, the person is asked;
 3. otherwise it proceeds.
 
-This is why the front end does not need a third `Ask` decision value in
-`interp`. The interpreter's question stays binary; *who* answers it is
-the front end's arrangement.
+This is why no third `Ask` decision is needed in `interp`. The
+interpreter's question stays binary; *who answers it* is the front end's
+arrangement.
 
 ### The four option kinds
-
-Every escalated action offers all four of ACP's `PermissionOptionKind`
-values, with stable option ids:
 
 | optionId | name | kind | effect |
 | --- | --- | --- | --- |
@@ -231,16 +273,14 @@ values, with stable option ids:
 | `reject-once` | Reject | `reject_once` | `interp.Deny` |
 | `reject-always` | Reject always | `reject_always` | `interp.Deny`, remembered |
 
-An unrecognized `optionId` in the response is a **deny**, not a guess.
+An unrecognized `optionId` in a response is a **deny**, not a guess.
 
 **What "always" remembers** is the pair (action kind, path) — for an
-exec that is the resolved program, for an open the file and whether it
-was for writing, and for a signal the target pid, which is deliberately
-narrow because a pid is not a stable identity and a remembered answer
-about one is nearly useless on purpose. The memory lives on the
+exec the resolved program, for an open the file and whether it was for
+writing, for a signal the target pid, which is deliberately near-useless
+because a pid is not a stable identity. The memory lives on the
 **session**, not the connection: sessions have their own working
-directory and a client presents them as separate things, so an answer
-given in one should not silently govern another.
+directory and a client presents them as separate things.
 
 It is an exact match and not a prefix. "Allow always for everything
 under /tmp" is a policy language, and writing one here would be the
@@ -248,27 +288,17 @@ sandboxing initiative done badly in the wrong package.
 
 ### Deny until answered
 
-Every path that is not an explicit allow is a denial:
+Every path that is not an explicit allow is a denial: outcome
+`cancelled` (which a client **must** send for pending permission
+requests when a turn is cancelled), a reject kind, an option id we never
+offered, a JSON-RPC error, the connection closing with the request
+outstanding, or the turn's context being cancelled while waiting.
 
-- outcome `cancelled` (which the client **must** send for pending
-  permission requests when the turn is cancelled) → `Deny`;
-- an `optionId` naming a reject kind, or naming nothing we offered →
-  `Deny`;
-- a JSON-RPC error from the client → `Deny`;
-- the connection closing with the request outstanding → `Deny`;
-- the turn's context being cancelled while waiting → `Deny`.
-
-There is no timeout. A client that never answers holds the goroutine,
-and that is correct: the alternative is a deadline that silently allows
-or silently refuses, and either one is a boundary that reports something
-other than what happened. Cancellation is the intended way out, and it
-is a message the protocol already has.
-
-A denial is reported by the interpreter in its own words — a denied exec
-says so and fails with 126, a denied stat is quiet and reads as a
-missing path — and the front end does not second-guess that. The
-`EventDenied` that follows becomes a failed tool call, so the client
-sees the refusal it caused.
+There is **no timeout**. A client that never answers holds the
+goroutine, and that is correct: a deadline that silently allows or
+silently refuses is a boundary that reports something other than what
+happened. Cancellation is the way out, and it is a message the protocol
+already has.
 
 ## The event stream becomes session updates
 
@@ -282,130 +312,169 @@ sees the refusal it caused.
 
 A tool call's `title` is the command line as written, its `locations`
 carry the path for a file action so the client can follow along, and its
-`rawInput` carries the structured action — kind, path, args, write flag,
-pid, signal — which is the audit record the protocol will let us hand
-over verbatim.
+`rawInput` carries the structured action.
 
 An escalated action creates its tool call *before* the permission
-request, because `session/request_permission` requires a `toolCall` and
-the client will want to show what it is asking about. The gate runs
-before `EventCommandStart`, so the tool call exists by the time the
-event arrives and the event updates it rather than creating a second.
+request, because `session/request_permission` requires a `toolCall`. The
+gate runs before `EventCommandStart`, so the tool call exists by the
+time the event arrives and the event updates it rather than creating a
+second.
 
 ### The correlation gap, which is not ours to close
 
 `interp.Event` carries no identity for the action it belongs to.
 `EventCommandStart` and `EventCommandEnd` are matched by *ordering*, and
 ordering is exactly what concurrency breaks: a background job and each
-half of a pipeline emit from their own goroutines, so two runs of the
-same command can interleave their start and end.
+half of a pipeline emit from their own goroutines.
 
-Until the event schema carries an id, this front end matches by a
-fingerprint of (kind, path, args, line, file) with a FIFO of open tool
-calls per fingerprint, and an unmatched end becomes a standalone
-completed tool call rather than being dropped. It is cosmetic when it is
-wrong — the *wrong tool call* is marked complete, no decision changes —
-but it is wrong, and the fix is one field.
+The audit schema in `internal/event` — owned by
+`docs/design/sandboxing.md`, which this consumes rather than competes
+with — does not close it either, and says so: `seq` is a total order of
+*emission* and is explicitly "not a causal order". That is the right
+call for a log and leaves this mapping without an answer.
 
-**The stable event schema is owned by the native sandboxing work
-(#494),** because the sandbox audit log and these session updates are
-the two consumers of it. What is wanted from it is a monotonic
-per-action id on `Event` (and the same id on the `Action` a gate is
-consulted about, so that a permission request and the events for the
-action it approved are provably the same action). This front end does
-not define one.
+Until an id exists, this front end matches by a fingerprint of (kind,
+path, args, line, file) with a FIFO of open tool calls per fingerprint,
+and an unmatched end becomes a standalone completed tool call rather
+than being dropped. It is cosmetic when it is wrong — the wrong tool
+call is marked complete, no decision changes — but it is wrong, and the
+fix is one field: a per-action id on `Event`, and the same id on the
+`Action` a gate is consulted about, so that a permission request and the
+events for the action it approved are provably the same action.
 
-## Interactive: ACP is strictly non-interactive, and the REPL is untouched
+## The three agents we must talk to
 
-The REPL and the ACP front end do **not** share the interactive
-plumbing. An ACP session is non-interactive in the same sense a script
-is: no line editor, no history, no prompts, no `/dev/tty`, no terminal
-handoff, and `i` is not in `$-`.
+All three speak protocol version 1, all three are launched with `npx`,
+and there the similarity stops. Measured from the ACP registry's own
+daily protocol matrix (`.protocol-matrix/latest.json`, run 2026-09-05)
+and the registry's agent entries:
 
-Three reasons, in order of how load-bearing they are.
+| | Claude Agent | Codex | Gemini CLI |
+| --- | --- | --- | --- |
+| package | `@agentclientprotocol/claude-agent-acp` | `@agentclientprotocol/codex-acp` | `@google/gemini-cli` |
+| version measured | 0.75.0 | 1.10.0 | 0.58.0 |
+| ACP by | adapter over the Claude Agent SDK | adapter | **native** |
+| launch args | *(none)* | *(none)* | `--acp` |
+| `protocolVersion` | 1 | 1 | 1 |
+| auth method kind | `terminal` | `agent` | `agent` |
+| `session/new` unauthenticated | succeeds | `-32000` auth required | `-32000` auth required |
+| `session/list` | supported | `-32000` until authenticated | **`-32601`** |
+| `session/resume` | supported | `-32000` until authenticated | **`-32601`** |
+| `session/fork` | advertised, answers `-32603` | `-32000` until authenticated | `-32601` |
 
-**The channel is taken.** The REPL reads standard input and writes
-standard output; ACP *is* standard input and standard output. There is
-no arrangement in which both are on the same descriptors and both work.
+Four things a client has to be built around, none of which is visible
+from the specification alone:
 
-**There is no terminal.** The REPL's editor needs raw mode, a window
-size and `/dev/tty` for job control. A client spawns an agent with
-pipes. A prompt drawn into a pipe is not a prompt.
+1. **Authentication is the first thing that happens, not the last.**
+   Two of the three refuse `session/new` with `-32000` until
+   authenticated. A client that treats `initialize` succeeding as "ready
+   to work" fails on two of three agents.
+2. **The auth *kind* differs, and one of them needs us to be a
+   terminal.** Agent Auth means the agent opens a browser and runs its
+   own OAuth callback server; the client's part is to trigger it and
+   wait. Terminal Auth means the client **relaunches the agent binary
+   with extra arguments in an interactive terminal** — which is what
+   Claude Agent asks for. For a shell that is an unusually good fit and
+   for an editor it is a whole subsystem: it is the one place where
+   being a shell makes us a *better* ACP client than the tools this
+   protocol was written for.
+3. **An advertised capability is not a working method.** Claude Agent
+   advertises `sessionFork` and answers `-32603` to it. A client must
+   degrade on the *answer*, not only on the advertisement.
+4. **`-32601` is a fact, not a failure.** Gemini answers it for every
+   optional method. A client must treat method-not-found as "this agent
+   does not do that" and carry on.
 
-**The protocol has its own answer.** Where a script genuinely needs a
-person — a `read` at a prompt, a password — ACP's `elicitation/create`
-is the message for it, and a client that advertises the capability could
-serve a `read` properly. That is a real feature and it is out of scope
-here; noting it is the point of writing this section.
+The differences are recorded here rather than discovered per agent
+because they are the compatibility surface, and because "they all speak
+ACP" is exactly the assumption that makes a client work with one of
+them.
 
-What the two front ends *do* share is everything that matters:
-`driver.Shell`, the runner it builds, the gate and the sink. An ACP
-session and a prompt session are the same shell.
+## Interactive: ACP is non-interactive, and the REPL is untouched
+
+On the **agent** side an ACP session is non-interactive in the same
+sense a script is: no line editor, no history, no prompts, no
+`/dev/tty`, no terminal handoff, and `i` is not in `$-`.
+
+Three reasons, in order of how load-bearing they are. **The channel is
+taken** — the REPL reads standard input and writes standard output, and
+ACP *is* standard input and standard output. **There is no terminal** —
+the editor spawns us with pipes, and a prompt drawn into a pipe is not a
+prompt. **The protocol has its own answer** — `elicitation/create` is
+the message for a script that genuinely needs a person, and a client
+that advertises the capability could serve a `read` properly. That is a
+real feature and it is out of scope here.
+
+The **client** side is where a person is present, and it does not change
+that answer either: the shell that is running an agent may well be a
+prompt, but the agent's own stdio is a pipe we own, and the permission
+questions it asks are drawn by whatever front end the person is using.
+The two front ends share `driver.Shell`, the runner it builds, the gate
+and the sink. An ACP session and a prompt session are the same shell.
 
 ## Package layout
 
-    internal/acp/        the protocol and the mapping
-      jsonrpc.go         JSON-RPC 2.0 over a newline-delimited stream
-      wire.go            the v1 message shapes we use, and nothing else
-      agent.go           initialize / session lifecycle / dispatch
-      session.go         one shell: runner, turn, streams
-      gate.go            Gate → session/request_permission
-      updates.go         Sink and stream writers → session/update
-    cmd/sh               `sh -acp` serves ACP on stdin/stdout
+    internal/acp/          the shared core — neither side's
+      jsonrpc.go           JSON-RPC 2.0 over a newline-delimited stream
+      wire.go              the v1 message shapes, for both parties
+      permission.go        option kinds ↔ interp.Decision, and the memory
+      session.go           id, cwd, one turn at a time, cancellation
+    internal/acp/agent/    role: we answer
+    internal/acp/client/   role: we ask, and we provide the world
+    cmd/sh                 `sh --acp` serves; `sh --acp-connect` calls out
 
-`internal/` per the promotion rule: a package is promoted once something
-has consumed it, and the consumer that earns it is the binary. Putting
-the ACP front end behind `sh -acp` rather than in a binary of its own
-gets `-dialect` for free, keeps one place that knows how to build a
-`driver.Shell` from a dialect package, and makes the agent command line
-an editor writes something a person can also type. If a client ever
-needs `acp` as a separate executable, `cmd/acp` is a `main` that calls
-one function.
+`internal/` per the promotion rule; the consumer that earns promotion is
+the binary. Putting both behind `cmd/sh` gets `-dialect` for free, keeps
+one place that knows how to build a `driver.Shell` from a dialect
+package, and makes the agent command line an editor writes something a
+person can also type.
 
-`driver.Shell` gains one field for this: **`Dir`**, the directory the
-shell starts in, defaulting to the process's when empty. `session/new`
-carries a `cwd` per session and a process has one working directory, so
-without it two sessions would have to fight over `os.Chdir` — which is
-the library-purity rule from `docs/design.md` reappearing one level up.
-It is a field every other consumer already had implicitly.
+`driver` gains what a long-lived front end needs and no more: `Session`,
+a shell held open across several inputs, and `Shell.Dir`, because
+`session/new` carries a per-session working directory and a process has
+only one.
 
 ## What this is not
 
 It is not a sandbox, and the boundary is around the interpreter rather
-than around the process tree. Approving `cat /secret` in an editor's
-permission dialog approves *starting* `cat`; what `cat` then reads is
-its own business and the gate never sees it. This front end makes the
-shell's own accesses visible and refusable, which is a strictly larger
-surface than an editor spawning `sh -c` has today, and strictly smaller
-than containment. Containment is #494.
+than around the process tree. Approving `cat /secret` approves
+*starting* `cat`; what `cat` then reads is its own business. On the
+client side the same limit applies to the agent's own process: what it
+does through `fs/*` and `terminal/*` is ours to gate, and what it does
+with its own file descriptors is not. Containment is
+`docs/design/sandboxing.md`.
 
 ## Decisions flagged for review
 
-Each of these is a defensible default chosen so the work could proceed;
-each is genuinely the maintainer's.
+Each is a defensible default chosen so the work could proceed; each is
+genuinely the maintainer's.
 
 1. **Protocol version 1 rather than the v2 alpha.** Revisit when v2
-   stabilizes.
-2. **The escalation set** — exec, writing opens, signals. Reads
-   recorded and not asked about. This is the one that decides whether
-   the front end is usable, and the one most likely to be wrong.
-3. **`allow_always` scope**: exact (kind, path), session-lifetime. A
-   subtree or a pattern would need a policy language.
-4. **stderr as `agent_message_chunk` with a `_meta` marker** rather
-   than a distinct update kind, which v1 does not have.
-5. **`sh -acp` rather than `cmd/acp`.** A flag on the substrate's
-   driver, not a new binary.
-6. **`session/load` refused.** A shell's session state is not in the
-   transcript.
+   stabilizes. All three agents speak 1 today.
+2. **The escalation set** — exec, writing opens, signals; reads recorded
+   and not asked about. The decision most likely to be wrong.
+3. **`allow_always` scope**: exact (kind, path), session-lifetime.
+4. **stderr as `agent_message_chunk` with a `_meta` marker** rather than
+   a distinct update kind, which v1 does not have.
+5. **`sh --acp` and `sh --acp-connect` rather than separate binaries.**
+6. **`session/load` refused on the agent side.** A shell's session state
+   is not in the transcript.
 7. **No permission timeout.** Cancellation is the way out.
-8. **`fs/*` and `terminal/*` client capabilities not used**, even when
-   advertised, because using them would move accesses outside the gate.
+8. **`fs/*` and `terminal/*` not *called* on the agent side**, and
+   **implemented and advertised on the client side.** The asymmetry is
+   deliberate and is the same rule read twice: keep accesses inside our
+   boundary.
+9. **Terminal Auth is in scope for the client.** Without it Claude Agent
+   cannot be authenticated from this shell at all, because `terminal` is
+   the only method it offers.
 
 ## Staging
 
-1. this document;
-2. `internal/acp`: JSON-RPC framing and the wire types, tested against
-   the schema's shapes;
-3. the session: the `driver.Shell` consumer, the gate mapping, the
-   update mapping;
-4. `sh -acp` and an end-to-end test that drives a real connection.
+1. the design (this document);
+2. the shared core — framing and wire types, then the permission
+   mapping and the session model;
+3. `driver.Session` and `Shell.Dir`, which both roles need;
+4. the agent side, and `sh --acp`;
+5. the client side, and `sh --acp-connect`, against all three agents.
+
+`Closes #493` belongs on the last of those and on nothing before it.

@@ -71,6 +71,35 @@ own OS sandbox backends, protocol transports, or model providers. A
 library that imports an AI SDK is a library nobody adopts; the seams are
 here, the implementations sit above.
 
+**A binary supplies the value; the interpreter owns the meaning.**
+`driver.Shell` carries a `Gate` and an `Events` sink and hands both to
+every Runner it builds — one place, so the `-c` route, a script file,
+standard input and a prompt cannot disagree about whether a shell is
+gated. Nil is the default and means what it has always meant: allow
+everything, discard every event, one nil check on the hot path. What
+the interpreter *asks about*, what a decision does, and what an event
+carries are not the front end's to change; a driver that decided any of
+that would be a policy applied outside execution, which is the thing
+this whole seam exists to rule out.
+
+The rule that a seam nothing reaches is a seam nothing grades applies
+here as hard as anywhere. The gate was unit-tested from its first commit
+and no shipped binary ever set one, so the conformance harness and the
+wild sweep both ran ungated and a hole in the boundary would have looked
+exactly like a shell that works. `cmd/sh` therefore has a debug route
+onto it — `-trace-events` prints the stream, `-deny` refuses a path and
+everything under it — and that route is a way to *watch* the gate, not a
+sandbox.
+
+The distinction is worth stating because the boundary is drawn around
+the interpreter and not around the process tree. `-deny /secret` hides
+`/secret` from the shell's own file tests, globs and redirections, and
+does nothing at all to a `cat /secret/f` the shell was allowed to start:
+the gate refuses *the shell's* accesses, and a child process makes its
+own. Containing what a command does once it is running is the job of an
+OS sandbox backend, which sits above this and is what a real `Gate`
+implementation would reach for.
+
 ## The process model is decided now
 
 Background jobs are **real process groups**, not goroutines.

@@ -35710,6 +35710,50 @@
         "TimedOut": false
       }
     },
+    "redir/a-descriptor-number-over-the-open-file-limit": {
+      "bash": {
+        "Stdout": "st=1~fresh",
+        "Stderr": "\u003cshell\u003e: line 1: 70: Bad file descriptor",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: 70: Bad file descriptor",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~fresh",
+        "Stderr": "\u003cshell\u003e: 70: Bad file descriptor",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: exec: 70: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: exec: 70: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: command not found: 70",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "redir/a-dup-prefix-is-that-commands-alone": {
       "bash": {
         "Stdout": "st=1",
@@ -36326,6 +36370,50 @@
         "TimedOut": false
       }
     },
+    "redir/a-two-digit-descriptor-number": {
+      "bash": {
+        "Stdout": "hi",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "hi",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "hi",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: exec: 10: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: exec: 10: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: command not found: 10",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "redir/a-write-to-a-closed-descriptor-fails": {
       "bash": {
         "Stdout": "st=1",
@@ -36585,6 +36673,50 @@
       "zsh": {
         "Stdout": "st=1",
         "Stderr": "\u003cshell\u003e:1: is a directory: d",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/digits-before-a-redirection-that-are-not-a-number": {
+      "bash": {
+        "Stdout": "x~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "x~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "x~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0~x 10",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~x 10",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~x 10",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

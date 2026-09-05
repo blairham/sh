@@ -67,6 +67,20 @@ type Parser struct {
 	// normal case on the keystroke path, so this is a bound rather than a
 	// trust.
 	depth int
+
+	// bodyTookTerm is where a command's own body took the separator that
+	// would otherwise have ended the statement around it, and it is the one
+	// way a statement is terminated without holding the terminator itself.
+	//
+	// A short loop body is a whole statement, terminator and all: the `;` in
+	// `for i (a b) echo $i; echo end` belongs to `echo $i`, and there is
+	// nothing left between the loop and `echo end` — so the loop is
+	// terminated by it too, and the list may go on. A `do … done` or a brace
+	// body is closed by its own word instead and leaves the statement
+	// unterminated, which is measured: the shell with short loops parses
+	// `for i (a b) echo $i; echo end` and refuses
+	// `for i (a b) { echo $i; } echo end`.
+	bodyTookTerm Pos
 }
 
 // maxParamDepth is how far `${x:-${y:-…}}` may nest before the parser stops.
@@ -520,6 +534,15 @@ func (p *Parser) NextLine() (*File, bool) {
 		if p.at(TokNewline) || p.at(TokEOF) {
 			break
 		}
+		if !st.Semi.IsValid() {
+			// Nothing terminated the statement, so the line ended with it:
+			// two commands need a `;`, a newline or an `&` between them.
+			// Only a command that ends itself gets this far — a simple
+			// command absorbs the next word as an argument — which is why it
+			// shows on `{ :; } echo x` and never on `true echo x`.
+			p.failUnexpected("")
+			break
+		}
 	}
 	f.Last = p.lineEnd()
 	return f, true
@@ -551,20 +574,24 @@ func (p *Parser) skipNewlines() {
 	}
 }
 
-// parseList reads statements until a stop word, a closing paren, or the end.
-func (p *Parser) parseList() []*Stmt { return p.parseListUntil(false) }
-
-// parseListUntil is parseList, optionally stopping after a statement that was
-// written with no terminator after it.
+// parseList reads statements until a stop word, a closing paren, or the end —
+// and until a statement that was written with no terminator after it.
 //
-// That is a list's real boundary and nothing else marks it: two statements
-// need a `;`, a newline or an `&` between them, so a command standing straight
-// after one that ended itself — `(( i < 2 )) echo hi` — is not a second
-// statement of the same list. Every shell in the panel refuses that text where
-// it is only a list; the one with short loops reads the second command as a
-// loop *body*, which is what the flag asks for and why the boundary has to be
-// visible here rather than guessed at afterwards.
-func (p *Parser) parseListUntil(stopWhereTheListEnds bool) []*Stmt {
+// That last one is the list's real boundary and nothing else marks it: two
+// statements need a `;`, a newline or an `&` between them, so a command
+// standing straight after one that ended itself — `(( i < 2 )) echo hi` — is
+// not a second statement of the same list. Every shell in the panel refuses
+// that text where it is only a list; the one with short loops reads the second
+// command as a loop *body*, which is why the boundary has to be visible here
+// rather than guessed at afterwards.
+//
+// The list stops rather than failing, and the caller says what was wrong,
+// because the caller is the one that knows what it was waiting for: the panel
+// names the token it met and one shell also names the closer it wanted, which
+// is `)` for a subshell and `done` for a loop. A simple command hides the gap
+// entirely, since its words absorb whatever follows — `true echo x` is one
+// command with an argument — so this only ever shows after a compound.
+func (p *Parser) parseList() []*Stmt {
 	var out []*Stmt
 	p.skipNewlines()
 	for p.err == nil && !p.at(TokEOF) && !p.atStopWord() && !p.at(TokRightParen) {
@@ -573,7 +600,7 @@ func (p *Parser) parseListUntil(stopWhereTheListEnds bool) []*Stmt {
 			break
 		}
 		out = append(out, st)
-		if stopWhereTheListEnds && !st.Semi.IsValid() {
+		if !st.Semi.IsValid() {
 			break
 		}
 		p.skipNewlines()
@@ -619,11 +646,14 @@ func (p *Parser) requireBody(list []*Stmt) []*Stmt {
 
 // parseStmt reads one and-or list and its terminator.
 func (p *Parser) parseStmt() *Stmt {
+	// Cleared here rather than after it is read, so that the statement being
+	// started asks about its own body and never about an earlier one's.
+	p.bodyTookTerm = Pos{}
 	expr := p.parseAndOr()
 	if expr == nil {
 		return nil
 	}
-	st := &Stmt{Expr: expr}
+	st := &Stmt{Expr: expr, Semi: p.bodyTookTerm}
 	switch p.tok.Kind {
 	case TokAmp:
 		// `&` belongs to the statement, not the command: `a && b &`
@@ -1475,7 +1505,24 @@ func (p *Parser) parseSubshell() Command {
 	p.next()
 	c.List = p.parseBody()
 	if !p.at(TokRightParen) {
-		p.fail("expected )")
+		if p.at(TokEOF) {
+			p.ranOut()
+			if p.err == nil {
+				p.err = p.unterminated(")")
+			}
+			return c
+		}
+		// Named the same way a brace group names it: the token that stopped
+		// the list, and the closer that was wanted alongside it only where
+		// the subshell had something in it. `( echo a; fi )` is
+		// `"fi" unexpected (expecting ")")` in the one shell that prints an
+		// expectation and `( fi )` is `"fi" unexpected` there, which is
+		// measured — an empty subshell has nothing to be in the middle of.
+		expected := ""
+		if len(c.List) > 0 {
+			expected = ")"
+		}
+		p.failUnexpected(expected)
 		return c
 	}
 	c.Stop = p.tok.End
@@ -1662,6 +1709,10 @@ func (p *Parser) shortLoopBody() (body []*Stmt, stop Pos) {
 	if st == nil {
 		return nil, p.tok.Pos
 	}
+	// The separator the body just took is the loop's as well: there is
+	// nothing between the two commands but the one `;`, so a list may carry
+	// on after the loop where it could not after a `done` or a `}`.
+	p.bodyTookTerm = st.Semi
 	return []*Stmt{st}, st.End()
 }
 
@@ -1724,7 +1775,7 @@ func (p *Parser) parseLoop() Command {
 	c := &LoopClause{Until: p.atWord("until"), Start: p.tok.Pos}
 	defer p.opens(loopWord(c.Until))()
 	p.next()
-	c.Cond = p.requireBody(p.parseListUntil(p.dialect.ShortLoop))
+	c.Cond = p.requireBody(p.parseList())
 	// Where the body may be short, the condition list is the whole header and
 	// it has just ended: what stands here is either `do`, or the body, or
 	// nothing. The list is what decides — a `;` kept it going, so anything

@@ -190,16 +190,103 @@ only where `-s` was written. That is a shell disagreeing with its own
 later build rather than a panel disagreement, so it is recorded here and
 not modeled; the bash dialect follows 5.3, as it does everywhere else.
 
-**The letters a shell adds only when interactive are a second vector,
-also unmodeled.** bash adds `H`, zsh adds `Z`, and ksh93 trades `h` for
-`m` and `E`; dash adds nothing. That is per-dialect startup state rather
-than one axis, and it is a different question from whether the shell is
-interactive at all.
+### The letters an interactive shell starts with are a second vector
 
-**ksh93 is the only shell that turns the monitor on for `-i
-script.sh`** (`m` in its row, absent from the other three). So being
-interactive and having job control are not the same fact, which is why
-`Interactive` and `JobControl` are separate fields rather than one.
+**The rule.** What `$-` begins with is `Semantics.DefaultOptionLetters` for a
+script and `Semantics.InteractiveOptionLetters` for an interactive shell, and
+the second **replaces** the first rather than adding to it. An empty second
+string means the shell has no separate answer and the first stands for both.
+
+It is a different question from whether the shell is interactive at all, which
+is unanimous and needs no axis; this is what being interactive *turns on*, and
+the panel disagrees about it four ways.
+
+#### Measured
+
+Same panel and date. `sh -i script.sh` with a scratch `HOME`, so the shell is
+interactive without a terminal — which is the whole of the condition, measured:
+`-i` alone is enough and no prompt is needed.
+
+| shell | a script | `-i script.sh` | what moved |
+| --- | --- | --- | --- |
+| bash 5.3 | `hB` | `hiBH` | adds `H` |
+| bash 3.2 | `hB` | `hiB` | adds nothing |
+| dash | *(empty)* | `i` | adds nothing |
+| ksh93 | `hB` | `imBE` | **drops `h`**, adds `m` and `E` |
+| zsh | `569X` | `569XZi` | adds `Z` |
+
+**ksh93 is why the field replaces rather than appends.** A "letters to add"
+field would have recorded three shells correctly and one wrongly, and the one
+it got wrong is the only one that makes the shape visible. What moved is real
+and was checked from the other side with `set -o`: `trackall` is on for a
+script and off when interactive, which is the `h`; `rc` — the option that reads
+`$ENV` — comes on only when interactive, which is the `E`.
+
+bash's `H` is the same check: `histexpand` and `history` are both off for a
+script and on under `-i`, and the letter is `histexpand`'s.
+
+**bash 3.2 dissents against its own later build**, and by route as well: it
+answers `hiB` for `-i script.sh` and `hiBHc` for `-i -c`. 5.3 is the panel
+member that counts, as it is everywhere else.
+
+#### `m` is not in the field, and must not be
+
+**ksh93 is the only shell that turns the monitor on for `-i script.sh`**, and
+it really turns it on: `set -o` reports `monitor on` there, and off in bash and
+zsh. Every shell in the panel that reports `m` reports it *because* the monitor
+is running — `set -m; echo $-` shows the letter in bash and ksh93 alike.
+
+So the letter has to come from `Runner.monitor` or not at all. Writing it into
+a startup string would report a monitor that is not there, and being
+interactive and having job control would stop being separate facts — which is
+exactly why `Interactive` and `JobControl` are separate fields.
+
+**Measured and not modeled:** the front end sets `JobControl` for a prompt and
+not for `-i script.sh`, which follows three of the four, so our ksh answers
+`iBE` there where the real one answers `imBE`. Turning job control on for an
+interactive shell with a script to run is one shell against three and a change
+to what the shell *does* rather than to what it says about itself, so it is a
+question of its own.
+
+#### What the corpus cannot say about this
+
+Nothing here is a corpus case, and the reason is recorded on
+`invoke/a-script-is-not-interactive`: `-i` away from a terminal makes bash and
+dash announce that job control is off, and bash's line carries a pid, so the
+output is not the same twice. The evidence is the table above, the per-dialect
+answers in `dialect/*/`, and the front end's own test that the invocation
+chooses between the two vectors.
+
+### The order of the letters is the shell's, and it is not the order they were set in
+
+Everything above reads `$-` as *membership*, which is what a script does
+and what the axes model. The **string** is a separate fact and no shell
+in the panel builds it the same way. Measured 2026-09-05, `set -f; set
+-u; set -e` and then `echo "[$-]"`
+(`special/dollar-dash-orders-the-letters-its-own-way`):
+
+| shell | `$-` |
+| --- | --- |
+| dash | `ufe` |
+| bash 5.3, bash-as-`sh`, bash 3.2 | `efhuBc` |
+| ksh93 | `cefhsuB` |
+| zsh | `569Xefu` |
+
+None of them is the order the options were written in, and only two
+resemble each other. bash sorts the lowercase letters and keeps the ones
+it started with as a suffix; ksh93 sorts everything it holds; zsh puts
+its digits first; and dash's `ufe` is neither sorted nor chronological —
+it is its own option table's order, which is a fact about a table nobody
+outside dash can see.
+
+So a script may test `case $- in *e*)` and may not compare `$-` against a
+string, and an implementation has no order to inherit: it has to pick
+one, per dialect, the way it picks the letters. The whole string is also
+recorded by route in `special/dollar-dash-in-full` and
+`special/dollar-dash-in-full-from-a-script`, which is where the
+route-dependence above shows up as text rather than as membership — ksh93
+carries `s` for a command string and drops it for a script, landing on
+exactly bash's `hB`.
 
 ## Where it lives
 
@@ -572,6 +659,114 @@ The profile is sourced after the invocation's options are applied and after
 the runner is built, which is what the two measurements above require, and it
 is the same order the prompt route already used (#482).
 
+## Called `sh`: the name starts the shell in POSIX mode
+
+**The rule.** A shell invoked under the standard's own name — `sh` — starts in
+POSIX mode. The name is the last element of `argv[0]` with one leading dash
+removed, so `sh`, `/bin/sh`, `./sh` and the login spelling `-sh` are all it.
+
+The mode itself is `Semantics.RedirectErrorOnSpecialBuiltinFatal` and whatever
+else is ever measured to move with it; see `semantics.md`. What is written down
+here is only where it *starts*, which is the front end's half: how a program
+arrived and what it was called is `driver`'s fact and nothing else's, the same
+reasoning that put `$0`, the alias route and login-ness there.
+
+**It is not an axis.** The same binary answers both ways depending on the word
+it was exec'd with, so a dialect field keyed on it would record the accident
+and lose the rule — which is exactly what #691 found when it moved the answer
+out of the panel's `bash-as-sh` column and into a mode. This is the other half
+of that: the dialect supplies where the mode starts and the front end overrides
+it when the name says `sh`.
+
+### Measured
+
+Panel: bash 5.3.15, bash 3.2.57, dash, ksh93u+ 2012-08-01, zsh 5.9.2, on macOS
+25.5 — measured 2026-09-05. Every row was run under a chosen `argv[0]` with a
+scratch `HOME`, the snippet `exec 3>/nope/x; echo after`, which is the axis the
+mode moves.
+
+| `argv[0]` | bash 5.3 | bash 3.2 | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- |
+| its own name | `after`, 0 | `after`, 0 | stops, 2 | stops, 1 | `after`, 0 |
+| `sh` | **stops, 1** | **stops, 1** | stops, 2 | stops, 1 | **stops, 1** |
+| `/bin/sh`, `./sh` | stops, 1 | — | — | — | stops, 1 |
+| `-sh` | stops, 1 | stops, 1 | — | — | stops, 1 |
+| `--sh` | `after`, 0 | — | — | — | — |
+| `shx`, `SH`, `bsh` | `after`, 0 | — | — | — | see below |
+
+**Two shells move and two have nowhere to move to.** dash and ksh93 keep the
+standard's rule under every name, so they answer alike in both rows; the
+evidence is bash and zsh, which are the two with a mode at all and which each
+change under the same word. `set -o` confirms it directly for bash — `posix on`
+called `sh`, `posix off` called `bash` — and `emulate` does for zsh, reporting
+`sh` and `zsh` respectively.
+
+**The two that move do not read the name the same way, and the core takes the
+narrower reading.** bash matches the basename exactly. zsh takes the *first
+letter* of it, after stripping a leading `-` and a leading `r`: `s` and `b`
+mean `sh`, `k` means `ksh`, `c` means `csh`, and anything else is zsh — so
+`bash`, `shx`, `shell` and even `s` are all sh emulation there while `ash`,
+`dash`, `fish`, `xsh` and `mysh` are not, and `rsh` is while `rzsh` is not. The
+front end reads `sh` and nothing else: it is the word both shells agree on, it
+is the only one anything is really invoked by, and taking zsh's extras would
+put a shell called `bash` into POSIX mode.
+
+**One dash and not any number.** `-/bin/sh` is the name and `--sh` is not,
+which is what makes the strip a login convention rather than general
+punctuation.
+
+### Where in startup it happens
+
+Last, and both halves are measured.
+
+**After the invocation's own options.** `sh +o posix -c 'exec 3>/nope/x; echo
+after'` still stops where `bash +o posix -c` the same string carries on. It is
+not the option loop being ignored — `+o errexit` on the same invocation is
+honored, and so is `-x` — so the name is read after the options and outranks
+the one of them it collides with.
+
+**After the startup files.** A `~/.profile` read by `-sh -l` reports `posix
+off`, and the script that follows it stops all the same. So the profile runs in
+the shell the dialect describes and the mode arrives after it.
+
+**But before the file a non-interactive shell sources out of a named
+variable**, because the mode *suppresses* that file — see "The file a shell
+reads when it is not going to prompt" below. The two questions compose here
+and nowhere else: a shell called `sh` reads no such file, which is the same
+absence the standard's own posix option produces, and neither needs a second
+answer keyed on the invocation. Pinned by
+`env/a-file-named-for-a-non-interactive-shell-is-not-read-when-called-sh`
+against the row for the same case under the shell's own name.
+
+### Leaving it again
+
+The mode is a mode and not a written-down answer, which matters most on the way
+out. `sh -c 'set +o posix; exec 3>/nope/x; echo after'` prints `after` at 0 —
+the shell's *own* answer is back, not the standard's opposite — and entering it
+again stops it again.
+
+That is why the front end goes through the runner's own knob rather than
+writing the axis. Entering records the answer the dialect held; leaving puts
+that back. A front end that set the axis directly would leave nothing to
+restore *and* nothing to notice: the mode would read as off, and `set +o posix`
+would be granted by doing nothing at all, which is the one failure this shape
+prevents.
+
+### Where it lives
+
+`driver.PosixNamed`, beside `LoginShell` — the two facts read off the same
+word, asked in the same two places, since the prompt route never reaches where
+the script routes read them. `interp.Runner.SetPosixMode` is the knob, exported
+for exactly this: whether a shell *has* the name `set -o posix` is a dialect's
+answer and only one of the panel declares it, so a front end routing this
+through `SetNamedOption` would be refused by the second shell that needs it.
+The name and the mode are two questions.
+
+`Case.Argv0` is how the corpus asks it. `Case.Args` is what comes after
+`argv[0]` and can never be the word itself, so until it existed the only
+record of this was the panel's own `bash-as-sh` column — one shell, and for the
+whole corpus rather than for the case that means to ask.
+
 ## `+c`: the sign of the option letter
 
 **The rule.** Both signs of the `c` letter select the command string —
@@ -772,51 +967,158 @@ ksh93 answer 2 either way and zsh 1 either way, so bash is alone and only in
 one of the two orders. An axis for the position of a letter within a bundle
 would be a field asked once.
 
-## Two bash startup inputs this shell does not have
+## Two startup inputs the environment carries
 
-Recorded because an absence nobody wrote down is one that gets implemented
-twice, or not at all. Neither `SHELLOPTS` nor `BASH_ENV` is read anywhere in
-this tree, and until now nothing said whether that was a decision.
+Neither is an axis: one shell in the panel reads both names and the other three
+do nothing at all with either, so what is modeled is a per-dialect *name* and
+not a disagreement about behavior.
 
 ### Measured
 
-Same panel and date. A scratch `HOME`, `PATH` set to one nonexistent
-directory, running a script file so that the shell is not interactive.
+Panel: bash 5.3.15, bash 3.2.57, bash-as-`sh`, dash, ksh93u+ 2012-08-01, zsh
+5.9.2, on macOS 25.5 — measured 2026-09-05. A scratch `HOME`, `PATH` set to one
+nonexistent directory, running a script file so that the shell is not
+interactive. bash-as-`sh` is the same 5.3 binary through a link named `sh`.
 
 | | bash 5.3 | bash 3.2 | bash-as-`sh` | dash | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
 | `BASH_ENV=f` sources f | **yes** | **yes** | no | no | no | no |
 | `$0` inside it | the script | `bash` | — | — | — | — |
-| `SHELLOPTS=xtrace:nounset` in the environment | **applied**: `$-` gains `ux` | **applied** | **applied** | ignored | ignored | ignored |
+| `SHELLOPTS=xtrace:nounset` inherited | **applied**: `$-` gains `ux` | **applied** | **applied** | ignored | ignored | ignored |
 | `SHELLOPTS` after startup | rewritten, sorted, with the shell's own defaults | same | same, plus `posix` | the string as given | the string as given | the string as given |
 | assigning to `SHELLOPTS` | refused, `readonly variable`, 1 | refused, 1 | refused, 127, fatal | ordinary variable, 0 | ordinary variable, 0 | ordinary variable, 0 |
 
-`BASH_ENV` is the non-interactive counterpart of `$ENV`, and the two do not
-overlap: bash reads `BASH_ENV` and not `$ENV` when it is not interactive, and
-bash-as-`sh` reads neither. dash, ksh93 and zsh read neither, so this is one
-shell's feature rather than an axis — which is also why bash 3.2 differing
-about `$0` inside the file is a version wrinkle rather than a split.
+## The file a shell reads when it is not going to prompt
 
-`SHELLOPTS` is not a variable that happens to be read at startup. It is bound
-to `$-` in both directions, readonly, normalized to a sorted list, and
-populated with the options the shell has on by default; the environment merely
-seeds it. It is also the sharpest security-relevant input a shell takes, since
-an inherited `SHELLOPTS=xtrace` changes what every non-interactive bash on the
-machine writes to standard error.
+**The rule.** A shell that has such a file names the variable holding its path,
+and the front end expands that value and sources it before the program runs —
+on a script operand, on `-c` and on a program arriving on standard input alike.
+`Semantics.NonInteractiveStartupVariable`, empty for a shell that has none.
 
-### The decision
+It is the exact counterpart of `$ENV`, and the two never overlap: the shell that
+has this reads this and not `$ENV` when it is not interactive, and reads neither
+at a prompt, where it has a file of its own name instead. That is the whole
+reason it is a second function beside `loginProfile` rather than a flag on
+`startup` — reaching it through `startup` would bring `$ENV` with it, which is
+what `$ENV` exists not to do.
 
-**Both are out of scope for now, and this is the statement of it.**
+### What it sees, and when
 
-`BASH_ENV` would be small — a per-dialect variable *name* whose value is
-sourced on the script routes, the shape `loginProfile` already has. It waits
-on nothing but a reason to want it.
+The same three things the login profile sees, and for the same reason — it is
+run *by* the shell that is about to run the program:
 
-`SHELLOPTS` is not small. A two-way binding to `$-`, a readonly variable the
-dialect installs, the name-to-letter mapping in both directions, and a
-decision about the defaults would all have to arrive together, and a partial
-one — importing the value without keeping it in step — would be worse than
-none, because a script reading `SHELLOPTS` would be told something untrue.
+- `$0`, `$#` and the positional parameters are the invocation's. On `-c` with
+  operands, `$0` is the name operand and `$1` onward are the rest.
+- The invocation's options are already in effect, so `-x` traces its lines.
+- `exit 3` in it exits 3 and the program never runs. A file that is not there
+  is not a failure, and neither is an empty or unset value.
 
-Filed as #596 rather than left here, so that the absence is tracked and not
-only stated.
+### POSIX mode suppresses it
+
+Measured, and it is why this is one field rather than two: the shell that has
+the file reads nothing when started with the standard's own posix option, and
+nothing when invoked as `sh`. Those are two spellings of one mode, so the
+absence in the `sh` column is not a second fact about a second name — it is the
+mode, which the front end asks the runner about (`interp.Runner.PosixMode`)
+rather than deriving a second time from the invocation. See "Called `sh`" above
+and #691.
+
+| non-interactive, with `BASH_ENV` set | reads it? |
+| --- | --- |
+| bash 5.3 | **yes** |
+| bash 3.2 | **yes** |
+| bash 5.3 `--posix` | no |
+| bash 5.3 as `sh` | no |
+| dash, ksh93, zsh | no |
+
+**One version wrinkle, measured and not modeled.** bash 3.2 gives the sourced
+file `$0` = the shell's own name where bash 5.3 gives it the script's path. 5.3
+is the panel member that counts, and every other answer about the file is the
+same in both.
+
+## The option list the environment carries
+
+**The rule.** A shell that has it names the variable
+(`interp.Runner.SetShellOptions`), and the variable is then bound to the option
+state in both directions: reading it gives the long names of every option that
+is on, and what it *held at startup* has already turned those options on.
+
+It is not a variable that happens to be read at startup. Four properties, and a
+partial implementation of them would be worse than none — a script reading a
+stale copy would be told something untrue about what the shell is doing, which
+is the one failure this name has that plain absence does not:
+
+- **Produced, not stored.** `set -x` changes what it says and `set +x` changes
+  it back, because the value is computed when it is read. This is the half a
+  copy taken at startup gets wrong.
+- **Normalized.** Sorted, long names, the shell's own defaults included — so
+  what comes back out is never what went in, and the way to read it is
+  membership: `case ":$SHELLOPTS:" in *:xtrace:*)`, exactly as `$-` is read.
+- **Readonly.** Assignment is refused, in the dialect's ordinary readonly
+  wording and with its ordinary fatality; there is no sentence of its own.
+- **Seeded from the environment**, which is the part that matters most: an
+  inherited `xtrace` changes what every non-interactive shell below it writes
+  to standard error.
+
+### Where in startup the seeding happens
+
+**After the argument vector and before the files**, both measured, and the
+first of those is the opposite of every other startup input:
+
+- `SHELLOPTS=xtrace sh +x -c '…'` still traces. The environment wins over an
+  option written out, so it is read second.
+- A `~/.profile` read by a shell launched with `SHELLOPTS=xtrace` is itself
+  traced, and so is the non-interactive startup file above. So it is read
+  before them.
+
+A prompt reads it too: an inherited `xtrace` traces the lines a person types.
+
+### An unknown name costs only itself
+
+Measured: a name the shell does not have draws a complaint at **line 0** —
+nothing has been read — and every good name in the same value is still applied.
+The shell carries on at status 0. An empty piece between two colons is a name
+of nothing and draws the same complaint.
+
+The wording is the third shape this refusal has, and it is the plainest of
+them. All three are the same sentence with a different amount in front of it:
+
+| where the name came from | what is said |
+| --- | --- |
+| a script's own `set -o zzz` | `<shell>: line 1: set: zzz: invalid option name` |
+| an invocation's `-o zzz` | `<shell>: line 0: <shell>: zzz: invalid option name` |
+| the environment | `<shell>: line 0: zzz: invalid option name` |
+
+### What a child is handed
+
+The value a command inherits is **recomputed**, not the string this shell was
+launched with. Measured: a shell handed `xtrace` that then runs `set +x` hands
+its children a list without it. The entry the shell was born with is the only
+place a stale value could reach a command, so that is where it is replaced.
+
+The export attribute itself is ordinary: the name reaches a child because it
+arrived in the environment, or because a script exported it, and not otherwise.
+
+### Two defaults differ from the shell that has this, on purpose
+
+The names in the list are this shell's own state and not a claim about anyone
+else's. `hashall` is off here because nothing is hashed, and `emacs` is on
+because the line editor really does read those keys — both already recorded in
+`interp/setoptions.go`. Reporting either one the other way round to match a
+listing would be the lie this whole design avoids, which is also why every
+corpus case here asks about membership of a name it set itself.
+
+### Where it lives
+
+`interp/shellopts.go` — the produced value, the readonly mark and
+`ApplyInheritedShellOptions`, which the front end calls. It is a call rather
+than something the Runner does for itself because it is a startup action: a
+library Runner handed an environment is not entitled to change its embedder's
+options on the strength of a name in it.
+
+`Case.Env` is how the corpus asks about either of these. The harness hands every
+case the same four entries, and a snippet cannot put anything into the
+environment of the shell already running it, so until this existed neither
+startup input could be graded at all — only described. A value may name the
+scratch script with `ArgScript`, which is what lets a case point the startup
+file at its own snippet.

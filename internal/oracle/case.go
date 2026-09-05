@@ -111,6 +111,52 @@ type Case struct {
 	// actually ran, which a second hand-kept copy would not.
 	Stdin string
 
+	// Argv0 is the name every shell in the run is invoked under for this
+	// case, in place of the one its panel entry gives it — and the binary
+	// under test is given it too, which is what makes it a graded surface
+	// rather than only a recorded one.
+	//
+	// It exists because a shell's own name is a startup input like any other,
+	// and Args cannot reach it: Args is what comes *after* argv[0], and the
+	// one word it never contains is the one being asked about. A shell called
+	// `sh` starts in POSIX mode, and until this there was no way to write
+	// that down as a case — the panel's own bash-as-sh column pins it for
+	// bash and for no other shell, and it pins it for the whole corpus rather
+	// than for the case that means to ask.
+	//
+	// Every column moves together, which is the point. A case that sets it is
+	// asking what each shell does under that name, so the answer wanted from
+	// the `bash` column is bash-under-that-name; a case that leaves it empty
+	// is asking about each shell under its own, which is every other case.
+	// The recorded output normalizes the given name exactly as it normalizes
+	// a panel entry's, so a diagnostic still reads `<shell>:` on both sides.
+	Argv0 string
+
+	// Env are environment entries added to the fixed four every case gets,
+	// in `NAME=value` form, and handed to both sides of a comparison.
+	//
+	// The environment is a **startup input** and not only a place variables
+	// live: a shell reads names out of it before the first line runs, and
+	// what it finds there changes what every command afterwards does. That is
+	// the class of behavior this exists for — an inherited list of options, a
+	// file to source before the script — and until now the corpus could not
+	// ask about it at all, because the harness hands every case the same four
+	// entries and a snippet cannot put anything in the environment of the
+	// shell that is already running it.
+	//
+	// The base four stay: a case adds to them rather than replacing them, so
+	// no case can quietly drop the PATH and HOME that keep the record from
+	// depending on whose machine produced it. An entry naming one of the four
+	// overrides it, which is what execve does with a duplicate and is the
+	// only reading that lets a case ask about HOME.
+	//
+	// ArgScript is honored in a value, wherever it appears, exactly as it is
+	// in Args and Stdin — which is what lets a case name a *file* to be read
+	// at startup without spelling its path, since the path is a scratch
+	// directory this run invented. The file holds the Snippet, and the case's
+	// Args then say what the shell is to run instead.
+	Env []string
+
 	// GradedOnRefusal grades a case on the fact that the shell said no,
 	// rather than on the words it said no in.
 	//
@@ -799,7 +845,34 @@ var Corpus = []Case{
 	{
 		ID: "special/underscore-follows-the-last-argument", Category: "parameters",
 		Snippet: `echo one two >/dev/null; echo "[$_]"; x=5; echo "[$_]"`,
-		Why:     "bash and zsh move $_ to the previous command's last argument and to empty after a bare assignment; dash and ksh93 leave it at the shell's own path forever",
+		Why:     "bash and zsh move $_ to the previous command's last argument and to empty after a bare assignment; dash and ksh93 answer with nothing at all, because they keep no such parameter and `$_` is an ordinary unset name there. This reason said they leave it at the shell's own path, which the row beside it has never shown — the harness writes a shell's path as `<shell>` and both cells are empty. A wrong sentence over a right measurement is the failure `oracle-check` cannot see, since it compares behavior and not prose (#706)",
+	},
+	{
+		ID: "special/underscore-after-a-declaration-command", Category: "parameters",
+		Snippet: `x=1; echo "a=[$_]"; export y=2; echo "b=[$_]"`,
+		Why:     "what a *declaration* command leaves in $_, and the panel gives four answers to it: bash 5.3 binds the assignment word as written, `y=2`; bash 3.2 binds the name alone, `y`; zsh binds the command word, `export`; dash and ksh93 keep no $_ at all. A bare assignment leaves it empty everywhere that has one, which is the first line and the control. The bash-to-bash disagreement is the point — a claim about this recorded against one build would have been wrong for the other",
+	},
+	{
+		ID: "special/underscore-at-startup", Category: "parameters",
+		Script:  true,
+		Snippet: `echo "[$_]"`,
+		Why:     "before any command has run, $_ holds how the shell was *invoked*: bash writes the path it was started as, and the same binary called `sh` writes `sh`, which is argv[0] rather than the path — so the parameter carries the invocation and not the executable. dash, ksh93 and zsh leave it empty. Run from a script rather than -c because that is the route where the answer is a path at all",
+	},
+	{
+		ID: "special/dollar-dash-in-full", Category: "parameters",
+		Snippet: `echo "[$-]"`,
+		Why:     "the whole of $- rather than a test for one letter in it. The `invoke/dollar-dash-*` cases ask whether `c` or `s` is present, which is the axis; this records what each shell actually carries, and the answers share almost nothing: dash writes *nothing at all* for a command string, bash `hBc`, ksh93 `chsB`, and zsh a set of digits. So there is no common alphabet to write a default over, and a claim about `$-` that does not name a shell is not a claim",
+	},
+	{
+		ID: "special/dollar-dash-in-full-from-a-script", Category: "parameters",
+		Script:  true,
+		Snippet: `echo "[$-]"`,
+		Why:     "the same string by the other route, and it moves in three of the six: the `c` goes, and ksh93 loses its `s` as well and lands on exactly bash's `hB`. Two shells that agree on one route and not on another is why a `$-` answer has to be recorded per route, and it is the pair with the case above that says so",
+	},
+	{
+		ID: "special/dollar-dash-orders-the-letters-its-own-way", Category: "parameters",
+		Snippet: `set -f; set -u; set -e; echo "[$-]"`,
+		Why:     "three options turned on in a written order, and no shell reports them in it. bash sorts the lowercase letters and keeps its own suffix (`efhuBc`); ksh93 sorts including the letters it already had (`cefhsuB`); zsh puts its digits first (`569Xefu`); dash answers `ufe`, which is neither the order they were set in nor alphabetical but its own option table's. The order is therefore a property of the shell and never a fact about `$-`, which is worth pinning because a reader of any one row would assume otherwise",
 	},
 	{
 		ID: "special/lineno-is-where-you-are", Category: "parameters",
@@ -962,6 +1035,36 @@ var Corpus = []Case{
 		ID: "core/a-short-loop-body-is-one-command", Category: "command language", SyntaxError: true,
 		Snippet: `i=0; while (( i < 2 )) echo $((i++)); echo end`,
 		Why:     "the body of a short loop need not be a brace group, and it is exactly one command: the `; echo end` after it is outside the loop, so `end` prints once rather than per iteration. A second command inside would need a separator, and a separator there is the enclosing list's",
+	},
+	{
+		ID: "core/two-commands-need-a-separator-between-them", Category: "command language", SyntaxError: true,
+		Snippet: `(echo a) echo b`,
+		Why:     "the list production's separator is required, and this is the shortest text that shows it. Every shell in the panel names the second command's word and refuses the line; the reading that takes it is two statements, which would print a and b — a *different program*, so the wrong answer here is silent rather than noisy. Nothing shows the rule until a compound is written, because a simple command's words absorb whatever follows and `true echo x` is one command with an argument",
+	},
+	{
+		ID: "core/a-compound-does-not-absorb-the-word-after-it", Category: "command language", SyntaxError: true,
+		Snippet: `echo one; { :; } echo x`,
+		Why:     "the same rule with a statement in front of it, so that the refusal cannot be a property of the line's first command. `echo one` never runs either: the panel parses the whole `-c` string before running any of it, so a failure anywhere in it discards everything. The construct is a brace group here rather than a subshell to show that the rule is about the *list* and not about parentheses",
+	},
+	{
+		ID: "core/a-separator-is-needed-after-a-redirected-compound", Category: "command language", SyntaxError: true,
+		Snippet: `{ :; } 2>/dev/null echo b`,
+		Why:     "a redirection after a compound command belongs to the compound and does not reopen it, so a word after the redirection is still a second command with nothing between. Worth pinning apart from the bare form because the suffix is the one place a parser might keep reading words — and if it did, `echo b` would become an argument of nothing",
+	},
+	{
+		ID: "core/the-missing-separator-is-named-inside-a-group", Category: "command language", SyntaxError: true,
+		Snippet: `{ (echo a) echo b; }`,
+		Why:     "where the failure is reported when the list is a construct's rather than the program's. All five name the token the list stopped on, and the one shell that prints an expectation adds the closer that was waiting — `(expecting \"}\")` here, `\")\"` in a subshell and `\"done\"` in a loop, so the token comes from the list and the expectation from whatever enclosed it",
+	},
+	{
+		ID: "core/two-subshells-with-nothing-between-them", Category: "command language", SyntaxError: true,
+		Snippet: `(echo a) (echo b)`,
+		Why:     "the same missing separator where the token that follows is an operator rather than a word. It changes what the diagnostics say — the shell that classifies a token calls this one `\"(\"` where the rows above are `word` — so it grades the class as well as the refusal",
+	},
+	{
+		ID: "core/a-missing-separator-inside-a-loop-body", Category: "command language", SyntaxError: true,
+		Snippet: `while true; do (echo a) echo b; done`,
+		Why:     "a `do … done` body is an ordinary list and needs the separator an ordinary list needs. Paired with the short-loop rows below, which are the one place the panel splits: the shell with short loops reads a command after an *ended header* as the loop's body, and even there a `do … done` body is this",
 	},
 	{
 		ID: "core/a-for-over-a-parenthesized-list", Category: "command language", SyntaxError: true,
@@ -1482,6 +1585,16 @@ var Corpus = []Case{
 		Why:     "`-H` and `-S` choose which of the two limits is read, and neither means the soft one — so the third line repeats the second. CPU time rather than open files: the file-descriptor limit is the one resource whose value differs between our process and bash's, for reasons outside either shell",
 	},
 	{
+		ID: "ulimit/setting-with-neither-letter-moves-both", Category: "traps and exit",
+		Snippet: `ulimit -n 100; h=$(ulimit -H -n); s=$(ulimit -S -n); echo "s=$s hard_moved=$([ "$h" = 100 ] && echo yes || echo no)"`,
+		Why:     "`ulimit -n 100` with neither -H nor -S sets *both* limits in five of the six and only the soft one in zsh — which matters because lowering both is a door that cannot be reopened, while lowering the soft limit alone can be undone. The hard limit is compared rather than printed: its starting value is a property of the machine, and a row that recorded it would record where it was generated",
+	},
+	{
+		ID: "ulimit/the-file-size-block", Category: "traps and exit",
+		Snippet: `{ ( ulimit -f 1; printf "%0600d" 0 > f ); } 2>/dev/null; ls -l f | awk "{print \"size=\" \$5}"`,
+		Why:     "how many bytes a block is, asked of the file system rather than of the builtin: one block, six hundred bytes written, and the file is 600 where a block is 1024 and 512 where it is 512. The prior reading of this, taken from bash alone, was that a block is 1024 bytes — true for bash 5.3 and bash 3.2 as `bash`, and false for dash, ksh93, zsh *and the same bash 5.3 called `sh`*, all of which use POSIX's 512. So the unit is argv[0]'s to decide, which is not a shape a one-shell measurement could have found. Written in a subshell whose group carries the redirection, because the shell that reaps a child killed by SIGXFSZ announces it with a process id in the text",
+	},
+	{
 		ID: "ulimit/unlimited-is-a-word", Category: "traps and exit",
 		Snippet: `ulimit -Hf`,
 		Why:     "no limit is printed as `unlimited` rather than as a very large number, in all four — and is read back from that word too, which is what lets a script save and restore one",
@@ -1927,6 +2040,11 @@ var Corpus = []Case{
 		ID: "procsub/quoted-is-not-a-substitution", Category: "redirection",
 		Snippet: `printf "[%s]\n" "<(echo hi)"`,
 		Why:     "the construct is unquoted-only: inside double quotes the same ten characters are text, unanimously and dash included. It is the completeness half of `procsub/reads-a-command-as-a-file` — that case says the lexer reads the form, this one says where it stops looking, and a lexer that also read it inside quotes would pass the first and fail here",
+	},
+	{
+		ID: "read/interrupted-by-a-trapped-signal", Category: "builtins",
+		Snippet: `mkfifo p; exec 3<>p; trap "echo T" INT; (sleep 0.3; kill -INT $$; sleep 0.5; echo late >p) & read -r l <&3; echo "st=$? l=[$l]"; wait`,
+		Why:     "a `read` waiting on a pipe when a trapped signal arrives, which is where the prior reading of `$?` after an interrupt — 130, measured against bash — turns out to be one of four answers. bash 5.3, bash 3.2 and zsh run the handler and *resume* the read, so the line that arrives afterwards is read and the status is 0; the same bash 5.3 called `sh` abandons it at 130; dash abandons it at 1; ksh93 answers 258. The late write is what makes the case terminate at all rather than recording three timeouts, and it is what makes the resuming shells observably different from a shell that merely returned 0",
 	},
 	{
 		ID: "read/a-failing-read-still-assigns", Category: "builtins",
@@ -2748,6 +2866,19 @@ body
 EOF
 ); echo "[$x]"`,
 		Why: "a delimiter that does arrive, as the control for the one below it — and with standard error no longer discarded, that nobody warns when it does",
+	},
+	{
+		ID: "heredoc/the-delimiter-is-the-whole-line", Category: "redirection",
+		Script:     true,
+		Unfinished: true,
+		Snippet:    "cat <<EOF\nline\nEOF x\necho \"st=$?\"\n",
+		Why:        "the delimiter is compared against the *physical line as written*, so `EOF x` is body and not a terminator — unanimously, in a shape that would read as a terminator to anything matching a prefix. The body then runs to the end of the input, which is why the last line is printed rather than run, and bash 5.3 alone remarks that the document ended at end of file where bash 3.2 says nothing. Prior work of our own had this as a rule about prefixes, and the prefix reading is exactly what is false",
+	},
+	{
+		ID: "heredoc/a-delimiter-that-closes-a-command-substitution", Category: "redirection",
+		Script:  true,
+		Snippet: "v=$(cat <<EOF\na\nEOF)\necho \"v=[$v] st=$?\"\n",
+		Why:     "the one place a line that merely *begins* with the delimiter ends the body: `EOF)` inside `$( )`, where the parenthesis that closes the substitution is what follows it. bash and ksh93 take it and the body is `a`; dash and zsh refuse the whole construct, dash wanting the `)` and zsh naming the assignment. So the prefix rule the case above disproves is real for this one shape and in only two of the six — and `EOF junk` in the same position is body in every one of them, which is how the two shapes tell each other apart",
 	},
 	{
 		ID: "heredoc/a-delimiter-that-never-matches", Category: "redirection",
@@ -5450,6 +5581,21 @@ echo after`,
 	},
 	// --- umask: the symbolic spelling ----------------------------------
 	{
+		ID: "shift/past-the-end-with-a-count", Category: "builtins",
+		Snippet: `set -- a b; shift 5; echo "st=$? n=$# rest=[$*]"`,
+		Why:     "a count larger than `$#`, which the prior reading of this — measured against bash alone — had as 'moves nothing and answers 1'. That is bash and zsh; dash and ksh93 *end the script*, which is `ShiftPastEndFatal` arriving with a count rather than without one, and the two say so in different words at different statuses. And the same bash 5.3 binary is silent as `bash` and prints `shift count out of range` as `sh`, so the diagnostic is argv[0]'s and not the build's. `shift/an-operand-that-was-never-given` is the no-count half",
+	},
+	{
+		ID: "shift/a-negative-count", Category: "builtins",
+		Snippet: `set -- a b c; shift -1; echo "st=$? n=$#"`,
+		Why:     "a count that cannot be one, and it divides the panel on *what kind of thing* the word is before it divides them on the answer: ksh93 reads `-1` as an option and refuses it as one, dash reads it as a number it calls illegal, and bash and zsh read it as a count that is out of range — three complaints, and fatal in the two where a special builtin's failure is. In the four that carry on, `$#` is untouched; the two that end the script end it before anything could be read back, which is the one thing this shape cannot say about them",
+	},
+	{
+		ID: "shift/a-double-dash-before-the-count", Category: "builtins",
+		Snippet: `set -- a b c; shift -- 2; echo "st=$? n=$# rest=[$*]"`,
+		Why:     "the end-of-options marker in front of the count: five take it and shift two, and dash calls `--` an illegal number — it has no option parsing here for `--` to end. It is the counterpart of `shift/a-leading-dash-that-is-not-a-number`, which asks what a dash word that is *not* the marker does, and together they say which shells read options at all",
+	},
+	{
 		ID: "shift/a-leading-dash-that-is-not-a-number", Category: "builtins",
 		Snippet: `shift -x; echo "st=$?"`,
 		Why:     "two of the four read it as an *option* and refuse it as one; the other two read it as the count and complain about the number. Same input, two kinds of complaint — and both end the script where a special builtin's failure is fatal",
@@ -6550,5 +6696,133 @@ exit 7`,
 		Args:    []string{"-s", "-c", ArgSnippet},
 		Snippet: `case $- in *s*) echo has-s ;; *) echo no-s ;; esac`,
 		Why:     "-c wins about where the program comes from and does not take the letter away: all six run the command string and all six still show `s`. So the letter follows either the route or the spelling, and a shell that read only the route would lose it here",
+	},
+
+	// --- the name a shell was called by (#733). Every one of these sets
+	// Argv0, so the whole panel is measured under one name rather than each
+	// under its own — which is the only way to ask the question at all, since
+	// Args is what comes after argv[0] and never argv[0] itself.
+	{
+		ID: "invoke/called-sh-starts-in-posix-mode", Category: "invocation",
+		Argv0:   "sh",
+		Snippet: `exec 3>/nope/x; echo after`,
+		Why:     "the name is a startup input: the same bash prints `after` at 0 called `bash` and stops at 1 called `sh`, which is POSIX's rule that a failed redirection on a special builtin is fatal. zsh moves with it under the same name; dash and ksh93 keep that rule under every name and so answer alike in both rows",
+	},
+	{
+		ID: "invoke/called-sh-and-a-script-operand-starts-in-posix-mode", Category: "invocation",
+		Argv0:   "sh",
+		Args:    []string{ArgScript},
+		Snippet: `exec 3>/nope/x; echo after`,
+		Why:     "the name and not the route: a script named on the command line answers exactly as the command string above does, so the front end reads argv[0] once rather than per route",
+	},
+	{
+		ID: "invoke/called-sh-by-a-path-starts-in-posix-mode", Category: "invocation",
+		Argv0:   "./sh",
+		Snippet: `exec 3>/nope/x; echo after`,
+		Why:     "the last element of the path is the name — `/bin/sh` is how anything really reaches it — so a shell reading argv[0] whole would miss every real invocation of this",
+	},
+	{
+		ID: "invoke/the-login-spelling-of-the-name-starts-in-posix-mode", Category: "invocation",
+		Argv0:   "-sh",
+		Snippet: `exec 3>/nope/x; echo after`,
+		Why:     "one leading dash is the login convention and not part of the name, so `-sh` is both a login shell and the standard's name at once; bash answers `--sh` the other way, which is what says one dash and not any number",
+	},
+	{
+		ID: "invoke/a-name-that-is-not-sh-does-not-start-in-posix-mode", Category: "invocation",
+		Argv0:   "myshell",
+		Snippet: `exec 3>/nope/x; echo after`,
+		Why:     "the control, and it has to be a name no shell in the panel reads as its own: zsh takes the *first letter* of the name, so `bash`, `shx` and even `s` all put it in sh emulation, while `m` leaves it alone. bash and zsh both print `after` here and both stop in the row above",
+	},
+	{
+		ID: "invoke/called-sh-and-then-leaving-posix-mode", Category: "invocation",
+		Argv0:   "sh",
+		Snippet: `set +o posix; exec 3>/nope/x; echo after`,
+		Why:     "leaving the mode reaches the shell's *own* answer rather than the standard's opposite, which is what makes the startup override a mode and not a written-down axis: bash-as-`sh` prints `after` at 0 again. The other three have no such name and refuse the `set` instead, each in its own words",
+	},
+	{
+		ID: "invoke/called-sh-outranks-the-invocations-own-posix-option", Category: "invocation",
+		Argv0:   "sh",
+		Args:    []string{"+o", "posix", "-c", ArgSnippet},
+		Snippet: `exec 3>/nope/x; echo after`,
+		Why:     "the name is read after the invocation's options and wins over the one they can name: `sh +o posix -c` still stops where `bash +o posix -c` carries on. Not the loop being ignored — `+o errexit` on the same invocation is honored — so this pins the order rather than the reading. The three shells without the name refuse the invocation instead",
+	},
+	// --- what the environment says at startup (#596). One shell in the panel
+	// reads two names out of it before the first line runs; the other three
+	// leave both as ordinary strings, which is what makes every row here
+	// evidence rather than a coincidence.
+	{
+		ID: "env/an-inherited-option-list-turns-an-option-on", Category: "invocation",
+		Env:     []string{"SHELLOPTS=nounset"},
+		Snippet: `case $- in *u*) echo has-u ;; *) echo no-u ;; esac`,
+		Why:     "the sharpest startup input a shell takes: a name in the environment changes what every command afterwards does. bash reads it and `$-` gains the letter; dash, ksh93 and zsh ignore the name entirely, which is the control",
+	},
+	{
+		ID: "env/an-inherited-option-list-outranks-the-invocations-own-option", Category: "invocation",
+		Env:     []string{"SHELLOPTS=nounset"},
+		Args:    []string{"+u", "-c", ArgSnippet},
+		Snippet: `case $- in *u*) echo has-u ;; *) echo no-u ;; esac`,
+		Why:     "the ordering, and it is the opposite of every other startup input: the environment is read *after* the argument vector, so `+u` written out does not undo it. The three that do not read the name answer `no-u` here and `no-u` in the row above, so this row is about the order rather than about the letter",
+	},
+	{
+		ID: "env/an-unknown-name-in-an-inherited-option-list", Category: "invocation",
+		Env:     []string{"SHELLOPTS=nosuchoption:nounset"},
+		Snippet: `case $- in *u*) echo has-u ;; *) echo no-u ;; esac`,
+		Why:     "one bad entry costs only itself: the complaint names line 0 — nothing has been read — and the good name in the same value is still applied. The wording is the plainest of the three shapes this refusal has, with nothing standing where `set` would",
+	},
+	{
+		ID: "env/the-option-list-follows-the-option-letters", Category: "invocation",
+		Snippet: `set -u; case ":$SHELLOPTS:" in *:nounset:*) echo listed ;; *) echo not-listed ;; esac`,
+		Why:     "the read direction of the binding, and the reason a stored copy would be a lie: the variable is produced when it is read, so an option set after startup is in it. Read as membership rather than as a string, for the reason `$-` is — what a shell has on by default is its own business",
+	},
+	{
+		ID: "env/the-option-list-drops-an-option-turned-off", Category: "invocation",
+		Snippet: `set -u; set +u; case ":$SHELLOPTS:" in *:nounset:*) echo listed ;; *) echo not-listed ;; esac`,
+		Why:     "the other half of the same binding, and the one a copy taken at startup would fail: turning the option off takes the name back out again",
+	},
+	{
+		ID: "env/the-option-list-uses-long-names", Category: "invocation",
+		Snippet: `set -f; case ":$SHELLOPTS:" in *:noglob:*) echo long ;; *:f:*) echo letter ;; *) echo neither ;; esac`,
+		Why:     "normalized rather than echoed: what goes in is a letter and what comes out is the long name, which is why nothing can usefully compare the whole string against what it exported",
+	},
+	{
+		ID: "env/the-option-list-is-readonly", Category: "invocation",
+		Snippet: `SHELLOPTS=whatever; echo after`,
+		Why:     "a name whose value is produced cannot be assigned to meaningfully, and the shell that has it refuses rather than accepting quietly. The refusal is its ordinary readonly one — wording, status and whether the script survives are all the dialect's — and the other three take the assignment as the ordinary variable it is for them",
+	},
+	{
+		ID: "env/a-file-named-for-a-non-interactive-shell-is-sourced", Category: "invocation",
+		Env:     []string{"BASH_ENV=" + ArgScript},
+		Args:    []string{"-c", "echo main"},
+		Snippet: `echo sourced`,
+		Why:     "the non-interactive counterpart of `$ENV`, and one shell's alone: bash sources the file before the command string and the other three do nothing with the name. The snippet is the *file*, which is why the argv runs something else",
+	},
+	{
+		ID: "env/that-file-sees-the-invocations-parameters", Category: "invocation",
+		Env:     []string{"BASH_ENV=" + ArgScript},
+		Args:    []string{"-c", "echo main", "name", "A"},
+		Snippet: `echo "[$0] n=$# [${1-}]"`,
+		Why:     "it is run *by* the shell that is about to run the program and sees what that shell sees, which is what puts it after the runner is built and after the operands are named — the same shape the login profile has",
+	},
+	{
+		ID: "env/that-file-can-end-the-shell", Category: "invocation",
+		Env:     []string{"BASH_ENV=" + ArgScript},
+		Args:    []string{"-c", "echo main"},
+		Snippet: `echo in-file; exit 3`,
+		Why:     "`exit 3` in it exits 3 and the program never runs, which is the other half of it being run by this shell rather than beside it",
+	},
+	{
+		ID: "env/a-file-named-for-a-non-interactive-shell-that-is-not-there", Category: "invocation",
+		Env:     []string{"BASH_ENV=/nonexistent-directory/nonexistent-file"},
+		Args:    []string{"-c", ArgSnippet},
+		Snippet: `echo main`,
+		Why:     "not a failure, in the shell that reads the name or in the three that do not. Every shell starts for the first time without one, and a complaint about it would be the first thing anybody saw",
+	},
+	{
+		ID: "env/a-file-named-for-a-non-interactive-shell-is-not-read-when-called-sh", Category: "invocation",
+		Argv0:   "sh",
+		Env:     []string{"BASH_ENV=" + ArgScript},
+		Args:    []string{"-c", "echo main"},
+		Snippet: `echo sourced`,
+		Why:     "the two startup questions composed, and the reason the file is gated on the mode rather than on a second name: the shell that sources this file called by its own name sources nothing called `sh`, exactly as it sources nothing under the standard's posix option. Pair it with env/a-file-named-for-a-non-interactive-shell-is-sourced, which is the same case under the shell's own name",
 	},
 }

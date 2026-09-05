@@ -92,6 +92,19 @@ func Semantics() interp.Semantics {
 	// Measured from a script file, where `echo $-` reports `hB`. The
 	// letters describing the route come from Runner.Route.
 	s.DefaultOptionLetters = "hB"
+	// And `imBE` for `-i script.sh`, which is why this axis replaces rather
+	// than appends: the `h` is *gone*. Measured 2026-09-05 — `set -o`
+	// reports `trackall on` for a script and off when interactive, which is
+	// that letter, while `rc on` appears only when interactive, which is the
+	// `E`.
+	//
+	// The `m` in that row is not written here and must not be: it is a
+	// monitor that is really on — `set -o` says `monitor on` under `-i
+	// script.sh` in this shell and off in the other two — so the letter has
+	// to come from the runner or not at all. That this shell turns job
+	// control on there and the front end does not is measured, recorded in
+	// docs/spec/invocation.md, and a separate question.
+	s.InteractiveOptionLetters = "BE"
 	// `ksh -c 'echo $-'` reports `chsB` — both route letters, where bash
 	// shows `c` alone and dash and zsh show neither. Read down its rows and
 	// ksh93's rule for `s` is "no script file was named" where the other

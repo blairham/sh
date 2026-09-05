@@ -72,10 +72,23 @@ func (sh Shell) session(argv, params []string, opts []optionSpec) int {
 	if code, ok := sh.applyOptions(r, opts); !ok {
 		return code
 	}
+	// And the environment's own option list, in the same place and for the
+	// same measured reasons as on the script routes: after the argument
+	// vector, before the files. A prompt reads it too — an inherited `xtrace`
+	// traces the lines a person types.
+	r.ApplyInheritedShellOptions()
 	// The prelude is the dialect's own; these are the user's, and come after
 	// it so a person's settings win over the shell's defaults.
 	if code := sh.startup(r, LoginShell(argv)); code != 0 {
 		return code
+	}
+	if PosixNamed(argv) {
+		// The other fact argv[0] carries, asked here for the reason
+		// LoginShell is asked here: the prompt route never reaches the place
+		// the script routes read it. Last for the same measured reason — the
+		// name wins over the invocation's own options, and the startup files
+		// run before the mode is on.
+		r.SetPosixMode(true)
 	}
 	s := sh.frontEnd(r, name, dg)
 	ctx := context.Background()

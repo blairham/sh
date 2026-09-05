@@ -151,21 +151,8 @@ var extraSetOptions = map[string]setOption{
 	// which is what keeps `set +o posix` — the thirteenth line of Homebrew's
 	// own script — the grant it has always been.
 	"posix": {
-		apply: func(r *Runner, on bool) {
-			if on == r.posixMode {
-				return
-			}
-			restore := r.posixSaved
-			if on {
-				r.posixSaved = r.sem().RedirectErrorOnSpecialBuiltinFatal
-				restore = Yes
-			}
-			r.swapSemantics(func(s *Semantics) {
-				s.RedirectErrorOnSpecialBuiltinFatal = restore
-			})
-			r.posixMode = on
-		},
-		get: func(r *Runner) bool { return r.posixMode },
+		apply: func(r *Runner, on bool) { r.SetPosixMode(on) },
+		get:   func(r *Runner) bool { return r.posixMode },
 	},
 	"errtrace":   {},
 	"functrace":  {},
@@ -176,6 +163,56 @@ var extraSetOptions = map[string]setOption{
 	"physical":   {},
 	"privileged": {},
 }
+
+// SetPosixMode enters or leaves POSIX mode, which is what the `posix` entry
+// above does when a script asks for it by name and what a front end does when
+// the shell was invoked under the standard's own name.
+//
+// Exported because the second of those has no other way in. Whether a shell
+// *has* the name is a dialect's answer and only one of the panel declares it,
+// so a front end reaching this through SetNamedOption would be refused by
+// every dialect that spells it differently or not at all — and the shell that
+// most needs the startup override is one of those. The name and the mode are
+// two questions; this is the mode, and it is the core's for the same reason
+// PosixSemantics is.
+//
+// The two fields are the whole of the care it needs, and the reason it is one
+// function rather than a line at each call site. Entering records the answer
+// the dialect held, and leaving puts *that* back rather than asserting the
+// standard's opposite: a shell POSIX already agrees with would otherwise lose
+// its own answer on the way out. A caller that wrote the axis directly instead
+// would leave nothing to restore, and the mode could then never be left —
+// measured, `set +o posix` in a shell invoked as `sh` carries on past a failed
+// redirection on a special builtin, so leaving it has to reach the dialect's
+// own answer.
+//
+// A request for the state we are already in moves nothing, which is what keeps
+// an invocation's own `+o posix` from recording a saved answer that was never
+// entered.
+func (r *Runner) SetPosixMode(on bool) {
+	if on == r.posixMode {
+		return
+	}
+	restore := r.posixSaved
+	if on {
+		r.posixSaved = r.sem().RedirectErrorOnSpecialBuiltinFatal
+		restore = Yes
+	}
+	r.swapSemantics(func(s *Semantics) {
+		s.RedirectErrorOnSpecialBuiltinFatal = restore
+	})
+	r.posixMode = on
+}
+
+// PosixMode reports whether the shell is in POSIX mode, which is the read
+// side of SetPosixMode.
+//
+// Exported for the front end, which has a startup question that turns on it:
+// the file a non-interactive shell sources out of a named variable is not
+// sourced in POSIX mode. Measured — the shell that reads such a file reads it
+// called by its own name, and reads nothing when started with the standard's
+// posix option or invoked as `sh`. See Semantics.NonInteractiveStartupVariable.
+func (r *Runner) PosixMode() bool { return r.posixMode }
 
 // setMonitor is `set -m`, the one request in the table a dialect can refuse:
 // two of the panel tie job control to the terminal, and this runner only has

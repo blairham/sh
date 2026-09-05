@@ -738,6 +738,26 @@ type Semantics struct {
 	// option as an option — two of them fatally.
 	ExportCarriesFunctions Answer
 
+	// ExportTakesTheAttributeOff gives `export` its `-n`, which takes the
+	// export attribute off a name and leaves the name itself alone. True in
+	// bash alone; the other three refuse the letter as an option, two of
+	// them fatally.
+	//
+	// The same shape as ExportCarriesFunctions and for the same reason: what
+	// the letter *means* is not in question anywhere it exists — the name
+	// stays set and stops reaching a child — only whether the dialect has it
+	// at all. So there is no wording here, and a dialect that says no sends
+	// `-n` down the ordinary unknown-option path to collect its own refusal.
+	// Measured 2026-09-05: `dash: 1: export: Illegal option -n` and the
+	// script ends, `ksh: export: -n: unknown option` with a usage line and
+	// the script ends, `zsh:export:1: bad option: -n` with `export` failing
+	// at 1 and the script carrying on.
+	//
+	// A wording field would be the wrong tool even for the one shell that
+	// carries on: unlike `-f`, which zsh knows and refuses in words of its
+	// own, `-n` is simply not a letter any of the three has.
+	ExportTakesTheAttributeOff Answer
+
 	// AnnouncesBackgroundJob prints the job number and the process id when a
 	// job is backgrounded, before the next prompt. True in bash, ksh93 and
 	// zsh; dash says nothing at all.
@@ -2274,6 +2294,11 @@ func PosixSemantics() Semantics {
 		// POSIX defines a pipeline's status as its last command's, and
 		// offers nothing to change it.
 		PipefailOption: No,
+		// POSIX spells `export` with one option, `-p`. So the standard's
+		// answer about `-n` is that there is no such letter, and a preset
+		// that said nothing would refuse `export -n` as an unchosen axis
+		// rather than as the unknown option the standard makes it.
+		ExportTakesTheAttributeOff: No,
 		// POSIX names the noglob letter itself: `set -f`, reported in `$-`
 		// as `f`. Only zsh answers otherwise.
 		NoglobLetterIsF: Yes,

@@ -904,6 +904,21 @@ var Corpus = []Case{
 		Why:     "the terminator between the header and the body is optional before the brace exactly as it is before `do`, which is what says the brace stands where `do` stands rather than being glued to the header",
 	},
 	{
+		ID: "core/c-style-for-takes-a-redirection", Category: "command language",
+		Snippet: `for ((i=0;i<2;i++)); do echo "$i"; done > f; echo end; cat f`,
+		Why:     "a redirection after a compound command covers the whole of it, and the C-style loop is no exception — the quiet failure is that a node with nowhere to keep one leaves the operator standing as a statement of its own, which truncates the file, redirects nothing, and says not a word. dash has no C-style loop and refuses the header",
+	},
+	{
+		ID: "core/c-style-for-with-a-brace-body-takes-a-redirection", Category: "command language",
+		Snippet: `for ((i=0;i<2;i++)) { echo "$i"; } > f; echo end; cat f`,
+		Why:     "the same on the brace-bodied spelling, which is where the suffix is easiest to lose: the body ends in a `}` rather than a keyword and the redirection reads as the brace group's",
+	},
+	{
+		ID: "core/c-style-for-takes-an-input-redirection", Category: "command language",
+		Snippet: `printf 'L1\nL2\n' > d; for ((i=0;i<2;i++)); do read x; echo "got=$x"; done < d`,
+		Why:     "the reading half, and the one that shows the redirection outlives an iteration: the second `read` continues where the first left off, which it could not do if the file were opened per pass",
+	},
+	{
 		ID: "core/a-list-for-with-a-brace-body", Category: "command language",
 		Snippet: `for i in a b; { printf "%s" "$i"; }; echo`,
 		Why:     "the same production on the ordinary `for`, which is the half easiest to miss: the brace body is not the C-style loop's alone. It needs the separator, and the next case says why — this is the one three of the four accept and dash refuses, dash being the only panel shell without the form",
@@ -2103,6 +2118,11 @@ var Corpus = []Case{
 		ID: "export/a-function-through-the-environment", Category: "builtins",
 		Snippet: `f(){ echo carried; }; export -f f 2>/dev/null; env | grep -c '^BASH_FUNC'`,
 		Why:     "one shell carries a function to its children and the other three have no way to: there is nothing but a string in an environment, so the source goes in and is parsed again at the other end. The count rather than the text, because what the entry holds is a shell's own spelling of a body",
+	},
+	{
+		ID: "export/the-n-option-takes-the-attribute-off", Category: "builtins",
+		Snippet: `V=1; export V; export -n V; echo "st=$?"; env | grep -c "^V="; echo alive`,
+		Why:     "the letter itself is the question, not what it does: bash has `-n` and the other three refuse it as an option, in three different ways and two of them fatally. Left out of #459 deliberately, because that change was about the export attribute and this row would have been recording an option-surface gap instead — which it now is, on purpose. Read through a real child, since what `-n` buys is that the name stays set in the shell and stops reaching one",
 	},
 	{
 		ID: "export/a-name-that-is-not-a-function", Category: "builtins",

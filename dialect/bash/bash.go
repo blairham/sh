@@ -342,6 +342,10 @@ func Semantics() interp.Semantics {
 	// An operator on `${a[*]}` trims each element before the join here.
 	s.OperatorDistributesOverStarSubscript = interp.Yes
 	s.ExportCarriesFunctions = interp.Yes
+	// `export -n V` takes the attribute off and leaves V set: measured, the
+	// name keeps its value in the shell and stops reaching a child. bash is
+	// the only shell in the panel with the letter.
+	s.ExportTakesTheAttributeOff = interp.Yes
 	s.AnnouncesBackgroundJob = interp.Yes
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.No

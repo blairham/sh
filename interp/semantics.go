@@ -1758,12 +1758,15 @@ type Semantics struct {
 	// which should touch a home directory because a field was left at its
 	// default. A dialect that wants it says so, and PosixSemantics does.
 	//
-	// Which file a login shell reads is a separate question and is not
-	// modeled: the front end reads ~/.profile for every dialect, which is
-	// dash's and ksh93's name for it, where bash reads ~/.bash_profile and
-	// zsh ~/.zprofile. Nor is the system-wide /etc/profile read at all. Both
-	// gaps predate this axis and apply to the interactive route as well; see
-	// docs/spec/invocation.md.
+	// Which file a login shell reads is a separate question and is
+	// LoginStartupFiles below. The system-wide /etc/profile is still not
+	// read at all, on any route; see docs/spec/invocation.md.
+	//
+	// It is about login-ness **inferred from argv[0]** and not about being a
+	// login shell as such, which is measured: an explicit `-l` or `--login`
+	// makes bash read its profile with a script to run, so the option
+	// overrides this rather than setting the same bit. See
+	// StartupFileOptions.Login.
 	LoginProfileWhenNonInteractive bool
 
 	// NonInteractiveStartupVariable names a variable whose value is expanded
@@ -1796,6 +1799,116 @@ type Semantics struct {
 	// the two spellings of the same mode. So the absence in the `sh` column is
 	// the mode again rather than a second fact about a second name.
 	NonInteractiveStartupVariable string
+
+	// StartupDirectoryVariable names a variable whose value replaces the home
+	// directory as the place the startup files below are looked for. Empty
+	// means the home directory, which is three of the four.
+	//
+	// zsh alone has one, `ZDOTDIR`, and it redirects *all* of its files
+	// rather than one of them — measured 2026-09-05, with every file under
+	// the named directory read and none of the same names under `$HOME`. It
+	// is read afresh for each file rather than once, which is also measured
+	// and is the reason a person's `~/.zshenv` setting `ZDOTDIR` works at
+	// all: the file that sets it is found under the home directory and every
+	// file after it under the directory it named.
+	//
+	// A variable name rather than a path, for the reason
+	// NonInteractiveStartupVariable is one: what the shell calls the thing is
+	// the dialect's, and the value is the person's.
+	StartupDirectoryVariable string
+
+	// UnconditionalStartupFile names a file read on *every* invocation —
+	// login or not, prompting or not, `-c` and a script alike. Empty means
+	// the shell has no such file, which is three of the four.
+	//
+	// zsh alone has one, `.zshenv`, and it is the only startup file any shell
+	// in the panel reads for a plain `sh -c cmd`. Measured 2026-09-05 with a
+	// scratch home directory on all four routes.
+	//
+	// First of the files, before the profile: measured, `zsh -l -i` reads
+	// `.zshenv`, `.zprofile`, `.zshrc` and `.zlogin`, in that order.
+	UnconditionalStartupFile string
+
+	// LoginStartupFiles names the profile a login shell reads, most preferred
+	// first, as whitespace-separated names. **The first one that can be read
+	// is the only one read**, which is bash's rule and reduces to "the file"
+	// for every shell with one name for it.
+	//
+	// Measured 2026-09-05 with a scratch home directory holding a marker for
+	// every name: bash reads `.bash_profile`, falls back to `.bash_login` when
+	// that is absent and to `.profile` when both are, and reads exactly one of
+	// the three. dash, ksh93 and the POSIX preset name `.profile`; zsh names
+	// `.zprofile`. Empty means the shell reads no profile, which is what a
+	// Semantics nobody has filled in should do — see
+	// LoginProfileWhenNonInteractive for why a default must not reach into a
+	// home directory.
+	//
+	// *Whether* a login shell reads it when there is a script to run rather
+	// than a person to prompt is the separate question
+	// LoginProfileWhenNonInteractive asks; this is only which file.
+	//
+	// One string rather than a slice, which is how EchoOptions, ReadOptions
+	// and JobsOptions already spell a list and is not only consistency: a
+	// slice anywhere in this struct makes the whole vector uncomparable, and
+	// `==` against another vector is something a test — and an embedder —
+	// may already be doing. No shell in the panel names a startup file with
+	// a space in it, so nothing is lost by the separator.
+	LoginStartupFiles string
+
+	// LateLoginStartupFile names a login file read *after* the interactive
+	// file rather than before it. Empty for three of the four.
+	//
+	// zsh alone has one, `.zlogin`, and the position is the whole of why it
+	// is a second field: measured, an interactive login zsh reads `.zprofile`,
+	// then `.zshrc`, then `.zlogin`, so a person's `.zlogin` sees what their
+	// `.zshrc` did. It is read for a non-interactive login shell too, in the
+	// dialects that read a profile there at all.
+	LateLoginStartupFile string
+
+	// InteractiveStartupFile names the file read when the shell is
+	// interactive, in the startup directory. Empty means the shell has no
+	// file of its own name and reads `$ENV` instead, which is dash, ksh93 and
+	// the standard.
+	//
+	// bash names `.bashrc` and zsh names `.zshrc`. Measured 2026-09-05: both
+	// read theirs and neither reads `$ENV`, and the shell that reads `$ENV`
+	// reads nothing of its own name — the two are alternatives rather than a
+	// sequence.
+	//
+	// **POSIX mode replaces it with `$ENV`**, which is the interactive half of
+	// what NonInteractiveStartupVariable records and is measured the same way:
+	// bash invoked as `sh` reads `$ENV` at a prompt and does not read
+	// `.bashrc`, and so does zsh invoked as `sh`. So this is not suppressed in
+	// the mode the way the non-interactive file is — the standard has a file
+	// here and the shell reads the standard's one instead of its own.
+	InteractiveStartupFile string
+
+	// InteractiveStartupFileWhenLogin has an interactive *login* shell read
+	// the interactive file as well as its profile.
+	//
+	// The panel's one disagreement about startup ordering, and it is why the
+	// four combinations of login and interactive are not four independent
+	// facts. Measured 2026-09-05 through a pseudo-terminal: zsh reads
+	// `.zshrc` for `zsh -l -i` and bash does *not* read `.bashrc` for `bash
+	// -l -i` — a person's `.bashrc` is reached from a login bash only because
+	// their `.bash_profile` sources it by hand, which is why every bash
+	// tutorial tells them to.
+	//
+	// Asked only where InteractiveStartupFile names something. A shell whose
+	// interactive file is `$ENV` reads it in both cases — measured, `-sh -i`
+	// reads `.profile` and then `$ENV` in dash, ksh93 and bash-as-`sh` alike —
+	// so there is nothing here to answer.
+	InteractiveStartupFileWhenLogin Answer
+
+	// StartupFileOptions names the invocation options that say which of the
+	// files above to skip, and which file to read in place of the interactive
+	// one. The zero value is a shell with no way to skip them.
+	//
+	// It is a startup input like the files themselves, and the reason it is
+	// modeled at all is that **a broken startup file has to be escapable**: a
+	// shell whose only `.zshrc` raises an error every time it starts is a
+	// shell a person cannot repair from.
+	StartupFileOptions StartupFileOptions
 
 	// ArrayLengthWithoutSubscriptIsCount makes `${#a}` of an array the
 	// number of elements, which is zsh's reading; bash and ksh93 measure
@@ -2361,6 +2474,79 @@ type Semantics struct {
 	UnsetArraySpan UnsetArraySpanPolicy
 }
 
+// StartupFileOptions are the invocation options that change which startup
+// files a shell reads: the escape hatches from a startup file that is wrong.
+//
+// Each field holds the spellings the dialect accepts, whitespace-separated and
+// exactly as they are written on a command line — `--norc`, `-f`. A
+// single-dash entry of one letter also matches inside a bundle, so `-if` is
+// `-i` and `-f`; a double-dash entry matches a whole word and nothing else.
+// Empty means a shell with no such option, and the zero value is a shell with
+// none at all.
+//
+// Strings rather than slices, for the reason LoginStartupFiles is one: a slice
+// reached from Semantics makes the whole vector uncomparable, and an option
+// spelling has no whitespace in it to lose.
+//
+// Measured 2026-09-05 across the panel with a scratch home directory. bash has
+// three of the four and spells them long; zsh has only the first and spells it
+// both ways; dash and ksh93 have none, so a startup file that breaks them is
+// escaped by moving the file. The shell that has no escape is the reason the
+// other two are worth carrying.
+type StartupFileOptions struct {
+	// SuppressAll names the options that suppress every startup file. zsh's
+	// `-f` and `--no-rcs`, and measured they mean *every* one: `zsh -f -l -i`
+	// reads no `.zshenv`, no `.zprofile`, no `.zshrc` and no `.zlogin`.
+	//
+	// It is not the POSIX `-f`, which turns globbing off. zsh gives the
+	// letter this meaning instead — measured, `zsh -f -c 'echo /etc/pas*'`
+	// still expands the pattern — which is why the letter is a per-dialect
+	// spelling here rather than a set option every shell shares.
+	SuppressAll string
+
+	// Login names the options that make this a login shell whatever argv[0]
+	// said. `-l` in all four, and `--login` in three of them — dash refuses
+	// the long spelling outright, with `Illegal option --` at status 2.
+	//
+	// It is not simply a second way to set the same bit, and that is why it
+	// belongs here rather than beside LoginShell: the option reads the
+	// profile **even with a script to run**, where login-ness inferred from
+	// argv[0] does not in every dialect. Measured 2026-09-05: `bash --login
+	// -c cmd` reads its profile and `exec -a -bash bash -c cmd` reads
+	// nothing, so an explicit option makes the panel unanimous where
+	// LoginProfileWhenNonInteractive says it is not.
+	//
+	// Without it a login shell can only be started by exec'ing with a
+	// dashed argv[0], which is what `login` does and what a person at a
+	// terminal cannot.
+	Login string
+
+	// SuppressLogin names the options that suppress the login profile and
+	// leave the rest. bash's `--noprofile`, and nobody else's.
+	//
+	// It beats Login above, which is measured: `bash --noprofile --login -i`
+	// reads no profile.
+	SuppressLogin string
+
+	// SuppressInteractive names the options that suppress the interactive
+	// file and leave the rest. bash's `--norc`, and nobody else's.
+	//
+	// It suppresses the file the shell reads *of its own name* and not
+	// `$ENV`: measured, `bash --posix --norc -i` still reads `$ENV`, because
+	// in that mode the standard's file is the one it was going to read.
+	SuppressInteractive string
+
+	// NameInteractive names the options whose operand — the next word — is
+	// read in place of the interactive file. bash's `--rcfile` and its
+	// synonym `--init-file`.
+	//
+	// It replaces rather than adds, and it loses to everything that suppresses
+	// the file: measured, `bash --norc --rcfile f -i` reads neither, and so
+	// does `bash --rcfile f -l -i`, where a login shell was not going to read
+	// an interactive file at all.
+	NameInteractive string
+}
+
 // NameOperands is what a builtin takes where it wants a name.
 type NameOperands int
 
@@ -2463,6 +2649,15 @@ func PosixSemantics() Semantics {
 		// conditional on being interactive, so the standard and the
 		// majority agree here.
 		LoginProfileWhenNonInteractive: true,
+		// And the file it reads: the standard names ~/.profile, which is
+		// dash's and ksh93's name for it too. One entry rather than a
+		// fallback chain — bash is the only shell in the panel that tries
+		// more than one name.
+		//
+		// InteractiveStartupFile is deliberately left empty here, which is
+		// not an omission: the standard's interactive file is `$ENV`, and an
+		// empty name is how a dialect says so.
+		LoginStartupFiles: ".profile",
 		// The three brace-range axes are left unanswered: a brace that
 		// never expands never asks them.
 		BraceExpansion:                 No,
@@ -2756,6 +2951,25 @@ func CoreSemantics() Semantics {
 	return Semantics{
 		SplitCommandSubstitution: Yes,
 		LengthOfSpecialIsCount:   Yes,
+		// Every shell in the panel reads a profile for a login shell, so the
+		// core reads one too; the disagreement is only over what it is
+		// called. `.profile` is the standard's name and nobody's brand,
+		// which is the same choice `$ENV` is for the interactive file and
+		// made for the same reason — this binary is not bash and must not
+		// claim `.bashrc`.
+		//
+		// The zero Semantics still names nothing, and that is the split
+		// worth keeping: a vector nobody filled in belongs to a library
+		// embedder or a test, neither of which should touch a home
+		// directory because a field was left at its default.
+		LoginStartupFiles: ".profile",
+		// And a way to say so. All four shells in the panel take `-l`, so
+		// the common denominator has it even though the standard does not
+		// — which is the one respect in which this differs from
+		// PosixSemantics here. Without it the only way to start a login
+		// shell is to exec with a dashed argv[0], which is what `login`
+		// does and what a person at a keyboard cannot.
+		StartupFileOptions: StartupFileOptions{Login: "-l"},
 	}
 }
 

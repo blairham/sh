@@ -33,7 +33,7 @@ func TestStartupFiles(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			sh, r := newTestShell(t, map[string]string{"HOME": home, "ENV": c.env})
-			if code := sh.startup(r, c.login); code != 0 {
+			if code := sh.startup(r, source{login: c.login, interactive: true}); code != 0 {
 				t.Fatalf("startup reported %d", code)
 			}
 			if _, ok := r.GetVar("FROM_PROFILE"); ok != c.profile {
@@ -52,7 +52,7 @@ func TestEnvIsExpanded(t *testing.T) {
 	home := t.TempDir()
 	write(t, filepath.Join(home, ".shrc"), "FROM_ENV=yes\n")
 	sh, r := newTestShell(t, map[string]string{"HOME": home, "ENV": "$HOME/.shrc"})
-	if code := sh.startup(r, false); code != 0 {
+	if code := sh.startup(r, source{interactive: true}); code != 0 {
 		t.Fatalf("startup reported %d", code)
 	}
 	if _, ok := r.GetVar("FROM_ENV"); !ok {
@@ -68,12 +68,12 @@ func TestAMissingStartupFileIsNotAFailure(t *testing.T) {
 	sh, r := newTestShell(t, map[string]string{
 		"HOME": home, "ENV": filepath.Join(home, "nothing-here"),
 	})
-	if code := sh.startup(r, true); code != 0 {
+	if code := sh.startup(r, source{login: true, interactive: true}); code != 0 {
 		t.Errorf("a missing file reported %d, want it ignored", code)
 	}
 	// Nor is a directory where a file was named.
 	sh, r = newTestShell(t, map[string]string{"HOME": home, "ENV": home})
-	if code := sh.startup(r, false); code != 0 {
+	if code := sh.startup(r, source{interactive: true}); code != 0 {
 		t.Errorf("a directory reported %d, want it ignored", code)
 	}
 }
@@ -88,7 +88,7 @@ func TestAStartupFileThatDoesNotParse(t *testing.T) {
 	var errs strings.Builder
 	sh, r := newTestShell(t, map[string]string{"HOME": home, "ENV": path})
 	sh.Stderr = &errs
-	if code := sh.startup(r, false); code == 0 {
+	if code := sh.startup(r, source{interactive: true}); code == 0 {
 		t.Error("a broken startup file reported 0, want a failure")
 	}
 	if !strings.Contains(errs.String(), path) {
@@ -99,7 +99,7 @@ func TestAStartupFileThatDoesNotParse(t *testing.T) {
 // With no HOME there is no ~/.profile to name, and nothing to complain about.
 func TestNoHome(t *testing.T) {
 	sh, r := newTestShell(t, nil)
-	if code := sh.startup(r, true); code != 0 {
+	if code := sh.startup(r, source{login: true, interactive: true}); code != 0 {
 		t.Errorf("reported %d with no HOME, want it skipped", code)
 	}
 }
@@ -127,8 +127,12 @@ func TestLoginShell(t *testing.T) {
 
 func newTestShell(t *testing.T, vars map[string]string) (Shell, *interp.Runner) {
 	t.Helper()
-	sh := Shell{Stdout: &strings.Builder{}, Stderr: &strings.Builder{}}
 	sem := interp.PosixSemantics()
+	// The same vector on both, which is what a binary does: the shell's copy
+	// is what names the startup files and the runner's is what runs them, and
+	// a test giving only one of them the preset was asking a shell with no
+	// profile to read one.
+	sh := Shell{Semantics: sem, Stdout: &strings.Builder{}, Stderr: &strings.Builder{}}
 	r := &interp.Runner{Semantics: &sem, Vars: vars, Stdout: sh.Stdout, Stderr: sh.Stderr}
 	return sh, r
 }
@@ -146,15 +150,55 @@ func write(t *testing.T, path, body string) {
 // machine running the test and the mistake would go unseen.
 func TestHomeFileNeedsAHome(t *testing.T) {
 	sem := interp.PosixSemantics()
+	sh := Shell{Semantics: sem}
 	r := &interp.Runner{Semantics: &sem, Vars: map[string]string{"HOME": "/home/someone"}}
-	if got := homeFile(r, ".profile"); got != "/home/someone/.profile" {
+	if got := sh.startupPath(r, ".profile"); got != "/home/someone/.profile" {
 		t.Errorf("got %q", got)
 	}
 	// An empty environment as well as empty Vars: a Runner with no Vars
 	// still sees the process's own HOME, which is the right answer for a
 	// shell and the wrong one for this test.
 	r = &interp.Runner{Semantics: &sem, Env: []string{}}
-	if got := homeFile(r, ".profile"); got != "" {
+	if got := sh.startupPath(r, ".profile"); got != "" {
 		t.Errorf("with no HOME got %q, want nothing — not root's", got)
+	}
+	// And a name of nothing is nothing, however good the directory: the
+	// dialects that have no file for a slot leave the name empty, and a
+	// path built from one would be the home directory itself.
+	r = &interp.Runner{Semantics: &sem, Vars: map[string]string{"HOME": "/home/someone"}}
+	if got := sh.startupPath(r, ""); got != "" {
+		t.Errorf("an unnamed file gave %q, want nothing", got)
+	}
+}
+
+// The startup directory is a variable the dialect names, and it redirects
+// every file rather than one of them. zsh's ZDOTDIR is the only one.
+func TestTheStartupDirectoryVariableRedirects(t *testing.T) {
+	sem := interp.PosixSemantics()
+	sem.StartupDirectoryVariable = "ZDOTDIR"
+	sh := Shell{Semantics: sem}
+	vars := map[string]string{"HOME": "/home/someone", "ZDOTDIR": "/elsewhere"}
+	r := &interp.Runner{Semantics: &sem, Vars: vars}
+	if got := sh.startupPath(r, ".rc"); got != "/elsewhere/.rc" {
+		t.Errorf("got %q, want the named directory", got)
+	}
+	// Set to nothing is not the same as unset, which is measured: a shell
+	// whose directory variable is the empty string reads none of its files
+	// rather than falling back to the home directory.
+	vars["ZDOTDIR"] = ""
+	if got := sh.startupPath(r, ".rc"); got != "" {
+		t.Errorf("an empty directory gave %q, want nothing", got)
+	}
+	// Unset, and the home directory answers again.
+	delete(vars, "ZDOTDIR")
+	if got := sh.startupPath(r, ".rc"); got != "/home/someone/.rc" {
+		t.Errorf("got %q, want the home directory", got)
+	}
+	// A dialect that names no variable never looks for one, however set it
+	// happens to be — this is the three shells that have no ZDOTDIR.
+	vars["ZDOTDIR"] = "/elsewhere"
+	plain := Shell{Semantics: interp.PosixSemantics()}
+	if got := plain.startupPath(r, ".rc"); got != "/home/someone/.rc" {
+		t.Errorf("got %q, want the home directory for a dialect with no such variable", got)
 	}
 }

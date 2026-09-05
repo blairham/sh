@@ -1,0 +1,152 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+package main
+
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/blairham/sh/driver"
+)
+
+// TestAPersonsRunCommandsFileIsRead is #807 measured against the binary rather
+// than against the library.
+//
+// The distinction is the point: the dialect's prelude is shell, so it moves
+// shell state exactly the way a script does, and a startup rule that works with
+// no prelude can still do nothing in the shell a person runs. This dialect has
+// four startup files where the other has two, so the ordering between them is
+// the part worth pinning here.
+func TestAPersonsRunCommandsFileIsRead(t *testing.T) {
+	home := scratchHome(t)
+	writeHomeFile(t, home, ".zshrc", strings.Join([]string{
+		"alias ll='echo alias-ran'",
+		"myfunc() { echo function-ran; }",
+		"export FROMRC=yes",
+	}, "\n")+"\n")
+
+	out, errs, code := prompt(t, "ll\nmyfunc\necho \"FROMRC=$FROMRC\"\n", "zsh", "-i")
+	if code != 0 {
+		t.Fatalf("status %d, stderr %q", code, errs)
+	}
+	for _, want := range []string{"alias-ran", "function-ran", "FROMRC=yes"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("out = %q, want %q — the run-commands file did not take effect", out, want)
+		}
+	}
+}
+
+// The four files, in the measured order, with the run-commands file between the
+// two login ones — and the unconditional one read even by a shell with a command
+// string to run and nobody to prompt.
+func TestTheFourStartupFilesAndTheirOrder(t *testing.T) {
+	home := scratchHome(t)
+	for _, n := range []string{".zshenv", ".zprofile", ".zshrc", ".zlogin"} {
+		writeHomeFile(t, home, n, "echo read"+n+"\n")
+	}
+
+	out, _, _ := prompt(t, "", "-zsh", "-i")
+	want := "read.zshenv\nread.zprofile\nread.zshrc\nread.zlogin\n"
+	if !strings.Contains(out, want) {
+		t.Errorf("out = %q, want %q", out, want)
+	}
+
+	out, _, _ = prompt(t, "", "zsh", "-i")
+	if !strings.Contains(out, "read.zshenv\nread.zshrc\n") || strings.Contains(out, ".zlogin") {
+		t.Errorf("out = %q, want the two a non-login prompt reads", out)
+	}
+
+	out, _, _ = prompt(t, "", "zsh", "-c", ":")
+	if got := strings.TrimSpace(out); got != "read.zshenv" {
+		t.Errorf("out = %q, want the unconditional file alone", got)
+	}
+}
+
+// The directory variable moves every file at once, and it is read afresh for
+// each one — which is what makes a person's own unconditional file able to set
+// it and have the rest follow.
+func TestTheDirectoryVariableMovesEveryFile(t *testing.T) {
+	home := scratchHome(t)
+	elsewhere := t.TempDir()
+	for _, n := range []string{".zshrc", ".zlogin"} {
+		writeHomeFile(t, elsewhere, n, "echo moved"+n+"\n")
+	}
+	writeHomeFile(t, home, ".zshrc", "echo home.zshrc\n")
+	writeHomeFile(t, home, ".zshenv", "echo read.zshenv\nexport ZDOTDIR="+elsewhere+"\n")
+
+	out, _, _ := prompt(t, "", "-zsh", "-i")
+	want := "read.zshenv\nmoved.zshrc\nmoved.zlogin\n"
+	if !strings.Contains(out, want) {
+		t.Errorf("out = %q, want %q", out, want)
+	}
+	if strings.Contains(out, "home.zshrc") {
+		t.Errorf("out = %q, want the home directory's file left unread", out)
+	}
+}
+
+// A file that breaks has to be escapable, and here the escape drops every one
+// of the four rather than only the run-commands file.
+func TestABrokenStartupFileIsEscapable(t *testing.T) {
+	home := scratchHome(t)
+	writeHomeFile(t, home, ".zshrc", "if\n")
+	writeHomeFile(t, home, ".zshenv", "echo read.zshenv\n")
+
+	if _, errs, code := prompt(t, "", "zsh", "-i"); code == 0 || !strings.Contains(errs, ".zshrc") {
+		t.Errorf("a broken file gave status %d and %q, want it reported", code, errs)
+	}
+	out, _, code := prompt(t, "echo alive\n", "zsh", "-f", "-i")
+	if code != 0 || !strings.Contains(out, "alive") {
+		t.Errorf("-f gave status %d and %q, want a working session", code, out)
+	}
+	if strings.Contains(out, "read.zshenv") {
+		t.Errorf("out = %q, want every startup file skipped, not only the broken one", out)
+	}
+}
+
+// scratchHome points HOME at a directory of this test's own. A test that read
+// the developer's real home directory would be measuring their machine, and
+// this dialect's directory variable is one a developer's own shell may export.
+func scratchHome(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	// t.Setenv registers the restore; the unset that follows is what is
+	// wanted, and there is no t.Unsetenv.
+	for _, name := range []string{"ENV", "ZDOTDIR"} {
+		t.Setenv(name, "")
+		_ = os.Unsetenv(name)
+	}
+	return dir
+}
+
+func writeHomeFile(t *testing.T, home, name, body string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(home, name), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// prompt drives the binary's own shell value through an interactive session,
+// with the typed lines on a pipe standing in for a person.
+func prompt(t *testing.T, typed string, argv ...string) (out, errs string, code int) {
+	t.Helper()
+	var o, e bytes.Buffer
+	sh := shell()
+	sh.Stdout, sh.Stderr = &o, &e
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		_, _ = w.WriteString(typed)
+		_ = w.Close()
+	}()
+	t.Cleanup(func() { _ = r.Close() })
+	sh.Stdin = r
+	code = driver.MainArgs(sh, argv)
+	return o.String(), e.String(), code
+}

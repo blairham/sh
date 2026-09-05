@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -204,7 +205,7 @@ func MainArgs(sh Shell, argv []string) int {
 		//
 		// With whatever parameters the invocation supplied: `sh -s one two`
 		// sets `$1` at a prompt in all four.
-		return sh.interactive(argv, in.params, in.opts)
+		return sh.interactive(argv, in)
 	}
 	// Asked here rather than inside the option loop: both are facts about
 	// argv[0], which is the one word that loop never looks at. The prompt
@@ -377,8 +378,23 @@ type source struct {
 	// `sh -s -c cmd` runs the command string and still shows `s` in `$-`,
 	// unanimously across the panel.
 	stdinOption bool
-	dg          interp.Diagnostics
+	// startup is what the invocation said about which startup files to read:
+	// `-l`, `--norc`, `--noprofile`, `--rcfile FILE`, `-f`. Carried here for
+	// the reason login and posix are — deciding it is part of reading an
+	// argument vector, and a caller reaching Run or RunCommand directly has
+	// an invocation of its own and none of these.
+	startup startupFlags
+	dg      interp.Diagnostics
 }
+
+// loginShell reports whether this invocation is a login shell, by either of
+// the two routes there are: a dashed argv[0], which is what `login` and every
+// terminal emulator's "run as a login shell" does, or an explicit option,
+// which is the only way a person at a keyboard can say it.
+//
+// The two are the same fact for *which* files are read and differ for whether
+// a shell with a script to run reads them at all; see readsLoginProfile.
+func (s source) loginShell() bool { return s.login || s.startup.login }
 
 // invocationRoute is which of the three routes the program came by, for the
 // runner. The same three cases aliasRoute splits on and the same reason: a
@@ -480,7 +496,71 @@ type invocation struct {
 	// differently, and the sign of the word the letter was in is the whole
 	// of the question. See Semantics.PlusSignedCommandStringIsDollarZero.
 	plusC bool
-	opts  []optionSpec
+	// startup is what the startup-file options said, accumulated the same
+	// way the rest is and read off the dialect's own spellings; see
+	// Semantics.StartupFileOptions.
+	startup startupFlags
+	opts    []optionSpec
+}
+
+// namesStartupOption reports whether this dialect spells a startup-file option
+// this way, which the letter loop has to know *before* it decides the letter
+// is a set option's rather than this front end's.
+//
+// Separate from startupOption because that one has a side effect and this
+// question is asked in a switch's condition. The two read the same four lists,
+// which is why neither takes an opinion about what a spelling means.
+func (sh Shell) namesStartupOption(spelling string) bool {
+	o := sh.Semantics.StartupFileOptions
+	return spelt(o.Login, spelling) ||
+		spelt(o.SuppressAll, spelling) ||
+		spelt(o.SuppressLogin, spelling) ||
+		spelt(o.SuppressInteractive, spelling) ||
+		spelt(o.NameInteractive, spelling)
+}
+
+// spelt reports whether a whitespace-separated list of option spellings holds
+// this one. The lists are two or three words long, so they are read on demand
+// rather than split once and kept — the vector is a value a caller may still
+// be editing, and a cache of it would be a second answer to the same question.
+func spelt(list, spelling string) bool {
+	return slices.Contains(strings.Fields(list), spelling)
+}
+
+// startupOption applies a startup-file option this dialect spells `spelling`,
+// reporting whether it was one at all and what arguments are left.
+//
+// The spellings are the dialect's rather than this front end's, which is the
+// whole reason they are data: `-f` is "read no startup files" in zsh and "turn
+// globbing off" in every other shell in the panel, so a front end with an
+// opinion about the letter would have to hold both. A dialect that names none
+// of them — dash and ksh93 name none — is a shell whose startup files cannot
+// be skipped, which is measured and is what those two do.
+func (sh Shell) startupOption(spelling string, args []string, inv *invocation) (rest []string, matched bool, err error) {
+	o := sh.Semantics.StartupFileOptions
+	switch {
+	case spelt(o.Login, spelling):
+		inv.startup.login = true
+	case spelt(o.SuppressAll, spelling):
+		inv.startup.none = true
+	case spelt(o.SuppressLogin, spelling):
+		inv.startup.noLogin = true
+	case spelt(o.SuppressInteractive, spelling):
+		inv.startup.noInteractive = true
+	case spelt(o.NameInteractive, spelling):
+		// The file is the next word. Refused rather than ignored when there
+		// is none: an invocation that named a startup file and did not say
+		// which is not one a shell can guess at, and every other option here
+		// that takes an argument is refused the same way.
+		if len(args) < 1 {
+			return nil, true, fmt.Errorf("%s requires an argument", spelling)
+		}
+		inv.startup.file = args[0]
+		return args[1:], true, nil
+	default:
+		return args, false, nil
+	}
+	return args, true, nil
 }
 
 func (sh Shell) input(argv []string) (source, error) {
@@ -528,13 +608,31 @@ func (sh Shell) input(argv []string) (source, error) {
 // `sh -c -- cmd` runs `cmd` too. What ends the loop is an operand.
 //
 // The letters this front end owns are the ones that say where the script
-// comes from — `c`, `i`, `s` — and they bundle with the rest: `sh -ec cmd`
-// is unanimous across the panel. Every other letter is a `set` option and
-// stays text here; whether the shell has it is the dialect's question,
-// answered by the same machinery `set` uses once the runner exists.
+// comes from — `c`, `i`, `s` — plus whichever the dialect spends on its
+// startup files, and they bundle with the rest: `sh -ec cmd` is unanimous
+// across the panel. Every other letter is a `set` option and stays text here;
+// whether the shell has it is the dialect's question, answered by the same
+// machinery `set` uses once the runner exists.
 func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []string, err error) {
 	on := a[0] == '-'
 	body := a[1:]
+	// A double-dash word is a whole spelling and never a bundle, so it is
+	// matched before the letters are read — `--` itself never reaches here,
+	// having ended the options one level up.
+	//
+	// One this dialect does not name is refused rather than read as letters,
+	// which is measured and unanimous: every shell in the panel refuses an
+	// unknown long option outright. Reading it as a bundle is not merely a
+	// worse diagnostic — the letters of `--rcfile` include a `c`, so a shell
+	// without that option would have taken the *next word* as a command
+	// string and run it.
+	if strings.HasPrefix(a, "--") {
+		rest, matched, err := sh.startupOption(a, args, inv)
+		if matched {
+			return rest, err
+		}
+		return nil, fmt.Errorf("unknown option %q", a)
+	}
 	letters := ""
 	flush := func() {
 		if letters != "" {
@@ -565,6 +663,19 @@ func (sh Shell) optionWord(a string, args []string, inv *invocation) (rest []str
 			inv.forcePrompt = true
 		case ch == 's' && on:
 			inv.fromStdin = true
+		case on && sh.namesStartupOption("-"+string(ch)):
+			// A startup-file option written as one letter, which bundles
+			// like any other: `zsh -if` is `-i` and `-f`. Only the minus
+			// spelling — no shell in the panel gives `+f` a meaning, and a
+			// plus-signed letter here is a set option's the way it always
+			// was.
+			//
+			// Handled before the default arm so the letter never reaches the
+			// runner as a set option. It is the same letter POSIX gives to
+			// globbing, and one dialect spends it on this instead.
+			if args, _, err = sh.startupOption("-"+string(ch), args, inv); err != nil {
+				return nil, err
+			}
 		case ch == 'o':
 			// The long spelling, whose name is the next word — read at the
 			// end of a bundle exactly as `set` reads it, so `sh -euo
@@ -638,6 +749,10 @@ func (sh Shell) operands(args []string, inv invocation) (source, error) {
 	// place: it survives a route that overrode it, and `sh -s -c cmd` shows
 	// `s` in `$-` in all four shells while running the command string.
 	in.stdinOption = inv.fromStdin
+	// And what the invocation said about its startup files, carried past the
+	// route for the reason `-i` is: every route reads at least one of them,
+	// so deciding it per route is how one of them would come to be forgotten.
+	in.startup = inv.startup
 	return in, nil
 }
 
@@ -976,24 +1091,25 @@ func (sh Shell) runInput(in source) int {
 	// own `+x`, so the environment is read second; and the startup files below
 	// are traced by it, so it is read before them.
 	r.ApplyInheritedShellOptions()
-	// A login shell reads ~/.profile before the script, in the dialects that
-	// say a shell with work to do still reads it. After the options, which is
-	// where the panel has them: `-x` given to the invocation traces the
-	// profile's own lines in dash, ksh93 and zsh alike. After the runner is
-	// built rather than before, because the profile is run *by* this shell
-	// and sees what it sees — measured, `$0` and `$#` inside ~/.profile are
-	// the script's in dash and ksh93.
-	if in.login && sh.Semantics.LoginProfileWhenNonInteractive {
-		if code := sh.loginProfile(r); code != 0 {
-			return code
-		}
-		if r.Exited() {
-			// The profile ended the shell, which is measured: `exit 3` in it
-			// exits 3 and the script never runs, in all three of the shells
-			// that read it. Through Finish, so an EXIT trap the profile set
-			// still fires.
-			return r.Finish(context.Background())
-		}
+	// The startup files, before the script. After the options, which is where
+	// the panel has them: `-x` given to the invocation traces the profile's
+	// own lines in dash, ksh93 and zsh alike. After the runner is built rather
+	// than before, because they are run *by* this shell and see what it sees —
+	// measured, `$0` and `$#` inside ~/.profile are the script's in dash and
+	// ksh93.
+	//
+	// The same call the prompt route makes, which is what it took to make
+	// `sh -i script.sh` read a person's run-commands file: measured, `bash -i
+	// -c cmd` reads `~/.bashrc`, and one shell reads a file on *every*
+	// invocation whether or not there is anyone to prompt.
+	if code := sh.startup(r, in); code != 0 {
+		return code
+	}
+	if r.Exited() {
+		// A startup file ended the shell, which is measured: `exit 3` in it
+		// exits 3 and the script never runs, in all three of the shells that
+		// read one. Through Finish, so an EXIT trap it set still fires.
+		return r.Finish(context.Background())
 	}
 	if in.posix {
 		// Called `sh`, so the shell starts in POSIX mode however the program
@@ -1019,7 +1135,7 @@ func (sh Shell) runInput(in source) int {
 	// Before the file below, which is the composition of the two: POSIX mode
 	// suppresses that file, measured, and being called `sh` is one of the two
 	// ways into the mode.
-	if code := sh.nonInteractiveStartupFile(r); code != 0 {
+	if code := sh.nonInteractiveStartupFile(r, in); code != 0 {
 		return code
 	}
 	if r.Exited() {

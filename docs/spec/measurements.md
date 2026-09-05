@@ -6504,6 +6504,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `env/that-file-can-end-the-shell` | `main` | `in-file` *(status 3)* | `main` | `in-file` *(status 3)* | `main` | `main` |
 | `env/a-file-named-for-a-non-interactive-shell-that-is-not-there` | `main` | `main` | `main` | `main` | `main` | `main` |
 | `env/a-file-named-for-a-non-interactive-shell-is-not-read-when-called-sh` | `main` | `main` | `main` | `main` | `main` | `main` |
+| `env/the-interactive-file-is-read-at-a-prompt` | `sourced~main` **2>** `<shell>: 0: can't access tty; job control turned off` | `main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `sourced~main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `main` **2>** `<shell>: no job control in this shell` | `sourced~main` | `main` |
+| `env/the-interactive-file-is-read-when-called-sh` | `sourced~main` **2>** `<shell>: 0: can't access tty; job control turned off` | `sourced~main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `sourced~main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `sourced~main` **2>** `<shell>: no job control in this shell` | `sourced~main` | `sourced~main` |
+| `env/the-interactive-file-is-not-read-by-a-script` | `main` | `main` | `main` | `main` | `main` | `main` |
+| `env/the-non-interactive-file-stands-down-at-a-prompt` | `main` **2>** `<shell>: 0: can't access tty; job control turned off` | `main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `main` **2>** `<shell>: no job control in this shell` | `main` | `main` |
+| `env/the-interactive-file-sees-the-invocations-parameters` | `[name] n=1 [A]~main` **2>** `name: 0: can't access tty; job control turned off` | `[name] n=1 [A]~main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `[name] n=1 [A]~main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `[sh] n=0 []~main` **2>** `<shell>: no job control in this shell` | `[name] n=1 [A]~main` | `[name] n=1 [A]~main` |
+| `env/the-interactive-file-can-end-the-shell` | `in-file` **2>** `<shell>: 0: can't access tty; job control turned off` *(status 3)* | `in-file` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` *(status 3)* | `in-file` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` *(status 3)* | `in-file` **2>** `<shell>: no job control in this shell` *(status 3)* | `in-file` *(status 3)* | `in-file` *(status 3)* |
+| `env/the-interactive-file-that-is-not-there` | `main` **2>** `<shell>: 0: can't access tty; job control turned off` | `main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `main` **2>** `<shell>: cannot set terminal process group (N): Inappropriate ioctl for device~<shell>: no job control in this shell` | `main` **2>** `<shell>: no job control in this shell` | `main` | `main` |
 
 - `set/posix-mode-makes-a-failed-redirection-fatal` — the same binary, both answers: bash 5.3 and bash 3.2 print `after` without this line and stop at 1 with it, which is the bash-as-`sh` column reached at run time. The other three have no such name and refuse the `set` instead, each in its own words
   ```sh
@@ -6775,4 +6782,32 @@ grades it and nothing drift-checks it either, for the same reason.
 - `env/a-file-named-for-a-non-interactive-shell-is-not-read-when-called-sh` — the two startup questions composed, and the reason the file is gated on the mode rather than on a second name: the shell that sources this file called by its own name sources nothing called `sh`, exactly as it sources nothing under the standard's posix option. Pair it with env/a-file-named-for-a-non-interactive-shell-is-sourced, which is the same case under the shell's own name
   ```sh
   echo sourced
+  ```
+- `env/the-interactive-file-is-read-at-a-prompt` — `$ENV` is the standard's interactive startup file, and the panel splits over it exactly where a shell has a file of its own name: dash and ksh93 read it, bash reads `~/.bashrc` instead and zsh `~/.zshrc`, so neither of those two touches this name. `-i` rather than a terminal, because being interactive is what the file is gated on and `-i` says so on every route
+  ```sh
+  echo sourced
+  ```
+- `env/the-interactive-file-is-read-when-called-sh` — the same invocation under the standard's own name, where the panel becomes unanimous: a shell in POSIX mode reads the standard's interactive file and not one of its own. That makes it the interactive half of what env/a-file-named-for-a-non-interactive-shell-is-not-read-when-called-sh records — the non-interactive file is *suppressed* in the mode and this one is *substituted*, because the standard has an interactive file and no other kind
+  ```sh
+  echo sourced
+  ```
+- `env/the-interactive-file-is-not-read-by-a-script` — unanimous, and the whole point of the file: a script must not inherit what somebody wrote for their keyboard. Pair it with env/the-interactive-file-is-read-at-a-prompt, which is the same invocation with `-i`
+  ```sh
+  echo sourced
+  ```
+- `env/the-non-interactive-file-stands-down-at-a-prompt` — the two files are complementary rather than alternatives: the shell that has a non-interactive startup variable reads it when there is nobody to prompt and a file of its own name when there is, and never both. So `-i` makes the one shell that reads this name read nothing here
+  ```sh
+  echo sourced
+  ```
+- `env/the-interactive-file-sees-the-invocations-parameters` — run *by* the shell that is about to run the program and seeing what that shell sees, which is the same shape the login profile and the non-interactive file have — and what puts it after the runner is built and after the operands are named
+  ```sh
+  echo "[$0] n=$# [${1-}]"
+  ```
+- `env/the-interactive-file-can-end-the-shell` — `exit 3` in it exits 3 and the program never runs, which is the other half of it being run by this shell rather than beside it
+  ```sh
+  echo in-file; exit 3
+  ```
+- `env/the-interactive-file-that-is-not-there` — not a failure in any of them. Every shell starts for the first time without one, and a complaint would be the first thing anybody saw — the same answer the non-interactive file gives, recorded separately because they are read on different routes
+  ```sh
+  echo main
   ```

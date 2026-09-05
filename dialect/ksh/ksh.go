@@ -105,6 +105,13 @@ func Semantics() interp.Semantics {
 	// control on there and the front end does not is measured, recorded in
 	// docs/spec/invocation.md, and a separate question.
 	s.InteractiveOptionLetters = "BE"
+	// Login-ness written out, in both spellings. Measured 2026-09-05 with a
+	// scratch home directory: `ksh -l -c cmd` and `ksh --login -c cmd` each
+	// read `~/.profile`, which is the file the POSIX preset already names.
+	// The interactive file stays `$ENV` and the escape hatches stay empty —
+	// this shell has none, so a startup file that breaks it is escaped by
+	// moving the file, which is measured and is what it does.
+	s.StartupFileOptions = interp.StartupFileOptions{Login: "-l --login"}
 	// `ksh -c 'echo $-'` reports `chsB` — both route letters, where bash
 	// shows `c` alone and dash and zsh show neither. Read down its rows and
 	// ksh93's rule for `s` is "no script file was named" where the other

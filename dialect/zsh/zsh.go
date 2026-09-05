@@ -95,6 +95,33 @@ func Semantics() interp.Semantics {
 	// plus the line-editor letter. Measured 2026-09-05 under `-i script.sh`
 	// and at a pseudo-terminal alike; `i` comes from the runner.
 	s.InteractiveOptionLetters = "569XZ"
+	// The startup files, and zsh has more of them than the rest of the panel
+	// put together. Measured 2026-09-05 through a pseudo-terminal with a
+	// scratch home directory: `zsh -l -i` reads `.zshenv`, `.zprofile`,
+	// `.zshrc` and `.zlogin`, in that order, and `zsh -c cmd` reads
+	// `.zshenv` alone — the only startup file any shell in the panel reads
+	// for a plain command string.
+	s.StartupDirectoryVariable = "ZDOTDIR"
+	s.UnconditionalStartupFile = ".zshenv"
+	s.LoginStartupFiles = ".zprofile"
+	// After the run-commands file rather than before it, so a person's
+	// `.zlogin` sees what their `.zshrc` did. Read for a non-interactive
+	// login shell too, which zsh is one of the three to do at all.
+	s.LateLoginStartupFile = ".zlogin"
+	s.InteractiveStartupFile = ".zshrc"
+	// And zsh reads it for a login shell as well as a plain one, where bash
+	// reads only its profile.
+	s.InteractiveStartupFileWhenLogin = interp.Yes
+	// One escape hatch, spelled two ways, and it means *every* file: `zsh -f
+	// -l -i` reads no `.zshenv`, no `.zprofile`, no `.zshrc` and no
+	// `.zlogin`. It is not the POSIX `-f` — measured, `zsh -f -c 'echo
+	// /etc/pas*'` still expands the pattern, so the letter is spent on this
+	// here and on globbing everywhere else.
+	s.StartupFileOptions = interp.StartupFileOptions{
+		// Both spellings of login-ness, which zsh has like the other three.
+		Login:       "-l --login",
+		SuppressAll: "-f --no-rcs",
+	}
 	s.CommandStringShowsCInDollarDash = interp.No
 	s.CommandStringShowsSInDollarDash = interp.No
 	// The panel's holdout: `echo hi >&-` is status 0 here and 1 in the other

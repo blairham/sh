@@ -6340,6 +6340,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `invoke/dollar-dash-shows-s-for-a-program-on-standard-input` | `has-s` | `has-s` | `has-s` | `no-s` | `has-s` | `has-s` |
 | `invoke/dollar-dash-shows-s-for-the-s-option` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` |
 | `invoke/dollar-dash-keeps-s-when-a-command-string-overrides-it` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` |
+| `invoke/called-sh-starts-in-posix-mode` | **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` *(status 2)* | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: /nope/x: cannot create [No such file or directory]` *(status 1)* | **2>** `<shell>:1: no such file or directory: /nope/x` *(status 1)* |
+| `invoke/called-sh-and-a-script-operand-starts-in-posix-mode` | **2>** `<script>: 1: cannot create /nope/x: Directory nonexistent` *(status 2)* | **2>** `<script>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<script>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<script>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<script>[1]: /nope/x: cannot create [No such file or directory]` *(status 1)* | **2>** `<script>:1: no such file or directory: /nope/x` *(status 1)* |
+| `invoke/called-sh-by-a-path-starts-in-posix-mode` | **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` *(status 2)* | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: /nope/x: cannot create [No such file or directory]` *(status 1)* | **2>** `<shell>:1: no such file or directory: /nope/x` *(status 1)* |
+| `invoke/the-login-spelling-of-the-name-starts-in-posix-mode` | **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` *(status 2)* | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: /nope/x: cannot create [No such file or directory]` *(status 1)* | **2>** `<shell>:1: no such file or directory: /nope/x` *(status 1)* |
+| `invoke/a-name-that-is-not-sh-does-not-start-in-posix-mode` | **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` *(status 2)* | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: No such file or directory` | **2>** `<shell>: /nope/x: cannot create [No such file or directory]` *(status 1)* | `after` **2>** `<shell>:1: no such file or directory: /nope/x` |
+| `invoke/called-sh-and-then-leaving-posix-mode` | **2>** `<shell>: 1: set: Illegal option -o posix` *(status 2)* | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: No such file or directory` | **2>** `<shell>: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: posix` *(status 1)* |
+| `invoke/called-sh-outranks-the-invocations-own-posix-option` | **2>** `<shell>: 0: Illegal option -o posix` *(status 2)* | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: posix: bad option(s)~Usage: <shell> [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>: no such option: posix` *(status 1)* |
 | `env/an-inherited-option-list-turns-an-option-on` | `no-u` | `has-u` | `has-u` | `has-u` | `no-u` | `no-u` |
 | `env/an-inherited-option-list-outranks-the-invocations-own-option` | `no-u` | `has-u` | `has-u` | `has-u` | `no-u` | `no-u` |
 | `env/an-unknown-name-in-an-inherited-option-list` | `no-u` | `has-u` **2>** `<shell>: line 0: nosuchoption: invalid option name` | `has-u` **2>** `<shell>: line 0: nosuchoption: invalid option name` | `has-u` **2>** `<shell>: line 0: nosuchoption: invalid option name` | `no-u` | `no-u` |
@@ -6351,6 +6358,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `env/that-file-sees-the-invocations-parameters` | `main` | `[name] n=1 [A]~main` | `main` | `[<shell>] n=0 []~main` | `main` | `main` |
 | `env/that-file-can-end-the-shell` | `main` | `in-file` *(status 3)* | `main` | `in-file` *(status 3)* | `main` | `main` |
 | `env/a-file-named-for-a-non-interactive-shell-that-is-not-there` | `main` | `main` | `main` | `main` | `main` | `main` |
+| `env/a-file-named-for-a-non-interactive-shell-is-not-read-when-called-sh` | `main` | `main` | `main` | `main` | `main` | `main` |
 
 - `set/posix-mode-makes-a-failed-redirection-fatal` — the same binary, both answers: bash 5.3 and bash 3.2 print `after` without this line and stop at 1 with it, which is the bash-as-`sh` column reached at run time. The other three have no such name and refuse the `set` instead, each in its own words
   ```sh
@@ -6547,6 +6555,34 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   case $- in *s*) echo has-s ;; *) echo no-s ;; esac
   ```
+- `invoke/called-sh-starts-in-posix-mode` — the name is a startup input: the same bash prints `after` at 0 called `bash` and stops at 1 called `sh`, which is POSIX's rule that a failed redirection on a special builtin is fatal. zsh moves with it under the same name; dash and ksh93 keep that rule under every name and so answer alike in both rows
+  ```sh
+  exec 3>/nope/x; echo after
+  ```
+- `invoke/called-sh-and-a-script-operand-starts-in-posix-mode` — the name and not the route: a script named on the command line answers exactly as the command string above does, so the front end reads argv[0] once rather than per route
+  ```sh
+  exec 3>/nope/x; echo after
+  ```
+- `invoke/called-sh-by-a-path-starts-in-posix-mode` — the last element of the path is the name — `/bin/sh` is how anything really reaches it — so a shell reading argv[0] whole would miss every real invocation of this
+  ```sh
+  exec 3>/nope/x; echo after
+  ```
+- `invoke/the-login-spelling-of-the-name-starts-in-posix-mode` — one leading dash is the login convention and not part of the name, so `-sh` is both a login shell and the standard's name at once; bash answers `--sh` the other way, which is what says one dash and not any number
+  ```sh
+  exec 3>/nope/x; echo after
+  ```
+- `invoke/a-name-that-is-not-sh-does-not-start-in-posix-mode` — the control, and it has to be a name no shell in the panel reads as its own: zsh takes the *first letter* of the name, so `bash`, `shx` and even `s` all put it in sh emulation, while `m` leaves it alone. bash and zsh both print `after` here and both stop in the row above
+  ```sh
+  exec 3>/nope/x; echo after
+  ```
+- `invoke/called-sh-and-then-leaving-posix-mode` — leaving the mode reaches the shell's *own* answer rather than the standard's opposite, which is what makes the startup override a mode and not a written-down axis: bash-as-`sh` prints `after` at 0 again. The other three have no such name and refuse the `set` instead, each in its own words
+  ```sh
+  set +o posix; exec 3>/nope/x; echo after
+  ```
+- `invoke/called-sh-outranks-the-invocations-own-posix-option` — the name is read after the invocation's options and wins over the one they can name: `sh +o posix -c` still stops where `bash +o posix -c` carries on. Not the loop being ignored — `+o errexit` on the same invocation is honored — so this pins the order rather than the reading. The three shells without the name refuse the invocation instead
+  ```sh
+  exec 3>/nope/x; echo after
+  ```
 - `env/an-inherited-option-list-turns-an-option-on` — the sharpest startup input a shell takes: a name in the environment changes what every command afterwards does. bash reads it and `$-` gains the letter; dash, ksh93 and zsh ignore the name entirely, which is the control
   ```sh
   case $- in *u*) echo has-u ;; *) echo no-u ;; esac
@@ -6590,4 +6626,8 @@ grades it and nothing drift-checks it either, for the same reason.
 - `env/a-file-named-for-a-non-interactive-shell-that-is-not-there` — not a failure, in the shell that reads the name or in the three that do not. Every shell starts for the first time without one, and a complaint about it would be the first thing anybody saw
   ```sh
   echo main
+  ```
+- `env/a-file-named-for-a-non-interactive-shell-is-not-read-when-called-sh` — the two startup questions composed, and the reason the file is gated on the mode rather than on a second name: the shell that sources this file called by its own name sources nothing called `sh`, exactly as it sources nothing under the standard's posix option. Pair it with env/a-file-named-for-a-non-interactive-shell-is-sourced, which is the same case under the shell's own name
+  ```sh
+  echo sourced
   ```

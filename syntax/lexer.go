@@ -242,6 +242,10 @@ func (l *Lexer) Next() Token {
 
 // startsProcSubst reports whether the cursor is on `<(` or `>(` in a dialect
 // that has process substitution.
+//
+// Adjacency is the grammar and not a convention: `cat < (echo hi)` is a
+// syntax error in every shell in the panel, the three that have the
+// construct included. Specified in docs/spec/grammar/substitutions.md.
 func (l *Lexer) startsProcSubst() bool {
 	if !l.dialect.ProcessSubstitution {
 		return false
@@ -603,9 +607,10 @@ func (l *Lexer) scanWord(start Pos) Token {
 
 		case l.startsProcSubst():
 			// Unquoted only, and that is not an omission: `"<(cmd)"` is the
-			// five characters in every shell that has the construct, because
-			// what it produces is a *path* and a quoted path is still a path
-			// — there would be nothing for the quoting to change.
+			// five characters in every shell in the panel, dash included,
+			// because what it produces is a *path* and a quoted path is
+			// still a path — there would be nothing for the quoting to
+			// change. Measured; see docs/spec/grammar/substitutions.md.
 			flush()
 			spans = append(spans, l.scanParens(procSubstKind(c), Unquoted))
 
@@ -838,10 +843,12 @@ func (l *Lexer) scanDouble() []Span {
 
 // scanDollarSingle reads $'...'.
 //
-// The escape sequences inside are *not* resolved here. docs/spec does not yet
-// say what the table is — which escapes exist, and what the shells disagree
-// about — and inventing one in the implementation is exactly what CLEANROOM.md
-// forbids. The raw text is preserved so that resolving it later loses nothing.
+// The escape sequences inside are *not* resolved here, and that is a division
+// of labor rather than a gap: the table is written down — see the `$'...'`
+// section of docs/spec/grammar/tokenization.md, which measures it escape by
+// escape — and interp's expandDollarSingle applies it. What this stage owes
+// the later ones is the span's *quoting*, since a decoded tab must not be
+// split on, and the raw text, so that decoding it later loses nothing.
 func (l *Lexer) scanDollarSingle() (Span, bool) {
 	open := l.pos()
 	l.advance() // $

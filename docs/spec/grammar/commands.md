@@ -125,6 +125,84 @@ is fatal, so it is one concept with two consequences.
 
 Vector field: `AssignmentPrefixPersistsOnSpecialBuiltin` (default false).
 
+### Array assignment
+
+An assignment whose value is a parenthesized word list makes an array,
+and there are four spellings:
+
+    a=(x y z)        a literal
+    a[i]=v           one element
+    a+=(y z)         append to the end
+    a[i]+=v          append to one element
+
+The parentheses are core — bash, ksh93 and zsh have them, dash does not
+and calls the `(` a syntax error rather than reading it as anything
+else. Grammar flag: `ArrayLiteral` (on in the core, off for `posix` and
+`dash`).
+
+**The `(` must be adjacent to the `=`, in every shell but ksh93.**
+
+| probe | dash | bash 5 | bash 3.2 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- |
+| `a= (echo x)` | error | error | error | **accepted** | error |
+
+Where it is accepted it is the *array literal*, not an assignment
+followed by a subshell: ksh93 leaves `a` holding two elements, `echo`
+and `x` (measured 2026-09-05, panel and machine as `../oracle.md`). So
+the space is not significant there, and the parser cannot decide the
+construct on adjacency alone — it decides *which diagnostic*, and the
+non-adjacent form falls through to the ordinary rule for a `(` after a
+word.
+
+**The elements are words**, expanded, split and globbed like any other
+unquoted word, and a newline inside the parentheses separates elements
+rather than ending a command:
+
+    x="p q"; a=($x)      →  2 elements in dash-family shells, 1 in zsh
+    x="p q"; a=("$x")    →  1 element, unanimously
+    a=(x
+    y)                   →  2 elements, unanimously
+
+The two-element answer for `a=($x)` is the `SplitParamExpansion` axis
+from `semantics.md` reaching into the literal; it is one rule, not a
+second one for arrays.
+
+Three corners split the panel and each is silent:
+
+| probe | bash 5 | ksh93 | zsh |
+| --- | --- | --- | --- |
+| `a=(); echo ${#a[@]}` | 0 | **1** | 0 |
+| `a=(x y); a[0]+=Q` | `xQ` | `xQ` | **refused** |
+| `a=([2]=c [0]=a)` | placed | placed | **refused** |
+
+`a=()` is an *empty array* in bash and zsh. In ksh93 it declares a
+compound variable instead — `typeset -p a` answers `typeset -C a=()`,
+`${#a[@]}` is 1, and `${a[0]}` renders as the two-line text `(` `)`.
+zsh refuses an append to a single element (`assignment to invalid
+subscript range`) and refuses a subscript written inside the literal
+(`bad subscript for direct array assignment`), both at status 1.
+
+The subscript on the left of an assignment inherits the array-base axis:
+`a[1]=Q` replaces the *second* element in bash and ksh93 and the first
+in zsh, exactly as `${a[1]}` reads it.
+
+An array assignment may also be an **operand** of a declaration utility
+— `typeset a=(x y)`, `local a=(x y)`, `readonly a=(p q)` — which is a
+separate grammar flag, because it is reached by the word after a command
+name rather than by an assignment prefix (`DeclarationUtilities`;
+measured: `decl/an-array-assignment-as-an-operand`,
+`decl/a-local-array-stays-local`, `decl/readonly-takes-its-array-first`).
+
+Corpus: `core/append-to-an-array`, `core/array-star-joins`,
+`array/a-subscript-past-the-end`, `array/removing-one-element`,
+`pat/an-array-literal-is-not-a-group`.
+
+**Two of the rows above are ahead of the implementation**, and are
+recorded so the gap is a known one: a subscript inside a literal is kept
+as literal text here rather than placed (`a=([2]=c)` leaves one element
+reading `[2]=c`), and `a[i]+=v` replaces the element instead of
+appending to it. Both are unanimous in the two shells that answer them.
+
 ## Grouping: `( )` and `{ }`
 
 `( … )` runs in a subshell; `{ …; }` runs in the current one. The
@@ -174,6 +252,59 @@ list, not just simple commands.
 
 Unanimous, and worth pinning because "status of the last command" is the
 obvious wrong answer when there was no last command.
+
+## C-style `for ((init; cond; post))`
+
+A loop on a condition rather than over a list. Core — bash, ksh93 and
+zsh have it and dash does not, and dash's refusal blames the *loop
+variable* rather than the parenthesis, which is the tell that it read
+`for` and then failed to find a name:
+
+    dash: Syntax error: Bad for loop variable
+
+Grammar flag: `CStyleFor` (on in the core, off for `posix` and `dash`).
+Measured: `core/c-style-for`.
+
+**The header is arithmetic, not a word list.** The three parts are the
+expressions of `arithmetic.md`, so a bare name in the condition is a
+variable rather than a word — `n=2; for ((i=0;i<n;i++))` iterates twice
+in all three, with no `$` anywhere. The comma operator is available and
+lets each part carry more than one expression:
+`for ((i=0,j=9; i<3; i++,j--))` walks both, unanimously.
+
+**Any of the three may be omitted, and an omitted condition is true.**
+That is what makes the endless loop spell as it does:
+
+    for ((;;))         →  runs until something breaks
+    for ((i=0;;i++))   →  the same, with an initialization and a step
+    for ((;i<3;))      →  a while loop written this way
+
+All measured unanimous across bash 5.3, bash 3.2, ksh93 and zsh. The
+consequence for an AST is that "omitted" and "the expression `0`" are
+different: a missing condition loops forever and a false one runs the
+body zero times and exits 0.
+
+**The loop variable is an ordinary variable and survives the loop** —
+`for ((i=0;i<3;i++)); do :; done` leaves `i` at 3 — which follows from
+the header being arithmetic in the current scope.
+
+Two shapes are specific to this loop and neither holds for any other:
+
+- **No separator is required before `do`.** `for ((i=0;i<2;i++)) do …
+  done` is accepted by all four, where the same document's rule above
+  says a `;` or newline must precede `do`. The `))` has already ended
+  the header, so there is nothing for a separator to delimit.
+- **The body may be a brace group instead of `do … done`.**
+  `for ((i=0;i<2;i++)) { …; }` runs in bash 5.3, bash 3.2, ksh93 and
+  zsh alike. It is not a general loop syntax: `for i in a b { …; }` and
+  `while cond { …; }` are parse errors in all four, except that zsh
+  takes the brace body on `while`. **This implementation accepts only
+  `do … done`**, and the brace form is a known gap rather than a
+  decision.
+
+The header is also a *lexer* fact rather than a parser one: `(( … ))`
+arrives whole, because what is inside is arithmetic and not a command
+list, so the three parts are cut on the semicolons afterwards.
 
 ## `case`
 
@@ -297,10 +428,17 @@ and-or lists separated by `;`, `&` or newline; `sep` is any one of those.
     while       :  'while' list sep 'do' list sep 'done'
     until       :  'until' list sep 'do' list sep 'done'
     for         :  'for' name [ [ 'in' word* ] sep ] 'do' list sep 'done'
+    for-arith   :  'for' '((' [ expr ] ';' [ expr ] ';' [ expr ] '))'
+                   [ sep ] ( 'do' list sep 'done' | '{' list sep '}' )
     select      :  'select' name [ [ 'in' word* ] sep ] 'do' list sep 'done'
     case        :  'case' word 'in' { case-item } 'esac'
     case-item   :  [ '(' ] pattern { '|' pattern } ')' [ list ] terminator
     terminator  :  ';;' | ';&' | ';;&'
+    coproc      :  'coproc' ( command | name compound )
+
+`for-arith` and `coproc` are not in XCU; each has its own section below,
+and `coproc` is the one line here that is a dialect's rather than the
+core's.
 
 Four things there are measured rather than transcribed, because each is
 somewhere an implementation guesses wrong.
@@ -384,3 +522,60 @@ different inside it. `[[` is only special where a command may begin —
 commands begin. Lexing `<` as an operator loses nothing: the parser knows
 it is inside `[[ ]]` and reinterprets the token. A lexer mode keyed on
 seeing the word `[[` would break `echo`.
+
+## `coproc`
+
+A command run in the background with a pipe on each of its standard
+streams, and the near ends kept where the script can reach them.
+
+**It is a keyword in two shells and a different feature in each.**
+Measured with `type coproc`:
+
+| shell | `coproc` is | how the near ends are reached |
+| --- | --- | --- |
+| dash | not found | — |
+| bash 3.2 | not found | — |
+| bash 5.3 | a shell keyword | the array `COPROC`, pid in `COPROC_PID` |
+| ksh93 | not found | `cmd \|&`, then `print -p` and `read -p` |
+| zsh | a reserved word | `coproc cmd`, then `print -p` and `read -p` |
+
+So the word `coproc` is shared by bash and zsh and the *model* is not.
+bash names a coprocess and hands back a two-element array of file
+descriptors; zsh has one anonymous coprocess addressed as `>&p` and
+`<&p`, and no name may be written at all — `coproc MY { cat; }` is a
+parse error there. ksh93 has the zsh model under a different spelling,
+`cat |&`, with no `coproc` word. Only bash's is this construct.
+
+Grammar flag: `Coproc` (off in the core, on for `bash`). It is not core
+even though two shells have the keyword, because a switch that made the
+word parse would still leave two incompatible ways to talk to what it
+started.
+
+Measured in bash 5.3 (2026-09-05):
+
+    coproc cat
+    echo hi >&"${COPROC[1]}"
+    read -r l <&"${COPROC[0]}"      →  hi
+
+**A name may be written only before a compound command.** This is the
+whole of the grammar and it is where an implementation guesses wrong:
+
+    coproc cat            →  runs cat; the array is COPROC
+    coproc MY { cat; }    →  runs cat; the array is MY
+    coproc MY ( cat )     →  the same — a subshell is compound too
+    coproc MY cat         →  runs *MY* with the argument cat
+
+The last row is the point: bash reports `MY: command not found` from the
+background job, having taken the first word of a simple command as the
+command. There is no ambiguity to resolve at run time, because the shape
+of what follows decides it while parsing. Named coprocesses coexist —
+`coproc A { cat; }; coproc B { cat; }` gives two independent pairs.
+
+`coproc` is a **bash 4** feature, and dates rather than vetoes nothing:
+bash 3.2 has no such word, so `coproc cat` there is a command lookup
+that fails with 127 and `coproc MY { cat; }` is a syntax error at the
+`}`. The same rule `;&` follows in the `case` table above, from
+`../core.md`.
+
+Corpus: `commands/coproc-is-one-dialect-s-keyword`. The name-before-a-
+compound rule is measured here and is **not yet pinned by a case**.

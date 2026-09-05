@@ -144,20 +144,22 @@ func TestAPromptIsTheStandardInputRoute(t *testing.T) {
 	done := make(chan int, 1)
 	go func() { done <- driver.MainArgs(sh, []string{"testsh"}) }()
 
-	drawn.await(t, "$ ")
+	drawn.awaitReadyForInput(t)
 	// The marker is split in the typed line and whole in the answer, so
 	// waiting on it cannot be satisfied by the terminal echoing what was
 	// typed back.
 	write(t, control, `case $- in *s*) echo "route""=stdin" ;; *) echo "route""=other" ;; esac`+"\r")
 	drawn.await(t, "route=stdin")
-	write(t, control, "\x04") // ^D on an empty line ends the session
+	// The answer says the command ran; the next prompt says the shell is
+	// reading again, which is the only moment ^D survives.
+	drawn.endSession(t, control)
 
 	select {
 	case code := <-done:
 		if code != 0 {
 			t.Errorf("status = %d, want 0", code)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(sessionBudget):
 		_ = control.Close() // unblock the read the shell is sitting in
 		t.Fatalf("the session did not end; drawn so far: %q", drawn.text())
 	}

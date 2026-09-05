@@ -198,7 +198,14 @@ func TestTheTerminalLoopScrubsWhatIsTyped(t *testing.T) {
 		t.Errorf("the notice is %q, want the rule named", got)
 	}
 	// ^D on an empty line ends the session, which is where the file is
-	// written.
+	// written — but only once the shell is reading again. It puts the
+	// terminal back in its own line discipline to run a line and takes it
+	// into raw mode afterwards, and the kernel drops what is queued but
+	// unread across that change, so a ^D sent any earlier is simply gone and
+	// the session never ends. The next prompt is drawn after raw mode is
+	// restored and immediately before the read, which makes it the mark to
+	// wait on rather than a duration to guess at.
+	waitFor(t, out, "$ ", "the prompt after the line ran")
 	if _, err := control.WriteString("\x04"); err != nil {
 		t.Fatal(err)
 	}
@@ -222,8 +229,9 @@ func TestTheTerminalLoopScrubsWhatIsTyped(t *testing.T) {
 
 // syncBuffer is a buffer the test reads while the shell is writing to it.
 type syncBuffer struct {
-	mu sync.Mutex
-	b  strings.Builder
+	mu   sync.Mutex
+	b    strings.Builder
+	seen int
 }
 
 func (s *syncBuffer) Write(p []byte) (int, error) {
@@ -238,15 +246,100 @@ func (s *syncBuffer) String() string {
 	return s.b.String()
 }
 
+// seek reports whether the text has arrived since the last thing waited for
+// did, and moves the cursor past it if so.
+//
+// A cursor rather than a search of everything written, because a session
+// writes the same prompt after every line: without one, a second wait for
+// `$ ` is answered by the first prompt and waits for nothing. Nothing is
+// discarded — the whole buffer is what a failure prints.
+func (s *syncBuffer) seek(want string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := strings.Index(s.b.String()[s.seen:], want)
+	if i < 0 {
+		return false
+	}
+	s.seen += i + len(want)
+	return true
+}
+
 // waitFor blocks until the text appears, or fails the test saying what it was
 // waiting for and what it had instead.
 func waitFor(t *testing.T, buf *syncBuffer, want, what string) {
 	t.Helper()
 	for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); {
-		if strings.Contains(buf.String(), want) {
+		if buf.seek(want) {
 			return
 		}
 		time.Sleep(2 * time.Millisecond)
 	}
 	t.Fatalf("waiting for %s: %q never arrived, and what did was %q", what, want, buf.String())
+}
+
+// TestAWaitIsNotSatisfiedByAPromptItAlreadySaw is why the buffer carries a
+// cursor.
+//
+// The session writes the same prompt after every line, so a wait that
+// searched everything written would be answered by the first prompt for the
+// rest of the run — and a test that then types is typing at a shell that may
+// still be between line disciplines, where the kernel drops what is queued
+// but unread. That is how a ^D goes missing (#635).
+func TestAWaitIsNotSatisfiedByAPromptItAlreadySaw(t *testing.T) {
+	var buf syncBuffer
+	if _, err := buf.Write([]byte("$ ")); err != nil {
+		t.Fatal(err)
+	}
+
+	if !buf.seek("$ ") {
+		t.Fatal("the first prompt was not found at all")
+	}
+	if buf.seek("$ ") {
+		t.Error("the same prompt answered twice, so a later wait would not wait")
+	}
+
+	if _, err := buf.Write([]byte("history: aws-access-key-id\n$ ")); err != nil {
+		t.Fatal(err)
+	}
+	if !buf.seek("history:") {
+		t.Error("the notice was not found")
+	}
+	if !buf.seek("$ ") {
+		t.Error("the prompt drawn after the line ran was not found")
+	}
+	if buf.seek("$ ") {
+		t.Error("a third prompt was found where only two were written")
+	}
+
+	// And nothing is discarded: the whole buffer is what a failure prints.
+	if got := buf.String(); !strings.Contains(got, "history:") {
+		t.Errorf("the buffer is %q, want everything written kept for the diagnostic", got)
+	}
+}
+
+// TestAWaitBlocksUntilThePromptIsWrittenAgain: waitFor is what the test
+// actually calls, so it is checked rather than only the search under it.
+//
+// The second prompt is arranged to arrive late and the assertion is on the
+// lower bound, so load can only lengthen the wait — the direction that keeps
+// this from becoming a flake in its own right.
+func TestAWaitBlocksUntilThePromptIsWrittenAgain(t *testing.T) {
+	const late = 50 * time.Millisecond
+
+	var buf syncBuffer
+	if _, err := buf.Write([]byte("$ ")); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, &buf, "$ ", "the first prompt")
+
+	go func() {
+		time.Sleep(late)
+		_, _ = buf.Write([]byte("history: aws-access-key-id\n$ "))
+	}()
+
+	start := time.Now()
+	waitFor(t, &buf, "$ ", "the prompt after the line ran")
+	if waited := time.Since(start); waited < late {
+		t.Errorf("the wait returned after %v, before the second prompt was written at %v", waited, late)
+	}
 }

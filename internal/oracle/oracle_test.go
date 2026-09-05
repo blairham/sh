@@ -245,6 +245,30 @@ func TestArgScriptIsReplacedInsideAWordToo(t *testing.T) {
 	}
 }
 
+// TestTheScriptFileIsOnlyWrittenWhenACaseAsksForIt is why the replacement is
+// guarded rather than unconditional, and it is a measurement bug and not
+// tidiness.
+//
+// The scratch directory is the shell's *working* directory, so a file written
+// into it is a file the snippet can see: several cases glob the current
+// directory, and `echo *` would list a case.sh nobody asked for. Replacing
+// ArgScript unconditionally would write one for every case that uses Args.
+func TestTheScriptFileIsOnlyWrittenWhenACaseAsksForIt(t *testing.T) {
+	sh := Found{Shell: Shell{Name: "ours"}, Path: "/bin/sh"}
+	dir := t.TempDir()
+
+	command(t.Context(), sh, Case{ID: "t", Snippet: "echo *", Args: []string{"-c" + ArgSnippet}}, dir)
+	if _, err := os.Stat(filepath.Join(dir, "case.sh")); !os.IsNotExist(err) {
+		t.Errorf("case.sh exists in the working directory of a case that never named it (%v); a snippet that globs would see it", err)
+	}
+	// The control, so this cannot pass by the file never being written at all.
+	other := t.TempDir()
+	command(t.Context(), sh, Case{ID: "t", Snippet: "echo hi", Args: []string{ArgScript}}, other)
+	if _, err := os.Stat(filepath.Join(other, "case.sh")); err != nil {
+		t.Errorf("case.sh missing for a case that did name it: %v", err)
+	}
+}
+
 // TestAPlaceholderNamedTwiceIsRefusedInsideAWordToo keeps validate's rule in
 // step with the replacement rule.
 //

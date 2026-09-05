@@ -76,6 +76,13 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	}
 }
 
+// The invocation answers this preset gives that are not Answers.
+func TestPlusSignedCommandStringNaming(t *testing.T) {
+	if got := ksh.Semantics().PlusSignedCommandStringIsDollarZero; got != true {
+		t.Errorf("PlusSignedCommandStringIsDollarZero = %v, want true", got)
+	}
+}
+
 func TestDiagnosticAnswersTheInterpTestsRelyOn(t *testing.T) {
 	d := ksh.Diagnostics()
 	if got, want := d.TraceQuoting, interp.QuoteDollar; got != want {

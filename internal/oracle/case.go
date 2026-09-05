@@ -4273,6 +4273,11 @@ echo unreachable`,
 		Why:     "a name outside the shell's table is refused in both directions, with four different wordings and two different statuses — the boundary the accept-off policy stops at, since a name that does not exist is not a state anything is already in",
 	},
 	{
+		ID: "opt/an-unknown-letter-is-refused", Category: "shell options",
+		Snippet: `set -q; echo "st=$?"; echo alive`,
+		Why:     "the letter half of the question the long name asks, and the panel answers the two identically — `-q`, `-j`, `-z` and `-A` are the letters all six refuse, and each shell reports for `set -q` exactly what it reports for `set -o zzznosuch` and ends the script or does not in the same way. bash alone carries on, at 2; dash and ksh93 stop at 2 and zsh at 1. The letter had no dialect answer at all until #483: it reported 2 everywhere and never stopped a script, so the same shell answered its own two spellings differently",
+	},
+	{
 		ID: "opt/turning-off-a-name-a-shell-does-not-implement", Category: "shell options",
 		Snippet: `set +o posix; echo "st=$?"; set +o history; echo "st=$?"`,
 		Why:     "the thirteenth line of Homebrew's own brew script is `set +o posix`, and it is the shape this implementation's accept-off/refuse-on policy exists for: turning off what a shell was never doing is a request that has been granted, where turning it *on* would be a promise. Recorded across the panel because the two names split it — bash has both, and the others have neither",

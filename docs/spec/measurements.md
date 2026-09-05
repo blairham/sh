@@ -1855,7 +1855,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   print -p x; echo "st=$?"
   ```
-- `print/l-and-n-are-the-separator-and-the-terminator` — zsh's `-l` separates the operands with newlines and `-n` withholds the terminator, so the two compose rather than cancelling: `c~d.` on one line after `a~b`. ksh93 has no `-l` at all and says so twice, which is the dialect boundary inside a builtin both shells have
+- `print/l-and-n-are-the-separator-and-the-terminator` — zsh's `-l` separates the operands with newlines and `-n` withholds the terminator, so the two compose rather than canceling: `c~d.` on one line after `a~b`. ksh93 has no `-l` at all and says so twice, which is the dialect boundary inside a builtin both shells have
   ```sh
   print -l a b; print -ln c d; echo .
   ```

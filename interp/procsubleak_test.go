@@ -74,20 +74,31 @@ func TestASubstitutionNobodyOpensLeavesNoGoroutineBehind(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			release := filepath.Join(t.TempDir(), "go-ahead")
 
-			before := substitutionGoroutines()
+			// A quiet baseline rather than whatever the count happens to be.
+			// Taking the number as it stands and asking for more than it
+			// afterwards was a race of its own: a substitution from the case
+			// before, or from another test in this package, can still be
+			// finishing when the number is read, and then finish before it
+			// is read again — which is a rise and a fall recorded as no rise
+			// at all. Nothing here can be relative to a number that moves,
+			// so the test waits for the one number that does not.
+			if n := waitForGoroutines(0); n != 0 {
+				t.Fatalf("%d goroutines already in a substitution, want a quiet start", n)
+			}
+
 			if _, st := run(t, strings.ReplaceAll(tc.running, "%s", release), nil); st != 0 {
 				t.Fatalf("status %d, want the substitution to run", st)
 			}
-			if n := substitutionGoroutines(); n <= before {
+			if n := substitutionGoroutines(); n < 1 {
 				t.Fatalf("%d goroutines in a substitution with one still running, "+
-					"want more than the %d there were — the frame this counts by is gone, "+
-					"so the leak below cannot be seen either", n, before)
+					"want at least the one — the frame this counts by is gone, "+
+					"so the leak below cannot be seen either", n)
 			}
 			if err := os.WriteFile(release, nil, 0o600); err != nil {
 				t.Fatal(err)
 			}
-			if n := waitForGoroutines(before); n > before {
-				t.Fatalf("%d goroutines still in a substitution that was let go, want %d", n, before)
+			if n := waitForGoroutines(0); n != 0 {
+				t.Fatalf("%d goroutines still in a substitution that was let go, want none", n)
 			}
 
 			for range 5 {
@@ -95,9 +106,9 @@ func TestASubstitutionNobodyOpensLeavesNoGoroutineBehind(t *testing.T) {
 					t.Fatalf("status %d, want a path nobody opens to be no error", st)
 				}
 			}
-			if n := waitForGoroutines(before); n > before {
-				t.Errorf("%d goroutines left in a substitution, want the %d there were before — "+
-					"a path nobody opened parked one for good", n, before)
+			if n := waitForGoroutines(0); n != 0 {
+				t.Errorf("%d goroutines left in a substitution, want none — "+
+					"a path nobody opened parked one for good", n)
 			}
 		})
 	}

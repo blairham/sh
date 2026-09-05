@@ -30,6 +30,17 @@ linters:
       # Runner, so an os.Getenv landing there is the same leak in a
       # directory the rule used not to cover.
       #
+      # The three streams are on the list for the same reason and are the
+      # sharpest case, because they are the one piece of process state a
+      # library *writes*. A nil Stdout used to fall back to os.Stdout, which
+      # meant an embedder who wired two of the three had a script's output
+      # appearing in the host program's terminal with nothing to say where
+      # it came from — while a nil Env was already empty and Dir already
+      # refused to ask os.Getwd. Nil now means empty for all three, and this
+      # entry is what keeps it that way: there is no nolint anywhere under
+      # interp/ or dialect/, because after that change there is nothing left
+      # to bless.
+      #
       # Reading the process's *identity* is not on this list and is not
       # meant to be. A pid, a uid, a euid are per-process but they are not
       # state anyone can fight over — two Runners in one program genuinely
@@ -50,6 +61,8 @@ linters:
         msg: replacing the process is the binary's decision; use the ReplaceProcess hook
       - pattern: ^exec\.LookPath$
         msg: consults the process's PATH and cwd; the Runner owns both — use lookpath.go
+      - pattern: ^os\.Std(in|out|err)$
+        msg: the three streams are r.Stdin/r.Stdout/r.Stderr, and a nil one is empty; driver wires all three at construction
       - pattern: ^os\.(TempDir|MkdirTemp|CreateTemp)$
         msg: os.TempDir is os.Getenv("TMPDIR"), and MkdirTemp/CreateTemp call it for an empty dir; the temporary home is r.tempHome() — TMPDIR through r.getVar
   enable:

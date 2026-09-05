@@ -97,6 +97,42 @@ type Case struct {
 	// actually ran, which a second hand-kept copy would not.
 	Stdin string
 
+	// GradedOnRefusal grades a case on the fact that the shell said no,
+	// rather than on the words it said no in.
+	//
+	// The shapes most worth pinning about an invocation are the ones a shell
+	// *refuses* — a command string attached to its letter, an option that is
+	// not one, `-c` with nothing after it — and each shell refuses in its own
+	// words. Those wordings are deliberately different: they are what the
+	// Diagnostics vector exists for, and a dialect is supposed to sound like
+	// the shell it names. So an exact comparison scores four shells that all
+	// agree about the behavior as four disagreements, and the case that would
+	// catch the real bug cannot be written at all.
+	//
+	// What is forgiven is exactly the text of the diagnostic. What is not:
+	//
+	//	the outcome    the same status, signal and timeout as always
+	//	standard out   byte for byte as always, so a shell that *ran* what
+	//	               the reference declined to run still fails
+	//	the refusal    both sides must have ended nonzero *and* written
+	//	               something to standard error — two requirements the
+	//	               exact comparison never makes
+	//
+	// The last of those is the safeguard. This mode is not "compare less",
+	// it is "compare a different thing that can still be false", and it is
+	// stricter than exact grading in the one direction that matters: put the
+	// flag on a case the reference does not refuse and the case *fails*,
+	// because a misused flag has to be louder than a correct one. A case that
+	// refuses silently fails too — saying nothing is not a wording
+	// difference.
+	//
+	// It changes grading only. The record stays exact: measurements.md prints
+	// what each shell actually said, and the drift check still compares every
+	// byte, so a shell that changes its wording is still caught. The rendered
+	// table marks these rows, because a relaxation a reader cannot enumerate
+	// is indistinguishable from a score that is wrong.
+	GradedOnRefusal bool
+
 	// LayoutSensitive marks a case whose output depends on how the source is
 	// laid out rather than only on what it means — a diagnostic naming the
 	// line it happened on, where that line is a fact about the text.
@@ -5766,5 +5802,42 @@ out=$(CDPATH=./pool cd sub)
 		Args:    []string{ArgScript},
 		Snippet: "case $- in *i*) echo interactive ;; *) echo not ;; esac",
 		Why:     "the negative half of #472: `i` belongs in $- only where the shell is interactive, and a script operand is not — unanimous. Membership rather than the spelling, for the same reason invoke/errexit-reaches-the-option-letters uses it. The positive half cannot live here: bash and dash announce that job control is off when -i has no terminal, and bash's line carries a pid, so `-i` under the harness is not a recordable fact",
+	},
+
+	// --- invocations a shell refuses ------------------------------------
+	//
+	// Graded on the refusal rather than on its wording. Every shell here
+	// declines, and every one of them declines in words of its own, so an
+	// exact comparison would score four shells that agree about the behavior
+	// as four disagreements — and these shapes would be unwritable, which is
+	// exactly what kept the sharpest of them out of the corpus (#534).
+	{
+		ID: "invoke/a-command-string-attached-to-the-letter", Category: "invocation",
+		Args:            []string{"-cecho hi"},
+		Snippet:         `echo hi`,
+		GradedOnRefusal: true,
+		Why: "`sh -c'echo hi'` — the command string written against the letter rather than as its own word, which is how a hand and a generated command line both get it wrong. All six refuse it: `-c` takes its operand as a separate word, so the rest of this one is read as more option letters and `echo hi` is not a run of them. We ran it. That is the bug this case exists for, and it is caught here against every reference, because a shell that ran the string writes `hi` to standard output and standard output is still compared exactly. " +
+			"bash is the reason the row is marked: it answers by writing its entire `set -o` table to standard *output* as part of the usage, so against a bash reference this reports a real gap until we write the table too — the relaxation forgives a diagnostic's wording and declines to forgive a stream of output nobody produced",
+	},
+	{
+		ID: "invoke/c-with-nothing-after-it", Category: "invocation",
+		Args:            []string{"-c"},
+		Snippet:         `echo this never arrives`,
+		GradedOnRefusal: true,
+		Why:             "the option that requires an argument, given none — deliberately no placeholder, because what is pinned is the shell refusing before it has a program at all. Unanimous in behavior and unanimous in nothing else: five of the six exit 2 and zsh exits 1, and all six word it differently, which is the pair of facts that makes this gradable only on the refusal. A front end that treated a missing operand as an empty command string would exit 0 having done nothing",
+	},
+	{
+		ID: "invoke/an-option-letter-that-is-not-one", Category: "invocation",
+		Args:            []string{"-Z", ArgSnippet},
+		Snippet:         `echo hi`,
+		GradedOnRefusal: true,
+		Why:             "a letter no shell has. Four of them say so and stop; zsh is the divergence worth recording — it accepts `-Z` as one of its own and then fails on the operand as a script it cannot open, at 127 rather than 2. So the panel is unanimous that this fails and split on why, which is a fact the row keeps in full even though the grading only asks whether the shell declined",
+	},
+	{
+		ID: "invoke/a-long-option-name-that-is-not-one", Category: "invocation",
+		Args:            []string{"-o", "nosuchoption", "-c", ArgSnippet},
+		Snippet:         `echo hi`,
+		GradedOnRefusal: true,
+		Why:             "the same question one level in: `-o` is a valid letter and its operand is not a valid name, so the refusal comes from the option table rather than from the letter table. All six decline before running the command string, which is the part that matters — a shell that warned and carried on would print `hi` and standard output would catch it",
 	},
 }

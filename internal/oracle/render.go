@@ -62,6 +62,12 @@ func (r *Run) Markdown(cases []Case) string {
 	b.WriteString("standard error after a bold **2>**. The two streams are captured apart,\n")
 	b.WriteString("so a diagnostic that moved from one to the other shows up here as a\n")
 	b.WriteString("changed cell rather than as no change at all. Newlines are shown as `~`.\n\n")
+	b.WriteString("A case marked **(refusal)** is *graded* on the fact that the shell said\n")
+	b.WriteString("no — same outcome, same standard output, and a diagnostic on standard\n")
+	b.WriteString("error from both sides — rather than on the words it said no in, which\n")
+	b.WriteString("are a dialect's own. Only the grading is relaxed: the cells below are\n")
+	b.WriteString("what each shell actually printed, and the drift check still compares\n")
+	b.WriteString("every byte of them.\n\n")
 
 	b.WriteString("## Panel\n\n| shell | build |\n| --- | --- |\n")
 	for _, s := range r.Shells {
@@ -88,7 +94,7 @@ func (r *Run) Markdown(cases []Case) string {
 			if c.Category != cat {
 				continue
 			}
-			fmt.Fprintf(&b, "| `%s` |", c.ID)
+			fmt.Fprintf(&b, "| `%s`%s |", c.ID, gradeMark(c))
 			for _, n := range names {
 				fmt.Fprintf(&b, " %s |", cell(r.Results[c.ID][n]))
 			}
@@ -97,7 +103,7 @@ func (r *Run) Markdown(cases []Case) string {
 		b.WriteString("\n")
 		for _, c := range cases {
 			if c.Category == cat {
-				fmt.Fprintf(&b, "- `%s` — %s\n  ```sh\n%s\n  ```\n", c.ID, c.Why,
+				fmt.Fprintf(&b, "- `%s`%s — %s\n  ```sh\n%s\n  ```\n", c.ID, gradeMark(c), c.Why,
 					indentSnippet(c.Snippet))
 			}
 		}
@@ -153,6 +159,21 @@ func outcome(res Result) string {
 		return fmt.Sprintf("killed by signal %d (%s)", int(res.Signal), res.Signal)
 	}
 	return fmt.Sprintf("status %d", res.Status)
+}
+
+// gradeMark labels a row that is graded on something other than an exact
+// comparison, next to the case's own name in both places the name appears.
+//
+// The record has to carry this. A relaxation visible only in the corpus source
+// is one a reader of the generated tables cannot see, and the whole objection
+// to grading a refusal loosely is that it could quietly turn a divergence
+// green — an objection that only stands while nobody can tell which rows are
+// which.
+func gradeMark(c Case) string {
+	if c.GradedOnRefusal {
+		return " **(refusal)**"
+	}
+	return ""
 }
 
 // escapeCell hides the one character a Markdown table reads as structure.

@@ -3748,6 +3748,13 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `redir/restating-the-number-hands-an-exec-descriptor-over` | `st=0~restated` | `st=0~restated` | `st=0~restated` | `st=0~restated` | `st=0~restated` | `st=0~restated` |
 | `redir/exec-descriptor-reaches-a-replacement` | `repl` | `repl` | `repl` | `repl` | *(no output, status 0)* | `repl` |
 | `redir/a-replacements-descriptor-numbers-keep-their-gaps` | `five` | `five` | `five` | `five` | *(no output, status 0)* | `five` |
+| `redir/a-replacement-keeps-a-redirected-stdout` | **2>** `repl` | **2>** `repl` | **2>** `repl` | **2>** `repl` | **2>** `repl` | **2>** `repl` |
+| `redir/a-replacement-keeps-a-redirected-stderr` | `err` | `err` | `err` | `err` | `err` | `err` |
+| `redir/a-replacement-keeps-a-redirected-stdin` | `line` | `line` | `line` | `line` | `line` | `line` |
+| `redir/a-replacements-own-redirection-crosses` | **2>** `own` | **2>** `own` | **2>** `own` | **2>** `own` | **2>** `own` | **2>** `own` |
+| `redir/a-replacement-keeps-a-merged-stream` | *(no output, status 2)* | *(no output, status 2)* | *(no output, status 2)* | *(no output, status 2)* | *(no output, status 2)* | *(no output, status 2)* |
+| `redir/a-closed-stdout-is-closed-for-a-replacement` | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* |
+| `redir/a-closed-stdin-is-closed-for-a-replacement` | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* | *(no output, status 1)* |
 | `redir/an-inherited-descriptor-keeps-its-number` | `five` | `five` | `five` | `five` | *(no output, status 0)* | `five` |
 | `redir/a-dup-prefix-is-that-commands-alone` | `st=2` **2>** `<shell>: 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: 6: Bad file descriptor` | `st=1` **2>** `<shell>: 6: cannot open [Bad file descriptor]` | `st=1` **2>** `<shell>:1: 6: bad file descriptor` |
 | `redir/merge-then-file` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` |
@@ -3908,6 +3915,34 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `redir/a-replacements-descriptor-numbers-keep-their-gaps` — the replacement's table is the shell's table by number rather than a packing of it: with 3 and 4 never opened, the file parked on 5 is on 5 there and 3 is closed rather than shifted down to fill the hole. Unanimous but for ksh93, which passes neither
   ```sh
   exec 5>f; exec /bin/sh -c "{ echo five >&5; echo three >&3; } 2>/dev/null; cat f"
+  ```
+- `redir/a-replacement-keeps-a-redirected-stdout` — the named streams cross a replacement as the rest of the table does, and unanimously — ksh93 included, which is the boundary of what that shell keeps to itself. The replacement reads the file back on the one stream still going to the terminal, because there is no shell left to read it
+  ```sh
+  exec >f; exec /bin/sh -c "echo repl; cat f >&2"
+  ```
+- `redir/a-replacement-keeps-a-redirected-stderr` — the same claim for the stream a shell reports its own failures on, read back on the standard output the script left alone
+  ```sh
+  exec 2>f; exec /bin/sh -c "echo err >&2; cat f"
+  ```
+- `redir/a-replacement-keeps-a-redirected-stdin` — the reading half: the replacement reads the file the script opened rather than the shell's own input, which with a terminal there is the difference between printing a line and hanging
+  ```sh
+  printf 'line\n' >f; exec <f; exec /bin/cat
+  ```
+- `redir/a-replacements-own-redirection-crosses` — the form a script is likelier to write — the redirection on the `exec` itself rather than on an `exec` before it — and the same answer, so the rule is about the stream and not about which command opened it
+  ```sh
+  exec /bin/sh -c "echo own; cat f >&2" >f
+  ```
+- `redir/a-replacement-keeps-a-merged-stream` — `>f 2>&1` is one file under two numbers rather than two targets, so a replacement that places files by number gets both — the count is the only channel left once every stream is in the file, and it is 2 in every shell. The command substitution is the replacement's, quoted so that the shell being replaced does not run it against a file it has only just truncated
+  ```sh
+  exec >f 2>&1; exec /bin/sh -c 'echo out; echo err >&2; exit $(grep -c . f)'
+  ```
+- `redir/a-closed-stdout-is-closed-for-a-replacement` — a stream the script closed stays closed across the replacement rather than falling back to the process's own: the command fails where it would otherwise have written, unanimously. The complaint is discarded because its wording is a fact about whatever /bin/echo is on the machine
+  ```sh
+  exec >&-; exec /bin/echo hi 2>/dev/null
+  ```
+- `redir/a-closed-stdin-is-closed-for-a-replacement` — the same rule on the reading side, and the case that tells a closed stream from an empty one: a replacement handed the shell's own input would read to end of file and report success
+  ```sh
+  exec <&-; exec /bin/cat 2>/dev/null
   ```
 - `redir/an-inherited-descriptor-keeps-its-number` — the discriminating case for how the table crosses: with 3 and 4 never opened, the file parked on 5 is still on 5 in the child and 3 is a hole, so the file holds `five`. A table packed from the bottom would put it on 3 and the file would hold `three`
   ```sh

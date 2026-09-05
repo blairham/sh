@@ -1008,7 +1008,61 @@ Placing the table is the *binary's*, for the reason the exec itself is:
 rewriting the process's descriptors is process-wide state, and a Runner
 embedded in another program may not touch it. So `interp` decides which
 descriptors are the script's to hand out and hands that slice to
-`Runner.ReplaceProcess`, in the layout both other halves already use.
+`Runner.ReplaceProcess`.
+
+### The named streams cross in the same slice
+
+They are the half with no second route. A descriptor above 2 is placed
+because Go opened it close-on-exec; standard output has to be placed
+because after `exec >log` the file is on whatever number Go had free and
+the process's own 1 is still the caller's. An external child never shows
+this, because `os/exec` builds its 0, 1 and 2 separately and will copy
+bytes through a pipe for a stream that is not a file at all — there is no
+separately here, and nothing to copy with.
+
+Measured on macOS, 2026-09-05, across bash 5.3, bash 3.2, dash, ksh93 and
+zsh, and pinned in the corpus as `redir/a-replacement-keeps-a-redirected-…`
+and `redir/a-closed-std…-is-closed-for-a-replacement`:
+
+    exec >log; exec cmd                    the replacement writes to the file
+                                           — unanimous, ksh93 included
+    exec cmd >log                          the same, with the redirection on
+                                           the `exec` itself
+    exec <data; exec cat                   the replacement reads the file
+                                           rather than the shell's own input
+    exec >log 2>&1; exec cmd               both streams reach the file: `2>&1`
+                                           is one file under two numbers
+                                           rather than two targets
+    exec >&-; exec cmd                     the command finds it closed and
+                                           fails — unanimous
+    exec <&-; exec cmd                     the same on the reading side
+
+So the slice a replacement is given is the table extended down to zero —
+entry i is descriptor i — rather than the ExtraFiles layout the other two
+halves use, and that is the whole of the difference between them. The
+exclusion the dissenting shell makes for what `exec` opened stops above 2
+in that shell too: its own `exec >log; exec cmd` writes to the file.
+
+Both rules the table already stated carry over, and the second is a
+decision rather than a consequence:
+
+- **Only a real file can cross.** A Runner embedded in another program may
+  have a caller's buffer behind standard output, and there is no number to
+  hand a replacement for one of those.
+- **A nil is a number that must not be open**, for a named stream as for
+  the rest of the table, rather than "leave the process's own". The
+  measured rows above decide it: `exec >&-; exec cmd` leaves the command a
+  closed descriptor everywhere, and it is the same nil. The alternative
+  would also be the one way for an embedder's terminal to reach a command
+  through a stream the script had redirected away from, which is the
+  borrowing of process state this library exists not to do.
+
+One case is a known divergence and is neither reading: one dialect writes
+to *every* target of a repeated redirection, so `exec >a >b` leaves the
+runner a writer over two files and no single number to place. The command
+a replacement runs finds standard output closed there, where that shell
+gives it both files — which needs a copying process between the two, and
+is a larger thing than a table.
 
 ### Whether a descriptor `exec` parked is handed over at all
 

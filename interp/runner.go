@@ -126,14 +126,21 @@ type Runner struct {
 	// It returns only on failure — a successful replacement does not come
 	// back — and the error it returns is reported as the exec having failed.
 	//
-	// files is the descriptor table the replacement is to be given beyond the
-	// three named streams, laid out exactly as InheritedFiles is read and as
-	// childFiles hands one to an external child: entry i is descriptor 3+i,
-	// and a nil entry is a number that must not be open there. It is a
-	// separate argument rather than something the hook can work out for
-	// itself, because the numbers are the *script's* — a Runner's descriptor
-	// 3 is some other number in the process, and which descriptors are the
-	// script's to hand out is a question only this package can answer.
+	// files is the descriptor table the replacement is to be given: entry i is
+	// descriptor i, and a nil entry is a number that must not be open there.
+	// It is a separate argument rather than something the hook can work out
+	// for itself, because the numbers are the *script's* — a Runner's
+	// descriptor 3 is some other number in the process, and which descriptors
+	// are the script's to hand out is a question only this package can answer.
+	//
+	// It starts at 0 rather than at 3, which is where InheritedFiles is read
+	// from and where os/exec's ExtraFiles begins. A child is handed its named
+	// streams separately, by a package that will copy bytes through a pipe for
+	// a stream that is not a file; a replacement is this process, so 0, 1 and
+	// 2 have to say the right thing before the execve like every other number,
+	// or `exec >log; exec cmd` writes to the terminal. Entries 0 to 2 are nil
+	// wherever the stream is not a file, and the nil closes the number there
+	// as it does anywhere else in the table.
 	ReplaceProcess func(path string, argv, env []string, files []*os.File) error
 
 	// DieBySignal ends this process with the signal a script sent it and had

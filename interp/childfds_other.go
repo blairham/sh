@@ -15,3 +15,9 @@ import "os"
 // passes a descriptor to a child is unsupported on such a platform, in the
 // same way process groups are.
 func (r *Runner) childFiles() []*os.File { return nil }
+
+// replacementFiles hands nothing over for the same reason, named streams
+// included. Placing a descriptor on a number is the POSIX call childFiles'
+// absence here already stands for, and a platform with no such call has
+// nothing for a replacement to be given.
+func (r *Runner) replacementFiles() []*os.File { return nil }

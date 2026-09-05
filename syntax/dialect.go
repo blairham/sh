@@ -463,6 +463,32 @@ type Dialect struct {
 	// ordinary word.
 	FdVariableRedirections bool
 
+	// MultiDigitFdNumber lets a redirection's descriptor number have more
+	// than one digit: `exec 10>file` opens the file on ten.
+	//
+	// bash alone reads it that way. To dash, ksh93 and zsh the digits are an
+	// ordinary word and the operator is a redirection of its own, so
+	// `exec 10>f` is `exec 10 >f` and reports that no command called `10` was
+	// found — measured on all five panel members, and the same answer for
+	// every width from two digits up. Those three still hold descriptors
+	// above nine perfectly well; they simply have no way to *write* one, and
+	// `exec {v}>f` is what puts them there — the shell picks 10 or 11 and the
+	// variable says which.
+	//
+	// It is the lexer's because the token is: digits immediately before `<`
+	// or `>` are either a number or the tail of a word, and nothing later can
+	// tell them apart. This is the case AmpersandRedirect's comment warns
+	// about, in a milder form — where the flag is off, `echo x 10>f` is not
+	// an error but a different command, printing `x 10` into the file rather
+	// than `x` to the terminal.
+	//
+	// POSIX is the reason it is a flag rather than a fact: the standard's
+	// IO_NUMBER is one *or more* digits, so a shell taking `10>f` conforms
+	// and so does the majority that does not. Where the panel and the
+	// standard disagree the panel decides the core, which leaves this to the
+	// one shell that wants it.
+	MultiDigitFdNumber bool
+
 	// FdVariableSubscript lets the name inside those braces carry a
 	// subscript: `exec {a[1]}>&-` closes the descriptor that element holds,
 	// which is how a coprocess's feed is closed by the array the shell put

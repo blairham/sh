@@ -76,6 +76,25 @@ func TestUnsetPastTheStartIsRefusedOnlyWhereTheAnswerRemoves(t *testing.T) {
 	if strings.Contains(out, "subscript") {
 		t.Errorf("blanking: %q, want nothing said", out)
 	}
+	// `-1` on an array with nothing in it is past the start too, and the
+	// blanking answer is silent about that one as well — the boundary it
+	// reaches is the non-negative spelling and only that one.
+	out, _ = runUnsetBelowBase(t, No, UnsetArraySpanLeavesOneEmptyElement,
+		`a=(); unset "a[-1]"; echo "st=$?"`)
+	if strings.TrimSpace(out) != "st=0" {
+		t.Errorf("blanking, empty array: %q, want %q", strings.TrimSpace(out), "st=0")
+	}
+}
+
+// The boundary is *before* the first element and not at it: under the
+// blanking answer a scalar's own element is reachable, and only what stands
+// below it is refused.
+func TestUnsetAtTheFirstElementOfAScalarIsNotRefused(t *testing.T) {
+	out, _ := runUnsetBelowBase(t, No, UnsetArraySpanLeavesOneEmptyElement,
+		`a=v; unset "a[1]"; echo "st=$?"`)
+	if strings.TrimSpace(out) != "st=0" {
+		t.Errorf("got %q, want %q", strings.TrimSpace(out), "st=0")
+	}
 }
 
 // A subscript written as an expression is named as it was written and not as

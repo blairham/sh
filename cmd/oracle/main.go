@@ -13,8 +13,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 
@@ -72,10 +74,21 @@ func run(check bool, goldenPath, docPath string) error {
 	fmt.Printf("  %d cases across %d shells\n\n", len(oracle.Corpus), len(got.Shells))
 
 	if !check {
-		if err := os.WriteFile(docPath, []byte(got.Markdown(oracle.Corpus)), 0o644); err != nil {
-			return err
+		// The record is read before it is written: a racing row's cells are
+		// one sample of a coin flip, and rewriting them is the only way such
+		// a row can move, so they are carried forward. Run.Record owns the
+		// order the two artifacts have to be produced in.
+		prev, err := oracle.Load(goldenPath)
+		switch {
+		case err == nil:
+		case errors.Is(err, fs.ErrNotExist):
+			// The first run on a machine with no record, which is how the
+			// file is created. Nothing to carry forward.
+			prev = nil
+		default:
+			return fmt.Errorf("reading %s to carry racing rows forward: %w", goldenPath, err)
 		}
-		if err := got.Save(goldenPath); err != nil {
+		if err := got.Record(prev, oracle.Corpus, docPath, goldenPath); err != nil {
 			return err
 		}
 		fmt.Printf("wrote %s and %s\n", docPath, goldenPath)

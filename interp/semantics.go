@@ -1488,6 +1488,28 @@ type Semantics struct {
 	// holds no descriptor number. ksh93 says nothing and reports success.
 	FdVariableBadCloseIsAnError Answer
 
+	// FdNumberBoundedByOpenFileLimit refuses a redirection whose descriptor
+	// number is at or above the process's soft limit on open files. bash and
+	// ksh93 do; dash and zsh accept the number and let whatever comes next
+	// fail on it, or not at all.
+	//
+	// There is no *language* bound anywhere in the panel — no shell has a
+	// ceiling of its own, and the one that bites is the kernel's `ulimit -n`.
+	// bash reports the errno it gets: with the limit at 20, `exec 20>f` is
+	// `20: Bad file descriptor` and status 1, `exec 19>f` is silent, and
+	// lowering the limit lowers the ceiling exactly. ksh93 refuses the same
+	// numbers in its own words. dash and zsh answer 0 for `exec 8>f` under a
+	// limit of 6 and leave the descriptor unusable, which is the shape of not
+	// asking rather than of a different answer.
+	//
+	// It is asked at the disagreement rather than on every redirection: a
+	// number below the limit is nobody's question, and a Runner with no
+	// GetRlimit has no limit to be asked about. Reached most often through
+	// MultiDigitFdNumber, which is what lets a script write a number that
+	// large at all — under the three shells that read one digit, the only way
+	// to a descriptor above nine is to let the shell pick it.
+	FdNumberBoundedByOpenFileLimit Answer
+
 	// JobControlAbsenceIsReportedFirst refuses `bg` and `fg` before
 	// reading the operand when there is no job control — bash and zsh; dash
 	// and ksh93 read their operands and options first and complain about
@@ -2412,6 +2434,10 @@ func PosixSemantics() Semantics {
 		CdpathAnnouncesTheDirectory:      Yes,
 		FdVariableOutlivesTheCommand:     Yes,
 		FdVariableBadCloseIsAnError:      Yes,
+		// The standard says nothing about a ceiling, so this follows the
+		// panel: bash and ksh93 hand the kernel's refusal back, dash and zsh
+		// report success on a number the process cannot hold.
+		FdNumberBoundedByOpenFileLimit: Yes,
 		// The standard is silent and four of the five hand the descriptor
 		// over, which is what the flock and shared-log idioms are built on.
 		ExecOpenedFdReachesACommand:        Yes,

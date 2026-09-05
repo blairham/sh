@@ -508,3 +508,22 @@ func TestPrintfMissingFormatCharacter(t *testing.T) {
 		}
 	}
 }
+
+// `\x` reads at most two digits as one byte, and an empty digit run leaves
+// the escape standing with a complaint that does not fail the command.
+func TestPrintfHexEscapeIsAByte(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct{ src, want string }{
+		{`printf 'a\x41Z'`, "aAZ"},
+		{`printf '[\x0ff]'`, "[\x0ff]"},
+		{`printf 'a\x80Z'`, "a\x80Z"},
+	} {
+		if out, _ := runBash(t, dir, tc.src+"\n"); out != tc.want {
+			t.Errorf("%s: said % x, want % x", tc.src, out, tc.want)
+		}
+	}
+	out, st := runBash(t, dir, `printf 'a\xZ'`+"\n")
+	if !strings.Contains(out, `printf: missing hex digit for \x`) || st != 0 {
+		t.Errorf("said %q status %d, want the warning and a zero status", out, st)
+	}
+}

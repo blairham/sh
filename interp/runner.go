@@ -179,6 +179,47 @@ type Runner struct {
 	// corpus records.
 	DieBySignal func(sig syscall.Signal) error
 
+	// GuardConcurrent runs work this shell put on a goroutine of its own — a
+	// background job, either half of a pipeline, a coprocess, a process
+	// substitution — and is where a panic in that work is dealt with.
+	//
+	// Opt-in for the reason ReplaceProcess and DieBySignal are, and for the
+	// reason this package panics at all. interp panics when an invariant of
+	// its own breaks, because a library that swallows a broken invariant
+	// hands its caller a wrong answer where it could have handed back
+	// nothing; a front end that has decided the process *is* a shell may
+	// decide otherwise, and internal/panicguard is that decision. Nil leaves
+	// the work bare, so a panic on it ends the process — which is the honest
+	// answer and the one a library owes.
+	//
+	// `recover` reaches only the goroutine that panicked, which is why this
+	// exists as a hook rather than as something a caller can wrap from
+	// outside: the guard a front end already puts around a run is on the
+	// calling goroutine, and every goroutine named above is out of its reach.
+	//
+	// It is called *on* the new goroutine, with the work as its argument;
+	// starting the goroutine stays here. A hook that decided where the work
+	// ran could run it on the calling one, and the shell waits for a
+	// background job to report its process before it goes on — so a hook
+	// meaning well would deadlock the shell it was protecting.
+	//
+	// The second argument is where a report about the panic goes: the
+	// shell's own error stream, with the lock this package puts over a
+	// caller's io.Writer already on it. Handed over rather than left to be
+	// assumed, because a front end writing to the stream it supplied would
+	// be a second writer with a lock of its own, and two locks over one
+	// writer exclude nothing — which is the argument lockedWriter is built
+	// on, arriving here from the other side.
+	//
+	// What it may not do is skip the work, and it is not asked to clean up
+	// after it. Everything a goroutine of ours owes the rest of the shell —
+	// a job's status, a pipe's end, an element's place in a pipeline — is
+	// handed over once this returns, whether the work returned or panicked,
+	// so what a recover here reports is a broken shell rather than a hung
+	// one. That it happens *after* this returns is also the guarantee that a
+	// report is written before whatever was waiting carries on.
+	GuardConcurrent func(work func(), errs io.Writer)
+
 	// SetUmask sets this process's file-creation mask and returns the one it
 	// replaced. Nil — the default — means this shell has no umask to offer
 	// and the builtin is refused.
@@ -739,6 +780,17 @@ type Runner struct {
 	// lives on signalState. A subshell begins with only the parent's
 	// ignored signals — see inheritTraps in trapsubshell.go.
 	traps map[string]string
+	// selfPending is what a subshell raised on *itself* and has not handled
+	// yet — today, the SIGPIPE of its own failed write. It is this runner's
+	// own list rather than the shared one because the two are different
+	// events: a signal aimed at `$$` from inside a subshell is the shell at
+	// the top's to handle, and one the subshell caused by writing into a
+	// broken pipe never left the subshell at all. Sharing the list would
+	// make the parent run its own handler for a signal it never had.
+	//
+	// No lock: a subshell's runner is a copy owned by the goroutine running
+	// it, which is also the only thing that records or takes from this.
+	selfPending []string
 	// inheritedIgnored marks the entries in traps that arrived across the
 	// subshell boundary rather than being set inside it, because one
 	// dialect lists an ignore it set and not one it inherited.

@@ -206,10 +206,11 @@ func MainArgs(sh Shell, argv []string) int {
 		// sets `$1` at a prompt in all four.
 		return sh.interactive(argv, in.params, in.opts)
 	}
-	// Asked here rather than inside the option loop: it is a fact about
+	// Asked here rather than inside the option loop: both are facts about
 	// argv[0], which is the one word that loop never looks at. The prompt
-	// route above asks the same question of the same vector for itself.
+	// route above asks the same questions of the same vector for itself.
 	in.login = LoginShell(argv)
+	in.posix = PosixNamed(argv)
 	return sh.run(in)
 }
 
@@ -359,6 +360,12 @@ type source struct {
 	// which is right, because a program embedding a runner has an invocation
 	// of its own and this shell is not it.
 	login bool
+	// posix says argv[0] named the shell `sh`, so it starts in POSIX mode.
+	// The other fact read off the same word, carried for the same reason and
+	// set from the same two places, and it is only ever set from an argument
+	// vector for the reason login is: a caller reaching Run or RunCommand
+	// directly has an invocation of its own.
+	posix bool
 	// onStdin says the program itself arrives on standard input, so it is
 	// read as it runs rather than handed over as text. The shell holds one
 	// descriptor: what it has not read yet is still there for the script's
@@ -810,6 +817,14 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// And which run this is, so every event it emits says so. Set beside
 		// the sink because it is only meaningful to something reading one.
 		Session: sh.Session,
+		// And the guard, for the goroutines a shell runs beside itself.
+		// Outside the KeepProcess block below, because this is not a
+		// process hook: it changes nothing about the process and is the
+		// same decision the guard around every route already makes — that
+		// an interpreter bug is a diagnostic and a status rather than a
+		// crash. An embedder that has told this front end to keep the
+		// process is exactly the caller who most wants it.
+		GuardConcurrent: sh.guardConcurrent(),
 	}
 	r.Dir = sh.Dir
 	if r.Dir == "" {
@@ -980,6 +995,30 @@ func (sh Shell) runInput(in source) int {
 			return r.Finish(context.Background())
 		}
 	}
+	if in.posix {
+		// Called `sh`, so the shell starts in POSIX mode however the program
+		// arrived — measured on the command string, on a script operand and
+		// on standard input alike.
+		//
+		// Last, and both halves of that are measured. It is after the
+		// invocation's own options because the name wins over them: `sh +o
+		// posix -c …` still stops on a failed redirection where `bash +o
+		// posix -c …` does not, while `+o errexit` on the same invocation is
+		// honored, so this is the one option the name overrides rather than
+		// the option loop being ignored. And it is after the profile because
+		// the profile sees the mode *off* — `set -o` in a `~/.profile` read
+		// by `-sh -l` reports `posix off`, and the script that follows it
+		// stops all the same.
+		//
+		// Through the runner's own knob rather than by writing the axis,
+		// because the mode has to be leavable: a script's `set +o posix` puts
+		// back the answer this recorded on the way in, and an axis written
+		// here directly would leave it nothing to find.
+		r.SetPosixMode(true)
+	}
+	// Before the file below, which is the composition of the two: POSIX mode
+	// suppresses that file, measured, and being called `sh` is one of the two
+	// ways into the mode.
 	if code := sh.nonInteractiveStartupFile(r); code != 0 {
 		return code
 	}

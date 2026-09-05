@@ -2706,6 +2706,15 @@ grades it and nothing drift-checks it either, for the same reason.
 | `printf/backslash-c-with-a-symbol-outside-the-letters` | ` a \ c ~ Z : a \ c ? Z ` | ` a \ c ~ Z : a \ c ? Z ` | ` a \ c ~ Z : a \ c ? Z ` | ` a \ c ~ Z : a \ c ? Z ` | ` a > Z : a 177 Z ` | ` a ` |
 | `printf/backslash-c-controls-a-decoded-escape` | ` a \ c \t Z ` | ` a \ c \t Z ` | ` a \ c \t Z ` | ` a \ c \t Z ` | ` a I Z ` | ` a ` |
 | `printf/backslash-c-at-the-end-of-a-format` | ` a \ c \ ` | ` a \ c \ ` | ` a \ c \ ` | ` a \ c \ ` | ` a @ ` | ` a ` |
+| `printf/hex-escape-in-a-format` | ` 61 5c 78 34 31 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 41 5a ` |
+| `printf/hex-escape-writes-one-raw-byte` | ` 61 5c 78 38 30 5a ` | ` 61 80 5a ` | ` 61 80 5a ` | ` 61 80 5a ` | ` 61 80 5a ` | ` 61 80 5a ` |
+| `printf/hex-escape-digit-run-diverges` | ` 5b 5c 78 30 66 66 5d ` | ` 5b 0f 66 5d ` | ` 5b 0f 66 5d ` | ` 5b 0f 66 5d ` | ` 5b c3 bf 5d ` | ` 5b 0f 66 5d ` |
+| `printf/hex-escape-four-digits-is-a-code-point` | ` 5b 5c 78 30 30 34 31 5d ` | ` 5b 00 34 31 5d ` | ` 5b 00 34 31 5d ` | ` 5b 00 34 31 5d ` | ` 5b 41 5d ` | ` 5b 00 34 31 5d ` |
+| `printf/hex-escape-with-no-digits` | ` 61 5c 78 5a ` | ` 61 5c 78 5a ` **2>** `<shell>: line 1: printf: missing hex digit for \x` | ` 61 5c 78 5a ` **2>** `<shell>: line 1: printf: missing hex digit for \x` | ` 61 5c 78 5a ` **2>** `<shell>: line 0: printf: missing hex digit for \x` | ` 61 00 5a ` | ` 61 00 5a ` |
+| `printf/hex-escape-is-not-a-b-escape` | ` 61 5c 78 34 31 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 5c 78 34 31 5a ` | ` 61 41 5a ` |
+| `printf/an-octal-escape-is-a-byte-and-not-a-code-point` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` |
+| `printf/a-quoted-escape-used-as-a-format` | ` 24 61 5c 78 63 30 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` |
+| `printf/a-c-conversion-writes-one-byte` | ` 24 ` | ` c0 ` | ` c0 ` | ` c0 ` | ` c0 ` | ` c0 ` |
 
 - `printf/assigns-with-v` — `printf -v name` puts the formatted text in a variable and prints nothing, which is how a script formats a value without a command substitution and a subshell. bash and zsh have it; dash and ksh93 reject it as an unknown option, and each words that differently
   ```sh
@@ -2847,6 +2856,42 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   printf 'a\c\' | od -An -c | tr -s " "
   ```
+- `printf/hex-escape-in-a-format` — \xHH is an escape in a format for every shell in the panel but dash, which has none and writes the six characters as they stand
+  ```sh
+  printf 'a\x41Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/hex-escape-writes-one-raw-byte` — the escape produces a byte and not a character, so a value no encoding claims is one byte wide — read as hexadecimal because the display cannot tell 80 from the two bytes UTF-8 spells U+0080 with, and unanimous among the five that have the escape at all
+  ```sh
+  printf 'a\x80Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/hex-escape-digit-run-diverges` — how wide the digit run is: bash and zsh stop at two and the value is a byte, so this is 0x0f followed by an f, and ksh93 takes every digit and reads more than two of them as a code point, so the same text is U+00FF in UTF-8
+  ```sh
+  printf '[\x0ff]' | od -An -tx1 | tr -s " "
+  ```
+- `printf/hex-escape-four-digits-is-a-code-point` — the same split with a value that is ASCII, which shows the switch is on the number of digits rather than on the size of the value: two digits would be a NUL and a 4 and a 1, and every digit read as a code point is an A
+  ```sh
+  printf '[\x0041]' | od -An -tx1 | tr -s " "
+  ```
+- `printf/hex-escape-with-no-digits` — an empty digit run: bash leaves the escape standing and warns without failing, ksh93 and zsh read the run as a zero and write a NUL, and dash has no escape here to have an empty run
+  ```sh
+  printf 'a\xZ' | od -An -tx1 | tr -s " "
+  ```
+- `printf/hex-escape-is-not-a-b-escape` — the site matters and not only the shell: ksh93 reads \x41 in a format and leaves it as written in a %b argument, which expands the set echo expands. bash and zsh have it in both and dash in neither, so ksh93 alone separates the two tables
+  ```sh
+  printf '%b' 'a\x41Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/an-octal-escape-is-a-byte-and-not-a-code-point` — unanimous, and worth pinning as bytes: \300 is the single byte 0xc0 in all six, never the two bytes UTF-8 gives the code point of the same number
+  ```sh
+  printf 'a\300Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/a-quoted-escape-used-as-a-format` — the byte arrives already decoded and the format only has to carry it, which is a different route to the output from an escape the format decodes itself. dash has no quoted-escape form, so the dollar sign is part of the word there
+  ```sh
+  printf $'a\xc0Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/a-c-conversion-writes-one-byte` — %c takes the first byte of its operand rather than the first character, so a byte above the ASCII range is written alone and not as the pair an encoding would spell it with
+  ```sh
+  printf '%c' $'\xc0' | od -An -tx1 | tr -s " "
+  ```
 
 ## kill
 
@@ -2931,6 +2976,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `trap/empty-handler-ignores` | `after` | `after` | `after` | `after` | `after` | `after` |
 | `trap/default-signal-terminates` | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
 | `trap/reset-restores-the-default` | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
+| `trap/a-pipeline-element-runs-the-pipe-handler-it-set-for-itself` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `~child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` |
+| `trap/an-elements-broken-pipe-is-not-the-outer-shells-to-handle` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` | `after` **2>** `~child~reached` | `after` **2>** `child~reached` | `after` **2>** `child~reached` |
+| `trap/an-elements-pipe-handler-runs-inside-the-elements-redirections` | `e=[<shell>: 1: echo: echo: I/O error~child]` | `e=[<shell>: line 1: echo: write error: Broken pipe~child]` | `e=[sh: line 1: echo: write error: Broken pipe~child]` | `e=[<shell>: line 0: echo: write error: Broken pipe~~child]` | `e=[child]` | `e=[child~child~<shell>:echo:1: write error: broken pipe~<shell>:1: write error: broken pipe~child]` |
 | `signal-death/status-encodes-the-signal` | `st=141~after` | `st=141~after` | `st=141~after` | `st=141~after` | `st=269~after` | `st=141~after` |
 | `signal-death/the-shell-dies-by-the-signal-rather-than-exiting` | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* | *(no output, killed by signal 15 (terminated))* |
 | `signal-death/an-uncatchable-signal-ends-it-outright` | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* | *(no output, killed by signal 9 (killed))* |
@@ -3033,6 +3081,18 @@ grades it and nothing drift-checks it either, for the same reason.
   trap - INT
   kill -INT $$
   echo after
+  ```
+- `trap/a-pipeline-element-runs-the-pipe-handler-it-set-for-itself` — a handler is not only the shell's to set: an element that traps PIPE for itself runs that handler when its own write meets the broken pipe, and every shell in the panel does it — `child` then `reached` on standard error, in that order, in dash, both bash builds, ksh93 and zsh. The trap has to be set *inside* the element, because a handled signal is back at its default across the boundary and only an ignore crosses intact, so this cannot be spelled from the outside. ksh93 prints `after` before either of them, which is why the two streams are recorded apart
+  ```sh
+  v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; { trap 'echo child >&2' PIPE; echo "$v" 2>/dev/null; echo reached >&2; } | true; echo after
+  ```
+- `trap/an-elements-broken-pipe-is-not-the-outer-shells-to-handle` — the same shape with a handler on both sides, which is the half that says where the signal went: the element's handler runs and the shell's never does, in all five, because the broken pipe was the element's and the process never had it. It is the case a naive fix breaks — recording the arrival where the shell can see it makes the shell run `outer` for a signal it was never sent
+  ```sh
+  v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; trap 'echo outer >&2' PIPE; { trap 'echo child >&2' PIPE; echo "$v" 2>/dev/null; echo reached >&2; } | true; echo after
+  ```
+- `trap/an-elements-pipe-handler-runs-inside-the-elements-redirections` — two facts one shape can hold, and both are about *when* the handler runs. The failed write is the element's last command, so there is no command after it to run a handler between — and every shell in the panel runs it anyway, which makes the end of the element's body a boundary of its own. And `child` lands in the file rather than on the shell's standard error, so it runs while the element's own redirection is still in force: the boundary is at the end of the element's *list*, inside the redirection, and not after the body has been taken down. The wording of the failed write lands in the file too, ahead of the handler, which is the ordering all five agree on — ksh93 has no wording, and zsh says its own twice and runs the handler three times
+  ```sh
+  v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; { trap 'echo child >&2' PIPE; echo "$v"; } 2>e | true; echo "e=[$(cat e)]"
   ```
 - `signal-death/status-encodes-the-signal` — a command killed by a signal has no exit status of its own, so the signal goes in the number: 128 + 13 in bash, dash and zsh, and 256 + 13 in ksh93. PIPE is the signal to ask with — it is one of only two the panel does not announce (INT is the other), so the case is about the number and not about three wordings, and unlike INT it does not end the script in ksh93
   ```sh
@@ -6380,6 +6440,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `invoke/dollar-dash-shows-s-for-a-program-on-standard-input` | `has-s` | `has-s` | `has-s` | `no-s` | `has-s` | `has-s` |
 | `invoke/dollar-dash-shows-s-for-the-s-option` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` |
 | `invoke/dollar-dash-keeps-s-when-a-command-string-overrides-it` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` |
+| `invoke/called-sh-starts-in-posix-mode` | **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` *(status 2)* | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: /nope/x: cannot create [No such file or directory]` *(status 1)* | **2>** `<shell>:1: no such file or directory: /nope/x` *(status 1)* |
+| `invoke/called-sh-and-a-script-operand-starts-in-posix-mode` | **2>** `<script>: 1: cannot create /nope/x: Directory nonexistent` *(status 2)* | **2>** `<script>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<script>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<script>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<script>[1]: /nope/x: cannot create [No such file or directory]` *(status 1)* | **2>** `<script>:1: no such file or directory: /nope/x` *(status 1)* |
+| `invoke/called-sh-by-a-path-starts-in-posix-mode` | **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` *(status 2)* | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: /nope/x: cannot create [No such file or directory]` *(status 1)* | **2>** `<shell>:1: no such file or directory: /nope/x` *(status 1)* |
+| `invoke/the-login-spelling-of-the-name-starts-in-posix-mode` | **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` *(status 2)* | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: /nope/x: cannot create [No such file or directory]` *(status 1)* | **2>** `<shell>:1: no such file or directory: /nope/x` *(status 1)* |
+| `invoke/a-name-that-is-not-sh-does-not-start-in-posix-mode` | **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` *(status 2)* | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: No such file or directory` | **2>** `<shell>: /nope/x: cannot create [No such file or directory]` *(status 1)* | `after` **2>** `<shell>:1: no such file or directory: /nope/x` |
+| `invoke/called-sh-and-then-leaving-posix-mode` | **2>** `<shell>: 1: set: Illegal option -o posix` *(status 2)* | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: No such file or directory` | **2>** `<shell>: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: posix` *(status 1)* |
+| `invoke/called-sh-outranks-the-invocations-own-posix-option` | **2>** `<shell>: 0: Illegal option -o posix` *(status 2)* | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: posix: bad option(s)~Usage: <shell> [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>: no such option: posix` *(status 1)* |
 | `env/an-inherited-option-list-turns-an-option-on` | `no-u` | `has-u` | `has-u` | `has-u` | `no-u` | `no-u` |
 | `env/an-inherited-option-list-outranks-the-invocations-own-option` | `no-u` | `has-u` | `has-u` | `has-u` | `no-u` | `no-u` |
 | `env/an-unknown-name-in-an-inherited-option-list` | `no-u` | `has-u` **2>** `<shell>: line 0: nosuchoption: invalid option name` | `has-u` **2>** `<shell>: line 0: nosuchoption: invalid option name` | `has-u` **2>** `<shell>: line 0: nosuchoption: invalid option name` | `no-u` | `no-u` |
@@ -6391,6 +6458,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `env/that-file-sees-the-invocations-parameters` | `main` | `[name] n=1 [A]~main` | `main` | `[<shell>] n=0 []~main` | `main` | `main` |
 | `env/that-file-can-end-the-shell` | `main` | `in-file` *(status 3)* | `main` | `in-file` *(status 3)* | `main` | `main` |
 | `env/a-file-named-for-a-non-interactive-shell-that-is-not-there` | `main` | `main` | `main` | `main` | `main` | `main` |
+| `env/a-file-named-for-a-non-interactive-shell-is-not-read-when-called-sh` | `main` | `main` | `main` | `main` | `main` | `main` |
 
 - `set/posix-mode-makes-a-failed-redirection-fatal` — the same binary, both answers: bash 5.3 and bash 3.2 print `after` without this line and stop at 1 with it, which is the bash-as-`sh` column reached at run time. The other three have no such name and refuse the `set` instead, each in its own words
   ```sh
@@ -6587,6 +6655,34 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   case $- in *s*) echo has-s ;; *) echo no-s ;; esac
   ```
+- `invoke/called-sh-starts-in-posix-mode` — the name is a startup input: the same bash prints `after` at 0 called `bash` and stops at 1 called `sh`, which is POSIX's rule that a failed redirection on a special builtin is fatal. zsh moves with it under the same name; dash and ksh93 keep that rule under every name and so answer alike in both rows
+  ```sh
+  exec 3>/nope/x; echo after
+  ```
+- `invoke/called-sh-and-a-script-operand-starts-in-posix-mode` — the name and not the route: a script named on the command line answers exactly as the command string above does, so the front end reads argv[0] once rather than per route
+  ```sh
+  exec 3>/nope/x; echo after
+  ```
+- `invoke/called-sh-by-a-path-starts-in-posix-mode` — the last element of the path is the name — `/bin/sh` is how anything really reaches it — so a shell reading argv[0] whole would miss every real invocation of this
+  ```sh
+  exec 3>/nope/x; echo after
+  ```
+- `invoke/the-login-spelling-of-the-name-starts-in-posix-mode` — one leading dash is the login convention and not part of the name, so `-sh` is both a login shell and the standard's name at once; bash answers `--sh` the other way, which is what says one dash and not any number
+  ```sh
+  exec 3>/nope/x; echo after
+  ```
+- `invoke/a-name-that-is-not-sh-does-not-start-in-posix-mode` — the control, and it has to be a name no shell in the panel reads as its own: zsh takes the *first letter* of the name, so `bash`, `shx` and even `s` all put it in sh emulation, while `m` leaves it alone. bash and zsh both print `after` here and both stop in the row above
+  ```sh
+  exec 3>/nope/x; echo after
+  ```
+- `invoke/called-sh-and-then-leaving-posix-mode` — leaving the mode reaches the shell's *own* answer rather than the standard's opposite, which is what makes the startup override a mode and not a written-down axis: bash-as-`sh` prints `after` at 0 again. The other three have no such name and refuse the `set` instead, each in its own words
+  ```sh
+  set +o posix; exec 3>/nope/x; echo after
+  ```
+- `invoke/called-sh-outranks-the-invocations-own-posix-option` — the name is read after the invocation's options and wins over the one they can name: `sh +o posix -c` still stops where `bash +o posix -c` carries on. Not the loop being ignored — `+o errexit` on the same invocation is honored — so this pins the order rather than the reading. The three shells without the name refuse the invocation instead
+  ```sh
+  exec 3>/nope/x; echo after
+  ```
 - `env/an-inherited-option-list-turns-an-option-on` — the sharpest startup input a shell takes: a name in the environment changes what every command afterwards does. bash reads it and `$-` gains the letter; dash, ksh93 and zsh ignore the name entirely, which is the control
   ```sh
   case $- in *u*) echo has-u ;; *) echo no-u ;; esac
@@ -6630,4 +6726,8 @@ grades it and nothing drift-checks it either, for the same reason.
 - `env/a-file-named-for-a-non-interactive-shell-that-is-not-there` — not a failure, in the shell that reads the name or in the three that do not. Every shell starts for the first time without one, and a complaint about it would be the first thing anybody saw
   ```sh
   echo main
+  ```
+- `env/a-file-named-for-a-non-interactive-shell-is-not-read-when-called-sh` — the two startup questions composed, and the reason the file is gated on the mode rather than on a second name: the shell that sources this file called by its own name sources nothing called `sh`, exactly as it sources nothing under the standard's posix option. Pair it with env/a-file-named-for-a-non-interactive-shell-is-sourced, which is the same case under the shell's own name
+  ```sh
+  echo sourced
   ```

@@ -189,7 +189,7 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, bool) {
 		c := format[i]
 		switch {
 		case c == '\\':
-			text, n, stop := r.expandPrintfEscape(format[i:])
+			text, n, stop := r.expandPrintfEscape(format[i:], true)
 			b.WriteString(text)
 			i += n
 			if stop {
@@ -256,7 +256,10 @@ func (r *Runner) printfVerb(spec string, verb byte, timeFmt string, next func() 
 		if arg == "" {
 			return "", 0, false
 		}
-		return fmt.Sprintf(spec+"c", rune(arg[0])), 0, false
+		// The first *byte*, padded as a string. `%c` of a rune would encode
+		// it: `printf '%c' $'\xc0'` is the one byte 0xc0 in every shell in
+		// the panel, and Go's `%c` on `rune(0xc0)` writes two.
+		return fmt.Sprintf(spec+"s", arg[:1]), 0, false
 	case 'q':
 		return r.printfQuote(spec, arg)
 	case 'd', 'i':
@@ -593,7 +596,12 @@ func (r *Runner) expandPrintfEscapes(s string) (string, int, bool) {
 			i++
 			continue
 		}
-		text, n, stop := r.expandPrintfEscape(s[i:])
+		// No `\x` here. This is `%b`, whose argument is expanded with the set
+		// `echo` expands rather than with the format's — measured on the one
+		// shell where the two differ, ksh93, which reads `\x41` in a format
+		// and leaves it as written in a `%b`. Passing the format's answer
+		// through would give that shell an escape it does not have.
+		text, n, stop := r.expandPrintfEscape(s[i:], false)
 		b.WriteString(text)
 		i += n
 		if stop {
@@ -604,11 +612,20 @@ func (r *Runner) expandPrintfEscapes(s string) (string, int, bool) {
 }
 
 // expandPrintfEscape expands the one escape at the front of s.
-func (r *Runner) expandPrintfEscape(s string) (string, int, bool) {
+//
+// hex says whether this site reads `\xHH` at all, which is a property of the
+// site and not only of the dialect: a format has the escape and a `%b`
+// argument does not, in the one shell where those two tables differ.
+func (r *Runner) expandPrintfEscape(s string, hex bool) (string, int, bool) {
 	if len(s) < 2 {
 		return `\`, len(s), false
 	}
 	switch c := s[1]; c {
+	case 'x':
+		if !hex {
+			break
+		}
+		return r.printfHexEscape(s)
 	case 'n':
 		return "\n", 2, false
 	case 't':
@@ -660,9 +677,56 @@ func (r *Runner) expandPrintfEscape(s string) (string, int, bool) {
 			n = n*8 + int(s[i]-'0')
 			digits++
 		}
-		return string(rune(n)), 1 + digits, false
+		// A byte, not a code point. `string(rune(0300))` is the two bytes
+		// UTF-8 spells U+00C0 with, and a format is a byte string: `\300`
+		// is 0xc0 alone in every shell in the panel.
+		return string([]byte{byte(n)}), 1 + digits, false
 	}
 	return `\` + string(s[1]), 2, false
+}
+
+// printfHexEscape decodes the `\x` at the front of s, which is four readings.
+//
+// The digits are scanned with the same reader `$'…'` uses, because there is
+// one hexadecimal escape and not two — the lesson #556 left, one escape
+// further along.
+func (r *Runner) printfHexEscape(s string) (string, int, bool) {
+	p := r.hexEscape()
+	if p == PrintfHexEscapeAbsent || r.unspecified {
+		return `\x`, 2, false
+	}
+	n, used := 0, 0
+	if p == PrintfHexEscapeCodePoint {
+		// Every digit that follows. Eight of them reach past the last code
+		// point there is, so the value is read from the first eight and a
+		// longer run is out of range — which is what ksh93 does with one,
+		// writing nothing for it.
+		n, used = scanBase(s[2:], 16, 8)
+		for 2+used < len(s) && digitValue(s[2+used]) >= 0 {
+			used++
+			n = -1
+		}
+	} else {
+		n, used = scanBase(s[2:], 16, 2)
+	}
+	switch {
+	case used == 0 && p == PrintfHexEscapeByte:
+		// The escape stands, with a warning that does not change the status:
+		// `printf 'a\x'; echo $?` writes the complaint, the two characters,
+		// and a zero.
+		d := r.diag()
+		r.diagf("%s\n", Wording(d.PrintfMissingHexDigit, `printf: missing hex digit for \x`))
+		return `\x`, 2, false
+	case used == 0:
+		// An empty digit run is a zero, and a format is a counted string, so
+		// the NUL is written rather than ending anything.
+		return "\x00", 2, false
+	case used <= 2:
+		return string([]byte{byte(n)}), 2 + used, false
+	case n < 0 || n > 0x10FFFF:
+		return "", 2 + used, false
+	}
+	return string(rune(n)), 2 + used, false
 }
 
 // printfWriter is the shell's output stream, held back or written through
@@ -687,7 +751,11 @@ func (p printfWriter) WriteString(s string) {
 // writeByte is not WriteByte: that name carries an error return by
 // convention, and this writer reports one the way every builtin's output
 // does — on the runner, for the dispatcher to fold in.
-func (p printfWriter) writeByte(c byte) { p.WriteString(string(c)) }
+//
+// The conversion is through a one-byte slice and not through `string(c)`,
+// which is a *rune* conversion: it spells 0xc0 as the two bytes UTF-8 gives
+// U+00C0, so a format holding a byte no encoding claims came out as two.
+func (p printfWriter) writeByte(c byte) { p.WriteString(string([]byte{c})) }
 
 func (p printfWriter) flush() {
 	if p.hold != nil {

@@ -414,3 +414,11 @@ func TestPrintfMissingFormatCharacter(t *testing.T) {
 		t.Errorf("said %q status %d, want an unnamed complaint and 2", out, st)
 	}
 }
+
+// There is no `\x` in a format here, so the backslash and the letter stand.
+func TestPrintfHasNoHexEscape(t *testing.T) {
+	dir := t.TempDir()
+	if out, _ := runDash(t, dir, `printf 'a\x41Z'`+"\n"); out != `a\x41Z` {
+		t.Errorf("said %q, want the escape as written", out)
+	}
+}

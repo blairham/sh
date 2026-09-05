@@ -130,20 +130,27 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	// background job and whatever runs next both read the shell's stdin, and
 	// os/exec copies from a caller's io.Reader on a goroutine of its own.
 	sub.Stdin = r.lockedStdin()
-	go func() {
+	// The job is finished however the goroutine ended, which is what keeps an
+	// interpreter bug on it from costing more than the job. The shell is
+	// blocked on <-job.ready below and `wait` blocks on the same job
+	// afterwards, so a goroutine that stopped without saying so leaves a
+	// shell waiting for something that is never coming — a hang where there
+	// was a crash, which is the worse of the two.
+	//
+	// finish marks it ready as well, and both are idempotent: a job that
+	// never started a process — a builtin, a compound command — becomes
+	// ready when it finishes, with a PID of zero.
+	status := internalErrorStatus
+	r.spawn(func() {
 		// Errors inside a background job are reported where the job runs;
 		// there is nowhere to return them to.
 		if err := sub.expr(ctx, st.Expr); err != nil {
 			sub.diagf("%v\n", err)
-			job.markReady()
-			job.finish(1)
+			status = 1
 			return
 		}
-		// A job that never started a process — a builtin, a compound command
-		// — becomes ready when it finishes, with a PID of zero.
-		job.markReady()
-		job.finish(sub.status)
-	}()
+		status = sub.status
+	}, func() { job.finish(status) })
 
 	// Wait for the PID to be known before returning, so `$!` on the next line
 	// is not racing the goroutine that sets it.

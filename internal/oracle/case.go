@@ -111,6 +111,27 @@ type Case struct {
 	// actually ran, which a second hand-kept copy would not.
 	Stdin string
 
+	// Argv0 is the name every shell in the run is invoked under for this
+	// case, in place of the one its panel entry gives it — and the binary
+	// under test is given it too, which is what makes it a graded surface
+	// rather than only a recorded one.
+	//
+	// It exists because a shell's own name is a startup input like any other,
+	// and Args cannot reach it: Args is what comes *after* argv[0], and the
+	// one word it never contains is the one being asked about. A shell called
+	// `sh` starts in POSIX mode, and until this there was no way to write
+	// that down as a case — the panel's own bash-as-sh column pins it for
+	// bash and for no other shell, and it pins it for the whole corpus rather
+	// than for the case that means to ask.
+	//
+	// Every column moves together, which is the point. A case that sets it is
+	// asking what each shell does under that name, so the answer wanted from
+	// the `bash` column is bash-under-that-name; a case that leaves it empty
+	// is asking about each shell under its own, which is every other case.
+	// The recorded output normalizes the given name exactly as it normalizes
+	// a panel entry's, so a diagnostic still reads `<shell>:` on both sides.
+	Argv0 string
+
 	// Env are environment entries added to the fixed four every case gets,
 	// in `NAME=value` form, and handed to both sides of a comparison.
 	//
@@ -1329,6 +1350,51 @@ var Corpus = []Case{
 		Snippet: `printf 'a\c\' | od -An -c | tr -s " "`,
 		Why:     "a backslash with nothing after it escapes the end of the format, so what \\c controls is a NUL rather than the backslash itself — an @ and not a control-backslash for the shell that reads the escape",
 	},
+	{
+		ID: "printf/hex-escape-in-a-format", Category: "printf",
+		Snippet: `printf 'a\x41Z' | od -An -tx1 | tr -s " "`,
+		Why:     "\\xHH is an escape in a format for every shell in the panel but dash, which has none and writes the six characters as they stand",
+	},
+	{
+		ID: "printf/hex-escape-writes-one-raw-byte", Category: "printf",
+		Snippet: `printf 'a\x80Z' | od -An -tx1 | tr -s " "`,
+		Why:     "the escape produces a byte and not a character, so a value no encoding claims is one byte wide — read as hexadecimal because the display cannot tell 80 from the two bytes UTF-8 spells U+0080 with, and unanimous among the five that have the escape at all",
+	},
+	{
+		ID: "printf/hex-escape-digit-run-diverges", Category: "printf",
+		Snippet: `printf '[\x0ff]' | od -An -tx1 | tr -s " "`,
+		Why:     "how wide the digit run is: bash and zsh stop at two and the value is a byte, so this is 0x0f followed by an f, and ksh93 takes every digit and reads more than two of them as a code point, so the same text is U+00FF in UTF-8",
+	},
+	{
+		ID: "printf/hex-escape-four-digits-is-a-code-point", Category: "printf",
+		Snippet: `printf '[\x0041]' | od -An -tx1 | tr -s " "`,
+		Why:     "the same split with a value that is ASCII, which shows the switch is on the number of digits rather than on the size of the value: two digits would be a NUL and a 4 and a 1, and every digit read as a code point is an A",
+	},
+	{
+		ID: "printf/hex-escape-with-no-digits", Category: "printf",
+		Snippet: `printf 'a\xZ' | od -An -tx1 | tr -s " "`,
+		Why:     "an empty digit run: bash leaves the escape standing and warns without failing, ksh93 and zsh read the run as a zero and write a NUL, and dash has no escape here to have an empty run",
+	},
+	{
+		ID: "printf/hex-escape-is-not-a-b-escape", Category: "printf",
+		Snippet: `printf '%b' 'a\x41Z' | od -An -tx1 | tr -s " "`,
+		Why:     "the site matters and not only the shell: ksh93 reads \\x41 in a format and leaves it as written in a %b argument, which expands the set echo expands. bash and zsh have it in both and dash in neither, so ksh93 alone separates the two tables",
+	},
+	{
+		ID: "printf/an-octal-escape-is-a-byte-and-not-a-code-point", Category: "printf",
+		Snippet: `printf 'a\300Z' | od -An -tx1 | tr -s " "`,
+		Why:     "unanimous, and worth pinning as bytes: \\300 is the single byte 0xc0 in all six, never the two bytes UTF-8 gives the code point of the same number",
+	},
+	{
+		ID: "printf/a-quoted-escape-used-as-a-format", Category: "printf",
+		Snippet: `printf $'a\xc0Z' | od -An -tx1 | tr -s " "`,
+		Why:     "the byte arrives already decoded and the format only has to carry it, which is a different route to the output from an escape the format decodes itself. dash has no quoted-escape form, so the dollar sign is part of the word there",
+	},
+	{
+		ID: "printf/a-c-conversion-writes-one-byte", Category: "printf",
+		Snippet: `printf '%c' $'\xc0' | od -An -tx1 | tr -s " "`,
+		Why:     "%c takes the first byte of its operand rather than the first character, so a byte above the ASCII range is written alone and not as the pair an encoding would spell it with",
+	},
 
 	// --- kill: a builtin, because a shell has to know what it sent ---------
 	{
@@ -1442,6 +1508,25 @@ var Corpus = []Case{
 		Script:  true,
 		Snippet: "trap 'echo caught' INT\ntrap - INT\nkill -INT $$\necho after\n",
 		Why:     "`trap -` puts the default back rather than leaving an empty handler",
+	},
+	{
+		// The doubling loop of the pipeline cases, so the write cannot fit in
+		// the pipe and the reader has already gone. `2>/dev/null` on the
+		// failing write alone is what keeps this about the handler rather
+		// than about four different wordings for the write.
+		ID: "trap/a-pipeline-element-runs-the-pipe-handler-it-set-for-itself", Category: "traps and exit",
+		Snippet: `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; { trap 'echo child >&2' PIPE; echo "$v" 2>/dev/null; echo reached >&2; } | true; echo after`,
+		Why:     "a handler is not only the shell's to set: an element that traps PIPE for itself runs that handler when its own write meets the broken pipe, and every shell in the panel does it — `child` then `reached` on standard error, in that order, in dash, both bash builds, ksh93 and zsh. The trap has to be set *inside* the element, because a handled signal is back at its default across the boundary and only an ignore crosses intact, so this cannot be spelled from the outside. ksh93 prints `after` before either of them, which is why the two streams are recorded apart",
+	},
+	{
+		ID: "trap/an-elements-broken-pipe-is-not-the-outer-shells-to-handle", Category: "traps and exit",
+		Snippet: `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; trap 'echo outer >&2' PIPE; { trap 'echo child >&2' PIPE; echo "$v" 2>/dev/null; echo reached >&2; } | true; echo after`,
+		Why:     "the same shape with a handler on both sides, which is the half that says where the signal went: the element's handler runs and the shell's never does, in all five, because the broken pipe was the element's and the process never had it. It is the case a naive fix breaks — recording the arrival where the shell can see it makes the shell run `outer` for a signal it was never sent",
+	},
+	{
+		ID: "trap/an-elements-pipe-handler-runs-inside-the-elements-redirections", Category: "traps and exit",
+		Snippet: `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; { trap 'echo child >&2' PIPE; echo "$v"; } 2>e | true; echo "e=[$(cat e)]"`,
+		Why:     "two facts one shape can hold, and both are about *when* the handler runs. The failed write is the element's last command, so there is no command after it to run a handler between — and every shell in the panel runs it anyway, which makes the end of the element's body a boundary of its own. And `child` lands in the file rather than on the shell's standard error, so it runs while the element's own redirection is still in force: the boundary is at the end of the element's *list*, inside the redirection, and not after the body has been taken down. The wording of the failed write lands in the file too, ahead of the handler, which is the ordering all five agree on — ksh93 has no wording, and zsh says its own twice and runs the handler three times",
 	},
 	{
 		ID: "signal-death/status-encodes-the-signal", Category: "traps and exit",
@@ -6671,6 +6756,55 @@ exit 7`,
 		Snippet: `case $- in *s*) echo has-s ;; *) echo no-s ;; esac`,
 		Why:     "-c wins about where the program comes from and does not take the letter away: all six run the command string and all six still show `s`. So the letter follows either the route or the spelling, and a shell that read only the route would lose it here",
 	},
+
+	// --- the name a shell was called by (#733). Every one of these sets
+	// Argv0, so the whole panel is measured under one name rather than each
+	// under its own — which is the only way to ask the question at all, since
+	// Args is what comes after argv[0] and never argv[0] itself.
+	{
+		ID: "invoke/called-sh-starts-in-posix-mode", Category: "invocation",
+		Argv0:   "sh",
+		Snippet: `exec 3>/nope/x; echo after`,
+		Why:     "the name is a startup input: the same bash prints `after` at 0 called `bash` and stops at 1 called `sh`, which is POSIX's rule that a failed redirection on a special builtin is fatal. zsh moves with it under the same name; dash and ksh93 keep that rule under every name and so answer alike in both rows",
+	},
+	{
+		ID: "invoke/called-sh-and-a-script-operand-starts-in-posix-mode", Category: "invocation",
+		Argv0:   "sh",
+		Args:    []string{ArgScript},
+		Snippet: `exec 3>/nope/x; echo after`,
+		Why:     "the name and not the route: a script named on the command line answers exactly as the command string above does, so the front end reads argv[0] once rather than per route",
+	},
+	{
+		ID: "invoke/called-sh-by-a-path-starts-in-posix-mode", Category: "invocation",
+		Argv0:   "./sh",
+		Snippet: `exec 3>/nope/x; echo after`,
+		Why:     "the last element of the path is the name — `/bin/sh` is how anything really reaches it — so a shell reading argv[0] whole would miss every real invocation of this",
+	},
+	{
+		ID: "invoke/the-login-spelling-of-the-name-starts-in-posix-mode", Category: "invocation",
+		Argv0:   "-sh",
+		Snippet: `exec 3>/nope/x; echo after`,
+		Why:     "one leading dash is the login convention and not part of the name, so `-sh` is both a login shell and the standard's name at once; bash answers `--sh` the other way, which is what says one dash and not any number",
+	},
+	{
+		ID: "invoke/a-name-that-is-not-sh-does-not-start-in-posix-mode", Category: "invocation",
+		Argv0:   "myshell",
+		Snippet: `exec 3>/nope/x; echo after`,
+		Why:     "the control, and it has to be a name no shell in the panel reads as its own: zsh takes the *first letter* of the name, so `bash`, `shx` and even `s` all put it in sh emulation, while `m` leaves it alone. bash and zsh both print `after` here and both stop in the row above",
+	},
+	{
+		ID: "invoke/called-sh-and-then-leaving-posix-mode", Category: "invocation",
+		Argv0:   "sh",
+		Snippet: `set +o posix; exec 3>/nope/x; echo after`,
+		Why:     "leaving the mode reaches the shell's *own* answer rather than the standard's opposite, which is what makes the startup override a mode and not a written-down axis: bash-as-`sh` prints `after` at 0 again. The other three have no such name and refuse the `set` instead, each in its own words",
+	},
+	{
+		ID: "invoke/called-sh-outranks-the-invocations-own-posix-option", Category: "invocation",
+		Argv0:   "sh",
+		Args:    []string{"+o", "posix", "-c", ArgSnippet},
+		Snippet: `exec 3>/nope/x; echo after`,
+		Why:     "the name is read after the invocation's options and wins over the one they can name: `sh +o posix -c` still stops where `bash +o posix -c` carries on. Not the loop being ignored — `+o errexit` on the same invocation is honored — so this pins the order rather than the reading. The three shells without the name refuse the invocation instead",
+	},
 	// --- what the environment says at startup (#596). One shell in the panel
 	// reads two names out of it before the first line runs; the other three
 	// leave both as ordinary strings, which is what makes every row here
@@ -6741,5 +6875,13 @@ exit 7`,
 		Args:    []string{"-c", ArgSnippet},
 		Snippet: `echo main`,
 		Why:     "not a failure, in the shell that reads the name or in the three that do not. Every shell starts for the first time without one, and a complaint about it would be the first thing anybody saw",
+	},
+	{
+		ID: "env/a-file-named-for-a-non-interactive-shell-is-not-read-when-called-sh", Category: "invocation",
+		Argv0:   "sh",
+		Env:     []string{"BASH_ENV=" + ArgScript},
+		Args:    []string{"-c", "echo main"},
+		Snippet: `echo sourced`,
+		Why:     "the two startup questions composed, and the reason the file is gated on the mode rather than on a second name: the shell that sources this file called by its own name sources nothing called `sh`, exactly as it sources nothing under the standard's posix option. Pair it with env/a-file-named-for-a-non-interactive-shell-is-sourced, which is the same case under the shell's own name",
 	},
 }

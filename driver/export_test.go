@@ -4,9 +4,23 @@
 package driver
 
 import (
+	"io"
+
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
 )
+
+// LineReaderForTest is lineReader, reachable from the package's external
+// tests.
+//
+// What it leaves behind on the descriptor is the whole of its contract and
+// only half of that is visible in a shell's output, so the other half is
+// checked directly — against a descriptor that seeks, and against one that
+// stops seeking half way, which nothing a Shell can be handed will do.
+type LineReaderForTest struct{ lr lineReader }
+
+// Read is lineReader.read.
+func (l *LineReaderForTest) Read(in io.Reader, buf []byte) string { return l.lr.read(in, buf) }
 
 // FrontEndForTest is frontEnd, reachable from the package's external tests.
 //

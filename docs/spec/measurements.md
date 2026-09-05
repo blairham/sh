@@ -3674,7 +3674,7 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   x=/tmp/Dir/File.Txt; h=9; echo "[${x:h}]"
   ```
-- `param/a-substring-offset-that-does-not-begin-with-a-letter` — the boundary of that reading, measured three ways: an underscore is not a letter, a leading space puts the letter second, and a parenthesis does the same — so all three are ranges in all four columns and answer alike. It says the rule is about the first byte and not about the segment containing a name
+- `param/a-substring-offset-that-does-not-begin-with-a-letter` — the boundary of that reading, measured three ways: an underscore is not a letter, a leading space puts the letter second, and a parenthesis does the same — so all three are ranges rather than modifiers, and the shell that has modifiers answers them exactly as bash does. It says the rule is about the first byte and not about the segment containing a name. ksh93 is the odd column and for an unrelated reason: it refuses a parenthesized offset outright, naming it with the parentheses backslashed
   ```sh
   x=abcdef; _q=1; echo "[${x:_q:2}] [${x: _q:2}] [${x:(_q):2}]"
   ```

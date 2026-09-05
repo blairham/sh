@@ -304,6 +304,21 @@ var Corpus = []Case{
 		Why:     "the exemption covers a command substitution's result too, which the splitting question otherwise governs — the value is stored with its space, unanimous",
 	},
 	{
+		ID: "expand/a-here-string-is-not-split", Category: "expansion",
+		Snippet: "x=\"a:b:c\"; IFS=:; cat <<< $x; cat <<< \"$x\"",
+		Why:     "the no-split exemption on a here-string word, and the one place in the set where the panel is not unanimous: bash 3.2 splits the unquoted word and rejoins the fields on a space, where bash 5.3, ksh93 and zsh hand the value through whole. A dated answer rather than a disputed one, and the quoted line beside it shows the split is the only difference",
+	},
+	{
+		ID: "expand/a-heredoc-body-is-not-split", Category: "expansion",
+		Snippet: "x=\"a:b:c\"; IFS=:; cat <<EOF\n[$x]\nEOF",
+		Why:     "a here-document body is input rather than a word list, so an expansion in it is never split however IFS is set — unanimous, including the bash 3.2 that splits a here-string",
+	},
+	{
+		ID: "expand/arithmetic-text-is-not-split", Category: "expansion",
+		Snippet: `IFS=+; n="1+2"; echo "[$(( $n ))]"`,
+		Why:     "the inside of $(( )) is expanded like a double-quoted string and only then read as an expression, so a value holding an operator that is also in IFS is still one expression — splitting it would leave `1 2`, which every shell calls an arithmetic syntax error",
+	},
+	{
 		ID: "expand/glob-applies-to-expansion", Category: "expansion",
 		Snippet: `cd /; x="et*"; set -- $x; printf "[%s]" "$@"`,
 		Why:     "globbing runs after splitting, so an expansion result is matched — except in zsh",
@@ -3296,6 +3311,11 @@ echo unreachable`,
 		Why:     "unanimous",
 	},
 	{
+		ID: "case/an-operator-where-a-pattern-belongs", SyntaxError: true, Category: "compound shapes",
+		Snippet: `case a in & ) echo hit;; *) echo miss;; esac`,
+		Why:     "dash parses this and prints miss: one operator is accepted where the pattern list would start, and the arm it opens matches nothing at all — not `&`, not the empty string. The other three refuse at the `&`. Measured rather than inferred from the diagnostic, because a shell that only worded the error differently would still not reach the esac",
+	},
+	{
 		ID: "times/argument-diverges", Category: "times",
 		Snippet: `times foo 2>&1 | sed -E "s/[0-9]+/N/g"; echo "st=$?"`,
 		Why:     "dash and bash ignore the argument, zsh refuses it with status 1, and ksh93 makes it a *syntax* error with status 3 — `times` is a reserved word there, so no builtin ever runs. The ksh93 answer is a grammar question rather than a builtin one and is recorded here rather than implemented; zsh's wording needs the builtin name inside the location prefix, which is a structural gap this repository has now measured three times",
@@ -3832,6 +3852,21 @@ echo unreachable`,
 		Why:     "where an unterminated construct is reported: bash puts it on the line *after* the input's last when the text does not end in one, and the other three on the last line itself",
 	},
 	{
+		ID: "token/an-unterminated-quote-at-end-of-input", SyntaxError: true, Category: "command language",
+		Snippet: "echo \"abc",
+		Why:     "ksh93 alone closes a quote the input never closed and runs the command, printing abc, where the other three refuse to parse. The grammar flag CloseQuotesAtEOF, and it matters beyond wording: a truncated file runs a command under one shell and not another",
+	},
+	{
+		ID: "token/an-unterminated-substitution-still-refuses", SyntaxError: true, Category: "command language",
+		Snippet: "echo $(echo hi",
+		Why:     "the other half of the flag, and the reason it is about quotes rather than about leniency at end of input: `$(` is not a quote, so ksh93 refuses this one too — `(' unmatched",
+	},
+	{
+		ID: "cmd/a-malformed-function-header-blames-two-tokens", SyntaxError: true, Category: "command language",
+		Snippet: `f ( x ) { echo hi; }`,
+		Why:     "which token a bad definition is blamed on says when the shell committed to reading one: bash and dash are already inside a definition looking for `)` and name the word x, ksh93 never entered one and names the `(`, and zsh gets as far as the `}`. The grammar flag FuncDefAtParen, reached most often through a construct a dialect lacks — `[[ ( -n x ) ]]` is a definition of a function called `[[` to a shell without `[[`",
+	},
+	{
 		ID: "arith/integer-division-stays-integer", Category: "arithmetic",
 		Snippet: `echo $((3/2))`,
 		Why:     "whole numbers mean the same thing everywhere, floats or not — an expression is integer until a float enters it, which is why the shells with floats still answer 1 here",
@@ -4156,6 +4191,21 @@ echo unreachable`,
 		ID: "opt/set-o-noglob-is-unanimous", Category: "shell options",
 		Snippet: `touch a.txt b.txt; set -o noglob; echo *.txt`,
 		Why:     "the long name means the same thing in all four, which is what makes it the spelling that needs no dialect — and the pair with the case above is the whole of the axis",
+	},
+	{
+		ID: "opt/command-tracking-has-two-long-names", Category: "shell options",
+		Snippet: `set -o hashall 2>/dev/null; echo "hashall=$?"; set -o trackall 2>/dev/null; echo "trackall=$?"`,
+		Why:     "the same idea under two names, and the membership is not the clean split it looks like: bash has hashall alone, ksh93 trackall alone, and zsh has *both* — so a dialect table that gives trackall to ksh93 only is wrong, which is how this row came to exist",
+	},
+	{
+		ID: "opt/an-unknown-long-name-is-refused", Category: "shell options",
+		Snippet: `set -o zzznosuch; echo "on=$?"; set +o zzznosuch; echo "off=$?"`,
+		Why:     "a name outside the shell's table is refused in both directions, with four different wordings and two different statuses — the boundary the accept-off policy stops at, since a name that does not exist is not a state anything is already in",
+	},
+	{
+		ID: "opt/turning-off-a-name-a-shell-does-not-implement", Category: "shell options",
+		Snippet: `set +o posix; echo "st=$?"; set +o history; echo "st=$?"`,
+		Why:     "the thirteenth line of Homebrew's own brew script is `set +o posix`, and it is the shape this implementation's accept-off/refuse-on policy exists for: turning off what a shell was never doing is a request that has been granted, where turning it *on* would be a promise. Recorded across the panel because the two names split it — bash has both, and the others have neither",
 	},
 	{
 		ID: "opt/noglob-does-not-stop-matching", Category: "shell options",
@@ -4656,6 +4706,24 @@ echo "st=$?"`,
 		Snippet: `alias bad='nosuchcmd'
 bad`,
 		Why: "a command that came from an alias is reported at the line the *alias word* was written on, never a line inside the body. That is what makes a token-level splice honest: every position still points into the real input",
+	},
+	{
+		ID: "alias/a-script-file-is-a-different-route", Category: "alias",
+		Script: true,
+		Snippet: `alias a='echo hit'
+a`,
+		Why: "the same two lines as `alias/expands-a-command-word`, from a file instead of -c, and zsh changes its answer: it declines to expand under -c and expands from a script file. So whether aliases expand is a property of *how the program arrived* rather than of the shell, which one boolean on the dialect cannot say — issue #583",
+	},
+	{
+		ID: "alias/a-body-newline-shifts-later-lines", Category: "alias",
+		Script:          true,
+		LayoutSensitive: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias two='echo one
+echo two'
+two
+echo "LINENO=$LINENO"`,
+		Why: "the one place a token-level splice is distinguishable from a textual one, and the shopt line is there so bash expands too and can be compared. The last line is physically line 5: bash reports 5, and dash, ksh93 and zsh all report 6 because they counted the newline inside the alias body. There is no axis for it and this shell reports 5 in every dialect — issue #583",
 	},
 	{
 		ID: "alias/defines-and-lists-one", Category: "alias",

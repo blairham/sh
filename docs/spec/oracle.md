@@ -136,6 +136,41 @@ A shell that is absent is reported, not fatal, and its column is omitted
 rather than blanked: a table from three shells is a weaker claim than the
 same table from five, and the generated file says which it was.
 
+### `LC_ALL=C` is a choice, and it costs something
+
+Pinning the locale is what makes the record reproducible, and it is also
+a **limitation of the record**, not a fact about the shells. Every row in
+`measurements.md` is what that shell does *in the C locale*. Two effects
+are known and measured, and both are cases where a UTF-8 locale gives a
+different answer:
+
+- **Collation.** `echo *` over `Apple banana Cherry _under 1digit` is
+  byte order in all four shells under `LC_ALL=C`
+  (`1digit Apple Cherry _under banana`). Under `en_US.UTF-8`, bash,
+  ksh93 and zsh collate (`_under 1digit Apple banana Cherry`) and dash
+  keeps byte order. So the panel is unanimous only because the locale
+  is pinned, and the disagreement the record cannot show is real. Pinned
+  deliberately by `glob/matches-are-in-order`, whose `Why` says so.
+- **What counts as a printable character.** bash's `${x@Q}` single-quotes
+  `café` in a UTF-8 locale and writes `$'caf\303\251'` under `LC_ALL=C`,
+  because no byte of it is character-shaped to a shell reading one byte
+  at a time. This implementation has no locale and always takes the UTF-8
+  reading, which is why no corpus row pins a multibyte `@Q` — the row
+  would grade it against an environment it does not model
+  (`grammar/parameter-expansion.md`).
+
+The rule that follows: **a case whose answer is a property of the locale
+does not belong in the corpus.** Record the locale dependence in the spec
+entry instead, and pin the C-locale answer only where it is the answer
+worth having. Both rows above do the second thing on purpose, and say so
+in their `Why`.
+
+Two other classes of answer are excluded for the same reason — because
+they are not properties of the shell. A probe must not record the clock
+or the machine: `${x@P}` on `\t` is the time of day and on `\w` the
+working directory, so the row that pins prompt expansion probes `\n` and
+`\\` only.
+
 ## Third-party suites
 
 bash's own `tests/` directory is a useful denominator and is **GPLv3**.

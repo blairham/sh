@@ -201,10 +201,16 @@ type Dialect struct {
 	ParamTransformations bool
 
 	// ExpandAliases expands an alias in a *non-interactive* shell. True in
-	// dash and ksh93; bash needs `shopt -s expand_aliases` and zsh does not
-	// expand under `-c` at all. All four expand interactively, which is the
-	// front end's to know rather than this — it is what decides there is a
-	// person at the keyboard.
+	// dash and ksh93, which expand by every route; bash needs
+	// `shopt -s expand_aliases` and expands by none without it. All four
+	// expand interactively, which is the front end's to know rather than
+	// this — it is what decides there is a person at the keyboard.
+	//
+	// zsh does not fit the boolean, measured 2026-09-05: it declines under
+	// `-c` and expands from a script file and from standard input. This flag
+	// is false for zsh, which is right for `-c` and wrong for the other two
+	// routes; the answer wants to be route-aware the way "is this
+	// interactive" already is, and that is not built. Issue #583.
 	//
 	// Whether a word *is* expanded, and into what, is not a dialect question:
 	// every shell that expands agrees on the whole algorithm, so that is the

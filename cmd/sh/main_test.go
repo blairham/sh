@@ -243,6 +243,30 @@ func TestACPConnectFlag(t *testing.T) {
 	}
 }
 
+// -acp-auth names one of the methods the agent advertised, and it is a value
+// flag in both spellings the rest of them accept. It must not eat the agent's
+// command line either: `-acp-auth id -acp-connect npx …` leaves `npx` alone.
+func TestACPAuthFlag(t *testing.T) {
+	for _, args := range [][]string{
+		{"-acp-auth", "gemini-api-key", "-acp-connect", "npx", "pkg"},
+		{"-acp-auth=gemini-api-key", "-acp-connect", "npx", "pkg"},
+	} {
+		own, rest, err := readOwnFlags(args)
+		if err != nil {
+			t.Fatalf("readOwnFlags(%v): %v", args, err)
+		}
+		if own.acpAuth != "gemini-api-key" {
+			t.Errorf("acpAuth = %q, want the method id", own.acpAuth)
+		}
+		if !slices.Equal(rest, []string{"npx", "pkg"}) {
+			t.Errorf("rest = %v, want the agent's command line", rest)
+		}
+	}
+	if _, _, err := readOwnFlags([]string{"-acp-auth"}); err == nil {
+		t.Error("-acp-auth with no method id was accepted")
+	}
+}
+
 // With no command there is nothing to connect to, and saying so beats hanging
 // on a pipe nobody is on the other end of.
 func TestACPConnectNeedsACommand(t *testing.T) {
@@ -250,7 +274,7 @@ func TestACPConnectNeedsACommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if code := connectACP(sh, false, nil); code == 0 {
+	if code := connectACP(sh, false, "", nil); code == 0 {
 		t.Error("connecting to nothing reported success")
 	}
 }

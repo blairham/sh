@@ -11,6 +11,7 @@ import (
 
 	"github.com/blairham/sh/internal/blocks"
 	"github.com/blairham/sh/internal/boundary"
+	"github.com/blairham/sh/internal/event"
 )
 
 // Reading a store back, through the flags a person types.
@@ -43,7 +44,7 @@ func seedStore(t *testing.T, recs ...blocks.Record) (string, []string) {
 	var ids []string
 	for _, r := range recs {
 		if r.ID == "" {
-			r.ID = blocks.NewID(r.Start)
+			r.ID = event.NewID(r.Start)
 		}
 		ids = append(ids, r.ID)
 		if err := s.Record(t.Context(), r, blocks.Output{}); err != nil {
@@ -141,7 +142,7 @@ func TestBlocksShowPrintsTheBody(t *testing.T) {
 	s := blocks.Open(dir, boundary.Boundary{}, "SESSION")
 	t.Cleanup(func() { _ = s.Close() })
 	err := s.Record(t.Context(),
-		blocks.Record{ID: blocks.NewID(at(1000)), Command: "build", Start: at(1000)},
+		blocks.Record{ID: event.NewID(at(1000)), Command: "build", Start: at(1000)},
 		blocks.Output{Text: "compiling\nfailed\n", Bytes: 9000, Truncated: true})
 	if err != nil {
 		t.Fatal(err)

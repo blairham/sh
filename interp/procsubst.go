@@ -64,7 +64,7 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 	// before the inner command exists. The scaffolding around the open — the
 	// temporary directory, the mkfifo, their removal — is deliberately not
 	// gated; ActionOpen's comment in seams.go is the decision.
-	action := Action{Kind: ActionOpen, Path: path, Write: kind != syntax.ProcSubstOut}
+	action := r.act(Action{Kind: ActionOpen, Path: path, Write: kind != syntax.ProcSubstOut})
 	if !r.allowed(ctx, action) {
 		_ = os.Remove(path)
 		r.expandErr = true

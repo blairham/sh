@@ -133,5 +133,10 @@ func openBlocks(sh driver.Shell) (*blocks.Store, error) {
 	if dir == "" {
 		return nil, errors.New("no block store: set SH_BLOCKS_DIR, or HOME")
 	}
-	return blocks.Open(dir, boundary.Boundary{Gate: sh.Gate, Events: sh.Events}, ""), nil
+	// No session, on both halves. This route reads a store rather than being a
+	// shell, so nothing here builds one and the front end never defaults one in
+	// — the records it makes name no run because there is no run to name.
+	return blocks.Open(dir,
+		boundary.Boundary{Gate: sh.Gate, Events: sh.Events, Session: sh.Session},
+		sh.Session), nil
 }

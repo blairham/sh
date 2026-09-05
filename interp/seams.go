@@ -139,6 +139,29 @@ func (k ActionKind) String() string {
 
 // Action describes something about to happen.
 type Action struct {
+	// ID names this action, and is the same string on the Action a Gate is
+	// consulted about and on every Event that action produces. That is the
+	// whole of what it promises: a permission request and the records of what
+	// was permitted are provably the same action, rather than two records that
+	// look alike.
+	//
+	// It is needed because ordering does not answer the question. A background
+	// job and each half of a pipeline emit from their own goroutines, so a
+	// command's start and its end are not adjacent and cannot be paired by
+	// position — a consumer that matched them by a fingerprint of kind, path
+	// and arguments got the wrong one whenever a script ran the same command
+	// twice at once.
+	//
+	// Unique within a session and not beyond it: it is a small counter, so the
+	// pair (Runner.Session, ID) is what is unique everywhere, and a stream that
+	// several shells append to carries the session beside it for exactly that
+	// reason. Empty when nothing is watching — a Runner with no Gate and no
+	// Sink numbers nothing, because there is no record for an id to appear in.
+	//
+	// Deliberately not the stream's sequence number, which is a different
+	// thing: seq orders emission within one stream, and this identifies one
+	// action across every stream that mentions it.
+	ID   string
 	Kind ActionKind
 	// Path is the program or file.
 	Path string
@@ -252,6 +275,17 @@ type Event struct {
 	// the script otherwise, and empty when the input was a command string
 	// or standard input.
 	File string
+	// Session identifies the shell this event came from, copied from
+	// Runner.Session so that records written by different consumers of one run
+	// can be lined up against each other.
+	//
+	// A run has two records of itself at least — an audit stream and whatever
+	// a front end keeps of what it ran — and without this they describe the
+	// same commands and cannot be joined. It is the embedder's string rather
+	// than one this package invents: interp does not generate identity, for
+	// the same reason it does not read a clock on an event's behalf, and a
+	// front end that has no use for one leaves it empty.
+	Session string
 }
 
 // Sink receives events. A nil Sink discards them.

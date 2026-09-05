@@ -263,3 +263,83 @@ func TestANewSessionAlwaysCarriesTheRequiredList(t *testing.T) {
 		t.Errorf("session/new = %s, want the server it was given", b)
 	}
 }
+
+// The auth method union is discriminated on `type`, and an absent one means
+// `agent`. That is the schema's default rather than an unknown, and it is what
+// the published agents actually send: reading the field raw would find "" for
+// every one of Gemini's four and match neither kind.
+func TestAnAuthMethodWithNoTypeIsAnAgentMethod(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{"no type at all", `{"id":"api-key","name":"API key"}`, acp.AuthAgent},
+		{"an explicit agent", `{"type":"agent","id":"a","name":"A"}`, acp.AuthAgent},
+		{"a terminal method", `{"type":"terminal","id":"login","name":"Log in"}`, acp.AuthTerminal},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var m acp.AuthMethod
+			if err := json.Unmarshal([]byte(tc.raw), &m); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if m.Kind() != tc.want {
+				t.Errorf("kind of %s = %q, want %q", tc.raw, m.Kind(), tc.want)
+			}
+		})
+	}
+}
+
+// A terminal method carries the other half of an invocation: what to append to
+// the agent's own command line and what to set in its environment. Both are
+// read from the wire, because a client that dropped them would relaunch the
+// agent as itself rather than as a login.
+func TestATerminalAuthMethodCarriesItsInvocation(t *testing.T) {
+	t.Parallel()
+	var m acp.AuthMethod
+	raw := `{"type":"terminal","id":"login","name":"Log in","description":"in a terminal",
+	         "args":["/login","--force"],"env":{"MODE":"interactive"}}`
+	if err := json.Unmarshal([]byte(raw), &m); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(m.Args) != 2 || m.Args[0] != "/login" || m.Args[1] != "--force" {
+		t.Errorf("args = %v, want both, in order", m.Args)
+	}
+	if m.Env["MODE"] != "interactive" {
+		t.Errorf("env = %v, want the variable it named", m.Env)
+	}
+	if m.Description != "in a terminal" {
+		t.Errorf("description = %q", m.Description)
+	}
+}
+
+// The client's authentication capability is a nested object rather than a flag
+// beside the others, and it is written even when nothing is claimed: the
+// schema defaults it either way, and an agent reading a shape it does not
+// expect is a handshake nobody debugs twice.
+func TestClientCapabilitiesNestTheAuthClaim(t *testing.T) {
+	t.Parallel()
+	got := encode(t, acp.ClientCapabilities{Auth: acp.AuthCapabilities{Terminal: true}})
+	auth, ok := got["auth"].(map[string]any)
+	if !ok {
+		t.Fatalf("clientCapabilities = %v, want an auth object", got)
+	}
+	if auth["terminal"] != true {
+		t.Errorf("auth = %v, want terminal claimed", auth)
+	}
+	off := encode(t, acp.ClientCapabilities{})
+	if _, ok := off["auth"]; !ok {
+		t.Errorf("clientCapabilities = %v, want auth present even when nothing is claimed", off)
+	}
+}
+
+// authenticate names the method and nothing else.
+func TestAuthenticateNamesTheMethodId(t *testing.T) {
+	t.Parallel()
+	got := encode(t, acp.AuthenticateRequest{MethodID: "oauth-personal"})
+	if got["methodId"] != "oauth-personal" {
+		t.Errorf("authenticate = %v, want methodId", got)
+	}
+}

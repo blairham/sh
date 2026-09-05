@@ -78,6 +78,14 @@ func runGrammar(t *testing.T, src string, enable func(*syntax.Dialect), setup fu
 	// is exactly what these tests are full of.
 	bash := bash.Semantics()
 	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &bash, Env: testPATH()}
+	// A temporary directory the framework takes away again. A process
+	// substitution makes a directory for its pipes under the shell's TMPDIR
+	// and only CleanUp removes it, which most tests have no reason to call —
+	// so without this the suite leaves one behind per substituting Runner, in
+	// whatever real directory the machine names. Seeding the Runner's own
+	// environment is all it takes, which is the point of the change that
+	// made TMPDIR the Runner's question rather than the process's.
+	r.Env = append(r.Env, "TMPDIR="+t.TempDir())
 	if setup != nil {
 		setup(r)
 	}

@@ -626,6 +626,14 @@ func Apply(r *interp.Runner) {
 	// Parameters bash provides and the others do not all have. Which
 	// variables a shell supplies is the same kind of question as which
 	// builtins it has, so it is answered here rather than as an axis.
+	//
+	// A read of the process, in library code, on purpose. The purity rule
+	// covers dialect/ as well as interp/ — an embedder links this and Apply
+	// runs inside the Runner — but it is about state a Runner owns and two
+	// Runners could disagree about. A uid is neither: nothing a script does
+	// changes it, two shells in one program genuinely have the same one, and
+	// $UID has no other source. Same class as $$, which .golangci.yml has
+	// blessed since it was written.
 	r.SetSpecial("UID", strconv.Itoa(os.Getuid()))
 	r.SetSpecial("EUID", strconv.Itoa(os.Geteuid()))
 	// Where the script is, which is a stack rather than a value — see

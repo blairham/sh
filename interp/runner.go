@@ -102,6 +102,27 @@ type Runner struct {
 	Stdin          io.Reader
 	Stdout, Stderr io.Writer
 
+	// AxisRemedy is what a caller wants said to a person who has just run
+	// into an axis no dialect answered: the words that turn "the shells
+	// disagree here and no dialect was chosen" from a statement of the
+	// problem into a statement of the fix. Empty — the default — says
+	// nothing extra, which is the honest answer for a Runner embedded in a
+	// program that has no dialect flag to point at.
+	//
+	// Supplied rather than composed here, and for the reason this package
+	// takes every other decision from its caller: the remedy is a sentence
+	// about the *front end*, naming its flag and the shells it will accept,
+	// and nothing under interp may name a shell — see the structure rule in
+	// AGENTS.md. A remedy written here would also be wrong for every
+	// embedder that is not this repository's own binary, which is most of
+	// them. cmd/sh sets it, via driver.Shell.AxisRemedy; a dialect binary
+	// leaves it empty, because a dialect that reaches an unanswered axis has
+	// a gap in its vector rather than a flag its user forgot.
+	//
+	// It crosses into a subshell unchanged, like every other fact about the
+	// invocation: the refusal reads the same wherever the script hit it.
+	AxisRemedy string
+
 	// Gate is consulted before every action that leaves this process. Nil
 	// allows everything, so the zero value is usable.
 	Gate Gate

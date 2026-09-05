@@ -187,7 +187,7 @@ func (r *Runner) declarePrint(names []string) int {
 // `export -p` lists the exported names alone.
 func (r *Runner) declarePrintForm(names []string, form DeclarationListingForm, keep func(declaration) bool) int {
 	if form == DeclarationListingUnspecified {
-		r.diagf("how a declaration is listed back: the shells disagree here and no dialect was chosen\n")
+		r.diagf("%s\n", r.unanswered("how a declaration is listed back"))
 		r.status = 2
 		r.unspecified = true
 		return 2

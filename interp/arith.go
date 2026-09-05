@@ -731,7 +731,7 @@ func (r *Runner) parseNum(s string) (int, error) {
 		}
 		if b > 36 && !r.ask(r.sem().ArithBaseAbove36, "a base above 36") {
 			if r.unspecified {
-				return 0, arithError{msg: "a base above 36: the shells disagree here and no dialect was chosen"}
+				return 0, arithError{msg: r.unanswered("a base above 36")}
 			}
 			// One dialect stops at 36 and says so, naming the base.
 			return 0, arithError{msg: Wording(r.diag().ArithInvalidBase,

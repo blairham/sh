@@ -44,7 +44,7 @@ type UlimitListingRow struct {
 func (r *Runner) ulimitListing(hard bool) int {
 	rows := r.diag().UlimitListing
 	if len(rows) == 0 {
-		r.diagf("how `ulimit -a` is laid out: the shells disagree here and no dialect was chosen\n")
+		r.diagf("%s\n", r.unanswered("how `ulimit -a` is laid out"))
 		r.status = 2
 		r.unspecified = true
 		return 2

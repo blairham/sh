@@ -1402,7 +1402,7 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 			break
 		}
 		if r.sem().ReadZeroTimeout != ReadZeroTimeoutPolls {
-			r.diagf("what `read -t 0` asks of the stream: the shells disagree here and no dialect was chosen\n")
+			r.diagf("%s\n", r.unanswered("what `read -t 0` asks of the stream"))
 			r.status = 2
 			r.unspecified = true
 			return 2

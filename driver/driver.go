@@ -101,6 +101,22 @@ type Shell struct {
 	// precisely so that two of them in one process need not agree.
 	Dir string
 
+	// AxisRemedy is what this binary would have a person do about an axis no
+	// dialect answered — "pass -dialect …", for a binary that has such a
+	// flag. It is handed to every Runner this front end builds, and it is
+	// used for the one refusal the front end makes on its own account: `-c`
+	// with `-s`, where the panel splits over which operand is `$0`.
+	//
+	// Empty is right for a dialect binary. `bash` reaching an unanswered axis
+	// is a hole in bash's vector, and telling its user to choose a dialect
+	// would be telling them to fix our bug.
+	//
+	// It is a string this package carries rather than a sentence it composes,
+	// because the sentence names a flag this package does not have and shells
+	// this package may not name. See interp.Runner.AxisRemedy, which says the
+	// same thing one level down.
+	AxisRemedy string
+
 	// Gate is asked about every action that leaves the process — an exec, a
 	// file open, a stat, a directory read — before it happens. Nil allows
 	// everything, which is what a shell without a policy is, and costs
@@ -744,8 +760,22 @@ func (sh Shell) commandWithStdinOption(cmd string, operands []string, inv invoca
 	// Refused rather than given one side's answer, the way an unanswered
 	// axis is refused everywhere else. A usage error, because what could not
 	// be understood is the argument vector.
-	return source{}, errors.New("`-c` with `-s`, and which operand is $0: " +
-		"the shells disagree here and no dialect was chosen")
+	return source{}, errors.New(sh.unanswered("`-c` with `-s`, and which operand is $0"))
+}
+
+// unanswered is the refusal of an axis nothing answered, worded the way interp
+// words the twenty-odd it refuses — the same sentence, and the same remedy
+// appended where the binary supplied one.
+//
+// Spelled here as well as there because this is the one such refusal the front
+// end makes on its own account: whether `-c` with `-s` names its operands is a
+// question about the *invocation*, and there is no runner yet to ask.
+func (sh Shell) unanswered(what string) string {
+	msg := what + ": the shells disagree here and no dialect was chosen"
+	if sh.AxisRemedy != "" {
+		msg += "; " + sh.AxisRemedy
+	}
+	return msg
 }
 
 // commandSource is the source for `-c`, whose operands are named differently
@@ -788,6 +818,11 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// argv[0] over the configured fallback, so this is the word the
 		// process was executed as wherever there was one.
 		Invocation: sh.Name,
+		// What to tell a person who has just met an axis nothing answered.
+		// Carried rather than composed, here and in interp both: naming the
+		// remedy means naming a flag and the shells it takes, and neither
+		// package may name a shell.
+		AxisRemedy: sh.AxisRemedy,
 		// `$1` onward. A nil slice and an empty one mean the same thing to
 		// the interpreter, so nothing distinguishes "no operands" from
 		// "operands that were all consumed as the name".

@@ -362,6 +362,13 @@ type Runner struct {
 	killedBy    string
 	killedBySig syscall.Signal
 
+	// stoppedBySignal records that an untrapped signal ended the script,
+	// which is a wider fact than killedBy and deliberately a separate one:
+	// where HangupIsAnOrderlyExit is taken, the script stops and there is no
+	// death to re-raise afterwards. Anything asking "is this shell still
+	// running its script" wants this; only the re-raise wants killedBy.
+	stoppedBySignal bool
+
 	// status is the exit status of the last command run.
 	status int
 	// ctl carries break, continue and return out of a construct. They are

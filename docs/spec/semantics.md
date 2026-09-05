@@ -478,6 +478,44 @@ bash 5.3 still ignores the signal and zsh dies by it. Not modeled — POSIX
 says `trap -` restores the disposition the shell *inherited*, which makes
 both defensible, and nothing in the corpus asks yet.
 
+## The other fatal signal, which is fatal without being a death
+
+    kill -HUP $$; echo after
+
+    bash 5.3  → killed by SIGHUP, 129    dash   → killed by SIGHUP, 129
+    bash 3.2  → killed by SIGHUP, 129    ksh93  → killed by SIGHUP, 129
+    zsh       → exit 1
+
+`Semantics.HangupIsAnOrderlyExit`. Nothing prints after it anywhere, so
+the script stops in all five and the disagreement is about *how* it
+stopped. The status is the first sign: 1 is not 128 plus anything.
+
+Three further measurements say it is an exit rather than a differently
+numbered death, and the second of them is the one that settles it.
+
+- The shell's own caller sees an ordinary exit rather than a process
+  killed by SIGHUP — so nothing was re-raised.
+- The EXIT trap runs. `trap 'echo bye' EXIT; kill -TERM $$` prints
+  nothing in zsh, because that shell answers *no* to
+  `ExitTrapRunsOnSignalDeath`; `trap 'echo bye' EXIT; kill -HUP $$`
+  prints `bye` in the same shell. Both can only be true if SIGHUP
+  produced no death for the first question to be asked about.
+- An `exit 5` inside that trap takes the status, exactly as it would
+  after any other ending.
+
+The status is a constant and not something carried over: `(exit 7); kill
+-HUP $$` is still 1.
+
+It is one signal, and the sweep is worth recording because it bounds the
+family. Across the nineteen signals whose default action ends a process —
+HUP, INT, QUIT, ILL, TRAP, ABRT, FPE, BUS, SEGV, SYS, PIPE, ALRM, TERM,
+USR1, USR2, XCPU, XFSZ, VTALRM and PROF — the panel is unanimous on
+seventeen. QUIT is one exception and HUP is the other; there is no third.
+
+An external SIGHUP is answered the same way, so this is a disposition and
+not something `kill` does on its way past, and a trap overrides it as it
+overrides everything here.
+
 ## A second axis that is an ordering
 
 `exit` is not equally fussy about what it is given:

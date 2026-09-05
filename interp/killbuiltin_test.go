@@ -329,6 +329,168 @@ func TestAnIgnoredFatalSignalIsNotADeath(t *testing.T) {
 	}
 }
 
+// TestAnOrderlyEndingIsNotADeath covers the axis for the other fatal signal
+// the panel splits on, and the split is about the *kind* of ending rather than
+// about a number: one side is killed by the signal and reports 128 plus it,
+// the other stops as though it had run `exit 1`.
+func TestAnOrderlyEndingIsNotADeath(t *testing.T) {
+	const src = "kill -HUP $$\necho after\n"
+	for _, c := range []struct {
+		name       string
+		answer     Answer
+		wantStatus int
+	}{
+		{"killed by the signal", No, 128 + int(syscall.SIGHUP)},
+		{"exits instead", Yes, 1},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			sem := killSem()
+			sem.HangupIsAnOrderlyExit = c.answer
+			out, errs, st := killRun(t, src, sem, Diagnostics{})
+			if out != "" {
+				t.Errorf("output %q, want the script to have stopped", out)
+			}
+			if errs != "" {
+				t.Errorf("diagnostic %q, want none", errs)
+			}
+			if st != c.wantStatus {
+				t.Errorf("status %d, want %d", st, c.wantStatus)
+			}
+		})
+	}
+}
+
+// An ending that is not a death has nothing to re-raise, which is the half of
+// the axis a status cannot show: the same script asks to die on one answer and
+// does not on the other.
+func TestAnOrderlyEndingRaisesNothing(t *testing.T) {
+	for _, c := range []struct {
+		name      string
+		answer    Answer
+		wantAsked int
+	}{
+		{"a death is raised", No, 1},
+		{"an exit is not", Yes, 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f, err := syntax.Parse("kill -HUP $$\necho after\n", syntax.Core())
+			if err != nil {
+				t.Fatal(err)
+			}
+			asked := 0
+			sem := killSem()
+			sem.HangupIsAnOrderlyExit = c.answer
+			var o bytes.Buffer
+			r := &Runner{
+				Stdout: &o, Semantics: &sem, Name: "testsh",
+				DieBySignal: func(syscall.Signal) error { asked++; return nil },
+			}
+			if _, err := r.Run(context.Background(), f); err != nil {
+				t.Fatal(err)
+			}
+			if asked != c.wantAsked {
+				t.Errorf("asked to die %d times, want %d", asked, c.wantAsked)
+			}
+			if o.String() != "" {
+				t.Errorf("output %q, want the script to have stopped", o.String())
+			}
+		})
+	}
+}
+
+// The EXIT trap tells the two endings apart where the status cannot, because
+// a shell that answers "no" to ExitTrapRunsOnSignalDeath still runs it after
+// an ending that was never a death. Both axes are set against each other here
+// on purpose: that combination is the only evidence that this one is about the
+// kind of ending rather than about a number.
+func TestAnOrderlyEndingRunsTheExitTrapAnyway(t *testing.T) {
+	const src = "trap 'echo bye' EXIT\nkill -HUP $$\necho after\n"
+	for _, c := range []struct {
+		name       string
+		orderly    Answer
+		wantOut    string
+		wantStatus int
+	}{
+		{"a death does not reach it", No, "", 128 + int(syscall.SIGHUP)},
+		{"an exit does", Yes, "bye\n", 1},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			sem := killSem()
+			sem.ExitTrapRunsOnSignalDeath = No
+			sem.HangupIsAnOrderlyExit = c.orderly
+			out, _, st := killRun(t, src, sem, Diagnostics{})
+			if out != c.wantOut {
+				t.Errorf("output %q, want %q", out, c.wantOut)
+			}
+			if st != c.wantStatus {
+				t.Errorf("status %d, want %d", st, c.wantStatus)
+			}
+		})
+	}
+}
+
+// An `exit` in the EXIT trap takes the status, which it could not do if the
+// ending were a death carrying a number of its own.
+func TestAnOrderlyEndingLetsTheExitTrapChooseTheStatus(t *testing.T) {
+	sem := killSem()
+	sem.HangupIsAnOrderlyExit = Yes
+	_, _, st := killRun(t, "trap 'exit 5' EXIT\nkill -HUP $$\n", sem, Diagnostics{})
+	if st != 5 {
+		t.Errorf("status %d, want the trap's 5", st)
+	}
+}
+
+// The status is a constant rather than anything the script had reached, which
+// is what says it is this ending's own number and not a status carried over.
+func TestAnOrderlyEndingIgnoresTheEarlierStatus(t *testing.T) {
+	sem := killSem()
+	sem.HangupIsAnOrderlyExit = Yes
+	_, _, st := killRun(t, "false\nkill -HUP $$\n", sem, Diagnostics{})
+	if st != 1 {
+		t.Errorf("status %d, want 1", st)
+	}
+	_, _, st = killRun(t, "(exit 7)\nkill -HUP $$\n", sem, Diagnostics{})
+	if st != 1 {
+		t.Errorf("status %d, want 1", st)
+	}
+}
+
+// A subshell raising it is the same ending, arriving by the other route: the
+// subshell finishes, the parent does not carry on, and the status is the
+// orderly one rather than a death's.
+func TestAnOrderlyEndingFromASubshellEndsTheParent(t *testing.T) {
+	sem := killSem()
+	sem.HangupIsAnOrderlyExit = Yes
+	out, _, st := killRun(t, "(kill -HUP $$; echo inner)\necho outer\n", sem, Diagnostics{})
+	if out != "inner\n" {
+		t.Errorf("output %q, want the subshell to finish and the parent to stop", out)
+	}
+	if st != 1 {
+		t.Errorf("status %d, want 1", st)
+	}
+}
+
+// A trapped hangup never reaches the axis, so the answer cannot turn a handled
+// signal into an ending.
+func TestATrappedHangupDoesNotReachTheOrderlyAxis(t *testing.T) {
+	sem := killSem()
+	sem.HangupIsAnOrderlyExit = Unspecified
+	// Answered because running a handler at all asks it, and an unanswered
+	// axis writes a diagnostic this test reads as the failure it is looking
+	// for. Which way it is answered does not matter here.
+	sem.SignalHandlerSeesEarlierStatus = No
+	out, errs, st := killRun(t, "trap 'echo caught' HUP\nkill -HUP $$\necho after\n", sem, Diagnostics{})
+	if out != "caught\nafter\n" {
+		t.Errorf("output %q, want the handler and then the script", out)
+	}
+	if errs != "" {
+		t.Errorf("diagnostic %q, want none — the axis was not reached", errs)
+	}
+	if st != 0 {
+		t.Errorf("status %d, want 0", st)
+	}
+}
+
 // And a signal nobody ignores never reaches the axis, so leaving it unanswered
 // is not a way to break every other death.
 func TestAnUnansweredIgnoreAxisDoesNotReachOtherSignals(t *testing.T) {

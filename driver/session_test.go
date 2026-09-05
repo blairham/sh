@@ -248,3 +248,46 @@ func TestCancelingAnInputLeavesTheSessionUsable(t *testing.T) {
 		t.Errorf("output = %q, want the session to have run the next input", got)
 	}
 }
+
+// A run-time option can change the grammar, and a session has to read the
+// runner's dialect rather than the shell's when it parses the next input:
+// `set -o` in one turn governs the parse of the one after it. Reading the
+// shell's would parse the next input with a configuration the shell has
+// already moved off, which is a syntax error for a construct that is now
+// legal.
+//
+// The flag is named rather than a shell, and the builtin that flips it is
+// registered here, because which builtin flips it under which name is a
+// dialect's business.
+func TestAGrammarChangeInOneInputReachesTheNext(t *testing.T) {
+	t.Parallel()
+	var out, errs strings.Builder
+	s, code := driver.NewSession(driver.Shell{
+		Name: "sh", Dir: t.TempDir(), Stdout: &out, Stderr: &errs, KeepProcess: true,
+		Register: func(r *interp.Runner) {
+			r.Register("groups-on", func(r *interp.Runner, _ context.Context, _ []string) int {
+				r.SetMatchOption(interp.QuantifiedGroupsEverywhere, true)
+				return 0
+			})
+		},
+	})
+	if code != 0 {
+		t.Fatalf("NewSession: status %d", code)
+	}
+
+	// The core has no quantified groups, so this input is a syntax error
+	// until the toggle has run.
+	const groups = "case ab in @(ab|cd)) echo hit;; esac\n"
+	if status := s.Run(t.Context(), groups); status == 0 {
+		t.Errorf("status = %d before the toggle, want a parse failure", status)
+	}
+	if status := s.Run(t.Context(), "groups-on"); status != 0 {
+		t.Fatalf("the toggle failed: status %d, stderr %q", status, errs.String())
+	}
+	if status := s.Run(t.Context(), groups); status != 0 {
+		t.Fatalf("status = %d after the toggle, stderr %q", status, errs.String())
+	}
+	if got := strings.TrimSpace(out.String()); got != "hit" {
+		t.Errorf("output = %q, want hit", got)
+	}
+}

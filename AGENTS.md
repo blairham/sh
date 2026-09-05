@@ -451,11 +451,38 @@ ID has ever left `main` in the whole history of the file; retiring one on
 purpose means naming it in `corpusguard.Retired`, which is reviewable and
 fails safe if it is itself lost.
 
-`make oracle-check` runs in CI in **report-only** mode: the golden record
-is generated on one machine and a runner does not have the same builds of
-the same shells, so some differences are legitimate. A check that is red
-for a legitimate reason is one people learn to ignore. `make check` is the
-gate locally, where the panel matches the record.
+`make oracle-check` asks two questions, and they are enforced in different
+places because only one of them has the same answer on every machine.
+
+**Do the committed files agree with each other?** The corpus in `case.go`,
+the golden record and `docs/spec/measurements.md` are three views of one
+thing, and the document is a *pure function* of the other two — so
+re-rendering it and comparing every byte asks the question completely.
+That needs no shells and cannot differ by machine, so it **blocks**: it is
+`TestTheCommittedRecordAndDocumentAgree` in `internal/oracle`, which runs
+in `make check` and in the required `Build and test` job.
+
+It exists because `oracle-check` compared *behavior* and a `Why` is prose.
+Editing one after `make oracle` had run left `measurements.md` carrying a
+sentence its own source no longer held, and nothing failed — twice in one
+day, caught by eye both times. A wrong explanation attached to a correct
+measurement is worse than a wrong number, because the numbers are checked
+and the prose was not. The same comparison catches a case added, removed
+or renamed without regenerating, and a change to the renderer shipped
+without one.
+
+**Does the panel still behave as recorded?** This one is **report-only in
+CI**, and the reason is measured rather than assumed: on `ubuntu-latest`,
+against a record made on macOS, **380 of 1122 cases differ** and bash 3.2
+cannot be installed at all. A blocking job would fail every build. `make
+check` is the gate locally, where the panel is the one that produced the
+record.
+
+So a stale record fails for its author on the half that can be pinned, and
+the half that cannot is still reported — with a per-shell tally, because
+four hundred lines of drift is not a report anyone reads and the shape is
+the part worth seeing: concentrated in one column is a shell that moved,
+spread evenly is a record that did.
 
 ## Never work on `main`
 

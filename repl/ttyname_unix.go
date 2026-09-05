@@ -24,8 +24,14 @@ import (
 // The answer is kept by the caller for the session, since a shell does not
 // change terminals and this reads a directory.
 func lookupTerminal(f *os.File) string {
+	// A terminal first, and not merely a character device: the rdev scan
+	// below would happily match `/dev/null` against the entry for it and
+	// draw `null` where a shell draws `ttys013`.
+	if !IsTerminal(f) {
+		return ""
+	}
 	info, err := f.Stat()
-	if err != nil || info.Mode()&os.ModeCharDevice == 0 {
+	if err != nil {
 		return ""
 	}
 	st, ok := info.Sys().(*syscall.Stat_t)

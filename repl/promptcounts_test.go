@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/blairham/sh/internal/pty"
 	"github.com/blairham/sh/syntax"
 )
 
@@ -140,19 +141,23 @@ func TestTheTerminalNameOfSomethingThatIsNotOne(t *testing.T) {
 	if got := lookupTerminal(readerFile(t, "x")); got != "" {
 		t.Errorf("a regular file gave %q, want nothing", got)
 	}
-}
-
-// And drawn through the code that asks for it, so that the answer reaching
-// the prompt is what is graded and not only the lookup.
-//
-// /dev/null is a character device with a device number like any other, which
-// is how a terminal's name can be looked up where there is no terminal.
-func TestDrawingTheTerminalName(t *testing.T) {
+	// The null device is a character device with a device number like any
+	// other, so the scan below would happily find the entry for it and draw
+	// `null` where a shell draws `ttys013`. It is nobody's terminal.
 	f, err := os.Open(os.DevNull)
 	if err != nil {
 		t.Skipf("no %s: %v", os.DevNull, err)
 	}
 	t.Cleanup(func() { _ = f.Close() })
+	if got := lookupTerminal(f); got != "" {
+		t.Errorf("%s gave %q, want nothing", os.DevNull, got)
+	}
+}
+
+// And drawn through the code that asks for it, so that the answer reaching
+// the prompt is what is graded and not only the lookup.
+func TestDrawingTheTerminalName(t *testing.T) {
+	f := terminalFile(t)
 	s := Shell{
 		In:     f,
 		counts: &counts{},
@@ -161,8 +166,8 @@ func TestDrawingTheTerminalName(t *testing.T) {
 			Codes:  map[rune]PromptField{'l': FieldTerminalName},
 		},
 	}
-	if got := s.render(`<\l>`); got != "<null>" {
-		t.Errorf("drew %q, want <null>", got)
+	if want := "<" + filepath.Base(f.Name()) + ">"; s.render(`<\l>`) != want {
+		t.Errorf("drew %q, want %q", s.render(`<\l>`), want)
 	}
 	// Asked once: the answer is kept for the session.
 	s.counts.tty = "changed"
@@ -264,17 +269,35 @@ func TestTheNumberingStartsFromTheHistoryFile(t *testing.T) {
 	}
 }
 
-// The terminal's name is found by its device number, so anything in /dev with
-// one can be looked up — which is how this is tested without a terminal.
-func TestLookingUpADeviceByItsNumber(t *testing.T) {
-	f, err := os.Open(os.DevNull)
+// The terminal's name is found by its device number: the shell's input is the
+// process's, and Go calls that `/dev/stdin` whatever is behind it — the name
+// of the door rather than of the room.
+//
+// Asked of a real pseudo-terminal, which is the only thing that proves the
+// scan finds anything. It used to be asked of the null device, on the grounds
+// that anything in /dev with a device number can be looked up; that made the
+// test pass for a lookup that could not tell a terminal from the null device,
+// which is the same mistake as the one in the prompt decision.
+func TestLookingUpTheTerminalByItsDeviceNumber(t *testing.T) {
+	f := terminalFile(t)
+	if got, want := lookupTerminal(f), filepath.Base(f.Name()); got != want {
+		t.Errorf("looked up %s and got %q, want %q", f.Name(), got, want)
+	}
+}
+
+// terminalFile is one end of a real pseudo-terminal, or a skip where the
+// platform has none.
+func terminalFile(t *testing.T) *os.File {
+	t.Helper()
+	control, tty, err := pty.Open()
 	if err != nil {
-		t.Skipf("no %s: %v", os.DevNull, err)
+		t.Skipf("no pseudo-terminal: %v", err)
 	}
-	t.Cleanup(func() { _ = f.Close() })
-	if got := lookupTerminal(f); got != "null" {
-		t.Errorf("looked up %s and got %q, want null", os.DevNull, got)
-	}
+	t.Cleanup(func() {
+		_ = tty.Close()
+		_ = control.Close()
+	})
+	return tty
 }
 
 // A job that has finished is not one the shell is looking after.

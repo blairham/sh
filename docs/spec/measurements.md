@@ -4788,6 +4788,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `invoke/end-of-options-between-c-and-its-string` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` |
 | `invoke/plus-c-still-runs-the-command` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
 | `invoke/c-outranks-standard-input` | `hi\|0` | `hi\|0` | `hi\|0` | `hi\|0` | `hi\|0` | `hi\|0` |
+| `invoke/standard-input-that-is-not-a-terminal` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 
 - `invoke/errexit-with-a-script` — the first line of most scripts, spelled on the command line instead: a set option given at invocation has to reach the runner, and abandon the script at the failure rather than run to the end
   ```sh
@@ -4835,4 +4836,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `invoke/c-outranks-standard-input` — -s and -c in one bundle: all four run the command rather than reading standard input, so a shell that let -s win would print nothing and still exit 0
   ```sh
   echo "hi|$#"
+  ```
+- `invoke/standard-input-that-is-not-a-terminal` — the harness gives every child the null device for standard input, and the null device is a character device — which is exactly what made the prompt decision say terminal, ask it for raw mode, and exit 2 with `operation not supported by device` (#509). No shell in the panel prompts here: -s says read standard input, standard input ends at once, and the shell exits 0 having said nothing. Deliberately no placeholder — what is pinned is what a shell does before it reads anything, and the snippet is written down as the thing that would have run
+  ```sh
+  echo unreachable
   ```

@@ -12538,6 +12538,38 @@
         "TimedOut": false
       }
     },
+    "invoke/standard-input-that-is-not-a-terminal": {
+      "bash": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "invoke/the-command-string-names-zero-itself": {
       "bash": {
         "Output": "name|2|a b",

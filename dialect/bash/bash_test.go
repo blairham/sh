@@ -149,6 +149,11 @@ func TestDiagnostics(t *testing.T) {
 	if got, want := bash.Diagnostics().TypeNotFound, "type: %[1]s: not found"; got != want {
 		t.Errorf("TypeNotFound = %q, want %q", got, want)
 	}
+	// A complaint rather than a report, so it goes to standard error and
+	// `type nope 2>/dev/null` says nothing at all. Half the panel disagrees.
+	if bash.Diagnostics().TypeNotFoundOnStdout {
+		t.Error("TypeNotFoundOnStdout = true, want the line on standard error")
+	}
 	if got, want := bash.Diagnostics().SyntaxStatus(), 2; got != want {
 		t.Errorf("syntax-error status = %d, want %d", got, want)
 	}

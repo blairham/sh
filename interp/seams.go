@@ -21,8 +21,12 @@ import (
 )
 
 // ActionKind is what an action does. These are the points where control
-// leaves the interpreter's own memory, which is the complete boundary worth
-// gating: everything else is arithmetic on values it already holds.
+// crosses the interpreter's own memory, which is the complete boundary worth
+// recording: everything else is arithmetic on values it already holds.
+//
+// Almost all of them cross outwards and are gated. ActionInherit is the one
+// that crosses inwards — a capability the shell was handed before it read a
+// line — and it is recorded rather than gated, for the reason set out on it.
 type ActionKind uint8
 
 const (
@@ -88,6 +92,33 @@ const (
 	// already has, so a policy hiding a process and a kernel refusing one
 	// are indistinguishable to the script.
 	ActionSignal
+	// ActionInherit records a descriptor the shell was started holding and
+	// has just published to the script — `sh 3<&0 script`, where 3 is
+	// readable as `<&3` because the caller opened it. Path names it the way
+	// the operating system does, /dev/fd/N.
+	//
+	// It is the one action the gate is never asked about, and that is a
+	// decision rather than an omission. Every other kind here has a
+	// construct behind it: a line to name, a command to refuse, a status to
+	// report. This has none — the table is filled before the first statement
+	// runs, so there is nothing to fail — and a veto would be a promise the
+	// boundary cannot keep. The descriptor is in the *process's* table
+	// whatever this package decides: it is not close-on-exec, which is how
+	// it was recognized, so `exec cmd` hands it to its replacement by number
+	// and any external child inherits it, both without passing through
+	// anything interp holds. Refusing publication would hide it from `<&3`
+	// and leave it reachable through both, which is a boundary that reports
+	// more than it enforces.
+	//
+	// The control that is real is total rather than per-descriptor, and it
+	// is upstream: a Runner is handed the descriptors it may publish
+	// (Runner.InheritedFiles) and never goes looking, so an embedder that
+	// wants a script to see none of its own descriptors gives it none. What
+	// the boundary owes here is the record — a shell that starts already
+	// holding a file it never opened is exactly what an audit trail must
+	// contain — so this is emitted as an EventAccess, always, and asks the
+	// gate nothing.
+	ActionInherit
 )
 
 func (k ActionKind) String() string {
@@ -100,6 +131,8 @@ func (k ActionKind) String() string {
 		return "read-dir"
 	case ActionSignal:
 		return "signal"
+	case ActionInherit:
+		return "inherit"
 	}
 	return "exec"
 }

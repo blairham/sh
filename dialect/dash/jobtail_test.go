@@ -41,3 +41,24 @@ func TestDisownIsNotABuiltin(t *testing.T) {
 		t.Errorf("got %q, want the name resolved like any missing command", out)
 	}
 }
+
+// `jobs` takes POSIX's two letters here and nothing else: `-p` is the
+// process ids alone, and the letters bash added are illegal options.
+func TestJobsOptionLetters(t *testing.T) {
+	out, _ := runDash(t, t.TempDir(), `/bin/sleep 0.3 & echo "bang=$!"
+jobs -p
+wait`)
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 2 || lines[1] != strings.TrimPrefix(lines[0], "bang=") {
+		t.Errorf("got %q, want the job's process id and nothing else", out)
+	}
+
+	out, _ = runDash(t, t.TempDir(), `jobs -r; echo r=$?
+jobs -n; echo n=$?`)
+	if !strings.Contains(out, "jobs: Illegal option -r") || !strings.Contains(out, "r=2") {
+		t.Errorf("got %q, want -r refused as illegal at 2", out)
+	}
+	if !strings.Contains(out, "jobs: Illegal option -n") || !strings.Contains(out, "n=2") {
+		t.Errorf("got %q, want -n refused as illegal at 2", out)
+	}
+}

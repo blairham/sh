@@ -625,6 +625,33 @@ type Diagnostics struct {
 	TypeNotFound           string
 	TypeNotFoundUnprefixed bool
 
+	// TypeNotFoundOnStdout writes that line to standard output rather than
+	// to standard error, which is half the panel:
+	//
+	//	bash   standard error
+	//	dash   standard output
+	//	ksh93  standard error
+	//	zsh    standard output
+	//
+	// It is a question of its own and not a consequence of the wording. Two
+	// shells treat a name they could not account for as a *report* — part of
+	// what the reader asked `type` for, and so an answer — and two treat it
+	// as a complaint about the request. Nothing else about the builtin
+	// follows from which: the status is settled separately by
+	// TypeNotFoundStatus, and the prefix by TypeNotFoundUnprefixed.
+	//
+	// The stream is visible in ways the wording is not. On the two shells
+	// that report it, `type nope 2>/dev/null` still prints the line and
+	// `p=$(type -p nope)` captures it; on the two that complain, both are
+	// silent. It is also why a multi-name invocation reads in order there —
+	// `type -t f cd if ls` puts every line, found or not, in one stream.
+	//
+	// A dialect that both prefixes the line and reports it on standard
+	// output is not in the panel, but the two fields do not constrain each
+	// other: the prefix is chosen first and the stream carries whatever
+	// results.
+	TypeNotFoundOnStdout bool
+
 	// TypeNotFoundStatus is what `type` reports when a name was not
 	// accounted for. Zero means 1, which is three of the four; dash answers
 	// with a missing command's 127.
@@ -633,8 +660,9 @@ type Diagnostics struct {
 	// CommandVNotFound is what `command -V` says about a name that is
 	// nothing, which is `type`'s complaint with a different name in front:
 	// two shells blame `command`, and the two that keep the shell's name off
-	// the line here keep it off there too — TypeNotFoundUnprefixed and
-	// TypeNotFoundStatus speak for both builtins. One verb, the name.
+	// the line here keep it off there too — TypeNotFoundUnprefixed,
+	// TypeNotFoundOnStdout and TypeNotFoundStatus speak for both builtins.
+	// One verb, the name.
 	CommandVNotFound string
 
 	// FunctionListingHeader is how a function said back whole begins —
@@ -670,6 +698,31 @@ type Diagnostics struct {
 	// stopped and running lines end in the same column. Odd, and exactly
 	// what it does.
 	JobLine string
+
+	// JobLineLong is the same row as `jobs -l` writes it, with the process
+	// id in it. Five verbs: the number, the marker, the process id, the
+	// state and the command.
+	//
+	// A separate format rather than a field spliced into JobLine, because
+	// where the id goes is not one rule. Measured to the byte, with a
+	// five-digit id:
+	//
+	//	bash   [1]+ 41293 Running                    sleep 0.4 &
+	//	dash   [1] + 41293 Running
+	//	ksh93  [1] + 41293\t Running                 <command unknown>
+	//	zsh    [1]  + 41293 running    sleep 0.4
+	//
+	// bash spends one of the two spaces after its marker on the id; the
+	// other three insert the id and keep the spacing they had. ksh93 puts a
+	// tab after it. And dash narrows its state column by exactly what the id
+	// took, so that the command column stays where it was — the only shell
+	// in the panel that does, and invisible in practice, because dash keeps
+	// no command text and what moves is trailing whitespace. The width here
+	// is the measured one for a five-digit id rather than that arithmetic.
+	//
+	// Empty means JobLine with the id and a space in front of the state,
+	// which no dialect in the panel relies on.
+	JobLineLong string
 
 	// JobRunning, JobStopped and JobDone are the states a job is listed in.
 	// No verbs.

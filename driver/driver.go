@@ -32,6 +32,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/blairham/sh/internal/panicguard"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
 	"github.com/blairham/sh/syntax"
@@ -662,6 +663,15 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, c
 		// And it hands the terminal to whatever it is running, which is what
 		// makes ^C and ^Z reach the command rather than the shell.
 		r.Foreground = foreground
+		// And the descriptors it was started holding: `sh 3<&0 script` opens
+		// 3 for the script, and a script can neither open one nor find out
+		// that it has one. Here for the reason everything else in this block
+		// is here — finding them means reading the *process's* open
+		// descriptors, and a Runner embedded in another program would be
+		// publishing that program's own files to a script it was handed.
+		// interp takes the answer; only a binary that is the shell goes
+		// looking for it.
+		r.InheritedFiles = inheritedFiles()
 	}
 	if sh.Register != nil {
 		// The dialect's own adjustment: what it adds to or removes from the
@@ -671,7 +681,23 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, c
 	return r
 }
 
-func (sh Shell) run(in source) int {
+// run parses and executes one whole invocation, guarding it against an
+// interpreter bug.
+//
+// The route is the unit here, and that is the difference from a prompt. A
+// script has control flow a panic has already broken — the line after the one
+// that failed is not a fresh start, it is the middle of something — and there
+// is no session to keep, so the run ends. What the guard buys is that it ends
+// the way a shell ends: a diagnostic on stderr and a status, rather than a Go
+// stack trace and whatever the runtime exits with.
+func (sh Shell) run(in source) (status int) {
+	if sh.guard().Do(func() { status = sh.runInput(in) }) {
+		return panicguard.Status
+	}
+	return status
+}
+
+func (sh Shell) runInput(in source) int {
 	src, name, input, dg := in.src, in.name, in.input, in.dg
 	// One dialect reads a command string whole before running any of it, and
 	// the rest run each line as they reach it. Parsing everything up front is

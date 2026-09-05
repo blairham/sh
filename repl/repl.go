@@ -22,6 +22,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blairham/sh/internal/panicguard"
+	"github.com/blairham/sh/internal/secret"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -55,6 +57,17 @@ type Shell struct {
 
 	// Clock is what a prompt with the time in it reads. Nil is the real one.
 	Clock func() time.Time
+
+	// PanicTrace prints the stack of an interpreter bug caught while running
+	// a line, as well as the report that one was caught. The default is off
+	// because a trace at a prompt scrolls the session away and buries the
+	// line that said what happened.
+	//
+	// A field rather than an environment variable read here: this package is
+	// a library in the same sense interp is, and a library that consults the
+	// process is one two of them in one program cannot agree about. The front
+	// end reads the variable and says so — see driver's panic.go.
+	PanicTrace bool
 
 	// counts are the running totals a prompt can draw. Set by the loops,
 	// which are the only things that know a line has been accepted.
@@ -139,7 +152,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 		// 1, 5, 6. accept already keeps the history that way — it remembers
 		// the whole accumulated text as one line — and only the numbering
 		// disagreed with it.
-		stmts, perr, ready := s.take(&pending, ed.remember, line)
+		stmts, perr, ready := s.take(&pending, s.recording(ed.remember), line)
 		if !ready {
 			continue
 		}
@@ -183,7 +196,33 @@ func (s Shell) run(ctx context.Context, state *terminalState, stmts []*syntax.Fi
 // runStmts executes the statements of one accepted line, reporting whether the
 // shell should stop. Without a terminal there is nothing to hand back, which
 // is the only difference between this and run.
-func (s Shell) runStmts(ctx context.Context, stmts []*syntax.File) bool {
+//
+// This is where a session survives an interpreter bug, and the unit is the
+// line because the line is what a person typed: one bad line costs that line
+// and the shell keeps its variables, its functions, its jobs and its
+// directory. Here rather than in either loop, so that the editor's loop and
+// the piped one cannot disagree about it — and inside run's restore, so the
+// report is written with the terminal in its own line discipline, exactly as a
+// command's own output is. interp goes on panicking, which is correct for a
+// library; see internal/panicguard.
+func (s Shell) runStmts(ctx context.Context, stmts []*syntax.File) (done bool) {
+	if s.guard().Do(func() { done = s.runEach(ctx, stmts) }) {
+		// The line never finished, so it has no status of its own and must
+		// not keep the one before it: `$?` says it failed, and the `&&` on
+		// the next line reads it the way it reads any other failure.
+		s.Runner.SetExitStatus(panicguard.Status)
+		return false
+	}
+	return done
+}
+
+// guard is what a typed line is run behind.
+func (s Shell) guard() panicguard.Guard {
+	return panicguard.Guard{Name: s.Name, Err: s.Err, Trace: s.PanicTrace}
+}
+
+// runEach is runStmts without the guard around it.
+func (s Shell) runEach(ctx context.Context, stmts []*syntax.File) bool {
 	for _, st := range stmts {
 		if err := s.Runner.RunPart(ctx, st); err != nil {
 			// Refused rather than silently skipped, the same way the script
@@ -499,6 +538,38 @@ func (s Shell) take(pending *strings.Builder, remember func(string), line string
 	}
 	s.counted().accepted(blank, perr == nil)
 	return stmts, perr, true
+}
+
+// recording is what an accepted line goes into the session's history
+// through, and it is where a credential is noticed.
+//
+// The check is on the way *in* rather than on the way out, because the notice
+// is the whole difference between a feature and a shell that has lost your
+// line: printed here it lands directly under what was typed, while the file
+// is written as the shell exits, which is the worst moment there is for
+// something a person is meant to read. The file itself is guarded separately,
+// in withoutCredentials, so the invariant does not depend on this.
+//
+// The line is still remembered, and that is the interesting half. Measured on
+// 2026-09-05: bash 5.3.15 given `HISTIGNORE='*SECRET*'` drops a matching line
+// from the history list entirely — its own `history` builtin cannot see it —
+// while zsh 5.9.2 given `HISTORY_IGNORE='*SECRET*'` keeps it in the list and
+// leaves it out of the file. zsh's is the answer taken here, for a reason
+// that is about this feature rather than about zsh: a line that was refused
+// is very often a line about to be retyped — the token had a character
+// missing — and a scrubber that also takes away the up arrow is one people
+// work around by turning it off. Nothing that was on the screen anyway is
+// being protected by forgetting it.
+func (s Shell) recording(remember func(string)) func(string) {
+	if remember == nil {
+		return nil
+	}
+	return func(line string) {
+		if rule, found := secret.Default().Match(line); found {
+			s.errf("%s: history: not saving this line (matched %s)\n", or(s.Name, "sh"), rule)
+		}
+		remember(line)
+	}
 }
 
 // newEditor is the line editor this shell types into.

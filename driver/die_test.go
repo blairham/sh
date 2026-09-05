@@ -24,12 +24,16 @@ const dyingScript = "SH_TEST_DYING_SCRIPT"
 // deathBudget is how long a shell that is going to be killed by a signal is
 // given to be killed by it.
 //
-// It is not a performance assertion. The measured time on an idle machine is
-// under ten milliseconds, and the defect this guards against was a shell that
-// parked forever — so a second is loose enough that load cannot fail it and
-// tight enough that a hang is reported as a hang rather than as whatever the
-// enclosing timeout eventually says.
-const deathBudget = time.Second
+// It is not a performance assertion. The measured time is tens of
+// milliseconds on both platforms, and the defect this guards against was a
+// shell that parked forever — so this is loose enough that a loaded runner
+// cannot fail it and tight enough that a hang is reported as a hang rather
+// than as whatever the enclosing timeout eventually says.
+//
+// It is also deliberately under the raise's own grace period, so a shell that
+// gave up and exited with a number is caught by this as well as by the wait
+// status.
+const deathBudget = 2 * time.Second
 
 // dieRunningAsAShell turns this process into a shell when it was re-executed
 // as one, and does nothing otherwise.
@@ -40,9 +44,31 @@ const deathBudget = time.Second
 // with, for the signals involved, the disposition change that gets it there,
 // which is process-global and survives exec.
 func dieRunningAsAShell() {
-	if src := os.Getenv(dyingScript); src != "" {
-		os.Exit(driver.MainArgs(shell(), []string{"testsh", "-c", src}))
+	src := os.Getenv(dyingScript)
+	if src == "" {
+		return
 	}
+	writeNoCore()
+	os.Exit(driver.MainArgs(shell(), []string{"testsh", "-c", src}))
+}
+
+// writeNoCore stops this process dumping core when a signal kills it, which is
+// what a shell's own `ulimit -c 0` does and is scoped to the shell half rather
+// than to the test binary.
+//
+// Not tidiness. SIGABRT is a core-dumping signal on Linux where it is not on
+// macOS, and a race-instrumented test binary is large: measured on a CI runner,
+// the kernel spent 1.5 seconds writing the image before reaping the process, so
+// the timing this file is here to measure was the core writer's rather than the
+// shell's. The failure looked platform-specific and was a matter of what the
+// default action *does* on each one.
+func writeNoCore() {
+	var lim syscall.Rlimit
+	if err := syscall.Getrlimit(syscall.RLIMIT_CORE, &lim); err != nil {
+		return
+	}
+	lim.Cur = 0
+	_ = syscall.Setrlimit(syscall.RLIMIT_CORE, &lim)
 }
 
 // waitStatusOfAShell re-executes this test binary as a shell running src and

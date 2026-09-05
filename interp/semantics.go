@@ -1178,6 +1178,25 @@ type Semantics struct {
 	// axis is absent rather than false there.
 	ArrayBaseIsZero Answer
 
+	// ArrayLiteralSubscriptIsAKey reads a subscript written inside an array
+	// literal as the text between the brackets rather than as an arithmetic
+	// expression — and, because the two go together, makes such a literal
+	// declare a keyed array rather than an indexed one.
+	//
+	// One concept with two consequences, like whether an assignment prefix
+	// survives a special builtin. True in ksh93, where `a=([1+1]=c)` stores
+	// under the three characters and `${a[2]}` finds nothing; false in bash
+	// and zsh, where the subscript is evaluated and the value lands at 2.
+	//
+	// Asked only where the two readings differ. A plain decimal numeral
+	// evaluates to itself, so `a=([2]=c)` fills the same slot either way and
+	// never reaches the question — which is what keeps the ordinary way to
+	// build a sparse array available in a core that has chosen no shell.
+	//
+	// dash has no array literal at all, so the axis is absent there rather
+	// than false.
+	ArrayLiteralSubscriptIsAKey Answer
+
 	// DollarZeroInFunctionIsFunctionName makes `$0` inside a function the
 	// function's name. True only in zsh.
 	DollarZeroInFunctionIsFunctionName Answer

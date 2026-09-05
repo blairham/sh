@@ -153,22 +153,6 @@ func (r *Runner) appendArrayElem(name string, idx int, value string) {
 	r.setArrayElem(name, idx, value)
 }
 
-// appendArray adds elements after the highest subscript.
-func (r *Runner) appendArray(name string, elems []string) {
-	a := r.Arrays[name]
-	if a == nil {
-		a = Array{}
-	}
-	next := 0
-	if subs := a.subscripts(); len(subs) > 0 {
-		next = subs[len(subs)-1] + 1
-	}
-	for i, v := range elems {
-		a[next+i] = v
-	}
-	r.storeArray(name, a)
-}
-
 // unsetArrayElem removes one subscript.
 //
 // Removed and not blanked, in every dialect: the dense reading finds an

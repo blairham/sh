@@ -77,6 +77,8 @@ func Semantics() interp.Semantics {
 	// the semantics field deliberately leaves out.
 	s.DefaultOptionLetters = "hB"
 	s.ArrayScalarIsTheWholeArray = interp.No
+	// A subscript inside a literal is an expression: `a=([1+1]=c)` lands at 2.
+	s.ArrayLiteralSubscriptIsAKey = interp.No
 	s.AssignmentUpdatesPipelineStatus = interp.Yes
 	s.UnsetEndsTheProducedPipelineStatus = interp.No
 	s.SelectLayout = interp.SelectMenuVerticalThenColumns

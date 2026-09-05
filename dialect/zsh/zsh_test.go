@@ -89,6 +89,7 @@ func TestSemantics(t *testing.T) {
 		{"TypesetLocalNeedsKeywordFunction", s.TypesetLocalNeedsKeywordFunction, interp.No},
 		{"SplitParamExpansion", s.SplitParamExpansion, interp.No},
 		{"ArrayBaseIsZero", s.ArrayBaseIsZero, interp.No},
+		{"ArrayLiteralSubscriptIsAKey", s.ArrayLiteralSubscriptIsAKey, interp.No},
 		{"GlobNoMatchIsError", s.GlobNoMatchIsError, interp.Yes},
 		{"ArithLeadingZeroIsOctal", s.ArithLeadingZeroIsOctal, interp.No},
 		{"ReadonlyReassignmentFatal", s.ReadonlyReassignmentFatal, interp.Yes},

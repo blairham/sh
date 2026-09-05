@@ -3774,6 +3774,25 @@ Indexes arrays from 0. True in bash and ksh93, false in zsh, which
 counts from 1. dash has no arrays at all, which is why the axis is
 absent rather than false there.
 
+**`ArrayLiteralSubscriptIsAKey`** — bash no · dash unspecified · ksh93 yes · zsh no
+
+Reads a subscript written inside an array literal as the text between
+the brackets rather than as an arithmetic expression, and — because the
+two go together — makes such a literal declare a keyed array rather than
+an indexed one. In ksh93 `a=([1+1]=c)` stores under the three
+characters, `typeset -p a` answers `typeset -A`, and `${a[2]}` finds
+nothing; bash and zsh evaluate the subscript and the value lands at 2.
+
+One concept with two consequences, like whether an assignment prefix
+survives a special builtin.
+
+Asked only where the two readings differ. A plain decimal numeral
+evaluates to itself, so `a=([2]=c)` fills the same slot either way and
+never reaches the question — which is what keeps the ordinary way to
+build a sparse array available in a core that has chosen no shell. dash
+has no array literal at all, so the axis is absent there rather than
+false.
+
 **`ArrayLengthWithoutSubscriptIsCount`** — bash no · dash no · ksh93 no · zsh yes
 
 Makes `${#a}` of an array the number of elements, which is zsh's

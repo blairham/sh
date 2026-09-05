@@ -8,6 +8,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -96,18 +97,28 @@ var exempt = map[string]string{
 // reporting a missing kind as a skip left the whole suite green, and the guard
 // would then have watched a seventh kind land in the silence it exists to
 // break. A mutation is what said so.
-func unaccounted(kinds []string) (missing, both []string) {
+// The tables are passed in rather than read from the package, so that a case
+// this vocabulary does not currently have — a kind in *both* — can be put to it
+// anyway. A detector whose second answer nothing exercises is half a detector,
+// and this one's second answer went unexercised until a mutation removed it and
+// nothing failed.
+func unaccounted(kinds, canDeny, isExempt []string) (missing, both []string) {
 	for _, name := range kinds {
-		_, canDeny := denyable[name]
-		_, isExempt := exempt[name]
+		deniable := slices.Contains(canDeny, name)
+		excused := slices.Contains(isExempt, name)
 		switch {
-		case canDeny && isExempt:
+		case deniable && excused:
 			both = append(both, name)
-		case !canDeny && !isExempt:
+		case !deniable && !excused:
 			missing = append(missing, name)
 		}
 	}
 	return missing, both
+}
+
+// tables is the two lists as the guard actually holds them.
+func tables() (canDeny, isExempt []string) {
+	return slices.Sorted(maps.Keys(denyable)), slices.Sorted(maps.Keys(exempt))
 }
 
 func TestEveryActionKindCanBeDenied(t *testing.T) {
@@ -119,7 +130,8 @@ func TestEveryActionKindCanBeDenied(t *testing.T) {
 		t.Fatalf("found %d action kinds in %s, want the whole block — the guard is looking in the wrong place",
 			len(kinds), seamsFile)
 	}
-	missing, both := unaccounted(kinds)
+	canDeny, isExempt := tables()
+	missing, both := unaccounted(kinds, canDeny, isExempt)
 	if len(missing) != 0 {
 		t.Errorf("%v can be watched and not refused.\n"+
 			"Every kind the gate defines needs a way to say no through -deny, or the "+
@@ -221,24 +233,55 @@ func isActionKindBlock(gen *ast.GenDecl) bool {
 // halves of the mechanism written out: that a seventh kind is *found* in the
 // declaration, and that a found kind nothing speaks for is *reported*.
 func TestTheGuardReportsAKindNothingSpeaksFor(t *testing.T) {
-	missing, both := unaccounted([]string{"ActionExec", "ActionInherit", "ActionConnect"})
-	if !slices.Contains(missing, "ActionConnect") {
-		t.Errorf("missing = %v, want the kind nothing speaks for reported", missing)
-	}
-	if slices.Contains(missing, "ActionExec") {
-		t.Errorf("missing = %v, want a denyable kind left out of it", missing)
-	}
-	if slices.Contains(missing, "ActionInherit") {
-		t.Errorf("missing = %v, want an exempt kind left out of it", missing)
-	}
-	if len(both) != 0 {
-		t.Errorf("both = %v, want none — no kind is in two tables today", both)
-	}
-	// And nothing is reported for a vocabulary that is fully spoken for, or the
-	// guard would fail whatever the tables said, which is a guard nobody acts
-	// on twice.
-	if m, b := unaccounted([]string{"ActionExec", "ActionInherit"}); len(m) != 0 || len(b) != 0 {
-		t.Errorf("a covered vocabulary reported missing %v and both %v", m, b)
+	for _, tc := range []struct {
+		name                     string
+		kinds, canDeny, isExempt []string
+		wantMissing, wantBoth    []string
+	}{
+		{
+			"a kind nothing speaks for is reported",
+			[]string{"A", "B", "C"},
+			[]string{"A"},
+			[]string{"B"},
+			[]string{"C"},
+			nil,
+		},
+		{
+			"a vocabulary fully spoken for reports nothing",
+			[]string{"A", "B"},
+			[]string{"A"},
+			[]string{"B"},
+			nil, nil,
+		},
+		{
+			// Not a state this vocabulary is in, and that is the reason to put
+			// it here: an exemption added beside an entry that already exists
+			// would otherwise read as coverage while saying the kind must not
+			// be gated, which is two opposite claims about one kind.
+			"a kind in both tables is reported",
+			[]string{"A"},
+			[]string{"A"},
+			[]string{"A"},
+			nil,
+			[]string{"A"},
+		},
+		{
+			"an empty vocabulary reports nothing",
+			nil,
+			[]string{"A"},
+			[]string{"B"},
+			nil, nil,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			missing, both := unaccounted(tc.kinds, tc.canDeny, tc.isExempt)
+			if !slices.Equal(missing, tc.wantMissing) {
+				t.Errorf("missing = %v, want %v", missing, tc.wantMissing)
+			}
+			if !slices.Equal(both, tc.wantBoth) {
+				t.Errorf("both = %v, want %v", both, tc.wantBoth)
+			}
+		})
 	}
 }
 
@@ -294,26 +337,11 @@ func TestTheGuardsTableNamesRealKinds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range slices.Sorted(mapKeys(denyable, exempt)) {
+	canDeny, isExempt := tables()
+	for _, name := range slices.Concat(canDeny, isExempt) {
 		if !slices.Contains(kinds, name) {
 			t.Errorf("the guard names %q, which is not an ActionKind in %s: %v",
 				name, seamsFile, kinds)
-		}
-	}
-}
-
-// mapKeys is every key of both maps, so the check above reads one list.
-func mapKeys[V, W any](a map[string]V, b map[string]W) func(func(string) bool) {
-	return func(yield func(string) bool) {
-		for k := range a {
-			if !yield(k) {
-				return
-			}
-		}
-		for k := range b {
-			if !yield(k) {
-				return
-			}
 		}
 	}
 }

@@ -123,7 +123,11 @@ set of special builtins is fixed and small — `break`, `:`, `continue`,
 `shift`, `times`, `trap`, `unset` — and it also governs whether a failure
 is fatal, so it is one concept with two consequences.
 
-Vector field: `AssignmentPrefixPersistsOnSpecialBuiltin` (default false).
+Semantics axis: `AssignmentPrefixPersistsOnSpecialBuiltin` — dash and
+ksh93 yes, bash and zsh no. Unanswered in the core. POSIX requires yes,
+so the `posix` preset says yes and the two shells that ship a POSIX mode
+switch to it there; recording that as a default of "no" would have
+inverted the standard's own answer.
 
 ### Array assignment
 
@@ -499,9 +503,9 @@ which is the reverse of the usual convention and is unanimous:
     (( 1+1 )); echo $?   →  0
     (( 0 ));   echo $?   →  1
 
-Vector fields: `DoubleBracket` and `ArithCommand`, both default true, both
-false for `posix`. As with `&>`, turning them off does not make the text
-invalid — it makes it mean something else.
+Grammar flags: `DoubleBracket` and `ArithCommand` — core: on for both;
+`posix` and `dash`: off for both. As with `&>`, turning them off does not
+make the text invalid — it makes it mean something else.
 
 ### Which layer handles which
 

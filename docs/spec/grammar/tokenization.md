@@ -81,8 +81,7 @@ So the `$` contributes nothing to the parsed tree: the spans of
 parses that way* varies by shell. zsh is on the literal side, which
 keeps it out of the core.
 
-Vector field: `DollarDoubleQuote` (off in the core; the bash and ksh
-dialects set it).
+Grammar flag: `DollarDoubleQuote` — core: off; `bash` and `ksh`: on.
 
 ### `$'...'` decodes escapes, and this is the set
 
@@ -184,8 +183,8 @@ exactly as `1>f` and `1 >f` differ. That is why the construct is
 consumed by the lexer — the space is the whole distinction, and only
 the lexer still has it.
 
-Vector field: `FdVariableRedirections` (on in the core, off for `posix`
-and `dash`).
+Grammar flag: `FdVariableRedirections` — core: on; `posix` and `dash`:
+off.
 
 ## Comments
 
@@ -315,7 +314,11 @@ prevent, and it argues for the lexer knowing its dialect rather than
 accepting the union and letting the interpreter sort it out: the union
 would silently pick one meaning for text that legitimately has two.
 
-Vector field: `AmpersandRedirect` (default true; false for `posix`).
+Grammar flag: `AmpersandRedirect` — core: on; `posix`, `dash` and `ksh`:
+off. The `ksh` preset is off because it is measured against the 93u+
+build described above; a deployment standardized on 93u+m would turn it
+back on, which is the point of its being a configured value rather than
+a shell name.
 
 By contrast `>|`, which overrides `noclobber`, is accepted with the same
 meaning by all six and is core.

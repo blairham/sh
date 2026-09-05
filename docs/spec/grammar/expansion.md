@@ -175,8 +175,10 @@ Two separate zsh divergences here, and conflating them is a mistake:
 - **zsh errors on a pattern that matches nothing**, where the others
   pass the unmatched pattern through unchanged.
 
-Vector fields: `GlobExpansionResults` (default true) and
-`GlobNoMatchIsError` (default false).
+Semantics axes: `GlobExpansionResults` (dash, bash and ksh93 yes; zsh
+no) and `GlobNoMatchIsError` (dash, bash and ksh93 no; zsh yes). Neither
+is answered in the core, so an unqualified core run refuses the glob
+rather than picking a side.
 
 ## 8. Quote removal
 

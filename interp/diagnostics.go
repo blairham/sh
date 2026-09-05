@@ -20,7 +20,7 @@ import (
 // has. Neither can say what a shell *prints* when it refuses, or which number
 // it exits with — those are not sides of a question, they are values.
 //
-// It lives here, next to [BashSemantics] and the rest, rather than in the
+// It lives here, next to [Semantics] and [PosixSemantics], rather than in the
 // shells built on the substrate. The argument is the one the presets already
 // make: a dialect is a set of measured answers, and where the answers live is
 // already settled. A shell that wants its own wording overrides the vector,

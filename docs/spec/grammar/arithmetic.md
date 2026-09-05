@@ -32,7 +32,7 @@ ksh93 and zsh evaluate floating point. A core that promised integers and
 silently truncated on those shells, or a core that accepted floats and
 failed on the others, would both be wrong; this is a dialect axis.
 
-Vector field: `ArithFloat` (default false).
+Grammar flag: `ArithFloat` — core: off; `ksh` and `zsh`: on.
 
 ## Numeric bases, where the interesting divergence is
 
@@ -55,8 +55,17 @@ ksh93 sits between, reading `010` as octal but accepting `08`.
 
 dash has no `base#number` form at all.
 
-Vector fields: `ArithLeadingZeroIsOctal` (default true) and
-`ArithExplicitBase` (default true, false for `posix`).
+Grammar flag: `ArithExplicitBase` — core: on; `posix` and `dash`: off.
+
+Semantics axis: `ArithLeadingZeroIsOctal` — dash, bash and ksh93 yes,
+zsh no. Unanswered in the core, and it is the axis that decides `0100`.
+A `syntax.Dialect` field of the same name exists and is deliberately
+inert: a literal is kept as written so the tree bakes in no answer, and
+evaluation asks the semantics vector.
+
+`ArithInvalidOctalDigitIsError` is the second half, and the reason one
+field could not carry both: `08` is an error in dash and bash, decimal
+8 in ksh93, and unreachable in zsh, where nothing made the zero octal.
 
 ## Operators
 
@@ -94,8 +103,8 @@ detail.
 **Assignment inside an expression is a side effect that escapes**:
 `$((x=5))` yields 5 and leaves `x` set to 5, exactly like `${x:=5}`.
 
-Vector fields: `ArithIncDec` and `ArithComma`, both default true, both
-false for `posix`.
+Grammar flags: `ArithIncDec` and `ArithComma` — core: on for both;
+`posix` and `dash`: off for both.
 
 ## Exponentiation
 
@@ -129,9 +138,11 @@ Overflow is under "what this does not cover" below: bash and zsh wrap at
 the word size where ksh93 slides into float, which is the shells' general
 disagreement about integer width rather than anything `**` adds.
 
-Vector fields: `ArithExponent` (grammar, default true, false for `posix`)
-and `ArithNegativeExponentIsError` (semantics — unanswered where the
-grammar has no `**`).
+Grammar flag: `ArithExponent` — core: on; `posix` and `dash`: off.
+
+Semantics axis: `ArithNegativeExponentIsError` — bash yes, ksh93 and zsh
+no. Unanswered in the core, and unreachable in `posix` and `dash`, where
+the grammar has no `**` to ask about.
 
 ## Errors
 

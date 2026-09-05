@@ -1830,12 +1830,17 @@ The letters themselves diverge before the behaviors do:
   they were: the read failed before reaching any input, so the
   clear-on-EOF rule never fires. The optstring's shape carries the split
   the way it does for `-n`; the refusal's words are
-  `Diagnostics.ReadNoCoprocess`. "Is a terminal" is the substrate's usual
-  approximation — a character device, now excepting the null device,
-  which every harness-fed child holds and bash measurably does not prompt
+  `Diagnostics.ReadNoCoprocess`. "Is a terminal" is `interp`'s
+  approximation — a character device, excepting the null device, which
+  every harness-fed child holds and bash measurably does not prompt
   through. A character device that is neither a terminal nor `/dev/null`
   (say `/dev/zero`) is taken for one; real shells ask isatty and are not
-  fooled, a difference accepted knowingly.
+  fooled, a difference accepted knowingly. The front end no longer
+  approximates: `driver.Interactively` asks the ioctl, through
+  `repl.IsTerminal` (#509, `invocation.md`). `interp` cannot reach that —
+  `repl` imports `interp`, so the dependency only runs one way — and this
+  is the remaining place where a character device stands in for a
+  terminal.
 - **The timeout.** `-t SECS`, fractions allowed; input already waiting is
   read as if the flag were absent. Expiry clears the variables and reports
   142 in bash (128 plus SIGALRM) and 1 in ksh93 and zsh —

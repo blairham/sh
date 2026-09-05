@@ -26,6 +26,7 @@ A spec entry with no citation is a guess and does not belong here.
     shell-matrix.md   which constructs exist in which shells (measured)
     semantics.md      where shells disagree on identical syntax (measured)
     core.md           the boundary: what the core language contains
+    invocation.md     what the front end decides before anything runs
     grammar/          per-construct specs
       tokenization.md   input to tokens, and where quoting is recorded
       commands.md       tokens to commands: precedence and structure

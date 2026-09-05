@@ -15,7 +15,8 @@ import (
 )
 
 // RunTimeout bounds a single snippet. A shell that waits on stdin would
-// otherwise hang the whole run, so stdin is closed as well; both are needed,
+// otherwise hang the whole run, so stdin is closed unless the case supplies
+// some — and a supplied one is a finite string that ends. Both are needed,
 // because a snippet can block on things other than input.
 const RunTimeout = 10 * time.Second
 
@@ -38,7 +39,9 @@ type Result struct {
 
 // ArgSnippet and ArgScript are the placeholders a Case.Args may use to say
 // where its snippet goes: as the word after `-c`, or as a file the shell is
-// asked to run. See Case.Args, which documents the contract.
+// asked to run. Case.Stdin honors them too, which is how a case says its
+// program arrives on standard input. See Case.Args and Case.Stdin, which
+// document the contract.
 //
 // They are spelled with braces because no shell gives that spelling a meaning
 // in an argument, so a placeholder can never be confused with a word a case
@@ -72,10 +75,10 @@ func Exec(ctx context.Context, sh Found, c Case) Result {
 
 	cmd := command(ctx, sh, c, dir)
 	cmd.Dir = dir
-	// A snippet must not read the terminal, and must not inherit a
-	// user's environment: HOME, IFS or PATH from the developer's shell
-	// would make the record depend on whose machine produced it.
-	cmd.Stdin = nil
+	// A snippet must not inherit a user's environment: HOME, IFS or PATH
+	// from the developer's shell would make the record depend on whose
+	// machine produced it. Standard input is the same argument and is
+	// settled in command(), which knows what the case asked for.
 	cmd.Env = []string{
 		"PATH=/usr/bin:/bin:/usr/sbin:/sbin",
 		"HOME=" + dir,
@@ -171,6 +174,22 @@ func command(ctx context.Context, sh Found, c Case, dir string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, sh.Path, args...)
 	if named && sh.Argv0 != "" {
 		cmd.Args[0] = sh.Argv0
+	}
+	// Standard input is closed unless the case asked for some. A nil Stdin is
+	// os/exec's own spelling of that, and it is the right default twice over:
+	// a shell with nothing to read must not wait for a terminal, and a case
+	// that says nothing about input must not be handed whatever the harness
+	// itself was started with.
+	//
+	// The placeholders are honored here too, so a case whose *program*
+	// arrives on standard input writes it once as its Snippet. The script
+	// file is only written if something asks for it.
+	if c.Stdin != "" {
+		in := strings.ReplaceAll(c.Stdin, ArgSnippet, c.Snippet)
+		if strings.Contains(in, ArgScript) {
+			in = strings.ReplaceAll(in, ArgScript, script())
+		}
+		cmd.Stdin = strings.NewReader(in)
 	}
 	return cmd
 }

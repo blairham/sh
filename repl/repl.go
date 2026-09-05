@@ -78,7 +78,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	hist := s.historyFile()
 	earlier := hist.load()
 	s.counts = &counts{history: len(earlier)}
-	if !isTerminal(s.In) {
+	if !IsTerminal(s.In) {
 		// A prompt without a terminal is not a mistake to refuse: every shell
 		// in the panel, given `-i` on a pipe, still prints a prompt and runs
 		// the lines — it only says that job control is off. The *editor* is

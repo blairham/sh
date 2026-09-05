@@ -75,6 +75,17 @@ func (sh Shell) interactive(argv, params []string, opts []optionSpec) int {
 // Both halves matter. `sh < script.sh` has no argument either and must not
 // prompt, and `echo x | sh` must read the pipe rather than wait for a
 // keystroke that will never come.
+//
+// "A terminal" is an ioctl the kernel answers, not the mode bits. It was the
+// mode bits, and `sh < /dev/null` — the canonical cron, systemd, CI and
+// harness invocation, whose whole purpose is that the shell waits for nobody —
+// took the prompt route, asked the null device for raw mode, was told ENOTTY
+// and exited 2 with `operation not supported by device`. The null device is a
+// character device; so are `/dev/zero` and `/dev/random`. Measured, no shell
+// in the panel prompts on any of them, and none prompts on a regular file, a
+// pipe or a closed descriptor either — `docs/spec/invocation.md` has the
+// grid. Only `-i`, which is `forcePrompt` and never reaches here, overrides
+// it.
 func Interactively(sh Shell, hasWork bool) bool {
 	if hasWork {
 		return false
@@ -82,8 +93,10 @@ func Interactively(sh Shell, hasWork bool) bool {
 	if sh.Stdin == nil {
 		sh.Stdin = os.Stdin
 	}
-	info, err := sh.Stdin.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
+	// repl owns the termios calls, so the ioctl lives there and there is one
+	// of it. The decision is still the front end's: this function is what
+	// says a terminal plus no operands means a person.
+	return repl.IsTerminal(sh.Stdin)
 }
 
 // frontEnd is the interactive shell this dialect asks for, as a value.

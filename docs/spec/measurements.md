@@ -554,6 +554,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `read/silent-still-reads` | `<shell>: 1: read: Illegal option -s~v=` | `v=secret` | `v=secret` | `v=secret` | `v=secret` | `v=secret` |
 | `read/a-prompt-or-a-coprocess` | `st=0 v=[data]` | `st=0 v=[data]` | `st=0 v=[data]` | `st=0 v=[data]` | `<shell>: read: no query process~st=1 v=[keep]` | `<shell>:read:1: -p: no coprocess~st=1 v=[keep]` |
 | `read/a-prompt-that-never-arrives` | `<shell>: 1: read: No arg for -p option~st=2` | `<shell>: line 1: read: -p: option requires an argument~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~st=2` | `<shell>: line 1: read: -p: option requires an argument~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]~st=2` | `<shell>: line 0: read: -p: option requires an argument~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]~st=2` | `<shell>: read: no query process~st=1` | `<shell>:read:1: -p: no coprocess~st=1` |
+| `read/from-the-shells-own-standard-input` | `[one]~[two]~eof=1\|[]` | `[one]~[two]~eof=1\|[]` | `[one]~[two]~eof=1\|[]` | `[one]~[two]~eof=1\|[]` | `[one]~[two]~eof=1\|[]` | `[one]~[two]~eof=1\|[]` |
 | `name/unset-f-on-a-name-no-function-could-have` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>: unset: 1x: invalid function name~st=1` | `<shell>:unset:1: no such hash table element: 1x~st=1` |
 | `name/unset-f-on-a-name-that-is-merely-undefined` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>:unset:1: no such hash table element: nosuch~st=1` |
 | `name/a-lone-dash-given-to-a-builtin` | `unalias: - not found~st=1` | `<shell>: line 1: unalias: -: not found~st=1` | `<shell>: line 1: unalias: -: not found~st=1` | `<shell>: line 0: unalias: -: not found~st=1` | `st=1` | `<shell>:unalias:1: not enough arguments~st=1` |
@@ -744,6 +745,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `read/a-prompt-that-never-arrives` — the same word missing means three different things: bash wants -p's argument and says so with its usage, status 2; dash wants it too and says `No arg for -p option`; ksh93 and zsh never wanted one — their -p is the coprocess flag, so this is the no-coprocess refusal again at 1. A letter's arity is part of the dialect's answer, not just its spelling
   ```sh
   read -p </dev/null; echo "st=$?"
+  ```
+- `read/from-the-shells-own-standard-input` — every other read case feeds a pipe or a here-string built inside the snippet, so what the *shell* was started with was never read at all. Here it is the shell's own input: two lines arrive in order and the third read finds the end, reporting 1 with the variable cleared rather than left holding the line before
+  ```sh
+  read a; echo "[$a]"; read b; echo "[$b]"; read c; echo "eof=$?|[$c]"
   ```
 - `name/unset-f-on-a-name-no-function-could-have` — two of the panel are quiet here and two are not, and the two that speak are not answering the same question — one is judging the name, which `1x` could never be, and the other is reporting that its table holds nothing under it. The case next to this one is what tells them apart
   ```sh
@@ -4422,6 +4427,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `select/no-list-uses-the-positionals` | `<shell>: 1: Syntax error: "do" unexpected` *(status 2)* | `1) p~2) q~#? got=q` | `1) p~2) q~#? got=q` | `1) p~2) q~#? got=q` | `1) p~2) q~got=q` | `1) p  2) q  ~?# got=q` |
 | `select/ps3-is-read-each-time` | `<shell>: 1: Syntax error: "do" unexpected` *(status 2)* | `1) a~2) b~Aa~Bb~B` *(status 1)* | `1) a~2) b~Aa~Bb~B` *(status 1)* | `1) a~2) b~Aa~Bb~B` *(status 1)* | `1) a~2) b~a~b` *(status 1)* | `1) a  2) b  ~Aa~Bb~B` |
 | `select/break-leaves-the-loop` | `<shell>: 1: Syntax error: "do" unexpected` *(status 2)* | `1) a~2) b~#? b~st=0` | `1) a~2) b~#? b~st=0` | `1) a~2) b~#? b~st=0` | `1) a~2) b~b~st=0` | `1) a  2) b  ~?# b~st=0` |
+| `select/the-choice-comes-from-the-shells-own-input` | `<shell>: 1: Syntax error: "do" unexpected` *(status 2)* | `1) a~2) b~#? got=b rep=2` | `1) a~2) b~#? got=b rep=2` | `1) a~2) b~#? got=b rep=2` | `1) a~2) b~got=b rep=2` | `1) a  2) b  ~?# got=b rep=2` |
 | `select/is-not-in-dash` | `<shell>: 1: Syntax error: "do" unexpected` *(status 2)* | `1) a~#? ` *(status 1)* | `1) a~#? ` *(status 1)* | `1) a~#? ` *(status 1)* | `1) a` *(status 1)* | `1) a  ~?# ` |
 | `select/an-unterminated-final-reply` | `<shell>: 1: Syntax error: "do" unexpected (expecting "}")` *(status 2)* | `1) a~2) b~#? ~st=1` | `1) a~2) b~#? ~st=1` | `1) a~2) b~#? ~st=1` | `1) a~2) b~st=1` | `1) a  2) b  ~?# picked=b~st=0` |
 
@@ -4465,6 +4471,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `select/break-leaves-the-loop` — `break` ends a menu loop like any other, and the status is the body's rather than the input-ended one
   ```sh
   select x in a b; do echo "$x"; break; done <<< "2"; echo "st=$?"
+  ```
+- `select/the-choice-comes-from-the-shells-own-input` — the same menu as the base case with nothing redirected onto it: a select loop reads the shell's own standard input, which is what makes it usable at a prompt at all. The here-string in every other select case hides whether the loop can reach the shell's input or only a redirection
+  ```sh
+  select x in a b; do echo "got=$x rep=$REPLY"; break; done
   ```
 - `select/is-not-in-dash` — dash has no `select`, so the word is ordinary and the `do` after it has nothing to open — the grammar flag is what the other three turn on
   ```sh
@@ -4788,6 +4798,9 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `invoke/end-of-options-between-c-and-its-string` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` |
 | `invoke/plus-c-still-runs-the-command` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
 | `invoke/c-outranks-standard-input` | `hi\|0` | `hi\|0` | `hi\|0` | `hi\|0` | `hi\|0` | `hi\|0` |
+| `invoke/standard-input-that-is-not-a-terminal` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
+| `invoke/the-program-arrives-on-standard-input` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` | `0=[sh]\|n=0` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` |
+| `invoke/dash-s-makes-every-operand-a-parameter` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[sh]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` |
 
 - `invoke/errexit-with-a-script` — the first line of most scripts, spelled on the command line instead: a set option given at invocation has to reach the runner, and abandon the script at the failure rather than run to the end
   ```sh
@@ -4835,4 +4848,16 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `invoke/c-outranks-standard-input` — -s and -c in one bundle: all four run the command rather than reading standard input, so a shell that let -s win would print nothing and still exit 0
   ```sh
   echo "hi|$#"
+  ```
+- `invoke/standard-input-that-is-not-a-terminal` — the harness gives every child the null device for standard input, and the null device is a character device — which is exactly what made the prompt decision say terminal, ask it for raw mode, and exit 2 with `operation not supported by device` (#509). No shell in the panel prompts here: -s says read standard input, standard input ends at once, and the shell exits 0 having said nothing. Deliberately no placeholder — what is pinned is what a shell does before it reads anything, and the snippet is written down as the thing that would have run
+  ```sh
+  echo unreachable
+  ```
+- `invoke/the-program-arrives-on-standard-input` — the third invocation route, and the only one with nothing on the command line to name: $0 stays the shell rather than becoming a path, and there are no operands to become parameters. `--` is there because Args with no placeholder is what says the program is not on the argv, and an empty Args would mean the harness's own -c
+  ```sh
+  echo "0=[$0]|n=$#"
+  ```
+- `invoke/dash-s-makes-every-operand-a-parameter` — -s says the program is on standard input, so the words after it are parameters rather than a script path — the one route where $1 is set and $0 is still the shell. Without it the same two words would make `a` the script and `b` its first parameter
+  ```sh
+  echo "0=[$0]|n=$#|[$*]"
   ```

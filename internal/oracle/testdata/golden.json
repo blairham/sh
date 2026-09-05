@@ -12346,6 +12346,38 @@
         "TimedOut": false
       }
     },
+    "invoke/dash-s-makes-every-operand-a-parameter": {
+      "bash": {
+        "Output": "0=[\u003cshell\u003e]|n=2|[a b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "0=[sh]|n=2|[a b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "0=[\u003cshell\u003e]|n=2|[a b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "0=[\u003cshell\u003e]|n=2|[a b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "0=[\u003cshell\u003e]|n=2|[a b]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "0=[\u003cshell\u003e]|n=2|[a b]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "invoke/end-of-options-before-a-script": {
       "bash": {
         "Output": "\u003cscript\u003e|2|a",
@@ -12538,6 +12570,38 @@
         "TimedOut": false
       }
     },
+    "invoke/standard-input-that-is-not-a-terminal": {
+      "bash": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "invoke/the-command-string-names-zero-itself": {
       "bash": {
         "Output": "name|2|a b",
@@ -12599,6 +12663,38 @@
       "zsh": {
         "Output": "one",
         "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "invoke/the-program-arrives-on-standard-input": {
+      "bash": {
+        "Output": "0=[\u003cshell\u003e]|n=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "0=[sh]|n=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "0=[\u003cshell\u003e]|n=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "0=[\u003cshell\u003e]|n=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "0=[\u003cshell\u003e]|n=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "0=[\u003cshell\u003e]|n=0",
+        "Status": 0,
         "TimedOut": false
       }
     },
@@ -19642,6 +19738,38 @@
         "TimedOut": false
       }
     },
+    "read/from-the-shells-own-standard-input": {
+      "bash": {
+        "Output": "[one]~[two]~eof=1|[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "[one]~[two]~eof=1|[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "[one]~[two]~eof=1|[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "[one]~[two]~eof=1|[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "[one]~[two]~eof=1|[]",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "[one]~[two]~eof=1|[]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "read/options-cluster-in-one-word": {
       "bash": {
         "Output": "[x\\]",
@@ -21238,6 +21366,38 @@
       },
       "zsh": {
         "Output": "1) a  2) b  ~?# [] rep=9",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "select/the-choice-comes-from-the-shells-own-input": {
+      "bash": {
+        "Output": "1) a~2) b~#? got=b rep=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1) a~2) b~#? got=b rep=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1) a~2) b~#? got=b rep=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: Syntax error: \"do\" unexpected",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1) a~2) b~got=b rep=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1) a  2) b  ~?# got=b rep=2",
         "Status": 0,
         "TimedOut": false
       }

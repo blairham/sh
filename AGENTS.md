@@ -219,7 +219,15 @@ slow for every commit. When in doubt run `make check` *and* `make lint`.
 - **Formatter**: gofumpt, pinned in `go.mod`'s `tool` block, run as
   `go tool gofumpt`.
 - **Linter**: golangci-lint v2, also `go tool`-pinned, config in
-  `.golangci.yml` — the same file in every Go repository here.
+  `.golangci.yml` — the same file in every Go repository here. It sets
+  `run.allow-parallel-runners`, because several worktrees of this module
+  lint at once and the default is a file lock in `$TMPDIR` that makes the
+  second one *refuse* — and refuse through the pre-commit hook, which
+  fails a commit for a reason unrelated to the commit. The lock is not in
+  the cache directory, so a per-worktree `GOLANGCI_LINT_CACHE` does not
+  move it; the cache is deliberately left shared, since its keys and the
+  positions it stores are module-relative and a warm shared cache lints
+  this repository in under a second against 37 seconds for a cold one.
 - **Linters follow dependencies.** The shared config is the base. When a
   repository adopts a technology, the linter that understands it is added
   **in the same change as the dependency**, not later and not by someone

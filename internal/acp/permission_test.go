@@ -35,6 +35,16 @@ func TestDecideDeniesEverythingThatIsNotAnAllow(t *testing.T) {
 		{"an option we never offered", sel("something-else"), interp.Deny, false},
 		{"an outcome we do not know", acp.PermissionOutcome{Outcome: "invented"}, interp.Deny, false},
 		{"nothing at all", acp.PermissionOutcome{}, interp.Deny, false},
+		// The outcome is the discriminator and the option id is only
+		// meaningful under one of its values. A peer that sends both — a
+		// cancellation carrying an option nobody chose — is refused on the
+		// outcome, and reading the option there would be taking consent from
+		// a message that says the turn ended.
+		{
+			"a cancellation that names an option anyway",
+			acp.PermissionOutcome{Outcome: acp.OutcomeCancelled, OptionID: acp.OptionAllowAlways},
+			interp.Deny, false,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

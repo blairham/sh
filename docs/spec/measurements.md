@@ -5774,6 +5774,12 @@ every byte of them.
 | `invoke/c-with-nothing-after-it` **(refusal)** | **2>** `<shell>: 0: -c requires an argument` *(status 2)* | **2>** `<shell>: -c: option requires an argument` *(status 2)* | **2>** `<shell>: -c: option requires an argument` *(status 2)* | **2>** `<shell>: -c: option requires an argument` *(status 2)* | **2>** `<shell>: -c requires argument~Usage: <shell> [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>: string expected after -c` *(status 1)* |
 | `invoke/an-option-letter-that-is-not-one` **(refusal)** | **2>** `<shell>: 0: Illegal option -Z` *(status 2)* | **2>** `<shell>: -Z: invalid option~Usage:	<shell> [GNU long option] [option] ...~	<shell> [GNU long option] [option] script-file ...~GNU long options:~	--debug~	--debugger~	--dump-po-strings~	--dump-strings~	--help~	--init-file~	--login~	--noediting~	--noprofile~	--norc~	--posix~	--pretty-print~	--rcfile~	--restricted~	--verbose~	--version~Shell options:~	-ilrsD or -c command or -O shopt_option		(invocation only)~	-abefhkmnptuvxBCEHPT or -o option` *(status 2)* | **2>** `<shell>: -Z: invalid option~Usage:	<shell> [GNU long option] [option] ...~	sh [GNU long option] [option] script-file ...~GNU long options:~	--debug~	--debugger~	--dump-po-strings~	--dump-strings~	--help~	--init-file~	--login~	--noediting~	--noprofile~	--norc~	--posix~	--pretty-print~	--rcfile~	--restricted~	--verbose~	--version~Shell options:~	-ilrsD or -c command or -O shopt_option		(invocation only)~	-abefhkmnptuvxBCEHPT or -o option` *(status 2)* | **2>** `<shell>: -Z: invalid option~Usage:	<shell> [GNU long option] [option] ...~	<shell> [GNU long option] [option] script-file ...~GNU long options:~	--debug~	--debugger~	--dump-po-strings~	--dump-strings~	--help~	--init-file~	--login~	--noediting~	--noprofile~	--norc~	--posix~	--protected~	--rcfile~	--restricted~	--verbose~	--version~	--wordexp~Shell options:~	-irsD or -c command or -O shopt_option		(invocation only)~	-abefhkmnptuvxBCHP or -o option` *(status 2)* | **2>** `<shell>: -Z: unknown option~Usage: <shell> [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>: can't open input file: echo hi` *(status 127)* |
 | `invoke/a-long-option-name-that-is-not-one` **(refusal)** | **2>** `<shell>: 0: Illegal option -o nosuchoption` *(status 2)* | **2>** `<shell>: line 0: <shell>: nosuchoption: invalid option name` *(status 2)* | **2>** `<shell>: line 0: sh: nosuchoption: invalid option name` *(status 2)* | **2>** `<shell>: line 0: <shell>: nosuchoption: invalid option name` *(status 2)* | **2>** `<shell>: nosuchoption: bad option(s)~Usage: <shell> [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>: no such option: nosuchoption` *(status 1)* |
+| `invoke/a-script-has-neither-route-letter` | `no-c~no-s` | `no-c~no-s` | `no-c~no-s` | `no-c~no-s` | `no-c~no-s` | `no-c~no-s` |
+| `invoke/dollar-dash-shows-c-for-a-command-string` | `no-c` | `has-c` | `has-c` | `has-c` | `has-c` | `no-c` |
+| `invoke/dollar-dash-and-the-s-letter-for-a-command-string` | `no-s` | `no-s` | `no-s` | `no-s` | `has-s` | `no-s` |
+| `invoke/dollar-dash-shows-s-for-a-program-on-standard-input` | `has-s` | `has-s` | `has-s` | `no-s` | `has-s` | `has-s` |
+| `invoke/dollar-dash-shows-s-for-the-s-option` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` |
+| `invoke/dollar-dash-keeps-s-when-a-command-string-overrides-it` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` |
 
 - `invoke/errexit-with-a-script` — the first line of most scripts, spelled on the command line instead: a set option given at invocation has to reach the runner, and abandon the script at the failure rather than run to the end
   ```sh
@@ -5937,4 +5943,28 @@ every byte of them.
 - `invoke/a-long-option-name-that-is-not-one` **(refusal)** — the same question one level in: `-o` is a valid letter and its operand is not a valid name, so the refusal comes from the option table rather than from the letter table. All six decline before running the command string, which is the part that matters — a shell that warned and carried on would print `hi` and standard output would catch it
   ```sh
   echo hi
+  ```
+- `invoke/a-script-has-neither-route-letter` — the baseline the other rows are read against: a script named on the command line is neither a command string nor standard input, and no shell in the panel puts either letter there. Membership rather than the spelling, because the spelling is what splits — no two shells order $- alike
+  ```sh
+  case $- in *c*) echo has-c ;; *) echo no-c ;; esac; case $- in *s*) echo has-s ;; *) echo no-s ;; esac
+  ```
+- `invoke/dollar-dash-shows-c-for-a-command-string` — two against two, which is what makes it an axis rather than a rule: bash and ksh93 put `c` in $- for a program given as a command string and dash and zsh do not. There is no majority to follow, so the preset takes the POSIX text — $- is the option flags specified on invocation, and -c is one
+  ```sh
+  case $- in *c*) echo has-c ;; *) echo no-c ;; esac
+  ```
+- `invoke/dollar-dash-and-the-s-letter-for-a-command-string` — the corner that keeps `s` from being modeled as `the program came from standard input` outright: ksh93 alone also shows it under -c. Read down its rows and ksh93's rule is `no script file was named` where the other three's is the standard-input route, and this is the one invocation where the two rules differ
+  ```sh
+  case $- in *s*) echo has-s ;; *) echo no-s ;; esac
+  ```
+- `invoke/dollar-dash-shows-s-for-a-program-on-standard-input` — the unanimous half, and the reason it could be implemented without waiting for the -c corner to be settled: a program arriving on standard input puts `s` in $- whether -s was written or not. bash 3.2 is the one dissent and it is a shell disagreeing with its own later build rather than a panel split — it shows the letter only where -s was written
+  ```sh
+  case $- in *s*) echo has-s ;; *) echo no-s ;; esac
+  ```
+- `invoke/dollar-dash-shows-s-for-the-s-option` — the same letter with the option written out, which is where all six agree including bash 3.2 — the pair with the row above is what tells the route from the spelling
+  ```sh
+  case $- in *s*) echo has-s ;; *) echo no-s ;; esac
+  ```
+- `invoke/dollar-dash-keeps-s-when-a-command-string-overrides-it` — -c wins about where the program comes from and does not take the letter away: all six run the command string and all six still show `s`. So the letter follows either the route or the spelling, and a shell that read only the route would lose it here
+  ```sh
+  case $- in *s*) echo has-s ;; *) echo no-s ;; esac
   ```

@@ -34,7 +34,7 @@ func badWordRun(t *testing.T, src string, dg Diagnostics, sem Semantics, command
 	r := &Runner{
 		Stdout: &out, Stderr: &errs,
 		Semantics: &sem, Diagnostics: &dg,
-		Name: "testsh", CommandString: commandString,
+		Name: "testsh", Route: routeFor(commandString),
 	}
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {

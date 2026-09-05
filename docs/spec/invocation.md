@@ -135,24 +135,60 @@ bash is the one that does *not* expand it without `-i`, which is what
 makes the row evidence rather than a coincidence of three shells that
 always expand.
 
-### What is not implemented, and why
+### The route letters, `c` and `s`
 
-**`c` and `s` split the panel and are left unmodeled.** Reading down the
-table:
+**The rule.** `c` is in `$-` when the program came from a command string
+and the dialect says so. `s` is there when the program came from standard
+input, or `-s` was written, or the program came from a command string and
+the dialect counts that too.
 
-- `c` for a command string: bash and ksh93 show it, dash and zsh do not.
-  A clean two-two split with no majority to follow.
-- `s` for the standard-input route: all four show it, whether `-s` was
-  written or not, and including at a prompt — that half is unanimous.
-  But ksh93 alone also shows `s` under `-c`, where the other three show
-  nothing, so the letter cannot be modeled as "the input came from
-  standard input" without taking a side on `-c`.
+The route itself is the front end's — `interp.Runner.Route`, carried in
+beside `Interactive` and for the same reason. Two of the three ways `s`
+gets there are unanimous and need no axis; the third and the whole of `c`
+are `Semantics.CommandStringShowsSInDollarDash` and
+`Semantics.CommandStringShowsCInDollarDash`.
 
-Neither is implemented and neither has an axis: `i` was the question
-issue #472 asked, and inventing an axis for a letter nothing has needed
-yet would be answering a question nobody put. The corpus reads `$-` as
-membership (`case $- in *i*)`) precisely so that a case does not depend
-on the spelling.
+Both are *read* rather than `ask`ed. A dialect that answers nothing shows
+no letter, which is exactly what an unanswered `DefaultOptionLetters`
+does; refusing the expansion would break `case $- in *e*)`, the ordinary
+errexit check, in every script running under a preset that has not
+chosen.
+
+#### Measured
+
+Same panel, 2026-09-05. Membership, since the spelling is what splits.
+
+| invocation | bash 5.3 | bash 3.2 | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- |
+| `sh script.sh` | — | — | — | — | — |
+| `sh -c cmd` | `c` | `c` | — | `c` `s` | — |
+| `sh -s < pipe` | `s` | `s` | `s` | `s` | `s` |
+| `sh < pipe` | `s` | — | `s` | `s` | `s` |
+| `sh < file` | `s` | — | `s` | `s` | `s` |
+| `sh` at a terminal | `s` | — | `s` | `s` | `s` |
+| `sh -s -c cmd` | `c` `s` | `c` `s` | `s` | `c` `s` | `s` |
+
+Three things to read out of it:
+
+- **`c` is two against two.** bash and ksh93 show it, dash and zsh do
+  not, and there is no majority to follow. The POSIX preset answers yes
+  from the text rather than from a vote: `$-` is defined as the option
+  flags specified on invocation, and `-c` is one of them.
+- **`s` is unanimous for the standard-input route** — with `-s` written
+  or without it, from a pipe, from a file, and at a prompt, which is the
+  same route with a person on the other end. That half is a rule and not
+  an axis.
+- **`s` under `-c` is ksh93 alone.** Read down its column and its rule is
+  "no script file was named" where the other three's is "the program came
+  from standard input"; the two agree on every other row. The last row is
+  what keeps the letter from being read off the route alone: `-c` wins
+  about where the program comes from and *all four* still show `s` when
+  `-s` was written.
+
+**bash 3.2 dissents on the implicit standard-input route**, showing `s`
+only where `-s` was written. That is a shell disagreeing with its own
+later build rather than a panel disagreement, so it is recorded here and
+not modeled; the bash dialect follows 5.3, as it does everywhere else.
 
 **The letters a shell adds only when interactive are a second vector,
 also unmodeled.** bash adds `H`, zsh adds `Z`, and ksh93 trades `h` for
@@ -179,6 +215,15 @@ operands, and hands it to `interp.Runner.Interactive`. It was decided
 per route once, in the one branch that had nothing to run, and `sh -i
 script.sh` therefore ran the script with `-i` dropped on the floor
 (#472).
+
+The route is the same shape: read once out of the operands, handed over
+as `interp.Runner.Route`, and read by three unrelated things — the status
+one dialect gives a failed expansion under `-c`, the fatality another
+gives a readonly reassignment, and the letters above. One field rather
+than a bool per route, because a second name for one measurement is the
+one that drifts. `-s` as written travels beside it, in
+`Runner.StandardInputOption`, for the single invocation where the two
+differ: `sh -s -c cmd` runs the command string and still shows `s`.
 
 `interp` asks a related question for `select` and `read -p` and answers
 it differently — a character device, excepting the null device — because

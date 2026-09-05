@@ -551,12 +551,32 @@ func TestASubstitutionsBodyIsNumberedFromTheFile(t *testing.T) {
 	}
 }
 
-// The letters `$-` starts with, measured from a script file; ksh93's route
-// letters (`c` under -c, `s` reading a command string or standard input) are
-// the front end's and deliberately absent.
+// The letters `$-` starts with, measured from a script file; the letters that
+// describe the route come from Runner.Route and are asserted below.
 func TestDollarDashStartupLetters(t *testing.T) {
 	if got, want := ksh.Semantics().DefaultOptionLetters, "hB"; got != want {
 		t.Errorf("DefaultOptionLetters = %q, want %q", got, want)
+	}
+}
+
+// The panel's holdout on the second route letter. Measured 2026-09-05 on
+// 93u+ 2012-08-01: `ksh -c 'echo $-'` reports `chsB` — both letters, where
+// bash shows `c` alone and dash and zsh show neither.
+//
+// Read down its rows and ksh93's rule for `s` is "no script file was named"
+// where the other three's is "the program came from standard input". The two
+// agree on every other route; this is the one invocation that tells them
+// apart, and it is why `s` could not be modeled from the route alone.
+func TestDollarDashRouteLetters(t *testing.T) {
+	s := ksh.Semantics()
+	if got := s.CommandStringShowsCInDollarDash; got != interp.Yes {
+		t.Errorf("CommandStringShowsCInDollarDash = %v, want Yes", got)
+	}
+	if got := s.CommandStringShowsSInDollarDash; got != interp.Yes {
+		t.Errorf("CommandStringShowsSInDollarDash = %v, want Yes", got)
+	}
+	if got := (interp.Semantics{}).CommandStringShowsSInDollarDash; got == interp.Yes {
+		t.Error("the substrate says yes, want this to be ksh93's answer and nobody else's")
 	}
 }
 

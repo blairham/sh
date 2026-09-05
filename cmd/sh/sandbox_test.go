@@ -594,3 +594,42 @@ func TestAPolicyIsQuietWithoutTheTraceFlag(t *testing.T) {
 		t.Errorf("err = %q, want silence", got.errs)
 	}
 }
+
+// A -deny value is normalized and reported exactly as a file's rule is.
+//
+// The two routes share the rule language, so they have to share this too: a
+// flag that quietly covered a second path while the file said so out loud would
+// be the two vocabularies coming apart again in a place nobody looks.
+func TestATraceReportsWhatADenyValueNormalized(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("no platform aliases here")
+	}
+	got := sandboxed(t, "core",
+		"-deny", "/tmp/nothing-this-test-uses", "-trace-events", "-c", ":")
+	want := "policy: deny path /tmp/nothing-this-test-uses/** " +
+		"(also /private/tmp/nothing-this-test-uses/**)"
+	if !strings.Contains(got.errs, want) {
+		t.Errorf("err =\n%s\nwant %s", got.errs, want)
+	}
+}
+
+// And the flag protects both names, which is the half the report only claims.
+func TestADenyValueUnderAPlatformAliasProtectsBothNames(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("no platform aliases here")
+	}
+	dir := t.TempDir()
+	secret := filepath.Join("/tmp", "sh-538-deny-"+filepath.Base(dir))
+	if err := os.Mkdir(secret, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(secret) })
+	if err := os.WriteFile(filepath.Join(secret, "f"), []byte("secret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	src := "cd -P " + secret + "\n[ -f f ] && echo found || echo hidden\n"
+	got := sandboxed(t, "core", "-deny", secret, "-c", src)
+	if !strings.Contains(got.out, "hidden") {
+		t.Errorf("out = %q, want the physical path refused too", got.out)
+	}
+}

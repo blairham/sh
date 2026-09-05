@@ -246,6 +246,17 @@ grades it and nothing drift-checks it either, for the same reason.
 | `array/a-subscript-without-braces-is-read-once` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x[1][1]]` | `[x[1][1]]` | `[x[1][1]]` | `[x[1][1]]` | `[x[1]]` |
 | `array/a-length-without-braces` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[0a]` | `[0a]` | `[0a]` | `[0a]` | `[3]` |
 | `array/a-length-without-braces-stops-at-two-specials` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[2#][2@][2a]` | `[2#][2@][2a]` | `[2#][2@][2a]` | `[2#][2@][2a]` | `[2#][2][3]` |
+| `array/a-subscript-pair-is-a-range` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[z]` | `[z]` | `[z]` | `[z]` | `[w x y]` |
+| `array/a-subscript-pair-counts-back-from-the-end` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[z][y]` | `[z][y]` | `[][]` **2>** `<shell>: a: bad array subscript~<shell>: a: bad array subscript` | `[z][y]` | `[x y z][x y]` |
+| `array/a-subscript-pair-past-either-end` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[][y][y]` | `[][y][y]` | `[][y][y]` | `[][y][y]` | `[w x y z][][]` |
+| `array/a-subscript-pair-is-counted-as-elements` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[3]` | `[3]` | `[3]` | `[3]` | `[2]` |
+| `array/a-subscript-on-a-string` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[hello][][][]` **2>** `<shell>: line 1: s: bad array subscript` | `[hello][][][]` **2>** `<shell>: line 1: s: bad array subscript` | `[hello][][][]` **2>** `<shell>: s: bad array subscript` | `[hello][][][]` | `[][h][e][o]` |
+| `array/a-string-subscript-pair` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[][]` | `[][]` | `[][]` | `[][]` | `[ell][he]` |
+| `array/a-subscript-on-the-positional-list` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: [${@[1]}][${*[2]}]: bad substitution` *(status 1)* | **2>** `<shell>: line 1: [${@[1]}][${*[2]}]: bad substitution` *(status 127)* | **2>** `<shell>: [${@[1]}][${*[2]}]: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `[' unexpected` *(status 3)* | `[a][b]` |
+| `array/a-subscript-on-a-positional-parameter` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: [${1[2]}]: bad substitution` *(status 1)* | **2>** `<shell>: line 1: [${1[2]}]: bad substitution` *(status 127)* | **2>** `<shell>: [${1[2]}]: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `[' unexpected` *(status 3)* | `[b]` |
+| `array/a-quoted-subscript-pair-joins` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=1 [z]~n=3 [x]` | `n=1 [z]~n=3 [x]` | `n=1 [z]~n=3 [x]` | `n=1 [z]~n=3 [x]` | `n=1 [x y]~n=3 [x]` |
+| `array/a-quoted-pair-of-parameters-keeps-its-fields` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${@[1,3]}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${@[1,3]}: bad substitution` *(status 127)* | **2>** `<shell>: ${@[1,3]}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `[' unexpected` *(status 3)* | `n=3~n=1` |
+| `array/a-subscript-pair-with-three-parts` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[z]~after` | `[z]~after` | `[z]~after` | `[z]~after` | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `array/reading-a-subscript-is-arithmetic` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[z]` | `[z]` | `[z]` | `[z]` | `[y]` |
 | `array/a-subscript-reads-a-variable` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[z]` | `[z]` | `[z]` | `[z]` | `[y]` |
 | `array/an-unset-name-in-a-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x]` | `[x]` | `[x]` | `[x]` | `[]` |
@@ -578,6 +589,50 @@ grades it and nothing drift-checks it either, for the same reason.
 - `array/a-length-without-braces-stops-at-two-specials` — how far the no-brace length form reaches, measured at the two edges at once: zsh takes a name and takes `@`, and does *not* take `#` — `$##` is the positional count and then a literal `#` there exactly as it is in bash. So the parameter after the `#` is drawn from a set with holes in it rather than from every parameter, and a dialect that read one more character than the shell does would differ only on the shapes nothing tests
   ```sh
   set -- p q; a=(x y z); echo "[$##][$#@][$#a]"
+  ```
+- `array/a-subscript-pair-is-a-range` — the comma in a subscript, which is two readings of one spelling: zsh separates a range and gives `w x y`, while bash 5.3, bash 3.2, bash as sh and ksh93 read the whole text as arithmetic, take the comma operator's right operand and name element 3 alone. Both answer and neither reports, so a script cannot tell which shell it is on except by the value — the definition of a semantics axis rather than a construct one grammar has
+  ```sh
+  a=(w x y z); echo "[${a[1,3]}]"
+  ```
+- `array/a-subscript-pair-counts-back-from-the-end` — both endpoints take the negative reading a single subscript takes, so a range to the end needs no length. The shells that read the comma as an operator give the last operand's element for the first — nothing, since -1 is the last element — which is what makes this row separate from the plain range: it pins the endpoint rule rather than the comma
+  ```sh
+  a=(w x y z); echo "[${a[2,-1]}][${a[-3,-2]}]"
+  ```
+- `array/a-subscript-pair-past-either-end` — the three edges of the range, measured together because a fix is most likely to impose a symmetry on them that the shell does not have: an end past the last is the last, a range that runs backwards is empty, and a start counted back past the *first* leaves an array empty rather than clamping. The last of those is the asymmetry — the same reach past the start of a string is clamped, which `array/a-string-subscript-pair` records
+  ```sh
+  a=(w x y z); echo "[${a[0,99]}][${a[3,2]}][${a[-5,2]}]"
+  ```
+- `array/a-subscript-pair-is-counted-as-elements` — whether `${#…}` over a range is a count or a width. The element the arithmetic reading lands on is three characters long and the range holds two, so the two answers are 3 and 2 rather than the same number twice — which is what an array of equal-length elements would have hidden
+  ```sh
+  a=(aa bb ccc); echo "[${#a[1,2]}]"
+  ```
+- `array/a-subscript-on-a-string` — a subscript on a plain string: zsh reaches into its characters, and bash and ksh93 read the scalar as an array of one — so the same four subscripts give `h` and `e` and `o` on one side and the whole string at 0 and nothing elsewhere on the other. The empty-or-error question this settles is the core one: neither bash nor ksh93 says anything about `${s[2]}`, so a shell without the character reading answers empty at status 0 rather than reporting
+  ```sh
+  s=hello; echo "[${s[0]}][${s[1]}][${s[2]}][${s[-1]}]"
+  ```
+- `array/a-string-subscript-pair` — the two readings of a subscript meeting on one string: a range of characters is a substring, and a start counted back past the first character is *clamped* here where the same reach on an array is empty. The asymmetry is measured rather than derived, and it is the half a shared range helper would flatten
+  ```sh
+  s=hello; echo "[${s[2,4]}][${s[-6,2]}]"
+  ```
+- `array/a-subscript-on-the-positional-list` — whether the positional parameters are a list a subscript reaches into. zsh says yes; every other member of the panel refuses the expansion outright — bash calls it a bad substitution when it is reached, ksh93 refuses the bracket while reading, dash says `Bad substitution`. Five refusals and one reading, with nobody meaning something else by it, which is what makes it a grammar flag rather than an axis. Expanding it to nothing at status 0 was the silent middle answer nobody gives
+  ```sh
+  set -- a b c; echo "[${@[1]}][${*[2]}]"
+  ```
+- `array/a-subscript-on-a-positional-parameter` — the same grammar flag reaching a parameter that holds a *value* rather than a list, which is the half that shows the flag is about the name and not about `@`: the character reading answers it, so `${1[2]}` is `b` where the flag is on and a bad substitution everywhere else. `array/a-subscript-without-braces-is-not-a-positional` is the neighbouring row and says the opposite about the *brace-less* spelling, which is a difference the two rows exist to hold apart
+  ```sh
+  set -- abcd; echo "[${1[2]}]"
+  ```
+- `array/a-quoted-subscript-pair-joins` — how many fields a quoted range makes, and what is in the first of them. One field with the elements joined, exactly as a quoted plain `$a` is in the shell that reads a bare array name as the whole array — and the count alone does not say so, because the arithmetic reading names one element and that is one field too. The `[@]` half beside it is one field each, which is the difference the case is really about
+  ```sh
+  a=(x y z); set -- "${a[1,2]}"; echo "n=$# [$1]"; set -- "${a[@]}"; echo "n=$# [$1]"
+  ```
+- `array/a-quoted-pair-of-parameters-keeps-its-fields` — and the name is what decides it: `@` keeps its fields however it is subscripted, `*` joins. The same difference `"$@"` has from `"$*"`, reached through a subscript rather than through the bare spelling — which is the rule a range has to follow rather than a rule of its own
+  ```sh
+  set -- a b c; set -- "${@[1,3]}"; echo "n=$#"; set -- a b c; set -- "${*[1,3]}"; echo "n=$#"
+  ```
+- `array/a-subscript-pair-with-three-parts` — a range has two ends and a third is not a wider one. The shell with ranges calls it a bad substitution and gives up on the command; the shells reading arithmetic take the comma operator's last operand and name an element. Answering the second in a dialect that has ranges would be the other reading wearing this one's name, and it is exactly the shape a fix reaches for when it splits on the first comma and ignores the rest
+  ```sh
+  a=(w x y z); echo "[${a[1,2,3]}]"; echo after
   ```
 - `array/reading-a-subscript-is-arithmetic` — a subscript being read is an expression, exactly as one being written through is. It took a numeral and nothing else, so this expanded to the empty string with status 0 — and `a[1+1]=v` had already learned to store where `${a[1+1]}` could not look, which is two spellings of one subscript naming two different elements. zsh answers the element before, which is the base rather than a different reading
   ```sh

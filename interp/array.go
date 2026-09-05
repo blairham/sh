@@ -504,10 +504,36 @@ func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 	if !ok {
 		return nil, true
 	}
+	if scalar {
+		if v, ok := scalarElemAt(elems[0], n, r.arrayBase()); ok {
+			return []string{v}, true
+		}
+		return nil, true
+	}
 	if v, ok := r.elemAt(e.Name, elems, n); ok {
 		return []string{v}, true
 	}
 	return nil, true
+}
+
+// scalarElemAt answers a numeric subscript against a plain string read as an
+// array of one, which is what a subscript on a scalar is where it is not read
+// as a character.
+//
+// The base names the string itself and nothing else does — including a
+// negative subscript, which is the half this exists for: a string has no end
+// to count back from, so `${s[-1]}` on `hello` is no element in bash and in
+// ksh93 alike. Both answer empty; bash also says `s: bad array subscript`
+// while ksh93 is silent, and the value is what is unanimous.
+//
+// It answered `hello` before, because the string was handed to the array path
+// and a one-element array's last element is its first. A plausible value with
+// no diagnostic anywhere near it, and the same silent shape `${a[b c]}` had.
+func scalarElemAt(v string, n, base int) (string, bool) {
+	if n != base {
+		return "", false
+	}
+	return v, true
 }
 
 // subscriptTarget is what a subscript reaches into, and whether that is one
@@ -695,7 +721,7 @@ func (r *Runner) scalarReadsAsCharacters(v, idx string) bool {
 		return false
 	}
 	c, asChar := r.charAt(v, idx)
-	elem, asElem := r.elemAt("", []string{v}, n)
+	elem, asElem := scalarElemAt(v, n, r.arrayBase())
 	if asChar == asElem && c == elem {
 		return false
 	}

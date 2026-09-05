@@ -5065,6 +5065,47 @@ Indexes arrays from 0. True in bash and ksh93, false in zsh, which
 counts from 1. dash has no arrays at all, which is why the axis is
 absent rather than false there.
 
+**`SubscriptCommaIsARange`** — bash no · dash no · ksh93 no · zsh yes
+
+Reads the comma in `${a[1,3]}` as the separator of a range rather than as
+the arithmetic comma operator, whose value is its right operand:
+
+    a=(w x y z)
+    ${a[1,3]}    bash, ksh93 → z          (element 3, the operator's value)
+                 zsh         → w x y      (elements 1 through 3)
+    ${a[1,2,3]}  bash, ksh93 → z
+                 zsh         → bad substitution, status 1
+
+The same characters with two meanings, which is what makes it an axis
+rather than a grammar flag: `${a[1,3]}` is one subscript in every shell
+that has subscripts at all, and they disagree about what it says. The
+preset answers *no*, which is the standard's reading — POSIX has the
+comma operator and no ranges — as well as four of the five shells'.
+
+Asked only where the two readings differ, so `${a[2,2]}` needs no
+answer. The endpoints, and the one asymmetry between an array and a
+string, are in
+`docs/spec/grammar/parameter-expansion.md`.
+
+**`ScalarSubscriptIsACharacter`** — bash no · dash no · ksh93 no · zsh yes
+
+Reads `${s[2]}` on a plain string as its second character rather than as
+an element of the one-element array a scalar reads as:
+
+    s=hello
+    ${s[0]}  bash, ksh93 → hello      zsh → (empty)
+    ${s[2]}  bash, ksh93 → (empty)    zsh → e
+
+Both readings answer, neither reports, and an empty string is a
+plausible element as well as a plausible miss — so a script cannot tell
+which shell it is on except by the value. That empty rather than an
+error is the non-zsh answer is measured and not defaulted: neither bash
+nor ksh93 says anything about `${s[2]}`, and both give status 0.
+
+A range and a character go together — `${s[2,4]}` is `ell` in the shell
+that reads characters — but they are two axes, because `${a[1,3]}` on an
+*array* is a range with no character in it.
+
 **`NegativeSubscriptPastTheStartInserts`** — bash no · dash unspecified · ksh93 no · zsh yes
 
 Places a new element in front of every other when a negative subscript

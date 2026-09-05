@@ -12,12 +12,10 @@ import (
 // read the same characters as a parameter followed by text, which is the
 // grammar split `syntax.BareSubscript` exists for.
 //
-// Two shapes the grammar reads and the *evaluation* does not yet answer are
-// left out here rather than pinned wrong: a subscript on a scalar (`$s[2]` is
-// `e` of `hello`) and one on the positional list (`$@[1]`). Both are the same
-// absence in the braced spelling — `${s[2]}` and `${@[1]}` expand to nothing
-// too — so they are a subscript-evaluation gap and not this one, and the
-// grammar reading them is what lets one fix answer both spellings.
+// The two shapes this once left out — a subscript on a scalar and one on the
+// positional list — are answered now, in `subscripteval_test.go`. They were an
+// *evaluation* gap rather than this one, present in the braced spelling too,
+// and the shared span is what let one fix answer both (#854).
 //
 // The idiom is not an obscure one: the shell integration this machine's own
 // startup files load tests `"$precmd_functions[-1]"` against a name, and

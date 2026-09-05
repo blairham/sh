@@ -79,6 +79,12 @@ type ClientCapabilities struct {
 	FS       FileSystemCapabilities `json:"fs"`
 	Terminal bool                   `json:"terminal"`
 	Auth     AuthCapabilities       `json:"auth"`
+	// Elicitation is omitted rather than written empty, which is the schema's
+	// own way of saying "not supported": omitted and null both mean no, and
+	// supplying an object is the claim. A struct written always would claim
+	// the capability and then name no mode inside it, which is a shape an
+	// agent has to guess about.
+	Elicitation *ElicitationCapabilities `json:"elicitation,omitempty"`
 }
 
 // AuthCapabilities is what a client can do about being authenticated, and it

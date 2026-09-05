@@ -359,6 +359,16 @@ func Diagnostics() interp.Diagnostics {
 		NoclobberRefusal:        "%[1]s: cannot overwrite existing file",
 		NamesTheInputInLocation: true,
 		EchoesTheOffendingLine:  true,
+		// A script operand it could not read, worded the same way as `.` and
+		// as a redirection: the path, then the operating system's own text.
+		// The two numbers are the measurement — 127 for a path that names
+		// nothing, the number a missing command carries, and 126 for one that
+		// is there and will not open, the number an unrunnable one carries.
+		// Measured on a missing path, a missing parent, a dangling symlink, a
+		// mode-000 file and a directory.
+		ScriptNotFound:          "%[1]s: %[2]s",
+		ScriptNotFoundStatus:    127,
+		ScriptNotReadableStatus: 126,
 		SelectPrompt:            "#? ",
 		Location:                interp.LocationLineWord,
 		NotFound:                "%s: command not found",

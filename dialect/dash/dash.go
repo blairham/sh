@@ -54,6 +54,10 @@ func Semantics() interp.Semantics {
 	// finds end of input and the data line is run as a command. The other
 	// three read a line at a time and leave the rest on the descriptor.
 	s.StdinProgramReadInBlocks = true
+	// `-c` and `-s` together: the command string names the operands here,
+	// so `sh -sc CMD name a` has `$0` of `name` and one parameter. ksh93
+	// and zsh let `-s` name them instead.
+	s.StdinOptionNamesTheOperands = interp.No
 	// read takes -r and, alone among its letters, bash's -p prompt — an
 	// argument, printed only to a terminal. The rest of bash's set (-s, the
 	// counts, -d, -t, -u) is refused as unknown here.

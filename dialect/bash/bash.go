@@ -70,6 +70,10 @@ func Semantics() interp.Semantics {
 	// that a non-interactive shell reads no startup file unless `--login`
 	// was written out, and this front end has no `--login` to write.
 	s.LoginProfileWhenNonInteractive = false
+	// `-c` and `-s` together: the command string names the operands here,
+	// so `sh -sc CMD name a` has `$0` of `name` and one parameter — the
+	// same answer in the 3.2 macOS ships. ksh93 and zsh let `-s` name them.
+	s.StdinOptionNamesTheOperands = interp.No
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
 	// Measured: `echo $-` reports `hB` — hashall and braceexpand — under

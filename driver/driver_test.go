@@ -1005,3 +1005,66 @@ func TestTheWarningIsSaidBeforeAFatalError(t *testing.T) {
 		t.Error("status = 0, want the parse failure to stand")
 	}
 }
+
+// TestWhoNamesTheOperandsWithBothRoutesIsAnAxis: `-c` and `-s` together have
+// two rules for naming operands and the panel splits over which applies, so
+// the front end asks rather than picking one.
+//
+// Yes is the standard-input rule — no operand becomes `$0`, so the shell
+// keeps its own name and every operand is a parameter. No is the command
+// string's — the first operand is `$0` and only the rest are parameters.
+// Neither is refused, because a shell that guessed would silently hand a
+// script the wrong `$1`.
+func TestWhoNamesTheOperandsWithBothRoutesIsAnAxis(t *testing.T) {
+	const snippet = `echo "0=$0 n=$# args=$*"`
+	for _, tc := range []struct {
+		name   string
+		answer interp.Answer
+		want   string
+	}{
+		{"the standard-input rule", interp.Yes, "0=testsh n=2 args=name a\n"},
+		{"the command string's rule", interp.No, "0=name n=1 args=a\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sh := shell()
+			sh.Semantics.StdinOptionNamesTheOperands = tc.answer
+			out, errs, code := runArgs(t, sh, "testsh", "-sc", snippet, "name", "a")
+			if code != 0 {
+				t.Errorf("status %d, want 0 (stderr %q)", code, errs)
+			}
+			if out != tc.want {
+				t.Errorf("output = %q, want %q (stderr %q)", out, tc.want, errs)
+			}
+		})
+	}
+	// Unanswered, the invocation is refused rather than given one side's
+	// answer — and refused as a usage error, before anything runs.
+	out, errs, code := runArgs(t, shell(), "testsh", "-sc", snippet, "name", "a")
+	if code != 2 || out != "" {
+		t.Errorf("status %d output %q, want the invocation refused (stderr %q)", code, out, errs)
+	}
+	if !strings.Contains(errs, "no dialect was chosen") {
+		t.Errorf("stderr = %q, want the unanswered axis named", errs)
+	}
+	// With no operand there is nothing for the two rules to disagree about,
+	// so the question is not asked and the command runs whatever the vector
+	// says. Measured: all four keep their own name and no parameters.
+	out, errs, code = runArgs(t, shell(), "testsh", "-sc", snippet)
+	if want := "0=testsh n=0 args=\n"; code != 0 || out != want {
+		t.Errorf("status %d output %q, want %q (stderr %q)", code, out, want, errs)
+	}
+	// The letters are read as options wherever they appear, so the two
+	// spellings and both orders reach the same answer.
+	for _, argv := range [][]string{
+		{"testsh", "-s", "-c", snippet, "name", "a"},
+		{"testsh", "-c", "-s", snippet, "name", "a"},
+		{"testsh", "-cs", snippet, "name", "a"},
+	} {
+		sh := shell()
+		sh.Semantics.StdinOptionNamesTheOperands = interp.Yes
+		out, errs, code := runArgs(t, sh, argv...)
+		if want := "0=testsh n=2 args=name a\n"; code != 0 || out != want {
+			t.Errorf("%v: status %d output %q, want %q (stderr %q)", argv[1:], code, out, want, errs)
+		}
+	}
+}

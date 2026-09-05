@@ -44,6 +44,10 @@ func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.No
+	// `-c` and `-s` together: `-s` names the operands here, so `sh -sc CMD
+	// name a` keeps the shell in `$0` and makes both operands parameters.
+	// bash and dash let the command string name them instead.
+	s.StdinOptionNamesTheOperands = interp.Yes
 	// The reading side of the same option: zsh's short spelling of noglob
 	// is `-F`, and that capital is what its `$-` reports.
 	s.NoglobLetterIsF = interp.No

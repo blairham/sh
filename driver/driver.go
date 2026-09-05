@@ -533,6 +533,15 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 		if len(args) == 0 {
 			return source{}, errors.New("-c requires an argument")
 		}
+		if inv.fromStdin && len(args) > 1 {
+			// Both routes were named, and there is an operand for them to
+			// disagree about. Which route the *program* comes from is
+			// settled above and is unanimous; which route's rule names the
+			// operands is not. With no operand past the command string the
+			// two rules name the same nothing, so the question is not
+			// raised and every dialect runs it.
+			return sh.commandWithStdinOption(args[0], args[1:], inv)
+		}
 		s := commandSource(sh, args[0], args[1:])
 		s.opts = inv.opts
 		return s, nil
@@ -581,6 +590,35 @@ func (sh Shell) route(args []string, inv invocation) (source, error) {
 		src: string(b), name: path, file: path,
 		params: args[1:], dg: sh.Diagnostics.ForScript(), opts: inv.opts,
 	}, nil
+}
+
+// commandWithStdinOption is `-c` and `-s` together, where the two routes have
+// different rules for naming operands and the panel is split 2-2 over which
+// of them applies.
+//
+// The command string wins about where the program comes from — all four run
+// it, and neither read standard input nor prompt — so the only question left
+// is whether the first operand becomes `$0` or whether every operand is a
+// positional parameter and `$0` stays the shell. See
+// Semantics.StdinOptionNamesTheOperands, which is the whole of it: nothing
+// else about the invocation changes.
+func (sh Shell) commandWithStdinOption(cmd string, operands []string, inv invocation) (source, error) {
+	switch sh.Semantics.StdinOptionNamesTheOperands {
+	case interp.Yes:
+		// The standard-input rule: no operand is `$0`.
+		s := commandSource(sh, cmd, nil)
+		s.params, s.opts = operands, inv.opts
+		return s, nil
+	case interp.No:
+		s := commandSource(sh, cmd, operands)
+		s.opts = inv.opts
+		return s, nil
+	}
+	// Refused rather than given one side's answer, the way an unanswered
+	// axis is refused everywhere else. A usage error, because what could not
+	// be understood is the argument vector.
+	return source{}, errors.New("`-c` with `-s`, and which operand is $0: " +
+		"the shells disagree here and no dialect was chosen")
 }
 
 // commandSource is the source for `-c`, whose operands are named differently

@@ -5310,6 +5310,10 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `invoke/end-of-options-between-c-and-its-string` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` |
 | `invoke/plus-c-still-runs-the-command` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
 | `invoke/c-outranks-standard-input` | `hi\|0` | `hi\|0` | `hi\|0` | `hi\|0` | `hi\|0` | `hi\|0` |
+| `invoke/c-with-s-names-the-operands` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `<shell>\|2\|name a` | `<shell>\|2\|name a` |
+| `invoke/c-with-s-unbundled` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `<shell>\|2\|name a` | `<shell>\|2\|name a` |
+| `invoke/c-before-s-names-the-operands` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `<shell>\|2\|name a` | `<shell>\|2\|name a` |
+| `invoke/c-with-s-and-no-operands` | `<shell>\|0\|` | `<shell>\|0\|` | `sh\|0\|` | `<shell>\|0\|` | `<shell>\|0\|` | `<shell>\|0\|` |
 | `invoke/standard-input-that-is-not-a-terminal` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `invoke/the-program-arrives-on-standard-input` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` | `0=[sh]\|n=0` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` | `0=[<shell>]\|n=0` |
 | `invoke/dash-s-makes-every-operand-a-parameter` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[sh]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` | `0=[<shell>]\|n=2\|[a b]` |
@@ -5372,6 +5376,22 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `invoke/c-outranks-standard-input` — -s and -c in one bundle: all four run the command rather than reading standard input, so a shell that let -s win would print nothing and still exit 0
   ```sh
   echo "hi|$#"
+  ```
+- `invoke/c-with-s-names-the-operands` — the same bundle with operands after it, which is where the panel splits 2-2: bash and dash apply the command string's rule and make `name` $0, ksh93 and zsh apply the standard-input rule and let no operand be $0, so the shell keeps its own name and both operands are parameters. Only the naming splits — all four run the command string, which the case above pins
+  ```sh
+  echo "$0|$#|$*"
+  ```
+- `invoke/c-with-s-unbundled` — the same question spelled as two words, which changes nothing anywhere: whichever rule a shell applies, it applies it to the bundle and to the pair alike
+  ```sh
+  echo "$0|$#|$*"
+  ```
+- `invoke/c-before-s-names-the-operands` — and in the other order, where the letter that comes first might have been expected to win and does not — the answer is the shell's rather than the invocation's
+  ```sh
+  echo "$0|$#|$*"
+  ```
+- `invoke/c-with-s-and-no-operands` — the same invocation with nothing for the two rules to disagree about: with no operand past the command string all four keep the shell's own name and no parameters, which is why the question is only asked where an operand follows
+  ```sh
+  echo "$0|$#|$*"
   ```
 - `invoke/standard-input-that-is-not-a-terminal` — the harness gives every child the null device for standard input, and the null device is a character device — which is exactly what made the prompt decision say terminal, ask it for raw mode, and exit 2 with `operation not supported by device` (#509). No shell in the panel prompts here: -s says read standard input, standard input ends at once, and the shell exits 0 having said nothing. Deliberately no placeholder — what is pinned is what a shell does before it reads anything, and the snippet is written down as the thing that would have run
   ```sh

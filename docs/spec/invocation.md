@@ -474,6 +474,52 @@ The profile is sourced after the invocation's options are applied and after
 the runner is built, which is what the two measurements above require, and it
 is the same order the prompt route already used (#482).
 
+## `-c` and `-s` together: who names the operands
+
+**The rule.** An invocation carrying both a command string and the
+standard-input option runs the command string — unanimously — and the two
+routes then disagree about what to call the operands after it. The
+command string's rule is that the first operand is `$0` and only the rest
+are parameters; the standard-input rule is that no operand is `$0`, so
+the shell keeps its own name and every operand is a parameter. Which rule
+applies is `Semantics.StdinOptionNamesTheOperands`.
+
+### Measured
+
+Panel: bash 5.3.15, bash 3.2.57, dash, ksh93u+ 2012-08-01, zsh 5.9, on
+macOS 25.5 — measured 2026-09-05, with `HOME` a scratch directory holding
+an empty `.zshrc`. Snippet `echo "$0|$#|$*"`, invoked
+`sh -sc SNIPPET name a`:
+
+| shell | result | rule |
+| --- | --- | --- |
+| bash 5.3 | `name\|1\|a` | the command string's |
+| bash 3.2 | `name\|1\|a` | the command string's |
+| dash | `name\|1\|a` | the command string's |
+| ksh93 | `<shell>\|2\|name a` | standard input's |
+| zsh | `<shell>\|2\|name a` | standard input's |
+
+Identical for `-sc`, `-cs`, `-s -c` and `-c -s`: neither the order of the
+two letters nor whether they are bundled changes any answer, so this is a
+fact about the shell and not about the spelling.
+
+**With no operand the question does not arise.** `sh -sc SNIPPET` is
+`<shell>|0|` in all five: the two rules name the same nothing. So the axis
+is asked only where an operand follows the command string, and a dialect
+that has not answered still runs the common case.
+
+**Where the program comes from is a different question, and it is
+unanimous.** All five run the command string and none of them reads
+standard input for a program — pinned by `invoke/c-outranks-standard-input`
+and by #522, which fixed `-sc CMD` running `s` as a command.
+
+**Nothing to break the tie.** POSIX gives `-c` and `-s` separate synopses
+and says the standard-input route is assumed only when `-c` is absent, so
+it never describes an invocation carrying both. `PosixSemantics()`
+therefore leaves the axis unanswered, and a shell built on the substrate
+without choosing refuses such an invocation with a usage error rather
+than picking a side.
+
 ## Refusing an option
 
 **The rule.** An option the shell does not have is refused before anything

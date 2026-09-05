@@ -104,7 +104,8 @@ func TestAReplacementInheritsTheOpenFileLimitAChildGets(t *testing.T) {
 	replaced := filepath.Join(dir, "replaced")
 	runAsShellReplacingItself(t, "TestAReplacementInheritsTheOpenFileLimitAChildGets",
 		"/bin/sh -c 'ulimit -n' >"+child+"\n"+
-			"exec /bin/sh -c 'ulimit -n' >"+replaced+"\n")
+			"exec /bin/sh -c 'ulimit -n' >"+replaced+"\n",
+		func(string) bool { return wrote(replaced) })
 
 	a, _ := os.ReadFile(child)
 	b, _ := os.ReadFile(replaced)

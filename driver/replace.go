@@ -112,6 +112,41 @@ func reachedPlacement(where string) {
 // back below placeFiles would compile, pass every test that runs a shell, and
 // put the failure back — which is why `TestNothingAllocatesInTheWindow`
 // counts rather than trusts.
+//
+// # What is left, and why it stays
+//
+// The window is now empty of everything this repository puts in it. An strace
+// of `exec 5>f; exec cmd` is the dup3 and then the execve, adjacent:
+//
+//	dup3(8, 5, 0) = 5
+//	execve("/bin/sh", ...)
+//
+// It is still not safe, and the remainder is the kernel's rather than ours.
+// execve on a *multithreaded* process kills the other threads inside the
+// call, and until it has, they are running against a descriptor table that
+// has already changed. sysmon is one of them and polls on a timer of its own.
+// Nothing written in Go can shorten that interval, and no ordering here can
+// avoid it: the script asked for its file on descriptor 5 and that is where
+// it has to go.
+//
+// Which number the runtime holds is not luck, either, and it is the part
+// worth knowing. Measured, this shell's own startup creates it: opening the
+// script leaves 3 and 4 briefly free, and the poller lands immediately after
+// on 5 — the number a script is most likely to park on after 3 and 4.
+//
+//	openat("s.sh", O_RDONLY|O_CLOEXEC) = 4
+//	epoll_create1(EPOLL_CLOEXEC)       = 5
+//	eventfd2(0, EFD_CLOEXEC|EFD_NONBLOCK) = 6
+//
+// So the collision is between two low numbers, both chosen by accident. The
+// direction that would actually close it is to stop the runtime taking a
+// number a script can reach — reserving the low descriptors until the poller
+// exists, which is #731 option 2 and is a change to how the shell starts
+// rather than to how it execs. It is not made here.
+//
+// Until then a replacement that dies this way has not answered the question a
+// test asked, and the tests retry it rather than report it — loudly, and
+// counting every attempt. See replacementAttempts in replacefds_test.go.
 func replaceProcess(path string, argv, env []string, files []*os.File) error {
 	prev := debug.SetGCPercent(-1)
 	// Before the table is touched, because this is the part that allocates.

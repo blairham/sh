@@ -919,6 +919,21 @@ var Corpus = []Case{
 		Why:     "the reading half, and the one that shows the redirection outlives an iteration: the second `read` continues where the first left off, which it could not do if the file were opened per pass",
 	},
 	{
+		ID: "core/c-style-for-with-an-empty-header", Category: "command language",
+		Snippet: `i=0; for ((;;)); do i=$((i+1)); if [ $i -ge 3 ]; then break; fi; done; echo "i=$i"`,
+		Why:     "every section omitted, which is how the endless loop is spelled: an absent condition is *true* rather than the expression 0, so the body runs until something breaks out of it. The distinction is one an AST can lose — a parser that fills a missing section in with a zero writes a loop that never runs a single pass. dash has no C-style loop and blames the loop variable",
+	},
+	{
+		ID: "core/c-style-for-without-a-condition", Category: "command language",
+		Snippet: `for ((i=0;;i++)); do if [ $i -ge 3 ]; then break; fi; done; echo "i=$i"`,
+		Why:     "the same absent condition with the other two sections present, which is what says the sections are independent rather than all-or-nothing: the initialization and the step still run, and `i` is 3 at the break",
+	},
+	{
+		ID: "core/c-style-for-with-only-a-condition", Category: "command language",
+		Snippet: `i=0; for ((;i<3;)); do i=$((i+1)); done; echo "i=$i"`,
+		Why:     "a `while` loop written as a `for`: the initialization and the step are the ones omitted here, and an omitted step must not be run as an expression whose value could end the loop. The trio with the two cases above covers every section this header can leave out",
+	},
+	{
 		ID: "core/a-list-for-with-a-brace-body", Category: "command language",
 		Snippet: `for i in a b; { printf "%s" "$i"; }; echo`,
 		Why:     "the same production on the ordinary `for`, which is the half easiest to miss: the brace body is not the C-style loop's alone. It needs the separator, and the next case says why — this is the one three of the four accept and dash refuses, dash being the only panel shell without the form",
@@ -1767,6 +1782,11 @@ var Corpus = []Case{
 		Why:     "the idiom people actually reach for it with, and the reason a pipeline will not do: the loop runs in *this* shell, so what it reads is still there afterwards",
 	},
 	{
+		ID: "procsub/quoted-is-not-a-substitution", Category: "redirection",
+		Snippet: `printf "[%s]\n" "<(echo hi)"`,
+		Why:     "the construct is unquoted-only: inside double quotes the same ten characters are text, unanimously and dash included. It is the completeness half of `procsub/reads-a-command-as-a-file` — that case says the lexer reads the form, this one says where it stops looking, and a lexer that also read it inside quotes would pass the first and fail here",
+	},
+	{
 		ID: "read/a-failing-read-still-assigns", Category: "builtins",
 		Snippet: `l=keep; read -r l </dev/null; echo "st=$? l=[$l]"`,
 		Why:     "end of input clears the variables rather than leaving what was there, which is what stops `while read -r l` from leaving the last line behind for the code after the loop. Unanimous across the panel, so it is the core's answer and not an axis",
@@ -2183,6 +2203,12 @@ var Corpus = []Case{
 		ID: "array/appending-to-an-associative-element", Category: "expansion",
 		Snippet: `typeset -A m; m[k]+=x; m[k]+=Q; echo "[${m[k]}]"`,
 		Why:     "the declared form appends by key just as the indexed form appends by subscript — unanimous in the three that have the attribute. Both assignments are written with `+=` so that the first one also stands as the unset-key case, and so that dash, which has neither, reports the two identically",
+	},
+	{
+		ID: "array/a-literal-with-a-space-before-it", Category: "expansion",
+		SyntaxError: true,
+		Snippet:     `a= (echo x); echo "n=${#a[@]} 0=${a[0]} 1=${a[1]}"`,
+		Why:         "the `(` has to be adjacent to the `=` everywhere but ksh93, and ksh93 is not merely lenient about the space — it reads the whole thing as the *array literal*, leaving `a` holding `echo` and `x` rather than assigning an empty value and running a subshell. So the panel splits on what the text means and not only on whether it is accepted, and a parser cannot settle the construct on adjacency alone: adjacency decides which diagnostic, and the non-adjacent form falls through to the ordinary rule for a `(` after a word",
 	},
 	{
 		ID: "array/a-literal-places-its-subscripts", Category: "expansion",
@@ -5633,6 +5659,21 @@ out=$(CDPATH=./pool cd sub)
 		ID: "commands/coproc-is-one-dialect-s-keyword", Category: "commands",
 		Snippet: `coproc cat; echo hi >&"${COPROC[1]}"; read -r l <&"${COPROC[0]}"; echo "$l"`,
 		Why:     "bash runs cat in the background with the pipe's near ends in COPROC and reads its own line back; the other three have no such keyword — even zsh, whose coprocess speaks `print -p` rather than an array",
+	},
+	{
+		ID: "commands/coproc-names-a-compound", Category: "commands",
+		Snippet: `coproc MY { cat; }; echo hi >&"${MY[1]}"; read -r l <&"${MY[0]}"; echo "$l"`,
+		Why:     "a name may be written before a *compound* command, and then it is the name: the near ends arrive in MY rather than in COPROC. Nothing decides this at run time — the shape of what follows settles it while parsing — and bash 3.2 dates the feature by refusing the `}` outright, as do dash and ksh93. zsh has the word and no name to give it",
+	},
+	{
+		ID: "commands/coproc-names-a-subshell", Category: "commands",
+		Snippet: `coproc MY ( cat </dev/null ); echo "n=${#MY[@]}"`,
+		Why:     "a subshell is a compound command too, so the same rule binds the name — which is the half a parser that only looks for `{` gets wrong. Read back as a count rather than through the descriptors, because a coprocess whose feed is /dev/null has nothing to answer with and the count is the whole claim",
+	},
+	{
+		ID: "commands/coproc-does-not-name-a-simple-command", Category: "commands",
+		Snippet: `MY() { echo ran-MY; }; coproc MY cat; read -r l <&"${COPROC[0]}"; echo "l=$l COPROC=${#COPROC[@]} MY=${#MY[@]}"`,
+		Why:     "the other side of the same rule, and the one worth pinning: before a *simple* command the first word is the command, so `coproc MY cat` runs MY and the array is the default COPROC. A function named MY is what makes that visible without a race — bash reports `MY: command not found` from the background job otherwise, whenever the job gets there — and the line read back is the function's own output, which no shell that had taken MY as a name could produce",
 	},
 	{
 		ID: "syntax/an-unmatched-double-quote", Category: "diagnostics",

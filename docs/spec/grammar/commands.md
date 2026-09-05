@@ -152,7 +152,8 @@ else. Grammar flag: `ArrayLiteral` (on in the core, off for `posix` and
 
 Where it is accepted it is the *array literal*, not an assignment
 followed by a subshell: ksh93 leaves `a` holding two elements, `echo`
-and `x` (measured 2026-09-05, panel and machine as `../oracle.md`). So
+and `x` (measured 2026-09-05, panel and machine as `../oracle.md`;
+pinned by `array/a-literal-with-a-space-before-it`). So
 the space is not significant there, and the parser cannot decide the
 construct on adjacency alone — it decides *which diagnostic*, and the
 non-adjacent form falls through to the ordinary rule for a `(` after a
@@ -398,7 +399,10 @@ That is what makes the endless loop spell as it does:
 All measured unanimous across bash 5.3, bash 3.2, ksh93 and zsh. The
 consequence for an AST is that "omitted" and "the expression `0`" are
 different: a missing condition loops forever and a false one runs the
-body zero times and exits 0.
+body zero times and exits 0. Pinned, one per shape:
+`core/c-style-for-with-an-empty-header`,
+`core/c-style-for-without-a-condition` and
+`core/c-style-for-with-only-a-condition`.
 
 **The loop variable is an ordinary variable and survives the loop** —
 `for ((i=0;i<3;i++)); do :; done` leaves `i` at 3 — which follows from
@@ -848,5 +852,12 @@ that fails with 127 and `coproc MY { cat; }` is a syntax error at the
 `}`. The same rule `;&` follows in the `case` table above, from
 `../core.md`.
 
-Corpus: `commands/coproc-is-one-dialect-s-keyword`. The name-before-a-
-compound rule is measured here and is **not yet pinned by a case**.
+Corpus: `commands/coproc-is-one-dialect-s-keyword`, and the
+name-before-a-compound rule in all three of its shapes —
+`commands/coproc-names-a-compound` for a brace group,
+`commands/coproc-names-a-subshell` for the compound that is easiest to
+forget, and `commands/coproc-does-not-name-a-simple-command` for the
+side that says the rule is a rule. The last of those runs a *function*
+called `MY`, because bash's `MY: command not found` arrives from a
+background job whenever that job gets to it, and a case graded on a
+racing diagnostic grades nothing.

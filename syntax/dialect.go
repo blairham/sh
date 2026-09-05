@@ -396,15 +396,18 @@ type Dialect struct {
 	// ArithExplicitBase enables the `base#digits` form. Absent from dash.
 	ArithExplicitBase bool
 
-	// ArithLeadingZeroIsOctal decides whether `0100` is sixty-four or one
-	// hundred. It is true everywhere but zsh, and it is the quietest
-	// divergence measured: nothing warns, both answers are plausible
-	// numbers, and file modes are written with leading zeros.
+	// Whether `0100` is sixty-four or one hundred is deliberately *not* a
+	// field here. A literal is kept as written, so the tree bakes in no
+	// answer and nothing in the parser has the question to ask; the answer
+	// is `interp.Semantics.ArithLeadingZeroIsOctal`, which evaluation reads.
 	//
-	// Nothing in the parser reads this — a literal is kept as written, so
-	// the tree does not bake in an answer — but the field belongs with the
-	// others, and evaluation needs it.
-	ArithLeadingZeroIsOctal bool
+	// A `syntax.Dialect` field of the same name stood here and was removed
+	// (#564). Nothing read it, and being unread it was also *wrong*: it was
+	// documented as "true everywhere but zsh" while the `zsh` preset — which
+	// starts from Core, where it was set — carried true, the opposite of
+	// zsh's own answer. A flag no parser consults cannot be corrected by
+	// anything failing, so it drifts, and it is indistinguishable from one
+	// whose consumer was lost in a refactor.
 
 	// ArithFloat enables floating point, which ksh93 and zsh have and POSIX
 	// does not.
@@ -463,12 +466,28 @@ type Dialect struct {
 	// never reaches the question.
 	RegexTakesAlternation bool
 
-	// ArraySubscript enables `${a[i]}`, `${a[@]}` and `${a[*]}`, and `a[i]`
-	// inside an arithmetic expression. Absent from dash, which has no arrays
-	// at all and calls the subscript a bad substitution rather than reading
-	// it — a separate flag from ArrayLiteral because the two halves are
-	// separately reachable: a subscript can be written for a variable that
-	// was never an array.
+	// ArraySubscript enables `${a[i]}`, `${a[@]}` and `${a[*]}`, `a[i]`
+	// inside an arithmetic expression, and the element assignment `a[i]=v`
+	// and `a[i]+=v`. Absent from dash, which has no arrays at all and calls
+	// the subscript a bad substitution rather than reading it — a separate
+	// flag from ArrayLiteral because the two halves are separately
+	// reachable: a subscript can be written for a variable that was never an
+	// array.
+	//
+	// The assignment shape is this flag's rather than a fourth one, and that
+	// is measured rather than assumed: reading a subscript and writing
+	// through one split the panel the same way, with bash 3.2, bash 5.3,
+	// ksh93 and zsh on one side and dash alone on the other. zsh's refusal
+	// of `a[0]=x` is not a third answer — it parses the assignment and
+	// rejects the *subscript*, which is the array-base axis and belongs to
+	// the semantics vector. A flag no dialect can be given a different value
+	// for is a field nothing reads, which is what #564 is about.
+	//
+	// Where it is off, `a[0]=x` is a command name and not an assignment —
+	// the shell without arrays reports `a[0]=x: not found` and carries on.
+	// Getting that wrong is silent on the permissive side: the element is
+	// stored, nothing is reported, and a script written against the
+	// no-array dialect on purpose is told it is portable when it is not.
 	ArraySubscript bool
 
 	// DoubleBracket enables `[[ ... ]]`.
@@ -614,11 +633,10 @@ func Core() Dialect {
 		ParamSubstitution:       true,
 		ParamSubstring:          true,
 
-		ArithIncDec:             true,
-		ArithComma:              true,
-		ArithExponent:           true,
-		ArithExplicitBase:       true,
-		ArithLeadingZeroIsOctal: true,
+		ArithIncDec:       true,
+		ArithComma:        true,
+		ArithExponent:     true,
+		ArithExplicitBase: true,
 	}
 }
 

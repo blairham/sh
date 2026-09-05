@@ -144,6 +144,35 @@ and calls the `(` a syntax error rather than reading it as anything
 else. Grammar flag: `ArrayLiteral` (on in the core, off for `posix` and
 `dash`).
 
+**Two flags, not one.** `ArrayLiteral` is the parenthesized value and
+nothing else; the two *subscripted* spellings are `ArraySubscript`'s,
+the same flag that decides whether `${a[i]}` is read. Naming only the
+first is what let a shell with no arrays store an element (#618).
+
+| probe | dash | bash 3.2 | bash 5 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- |
+| `a[0]=x; echo "[${a[0]}]"` | `a[0]=x: not found`, then `Bad substitution` | `[x]` | `[x]` | `[x]` | refuses the subscript |
+| `echo "[${a[0]}]"` | `Bad substitution` | `[]` | `[]` | `[]` | `[]` |
+| `a[0]=x; a[0]+=Q` | `a[0]=x: not found`, `a[0]+=Q: not found` | `[xQ]` | `[xQ]` | `[xQ]` | refuses the subscript |
+
+Measured 2026-09-05, panel and machine as `../oracle.md`. Reading a
+subscript and writing through one split the panel identically — four
+shells against dash — which is why one flag covers both and a third is
+not added. zsh is not a fifth answer: it *parses* `a[0]=x` and rejects
+the subscript, because `0` is below its first element, which is the
+array-base axis on the semantics vector and not a grammar question
+(`array/a-subscript-below-the-first-element`).
+
+Being wrong here is one-sided and silent. Where the flag is off the word
+is a command name — the no-array shell reports `a[0]=x: not found` and
+carries on — so accepting the shape anyway stores an element, says
+nothing, and tells someone testing under that dialect on purpose that a
+script is portable when it is not. The `+=` form was accidentally right
+throughout, because `AppendAssign` is also off there and gated it by
+another road; the plain form had nothing (corpus:
+`array/a-subscript-where-there-are-no-arrays`,
+`array/appending-to-an-element-where-there-are-no-arrays`).
+
 **The `(` must be adjacent to the `=`, in every shell but ksh93.**
 
 | probe | dash | bash 5 | bash 3.2 | ksh93 | zsh |
@@ -152,7 +181,8 @@ else. Grammar flag: `ArrayLiteral` (on in the core, off for `posix` and
 
 Where it is accepted it is the *array literal*, not an assignment
 followed by a subshell: ksh93 leaves `a` holding two elements, `echo`
-and `x` (measured 2026-09-05, panel and machine as `../oracle.md`). So
+and `x` (measured 2026-09-05, panel and machine as `../oracle.md`;
+pinned by `array/a-literal-with-a-space-before-it`). So
 the space is not significant there, and the parser cannot decide the
 construct on adjacency alone — it decides *which diagnostic*, and the
 non-adjacent form falls through to the ordinary rule for a `(` after a
@@ -398,7 +428,10 @@ That is what makes the endless loop spell as it does:
 All measured unanimous across bash 5.3, bash 3.2, ksh93 and zsh. The
 consequence for an AST is that "omitted" and "the expression `0`" are
 different: a missing condition loops forever and a false one runs the
-body zero times and exits 0.
+body zero times and exits 0. Pinned, one per shape:
+`core/c-style-for-with-an-empty-header`,
+`core/c-style-for-without-a-condition` and
+`core/c-style-for-with-only-a-condition`.
 
 **The loop variable is an ordinary variable and survives the loop** —
 `for ((i=0;i<3;i++)); do :; done` leaves `i` at 3 — which follows from
@@ -924,5 +957,12 @@ that fails with 127 and `coproc MY { cat; }` is a syntax error at the
 `}`. The same rule `;&` follows in the `case` table above, from
 `../core.md`.
 
-Corpus: `commands/coproc-is-one-dialect-s-keyword`. The name-before-a-
-compound rule is measured here and is **not yet pinned by a case**.
+Corpus: `commands/coproc-is-one-dialect-s-keyword`, and the
+name-before-a-compound rule in all three of its shapes —
+`commands/coproc-names-a-compound` for a brace group,
+`commands/coproc-names-a-subshell` for the compound that is easiest to
+forget, and `commands/coproc-does-not-name-a-simple-command` for the
+side that says the rule is a rule. The last of those runs a *function*
+called `MY`, because bash's `MY: command not found` arrives from a
+background job whenever that job gets to it, and a case graded on a
+racing diagnostic grades nothing.

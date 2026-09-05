@@ -129,11 +129,15 @@ grammar, and it is why the construct is the lexer's rather than the
 parser's.
 
 **It is unquoted only, and nothing is lost by that.** `"<(echo hi)"` is
-the five characters in every shell in the panel, dash included, and the
-reason is that what the construct produces is a *path*: a quoted path is
-still a path, so there is nothing for the quoting to change. The lexer
-therefore reads the form outside quotes and nowhere else, and that is a
-completeness statement rather than an omission.
+its own ten characters of text in every shell in the panel, dash
+included, and the reason is that what the construct produces is a
+*path*: a quoted path is still a path, so there is nothing for the
+quoting to change. The lexer therefore reads the form outside quotes and
+nowhere else, and that is a completeness statement rather than an
+omission. Pinned by `procsub/quoted-is-not-a-substitution`; the claim
+said "the five characters" until the case was written, which is a count
+of nothing in the example beside it and the sort of arithmetic a
+sentence nobody can run keeps.
 
 **What the path looks like is the shell's business, not the grammar's.**
 Measured with `echo <(true)`: bash answers `/dev/fd/63`, ksh93

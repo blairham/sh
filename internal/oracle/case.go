@@ -834,6 +834,31 @@ var Corpus = []Case{
 		Why:     "a loop on a condition rather than over a list; dash does not have it and says so about the loop variable rather than about the parenthesis",
 	},
 	{
+		ID: "core/c-style-for-with-a-brace-body", Category: "command language",
+		Snippet: `for ((i=0;i<3;i++)) { printf "%s" "$i"; }; echo`,
+		Why:     "a brace group may stand where `do … done` stands, and every shell that has the C-style form at all accepts it — so it is a production of this construct rather than a dialect's addition. Unanimous, which is why it is core; dash has no C-style loop to give a body to and says so about the loop variable, exactly as it does for `core/c-style-for`",
+	},
+	{
+		ID: "core/c-style-for-brace-body-after-a-separator", Category: "command language",
+		Snippet: `for ((i=0;i<2;i++)); { printf "%s" "$i"; }; echo`,
+		Why:     "the terminator between the header and the body is optional before the brace exactly as it is before `do`, which is what says the brace stands where `do` stands rather than being glued to the header",
+	},
+	{
+		ID: "core/a-list-for-with-a-brace-body", Category: "command language",
+		Snippet: `for i in a b; { printf "%s" "$i"; }; echo`,
+		Why:     "the same production on the ordinary `for`, which is the half easiest to miss: the brace body is not the C-style loop's alone. It needs the separator, and the next case says why — this is the one three of the four accept and dash refuses, dash being the only panel shell without the form",
+	},
+	{
+		ID: "core/a-list-for-brace-body-needs-a-separator", Category: "command language", SyntaxError: true,
+		Snippet: `for i in a b { echo "$i"; }`,
+		Why:     "the same line without the `;`, refused by all four — and not because the brace body is refused there. With nothing between, `{` is another *item* of the list, so the loop reads on and meets `}` where `do` belongs, which is what every one of the four then names. The C-style header takes the brace with nothing between because `))` has already ended it",
+	},
+	{
+		ID: "core/a-brace-body-is-not-a-while-body", Category: "command language", SyntaxError: true,
+		Snippet: `while true; { echo hi; break; }`,
+		Why:     "the production belongs to the loops built on a `for` header and to nothing else. Written with the separator, so that it is the same shape the list `for` accepts and the difference is the construct rather than the punctuation. Three refuse it; zsh accepts it as a short loop of its own, which is the divergence this case records",
+	},
+	{
 		ID: "core/for-wants-a-name", Category: "command language", SyntaxError: true,
 		Snippet: `for 1x in a; do echo; done`,
 		Why:     "four wordings for one refusal, and only one of them blames the word rather than saying something about names",
@@ -2631,6 +2656,26 @@ echo "st=$?"`,
 		ID: "param/transform-takes-exactly-one-letter", Category: "parameter expansion",
 		Snippet: `echo "[${u@QQ}]"; echo "u=$?"; x=a; echo "[${x@QQ}]"; echo unreached`,
 		Why:     "the operator is @ followed by one letter: doubling a letter that is valid on its own is a bad substitution, so the family cannot be extended by repetition the way zsh's (q) can. And bash checks the letter only once it has a value — an *unset* name yields empty and status 0 for the very same spelling, so a probe that forgets to set the variable measures nothing. The three shells without the family reject both",
+	},
+	{
+		ID: "param/bad-substitution-names-the-word", Category: "parameter expansion",
+		Snippet: `x=a; echo "pre${x@QQ}post"`,
+		Why:     "what the sentence names is the *word*, not the ${…} inside it: bash writes `pre${x@QQ}post: bad substitution` and ksh93 the same word in its own quotes, while dash and zsh name nothing at all — three answers across the four. One command, because the first failure ends the line",
+	},
+	{
+		ID: "param/bad-substitution-names-only-one-quoting", Category: "parameter expansion",
+		Snippet: `x=a; echo 'lit'"${x@QQ}"`,
+		Why:     "the same question where the word changes quoting in the middle, which is what separates the two shells that name a word: bash stops at the change and blames ${x@QQ} alone, ksh93 blames 'lit'\"${x@QQ}\" whole. A separate row because the first bad word ends the command, so the two spellings cannot share one",
+	},
+	{
+		ID: "param/bad-substitution-stops-at-the-first", Category: "parameter expansion",
+		Snippet: `x=a; printf "[%s]" "${x@QQ}" "${x@ZZ}" "${x@YY}"; echo " after"`,
+		Why:     "one diagnostic per command and not one per bad word — every column abandons the command at the first expansion it cannot answer. This implementation expanded the remaining words and reported each of them, which is four lines where a script's log expects one",
+	},
+	{
+		ID: "param/an-unset-name-stops-at-the-first-too", Category: "parameter expansion",
+		Snippet: `set -u; printf "[%s]" "$a" "$b"; echo " after"`,
+		Why:     "the same rule reached through a different failure: `set -u` on two unset names names only the first. Kept beside the bad-substitution row because the two shared one cause — the command expanded every word before deciding not to run",
 	},
 	{
 		ID: "param/an-array-length-without-a-subscript", Category: "parameter expansion",

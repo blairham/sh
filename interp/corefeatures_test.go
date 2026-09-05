@@ -107,6 +107,32 @@ func TestCStyleFor(t *testing.T) {
 	}
 }
 
+// A brace group may stand where `do … done` stands, and it runs exactly as
+// `do … done` does: it is the same list, so `break` and `continue` reach the
+// loop rather than a group in the way, and the whole thing is still one
+// command that a function body or a pipeline can hold.
+func TestAForLoopWithABraceBody(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"counting up", `for ((i=0;i<3;i=i+1)) { printf "%s" "$i"; }`, "012"},
+		{"break leaves it", `for ((i=0;i<9;i=i+1)) { [ "$i" -eq 2 ] && break; printf "%s" "$i"; }`, "01"},
+		{"continue skips", `for ((i=0;i<4;i=i+1)) { [ "$i" -eq 1 ] && continue; printf "%s" "$i"; }`, "023"},
+		{"a separator before the brace", `for ((i=0;i<2;i=i+1)); { printf "%s" "$i"; }`, "01"},
+		{"nested", `for ((i=0;i<2;i=i+1)) { for ((j=0;j<2;j=j+1)) { printf "%s%s " "$i" "$j"; }; }`, "00 01 10 11 "},
+		{"inside a function", `f() { for ((i=0;i<2;i=i+1)) { printf "%s" "$i"; }; }; f`, "01"},
+		{"the two spellings agree", `for ((i=0;i<2;i=i+1)) { printf a; }; for ((i=0;i<2;i=i+1)); do printf b; done`, "aabb"},
+		{"the list form takes it too", `for i in a b; { printf "%s" "$i"; }`, "ab"},
+		{"a newline before the brace", "for i in a b\n{ printf \"%s\" \"$i\"; }", "ab"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := CoreSemantics()
+			out, _ := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
 // A subscript that is *not* a plain literal still expands, which is the half
 // the fix had to keep: only `@` and `*` are read as written.
 func TestComputedSubscriptStillExpands(t *testing.T) {

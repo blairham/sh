@@ -418,6 +418,13 @@ type Runner struct {
 	// number that is not one. The command does not run, which is what every
 	// shell in the panel does and what the exit status has to say.
 	expandErr bool
+	// expandingWord is the word being expanded and expandingSpan which of
+	// its spans, so a diagnostic about an expansion can name the text around
+	// it: two dialects blame the word rather than the `${…}`, and by the
+	// time anything has failed the word is a list of spans. Nil where an
+	// expansion was reached from something that is not a word.
+	expandingWord *syntax.Word
+	expandingSpan int
 	// unspecified records that a script depended on an axis no dialect had
 	// answered, so a caller can tell that from an ordinary failure.
 	unspecified bool
@@ -976,8 +983,14 @@ func (r *Runner) locationPrefix() string {
 // which cares how it was invoked.
 func (r *Runner) fatalExpansion(format string, args ...any) {
 	r.diagf(format, args...)
+	r.fatalExpansionQuiet()
+}
+
+// fatalExpansionQuiet is the same for a failure that has already reported
+// itself, as fatalQuiet is to fatal.
+func (r *Runner) fatalExpansionQuiet() {
 	r.fatalQuiet()
-	if n := r.diag().UnsetParameterStatusFromCommandString; n != 0 && r.CommandString {
+	if n := r.diag().ExpansionFailureStatusFromCommandString; n != 0 && r.CommandString {
 		r.status = n
 	}
 }
@@ -1550,6 +1563,14 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	}
 	var argv []string
 	for i, w := range c.Args {
+		if r.expandErr || r.ctl == controlExit {
+			// The command is abandoned at its first failed expansion rather
+			// than diagnosing every word that would fail. Unanimous in the
+			// panel: `printf "[%s]" "${(q)x}" "${(qq)x}"` writes one line in
+			// all six columns, and `set -u; printf "[%s]" "$a" "$b"` names
+			// only `a`. Both wrote one line per bad word here.
+			break
+		}
 		// A declaration utility's `name=value` arguments are assignments and
 		// expand as ones, which is what keeps `typeset -i n=3*3` from being
 		// read as a pattern. Only after the first word is expanded is it

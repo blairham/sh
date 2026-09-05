@@ -161,6 +161,21 @@ type Semantics struct {
 	// one: both answers are plausible numbers.
 	LengthOfSpecialIsCount Answer
 
+	// TransformLetterCheckedOnlyWhenValued delays the check of a `@`
+	// operator's letter until the name has a value. Yes makes `${u@QQ}` on
+	// an unset name empty at status 0 while the identical spelling on a set
+	// one is a bad substitution — the same word meaning two different things
+	// depending on what a variable happens to hold.
+	//
+	// Reached only by a grammar that *has* the family, which is one shell;
+	// to the rest `${u@QQ}` is an unknown operator whatever the value, and
+	// nothing here is asked. So this is an axis with one measured answer,
+	// deliberately: making an operator's validity depend on a value is not a
+	// rule anything should inherit by having a `@` family, and the shell
+	// that does it should have to say so. An empty array counts as no value,
+	// measured — `a=(); ${a[@]@Z}` is quiet and `a=(x); ${a[@]@Z}` is not.
+	TransformLetterCheckedOnlyWhenValued Answer
+
 	// ArithLeadingZeroIsOctal reads `0100` as sixty-four. False in zsh, where
 	// it is one hundred. The quietest divergence measured — nothing warns,
 	// both are plausible numbers, and file modes are written this way.

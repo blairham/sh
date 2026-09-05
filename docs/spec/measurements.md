@@ -1784,6 +1784,11 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
 | `core/c-style-for` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `012` | `012` | `012` | `012` | `012` |
+| `core/c-style-for-with-a-brace-body` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `012` | `012` | `012` | `012` | `012` |
+| `core/c-style-for-brace-body-after-a-separator` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `01` | `01` | `01` | `01` | `01` |
+| `core/a-list-for-with-a-brace-body` | **2>** `<shell>: 1: Syntax error: "{" unexpected (expecting "do")` *(status 2)* | `ab` | `ab` | `ab` | `ab` | `ab` |
+| `core/a-list-for-brace-body-needs-a-separator` | **2>** `<shell>: 1: Syntax error: "}" unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `for i in a b { echo "$i"; }'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `for i in a b { echo "$i"; }'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `}'~<shell>: -c: line 0: `for i in a b { echo "$i"; }'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `}' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `}'` *(status 1)* |
+| `core/a-brace-body-is-not-a-while-body` | **2>** `<shell>: 1: Syntax error: end of file unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file from `while' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file from `while' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: syntax error at line 1: `while' unmatched` *(status 3)* | `hi` |
 | `core/for-wants-a-name` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | **2>** `<shell>: line 1: `1x': not a valid identifier` *(status 1)* | **2>** `<shell>: line 1: `1x': not a valid identifier` *(status 2)* | **2>** `<shell>: `1x': not a valid identifier` *(status 1)* | **2>** `<shell>: 1x: invalid variable name` *(status 1)* | **2>** `<shell>:1: parse error near `1x'` *(status 1)* |
 | `cmd/andor-equal-precedence` | `B` | `B` | `B` | `B` | `B` | `B` |
 | `cmd/andor-left-to-right-success` | `A` | `A` | `A` | `A` | `A` | `A` |
@@ -1833,6 +1838,26 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `core/c-style-for` — a loop on a condition rather than over a list; dash does not have it and says so about the loop variable rather than about the parenthesis
   ```sh
   for ((i=0;i<3;i++)); do printf "%s" "$i"; done; echo
+  ```
+- `core/c-style-for-with-a-brace-body` — a brace group may stand where `do … done` stands, and every shell that has the C-style form at all accepts it — so it is a production of this construct rather than a dialect's addition. Unanimous, which is why it is core; dash has no C-style loop to give a body to and says so about the loop variable, exactly as it does for `core/c-style-for`
+  ```sh
+  for ((i=0;i<3;i++)) { printf "%s" "$i"; }; echo
+  ```
+- `core/c-style-for-brace-body-after-a-separator` — the terminator between the header and the body is optional before the brace exactly as it is before `do`, which is what says the brace stands where `do` stands rather than being glued to the header
+  ```sh
+  for ((i=0;i<2;i++)); { printf "%s" "$i"; }; echo
+  ```
+- `core/a-list-for-with-a-brace-body` — the same production on the ordinary `for`, which is the half easiest to miss: the brace body is not the C-style loop's alone. It needs the separator, and the next case says why — this is the one three of the four accept and dash refuses, dash being the only panel shell without the form
+  ```sh
+  for i in a b; { printf "%s" "$i"; }; echo
+  ```
+- `core/a-list-for-brace-body-needs-a-separator` — the same line without the `;`, refused by all four — and not because the brace body is refused there. With nothing between, `{` is another *item* of the list, so the loop reads on and meets `}` where `do` belongs, which is what every one of the four then names. The C-style header takes the brace with nothing between because `))` has already ended it
+  ```sh
+  for i in a b { echo "$i"; }
+  ```
+- `core/a-brace-body-is-not-a-while-body` — the production belongs to the loops built on a `for` header and to nothing else. Written with the separator, so that it is the same shape the list `for` accepts and the difference is the construct rather than the punctuation. Three refuse it; zsh accepts it as a short loop of its own, which is the divergence this case records
+  ```sh
+  while true; { echo hi; break; }
   ```
 - `core/for-wants-a-name` — four wordings for one refusal, and only one of them blames the word rather than saying something about names
   ```sh
@@ -3191,6 +3216,10 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `param/transform-keys-and-values` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[0 "one" 1 "t w"]<0><one><1><t w>{'q'}` | `[0 "one" 1 "t w"]<0><one><1><t w>{'q'}` | `[one][t w]<one><t w>` **2>** `<shell>: ${s@K}: bad substitution` *(status 1)* | **2>** `<shell>: "${a[@]@K}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/transform-case-letters` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[abc def][ABC DEF][AbC dEf]` | `[abc def][ABC DEF][AbC dEf]` | **2>** `<shell>: ${x@L}: bad substitution` *(status 1)* | **2>** `<shell>: "${x@L}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/transform-takes-exactly-one-letter` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[]~u=0` **2>** `<shell>: line 1: [${x@QQ}]: bad substitution` *(status 127)* | `[]~u=0` **2>** `<shell>: line 1: [${x@QQ}]: bad substitution` *(status 127)* | **2>** `<shell>: [${u@QQ}]: bad substitution` *(status 1)* | **2>** `<shell>: "[${u@QQ}]": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
+| `param/bad-substitution-names-the-word` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: pre${x@QQ}post: bad substitution` *(status 127)* | **2>** `<shell>: line 1: pre${x@QQ}post: bad substitution` *(status 127)* | **2>** `<shell>: pre${x@QQ}post: bad substitution` *(status 1)* | **2>** `<shell>: "pre${x@QQ}post": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
+| `param/bad-substitution-names-only-one-quoting` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${x@QQ}: bad substitution` *(status 127)* | **2>** `<shell>: line 1: ${x@QQ}: bad substitution` *(status 127)* | **2>** `<shell>: ${x@QQ}: bad substitution` *(status 1)* | **2>** `<shell>: 'lit'"${x@QQ}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
+| `param/bad-substitution-stops-at-the-first` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${x@QQ}: bad substitution` *(status 127)* | **2>** `<shell>: line 1: ${x@QQ}: bad substitution` *(status 127)* | **2>** `<shell>: ${x@QQ}: bad substitution` *(status 1)* | **2>** `<shell>: "${x@QQ}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
+| `param/an-unset-name-stops-at-the-first-too` | **2>** `<shell>: 1: a: parameter not set` *(status 2)* | **2>** `<shell>: line 1: a: unbound variable` *(status 127)* | **2>** `<shell>: line 1: a: unbound variable` *(status 127)* | **2>** `<shell>: a: unbound variable` *(status 127)* | **2>** `<shell>: a: parameter not set` *(status 1)* | **2>** `<shell>:1: a: parameter not set` *(status 1)* |
 | `param/an-array-length-without-a-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `3 5` | `3 5` | `3 5` | `3 5` | `3 3` |
 | `param/an-empty-array-quoted-at` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=0` | `n=0` | `n=0` | `n=1` | `n=0` |
 | `param/a-negative-substring-length` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[bcd]` | `[bcd]` | **2>** `<shell>: -2: substring expression < 0` *(status 1)* | `[]` | `[bcd]` |
@@ -3328,6 +3357,22 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `param/transform-takes-exactly-one-letter` — the operator is @ followed by one letter: doubling a letter that is valid on its own is a bad substitution, so the family cannot be extended by repetition the way zsh's (q) can. And bash checks the letter only once it has a value — an *unset* name yields empty and status 0 for the very same spelling, so a probe that forgets to set the variable measures nothing. The three shells without the family reject both
   ```sh
   echo "[${u@QQ}]"; echo "u=$?"; x=a; echo "[${x@QQ}]"; echo unreached
+  ```
+- `param/bad-substitution-names-the-word` — what the sentence names is the *word*, not the ${…} inside it: bash writes `pre${x@QQ}post: bad substitution` and ksh93 the same word in its own quotes, while dash and zsh name nothing at all — three answers across the four. One command, because the first failure ends the line
+  ```sh
+  x=a; echo "pre${x@QQ}post"
+  ```
+- `param/bad-substitution-names-only-one-quoting` — the same question where the word changes quoting in the middle, which is what separates the two shells that name a word: bash stops at the change and blames ${x@QQ} alone, ksh93 blames 'lit'"${x@QQ}" whole. A separate row because the first bad word ends the command, so the two spellings cannot share one
+  ```sh
+  x=a; echo 'lit'"${x@QQ}"
+  ```
+- `param/bad-substitution-stops-at-the-first` — one diagnostic per command and not one per bad word — every column abandons the command at the first expansion it cannot answer. This implementation expanded the remaining words and reported each of them, which is four lines where a script's log expects one
+  ```sh
+  x=a; printf "[%s]" "${x@QQ}" "${x@ZZ}" "${x@YY}"; echo " after"
+  ```
+- `param/an-unset-name-stops-at-the-first-too` — the same rule reached through a different failure: `set -u` on two unset names names only the first. Kept beside the bad-substitution row because the two shared one cause — the command expanded every word before deciding not to run
+  ```sh
+  set -u; printf "[%s]" "$a" "$b"; echo " after"
   ```
 - `param/an-array-length-without-a-subscript` — zsh counts the elements for a bare ${#a}; bash and ksh93 measure element zero — probed with distinct lengths, because (one two three) hides the difference behind a three
   ```sh

@@ -43,6 +43,18 @@ func (r *Runner) expandWord(w *syntax.Word) []string {
 	return r.expandOneWord(w)
 }
 
+// inWord records the word being expanded and returns the undo, so a
+// diagnostic raised inside it can name the text the expansion sits in.
+//
+// It has to be put back rather than cleared: an expansion's operand is a word
+// of its own — `${u:-${y@QQ}}` — and the inner one finishing does not mean the
+// outer one has.
+func (r *Runner) inWord(w *syntax.Word) func() {
+	prevWord, prevSpan := r.expandingWord, r.expandingSpan
+	r.expandingWord, r.expandingSpan = w, 0
+	return func() { r.expandingWord, r.expandingSpan = prevWord, prevSpan }
+}
+
 // expandOneWord is the pipeline for a single word, after braces.
 func (r *Runner) expandOneWord(w *syntax.Word) []string {
 	if w == nil {
@@ -57,7 +69,21 @@ func (r *Runner) expandOneWord(w *syntax.Word) []string {
 	fields := []string{""}
 	any := false
 
-	for _, s := range w.Spans {
+	// Whether an expansion has already failed on this word. Every shell in
+	// the panel abandons the word at the first failure rather than going on
+	// to diagnose the rest of it, measured — `printf "[%s]" "${(q)x}"
+	// "${(qq)x}"` is one line of diagnosis in all six columns and was four
+	// here. The state before the loop is what is compared against, because a
+	// caller may have failed already and this word is not responsible for
+	// that.
+	failed := r.expandErr
+	defer r.inWord(w)()
+
+	for i, s := range w.Spans {
+		if (r.expandErr && !failed) || r.ctl == controlExit {
+			break
+		}
+		r.expandingSpan = i
 		// `$@` is the one expansion that yields more than one field on its
 		// own, so it cannot go through expandSpan, which returns a string.
 		// The first parameter joins onto whatever precedes it and the last
@@ -131,8 +157,16 @@ func (r *Runner) expandWordNoSplit(w *syntax.Word) []string {
 		return nil
 	}
 	r.expandTilde(w)
+	failed := r.expandErr
+	defer r.inWord(w)()
 	var b strings.Builder
-	for _, s := range w.Spans {
+	for i, s := range w.Spans {
+		if (r.expandErr && !failed) || r.ctl == controlExit {
+			// The word is abandoned at its first failed expansion, here as
+			// in the splitting path.
+			break
+		}
+		r.expandingSpan = i
 		if parts, ok := r.expandAt(s); ok {
 			b.WriteString(strings.Join(parts, " "))
 			continue
@@ -388,6 +422,18 @@ func (r *Runner) expandColonTildes(w *syntax.Word) {
 // on an empty list and `set -- "$*"` is not.
 func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 	if s.Kind != syntax.ParamExp || s.Param == nil {
+		return nil, false
+	}
+	if s.Param.Bad {
+		// An expansion the grammar could not read is not a shape at all, so
+		// none of the shapes below applies to it. Left to the scalar path,
+		// which reports it.
+		//
+		// This has to come before the subscript test: a Bad node still
+		// carries the `[@]` that was read before the operator failed, the
+		// array shape matched on it, and `${a[@]@Q}` under a dialect without
+		// the family answered with the plain elements at status 0 where the
+		// shell it claims to be calls it a bad substitution.
 		return nil, false
 	}
 	// A flag group changes what the whole expansion yields — how many
@@ -732,25 +778,89 @@ func containsAnyOf(s, chars string) bool {
 	return false
 }
 
+// reportBadSubstitution diagnoses an operator the grammar did not recognize,
+// deferred here by the dialect: said only now that the expansion is reached,
+// the way bash, dash and zsh treat a bad substitution.
+//
+// Two things about it are the dialect's. What the sentence *names* — the
+// expansion, the word, or the run of the word that shares its quoting — and,
+// for the `@` family in a grammar that has it, whether the letter is checked
+// at all when the name has no value.
+func (r *Runner) reportBadSubstitution(e *syntax.ParamExpr) {
+	if e.BadTransform && !r.transformHasValue(e) &&
+		r.ask(r.sem().TransformLetterCheckedOnlyWhenValued,
+			"whether a transformation's letter is checked on a name with no value") {
+		// Nothing to transform, so nothing to refuse: the expansion is
+		// empty, the status is untouched and no diagnostic is written.
+		return
+	}
+	// The fallback wording is the one dialect that names the construct; the
+	// others' own wordings carry no verb at all — except the dialect whose
+	// BadSubstitution is a parse-time syntax error, which words the deferred
+	// report separately.
+	w := r.diag().BadSubstitutionAtRun
+	if w == "" {
+		w = r.diag().BadSubstitution
+	}
+	r.diagf("%s\n", Wording(w, "${%[1]s}: bad substitution", r.badSubstitutionSubject(e)))
+	if e.BadTransform {
+		// The family exists here and only the letter was wrong, which makes
+		// this a failed *expansion* rather than a word that could not be
+		// read — measured to carry the status a failed expansion carries,
+		// which in one dialect depends on how the shell was started.
+		r.fatalExpansionQuiet()
+		return
+	}
+	r.expandErr = true
+}
+
+// badSubstitutionSubject is the text this dialect's bad-substitution sentence
+// names.
+func (r *Runner) badSubstitutionSubject(e *syntax.ParamExpr) string {
+	names := r.diag().BadSubstitutionNames
+	if names == NamesTheExpansion {
+		return e.Src
+	}
+	var text string
+	if names == NamesTheWholeWord {
+		text = syntax.PrintWord(r.expandingWord)
+	} else {
+		text = syntax.PrintWordQuotingRun(r.expandingWord, r.expandingSpan)
+	}
+	if text == "" {
+		// Reached from something that is not a word — a `case` subject read
+		// another way, a caller of its own. The expansion is then all there
+		// is to name, spelled as the wording expects to receive it.
+		return "${" + e.Src + "}"
+	}
+	return text
+}
+
+// transformHasValue reports whether the name a `@` operator was written on has
+// anything to transform.
+//
+// A *list* has one when it is not empty: `a=()` and no positional parameters
+// are both nothing to transform, measured, where an empty *string* is a value
+// and is refused. So the two spellings cannot share one test.
+func (r *Runner) transformHasValue(e *syntax.ParamExpr) bool {
+	if e.Index != nil && wholeArraySubscript(r.subscriptText(e.Index)) {
+		elems, ok := r.arraySubscript(e)
+		return ok && len(elems) > 0
+	}
+	if e.Index == nil && wholeArraySubscript(e.Name) {
+		return len(r.Params) > 0
+	}
+	_, set, _ := r.paramSource(e)
+	return set
+}
+
 // expandParam handles the forms this slice implements.
 func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 	if e == nil {
 		return ""
 	}
 	if e.Bad {
-		// An operator the grammar did not recognize, deferred here by the
-		// dialect: diagnosed only now that the expansion is reached, the way
-		// bash, dash and zsh treat a bad substitution. The fallback wording
-		// is the one dialect that names the construct; the others' own
-		// wordings carry no verb at all — except the dialect whose
-		// BadSubstitution is a parse-time syntax error, which words the
-		// deferred report separately.
-		w := r.diag().BadSubstitutionAtRun
-		if w == "" {
-			w = r.diag().BadSubstitution
-		}
-		r.diagf("%s\n", Wording(w, "${%[1]s}: bad substitution", e.Src))
-		r.expandErr = true
+		r.reportBadSubstitution(e)
 		return ""
 	}
 	if e.HasFlags {

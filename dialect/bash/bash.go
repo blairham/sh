@@ -83,6 +83,11 @@ func Semantics() interp.Semantics {
 	s.ArrayScalarIsTheWholeArray = interp.No
 	// A subscript inside a literal is an expression: `a=([1+1]=c)` lands at 2.
 	s.ArrayLiteralSubscriptIsAKey = interp.No
+	// The `@` family's letter is checked against the value rather than
+	// against the spelling: `${u@QQ}` on an unset name is empty at status 0
+	// and the same word on a set one is a bad substitution. Measured on
+	// four spellings and on an empty array, which counts as no value.
+	s.TransformLetterCheckedOnlyWhenValued = interp.Yes
 	s.AssignmentUpdatesPipelineStatus = interp.Yes
 	s.UnsetEndsTheProducedPipelineStatus = interp.No
 	s.SelectLayout = interp.SelectMenuVerticalThenColumns
@@ -368,9 +373,16 @@ func Diagnostics() interp.Diagnostics {
 		// Measured from a terminal: `[1]+` then two spaces, the state in a
 		// 27-wide column, then the command — with the `&` back on it while
 		// the job runs and gone once it has ended.
-		UnsetParameterStatusFromCommandString: 127,
-		ParamNullOrNotSet:                     "parameter null or not set",
-		JobLine:                               "[%[1]d]%[2]s  %-27[3]s%[4]s",
+		ExpansionFailureStatusFromCommandString: 127,
+		// The word, not the `${…}` inside it: `echo "[${x@QQ}]"` is refused
+		// as `[${x@QQ}]: bad substitution`. The run of the word that shares
+		// the expansion's quoting, and with the quotes off — `echo
+		// 'lit'"${x@QQ}"` names `${x@QQ}` alone, where `echo
+		// "pre${x@QQ}post"` names all of `pre${x@QQ}post`.
+		BadSubstitution:      "%[1]s: bad substitution",
+		BadSubstitutionNames: interp.NamesTheQuotingRun,
+		ParamNullOrNotSet:    "parameter null or not set",
+		JobLine:              "[%[1]d]%[2]s  %-27[3]s%[4]s",
 		// `jobs -l`: the same 27-wide state column, with the process id
 		// spending one of the two spaces after the marker rather than
 		// pushing the rest of the row along.

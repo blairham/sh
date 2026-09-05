@@ -33,6 +33,28 @@ import (
 // shell's behavior. A status has no such claim to make — the process must
 // exit with *some* number, and refusing to choose is not available. `sh` is
 // itself a shell, so where a dialect says nothing, `sh` answers for itself.
+// BadSubstitutionSubject is the text a bad-substitution diagnostic puts where
+// its verb is.
+//
+// Three answers because the panel gives three. One names the expansion and
+// nothing around it; one names the whole word exactly as it was written; and
+// one names the run of the word that shares the expansion's quoting, with the
+// quotes taken off — so `echo "pre${x@QQ}post"` blames all of
+// `pre${x@QQ}post` there while `echo 'lit'"${x@QQ}"` blames `${x@QQ}` alone.
+// The remaining two dialects name nothing at all and never reach this.
+type BadSubstitutionSubject uint8
+
+const (
+	// NamesTheExpansion is the `${…}` and nothing else, which is the
+	// substrate's own answer and the one a dialect gets by saying nothing.
+	NamesTheExpansion BadSubstitutionSubject = iota
+	// NamesTheQuotingRun is the run of spans around the expansion that share
+	// its quoting, written without the quote characters that surrounded it.
+	NamesTheQuotingRun
+	// NamesTheWholeWord is the word as written, quotes and all.
+	NamesTheWholeWord
+)
+
 type Diagnostics struct {
 	// SyntaxErrorStatus is the exit status of a script that did not parse.
 	//
@@ -809,15 +831,22 @@ type Diagnostics struct {
 	// with every message.
 	UnsetFunctionNotFound string
 
-	// UnsetParameterStatusFromCommandString is what a shell exits with when
-	// a parameter could not be expanded *and the program came from an
-	// argument* — `-c` — rather than from a file or standard input.
+	// ExpansionFailureStatusFromCommandString is what a shell exits with when
+	// an expansion failed *and the program came from an argument* — `-c` —
+	// rather than from a file or standard input.
 	//
 	// bash alone, and only there: 127 given with `-c`, 1 from a file or from
-	// standard input, for `set -u` and `${x?}` alike. Measured over eight
-	// other ways it stops, none of which differs by invocation. Zero leaves
-	// the dialect's ordinary fatal status standing either way.
-	UnsetParameterStatusFromCommandString int
+	// standard input, for `set -u`, `${x?}` and a `@` transformation whose
+	// letter does not exist alike. Measured over eight other ways it stops,
+	// none of which differs by invocation. Zero leaves the dialect's
+	// ordinary fatal status standing either way.
+	//
+	// It covers a *failed* expansion and not an unreadable word, which is
+	// the line the same shell draws itself: `${x@QQ}` on a value exits 127
+	// under `-c` and `${(q)x}` — a bad substitution for a different reason,
+	// found while reading the word rather than while expanding it — exits 1
+	// from the same invocation.
+	ExpansionFailureStatusFromCommandString int
 
 	// ParamErrorMessage is what `${x?word}` says. Two verbs: the parameter
 	// and the word. The shape is unanimous — `x: word` — and only the
@@ -1373,6 +1402,11 @@ type Diagnostics struct {
 	// `${x@j}: bad substitution` when reached. Empty falls back to
 	// BadSubstitution, which is a runtime wording everywhere else.
 	BadSubstitutionAtRun string
+	// BadSubstitutionNames is what the verb above is filled with. The
+	// default names the expansion; two dialects name the *word* it sits in
+	// and do not agree on how much of a word counts, which is why this is
+	// three answers and not a flag.
+	BadSubstitutionNames BadSubstitutionSubject
 	// ExpansionFlagsError is a character a parenthesized expansion-flag
 	// group could not carry, reported when the expansion is reached. Two
 	// verbs: the 1-based position counted from the `$`, and the whole

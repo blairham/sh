@@ -1142,7 +1142,32 @@ var Corpus = []Case{
 	{
 		ID: "printf/unknown-verb-diverges", Category: "printf",
 		Snippet: `printf "[%z]\n" x; echo "st=$?"`,
-		Why:     "half the panel names the character *after* the one it could not read and half names the conversion, with four wordings and three statuses between them",
+		Why:     "half the panel names the conversion character alone and half names the whole directive as written, with four wordings and three statuses between them. `z` is a length modifier in three of them, so the character they cannot read here is the `]`",
+	},
+	{
+		ID: "printf/a-length-modifier-on-a-conversion", Category: "printf",
+		Snippet: `printf "[%ld][%5ld][%Lf]\n" 42 42 1.5; echo "st=$?"`,
+		Why:     "the C length modifiers every shell with any of them takes, in the place C puts them — after the precision and before the verb. The one shell with none reads the `l` as the conversion and says so",
+	},
+	{
+		ID: "printf/a-length-modifier-c99-added", Category: "printf",
+		Snippet: `printf "[%zX][%jd][%lld][%hhd]\n" 255 42 42 42; echo "st=$?"`,
+		Why:     "the C99 additions, which is where the panel splits three ways rather than two: two shells take them, one takes only C89's `h`, `l` and `L` and calls these invalid directives, and one takes none at all",
+	},
+	{
+		ID: "printf/a-length-modifier-is-read-and-thrown-away", Category: "printf",
+		Snippet: `printf "[%hhd][%lld]\n" 300 9223372036854775807; echo "st=$?"`,
+		Why:     "an accepted modifier never narrows or widens anything: 300 through `%hhd` is 300 and not 44, and the largest signed 64-bit value survives `%lld` — so this is about what a format may say and never about what it means",
+	},
+	{
+		ID: "printf/a-run-of-length-modifiers", Category: "printf",
+		Snippet: `printf "[%llld][%hld]\n" 42 42; echo "st=$?"`,
+		Why:     "the shells with the C99 set skip a run of the letters rather than a list of spellings, so nonsense like `lll` and `hl` is accepted; the shell with C89's set takes exactly one letter and refuses both",
+	},
+	{
+		ID: "printf/an-unknown-conversion-names-the-character", Category: "printf",
+		Snippet: `printf "%v]xY" 1; echo "st=$?"`,
+		Why:     "a conversion no shell in the panel has, with a tail after it, which is what separates naming the conversion character from naming what follows it: two shells say `v` and two say `%v`, and none of them names the `]`",
 	},
 	{
 		ID: "printf/no-format-at-all", Category: "printf",
@@ -4680,6 +4705,48 @@ echo unreachable`,
 		Why:     "the quiet death, and the one no other case reaches: a builtin whose output goes into a pipe nobody is reading is killed by SIGPIPE where it stands, so `reached` never runs and nothing is said about it — unanimous in all four, and the point of the `>&2` is that a shell which merely swallowed the write would still print it. This is `yes | head` seen from the writing end, and it is the case the corpus was missing while `printf x | { read -d : v; }` measured the same thing by accident: there the write is small enough to fit, so whether it beats the reader's exit is the machine's to decide and the score wandered by one",
 	},
 	{
+		// The same doubling loop and the same dead reader, with one thing
+		// changed: SIGPIPE is ignored. An ignore is the one disposition that
+		// crosses into a pipeline element intact, so the writer meets the
+		// broken pipe with the signal already disarmed and the kernel hands
+		// back EPIPE instead. `2>/dev/null` on the failing write alone is
+		// what keeps this about the outcome rather than about the wording —
+		// four of the panel say something here and each says it differently,
+		// which is a separate question from whether the shell is still
+		// running to say anything at all.
+		ID: "pipeline/an-ignored-broken-pipe-does-not-kill-the-writer", Category: "pipeline status",
+		Snippet: `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; ( trap '' PIPE; { echo "$v" 2>/dev/null; echo reached >&2; } | true ); echo after`,
+		Why:     "the other half of the quiet death, and the half that shows it was never about the errno: EPIPE is not what kills the writer, SIGPIPE is, and a shell that has ignored SIGPIPE gets the failed write back as an ordinary failure. `reached` runs and `after` follows in every shell measured, against the neighboring case where the identical write ends the writer where it stands — so the difference between dying and carrying on is one `trap ''` and nothing else. The ignore is set inside a subshell rather than at the top: it is inherited from there either way, and a shell that is *the* shell ignores a signal for its whole process, which one harness runs the corpus inside of. bash 3.2 is recorded with a stray newline ahead of `reached`: its failed write leaves the line's terminator queued on the shared output stream and the next write to that stream flushes it out first",
+	},
+	{
+		ID: "cmd/an-empty-brace-group", Category: "command language",
+		Snippet:     `{ }; echo ok`,
+		SyntaxError: true,
+		Why:         "a compound command's body may not be empty: dash, both bash builds and ksh93 refuse the brace group and name the `}` they met where a command belonged, and zsh alone takes it. The core is the language every shell accepts, so an empty body is outside it and a dialect adds it back rather than the core allowing what four shells reject",
+	},
+	{
+		ID: "cmd/an-empty-subshell", Category: "command language",
+		Snippet:     `( ); echo ok`,
+		SyntaxError: true,
+		Why:         "the same rule with parentheses, which is what shows it is a rule about bodies rather than about braces — and it is not a `}` this time, so a shell that special-cased the brace would take it. The same four refuse and the same one takes it",
+	},
+	{
+		ID: "cmd/an-empty-loop-body", Category: "command language",
+		Snippet:     `while false; do done; echo ok`,
+		SyntaxError: true,
+		Why:         "the keyword form of the same rule: `done` where a command belongs. Worth its own case because a loop's body has a terminator of its own, so a parser could reach the end of it without ever asking whether anything was in it",
+	},
+	{
+		ID: "cmd/an-empty-command-substitution", Category: "command language",
+		Snippet: `x=$( ); echo "[$x] ok"`,
+		Why:     "the counter-case, and the line the rule stops at: a command substitution's body is a whole program rather than a compound command's body, and every shell in the panel takes an empty one. Without it a shell could refuse every empty thing and look right on four cases out of four",
+	},
+	{
+		ID: "cmd/a-case-with-no-arms", Category: "command language",
+		Snippet: `case x in esac; echo ok`,
+		Why:     "the other line the rule stops at, and the panel splits the other way here: a `case` with no arms is a list of *arms* rather than a command list, and dash, bash and zsh take it where ksh93 alone refuses. Recorded so the empty-body rule is not quietly widened to cover it",
+	},
+	{
 		ID: "cmd/close-brace-as-an-ordinary-word", Category: "command language",
 		Snippet: `echo }`,
 		Why:     "`}` is reserved only where a command may begin in three of the four, so as an argument it is an ordinary brace — and in zsh it is reserved wherever a word may stand, which is a parse error here and is the same rule that lets `{ echo a }` close without a terminator",
@@ -4978,6 +5045,23 @@ echo unreachable`,
 		ID: "opt/set-o-noexec-reads-and-never-runs", Category: "shell options",
 		Snippet: "echo before\nset -o noexec\necho after\n",
 		Why:     "the long spelling of `set -n`, and it behaves identically in all four: everything after it is read and never run, and the script still ends at 0 — the same option under its other name, which was refused as unimplemented here while the letter worked",
+	},
+	{
+		// The body goes to standard error on purpose, so that the command's
+		// own output and the echo of its lines land on one descriptor and
+		// their order is visible. With the two apart the same four lines come
+		// out in the same order whether the terminator is echoed with the
+		// command or after it, which is why this went unnoticed.
+		ID: "opt/set-v-echoes-a-here-document-with-its-command", Category: "shell options",
+		Script:  true,
+		Snippet: "set -v\ncat <<END >&2\nbody\nEND\necho after\n",
+		Why:     "all three physical lines of a command carrying a here-document are written back before any of it runs, terminator included — unanimous. The delimiter belongs to the command that opened it rather than to the input after it, and a shell that counts only the lines the parser turned into a command echoes it on the back of the next one, after the body has already been written out",
+	},
+	{
+		ID: "opt/set-v-echoes-the-tail-after-the-last-command", Category: "shell options",
+		Script:  true,
+		Snippet: "set -v\necho one\n\n\n# the end\n",
+		Why:     "the option's contract is to write back what it reads, and the lines after the last command are read like any others: two blank lines and a comment, echoed by all four. Blank lines and comments *between* commands are dragged out by the line that follows them, so only the tail — where there is no line after — shows a shell that echoes per command rather than per line. The comment is last because a record trims trailing newlines, and blank lines at the very end would leave nothing to compare",
 	},
 	{
 		ID: "opt/set-o-verbose-echoes-what-is-read", Category: "shell options",

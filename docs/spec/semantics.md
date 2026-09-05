@@ -969,11 +969,57 @@ grammar, so `PrintfTimeConversion` is No there and four corpus rows show
 the ksh93 column diverging, which is the honest record of an unbuilt
 feature rather than a silent one.
 
-One thing measured on the way that is **not** this conversion and is
-worth its own change: bash reads the C length modifiers — `%zX`, `%ld`,
-`%jd` — and this engine calls them unknown conversions. That is why bash
-names `T` in `printf '%T'` where it names the character *after* `z` in
-`printf '%z]'`: `z` is a modifier there and `T` is a verb.
+### The C length modifiers
+
+A conversion may carry a C length modifier between its precision and its
+verb, and the panel splits three ways over which ones. Measured with
+`/bin/bash` 3.2.57, `/opt/homebrew/bin/bash` 5.3.15, `/bin/ksh` 93u+
+2012-08-01, `/opt/homebrew/bin/zsh` 5.9.2 and `/bin/dash`:
+
+    printf '[%ld]'  42        bash 42   ksh93 42   zsh 42   dash %l: invalid directive
+    printf '[%Lf]'  1.5       bash ok   ksh93 ok   zsh ok   dash %L: invalid directive
+    printf '[%lld]' 42        bash 42   ksh93 42   zsh %ll: invalid directive
+    printf '[%zX]'  255       bash FF   ksh93 FF   zsh %z:  invalid directive
+    printf '[%jd]'  42        bash 42   ksh93 42   zsh %j:  invalid directive
+    printf '[%llld]' 42       bash 42   ksh93 42   zsh %ll: invalid directive
+    printf '[%hld]' 42        bash 42   ksh93 42   zsh %hl: invalid directive
+
+So: dash has none; zsh has `h`, `l` and `L` and exactly one of them,
+which is C89's set — the refusals are precisely C99's additions; bash and
+ksh93 have all eight and skip a *run* of the letters rather than a list
+of spellings, which is why `%llld` and `%hld` are accepted.
+
+Every one of them is read and thrown away. `printf '%hhd' 300` is 300 and
+not 44 in all four that take it, and `printf '%lld'` with the largest
+signed 64-bit value is that value — a shell's arithmetic is one width and
+the modifier cannot change it. This is about what a format may *say* and
+never about what it means, which is what makes one set-valued axis enough.
+
+The diagnostic follows from the parse rather than being its own rule. A
+conversion nobody has is named two ways, and only two:
+
+    printf '%v]xY' 1     bash    `v': invalid format character
+                         ksh93   v: unknown format specifier
+                         zsh     %v: invalid directive
+                         dash    %v: invalid directive
+
+bash and ksh93 name the conversion character alone — neither names the
+`]` after it — and zsh and dash name the whole directive as written. That
+is why bash names `T` in `printf '%T'` and `]` in `printf '%z]'`: `z` is
+a modifier there, so the conversion it could not read is the `]`. It was
+recorded here as "the character *after* `z`", which was the wrong reading
+of a right observation, and it survived because nothing in the corpus put
+a tail after a bad conversion.
+
+Two things ksh93 does here are **not** modeled, and neither belongs to
+this axis:
+
+- ksh93 will read a width *after* a modifier — `printf '%l5d' 42` is a
+  padded 42 there and an error in bash and zsh. That is its free-order
+  conversion prefix and has nothing to do with modifiers: `printf '%5-d'`
+  and `printf '%5 d'` work in ksh93 too, with no modifier in them at all.
+- ksh93 appends a newline to any output holding a byte above the ASCII
+  range, in a format and inside `$'…'` alike.
 
 ## A capability the corpus cannot hand a case
 

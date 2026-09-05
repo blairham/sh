@@ -750,6 +750,31 @@ func (r *Runner) setFd(fd int, v any) {
 // small write beats the closing read end is a coin flip the machine gets to
 // call. Idle it never lost; under sixteen spinning loads it lost 3 times in
 // 200, and the reference dash lost 0 in 200 either way.
+//
+// The death is conditional on the signal, and that is the half this missed.
+// EPIPE is not the death; the death is SIGPIPE, and a write only raises a
+// fatal one because nothing is stopping it. A script that ignores SIGPIPE
+// stops it, and so does one that handles it, and the kernel then hands the
+// errno back to a writer that is still running. Measured on a builtin writing
+// more than a pipe will hold into a reader that has gone, and the panel is
+// unanimous on the part that matters: with SIGPIPE ignored, and again with it
+// handled, every one of dash, bash 5.3, bash 3.2, ksh93 and zsh reaches the
+// command after the failed write. Four of them also say something, in the same
+// wording they use for `>&-`, which is what puts this back on the ordinary
+// path rather than on one of its own — and where a handler is set, all four
+// run it.
+//
+// So EPIPE asks about the disposition rather than about the errno. Only the
+// default action is a death; anything the script arranged leaves an ordinary
+// failed write, where the existing axis decides the status and the existing
+// wording decides the text, and a handler is delivered the way every other
+// handler is — recorded here and run between commands.
+//
+// Which disposition is in force is a question about *where* the write
+// happened, and the trap table answers it: a pipeline element carries an
+// inherited ignore and not an inherited handler, so a handled SIGPIPE outside
+// the pipeline leaves the writer inside it dying exactly as an untrapped one
+// does. That is measured too.
 func (r *Runner) builtinWriteStatus(name string, st int) int {
 	err := r.writeFailed
 	r.writeFailed = nil
@@ -757,8 +782,17 @@ func (r *Runner) builtinWriteStatus(name string, st int) int {
 		return st
 	}
 	if errors.Is(err, syscall.EPIPE) {
-		r.signalDeath("PIPE", syscall.SIGPIPE)
-		return r.status
+		arranged := r.signalArranged("PIPE")
+		if arranged == signalFatal {
+			r.signalDeath("PIPE", syscall.SIGPIPE)
+			return r.status
+		}
+		// Not a death, so the signal is answered here rather than left to the
+		// runtime's copy of it. A handler runs between commands and not at
+		// the write, so it is delivered rather than run — and only at the top
+		// level, because a handler an element set for itself is the subshell
+		// trap model's question and the *outer* shell's handler is nobody's.
+		r.brokenPipeAbsorbed(arranged == signalHandledBy && r.traps == nil)
 	}
 	if !r.ask(r.sem().BuiltinWriteErrorFailsTheCommand, "a builtin's failed write failing the command") {
 		return st

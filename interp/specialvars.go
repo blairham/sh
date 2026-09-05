@@ -46,15 +46,12 @@ func (r *Runner) ensureSpecials() {
 		// while a process substitution's goroutine may be reading the shared
 		// table, and rewriting the same producer was a write all the same.
 		r.Dynamic["_"] = func(r *Runner) string {
-			// The tracked argument in the dialects that move `$_`;
-			// elsewhere, and before anything ran, whatever the environment
-			// brought — the invoking shell's own note of what it last ran.
+			// The tracked argument in the dialects that move `$_`.
 			if r.lastArgSet &&
 				r.ask(r.sem().UnderscoreTracksTheLastArgument, "`$_` following the last argument") {
 				return r.lastArg
 			}
-			v, _ := r.inheritedValue("_")
-			return v
+			return r.underscoreAtStartup()
 		}
 	}
 	if _, ok := r.Vars["PPID"]; !ok && !r.removed["PPID"] {
@@ -196,6 +193,59 @@ func (r *Runner) showsS() bool {
 		return true
 	}
 	return r.Route == RouteCommandString && r.sem().CommandStringShowsSInDollarDash == Yes
+}
+
+// ForgetLastArgument puts `$_` back to the value it has before any command
+// has run, which is what a front end calls after sourcing text the script's
+// author did not write.
+//
+// A dialect's prelude is shell, so it moves `$_` exactly as a script would:
+// bash's ends in an assignment, which leaves the parameter empty everywhere
+// that tracks it, and a script whose first line read `$_` got that instead of
+// the startup value. It is the same reasoning that already holds the
+// invocation's `set` options back until the prelude has run — tracing the
+// dialect's own plumbing under `-x`, or stopping on it under `-e`, reports on
+// machinery nobody wrote.
+//
+// Exported rather than done inside Run because only the caller knows which
+// text was the script's: the interpreter is handed a parsed file either way
+// and the two are indistinguishable to it.
+func (r *Runner) ForgetLastArgument() { r.lastArg, r.lastArgSet = "", false }
+
+// underscoreAtStartup is `$_` before anything has moved it, and it is still
+// the answer afterwards in the shells that never move it at all.
+//
+// Two questions in order, because that is the order the panel answers them
+// in: an `_` the environment carried wins, and the invocation is written only
+// where the environment said nothing. bash is the only member that writes
+// one, and it writes argv[0] — so it is the invocation and not `$0`, which a
+// `-c` shell takes from its first operand.
+//
+// A shell that *discards* the environment's `_` still reaches the second
+// question, which the panel cannot decide either way — the one member that
+// discards is also the one that writes nothing — so the two axes compose
+// rather than the first swallowing the second.
+//
+// Neither is asked where the answer cannot matter. An axis a dialect has not
+// answered reports itself, and a shell that was handed no `_` and has no
+// invocation to write has nothing to disagree about.
+func (r *Runner) underscoreAtStartup() string {
+	if v, ok := r.inheritedValue("_"); ok {
+		if r.ask(r.sem().UnderscoreInheritsFromTheEnvironment, "`$_` taking the value the environment brought") {
+			return v
+		}
+		if r.sem().UnderscoreInheritsFromTheEnvironment != No {
+			// Refused for want of an answer rather than answered no, and
+			// the refusal has already been reported. Asking the second
+			// question would report the same thing twice about one read.
+			return ""
+		}
+	}
+	if r.Invocation != "" &&
+		r.ask(r.sem().UnderscoreStartsAtTheInvocation, "`$_` starting at the invocation") {
+		return r.Invocation
+	}
+	return ""
 }
 
 // setVarQuietly assigns without going through the readonly check or the

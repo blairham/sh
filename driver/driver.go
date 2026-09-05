@@ -783,6 +783,11 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		Semantics:   &sh.Semantics,
 		Diagnostics: &dg,
 		Name:        name,
+		// argv[0], which is a different fact from Name and is the one the
+		// startup `$_` follows. withDefaults has already preferred the real
+		// argv[0] over the configured fallback, so this is the word the
+		// process was executed as wherever there was one.
+		Invocation: sh.Name,
 		// `$1` onward. A nil slice and an empty one mean the same thing to
 		// the interpreter, so nothing distinguishes "no operands" from
 		// "operands that were all consumed as the name".
@@ -1277,6 +1282,13 @@ func (sh Shell) source(r *interp.Runner, name string) int {
 	f, err := syntax.Parse(sh.Prelude, sh.Dialect)
 	if err == nil {
 		_, err = r.Run(context.Background(), f)
+		// The prelude is the dialect's plumbing and not a command the
+		// script ran, so what it leaves in `$_` is not an answer about the
+		// script. Without this the parameter arrived at the script's first
+		// line already moved — empty, after the assignment bash's prelude
+		// ends on — and the startup value was unreachable through any
+		// binary that has a prelude at all.
+		r.ForgetLastArgument()
 	}
 	if err != nil {
 		sh.errf("%s: prelude: %v\n", name, err)

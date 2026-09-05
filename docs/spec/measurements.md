@@ -2042,6 +2042,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `special/underscore-follows-the-last-argument` | `[]~[]` | `[two]~[]` | `[two]~[]` | `[two]~[]` | `[]~[]` | `[two]~[]` |
 | `special/underscore-after-a-declaration-command` | `a=[]~b=[]` | `a=[]~b=[y=2]` | `a=[]~b=[y=2]` | `a=[]~b=[y]` | `a=[]~b=[]` | `a=[]~b=[export]` |
 | `special/underscore-at-startup` | `[]` | `[<shell>]` | `[sh]` | `[<shell>]` | `[]` | `[]` |
+| `special/underscore-inherited-from-the-environment` | `[inherited]` | `[inherited]` | `[inherited]` | `[inherited]` | `[inherited]` | `[]` |
 | `special/dollar-dash-in-full` | `[]` | `[hBc]` | `[hBc]` | `[hBc]` | `[chsB]` | `[569X]` |
 | `special/dollar-dash-in-full-from-a-script` | `[]` | `[hB]` | `[hB]` | `[hB]` | `[hB]` | `[569X]` |
 | `special/dollar-dash-orders-the-letters-its-own-way` | `[ufe]` | `[efhuBc]` | `[efhuBc]` | `[efhuBc]` | `[cefhsuB]` | `[569Xefu]` |
@@ -2068,6 +2069,10 @@ grades it and nothing drift-checks it either, for the same reason.
   x=1; echo "a=[$_]"; export y=2; echo "b=[$_]"
   ```
 - `special/underscore-at-startup` — before any command has run, $_ holds how the shell was *invoked*: bash writes the path it was started as, and the same binary called `sh` writes `sh`, which is argv[0] rather than the path — so the parameter carries the invocation and not the executable. dash, ksh93 and zsh leave it empty. Run from a script rather than -c because that is the route where the answer is a path at all
+  ```sh
+  echo "[$_]"
+  ```
+- `special/underscore-inherited-from-the-environment` — the other half of the startup value, and the half no snippet can ask about, since nothing running inside a shell can put a name in the environment that shell was started with. An exported `_` beats the invocation in five of the six — bash writes argv[0] only where the environment said nothing — and zsh alone discards it and starts empty however it was called. It is also the row that shows the neighboring case is not the whole rule: three columns are empty there and only one of them is empty here
   ```sh
   echo "[$_]"
   ```

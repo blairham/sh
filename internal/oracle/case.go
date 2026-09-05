@@ -859,6 +859,11 @@ var Corpus = []Case{
 		Why:     "before any command has run, $_ holds how the shell was *invoked*: bash writes the path it was started as, and the same binary called `sh` writes `sh`, which is argv[0] rather than the path — so the parameter carries the invocation and not the executable. dash, ksh93 and zsh leave it empty. Run from a script rather than -c because that is the route where the answer is a path at all",
 	},
 	{
+		ID: "special/underscore-inherited-from-the-environment", Category: "parameters", Env: []string{"_=inherited"},
+		Snippet: `echo "[$_]"`,
+		Why:     "the other half of the startup value, and the half no snippet can ask about, since nothing running inside a shell can put a name in the environment that shell was started with. An exported `_` beats the invocation in five of the six — bash writes argv[0] only where the environment said nothing — and zsh alone discards it and starts empty however it was called. It is also the row that shows the neighboring case is not the whole rule: three columns are empty there and only one of them is empty here",
+	},
+	{
 		ID: "special/dollar-dash-in-full", Category: "parameters",
 		Snippet: `echo "[$-]"`,
 		Why:     "the whole of $- rather than a test for one letter in it. The `invoke/dollar-dash-*` cases ask whether `c` or `s` is present, which is the axis; this records what each shell actually carries, and the answers share almost nothing: dash writes *nothing at all* for a command string, bash `hBc`, ksh93 `chsB`, and zsh a set of digits. So there is no common alphabet to write a default over, and a claim about `$-` that does not name a shell is not a claim",

@@ -182,6 +182,10 @@ func Semantics() interp.Semantics {
 	s.HashSearchesPathAlone = interp.Yes
 	s.TildePlusMinusExpands = interp.Yes
 	s.UnderscoreTracksTheLastArgument = interp.Yes
+	// And starts it empty regardless, alone in the panel: an exported `_`
+	// is discarded rather than carried in, so the parameter says nothing
+	// about the invocation until the first command has run.
+	s.UnderscoreInheritsFromTheEnvironment = interp.No
 	// Bases stop at 36 here, and the refusal says so.
 	s.ArithBaseAbove36 = interp.No
 	// ${#a} of an array counts elements, and a function's $LINENO counts

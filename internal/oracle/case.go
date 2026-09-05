@@ -2146,6 +2146,11 @@ echo "st=$?"`,
 		Why:     "the rule that decides the implementation: counting parens truncates the substitution and silently changes the program",
 	},
 	{
+		ID: "subst/brace-in-quotes-does-not-close", Category: "substitutions",
+		Snippet: `printf "[%s]" "${x:-"a}b"}"`,
+		Why:     "the same rule one construct over: counting braces stops at the quoted } and leaves the rest of the expansion behind as text",
+	},
+	{
 		ID: "subst/nesting", Category: "substitutions",
 		Snippet: `echo "[$(echo "$(echo deep)")]"`,
 		Why:     "nesting works because the scan tracks quoting, not because of a separate rule",

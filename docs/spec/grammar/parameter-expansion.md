@@ -63,8 +63,10 @@ Measured with `p=a.b.c`, unanimous:
 | `${p#x}` | `a.b.c` — a pattern that does not match removes nothing |
 
 The patterns are **glob patterns, not regular expressions**: `${p#[ab]}`
-and `${p#?}` both yield `bc`. Doubling the operator is what selects the
-longer match; there is no greediness syntax inside the pattern.
+and `${p#?}` both yield `.b.c`, because a bracket expression and a `?`
+each match exactly one character — the leading `a` — and neither repeats.
+Doubling the operator is what selects the longer match; there is no
+greediness syntax inside the pattern.
 
 ## Length, and where it diverges
 

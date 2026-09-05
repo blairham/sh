@@ -64,15 +64,18 @@ recommending. Its delimiter is a backtick that is not backslash-escaped.
 
 ## `${…}`
 
-`${x:-y}` and its relatives already lex as one word today, because braces
-are not word delimiters and nothing inside them is either. That is
-accidental rather than correct: a `}` inside a quoted section of the
-expansion would end it early.
+`${x:-y}` and its relatives lex as one word, and the delimiting rule is
+the same as for `$( )` — track quoting, stop at the matching close. That
+is what makes a `}` inside a quoted section ordinary rather than the end
+of the expansion:
 
-The delimiting rule is the same as for `$( )` — track quoting, stop at
-the matching close — and the **operators inside** (`:-`, `#`, `%`, `/`,
-`:offset:length`, `[index]`) are a separate specification this document
-does not attempt. The lexer only has to find the end.
+    ${x:-"a}b"}   →  a}b   unanimous
+                          (`subst/brace-in-quotes-does-not-close`)
+
+Counting braces without tracking quotes would stop at the first `}` and
+leave `b"}` behind as text. The **operators inside** (`:-`, `#`, `%`,
+`/`, `:offset:length`, `[index]`) are a separate specification this
+document does not attempt. The lexer only has to find the end.
 
 ## What this does not cover
 

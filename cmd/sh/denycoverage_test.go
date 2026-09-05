@@ -87,6 +87,29 @@ var exempt = map[string]string{
 		"from the script and leave it reachable. See interp/seams.go.",
 }
 
+// unaccounted names the kinds that neither table speaks for, and the ones both
+// speak for, which are the two ways this guard goes wrong.
+//
+// Split out from the test so the test below can hand it a vocabulary of its
+// own. A guard that can only be pointed at the tree it guards is a guard whose
+// own failure looks exactly like success — which is not hypothetical here:
+// reporting a missing kind as a skip left the whole suite green, and the guard
+// would then have watched a seventh kind land in the silence it exists to
+// break. A mutation is what said so.
+func unaccounted(kinds []string) (missing, both []string) {
+	for _, name := range kinds {
+		_, canDeny := denyable[name]
+		_, isExempt := exempt[name]
+		switch {
+		case canDeny && isExempt:
+			both = append(both, name)
+		case !canDeny && !isExempt:
+			missing = append(missing, name)
+		}
+	}
+	return missing, both
+}
+
 func TestEveryActionKindCanBeDenied(t *testing.T) {
 	kinds, err := actionKinds(seamsFile)
 	if err != nil {
@@ -96,24 +119,25 @@ func TestEveryActionKindCanBeDenied(t *testing.T) {
 		t.Fatalf("found %d action kinds in %s, want the whole block — the guard is looking in the wrong place",
 			len(kinds), seamsFile)
 	}
+	missing, both := unaccounted(kinds)
+	if len(missing) != 0 {
+		t.Errorf("%v can be watched and not refused.\n"+
+			"Every kind the gate defines needs a way to say no through -deny, or the "+
+			"debug surface has a hole that looks exactly like a shell that works — "+
+			"which is what ActionSignal was.\n"+
+			"Add a -deny value for it here, or, if it genuinely must not be gated, "+
+			"add it to exempt with the reason.", missing)
+	}
+	if len(both) != 0 {
+		t.Errorf("%v are both denyable and exempt: pick one", both)
+	}
 
 	for _, name := range kinds {
+		tc, ok := denyable[name]
+		if !ok {
+			continue
+		}
 		t.Run(name, func(t *testing.T) {
-			if why, ok := exempt[name]; ok {
-				if _, both := denyable[name]; both {
-					t.Fatalf("%s is both denyable and exempt: pick one", name)
-				}
-				t.Skipf("exempt: %s", why)
-			}
-			tc, ok := denyable[name]
-			if !ok {
-				t.Fatalf("%s can be watched and not refused.\n"+
-					"Every kind the gate defines needs a way to say no through -deny, or the "+
-					"debug surface has a hole that looks exactly like a shell that works — "+
-					"which is what ActionSignal was.\n"+
-					"Add a -deny value for it here, or, if it genuinely must not be gated, "+
-					"add it to exempt with the reason.", name)
-			}
 			g, err := denyRules([]string{tc.value})
 			if err != nil {
 				t.Fatalf("-deny %s: %v", tc.value, err)
@@ -193,10 +217,31 @@ func isActionKindBlock(gen *ast.GenDecl) bool {
 // The guard catches what it is for.
 //
 // A guard over a vocabulary that already obeys the rule reports nothing whether
-// it works or not, so the passing run above is not evidence. This points the
-// reader at a source of its own and checks that a seventh kind shows up in what
-// it finds — which is the whole mechanism, since the test above fails on any
-// name it does not have an entry for.
+// it works or not, so the passing run above is not evidence. These are the two
+// halves of the mechanism written out: that a seventh kind is *found* in the
+// declaration, and that a found kind nothing speaks for is *reported*.
+func TestTheGuardReportsAKindNothingSpeaksFor(t *testing.T) {
+	missing, both := unaccounted([]string{"ActionExec", "ActionInherit", "ActionConnect"})
+	if !slices.Contains(missing, "ActionConnect") {
+		t.Errorf("missing = %v, want the kind nothing speaks for reported", missing)
+	}
+	if slices.Contains(missing, "ActionExec") {
+		t.Errorf("missing = %v, want a denyable kind left out of it", missing)
+	}
+	if slices.Contains(missing, "ActionInherit") {
+		t.Errorf("missing = %v, want an exempt kind left out of it", missing)
+	}
+	if len(both) != 0 {
+		t.Errorf("both = %v, want none — no kind is in two tables today", both)
+	}
+	// And nothing is reported for a vocabulary that is fully spoken for, or the
+	// guard would fail whatever the tables said, which is a guard nobody acts
+	// on twice.
+	if m, b := unaccounted([]string{"ActionExec", "ActionInherit"}); len(m) != 0 || len(b) != 0 {
+		t.Errorf("a covered vocabulary reported missing %v and both %v", m, b)
+	}
+}
+
 func TestTheGuardSeesASeventhKind(t *testing.T) {
 	const src = `package interp
 

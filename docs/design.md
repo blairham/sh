@@ -176,6 +176,10 @@ own. Containing what a command does once it is running is the job of an
 OS sandbox backend, which sits above this and is what a real `Gate`
 implementation would reach for.
 
+`design/sandboxing.md` is the shipped policy that fills the seam: the
+policy format, the default posture, what a refusal looks like, and the
+event schema its consumers share.
+
 ## The process model is decided now
 
 Background jobs are **real process groups**, not goroutines.

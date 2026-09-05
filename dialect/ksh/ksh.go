@@ -379,6 +379,12 @@ func Semantics() interp.Semantics {
 	// redirections, and closing through a name that holds nothing is not
 	// worth a word here.
 	s.FdVariableOutlivesTheCommand = interp.No
+	// And a descriptor `exec` opened is this shell's alone: measured, and its
+	// manual says so — a file descriptor number greater than 2 opened by
+	// `exec`'s redirection list is closed when it invokes another program.
+	// One the caller opened still crosses, and so does one the command
+	// redirects itself.
+	s.ExecOpenedFdReachesACommand = interp.No
 	s.FdVariableBadCloseIsAnError = interp.No
 
 	return s

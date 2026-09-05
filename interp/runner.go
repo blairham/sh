@@ -501,6 +501,17 @@ type Runner struct {
 	// number, so a script that hands a bare descriptor number to a child for
 	// the child's own use is not served by this.
 	fds map[int]any
+	// execFds are the numbers in that table that `exec`'s own redirection
+	// list opened, which one dialect keeps to itself when it runs anything.
+	// A per-command redirection on the same number takes the mark off for
+	// that command — see ExecOpenedFdReachesACommand, which is the only
+	// reader.
+	execFds map[int]bool
+	// redirFds are the numbers beyond the named streams that the command
+	// being set up has just written, in the order it wrote them. The caller
+	// reads it once, to learn what to mark when a command's redirections
+	// turn out to outlive it.
+	redirFds []int
 	// inheritedPublished says InheritedFiles has already been put into the
 	// table. Copied by clone with the rest of the struct, which is what keeps
 	// a subshell from publishing over the table it was cloned with.
@@ -1728,6 +1739,10 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 	}
 	closers, err := r.applyRedirs(ctx, c.Redirs, false)
 	r.redirectForBuiltin = ""
+	// Read here rather than in the defer: a builtin that runs a program of its
+	// own — `eval`, `.` — applies redirections of its own on the way, and this
+	// command's are the ones that were just applied.
+	wroteFds := r.redirFds
 	defer func() {
 		if r.keepRedirs {
 			// `exec > log` is the one command whose redirections outlive it.
@@ -1735,6 +1750,10 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			// puts the saved streams back, and the rest hold files the script
 			// still needs open.
 			r.keepRedirs = false
+			// And outliving the command is what makes them `exec`'s, which
+			// one dialect needs to know: the descriptors it opened this way
+			// are the ones it keeps to itself when it runs anything.
+			r.markExecOpened(wroteFds)
 			return
 		}
 		for _, c := range closers {

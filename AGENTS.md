@@ -76,6 +76,7 @@ refuses what every real shell accepts is a core nobody can write against.
     cmd/bash cmd/zsh  dialect binaries, as proof the library goal holds
     cmd/dash cmd/ksh  …
     cmd/oracle        records what real shells do
+    cmd/smoke         drives a session through a terminal, per-feature
 
 **The core does not know its successors.** `syntax` and `interp` define the
 questions — a grammar flag, a semantics axis, a diagnostic value — and each
@@ -215,6 +216,9 @@ what a binary meant to be liftable into its own repository must not need.
 `check` runs `fmt vet test corpus-guard oracle-check`. Lint runs in CI,
 not pre-commit — it is too slow for every commit. When in doubt run
 `make check` *and* `make lint`.
+
+The report targets are `conformance`, `conformance-dialects`, `wild`,
+`wild-run` and `smoke`. None of them gates; each is described below.
 
 ## Installing, and the name collision
 
@@ -459,6 +463,38 @@ timeout on each — so a whole-machine run takes minutes. `ARGS='-dirs
 Not a gate either, and for a stronger reason than conformance: the answer
 depends on what happens to be installed, so it cannot be the same twice on
 two machines.
+
+`make smoke` starts each dialect binary on a real pseudo-terminal with a
+scratch `HOME` and drives a session a person would have: an rc file with an
+alias, a function and a `PS1` in it, a prompt, Tab, up-arrow, `C-r`, a
+pipeline, a background job, `^Z` and `fg`, and `exit`. It answers **one row
+per feature** and never one boolean, because a shell whose rc file is never
+read fails four rows for one reason and a suite that stops at the first of
+them reports a shell about which nothing else is known. `internal/smoke`
+holds it and `cmd/smoke` prints the table.
+
+It exists because the interactive surface has no other test. The corpus
+invokes everything with `-c`, `make wild` reads scripts and `make wild-run`
+runs them — none of which involves a terminal, an editor, a prompt or a
+keystroke, so every gap on the `daily-driver` label was found by somebody
+hand-driving a pty for ten minutes. That is a fine way to find the first ten
+and a hopeless way to learn whether they are fixed.
+
+Two rules make it worth reading. **A mark is never text that is typed**: the
+terminal echoes keystrokes, so a wait on a mark the line contains passes for
+a shell that draws the line back and runs nothing — every line is written as
+an expression, `echo alias-$((6 * 7))-ok` in and `alias-42-ok` out, and a
+test holds the invariant. And **the assertions are written against what bash
+and zsh do rather than against what this tree does today**: rows known to be
+missing carry the issue that owns them, so a known gap is quiet, an unowned
+one is an exit status, and a gap that closes announces itself. Weakening one
+until it passes would produce a green table about an unusable shell, which
+is the exact failure the suite exists to prevent.
+
+Not a gate, for the reasons `make wild-run` is not one and one more: it
+asserts on a job actually resuming, which is timing. `go test` covers the
+instrument's own machinery — the wait discipline, the scratch home, the
+grading — and the session it drives is a target you run.
 
 `make corpus-guard` fails when the corpus has *lost* a case. It runs in
 `make check` and as a step of the required `Build and test (ubuntu-latest)`

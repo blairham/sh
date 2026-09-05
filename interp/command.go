@@ -53,13 +53,11 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 	// machine, so it is accepted and changes nothing — which is what it
 	// means for a shell that never had the developer's PATH to begin with.
 	// `-v` and `-p` are read by all four. What splits them is a leading `-`
-	// word that is *not* one of those: bash and dash refuse it as an option,
-	// and ksh93 and zsh stop reading options and take it as the command, so
-	// `command -x ls` is `command not found: -x` there.
-	//
-	// `-p` means "use a default PATH". Ours is already the Runner's rather
-	// than the process's, and inventing a second would be a guess about this
-	// machine, so it is accepted and changes nothing.
+	// word that is *not* one of those: bash, dash and ksh93 refuse it as an
+	// option, and zsh alone stops reading options and takes it as the
+	// command, so `command -q ls` is `command not found: -q` there. Probed
+	// with a letter no panel shell owns — `-x` is a real ksh93 option, and
+	// the first measurement read ksh93 off it, wrongly.
 	verbose, sentence := false, false
 	for len(args) > 0 {
 		a := args[0]
@@ -79,7 +77,7 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 			args = args[1:]
 			continue
 		}
-		if !r.ask(r.sem().CommandRejectsUnknownOption, "`command -x` refused as an option rather than run as the command") {
+		if !r.ask(r.sem().CommandRejectsUnknownOption, "`command -q` refused as an option rather than run as the command") {
 			break
 		}
 		if r.unspecified {

@@ -45,9 +45,9 @@ func (a Answer) String() string {
 // `&>` or does not depending on which build is installed, twelve years apart
 // under the same name, so a field called `Ksh` could not be given a value.
 //
-// Eighteen axes were measured across four shells and produced eight distinct
-// groupings — no ordering of the shells explains the data, which is why this
-// is a vector and not a level.
+// The axes were measured across four shells and produced groupings that
+// overlap and contradict — no ordering of the shells explains the data,
+// which is why this is a vector and not a level.
 type Semantics struct {
 	// SplitParamExpansion field-splits the result of an unquoted parameter
 	// expansion. False in zsh, and narrower than "word splitting": zsh still
@@ -244,8 +244,7 @@ type Semantics struct {
 	// it showed that would be worse, because every other axis is genuinely
 	// binary and a wider Answer would let `BracketBadPattern` be assigned to
 	// any of them and still compile. An axis with three answers gets a type
-	// with three values; the twenty-three binary ones keep the type that
-	// says so.
+	// with three values; the binary ones keep the type that says so.
 	UnterminatedBracket BracketPolicy
 	// TraceAssignmentsSeparately gives each assignment of `a=1 b=2` its own
 	// trace line. True in bash and ksh93; dash and zsh put them on one.
@@ -567,7 +566,9 @@ type Semantics struct {
 	// in bash because its bare form validates nothing, not because the dash
 	// was eaten — `unset -v -`, which does validate, names the dash there.
 	// zsh reports `not enough arguments` instead, because after the dash is
-	// eaten there is nothing left to unset.
+	// eaten there is nothing left to unset. Recorded as
+	// `name/a-lone-dash-given-to-a-builtin` and
+	// `name/unset-v-validates-the-lone-dash`.
 	LoneDashIsAnOption Answer
 
 	// ReturnOutsideAFunctionIsRefused reports a `return` that has nothing to
@@ -930,18 +931,25 @@ type Semantics struct {
 	// CommandRejectsUnknownOption refuses a leading `-` word that is not one
 	// of `command`'s own options, rather than taking it as the command.
 	//
-	// All four read `-v` and `-p`. bash and dash refuse anything else;
-	// ksh93 and zsh stop reading options there, so `command -x ls` is
-	// `command not found: -x`. The same shape printf already has.
+	// All four read `-v` and `-p`. bash, dash and ksh93 refuse anything
+	// else; zsh alone stops reading options there, so `command -q ls` is
+	// `command not found: -q` in zsh and a refused option in the other
+	// three. The same shape printf already has. Recorded as
+	// `cmd/command-with-an-option-nobody-has`, with a letter no panel shell
+	// owns: the first probe used -x, which is a real ksh93 option, and read
+	// ksh93 as tolerant off ksh93's own feature.
 	CommandRejectsUnknownOption Answer
 
 	// GetoptsRejectsUnknownOption is the same question for `getopts`, which
 	// has no options at all here — so any leading `-` word is the one being
 	// asked about, and it would otherwise be the optstring.
 	//
-	// bash alone refuses it: `getopts -a x` is `-a: invalid option` there and
-	// an optstring of `-a` in dash and zsh. ksh93 has `-a` for real, and is
-	// left reading none for the same reason as above.
+	// bash and ksh93 refuse it: `getopts -q o` is an unknown option there
+	// and an optstring of `-q` in dash and zsh. Recorded as
+	// `getopts/a-dash-word-where-the-optstring-belongs`, with a letter no
+	// panel shell owns: ksh93 has `-a` for real, and the first probe used
+	// it — ksh93's answer stood, wrongly, at No until the probe was rerun
+	// with -q.
 	GetoptsRejectsUnknownOption Answer
 
 	// ShiftCountIsArithmetic reads `shift`'s operand as an expression rather
@@ -1110,7 +1118,7 @@ type Semantics struct {
 	// `hash shift` with "no such command" where the other three accept a
 	// builtin or a function as hashable. Measured with `shift`, which no
 	// PATH carries — `cd` was the contaminated probe, macOS ships
-	// /usr/bin/cd.
+	// /usr/bin/cd. Recorded as `hash/a-builtin-counts-except-in-zsh`.
 	HashSearchesPathAlone Answer
 
 	// UnderscoreTracksTheLastArgument moves `$_` to the previous simple
@@ -1212,7 +1220,8 @@ type Semantics struct {
 	// the ERR trap (and DEBUG with RETURN) into functions and subshells the
 	// dialect otherwise bounds them out of. bash alone: dash and ksh93
 	// refuse the letters, and zsh spells different options with them, so
-	// only a refusal is honest elsewhere.
+	// only a refusal is honest elsewhere. Recorded as
+	// `opt/set-e-carries-the-err-trap`.
 	SetHasTraceLetters Answer
 
 	// SetHasTheHLetter gives `set` the -h letter at all. Three of the four
@@ -1522,15 +1531,18 @@ type Semantics struct {
 	//
 	// Measured rather than read: `ulimit -f 1` then writing until the kernel
 	// objected. bash allowed 1000 bytes and refused 1200; dash, ksh93 and zsh
-	// refused 600.
+	// refused 600. The probe lives in docs/spec/semantics.md rather than in
+	// the corpus — bash and ksh93 announce the killed writer by process id,
+	// which no golden record can hold.
 	UlimitBlockIsKilobyte Answer
 
 	// UlimitHasResidentSet is `ulimit -m`. True in bash, dash and ksh93; zsh
-	// has no such letter and reports it as a bad option.
+	// has no such letter and reports it as a bad option. Recorded as
+	// `ulimit/a-letter-zsh-does-not-have`.
 	UlimitHasResidentSet Answer
 
 	// UlimitHasProcessCount is `ulimit -u`. True in bash, ksh93 and zsh; dash
-	// has no such letter.
+	// has no such letter. Recorded as `ulimit/a-letter-dash-does-not-have`.
 	UlimitHasProcessCount Answer
 
 	// UlimitSetsBothLimits lowers the hard limit along with the soft one when
@@ -1659,7 +1671,7 @@ func (n NameOperands) String() string {
 // it owns the *mechanism*, and a shell built on it owns the policy, the same
 // way the gate and the event stream are defined here and the sandbox backends
 // and protocols are not. The presets exist so that choice can be spelled in
-// one line rather than eighteen.
+// one line rather than one per axis.
 
 // PosixSemantics is what the specification requires, which is not what any
 // shell does in full — it is the right target for a portability check and the
@@ -1923,9 +1935,9 @@ func PosixSemantics() Semantics {
 // disagrees about, which makes it a portability check rather than a runtime —
 // the same role docs/spec/core.md gave strict POSIX.
 //
-// Only two of the fourteen axes survive, and that is not a defect of the
-// panel. The axes exist because they diverge; everything shells agree about
-// never became one.
+// Almost no axis survives — the two fields below are the whole of it — and
+// that is not a defect of the panel. The axes exist because they diverge;
+// everything shells agree about never became one.
 func CoreSemantics() Semantics {
 	return Semantics{
 		SplitCommandSubstitution: Yes,

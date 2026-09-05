@@ -64,6 +64,39 @@ type Case struct {
 	// silent precedence rule nobody would think to look for.
 	Args []string
 
+	// Stdin is what the shell finds on its standard input, handed to both
+	// sides of a comparison byte for byte. Empty means the input is closed,
+	// which is what every case without one gets and why the record does not
+	// depend on what the harness itself was started with.
+	//
+	// It is a separate question from where the *program* comes from, and the
+	// two combine in three useful ways:
+	//
+	//	Snippet alone, or with Args naming ArgSnippet or ArgScript: the
+	//	program arrives the usual way and Stdin is data — the line `read`
+	//	consumes, the choice `select` is answered with. Those are otherwise
+	//	only reachable through a here-string or a pipe inside the snippet,
+	//	neither of which is the shell's own input.
+	//
+	//	Args naming no placeholder, plus Stdin: the shell reads its program
+	//	from standard input. That is the route `sh < script` and `echo … |
+	//	sh` take, and it is its own invocation — `$0` stays the shell rather
+	//	than becoming a path, and with `-s` every operand is a positional
+	//	parameter and none of them a script. There is no way to spell it with
+	//	Args alone, because Args with no placeholder hands the shell nothing
+	//	to run.
+	//
+	//	Script or ArgScript, plus Stdin: a file is the program and standard
+	//	input is still data, which is the ordinary shape of a script that
+	//	reads.
+	//
+	// ArgSnippet and ArgScript are replaced here as well, wherever they
+	// appear rather than only as the whole string, so the stdin-program route
+	// spells its program once: Stdin is ArgSnippet + "\n" and Snippet stays
+	// the single copy of the text. That keeps the rendered table showing what
+	// actually ran, which a second hand-kept copy would not.
+	Stdin string
+
 	// LayoutSensitive marks a case whose output depends on how the source is
 	// laid out rather than only on what it means — a diagnostic naming the
 	// line it happened on, where that line is a fact about the text.
@@ -1487,6 +1520,12 @@ var Corpus = []Case{
 		ID: "read/a-prompt-that-never-arrives", Category: "builtins",
 		Snippet: `read -p </dev/null; echo "st=$?"`,
 		Why:     "the same word missing means three different things: bash wants -p's argument and says so with its usage, status 2; dash wants it too and says `No arg for -p option`; ksh93 and zsh never wanted one — their -p is the coprocess flag, so this is the no-coprocess refusal again at 1. A letter's arity is part of the dialect's answer, not just its spelling",
+	},
+	{
+		ID: "read/from-the-shells-own-standard-input", Category: "builtins",
+		Snippet: `read a; echo "[$a]"; read b; echo "[$b]"; read c; echo "eof=$?|[$c]"`,
+		Stdin:   "one\ntwo\n",
+		Why:     "every other read case feeds a pipe or a here-string built inside the snippet, so what the *shell* was started with was never read at all. Here it is the shell's own input: two lines arrive in order and the third read finds the end, reporting 1 with the variable cleared rather than left holding the line before",
 	},
 	{
 		ID: "redir/a-target-that-is-not-one-word", Category: "redirection",
@@ -3498,6 +3537,12 @@ echo unreachable`,
 		Why:     "`break` ends a menu loop like any other, and the status is the body's rather than the input-ended one",
 	},
 	{
+		ID: "select/the-choice-comes-from-the-shells-own-input", Category: "select",
+		Snippet: `select x in a b; do echo "got=$x rep=$REPLY"; break; done`,
+		Stdin:   "2\n",
+		Why:     "the same menu as the base case with nothing redirected onto it: a select loop reads the shell's own standard input, which is what makes it usable at a prompt at all. The here-string in every other select case hides whether the loop can reach the shell's input or only a redirection",
+	},
+	{
 		ID: "select/is-not-in-dash", Category: "select", SyntaxError: false,
 		Snippet: `select x in a; do :; done`,
 		Why:     "dash has no `select`, so the word is ordinary and the `do` after it has nothing to open — the grammar flag is what the other three turn on",
@@ -4725,5 +4770,19 @@ out=$(CDPATH=./pool cd sub)
 		Args:    []string{"-s"},
 		Snippet: `echo unreachable`,
 		Why:     "the harness gives every child the null device for standard input, and the null device is a character device — which is exactly what made the prompt decision say terminal, ask it for raw mode, and exit 2 with `operation not supported by device` (#509). No shell in the panel prompts here: -s says read standard input, standard input ends at once, and the shell exits 0 having said nothing. Deliberately no placeholder — what is pinned is what a shell does before it reads anything, and the snippet is written down as the thing that would have run",
+	},
+	{
+		ID: "invoke/the-program-arrives-on-standard-input", Category: "invocation",
+		Args:    []string{"--"},
+		Stdin:   ArgSnippet + "\n",
+		Snippet: `echo "0=[$0]|n=$#"`,
+		Why:     "the third invocation route, and the only one with nothing on the command line to name: $0 stays the shell rather than becoming a path, and there are no operands to become parameters. `--` is there because Args with no placeholder is what says the program is not on the argv, and an empty Args would mean the harness's own -c",
+	},
+	{
+		ID: "invoke/dash-s-makes-every-operand-a-parameter", Category: "invocation",
+		Args:    []string{"-s", "a", "b"},
+		Stdin:   ArgSnippet + "\n",
+		Snippet: `echo "0=[$0]|n=$#|[$*]"`,
+		Why:     "-s says the program is on standard input, so the words after it are parameters rather than a script path — the one route where $1 is set and $0 is still the shell. Without it the same two words would make `a` the script and `b` its first parameter",
 	},
 }

@@ -5,6 +5,7 @@ package oracle
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -157,7 +158,8 @@ func TestArgScriptWritesTheSnippetToTheFileTheNormalizerKnows(t *testing.T) {
 
 func TestArgsWithNoPlaceholderDoNotHandOverTheSnippet(t *testing.T) {
 	// The shape an invocation that fails before it reads anything needs — a
-	// script path that does not exist — and the shape Case.Stdin will need.
+	// script path that does not exist — and the shape Case.Stdin needs, so
+	// that the program can arrive on standard input instead.
 	// The snippet is still written down, as the thing that would have run.
 	found, _ := Resolve(context.Background())
 	if len(found) == 0 {
@@ -168,6 +170,81 @@ func TestArgsWithNoPlaceholderDoNotHandOverTheSnippet(t *testing.T) {
 	got := Exec(context.Background(), found[0], c)
 	if got.Output != "the-argv" {
 		t.Errorf("Output = %q, want %q: Args are the whole invocation", got.Output, "the-argv")
+	}
+}
+
+func TestStdinReachesBothShellsIdentically(t *testing.T) {
+	// The point of the field. A case that fed only one side would record the
+	// difference between two inputs and call it a difference between two
+	// shells.
+	found, _ := Resolve(context.Background())
+	if len(found) == 0 {
+		t.Skip("no reference shells on this machine")
+	}
+	ref := found[0]
+	ours := Found{Shell: Shell{Name: "ours"}, Path: ref.Path}
+	c := Case{ID: "t", Snippet: `read a; read b; echo "[$a][$b]"`, Stdin: "one\ntwo\n"}
+
+	a, b := Exec(context.Background(), ref, c), Exec(context.Background(), ours, c)
+	if a != b {
+		t.Errorf("same case, different input: %q vs %q", a.Output, b.Output)
+	}
+	if a.Output != "[one][two]" {
+		t.Errorf("Output = %q, want %q", a.Output, "[one][two]")
+	}
+}
+
+func TestNoStdinLeavesTheShellWithNothingToRead(t *testing.T) {
+	// The default has to stay closed rather than inherited. A harness that
+	// passed its own input through would let the *test binary's* standard
+	// input decide what a case measured, which is a wrong measurement that
+	// looks like a shell.
+	found, _ := Resolve(context.Background())
+	if len(found) == 0 {
+		t.Skip("no reference shells on this machine")
+	}
+	got := Exec(context.Background(), found[0], Case{ID: "t", Snippet: `read a; echo "st=$?|[$a]"`})
+	if got.Output != "st=1|[]" {
+		t.Errorf("Output = %q, want %q: a case with no Stdin reads nothing", got.Output, "st=1|[]")
+	}
+}
+
+func TestStdinCarriesTheProgramWhenArgsNameNoPlaceholder(t *testing.T) {
+	// The combination that makes the standard-input invocation route
+	// reachable: nothing on the argv hands the shell its snippet, so the
+	// snippet has to arrive on the input, and $0 stays the shell.
+	found, _ := Resolve(context.Background())
+	if len(found) == 0 {
+		t.Skip("no reference shells on this machine")
+	}
+	sh := found[0]
+	c := Case{ID: "t", Snippet: `echo "0=[$0]|n=$#"`, Args: []string{"--"}, Stdin: ArgSnippet + "\n"}
+
+	if got := Exec(context.Background(), sh, c); got.Output != "0=[<shell>]|n=0" {
+		t.Errorf("Output = %q, want %q", got.Output, "0=[<shell>]|n=0")
+	}
+}
+
+func TestStdinPlacesTheScriptPathTheNormalizerKnows(t *testing.T) {
+	// ArgScript means the same file in Stdin as it does in Args, so a case
+	// can name the script from its input without hard-coding a path that
+	// would differ on every machine.
+	dir := t.TempDir()
+	sh := Found{Shell: Shell{Name: "ours"}, Path: "/bin/sh"}
+	c := Case{ID: "t", Snippet: `echo hi`, Args: []string{"-s"}, Stdin: ". " + ArgScript + "\n"}
+
+	cmd := command(t.Context(), sh, c, dir)
+	in, err := io.ReadAll(cmd.Stdin)
+	if err != nil {
+		t.Fatalf("reading the case's input: %v", err)
+	}
+	want := ". " + filepath.Join(dir, "case.sh") + "\n"
+	if string(in) != want {
+		t.Errorf("stdin = %q, want %q", in, want)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "case.sh"))
+	if err != nil || string(b) != "echo hi\n" {
+		t.Errorf("script file = %q, %v; want the snippet", b, err)
 	}
 }
 

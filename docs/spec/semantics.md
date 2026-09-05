@@ -5918,3 +5918,82 @@ Not a wording difference: where it is absent the name is not an option
 at all, so `set -o pipefail` fails and the pipeline goes on reporting
 its last element — which is the answer a script guarding against a
 failure upstream is specifically trying not to get.
+
+## Suspend and resume: what ^Z, `fg` and `bg` say, and what a stopped job does to an exit
+
+Measured through a pseudo-terminal on 2026-09-05 — bash 5.3.15, zsh
+5.9.2, dash and ksh93u+ — because none of it exists anywhere else: a
+shell reads its stopped-job state off a terminal it owns, and `-c` and a
+script file cannot reach any of it. Each shell was driven in a session of
+its own with a scratch `HOME`, the sequence `sleep 40`, ^Z, `jobs`, `fg`,
+^Z, `bg`, `exit`, `exit`, waiting on the next prompt between steps.
+
+**^Z prints a notice where the stop happened**, not before the next
+prompt. `sleep 5; echo after` suspended with ^Z prints the notice and
+*then* `after` in all four, so it belongs to the stop rather than to the
+prompt — unlike the notice a job that *ended* gets, which every shell
+holds back until the prompt.
+
+Three of the four print the `jobs` listing's own row. zsh prints a
+sentence that names itself and no job number at all:
+
+    bash    [1]+  Stopped                    sleep 40
+    dash    [1] + Suspended: 18              sleep 40
+    ksh93   [1] + Stopped                    sleep 40
+    zsh     zsh: suspended  sleep 40
+
+`Diagnostics.JobStoppedNotice` is empty for the first three and zsh's
+sentence for the fourth.
+
+**Whether it starts on a line of its own splits two and two.** The
+terminal echoed `^Z` where the cursor was and left it there. bash and zsh
+write a newline first; dash and ksh93 write the row straight after the
+echo, so the screen reads `^Z[1] + Stopped …`. That is
+`Diagnostics.JobStoppedNoticeOnANewLine`, and it is the same debt the
+prompt pays after a `^C`.
+
+**`fg` names the command alone in three of the four**, and zsh prints a
+listing row with a state that appears in no listing:
+
+    bash, dash, ksh93   sleep 40
+    zsh                 [1]  + continued  sleep 40
+
+**`bg` differs in all four**, which is why it is a format rather than a
+flag:
+
+    bash    [1]+ sleep 40 &
+    dash    [1] sleep 40
+    ksh93   [1]<tab>sleep 40&
+    zsh     [1]  + continued  sleep 40
+
+**A stopped job holds the exit in bash and zsh and not in dash or
+ksh93.** The two that hold say so and stay; the attempt has to be made a
+second time, and the end of input behaves exactly as `exit` does:
+
+    bash    There are stopped jobs.
+    zsh     zsh: you have suspended jobs.
+
+The status afterwards is the sharper half. bash's held `exit` reports 1 —
+a builtin that failed, which `echo $?` on the next line shows — and zsh's
+reports 0. A held ^D changes no status at all in either, so a session
+ended by ^D ^D exits 146, the status the stopped `sleep` left behind.
+
+**What suppresses the second warning is the thing immediately before
+it**, and both shells agree:
+
+    ^Z, exit, exit                    warns, then leaves
+    ^Z, echo hi, exit                 warns
+    ^Z, jobs, exit                    leaves at once
+    ^Z, jobs, true, exit              warns
+    ^Z, jobs, sleep 41, ^Z, exit      warns
+    ^Z, jobs -p, exit                 leaves at once
+
+So a `jobs` listing counts as the shell having shown you the same thing —
+in any form, `jobs -p` included — and only for the very next line. A
+sticky "has been warned" flag gets the first four rows right and the
+fifth and sixth wrong, which is why `Runner` carries what the *previous*
+chunk said rather than what has ever been said.
+
+`Semantics.StoppedJobsHoldTheExit` is the axis; the POSIX base leaves,
+since the standard describes `exit` as exiting and says nothing about a
+job left behind, and bash and zsh override.

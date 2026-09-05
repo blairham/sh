@@ -189,6 +189,10 @@ func Semantics() interp.Semantics {
 	s.ArrayLengthWithoutSubscriptIsCount = interp.Yes
 	s.FcEmptyHistoryIsAnError = interp.Yes
 	s.JobControlAbsenceIsReportedFirst = interp.Yes
+	// A stopped job holds the exit back: the shell says so and stays,
+	// and the next attempt leaves. Measured through a pseudo-terminal for
+	// `exit` and for ^D alike.
+	s.StoppedJobsHoldTheExit = interp.Yes
 	// CDPATH moves in silence here.
 	s.CdpathAnnouncesTheDirectory = interp.No
 	s.LinenoCountsFromTheFunction = interp.Yes
@@ -532,6 +536,21 @@ func Diagnostics() interp.Diagnostics {
 		// mentions a job that has ended.
 		JobDone:    "done",
 		JobStopped: "suspended",
+		// ^Z is a sentence rather than a listing row here, and the shell
+		// names itself in it: `zsh: suspended  sleep 40`, two spaces, no job
+		// number. Under a newline of its own, as bash's is.
+		JobStoppedNotice:           "%[3]s: suspended  %[4]s",
+		JobStoppedNoticeOnANewLine: true,
+		// `fg` and `bg` both print a listing row with a state no listing
+		// ever shows — `[1]  + continued  sleep 3` — so it is spelled here
+		// rather than beside JobRunning and JobStopped. The shape is
+		// JobLine's, with `continued` in the 11-wide state column.
+		JobResumedInForeground: "[%[1]d]  %[2]s continued  %[3]s",
+		JobResumedInBackground: "[%[1]d]  %[2]s continued  %[3]s",
+		// The shell names itself here too, and the held `exit` reports
+		// nothing — measured, `echo $?` after the refusal says 0, where
+		// bash's says 1.
+		StoppedJobsAtExit: "%[1]s: you have suspended jobs.",
 		// The reason first and the name after it, which is zsh's shape and
 		// nobody else's. Lowercased, which LowercaseReason already says.
 		// Same either way — zsh does not distinguish opening from creating.

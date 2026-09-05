@@ -507,7 +507,12 @@ func Diagnostics() interp.Diagnostics {
 		SignalDescriptions: signalDescriptions(),
 		JobRunning:         " Running",
 		JobStopped:         "Stopped",
-		JobUnknownCommand:  "<command unknown>",
+		// ^Z prints the listing's own row straight after the echoed `^Z`, as
+		// dash does; `fg` names the command alone. `bg` writes the job
+		// number, a tab, the command and an `&` with no space before it —
+		// measured through a pseudo-terminal on 2026-09-05.
+		JobResumedInBackground: "[%[1]d]\t%[3]s&",
+		JobUnknownCommand:      "<command unknown>",
 		// ksh93 lists a job that has already ended as "Running", and it is
 		// not a reaping race — it still says so after `wait`. Recorded as
 		// the word ksh uses rather than corrected, which would be inventing

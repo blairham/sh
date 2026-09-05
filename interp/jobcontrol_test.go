@@ -48,6 +48,10 @@ type fakeJobs struct {
 		sig  syscall.Signal
 	}
 	foreground []int
+	// polls are what the shell is told when it asks after a job nothing is
+	// waiting on — what `bg` let go of. Empty means nothing has changed,
+	// which is the answer for a job that is still running.
+	polls []Wait
 }
 
 func (f *fakeJobs) next() Wait {
@@ -57,6 +61,16 @@ func (f *fakeJobs) next() Wait {
 	w := f.waits[0]
 	f.waits = f.waits[1:]
 	return w
+}
+
+// poll is the non-blocking half: a Wait and whether anything happened.
+func (f *fakeJobs) poll() (Wait, bool) {
+	if len(f.polls) == 0 {
+		return Wait{}, false
+	}
+	w := f.polls[0]
+	f.polls = f.polls[1:]
+	return w, true
 }
 
 func jobRun(t *testing.T, f *fakeJobs, src string) (string, int, *Runner) {
@@ -95,6 +109,10 @@ func jobRun(t *testing.T, f *fakeJobs, src string) (string, int, *Runner) {
 		r.Foreground = func(pgid int) error {
 			f.foreground = append(f.foreground, pgid)
 			return nil
+		}
+		r.PollCommand = func(int) (Wait, bool, error) {
+			w, changed := f.poll()
+			return w, changed, nil
 		}
 	}
 	if _, err := r.Run(context.Background(), file); err != nil {

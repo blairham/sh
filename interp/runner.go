@@ -250,6 +250,19 @@ type Runner struct {
 	// shell without this hook hangs on ^Z rather than returning to a prompt.
 	WaitForCommand func(pid int) (Wait, error)
 
+	// PollCommand is WaitForCommand without the waiting: it reports whether a
+	// command this shell started has changed state since it was last asked,
+	// and `changed` is false when it has not.
+	//
+	// It is what a job `bg` resumed is finished by. Nothing is blocked on such
+	// a job — ^Z left it behind a wait that already returned — so the shell
+	// has to ask, and it asks between commands, where it is the only waiter
+	// and there is no race over who reaps the child.
+	//
+	// Nil means this shell cannot ask, and a resumed job then stays listed as
+	// running until something waits for it by name.
+	PollCommand func(pid int) (w Wait, changed bool, err error)
+
 	// Foreground, when set, hands the terminal to a process group for as long
 	// as it runs, and takes it back afterwards. A pgid of 0 means the shell
 	// itself.
@@ -623,6 +636,20 @@ type Runner struct {
 	// jobs are the background commands started by this shell.
 	jobs    []*Job
 	lastJob *Job
+	// toldOfStoppedJobs says the chunk *before* this one showed the person
+	// the jobs that are stopped, so the shell will not hold its exit for them
+	// again; tellingOfStoppedJobs is this chunk saying so, and becomes the
+	// other at the next one.
+	//
+	// Two fields because what suppresses the warning is the thing immediately
+	// before it and not anything that has ever happened. Measured through a
+	// pseudo-terminal: ^Z then `exit` warns and a second `exit` leaves; ^Z
+	// then `jobs` then `exit` leaves, because the listing is the shell showing
+	// the same thing on purpose; and ^Z, `jobs`, any other command, `exit`
+	// warns again. One sticky flag gets the first three right and the fourth
+	// wrong.
+	toldOfStoppedJobs    bool
+	tellingOfStoppedJobs bool
 	// bg is set on the runner *inside* a background job, so the process it
 	// starts can be recorded against the job.
 	bg *Job
@@ -1230,6 +1257,10 @@ func (r *Runner) Run(ctx context.Context, f *syntax.File) (int, error) {
 // Nothing is torn down here. Finish does that, once, however many chunks ran.
 func (r *Runner) RunPart(ctx context.Context, f *syntax.File) error {
 	r.ctx = ctx
+	// A chunk is a typed line, and whether the shell has just shown the person
+	// its stopped jobs is a fact about the line before this one — see the two
+	// fields for what that buys over remembering it forever.
+	r.toldOfStoppedJobs, r.tellingOfStoppedJobs = r.tellingOfStoppedJobs, false
 	r.ensurePWD()
 	r.ensureSpecials()
 	r.ensureImportedFunctions()

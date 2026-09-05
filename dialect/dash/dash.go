@@ -335,9 +335,17 @@ func Diagnostics() interp.Diagnostics {
 		// dash names the signal that stopped it rather than calling it
 		// stopped: `Suspended: 18`, where 18 is SIGTSTP.
 		JobStopped: "Suspended: %[1]d",
-		JobDone:    "Done",
-		JobExited:  "Done(%[1]d)",
-		Location:   interp.LocationColonLine,
+		// ^Z prints the listing's own row, straight after the `^Z` the
+		// terminal echoed — no newline of its own, which is where dash and
+		// ksh93 part company with bash and zsh. Measured through a
+		// pseudo-terminal on 2026-09-05.
+		//
+		// `fg` names the command alone, which is the empty default; `bg`
+		// prints the job number and the command, with no marker and no `&`.
+		JobResumedInBackground: "[%[1]d] %[3]s",
+		JobDone:                "Done",
+		JobExited:              "Done(%[1]d)",
+		Location:               interp.LocationColonLine,
 		// The one shell in the panel that tells neither failure from the
 		// other: a script operand that is missing and one that will not open
 		// share a wording and a status, and the status is the 2 it gives a

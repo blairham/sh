@@ -857,6 +857,9 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// And it waits for its own children, which is the only way to be
 		// told that one *stopped* rather than finished.
 		r.WaitForCommand = waitForCommand
+		// And it asks after the ones nothing is waiting for — what `bg` let
+		// go of — which is reaping just as much and so belongs here too.
+		r.PollCommand = pollCommand
 		// And it may resume one it stopped, which is a signal leaving this
 		// process and so the binary's to send.
 		r.SignalGroup = signalGroup

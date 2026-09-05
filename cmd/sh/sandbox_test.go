@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -503,5 +504,93 @@ func TestTwoRunsInOneAuditFileAreTwoSessions(t *testing.T) {
 	}
 	if len(seen) != 2 {
 		t.Errorf("the file holds %d session(s), want one per run: %v", len(seen), seen)
+	}
+}
+
+// A policy written against the name a person types protects the place they
+// meant, through the binary they run.
+//
+// This is #538 end to end. On macOS `/tmp` is another name for `/private/tmp`,
+// and a shell that has resolved a path — which `cd -P` does, and which is the
+// only way `pwd` can answer honestly — presents the physical one to the gate. A
+// rule written with the name the person uses walked straight past it, and the
+// script saw a refusal that never happened.
+func TestAPolicyUnderAPlatformAliasProtectsBothNames(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("no platform aliases here — see internal/policy/alias_other.go")
+	}
+	dir := t.TempDir()
+	secret := filepath.Join("/tmp", "sh-538-"+filepath.Base(dir))
+	if err := os.Mkdir(secret, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(secret) })
+	if err := os.WriteFile(filepath.Join(secret, "f"), []byte("secret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// The rule names the directory the way a person would, and the script
+	// reaches it the way a shell that resolved the path does.
+	p := writePolicy(t, "default allow\ndeny path "+secret+"/**")
+	src := "cd -P " + secret + "\n[ -f f ] && echo found || echo hidden\n" +
+		"[ -f " + secret + "/f ] && echo found-lexical || echo hidden-lexical\n"
+	got := sandboxed(t, "core", "-policy", p, "-c", src)
+	if !strings.Contains(got.out, "hidden\n") {
+		t.Errorf("out = %q, want the physical path refused too — the rule named the same place", got.out)
+	}
+	if !strings.Contains(got.out, "hidden-lexical") {
+		t.Errorf("out = %q, want the name as written still refused", got.out)
+	}
+}
+
+// And what the rule turned into is said out loud, under the flag whose job is
+// showing what the boundary is doing.
+//
+// A rule that quietly covers a second path is a rule whose meaning is not in
+// the file it came from, and a policy is reviewed by somebody reading it.
+func TestATraceReportsWhatAPolicyNormalized(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("no platform aliases here")
+	}
+	p := writePolicy(t, "default allow\ndeny path /tmp/nothing-this-test-uses/**")
+	got := sandboxed(t, "core", "-policy", p, "-trace-events", "-c", ":")
+	want := "policy: deny path /tmp/nothing-this-test-uses/** (also /private/tmp/nothing-this-test-uses/**)"
+	if !strings.Contains(got.errs, want) {
+		t.Errorf("err =\n%s\nwant %s", got.errs, want)
+	}
+	// Not on the shell's own output, and not disguised as an event: a consumer
+	// reading the trace filters on the prefix, and this is something the policy
+	// is rather than something the shell did.
+	if strings.Contains(got.out, "policy:") {
+		t.Errorf("out = %q, want the report kept off the shell's output stream", got.out)
+	}
+	if strings.Contains(got.errs, "trace: policy") {
+		t.Errorf("err = %q, want the report not to pose as an event", got.errs)
+	}
+}
+
+// Nothing is reported for a policy that normalized nothing, so the line means
+// something when it appears.
+func TestATraceReportsNothingWhenNothingNormalized(t *testing.T) {
+	p := writePolicy(t, "default allow\ndeny path /srv/nothing-this-test-uses/**\ndeny signal")
+	got := sandboxed(t, "core", "-policy", p, "-trace-events", "-c", ":")
+	if strings.Contains(got.errs, "policy:") {
+		t.Errorf("err = %q, want no report for a policy that named no alias", got.errs)
+	}
+}
+
+// And without -trace-events there is no report at all: a shell running under a
+// policy is not a shell that chatters about it.
+func TestAPolicyIsQuietWithoutTheTraceFlag(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("no platform aliases here")
+	}
+	p := writePolicy(t, "default allow\ndeny path /tmp/nothing-this-test-uses/**")
+	got := sandboxed(t, "core", "-policy", p, "-c", "echo ran")
+	if !strings.Contains(got.out, "ran") {
+		t.Fatalf("out = %q, want the script to have run", got.out)
+	}
+	if got.errs != "" {
+		t.Errorf("err = %q, want silence", got.errs)
 	}
 }

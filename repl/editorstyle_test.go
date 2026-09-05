@@ -56,3 +56,28 @@ func TestTheDialectsWordsReachTheEditor(t *testing.T) {
 		t.Errorf("a shell that said nothing got %+v", zero)
 	}
 }
+
+// And the three about undo and `M-.`, for the third time and the same reason.
+func TestTheDialectsUndoAnswersReachTheEditor(t *testing.T) {
+	e := Shell{Editor: EditorStyle{
+		UndoTakesBackOneKeystrokeAtATime:  true,
+		UndoRestoresTheCursorToWhereItWas: true,
+		LastArgumentStaysOnTheOldestLine:  true,
+	}}.newEditor()
+	for _, c := range []struct {
+		name string
+		got  bool
+	}{
+		{"undo takes back one keystroke", e.undoPerKeystroke},
+		{"undo restores the cursor", e.undoRestoresCursor},
+		{"M-. stays on the oldest line", e.lastArgStaysOnOldest},
+	} {
+		if !c.got {
+			t.Errorf("%s: the dialect's answer did not reach the editor", c.name)
+		}
+	}
+	zero := Shell{}.newEditor()
+	if zero.undoPerKeystroke || zero.undoRestoresCursor || zero.lastArgStaysOnOldest {
+		t.Errorf("a shell that said nothing got %+v", zero)
+	}
+}

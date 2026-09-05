@@ -37,6 +37,9 @@ var (
 		KillWordBeforeCursorUsesWordCharacters: true,
 		ForwardWordStopsBeforeTheNextWord:      true,
 		TransposeAtTheStartSwapsTheFirstTwo:    true,
+		UndoTakesBackOneKeystrokeAtATime:       true,
+		UndoRestoresTheCursorToWhereItWas:      true,
+		LastArgumentStaysOnTheOldestLine:       true,
 	}
 )
 

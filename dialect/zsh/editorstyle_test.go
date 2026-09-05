@@ -66,3 +66,28 @@ func TestEditorStyleWords(t *testing.T) {
 		t.Error("^T here swaps the first two characters and moves past them")
 	}
 }
+
+// Taking a change back, and `M-.` past the oldest line it can reach.
+//
+// Measured under a pty against zsh 5.9.2, one keystroke at a time, with the
+// line read back out of the shell's own history file. All three are
+// disagreements with bash rather than absences.
+func TestEditorStyleUndoAndLastArgument(t *testing.T) {
+	s := zsh.EditorStyle()
+	// `echo abcdef` typed a character at a time and then one `^_` leaves
+	// `echo abcde` here; bash leaves an empty line.
+	if !s.UndoTakesBackOneKeystrokeAtATime {
+		t.Error("^_ here takes back one keystroke rather than the whole run of typing")
+	}
+	// `echo one two`, `^A`, `^K`, `^_` leaves the cursor at the start of the
+	// line here — where it was when the kill happened — and at the end of it
+	// in bash.
+	if !s.UndoRestoresTheCursorToWhereItWas {
+		t.Error("^_ here puts the cursor back where the change was made")
+	}
+	// Three lines behind the prompt and four presses of `M-.`: this shell
+	// keeps the oldest line's last word and bash takes the word off the line.
+	if !s.LastArgumentStaysOnTheOldestLine {
+		t.Error("M-. here stops on the oldest line rather than emptying what it inserted")
+	}
+}

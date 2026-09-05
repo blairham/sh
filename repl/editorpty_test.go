@@ -5,6 +5,7 @@ package repl
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -147,4 +148,79 @@ func TestAnUnknownKeyReachesNoCommand(t *testing.T) {
 	if got := s.errs.String(); got != "" {
 		t.Errorf("the session complained: %q", got)
 	}
+}
+
+// A key that has begun and not finished, through a terminal and with real time
+// passing in the middle of it.
+//
+// This is the one claim a reader-driven test cannot make. Handed a string, an
+// Escape and the byte after it arrive together however they were written; on a
+// terminal they arrive when they are typed, and the question is what the
+// editor does in between.
+//
+// Measured, all three real shells wait indefinitely: with `echo one two` on the
+// line, an Escape and then a `b` typed six seconds later is still `M-b` in bash
+// 5.3.15, bash 3.2.57 and zsh 5.9.2, and `\e[` with three seconds before the
+// `A` is still Up. So there is no timeout here either — a shell that gave up on
+// a half-read key would be the only one that did.
+func TestAnEscapeWaitsForTheKeyItNames(t *testing.T) {
+	s := newSession(t)
+	s.typeLine("echo one two\x1b")
+	// Long enough that any bounded wait a shell might have would have expired:
+	// the two the manuals name are 500ms and 400ms.
+	time.Sleep(700 * time.Millisecond)
+	if _, err := s.control.WriteString("bX\n"); err != nil {
+		t.Fatal(err)
+	}
+	// `M-b` went back over `two`, so the `X` landed in front of it. Had the
+	// Escape been given up on, the `b` would have been typed at the end.
+	waitFor(t, s.ran, "one Xtwo", "the command's output")
+	s.end()
+}
+
+// And ^C is the way out of one, which is what keeps that wait from being a
+// wedge.
+//
+// Measured, all three shells abandon the line on ^C however far into a key
+// sequence they are: their editors leave the terminal's ISIG on, so the kernel
+// makes that one keystroke a signal wherever the editor is. This editor takes
+// the terminal fully raw — ^C has to be a byte for the line to be abandoned
+// without racing a read already in progress — so the rescue is written down
+// rather than inherited, and this is the test that it reaches the terminal.
+func TestControlCGetsOutOfAHalfTypedKeyOnATerminal(t *testing.T) {
+	s := newSession(t)
+	// A bare Escape, a pause a person would notice, and then the way out.
+	s.typeLine("echo abandoned\x1b")
+	time.Sleep(300 * time.Millisecond)
+	if _, err := s.control.WriteString("\x03"); err != nil {
+		t.Fatal(err)
+	}
+	// The prompt comes back below the line that was given up on — and it is
+	// the *same* prompt, because nothing ran and the command number counts
+	// commands. So the wait is on the abandoned line having been left behind
+	// rather than on a number, and the line typed after it goes in directly.
+	waitFor(t, s.screen, "abandoned\r\n[1]", "a prompt below the abandoned line")
+	if _, err := s.control.WriteString("echo recovered\n"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, s.ran, "recovered", "the command after the interrupt")
+	if strings.Contains(s.ran.String(), "abandoned") {
+		t.Errorf("the abandoned line ran: %q", s.ran.String())
+	}
+	s.end()
+}
+
+// `M-.` and `^_`, through a terminal, in the shape a person uses them.
+func TestTheLastArgumentAndUndoThroughATerminal(t *testing.T) {
+	s := newSession(t)
+	// The line whose last argument the next one reaches back for.
+	s.typeLine("echo first-arg second-arg\n")
+	waitFor(t, s.ran, "first-arg second-arg", "the first line's output")
+	// `echo ` and then the argument that was just typed, without typing it.
+	s.typeLine("echo picked-\x1b.\n")
+	waitFor(t, s.ran, "picked-second-arg", "the last argument, inserted")
+	// A whole line killed by mistake and taken back.
+	s.typeLine("echo restored-line\x15\x1f\n")
+	waitFor(t, s.ran, "restored-line", "the line ^U took away")
+	s.end()
 }

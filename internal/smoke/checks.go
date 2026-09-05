@@ -76,11 +76,27 @@ var (
 	// by a test on the *completed* name: a Tab that did nothing leaves a name
 	// that does not exist, the test is false, and nothing is printed.
 	completionProbe = probe{completionOpens + completionTarget + completionCloses, "completed-42"}
+	// The whole line, as it would have to be typed without `^_`. The row
+	// types it, kills it with `^U` and takes the kill back, so the mark is
+	// printed only if the line came back.
+	undoProbe = probe{"echo undo-$((6 * 7))-ok", "undo-42-ok"}
+	// A line to run after a half-typed key has been given up on. Its only job
+	// is to prove the shell is still reading.
+	escapeProbe = probe{"echo escaped-$((6 * 7))-ok", "escaped-42-ok"}
 )
 
 const (
 	completionOpens  = "[ -f "
 	completionCloses = " ] && echo completed-$((6 * 7))"
+	// The line `M-.` reaches back for, and the mark the line after it prints.
+	//
+	// Not a probe, because the two halves belong to different lines: this one
+	// prints nothing, and what proves the key worked is the *next* line —
+	// which cannot contain the argument, because the whole point is that it
+	// was never typed there. Quoted so that the word the key carries over is
+	// one word and expands to text neither line ever held.
+	lastArgSeed = `: "lastarg-$((6 * 7))-ok"`
+	lastArgMark = "lastarg-42-ok"
 )
 
 // probes is every one of them, for the test that holds the invariant.
@@ -88,6 +104,7 @@ func probes() []probe {
 	return []probe{
 		rcProbe, aliasProbe, functionProbe, pipelineProbe,
 		recallProbe, searchProbe, chaffProbe, tickProbe, completionProbe,
+		undoProbe, escapeProbe,
 	}
 }
 
@@ -246,6 +263,68 @@ func checks() []check {
 					return Fail, "C-r did not find the earlier line: " + err.Error()
 				}
 				return Pass, "C-r found a line two back and ran it"
+			},
+		},
+		{
+			name:   "M-. inserts the last argument",
+			proves: "the argument just typed can be used again without retyping it",
+			run: func(_ context.Context, s *session, _ *state) (Outcome, string) {
+				// The line to reach back into. It prints nothing, so the only
+				// wait is for the prompt after it.
+				if err := s.typeLine(lastArgSeed); err != nil {
+					return Fail, "the line to reach back into did not run: " + err.Error()
+				}
+				if err := s.atPrompt(); err != nil {
+					return Fail, err.Error()
+				}
+				if err := s.send("echo \x1b.\r"); err != nil {
+					return Fail, err.Error()
+				}
+				if err := s.screen.Await(lastArgMark, budget); err != nil {
+					return Fail, "M-. did not bring the last argument over: " + err.Error()
+				}
+				return Pass, "M-. inserted the previous line's last argument"
+			},
+		},
+		{
+			name:   "^_ takes a kill back",
+			proves: "a line killed by mistake is recoverable without retyping it",
+			run: func(_ context.Context, s *session, _ *state) (Outcome, string) {
+				if err := s.atPrompt(); err != nil {
+					return Fail, err.Error()
+				}
+				// Typed, killed whole, and taken back. The mark is printed
+				// only if what came back is what was killed.
+				if err := s.send(undoProbe.line + "\x15\x1f\r"); err != nil {
+					return Fail, err.Error()
+				}
+				if err := s.screen.Await(undoProbe.mark, budget); err != nil {
+					return Fail, "^_ did not put back what ^U took: " + err.Error()
+				}
+				return Pass, "^U took the line and ^_ gave it back"
+			},
+		},
+		{
+			name:   "^C ends a half-typed key",
+			proves: "an Escape typed by accident does not leave the shell unable to answer",
+			run: func(_ context.Context, s *session, _ *state) (Outcome, string) {
+				if err := s.atPrompt(); err != nil {
+					return Fail, err.Error()
+				}
+				// An Escape names no key on its own, so the editor is part-way
+				// through one and waiting — which is what all three real
+				// shells do too. ^C is the way out, and without it there is no
+				// keystroke that gets the prompt back.
+				if err := s.send("\x1b"); err != nil {
+					return Fail, err.Error()
+				}
+				if err := s.send("\x03"); err != nil {
+					return Fail, err.Error()
+				}
+				if err := s.runProbe(escapeProbe); err != nil {
+					return Fail, "the shell did not come back after ^C: " + err.Error()
+				}
+				return Pass, "^C ended the half-typed key and the shell went on reading"
 			},
 		},
 		{

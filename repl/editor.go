@@ -70,6 +70,18 @@ type editor struct {
 	killed                []rune
 	killing, killedBefore bool
 
+	// changes is the line as it was before each change, oldest first, and
+	// `^_` walks back through it. typing and typedBefore say whether this
+	// keystroke and the one before it were characters typed into the line,
+	// which is what decides whether a dialect that groups a run of typing
+	// puts another entry on the stack. See undo.go.
+	changes              []snapshot
+	typing, typedBefore  bool
+	undoPerKeystroke     bool
+	undoRestoresCursor   bool
+	lastArg              lastArgWalk
+	lastArgStaysOnOldest bool
+
 	// What this dialect calls a word, and what its kills do with one. See
 	// EditorStyle, which is where each of these was measured.
 	wordChars                  string
@@ -114,6 +126,11 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	// Fresh for every line: an edit made to a recalled entry lasts as long as
 	// the line does and no longer, which is what both shells do — see drafts.
 	e.drafts = map[int][]rune{}
+	// Nothing to take back yet. Measured, `^_` at a fresh prompt does nothing
+	// in both shells however much was edited on the line before it, so the
+	// stack belongs to the line rather than to the session.
+	e.changes = nil
+	e.lastArg = lastArgWalk{}
 	e.write(prompt.text)
 
 	var buf [1]byte
@@ -135,13 +152,16 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		// line's first. So the text a kill took survives the line it came off
 		// — measured — and the joining does not.
 		e.killedBefore, e.killing = e.killing, false
+		// The same for whether the keystroke before this one typed a
+		// character into the line, and whether it was `M-.`. Both decide what
+		// this keystroke does rather than what it is: a run of typing is one
+		// change to undo, and a second `M-.` walks the history rather than
+		// inserting a second copy.
+		e.typedBefore, e.typing = e.typing, false
+		e.lastArg.walkingBefore, e.lastArg.walking = e.lastArg.walking, false
 		switch c := buf[0]; c {
 		case ctrlC:
-			// The line is abandoned, not run. The newline is ours to print:
-			// the terminal echoes nothing in raw mode, so without it the
-			// next prompt would land on top of what was typed.
-			e.endLine(prompt, e.interrupt)
-			return "", ErrInterrupted
+			return e.abandon(prompt)
 		case ctrlD:
 			if len(e.line) == 0 {
 				e.endLine(prompt, "")
@@ -149,7 +169,7 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			}
 			// With something typed, ^D deletes forwards instead — which is
 			// what it means everywhere but on an empty line.
-			e.deleteForward()
+			e.change(false, e.deleteForward)
 		case '\r', '\n':
 			e.endLine(prompt, "")
 			return string(e.line), nil
@@ -162,19 +182,22 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		case ctrlF:
 			e.moveTo(e.pos+1, prompt)
 		case ctrlK:
-			e.killForwardTo(len(e.line))
+			e.change(false, func() { e.killForwardTo(len(e.line)) })
 			e.redraw(prompt)
 		case ctrlU:
-			e.killToStart()
+			e.change(false, e.killToStart)
 			e.redraw(prompt)
 		case ctrlW:
-			e.killTo(e.wordStartBeforeCursor())
+			e.change(false, func() { e.killTo(e.wordStartBeforeCursor()) })
 			e.redraw(prompt)
 		case ctrlY:
-			e.yank()
+			e.change(false, e.yank)
 			e.redraw(prompt)
 		case ctrlT:
-			e.transpose()
+			e.change(false, e.transpose)
+			e.redraw(prompt)
+		case ctrlUnderscore:
+			e.undoLine()
 			e.redraw(prompt)
 		case ctrlL:
 			// Clear the screen and put the line back at the top of it.
@@ -188,10 +211,11 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		case ctrlR:
 			e.reverseSearch(prompt)
 		case backspace, del:
-			e.deleteBackward()
+			e.change(false, e.deleteBackward)
 			e.redraw(prompt)
 		case tab:
-			matches := e.complete(e.comp)
+			var matches []string
+			e.change(false, func() { matches = e.complete(e.comp) })
 			if len(matches) > 0 && wasTab && e.confirmList(matches, prompt) {
 				e.list(matches, prompt)
 			}
@@ -202,7 +226,25 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			e.lastTab = true
 			continue
 		case esc:
-			e.escape(prompt)
+			if e.escape(prompt) == keyAbandoned {
+				return e.abandon(prompt)
+			}
+		case ctrlX:
+			// The other prefix, and the only sequence behind it that this
+			// acts on is `^X^U`, which is a second spelling of `^_`. The byte
+			// after it is read whatever it is, for the same reason an escape
+			// sequence is read to its end: measured, `^X` then `q` puts
+			// nothing in the line in either shell, and a prefix that gave the
+			// byte back would type the `q`.
+			b, got := e.readByte()
+			switch {
+			case got == keyAbandoned:
+				return e.abandon(prompt)
+			case got != keyContinues:
+			case b == ctrlU:
+				e.undoLine()
+				e.redraw(prompt)
+			}
 		default:
 			if c < 0x20 {
 				// Any other control character is ignored rather than
@@ -214,7 +256,8 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			e.insert(r)
+			e.change(e.typedBefore, func() { e.insert(r) })
+			e.typing = true
 			e.redraw(prompt)
 		}
 	}
@@ -232,6 +275,16 @@ func (e *editor) nextByte(buf []byte) (int, error) {
 		return 1, nil
 	}
 	return e.in.Read(buf)
+}
+
+// abandon ends a line the person gave up on with ^C.
+//
+// The line is discarded, not run. The newline is ours to print: the terminal
+// echoes nothing in raw mode, so without it the next prompt would land on top
+// of what was typed.
+func (e *editor) abandon(prompt drawnPrompt) (string, error) {
+	e.endLine(prompt, e.interrupt)
+	return "", ErrInterrupted
 }
 
 // readRune completes a UTF-8 sequence whose first byte has arrived.
@@ -668,9 +721,14 @@ const (
 	ctrlT     = 0x14
 	ctrlU     = 0x15
 	ctrlW     = 0x17
+	ctrlX     = 0x18
 	ctrlY     = 0x19
 	tab       = 0x09
 	esc       = 0x1b
 	backspace = 0x08
 	del       = 0x7f
+	// `^_` is what a terminal sends for Ctrl and the underscore key, which on
+	// most layouts is Ctrl-Shift-minus. `^X^U` is the same command spelled
+	// with two keystrokes, for a keyboard where the first is awkward.
+	ctrlUnderscore = 0x1f
 )

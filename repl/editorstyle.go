@@ -113,6 +113,44 @@ type EditorStyle struct {
 	// Everywhere else in the line the two agree exactly.
 	TransposeAtTheStartSwapsTheFirstTwo bool
 
+	// UndoTakesBackOneKeystrokeAtATime is how much of the line one `^_`
+	// returns.
+	//
+	// Measured with `echo abcdef` typed a character at a time and one `^_`
+	// after it: bash leaves an empty line and zsh leaves `echo abcde`. bash
+	// takes back the whole *run* of typing as one change and zsh takes back
+	// one keystroke, which is the difference between undoing a mistyped
+	// word and undoing the line it was in.
+	//
+	// A run, not the line: measured, `echo abc`, `^B`, `d`, `^_` leaves
+	// `echo abc` in bash, so a keystroke that is not typing ends the run.
+	// The same answer decides an `M-.` walk — three presses and one `^_`
+	// leaves bash in front of the first press and zsh at the second — which
+	// is why this is one question rather than two.
+	UndoTakesBackOneKeystrokeAtATime bool
+
+	// UndoRestoresTheCursorToWhereItWas puts the cursor back where it stood
+	// before the change, rather than after the text the undo put back.
+	//
+	// Measured on `echo one two` with `^A`, `^K`, `^_`: zsh leaves the cursor
+	// at the start of the line, where it was when the kill happened, and bash
+	// leaves it at the end of what came back. Same line either way, and the
+	// next keystroke lands in a different place.
+	//
+	// The two agree on the case undo exists for — `^W` then `^_` puts the
+	// cursor at the end of the restored word in both, because that is also
+	// where it was — and part company on a kill that went forwards.
+	UndoRestoresTheCursorToWhereItWas bool
+
+	// LastArgumentStaysOnTheOldestLine is what `M-.` does once it has been
+	// pressed more times than there are lines behind the prompt.
+	//
+	// Measured with three lines in the history and four presses: zsh keeps
+	// the oldest line's last word and every further press leaves it there,
+	// and bash takes the word it had inserted back off the line and puts
+	// nothing in its place.
+	LastArgumentStaysOnTheOldestLine bool
+
 	// CompletionMatchesHiddenFiles offers names beginning with a dot to a
 	// word that does not begin with one.
 	//

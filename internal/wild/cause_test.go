@@ -18,7 +18,13 @@ func TestCausesGroupsAndRanks(t *testing.T) {
 	dir := t.TempDir()
 	// Three scripts sharing one gap, and one with a different gap.
 	for _, name := range []string{"a", "b", "c"} {
-		write(t, dir, name, "#!/bin/zsh\n[[ $k == (x|y) ]]\n")
+		// A construct this parser does not have and is not about to: the
+		// completion-context conditions are recorded in
+		// docs/spec/grammar/conditions.md as a decision rather than a gap.
+		// It was `[[ $k == (x|y) ]]` until that was implemented (#826),
+		// which is the hazard a fixture like this has: it has to be
+		// something the parser still refuses.
+		write(t, dir, name, "#!/bin/zsh\n[[ -prefix - ]]\n")
 	}
 	write(t, dir, "d", "#!/bin/zsh\nrepeat 3 { echo x; }\n")
 

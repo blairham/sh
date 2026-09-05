@@ -207,7 +207,7 @@ func (p *Parser) condPrimary() CondExpr {
 		p.next()
 		x := p.word()
 		if x == nil {
-			p.fail("expected an operand after %s", op)
+			p.failCondOperand(op, "unary")
 			return nil
 		}
 		return &CondUnary{Op: op, X: x, Start: start}
@@ -224,11 +224,43 @@ func (p *Parser) condPrimary() CondExpr {
 	}
 	right := p.word()
 	if right == nil {
-		p.fail("expected an operand after %s", op)
+		p.failCondOperand(op, "binary")
 		return nil
 	}
 	return &CondBinary{Op: op, X: left, Y: right}
 }
+
+// failCondOperand records a token standing where a conditional operator
+// wanted a word.
+//
+// It names the token rather than the operator, which is what every shell in
+// the panel does — one of them says which *kind* of operator was waiting as
+// well, which is the `arity` here. Written as its own kind rather than as a
+// message because a dialect may not match on our phrasing; see
+// Diagnostics.CondOperand.
+func (p *Parser) failCondOperand(op, arity string) {
+	if p.err != nil {
+		return
+	}
+	if p.at(TokEOF) {
+		p.ranOut()
+		p.err = p.unterminated("]]")
+		return
+	}
+	p.err = &Error{
+		Pos: p.tok.Pos, Kind: ErrCondOperand,
+		Token: p.tokenLiteral(), Class: p.tokenClass(false),
+		Expected: arity, LastToken: op,
+		Msg: p.tokenLiteral() + " unexpected",
+	}
+}
+
+// condPatternOps are the operators whose right operand is a *pattern* — the
+// language of patterns.md, rather than the regular expression `=~` takes or
+// the number the `-eq` family reads. It is the same set `case` matches with,
+// and the reason a group there belongs to the operand rather than to the
+// shell.
+var condPatternOps = map[string]bool{"=": true, "==": true, "!=": true}
 
 // condOperator reads a comparison operator, reinterpreting `<` and `>`.
 //
@@ -253,8 +285,14 @@ func (p *Parser) condOperator() string {
 		// before the operand is read — which is here, before the token after
 		// the operator is fetched.
 		p.lex.inRegex = op == "=~"
+		// And the operand of `==`, `=` and `!=` is a *pattern*, where one
+		// dialect reads a bare `(a|b)` group — including one that starts the
+		// operand, which is the position the operator table reaches first.
+		// Set here for the same reason and in the same place.
+		p.lex.inPattern = condPatternOps[op]
 		p.next()
 		p.lex.inRegex = false
+		p.lex.inPattern = false
 		return op
 	}
 	return ""

@@ -1558,6 +1558,18 @@ type Diagnostics struct {
 	// in the other three.
 	UnterminatedEndsOnNextLine bool
 
+	// CondOperand is a token standing where a conditional operator wanted a
+	// word — `[[ $k == (a|b) ]]` in a dialect with no bare pattern groups,
+	// or `[[ -n ]]` with nothing after the operator at all. Four verbs:
+	// %[1]s the offending token, %[2]s `unary` or `binary`, %[3]s the
+	// operator that was waiting, and %[4]d the line.
+	//
+	// Empty means the dialect says what it says about any token the grammar
+	// did not want, which is three of the four: `\`(' unexpected`, with
+	// nothing about the condition. bash is the exception and words it as a
+	// statement about the operator rather than about the token.
+	CondOperand string
+
 	// SyntaxUnexpected is a token the grammar did not want. Three verbs:
 	// %[1]s the token, %[2]s what would have been valid where the parser
 	// knows, and %[3]d the line, for the dialect that has no location of its
@@ -2255,6 +2267,26 @@ func readOn(se *syntax.Error, expr string) bool {
 // wrong inside `${ }` and "Syntax error: …" for everything else, and matching
 // on our own phrasing to tell those apart would break the first time the
 // phrasing changed.
+// unexpectedToken words a token the grammar did not want, which is one
+// sentence shared by two failures: a token in the wrong place anywhere, and
+// an operand a conditional operator could not take in a dialect with no
+// sentence of its own for that.
+func (d Diagnostics) unexpectedToken(se *syntax.Error) string {
+	form := d.SyntaxUnexpected
+	if se.Class == syntax.ClassWord && d.SyntaxUnexpectedWord != "" {
+		form = d.SyntaxUnexpectedWord
+	}
+	if se.Redirect && d.SyntaxRedirectUnexpected != "" {
+		// One dialect does not name the token here at all.
+		return d.SyntaxRedirectUnexpected
+	}
+	msg := Wording(form, `"%[1]s" unexpected`, se.Token, se.Expected, se.Pos.Line)
+	if se.Expected != "" && d.SyntaxExpecting != "" {
+		msg += Wording(d.SyntaxExpecting, "", se.Expected)
+	}
+	return msg
+}
+
 func (d Diagnostics) ParseFailure(err error) string {
 	var se *syntax.Error
 	if !errors.As(err, &se) {
@@ -2270,20 +2302,16 @@ func (d Diagnostics) ParseFailure(err error) string {
 		return d.arithParseFailure(se, se.Expr)
 	case syntax.ErrForName:
 		return Wording(d.ForName, "expected a name after `for`", se.Token, se.Pos.Line)
+	case syntax.ErrCondOperand:
+		if d.CondOperand != "" {
+			return Wording(d.CondOperand, "", se.Token, se.Expected, se.LastToken, se.Pos.Line)
+		}
+		// A dialect with no sentence of its own names the token the way it
+		// names any token the grammar did not want, which is what three of
+		// the four do here: `\`(' unexpected` and nothing about `[[`.
+		return d.unexpectedToken(se)
 	case syntax.ErrUnexpected:
-		form := d.SyntaxUnexpected
-		if se.Class == syntax.ClassWord && d.SyntaxUnexpectedWord != "" {
-			form = d.SyntaxUnexpectedWord
-		}
-		if se.Redirect && d.SyntaxRedirectUnexpected != "" {
-			// One dialect does not name the token here at all.
-			return d.SyntaxRedirectUnexpected
-		}
-		msg := Wording(form, `"%[1]s" unexpected`, se.Token, se.Expected, se.Pos.Line)
-		if se.Expected != "" && d.SyntaxExpecting != "" {
-			msg += Wording(d.SyntaxExpecting, "", se.Expected)
-		}
-		return msg
+		return d.unexpectedToken(se)
 	case syntax.ErrUnmatched:
 		form := d.UnmatchedQuote
 		switch se.Token {

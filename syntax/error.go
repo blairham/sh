@@ -84,6 +84,18 @@ const (
 	// `"`, a backquote, `$(` or `${`; Expected is what would have closed
 	// it; LastToken is the text from the opener to the end of its line.
 	ErrUnmatched
+	// ErrCondOperand is an operand a conditional operator cannot take: a
+	// token where `[[ ]]` wanted a word, so `[[ $k == (a|b) ]]` in a dialect
+	// with no bare pattern groups, or `[[ -n ]]` with nothing after the
+	// operator at all.
+	//
+	// Its own kind because one dialect words it as a statement about the
+	// *operator* — "unexpected argument `(' to conditional binary operator" —
+	// rather than as a token the grammar did not want, and the others use
+	// the wording they use for any such token. Token is the offending one
+	// and Expected is `unary` or `binary`, which is the only part of the
+	// sentence that varies within the dialect that has one.
+	ErrCondOperand
 	// ErrForName is a `for` whose variable is not a name. Its own kind
 	// because the panel does not word it as an unexpected token: three of the
 	// four say something about the *name* and only the fourth blames the

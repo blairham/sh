@@ -47,6 +47,15 @@ type Lexer struct {
 	// token.
 	inCondition bool
 
+	// inPattern is set while the token being read is the operand of a
+	// pattern operator — `==`, `=` or `!=`. Its `(` opens an alternation
+	// group rather than anything of the shell's, in the dialect that has
+	// bare groups, and that has to be known before the operator table sees
+	// the character: `(` is an operator, so a token beginning with one never
+	// reaches the word scanner. Exactly the shape inRegex has, and for
+	// exactly the same reason.
+	inPattern bool
+
 	// pending holds here-documents whose bodies have not been read yet.
 	//
 	// A body starts after the *next newline*, not after the operator — the
@@ -225,6 +234,18 @@ func (l *Lexer) Next() Token {
 	// the token so the interpreter can tell the two apart.
 	if tok, ok := l.tryFdVariable(); ok {
 		return tok
+	}
+
+	// A pattern's operand owns a group that *starts* it — `[[ $k == (a|b) ]]`
+	// — where the dialect reads bare groups. Only the first character needs
+	// saying: mid-word the scanner already takes one, which is why
+	// `[[ $k == a(b|c) ]]` worked while this did not (#826).
+	//
+	// Before the arithmetic command below, not after it: a nested group
+	// starts `((`, and `[[ $k == ((a|b)|x) ]]` is a pattern rather than the
+	// one place in the grammar where two parentheses are one token.
+	if l.inPattern && l.peek() == '(' && l.opensPatternGroup() {
+		return l.scanWord(start)
 	}
 
 	// `((` is an arithmetic command; `( (` is a subshell containing one. The

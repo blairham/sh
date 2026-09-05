@@ -55,17 +55,24 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 	// Only the two named streams go through the pipes; complaints still
 	// reach whoever is watching the shell.
 	sub.Stderr = r.lockedStderr()
-	go func() {
+	// Handed over however the goroutine ended, for the reason a background
+	// job's status is: the shell waits below for this job to report its
+	// process, and a coprocess whose ends stayed open is a shell reading a
+	// stream that will never finish. An interpreter bug here has to cost the
+	// coprocess and no more.
+	status := internalErrorStatus
+	r.spawn(func() {
 		if err := sub.command(ctx, c.Cmd); err != nil {
 			sub.diagf("%v\n", err)
 		}
+		status = sub.status
+	}, func() {
 		// The command is done with its ends, and closing them here is what
 		// turns its exit into end-of-file for whoever reads NAME[0].
 		_ = childIn.Close()
 		_ = childOut.Close()
-		job.markReady()
-		job.finish(sub.status)
-	}()
+		job.finish(status)
+	})
 	<-job.ready
 
 	r.jobs = append(r.jobs, job)

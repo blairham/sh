@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -60,6 +61,22 @@ type Client struct {
 	// point of the exercise; off is for a caller that wants the agent to do
 	// its own reading and accepts that nothing will see it.
 	Files bool
+
+	// Relaunch runs the agent's own command again — the same program with the
+	// same arguments, plus these — with env set over the top, attached to a
+	// terminal a person can type into. A zero exit status means they
+	// authenticated; any other termination means they did not.
+	//
+	// It is a hook rather than something this package does, because this
+	// package does not know how the agent was started: only the caller that
+	// launched it can reproduce that invocation, which is precisely what
+	// terminal authentication asks for.
+	//
+	// Nil is a client that cannot serve terminal authentication, and it is
+	// nil-ness that decides what is *advertised*: the capability and the
+	// ability to honor it are one field, so there is no arrangement in which
+	// an agent is offered a login this client cannot run.
+	Relaunch func(ctx context.Context, args []string, env map[string]string) error
 
 	conn  *Conn
 	agent InitializeResponse
@@ -126,6 +143,13 @@ func (c *Client) Initialize(ctx context.Context) (InitializeResponse, error) {
 	info := c.Info
 	req := InitializeRequest{ProtocolVersion: Version, ClientInfo: &info}
 	req.Capabilities.FS = FileSystemCapabilities{ReadTextFile: c.Files, WriteTextFile: c.Files}
+	// Claimed from the hook rather than from a flag beside it. An agent only
+	// offers a terminal method to a client that says it can run one, so this
+	// is what decides whether such a method is ever on the list — and reading
+	// it off the same field that performs one is how a capability that is
+	// served but not advertised, or advertised but not served, is made
+	// unrepresentable.
+	req.Capabilities.Auth = AuthCapabilities{Terminal: c.Relaunch != nil}
 	var resp InitializeResponse
 	if err := c.conn.Call(ctx, MethodInitialize, req, &resp); err != nil {
 		return resp, err
@@ -148,6 +172,68 @@ func (c *Client) Initialize(ctx context.Context) (InitializeResponse, error) {
 // one of them advertises a capability and then answers an internal error to
 // the method behind it. Degrade on the answer as well as on the claim.
 func (c *Client) Agent() InitializeResponse { return c.agent }
+
+// Authenticate settles one of the methods the agent advertised.
+//
+// Authentication is the *first* thing that happens with a real agent rather
+// than the last: measured, two of the three published ones refuse session/new
+// with -32000 until it has. So this belongs between Initialize and NewSession,
+// and a client that treats a successful handshake as "ready to work" is a
+// client that works with one agent in three.
+//
+// The method is looked up in what the agent actually advertised, and an id
+// that is not on that list is refused here without a message being sent. That
+// is the same rule as an option id we never offered, read the other way round:
+// the agent named the choices, so a choice it did not name is not one.
+//
+// What happens next is the kind's, not ours to pick. An agent method is the
+// `authenticate` call; a terminal method is deliberately *not* — the schema
+// forbids passing one to `authenticate` — and is the relaunch instead.
+func (c *Client) Authenticate(ctx context.Context, id string) error {
+	m, ok := c.authMethod(id)
+	if !ok {
+		return fmt.Errorf("acp: %q is not one of the authentication methods this agent offers%s",
+			id, offered(c.agent.AuthMethods))
+	}
+	if m.Kind() == AuthTerminal {
+		if c.Relaunch == nil {
+			// Only reachable from an agent that offered a terminal method
+			// without being told it could, since the capability is the hook.
+			// Worth saying rather than assuming, because the failure it
+			// prevents is a person watching a login that never opens.
+			return fmt.Errorf("acp: %q wants a terminal to log in on and this client has none", id)
+		}
+		if err := c.Relaunch(ctx, m.Args, m.Env); err != nil {
+			return fmt.Errorf("acp: %q: %w", id, err)
+		}
+		return nil
+	}
+	return c.conn.Call(ctx, MethodAuthenticate, AuthenticateRequest{MethodID: id}, nil)
+}
+
+// authMethod finds an advertised method by id.
+func (c *Client) authMethod(id string) (AuthMethod, bool) {
+	for _, m := range c.agent.AuthMethods {
+		if m.ID == id {
+			return m, true
+		}
+	}
+	return AuthMethod{}, false
+}
+
+// offered names what was on the list, for a message about something that was
+// not. An agent that advertised nothing is a distinct answer from one that
+// advertised something else, and saying "offers ()" would hide it.
+func offered(methods []AuthMethod) string {
+	if len(methods) == 0 {
+		return "; it advertised none"
+	}
+	ids := make([]string, 0, len(methods))
+	for _, m := range methods {
+		ids = append(ids, m.ID)
+	}
+	return " (" + strings.Join(ids, ", ") + ")"
+}
 
 // NewSession opens a session in a directory.
 func (c *Client) NewSession(ctx context.Context, cwd string) (string, error) {

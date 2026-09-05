@@ -4869,6 +4869,23 @@ echo unreachable`,
 		Why:     "the long spelling of `set -n`, and it behaves identically in all four: everything after it is read and never run, and the script still ends at 0 — the same option under its other name, which was refused as unimplemented here while the letter worked",
 	},
 	{
+		// The body goes to standard error on purpose, so that the command's
+		// own output and the echo of its lines land on one descriptor and
+		// their order is visible. With the two apart the same four lines come
+		// out in the same order whether the terminator is echoed with the
+		// command or after it, which is why this went unnoticed.
+		ID: "opt/set-v-echoes-a-here-document-with-its-command", Category: "shell options",
+		Script:  true,
+		Snippet: "set -v\ncat <<END >&2\nbody\nEND\necho after\n",
+		Why:     "all three physical lines of a command carrying a here-document are written back before any of it runs, terminator included — unanimous. The delimiter belongs to the command that opened it rather than to the input after it, and a shell that counts only the lines the parser turned into a command echoes it on the back of the next one, after the body has already been written out",
+	},
+	{
+		ID: "opt/set-v-echoes-the-tail-after-the-last-command", Category: "shell options",
+		Script:  true,
+		Snippet: "set -v\necho one\n\n\n# the end\n",
+		Why:     "the option's contract is to write back what it reads, and the lines after the last command are read like any others: two blank lines and a comment, echoed by all four. Blank lines and comments *between* commands are dragged out by the line that follows them, so only the tail — where there is no line after — shows a shell that echoes per command rather than per line. The comment is last because a record trims trailing newlines, and blank lines at the very end would leave nothing to compare",
+	},
+	{
 		ID: "opt/set-o-verbose-echoes-what-is-read", Category: "shell options",
 		Snippet: "echo before\nset -o verbose\necho after\n",
 		Why:     "the long spelling of `set -v`: input is written back to stderr as it is read, and never the line that turned it on. From a file all four agree; a -c string is read differently — bash echoes it where dash and zsh do not — so the case pins the route every script uses",

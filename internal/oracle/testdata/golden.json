@@ -27966,6 +27966,50 @@
         "TimedOut": false
       }
     },
+    "opt/set-v-echoes-a-here-document-with-its-command": {
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "cat \u003c\u003cEND \u003e\u00262~body~END~body~echo after",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after",
+        "Stderr": "cat \u003c\u003cEND \u003e\u00262~body~END~body~echo after",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after",
+        "Stderr": "cat \u003c\u003cEND \u003e\u00262~body~END~body~echo after",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "after",
+        "Stderr": "cat \u003c\u003cEND \u003e\u00262~body~END~body~echo after",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "after",
+        "Stderr": "cat \u003c\u003cEND \u003e\u00262~body~END~body~echo after",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "after",
+        "Stderr": "cat \u003c\u003cEND \u003e\u00262~body~END~body~echo after",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "opt/set-v-echoes-lines-as-read": {
       "bash": {
         "Stdout": "a~b",
@@ -28005,6 +28049,50 @@
       "zsh": {
         "Stdout": "a~b",
         "Stderr": "echo a~echo b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "opt/set-v-echoes-the-tail-after-the-last-command": {
+      "bash": {
+        "Stdout": "one",
+        "Stderr": "echo one~~~# the end",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "echo one~~~# the end",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one",
+        "Stderr": "echo one~~~# the end",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "echo one~~~# the end",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "echo one~~~# the end",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "echo one~~~# the end",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

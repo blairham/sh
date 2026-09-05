@@ -521,8 +521,28 @@ func (p *Parser) NextLine() (*File, bool) {
 			break
 		}
 	}
-	f.Last = p.tok.Pos
+	f.Last = p.lineEnd()
 	return f, true
+}
+
+// lineEnd is where the logical line just parsed ends in the input.
+//
+// The token that ended it, ordinarily — and the line that closed a
+// here-document where one was read, because its body and its delimiter are
+// physical lines of the command that owns them and the token says nothing
+// about them. The newline that triggers the read sits at the end of the
+// command's *first* line and the body is consumed behind it, so `cat <<END`
+// over three lines of script otherwise reports one.
+//
+// The furthest of the two, which is the whole rule: a line with no
+// here-document is unaffected, and one with several is closed by the last
+// delimiter rather than the first.
+func (p *Parser) lineEnd() Pos {
+	at := p.tok.Pos
+	if e := p.lex.heredocEnd; e.Offset > at.Offset {
+		return e
+	}
+	return at
 }
 
 func (p *Parser) skipNewlines() {

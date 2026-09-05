@@ -7,26 +7,26 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
-	"github.com/blairham/sh/dialect/dash"
-	"github.com/blairham/sh/dialect/zsh"
 	. "github.com/blairham/sh/interp"
 )
 
-func TestEqualsExpansionIsZshAlone(t *testing.T) {
-	// `echo =ls` prints a path in zsh and the literal text everywhere else,
-	// with nothing reported either way — the `&>` failure mode in an
-	// expansion.
-	if got, _ := run(t, `echo =ls`, withSem(zsh.Semantics())); !strings.HasSuffix(strings.TrimSpace(got), "/ls") {
-		t.Errorf("zsh should expand to a path, got %q", got)
+// equalsSem answers the axis by name. Which preset answers Yes is the
+// dialect packages' claim, not this one's.
+func equalsSem(a Answer) Semantics {
+	s := permissive()
+	s.EqualsExpansion = a
+	return s
+}
+
+func TestEqualsExpansionIsAnAxis(t *testing.T) {
+	// `echo =ls` prints a path where the axis is on and the literal text
+	// where it is off, with nothing reported either way — the `&>` failure
+	// mode in an expansion.
+	if got, _ := run(t, `echo =ls`, withSem(equalsSem(Yes))); !strings.HasSuffix(strings.TrimSpace(got), "/ls") {
+		t.Errorf("Yes should expand to a path, got %q", got)
 	}
-	for _, tc := range []struct {
-		name string
-		sem  Semantics
-	}{{"bash", bash.Semantics()}, {"dash", dash.Semantics()}} {
-		if got, _ := run(t, `echo =ls`, withSem(tc.sem)); got != "=ls\n" {
-			t.Errorf("%s should take it literally, got %q", tc.name, got)
-		}
+	if got, _ := run(t, `echo =ls`, withSem(equalsSem(No))); got != "=ls\n" {
+		t.Errorf("No should take it literally, got %q", got)
 	}
 	// The core refuses, because both answers are plausible output.
 	if _, st := run(t, `echo =ls`, withSem(CoreSemantics())); st != 2 {
@@ -35,7 +35,7 @@ func TestEqualsExpansionIsZshAlone(t *testing.T) {
 }
 
 func TestEqualsExpansionOnlyAtTheHeadAndUnquoted(t *testing.T) {
-	sem := zsh.Semantics()
+	sem := equalsSem(Yes)
 	for _, tc := range []struct{ src, want string }{
 		// An assignment does not begin with `=`.
 		{`echo a=b`, "a=b\n"},
@@ -51,8 +51,12 @@ func TestEqualsExpansionOnlyAtTheHeadAndUnquoted(t *testing.T) {
 }
 
 func TestEqualsExpansionFailureIsFatal(t *testing.T) {
-	// zsh reports the name without a colon and abandons the script.
-	out, st := run(t, `echo =nosuchcommand_xyz; echo after`, withSem(zsh.Semantics()))
+	// The name is reported through the EqualsNotFound wording and the script
+	// is abandoned, like any failed expansion here. The status rides the
+	// fatal-status axis, so that is named too.
+	sem := equalsSem(Yes)
+	sem.FatalErrorStatusIsOne = Yes
+	out, st := run(t, `echo =nosuchcommand_xyz; echo after`, withSem(sem))
 	if strings.Contains(out, "after") {
 		t.Errorf("the script continued: %q", out)
 	}

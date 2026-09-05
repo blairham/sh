@@ -7,10 +7,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
-	"github.com/blairham/sh/dialect/zsh"
 	. "github.com/blairham/sh/interp"
 )
+
+// The two answers to the array-base axis, named rather than borrowed from a
+// preset: everything below that says "both bases" iterates these.
+func baseVectors() []Semantics {
+	zero := permissive()
+	zero.ArrayBaseIsZero = Yes
+	one := permissive()
+	one.ArrayBaseIsZero = No
+	return []Semantics{zero, one}
+}
 
 // A negative subscript counts back from the end, and asks nothing: `${a[-1]}`
 // is the last element in all three shells with arrays, the one whose
@@ -35,10 +43,10 @@ func TestANegativeSubscriptCountsFromTheEnd(t *testing.T) {
 // on the last element.
 func TestANegativeSubscriptIgnoresTheBase(t *testing.T) {
 	src := `a=(one two three); printf "%s %s" "${a[1]}" "${a[-1]}"`
-	if out, _ := run(t, src, withSem(bash.Semantics())); out != "two three" {
+	if out, _ := run(t, src, withSem(baseVectors()[0])); out != "two three" {
 		t.Errorf("zero-based gave %q, want %q", out, "two three")
 	}
-	if out, _ := run(t, src, withSem(zsh.Semantics())); out != "one three" {
+	if out, _ := run(t, src, withSem(baseVectors()[1])); out != "one three" {
 		t.Errorf("one-based gave %q, want %q", out, "one three")
 	}
 }
@@ -47,7 +55,7 @@ func TestANegativeSubscriptIgnoresTheBase(t *testing.T) {
 // element answers to.
 func TestAssigningThroughANegativeSubscript(t *testing.T) {
 	src := `a=(x y z); a[-1]=Q; a[-3]=P; echo "${a[@]}"`
-	for _, sem := range []Semantics{bash.Semantics(), zsh.Semantics()} {
+	for _, sem := range baseVectors() {
 		if out, _ := run(t, src, withSem(sem)); strings.TrimSpace(out) != "P y Q" {
 			t.Errorf("got %q, want %q", strings.TrimSpace(out), "P y Q")
 		}
@@ -75,14 +83,14 @@ func TestANegativeSubscriptOutOfRange(t *testing.T) {
 // element is read and written back from the end, in both bases.
 func TestNegativeSubscriptsInArithmetic(t *testing.T) {
 	src := `a=(10 20 30); echo $((a[-1] + a[-3])); : $((a[-2] = a[-2] + 1)); echo "${a[-2]}"`
-	for _, sem := range []Semantics{bash.Semantics(), zsh.Semantics()} {
+	for _, sem := range baseVectors() {
 		out, _ := run(t, src, withSem(sem))
 		if strings.TrimSpace(out) != "40\n21" {
 			t.Errorf("got %q, want %q", strings.TrimSpace(out), "40\n21")
 		}
 	}
 	// Out of range is zero, exactly as a subscript past the other end is.
-	if out, _ := run(t, `a=(10); echo $((a[-9]))`, withSem(bash.Semantics())); strings.TrimSpace(out) != "0" {
+	if out, _ := run(t, `a=(10); echo $((a[-9]))`, withSem(baseVectors()[0])); strings.TrimSpace(out) != "0" {
 		t.Errorf("out of range gave %q, want 0", strings.TrimSpace(out))
 	}
 }
@@ -90,7 +98,7 @@ func TestNegativeSubscriptsInArithmetic(t *testing.T) {
 // `unset "a[-1]"` removes the last element — the same end-relative reading,
 // reached through the builtin.
 func TestUnsettingANegativeSubscript(t *testing.T) {
-	out, _ := runBash(t, `a=(x y z); unset "a[-1]"; echo "[${a[@]}]"`)
+	out, _ := runArray(t, `a=(x y z); unset "a[-1]"; echo "[${a[@]}]"`)
 	if strings.TrimSpace(out) != "[x y]" {
 		t.Errorf("got %q, want the last element gone", strings.TrimSpace(out))
 	}
@@ -102,11 +110,11 @@ func TestUnsettingANegativeSubscript(t *testing.T) {
 // positions have to be the store's for the positive spelling too, or the loop
 // `${!a[@]}` exists for reads the wrong elements back.
 func TestNegativeCountsFromTheHighestSubscript(t *testing.T) {
-	out, _ := runBash(t, `a=(x); a[5]=y; printf "[%s]" "${a[-1]}" "${a[-2]:-gap}" "${a[5]}" "${a[1]:-gap}"`)
+	out, _ := runArray(t, `a=(x); a[5]=y; printf "[%s]" "${a[-1]}" "${a[-2]:-gap}" "${a[5]}" "${a[1]:-gap}"`)
 	if out != "[y][gap][y][gap]" {
 		t.Errorf("got %q, want positions counted by subscript", out)
 	}
-	out, _ = runBash(t, `a=(x); a[5]=y; a[-1]=Z; echo "${!a[@]}" "${a[5]}"`)
+	out, _ = runArray(t, `a=(x); a[5]=y; a[-1]=Z; echo "${!a[@]}" "${a[5]}"`)
 	if strings.TrimSpace(out) != "0 5 Z" {
 		t.Errorf("got %q, want the write to land on the highest subscript", strings.TrimSpace(out))
 	}
@@ -115,7 +123,7 @@ func TestNegativeCountsFromTheHighestSubscript(t *testing.T) {
 // An associative subscript is a key, never a position: `-1` on a declared
 // name is the two characters, and nothing counts from any end.
 func TestAnAssociativeKeyIsNotANegativeSubscript(t *testing.T) {
-	out, _ := runBash(t, `typeset -A m; m[x]=v; m[-1]=q; printf "[%s]" "${m[-1]}" "${m[x]}"`)
+	out, _ := runArray(t, `typeset -A m; m[x]=v; m[-1]=q; printf "[%s]" "${m[-1]}" "${m[x]}"`)
 	if out != "[q][v]" {
 		t.Errorf("got %q, want -1 stored and read as a key", out)
 	}

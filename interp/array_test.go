@@ -7,8 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
-	"github.com/blairham/sh/dialect/zsh"
 	. "github.com/blairham/sh/interp"
 )
 
@@ -53,15 +51,18 @@ func TestQuotedArrayKeepsOneFieldPerElement(t *testing.T) {
 }
 
 func TestArrayBaseIsAnAxis(t *testing.T) {
-	// bash and ksh93 count from 0, zsh from 1 — measured, and the reason a
-	// subscript cannot be used as a slice offset without asking.
+	// ArrayBaseIsZero — measured on both sides, and the reason a subscript
+	// cannot be used as a slice offset without asking. Which preset gives
+	// which answer is the dialect packages' claim.
 	src := `a=(p q r); printf "%s" "${a[1]}"`
-	bash := bash.Semantics()
-	if got, _ := run(t, src, func(r *Runner) { r.Semantics = &bash }); got != "q" {
+	zero := permissive()
+	zero.ArrayBaseIsZero = Yes
+	if got, _ := run(t, src, withSem(zero)); got != "q" {
 		t.Errorf("zero-based gave %q, want q", got)
 	}
-	zsh := zsh.Semantics()
-	if got, _ := run(t, src, func(r *Runner) { r.Semantics = &zsh }); got != "p" {
+	one := permissive()
+	one.ArrayBaseIsZero = No
+	if got, _ := run(t, src, withSem(one)); got != "p" {
 		t.Errorf("one-based gave %q, want p", got)
 	}
 }

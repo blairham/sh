@@ -6,11 +6,29 @@ package syntax_test
 import (
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
-
 	"github.com/blairham/sh/internal/oracle"
 	"github.com/blairham/sh/syntax"
 )
+
+// corpusDialect is the flag set the corpus needs, constructed here so that
+// this package never borrows a shell's preset: the corpus is dialect-neutral,
+// and each flag beyond the core is named for the construct some case uses.
+// A new case wanting a sixth flag adds it here by name.
+func corpusDialect() syntax.Dialect {
+	d := syntax.Core()
+	// `${!x}` and `${!prefix*}` — the param/ indirection cases.
+	d.ParamIndirection = true
+	// `;;&` — the case-continue cases.
+	d.CaseContinue = true
+	// `function f() { …; }`, both markers at once.
+	d.FunctionKeywordParens = true
+	// `[[ x == @(a|b) ]]` — extended patterns where a condition reads them.
+	d.ExtendedPatternInCondition = true
+	// One case records `f() echo hi` as a syntax error, which only a
+	// grammar that insists on a compound body can reproduce.
+	d.FuncBodyMustBeCompound = true
+	return d
+}
 
 // The oracle corpus is real shell that real shells ran. Long before an
 // interpreter exists, every one of those snippets has to lex — cleanly, with
@@ -22,7 +40,7 @@ import (
 func TestCorpusLexes(t *testing.T) {
 	for _, c := range oracle.Corpus {
 		t.Run(c.ID, func(t *testing.T) {
-			l := syntax.NewLexer(c.Snippet, bash.Dialect())
+			l := syntax.NewLexer(c.Snippet, corpusDialect())
 			toks := l.Tokens()
 
 			if err := l.Err(); err != nil {
@@ -62,7 +80,7 @@ func TestCorpusLexes(t *testing.T) {
 func TestCorpusParses(t *testing.T) {
 	for _, c := range oracle.Corpus {
 		t.Run(c.ID, func(t *testing.T) {
-			p := syntax.NewParser(c.Snippet, bash.Dialect())
+			p := syntax.NewParser(c.Snippet, corpusDialect())
 			f := p.Parse()
 
 			// Cases the reference shells reject must be rejected here too.

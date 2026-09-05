@@ -7,10 +7,19 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
-	"github.com/blairham/sh/dialect/zsh"
 	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
+
+// runArray is run() with the two grammar flags these rows use enabled by
+// name: the case-change operator and `${!a[@]}`.
+func runArray(t *testing.T, src string) (string, int) {
+	t.Helper()
+	return runGrammar(t, src, func(d *syntax.Dialect) {
+		d.ParamCaseChange = true
+		d.ParamIndirection = true
+	}, nil)
+}
 
 // An operator applies to a subscripted value exactly as it does to a variable.
 //
@@ -39,7 +48,7 @@ func TestAnOperatorReachesAnArrayElement(t *testing.T) {
 		// difference between `:-` and `-`.
 		{`a=("" x); echo "[${a[0]:-d}][${a[0]-d}]"`, "[d][]"},
 	} {
-		if out, _ := runBash(t, c.src); strings.TrimSpace(out) != c.want {
+		if out, _ := runArray(t, c.src); strings.TrimSpace(out) != c.want {
 			t.Errorf("%s = %q, want %q", c.src, strings.TrimSpace(out), c.want)
 		}
 	}
@@ -49,16 +58,16 @@ func TestAnOperatorReachesAnArrayElement(t *testing.T) {
 // replace the whole array with one string, which is worse than the nothing
 // this used to do.
 func TestAssigningThroughASubscript(t *testing.T) {
-	out, _ := runBash(t, `a=(x y); echo "${a[1]:=new}"; echo "[${a[@]}]"`)
+	out, _ := runArray(t, `a=(x y); echo "${a[1]:=new}"; echo "[${a[@]}]"`)
 	if got := strings.TrimSpace(out); got != "y\n[x y]" {
 		t.Errorf("set element: got %q, want the test not to fire", got)
 	}
-	out, _ = runBash(t, `a=(x y); echo "${a[1]:=new}"; a=(p ""); echo "${a[1]:=new}"; echo "[${a[@]}]"`)
+	out, _ = runArray(t, `a=(x y); echo "${a[1]:=new}"; a=(p ""); echo "${a[1]:=new}"; echo "[${a[@]}]"`)
 	if !strings.Contains(out, "[p new]") {
 		t.Errorf("empty element: got %q, want the element assigned", out)
 	}
 	// And the array is not flattened into a scalar.
-	out, _ = runBash(t, `a=(x ""); : "${a[1]:=new}"; echo "${#a[@]}"`)
+	out, _ = runArray(t, `a=(x ""); : "${a[1]:=new}"; echo "${#a[@]}"`)
 	if got := strings.TrimSpace(out); got != "2" {
 		t.Errorf("got %q elements, want 2 — the array must survive", got)
 	}
@@ -79,13 +88,13 @@ func TestSlicingTheWholeArrayButNotOneElement(t *testing.T) {
 		// One element, and a substring of it.
 		{`a=(hello); echo "${a[0]:1}"`, "ello"},
 	} {
-		if out, _ := runBash(t, c.src); strings.TrimSpace(out) != c.want {
+		if out, _ := runArray(t, c.src); strings.TrimSpace(out) != c.want {
 			t.Errorf("%s = %q, want %q", c.src, strings.TrimSpace(out), c.want)
 		}
 	}
 	// The slice is a list, so an element holding a space stays one field —
 	// which is the whole reason it is not a substring of the joined text.
-	out, _ := runBash(t, `a=("a b" c d); printf "[%s]" "${a[@]:0:2}"`)
+	out, _ := runArray(t, `a=("a b" c d); printf "[%s]" "${a[@]:0:2}"`)
 	if got := strings.TrimSpace(out); got != "[a b][c]" {
 		t.Errorf("got %q, want two fields", got)
 	}
@@ -94,20 +103,20 @@ func TestSlicingTheWholeArrayButNotOneElement(t *testing.T) {
 // `${!a[@]}` is the array's subscripts, not its elements. Answering with the
 // elements made the loop that exists to use it iterate the wrong thing.
 func TestArrayIndices(t *testing.T) {
-	out, _ := runBash(t, `a=(p q r); echo "${!a[@]}"`)
+	out, _ := runArray(t, `a=(p q r); echo "${!a[@]}"`)
 	if got := strings.TrimSpace(out); got != "0 1 2" {
 		t.Errorf("got %q, want the subscripts", got)
 	}
-	out, _ = runBash(t, `a=(p q r); echo "${!a[*]}"`)
+	out, _ = runArray(t, `a=(p q r); echo "${!a[*]}"`)
 	if got := strings.TrimSpace(out); got != "0 1 2" {
 		t.Errorf("star form: got %q, want the subscripts", got)
 	}
-	out, _ = runBash(t, `a=(p q r); for i in "${!a[@]}"; do printf "%s=%s " "$i" "${a[$i]}"; done`)
+	out, _ = runArray(t, `a=(p q r); for i in "${!a[@]}"; do printf "%s=%s " "$i" "${a[$i]}"; done`)
 	if got := strings.TrimSpace(out); got != "0=p 1=q 2=r" {
 		t.Errorf("the loop: got %q", got)
 	}
 	// The elements are still the elements.
-	out, _ = runBash(t, `a=(p q r); echo "${a[@]}"`)
+	out, _ = runArray(t, `a=(p q r); echo "${a[@]}"`)
 	if got := strings.TrimSpace(out); got != "p q r" {
 		t.Errorf("got %q, want the elements", got)
 	}
@@ -137,7 +146,7 @@ func TestAnOperatorDistributesOverTheElements(t *testing.T) {
 		// `${#a[@]}` is still the count, not a trimmed anything.
 		{`a=(aa ab); printf "[%s]" "${#a[@]}"`, "[2]"},
 	} {
-		if out, _ := runBash(t, c.src); out != c.want {
+		if out, _ := runArray(t, c.src); out != c.want {
 			t.Errorf("%s = %q, want %q", c.src, out, c.want)
 		}
 	}
@@ -147,19 +156,24 @@ func TestAnOperatorDistributesOverTheElements(t *testing.T) {
 // left, the third joins first and trims the joined string once — so which
 // string the operator sees is an axis, asked only on the star form.
 func TestTheStarFormOperatorIsAnAxis(t *testing.T) {
+	distributes := permissive()
+	distributes.OperatorDistributesOverStarSubscript = Yes
+	joins := permissive()
+	joins.OperatorDistributesOverStarSubscript = No
+
 	src := `a=(aa ab); printf "%s" "${a[*]#a}"`
-	if out, _ := run(t, src, withSem(bash.Semantics())); out != "a b" {
+	if out, _ := run(t, src, withSem(distributes)); out != "a b" {
 		t.Errorf("distributing gave %q, want %q", out, "a b")
 	}
-	if out, _ := run(t, src, withSem(zsh.Semantics())); out != "a ab" {
+	if out, _ := run(t, src, withSem(joins)); out != "a ab" {
 		t.Errorf("joining first gave %q, want %q", out, "a ab")
 	}
 	// The join is on the first character of IFS either way.
 	src = `a=(aa ab); IFS=-; printf "%s" "${a[*]/a/X}"`
-	if out, _ := run(t, src, withSem(bash.Semantics())); out != "Xa-Xb" {
+	if out, _ := run(t, src, withSem(distributes)); out != "Xa-Xb" {
 		t.Errorf("distributing gave %q, want %q", out, "Xa-Xb")
 	}
-	if out, _ := run(t, src, withSem(zsh.Semantics())); out != "Xa-ab" {
+	if out, _ := run(t, src, withSem(joins)); out != "Xa-ab" {
 		t.Errorf("joining first gave %q, want %q", out, "Xa-ab")
 	}
 }

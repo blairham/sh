@@ -8,10 +8,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
-	"github.com/blairham/sh/dialect/dash"
-	"github.com/blairham/sh/dialect/ksh"
-	"github.com/blairham/sh/dialect/zsh"
 	. "github.com/blairham/sh/interp"
 )
 
@@ -40,20 +36,17 @@ func TestRedirectionWithNoCommandStillOpensTheFile(t *testing.T) {
 }
 
 func TestBraceExpansionIsADialectQuestion(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		sem  Semantics
-		want string
-	}{
-		{"bash", bash.Semantics(), "1 2 3\n"},
-		{"ksh93", ksh.Semantics(), "1 2 3\n"},
-		{"zsh", zsh.Semantics(), "1 2 3\n"},
-		// dash has no brace expansion, so the word is a literal.
-		{"dash", dash.Semantics(), "{1..3}\n"},
-	} {
-		if got, _ := run(t, `echo {1..3}`, withSem(tc.sem)); got != tc.want {
-			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
-		}
+	// The BraceExpansion axis: on one side the word expands, on the other it
+	// is a literal. Both answers are quiet, so both are asserted.
+	expands := permissive()
+	expands.BraceExpansion = Yes
+	if got, _ := run(t, `echo {1..3}`, withSem(expands)); got != "1 2 3\n" {
+		t.Errorf("Yes: got %q, want %q", got, "1 2 3\n")
+	}
+	literal := permissive()
+	literal.BraceExpansion = No
+	if got, _ := run(t, `echo {1..3}`, withSem(literal)); got != "{1..3}\n" {
+		t.Errorf("No: got %q, want %q", got, "{1..3}\n")
 	}
 	if _, st := run(t, `echo {1..3}`, withSem(CoreSemantics())); st != 2 {
 		t.Error("the core should refuse brace expansion")
@@ -61,25 +54,23 @@ func TestBraceExpansionIsADialectQuestion(t *testing.T) {
 }
 
 func TestBracketCaretIsADialectQuestion(t *testing.T) {
+	// The BracketCaretNegates axis: `^` negates the class, or is an ordinary
+	// member — so `[^abc]` against `d` matches on one side and falls through
+	// on the other. Both answers are matches, on different inputs, with
+	// nothing to warn on.
 	const src = `case d in [^abc]) echo caret;; *) echo no-caret;; esac`
-	for _, tc := range []struct {
-		name string
-		sem  Semantics
-		want string
-	}{
-		{"bash", bash.Semantics(), "caret\n"},
-		{"zsh", zsh.Semantics(), "caret\n"},
-		// dash reads `^` as an ordinary member, so `[^abc]` matches a caret
-		// and `d` falls through. Both answers are matches, on different
-		// inputs, with nothing to warn on.
-		{"dash", dash.Semantics(), "no-caret\n"},
-	} {
-		if got, _ := run(t, src, withSem(tc.sem)); got != tc.want {
-			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
-		}
+	negates := permissive()
+	negates.BracketCaretNegates = Yes
+	if got, _ := run(t, src, withSem(negates)); got != "caret\n" {
+		t.Errorf("Yes: got %q, want %q", got, "caret\n")
+	}
+	member := permissive()
+	member.BracketCaretNegates = No
+	if got, _ := run(t, src, withSem(member)); got != "no-caret\n" {
+		t.Errorf("No: got %q, want %q", got, "no-caret\n")
 	}
 	// `!` is the portable negation and needs no answer from anyone.
-	for _, sem := range []Semantics{dash.Semantics(), bash.Semantics(), CoreSemantics()} {
+	for _, sem := range []Semantics{negates, member, CoreSemantics()} {
 		if got, _ := run(t, `case d in [!abc]) echo neg;; *) echo no;; esac`, withSem(sem)); got != "neg\n" {
 			t.Errorf("[!abc] should negate everywhere, got %q", got)
 		}

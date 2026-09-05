@@ -4,38 +4,15 @@
 package interp_test
 
 import (
-	"bytes"
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
-	"github.com/blairham/sh/dialect/zsh"
 	. "github.com/blairham/sh/interp"
 
 	"github.com/blairham/sh/syntax"
 )
-
-// runBash is run() with the bash *grammar* as well as its semantics. The
-// shared helper parses with syntax.Core() on purpose, so a construct bash
-// alone has — `;;&` here — needs the dialect naming both halves.
-func runBash(t *testing.T, src string) (string, int) {
-	t.Helper()
-	f, err := syntax.Parse(src, bash.Dialect())
-	if err != nil {
-		t.Fatalf("parse %q: %v", src, err)
-	}
-	var buf bytes.Buffer
-	sem := bash.Semantics()
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem}
-	st, rerr := r.Run(context.Background(), f)
-	if rerr != nil {
-		return buf.String() + "unsupported: " + rerr.Error(), -1
-	}
-	return buf.String(), st
-}
 
 func TestLocalIsDynamicallyScoped(t *testing.T) {
 	// A local is visible to everything the function calls and gone when it
@@ -72,7 +49,9 @@ func TestLocalOutsideAFunctionFails(t *testing.T) {
 func TestCaseContinueKeepsTestingLaterPatterns(t *testing.T) {
 	// `;;&` re-tests; `;&` falls through without testing. The difference is
 	// the whole reason they are separate operators, so both are asserted.
-	got, _ := runBash(t, `case ab in a*) echo one;;& *b) echo two;;& zz) echo three;; esac`)
+	// `;;&` is not core grammar, so the flag is enabled by name.
+	got, _ := runGrammar(t, `case ab in a*) echo one;;& *b) echo two;;& zz) echo three;; esac`,
+		func(d *syntax.Dialect) { d.CaseContinue = true }, nil)
 	if want := "one\ntwo\n"; got != want {
 		t.Errorf(";;&: got %q, want %q", got, want)
 	}
@@ -117,26 +96,36 @@ func TestSetCDoesNotClobberPositionalParameters(t *testing.T) {
 }
 
 func TestIndirectionReadsTheNamedVariable(t *testing.T) {
-	if got, _ := runBash(t, `x=y; y=V; printf "[%s]" "${!x}"`); got != "[V]" {
+	// `${!x}` is grammar the core does not have, and what it means is the
+	// IndirectionYieldsName axis — both named here.
+	indirect := func(d *syntax.Dialect) { d.ParamIndirection = true }
+	sem := permissive()
+	sem.IndirectionYieldsName = No
+	if got, _ := runGrammar(t, `x=y; y=V; printf "[%s]" "${!x}"`, indirect, withSem(sem)); got != "[V]" {
 		t.Errorf("got %q, want %q", got, "[V]")
 	}
 	// An unset middle name yields empty rather than the name itself, which
-	// is the reading ksh93 gives and the one the bash dialect must not.
-	if got, _ := runBash(t, `x=nope; printf "[%s]" "${!x}"`); got != "[]" {
+	// is the reading the other answer gives and this one must not.
+	if got, _ := runGrammar(t, `x=nope; printf "[%s]" "${!x}"`, indirect, withSem(sem)); got != "[]" {
 		t.Errorf("unset target: got %q, want %q", got, "[]")
 	}
 }
 
 func TestCaseChangeOperators(t *testing.T) {
-	if got, _ := runBash(t, `x=aBc; printf "[%s]" "${x^^}" "${x,,}"`); got != "[ABC][abc]" {
+	got, _ := runGrammar(t, `x=aBc; printf "[%s]" "${x^^}" "${x,,}"`,
+		func(d *syntax.Dialect) { d.ParamCaseChange = true }, nil)
+	if got != "[ABC][abc]" {
 		t.Errorf("got %q, want %q", got, "[ABC][abc]")
 	}
 }
 
 func TestArithmeticErrorAbandonsTheScript(t *testing.T) {
-	// Fatality is not an axis: dash, bash, ksh93 and zsh all stop. Only the
-	// status differs, and that is asserted in eval_test.go.
-	for _, sem := range []Semantics{bash.Semantics(), PosixSemantics(), zsh.Semantics()} {
+	// Fatality is not an axis: every measured vector stops. Only the status
+	// differs, and that is the FatalErrorStatusIsOne axis asserted in
+	// eval_test.go — so both of its answers are exercised here.
+	one := permissive()
+	one.FatalErrorStatusIsOne = Yes
+	for _, sem := range []Semantics{PosixSemantics(), permissive(), one} {
 		out, _ := run(t, `echo $((1/0)); echo reached`, withSem(sem))
 		if strings.Contains(out, "reached") {
 			t.Errorf("the script continued past a fatal expansion: %q", out)

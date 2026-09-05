@@ -9,10 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
-	"github.com/blairham/sh/dialect/dash"
-	"github.com/blairham/sh/dialect/ksh"
-	"github.com/blairham/sh/dialect/zsh"
 	. "github.com/blairham/sh/interp"
 )
 
@@ -29,31 +25,35 @@ func TestExitBuiltin(t *testing.T) {
 		{"exit from a function ends the script", `f() { exit 4; }; f; echo no`, "", 4},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, st := run(t, tc.src, withSem(bash.Semantics()))
+			got, st := run(t, tc.src, nil)
 			if got != tc.wantOut || st != tc.wantSt {
 				t.Errorf("got %q/%d, want %q/%d", got, st, tc.wantOut, tc.wantSt)
 			}
 		})
 	}
 	// A subshell's exit is its own.
-	if got, st := run(t, `(exit 5); echo after=$?`, withSem(bash.Semantics())); got != "after=5\n" || st != 0 {
+	if got, st := run(t, `(exit 5); echo after=$?`, nil); got != "after=5\n" || st != 0 {
 		t.Errorf("subshell: got %q/%d", got, st)
 	}
 }
 
-// TestExitArgumentIsAnOrdering is the second axis that is not a side: dash
-// refuses both a negative and a non-number, bash refuses only the non-number,
-// and ksh93 and zsh take either.
+// TestExitArgumentIsAnOrdering is the second axis that is not a side: the
+// strict policy refuses both a negative and a non-number, the numeric one
+// refuses only the non-number, and the lenient one takes either.
 func TestExitArgumentIsAnOrdering(t *testing.T) {
+	exitSem := func(p ExitArgumentPolicy) Semantics {
+		s := permissive()
+		s.ExitArgument = p
+		return s
+	}
 	for _, tc := range []struct {
 		name          string
 		sem           Semantics
 		negSt, textSt int
 	}{
-		{"dash", dash.Semantics(), 2, 2},
-		{"bash", bash.Semantics(), 255, 2},
-		{"ksh93", ksh.Semantics(), 255, 0},
-		{"zsh", zsh.Semantics(), 255, 0},
+		{"strict", exitSem(ExitArgStrict), 2, 2},
+		{"numeric", exitSem(ExitArgNumeric), 255, 2},
+		{"lenient", exitSem(ExitArgLenient), 255, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if _, st := run(t, `exit -1`, withSem(tc.sem)); st != tc.negSt {
@@ -92,7 +92,7 @@ func TestExitTrap(t *testing.T) {
 		{"set -e still fires it", `set -e; trap 'echo bye' EXIT; false; echo no`, "bye\n", 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, st := run(t, tc.src, withSem(bash.Semantics()))
+			got, st := run(t, tc.src, nil)
 			if got != tc.wantOut || st != tc.wantSt {
 				t.Errorf("got %q/%d, want %q/%d", got, st, tc.wantOut, tc.wantSt)
 			}
@@ -100,26 +100,26 @@ func TestExitTrap(t *testing.T) {
 	}
 }
 
-// TestTrapInAFunctionIsAnAxis is zsh's alone: there a trap set inside a
-// function fires when the function returns. A trap set at the top level
-// behaves the same everywhere, which is what makes this about the function
-// rather than about traps.
-func TestTrapInAFunctionIsAnAxis(t *testing.T) {
+// TestExitTrapIsFunctionLocalIsAnAxis pins the axis by name: on one side an
+// EXIT trap set inside a function fires when the function returns, on the
+// other it waits for the script's end. A trap set at the top level behaves
+// the same on both sides, which is what makes this about the function rather
+// than about traps.
+func TestExitTrapIsFunctionLocalIsAnAxis(t *testing.T) {
+	local := permissive()
+	local.ExitTrapIsFunctionLocal = Yes
+	global := permissive()
+	global.ExitTrapIsFunctionLocal = No
 	const src = `f() { trap 'echo TRAP' EXIT; echo enter; }; f; echo between`
-	if got, _ := run(t, src, withSem(zsh.Semantics())); got != "enter\nTRAP\nbetween\n" {
-		t.Errorf("zsh: got %q", got)
+	if got, _ := run(t, src, withSem(local)); got != "enter\nTRAP\nbetween\n" {
+		t.Errorf("Yes: got %q", got)
 	}
-	for _, tc := range []struct {
-		name string
-		sem  Semantics
-	}{{"dash", dash.Semantics()}, {"bash", bash.Semantics()}, {"ksh93", ksh.Semantics()}} {
-		if got, _ := run(t, src, withSem(tc.sem)); got != "enter\nbetween\nTRAP\n" {
-			t.Errorf("%s: got %q", tc.name, got)
-		}
+	if got, _ := run(t, src, withSem(global)); got != "enter\nbetween\nTRAP\n" {
+		t.Errorf("No: got %q", got)
 	}
 	// A top-level trap is not affected by the axis.
 	const top = `trap 'echo T' EXIT; f() { echo in; }; f; echo end`
-	for _, sem := range []Semantics{zsh.Semantics(), dash.Semantics()} {
+	for _, sem := range []Semantics{local, global} {
 		if got, _ := run(t, top, withSem(sem)); got != "in\nend\nT\n" {
 			t.Errorf("top-level trap: got %q", got)
 		}
@@ -133,14 +133,14 @@ func TestTrapRefusesSignalsItCannotCatch(t *testing.T) {
 	// which is a deliberate divergence and keeps its own wording rather than
 	// borrowing a dialect's complaint about a word that names nothing.
 	for _, sig := range []string{"KILL", "STOP"} {
-		out, st := run(t, `trap 'x' `+sig, withSem(bash.Semantics()))
+		out, st := run(t, `trap 'x' `+sig, nil)
 		if st == 0 || !strings.Contains(out, "not a signal this shell can catch") {
 			t.Errorf("%s: got %q/%d", sig, out, st)
 		}
 	}
 	// A word naming no signal at all is a different complaint, and one the
 	// dialect words. All four report 1 for it.
-	out, st := run(t, `trap 'x' NOSUCHSIGNAL`, withSem(bash.Semantics()))
+	out, st := run(t, `trap 'x' NOSUCHSIGNAL`, nil)
 	if st != 1 || !strings.Contains(out, "NOSUCHSIGNAL") {
 		t.Errorf("a word that names nothing: got %q/%d, want 1", out, st)
 	}
@@ -156,7 +156,7 @@ func TestTrapRefusesSignalsItCannotCatch(t *testing.T) {
 // uncatchable in a shell where all four panel members catch it.
 func TestTrapTakesEverySignalButTheTwoNobodyCanCatch(t *testing.T) {
 	for _, sig := range []string{"CONT", "CHLD", "WINCH", "TSTP", "URG", "IO", "SYS", "TRAP", "XCPU", "USR1"} {
-		if out, st := run(t, `trap 'x' `+sig, withSem(bash.Semantics())); st != 0 || out != "" {
+		if out, st := run(t, `trap 'x' `+sig, nil); st != 0 || out != "" {
 			t.Errorf("%s: got %q/%d, want it taken quietly", sig, out, st)
 		}
 	}
@@ -172,8 +172,8 @@ func TestSIGPrefixIsAnAxis(t *testing.T) {
 		sem  Semantics
 		want string
 	}{
-		{"accepted", bashSemWith(Yes), "st=0\n"},
-		{"refused", bashSemWith(No), "sh: trap: SIGUSR1: bad trap\nst=1\n"},
+		{"accepted", sigPrefixSem(Yes), "st=0\n"},
+		{"refused", sigPrefixSem(No), "sh: trap: SIGUSR1: bad trap\nst=1\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := run(t, src, withSem(tc.sem))
@@ -186,7 +186,7 @@ func TestSIGPrefixIsAnAxis(t *testing.T) {
 	// Unspecified is refused rather than guessed, and only where the prefix
 	// decides something: a bare name never asks, and neither does a word that
 	// names no signal with the prefix taken off.
-	sem := bashSemWith(Unspecified)
+	sem := sigPrefixSem(Unspecified)
 	if _, _ = run(t, `trap 'x' SIGUSR1`, withSem(sem)); true {
 		out, _ := run(t, `trap 'x' SIGUSR1`, withSem(sem))
 		if !strings.Contains(out, "no dialect was chosen") {
@@ -201,10 +201,10 @@ func TestSIGPrefixIsAnAxis(t *testing.T) {
 	}
 }
 
-// bashSemWith is bash's vector with one axis overridden, so the test names the
-// axis rather than a shell.
-func bashSemWith(a Answer) Semantics {
-	s := bash.Semantics()
+// sigPrefixSem answers the SIGPrefixAccepted axis by name on the permissive
+// base, so the test names the axis rather than a shell.
+func sigPrefixSem(a Answer) Semantics {
+	s := permissive()
 	s.SIGPrefixAccepted = a
 	return s
 }
@@ -222,12 +222,12 @@ func TestProcessIDParameter(t *testing.T) {
 	// `$$` is the shell's own process id, and the same inside a subshell:
 	// POSIX says the *invoking* shell's, which is what makes it usable as a
 	// lock name.
-	got, _ := run(t, `echo "[$$]"`, withSem(bash.Semantics()))
+	got, _ := run(t, `echo "[$$]"`, nil)
 	if got != "["+itoaForTest(os.Getpid())+"]\n" {
 		t.Errorf("got %q, want the process id", got)
 	}
-	inner, _ := run(t, `echo "$$"`, withSem(bash.Semantics()))
-	sub, _ := run(t, `(echo "$$")`, withSem(bash.Semantics()))
+	inner, _ := run(t, `echo "$$"`, nil)
+	sub, _ := run(t, `(echo "$$")`, nil)
 	if inner != sub {
 		t.Errorf("a subshell should report the same id: %q vs %q", inner, sub)
 	}

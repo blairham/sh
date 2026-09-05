@@ -7,31 +7,26 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
-	"github.com/blairham/sh/dialect/dash"
-	"github.com/blairham/sh/dialect/ksh"
-	"github.com/blairham/sh/dialect/zsh"
 	. "github.com/blairham/sh/interp"
 )
+
+// pipelineSem answers LastPipelineElementInCurrentShell by name.
+func pipelineSem(a Answer) Semantics {
+	s := permissive()
+	s.LastPipelineElementInCurrentShell = a
+	return s
+}
 
 func TestLastPipelineElementRunsWhereTheDialectSays(t *testing.T) {
 	// The axis had a value in every preset and nothing read it. Asserting
 	// both sides is the point: taking the majority silently is what it did
 	// before, and that looks identical to an implementation on one side.
 	const src = `echo x | read v; echo "[$v]"`
-	for _, tc := range []struct {
-		name string
-		sem  Semantics
-		want string
-	}{
-		{"ksh93", ksh.Semantics(), "[x]\n"},
-		{"zsh", zsh.Semantics(), "[x]\n"},
-		{"dash", dash.Semantics(), "[]\n"},
-		{"bash", bash.Semantics(), "[]\n"},
-	} {
-		if got, _ := run(t, src, withSem(tc.sem)); got != tc.want {
-			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
-		}
+	if got, _ := run(t, src, withSem(pipelineSem(Yes))); got != "[x]\n" {
+		t.Errorf("current shell: got %q, want %q", got, "[x]\n")
+	}
+	if got, _ := run(t, src, withSem(pipelineSem(No))); got != "[]\n" {
+		t.Errorf("subshell: got %q, want %q", got, "[]\n")
 	}
 }
 
@@ -63,7 +58,7 @@ func TestPipelineStillPipes(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		sem  Semantics
-	}{{"subshell side", bash.Semantics()}, {"current-shell side", ksh.Semantics()}} {
+	}{{"subshell side", pipelineSem(No)}, {"current-shell side", pipelineSem(Yes)}} {
 		if got, _ := run(t, `printf 'a\nb\n' | grep b`, withSem(tc.sem)); got != "b\n" {
 			t.Errorf("%s: got %q, want %q", tc.name, got, "b\n")
 		}

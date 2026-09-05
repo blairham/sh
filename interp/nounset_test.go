@@ -7,10 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
-	"github.com/blairham/sh/dialect/dash"
-	"github.com/blairham/sh/dialect/ksh"
-	"github.com/blairham/sh/dialect/zsh"
 	. "github.com/blairham/sh/interp"
 )
 
@@ -40,7 +36,7 @@ func TestNounset(t *testing.T) {
 		{"inside a function too", `set -u; f() { echo "[$NOPE]"; }; f; echo after`, "", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, st := run(t, tc.src, withSem(bash.Semantics()))
+			got, st := run(t, tc.src, nil)
 			if tc.stops {
 				if strings.Contains(got, "after") {
 					t.Errorf("the script continued: %q", got)
@@ -57,25 +53,25 @@ func TestNounset(t *testing.T) {
 	}
 }
 
-// TestUnsetPositionalIsAnAxis is ksh93's alone: there an argument the script
-// was not given expands to nothing, where the other three stop. Quiet either
-// way, which is what makes it worth an axis rather than a preference.
-func TestUnsetPositionalIsAnAxis(t *testing.T) {
+// TestUnsetPositionalIsAllowedIsAnAxis pins the axis by name: on one side an
+// argument the script was not given expands to nothing under `set -u`, on the
+// other the script stops. Quiet either way, which is what makes it worth an
+// axis rather than a preference.
+func TestUnsetPositionalIsAllowedIsAnAxis(t *testing.T) {
 	const src = `set -u; echo "[$1]"; echo after`
-	if got, st := run(t, src, withSem(ksh.Semantics())); got != "[]\nafter\n" || st != 0 {
-		t.Errorf("ksh93: got %q/%d, want %q/0", got, st, "[]\nafter\n")
+	allowed := permissive()
+	allowed.UnsetPositionalIsAllowed = Yes
+	if got, st := run(t, src, withSem(allowed)); got != "[]\nafter\n" || st != 0 {
+		t.Errorf("Yes: got %q/%d, want %q/0", got, st, "[]\nafter\n")
 	}
-	for _, tc := range []struct {
-		name string
-		sem  Semantics
-	}{{"dash", dash.Semantics()}, {"bash", bash.Semantics()}, {"zsh", zsh.Semantics()}} {
-		got, st := run(t, src, withSem(tc.sem))
-		if strings.Contains(got, "after") || st == 0 {
-			t.Errorf("%s: should have stopped, got %q/%d", tc.name, got, st)
-		}
+	stops := permissive()
+	stops.UnsetPositionalIsAllowed = No
+	got, st := run(t, src, withSem(stops))
+	if strings.Contains(got, "after") || st == 0 {
+		t.Errorf("No: should have stopped, got %q/%d", got, st)
 	}
-	// A positional in range is fine everywhere.
-	for _, sem := range []Semantics{ksh.Semantics(), dash.Semantics()} {
+	// A positional in range is fine on both sides of the axis.
+	for _, sem := range []Semantics{allowed, stops} {
 		if got, _ := run(t, `set -u; set -- a; echo "[$1]"`, withSem(sem)); got != "[a]\n" {
 			t.Errorf("in range: got %q", got)
 		}
@@ -92,24 +88,24 @@ func TestUnsetPositionalTakesADefault(t *testing.T) {
 		{`set -- a; echo "[${2-default}]"`, "[default]\n"},
 		{`set -- a b; echo "[${2-default}]"`, "[b]\n"},
 	} {
-		if got, _ := run(t, tc.src, withSem(bash.Semantics())); got != tc.want {
+		if got, _ := run(t, tc.src, nil); got != tc.want {
 			t.Errorf("%s: got %q, want %q", tc.src, got, tc.want)
 		}
 	}
 }
 
 func TestUnboundWordingIsTheDialects(t *testing.T) {
-	// bash calls it unbound where the other three call it not set. The
-	// wording lives in Diagnostics, so withSem alone cannot see it — which
-	// is worth a helper rather than a comment, since every wording test
-	// after this one needs both halves of the dialect.
+	// The wording lives in the UnboundVariable field of Diagnostics, so
+	// withSem alone cannot see it. What each preset puts there is asserted
+	// in the dialect packages; this asserts the field is the one consulted.
 	withDialect := func(sem Semantics, diag Diagnostics) func(*Runner) {
 		return func(r *Runner) { r.Semantics, r.Diagnostics = &sem, &diag }
 	}
-	if got, _ := run(t, `set -u; echo "$NOPE"`, withDialect(bash.Semantics(), bash.Diagnostics())); !strings.Contains(got, "unbound variable") {
-		t.Errorf("bash: got %q", got)
+	dg := Diagnostics{UnboundVariable: "%[1]s: measured wording"}
+	if got, _ := run(t, `set -u; echo "$NOPE"`, withDialect(permissive(), dg)); !strings.Contains(got, "NOPE: measured wording") {
+		t.Errorf("custom wording: got %q", got)
 	}
-	if got, _ := run(t, `set -u; echo "$NOPE"`, withDialect(dash.Semantics(), dash.Diagnostics())); !strings.Contains(got, "parameter not set") {
-		t.Errorf("dash: got %q", got)
+	if got, _ := run(t, `set -u; echo "$NOPE"`, withDialect(permissive(), Diagnostics{})); !strings.Contains(got, "NOPE") {
+		t.Errorf("fallback wording still names the variable: got %q", got)
 	}
 }

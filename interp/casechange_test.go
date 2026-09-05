@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
 	. "github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
 )
@@ -61,7 +60,7 @@ func TestCaseChangeAppliesItsPattern(t *testing.T) {
 		{"elements with a pattern", `a=(ab cd); echo "${a[@]^^[a]}"`, "Ab cd"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			out, _ := runBash(t, c.src)
+			out, _ := runGrammar(t, c.src, func(d *syntax.Dialect) { d.ParamCaseChange = true }, nil)
 			if strings.TrimSpace(out) != c.want {
 				t.Errorf("said %q, want %q", strings.TrimSpace(out), c.want)
 			}
@@ -87,12 +86,14 @@ func TestCaseConversionConsultsTheLocale(t *testing.T) {
 		{"LC_CTYPE outranks LANG", map[string]string{"LC_CTYPE": "C", "LANG": "en_US.UTF-8"}, "CAFé"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			f, err := syntax.Parse(`x=café; echo "${x^^}"`, bash.Dialect())
+			d := syntax.Core()
+			d.ParamCaseChange = true
+			f, err := syntax.Parse(`x=café; echo "${x^^}"`, d)
 			if err != nil {
 				t.Fatal(err)
 			}
 			var buf bytes.Buffer
-			sem := bash.Semantics()
+			sem := permissive()
 			vars := map[string]string{}
 			for k, v := range tc.vars {
 				vars[k] = v

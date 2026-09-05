@@ -46,12 +46,12 @@ func TestARedirectFailureIsWordedFourWays(t *testing.T) {
 		make string
 	}{
 		{
-			"bash",
+			"name and reason",
 			Diagnostics{CannotOpen: "%[1]s: %[2]s", CannotCreate: "%[1]s: %[2]s"},
 			"nope: No such file or directory", "d: Is a directory",
 		},
 		{
-			"dash",
+			"a verb and its own errno names",
 			Diagnostics{
 				CannotOpen: "cannot open %[1]s: %[2]s", CannotCreate: "cannot create %[1]s: %[2]s",
 				FileNotFound: "No such file", DirectoryNotFound: "Directory nonexistent",
@@ -59,12 +59,12 @@ func TestARedirectFailureIsWordedFourWays(t *testing.T) {
 			"cannot open nope: No such file", "cannot create d: Is a directory",
 		},
 		{
-			"ksh93",
+			"the reason bracketed after a verb",
 			Diagnostics{CannotOpen: "%[1]s: cannot open [%[2]s]", CannotCreate: "%[1]s: cannot create [%[2]s]"},
 			"nope: cannot open [No such file or directory]", "d: cannot create [Is a directory]",
 		},
 		{
-			"zsh",
+			"the reason first and lowercased",
 			Diagnostics{CannotOpen: "%[2]s: %[1]s", CannotCreate: "%[2]s: %[1]s", LowercaseReason: true},
 			"no such file or directory: nope", "is a directory: d",
 		},
@@ -80,9 +80,10 @@ func TestARedirectFailureIsWordedFourWays(t *testing.T) {
 	}
 }
 
-// dash names the same errno two ways depending on which direction the file was
-// being opened, where the operating system names it once.
-func TestDashNamesOneErrnoTwoWays(t *testing.T) {
+// FileNotFound and DirectoryNotFound name the same errno two ways depending on
+// which direction the file was being opened, where the operating system names
+// it once — one measured dialect wants exactly that.
+func TestADialectCanNameOneErrnoTwoWays(t *testing.T) {
 	dir := t.TempDir()
 	dg := Diagnostics{
 		CannotOpen: "cannot open %[1]s: %[2]s", CannotCreate: "cannot create %[1]s: %[2]s",
@@ -90,23 +91,24 @@ func TestDashNamesOneErrnoTwoWays(t *testing.T) {
 	}
 	// Exactly, not as a prefix: "No such file" is the front of the operating
 	// system's own "No such file or directory", so a Contains check here
-	// passes whether dash's text is used or not.
+	// passes whether the field's text is used or not.
 	if out, _ := redirRun(t, dir, dg, `cat < nodir/in`); !strings.HasSuffix(strings.TrimSpace(out), "cannot open nodir/in: No such file") {
-		t.Errorf("read: said %q, want dash's own open text and nothing more", out)
+		t.Errorf("read: said %q, want the field's own open text and nothing more", out)
 	}
 	if out, _ := redirRun(t, dir, dg, `echo x > nodir/out`); !strings.HasSuffix(strings.TrimSpace(out), "cannot create nodir/out: Directory nonexistent") {
-		t.Errorf("create: said %q, want dash's own create text and nothing more", out)
+		t.Errorf("create: said %q, want the field's own create text and nothing more", out)
 	}
 	// Without either, the operating system's own string, capitalized — which
-	// is what the other three print and what Go's errno does not give.
+	// is what the fields' absence means and what Go's errno does not give.
 	plain := Diagnostics{CannotOpen: "%[1]s: %[2]s", CannotCreate: "%[1]s: %[2]s"}
 	if out, _ := redirRun(t, dir, plain, `cat < nodir/in`); !strings.Contains(out, "No such file or directory") {
 		t.Errorf("read: said %q, want the OS string capitalized", out)
 	}
 }
 
-// The status, which is a separate question from the wording: dash says 2 where
-// the other three say 1, and does not stop.
+// The status, which is a separate question from the wording:
+// RedirectFailureStatus carries a dialect's own number over the default 1,
+// and the failure does not stop the script either way.
 func TestARedirectFailureStatus(t *testing.T) {
 	dir := t.TempDir()
 	for _, c := range []struct {
@@ -115,7 +117,7 @@ func TestARedirectFailureStatus(t *testing.T) {
 		want int
 	}{
 		{"the substrate's own", Diagnostics{}, 1},
-		{"dash's", Diagnostics{RedirectFailureStatus: 2}, 2},
+		{"a dialect's own number", Diagnostics{RedirectFailureStatus: 2}, 2},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			out, _ := redirRun(t, dir, c.diag, "cat < nope\necho st=$?\necho after")

@@ -4936,6 +4936,20 @@ environment. True in bash alone: the other three have no way to carry a
 function at all, and each rejects the option as an option — two of them
 fatally.
 
+**`ExportTakesTheAttributeOff`** — bash yes · dash no · ksh93 no · zsh no
+
+Gives `export` its `-n`, which takes the export attribute off a name and
+leaves the name itself alone. True in bash alone. What the letter *means*
+is not in question anywhere it exists — the name stays set in the shell
+and stops reaching a child — so the axis is about availability and there
+is no wording beside it: a dialect that says no sends `-n` down the
+ordinary unknown-option path and collects its own refusal. Measured
+2026-09-05: `dash: 1: export: Illegal option -n` and the script ends,
+`ksh: export: -n: unknown option` with a usage line and the script ends,
+`zsh:export:1: bad option: -n` with `export` failing at 1 and the script
+carrying on. The POSIX preset says no from the text, which spells
+`export` with `-p` and nothing else.
+
 **`ExportListing`** — bash DeclareListingClustered · dash DeclareListingCommandWord · ksh93 DeclareListingCommandWord · zsh DeclareListingCommandWord
 
 Is the shape `export -p` writes: bash spells each name as a clustered

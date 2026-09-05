@@ -350,6 +350,9 @@ func Semantics() interp.Semantics {
 	// An operator on `${a[*]}` trims each element before the join here.
 	s.OperatorDistributesOverStarSubscript = interp.Yes
 	s.ExportCarriesFunctions = interp.No
+	// No `-n` either: measured, `export: -n: unknown option` with the usage
+	// line under it, and the script ends there.
+	s.ExportTakesTheAttributeOff = interp.No
 	s.AnnouncesBackgroundJob = interp.Yes
 	s.ReportsACommandKilledBySignal = interp.Yes
 	s.ReportsAnyKilledPipelineElement = interp.No

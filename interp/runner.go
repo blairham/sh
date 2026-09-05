@@ -1732,6 +1732,10 @@ func (r *Runner) exec(ctx context.Context, argv, env []string) error {
 	cmd.Stdin = r.Stdin
 	cmd.Stdout = r.stdout()
 	cmd.Stderr = r.stderr()
+	// The descriptors past the three named streams, rebuilt into the child's
+	// own table — see childFiles for why that has to be done by hand and why
+	// the numbering is preserved rather than packed.
+	cmd.ExtraFiles = r.childFiles()
 
 	if r.bg != nil {
 		// Started rather than run, so the pid can be recorded before it is

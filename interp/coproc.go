@@ -72,10 +72,13 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 
 	// The near ends go into the descriptor table the way `exec {fd}>f`
 	// would put them there: numbered from ten up, for keeps.
+	// Marked as the shell's own, so they stay out of an external child's
+	// descriptor table — see shellOwnedFd for what a child holding the write
+	// end open would cost the coprocess.
 	rfd := r.nextFreeFd()
-	r.setFd(rfd, shellR)
+	r.setFd(rfd, shellOwnedFd{shellR})
 	wfd := r.nextFreeFd()
-	r.setFd(wfd, shellW)
+	r.setFd(wfd, shellOwnedFd{shellW})
 	r.setArrayElem(name, 0, itoa(rfd))
 	r.setArrayElem(name, 1, itoa(wfd))
 	r.setVar(name+"_PID", itoa(job.PID))

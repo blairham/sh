@@ -552,6 +552,30 @@ func (r *Runner) nextFreeFd() int {
 	}
 }
 
+// shellOwnedFd marks a descriptor the shell opened for its own plumbing
+// rather than one the script asked for by number.
+//
+// A coprocess's near ends are the only case so far. They are in the table so
+// that `>&${C[0]}` can find them, but they are not the script's to hand out,
+// and every descriptor in the table is otherwise rebuilt into an external
+// child's — see childFiles. Inheriting these would be worse than untidy: a
+// child holding the write end open means the coprocess never reads
+// end-of-file, which is the leak /dev/fd process substitution was rejected
+// for.
+//
+// It is what bash does, measured rather than assumed, and measured on the
+// harder half: with a coprocess running, an external child finds nothing
+// open on either number the shell reports in ${C[0]} and ${C[1]} — and
+// nothing open on 3 after `exec 3>&${C[1]}` either, though the shell itself
+// still writes through that 3 and the coprocess still receives it. So the
+// mark travels with a duplication rather than being shed by one, which is
+// what a wrapper value gives for free.
+//
+// The wrapper *is* the mark. It still reads, writes and closes as the file
+// does, so everything reaching through the table is unaffected; it is simply
+// not an *os.File, which is the one question childFiles asks.
+type shellOwnedFd struct{ *os.File }
+
 // setFd records a descriptor beyond the named three.
 func (r *Runner) setFd(fd int, v any) {
 	if r.fds == nil {

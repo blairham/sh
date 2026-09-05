@@ -3031,6 +3031,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `redir/a-write-to-a-closed-descriptor-fails` | `<shell>: 1: echo: echo: I/O error~st=1` | `<shell>: line 1: echo: write error: Bad file descriptor~st=1` | `<shell>: line 1: echo: write error: Bad file descriptor~st=1` | `<shell>: line 0: echo: write error: Bad file descriptor~hi~st=1` | `st=1` | `st=0` |
 | `redir/a-group-writing-to-a-closed-descriptor` | `<shell>: 1: echo: echo: I/O error~<shell>: 1: echo: echo: I/O error~st=1` | `<shell>: line 1: echo: write error: Bad file descriptor~<shell>: line 1: echo: write error: Bad file descriptor~st=1` | `<shell>: line 1: echo: write error: Bad file descriptor~<shell>: line 1: echo: write error: Bad file descriptor~st=1` | `<shell>: line 0: echo: write error: Bad file descriptor~<shell>: line 0: echo: write error: Bad file descriptor~a~b~st=1` | `st=1` | `<shell>:1: write error: bad file descriptor~<shell>:1: write error: bad file descriptor~st=0` |
 | `redir/exec-opens-a-high-descriptor` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` |
+| `redir/exec-descriptor-reaches-an-external-child` | `child` | `child` | `child` | `child` | *(no output, status 0)* | `child` |
+| `redir/an-inherited-descriptor-keeps-its-number` | `five` | `five` | `five` | `five` | *(no output, status 0)* | `five` |
 | `redir/a-dup-prefix-is-that-commands-alone` | `<shell>: 1: 6: Bad file descriptor~st=2` | `<shell>: line 1: 6: Bad file descriptor~st=1` | `<shell>: line 1: 6: Bad file descriptor~st=1` | `<shell>: 6: Bad file descriptor~st=1` | `<shell>: 6: cannot open [Bad file descriptor]~st=1` | `<shell>:1: 6: bad file descriptor~st=1` |
 | `redir/merge-then-file` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` |
 | `redir/file-then-merge` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` | `err~[out]` |
@@ -3168,6 +3170,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `redir/exec-opens-a-high-descriptor` — `exec 3>file` holds the file on a descriptor of its own — stdout stays where it was, and only what is aimed at 3 reaches the file
   ```sh
   exec 3>f; echo hi; echo aside >&3; exec 3>&-; cat f
+  ```
+- `redir/exec-descriptor-reaches-an-external-child` — a descriptor parked with `exec 3>file` is inherited by an external command, which is what the flock and shared-log idioms are built on — the child writes in every shell but ksh93, which alone keeps it to itself. The child's complaint is discarded because its wording is a fact about whatever /bin/sh is on the machine
+  ```sh
+  exec 3>f; /bin/sh -c "echo child >&3" 2>/dev/null; exec 3>&-; cat f
+  ```
+- `redir/an-inherited-descriptor-keeps-its-number` — the discriminating case for how the table crosses: with 3 and 4 never opened, the file parked on 5 is still on 5 in the child and 3 is a hole, so the file holds `five`. A table packed from the bottom would put it on 3 and the file would hold `three`
+  ```sh
+  exec 5>g; /bin/sh -c "echo three >&3" 2>/dev/null; /bin/sh -c "echo five >&5" 2>/dev/null; exec 5>&-; cat g
   ```
 - `redir/a-dup-prefix-is-that-commands-alone` — a duplication prefixed to one command does not outlive it — only `exec`'s do
   ```sh

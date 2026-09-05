@@ -135,6 +135,10 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 	cmd.Stdin = r.Stdin
 	cmd.Stdout = r.stdout()
 	cmd.Stderr = r.stderr()
+	// Standing in for a process replacement means standing in for what one
+	// inherits, so the descriptor table crosses here as it does for any other
+	// external command.
+	cmd.ExtraFiles = r.childFiles()
 
 	if err := cmd.Start(); err != nil {
 		r.emit(ctx, Event{Kind: EventError, Action: action, Err: err})

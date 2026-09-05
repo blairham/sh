@@ -19674,6 +19674,38 @@
         "TimedOut": false
       }
     },
+    "redir/an-inherited-descriptor-keeps-its-number": {
+      "bash": {
+        "Output": "five",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "five",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "five",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "five",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "five",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "redir/closing-through-a-name-that-holds-nothing": {
       "bash": {
         "Output": "\u003cshell\u003e: line 1: nofd: ambiguous redirect~st=1",
@@ -19798,6 +19830,38 @@
       },
       "zsh": {
         "Output": "done",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "redir/exec-descriptor-reaches-an-external-child": {
+      "bash": {
+        "Output": "child",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "child",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "child",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "child",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "child",
         "Status": 0,
         "TimedOut": false
       }

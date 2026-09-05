@@ -729,39 +729,16 @@ func Diagnostics() interp.Diagnostics {
 		},
 		BuiltinBadNameKeepsValue: true,
 		BuiltinUsageUnprefixed:   true,
-		BuiltinUsage: map[string]string{
-			"set":    "set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
-			"export": "export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
-			// The refusal lines a bad option earns from these two, measured
-			// with a letter nobody has (-q).
-			"command": "command: usage: command [-pVv] command [arg ...]",
-			"getopts": "getopts: usage: getopts optstring name [arg ...]",
-			// Not one line under two names: `typeset` loses the brackets
-			// around its name operand where `declare` keeps them. As
-			// written, both.
-			"declare": "declare: usage: declare [-aAfFgiIlnrtux] [name[=value] ...] or declare -p [-aAfFilnrtux] [name ...]",
-			"typeset": "typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]",
-			"local":   "local: usage: local [option] name[=value] ...",
-			"read": "read: usage: read [-Eers] [-a array] [-d delim] [-i text] " +
-				"[-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
-			"mapfile": "mapfile: usage: mapfile [-d delim] [-n count] [-O origin] [-s count] " +
-				"[-t] [-u fd] [-C callback] [-c quantum] [array]",
-			"readarray": "readarray: usage: readarray [-d delim] [-n count] [-O origin] [-s count] " +
-				"[-t] [-u fd] [-C callback] [-c quantum] [array]",
-			"readonly": "readonly: usage: readonly [-aAf] [name[=value] ...] or readonly -p",
-			"trap":     "trap: usage: trap [-Plp] [[action] signal_spec ...]",
-			"type":     "type: usage: type [-afptP] name [name ...]",
-			"jobs":     "jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]",
-			"wait":     "wait: usage: wait [-fn] [-p var] [id ...]",
-			"unset":    "unset: usage: unset [-f] [-v] [-n] [name ...]",
-		},
-		PrintfUsage:            "printf: usage: printf [-v var] format [arguments]",
-		UmaskBadMask:           "umask: %[1]s: octal number out of range",
-		AliasNotFound:          "%[1]s: %[2]s: not found",
-		UnaliasNotFound:        "%[1]s: %[2]s: not found",
-		AliasListPrefix:        "alias ",
-		UnaliasUsage:           "unalias: usage: unalias [-a] name [name ...]",
-		UnaliasUsageUnprefixed: true,
+		BuiltinHelpStatus:        2,
+		BuiltinHelp:              builtinHelp(),
+		BuiltinUsage:             builtinUsage(),
+		PrintfUsage:              "printf: usage: printf [-v var] format [arguments]",
+		UmaskBadMask:             "umask: %[1]s: octal number out of range",
+		AliasNotFound:            "%[1]s: %[2]s: not found",
+		UnaliasNotFound:          "%[1]s: %[2]s: not found",
+		AliasListPrefix:          "alias ",
+		UnaliasUsage:             "unalias: usage: unalias [-a] name [name ...]",
+		UnaliasUsageUnprefixed:   true,
 		// bash names the character and says which kind it wanted.
 		UmaskBadSymbolicMode:     "umask: `%[2]s': invalid symbolic mode character",
 		UmaskBadSymbolicOperator: "umask: `%[2]s': invalid symbolic mode operator",

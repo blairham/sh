@@ -23170,6 +23170,270 @@
         "TimedOut": false
       }
     },
+    "help/a-bad-option-is-followed-by-the-builtins-usage": {
+      "bash": {
+        "Stdout": "alias=2~ulimit=2",
+        "Stderr": "\u003cshell\u003e: line 1: alias: -Q: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 1: ulimit: -Q: invalid option~ulimit: usage: ulimit [-SHabcdefiklmnpqrstuvxPRT] [limit]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "alias=2~ulimit=2",
+        "Stderr": "\u003cshell\u003e: line 1: alias: -Q: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 1: ulimit: -Q: invalid option~ulimit: usage: ulimit [-SHabcdefiklmnpqrstuvxPRT] [limit]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "alias=2~ulimit=2",
+        "Stderr": "\u003cshell\u003e: line 0: alias: -Q: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 0: ulimit: -Q: invalid option~ulimit: usage: ulimit [-SHacdfilmnpqstuvx] [limit]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "alias=1~ulimit=2",
+        "Stderr": "alias: -Q not found~\u003cshell\u003e: 1: ulimit: Illegal option -Q",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "alias: -Q: unknown option~Usage: alias [-ptx] [name[=value]...]",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "alias=1~ulimit=1",
+        "Stderr": "\u003cshell\u003e:alias:1: bad option: -Q~\u003cshell\u003e:ulimit:1: bad option: -Q",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "help/a-bad-option-to-umask-is-named-the-way-the-dialect-names-one": {
+      "bash": {
+        "Stdout": "st=2~st=2",
+        "Stderr": "\u003cshell\u003e: line 1: umask: --: invalid option~umask: usage: umask [-p] [-S] [mode]~\u003cshell\u003e: line 1: umask: -Q: invalid option~umask: usage: umask [-p] [-S] [mode]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2~st=2",
+        "Stderr": "\u003cshell\u003e: line 1: umask: --: invalid option~umask: usage: umask [-p] [-S] [mode]~\u003cshell\u003e: line 1: umask: -Q: invalid option~umask: usage: umask [-p] [-S] [mode]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2~st=2",
+        "Stderr": "\u003cshell\u003e: line 0: umask: --: invalid option~umask: usage: umask [-p] [-S] [mode]~\u003cshell\u003e: line 0: umask: -Q: invalid option~umask: usage: umask [-p] [-S] [mode]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2~st=2",
+        "Stderr": "\u003cshell\u003e: 1: umask: Illegal option --~\u003cshell\u003e: 1: umask: Illegal option -Q",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2~st=2",
+        "Stderr": "  version         umask (AT\u0026T Research) 1999-04-07~\u003cshell\u003e: umask: -Q: unknown option~Usage: umask [-S] [mask]",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "\u003cshell\u003e:umask:1: bad option: -v~\u003cshell\u003e:umask:1: bad option: -Q",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "help/a-builtin-answers-the-help-option": {
+      "bash": {
+        "Stdout": "st=2~alias: alias [-p] [name[=value] ... ]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2~alias: alias [-p] [name[=value] ... ]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "help/a-builtin-with-nothing-to-say-takes-it-as-a-word": {
+      "bash": {
+        "Stdout": "st=0~--help",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~--help",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=0~--help",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0~--help",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0~--help",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~--help",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "help/the-help-option-comes-before-what-the-builtin-cannot-do": {
+      "bash": {
+        "Stdout": "st=2~bg: bg [job_spec ...]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2~bg: bg [job_spec ...]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "help/the-help-option-is-the-whole-word-and-stands-where-an-option-stands": {
+      "bash": {
+        "Stdout": "st=2~st=1~hash: hash [-lr] [-p pathname] [-dt] [name ...]",
+        "Stderr": "\u003cshell\u003e: line 1: alias: --: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 1: alias: --help: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=2~st=1~hash: hash [-lr] [-p pathname] [-dt] [name ...]",
+        "Stderr": "\u003cshell\u003e: line 1: alias: --: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 1: alias: --help: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=2~st=1",
+        "Stderr": "\u003cshell\u003e: line 0: alias: --: invalid option~alias: usage: alias [-p] [name[=value] ... ]~\u003cshell\u003e: line 0: alias: --help: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=0~--help='x'~st=1",
+        "Stderr": "alias: -- not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2~st=0",
+        "Stderr": "Usage: alias [ options ] [name[=value]...]~OPTIONS~  -x              Ignored, this option is obsolete.",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~st=1",
+        "Stderr": "\u003cshell\u003e:alias:1: bad option: -h",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "heredoc/a-backslash-escapes-three-things": {
       "bash": {
         "Stdout": "$x \\ \\n \\' \\\"",

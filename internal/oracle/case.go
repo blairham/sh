@@ -2146,6 +2146,36 @@ var Corpus = []Case{
 		Why:     "the complaint about a bundle names the letter the walk stopped on, never the word it rode in on: `-x` in all four, including the dialect recorded as whole-word naming from `export -Q`, where the letter and the word are the same thing. Four wordings, zsh reporting 1 to everyone else's 2, and all four carry on — `read` is not a special builtin, so nobody's fatality rule reaches it",
 	},
 	{
+		ID: "help/a-builtin-answers-the-help-option", Category: "builtins",
+		Snippet: `h=$(alias --help 2>/dev/null); echo "st=$?"; printf '%s\n' "$h" | head -n 1`,
+		Why:     "one shell answers `--help` and the rest refuse it as an option nobody has, and the answer goes to standard *output* while every refusal goes to standard error — which is the whole reason a script can tell the two apart. Written as a first line and a status rather than as the block itself: bash's answer carries a paragraph of its own documentation after the synopsis, and this tree reproduces the behavior rather than another project's prose (CLEANROOM.md). It matters far past its size — one platform ships fifteen /usr/bin commands as a stub around `builtin`, so `/usr/bin/alias --help` is this exact call, and every disagreement the real-script run sweep found was this (#825, #815)",
+	},
+	{
+		ID: "help/the-help-option-comes-before-what-the-builtin-cannot-do", Category: "builtins",
+		Snippet: `h=$(bg --help 2>/dev/null); echo "st=$?"; printf '%s\n' "$h" | head -n 1`,
+		Why:     "asked with a builtin that cannot run at all here — there is no job control in a non-interactive shell — so the two orders give different answers: the shell that has the option answers it and exits 2 without ever looking for a job, and the ones that do not reach the complaint about job control and exit 1. A shell that checked its preconditions first would pass every other row of this family and fail this one",
+	},
+	{
+		ID: "help/a-builtin-with-nothing-to-say-takes-it-as-a-word", Category: "builtins",
+		Snippet: `true --help; echo "st=$?"; echo --help`,
+		Why:     "unanimous, and the boundary of the rule above: the builtins with no options to speak of read `--help` as an ordinary operand, so `true` succeeds and `echo` prints it. The option belongs to the builtins that parse options, not to the shell",
+	},
+	{
+		ID: "help/the-help-option-is-the-whole-word-and-stands-where-an-option-stands", Category: "builtins",
+		Snippet: `alias --help=x; echo "st=$?"; alias -- --help; echo "st=$?"; h=$(hash -r --help 2>/dev/null); printf '%s\n' "$h" | head -n 1`,
+		Why:     "two ways of writing something near it that are not it, and one that is: a word with anything after `--help` is a bad option, a `--help` past the `--` that ends the options is an operand — a *name*, which `alias` then cannot find — and a `--help` after another option letter is still the option, which is what puts the answer in the option reader rather than in a scan of the first word. One shell is the exception and matches an abbreviated option, which is why it answers the first of these with its whole option list",
+	},
+	{
+		ID: "help/a-bad-option-is-followed-by-the-builtins-usage", Category: "builtins",
+		Snippet: `alias -Q; echo "alias=$?"; ulimit -Q; echo "ulimit=$?"`,
+		Why:     "the two shells that print a usage line after a bad option print one for *every* builtin, and these two reach it by different routes — `alias` through the shared option reader, `ulimit` through a refusal of its own, because its letters are resources rather than a fixed set. Both had the complaint and neither had the line under it (#825)",
+	},
+	{
+		ID: "help/a-bad-option-to-umask-is-named-the-way-the-dialect-names-one", Category: "builtins",
+		Snippet: `umask --version; echo "st=$?"; umask -Q; echo "st=$?"`,
+		Why:     "which part of a `--` word a complaint names is the dialect's rule and not the builtin's: `--` in bash and dash, the whole word in ksh93, and the first letter past the dashes — `-v` — in zsh, the same three answers `export --version` gives. A builtin that spelled the word out itself was the one place that rule did not hold. `-Q` beside it is the single-dash half, where all four name the letter",
+	},
+	{
 		ID: "read/fields-into-an-array", Category: "builtins",
 		Snippet: `echo "a b c" | { read -a arr; echo "[${arr[1]}]"; }`,
 		Why:     "the letter is the dialect's before the behavior is: bash's -a puts the fields in the named array, ksh93 spells the option -A and refuses -a with its usage, zsh refuses it in one line, and dash refuses the option and then the subscript too",

@@ -132,8 +132,7 @@ func biBuiltin(r *Runner, ctx context.Context, args []string) int {
 	}
 	// The fold names the builtin that wrote, not this wrapper — the same
 	// reason runWithoutFunctions folds for itself.
-	r.writeFailed = nil
-	return r.builtinWriteStatus(args[0], fn(r, ctx, args[1:]))
+	return r.callBuiltin(ctx, args[0], fn, args[1:])
 }
 
 // reportWhatRuns answers `command -v`.
@@ -197,13 +196,11 @@ func (r *Runner) runWithoutFunctions(ctx context.Context, args []string) int {
 	if fn, ok := r.lookupBuiltin(args[0]); ok {
 		outer := r.inBuiltin
 		r.inBuiltin = args[0]
-		r.writeFailed = nil
-		st := fn(r, ctx, args[1:])
-		// Folded here as well as at the outer dispatch, so a failed write is
-		// blamed on the builtin that wrote: `command echo hi >&-` names
-		// `echo`, not `command`. Measured — bash words it identically with
-		// and without the wrapper.
-		st = r.builtinWriteStatus(args[0], st)
+		// callBuiltin folds a failed write here as well as at the outer
+		// dispatch, so it is blamed on the builtin that wrote:
+		// `command echo hi >&-` names `echo`, not `command`. Measured —
+		// bash words it identically with and without the wrapper.
+		st := r.callBuiltin(ctx, args[0], fn, args[1:])
 		r.inBuiltin = outer
 		return st
 	}

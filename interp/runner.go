@@ -2033,9 +2033,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 		if locks {
 			r.assignOperands(c)
 		}
-		r.writeFailed = nil
-		st := fn(r, ctx, argv[1:])
-		st = r.builtinWriteStatus(argv[0], st)
+		st := r.callBuiltin(ctx, argv[0], fn, argv[1:])
 		r.inBuiltin = outer
 		if st == 0 && !locks {
 			r.assignOperands(c)

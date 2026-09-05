@@ -643,6 +643,38 @@ type Diagnostics struct {
 	// where the complaint above is a single string. dash and zsh print none.
 	BuiltinUsage map[string]string
 
+	// BuiltinHelp is what a builtin answers `--help` with, by builtin name.
+	// An entry is the *whole* answer and goes to standard output, which is
+	// what tells this apart from every neighbor here: a refusal is a
+	// diagnostic and this is not one.
+	//
+	// A name with no entry has no such answer, and `--help` is then an
+	// option the builtin does not have — which is the ordinary refusal
+	// above, and is what one whole dialect does for every builtin it has.
+	// So the map answers "does this builtin answer --help" as well as
+	// "with what", and no separate axis says whether the shell has the
+	// option at all.
+	//
+	// The word has to be exactly `--help` and has to stand where an option
+	// stands. Measured: an abbreviation is refused, so is `--help=x`,
+	// `builtin alias -- --help` is an operand, and `builtin read -d --help`
+	// hands `--help` to `-d` as its argument — which is why the shared
+	// option parser answers this rather than a pre-scan of the argument
+	// list, since only the parser knows which letters take an argument.
+	BuiltinHelp map[string]string
+
+	// BuiltinHelpStatus is what a builtin exits with after answering
+	// `--help`. Zero means 2, the substrate's answer for the adjacent
+	// question above — a builtin asked about its own usage — and the same
+	// default BuiltinBadOptionStatus takes.
+	//
+	// It defaults to something rather than to nothing on purpose. The
+	// option parser reports "the builtin is finished" to its thirteen
+	// callers as a nonzero code and has no other way to say it, so a help
+	// status of 0 would print the answer and then run the builtin anyway.
+	// A default that cannot be zero keeps that unreachable.
+	BuiltinHelpStatus int
+
 	// The four lines `type` prints, one per kind of thing a name can be.
 	// One verb each — the name — except TypeExternal, which takes the path
 	// as a second.

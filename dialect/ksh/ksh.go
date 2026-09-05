@@ -730,6 +730,10 @@ func Diagnostics() interp.Diagnostics {
 			"jobs":  "Usage: jobs [-lnp] [job ...]",
 			"shift": "Usage: shift [ options ] [n]",
 			"unset": "Usage: unset [-nfv] name...",
+			// This engine spells the limits as one word rather than as a
+			// letter each. Measured with `ulimit -Q`, which is the refusal
+			// that had been printing its complaint with no usage under it.
+			"ulimit": "Usage: ulimit [-HSalimits] [limit]",
 		},
 		// `ulimit -a`, row for row as the engine writes it. The rows this
 		// platform's engine calls unsupported, and the constant pipe and

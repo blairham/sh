@@ -143,3 +143,87 @@ func TestParseFileNamesTheFile(t *testing.T) {
 		t.Error("a policy that is not there loaded")
 	}
 }
+
+// ParseRule reads what a file line holds after its decision word, so a caller
+// with a rule and no file gets the same rule.
+//
+// It exists because `cmd/sh -deny` had a matcher of its own, and two matchers
+// over one gate is two answers to the same question. These are the cases that
+// differed: the flag's list matched a path lexically where this cleans one
+// first, and every rule it could hold named a path, so a signal could be
+// watched and never refused.
+func TestParseRuleReadsAFileLinesBody(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		sel        policy.Selector
+		pattern    string
+	}{
+		{"a selector and a pattern", "path /etc/**", policy.SelPath, "/etc/**"},
+		{"the kind with no pattern", "signal", policy.SelSignal, ""},
+		{"one kind", "exec /usr/bin/**", policy.SelExec, "/usr/bin/**"},
+		{"a pattern with a space in it", "read /srv/a b/**", policy.SelRead, "/srv/a b/**"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := policy.ParseRule(interp.Deny, tc.body)
+			if err != nil {
+				t.Fatalf("%q: %v", tc.body, err)
+			}
+			if r.Decision != interp.Deny || r.Sel != tc.sel || r.Pattern != tc.pattern {
+				t.Errorf("got %+v, want deny %v %q", r, tc.sel, tc.pattern)
+			}
+		})
+	}
+}
+
+// A body that names nothing is refused, and the diagnostic says which decision
+// it was about — the caller has one and no word to put in the message itself.
+func TestParseRuleRefusesWhatAFileWouldRefuse(t *testing.T) {
+	for _, tc := range []struct{ name, body string }{
+		{"empty", ""},
+		{"a selector nobody has", "network /x"},
+		{"a selector with no pattern", "exec"},
+		{"a relative pattern", "path etc/**"},
+		{"a pattern after signal", "signal /proc/1"},
+		{"inherit", "inherit"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := policy.ParseRule(interp.Deny, tc.body); err == nil {
+				t.Errorf("%q was accepted, want a rule that can never fire refused", tc.body)
+			}
+		})
+	}
+	// And the decision reaches the wording, which is the only thing ParseRule
+	// has to reconstruct that a line already carries.
+	_, err := policy.ParseRule(interp.Allow, "")
+	if err == nil || !strings.Contains(err.Error(), "allow") {
+		t.Errorf("err = %v, want the decision named in it", err)
+	}
+}
+
+// A rule built here and the same rule read from a file decide alike.
+//
+// The point of exporting this rather than writing a second matcher, asserted
+// against the thing that would fail if the two ever came apart.
+func TestARuleParsedAloneMatchesTheSameRuleInAFile(t *testing.T) {
+	fromFile, err := policy.Parse(strings.NewReader("version 1\ndefault allow\ndeny path /etc/**\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := policy.ParseRule(interp.Deny, "path /etc/**")
+	if err != nil {
+		t.Fatal(err)
+	}
+	alone := policy.New(interp.Allow, r)
+	for _, path := range []string{
+		"/etc", "/etc/passwd", "/etcetera", "/srv/../etc/passwd", "/usr/bin/cat", "",
+	} {
+		for _, k := range []interp.ActionKind{
+			interp.ActionExec, interp.ActionOpen, interp.ActionStat, interp.ActionReadDir,
+		} {
+			a := interp.Action{Kind: k, Path: path}
+			if fromFile.Allow(t.Context(), a) != alone.Allow(t.Context(), a) {
+				t.Errorf("the file and the parsed rule disagree about %v %q", k, path)
+			}
+		}
+	}
+}

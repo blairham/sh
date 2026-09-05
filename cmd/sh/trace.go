@@ -12,6 +12,7 @@ import (
 
 	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/internal/event"
+	"github.com/blairham/sh/internal/policy"
 	"github.com/blairham/sh/interp"
 )
 
@@ -53,7 +54,11 @@ import (
 func installSeams(sh driver.Shell, own ownFlags, w io.Writer) (driver.Shell, io.Closer, error) {
 	var g gates
 	if len(own.deny) > 0 {
-		g = append(g, denyPrefixes(own.deny))
+		d, err := denyRules(own.deny)
+		if err != nil {
+			return sh, nil, err
+		}
+		g = append(g, d)
 	}
 	if own.policy != "" {
 		p, err := loadPolicy(own.policy)
@@ -167,34 +172,72 @@ func formatEvent(e interp.Event) string {
 	return b.String()
 }
 
-// denyPrefixes refuses any action on a path at or beneath one of them.
+// denyRules turns the -deny values into a gate, and it is the *policy engine's*
+// rule language rather than a second one.
 //
-// Whole path components, so `-deny /etc` refuses /etc and /etc/passwd and
-// leaves /etcetera alone. A prefix that matched by characters would refuse a
-// neighboring directory because its name starts the same way, which is not
-// what anyone typing a directory means.
+// This used to be a path-prefix list of its own, and that was two matchers over
+// one gate. Two matchers is two answers to the same question and the one nobody
+// exercises is the one that is wrong — this one was: it compared a path by
+// lexical prefix where internal/policy cleans a path before matching it, so
+// `-deny /srv` did not cover `/srv/../srv/x` and `deny path /srv/**` did. It
+// also had a hole it could not close: every rule it could express named a path,
+// and a signal names a process, so `-trace-events` could watch a signal and
+// nothing shipped could refuse one. The policy language has no such hole,
+// because its vocabulary is interp's action kinds rather than paths.
 //
-// Every kind of action that has a path, deliberately. What a refusal then
-// *looks like* is the interpreter's and differs by kind — a denied exec says
-// so and fails, a denied stat answers as a missing path does and says
-// nothing — and that difference is the point of pointing this at a real
-// script. A signal names a process instead, so nothing a path list holds can
-// match one: `-trace-events` watches signals and `-deny` cannot refuse them,
-// which is a limit of this debug surface rather than of the gate. Refusing by
-// something other than a path is what a real policy is for.
+// So a `-deny` value is a policy rule minus its decision word, and the whole of
+// the difference is the separator:
 //
-// It keeps no state, so it needs no lock despite being called from several
-// goroutines at once.
-type denyPrefixes []string
-
-func (d denyPrefixes) Allow(_ context.Context, a interp.Action) interp.Decision {
-	for _, p := range d {
-		if p == "" {
-			continue
+//	-deny /etc              # every kind that has a path, at or under /etc
+//	-deny path:/etc/**      # the same rule, written out
+//	-deny signal            # every signal this shell sends
+//	-deny exec:/usr/bin/**  # one kind, one subtree
+//
+// A colon rather than a space, and that is the one concession to being a flag:
+// a value is one shell word, so `-deny exec /usr/bin` would hand `exec` to the
+// flag and `/usr/bin` to the shell as a script — which runs, quietly, under a
+// policy the person did not write. Every form above is a single word and needs
+// no quoting, which is the property worth having here. The selectors, the
+// patterns and the matcher are the file's, unchanged.
+//
+// The bare path is the shorthand the flag has always had, and it now means what
+// it always said it meant: `-deny /etc` is `deny path /etc/**`, and `**`
+// matches zero or more components, so it covers /etc itself and everything
+// beneath. Globs work in it, which they did not before — that follows from
+// there being one pattern language rather than two.
+func denyRules(values []string) (interp.Gate, error) {
+	rules := make([]policy.Rule, 0, len(values))
+	for _, v := range values {
+		r, err := policy.ParseRule(interp.Deny, denyBody(v))
+		if err != nil {
+			return nil, fmt.Errorf("-deny %s: %w", v, err)
 		}
-		if a.Path == p || strings.HasPrefix(a.Path, strings.TrimSuffix(p, "/")+"/") {
-			return interp.Deny
-		}
+		rules = append(rules, r)
 	}
-	return interp.Allow
+	// Allow-everything with holes cut in it, which is what a debug surface is:
+	// a way to watch the gate refuse something rather than a sandbox. A policy
+	// file is how a sandbox is written, and composing the two intersects them —
+	// see gates in sandbox.go.
+	return policy.New(interp.Allow, rules...), nil
+}
+
+// denyBody turns a flag value into the body of a policy rule.
+//
+// Three shapes, distinguished without ambiguity: a value beginning with `/` is
+// a path, because a selector is a bare word and no selector begins with a
+// slash; otherwise the first colon separates the selector from the pattern, and
+// a colon is legal in a path so only the first one splits. A value with no
+// colon is a selector on its own, which is what `signal` needs.
+func denyBody(v string) string {
+	if strings.HasPrefix(v, "/") {
+		// Trailing slashes trimmed so `-deny /etc/` and `-deny /etc` are the
+		// same rule. Without it the pattern would be `/etc//**`, which names a
+		// directory nobody has.
+		return "path " + strings.TrimSuffix(v, "/") + "/**"
+	}
+	sel, pattern, ok := strings.Cut(v, ":")
+	if !ok {
+		return v
+	}
+	return sel + " " + pattern
 }

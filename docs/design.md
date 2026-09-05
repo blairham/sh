@@ -187,6 +187,18 @@ own. Containing what a command does once it is running is the job of an
 OS sandbox backend, which sits above this and is what a real `Gate`
 implementation would reach for.
 
+**The gate also contains a name rather than a file.** It is asked about
+the path the interpreter holds, and the interpreter does not resolve
+links — so two names for one file are two questions to it, and a rule
+about one of them says nothing about the other. That is a limit for an
+ordinary symlink, which can change under a running shell and could only
+be resolved by reading the filesystem from inside the boundary the
+policy is enforcing. It is *not* a limit for a name the platform fixes:
+`/tmp` is `/private/tmp` on every macOS machine, so a policy expands
+that one when the rule is read, once, and matches either spelling.
+This paragraph exists because it is the second thing a reader of the
+seam has had to rediscover; `design/sandboxing.md` has both halves.
+
 [design/sandboxing.md](design/sandboxing.md) is the shipped policy that
 fills the seam: the policy format, the default posture, what a refusal
 looks like, and the event schema its consumers share. The agent-protocol

@@ -608,12 +608,20 @@ func (r *Runner) expandPrintfEscape(s string) (string, int, bool) {
 		case PrintfBackslashCStops:
 			return "", 2, true
 		case PrintfBackslashCControl:
-			if len(s) > 2 {
-				// Control-X is the letter with its top bits cleared, and a
-				// `\c` with nothing after it is a NUL.
-				return string(rune(s[2] & 0x1f)), 3, false
+			// The same escape `$'…'` decodes, read the same way: the
+			// dialect whose printf reads `\cX` as a control character is
+			// the one that toggles bit 6 there, and it decodes the
+			// argument before controlling it. Writing that arithmetic a
+			// second time here is what let the two drift — `\c1` was
+			// `0x11` in a format and `q` inside the quotes (#556).
+			x, next, ok := controlArgument(DollarSingleControlToggled, s, 2)
+			if !ok {
+				// `\c` with nothing after it is a NUL. printf writes it
+				// rather than ending there, because a format is a counted
+				// string and not a C one.
+				return "\x00", 2, false
 			}
-			return "\x00", 2, false
+			return string([]byte{controlByte(DollarSingleControlToggled, x)}), next, false
 		}
 		return `\c`, 2, false
 	case '0', '1', '2', '3', '4', '5', '6', '7':

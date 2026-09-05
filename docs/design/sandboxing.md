@@ -231,6 +231,34 @@ policy with `deny` rules carving holes. That is a way to *watch* a gate
 rather than a sandbox, and `docs/design.md` already draws that
 distinction for `-deny`. It is the same distinction here.
 
+**`-deny` is that policy and not a second rule language.** It used to be
+a path-prefix list of its own, which was two matchers over one gate, and
+the one nobody exercised was the one that was wrong twice over. It
+compared lexically where this cleans a path first, so `..` walked out of
+a `-deny` rule and not out of the identical file rule. And every rule it
+could hold named a path, so `ActionSignal` — the one kind with no path —
+could be watched and never refused.
+
+Each `-deny` value is now a rule body, parsed by this package:
+
+    -deny /etc              # the shorthand: deny path /etc/**
+    -deny path:/etc/**      # the same rule, written out
+    -deny signal            # every signal the shell sends
+    -deny exec:/usr/bin/**  # one kind, one subtree
+
+A colon rather than a space, and that is the whole of the difference. A
+flag value is one shell word, so `-deny exec /usr/bin` would give the
+flag `exec` and the shell a script — which runs, quietly, under a policy
+nobody wrote. Every form above is one word and needs no quoting.
+
+The guard is the half worth having. A test reads the `ActionKind`
+constant block out of `interp/seams.go` and fails when a kind lands that
+`-deny` cannot refuse, or that is not named as deliberately exempt with
+its reason. It reads the *declaration* rather than a list in Go, because
+a list is a second thing to remember to update and forgetting it is the
+failure being guarded against. `ActionInherit` is the one exemption and
+its reason is `interp`'s own: it is recorded and never gated.
+
 ### Where a policy comes from
 
 Two routes, and the split is deliberate.

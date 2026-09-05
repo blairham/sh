@@ -204,6 +204,16 @@ func (r *Runner) SetPosixMode(on bool) {
 	r.posixMode = on
 }
 
+// PosixMode reports whether the shell is in POSIX mode, which is the read
+// side of SetPosixMode.
+//
+// Exported for the front end, which has a startup question that turns on it:
+// the file a non-interactive shell sources out of a named variable is not
+// sourced in POSIX mode. Measured — the shell that reads such a file reads it
+// called by its own name, and reads nothing when started with the standard's
+// posix option or invoked as `sh`. See Semantics.NonInteractiveStartupVariable.
+func (r *Runner) PosixMode() bool { return r.posixMode }
+
 // setMonitor is `set -m`, the one request in the table a dialect can refuse:
 // two of the panel tie job control to the terminal, and this runner only has
 // one when a front end said so (JobControl).

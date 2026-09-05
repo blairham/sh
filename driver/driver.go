@@ -963,6 +963,11 @@ func (sh Shell) runInput(in source) int {
 	if code, ok := sh.applyOptions(r, in.opts); !ok {
 		return code
 	}
+	// The environment's own option list, after the argument vector and before
+	// the files — both measured. An inherited `xtrace` beats the invocation's
+	// own `+x`, so the environment is read second; and the startup files below
+	// are traced by it, so it is read before them.
+	r.ApplyInheritedShellOptions()
 	// A login shell reads ~/.profile before the script, in the dialects that
 	// say a shell with work to do still reads it. After the options, which is
 	// where the panel has them: `-x` given to the invocation traces the
@@ -1002,6 +1007,18 @@ func (sh Shell) runInput(in source) int {
 		// back the answer this recorded on the way in, and an axis written
 		// here directly would leave it nothing to find.
 		r.SetPosixMode(true)
+	}
+	// Before the file below, which is the composition of the two: POSIX mode
+	// suppresses that file, measured, and being called `sh` is one of the two
+	// ways into the mode.
+	if code := sh.nonInteractiveStartupFile(r); code != 0 {
+		return code
+	}
+	if r.Exited() {
+		// The file ended the shell, which is measured: `exit 3` in it exits 3
+		// and the script never runs. Through Finish, so an EXIT trap it set
+		// still fires — the same shape the profile above has.
+		return r.Finish(context.Background())
 	}
 
 	return sh.execute(r, pr, in)

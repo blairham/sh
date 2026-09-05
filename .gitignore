@@ -1,4 +1,8 @@
 /dist/
+
+# Graded binaries: `make conformance` and friends build here rather than to a
+# shared TMPDIR name, so two worktrees can be graded at once.
+/build/
 *.test
 *.out
 .DS_Store

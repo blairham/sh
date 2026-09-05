@@ -22,8 +22,7 @@ echo hi >&"${COPROC[1]}"
 read -r l <&"${COPROC[0]}"
 echo "got=$l"
 [ -n "$COPROC_PID" ] && echo pidset
-v=${COPROC[1]}
-exec {v}>&-
+exec {COPROC[1]}>&-
 wait "$COPROC_PID"
 echo "st=$?"`)
 	if got, want := out, "got=hi\npidset\nst=0\n"; got != want {
@@ -39,8 +38,7 @@ func TestCoprocTakesAName(t *testing.T) {
 echo hey >&"${UP[1]}"
 read -r l <&"${UP[0]}"
 echo "got=$l"
-v=${UP[1]}
-exec {v}>&-
+exec {UP[1]}>&-
 wait "$UP_PID"`)
 	if got, want := out, "got=hey\n"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -49,10 +47,17 @@ wait "$UP_PID"`)
 
 // runCoproc parses src with the keyword turned on and runs it with the posix
 // answers.
+//
+// The subscripted descriptor name goes with it, because closing the feed is
+// how a coprocess is told its input has ended and `exec {NAME[1]}>&-` is how
+// that is written. These cases used to copy the element into a scalar first
+// and close through that, which is the workaround for a shell without the
+// flag rather than anything a script would say.
 func runCoproc(t *testing.T, src string) string {
 	t.Helper()
 	d := syntax.Core()
 	d.Coproc = true
+	d.FdVariableSubscript = true
 	f, err := syntax.Parse(src, d)
 	if err != nil {
 		t.Fatal(err)

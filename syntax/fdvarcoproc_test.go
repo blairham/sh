@@ -103,3 +103,66 @@ func TestCoprocPrintsBack(t *testing.T) {
 		}
 	}
 }
+
+// A subscripted name inside the braces is a second flag's, not the first
+// one's. The shell that has `{fd}` and arrays and still refuses `{a[1]}` is
+// the reason: without a flag of its own, having both features would have
+// decided this one.
+func TestASubscriptedFdVariableIsItsOwnDialectQuestion(t *testing.T) {
+	d := Core()
+	d.FdVariableSubscript = true
+
+	f, err := Parse(`exec {a[1]}>out`, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*SimpleCmd)
+	if len(c.Redirs) != 1 || c.Redirs[0].N == nil || c.Redirs[0].N.Literal() != "{a[1]}" {
+		t.Errorf("with the flag read %+v, want one redirect numbered {a[1]}", c)
+	}
+	if len(c.Args) != 1 {
+		t.Errorf("with the flag read %d words, want exec alone", len(c.Args))
+	}
+
+	// The core has `{fd}` and arrays and still leaves the braces a word,
+	// because the three current shells do not agree about this one.
+	g, err := Parse(`exec {a[1]}>out`, Core())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc := g.Stmts[0].Expr.(*Pipeline).Cmds[0].(*SimpleCmd)
+	if len(sc.Args) != 2 || sc.Args[1].Literal() != "{a[1]}" {
+		t.Errorf("core read %+v, want {a[1]} as an ordinary word", sc)
+	}
+
+	// What the brackets may hold, and what keeps them clear of brace
+	// expansion: a subscript is never empty, never nested, and never carries
+	// anything that would have to expand — the token is one literal span, so
+	// a `$` in it could only ever mean the character.
+	for _, src := range []string{
+		`echo {a[]}>f`, `echo {a[b[1]]}>f`, `echo {a[$i]}>f`,
+		`echo {a[1],b}>f`, `echo {a[1]} >f`, `echo {[1]}>f`,
+	} {
+		h, err := Parse(src, d)
+		if err != nil {
+			t.Fatalf("%q: %v", src, err)
+		}
+		w := h.Stmts[0].Expr.(*Pipeline).Cmds[0].(*SimpleCmd)
+		if len(w.Args) != 2 {
+			t.Errorf("%q read as %d words, want the braces kept as one", src, len(w.Args))
+		}
+	}
+
+	// And an expression is a subscript, because that is what a subscript is
+	// everywhere else in the language.
+	for _, src := range []string{`exec {a[i]}>f`, `exec {a[i+1]}>f`, `exec {m[key]}>f`} {
+		h, err := Parse(src, d)
+		if err != nil {
+			t.Fatalf("%q: %v", src, err)
+		}
+		w := h.Stmts[0].Expr.(*Pipeline).Cmds[0].(*SimpleCmd)
+		if len(w.Redirs) != 1 {
+			t.Errorf("%q read as %d redirects, want one", src, len(w.Redirs))
+		}
+	}
+}

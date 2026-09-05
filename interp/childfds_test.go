@@ -74,7 +74,7 @@ func TestACoprocessDescriptorDoesNotReachAnExternalChild(t *testing.T) {
 v=${COPROC[1]}
 /bin/sh -c 'echo leaked >&'"$v"
 echo "child=$?"
-exec {v}>&-
+exec {COPROC[1]}>&-
 wait "$COPROC_PID"
 `)
 	if !strings.Contains(out, "child=") {

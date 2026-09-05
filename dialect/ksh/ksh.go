@@ -63,6 +63,10 @@ func Dialect() syntax.Dialect {
 	// The end of input closes a quote here: `echo "abc` prints abc, and the
 	// old backquote form behaves the same way. The substitutions do not.
 	d.CloseQuotesAtEOF = true
+	// `exec {a[1]}>&-`: the name inside the braces may be a subscripted one.
+	// Measured — this shell closes the descriptor the element holds, as bash
+	// does and zsh does not.
+	d.FdVariableSubscript = true
 	return d
 }
 

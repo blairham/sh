@@ -962,3 +962,180 @@ func TestSyntaxErrorCasesAreGraded(t *testing.T) {
 		t.Error("a racing reference cannot grade anything and must stay excluded")
 	}
 }
+
+// TestRegeneratingKeepsARacingRow is the whole of the fix: a marked row is
+// exempt from grading and from drift, and was exempt from neither of the two
+// things that actually wrote to the record. Regeneration rewrote it with
+// whichever answer the coin gave, which was the only way it could move, so
+// every move was noise in somebody else's pull request.
+func TestRegeneratingKeepsARacingRow(t *testing.T) {
+	cases := []Case{
+		{ID: "racy", Category: "shell options", Snippet: "echo hi", ReferenceRaces: true},
+		{ID: "steady", Category: "shell options", Snippet: "echo hi"},
+	}
+	panel := []ShellRecord{{Name: "ksh93", Version: "AJM 93u+"}}
+	recorded := &Run{
+		Shells: panel,
+		Results: map[string]map[string]Result{
+			"racy":   {"ksh93": {Stderr: "+ cat~+ echo a"}},
+			"steady": {"ksh93": {Stdout: "hi"}},
+		},
+	}
+	// The coin lands the other way, and the steady row genuinely moved.
+	fresh := &Run{
+		Shells: panel,
+		Results: map[string]map[string]Result{
+			"racy":   {"ksh93": {Stderr: "+ echo a~+ cat"}},
+			"steady": {"ksh93": {Stdout: "bye"}},
+		},
+	}
+	fresh.KeepRacingRows(recorded, cases)
+
+	if got := fresh.Results["racy"]["ksh93"].Stderr; got != "+ cat~+ echo a" {
+		t.Errorf("the racing row was resampled: %q", got)
+	}
+	if got := fresh.Results["steady"]["ksh93"].Stdout; got != "bye" {
+		t.Errorf("an ordinary row was pinned as well: %q, want the new measurement", got)
+	}
+}
+
+// TestARacingRowIsResampledWhenTheShellChanged: the pin is not a freeze. A
+// build that moved is the one event that makes the old sample stale rather
+// than merely unlucky, and it is exactly when somebody should look again —
+// including at a row nothing else checks.
+func TestARacingRowIsResampledWhenTheShellChanged(t *testing.T) {
+	cases := []Case{{ID: "racy", Category: "shell options", Snippet: "echo hi", ReferenceRaces: true}}
+	recorded := &Run{
+		Shells:  []ShellRecord{{Name: "ksh93", Version: "AJM 93u+"}, {Name: "zsh", Version: "5.9"}},
+		Results: map[string]map[string]Result{"racy": {"ksh93": {Stdout: "old"}, "zsh": {Stdout: "old"}}},
+	}
+	fresh := &Run{
+		Shells:  []ShellRecord{{Name: "ksh93", Version: "AJM 93u+ 2020"}, {Name: "zsh", Version: "5.9"}},
+		Results: map[string]map[string]Result{"racy": {"ksh93": {Stdout: "new"}, "zsh": {Stdout: "new"}}},
+	}
+	fresh.KeepRacingRows(recorded, cases)
+
+	if got := fresh.Results["racy"]["ksh93"].Stdout; got != "new" {
+		t.Errorf("an upgraded shell was pinned to its old sample: %q", got)
+	}
+	if got := fresh.Results["racy"]["zsh"].Stdout; got != "old" {
+		t.Errorf("an unchanged shell was resampled: %q", got)
+	}
+}
+
+// TestKeepRacingRowsInventsNothing: a shell or a case the record has never
+// seen has no value to carry forward, and pinning one that does not exist
+// would put an empty result where a measurement belongs.
+func TestKeepRacingRowsInventsNothing(t *testing.T) {
+	cases := []Case{
+		{ID: "racy", Category: "shell options", Snippet: "echo hi", ReferenceRaces: true},
+		{ID: "added", Category: "shell options", Snippet: "echo hi", ReferenceRaces: true},
+	}
+	recorded := &Run{
+		Shells:  []ShellRecord{{Name: "ksh93", Version: "AJM 93u+"}},
+		Results: map[string]map[string]Result{"racy": {"ksh93": {Stdout: "old"}}},
+	}
+	fresh := &Run{
+		Shells: []ShellRecord{{Name: "ksh93", Version: "AJM 93u+"}, {Name: "dash", Version: "0.5"}},
+		Results: map[string]map[string]Result{
+			"racy":  {"ksh93": {Stdout: "new"}, "dash": {Stdout: "fresh"}},
+			"added": {"ksh93": {Stdout: "fresh"}},
+		},
+	}
+	fresh.KeepRacingRows(recorded, cases)
+
+	if got := fresh.Results["racy"]["dash"].Stdout; got != "fresh" {
+		t.Errorf("a shell the record never saw was overwritten: %q", got)
+	}
+	if got := fresh.Results["added"]["ksh93"].Stdout; got != "fresh" {
+		t.Errorf("a case the record never had was overwritten: %q", got)
+	}
+	if n := len(fresh.Results["racy"]); n != 2 {
+		t.Errorf("the row grew or shrank: %d shells, want 2", n)
+	}
+	// And a run with nothing to carry forward from is left alone rather than
+	// panicking, which is the first run on a machine with no record.
+	fresh.KeepRacingRows(nil, cases)
+	if got := fresh.Results["racy"]["ksh93"].Stdout; got != "old" {
+		t.Errorf("a nil record changed the run: %q", got)
+	}
+}
+
+// TestTheRecordMarksARacingRow: the exemption has to be visible to a reader
+// of the generated tables. A row that is pinned, ungraded and undrifted while
+// looking exactly like its neighbors is the asymmetry somebody later reads as
+// a bug — and the reason a marked row was described in a comment nobody
+// generating the document could see.
+func TestTheRecordMarksARacingRow(t *testing.T) {
+	cases := []Case{
+		{ID: "racy", Category: "shell options", Snippet: "echo hi", ReferenceRaces: true},
+		{ID: "both", Category: "shell options", Snippet: "echo hi", ReferenceRaces: true, GradedOnRefusal: true},
+		{ID: "steady", Category: "shell options", Snippet: "echo hi"},
+	}
+	run := &Run{
+		Shells: []ShellRecord{{Name: "ksh93", Version: "x"}},
+		Results: map[string]map[string]Result{
+			"racy":   {"ksh93": {Stdout: "hi"}},
+			"both":   {"ksh93": {Stdout: "hi"}},
+			"steady": {"ksh93": {Stdout: "hi"}},
+		},
+	}
+	md := run.Markdown(cases)
+	for _, line := range strings.Split(md, "\n") {
+		switch {
+		case strings.Contains(line, "`racy`") && !strings.Contains(line, "(unordered)"):
+			t.Errorf("a racing row is not marked: %q", line)
+		case strings.Contains(line, "`steady`") && strings.Contains(line, "(unordered)"):
+			t.Errorf("a deterministic row is marked as racing: %q", line)
+		case strings.Contains(line, "`both`") &&
+			(!strings.Contains(line, "(refusal)") || !strings.Contains(line, "(unordered)")):
+			// Two marks say different things, and showing only the first
+			// tells a reader the wrong thing about the second.
+			t.Errorf("a row carrying both marks shows only one: %q", line)
+		}
+	}
+	if !strings.Contains(md, "**(unordered)**") {
+		t.Error("the mark never appears at all")
+	}
+}
+
+// TestRecordPinsBeforeItRenders: the two artifacts are produced from one Run,
+// so pinning the racing rows after the document is rendered would leave a
+// stable golden record beside a measurements table that still churned — half
+// a fix, and the half nobody diffs is the half that stays broken. Neither
+// write says anything about the order on its own, so it is asserted here.
+func TestRecordPinsBeforeItRenders(t *testing.T) {
+	cases := []Case{{ID: "racy", Category: "shell options", Snippet: "echo hi", ReferenceRaces: true}}
+	panel := []ShellRecord{{Name: "ksh93", Version: "AJM 93u+"}}
+	prev := &Run{
+		Shells:  panel,
+		Results: map[string]map[string]Result{"racy": {"ksh93": {Stdout: "the-kept-sample"}}},
+	}
+	got := &Run{
+		Shells:  panel,
+		Results: map[string]map[string]Result{"racy": {"ksh93": {Stdout: "the-fresh-coin"}}},
+	}
+	dir := t.TempDir()
+	doc, golden := filepath.Join(dir, "measurements.md"), filepath.Join(dir, "golden.json")
+	if err := got.Record(prev, cases, doc, golden); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+
+	md, err := os.ReadFile(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(md), "the-fresh-coin") {
+		t.Error("the document was rendered before the racing row was pinned")
+	}
+	if !strings.Contains(string(md), "the-kept-sample") {
+		t.Error("the document does not carry the pinned value at all")
+	}
+	back, err := Load(golden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := back.Results["racy"]["ksh93"].Stdout; s != "the-kept-sample" {
+		t.Errorf("the saved record holds %q, want the value carried forward", s)
+	}
+}

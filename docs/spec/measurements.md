@@ -17,6 +17,13 @@ are a dialect's own. Only the grading is relaxed: the cells below are
 what each shell actually printed, and the drift check still compares
 every byte of them.
 
+A case marked **(unordered)** is one the reference shells answer two
+ways at random, because the shell being measured races with itself.
+Its cells are one sample rather than the answer, so they are *kept* by
+a regeneration instead of resampled: re-rolling a coin on every run is
+the only way such a row can move, and every move is noise. Nothing
+grades it and nothing drift-checks it either, for the same reason.
+
 ## Panel
 
 | shell | build |
@@ -869,6 +876,7 @@ every byte of them.
 | `type/dash-t-on-nothing-is-silent-failure` | `-t: not found~a-name-that-is-nothing: not found~st=127` | `st=1` | `st=1` | `st=1` | `st=2` **2>** `<shell>: whence: -t: unknown option~Usage: whence [-afpqv] name  ...` | `st=1` **2>** `<shell>:type:1: bad option: -t` |
 | `export/unset-f-removes-a-function` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` |
 | `export/a-function-through-the-environment` | *(no output, status 2)* | `1` | `1` | `1` | *(no output, status 2)* | `0` *(status 1)* |
+| `export/the-n-option-takes-the-attribute-off` | **2>** `<shell>: 1: export: Illegal option -n` *(status 2)* | `st=0~0~alive` | `st=0~0~alive` | `st=0~0~alive` | **2>** `<shell>: export: -n: unknown option~Usage: export [-p] [name[=value]...]` *(status 2)* | `st=1~1~alive` **2>** `<shell>:export:1: bad option: -n` |
 | `export/a-name-that-is-not-a-function` | **2>** `<shell>: 1: export: Illegal option -f` *(status 2)* | `st=1` **2>** `<shell>: line 1: export: nope: not a function` | `st=1` **2>** `<shell>: line 1: export: nope: not a function` | `st=1` **2>** `<shell>: line 0: export: nope: not a function` | **2>** `<shell>: export: -f: unknown option~Usage: export [-p] [name[=value]...]` *(status 2)* | `st=1` **2>** `<shell>:export:1: invalid option(s)` |
 | `export/an-imported-name-keeps-the-attribute` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` |
 | `export/an-imported-name-reassigned-in-a-function` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` |
@@ -1222,6 +1230,10 @@ every byte of them.
 - `export/a-function-through-the-environment` — one shell carries a function to its children and the other three have no way to: there is nothing but a string in an environment, so the source goes in and is parsed again at the other end. The count rather than the text, because what the entry holds is a shell's own spelling of a body
   ```sh
   f(){ echo carried; }; export -f f 2>/dev/null; env | grep -c '^BASH_FUNC'
+  ```
+- `export/the-n-option-takes-the-attribute-off` — the letter itself is the question, not what it does: bash has `-n` and the other three refuse it as an option, in three different ways and two of them fatally. Left out of #459 deliberately, because that change was about the export attribute and this row would have been recording an option-surface gap instead — which it now is, on purpose. Read through a real child, since what `-n` buys is that the name stays set in the shell and stops reaching one
+  ```sh
+  V=1; export V; export -n V; echo "st=$?"; env | grep -c "^V="; echo alive
   ```
 - `export/a-name-that-is-not-a-function` — a name that is not a function now will not become one by being exported. The shells that have the option refuse it and the ones that do not read `-f` as something else entirely, which is the more interesting half
   ```sh
@@ -2962,6 +2974,10 @@ every byte of them.
 | `arith/overflow-saturates-in-one-shell` | `-9223372036854775808` | `-9223372036854775808` | `-9223372036854775808` | `-9223372036854775808` | `9223372036854775807` | `-9223372036854775808` |
 | `arith/an-empty-expression-diverges` | **2>** `<shell>: 1: arithmetic expression: expecting primary: " "` *(status 2)* | `0~st=0` | `0~st=0` | `0~st=0` | `0~st=0` | `0~st=0` |
 | `arith/a-name-shaped-value-is-chased` | **2>** `<shell>: 1: Illegal number: b` *(status 2)* | `3~st=0` | `3~st=0` | `3~st=0` | `3~st=0` | `3~st=0` |
+| `arith/an-operand-the-expression-ran-out-of` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "1+"` *(status 2)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 127)* | **2>** `<shell>: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
+| `arith/an-operand-the-expression-found` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "%"` *(status 2)* | **2>** `<shell>: line 1: %: arithmetic syntax error: operand expected (error token is "%")` *(status 1)* | **2>** `<shell>: line 1: %: arithmetic syntax error: operand expected (error token is "%")` *(status 127)* | **2>** `<shell>: %: syntax error: operand expected (error token is "%")` *(status 1)* | **2>** `<shell>: %: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at `%'` *(status 1)* |
+| `arith/an-operand-found-after-an-operator` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "1+&2"` *(status 2)* | **2>** `<shell>: line 1: 1+&2: arithmetic syntax error: operand expected (error token is "&2")` *(status 1)* | **2>** `<shell>: line 1: 1+&2: arithmetic syntax error: operand expected (error token is "&2")` *(status 127)* | **2>** `<shell>: 1+&2: syntax error: operand expected (error token is "&2")` *(status 1)* | **2>** `<shell>: 1+&2: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at `&2'` *(status 1)* |
+| `arith/an-operand-a-lexer-refuses-outright` | **2>** `<shell>: 1: arithmetic expression: expecting primary: "@"` *(status 2)* | **2>** `<shell>: line 1: @: arithmetic syntax error: operand expected (error token is "@")` *(status 1)* | **2>** `<shell>: line 1: @: arithmetic syntax error: operand expected (error token is "@")` *(status 127)* | **2>** `<shell>: @: syntax error: operand expected (error token is "@")` *(status 1)* | **2>** `<shell>: @: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: illegal character: @` *(status 1)* |
 | `arith/the-error-names-what-was-consumed` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "1+08"` *(status 2)* | **2>** `<shell>: line 1: 1+08: value too great for base (error token is "08")` *(status 1)* | **2>** `<shell>: line 1: 1+08: value too great for base (error token is "08")` *(status 127)* | **2>** `<shell>: 1+08: value too great for base (error token is "08")` *(status 1)* | `9~st=0` | `9~st=0` |
 | `arith/explicit-base` | **2>** `<shell>: 1: arithmetic expression: expecting EOF: "2#101"` *(status 2)* | `[5][16]` | `[5][16]` | `[5][16]` | `[5][16]` | `[5][16]` |
 | `arith/comparison-yields-one-or-zero` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` | `[1][0][1]` |
@@ -3070,6 +3086,22 @@ every byte of them.
 - `arith/a-name-shaped-value-is-chased` — bash, ksh93 and zsh resolve a value that names another variable until it is a number; dash calls b an illegal number and stops
   ```sh
   a=b; b=3; echo $((a)); echo "st=$?"
+  ```
+- `arith/an-operand-the-expression-ran-out-of` — an operand was wanted and the text ended, which two of the panel word apart from an operand that was wanted and found: ksh93 says more tokens expected and zsh names the end of the string. The pair with `arith/an-operand-the-expression-found` is the whole of it — either row alone passes under one wording for both, which is what let the end-of-input sentence stand for every operand failure in two dialects
+  ```sh
+  echo "[$((1+))]"; echo "st=$?"
+  ```
+- `arith/an-operand-the-expression-found` — the other half: a token is there and it cannot begin a value. ksh93 drops to its bare arithmetic syntax error and zsh names the text — ``operand expected at `%'`` — where both said the expression had run out. bash words the two identically, which is why the bash column cannot see this at all and why the failure survived every conformance read
+  ```sh
+  echo "[$((%))]"; echo "st=$?"
+  ```
+- `arith/an-operand-found-after-an-operator` — the found case reached mid-expression rather than at its start, and the text named runs to the end of the expression rather than being the one refused byte — `&2`, which is what the two shells that name anything name. It also says the distinction is not about where in the expression the failure is: the same operator wanting the same operand is worded one way here and the other way in `arith/an-operand-the-expression-ran-out-of`
+  ```sh
+  echo "[$((1+&2))]"; echo "st=$?"
+  ```
+- `arith/an-operand-a-lexer-refuses-outright` — a byte that is not part of any arithmetic token, which zsh alone words a third way — `illegal character: @` rather than the operand sentence it gives `%`. The row is recorded rather than reproduced: the third wording turns on where in the expression the byte stands as well as on which byte it is, since `$((1+@))` gets the operand sentence and `$((1 @))` and `$((@))` do not, and that is a lexer's table rather than a grammar rule. bash, ksh93 and dash word it exactly as they word `%`, so three of the four columns pass
+  ```sh
+  echo "[$((@))]"; echo "st=$?"
   ```
 - `arith/the-error-names-what-was-consumed` — bash's leading position is what the evaluator had consumed when the token failed — 1+08 blamed as 1+08 but 08+1 as 08 — where dash names the whole expression and the octal-tolerant shells answer 9
   ```sh
@@ -3259,7 +3291,7 @@ every byte of them.
 | `xtrace/assignments-per-line-diverges` | **2>** `+ a=1 b=2` | **2>** `+ a=1~+ b=2` | **2>** `+ a=1~+ b=2` | **2>** `+ a=1~+ b=2` | **2>** `+ a=1~+ b=2` | **2>** `+<shell>:1> a=1 b=2 ` |
 | `xtrace/disabling-set-diverges` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` | `done` **2>** `+<shell>:1> set +x` |
 | `xtrace/compound-header-diverges` | `1~2` **2>** `+ echo 1~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ echo 1~+ echo 2` | `1~2` **2>** `+<shell>:1> i=1~+<shell>:1> echo 1~+<shell>:1> i=2~+<shell>:1> echo 2` |
-| `xtrace/pipeline-order-diverges` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ cat~+ echo a` | `a` **2>** `+<shell>:1> echo a~+<shell>:1> cat` |
+| `xtrace/pipeline-order-diverges` **(unordered)** | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ cat~+ echo a` | `a` **2>** `+<shell>:1> echo a~+<shell>:1> cat` |
 | `nounset/unset-variable-is-an-error` | **2>** `<script>: 2: NOPE: parameter not set` *(status 2)* | **2>** `<script>: line 2: NOPE: unbound variable` *(status 1)* | **2>** `<script>: line 2: NOPE: unbound variable` *(status 1)* | **2>** `<script>: line 2: NOPE: unbound variable` *(status 1)* | **2>** `<script>: line 2: NOPE: parameter not set` *(status 1)* | **2>** `<script>:2: NOPE: parameter not set` *(status 1)* |
 | `shopt/nullglob-empties-a-miss` | `zz*zz~done` | `~done` | `~done` | `~done` | `zz*zz~done` | **2>** `<shell>:1: no matches found: zz*zz` *(status 1)* |
 | `shopt/globstar-crosses-directories` | `**/f` | `d/e/f` | `d/e/f` | `**/f` | `**/f` | `d/e/f` |
@@ -3333,7 +3365,7 @@ every byte of them.
   ```sh
   set -x; for i in 1 2; do echo $i; done
   ```
-- `xtrace/pipeline-order-diverges` — ksh93 usually prints the last element first, which follows from its running that one in the current shell — but only usually: its two processes race to their trace points, 26 runs in 400 come out the other way, and that is a fact about ksh93 rather than about anything measured against it
+- `xtrace/pipeline-order-diverges` **(unordered)** — ksh93 usually prints the last element first, which follows from its running that one in the current shell — but only usually: its two processes race to their trace points, 41 runs in 400 come out the other way. Nor is that ksh93's alone, which is what the row looked like until every column was counted rather than the loudest one: bash 5 reorders 5 times in 200, bash 3.2 once in 400 and zsh once in 200, so four of the six columns were seen to answer both ways and only dash held still. A pipeline's elements are separate processes and nothing sequences their trace points, so the order is the scheduler's and not the shell's — a fact about how the trace is emitted rather than about anything measured against it
   ```sh
   set -x; echo a | cat
   ```
@@ -3542,6 +3574,7 @@ every byte of them.
 | `param/unset-positional-takes-a-default` | `[default]` | `[default]` | `[default]` | `[default]` | `[default]` | `[default]` |
 | `param/a-substring-offset-that-will-not-evaluate` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: x: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: x: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: x: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+:2: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
 | `param/a-substring-length-that-will-not-evaluate` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: x: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: x: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: x: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
+| `param/a-substring-length-with-an-operand-it-found` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: x: %: arithmetic syntax error: operand expected (error token is "%")` *(status 1)* | **2>** `<shell>: line 1: x: %: arithmetic syntax error: operand expected (error token is "%")` *(status 1)* | **2>** `<shell>: x: %: syntax error: operand expected (error token is "%")` *(status 1)* | **2>** `<shell>: %: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at `%'` *(status 1)* |
 | `param/a-substring-offset-on-a-subscripted-parameter` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a[@]: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: a[@]: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: a[@]: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
 | `param/a-substring-offset-is-an-expression` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[cd]` | `[cd]` | `[cd]` | `[cd]` | `[cd]` |
 | `param/colon-extends-the-test-unset` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` |
@@ -3621,6 +3654,10 @@ every byte of them.
 - `param/a-substring-length-that-will-not-evaluate` — the length rather than the offset, which is what separates the two namings: the shell that blames an offset along with the rest of the range has nothing after a length and names it alone. Extending the text before *evaluating* it rather than only before reporting it invented a second failure, so the pair is what pins that the extension is a wording and not a reading
   ```sh
   x=abcdef; echo "[${x:2:1+}]"; echo after
+  ```
+- `param/a-substring-length-with-an-operand-it-found` — the found-an-operand wording reached through a range rather than through `$(( ))`, which is where the two are held together: the shell that blames an offset along with the rest of the range also *reads* the rest of the range, so `${x:1+:2}` is its found case where `${x:1+}` is its ran-out one. A length has nothing after it and is the plain case in every column
+  ```sh
+  x=abcdef; echo "[${x:2:%}]"; echo after
   ```
 - `param/a-substring-offset-on-a-subscripted-parameter` — the parameter a diagnostic names is the name and its subscript, not the name alone — `a[@]` — in the one shell that names it at all. The list form of the substring reaches the same evaluation as the string form, so this also says the two spellings share it
   ```sh

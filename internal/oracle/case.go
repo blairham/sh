@@ -186,6 +186,16 @@ type Case struct {
 	// Such a case is still worth recording: the divergence is real and the
 	// measurement documents it. It is simply not evidence about anybody's
 	// conformance, so it is not graded and not checked for drift.
+	//
+	// And not resampled. Neither of those two exemptions stopped `make
+	// oracle` from writing down whichever answer the coin gave, which was
+	// the *only* way such a row could move and made every move noise — a
+	// regeneration in a pull request about something else carrying a diff a
+	// reviewer then has to recognize and dismiss. So a regeneration keeps
+	// what is recorded for a marked row, per shell, for as long as the shell
+	// is the same build; see Run.KeepRacingRows, which also has the measured
+	// flip rates. To resample deliberately, delete the row from the golden
+	// record and regenerate.
 	ReferenceRaces bool
 
 	// Unfinished marks a case whose input is legitimately *unfinished* even
@@ -1534,7 +1544,7 @@ var Corpus = []Case{
 		ID: "xtrace/pipeline-order-diverges", Category: "shell options",
 		Snippet:        `set -x; echo a | cat`,
 		ReferenceRaces: true,
-		Why:            "ksh93 usually prints the last element first, which follows from its running that one in the current shell — but only usually: its two processes race to their trace points, 26 runs in 400 come out the other way, and that is a fact about ksh93 rather than about anything measured against it",
+		Why:            "ksh93 usually prints the last element first, which follows from its running that one in the current shell — but only usually: its two processes race to their trace points, 41 runs in 400 come out the other way. Nor is that ksh93's alone, which is what the row looked like until every column was counted rather than the loudest one: bash 5 reorders 5 times in 200, bash 3.2 once in 400 and zsh once in 200, so four of the six columns were seen to answer both ways and only dash held still. A pipeline's elements are separate processes and nothing sequences their trace points, so the order is the scheduler's and not the shell's — a fact about how the trace is emitted rather than about anything measured against it",
 	},
 	{
 		ID: "nounset/unset-variable-is-an-error", Category: "shell options",
@@ -2110,6 +2120,11 @@ var Corpus = []Case{
 		Why:     "one shell carries a function to its children and the other three have no way to: there is nothing but a string in an environment, so the source goes in and is parsed again at the other end. The count rather than the text, because what the entry holds is a shell's own spelling of a body",
 	},
 	{
+		ID: "export/the-n-option-takes-the-attribute-off", Category: "builtins",
+		Snippet: `V=1; export V; export -n V; echo "st=$?"; env | grep -c "^V="; echo alive`,
+		Why:     "the letter itself is the question, not what it does: bash has `-n` and the other three refuse it as an option, in three different ways and two of them fatally. Left out of #459 deliberately, because that change was about the export attribute and this row would have been recording an option-surface gap instead — which it now is, on purpose. Read through a real child, since what `-n` buys is that the name stays set in the shell and stops reaching one",
+	},
+	{
 		ID: "export/a-name-that-is-not-a-function", Category: "builtins",
 		Snippet: `export -f nope; echo "st=$?"`,
 		Why:     "a name that is not a function now will not become one by being exported. The shells that have the option refuse it and the ones that do not read `-f` as something else entirely, which is the more interesting half",
@@ -2293,6 +2308,11 @@ var Corpus = []Case{
 		ID: "param/a-substring-length-that-will-not-evaluate", Category: "parameter expansion",
 		Snippet: `x=abcdef; echo "[${x:2:1+}]"; echo after`,
 		Why:     "the length rather than the offset, which is what separates the two namings: the shell that blames an offset along with the rest of the range has nothing after a length and names it alone. Extending the text before *evaluating* it rather than only before reporting it invented a second failure, so the pair is what pins that the extension is a wording and not a reading",
+	},
+	{
+		ID: "param/a-substring-length-with-an-operand-it-found", Category: "parameter expansion",
+		Snippet: `x=abcdef; echo "[${x:2:%}]"; echo after`,
+		Why:     "the found-an-operand wording reached through a range rather than through `$(( ))`, which is where the two are held together: the shell that blames an offset along with the rest of the range also *reads* the rest of the range, so `${x:1+:2}` is its found case where `${x:1+}` is its ran-out one. A length has nothing after it and is the plain case in every column",
 	},
 	{
 		ID: "param/a-substring-offset-on-a-subscripted-parameter", Category: "parameter expansion",
@@ -3491,6 +3511,26 @@ echo unreachable`,
 		ID: "arith/a-name-shaped-value-is-chased", Category: "arithmetic",
 		Snippet: `a=b; b=3; echo $((a)); echo "st=$?"`,
 		Why:     "bash, ksh93 and zsh resolve a value that names another variable until it is a number; dash calls b an illegal number and stops",
+	},
+	{
+		ID: "arith/an-operand-the-expression-ran-out-of", SyntaxError: true, Category: "arithmetic",
+		Snippet: `echo "[$((1+))]"; echo "st=$?"`,
+		Why:     "an operand was wanted and the text ended, which two of the panel word apart from an operand that was wanted and found: ksh93 says more tokens expected and zsh names the end of the string. The pair with `arith/an-operand-the-expression-found` is the whole of it — either row alone passes under one wording for both, which is what let the end-of-input sentence stand for every operand failure in two dialects",
+	},
+	{
+		ID: "arith/an-operand-the-expression-found", SyntaxError: true, Category: "arithmetic",
+		Snippet: `echo "[$((%))]"; echo "st=$?"`,
+		Why:     "the other half: a token is there and it cannot begin a value. ksh93 drops to its bare arithmetic syntax error and zsh names the text — ``operand expected at `%'`` — where both said the expression had run out. bash words the two identically, which is why the bash column cannot see this at all and why the failure survived every conformance read",
+	},
+	{
+		ID: "arith/an-operand-found-after-an-operator", SyntaxError: true, Category: "arithmetic",
+		Snippet: `echo "[$((1+&2))]"; echo "st=$?"`,
+		Why:     "the found case reached mid-expression rather than at its start, and the text named runs to the end of the expression rather than being the one refused byte — `&2`, which is what the two shells that name anything name. It also says the distinction is not about where in the expression the failure is: the same operator wanting the same operand is worded one way here and the other way in `arith/an-operand-the-expression-ran-out-of`",
+	},
+	{
+		ID: "arith/an-operand-a-lexer-refuses-outright", SyntaxError: true, Category: "arithmetic",
+		Snippet: `echo "[$((@))]"; echo "st=$?"`,
+		Why:     "a byte that is not part of any arithmetic token, which zsh alone words a third way — `illegal character: @` rather than the operand sentence it gives `%`. The row is recorded rather than reproduced: the third wording turns on where in the expression the byte stands as well as on which byte it is, since `$((1+@))` gets the operand sentence and `$((1 @))` and `$((@))` do not, and that is a lexer's table rather than a grammar rule. bash, ksh93 and dash word it exactly as they word `%`, so three of the four columns pass",
 	},
 	{
 		ID: "arith/the-error-names-what-was-consumed", Category: "arithmetic",

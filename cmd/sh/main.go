@@ -27,6 +27,7 @@
 //	sh -deny /etc script.sh      # refuse every action at or under /etc
 //	sh -policy p.policy script.sh  # run it under a declarative policy
 //	sh -audit log.jsonl script.sh  # record every action as JSON, one per line
+//	sh -acp                        # serve the Agent Client Protocol on stdio
 //
 // Everything a shell reads at invocation — `-c`, a script path and its
 // positional parameters, `-s`, a lone `-`, set options like `-e` — is read
@@ -114,6 +115,22 @@ func run(argv []string, stdout, stderr io.Writer) int {
 		// A policy that will not load is not a shell that runs unsandboxed.
 		return fail(stderr, err)
 	}
+	if own.acp {
+		// Not a shell invocation at all: the process becomes an Agent Client
+		// Protocol server on its own standard input and output, and the
+		// shells it runs are sessions a client asks for. Reached before the
+		// front end, because there is no argument vector for it to read —
+		// everything about a session arrives as a message.
+		//
+		// The seams are already installed, which is the point of reaching it
+		// here rather than earlier: a policy handed to `-acp` governs every
+		// session the client opens, exactly as it governs a script.
+		code := serveACP(sh, rest)
+		if closer != nil {
+			_ = closer.Close()
+		}
+		return code
+	}
 	if own.tokens || own.parse {
 		dump := dumpTree
 		if own.tokens {
@@ -152,6 +169,7 @@ type ownFlags struct {
 	deny          []string
 	policy        string
 	audit         string
+	acp           bool
 }
 
 // readOwnFlags strips this binary's flags from the front of the line,
@@ -187,6 +205,8 @@ func readOwnFlags(args []string) (own ownFlags, rest []string, err error) {
 			own.dialect = val
 		case "trace-events":
 			own.traceEvents = true
+		case "acp":
+			own.acp = true
 		case "deny":
 			if !hasVal {
 				if i+1 >= len(args) {

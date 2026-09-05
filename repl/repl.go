@@ -57,6 +57,17 @@ type Shell struct {
 	// zero value draws nothing of its own.
 	Editor EditorStyle
 
+	// KeyBindings is what a person has rebound, as a table from the bytes a
+	// key sends to the action it should perform. Nil — and an empty table —
+	// is a session where every key does what the editor does by default,
+	// which is what a caller without a `bindkey` gets.
+	//
+	// A function rather than a value because it is asked per keystroke: the
+	// command that changes it is one a person runs at the prompt, and a value
+	// read once at the start of a session would take effect on the next
+	// shell. See bindings.go for what the editor does with it.
+	KeyBindings func() map[string]Widget
+
 	// History is how this dialect draws a search of the session's history and
 	// what it declines to put in it. The zero value searches in the
 	// substrate's own wording and filters nothing.
@@ -799,6 +810,8 @@ func (s Shell) newEditor() *editor {
 		undoPerKeystroke:     s.Editor.UndoTakesBackOneKeystrokeAtATime,
 		undoRestoresCursor:   s.Editor.UndoRestoresTheCursorToWhereItWas,
 		lastArgStaysOnOldest: s.Editor.LastArgumentStaysOnTheOldestLine,
+		// And what a person rebound, asked fresh for every key.
+		bindings: s.KeyBindings,
 		// The width comes from the input, which is the terminal; the output
 		// may be a file the session was started with, and its size is not the
 		// screen's.

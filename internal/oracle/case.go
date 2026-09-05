@@ -6568,6 +6568,62 @@ exit 7`,
 		Snippet: `whence; echo "st=$?"`,
 		Why:     "the two shells with the builtin part company over an empty operand list: zsh says nothing and reports 1, ksh93 prints its usage line and reports 2. The quiet one is the trap — a script testing the status sees a plain miss",
 	},
+	// --- zsh's zstyle and bindkey (#840). Both are this shell's alone, and
+	// the other five shells' command-not-found answers are the evidence of
+	// that. What is recorded here is the part a real rc file depends on: that
+	// a style set for a completion system survives being set, that the order
+	// styles come back in is the order a lookup reads them in, and that a key
+	// bound to a widget the shell has not got is accepted rather than refused.
+	{
+		ID: "zstyle/stores-and-lists-what-it-is-given", Category: "builtins",
+		Snippet: `zstyle ':completion:*' verbose yes; echo "st=$?"; zstyle -L`,
+		Why:     "the honest minimum an rc file needs: zsh takes the style, reports 0 and says it back as the command that would set it. Everyone else has no zstyle at all, which is why a config's first twenty lines die outside zsh",
+	},
+	{
+		ID: "zstyle/more-components-sort-first", Category: "builtins",
+		Snippet: `zstyle ':q:*' v 2; zstyle ':m:n:*' v 3; zstyle ':a:b:c:d:*' v 1; zstyle -L`,
+		Why:     "the listing's primary key, and it is not insertion order: the four-colon pattern comes out first though it was set last. This is the same order a lookup walks, so it is what `the most specific pattern wins` actually means",
+	},
+	{
+		ID: "zstyle/an-exact-pattern-beats-a-wildcard-one", Category: "builtins",
+		Snippet: `zstyle 'a*b' v 1; zstyle 'a?b' v 2; zstyle 'ab' v 3; zstyle -L`,
+		Why:     "the tie-break within one component count: the pattern with no metacharacter sorts first though it was set last, while the two that have one keep the order they were set in",
+	},
+	{
+		ID: "zstyle/the-most-specific-pattern-is-the-one-read", Category: "builtins",
+		Snippet: `zstyle ':a:b:*' v specific; zstyle ':a:*' v general; zstyle -s ':a:b:c' v out; echo "[$out]"`,
+		Why:     "the ordering seen from the reading end, set in the order that would fool a first-match-wins implementation: the longer context wins whichever was set first",
+	},
+	{
+		ID: "zstyle/the-test-form-has-three-statuses", Category: "builtins",
+		Snippet: `zstyle ':a:*' v no; zstyle -t ':a:b' v; echo "false=$?"; zstyle -t ':zz' v; echo "unset=$?"`,
+		Why:     "`-t` reports 1 for a style set to something false and 2 for one nobody set, which is the distinction that lets a reader tell `off` from `unsaid` — a two-status test would collapse them",
+	},
+	{
+		ID: "zstyle/refuses-a-bad-option-its-own-way", Category: "builtins",
+		Snippet: `zstyle -z ':a' v; echo "st=$?"`,
+		Why:     "`invalid option: -z` at 1 — and not `bad option`, which is what bindkey says for the same mistake in the same shell. The two builtins' wordings are separate facts",
+	},
+	{
+		ID: "bindkey/an-unknown-widget-is-accepted-in-silence", Category: "builtins",
+		Snippet: `bindkey '^X^T' no-such-widget; echo "st=$?"; bindkey '^X^T'`,
+		Why:     "the finding that makes a real config work: zsh stores a binding to a widget it has never heard of, reports 0, says nothing, and reads it back. A shell that refused would be stricter than zsh and would fail every config using a plugin's widget",
+	},
+	{
+		ID: "bindkey/says-one-binding-back", Category: "builtins",
+		Snippet: `bindkey '^A'; bindkey -r '^A'; bindkey '^A'; echo "st=$?"`,
+		Why:     "asking about a key is a question with an answer rather than a lookup that can fail: a key nobody has bound is `undefined-key` at status 0, and that is also what removing one leaves behind",
+	},
+	{
+		ID: "bindkey/refuses-a-bad-option-its-own-way", Category: "builtins",
+		Snippet: `bindkey -q; echo "st=$?"; bindkey -r; echo "short=$?"`,
+		Why:     "`bad option: -q` where zstyle says `invalid option`, and a usage complaint that names the letter that was short — `not enough arguments for -r` — where zstyle's names nothing",
+	},
+	{
+		ID: "bindkey/names-the-keymaps", Category: "builtins",
+		Snippet: `bindkey -l; echo "st=$?"; bindkey -M nosuchmap '^A' beginning-of-line; echo "bad=$?"`,
+		Why:     "the keymap list a config's `bindkey -M` has to name one of, and what a name outside it costs: `no such keymap` with zsh's own backtick-and-quote spelling, at 1",
+	},
 	{
 		ID: "print/joins-expands-and-ends-the-line", Category: "builtins",
 		Snippet: `print hello world; print -n ab; print cd`,

@@ -107,6 +107,12 @@ type editor struct {
 	listQueryEchoes bool
 	listQueryStrict bool
 
+	// bindings is what a person rebound, asked fresh for every key because
+	// `bindkey` is a command run at the prompt as well as in an rc file. Nil,
+	// or an empty table, is a session where nothing was rebound and every key
+	// reaches the dispatch below. See bindings.go.
+	bindings func() map[string]Widget
+
 	// width is how many columns the terminal has, asked each time it is
 	// needed; nil, or an answer of 0, means it will not say. row is which
 	// screen row the last draw left the cursor on, counted from the row the
@@ -159,6 +165,19 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		// inserting a second copy.
 		e.typedBefore, e.typing = e.typing, false
 		e.lastArg.walkingBefore, e.lastArg.walking = e.lastArg.walking, false
+		// What a person rebound comes first, and only for a byte that starts
+		// something they bound: a session with no bindings reaches the switch
+		// having asked one question of an empty map. It is after the bookkeeping
+		// above and not before it, because those two lines are about the
+		// keystroke that came *last* and hold whatever this one turns out to be.
+		// See bindings.go.
+		switch w, claimed, got := e.matchBinding(buf[0]); {
+		case got == keyAbandoned:
+			return e.abandon(prompt)
+		case claimed:
+			e.runWidget(w, prompt)
+			continue
+		}
 		switch c := buf[0]; c {
 		case ctrlC:
 			return e.abandon(prompt)

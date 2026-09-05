@@ -1,0 +1,582 @@
+// SPDX-FileCopyrightText: 2026 Blair Hamilton
+// SPDX-License-Identifier: Apache-2.0
+
+package zsh
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"strconv"
+	"strings"
+
+	"github.com/blairham/sh/interp"
+	"github.com/blairham/sh/repl"
+)
+
+// `bindkey` maps a key sequence onto an editor widget.
+//
+// Measured 2026-09-05 against zsh 5.9.2, both with `-c` and one keystroke at a
+// time under a pseudo-terminal, with a scratch HOME and no startup files.
+//
+// **The finding that shaped this is that an unknown widget is not an error.**
+// `bindkey '^X^T' no-such-widget` is status 0 and silence, and the binding is
+// stored: `bindkey '^X^T'` says `no-such-widget` back. That holds under a
+// terminal with the editor loaded as much as under `-c`. So the interesting
+// question — what to say to a name we do not have — turns out to have zsh's
+// answer already: say nothing, keep it, and let the key do nothing. Which is
+// exactly what a real rc file needs, because the two `bindkey` lines in the
+// one that opened #840 name `history-substring-search-up` and `-down`, widgets
+// belonging to a plugin that neither shell has without it.
+//
+// A name this editor *does* have is bound for real. `bindkey '^X^A'
+// beginning-of-line` moves the cursor when the key is pressed, through the
+// override layer in repl — see repl/bindings.go for why it is an override
+// layer and not a keymap.
+//
+// What is deliberately not built, and why each is a refusal rather than a
+// guess:
+//
+//   - **The default keymaps are this editor's keys, not zsh's 117.** Listing
+//     `vi-match-bracket` for `^X^B` because zsh does would be naming a widget
+//     nothing here performs, and `bindkey` is a question a person asks to find
+//     out what a key does. What it answers is what this editor will actually
+//     do. The same rule `whence -m` follows: an answer that cannot be
+//     generated is refused rather than invented.
+//   - **`-p`, `-R`, `-N`, `-A`, `-D` and `-d`** — prefix bindings, ranges of
+//     keys, and making, aliasing or destroying a keymap — are refused as not
+//     implemented, in the wording `whence` uses for the same case, so a script
+//     can tell a shell that lacks something from a typo.
+
+// bindkeyStore is the table of what a person rebound, and bindkeyMap is which
+// keymap is current.
+//
+// In the Runner's tables under names no script can reach, the way `emulate`
+// keeps its mode — which is also what gives a subshell its own copy, measured:
+// `(bindkey -r '^A')` leaves the parent's bindings alone.
+const (
+	bindkeyStore = ".zsh.bindkey"
+	bindkeyMap   = ".zsh.keymap"
+)
+
+// keymapNames are the keymaps this shell has, in the order `bindkey -l`
+// prints them, which is alphabetical with the dot-prefixed one first.
+//
+// All nine are named because `bindkey -M vicmd …` in an rc file must not fail
+// for a keymap this shell plainly has; what differs is that only the two the
+// editor can be driven from carry bindings.
+var keymapNames = []string{".safe", "command", "emacs", "isearch", "main", "vicmd", "viins", "viopp", "visual"}
+
+// bindkeyWidgets is this shell's name for each thing the editor does.
+//
+// The dialect's half of the split repl/widgets.go describes: the substrate
+// names the actions and this names them the way this shell does. The other
+// shell with an editor calls four of these something else — `previous-history`
+// where this one says `up-line-or-history` — which is the reason the mapping
+// is here rather than there.
+var bindkeyWidgets = map[string]repl.Widget{
+	"beginning-of-line":                   repl.WidgetBeginningOfLine,
+	"vi-beginning-of-line":                repl.WidgetBeginningOfLine,
+	"end-of-line":                         repl.WidgetEndOfLine,
+	"vi-end-of-line":                      repl.WidgetEndOfLine,
+	"backward-char":                       repl.WidgetBackwardChar,
+	"vi-backward-char":                    repl.WidgetBackwardChar,
+	"forward-char":                        repl.WidgetForwardChar,
+	"vi-forward-char":                     repl.WidgetForwardChar,
+	"backward-word":                       repl.WidgetBackwardWord,
+	"vi-backward-word":                    repl.WidgetBackwardWord,
+	"forward-word":                        repl.WidgetForwardWord,
+	"vi-forward-word":                     repl.WidgetForwardWord,
+	"kill-line":                           repl.WidgetKillLine,
+	"vi-kill-eol":                         repl.WidgetKillLine,
+	"kill-whole-line":                     repl.WidgetKillWholeLine,
+	"backward-kill-line":                  repl.WidgetKillWholeLine,
+	"backward-kill-word":                  repl.WidgetKillWordBefore,
+	"vi-backward-kill-word":               repl.WidgetKillWordBefore,
+	"kill-word":                           repl.WidgetKillWordAfter,
+	"yank":                                repl.WidgetYank,
+	"transpose-chars":                     repl.WidgetTransposeChars,
+	"up-line-or-history":                  repl.WidgetPreviousHistory,
+	"up-history":                          repl.WidgetPreviousHistory,
+	"down-line-or-history":                repl.WidgetNextHistory,
+	"down-history":                        repl.WidgetNextHistory,
+	"history-incremental-search-backward": repl.WidgetSearchHistoryBackward,
+	"clear-screen":                        repl.WidgetClearScreen,
+	"delete-char":                         repl.WidgetDeleteChar,
+	"vi-delete-char":                      repl.WidgetDeleteChar,
+	"backward-delete-char":                repl.WidgetBackwardDeleteChar,
+	"vi-backward-delete-char":             repl.WidgetBackwardDeleteChar,
+	"expand-or-complete":                  repl.WidgetComplete,
+	"complete-word":                       repl.WidgetComplete,
+	"undo":                                repl.WidgetUndo,
+	"vi-undo-change":                      repl.WidgetUndo,
+	"insert-last-word":                    repl.WidgetInsertLastWord,
+	// The key that means "this key does nothing", which is what `-r` leaves
+	// behind and what `bindkey` prints for a key nobody bound.
+	undefinedKey: repl.WidgetNone,
+}
+
+// undefinedKey is what this shell calls a key with nothing on it.
+const undefinedKey = "undefined-key"
+
+// defaultBindings is what each keymap does before anyone changes it: the keys
+// this editor acts on, under this shell's names for them.
+//
+// Not zsh's whole keymap. See the file comment — the two `main` maps differ
+// only in that `viins` leaves the letters to insert themselves, which they do
+// here in either case because this editor has no command mode.
+var defaultBindings = map[string]string{
+	"\x01":     "beginning-of-line",
+	"\x05":     "end-of-line",
+	"\x02":     "backward-char",
+	"\x06":     "forward-char",
+	"\x0b":     "kill-line",
+	"\x15":     "kill-whole-line",
+	"\x17":     "backward-kill-word",
+	"\x19":     "yank",
+	"\x14":     "transpose-chars",
+	"\x0c":     "clear-screen",
+	"\x10":     "up-line-or-history",
+	"\x0e":     "down-line-or-history",
+	"\x12":     "history-incremental-search-backward",
+	"\x04":     "delete-char-or-list",
+	"\x08":     "backward-delete-char",
+	"\x7f":     "backward-delete-char",
+	"\x09":     "expand-or-complete",
+	"\x0a":     "accept-line",
+	"\x0d":     "accept-line",
+	"\x1bb":    "backward-word",
+	"\x1bB":    "backward-word",
+	"\x1bf":    "forward-word",
+	"\x1bF":    "forward-word",
+	"\x1bd":    "kill-word",
+	"\x1bD":    "kill-word",
+	"\x1b\x7f": "backward-kill-word",
+	"\x1b[A":   "up-line-or-history",
+	"\x1b[B":   "down-line-or-history",
+	"\x1b[C":   "forward-char",
+	"\x1b[D":   "backward-char",
+	"\x1bOA":   "up-line-or-history",
+	"\x1bOB":   "down-line-or-history",
+	"\x1bOC":   "forward-char",
+	"\x1bOD":   "backward-char",
+	"\x1b[H":   "beginning-of-line",
+	"\x1b[F":   "end-of-line",
+	"\x1b[3~":  "delete-char",
+	"\x1f":     "undo",
+	"\x18\x15": "undo",
+	"\x1b.":    "insert-last-word",
+	"\x1b_":    "insert-last-word",
+}
+
+// registerBindkey installs the builtin.
+func registerBindkey(r *interp.Runner) {
+	r.Register("bindkey", bindkeyBuiltin)
+}
+
+// KeyBindings is what a person has rebound in this session, as the editor's
+// own vocabulary.
+//
+// The dialect's answer to driver.Shell.KeyBindings, and it reports only the
+// *changes*: a key nobody mentioned is absent, and reaches the editor's own
+// dispatch. A key bound to a widget this editor has not got is present and
+// maps to WidgetNone, which is what makes it do nothing rather than fall
+// through to what it used to do — measured, that is zsh's answer too, since it
+// stores the unknown name and the key stops working.
+func KeyBindings(r *interp.Runner) map[string]repl.Widget {
+	out := map[string]repl.Widget{}
+	for seq, widget := range readBindings(r) {
+		if def, standard := defaultBindings[seq]; standard && def == widget {
+			continue
+		}
+		out[seq] = bindkeyWidgets[widget]
+	}
+	return out
+}
+
+// readBindings is the current keymap's table: the defaults with whatever was
+// changed laid over them.
+func readBindings(r *interp.Runner) map[string]string {
+	out := map[string]string{}
+	for seq, w := range defaultBindings {
+		out[seq] = w
+	}
+	flat, _ := r.GetArray(bindkeyStore)
+	for i := 0; i+3 <= len(flat); i += 3 {
+		if flat[i] != currentKeymap(r) {
+			continue
+		}
+		out[flat[i+1]] = flat[i+2]
+	}
+	return out
+}
+
+// changeBinding records one change against the current keymap, replacing any
+// earlier one for the same sequence.
+func changeBinding(r *interp.Runner, seq, widget string) {
+	keymap := currentKeymap(r)
+	flat, _ := r.GetArray(bindkeyStore)
+	for i := 0; i+3 <= len(flat); i += 3 {
+		if flat[i] == keymap && flat[i+1] == seq {
+			flat[i+2] = widget
+			r.SetArray(bindkeyStore, flat)
+			return
+		}
+	}
+	r.SetArray(bindkeyStore, append(flat, keymap, seq, widget))
+}
+
+// currentKeymap is which keymap `bindkey` acts on without `-M`. `main` is an
+// alias for whichever of emacs and viins was last selected, and this holds the
+// resolved name.
+func currentKeymap(r *interp.Runner) string {
+	if m, ok := r.GetVar(bindkeyMap); ok && m != "" {
+		return m
+	}
+	return "emacs"
+}
+
+// bindkeyLetters are the option letters this builtin answers to.
+const bindkeyLetters = "lLeavrsM"
+
+// bindkeyUnimplemented are the letters this shell has that this one does not,
+// refused as missing rather than as unknown — the same split `whence` makes,
+// so a script can tell a gap from a typo.
+const bindkeyUnimplemented = "pRNADd"
+
+func bindkeyBuiltin(r *interp.Runner, _ context.Context, args []string) int {
+	opts, rest, code := bindkeyOptions(r, args)
+	if code != 0 {
+		return code
+	}
+	if opts.list {
+		for _, name := range keymapNames {
+			_, _ = fmt.Fprintf(r.Out(), "%s\n", name)
+		}
+		return 0
+	}
+	if opts.selected != "" {
+		r.SetVar(bindkeyMap, opts.selected)
+		if len(rest) == 0 && !opts.commands && !opts.remove && !opts.strings && opts.keymap == "" {
+			// Measured: `bindkey -v` and `bindkey -e` alone print nothing.
+			// Selecting a keymap is not a request to see it, where `-M` and
+			// `-a` with nothing after them are.
+			return 0
+		}
+	}
+	// `-M` and `-a` name the keymap this one command acts on without making it
+	// current — measured, `bindkey -a` lists vicmd and leaves `bindkey '^A'`
+	// answering from emacs afterwards.
+	saved := currentKeymap(r)
+	if opts.keymap != "" {
+		r.SetVar(bindkeyMap, opts.keymap)
+		defer r.SetVar(bindkeyMap, saved)
+	}
+	switch {
+	case opts.remove:
+		if len(rest) == 0 {
+			return bindkeyShort(r, "-r")
+		}
+		for _, seq := range rest {
+			changeBinding(r, decodeKeySequence(seq), undefinedKey)
+		}
+		return 0
+	case opts.strings:
+		if len(rest) < 2 {
+			return bindkeyShort(r, "-s")
+		}
+		return bindPairs(r, rest, true)
+	case len(rest) == 0:
+		listBindings(r, opts.commands)
+		return 0
+	case len(rest) == 1:
+		showBinding(r, rest[0], opts.commands)
+		return 0
+	default:
+		return bindPairs(r, rest, false)
+	}
+}
+
+// bindkeyOpts is what the letters asked for.
+type bindkeyOpts struct {
+	list     bool   // -l: name the keymaps
+	commands bool   // -L: list as the commands that would set it
+	remove   bool   // -r: unbind
+	strings  bool   // -s: bind to text rather than to a widget
+	keymap   string // -M or -a: the keymap this command acts on
+	selected string // -e or -v: the keymap to make current
+}
+
+// bindkeyOptions reads the leading option words.
+//
+// An unknown letter is `bad option: -q` and 1 — this builtin's wording, and
+// not `zstyle`'s `invalid option`, measured in both. Nothing is done after it.
+func bindkeyOptions(r *interp.Runner, args []string) (opts bindkeyOpts, rest []string, code int) {
+	rest = args
+	for len(rest) > 0 && strings.HasPrefix(rest[0], "-") && len(rest[0]) > 1 {
+		word := rest[0]
+		rest = rest[1:]
+		if word == "--" {
+			break
+		}
+		for i := 1; i < len(word); i++ {
+			letter := word[i]
+			switch {
+			case letter == 'M':
+				// The keymap is the next word, whether it is joined on or not.
+				name := word[i+1:]
+				if name == "" {
+					if len(rest) == 0 {
+						return opts, nil, bindkeyShort(r, "-M")
+					}
+					name, rest = rest[0], rest[1:]
+				}
+				if !containsWord(keymapNames, name) {
+					r.Diagnosef("no such keymap `%s'\n", name)
+					return opts, nil, 1
+				}
+				opts.keymap = name
+				i = len(word)
+			case strings.IndexByte(bindkeyLetters, letter) >= 0:
+				setBindkeyLetter(&opts, letter)
+			case strings.IndexByte(bindkeyUnimplemented, letter) >= 0:
+				r.Diagnosef("-%c is not implemented yet\n", letter)
+				return opts, nil, 1
+			default:
+				r.Diagnosef("bad option: -%c\n", letter)
+				return opts, nil, 1
+			}
+		}
+	}
+	return opts, rest, 0
+}
+
+func setBindkeyLetter(opts *bindkeyOpts, letter byte) {
+	switch letter {
+	case 'l':
+		opts.list = true
+	case 'L':
+		opts.commands = true
+	case 'r':
+		opts.remove = true
+	case 's':
+		opts.strings = true
+	case 'a':
+		opts.keymap = "vicmd"
+	case 'e':
+		opts.selected = "emacs"
+	case 'v':
+		opts.selected = "viins"
+	}
+}
+
+// bindkeyShort is the usage complaint, which names the letter that was short —
+// `not enough arguments for -r`, measured, where `zstyle` names nothing.
+func bindkeyShort(r *interp.Runner, flag string) int {
+	r.Diagnosef("not enough arguments for %s\n", flag)
+	return 1
+}
+
+// bindPairs binds each sequence-and-target pair. An odd number of words is
+// tolerated the way this shell tolerates it: the last one alone is ignored.
+func bindPairs(r *interp.Runner, words []string, text bool) int {
+	for i := 0; i+1 < len(words); i += 2 {
+		target := words[i+1]
+		if text {
+			// A string binding is kept as the text it types, quoted the way
+			// the listing prints it, which is how `bindkey '^X'` tells the two
+			// kinds apart when it says one back.
+			target = quoteKeyString(target)
+		}
+		changeBinding(r, decodeKeySequence(words[i]), target)
+	}
+	return 0
+}
+
+// listBindings is the whole keymap, sorted by the bytes each key sends —
+// measured, which is why `^_` comes before a space and `^?` after a tilde.
+func listBindings(r *interp.Runner, commands bool) {
+	table := readBindings(r)
+	seqs := make([]string, 0, len(table))
+	for seq := range table {
+		if table[seq] != undefinedKey {
+			seqs = append(seqs, seq)
+		}
+	}
+	sort.Strings(seqs)
+	for _, seq := range seqs {
+		writeBinding(r, seq, table[seq], commands)
+	}
+}
+
+// showBinding answers for one key. A key nobody bound is `undefined-key` and
+// still status 0 — measured; asking about an unbound key is a question with an
+// answer, not a failure.
+func showBinding(r *interp.Runner, spelled string, commands bool) {
+	seq := decodeKeySequence(spelled)
+	widget, bound := readBindings(r)[seq]
+	if !bound {
+		widget = undefinedKey
+	}
+	writeBinding(r, seq, widget, commands)
+}
+
+func writeBinding(r *interp.Runner, seq, widget string, commands bool) {
+	prefix := ""
+	if commands {
+		prefix = "bindkey "
+	}
+	_, _ = fmt.Fprintf(r.Out(), "%s\"%s\" %s\n", prefix, encodeKeySequence(seq), widget)
+}
+
+// decodeKeySequence reads the notation a key sequence is written in.
+//
+// Measured by binding each form and reading it back: `\C-x` and `^X` are the
+// same byte, `^ ` is NUL because the caret clears the top three bits of
+// whatever follows, `\e` and `\E` are escape, `\t` and the rest are C's
+// escapes, `\x41` is hexadecimal and `\100` is octal, and `\M-q` sets the top
+// bit rather than prefixing an escape — which is why it prints back as `\M-q`
+// and not as `^[q`.
+func decodeKeySequence(s string) string {
+	var out strings.Builder
+	for i := 0; i < len(s); {
+		switch c := s[i]; {
+		case c == '^' && i+1 < len(s):
+			out.WriteByte(caretByte(s[i+1]))
+			i += 2
+		case c == '\\' && i+1 < len(s):
+			b, width := decodeKeyEscape(s[i+1:])
+			out.WriteByte(b)
+			i += 1 + width
+		default:
+			out.WriteByte(c)
+			i++
+		}
+	}
+	return out.String()
+}
+
+// caretByte is the byte a caret and one character name. The caret clears the
+// top three bits, which is why `^ ` is NUL — with the one exception both
+// spellings of it agree on: `^?` and `\C-?` are DEL, not the 0x1f that
+// clearing the bits of `?` would give.
+func caretByte(c byte) byte {
+	if c == '?' {
+		return 0x7f
+	}
+	return c & 0x1f
+}
+
+// decodeKeyEscape reads one backslash escape, having been given what follows
+// the backslash, and answers with the byte and how much of the text it used.
+func decodeKeyEscape(s string) (byte, int) {
+	switch c := s[0]; c {
+	case 'a':
+		return 0x07, 1
+	case 'b':
+		return 0x08, 1
+	case 'e', 'E':
+		return 0x1b, 1
+	case 'f':
+		return 0x0c, 1
+	case 'n':
+		return 0x0a, 1
+	case 'r':
+		return 0x0d, 1
+	case 't':
+		return 0x09, 1
+	case 'v':
+		return 0x0b, 1
+	case 'C':
+		if len(s) > 2 && s[1] == '-' {
+			return caretByte(s[2]), 3
+		}
+		return c, 1
+	case 'M':
+		// `\M-x` and `\Mx` alike, measured: the dash is optional.
+		if len(s) > 2 && s[1] == '-' {
+			return s[2] | 0x80, 3
+		}
+		if len(s) > 1 {
+			return s[1] | 0x80, 2
+		}
+		return c, 1
+	case 'x', 'X':
+		return decodeKeyNumber(s[1:], 16, 2)
+	case '0', '1', '2', '3', '4', '5', '6', '7':
+		return decodeKeyNumber(s, 8, 3)
+	default:
+		return c, 1
+	}
+}
+
+// decodeKeyNumber reads up to most digits in the given base and answers with
+// the byte and how much of the text it used, the escape letter included where
+// there was one.
+func decodeKeyNumber(s string, base, most int) (byte, int) {
+	used := 0
+	for used < most && used < len(s) && isDigitInBase(s[used], base) {
+		used++
+	}
+	if used == 0 {
+		return s[0], 1
+	}
+	n, err := strconv.ParseUint(s[:used], base, 16)
+	if err != nil {
+		return s[0], 1
+	}
+	width := used
+	if base == 16 {
+		// The `x` itself, which the octal form does not have.
+		width++
+	}
+	return byte(n), width
+}
+
+func isDigitInBase(c byte, base int) bool {
+	switch {
+	case c >= '0' && c <= '7':
+		return true
+	case base == 8:
+		return false
+	case c == '8' || c == '9':
+		return true
+	case base == 16:
+		return (c|0x20) >= 'a' && (c|0x20) <= 'f'
+	default:
+		return false
+	}
+}
+
+// encodeKeySequence writes a sequence back the way this shell prints one:
+// control characters as a caret, the high half as `\M-`, and the four
+// characters that would end or reopen the double quotes escaped.
+func encodeKeySequence(s string) string {
+	var out strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 0x80 {
+			out.WriteString(`\M-`)
+			c &= 0x7f
+		}
+		switch {
+		case c == 0x7f:
+			out.WriteString("^?")
+		case c < 0x20:
+			out.WriteByte('^')
+			out.WriteByte(c + '@')
+		case c == '"' || c == '\\' || c == '$' || c == '`':
+			out.WriteByte('\\')
+			out.WriteByte(c)
+		default:
+			out.WriteByte(c)
+		}
+	}
+	return out.String()
+}
+
+// quoteKeyString spells the text a `-s` binding types, which the listing shows
+// in quotes of its own where a widget name would go.
+func quoteKeyString(s string) string {
+	return `"` + encodeKeySequence(s) + `"`
+}

@@ -32,6 +32,7 @@ func shell() driver.Shell {
 		Register:     zsh.Apply,
 		PromptStyle:  zsh.PromptStyle(),
 		EditorStyle:  zsh.EditorStyle(),
+		KeyBindings:  zsh.KeyBindings,
 		HistoryStyle: zsh.HistoryStyle(),
 	}
 }

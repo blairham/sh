@@ -84,6 +84,16 @@ type Shell struct {
 	// case now that cd, pwd and read live in the core.
 	Register func(*interp.Runner)
 
+	// KeyBindings is what a person has rebound in this session, read from the
+	// Runner because the command that changes it is a builtin and the Runner
+	// is where a builtin's state lives. Nil is a dialect with no way to
+	// rebind a key, which is three of the four.
+	//
+	// It takes the Runner rather than being a table because the table is
+	// *state*: it changes while the session runs, and a value collected here
+	// would be the one the shell started with.
+	KeyBindings func(*interp.Runner) map[string]repl.Widget
+
 	// Stdin is where the shell reads from: the lines a person types, and the
 	// program itself where the invocation named nothing to run. It has to be
 	// a terminal for the editor to work, and it is handed to the Runner, so

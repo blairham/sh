@@ -7902,6 +7902,182 @@
         "TimedOut": false
       }
     },
+    "bindkey/an-unknown-widget-is-accepted-in-silence": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: bindkey: command not found~\u003cshell\u003e: line 1: bindkey: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: bindkey: command not found~\u003cshell\u003e: line 1: bindkey: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: bindkey: command not found~\u003cshell\u003e: bindkey: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: bindkey: not found~\u003cshell\u003e: 1: bindkey: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: bindkey: not found~\u003cshell\u003e: bindkey: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~\"^X^T\" no-such-widget",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "bindkey/names-the-keymaps": {
+      "bash": {
+        "Stdout": "st=127~bad=127",
+        "Stderr": "\u003cshell\u003e: line 1: bindkey: command not found~\u003cshell\u003e: line 1: bindkey: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127~bad=127",
+        "Stderr": "\u003cshell\u003e: line 1: bindkey: command not found~\u003cshell\u003e: line 1: bindkey: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127~bad=127",
+        "Stderr": "\u003cshell\u003e: bindkey: command not found~\u003cshell\u003e: bindkey: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~bad=127",
+        "Stderr": "\u003cshell\u003e: 1: bindkey: not found~\u003cshell\u003e: 1: bindkey: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127~bad=127",
+        "Stderr": "\u003cshell\u003e: bindkey: not found~\u003cshell\u003e: bindkey: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": ".safe~command~emacs~isearch~main~vicmd~viins~viopp~visual~st=0~bad=1",
+        "Stderr": "\u003cshell\u003e:bindkey:1: no such keymap `nosuchmap'",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "bindkey/refuses-a-bad-option-its-own-way": {
+      "bash": {
+        "Stdout": "st=127~short=127",
+        "Stderr": "\u003cshell\u003e: line 1: bindkey: command not found~\u003cshell\u003e: line 1: bindkey: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127~short=127",
+        "Stderr": "\u003cshell\u003e: line 1: bindkey: command not found~\u003cshell\u003e: line 1: bindkey: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127~short=127",
+        "Stderr": "\u003cshell\u003e: bindkey: command not found~\u003cshell\u003e: bindkey: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~short=127",
+        "Stderr": "\u003cshell\u003e: 1: bindkey: not found~\u003cshell\u003e: 1: bindkey: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127~short=127",
+        "Stderr": "\u003cshell\u003e: bindkey: not found~\u003cshell\u003e: bindkey: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~short=1",
+        "Stderr": "\u003cshell\u003e:bindkey:1: bad option: -q~\u003cshell\u003e:bindkey:1: not enough arguments for -r",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "bindkey/says-one-binding-back": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: bindkey: command not found~\u003cshell\u003e: line 1: bindkey: command not found~\u003cshell\u003e: line 1: bindkey: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: bindkey: command not found~\u003cshell\u003e: line 1: bindkey: command not found~\u003cshell\u003e: line 1: bindkey: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: bindkey: command not found~\u003cshell\u003e: bindkey: command not found~\u003cshell\u003e: bindkey: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: bindkey: not found~\u003cshell\u003e: 1: bindkey: not found~\u003cshell\u003e: 1: bindkey: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: bindkey: not found~\u003cshell\u003e: bindkey: not found~\u003cshell\u003e: bindkey: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "\"^A\" beginning-of-line~\"^A\" undefined-key~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "builtin/an-option-it-does-have": {
       "bash": {
         "Stdout": "[unset]",
@@ -55813,6 +55989,270 @@
       "zsh": {
         "Stdout": "a b",
         "Stderr": "+\u003cshell\u003e:1\u003e echo a b",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zstyle/an-exact-pattern-beats-a-wildcard-one": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: zstyle: command not found~\u003cshell\u003e: zstyle: command not found~\u003cshell\u003e: zstyle: command not found~\u003cshell\u003e: zstyle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: zstyle: not found~\u003cshell\u003e: 1: zstyle: not found~\u003cshell\u003e: 1: zstyle: not found~\u003cshell\u003e: 1: zstyle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: zstyle: not found~\u003cshell\u003e: zstyle: not found~\u003cshell\u003e: zstyle: not found~\u003cshell\u003e: zstyle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "zstyle ab v 3~zstyle 'a*b' v 1~zstyle 'a?b' v 2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zstyle/more-components-sort-first": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: zstyle: command not found~\u003cshell\u003e: zstyle: command not found~\u003cshell\u003e: zstyle: command not found~\u003cshell\u003e: zstyle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: zstyle: not found~\u003cshell\u003e: 1: zstyle: not found~\u003cshell\u003e: 1: zstyle: not found~\u003cshell\u003e: 1: zstyle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: zstyle: not found~\u003cshell\u003e: zstyle: not found~\u003cshell\u003e: zstyle: not found~\u003cshell\u003e: zstyle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "zstyle ':a:b:c:d:*' v 1~zstyle ':m:n:*' v 3~zstyle ':q:*' v 2",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zstyle/refuses-a-bad-option-its-own-way": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zstyle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zstyle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zstyle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: zstyle: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zstyle: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:zstyle:1: invalid option: -z",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zstyle/stores-and-lists-what-it-is-given": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zstyle: command not found~\u003cshell\u003e: zstyle: command not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: zstyle: not found~\u003cshell\u003e: 1: zstyle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: zstyle: not found~\u003cshell\u003e: zstyle: not found",
+        "Status": 127,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0~zstyle ':completion:*' verbose yes",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zstyle/the-most-specific-pattern-is-the-one-read": {
+      "bash": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: zstyle: command not found~\u003cshell\u003e: zstyle: command not found~\u003cshell\u003e: zstyle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: 1: zstyle: not found~\u003cshell\u003e: 1: zstyle: not found~\u003cshell\u003e: 1: zstyle: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "[]",
+        "Stderr": "\u003cshell\u003e: zstyle: not found~\u003cshell\u003e: zstyle: not found~\u003cshell\u003e: zstyle: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "[specific]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "zstyle/the-test-form-has-three-statuses": {
+      "bash": {
+        "Stdout": "false=127~unset=127",
+        "Stderr": "\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "false=127~unset=127",
+        "Stderr": "\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found~\u003cshell\u003e: line 1: zstyle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "false=127~unset=127",
+        "Stderr": "\u003cshell\u003e: zstyle: command not found~\u003cshell\u003e: zstyle: command not found~\u003cshell\u003e: zstyle: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "false=127~unset=127",
+        "Stderr": "\u003cshell\u003e: 1: zstyle: not found~\u003cshell\u003e: 1: zstyle: not found~\u003cshell\u003e: 1: zstyle: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "false=127~unset=127",
+        "Stderr": "\u003cshell\u003e: zstyle: not found~\u003cshell\u003e: zstyle: not found~\u003cshell\u003e: zstyle: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "false=1~unset=2",
+        "Stderr": "",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

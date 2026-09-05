@@ -851,6 +851,12 @@ func Apply(r *interp.Runner) {
 	// `where`. Not ksh93's builtin under the same spelling — the stream, the
 	// statuses, the letters and every wording differ. See whence.go.
 	registerWhence(r)
+	// The styles database, which a real rc file fills in before it does
+	// anything else. See zstyle.go.
+	registerZstyle(r)
+	// And the line editor's key table, which a real rc file also reaches for.
+	// See bindkey.go.
+	registerBindkey(r)
 	// No `compgen` here; it is bash's alone.
 	r.Unregister("compgen")
 	r.Unregister("complete")

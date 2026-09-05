@@ -115,6 +115,18 @@ func (sh Shell) session(argv []string, in source) int {
 	return status
 }
 
+// keyBindings closes the dialect's answer over this run's Runner, or is nil
+// where the dialect has no way to rebind a key.
+//
+// A nil function rather than one returning an empty table, because repl tells
+// the two apart to skip the lookup entirely — see bindings.go.
+func (sh Shell) keyBindings(r *interp.Runner) func() map[string]repl.Widget {
+	if sh.KeyBindings == nil {
+		return nil
+	}
+	return func() map[string]repl.Widget { return sh.KeyBindings(r) }
+}
+
 // Interactively reports whether this shell should offer a prompt: nothing to
 // run was named, and the input is a terminal.
 //
@@ -176,7 +188,11 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		Style:   sh.PromptStyle,
 		Editor:  sh.EditorStyle,
 		History: sh.HistoryStyle,
-		Name:    name,
+		// Bound to *this* runner and read per keystroke, so a `bindkey` typed
+		// at the prompt takes effect on the next line rather than the next
+		// shell.
+		KeyBindings: sh.keyBindings(r),
+		Name:        name,
 		// The same policy and observer the Runner is given, because a
 		// session gated for what a script does and ungated for what the
 		// prompt does has a hole shaped exactly like `HISTFILE=/somewhere`.

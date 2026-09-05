@@ -789,10 +789,12 @@ func (r *Runner) builtinWriteStatus(name string, st int) int {
 		}
 		// Not a death, so the signal is answered here rather than left to the
 		// runtime's copy of it. A handler runs between commands and not at
-		// the write, so it is delivered rather than run — and only at the top
-		// level, because a handler an element set for itself is the subshell
-		// trap model's question and the *outer* shell's handler is nobody's.
-		r.brokenPipeAbsorbed(arranged == signalHandledBy && r.traps == nil)
+		// the write, so it is delivered rather than run — to whichever shell
+		// set it, which for an element that trapped PIPE for itself is the
+		// element. The *outer* shell's handler is nobody's here, and stays
+		// so: signalArranged read the element's own table, so an inherited
+		// handler was never one of these.
+		r.brokenPipeAbsorbed(arranged == signalHandledBy)
 	}
 	if !r.ask(r.sem().BuiltinWriteErrorFailsTheCommand, "a builtin's failed write failing the command") {
 		return st

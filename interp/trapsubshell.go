@@ -56,6 +56,11 @@ func (c *Runner) inheritTraps(r *Runner) {
 	c.signals = r.sigs()
 	c.traps = map[string]string{}
 	c.inheritedIgnored = map[string]bool{}
+	// Nothing this subshell raised on itself yet, and nothing of the
+	// parent's either: clone copies the runner by value, so a parent holding
+	// an undelivered arrival of its own would otherwise hand a copy of it to
+	// every child it started.
+	c.selfPending = nil
 	for name, action := range r.trapTable() {
 		if action == "" {
 			c.traps[name] = ""

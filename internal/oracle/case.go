@@ -1305,6 +1305,25 @@ var Corpus = []Case{
 		Why:     "`trap -` puts the default back rather than leaving an empty handler",
 	},
 	{
+		// The doubling loop of the pipeline cases, so the write cannot fit in
+		// the pipe and the reader has already gone. `2>/dev/null` on the
+		// failing write alone is what keeps this about the handler rather
+		// than about four different wordings for the write.
+		ID: "trap/a-pipeline-element-runs-the-pipe-handler-it-set-for-itself", Category: "traps and exit",
+		Snippet: `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; { trap 'echo child >&2' PIPE; echo "$v" 2>/dev/null; echo reached >&2; } | true; echo after`,
+		Why:     "a handler is not only the shell's to set: an element that traps PIPE for itself runs that handler when its own write meets the broken pipe, and every shell in the panel does it — `child` then `reached` on standard error, in that order, in dash, both bash builds, ksh93 and zsh. The trap has to be set *inside* the element, because a handled signal is back at its default across the boundary and only an ignore crosses intact, so this cannot be spelled from the outside. ksh93 prints `after` before either of them, which is why the two streams are recorded apart",
+	},
+	{
+		ID: "trap/an-elements-broken-pipe-is-not-the-outer-shells-to-handle", Category: "traps and exit",
+		Snippet: `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; trap 'echo outer >&2' PIPE; { trap 'echo child >&2' PIPE; echo "$v" 2>/dev/null; echo reached >&2; } | true; echo after`,
+		Why:     "the same shape with a handler on both sides, which is the half that says where the signal went: the element's handler runs and the shell's never does, in all five, because the broken pipe was the element's and the process never had it. It is the case a naive fix breaks — recording the arrival where the shell can see it makes the shell run `outer` for a signal it was never sent",
+	},
+	{
+		ID: "trap/an-elements-pipe-handler-runs-inside-the-elements-redirections", Category: "traps and exit",
+		Snippet: `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; { trap 'echo child >&2' PIPE; echo "$v"; } 2>e | true; echo "e=[$(cat e)]"`,
+		Why:     "two facts one shape can hold, and both are about *when* the handler runs. The failed write is the element's last command, so there is no command after it to run a handler between — and every shell in the panel runs it anyway, which makes the end of the element's body a boundary of its own. And `child` lands in the file rather than on the shell's standard error, so it runs while the element's own redirection is still in force: the boundary is at the end of the element's *list*, inside the redirection, and not after the body has been taken down. The wording of the failed write lands in the file too, ahead of the handler, which is the ordering all five agree on — ksh93 has no wording, and zsh says its own twice and runs the handler three times",
+	},
+	{
 		ID: "signal-death/status-encodes-the-signal", Category: "traps and exit",
 		Snippet: `sh -c 'kill -PIPE $$'; echo "st=$?"; echo after`,
 		Why:     "a command killed by a signal has no exit status of its own, so the signal goes in the number: 128 + 13 in bash, dash and zsh, and 256 + 13 in ksh93. PIPE is the signal to ask with — it is one of only two the panel does not announce (INT is the other), so the case is about the number and not about three wordings, and unlike INT it does not end the script in ksh93",

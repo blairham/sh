@@ -720,6 +720,17 @@ type Runner struct {
 	// lives on signalState. A subshell begins with only the parent's
 	// ignored signals — see inheritTraps in trapsubshell.go.
 	traps map[string]string
+	// selfPending is what a subshell raised on *itself* and has not handled
+	// yet — today, the SIGPIPE of its own failed write. It is this runner's
+	// own list rather than the shared one because the two are different
+	// events: a signal aimed at `$$` from inside a subshell is the shell at
+	// the top's to handle, and one the subshell caused by writing into a
+	// broken pipe never left the subshell at all. Sharing the list would
+	// make the parent run its own handler for a signal it never had.
+	//
+	// No lock: a subshell's runner is a copy owned by the goroutine running
+	// it, which is also the only thing that records or takes from this.
+	selfPending []string
 	// inheritedIgnored marks the entries in traps that arrived across the
 	// subshell boundary rather than being set inside it, because one
 	// dialect lists an ignore it set and not one it inherited.

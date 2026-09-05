@@ -69,6 +69,29 @@ The corpus started every case the same way, so the front end was pinned
 only by its own unit tests — the shape of the incident where the drivers
 scored 178/198 against a core scoring 198/198.
 
+## Cases that supply the shell's standard input
+
+`Case.Stdin` is what the shell finds on its own standard input, handed to
+both sides byte for byte. Empty means closed, which is what every other
+case gets, so the record cannot depend on what the harness itself was
+started with.
+
+Where the *program* comes from is a separate question, and the two
+combine three ways. With the snippet arriving the usual way, `Stdin` is
+data — the line `read` consumes, the choice `select` is answered with;
+those are otherwise reachable only through a here-string or a pipe
+written inside the snippet, and neither is the shell's own input. With
+`Args` naming no placeholder, the program itself arrives on standard
+input: the `sh < script` and `echo … | sh` route, where `$0` stays the
+shell rather than becoming a path, and where `-s` makes every operand a
+positional parameter. With a script file, the file is the program and the
+input is still data, which is the ordinary shape of a script that reads.
+
+`ArgSnippet` and `ArgScript` are honored in `Stdin` as well, wherever
+they appear rather than only as the whole string, so a case whose program
+arrives on standard input writes it once as its `Snippet` and the
+rendered table shows what actually ran.
+
 ## The harness
 
 `internal/oracle` implements this, and `cmd/oracle` drives it:
@@ -88,8 +111,9 @@ does. The response is to work out which, update the affected spec
 entries, and re-record.
 
 The run environment is fixed — an empty `PATH` of system directories,
-`HOME` pointed at a scratch directory, `LC_ALL=C`, no stdin — because a
-record that depends on whose machine produced it is not evidence. Shell
+`HOME` pointed at a scratch directory, `LC_ALL=C`, and no standard input
+unless the case supplies its own — because a record that depends on
+whose machine produced it is not evidence. Shell
 and script paths are normalized out of diagnostics for the same reason.
 
 A shell that is absent is reported, not fatal, and its column is omitted

@@ -550,6 +550,8 @@ func Apply(r *interp.Runner) {
 	// Where the script is, which is a stack rather than a value — see
 	// callstack.go for why it cannot be stored.
 	registerCallStack(r)
+	// The same stack, one step up: see caller.go.
+	registerCaller(r)
 	// A function carried to a child through the environment, under the name
 	// bash gives it. The other three do not carry functions at all.
 	r.SetFunctionExport("BASH_FUNC_", "%%")

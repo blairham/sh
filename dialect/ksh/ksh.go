@@ -595,4 +595,8 @@ func Apply(r *interp.Runner) {
 	if dot, ok := r.Builtin("."); ok {
 		r.Register("source", dot)
 	}
+	// ksh93's own spellings of "what would this run" and "write this out",
+	// both pervasive in real ksh scripts. See whence.go and print.go.
+	registerWhence(r)
+	registerPrint(r)
 }

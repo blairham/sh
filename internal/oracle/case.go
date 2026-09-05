@@ -4125,4 +4125,150 @@ out=$(CDPATH=./pool cd sub)
 		Snippet: `shift; echo "st=$?"`,
 		Why:     "past the end with no count written down, ksh93 reports `(null)` — the operand it did not get — where its complaint about `shift 99` names the 99; dash keeps one sentence for both and bash and zsh keep their usual answers",
 	},
+
+	// --- dialect-scoped builtins (#431): zsh's setopt/unsetopt and emulate,
+	// ksh93's whence and print, bash's caller. Each is one shell's own word;
+	// the others' command-not-found answers are the evidence of that, and are
+	// recorded rather than avoided.
+	{
+		ID: "setopt/normalizes-zsh-spellings", Category: "builtins",
+		Snippet: `setopt No_Glob; echo "st=$?"; echo x*`,
+		Why:     "zsh's option namespace ignores case and underscores, so No_Glob is noglob and the glob comes back literal; everyone else has no setopt at all and says so",
+	},
+	{
+		ID: "setopt/acts-past-a-bad-name", Category: "builtins",
+		Snippet: `setopt no_glob zzqq; echo "st=$?"; echo x*`,
+		Why:     "zsh refuses the name it does not have — `no such option`, as typed, status 1 — and still acts on the one it does: the glob is off despite the complaint",
+	},
+	{
+		ID: "setopt/the-no-prefix-strips-once", Category: "builtins",
+		Snippet: `setopt no_no_glob; echo "st=$?"`,
+		Why:     "a single `no` negates and a second is nobody's option: zsh says `no such option: no_no_glob` rather than restoring the glob",
+	},
+	{
+		ID: "setopt/bare-lists-the-deviations", Category: "builtins",
+		Snippet: `setopt err_exit no_clobber; setopt`,
+		Why:     "a bare setopt lists what differs from zsh's defaults, canonically spelled and ordered by the base name — noclobber prints between allexport's place and errexit — with nohashdirs as the -c baseline's one line",
+	},
+	{
+		ID: "setopt/shwordsplit-is-an-option", Category: "builtins",
+		Snippet: `x="a b"; setopt shwordsplit; set -- $x; echo "n=$#"`,
+		Why:     "zsh's no-splitting is an option, not a law: shwordsplit turns the sh behavior on. The name is zsh's own for a semantics axis, which is what makes it a one-line dialect answer",
+	},
+	{
+		ID: "setopt/nonomatch-passes-the-glob-through", Category: "builtins",
+		Snippet: `unsetopt nomatch; echo x*; echo "st=$?"`,
+		Why:     "unsetopt is setopt inverted, and nomatch is the option behind zsh's `no matches found`: off, the pattern passes through as itself the way the other shells default to",
+	},
+	{
+		ID: "setopt/errexit-is-the-same-switch-as-set-e", Category: "builtins",
+		Snippet: `setopt err_exit; false; echo reached`,
+		Why:     "setopt and set -o drive one table: err_exit ends the run exactly as set -e would, rather than being a second errexit that drifts",
+	},
+	{
+		ID: "emulate/names-the-current-mode", Category: "builtins",
+		Snippet: `emulate; emulate sh; emulate`,
+		Why:     "a bare emulate answers which shell zsh is currently being — zsh until something changes it, and the word that changed it after",
+	},
+	{
+		ID: "emulate/sh-moves-the-measured-axes", Category: "builtins",
+		Snippet: `x="a b"; emulate sh; set -- $x; echo "n=$#"; echo x*; a=(p q); echo "${a[1]}"`,
+		Why:     "what `emulate sh` means, measured probe by probe: unquoted expansions split, a failed glob passes through as itself, and arrays base at zero — three axes, not a new shell",
+	},
+	{
+		ID: "emulate/resets-the-options", Category: "builtins",
+		Snippet: `setopt err_exit; emulate zsh; false; echo reached`,
+		Why:     "a plain emulation resets options to its defaults with no -R asked for: the errexit set before it is gone and the script reaches its end",
+	},
+	{
+		ID: "emulate/dash-c-restores-after", Category: "builtins",
+		Snippet: `setopt no_glob; emulate sh -c 'echo inner'; echo x*; echo "st=$?"`,
+		Why:     "-c runs the string under the emulation and puts everything back, options included: the no_glob set before it still holds after, so the glob prints literal at 0",
+	},
+	{
+		ID: "emulate/an-unknown-mode-is-passed-over", Category: "builtins",
+		Snippet: `emulate fish; echo "st=$?"; emulate`,
+		Why:     "a word naming no emulation is silence and 0 in zsh, the mode unchanged — measured, and strange enough to be worth pinning against the guess that it would complain",
+	},
+	{
+		ID: "whence/bare-is-the-resolution", Category: "builtins",
+		Snippet: `whence echo; echo "st=$?"; whence if; f() { :; }; whence f`,
+		Why:     "ksh93's own question about a name, answered bare: a builtin, keyword or function is its own name and nothing more. zsh has a whence too — the same ancestry — and bash and dash have none",
+	},
+	{
+		ID: "whence/v-is-the-sentence", Category: "builtins",
+		Snippet: `whence -v echo; echo "st=$?"`,
+		Why:     "whence -v is what ksh93 spells type as, so the sentence is type's; zsh words its own",
+	},
+	{
+		ID: "whence/a-name-that-resolves-to-nothing", Category: "builtins",
+		Snippet: `whence nosuchcmd431; echo "st=$?"; whence -v nosuchcmd431; echo "st=$?"`,
+		Why:     "bare whence misses in silence at 1 where -v says so out loud — ksh93's complaint naming whence itself — and the two shells that have the builtin disagree only about the wording",
+	},
+	{
+		ID: "whence/p-searches-path-alone", Category: "builtins",
+		Snippet: `mkdir -p d; printf '#!/bin/sh\n' > d/tool431; chmod +x d/tool431; PATH=$PWD/d:$PATH; f() { :; }; w=$(whence -p tool431); case $w in */d/tool431) echo path-ok;; *) echo "got=$w";; esac; whence -p f; echo "st=$?"`,
+		Why:     "-p is the PATH search with functions and builtins invisible: the file answers with its path — matched rather than printed, because zsh spells the temp directory through /private and ksh93 does not — and the function is nobody, status 1",
+	},
+	{
+		ID: "whence/an-alias-answers-as-its-value", Category: "builtins",
+		Snippet: `alias ll="ls -l"; whence ll; whence -v ll`,
+		Why:     "the one resolution that is the parser's fact rather than the runner's: ksh93 prints the value quoted and the -v sentence calls it an alias; zsh words the same answer its own way",
+	},
+	{
+		ID: "whence/an-unknown-letter", Category: "builtins",
+		Snippet: `whence -z echo; echo "st=$?"`,
+		Why:     "ksh93 refuses with `unknown option` and its whence usage line at 2, the same shape its other builtins use; zsh's whence reads -z as its own flag set differs",
+	},
+	{
+		ID: "print/joins-expands-and-ends-the-line", Category: "builtins",
+		Snippet: `print hello world; print -n ab; print cd`,
+		Why:     "ksh93's echo: operands joined with single spaces, a newline after, and -n withholding it. zsh has print too; bash and dash do not, which is the dialect boundary this case records",
+	},
+	{
+		ID: "print/r-withholds-the-escapes", Category: "builtins",
+		Snippet: `print 'a\tb'; print -r 'a\tb'`,
+		Why:     "print expands echo's escapes by default and -r prints the operands raw — the pair a script chooses between where bash would choose echo -e against echo -E",
+	},
+	{
+		ID: "print/backslash-c-stops-everything", Category: "builtins",
+		Snippet: `print 'ab\c def'; print after`,
+		Why:     "\\c ends the command's output where it stands: the rest of the text and the newline are both unwritten, so `after` lands directly against `ab`",
+	},
+	{
+		ID: "print/u-aims-at-a-descriptor", Category: "builtins",
+		Snippet: `print -u2 to-err; echo "st=$?"; print -u9 x; echo "st=$?"`,
+		Why:     "-u writes to the named descriptor — 2 lands on the diagnostic stream — and a number nothing is open at is ksh93's `bad file unit number` with the errno in brackets, 1",
+	},
+	{
+		ID: "print/a-lone-dash-ends-the-options", Category: "builtins",
+		Snippet: `print -- -n; print - -n`,
+		Why:     "both enders work in ksh93, so `-n` prints as a word; zsh's print reads the lone dash its own way",
+	},
+	{
+		ID: "print/f-is-printf", Category: "builtins",
+		Snippet: `print -f '%s|' a b; echo .`,
+		Why:     "-f hands the whole command to printf: the format is reused over the operands and no newline is added, so the dot lands against the second bar",
+	},
+	{
+		ID: "print/the-coprocess-letter-with-nothing-there", Category: "builtins",
+		Snippet: `print -p x; echo "st=$?"`,
+		Why:     "-p writes to the coprocess, and with no |& in this grammar there is never one: ksh93's `no query process` at 1, the same shape read -p measured",
+	},
+	{
+		ID: "caller/from-a-function-under-dash-c", Category: "builtins",
+		Snippet: `f() { caller; echo "st=$?"; caller 0; echo "st0=$?"; }; f`,
+		Why:     "bash's question about who called: under -c there is no script frame, so bare caller prints the call line and NULL at 0, and caller 0 — which needs a frame above — is silence at 1. The other three have no caller at all",
+	},
+	{
+		ID: "caller/walks-a-script-s-stack", Category: "builtins",
+		Script: true, LayoutSensitive: true,
+		Snippet: "f() { caller; caller 0; caller 1; caller 2; echo \"st=$?\"; }\ng() { f; }\ng",
+		Why:     "from a file the frames are real: bare caller is the line and the file, a depth adds the function — the script's own frame answering as main — and past the stack is silence at 1. Line numbers are the output, which is why this runs as a script",
+	},
+	{
+		ID: "caller/refuses-what-is-not-a-depth", Category: "builtins",
+		Snippet: `f() { caller x; echo "st=$?"; }; f`,
+		Why:     "the expression is a plain number despite the manual's word for it — 1+1 is refused the same way — and bash answers `invalid number` with its caller usage at 2",
+	},
 }

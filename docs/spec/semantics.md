@@ -1874,3 +1874,75 @@ The corpus cannot catch this class of difference — `internal/oracle` pins
 `LC_ALL=C` for every run so the record does not depend on the developer's
 environment — so the pinning lives in unit tests that set the variables
 per case.
+
+## Builtins that belong to one shell
+
+Issue #431, from the 2026-09-04 completeness sweep: each shell's own manual
+makes a handful of builtins central that no other shell has, and until now
+they were simply absent — not built, and not recorded as out of scope, which
+is the state a sweep cannot tell from an oversight. This section is the
+record; the measurements live beside each implementation and in the corpus
+(`setopt/`, `emulate/`, `whence/`, `print/`, `caller/` cases).
+
+What was built, all through the extension seam — registered builtins in each
+`dialect/<shell>`, none of them known to `syntax/` or `interp/`:
+
+- **zsh `setopt` / `unsetopt`** (dialect/zsh/setopt.go): zsh's option
+  namespace — case-insensitive, underscores ignored, one `no` prefix
+  negating — over a measured table that binds each name to the substrate's
+  own `set -o` machinery or to a semantics axis (`shwordsplit`, `nomatch`,
+  `ksharrays`). The table is an honest subset of zsh's ~180 names: a name it
+  holds and cannot move is refused with zsh's own `can't change option`, and
+  a name outside it is `no such option`.
+- **zsh `emulate`** (dialect/zsh/emulate.go): `sh`/`ksh`/`zsh` switch the
+  three measured axes above and reset the option table to the emulation's
+  defaults, `-c` runs a string under the emulation and restores everything
+  after, and a bare `emulate` names the mode.
+- **ksh93 `whence`** (dialect/ksh/whence.go): bare, `-v`, `-p`, `-q` — the
+  bare mode delegating to the same lookup `command -v` uses, `-v` to the
+  core `type`, whose ksh wording was already `whence`'s, and aliases spoken
+  for in the dialect because the core's lookup cannot see them.
+- **ksh93 `print`** (dialect/ksh/print.go): the measured escape set with
+  `\c` stopping everything, `-r`/`-e`/`-n`, `-u fd` through the runner's
+  descriptor table, `-f` delegating to printf, `-s` consumed against a
+  history this shell does not keep, and `-p` refused with ksh93's own
+  `no query process` — the same shape `read -p` measured.
+- **bash `caller`** (dialect/bash/caller.go): the stack the three
+  `BASH_*` arrays already name, one step up, `NULL` and `main` where bash
+  puts them.
+
+Deliberately **not** built, so the next sweep counts each as scoped rather
+than missing:
+
+- zsh `zmodload`: there are no loadable modules here; the name would be a
+  table of refusals.
+- zsh `autoload` (and `fpath`): function-file loading is an interactive
+  startup mechanism; a non-interactive core sources files by name.
+- zsh `bindkey`, `vared`, `zle`: the line editor's, and the line editor's
+  key handling is the front end's concern, not the interpreter's.
+- zsh's own `print` and `whence`: zsh has both — shared ksh ancestry — with
+  its own flags and wording (`bad file number: 9` where ksh93 brackets the
+  errno; alias values unquoted). This round measured and built ksh93's; the
+  zsh pair stays command-not-found, visible in the corpus's `print/` and
+  `whence/` cases as the recorded difference.
+- zsh `setopt` names beyond the table: accepting an option we do not honor
+  would be a promise; the honest subset refuses the rest out loud.
+- zsh `emulate -L`: function-local emulation needs a restore-on-return seam
+  the runner does not have; refused out loud rather than silently made
+  global. `emulate csh` records the mode and changes nothing it could —
+  csh's differences are not modeled anywhere else either.
+- ksh93 `print -v`/`-C` and `whence -a`/`-f`: value quoting, compound
+  output, the all-resolutions walk and the function skip; each is refused
+  as not implemented rather than unknown, which would be the worse answer.
+- ksh93 `hist`: interactive history editing, and there is no history.
+- bash `bind`: readline's, same reasoning as zsh's bindkey.
+- bash `history` and `fc`'s editing half: no history file in a
+  non-interactive core; `fc` itself already answers with its measured
+  empty-history refusal.
+- bash `help`: documentation for another implementation's builtins would be
+  false advertising; scripts do not branch on it.
+- bash `suspend`: sends the shell SIGSTOP, which is an interactive job
+  under a job-control parent; a library must not stop its embedder.
+- bash `dirs` and `disown`: claimed by the core-builtin sweep (#430)
+  alongside the job-spec and directory-stack work they sit on, and recorded
+  there rather than twice.

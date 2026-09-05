@@ -527,6 +527,10 @@ func Apply(r *interp.Runner) {
 	// Not removed but replaced: zsh has an `enable`, and it is a different
 	// builtin from the one the core carries. See enable.go.
 	registerEnable(r)
+	// How zsh scripts actually change options, and how they change shells.
+	// See setopt.go and emulate.go.
+	registerSetopt(r)
+	registerEmulate(r)
 	// No `compgen` here; it is bash's alone.
 	r.Unregister("compgen")
 	r.Unregister("complete")

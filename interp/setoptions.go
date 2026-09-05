@@ -208,6 +208,14 @@ func (r *Runner) SetOptionLetters(letters string, on bool) bool {
 // a name it refuses. Exported for the front end, with SetOptionLetters.
 func (r *Runner) SetNamedOption(name string, on bool) int {
 	r.line = 0
+	return r.ApplyNamedOption(name, on)
+}
+
+// ApplyNamedOption is SetNamedOption from inside a running script: a
+// registered builtin presenting the same options under its own names routes
+// through here, where the line a complaint would name is the one being run
+// rather than the zero an invocation reports.
+func (r *Runner) ApplyNamedOption(name string, on bool) int {
 	ok := r.setOption(name, on)
 	if r.unspecified {
 		r.unspecified = false

@@ -180,6 +180,7 @@ func Semantics() interp.Semantics {
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutTakesWhatIsWaiting
 	s.ReadPartialCountSucceeds = interp.Yes
 	s.ReadExactCountKeepsPartial = interp.No
+	s.ReadTimeoutKeepsWhatArrived = interp.No
 	// typeset in a keyword function hides the caller's value, as bash's
 	// local does.
 	s.ValuelessDeclarationHidesTheOuterValue = interp.Yes

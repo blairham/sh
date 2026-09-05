@@ -1262,8 +1262,19 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 	status := 0
 	switch end {
 	case endTimeout:
-		text, lits = "", nil
 		status = orDefault(r.diag().ReadTimeoutStatus, 1)
+		// A deadline is not an end of input, and two of the three shells with
+		// the letter treat it as no read at all: no name is touched, not even
+		// cleared, so whatever the variable held survives. The third assigns
+		// the short read — which looks like clearing only because the usual
+		// way to reach a timeout is with nothing having arrived.
+		if !r.ask(r.sem().ReadTimeoutKeepsWhatArrived,
+			"an expired `read -t` assigning what did arrive") {
+			if r.unspecified {
+				return 2
+			}
+			return status
+		}
 	case endEOF:
 		status = 1
 		switch {

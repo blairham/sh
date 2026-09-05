@@ -7,20 +7,26 @@ import (
 	"os"
 	"runtime"
 	"runtime/debug"
-	"syscall"
 )
 
 // atPlacement is called on the way through a replacement, named for where it
-// is standing: "before" with the table still untouched, and "after" inside the
-// window this function exists to keep empty. Nil in a real shell.
+// is standing: "before" with the table still untouched, "after" once it has
+// been placed, and "execve" with the replacement one instruction away. Nil in
+// a real shell.
 //
 // A seam rather than a test that waits for the window to bite: what goes wrong
-// there is a garbage collection, and a collection is not something a test can
-// ask for from the outside. Both points are offered because the rule has two
-// halves — the collector is stopped *before* the first descriptor is
-// overwritten, and it is still stopped when the execve is reached — and a test
-// that could only see the second would accept a shell that stopped it too
-// late. See replaceProcess for what the window is.
+// there is a garbage collection or a poll on a timer, and neither is something
+// a test can ask for from the outside. Three points are offered because the
+// window has two rules and each needs both of its ends —
+//
+//   - the collector is stopped before the first descriptor is overwritten and
+//     is still stopped when the execve is reached, so a shell that stopped it
+//     too late would satisfy one end and not the other;
+//   - nothing allocates between "before" and "execve", which is what keeps
+//     `sysmon` from finding a window long enough to poll in, and which only
+//     shows as the *difference* between two counts.
+//
+// See replaceProcess for what the window is.
 var atPlacement func(where string)
 
 func reachedPlacement(where string) {
@@ -92,22 +98,36 @@ func reachedPlacement(where string) {
 // is no process left to collect for — and it is put back if the exec fails,
 // where there is.
 //
-// It closes the collector's half and not the other half, which is worth
-// stating rather than leaving to be rediscovered: `sysmon` polls on a timer of
-// its own, so a window that is *long* is dangerous whatever the collector is
-// doing. The real one is three string conversions and cannot be made much
-// shorter without reaching for unsafe; the same measurement with the
-// allocation slowed down by `-race` fails whether or not the collector is
-// stopped, which is what that residue looks like.
+// Stopping the collector closes one half of the window and cannot close the
+// other, which is worth stating rather than leaving to be rediscovered:
+// `sysmon` polls on a timer of its own from another thread, so a window that
+// is *long* is dangerous whatever the collector is doing. That half is closed
+// by emptying the window instead of shortening it — everything the exec is
+// going to allocate is built by prepareExec, before a single descriptor has
+// been overwritten, so what is left between the placement and the execve is
+// system calls. replaceexec_linux.go carries the mechanism and the numbers.
+//
+// The invariant the two halves share, and the one thing to keep: **nothing
+// may allocate between the placement and the execve.** A conversion moved
+// back below placeFiles would compile, pass every test that runs a shell, and
+// put the failure back — which is why `TestNothingAllocatesInTheWindow`
+// counts rather than trusts.
 func replaceProcess(path string, argv, env []string, files []*os.File) error {
 	prev := debug.SetGCPercent(-1)
+	// Before the table is touched, because this is the part that allocates.
+	ready, err := prepareExec(path, argv, env)
+	if err != nil {
+		debug.SetGCPercent(prev)
+		return err
+	}
 	reachedPlacement("before")
 	placeFiles(files)
 	reachedPlacement("after")
-	err := syscall.Exec(path, argv, env)
+	err = ready.execve()
 	// Reached only when the exec failed. The process is a shell again, so it
-	// collects again.
+	// collects again, and gets back whatever the exec had already spent.
 	debug.SetGCPercent(prev)
+	ready.undo()
 	// And here for the sake of the files rather than the error: nothing refers
 	// to the slice after placeFiles, so without this the collector may close a
 	// descriptor's original in the window between placing it and the exec that

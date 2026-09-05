@@ -44,20 +44,34 @@ type Case struct {
 	// invocation.
 	//
 	// The snippet still has to reach the shell, and Args says where it goes.
-	// At most one element may be a placeholder, and it is replaced before
-	// the shell sees it:
+	// At most one placeholder may appear, and it is replaced before the shell
+	// sees it:
 	//
-	//	ArgSnippet  the Snippet as a single word — where `-c` wants its
-	//	            operand, or `-o name -c` does, or a bundle ending in c.
+	//	ArgSnippet  the Snippet — where `-c` wants its operand, or
+	//	            `-o name -c` does, or a bundle ending in c.
 	//	ArgScript   the path of a file holding the Snippet: the same file
 	//	            Script writes, in the same scratch directory, and it
 	//	            normalizes to <script> in the recorded output.
 	//
-	// A case with neither placeholder never hands the shell its Snippet at
-	// all, and that is deliberate rather than an oversight: an invocation
-	// that must fail before it reads anything — a script path that does not
-	// exist — is one of the shapes worth pinning, and it still wants a
-	// Snippet written down as the thing that would have run.
+	// A placeholder is replaced **wherever it appears**, rather than only as
+	// a whole word, which is the same rule Stdin has always followed. That
+	// matters because `-c` takes its command string as its own word only when
+	// it is written that way: `sh -c'echo hi'` attaches the string to the
+	// letter, and an invocation needing the snippet inside a larger word is
+	// spelled `"-c" + ArgSnippet`.
+	//
+	// Requiring a whole word meant such a case had to write the text twice —
+	// once in Snippet and once literally in Args — and nothing checked that
+	// the two stayed in step, so an edit to either one silently made the case
+	// test something other than what it recorded. Interpolation removes the
+	// second copy rather than guarding it (#535).
+	//
+	// A case with no placeholder never hands the shell its Snippet at all,
+	// and that is deliberate rather than an oversight: an invocation that
+	// must fail before it reads anything — a script path that does not exist,
+	// `-c` with nothing after it — is one of the shapes worth pinning, and it
+	// still wants a Snippet written down as the thing that would have run.
+	// It is also how the program arrives on standard input; see Stdin.
 	//
 	// Args and Script are exclusive. Script is the shorthand for
 	// []string{ArgScript}, and setting both is a harness error rather than a
@@ -5888,7 +5902,7 @@ out=$(CDPATH=./pool cd sub)
 	// exactly what kept the sharpest of them out of the corpus (#534).
 	{
 		ID: "invoke/a-command-string-attached-to-the-letter", Category: "invocation",
-		Args:            []string{"-cecho hi"},
+		Args:            []string{"-c" + ArgSnippet},
 		Snippet:         `echo hi`,
 		GradedOnRefusal: true,
 		Why: "`sh -c'echo hi'` — the command string written against the letter rather than as its own word, which is how a hand and a generated command line both get it wrong. All six refuse it: `-c` takes its operand as a separate word, so the rest of this one is read as more option letters and `echo hi` is not a run of them. We ran it. That is the bug this case exists for, and it is caught here against every reference, because a shell that ran the string writes `hi` to standard output and standard output is still compared exactly. " +

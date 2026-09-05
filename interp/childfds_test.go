@@ -125,28 +125,58 @@ func runForReplacement(t *testing.T, dir, src string, coproc bool) []*os.File {
 // descriptor open for cmd in every shell in the panel but ksh93. The
 // interpreter's half of that is the table; putting it on those numbers is the
 // hook's, because a Runner may not rewrite the process's own descriptors.
+//
+// It reaches lower than a child's, and only a replacement's does: the named
+// streams are carried separately to a child and there is nothing to carry
+// them separately with here, so entry i is descriptor i and the table starts
+// at zero.
 func TestAReplacementIsHandedTheTableAChildIsHanded(t *testing.T) {
 	dir := t.TempDir()
 	five := filepath.Join(dir, "five")
 	files := runForReplacement(t, dir, `exec 5>`+five+`; exec /bin/echo replaced`, false)
 
 	// The numbers are the shell's, so the gap below five is a hole rather
-	// than a packing: entry i is descriptor 3+i.
-	if len(files) != 3 {
-		t.Fatalf("table has %d entries, want 3 — descriptors 3, 4 and 5", len(files))
+	// than a packing.
+	if len(files) != 6 {
+		t.Fatalf("table has %d entries, want one per descriptor through 5", len(files))
 	}
-	if files[0] != nil || files[1] != nil {
-		t.Errorf("descriptors 3 and 4 were never opened and must be holes: %v", files[:2])
+	if files[3] != nil || files[4] != nil {
+		t.Errorf("descriptors 3 and 4 were never opened and must be holes: %v", files[3:5])
 	}
-	if files[2] == nil {
+	// This runner's streams are buffers of the test's, which is the case a
+	// nil is for: there is no number to hand a replacement for one of those.
+	if files[0] != nil || files[1] != nil || files[2] != nil {
+		t.Errorf("a stream that is not a file was placed anyway: %v", files[:3])
+	}
+	if files[5] == nil {
 		t.Fatal("the descriptor the script parked on 5 did not reach the table")
 	}
 	// And it is the file the script parked, rather than merely something.
-	if _, err := files[2].WriteString("through the table\n"); err != nil {
+	if _, err := files[5].WriteString("through the table\n"); err != nil {
 		t.Fatalf("the table's entry for 5 is not writable: %v", err)
 	}
 	if b, _ := os.ReadFile(five); string(b) != "through the table\n" {
 		t.Errorf("entry for 5 wrote %q, want the file the script opened", b)
+	}
+}
+
+// And the named streams reach it by the same slice, which is the half that
+// `exec >log; exec cmd` needs: a redirection the script has already applied is
+// a file the shell holds on some other number entirely, and the replacement
+// finds the *process's* 1 unless that file is placed on it.
+func TestARedirectedNamedStreamReachesAReplacement(t *testing.T) {
+	dir := t.TempDir()
+	log := filepath.Join(dir, "log")
+	files := runForReplacement(t, dir, `exec >`+log+`; exec /bin/echo replaced`, false)
+
+	if len(files) < 2 || files[1] == nil {
+		t.Fatalf("standard output did not reach the table: %v", files)
+	}
+	if _, err := files[1].WriteString("through the table\n"); err != nil {
+		t.Fatalf("the table's entry for 1 is not writable: %v", err)
+	}
+	if b, _ := os.ReadFile(log); string(b) != "through the table\n" {
+		t.Errorf("entry for 1 wrote %q, want the file the redirection opened", b)
 	}
 }
 
@@ -163,13 +193,20 @@ v=${COPROC[1]}
 exec 3>&$v
 exec /bin/echo replaced
 `, true)
-	for i, f := range files {
+	// Entry i is descriptor i, so the named streams are the first three and
+	// they are buffers of the test's rather than files — nil for a reason of
+	// their own, and checked above rather than here.
+	for fd, f := range files {
+		if fd < firstExtraFdForTest {
+			continue
+		}
 		if f != nil {
-			t.Errorf("descriptor %d reached a replacement from the coprocess's feed", firstExtraFdForTest+i)
+			t.Errorf("descriptor %d reached a replacement from the coprocess's feed", fd)
 		}
 	}
 }
 
 // firstExtraFdForTest is interp's layout constant, spelled out here because
-// this is an external test package: entry i of the table is descriptor 3+i.
+// this is an external test package: the table beyond the three named streams
+// starts at descriptor 3.
 const firstExtraFdForTest = 3

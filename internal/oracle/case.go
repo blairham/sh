@@ -44,20 +44,34 @@ type Case struct {
 	// invocation.
 	//
 	// The snippet still has to reach the shell, and Args says where it goes.
-	// At most one element may be a placeholder, and it is replaced before
-	// the shell sees it:
+	// At most one placeholder may appear, and it is replaced before the shell
+	// sees it:
 	//
-	//	ArgSnippet  the Snippet as a single word — where `-c` wants its
-	//	            operand, or `-o name -c` does, or a bundle ending in c.
+	//	ArgSnippet  the Snippet — where `-c` wants its operand, or
+	//	            `-o name -c` does, or a bundle ending in c.
 	//	ArgScript   the path of a file holding the Snippet: the same file
 	//	            Script writes, in the same scratch directory, and it
 	//	            normalizes to <script> in the recorded output.
 	//
-	// A case with neither placeholder never hands the shell its Snippet at
-	// all, and that is deliberate rather than an oversight: an invocation
-	// that must fail before it reads anything — a script path that does not
-	// exist — is one of the shapes worth pinning, and it still wants a
-	// Snippet written down as the thing that would have run.
+	// A placeholder is replaced **wherever it appears**, rather than only as
+	// a whole word, which is the same rule Stdin has always followed. That
+	// matters because `-c` takes its command string as its own word only when
+	// it is written that way: `sh -c'echo hi'` attaches the string to the
+	// letter, and an invocation needing the snippet inside a larger word is
+	// spelled `"-c" + ArgSnippet`.
+	//
+	// Requiring a whole word meant such a case had to write the text twice —
+	// once in Snippet and once literally in Args — and nothing checked that
+	// the two stayed in step, so an edit to either one silently made the case
+	// test something other than what it recorded. Interpolation removes the
+	// second copy rather than guarding it (#535).
+	//
+	// A case with no placeholder never hands the shell its Snippet at all,
+	// and that is deliberate rather than an oversight: an invocation that
+	// must fail before it reads anything — a script path that does not exist,
+	// `-c` with nothing after it — is one of the shapes worth pinning, and it
+	// still wants a Snippet written down as the thing that would have run.
+	// It is also how the program arrives on standard input; see Stdin.
 	//
 	// Args and Script are exclusive. Script is the shorthand for
 	// []string{ArgScript}, and setting both is a harness error rather than a
@@ -2541,6 +2555,41 @@ echo "st=$?"`,
 		ID: "redir/a-replacements-descriptor-numbers-keep-their-gaps", Category: "redirection",
 		Snippet: `exec 5>f; exec /bin/sh -c "{ echo five >&5; echo three >&3; } 2>/dev/null; cat f"`,
 		Why:     "the replacement's table is the shell's table by number rather than a packing of it: with 3 and 4 never opened, the file parked on 5 is on 5 there and 3 is closed rather than shifted down to fill the hole. Unanimous but for ksh93, which passes neither",
+	},
+	{
+		ID: "redir/a-replacement-keeps-a-redirected-stdout", Category: "redirection",
+		Snippet: `exec >f; exec /bin/sh -c "echo repl; cat f >&2"`,
+		Why:     "the named streams cross a replacement as the rest of the table does, and unanimously — ksh93 included, which is the boundary of what that shell keeps to itself. The replacement reads the file back on the one stream still going to the terminal, because there is no shell left to read it",
+	},
+	{
+		ID: "redir/a-replacement-keeps-a-redirected-stderr", Category: "redirection",
+		Snippet: `exec 2>f; exec /bin/sh -c "echo err >&2; cat f"`,
+		Why:     "the same claim for the stream a shell reports its own failures on, read back on the standard output the script left alone",
+	},
+	{
+		ID: "redir/a-replacement-keeps-a-redirected-stdin", Category: "redirection",
+		Snippet: `printf 'line\n' >f; exec <f; exec /bin/cat`,
+		Why:     "the reading half: the replacement reads the file the script opened rather than the shell's own input, which with a terminal there is the difference between printing a line and hanging",
+	},
+	{
+		ID: "redir/a-replacements-own-redirection-crosses", Category: "redirection",
+		Snippet: `exec /bin/sh -c "echo own; cat f >&2" >f`,
+		Why:     "the form a script is likelier to write — the redirection on the `exec` itself rather than on an `exec` before it — and the same answer, so the rule is about the stream and not about which command opened it",
+	},
+	{
+		ID: "redir/a-replacement-keeps-a-merged-stream", Category: "redirection",
+		Snippet: `exec >f 2>&1; exec /bin/sh -c 'echo out; echo err >&2; exit $(grep -c . f)'`,
+		Why:     "`>f 2>&1` is one file under two numbers rather than two targets, so a replacement that places files by number gets both — the count is the only channel left once every stream is in the file, and it is 2 in every shell. The command substitution is the replacement's, quoted so that the shell being replaced does not run it against a file it has only just truncated",
+	},
+	{
+		ID: "redir/a-closed-stdout-is-closed-for-a-replacement", Category: "redirection",
+		Snippet: `exec >&-; exec /bin/echo hi 2>/dev/null`,
+		Why:     "a stream the script closed stays closed across the replacement rather than falling back to the process's own: the command fails where it would otherwise have written, unanimously. The complaint is discarded because its wording is a fact about whatever /bin/echo is on the machine",
+	},
+	{
+		ID: "redir/a-closed-stdin-is-closed-for-a-replacement", Category: "redirection",
+		Snippet: `exec <&-; exec /bin/cat 2>/dev/null`,
+		Why:     "the same rule on the reading side, and the case that tells a closed stream from an empty one: a replacement handed the shell's own input would read to end of file and report success",
 	},
 	{
 		ID: "redir/an-inherited-descriptor-keeps-its-number", Category: "redirection",
@@ -5883,7 +5932,7 @@ out=$(CDPATH=./pool cd sub)
 	// exactly what kept the sharpest of them out of the corpus (#534).
 	{
 		ID: "invoke/a-command-string-attached-to-the-letter", Category: "invocation",
-		Args:            []string{"-cecho hi"},
+		Args:            []string{"-c" + ArgSnippet},
 		Snippet:         `echo hi`,
 		GradedOnRefusal: true,
 		Why: "`sh -c'echo hi'` — the command string written against the letter rather than as its own word, which is how a hand and a generated command line both get it wrong. All six refuse it: `-c` takes its operand as a separate word, so the rest of this one is read as more option letters and `echo hi` is not a run of them. We ran it. That is the bug this case exists for, and it is caught here against every reference, because a shell that ran the string writes `hi` to standard output and standard output is still compared exactly. " +

@@ -2181,6 +2181,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cmd/compound-takes-redirection` | `[a,b,]` | `[a,b,]` | `[a,b,]` | `[a,b,]` | `[a,b,]` | `[a,b,]` |
 | `cmd/loop-takes-redirection` | `[1,2,]` | `[1,2,]` | `[1,2,]` | `[1,2,]` | `[1,2,]` | `[1,2,]` |
 | `cmd/loop-status-when-body-never-runs` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `core/a-while-loop-answers-with-its-body` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
+| `core/a-loop-answers-with-its-body-and-not-its-condition` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `core/an-until-loop-answers-with-its-body` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
+| `core/a-loop-that-never-ran-does-not-inherit` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
+| `core/a-c-style-loop-answers-with-its-body` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
+| `core/the-status-a-loop-body-starts-from` | `it=1~it=0` | `it=1~it=0` | `it=1~it=0` | `it=1~it=0` | `it=1~it=0` | `it=1~it=0` |
+| `core/a-loop-condition-sees-the-status-before-it` | `end` | `end` | `end` | `end` | `end` | `end` |
+| `core/a-break-is-a-command-of-the-body` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `cmd/for-status-empty-list` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `cmd/case-fallthrough` | **2>** `<shell>: 1: Syntax error: "&" unexpected` *(status 2)* | `one~two` | `one~two` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in a) echo one;& b) echo two;; esac'` *(status 2)* | `one~two` | `one~two` |
 | `cmd/case-continue-matching` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | `one~two` | `one~two` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in a) echo one;;& a) echo two;; esac'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `&' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `&'` *(status 1)* |
@@ -2386,6 +2394,38 @@ grades it and nothing drift-checks it either, for the same reason.
 - `cmd/loop-status-when-body-never-runs` — zero iterations exits 0; "status of the last command" is the obvious wrong answer when there was none
   ```sh
   while false; do :; done; echo "st=$?"
+  ```
+- `core/a-while-loop-answers-with-its-body` — the other half of the zero-iterations rule, and the half a shell written only for that one loses: once the body has run, the loop's status is the body's last command. Unanimous, and POSIX says the same
+  ```sh
+  i=0; while [ $i -lt 1 ]; do i=1; false; done; echo "st=$?"
+  ```
+- `core/a-loop-answers-with-its-body-and-not-its-condition` — the row that tells the two readings apart, which the one above cannot: here the condition that ended the loop is *false* and the body's last command succeeded, so a shell reporting the condition would say 1 and every shell in the panel says 0. Both rows are needed — with `false` in the body the condition and the body agree, and the wrong answer looks right
+  ```sh
+  i=0; while [ $i -lt 1 ]; do i=1; true; done; echo "st=$?"
+  ```
+- `core/an-until-loop-answers-with-its-body` — the same rule for `until`, whose condition is inverted and whose status is not. Written out rather than assumed from the `while` row, because inverting the test is exactly where an implementation might invert the answer too
+  ```sh
+  i=0; until [ $i -ge 1 ]; do i=1; false; done; echo "st=$?"
+  ```
+- `core/a-loop-that-never-ran-does-not-inherit` — zero iterations is 0 rather than whatever the shell's status happened to be, which `cmd/loop-status-when-body-never-runs` cannot show because nothing preceded the loop there. It is the guard on the row above: a shell that stopped resetting the status would pass that one and fail this
+  ```sh
+  false; while false; do :; done; echo "st=$?"
+  ```
+- `core/a-c-style-loop-answers-with-its-body` — the same rule for the arithmetic header, in the four shells that have one. Written out rather than assumed from the list `for`, because it is a separate clause with a condition of its own and the condition is evaluated once more after the last iteration — the same shape that lost the answer in the conditional loops
+  ```sh
+  for ((i=0;i<1;i++)); do false; done; echo "st=$?"
+  ```
+- `core/the-status-a-loop-body-starts-from` — what `$?` is *inside* a loop before the body has set one, which is a different question from what the loop reports and is answered by the same line of an implementation. The first iteration sees the command before the loop and the second sees the first iteration's `echo`, so this prints 1 then 0 — a shell that zeroes the status on the way in prints 0 twice and still passes every row about what the loop reports
+  ```sh
+  false; for i in a b; do echo "it=$?"; done
+  ```
+- `core/a-loop-condition-sees-the-status-before-it` — the same question asked of the condition rather than the body, and it is the sharper one because the answer changes what runs: the condition tests the status of the command before the loop, so it is false and the body never runs. A shell that zeroes the status before the first test prints `ran` — a loop that runs where no shell in the panel runs one
+  ```sh
+  false; while [ $? -eq 0 ]; do echo ran; break; done; echo end
+  ```
+- `core/a-break-is-a-command-of-the-body` — a loop left by `break` is not an exception to the rule but an instance of it: `break` is the last command the body ran and it succeeded, so the answer is 0 even though the command before it failed. Unanimous
+  ```sh
+  i=0; while [ $i -lt 3 ]; do i=$((i+1)); false; break; done; echo "st=$?"
   ```
 - `cmd/for-status-empty-list` — same rule for an empty for list
   ```sh

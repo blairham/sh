@@ -126,9 +126,24 @@ func (r *Runner) ifClause(ctx context.Context, c *syntax.IfClause) error {
 
 func (r *Runner) loop(ctx context.Context, c *syntax.LoopClause) error {
 	return r.withRedirs(ctx, c.Redirs, func() error {
-		// Zero iterations exits 0, which is why the status is set before the
-		// loop rather than left as whatever the condition produced.
-		r.status = 0
+		// What the loop will report, kept rather than read off the runner at
+		// the end: the condition runs once more after the final iteration
+		// and overwrites the live status with its own.
+		//
+		// Zero means a loop whose body never ran, which exits 0 whatever
+		// preceded it, and after that it is the body's last status. Both
+		// halves are one rule and neither can be dropped: `while [ $i -lt
+		// 1 ]; do i=1; true; done` is 0 even though the condition that
+		// ended it was *false*, so it is the body being reported and not
+		// the condition, and `false; while false; do :; done` is 0 rather
+		// than 1. Unanimous across the panel, and POSIX says the same.
+		//
+		// It is a local and not `r.status = 0` up here, because the live
+		// status belongs to the last command that ran until this loop has
+		// something of its own to say: the condition can *see* it —
+		// `false; while [ $? -eq 0 ]; do …` does not run in any shell in
+		// the panel, and resetting first made it run in ours.
+		body := 0
 		for {
 			if err := r.condList(ctx, c.Cond); err != nil {
 				return err
@@ -138,12 +153,13 @@ func (r *Runner) loop(ctx context.Context, c *syntax.LoopClause) error {
 				done = !done
 			}
 			if !done {
-				r.status = 0
+				r.status = body
 				return nil
 			}
 			if err := r.runList(ctx, c.Body); err != nil {
 				return err
 			}
+			body = r.status
 			if stop := r.loopControl(); stop {
 				return nil
 			}
@@ -165,7 +181,14 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 			items = r.Params
 		}
 
-		r.status = 0
+		// The same two questions the conditional loops answer, and the same
+		// local for the same reason: what the loop reports is 0 until its
+		// body has run and the body's last status afterwards, while `$?`
+		// inside the body is still the last command's until the body sets
+		// one. `false; for i in a b; do echo $?; done` prints 1 and then 0
+		// in every shell in the panel — the first iteration sees what
+		// preceded the loop — and a reset written up here printed 0 twice.
+		body := 0
 		for _, it := range items {
 			r.setVar(c.Name, it)
 			// After the assignment, because zsh traces the assignment
@@ -175,10 +198,12 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 			if err := r.runList(ctx, c.Body); err != nil {
 				return err
 			}
+			body = r.status
 			if stop := r.loopControl(); stop {
 				return nil
 			}
 		}
+		r.status = body
 		return nil
 	})
 }

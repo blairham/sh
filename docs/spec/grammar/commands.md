@@ -457,6 +457,73 @@ the loop; dash has no C-style `for` at all:
 Unanimous, and worth pinning because "status of the last command" is the
 obvious wrong answer when there was no last command.
 
+And they exit with **the body's last status once the body has run**. That
+is the other half of the same rule, and a shell written only for the half
+above loses it: the condition is evaluated once more after the final
+iteration, so the status standing when the loop ends is the *condition's*
+and it is not the answer. Measured 2026-09-05 on dash (`/bin/dash`), bash
+3.2.57 (`/bin/bash`), bash 5.3.15 (`/opt/homebrew/bin/bash`), that same
+5.3.15 binary through a symlink named `sh`, ksh93u+ (`/bin/ksh`) and zsh
+5.9.2 (`/opt/homebrew/bin/zsh`) — unanimous on every row, and POSIX says
+the same:
+
+| probe | all six |
+| --- | --- |
+| `i=0; while [ $i -lt 1 ]; do i=1; false; done; echo $?` | 1 |
+| `i=0; while [ $i -lt 1 ]; do i=1; true; done; echo $?` | **0** |
+| `i=0; until [ $i -ge 1 ]; do i=1; false; done; echo $?` | 1 |
+| `for i in a; do false; done; echo $?` | 1 |
+| `for ((i=0;i<1;i++)); do false; done; echo $?` | 1 (dash has no such loop) |
+| `i=0; while [ $i -lt 2 ]; do false; i=$((i+1)); done; echo $?` | 0 |
+| `i=0; while [ $i -lt 3 ]; do i=$((i+1)); false; break; done; echo $?` | 0 |
+| `i=0; while [ $i -lt 2 ]; do i=$((i+1)); false; continue; done; echo $?` | 0 |
+| `false; while false; do :; done; echo $?` | 0 |
+
+The **second row is the one that discriminates**, and without it the wrong
+answer looks right: the condition that ended that loop was false and the
+body's last command succeeded, so a shell reporting the condition would
+say 1 where all six say 0. The first row cannot tell them apart, because
+there the condition and the body agree.
+
+`break` is not an exception. It is a command of the body and it succeeds,
+so the loop answers 0 even where the command before it failed — the same
+rule, not a rule about `break`.
+
+### What `$?` is on the way in
+
+A different question from what the loop *reports*, and one an
+implementation is likely to answer with the same line. The live status
+belongs to the last command that ran until the loop has something of its
+own to say, so the first iteration and the condition both see what
+preceded the loop:
+
+| probe | all six |
+| --- | --- |
+| `false; for i in a b; do echo "it=$?"; done` | `it=1` then `it=0` |
+| `false; while [ $? -eq 0 ]; do echo ran; break; done; echo end` | `end` — the body never runs |
+| `false; until [ $? -ne 0 ]; do echo ran; break; done; echo end` | `end` |
+| `false; while true; do echo "it=$?"; break; done` | `it=0` — the condition ran last |
+
+The second row is the one with teeth: the answer decides whether the body
+runs at all, so a shell that zeroes the status before the first test runs
+a loop that no shell in the panel runs.
+
+The item list is **not** part of this. A command substitution in it —
+`false; for i in $(echo a); do echo $?; done` — leaves 1 in dash and in
+bash invoked as `sh`, and 0 in bash 5, ksh93 and zsh, so there is no
+common answer to write down and none is claimed here.
+
+Corpus: `cmd/loop-status-when-body-never-runs`,
+`cmd/for-status-empty-list`,
+`core/a-while-loop-answers-with-its-body`,
+`core/a-loop-answers-with-its-body-and-not-its-condition`,
+`core/an-until-loop-answers-with-its-body`,
+`core/a-loop-that-never-ran-does-not-inherit`,
+`core/a-break-is-a-command-of-the-body`,
+`core/a-c-style-loop-answers-with-its-body`,
+`core/the-status-a-loop-body-starts-from`,
+`core/a-loop-condition-sees-the-status-before-it`.
+
 ## C-style `for ((init; cond; post))`
 
 A loop on a condition rather than over a list. Core — bash, ksh93 and

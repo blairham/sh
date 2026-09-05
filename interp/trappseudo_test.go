@@ -46,10 +46,10 @@ func pseudoRun(t *testing.T, dir, src string, sem Semantics) (string, int) {
 		t.Fatalf("parse %q: %v", src, err)
 	}
 	var buf bytes.Buffer
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem,
 		Dir: dir, Name: "testsh", Vars: map[string]string{"PATH": dir},
-	}
+	})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		return buf.String() + "unsupported: " + rerr.Error(), -1

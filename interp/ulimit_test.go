@@ -34,7 +34,7 @@ func ulimitRun(t *testing.T, held map[Resource]limitPair, tweak func(*Semantics)
 		tweak(&sem)
 	}
 	dg := Diagnostics{}
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
 	r.GetRlimit = func(res Resource) (int64, int64, error) {
 		p := held[res]
 		return p.soft, p.hard, nil
@@ -149,7 +149,7 @@ func TestUlimitWithoutHooks(t *testing.T) {
 	var buf bytes.Buffer
 	sem := permissive()
 	dg := Diagnostics{}
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatal(rerr)

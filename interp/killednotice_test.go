@@ -39,10 +39,10 @@ func killedRun(t *testing.T, src string, dg Diagnostics, answer Answer) (string,
 	var errs strings.Builder
 	sem := PosixSemantics()
 	sem.ReportsACommandKilledBySignal = answer
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &dg, Name: "sh",
 		Stdout: &strings.Builder{}, Stderr: &errs,
-	}
+	})
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -168,13 +168,13 @@ func TestTheNoticeAlsoComesFromAWatchedWait(t *testing.T) {
 		Location:           LocationTightLine,
 		SignalDescriptions: map[syscall.Signal]string{syscall.SIGUSR1: "Boom"},
 	}
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &dg, Name: "sh",
 		Stdout: &strings.Builder{}, Stderr: &errs,
 		WaitForCommand: func(int) (Wait, error) {
 			return Wait{Killed: true, Signal: syscall.SIGUSR1}, nil
 		},
-	}
+	})
 	f, err := syntax.Parse("/usr/bin/true\n", syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -239,10 +239,10 @@ func TestASignalEndingAPipelineElementThatIsNotTheLast(t *testing.T) {
 				SignalDescriptions: map[syscall.Signal]string{syscall.SIGUSR1: "Boom"},
 			}
 			out := &strings.Builder{}
-			r := &Runner{
+			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Diagnostics: &dg, Name: "sh",
 				Stdout: out, Stderr: &errs,
-			}
+			})
 			f, err := syntax.Parse(src, syntax.Core())
 			if err != nil {
 				t.Fatal(err)
@@ -275,10 +275,10 @@ func TestTheLastPipelineElementIsAlwaysRemarkedOn(t *testing.T) {
 			Location:           LocationTightLine,
 			SignalDescriptions: map[syscall.Signal]string{syscall.SIGUSR1: "Boom"},
 		}
-		r := &Runner{
+		r := newTestRunner(t, &Runner{
 			Semantics: &sem, Diagnostics: &dg, Name: "sh",
 			Stdout: &strings.Builder{}, Stderr: &errs,
-		}
+		})
 		f, err := syntax.Parse("true\necho hi | /bin/sh -c 'kill -USR1 $$'\n", syntax.Core())
 		if err != nil {
 			t.Fatal(err)
@@ -308,10 +308,10 @@ func TestRefusingToRemarkOnAPipelineElementLeavesItsStatusAlone(t *testing.T) {
 	sem.PipefailOption = Yes
 	sem.SignalDeathStatusIsTwoFiftySix = No
 	out := &strings.Builder{}
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{Location: LocationTightLine},
 		Name: "sh", Stdout: out, Stderr: &errs, Env: testPATH(),
-	}
+	})
 	f, err := syntax.Parse("set -o pipefail\n/bin/sh -c 'kill -USR1 $$' | cat\necho \"st=$?\"\n", syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -432,7 +432,7 @@ func interruptRun(t *testing.T, src string, ends Answer, sig syscall.Signal, die
 	sem.ChildInterruptEndsTheScript = ends
 	sem.ReportsACommandKilledBySignal = Yes
 	sem.SignalDeathStatusIsTwoFiftySix = No
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{Location: LocationTightLine},
 		Name: "sh", Stdout: &buf, Stderr: &buf,
 		// The caller's own wait, which is told the signal directly. No real
@@ -442,7 +442,7 @@ func interruptRun(t *testing.T, src string, ends Answer, sig syscall.Signal, die
 			return Wait{Killed: true, Signal: sig}, nil
 		},
 		DieBySignal: die,
-	}
+	})
 	f, err := syntax.Parse(src, syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -515,13 +515,13 @@ func killedWatched(t *testing.T, dg Diagnostics, sig syscall.Signal) string {
 	sem.ReportsACommandKilledBySignal = Yes
 	sem.ChildInterruptEndsTheScript = No
 	sem.SignalDeathStatusIsTwoFiftySix = No
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &dg, Name: "sh",
 		Stdout: &strings.Builder{}, Stderr: &errs,
 		WaitForCommand: func(int) (Wait, error) {
 			return Wait{Killed: true, Signal: sig}, nil
 		},
-	}
+	})
 	f, err := syntax.Parse("/usr/bin/true\n", syntax.Core())
 	if err != nil {
 		t.Fatal(err)

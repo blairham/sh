@@ -40,11 +40,11 @@ func newDialect(t *testing.T, out *bytes.Buffer) *interp.Runner {
 	//    a value rather than a fork of the code.
 	sem := bash.Semantics()
 	dial := bash.Dialect()
-	r := &interp.Runner{
+	r := newTestRunner(t, &interp.Runner{
 		Stdout: out, Stderr: out,
 		Semantics: &sem, Dialect: &dial, Name: "mysh",
 		Env: testPATH(),
-	}
+	})
 
 	// 2. Register what shell cannot express. `cd` has to change the working
 	//    directory the runner itself uses; no function can say that.
@@ -164,7 +164,7 @@ func TestTheAxesAreValuesNotForks(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var out bytes.Buffer
 			sem := tc.sem
-			r := &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &sem}
+			r := newTestRunner(t, &interp.Runner{Stdout: &out, Stderr: &out, Semantics: &sem})
 			f, err := syntax.Parse(`echo $((0100))`, syntax.Core())
 			if err != nil {
 				t.Fatal(err)

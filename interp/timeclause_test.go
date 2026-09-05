@@ -32,7 +32,7 @@ func timeRun(t *testing.T, src string, d syntax.Dialect, sem Semantics, dg Diagn
 		t.Fatalf("parse %q: %v", src, err)
 	}
 	var o, e bytes.Buffer
-	r := &Runner{Stdout: &o, Stderr: &e, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+	r := newTestRunner(t, &Runner{Stdout: &o, Stderr: &e, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
 	if setup != nil {
 		setup(r)
 	}

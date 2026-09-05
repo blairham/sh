@@ -86,11 +86,43 @@ func testPATH() []string { return []string{"PATH=/usr/bin:/bin"} }
 // the TMPDIR are deliberately different directories — a substitution's pipes
 // appearing inside the shell's own working directory would be visible to a
 // glob, which is a difference no real shell has.
-func newTestRunner(t *testing.T) *Runner {
+//
+// It takes the Runner rather than returning a bare one because that is what
+// made it adoptable. There were 192 ad-hoc Runner literals in this package's
+// tests, each with its own fields, and a helper that returned a Runner for the
+// caller to fill in would have meant rewriting every one of them into a
+// construction plus a list of assignments. Wrapping the literal instead leaves
+// each test saying exactly what it said before, and the guard in
+// runnerguard_test.go can then require the wrapper on all of them.
+//
+// Only what the test did not say is supplied. A test that sets its own Dir,
+// or its own TMPDIR, keeps it — several are about precisely that.
+func newTestRunner(t *testing.T, r *Runner) *Runner {
 	t.Helper()
-	r := &Runner{Dir: t.TempDir(), Env: append(testPATH(), "TMPDIR="+t.TempDir())}
+	if r.Dir == "" {
+		r.Dir = t.TempDir()
+	}
+	if !hasEnv(r.Env, "TMPDIR") {
+		r.Env = append(r.Env, "TMPDIR="+t.TempDir())
+	}
+	// Registered here rather than left to each test, which is the whole of
+	// the leak: CleanUp removes the directory a process substitution made for
+	// its pipes, and a test has no reason to think about it. The suite left
+	// one behind per substituting Runner — in /tmp, since a Runner with no
+	// TMPDIR falls back to it — and they accumulated in the thousands.
 	t.Cleanup(r.CleanUp)
 	return r
+}
+
+// hasEnv says whether an environment already answers for a name, so the helper
+// supplies a default rather than overriding what a test meant.
+func hasEnv(env []string, name string) bool {
+	for _, kv := range env {
+		if strings.HasPrefix(kv, name+"=") {
+			return true
+		}
+	}
+	return false
 }
 
 func run(t *testing.T, src string, setup func(*Runner)) (out string, status int) {
@@ -117,8 +149,7 @@ func runGrammar(t *testing.T, src string, enable func(*syntax.Dialect), setup fu
 	// core and the core refuses anything the shells disagree about — which
 	// is exactly what these tests are full of.
 	bash := bash.Semantics()
-	r := newTestRunner(t)
-	r.Stdout, r.Stderr, r.Semantics = &buf, &buf, &bash
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &bash, Env: testPATH()})
 	if setup != nil {
 		setup(r)
 	}
@@ -171,7 +202,7 @@ func TestARelativeRedirectStaysInTheRunnersOwnDirectory(t *testing.T) {
 // real temporary directory that is one directory per substituting Runner,
 // forever; the helper registers the cleanup so no test has to remember.
 func TestTheHelperGivesTemporaryFilesSomewhereTemporary(t *testing.T) {
-	r := newTestRunner(t)
+	r := newTestRunner(t, &Runner{})
 	var tmp string
 	for _, kv := range r.Env {
 		if rest, ok := strings.CutPrefix(kv, "TMPDIR="); ok {
@@ -183,6 +214,34 @@ func TestTheHelperGivesTemporaryFilesSomewhereTemporary(t *testing.T) {
 	}
 	if tmp == r.Dir {
 		t.Error("TMPDIR is the working directory, so a substitution's pipes would be visible to a glob")
+	}
+}
+
+// TestTheHelperSuppliesOnlyWhatTheTestDidNot.
+//
+// The helper fills in a Dir and a TMPDIR, and both have to be defaults rather
+// than decisions: several tests are about a particular directory — where `cd`
+// lands, where a substitution's pipes go, what `pwd` reports — and a helper
+// that overwrote them would quietly move the thing under test and leave the
+// assertion looking at somewhere else.
+//
+// Asked of the helper directly, which is the gap it fills. Every other test
+// sets its directories in the setup function that runs *after* the helper, so
+// none of them would notice the helper overriding what it was handed.
+func TestTheHelperSuppliesOnlyWhatTheTestDidNot(t *testing.T) {
+	mine, myTmp := t.TempDir(), t.TempDir()
+	r := newTestRunner(t, &Runner{Dir: mine, Env: append(testPATH(), "TMPDIR="+myTmp)})
+	if r.Dir != mine {
+		t.Errorf("Dir = %q, want the one handed in (%q)", r.Dir, mine)
+	}
+	var tmp []string
+	for _, kv := range r.Env {
+		if rest, ok := strings.CutPrefix(kv, "TMPDIR="); ok {
+			tmp = append(tmp, rest)
+		}
+	}
+	if len(tmp) != 1 || tmp[0] != myTmp {
+		t.Errorf("TMPDIR = %q, want exactly the one handed in (%q)", tmp, myTmp)
 	}
 }
 
@@ -468,7 +527,7 @@ func TestOnlyExportedVariablesReachTheEnvironment(t *testing.T) {
 func TestRunPartLeavesTheShellOpen(t *testing.T) {
 	var out bytes.Buffer
 	s := bash.Semantics()
-	r := &Runner{Stdout: &out, Stderr: &out, Semantics: &s}
+	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Semantics: &s})
 	for _, src := range []string{`x=1; f() { echo "f says $x"; }`, `x=2`, `f`} {
 		f, err := syntax.Parse(src, syntax.Core())
 		if err != nil {
@@ -488,7 +547,7 @@ func TestRunPartLeavesTheShellOpen(t *testing.T) {
 func TestFinishRunsTheExitTrapOnce(t *testing.T) {
 	var out bytes.Buffer
 	s := bash.Semantics()
-	r := &Runner{Stdout: &out, Stderr: &out, Semantics: &s}
+	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Semantics: &s})
 	for _, src := range []string{`trap 'echo bye' EXIT`, `echo one`, `echo two`} {
 		f, err := syntax.Parse(src, syntax.Core())
 		if err != nil {
@@ -512,7 +571,7 @@ func TestFinishRunsTheExitTrapOnce(t *testing.T) {
 func TestExitedStopsTheCaller(t *testing.T) {
 	var out bytes.Buffer
 	s := bash.Semantics()
-	r := &Runner{Stdout: &out, Stderr: &out, Semantics: &s}
+	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Semantics: &s})
 	f, err := syntax.Parse(`echo one; exit 3; echo two`, syntax.Core())
 	if err != nil {
 		t.Fatal(err)

@@ -74,7 +74,7 @@ func (r *Runner) bareLocalListing() int {
 		r.diagf("local: listing every parameter of the shell is not implemented yet\n")
 		return 2
 	}
-	r.diagf("what a bare `local` lists: the shells disagree here and no dialect was chosen\n")
+	r.diagf("%s\n", r.unanswered("what a bare `local` lists"))
 	r.status = 2
 	r.unspecified = true
 	return 2

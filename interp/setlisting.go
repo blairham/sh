@@ -60,7 +60,7 @@ func (r *Runner) setListing() int {
 		return 2
 	case SetListingAssignments, SetListingAssignmentsThenFunctions:
 	default:
-		r.diagf("what a bare `set` lists: the shells disagree here and no dialect was chosen\n")
+		r.diagf("%s\n", r.unanswered("what a bare `set` lists"))
 		r.status = 2
 		r.unspecified = true
 		return 2

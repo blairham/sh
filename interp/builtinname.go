@@ -50,7 +50,7 @@ func (r *Runner) isBuiltinName(name string, takes NameOperands) bool {
 	case PlainNamesOnly:
 		return false
 	}
-	r.diagf("what may stand where a name is wanted: the shells disagree here and no dialect was chosen\n")
+	r.diagf("%s\n", r.unanswered("what may stand where a name is wanted"))
 	r.status = 2
 	r.unspecified = true
 	return false

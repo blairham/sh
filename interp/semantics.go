@@ -2863,7 +2863,7 @@ func (r *Runner) exitArgument() ExitArgumentPolicy {
 	p := r.sem().ExitArgument
 	if p == ExitArgUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
-			"exit: this argument: the shells disagree here and no dialect was chosen"))
+			r.unanswered("exit: this argument")))
 		r.status = 2
 		r.unspecified = true
 	}
@@ -2901,7 +2901,7 @@ func (r *Runner) backslashC() PrintfBackslashCPolicy {
 	p := r.sem().PrintfBackslashC
 	if p == PrintfBackslashCUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
-			`printf: \c: the shells disagree here and no dialect was chosen`))
+			r.unanswered(`printf: \c`)))
 		r.status = 2
 		r.unspecified = true
 	}
@@ -2962,7 +2962,7 @@ func (r *Runner) hexEscape() PrintfHexEscapePolicy {
 	p := r.sem().PrintfHexEscape
 	if p == PrintfHexEscapeUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
-			`printf: \x: the shells disagree here and no dialect was chosen`))
+			r.unanswered(`printf: \x`)))
 		r.status = 2
 		r.unspecified = true
 	}
@@ -3011,7 +3011,7 @@ func (r *Runner) lengthModifiers() PrintfLengthModifierSet {
 	p := r.sem().PrintfLengthModifiers
 	if p == PrintfLengthModifiersUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
-			`printf: a length modifier: the shells disagree here and no dialect was chosen`))
+			r.unanswered(`printf: a length modifier`)))
 		r.status = 2
 		r.unspecified = true
 	}
@@ -3050,7 +3050,7 @@ func (r *Runner) quoteStyle() PrintfQuoteStyle {
 	p := r.sem().PrintfQuote
 	if p == PrintfQuoteUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
-			"printf: %q: the shells disagree here and no dialect was chosen"))
+			r.unanswered("printf: %q")))
 		r.status = 2
 		r.unspecified = true
 	}
@@ -3106,7 +3106,7 @@ func (r *Runner) dollarSingleControl() DollarSingleControlPolicy {
 	p := r.sem().DollarSingleBackslashC
 	if p == DollarSingleControlUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
-			`$'\c': the shells disagree here and no dialect was chosen`))
+			r.unanswered(`$'\c'`)))
 		r.status = 2
 		r.unspecified = true
 	}
@@ -3145,7 +3145,7 @@ func (r *Runner) dollarSingleUnknown() DollarSingleUnknownPolicy {
 	p := r.sem().DollarSingleUnknownEscape
 	if p == DollarSingleUnknownUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
-			`$'\': an escape with no meaning: the shells disagree here and no dialect was chosen`))
+			r.unanswered(`$'\': an escape with no meaning`)))
 		r.status = 2
 		r.unspecified = true
 	}
@@ -3185,7 +3185,7 @@ func (r *Runner) killStatusPolicy() KillStatusPolicy {
 	p := r.sem().KillStatus
 	if p == KillStatusUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
-			"kill: some of these targets: the shells disagree here and no dialect was chosen"))
+			r.unanswered("kill: some of these targets")))
 		r.status = 2
 		r.unspecified = true
 	}
@@ -3198,7 +3198,7 @@ func (r *Runner) killListAcceptsName() Answer {
 	a := r.sem().KillListAcceptsName
 	if a == Unspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
-			"kill -l: a signal name: the shells disagree here and no dialect was chosen"))
+			r.unanswered("kill -l: a signal name")))
 		r.status = 2
 		r.unspecified = true
 	}
@@ -3238,7 +3238,7 @@ func (r *Runner) bracketPolicy() BracketPolicy {
 	p := r.sem().UnterminatedBracket
 	if p == BracketUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
-			"an unterminated bracket expression: the shells disagree here and no dialect was chosen"))
+			r.unanswered("an unterminated bracket expression")))
 		r.status = 2
 		r.unspecified = true
 	}
@@ -3312,7 +3312,7 @@ func (r *Runner) unsetArraySpan() UnsetArraySpanPolicy {
 	p := r.sem().UnsetArraySpan
 	if p == UnsetArraySpanUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
-			"`unset a[@]`: the shells disagree here and no dialect was chosen"))
+			r.unanswered("`unset a[@]`")))
 		r.status = 2
 		r.unspecified = true
 	}
@@ -3389,7 +3389,7 @@ func (r *Runner) ask(a Answer, axis string) bool {
 	case No:
 		return false
 	}
-	r.diagf("%s: the shells disagree here and no dialect was chosen\n", axis)
+	r.diagf("%s\n", r.unanswered(axis))
 	r.status = 2
 	r.unspecified = true
 	return false

@@ -144,7 +144,7 @@ func (r *Runner) subshellJobTable() SubshellJobTable {
 	t := r.sem().SubshellJobTable
 	if t == SubshellJobTableUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
-			"jobs in a subshell: the shells disagree here and no dialect was chosen"))
+			r.unanswered("jobs in a subshell")))
 		r.status = 2
 		r.unspecified = true
 	}

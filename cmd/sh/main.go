@@ -14,6 +14,7 @@
 // way that shell does. That is what makes it a column in the conformance
 // harness, which needs something it can hand a snippet to.
 //
+//	sh -h                        # what this is and how to invoke it
 //	sh                           # a prompt, if stdin is a terminal
 //	sh -c 'echo hi'              # run a command
 //	sh script.sh a b             # run a script, with $1 and $2 set
@@ -81,6 +82,28 @@
 // could be named by the environment could be replaced by anything able to set
 // it, the sandboxed script included.
 //
+// -h, -help and --help are the exception to "flags no shell has", and the
+// exception is deliberate. bash and zsh read `-h` as `set -h` and dash refuses
+// it; none of them would be a useful answer from a binary that is a harness
+// column and an inspection tool rather than a shell anyone is being bash for.
+// Fidelity to `bash -h` belongs to cmd/bash, which reaches driver without
+// passing through here at all. A person meeting this binary types -h, and a
+// usage message is not shell behavior — so it is answered before a dialect is
+// resolved, before an axis is consulted and before a policy is read.
+//
+// The default dialect stays `core`, which refuses at every axis the panel
+// disagrees about, and that refusal is the point of the binary rather than a
+// rough edge on it. Defaulting to `posix` would trade it for a worse failure:
+// measured, that dialect cannot parse `a=(1 2 3)`, `[[ -n x ]]` or `${s:1:3}`,
+// all of which every shell in the panel but dash accepts, so `sh -c` would
+// stop at the front door on syntax rather than at the disputed semantics.
+// Defaulting to `bash` would make the substrate's own driver answer every
+// disputed axis the way one member of the panel does, which is the bash-first
+// design this repository exists not to be, and would make the conformance
+// harness's explicit `-binargs "-dialect bash"` indistinguishable from no
+// choice at all. What the refusal owed a person was the name of the flag, and
+// that is what it now carries — see axisRemedy.
+//
 // With nothing to run and a terminal on stdin it prompts: a line editor with
 // history that survives the session, Tab completion of commands and files,
 // PS1 and PS2, and a continuation prompt for a construct that has not
@@ -122,6 +145,16 @@ func main() {
 // policy and drops the error on the floor.
 func run(argv []string, stdout, stderr io.Writer) int {
 	own, rest, err := readOwnFlags(argv[1:])
+	// Before the error, and before any dialect is resolved: a usage message is
+	// not shell behavior, so it must not be reachable only through a shell that
+	// works. `sh -h` used to be refused at an axis — `set -h` being an option
+	// letter at all is one the panel disagrees about — which made the one
+	// binary a person cannot casually run also the one that would not say how
+	// to run it.
+	if own.help {
+		usage(stdout, argv[0])
+		return 0
+	}
 	if err != nil {
 		return fail(stderr, err)
 	}
@@ -129,6 +162,12 @@ func run(argv []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return fail(stderr, err)
 	}
+	// What to tell a person who runs into an axis nothing answered. It is set
+	// here because this is the binary that has the flag: interp may not name a
+	// shell and driver has no flags of its own, so both carry the sentence
+	// rather than composing it. A dialect binary leaves it empty — telling its
+	// user to choose a dialect would be telling them to fix our bug.
+	sh.AxisRemedy = axisRemedy
 	// The fallback for an argv with nothing in it; driver names the shell by
 	// argv[0] the way every dialect binary is named.
 	sh.Name = "sh"
@@ -212,12 +251,17 @@ func run(argv []string, stdout, stderr io.Writer) int {
 // the gate and event seam.
 type ownFlags struct {
 	tokens, parse bool
-	dialect       string
-	traceEvents   bool
-	deny          []string
-	policy        string
-	audit         string
-	acp           bool
+	// help ends the invocation with a usage message, and is answered before
+	// anything else: no dialect is resolved, no axis is consulted, no policy
+	// is read. A shell that will not say how to invoke it is worse than one
+	// that refuses to run.
+	help        bool
+	dialect     string
+	traceEvents bool
+	deny        []string
+	policy      string
+	audit       string
+	acp         bool
 	// blocksList is how many recent blocks to print, and blocksShow names one
 	// to print in full. Both end the invocation: they read a store rather than
 	// running a shell.
@@ -250,6 +294,16 @@ func readOwnFlags(args []string) (own ownFlags, rest []string, err error) {
 		}
 		name, val, hasVal := strings.Cut(strings.TrimLeft(a[1:], "-"), "=")
 		switch name {
+		case "h", "help":
+			// The one letter this binary takes that a shell also has: bash and
+			// zsh read `-h` as `set -h`, measured, and dash refuses it. Taken
+			// anyway, and only here at the front of the line — `sh script.sh
+			// -h` still hands the script a `-h`, and `bash -h` is cmd/bash's
+			// to answer, which it still does through the front end untouched.
+			// The letter is what a person reaches for, and hashall is what
+			// they will never have meant by it on a binary whose whole flag
+			// namespace is already its own.
+			own.help = true
 		case "tokens":
 			own.tokens = true
 		case "parse":

@@ -120,7 +120,7 @@ func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) str
 		}
 		return doubleQuoted(v)
 	}
-	r.diagf("how %s spells a value: the shells disagree here and no dialect was chosen\n", what)
+	r.diagf("%s\n", r.unanswered("how "+what+" spells a value"))
 	r.status = 2
 	r.unspecified = true
 	return v

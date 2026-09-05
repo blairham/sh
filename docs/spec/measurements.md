@@ -3231,7 +3231,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   { echo out; echo err >&2; } 2>&1 >f; printf "[%s]" "$(cat f)"
   ```
-- `redir/multios-is-zsh-only` — zsh writes to every target and the others only to the last, with no error either way — the &> failure mode in a redirection, and not implemented here
+- `redir/multios-is-zsh-only` — zsh writes to every target and the others only to the last, with no error either way — the &> failure mode in a redirection: one spelling, two meanings, and no diagnostic to tell them apart
   ```sh
   echo x >a >b; printf "[%s][%s]" "$(cat a 2>/dev/null)" "$(cat b 2>/dev/null)"
   ```
@@ -4778,6 +4778,11 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `invoke/errexit-reaches-the-option-letters` | `has-e` | `has-e` | `has-e` | `has-e` | `has-e` | `has-e` |
 | `invoke/end-of-options-before-a-script` | `<script>\|2\|a` | `<script>\|2\|a` | `<script>\|2\|a` | `<script>\|2\|a` | `<script>\|2\|a` | `<script>\|2\|a` |
 | `invoke/the-command-string-names-zero-itself` | `name\|2\|a b` | `name\|2\|a b` | `name\|2\|a b` | `name\|2\|a b` | `name\|2\|a b` | `name\|2\|a b` |
+| `invoke/c-in-the-middle-of-a-bundle` | `name\|1\|a` *(status 1)* | `name\|1\|a` *(status 1)* | `name\|1\|a` *(status 1)* | `name\|1\|a` *(status 1)* | `name\|1\|a` *(status 1)* | `name\|1\|a` *(status 1)* |
+| `invoke/options-between-c-and-its-string` | `name\|1\|a` *(status 1)* | `name\|1\|a` *(status 1)* | `name\|1\|a` *(status 1)* | `name\|1\|a` *(status 1)* | `name\|1\|a` *(status 1)* | `name\|1\|a` *(status 1)* |
+| `invoke/end-of-options-between-c-and-its-string` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` |
+| `invoke/plus-c-still-runs-the-command` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
+| `invoke/c-outranks-standard-input` | `hi\|0` | `hi\|0` | `hi\|0` | `hi\|0` | `hi\|0` | `hi\|0` |
 
 - `invoke/errexit-with-a-script` — the first line of most scripts, spelled on the command line instead: a set option given at invocation has to reach the runner, and abandon the script at the failure rather than run to the end
   ```sh
@@ -4805,4 +4810,24 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `invoke/the-command-string-names-zero-itself` — -c names its operands differently from every other route: the first is $0 and only the rest are parameters, so a shell that handed all three to $1 onward would report n=3 and keep its own name
   ```sh
   echo "$0|$#|$*"
+  ```
+- `invoke/c-in-the-middle-of-a-bundle` — a bundle does not end at c: the letters after it are options and the command string is still the first operand. Reading the rest of the word as the string ran a command called `e` with the string as $0
+  ```sh
+  echo "$0|$#|$*"; false; echo two
+  ```
+- `invoke/options-between-c-and-its-string` — the option loop stops at the first operand rather than at c, so a whole option word may sit between -c and the command string — which is how an agent harness writes it. Taking the next word regardless would run `-e` as the program
+  ```sh
+  echo "$0|$#|$*"; false; echo two
+  ```
+- `invoke/end-of-options-between-c-and-its-string` — the same rule from the other side: -- ends the options and the first operand after it is the command string, not a path
+  ```sh
+  echo "$0|$#|$*"
+  ```
+- `invoke/plus-c-still-runs-the-command` — both signs select the command string — unanimous. Gating c on the minus sign made +c a set letter to turn off and then opened the command string as a script file
+  ```sh
+  echo hi
+  ```
+- `invoke/c-outranks-standard-input` — -s and -c in one bundle: all four run the command rather than reading standard input, so a shell that let -s win would print nothing and still exit 0
+  ```sh
+  echo "hi|$#"
   ```

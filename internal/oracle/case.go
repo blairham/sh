@@ -1970,7 +1970,7 @@ echo "st=$?"`,
 	{
 		ID: "redir/multios-is-zsh-only", Category: "redirection",
 		Snippet: `echo x >a >b; printf "[%s][%s]" "$(cat a 2>/dev/null)" "$(cat b 2>/dev/null)"`,
-		Why:     "zsh writes to every target and the others only to the last, with no error either way — the &> failure mode in a redirection, and not implemented here",
+		Why:     "zsh writes to every target and the others only to the last, with no error either way — the &> failure mode in a redirection: one spelling, two meanings, and no diagnostic to tell them apart",
 	},
 	{
 		ID: "token/clobber-override", Category: "tokenization",
@@ -4684,5 +4684,35 @@ out=$(CDPATH=./pool cd sub)
 		Args:    []string{"-c", ArgSnippet, "name", "a", "b"},
 		Snippet: `echo "$0|$#|$*"`,
 		Why:     "-c names its operands differently from every other route: the first is $0 and only the rest are parameters, so a shell that handed all three to $1 onward would report n=3 and keep its own name",
+	},
+	{
+		ID: "invoke/c-in-the-middle-of-a-bundle", Category: "invocation",
+		Args:    []string{"-ce", ArgSnippet, "name", "a"},
+		Snippet: `echo "$0|$#|$*"; false; echo two`,
+		Why:     "a bundle does not end at c: the letters after it are options and the command string is still the first operand. Reading the rest of the word as the string ran a command called `e` with the string as $0",
+	},
+	{
+		ID: "invoke/options-between-c-and-its-string", Category: "invocation",
+		Args:    []string{"-c", "-e", ArgSnippet, "name", "a"},
+		Snippet: `echo "$0|$#|$*"; false; echo two`,
+		Why:     "the option loop stops at the first operand rather than at c, so a whole option word may sit between -c and the command string — which is how an agent harness writes it. Taking the next word regardless would run `-e` as the program",
+	},
+	{
+		ID: "invoke/end-of-options-between-c-and-its-string", Category: "invocation",
+		Args:    []string{"-c", "--", ArgSnippet, "name", "a"},
+		Snippet: `echo "$0|$#|$*"`,
+		Why:     "the same rule from the other side: -- ends the options and the first operand after it is the command string, not a path",
+	},
+	{
+		ID: "invoke/plus-c-still-runs-the-command", Category: "invocation",
+		Args:    []string{"+c", ArgSnippet},
+		Snippet: `echo hi`,
+		Why:     "both signs select the command string — unanimous. Gating c on the minus sign made +c a set letter to turn off and then opened the command string as a script file",
+	},
+	{
+		ID: "invoke/c-outranks-standard-input", Category: "invocation",
+		Args:    []string{"-sc", ArgSnippet},
+		Snippet: `echo "hi|$#"`,
+		Why:     "-s and -c in one bundle: all four run the command rather than reading standard input, so a shell that let -s win would print nothing and still exit 0",
 	},
 }

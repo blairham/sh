@@ -157,8 +157,9 @@ type Semantics struct {
 	// ArithNameValueRecurses re-evaluates a name-shaped value as an
 	// expression: with `x=abc`, `$((x+1))` is 1 in bash and zsh, because
 	// `abc` is looked up in turn and is unset. dash and ksh93 error instead.
-	// The interpreter followed the two that agree and said so in a comment,
-	// which is the shape of a guess rather than a measurement.
+	// The interpreter once followed the two that agree and said so in a
+	// comment, which is the shape of a guess rather than a measurement; it
+	// asks here now, and arithValueOf is where the ask is made.
 	ArithNameValueRecurses Answer
 	// ArithInvalidOctalDigitIsError rejects `08` once a leading zero has
 	// been read as octal. True in dash and bash; ksh93 falls back to decimal
@@ -488,11 +489,6 @@ type Semantics struct {
 	// TypePrintsFunctionBody makes `type name` follow "name is a function"
 	// with the function itself, reformatted. True in bash alone; the other
 	// three stop at the sentence.
-	//
-	// Answered and not yet honored: printing a body needs a printer for the
-	// syntax tree, which this does not have — see the `type` builtin, which
-	// refuses rather than printing the sentence and silently dropping the
-	// half of the answer that was asked for.
 	TypePrintsFunctionBody Answer
 
 	// TypeEndsOptionsWithDashDash makes `type -- name` skip the `--`. True
@@ -915,8 +911,6 @@ type Semantics struct {
 	// a plainly quoted `'a<tab>b'`.
 	TrapQuoting ListingQuotingStyle
 
-	// TrapBodyLine is which lines a diagnostic from inside a trap's body
-	// names. See TrapBodyLineStyle.
 	// TrapActionIsParsedWhenSet reads a trap's action when the trap is set
 	// rather than when it fires, and refuses a trap whose action will not
 	// parse.
@@ -1034,6 +1028,8 @@ type Semantics struct {
 	// the wider question the same way everywhere are not asked twice.
 	ReportsAKilledCommandInACommandSubstitution Answer
 
+	// TrapBodyLine is which lines a diagnostic from inside a trap's body
+	// names. See TrapBodyLineStyle.
 	TrapBodyLine TrapBodyLineStyle
 
 	// ExitTrapFiresPastTheEnd counts the EXIT trap as having fired on the
@@ -1734,9 +1730,6 @@ func (n NameOperands) String() string {
 // and protocols are not. The presets exist so that choice can be spelled in
 // one line rather than one per axis.
 
-// PosixSemantics is what the specification requires, which is not what any
-// shell does in full — it is the right target for a portability check and the
-// wrong one for a runtime.
 // SelectMenuLayout is how a shell draws a `select` menu. The engines differ
 // enough that the same nine items are nine lines in two shells and one line in
 // the third, so this is a named choice rather than a flag.
@@ -1755,6 +1748,9 @@ const (
 	SelectMenuColumns
 )
 
+// PosixSemantics is what the specification requires, which is not what any
+// shell does in full — it is the right target for a portability check and the
+// wrong one for a runtime.
 func PosixSemantics() Semantics {
 	return Semantics{
 		SplitParamExpansion:                      Yes,

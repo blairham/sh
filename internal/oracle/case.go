@@ -1310,6 +1310,51 @@ var Corpus = []Case{
 		Snippet: `printf 'a\c\' | od -An -c | tr -s " "`,
 		Why:     "a backslash with nothing after it escapes the end of the format, so what \\c controls is a NUL rather than the backslash itself — an @ and not a control-backslash for the shell that reads the escape",
 	},
+	{
+		ID: "printf/hex-escape-in-a-format", Category: "printf",
+		Snippet: `printf 'a\x41Z' | od -An -tx1 | tr -s " "`,
+		Why:     "\\xHH is an escape in a format for every shell in the panel but dash, which has none and writes the six characters as they stand",
+	},
+	{
+		ID: "printf/hex-escape-writes-one-raw-byte", Category: "printf",
+		Snippet: `printf 'a\x80Z' | od -An -tx1 | tr -s " "`,
+		Why:     "the escape produces a byte and not a character, so a value no encoding claims is one byte wide — read as hexadecimal because the display cannot tell 80 from the two bytes UTF-8 spells U+0080 with, and unanimous among the five that have the escape at all",
+	},
+	{
+		ID: "printf/hex-escape-digit-run-diverges", Category: "printf",
+		Snippet: `printf '[\x0ff]' | od -An -tx1 | tr -s " "`,
+		Why:     "how wide the digit run is: bash and zsh stop at two and the value is a byte, so this is 0x0f followed by an f, and ksh93 takes every digit and reads more than two of them as a code point, so the same text is U+00FF in UTF-8",
+	},
+	{
+		ID: "printf/hex-escape-four-digits-is-a-code-point", Category: "printf",
+		Snippet: `printf '[\x0041]' | od -An -tx1 | tr -s " "`,
+		Why:     "the same split with a value that is ASCII, which shows the switch is on the number of digits rather than on the size of the value: two digits would be a NUL and a 4 and a 1, and every digit read as a code point is an A",
+	},
+	{
+		ID: "printf/hex-escape-with-no-digits", Category: "printf",
+		Snippet: `printf 'a\xZ' | od -An -tx1 | tr -s " "`,
+		Why:     "an empty digit run: bash leaves the escape standing and warns without failing, ksh93 and zsh read the run as a zero and write a NUL, and dash has no escape here to have an empty run",
+	},
+	{
+		ID: "printf/hex-escape-is-not-a-b-escape", Category: "printf",
+		Snippet: `printf '%b' 'a\x41Z' | od -An -tx1 | tr -s " "`,
+		Why:     "the site matters and not only the shell: ksh93 reads \\x41 in a format and leaves it as written in a %b argument, which expands the set echo expands. bash and zsh have it in both and dash in neither, so ksh93 alone separates the two tables",
+	},
+	{
+		ID: "printf/an-octal-escape-is-a-byte-and-not-a-code-point", Category: "printf",
+		Snippet: `printf 'a\300Z' | od -An -tx1 | tr -s " "`,
+		Why:     "unanimous, and worth pinning as bytes: \\300 is the single byte 0xc0 in all six, never the two bytes UTF-8 gives the code point of the same number",
+	},
+	{
+		ID: "printf/a-quoted-escape-used-as-a-format", Category: "printf",
+		Snippet: `printf $'a\xc0Z' | od -An -tx1 | tr -s " "`,
+		Why:     "the byte arrives already decoded and the format only has to carry it, which is a different route to the output from an escape the format decodes itself. dash has no quoted-escape form, so the dollar sign is part of the word there",
+	},
+	{
+		ID: "printf/a-c-conversion-writes-one-byte", Category: "printf",
+		Snippet: `printf '%c' $'\xc0' | od -An -tx1 | tr -s " "`,
+		Why:     "%c takes the first byte of its operand rather than the first character, so a byte above the ASCII range is written alone and not as the pair an encoding would spell it with",
+	},
 
 	// --- kill: a builtin, because a shell has to know what it sent ---------
 	{

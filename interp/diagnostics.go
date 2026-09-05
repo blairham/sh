@@ -299,6 +299,15 @@ type Diagnostics struct {
 	PrintfBadVerb string
 	// PrintfBadVerbStatus is what that reports. Zero means 1.
 	PrintfBadVerbStatus int
+	// PrintfMissingHexDigit is a `\x` in a format with no hexadecimal digit
+	// after it. No verbs.
+	//
+	// Only the dialect that leaves the escape standing says anything, and it
+	// is a warning rather than a failure: bash writes
+	// `printf: missing hex digit for \x`, writes the two characters, and
+	// still reports success. The dialects that read an empty digit run as a
+	// zero write the NUL and say nothing.
+	PrintfMissingHexDigit string
 	// PrintfUsage is `printf` with no format at all. No verbs.
 	// PrintfBadOption is a leading `-` word this dialect does not know. One
 	// verb: the word as written.

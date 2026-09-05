@@ -1021,6 +1021,82 @@ this axis:
 - ksh93 appends a newline to any output holding a byte above the ASCII
   range, in a format and inside `$'…'` alike.
 
+### The hexadecimal escape in a format
+
+`printf` reads `\xHH` in its *format*, and the panel splits four ways over
+how. Measured with `/bin/bash` 3.2.57, `/opt/homebrew/bin/bash` 5.3.15,
+`/bin/ksh` 93u+ 2012-08-01, `/opt/homebrew/bin/zsh` 5.9.2 and `/bin/dash`,
+reading the bytes with `od -An -tx1` rather than the display — which is
+the only way to ask this question at all. The two bash builds agree
+throughout, so they are one column here:
+
+    printf 'a\x41Z'    bash 61 41 5a   ksh93 61 41 5a   zsh 61 41 5a
+                       dash 61 5c 78 34 31 5a
+    printf 'a\x80Z'    bash 61 80 5a   ksh93 61 80 5a   zsh 61 80 5a
+                       dash 61 5c 78 38 30 5a
+    printf 'a\x1Z'     bash 61 01 5a   ksh93 61 01 5a   zsh 61 01 5a
+    printf '[\xff]'    bash 5b ff 5d   ksh93 5b ff 5d   zsh 5b ff 5d
+    printf '[\x0ff]'   bash 5b 0f 66 5d   zsh 5b 0f 66 5d
+                       ksh93 5b c3 bf 5d
+    printf '[\x0041]'  bash 5b 00 34 31 5d   zsh 5b 00 34 31 5d
+                       ksh93 5b 41 5d
+    printf 'a\xZ'      bash 61 5c 78 5a and `printf: missing hex digit for \x`
+                       ksh93 61 00 5a   zsh 61 00 5a
+                       dash 61 5c 78 5a
+
+Three separate details, and each splits the panel in a different place,
+which is why `PrintfHexEscape` is one enumeration rather than a bool:
+
+- **Whether the escape is there.** dash has no `\x`, so all six characters
+  of `a\x41Z` come out as written. It is the sole holdout, as it is on
+  most of this file.
+- **How wide the digit run is, and what the value means.** bash and zsh
+  stop at two digits and the value is a *byte*. ksh93 takes every digit
+  that follows, and once there are more than two of them the value is a
+  *code point* written in UTF-8 — which is why `\xff` is one byte there
+  and `\x0ff` is two. The switch is on the number of digits and not on the
+  value: `\x0041` is an `A` and `\x0080` is `c2 80`.
+- **What an empty digit run means.** bash leaves `\x` standing and writes
+  `printf: missing hex digit for \x` on standard error, with a status that
+  is still 0 — a warning rather than a failure. ksh93 and zsh read the
+  empty run as a zero and write a NUL.
+
+One thing measured here is **not** modeled. ksh93's code point may run
+past the last one there is, and it writes a nonstandard encoding for it:
+`printf '[\x123456789abc]'` is `5b fd 96 9e 89 aa bc 5d`, six bytes for a
+value forty times larger than U+10FFFF. This writes nothing for a run past
+the last code point, which is what ksh93 itself does once the value stops
+fitting at all — `printf '[\xffffffffffffffffffffff]'` is `5b 5d` there.
+Every value Unicode has agrees.
+
+The escape is a question about the **format**. `%b` expands the set `echo`
+expands, and the two tables are not the same one: ksh93 reads `\x41` in a
+format and leaves it as written in `printf '%b' 'a\x41Z'`, which is
+`61 5c 78 34 31 5a`. bash and zsh have it in both and dash in neither, so
+ksh93 alone shows that the site matters — and the axis is put to a format
+and never to a `%b` argument.
+
+### A format is a byte string, in every direction
+
+A shell word is a string of bytes and so is a `printf` format, and the
+byte a format decodes has to reach the output as that byte. Three routes
+into `printf` were spelling it as the text UTF-8 gives the *code point* of
+the same number instead, so `printf 'a\300Z'` wrote `61 c3 80 5a` where
+all five shells write `61 c0 5a`:
+
+    printf 'a<0xc0>Z'    a literal byte walked over by the format loop
+    printf 'a\300Z'      an octal escape
+    printf '%c' '<0xc0>' the first byte of a `%c` operand
+
+None of them is about how a word is *read*. The same byte written into a
+variable, or produced by `$'\xc0'`, or handed to `%s`, came through
+untouched in every dialect — `printf '%s' 'a<0xc0>Z'` was already
+`61 c0 5a` — and the octal case has no byte above ASCII in its source at
+all. The three sites are the format's own, and the cause in each is the
+same one: Go's `string(x)` on an integer is a *rune* conversion, so a byte
+of 0xc0 becomes the two bytes U+00C0 is spelled with. A one-byte slice is
+the conversion that means what a shell means.
+
 ## A capability the corpus cannot hand a case
 
 The corpus can give a case its own argv (`Case.Args`) and its own standard

@@ -2698,6 +2698,15 @@ grades it and nothing drift-checks it either, for the same reason.
 | `printf/backslash-c-with-a-symbol-outside-the-letters` | ` a \ c ~ Z : a \ c ? Z ` | ` a \ c ~ Z : a \ c ? Z ` | ` a \ c ~ Z : a \ c ? Z ` | ` a \ c ~ Z : a \ c ? Z ` | ` a > Z : a 177 Z ` | ` a ` |
 | `printf/backslash-c-controls-a-decoded-escape` | ` a \ c \t Z ` | ` a \ c \t Z ` | ` a \ c \t Z ` | ` a \ c \t Z ` | ` a I Z ` | ` a ` |
 | `printf/backslash-c-at-the-end-of-a-format` | ` a \ c \ ` | ` a \ c \ ` | ` a \ c \ ` | ` a \ c \ ` | ` a @ ` | ` a ` |
+| `printf/hex-escape-in-a-format` | ` 61 5c 78 34 31 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 41 5a ` |
+| `printf/hex-escape-writes-one-raw-byte` | ` 61 5c 78 38 30 5a ` | ` 61 80 5a ` | ` 61 80 5a ` | ` 61 80 5a ` | ` 61 80 5a ` | ` 61 80 5a ` |
+| `printf/hex-escape-digit-run-diverges` | ` 5b 5c 78 30 66 66 5d ` | ` 5b 0f 66 5d ` | ` 5b 0f 66 5d ` | ` 5b 0f 66 5d ` | ` 5b c3 bf 5d ` | ` 5b 0f 66 5d ` |
+| `printf/hex-escape-four-digits-is-a-code-point` | ` 5b 5c 78 30 30 34 31 5d ` | ` 5b 00 34 31 5d ` | ` 5b 00 34 31 5d ` | ` 5b 00 34 31 5d ` | ` 5b 41 5d ` | ` 5b 00 34 31 5d ` |
+| `printf/hex-escape-with-no-digits` | ` 61 5c 78 5a ` | ` 61 5c 78 5a ` **2>** `<shell>: line 1: printf: missing hex digit for \x` | ` 61 5c 78 5a ` **2>** `<shell>: line 1: printf: missing hex digit for \x` | ` 61 5c 78 5a ` **2>** `<shell>: line 0: printf: missing hex digit for \x` | ` 61 00 5a ` | ` 61 00 5a ` |
+| `printf/hex-escape-is-not-a-b-escape` | ` 61 5c 78 34 31 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 41 5a ` | ` 61 5c 78 34 31 5a ` | ` 61 41 5a ` |
+| `printf/an-octal-escape-is-a-byte-and-not-a-code-point` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` |
+| `printf/a-quoted-escape-used-as-a-format` | ` 24 61 5c 78 63 30 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` | ` 61 c0 5a ` |
+| `printf/a-c-conversion-writes-one-byte` | ` 24 ` | ` c0 ` | ` c0 ` | ` c0 ` | ` c0 ` | ` c0 ` |
 
 - `printf/assigns-with-v` — `printf -v name` puts the formatted text in a variable and prints nothing, which is how a script formats a value without a command substitution and a subshell. bash and zsh have it; dash and ksh93 reject it as an unknown option, and each words that differently
   ```sh
@@ -2806,6 +2815,42 @@ grades it and nothing drift-checks it either, for the same reason.
 - `printf/backslash-c-at-the-end-of-a-format` — a backslash with nothing after it escapes the end of the format, so what \c controls is a NUL rather than the backslash itself — an @ and not a control-backslash for the shell that reads the escape
   ```sh
   printf 'a\c\' | od -An -c | tr -s " "
+  ```
+- `printf/hex-escape-in-a-format` — \xHH is an escape in a format for every shell in the panel but dash, which has none and writes the six characters as they stand
+  ```sh
+  printf 'a\x41Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/hex-escape-writes-one-raw-byte` — the escape produces a byte and not a character, so a value no encoding claims is one byte wide — read as hexadecimal because the display cannot tell 80 from the two bytes UTF-8 spells U+0080 with, and unanimous among the five that have the escape at all
+  ```sh
+  printf 'a\x80Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/hex-escape-digit-run-diverges` — how wide the digit run is: bash and zsh stop at two and the value is a byte, so this is 0x0f followed by an f, and ksh93 takes every digit and reads more than two of them as a code point, so the same text is U+00FF in UTF-8
+  ```sh
+  printf '[\x0ff]' | od -An -tx1 | tr -s " "
+  ```
+- `printf/hex-escape-four-digits-is-a-code-point` — the same split with a value that is ASCII, which shows the switch is on the number of digits rather than on the size of the value: two digits would be a NUL and a 4 and a 1, and every digit read as a code point is an A
+  ```sh
+  printf '[\x0041]' | od -An -tx1 | tr -s " "
+  ```
+- `printf/hex-escape-with-no-digits` — an empty digit run: bash leaves the escape standing and warns without failing, ksh93 and zsh read the run as a zero and write a NUL, and dash has no escape here to have an empty run
+  ```sh
+  printf 'a\xZ' | od -An -tx1 | tr -s " "
+  ```
+- `printf/hex-escape-is-not-a-b-escape` — the site matters and not only the shell: ksh93 reads \x41 in a format and leaves it as written in a %b argument, which expands the set echo expands. bash and zsh have it in both and dash in neither, so ksh93 alone separates the two tables
+  ```sh
+  printf '%b' 'a\x41Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/an-octal-escape-is-a-byte-and-not-a-code-point` — unanimous, and worth pinning as bytes: \300 is the single byte 0xc0 in all six, never the two bytes UTF-8 gives the code point of the same number
+  ```sh
+  printf 'a\300Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/a-quoted-escape-used-as-a-format` — the byte arrives already decoded and the format only has to carry it, which is a different route to the output from an escape the format decodes itself. dash has no quoted-escape form, so the dollar sign is part of the word there
+  ```sh
+  printf $'a\xc0Z' | od -An -tx1 | tr -s " "
+  ```
+- `printf/a-c-conversion-writes-one-byte` — %c takes the first byte of its operand rather than the first character, so a byte above the ASCII range is written alone and not as the pair an encoding would spell it with
+  ```sh
+  printf '%c' $'\xc0' | od -An -tx1 | tr -s " "
   ```
 
 ## kill

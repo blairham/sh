@@ -59,6 +59,36 @@ func (sh Shell) loginProfile(r *interp.Runner) int {
 	return sh.sourceFile(r, homeFile(r, ".profile"))
 }
 
+// nonInteractiveStartupFile sources the file a shell reads when it is *not*
+// going to prompt, which is the third of the three and the counterpart of
+// $ENV.
+//
+// The name of the variable is the dialect's and empty for most of them, which
+// is what makes this do nothing at all in three of the four presets; see
+// Semantics.NonInteractiveStartupVariable. The value is expanded before it is
+// opened, exactly as $ENV's is and for the same reason — `$HOME/…` is how such
+// a path is written.
+//
+// Reached from the script routes and never from the prompt, which is the whole
+// of what separates it from $ENV. The two are complementary rather than
+// alternatives: measured, the shell that has this reads it when it is not
+// interactive and reads a file of its own name when it is, and never reads
+// both.
+//
+// **Not in POSIX mode.** The same shell reads nothing here when it was started
+// with the standard's posix option or invoked as `sh`, which is measured and
+// is the reason this asks the runner rather than the dialect: the mode is
+// runtime state by then, and a second axis keyed on the invocation would have
+// recorded the accident instead of the rule (#691, #733).
+func (sh Shell) nonInteractiveStartupFile(r *interp.Runner) int {
+	name := sh.Semantics.NonInteractiveStartupVariable
+	if name == "" || r.PosixMode() {
+		return 0
+	}
+	value, _ := r.GetVar(name)
+	return sh.sourceFile(r, r.Expand(value))
+}
+
 // sourceFile runs a file on the runner, as `.` would.
 //
 // Guarded per file, and a caught panic costs the file rather than the session.

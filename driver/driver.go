@@ -935,10 +935,14 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 				// The input ended part-way through something. Reported here
 				// rather than below, because a program read as it runs has no
 				// line to hand back when the last of it is unfinished.
+				// No readOn here, and it is not an oversight: this branch
+				// is reached when the parser could return nothing at all,
+				// which on this route means the input ran out part-way
+				// through a construct. There is nothing left to read on to,
+				// so the shell that reads on and the shell that stops end
+				// the same way — measured, an unterminated quote piped in
+				// is one complaint and status 1 in all four.
 				sh.errf("%s", in.dg.ParseDiagnostic(in.name, in.input, err, pr.text()))
-				if sh.readOn(r, pr, in, err) {
-					continue
-				}
 				r.Finish(ctx)
 				return in.dg.StatusForParseError(err)
 			}

@@ -1076,21 +1076,23 @@ func (sh Shell) applyOptions(r *interp.Runner, opts []optionSpec) (int, bool) {
 // unit and not the statement: with `echo one; { fi; }` on one line nothing
 // runs, so a whole line is parsed before any of it is.
 //
-// The EXIT trap fires either way, which is why the parse failure returns
-// through Finish rather than around it.
+// However the run ended, the EXIT trap fires, which is why every ending
+// returns through Finish rather than around it. The refusal used to return
+// around it and was the only ending that did — a silent exception to the rule
+// beside it, and one no input in the corpus reaches, so nothing said so. The
+// library had it right all along: interp's own Run runs the EXIT trap on the
+// same error, and only this front end disagreed.
 func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 	ctx := context.Background()
 	status, how := sh.executeLines(ctx, r, pr, in)
 	switch how {
-	case endingRefused:
-		// The front end could not run what it was given, and the shell is
-		// left alone: there is no session to end and no trap that has become
-		// due.
-		return status
-	case endingParseFailure:
+	case endingParseFailure, endingRefused:
 		// The EXIT trap fires even when the last thing read would not parse,
-		// which is unanimous across the panel — but the status is the parse
-		// failure's rather than the trap's.
+		// which is unanimous across the panel — and equally when the front
+		// end refused to run what it was given. A script's cleanup is not
+		// conditional on why the script stopped, and the refusal used to be
+		// the one ending that skipped it. The status is the failure's rather
+		// than the trap's, in both.
 		r.Finish(ctx)
 		return status
 	}
@@ -1100,8 +1102,15 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 // ending is how a run of lines stopped, which decides what the caller owes the
 // shell afterwards. Split out from execute so that a front end holding a shell
 // open across several inputs — a prompt, an agent protocol session — can run
-// one input without ending the shell, and can still make the same three
-// decisions about what just happened.
+// one input without ending the shell, and can still say what just happened.
+//
+// Three endings and **two** answers: a run that read everything exits with
+// the shell's own status, and one that stopped on something exits with that
+// something's — and either way the shell ends through Finish. The refusal
+// used to be a third answer, which was the bug. What still tells it from a
+// parse failure is which diagnostic executeLines wrote, not what it leaves
+// the caller to do, so a switch that separates the two here is describing a
+// difference that no longer exists.
 type ending int
 
 const (
@@ -1111,6 +1120,12 @@ const (
 	endingParseFailure
 	// endingRefused is the front end declining to run it at all, which is a
 	// usage error rather than anything the script did.
+	//
+	// It is reached: a builtin this shell must answer itself and cannot —
+	// `enable -n umask` and then `umask 077` — comes back from RunPart as an
+	// error rather than as a status, because it is the interpreter saying it
+	// has nothing to run and not a command that failed. It ends the shell
+	// like any other ending, EXIT trap included.
 	endingRefused
 )
 

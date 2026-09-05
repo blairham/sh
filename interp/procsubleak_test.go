@@ -38,8 +38,9 @@ import (
 func TestASubstitutionNobodyOpensLeavesNoGoroutineBehind(t *testing.T) {
 	for _, tc := range []struct {
 		name, unopened string
-		// running is a command with a substitution that will not finish
-		// until the file named %s exists.
+		// running is a command whose substitution says it has started by
+		// creating the file named %[1]s, and then will not finish until the
+		// file named %[2]s exists.
 		running string
 	}{
 		// `<(cmd)`: the shell holds the writing end, which is the case the
@@ -51,14 +52,14 @@ func TestASubstitutionNobodyOpensLeavesNoGoroutineBehind(t *testing.T) {
 			// The path is opened and let go of rather than read to the end:
 			// `cat` would wait for the substitution to finish, and the count
 			// has to be taken while one is still going.
-			running: `true < <(` + waitForFileScript + `)`,
+			running: `true < <(` + heldOpenScript + `)`,
 		},
 		// `>(cmd)`: the shell holds the reading end, and waited for a writer
 		// that a command which ignores the path never becomes.
 		{
 			name:     "writing into one",
 			unopened: `echo >(true) >/dev/null`,
-			running:  `echo hi > >(` + waitForFileScript + `)`,
+			running:  `echo hi > >(` + heldOpenScript + `)`,
 		},
 		// The same end, with a substituted command that reads rather than
 		// one that ignores its input. Nothing is ever going to write to it,
@@ -68,11 +69,13 @@ func TestASubstitutionNobodyOpensLeavesNoGoroutineBehind(t *testing.T) {
 		{
 			name:     "writing into one that reads",
 			unopened: `echo >(cat) >/dev/null`,
-			running:  `echo hi > >(` + waitForFileScript + `; cat >/dev/null)`,
+			running:  `echo hi > >(` + heldOpenScript + `; cat >/dev/null)`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			release := filepath.Join(t.TempDir(), "go-ahead")
+			dir := t.TempDir()
+			started := filepath.Join(dir, "started")
+			release := filepath.Join(dir, "go-ahead")
 
 			// A quiet baseline rather than whatever the count happens to be.
 			// Taking the number as it stands and asking for more than it
@@ -86,12 +89,24 @@ func TestASubstitutionNobodyOpensLeavesNoGoroutineBehind(t *testing.T) {
 				t.Fatalf("%d goroutines already in a substitution, want a quiet start", n)
 			}
 
-			if _, st := run(t, strings.ReplaceAll(tc.running, "%s", release), nil); st != 0 {
+			src := strings.NewReplacer("%[1]s", started, "%[2]s", release).Replace(tc.running)
+			if _, st := run(t, src, nil); st != 0 {
 				t.Fatalf("status %d, want the substitution to run", st)
 			}
+			// Counted once the substitution has said it is running, and not
+			// merely once the command that named it has returned. Those are
+			// two different moments and the gap between them is the whole
+			// bug this had: the goroutine is started before the substituted
+			// command reaches it, so a count taken on the command's return
+			// can find the goroutine somewhere on its way in rather than in
+			// the frame this counts by. It passed on one platform and failed
+			// on the other, which is what a missing synchronization looks
+			// like from the outside. The file is written *by the substituted
+			// command*, so its existence puts the goroutine inside the run.
+			waitForStart(t, started)
 			if n := substitutionGoroutines(); n < 1 {
-				t.Fatalf("%d goroutines in a substitution with one still running, "+
-					"want at least the one — the frame this counts by is gone, "+
+				t.Fatalf("%d goroutines in a substitution that has said it is running, "+
+					"want at least the one — the frame this counts by has moved, "+
 					"so the leak below cannot be seen either", n)
 			}
 			if err := os.WriteFile(release, nil, 0o600); err != nil {
@@ -114,12 +129,43 @@ func TestASubstitutionNobodyOpensLeavesNoGoroutineBehind(t *testing.T) {
 	}
 }
 
-// waitForFileScript is a substituted command that will not finish until the
-// test says so. `%s` is the file to wait for.
-const waitForFileScript = `while [ ! -e %s ]; do sleep 0.02; done`
+// heldOpenScript is a substituted command that says when it has started and
+// then will not finish until the test says so. `%[1]s` is the file it writes
+// to say it is running, `%[2]s` the file it waits for.
+//
+// Both halves are the test's synchronization, and neither can be replaced by a
+// number: the first is what puts the goroutine demonstrably inside the frame
+// being counted, and the second is what keeps it there for as long as the
+// counting takes.
+const heldOpenScript = `printf s >%[1]s; while [ ! -e %[2]s ]; do sleep 0.02; done`
+
+// waitForStart blocks until the substituted command has said it is running.
+func waitForStart(t *testing.T, path string) {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		if b, err := os.ReadFile(path); err == nil && len(b) > 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%s was never written — the substitution never started", path)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
 
 // substitutionGoroutines counts the goroutines a process substitution is
 // running on, by the frame every one of them has.
+//
+// Still the substitution's own frame and not spawn's, now that spawn is what
+// starts these. spawn starts all four of the things a shell runs beside itself
+// — a background job, either half of a pipeline, a coprocess, a substitution —
+// so counting there would count the suite's background jobs as substitutions,
+// which is exactly the moving number the quiet start below exists to avoid.
+// What the indirection cost was never the name: it was that the goroutine is
+// started before the substituted command reaches this frame, and what fixes
+// that is waiting for the command to say it is running rather than counting a
+// different frame.
 //
 // The buffer is grown rather than guessed at. runtime.Stack truncates to what
 // it is given and says nothing about having done so beyond filling it, and a

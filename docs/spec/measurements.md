@@ -5118,6 +5118,7 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `pipestatus/unset-then-another-pipeline-in-zsh` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[]` | `[]` | `[]` | `[]` | `[]` |
 | `pipestatus/read-as-a-plain-parameter` | `[]` | `[1]` | `[1]` | `[1]` | `[]` | `[]` |
 | `pipestatus/plain-parameter-on-an-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x]` | `[x]` | `[x]` | `[x]` | `[x y z]` |
+| `pipeline/a-builtin-writing-into-a-pipe-nobody-reads` | `after` | `after` | `after` | `after` | `after` | `after` |
 
 - `set/o-at-the-end-of-a-bundle` — `-o` is nearly always the last letter of a bundle rather than a word of its own — `set -euo pipefail` is the line at the top of a great many scripts — and the letters before it are ordinary letters that still apply. noglob rather than pipefail because every shell in the panel has it, so the case is about where the `o` sits and not about which options exist
   ```sh
@@ -5193,6 +5194,10 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `pipestatus/plain-parameter-on-an-array` — the same rule on an ordinary array, which is where it belongs: zsh joins and the other two take the first element
   ```sh
   a=(x y z); echo "[$a]"
+  ```
+- `pipeline/a-builtin-writing-into-a-pipe-nobody-reads` — the quiet death, and the one no other case reaches: a builtin whose output goes into a pipe nobody is reading is killed by SIGPIPE where it stands, so `reached` never runs and nothing is said about it — unanimous in all four, and the point of the `>&2` is that a shell which merely swallowed the write would still print it. This is `yes | head` seen from the writing end, and it is the case the corpus was missing while `printf x | { read -d : v; }` measured the same thing by accident: there the write is small enough to fit, so whether it beats the reader's exit is the machine's to decide and the score wandered by one
+  ```sh
+  v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; { echo "$v"; echo reached >&2; } | true; echo after
   ```
 
 ## builtin names

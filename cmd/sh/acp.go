@@ -29,10 +29,12 @@ import (
 // docs/design/acp.md pins down along with the subset a shell can honestly
 // serve.
 
-// version is what this binary calls itself to a client. It is not a release
-// number — this repository has none yet — and saying so is better than
-// inventing one that will be wrong.
-const version = "0.0.0-dev"
+// version is what this binary calls itself to a client. A build from a
+// checkout says so rather than inventing a number that will be wrong; a
+// release stamps the tag over it, which is why this is a var and not a const —
+// `-X main.version=` can only write to a variable, and .goreleaser.yaml passes
+// exactly that.
+var version = "0.0.0-dev"
 
 // serveACP runs the protocol until the client closes our input, and returns
 // the status to exit with.

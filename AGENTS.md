@@ -209,11 +209,45 @@ what a binary meant to be liftable into its own repository must not need.
 
 ## Make targets
 
-`build`, `test`, `fmt`, `vet`, `lint`, `tidy`, `clean`, `check`.
+`build`, `test`, `fmt`, `vet`, `lint`, `tidy`, `clean`, `check`,
+`install`, `uninstall`.
 
 `check` runs `fmt vet test corpus-guard oracle-check`. Lint runs in CI,
 not pre-commit — it is too slow for every commit. When in doubt run
 `make check` *and* `make lint`.
+
+## Installing, and the name collision
+
+`make install` builds all five binaries and puts them in
+`$(PREFIX)/libexec/sh`, keeping their plain names. `docs/install.md` is
+the user-facing half; the rule to hold on to is this one:
+
+**The binaries are called `bash`, `zsh`, `ksh`, `dash` and `sh`, and the
+name collision is both the point and the hazard.** A shebang, `chsh` and
+`login` all name a shell — by path, or by an `argv[0]` of `-bash` that
+`driver.LoginShell` reads — so renaming them to `sh-bash` would break the
+login route, `$0` in diagnostics, and every shebang. What moves instead
+is the *directory*: `libexec` is off `PATH`, so nothing on the machine
+resolves one of these by accident. `make install` refuses a `SHELLDIR`
+that is on `PATH` unless `ALLOW_PATH_SHADOW=1` is passed with it, and
+`GOBIN` is never consulted — which is also why `go install ./cmd/...` is
+the one Go command not to run in this repository.
+
+The Homebrew formula in `.goreleaser.yaml` makes the same choice: it
+installs into the keg's `libexec` and links nothing into `bin`. Anything
+that would put these names on a `PATH` is a change to argue for, not a
+tidy-up.
+
+## Release
+
+GoReleaser on a `v*` tag, per the parent tree: green CI on `main` → tag →
+`.github/workflows/release.yml` → `blairham/homebrew-tap` updated. One
+archive per platform carrying all five binaries, Linux and macOS only —
+every route into this program is a POSIX one. The first tag is `v0.0.0`.
+
+`cmd/sh`'s `version` is a var rather than a const so the tag can be
+stamped over it with `-X main.version=`; it is what `-acp` reports to a
+client, and a checkout says `0.0.0-dev`.
 
 ## Conventions
 

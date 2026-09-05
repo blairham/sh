@@ -4,7 +4,39 @@
 # reads as a flaky implementation rather than as two builds sharing a name.
 BINDIR := $(CURDIR)/build
 
-.PHONY: all build test test-cover fmt vet lint tidy clean check corpus-guard oracle oracle-check conformance conformance-dialects
+# Where `make install` puts the shells, and why it is not $(PREFIX)/bin.
+#
+# These binaries are called `bash`, `zsh`, `ksh`, `dash` and `sh`. The name
+# collision with the shells they model is the entire point — a script with
+# `#!/…/bash` at the top has to reach one — and it is also the way to break a
+# machine: anything earlier on PATH than /bin answers for *every* program that
+# resolves a shell by name, including this repository's own tests, the system's
+# scripts, and the terminal that would be needed to undo it.
+#
+# So the default lands in libexec, which is the directory convention for
+# programs meant to be named by their full path rather than found. The names
+# stay plain there, because the name is load-bearing at the other end: `login`
+# and every terminal emulator start a login shell as `-bash`, and
+# driver.LoginShell reads exactly that, so a binary renamed `sh-bash` would
+# announce itself as `-sh-bash`, print the wrong `$0` in diagnostics, and match
+# no shebang anybody has written.
+#
+# SHELLDIR is overridable, so shadowing PATH is possible — it just cannot
+# happen by accident. `install` refuses when SHELLDIR is on PATH unless
+# ALLOW_PATH_SHADOW=1 is passed with it.
+#
+# GOBIN is deliberately *not* consulted. It is on PATH on virtually every
+# machine that sets it, so honoring it would mean `make install` shadowing the
+# system shells for whoever had it set — which is also the reason to never run
+# `go install ./cmd/...` in this repository.
+#
+# DESTDIR is the packaging convention and prefixes only the copy. The PATH
+# check asks about SHELLDIR, because a staged tree's contents end up there.
+PREFIX ?= /usr/local
+SHELLDIR ?= $(PREFIX)/libexec/sh
+SHELLS := sh bash zsh ksh dash
+
+.PHONY: all build test test-cover fmt vet lint tidy clean check corpus-guard oracle oracle-check conformance conformance-dialects install uninstall
 
 all: build
 
@@ -35,6 +67,33 @@ clean:
 	go clean
 
 check: fmt vet test corpus-guard oracle-check
+
+install: ## Build the five shells and install them into $(SHELLDIR) — see docs/install.md
+	@case ":$$PATH:" in \
+	*:"$(SHELLDIR)":*) \
+		if [ "$(ALLOW_PATH_SHADOW)" != 1 ]; then \
+			echo "make install: refusing — $(SHELLDIR) is on your PATH." >&2; \
+			echo "  The binaries are named bash, zsh, ksh, dash and sh, so installing them" >&2; \
+			echo "  there shadows the system shells for everything that resolves one by name." >&2; \
+			echo "  Install somewhere off PATH (the default is $(PREFIX)/libexec/sh) and name" >&2; \
+			echo "  the full path to chsh, or repeat this with ALLOW_PATH_SHADOW=1." >&2; \
+			exit 1; \
+		fi; \
+		echo "make install: $(SHELLDIR) is on PATH — shadowing the system shells, as asked" >&2 ;; \
+	esac
+	@mkdir -p $(BINDIR)/staged
+	@for s in $(SHELLS); do go build -trimpath -o $(BINDIR)/staged/$$s ./cmd/$$s || exit 1; done
+	@install -d "$(DESTDIR)$(SHELLDIR)"
+	@for s in $(SHELLS); do install -m 0755 $(BINDIR)/staged/$$s "$(DESTDIR)$(SHELLDIR)/$$s" || exit 1; done
+	@echo "installed into $(DESTDIR)$(SHELLDIR): $(SHELLS)"
+	@echo "run one:      $(SHELLDIR)/bash -i"
+	@echo "login shell:  docs/install.md — /etc/shells and chsh, and what a session does not read yet"
+
+uninstall: ## Remove the shells `make install` put in $(SHELLDIR)
+	@for s in $(SHELLS); do rm -f "$(DESTDIR)$(SHELLDIR)/$$s"; done
+	@rmdir "$(DESTDIR)$(SHELLDIR)" 2>/dev/null || true
+	@echo "removed $(SHELLS) from $(DESTDIR)$(SHELLDIR)"
+	@echo "if this was your login shell, change it back first — chsh -s /bin/zsh — and drop the line from /etc/shells"
 
 corpus-guard: ## Fail if the corpus has lost a case since the merge base with main
 	@go run ./cmd/corpusguard

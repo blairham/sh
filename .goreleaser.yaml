@@ -1,0 +1,174 @@
+version: 2
+
+# GoReleaser configuration for sh.
+# See: https://goreleaser.com
+#
+# A release ships five binaries rather than one, because there are five shells:
+# the substrate driver `sh` plus the four dialect binaries. They go into one
+# archive per platform — a person installing this wants all of them, and the
+# dialects are the same core with a different vector, so splitting them into
+# five downloads would be five copies of one program.
+project_name: sh
+
+builds:
+# Named binaries, plain. The name collision with the shells they model is the
+# point — a shebang and `chsh` both name a shell by path, and `login` starts
+# one as `-bash` — and the answer to the hazard is *where* they are installed,
+# never a renaming that would break both. The Makefile's install target and the
+# formula below agree on that: off PATH, named by their full path.
+- id: sh
+  binary: sh
+  main: ./cmd/sh
+  env:
+  - CGO_ENABLED=0
+  goos: [linux, darwin]
+  goarch: [amd64, arm64]
+  ldflags:
+  - -s -w
+  # Only this binary has a `version` to stamp: it is what `-acp` reports to a
+  # client. The dialect binaries tell a client nothing, so there is nothing to
+  # write into them.
+  - -X main.version={{.Version}}
+
+- id: bash
+  binary: bash
+  main: ./cmd/bash
+  env: [CGO_ENABLED=0]
+  goos: [linux, darwin]
+  goarch: [amd64, arm64]
+  ldflags: [-s -w]
+
+- id: zsh
+  binary: zsh
+  main: ./cmd/zsh
+  env: [CGO_ENABLED=0]
+  goos: [linux, darwin]
+  goarch: [amd64, arm64]
+  ldflags: [-s -w]
+
+- id: ksh
+  binary: ksh
+  main: ./cmd/ksh
+  env: [CGO_ENABLED=0]
+  goos: [linux, darwin]
+  goarch: [amd64, arm64]
+  ldflags: [-s -w]
+
+- id: dash
+  binary: dash
+  main: ./cmd/dash
+  env: [CGO_ENABLED=0]
+  goos: [linux, darwin]
+  goarch: [amd64, arm64]
+  ldflags: [-s -w]
+
+# No windows target. Every route into this program is a POSIX one — process
+# groups, a controlling terminal, signals, `syscall.Exec` — and shipping a
+# binary that cannot start is worse than shipping none.
+
+archives:
+- id: default
+  formats: [tar.gz]
+  # Matches `uname` for OS and architecture, as the other repositories here do,
+  # so a downloader's own shell can build the name.
+  name_template: >-
+    {{ .ProjectName }}_ {{- title .Os }}_ {{- if eq .Arch "amd64" }}x86_64 {{- else }}{{ .Arch }}{{ end }}
+  files:
+  - LICENSE
+  - NOTICE
+  - README.md
+  - docs/install.md
+
+# macOS signing and notarization, matching the other repositories in this tree.
+# Gated on isEnvSet, so a release still succeeds unsigned while the secrets are
+# absent — which is the case here until they are added to this repository.
+notarize:
+  macos:
+  - enabled: '{{ isEnvSet "MACOS_SIGN_P12" }}'
+    ids: [sh, bash, zsh, ksh, dash]
+    sign:
+      certificate: "{{.Env.MACOS_SIGN_P12}}"
+      password: "{{.Env.MACOS_SIGN_PASSWORD}}"
+    notarize:
+      issuer_id: "{{.Env.MACOS_NOTARY_ISSUER_ID}}"
+      key_id: "{{.Env.MACOS_NOTARY_KEY_ID}}"
+      key: "{{.Env.MACOS_NOTARY_KEY}}"
+      wait: true
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  groups:
+  - title: Features
+    regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+    order: 0
+  - title: Bug Fixes
+    regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+    order: 1
+  - title: Other
+    order: 999
+  filters:
+    exclude:
+    - '^docs:'
+    - '^test:'
+    - '^chore:'
+
+# A formula, like everything else in blairham/homebrew-tap — the tap has only
+# Formula/. GoReleaser marks `brews` deprecated in favor of `homebrew_casks`,
+# with no announced removal date; the reason to stay is the tap's shape, and a
+# cask would also quarantine every binary it downloads, which for a shell means
+# Gatekeeper refusing the thing `chsh` was just pointed at.
+#
+# **It installs nothing into `bin`, on purpose.** `bin.install "bash"` would put
+# a file called `bash` in Homebrew's bin, which is ahead of /bin on the PATH of
+# every machine that has Homebrew — so `brew install sh` would silently take
+# over the system shells for every script on the machine, and undoing it would
+# need the shell it had just replaced. Everything lands in the keg's libexec,
+# which is off PATH, and the caveats say how to reach it. That is the same
+# decision `make install` makes, for the same reason.
+brews:
+- name: sh
+  repository:
+    owner: blairham
+    name: homebrew-tap
+    token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+  directory: Formula
+  homepage: https://github.com/blairham/sh
+  description: A shell parser and interpreter in Go, with bash, zsh, ksh and dash dialects
+  license: Apache-2.0
+  install: |
+    libexec.install "sh", "bash", "zsh", "ksh", "dash"
+  caveats: |
+    The binaries are named bash, zsh, ksh, dash and sh, so they are NOT linked
+    into #{HOMEBREW_PREFIX}/bin — that would shadow the system shells for
+    everything on this machine. They live here instead:
+
+      #{opt_libexec}
+
+    Run one by its full path:
+
+      #{opt_libexec}/bash -i
+
+    To use one as your login shell, add its full path to /etc/shells and then
+    chsh to it. Read this first — an interactive session does not yet read
+    ~/.bashrc or ~/.zshrc:
+
+      https://github.com/blairham/sh/blob/main/docs/install.md
+  test: |
+    assert_equal "hi", shell_output("#{libexec}/bash -c 'echo hi'").chomp
+    assert_equal "hi", shell_output("#{libexec}/sh -c 'echo hi'").chomp
+
+release:
+  draft: false
+  replace_existing_draft: true
+  target_commitish: "{{ .Commit }}"
+  prerelease: auto
+  mode: replace
+  footer: |
+    **Full Changelog**: https://github.com/blairham/sh/compare/{{ .PreviousTag }}...{{ .Tag }}

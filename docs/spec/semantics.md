@@ -890,24 +890,38 @@ which is an architectural difference rather than an axis.
    across the panel. They are core behavior, and adding a switch for
    them would be inventing a difference.
 
-## A probe the corpus cannot hold
+## A probe the corpus could hold after all
 
-Rule 1's probes normally live in the corpus, where `make oracle` re-runs
-them against the live panel. One cannot: whether `ulimit -f` counts in
-POSIX's 512-byte blocks or in 1024-byte ones is invisible until something
-writes past the limit, and the kernel answers that with SIGXFSZ. The
-probe, measured and re-measured (macOS, 2026-09-04):
+Rule 1's probes live in the corpus, where `make oracle` re-runs them
+against the live panel. One was written down here instead, as prose,
+because its output was thought not to be goldenable — whether `ulimit -f`
+counts in POSIX's 512-byte blocks or in 1024-byte ones is invisible until
+something writes past the limit, the kernel answers that with SIGXFSZ,
+and the shell that reaps the killed writer announces it with a **process
+id**, which is different on every run.
 
-    ulimit -f 1
-    head -c  600 /dev/zero > f    bash writes all 600; dash, ksh93 and zsh
-                                  stop the file at 512
-    head -c 1200 /dev/zero > g    bash stops it at 1024
+The fact is right and the reason was the probe's rather than the panel's.
+A process id only reaches the output if the announcement does, and the
+announcement is written by the *parent* when it reaps — so it is caught
+by a redirection on the group around the subshell rather than on the
+subshell itself:
 
-So bash's block is 1024 bytes and the others keep POSIX's 512, which is
-the `UlimitBlockIsKilobyte` preset: yes in bash alone. It is recorded as
-prose rather than as a case because the output cannot be golden: bash and
-ksh93 announce the killed writer by its process id, which is different on
-every run.
+    { ( ulimit -f 1; printf "%0600d" 0 > f ); } 2>/dev/null
+    ls -l f                       600 where a block is 1024
+                                  512 where it is 512
+
+That is `ulimit/the-file-size-block`, stable over repeated runs and now
+re-measured on every `make oracle` like everything else. Re-measuring it
+also widened the answer: the 1024-byte block is bash's **as `bash`**, and
+the same bash 5.3 called `sh` uses POSIX's 512, alongside dash, ksh93 and
+zsh. So `UlimitBlockIsKilobyte` is yes for the bash dialect and no for
+every other preset including a POSIX one, which is what the argv[0]
+column is in the panel to catch.
+
+The general lesson is the one `oracle.md` states about contaminated
+probes, in the other direction: a probe that cannot be recorded is worth
+re-examining before its fact is copied into prose, because prose is where
+`oracle-check` stops looking.
 
 ## A conversion the corpus cannot ask for twice
 
@@ -3349,6 +3363,47 @@ measured the same way. `wait; check $?` is the supervisor loop this
 whole behavior exists for, and it only works if both halves hold — the
 signal reaches the status, and the jobs survive to be waited on again.
 
+### `wait` is not the only builtin that blocks
+
+The sentence above — that `wait` is the only one where a signal's timing
+is visible — held only because nothing had given `read` something slow to
+read. A named pipe does, and the answer there is not `wait`'s. Measured
+2026-09-05, `read/interrupted-by-a-trapped-signal`:
+
+    mkfifo p; exec 3<>p; trap "echo T" INT
+    (sleep 0.3; kill -INT $$; sleep 0.5; echo late >p) &
+    read -r l <&3; echo "st=$? l=[$l]"
+
+| shell | after the handler runs |
+| --- | --- |
+| bash 5.3, bash 3.2, zsh | the read **resumes**: `st=0 l=[late]` |
+| bash 5.3 as `sh` | abandoned, `st=130`, nothing assigned |
+| dash | abandoned, `st=1` |
+| ksh93 | abandoned, `st=258` |
+
+Four answers, and the sharpest is that two of them come from the same
+binary: bash resumes a read a trapped signal interrupted and, called
+`sh`, does not. So this is argv[0]'s question and not the build's, which
+is the second time in this sweep the panel's bash-as-`sh` column carried
+the difference (`ulimit/the-file-size-block` is the other).
+
+Prior work of our own recorded `$?` after an interrupt as 130 and had it
+down as a possible bash 3.2 against 5.3 split. Neither holds: the two
+bash builds agree with each other here, 130 belongs to one *invocation*
+of one of them, and `sh -c 'kill -INT $$'` — the shape the 130 was
+measured with — is 130 in every shell in the panel that survives it,
+which makes it a fact about the child's death rather than about `$?`.
+
+The late write is what keeps the case measuring. Without it the three
+resuming shells wait for a line that never comes and the row records a
+timeout, which is a case that has stopped asking anything.
+
+**A related shape is a hang and is not in the corpus.** zsh's `read -t 1`
+on a fifo already holding unterminated bytes never returns at all — the
+timeout covers waiting for input and not completing a line — measured
+eight times out of eight. `read/a-timeout-that-expires` uses an empty
+pipe for that reason.
+
 ## A script that will not open is not a usage error
 
 Oracle runs, 2026-09-05, on macOS: bash 5.3, dash, ksh93u+, zsh 5.9.2.
@@ -4500,7 +4555,32 @@ elsewhere. Recorded as `opt/set-e-carries-the-err-trap`.
 
 Moves `$_` to the previous simple command's last expanded argument — the
 command word itself when it had none, and empty after a bare assignment.
-bash and zsh; dash and ksh93 leave it at the shell's own path forever.
+bash and zsh; dash and ksh93 keep no such parameter at all, so `$_` is an
+ordinary unset name there and expands to nothing.
+
+That last sentence used to read "leave it at the shell's own path
+forever", in this entry and in the reason of
+`special/underscore-follows-the-last-argument`, and the measurement
+underneath both has always been an empty cell — the harness writes a
+shell's path as `<shell>`, so a path would have been visible. Corrected
+from the panel in the sweep of #500. `oracle-check` compares behavior and
+not prose, which is why a wrong sentence over a right row can sit in two
+places for as long as nobody re-reads it (#706).
+
+Two shapes the axis does not cover, both recorded rather than modeled
+because nothing has needed them:
+
+- **A declaration command binds something different in every shell that
+  has `$_`.** After `export y=2`, bash 5.3 holds `y=2` — the assignment
+  word as written — bash 3.2 holds `y`, and zsh holds `export`, the
+  command word (`special/underscore-after-a-declaration-command`). The
+  disagreement runs *through* bash, so this is one of the shapes a claim
+  recorded against a single build gets wrong.
+- **At startup `$_` is the invocation.** Before any command has run, bash
+  holds the path it was started as and the same binary called `sh` holds
+  `sh` — argv[0] rather than the path — while dash, ksh93 and zsh hold
+  nothing (`special/underscore-at-startup`). Ours holds nothing, which is
+  a gap rather than a choice.
 
 
 ### `test` and `[`
@@ -5000,6 +5080,25 @@ count and complain about the number. Same input, two different kinds of
 complaint — and both are fatal in the dialects where a special builtin's
 failure is, which `shift` is.
 
+**Three `shift` shapes measured in the sweep of #500**, none of them
+needing a new axis and all three now pinned:
+
+- **Past the end with a count**, `set -- a b; shift 5`. Prior work of our
+  own had this as "moves nothing and answers 1", measured against bash.
+  That is bash and zsh; dash and ksh93 end the script, which is
+  `ShiftPastEndFatal` arriving with a count rather than without one. And
+  the same bash 5.3 binary is *silent* as `bash` and prints `shift count
+  out of range` as `sh`, so the diagnostic belongs to argv[0] and not to
+  the build (`shift/past-the-end-with-a-count`).
+- **A negative count** divides them on what kind of word it is before it
+  divides them on the answer: ksh93 reads `-1` as an option and refuses
+  it as one, dash calls it an illegal number, bash and zsh call it a
+  count out of range. Nothing moves anywhere
+  (`shift/a-negative-count`).
+- **`shift -- 2`** shifts two in five of the six; dash calls `--` an
+  illegal number, having no option parsing here for it to end
+  (`shift/a-double-dash-before-the-count`).
+
 **`TimesRejectsArguments`** — bash no · dash no · ksh93 no · zsh yes
 
 Makes `times` refuse an argument rather than ignore it. True in zsh,
@@ -5039,6 +5138,11 @@ dash and ksh93.
 
 False in zsh, which sets only the soft limit and leaves the hard one
 where it was, so the same line there can be undone.
+
+Pinned by `ulimit/setting-with-neither-letter-moves-both`, which compares
+the hard limit against the value it set rather than printing it: what a
+hard limit starts at is a property of the machine, and a row that
+recorded it would record where it was generated.
 
 
 ### declarations, `export` and `readonly`

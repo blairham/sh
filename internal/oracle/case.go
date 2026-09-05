@@ -799,7 +799,34 @@ var Corpus = []Case{
 	{
 		ID: "special/underscore-follows-the-last-argument", Category: "parameters",
 		Snippet: `echo one two >/dev/null; echo "[$_]"; x=5; echo "[$_]"`,
-		Why:     "bash and zsh move $_ to the previous command's last argument and to empty after a bare assignment; dash and ksh93 leave it at the shell's own path forever",
+		Why:     "bash and zsh move $_ to the previous command's last argument and to empty after a bare assignment; dash and ksh93 answer with nothing at all, because they keep no such parameter and `$_` is an ordinary unset name there. This reason said they leave it at the shell's own path, which the row beside it has never shown — the harness writes a shell's path as `<shell>` and both cells are empty. A wrong sentence over a right measurement is the failure `oracle-check` cannot see, since it compares behavior and not prose (#706)",
+	},
+	{
+		ID: "special/underscore-after-a-declaration-command", Category: "parameters",
+		Snippet: `x=1; echo "a=[$_]"; export y=2; echo "b=[$_]"`,
+		Why:     "what a *declaration* command leaves in $_, and the panel gives four answers to it: bash 5.3 binds the assignment word as written, `y=2`; bash 3.2 binds the name alone, `y`; zsh binds the command word, `export`; dash and ksh93 keep no $_ at all. A bare assignment leaves it empty everywhere that has one, which is the first line and the control. The bash-to-bash disagreement is the point — a claim about this recorded against one build would have been wrong for the other",
+	},
+	{
+		ID: "special/underscore-at-startup", Category: "parameters",
+		Script:  true,
+		Snippet: `echo "[$_]"`,
+		Why:     "before any command has run, $_ holds how the shell was *invoked*: bash writes the path it was started as, and the same binary called `sh` writes `sh`, which is argv[0] rather than the path — so the parameter carries the invocation and not the executable. dash, ksh93 and zsh leave it empty. Run from a script rather than -c because that is the route where the answer is a path at all",
+	},
+	{
+		ID: "special/dollar-dash-in-full", Category: "parameters",
+		Snippet: `echo "[$-]"`,
+		Why:     "the whole of $- rather than a test for one letter in it. The `invoke/dollar-dash-*` cases ask whether `c` or `s` is present, which is the axis; this records what each shell actually carries, and the answers share almost nothing: dash writes *nothing at all* for a command string, bash `hBc`, ksh93 `chsB`, and zsh a set of digits. So there is no common alphabet to write a default over, and a claim about `$-` that does not name a shell is not a claim",
+	},
+	{
+		ID: "special/dollar-dash-in-full-from-a-script", Category: "parameters",
+		Script:  true,
+		Snippet: `echo "[$-]"`,
+		Why:     "the same string by the other route, and it moves in three of the six: the `c` goes, and ksh93 loses its `s` as well and lands on exactly bash's `hB`. Two shells that agree on one route and not on another is why a `$-` answer has to be recorded per route, and it is the pair with the case above that says so",
+	},
+	{
+		ID: "special/dollar-dash-orders-the-letters-its-own-way", Category: "parameters",
+		Snippet: `set -f; set -u; set -e; echo "[$-]"`,
+		Why:     "three options turned on in a written order, and no shell reports them in it. bash sorts the lowercase letters and keeps its own suffix (`efhuBc`); ksh93 sorts including the letters it already had (`cefhsuB`); zsh puts its digits first (`569Xefu`); dash answers `ufe`, which is neither the order they were set in nor alphabetical but its own option table's. The order is therefore a property of the shell and never a fact about `$-`, which is worth pinning because a reader of any one row would assume otherwise",
 	},
 	{
 		ID: "special/lineno-is-where-you-are", Category: "parameters",
@@ -1390,6 +1417,16 @@ var Corpus = []Case{
 		Why:     "`-H` and `-S` choose which of the two limits is read, and neither means the soft one — so the third line repeats the second. CPU time rather than open files: the file-descriptor limit is the one resource whose value differs between our process and bash's, for reasons outside either shell",
 	},
 	{
+		ID: "ulimit/setting-with-neither-letter-moves-both", Category: "traps and exit",
+		Snippet: `ulimit -n 100; h=$(ulimit -H -n); s=$(ulimit -S -n); echo "s=$s hard_moved=$([ "$h" = 100 ] && echo yes || echo no)"`,
+		Why:     "`ulimit -n 100` with neither -H nor -S sets *both* limits in five of the six and only the soft one in zsh — which matters because lowering both is a door that cannot be reopened, while lowering the soft limit alone can be undone. The hard limit is compared rather than printed: its starting value is a property of the machine, and a row that recorded it would record where it was generated",
+	},
+	{
+		ID: "ulimit/the-file-size-block", Category: "traps and exit",
+		Snippet: `{ ( ulimit -f 1; printf "%0600d" 0 > f ); } 2>/dev/null; ls -l f | awk "{print \"size=\" \$5}"`,
+		Why:     "how many bytes a block is, asked of the file system rather than of the builtin: one block, six hundred bytes written, and the file is 600 where a block is 1024 and 512 where it is 512. The prior reading of this, taken from bash alone, was that a block is 1024 bytes — true for bash 5.3 and bash 3.2 as `bash`, and false for dash, ksh93, zsh *and the same bash 5.3 called `sh`*, all of which use POSIX's 512. So the unit is argv[0]'s to decide, which is not a shape a one-shell measurement could have found. Written in a subshell whose group carries the redirection, because the shell that reaps a child killed by SIGXFSZ announces it with a process id in the text",
+	},
+	{
 		ID: "ulimit/unlimited-is-a-word", Category: "traps and exit",
 		Snippet: `ulimit -Hf`,
 		Why:     "no limit is printed as `unlimited` rather than as a very large number, in all four — and is read back from that word too, which is what lets a script save and restore one",
@@ -1835,6 +1872,11 @@ var Corpus = []Case{
 		ID: "procsub/quoted-is-not-a-substitution", Category: "redirection",
 		Snippet: `printf "[%s]\n" "<(echo hi)"`,
 		Why:     "the construct is unquoted-only: inside double quotes the same ten characters are text, unanimously and dash included. It is the completeness half of `procsub/reads-a-command-as-a-file` — that case says the lexer reads the form, this one says where it stops looking, and a lexer that also read it inside quotes would pass the first and fail here",
+	},
+	{
+		ID: "read/interrupted-by-a-trapped-signal", Category: "builtins",
+		Snippet: `mkfifo p; exec 3<>p; trap "echo T" INT; (sleep 0.3; kill -INT $$; sleep 0.5; echo late >p) & read -r l <&3; echo "st=$? l=[$l]"; wait`,
+		Why:     "a `read` waiting on a pipe when a trapped signal arrives, which is where the prior reading of `$?` after an interrupt — 130, measured against bash — turns out to be one of four answers. bash 5.3, bash 3.2 and zsh run the handler and *resume* the read, so the line that arrives afterwards is read and the status is 0; the same bash 5.3 called `sh` abandons it at 130; dash abandons it at 1; ksh93 answers 258. The late write is what makes the case terminate at all rather than recording three timeouts, and it is what makes the resuming shells observably different from a shell that merely returned 0",
 	},
 	{
 		ID: "read/a-failing-read-still-assigns", Category: "builtins",
@@ -2626,6 +2668,19 @@ body
 EOF
 ); echo "[$x]"`,
 		Why: "a delimiter that does arrive, as the control for the one below it — and with standard error no longer discarded, that nobody warns when it does",
+	},
+	{
+		ID: "heredoc/the-delimiter-is-the-whole-line", Category: "redirection",
+		Script:     true,
+		Unfinished: true,
+		Snippet:    "cat <<EOF\nline\nEOF x\necho \"st=$?\"\n",
+		Why:        "the delimiter is compared against the *physical line as written*, so `EOF x` is body and not a terminator — unanimously, in a shape that would read as a terminator to anything matching a prefix. The body then runs to the end of the input, which is why the last line is printed rather than run, and bash 5.3 alone remarks that the document ended at end of file where bash 3.2 says nothing. Prior work of our own had this as a rule about prefixes, and the prefix reading is exactly what is false",
+	},
+	{
+		ID: "heredoc/a-delimiter-that-closes-a-command-substitution", Category: "redirection",
+		Script:  true,
+		Snippet: "v=$(cat <<EOF\na\nEOF)\necho \"v=[$v] st=$?\"\n",
+		Why:     "the one place a line that merely *begins* with the delimiter ends the body: `EOF)` inside `$( )`, where the parenthesis that closes the substitution is what follows it. bash and ksh93 take it and the body is `a`; dash and zsh refuse the whole construct, dash wanting the `)` and zsh naming the assignment. So the prefix rule the case above disproves is real for this one shape and in only two of the six — and `EOF junk` in the same position is body in every one of them, which is how the two shapes tell each other apart",
 	},
 	{
 		ID: "heredoc/a-delimiter-that-never-matches", Category: "redirection",
@@ -5233,6 +5288,21 @@ echo after`,
 		Why:     "bash 5.3's bare `unset` checks nothing and its `unset -v` checks a name, which is the sharpest line in this whole area — and bash 3.2 refuses both, so the panel's two bash columns disagree here on purpose. The other three check either way",
 	},
 	// --- umask: the symbolic spelling ----------------------------------
+	{
+		ID: "shift/past-the-end-with-a-count", Category: "builtins",
+		Snippet: `set -- a b; shift 5; echo "st=$? n=$# rest=[$*]"`,
+		Why:     "a count larger than `$#`, which the prior reading of this — measured against bash alone — had as 'moves nothing and answers 1'. That is bash and zsh; dash and ksh93 *end the script*, which is `ShiftPastEndFatal` arriving with a count rather than without one, and the two say so in different words at different statuses. And the same bash 5.3 binary is silent as `bash` and prints `shift count out of range` as `sh`, so the diagnostic is argv[0]'s and not the build's. `shift/an-operand-that-was-never-given` is the no-count half",
+	},
+	{
+		ID: "shift/a-negative-count", Category: "builtins",
+		Snippet: `set -- a b c; shift -1; echo "st=$? n=$#"`,
+		Why:     "a count that cannot be one, and it divides the panel on *what kind of thing* the word is before it divides them on the answer: ksh93 reads `-1` as an option and refuses it as one, dash reads it as a number it calls illegal, and bash and zsh read it as a count that is out of range — three complaints, and fatal in the two where a special builtin's failure is. In the four that carry on, `$#` is untouched; the two that end the script end it before anything could be read back, which is the one thing this shape cannot say about them",
+	},
+	{
+		ID: "shift/a-double-dash-before-the-count", Category: "builtins",
+		Snippet: `set -- a b c; shift -- 2; echo "st=$? n=$# rest=[$*]"`,
+		Why:     "the end-of-options marker in front of the count: five take it and shift two, and dash calls `--` an illegal number — it has no option parsing here for `--` to end. It is the counterpart of `shift/a-leading-dash-that-is-not-a-number`, which asks what a dash word that is *not* the marker does, and together they say which shells read options at all",
+	},
 	{
 		ID: "shift/a-leading-dash-that-is-not-a-number", Category: "builtins",
 		Snippet: `shift -x; echo "st=$?"`,

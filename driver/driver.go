@@ -662,6 +662,15 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, c
 		// And it hands the terminal to whatever it is running, which is what
 		// makes ^C and ^Z reach the command rather than the shell.
 		r.Foreground = foreground
+		// And the descriptors it was started holding: `sh 3<&0 script` opens
+		// 3 for the script, and a script can neither open one nor find out
+		// that it has one. Here for the reason everything else in this block
+		// is here — finding them means reading the *process's* open
+		// descriptors, and a Runner embedded in another program would be
+		// publishing that program's own files to a script it was handed.
+		// interp takes the answer; only a binary that is the shell goes
+		// looking for it.
+		r.InheritedFiles = inheritedFiles()
 	}
 	if sh.Register != nil {
 		// The dialect's own adjustment: what it adds to or removes from the

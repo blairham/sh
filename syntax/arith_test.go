@@ -176,11 +176,11 @@ func TestArithExponentPrecedenceAndAssociativity(t *testing.T) {
 }
 
 func TestArithDialectGates(t *testing.T) {
-	// dash has none of these, so posix must refuse them rather than accept
-	// something it cannot mean.
+	// None of these is in the standard's arithmetic, so POSIX() must refuse
+	// them rather than accept something it cannot mean.
 	for _, src := range []string{`x++`, `1,2`, `2#101`, `2**3`} {
 		if _, err := Parse("echo $(("+src+"))", POSIX()); err == nil {
-			t.Errorf("%s: posix accepted a construct dash does not have", src)
+			t.Errorf("%s: POSIX() accepted a construct the dialect does not have", src)
 		}
 	}
 	if got, want := arith(parseArithOf(t, `1,2`, Core())), `(1 , 2)`; got != want {

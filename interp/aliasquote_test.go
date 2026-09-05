@@ -21,38 +21,38 @@ func TestTheFourAliasQuotingEngines(t *testing.T) {
 		// Always quotes; an embedded quote closes and reopens with a
 		// backslashed one, and a value *ending* in a quote keeps the empty
 		// pair that leaves behind.
-		{ListingQuoteAlwaysEscaped, `ls`, `'ls'`, "bash, plain"},
-		{ListingQuoteAlwaysEscaped, `echo x`, `'echo x'`, "bash, space"},
-		{ListingQuoteAlwaysEscaped, `it's`, `'it'\''s'`, "bash, quote"},
-		{ListingQuoteAlwaysEscaped, `echo 'hi'`, `'echo '\''hi'\'''`, "bash, trailing quote"},
+		{ListingQuoteAlwaysEscaped, `ls`, `'ls'`, "always-escaped, plain"},
+		{ListingQuoteAlwaysEscaped, `echo x`, `'echo x'`, "always-escaped, space"},
+		{ListingQuoteAlwaysEscaped, `it's`, `'it'\''s'`, "always-escaped, quote"},
+		{ListingQuoteAlwaysEscaped, `echo 'hi'`, `'echo '\''hi'\'''`, "always-escaped, trailing quote"},
 
 		// Always quotes; an embedded quote is written as a double-quoted one,
 		// and the empty tail is dropped.
-		{ListingQuoteAlwaysDoubled, `ls`, `'ls'`, "dash, plain"},
-		{ListingQuoteAlwaysDoubled, `it's`, `'it'"'"'s'`, "dash, quote"},
-		{ListingQuoteAlwaysDoubled, `echo 'hi'`, `'echo '"'"'hi'"'"`, "dash, trailing quote"},
+		{ListingQuoteAlwaysDoubled, `ls`, `'ls'`, "always-doubled, plain"},
+		{ListingQuoteAlwaysDoubled, `it's`, `'it'"'"'s'`, "always-doubled, quote"},
+		{ListingQuoteAlwaysDoubled, `echo 'hi'`, `'echo '"'"'hi'"'"`, "always-doubled, trailing quote"},
 
 		// Quotes only when needed, and reaches for $'...' for a quote or a
 		// control character.
-		{ListingQuoteWhenNeededDollar, `ls`, `ls`, "ksh93, bare"},
-		{ListingQuoteWhenNeededDollar, `echo x`, `'echo x'`, "ksh93, space"},
-		{ListingQuoteWhenNeededDollar, `it's`, `$'it\'s'`, "ksh93, quote"},
-		{ListingQuoteWhenNeededDollar, "a\tb", `$'a\tb'`, "ksh93, tab"},
+		{ListingQuoteWhenNeededDollar, `ls`, `ls`, "when-needed-dollar, bare"},
+		{ListingQuoteWhenNeededDollar, `echo x`, `'echo x'`, "when-needed-dollar, space"},
+		{ListingQuoteWhenNeededDollar, `it's`, `$'it\'s'`, "when-needed-dollar, quote"},
+		{ListingQuoteWhenNeededDollar, "a\tb", `$'a\tb'`, "when-needed-dollar, tab"},
 
-		// Quotes only when needed, escapes a quote the way bash does, and
+		// Quotes only when needed, escapes a quote the way ListingQuoteAlwaysEscaped does, and
 		// reaches for $'...' only for a control character.
-		{ListingQuoteWhenNeededEscaped, `ls`, `ls`, "zsh, bare"},
-		{ListingQuoteWhenNeededEscaped, `echo x`, `'echo x'`, "zsh, space"},
-		{ListingQuoteWhenNeededEscaped, `it's`, `'it'\''s'`, "zsh, quote"},
-		{ListingQuoteWhenNeededEscaped, `echo 'hi'`, `'echo '\''hi'\'`, "zsh, trailing quote"},
-		{ListingQuoteWhenNeededEscaped, "a\tb", `$'a\tb'`, "zsh, tab"},
+		{ListingQuoteWhenNeededEscaped, `ls`, `ls`, "when-needed-escaped, bare"},
+		{ListingQuoteWhenNeededEscaped, `echo x`, `'echo x'`, "when-needed-escaped, space"},
+		{ListingQuoteWhenNeededEscaped, `it's`, `'it'\''s'`, "when-needed-escaped, quote"},
+		{ListingQuoteWhenNeededEscaped, `echo 'hi'`, `'echo '\''hi'\'`, "when-needed-escaped, trailing quote"},
+		{ListingQuoteWhenNeededEscaped, "a\tb", `$'a\tb'`, "when-needed-escaped, tab"},
 
 		// The characters that do not force quotes in the two that ask.
-		{ListingQuoteWhenNeededDollar, `a-b.c/d:e@f`, `a-b.c/d:e@f`, "ksh93, punctuation that is safe"},
-		{ListingQuoteWhenNeededEscaped, `a"b`, `'a"b'`, "zsh, a double quote is not safe"},
-		{ListingQuoteWhenNeededEscaped, `a$b`, `'a$b'`, "zsh, a dollar is not safe"},
+		{ListingQuoteWhenNeededDollar, `a-b.c/d:e@f`, `a-b.c/d:e@f`, "when-needed-dollar, punctuation that is safe"},
+		{ListingQuoteWhenNeededEscaped, `a"b`, `'a"b'`, "when-needed-escaped, a double quote is not safe"},
+		{ListingQuoteWhenNeededEscaped, `a$b`, `'a$b'`, "when-needed-escaped, a dollar is not safe"},
 		// An empty value is never bare — `a=` would read back as a lookup.
-		{ListingQuoteWhenNeededDollar, ``, `''`, "ksh93, empty"},
+		{ListingQuoteWhenNeededDollar, ``, `''`, "when-needed-dollar, empty"},
 	} {
 		got, _ := aliasRunWithValue(t, c.style, c.value)
 		if got != "a="+c.want {

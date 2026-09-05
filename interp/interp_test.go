@@ -351,13 +351,14 @@ func TestAssignmentPrefixIsAnAxisWithTwoSides(t *testing.T) {
 	// testing both of its positions — asserting one is asserting a default.
 	src := `set -- a b; x=1 shift; printf "[%s]" "$x"`
 
-	posix := PosixSemantics()
-	if got, _ := run(t, src, func(r *Runner) { r.Semantics = &posix }); got != "[1]" {
-		t.Errorf("under posix the assignment should persist, got %q", got)
+	persists := PosixSemantics()
+	if got, _ := run(t, src, func(r *Runner) { r.Semantics = &persists }); got != "[1]" {
+		t.Errorf("with the axis set to Yes the assignment should persist, got %q", got)
 	}
-	bash := bash.Semantics()
-	if got, _ := run(t, src, func(r *Runner) { r.Semantics = &bash }); got != "[]" {
-		t.Errorf("under bash it should not, got %q", got)
+	drops := PosixSemantics()
+	drops.AssignmentPrefixPersistsOnSpecialBuiltin = No
+	if got, _ := run(t, src, func(r *Runner) { r.Semantics = &drops }); got != "[]" {
+		t.Errorf("with it set to No it should not, got %q", got)
 	}
 }
 

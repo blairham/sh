@@ -5466,6 +5466,43 @@ out=$(CDPATH=./pool cd sub)
 		Why:         "one end of file, three sentences and a silence: bash wants the matching mark, dash calls the string unterminated, zsh calls the opener unmatched — and ksh93 closes the quote, runs the command, and prints abc",
 	},
 	{
+		ID: "syntax/standard-input-reads-on-past-a-parse-failure", Category: "diagnostics",
+		SyntaxError: true,
+		Args:        []string{"--"},
+		Stdin:       ArgSnippet + "\n",
+		Snippet: `echo one
+{ fi; }
+echo three`,
+		Why: "the program arriving on standard input, where zsh alone reports the bad line and then reads the next one: it prints one, the complaint, and three, and exits 0 where the other three stop at the complaint. `--` is what says the program is not on the argv",
+	},
+	{
+		ID: "syntax/a-file-stops-at-the-same-parse-failure", Category: "diagnostics",
+		SyntaxError: true,
+		Script:      true,
+		Snippet: `echo one
+{ fi; }
+echo three`,
+		Why: "the same three lines from a file, and zsh stops: nothing after the complaint and status 1. Which says the row above is about the *route* rather than about the text, and is the reason the answer cannot live with the parse status",
+	},
+	{
+		ID: "syntax/reading-on-does-not-invent-a-status", Category: "diagnostics",
+		SyntaxError: true,
+		Args:        []string{"--"},
+		Stdin:       ArgSnippet + "\n",
+		Snippet: `{ fi; }
+exit 7`,
+		Why: "the shell that reads on does not force a status either: what runs after the bad line reports as it always would, so this is 7 there. In the other three nothing after the complaint runs at all and the status is the parse failure's",
+	},
+	{
+		ID: "syntax/reading-on-with-nothing-left-to-read", Category: "diagnostics",
+		SyntaxError: true,
+		Args:        []string{"--"},
+		Stdin:       ArgSnippet + "\n",
+		Snippet: `echo one
+{ fi; }`,
+		Why: "the other half of the status: where the bad line is the last one there is nothing to report but the failure, so the shell that reads on still exits with the parse status. Together with the row above this says the status is left behind rather than chosen",
+	},
+	{
 		ID: "syntax/an-unmatched-command-substitution", Category: "diagnostics",
 		SyntaxError: true,
 		Snippet:     `echo $(echo`,

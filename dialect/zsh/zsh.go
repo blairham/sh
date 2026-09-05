@@ -457,11 +457,15 @@ func Diagnostics() interp.Diagnostics {
 		CannotCreate:             "%[2]s: %[1]s",
 		NotABuiltin:              "no such builtin: %[1]s",
 		CommandStringParsedWhole: true,
-		ArithInfinity:            "Inf",
-		ArithNotANumber:          "NaN",
-		ArithFloatDigits:         17,
-		ArithFloatKeepsPoint:     true,
-		SelectPrompt:             "?# ",
+		// Reading a program from standard input, a line that does not parse
+		// is reported and the next line is read anyway. This shell alone,
+		// and this route alone: the same program in a file stops it.
+		StdinProgramSurvivesAParseFailure: true,
+		ArithInfinity:                     "Inf",
+		ArithNotANumber:                   "NaN",
+		ArithFloatDigits:                  17,
+		ArithFloatKeepsPoint:              true,
+		SelectPrompt:                      "?# ",
 		// The reason before the name is zsh's shape everywhere, and here it
 		// drops the reason altogether: a script operand that is missing, one
 		// that is mode 000 and a directory all get the same sentence and the

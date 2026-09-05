@@ -25,6 +25,11 @@ func subshellJobsRun(t *testing.T, answer SubshellJobTable, src string) string {
 		s := *r.Semantics
 		s.SubshellJobTable = answer
 		r.Semantics = &s
+		// The listing goes to a file, and a relative path is resolved
+		// against the Runner's directory. Left unset it is the process's,
+		// which under `go test` is the package directory — so these tests
+		// wrote s.txt into the source tree, and one of them was committed.
+		r.Dir = t.TempDir()
 	})
 	return out
 }

@@ -793,7 +793,7 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 				// The input ended part-way through something. Reported here
 				// rather than below, because a program read as it runs has no
 				// line to hand back when the last of it is unfinished.
-				sh.errf("%s", in.dg.ParseDiagnostic(in.name, in.input, err, pr.src))
+				sh.errf("%s", in.dg.ParseDiagnostic(in.name, in.input, err, pr.text()))
 				r.Finish(ctx)
 				return in.dg.StatusForParseError(err)
 			}
@@ -802,7 +802,7 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 		if err := pr.err(); err != nil {
 			// The line did not parse, so none of it runs — not even the
 			// statements before the failure, which is measured.
-			sh.errf("%s", in.dg.ParseDiagnostic(in.name, in.input, err, pr.src))
+			sh.errf("%s", in.dg.ParseDiagnostic(in.name, in.input, err, pr.text()))
 			r.Finish(ctx)
 			return in.dg.StatusForParseError(err)
 		}
@@ -812,7 +812,7 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 			// here: the runner only says whether the option is on. Echoed up
 			// to the line the parser has consumed, so a here-document's body
 			// goes out with the line that owns it, and never twice.
-			echoed = sh.sayVerbose(pr.src, line.Last.Line, echoed)
+			echoed = sh.sayVerbose(pr.text(), line.Last.Line, echoed)
 		} else {
 			// Lines read while the option is off are spent, not saved: the
 			// line that says `set -v` is not echoed by the shell it turns on.

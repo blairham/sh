@@ -72,6 +72,9 @@ func TestTheGateSeesEveryWayIn(t *testing.T) {
 					return Allow
 				}),
 			}
+			// The process-substitution row makes a directory for its pipe,
+			// and only CleanUp removes one.
+			t.Cleanup(r.CleanUp)
 			f, err := syntax.Parse(tc.src, syntax.Core())
 			if err != nil {
 				t.Fatalf("parse: %v", err)

@@ -160,10 +160,56 @@ func (r *Runner) procSubDir() (string, error) {
 	if r.procSubHome == nil {
 		r.procSubHome = &procSubDirs{}
 	}
+	// Read out here rather than inside the closure: this runs on the
+	// goroutine that is expanding the word, which is where every other read
+	// of the variable table happens, and once.Do would otherwise be the one
+	// place a second goroutine reads r.Vars.
+	home := r.tempHome()
 	r.procSubHome.once.Do(func() {
-		r.procSubHome.dir, r.procSubHome.err = os.MkdirTemp("", "sh-procsub")
+		// An explicit parent, never MkdirTemp's empty one. Empty means
+		// os.TempDir, which is os.Getenv("TMPDIR") wearing a different name
+		// — the process's environment, read from inside the library, on the
+		// live path of every substitution. It is the os.Getwd fallback the
+		// glob path used to have, in a second place.
+		//nolint:forbidigo // the parent is the Runner's, computed above; only MkdirTemp's empty-string form asks the process
+		r.procSubHome.dir, r.procSubHome.err = os.MkdirTemp(home, "sh-procsub")
 	})
 	return r.procSubHome.dir, r.procSubHome.err
+}
+
+// tempHome is where this shell puts what it has to write to disk.
+//
+// TMPDIR through r.getVar, which is the Runner's own answer: its variables
+// first and the environment its embedder handed in second. That is the same
+// route `~` takes to HOME, and it is the only one that keeps two Runners in
+// one program separable — an embedder that seeds Env decides where its
+// shell's pipes go, and a script that assigns TMPDIR moves its own and
+// nobody else's.
+//
+// No shell in the panel exposes this: measured on darwin, bash, zsh and
+// ksh93 all expand `<(cmd)` to a /dev/fd path and none of them consults
+// TMPDIR for it, while zsh's `=(cmd)` — the nearest construct that does
+// write a file — reads TMPPREFIX and ignores TMPDIR too. So there is no
+// behavior to match here and no axis to add. The named pipe is ours, forced
+// by Go's close-on-exec (see the file comment), and where it lives is
+// therefore our decision rather than a compatibility question. What settles
+// it is the library rule: the answer belongs to the Runner.
+//
+// A relative TMPDIR is resolved against r.Dir rather than left for the
+// operating system to resolve, because the directory the *process* happens
+// to sit in is exactly the ambient state this is here to stop reading.
+func (r *Runner) tempHome() string {
+	dir, _ := r.getVar("TMPDIR")
+	if dir == "" {
+		// POSIX names /tmp as the directory that is there. A Runner built
+		// with no Env at all — the zero value, which this package promises
+		// is usable — still has to be able to make a pipe.
+		return "/tmp"
+	}
+	if !filepath.IsAbs(dir) {
+		return filepath.Join(r.workDir(), dir)
+	}
+	return dir
 }
 
 // takeProcSubs hands over the pipes a command's substitutions made, and
@@ -194,7 +240,10 @@ func removeProcSubs(paths []string) {
 //
 // Only the directory the named pipes went in, at present. A caller that runs
 // many scripts on one Runner should call it when finished; a binary that exits
-// need not, since the directory is under the system's temporary one.
+// need not, since the directory is under this shell's temporary one — TMPDIR
+// as the Runner reads it, which for a shell binary is the machine's. An
+// embedder that points a Runner's TMPDIR somewhere of its own is the case
+// where nothing else would ever remove it, which is the reason this is public.
 func (r *Runner) CleanUp() {
 	if r.procSubHome != nil && r.procSubHome.dir != "" {
 		_ = os.RemoveAll(r.procSubHome.dir)

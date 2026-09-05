@@ -623,6 +623,13 @@ func Apply(r *interp.Runner) {
 	// The statuses of the last pipeline's elements. The core keeps the
 	// record and this names it; ksh93 and dash have no name for it at all.
 	r.SetPipelineStatus("pipestatus")
+	// A read of the process, in library code, on purpose. The purity rule
+	// covers dialect/ as well as interp/ — an embedder links this and Apply
+	// runs inside the Runner — but it is about state a Runner owns and two
+	// Runners could disagree about. A uid is neither: nothing a script does
+	// changes it, two shells in one program genuinely have the same one, and
+	// $UID has no other source. Same class as $$, which .golangci.yml has
+	// blessed since it was written.
 	r.SetSpecial("UID", strconv.Itoa(os.Getuid()))
 	r.SetSpecial("EUID", strconv.Itoa(os.Geteuid()))
 	r.SetDynamic("RANDOM", func(*interp.Runner) string { return interp.Randoms() })

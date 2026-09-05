@@ -20,9 +20,22 @@ linters:
       # the answer belongs on the Runner (r.Dir, r.Env, r.Vars) or behind a
       # hook the binary fills in (ReplaceProcess). AGENTS.md states the rule;
       # this enforces it, because os.Getwd once sat in the glob path of every
-      # shipped binary with nothing to say so. Scoped to interp/ by the
-      # exclusions below; os.Getpid and friends are fine — a pid is per
-      # process but not *state*, and $$ needs it.
+      # shipped binary with nothing to say so — and then os.MkdirTemp("")
+      # did the same thing in the process-substitution path, because the
+      # empty first argument is os.TempDir is os.Getenv("TMPDIR"), and no
+      # pattern here named it. A guard is only as wide as its list.
+      #
+      # Scoped by the exclusions below to interp/ *and* dialect/. A dialect
+      # is library code too: an embedder links it and Apply runs inside the
+      # Runner, so an os.Getenv landing there is the same leak in a
+      # directory the rule used not to cover.
+      #
+      # Reading the process's *identity* is not on this list and is not
+      # meant to be. A pid, a uid, a euid are per-process but they are not
+      # state anyone can fight over — two Runners in one program genuinely
+      # share them, nothing a script does can change them, and $$, $UID and
+      # $EUID need them. dialect/bash and dialect/zsh read uid for exactly
+      # that and are correct.
       analyze-types: true
       forbid:
       - pattern: ^os\.Getwd$
@@ -37,6 +50,8 @@ linters:
         msg: replacing the process is the binary's decision; use the ReplaceProcess hook
       - pattern: ^exec\.LookPath$
         msg: consults the process's PATH and cwd; the Runner owns both — use lookpath.go
+      - pattern: ^os\.(TempDir|MkdirTemp|CreateTemp)$
+        msg: os.TempDir is os.Getenv("TMPDIR"), and MkdirTemp/CreateTemp call it for an empty dir; the temporary home is r.tempHome() — TMPDIR through r.getVar
   enable:
   - errcheck
   - forbidigo
@@ -48,10 +63,15 @@ linters:
   exclusions:
     rules:
     # The purity rule guards the library, so it applies where the library
-    # lives. driver and the binaries are the intended home of these calls,
-    # and interp's own tests are embedders — a test may legitimately read
-    # the real PATH to find the real /bin/echo.
-    - path-except: ^interp/
+    # lives — which is interp/ *and* dialect/. A dialect package is not a
+    # front end: an embedder imports it and its Apply runs inside the
+    # Runner, so process state read there is read on the library's side of
+    # the line, and only the exclusion's old shape made that lint clean.
+    # driver and the binaries are the intended home of these calls, and
+    # interp's own tests are embedders — a test may legitimately read the
+    # real PATH to find the real /bin/echo, or point TMPDIR somewhere it
+    # can watch.
+    - path-except: ^(interp|dialect)/
       linters:
       - forbidigo
     - path: _test\.go$

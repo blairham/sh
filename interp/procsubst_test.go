@@ -147,16 +147,20 @@ func TestProcessSubstitutionRemovesItsPipe(t *testing.T) {
 // CleanUp takes the directory as well. A library caller running many scripts
 // on one Runner has nothing else that would.
 func TestProcessSubstitutionCleanUpRemovesTheDirectory(t *testing.T) {
-	// The directory is made under the system's temporary one, so pointing
-	// that at a fresh directory is what makes it findable from here.
+	// The directory is made under the shell's temporary one, so pointing
+	// that at a fresh directory is what makes it findable from here — and
+	// the shell's is TMPDIR in the environment the Runner was handed, not
+	// the process's own. t.Setenv would say nothing to this package.
 	dir := t.TempDir()
-	t.Setenv("TMPDIR", dir)
 	var r *Runner
 	// Four substitutions across two commands, because the claim is one
 	// directory per *shell* — made when the first one needs it and not per
 	// substitution, which leaves one behind for every one but the last.
 	src := "cat <(echo a) <(echo b) >/dev/null; cat <(echo c) <(echo d) >/dev/null"
-	if _, st := run(t, src, func(rr *Runner) { r = rr }); st != 0 {
+	if _, st := run(t, src, func(rr *Runner) {
+		r = rr
+		rr.Env = append(testPATH(), "TMPDIR="+dir)
+	}); st != 0 {
 		t.Fatalf("status %d", st)
 	}
 	if n := len(subdirs(t, dir)); n != 1 {
@@ -178,8 +182,8 @@ func TestProcessSubstitutionPathIsNotGlobbed(t *testing.T) {
 	if err := os.Mkdir(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("TMPDIR", dir)
 	out, st := run(t, `cat <(echo hi)`, func(r *Runner) {
+		r.Env = append(testPATH(), "TMPDIR="+dir)
 		sem := CoreSemantics()
 		// A pattern matching nothing is an error here, which is what turns
 		// the unescaped path from silently wrong into visible.
@@ -189,6 +193,90 @@ func TestProcessSubstitutionPathIsNotGlobbed(t *testing.T) {
 	})
 	if st != 0 || out != "hi\n" {
 		t.Errorf("out = %q status %d, want the path used as a name", out, st)
+	}
+}
+
+// Where the pipes go is the Runner's answer and never the process's.
+//
+// This is the library rule, not a compatibility one: nothing a real shell
+// does is visible here, because every shell in the panel expands `<(cmd)` to
+// a /dev/fd path and consults no temporary directory at all. Our named pipe
+// is forced by Go's close-on-exec, so we alone have the question — and the
+// answer has to come off the Runner, because the process's TMPDIR is one
+// value every embedded shell in a program would share.
+//
+// The regression it pins: os.MkdirTemp with an empty first argument is
+// os.TempDir, which is os.Getenv("TMPDIR"). Two shells in one process could
+// not be told apart by it, and an embedder that handed one an environment
+// got the machine's answer anyway.
+func TestProcessSubstitutionIgnoresTheProcessTMPDIR(t *testing.T) {
+	// The decoy is what a leak would use, and it is watched rather than
+	// merely unused: an empty directory afterwards is the assertion.
+	decoy := t.TempDir()
+	t.Setenv("TMPDIR", decoy)
+	mine := t.TempDir()
+
+	var r *Runner
+	out, st := run(t, `cat <(echo hi)`, func(rr *Runner) {
+		r = rr
+		rr.Env = append(testPATH(), "TMPDIR="+mine)
+	})
+	if st != 0 || out != "hi\n" {
+		t.Fatalf("out = %q status %d, want the substitution to work", out, st)
+	}
+	t.Cleanup(r.CleanUp)
+	if n := len(subdirs(t, decoy)); n != 0 {
+		t.Errorf("%d directories under the process's TMPDIR, want none — the Runner's was handed in", n)
+	}
+	if n := len(subdirs(t, mine)); n != 1 {
+		t.Errorf("%d directories under the Runner's TMPDIR, want the one its shell made", n)
+	}
+}
+
+// A script that assigns TMPDIR moves its own shell's pipes.
+//
+// getVar reads the variable table before the environment, which is the same
+// route `~` takes to HOME, and it is what keeps the answer per-Runner all the
+// way down: the assignment is this shell's and no other shell in the process
+// sees it. Recorded because the alternative — a field seeded once at
+// construction — would leave the assignment inert with nothing saying so.
+func TestProcessSubstitutionHonorsAnAssignedTMPDIR(t *testing.T) {
+	assigned := t.TempDir()
+	handedIn := t.TempDir()
+
+	var r *Runner
+	src := `TMPDIR=` + assigned + `; cat <(echo hi)`
+	out, st := run(t, src, func(rr *Runner) {
+		r = rr
+		rr.Env = append(testPATH(), "TMPDIR="+handedIn)
+	})
+	if st != 0 || out != "hi\n" {
+		t.Fatalf("out = %q status %d, want the substitution to work", out, st)
+	}
+	t.Cleanup(r.CleanUp)
+	if n := len(subdirs(t, assigned)); n != 1 {
+		t.Errorf("%d directories under the assigned TMPDIR, want the one the shell made", n)
+	}
+	if n := len(subdirs(t, handedIn)); n != 0 {
+		t.Errorf("%d directories under the inherited TMPDIR, want none — the assignment shadows it", n)
+	}
+}
+
+// A Runner with no TMPDIR anywhere still works, because the zero value of
+// this package is meant to be usable and a nil Env is genuinely empty.
+func TestProcessSubstitutionWithoutATMPDIR(t *testing.T) {
+	var r *Runner
+	out, st := run(t, `cat <(echo hi)`, func(rr *Runner) {
+		r = rr
+		// Back to bare: the shared helper seeds one so the suite does not
+		// litter, and this is the one test that must not have it.
+		rr.Env = testPATH()
+	})
+	if st != 0 || out != "hi\n" {
+		t.Errorf("out = %q status %d, want the substitution to work with no TMPDIR", out, st)
+	}
+	if r != nil {
+		t.Cleanup(r.CleanUp)
 	}
 }
 

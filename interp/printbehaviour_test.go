@@ -74,7 +74,13 @@ func runUnderBash(t *testing.T, src string) (string, int) {
 		Semantics: &sem, Diagnostics: &dg,
 		Stdout: &out, Stderr: &out,
 		Stdin: strings.NewReader(""),
-		Name:  "sh", Dir: dir, Env: testPATH(),
+		// TMPDIR is the Runner's own, so a corpus case with a process
+		// substitution in it makes its directory somewhere the framework
+		// takes away — not in a real one, where nothing calls CleanUp.
+		// Its own directory rather than Dir: the path a substitution
+		// expands to would otherwise be rewritten by the <dir> masking
+		// below, which is meant for what the *snippet* prints.
+		Name: "sh", Dir: dir, Env: append(testPATH(), "TMPDIR="+t.TempDir()),
 	}
 	bash.Apply(r)
 	status, rerr := r.Run(context.Background(), f)

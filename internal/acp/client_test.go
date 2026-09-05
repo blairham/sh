@@ -668,3 +668,10 @@ func TestTheFileCapabilityIsAdvertised(t *testing.T) {
 		})
 	}
 }
+
+// events is every event the sink was given, in order.
+func (r *recorder) events() []interp.Event {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]interp.Event(nil), r.got...)
+}

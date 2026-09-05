@@ -239,26 +239,94 @@ exit $n
 //
 // The script here hangs from its second run on, so the reference answers once
 // and then stops answering.
+//
+// The hanging run is ended by canceling the sweep rather than by the sweep's
+// deadline, and that is the whole of what makes this test reliable. It used to
+// be given 300ms, which asked two things of one number: that a run forking
+// /bin/sh and reading a file finish *inside* it, and that the hang exceed it.
+// Under load the first run missed too, and the report came back
+// `{Ran:0 Timedout:2 Unstable:0}` — a real deadline losing to a real machine,
+// which raising the number would only have made rarer and slower. So the fast
+// run is given a minute it will never come near, the script says when it is
+// about to hang, and the sweep is stopped on that word. Nothing here is
+// waiting on a clock.
 func TestARepeatThatTimesOutIsNotStability(t *testing.T) {
 	dir := t.TempDir()
+	hanging := filepath.Join(dir, "hanging")
+	// `exec sleep`, so the hang *is* the shell rather than a child of it:
+	// killing the shell leaves a child holding the output pipes open, and
+	// os/exec then waits out its WaitDelay before Run returns. Replacing the
+	// shell puts the process being killed and the process holding the pipes
+	// back together, which takes a second off the test.
 	script := write(t, dir, "s", `#!/bin/sh
 d=$(dirname "$0")
 n=0
 [ -f "$d/n" ] && n=$(cat "$d/n")
 echo $((n+1)) > "$d/n"
-[ "$n" -ge 1 ] && sleep 30
+if [ "$n" -ge 1 ]; then
+	: > "$d/hanging"
+	exec sleep 300
+fi
 exit 0
 `)
 	// Prints something and never runs the script, so the reference is the
 	// only thing driving the counter.
 	odd := shellThat(t, "odd", `echo different`)
 
-	rep := wild.RunSweep(context.Background(), []string{script}, odd, "/bin/sh", 300*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Closed before the cancel rather than after it, so that a sweep which has
+	// returned is a sweep whose cancel this goroutine had already announced.
+	// Closing afterwards would leave the assertion below racing the scheduler
+	// for the one thing it is there to prove.
+	hung := make(chan struct{})
+	go func() {
+		// The file exists only once the script's second run has reached the
+		// hang, so this cannot fire early — and a run that has reached the
+		// hang is never coming back, so it cannot fire late either. That is
+		// the difference between synchronizing and guessing: a deadline has
+		// to be wrong in one direction or the other under enough load, and
+		// this is right at any speed.
+		for {
+			if _, err := os.Stat(hanging); err == nil {
+				close(hung)
+				cancel()
+				return
+			}
+			select {
+			case <-t.Context().Done():
+				return
+			case <-time.After(time.Millisecond):
+			}
+		}
+	}()
+
+	// A minute is a backstop against a hang this test did not arrange — a
+	// /bin/sh that will not start at all — and not the mechanism. Nothing here
+	// is meant to reach it, and the script's own wait is five minutes so that
+	// reaching it is still a *timeout*: a hang shorter than the backstop is not
+	// a hang, and the sweep would read the run that finished it as an answer.
+	rep := wild.RunSweep(ctx, []string{script}, odd, "/bin/sh", time.Minute)
 	if len(rep.Mismatches) != 0 {
 		t.Errorf("reported %d differences on the strength of a run that timed out: %+v",
 			len(rep.Mismatches), rep)
 	}
 	if rep.Unstable != 1 {
 		t.Errorf("unstable = %d, want 1: %+v", rep.Unstable, rep)
+	}
+	// The shape as well as the count, because `Unstable == 1` on its own does
+	// not say the comparison happened: the first probe has to have produced
+	// one, and that is the run the old deadline ate.
+	if rep.Ran != 1 {
+		t.Errorf("ran = %d, want the first probe's comparison and no more: %+v", rep.Ran, rep)
+	}
+	// And that the sweep was ended by the script rather than by its deadline.
+	// Without this the test still passes when the gate never fires — a minute
+	// later, on the backstop — which is the failure a deadline-shaped test is
+	// least able to notice about itself.
+	select {
+	case <-hung:
+	default:
+		t.Error("the sweep ended without the script ever reaching its hang, so the deadline is doing the work again")
 	}
 }

@@ -65,6 +65,7 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"TraceShowsItsOwnDisabling", s.TraceShowsItsOwnDisabling, interp.Yes},
 		{"LocalInheritsTheExportAttribute", s.LocalInheritsTheExportAttribute, interp.Yes},
 		{"StdinOptionNamesTheOperands", s.StdinOptionNamesTheOperands, interp.No},
+		{"HangupIsAnOrderlyExit", s.HangupIsAnOrderlyExit, interp.No},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.axis, tc.got, tc.want)

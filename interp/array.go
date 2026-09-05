@@ -174,6 +174,60 @@ func (r *Runner) unsetArrayElem(name string, idx int) {
 	r.storeArray(name, a)
 }
 
+// unsetWholeArray is `unset a[@]`, where the subscript names every element
+// rather than one of them. It reports whether the spelling was handled, so
+// the dialect that has no such reading can go on to the expression it does
+// have.
+//
+// The two spellings that reach it were doing nothing at all. `@` is not an
+// arithmetic expression, so the subscript failed to evaluate and the element
+// nobody named was quietly not removed — `unset a[@]` on a full array left
+// every element in place at status 0, where two of the three shells with
+// arrays empty it. Silent, and the shape scripts use to start a list over.
+func (r *Runner) unsetWholeArray(name string) (handled bool, code int) {
+	switch r.unsetArrayAt() {
+	case UnsetArrayAtRemovesEveryElement:
+		if _, ok := r.Arrays[name]; ok {
+			r.storeArray(name, Array{})
+			return true, 0
+		}
+		// A name that is no array is not emptied, and the two cases part
+		// here: one holding a value is complained about and reported as a
+		// failure, and one holding nothing at all is left alone without a
+		// word. Both keep what they had, which is why neither writes to the
+		// store.
+		if _, held := r.getVar(name); held {
+			r.diagf("%s\n", Wording(r.diag().UnsetNotAnArray,
+				"unset: %[1]s: not an array variable", name))
+			return true, 1
+		}
+		return true, 0
+	case UnsetArrayAtLeavesOneEmptyElement:
+		// The span becomes one empty string, which is the same rule this
+		// shell applies to a single element — `unset a[2]` blanks it in place
+		// — read over every element at once. A scalar is one element by that
+		// reading and comes back empty; a name holding nothing has no span,
+		// and nothing is what it keeps. An array that is already empty has no
+		// span either, so `a=(); unset a[@]` does not gain an element.
+		if a, ok := r.Arrays[name]; ok {
+			if len(a) > 0 {
+				r.storeArray(name, Array{0: ""})
+			}
+			return true, 0
+		}
+		if _, held := r.getVar(name); held {
+			r.setVar(name, "")
+		}
+		return true, 0
+	case UnsetArrayAtIsASubscript:
+		return false, 0
+	default:
+		// Unspecified, already reported by name. Refusing is not "quietly do
+		// nothing", which is the bug this function exists to fix.
+		return true, r.status
+	}
+}
+
 // arrayScalar is what a plain `$a` gives when `a` is an array.
 //
 // Two answers: every element joined by a space, or the first element alone.

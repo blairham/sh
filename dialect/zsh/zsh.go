@@ -228,6 +228,11 @@ func Semantics() interp.Semantics {
 	// is 2.
 	s.ExitTrapRunsOnSignalDeath = interp.No
 	s.QuitIgnoredWhenNotInteractive = interp.Yes
+	// This shell alone: an untrapped SIGHUP ends the shell with 1 and runs
+	// the EXIT trap, rather than killing it with 128 plus the number. The
+	// EXIT trap is why it is not simply a different number — the line above
+	// says dying does not run it, and here one runs.
+	s.HangupIsAnOrderlyExit = interp.Yes
 	// zsh alone: a bare `exit` there reports what the trap's own last
 	// command did, so `trap "false; exit" 0` exits 1.
 	s.ExitInTrapReportsEarlierStatus = interp.No
@@ -297,6 +302,12 @@ func Semantics() interp.Semantics {
 	s.UnsetNameOperands = interp.NamesAndPositionals
 	s.DeclarationTakesASubscript = interp.No
 	s.UnsetTakesASubscript = interp.Yes
+	// `unset a[@]` replaces the elements with a single empty one, which is
+	// this shell's reading of `unset` on a span rather than a special rule
+	// for `[@]`: `unset a[2]` leaves an empty element in place too. A scalar
+	// is one such span and comes back empty; an array with nothing in it has
+	// no span and gains no element.
+	s.UnsetArrayAt = interp.UnsetArrayAtLeavesOneEmptyElement
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No

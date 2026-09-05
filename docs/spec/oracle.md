@@ -24,6 +24,28 @@ language: bash 3.2 has process substitution when invoked as `bash` and
 rejects it as `sh`. Any claim about "bash" that does not say how it was
 invoked is incomplete.
 
+That name is applied on **every route** — `-c`, a script file, and a
+case's own argv alike — and the rule is written down because it was once
+broken on one of them. The script route did not apply it, so the column
+headed `bash-as-sh` held plain bash for every case that runs from a file,
+and 18 rows said the wrong shell's answer under the right shell's
+heading. Nothing about such a row looks wrong: they agree with each other
+and disagree only with the column they sit in, which is the mislabeled
+column `MustReport` exists to prevent, arriving by the one door
+`MustReport` cannot watch — it checks that the *binary* is the one the
+entry names, and a binary invoked under the wrong name is still that
+binary.
+
+What it cost is the measure of why the rule is worth stating. Called
+`sh`, the same bash makes a failed special builtin fatal, so a readonly
+reassignment stops the script rather than printing what came after it;
+expands aliases in a non-interactive script, so a command that was "not
+found" is found; prints `INT` where bash prints `SIGINT`; and holds
+`trap` to its POSIX usage. Thirteen of the eighteen rows had the wrong
+exit status, which is the part a reader would have trusted. **A column is
+named by argv[0] and by nothing else** — so a route that cannot say what
+argv[0] it used cannot say which shell it measured.
+
 ## Producing a fact
 
 A case is a snippet plus, for each shell in the panel, what it wrote to

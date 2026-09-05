@@ -30,6 +30,7 @@ import (
 // ignored.
 func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compound bool) ([]io.Closer, error) {
 	r.redirErr = false
+	r.redirFds = nil
 	if len(rs) == 0 {
 		return nil, nil
 	}
@@ -57,9 +58,15 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 		}
 		fdsTouched = true
 		saved := r.fds
+		// The marks travel with the table, because they are about the table:
+		// a command that redirects a number `exec` had opened is using that
+		// number for itself, and when the command ends the number goes back
+		// to being `exec`'s.
+		savedExec := r.execFds
 		r.fds = maps.Clone(r.fds)
+		r.execFds = maps.Clone(r.execFds)
 		closers = append(closers, closerFunc(func() error {
-			r.fds = saved
+			r.fds, r.execFds = saved, savedExec
 			return nil
 		}))
 	}
@@ -141,7 +148,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 					// holds. The close is for keeps — this path never joins
 					// the save — so the pipe or file behind it really ends,
 					// which is what lets a coprocess see its input finish.
-					v, okv := r.getVar(fdVar)
+					v, okv := r.fdVarValue(fdVar)
 					n, okn := atoi(v)
 					if !okv || !okn {
 						if r.ask(r.sem().FdVariableBadCloseIsAnError,
@@ -164,6 +171,7 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 							_ = c.Close()
 						}
 					}
+					r.redirWrote(n)
 					continue
 				}
 				// `exec {name}>&2` picks a fresh descriptor aimed where the
@@ -185,8 +193,9 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				r.redirErr = true
 				return closers, nil
 			}
+			r.redirWrote(fd)
 			if fdVar != "" {
-				r.setVar(fdVar, itoa(fd))
+				r.setFdVar(fdVar, itoa(fd))
 			}
 			continue
 		}
@@ -330,8 +339,9 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 				saveFds()
 			}
 			r.setFd(fd, f)
+			r.redirWrote(fd)
 			if fdVar != "" {
-				r.setVar(fdVar, itoa(fd))
+				r.setFdVar(fdVar, itoa(fd))
 			}
 		}
 	}
@@ -646,3 +656,97 @@ type closedFd struct{}
 
 func (closedFd) Write([]byte) (int, error) { return 0, syscall.EBADF }
 func (closedFd) Read([]byte) (int, error)  { return 0, syscall.EBADF }
+
+// fdVarValue reads the descriptor number a `{name}` token names.
+//
+// The name may carry a subscript where the dialect allows one — `{a[1]}` is
+// the element, and `exec {COPROC[1]}>&-` is how a coprocess's feed is closed
+// by the array the shell put its near ends in. The lexer has already decided
+// that the brackets are part of the name; what arrives here is the text
+// between the braces, so this is where a name and an element part company.
+//
+// The subscript is read the way every other subscript in this package is: a
+// declared associative name takes it as a key and any other takes it as an
+// expression, which is what makes `{a[i+1]}` mean what `${a[i+1]}` means.
+func (r *Runner) fdVarValue(ref string) (string, bool) {
+	base, sub, ok := r.subscriptOperand(ref)
+	if !ok {
+		return r.getVar(ref)
+	}
+	if r.assocDeclared(base) {
+		v, held := r.AssocArrays[base][sub]
+		return v, held
+	}
+	idx, err := r.subscriptValue(sub)
+	if err != nil {
+		return "", false
+	}
+	elems, isArray := r.arrayElems(base)
+	if !isArray {
+		return "", false
+	}
+	return r.elemAt(base, elems, idx)
+}
+
+// setFdVar gives the name the number the shell picked, which is the other
+// half of the same rule: `exec {a[2]}>f` opens the file and leaves the
+// descriptor in that element.
+func (r *Runner) setFdVar(ref, value string) {
+	base, sub, ok := r.subscriptOperand(ref)
+	if !ok {
+		r.setVar(ref, value)
+		return
+	}
+	if r.assocDeclared(base) {
+		r.setAssocElem(base, sub, value)
+		return
+	}
+	idx, err := r.subscriptValue(sub)
+	if err != nil {
+		// The same silence a bad subscript gets from the reading half. The
+		// redirection itself has already happened, and the number it chose
+		// has nowhere to go — which is the shape of the case the dialect
+		// answers with FdVariableBadCloseIsAnError on the way in.
+		return
+	}
+	r.setArrayElem(base, idx, value)
+}
+
+// redirWrote records that the redirections being applied have just written a
+// descriptor beyond the three named streams.
+//
+// Two things come of it. The caller learns which numbers to mark when the
+// redirections turn out to be `exec`'s and outlive the command; and the mark
+// comes *off* here, because a command redirecting a number `exec` had opened
+// is using that number for itself. Measured: `exec 3>f` keeps the descriptor
+// from an external command in one dialect, and `exec 3>f; cmd 3>&3` hands it
+// over there after all — restating the number on the command is what brings
+// it back. The save puts the mark on again when the command ends.
+func (r *Runner) redirWrote(fd int) {
+	if fd <= 2 {
+		return
+	}
+	r.redirFds = append(r.redirFds, fd)
+	delete(r.execFds, fd)
+}
+
+// markExecOpened records that these numbers were opened by `exec`'s own
+// redirection list, which is the one thing that distinguishes them from any
+// other descriptor in the table.
+//
+// Called where the redirections are found to outlive their command, because
+// that is what `exec` is: the caller keeps them rather than closing them, and
+// only then is it known that this was not an ordinary command's redirect.
+// A number that was closed rather than opened is not marked — the mark is
+// about a descriptor that is there to hand over.
+func (r *Runner) markExecOpened(fds []int) {
+	for _, fd := range fds {
+		if _, held := r.fds[fd]; !held {
+			continue
+		}
+		if r.execFds == nil {
+			r.execFds = map[int]bool{}
+		}
+		r.execFds[fd] = true
+	}
+}

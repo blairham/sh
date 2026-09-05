@@ -83,6 +83,7 @@ func Semantics() interp.Semantics {
 	s.DotWithNoOperandIsAnError = interp.No
 	s.ExitTrapRunsOnSignalDeath = interp.No
 	s.QuitIgnoredWhenNotInteractive = interp.No
+	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	s.KillListAcceptsName = interp.No
 	s.SIGPrefixAccepted = interp.No

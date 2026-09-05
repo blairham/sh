@@ -28,6 +28,16 @@ import (
 // background job, a process substitution — and a lock per writer would give
 // each of them a *different* lock over the *same* io.Writer, which excludes
 // nothing. The lock has to belong to the stream.
+//
+// And to *both* output streams together, which is the same argument carried
+// one step further. `Stdout` and `Stderr` are two fields and need not be two
+// writers: an embedder that wants what `2>&1` gives hands the same buffer to
+// both, and a lock per field is then two locks over one writer — the very
+// thing the paragraph above rules out, arrived at from the other side. The
+// shell cannot tell whether two io.Writers are one object without comparing
+// interface values, which panics for a writer whose type is not comparable,
+// so it assumes they are. Serializing stderr behind stdout costs a mutex on
+// streams a shell writes a line at a time.
 type lockedWriter struct {
 	mu *sync.Mutex
 	w  io.Writer
@@ -39,11 +49,14 @@ func (l *lockedWriter) Write(p []byte) (int, error) {
 	return l.w.Write(p)
 }
 
-// streamLocks is one lock per stream the shell was handed, shared by a runner
-// and every subshell cloned from it — which is exactly the set of runners that
-// can be reading or writing those streams at once.
+// streamLocks is the locks over the streams the shell was handed, shared by a
+// runner and every subshell cloned from it — which is exactly the set of
+// runners that can be reading or writing those streams at once.
+//
+// One for writing rather than one each for stdout and stderr: see
+// lockedWriter, where the reason is the whole point of the type.
 type streamLocks struct {
-	out, err, in sync.Mutex
+	write, in sync.Mutex
 }
 
 // lockedReader serializes reads from a stream the shell was handed, for the
@@ -85,11 +98,26 @@ func (r *Runner) streamLocks() *streamLocks {
 
 // lockedStdout and lockedStderr are the shell's streams, guarded.
 func (r *Runner) lockedStdout() *lockedWriter {
-	return &lockedWriter{mu: &r.streamLocks().out, w: r.stdout()}
+	return lockWriter(&r.streamLocks().write, r.stdout())
 }
 
 func (r *Runner) lockedStderr() *lockedWriter {
-	return &lockedWriter{mu: &r.streamLocks().err, w: r.stderr()}
+	return lockWriter(&r.streamLocks().write, r.stderr())
+}
+
+// lockWriter guards a stream, and hands back a guard that is already there.
+//
+// Wrapping unconditionally would be a `Write` that takes one mutex twice, and
+// a sync.Mutex is not reentrant, so the second call would wait for a lock its
+// own goroutine holds and never come back. It is reachable as soon as a
+// stream stays guarded past the construct that guarded it — a background job
+// leaves the shell's own streams wrapped for as long as the job can write to
+// them, and a pipeline in the same shell afterwards would wrap them again.
+func lockWriter(mu *sync.Mutex, w io.Writer) *lockedWriter {
+	if l, ok := w.(*lockedWriter); ok && l.mu == mu {
+		return l
+	}
+	return &lockedWriter{mu: mu, w: w}
 }
 
 // lockedStdin is the shell's input, guarded.

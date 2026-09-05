@@ -438,8 +438,22 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 			// was deleted from a table it was never in and nothing happened
 			// at all.
 			if r.assocDeclared(base) {
+				// `[@]` is a key like any other where the attribute is on:
+				// no shell measured clears a keyed array through it, so the
+				// whole-array reading below is the indexed array's alone.
 				r.unsetAssocElem(base, sub)
 				continue
+			}
+			if sub == "@" || sub == "*" {
+				// Every element rather than one, in two of the three shells
+				// with arrays. The third reads the brackets as an expression
+				// here as everywhere else, and falls through to it.
+				if handled, code := r.unsetWholeArray(base); handled {
+					if code != 0 {
+						status = code
+					}
+					continue
+				}
 			}
 			if idx, err := r.subscriptValue(sub); err == nil {
 				r.unsetArrayElem(base, idx)

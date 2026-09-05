@@ -23,8 +23,17 @@ import (
 // shell is a dialect with nothing dialectal about it: the substrate's own
 // answers, which is what a zero vector means. Naming a real shell here would
 // break the rule that nothing outside dialect/ names one.
+//
+// One axis is answered, the way interp's own tests answer the ones they are
+// not about: a script that parks a descriptor with `exec` and then runs
+// something asks whether that descriptor is handed over, and a test about the
+// front end's descriptor boundary must not be deciding that question by
+// leaving it unanswered. The answer is the majority's, which is the same one
+// PosixSemantics gives.
 func shell() driver.Shell {
-	return driver.Shell{Name: "testsh", Dialect: syntax.Core()}
+	sh := driver.Shell{Name: "testsh", Dialect: syntax.Core()}
+	sh.Semantics.ExecOpenedFdReachesACommand = interp.Yes
+	return sh
 }
 
 // runArgs invokes the front end the way a process would and returns both

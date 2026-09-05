@@ -68,6 +68,10 @@ func Dialect() syntax.Dialect {
 	// The end of input closes a quote here: `echo "abc` prints abc, and the
 	// old backquote form behaves the same way. The substitutions do not.
 	d.CloseQuotesAtEOF = true
+	// `exec {a[1]}>&-`: the name inside the braces may be a subscripted one.
+	// Measured — this shell closes the descriptor the element holds, as bash
+	// does and zsh does not.
+	d.FdVariableSubscript = true
 	return d
 }
 
@@ -237,6 +241,7 @@ func Semantics() interp.Semantics {
 	s.EmptyPathIsTheCurrentDirectory = interp.No
 	s.ExitTrapRunsOnSignalDeath = interp.Yes
 	s.QuitIgnoredWhenNotInteractive = interp.No
+	s.HangupIsAnOrderlyExit = interp.No
 	s.ExitInTrapReportsEarlierStatus = interp.Yes
 	s.KillListAcceptsName = interp.Yes
 	s.SIGPrefixAccepted = interp.Yes
@@ -305,6 +310,11 @@ func Semantics() interp.Semantics {
 	s.UnsetNameOperands = interp.PlainNamesOnly
 	s.DeclarationTakesASubscript = interp.Yes
 	s.UnsetTakesASubscript = interp.Yes
+	// `@` is not a spelling for the whole array here. The brackets hold an
+	// arithmetic expression as they do everywhere else, `@` is not one, and
+	// the operand is reported as a bad subscript with the array left as it
+	// was — the only shell in the panel that does not clear it.
+	s.UnsetArrayAt = interp.UnsetArrayAtIsASubscript
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.Yes
@@ -375,6 +385,12 @@ func Semantics() interp.Semantics {
 	// redirections, and closing through a name that holds nothing is not
 	// worth a word here.
 	s.FdVariableOutlivesTheCommand = interp.No
+	// And a descriptor `exec` opened is this shell's alone: measured, and its
+	// manual says so — a file descriptor number greater than 2 opened by
+	// `exec`'s redirection list is closed when it invokes another program.
+	// One the caller opened still crosses, and so does one the command
+	// redirects itself.
+	s.ExecOpenedFdReachesACommand = interp.No
 	s.FdVariableBadCloseIsAnError = interp.No
 
 	return s

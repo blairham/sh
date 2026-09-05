@@ -74,5 +74,44 @@ func (r *Runner) childFiles() []*os.File {
 			files[fd-firstExtraFd] = f
 		}
 	}
+	r.dropExecOpened(files)
 	return files
+}
+
+// dropExecOpened takes back the descriptors `exec` opened, where the dialect
+// says they are the shell's alone.
+//
+// A dialect question rather than a rule: four of the five hand them over, and
+// one closes anything above 2 that `exec` opened before it runs anything —
+// see ExecOpenedFdReachesACommand, which carries the measurements and the
+// boundary. Nothing else in the table is touched, which is the whole of the
+// difference: a descriptor the caller opened, and one this command redirected
+// itself, are not `exec`'s and cross in every shell.
+//
+// The axis is asked only when the table actually holds one. An axis consulted
+// on the common path would refuse every external command in a Runner that had
+// not chosen a dialect, over a question that decides nothing for a script with
+// no parked descriptors.
+func (r *Runner) dropExecOpened(files []*os.File) {
+	held := false
+	for fd := range r.execFds {
+		if i := fd - firstExtraFd; i >= 0 && i < len(files) && files[i] != nil {
+			held = true
+			break
+		}
+	}
+	if !held {
+		return
+	}
+	if r.ask(r.sem().ExecOpenedFdReachesACommand,
+		"a descriptor `exec` parked reaching what the shell runs") {
+		return
+	}
+	for fd := range r.execFds {
+		if i := fd - firstExtraFd; i >= 0 && i < len(files) {
+			// A nil rather than a gap: the number must be *closed* there, and
+			// a nil is what says so on both routes out of this table.
+			files[i] = nil
+		}
+	}
 }

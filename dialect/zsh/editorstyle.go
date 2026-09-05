@@ -33,6 +33,15 @@ func EditorStyle() repl.EditorStyle {
 		KillWordBeforeCursorUsesWordCharacters: true,
 		ForwardWordStopsBeforeTheNextWord:      true,
 		TransposeAtTheStartSwapsTheFirstTwo:    true,
+		// And three more about taking a change back and about `M-.`, measured
+		// the same way. One `^_` after `echo abcdef` leaves `echo abcde`
+		// here and an empty line in bash; `^A`, `^K`, `^_` leaves the cursor
+		// at the start of the line here and at the end of it in bash; and a
+		// press of `M-.` past the oldest line keeps that line's last word
+		// here where bash takes the word back off the line.
+		UndoTakesBackOneKeystrokeAtATime:  true,
+		UndoRestoresTheCursorToWhereItWas: true,
+		LastArgumentStaysOnTheOldestLine:  true,
 		// Measured: a bare Tab in a directory holding a `.hidden` lists
 		// everything except it, and `.` completes it outright because it is
 		// then the only match. Left false rather than written out, so that

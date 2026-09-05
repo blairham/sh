@@ -67,3 +67,30 @@ func TestEditorStyleWords(t *testing.T) {
 		t.Error("^T here does nothing with no character in front of the cursor")
 	}
 }
+
+// Taking a change back, and `M-.` past the oldest line it can reach.
+//
+// Measured under a pty against bash 5.3.15 and again against bash 3.2.57, one
+// keystroke at a time, with the line read back out of the shell's own history
+// file. The two versions agree on all three, and zsh answers all three the
+// other way — so these zero values are measurements and not defaults nobody
+// looked at.
+func TestEditorStyleUndoAndLastArgument(t *testing.T) {
+	s := bash.EditorStyle()
+	// `echo abcdef` typed a character at a time and then one `^_` leaves an
+	// empty line: the whole run of typing is one change. A run and not the
+	// line — `echo abc`, `^B`, `d`, `^_` leaves `echo abc`.
+	if s.UndoTakesBackOneKeystrokeAtATime {
+		t.Error("^_ here takes back the whole run of typing")
+	}
+	// `echo one two`, `^A`, `^K`, `^_` leaves the cursor at the end of the
+	// line, after what the undo put back rather than where the kill was.
+	if s.UndoRestoresTheCursorToWhereItWas {
+		t.Error("^_ here leaves the cursor after the text it put back")
+	}
+	// Three lines behind the prompt and four presses of `M-.`: the word this
+	// shell had inserted comes off the line and nothing replaces it.
+	if s.LastArgumentStaysOnTheOldestLine {
+		t.Error("M-. here empties what it inserted once it runs out of lines")
+	}
+}

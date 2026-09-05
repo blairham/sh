@@ -730,6 +730,11 @@ func (s Shell) newEditor() *editor {
 		searchPrompt: s.History.SearchPrompt,
 		searchFailed: s.History.SearchFailedPrompt,
 		searchBelow:  s.History.SearchBelowTheLine,
+		// How much of the line one `^_` takes back, where it leaves the
+		// cursor, and what `M-.` does past the oldest line it can reach.
+		undoPerKeystroke:     s.Editor.UndoTakesBackOneKeystrokeAtATime,
+		undoRestoresCursor:   s.Editor.UndoRestoresTheCursorToWhereItWas,
+		lastArgStaysOnOldest: s.Editor.LastArgumentStaysOnTheOldestLine,
 		// The width comes from the input, which is the terminal; the output
 		// may be a file the session was started with, and its size is not the
 		// screen's.

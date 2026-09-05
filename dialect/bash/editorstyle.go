@@ -25,6 +25,13 @@ func EditorStyle() repl.EditorStyle {
 		// the word rather than before the next, and `^T` at the start of the
 		// line does nothing. zsh disagrees with all five.
 		//
+		// So are the three about undo and `M-.`: one `^_` takes back the
+		// whole run of typing rather than one character of it, it leaves the
+		// cursor after the text it put back rather than where the change was
+		// made, and `M-.` past the oldest line takes the word it inserted
+		// back off. zsh disagrees with all three of those too, and both bash
+		// 5.3.15 and bash 3.2.57 give these answers.
+		//
 		// Measured: a bare Tab in a directory holding a `.hidden` lists it
 		// along with everything else. readline calls this
 		// `match-hidden-files` and documents it as on by default, which is

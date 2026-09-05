@@ -13,13 +13,19 @@ end and a test on the other:
 
 - `/opt/homebrew/bin/bash` 5.3.15, started `--norc --noprofile -i` with
   `INPUTRC=/dev/null`, so no startup file and no inputrc of the machine's.
+- `/bin/bash` 3.2.57, the same way, wherever the answer might be a version's
+  and not the shell's. It agrees with 5.3.15 on everything asked of it here,
+  including all three of the disagreements added for undo and `M-.`.
 - `/opt/homebrew/bin/zsh` 5.9.2, started `-f -i`, so no startup files.
-- Both with `TERM=xterm`, `LANG=en_US.UTF-8` and a 24×80 window.
+- All with `TERM=xterm`, `LANG=en_US.UTF-8` and a 24×80 window.
 
 The line that a key sequence produced is read back out of the shell's own
 **history file** rather than off the screen. A shell writes the accepted line
 there verbatim; the screen has the redraws, the escape sequences and the
-prompt mixed into it, and `fc -l` adds a format of its own.
+prompt mixed into it, and `fc -l` adds a format of its own. Each probe line
+starts with `:`, so that whatever the keys build is a command that runs and
+prints nothing; where the cursor ended up is measured by typing a `Z` after
+the key and seeing where it landed in the recorded line.
 
 **Type one keystroke at a time.** This is not a nicety. Written as one burst,
 bash appears to join a kill onto the kill before it across an insert between
@@ -48,6 +54,8 @@ Same key, same line, same result in bash 5.3 and zsh 5.9:
 | `M-Delete`, `M-^H` | kill back to the start of the word |
 | `M-B` `M-F` `M-D` | the same as the lower-case letters |
 | `\e[A` `\e[B` `\eOA` `\eOB` | the previous line of history, the next |
+| `M-.` `M-_` | insert the last argument of the line before, at the cursor |
+| `^_` `^X^U` | take the last change back |
 
 Three more facts about the kill, all measured:
 
@@ -67,10 +75,50 @@ a kill of nothing breaks the join in bash and does not in zsh. A field would
 have to be answered by every dialect ever added, for a sequence of keystrokes
 nobody types. This implementation takes bash's answer for both.
 
+### The last argument of the line before
+
+`M-.` is among the most-pressed keys either shell has: `cd some/deep/path`, then
+`ls M-.`. Measured, in both:
+
+- It inserts **at the cursor** and adds no space of its own.
+- Pressed again straight away it **walks a line further back**, taking out what
+  the press before it put in — so the presses count lines, not words.
+- A keystroke in between ends the walk. The next press starts again at the most
+  recent line and inserts a **second copy**: `M-.`, `Q`, `M-.` on a history
+  ending `: b1 b2` gives `b2Qb2`.
+- `M-_` is the same key.
+- The last argument is the last **word**, and quotes hold a word together and
+  come across with it: after `: p 'x y'` the key inserts `'x y'`, apostrophes
+  and space included. A backslash does not — after `: p a\ b` it inserts `b`.
+  Trailing whitespace is not a word, and a line of one word gives that word,
+  which is the command name.
+
+### Taking a change back
+
+`^_`, and `^X^U` for the same thing. It is the companion to a kill and the
+reason a kill is safe to press: `^Y` puts back what the last kill took, and it
+covers only a kill — a mistyped word, a completion that chose the wrong name,
+an `M-.` that walked one line too far are none of them things `^Y` can answer.
+
+What both shells do:
+
+- A kill taken back comes back **whole and in place**, cursor included: `^U`
+  then `^_` on `echo one two` leaves the line as it was with the cursor at the
+  end of it.
+- A yank is a change like any other, so `^_` takes the yanked text back off.
+- A key that left the line as it found it is **not a change**: `^W`, then `^K`
+  at the end of the line where there is nothing to kill, then `^_` still brings
+  the word back. An undo that appeared to do nothing and had to be pressed
+  twice would be worse than no undo.
+- The stack **belongs to the line**. `^_` at a fresh prompt does nothing,
+  however much was edited on the line before it.
+
 ## Where the two shells disagree
 
-Five of them, and all five are on the daily path. Each is a named field on
-`repl.EditorStyle`, with bash's answer as the zero value.
+Eight of them, and all eight are on the daily path. Each is a named field on
+`repl.EditorStyle`, with bash's answer as the zero value. One more field there
+is about completion rather than about a key, and `docs/spec/completion.md`
+owns it.
 
 | line and key | bash | zsh | field |
 | --- | --- | --- | --- |
@@ -79,6 +127,49 @@ Five of them, and all five are on the daily path. Each is a named field on
 | `^W` on `echo a+b` | `echo ` | `echo a+` | `KillWordBeforeCursorUsesWordCharacters` |
 | `M-f` from the start of `echo one two` | `echo`⎸` one two` | `echo `⎸`one two` | `ForwardWordStopsBeforeTheNextWord` |
 | `^T` at the start of `echo abc` | the line is unchanged | `ce`⎸`ho abc` | `TransposeAtTheStartSwapsTheFirstTwo` |
+| `echo abcdef` typed a character at a time, then `^_` | the line is emptied | `echo abcde` | `UndoTakesBackOneKeystrokeAtATime` |
+| `echo one two`, `^A`, `^K`, `^_` | `echo one two`⎸ | ⎸`echo one two` | `UndoRestoresTheCursorToWhereItWas` |
+| three lines behind the prompt and four presses of `M-.` | the inserted word comes off the line | the oldest line's last word stays | `LastArgumentStaysOnTheOldestLine` |
+
+### What one undo step is
+
+The last two of those are one question each, and the first of them decides the
+data structure, so it is worth stating plainly. **In bash one step is one
+change and a run of typing is one change; in zsh one step is one keystroke.**
+
+A *run*, not the line: `echo abc`, `^B`, `d`, `^_` leaves `echo abc` in bash, so
+a keystroke that is not typing ends the run. Deletes never join — three
+backspaces and one `^_` puts one character back in both.
+
+The same answer decides an `M-.` walk. Two presses and one `^_` leaves bash in
+front of the first press and zsh at what the first press inserted, which is why
+this is one field and not two.
+
+That makes the structure a **stack of snapshots of the line**, pushed before
+each change, rather than a list of edits to invert: the snapshot is the same
+shape whatever key made the change, and at the length of a command line copying
+it costs nothing beside the redraw that follows. The field then only decides
+whether a keystroke that continues what the one before it was doing pushes
+another snapshot or is covered by the one already there.
+
+### Where the cursor lands after an undo
+
+zsh puts it back where it was when the change was made; bash puts it after the
+text the undo has just put back. They agree on a backward kill, where those are
+the same place, and part company on a kill that went forwards:
+
+| line and key | bash | zsh |
+| --- | --- | --- |
+| `echo one two`, `^W`, `^_` | `echo one two`⎸ | `echo one two`⎸ |
+| `echo one two`, `^A`, `^K`, `^_` | `echo one two`⎸ | ⎸`echo one two` |
+| `echo one two`, `^B^B^B`, `^K`, `^_` | `echo one two`⎸ | `echo one `⎸`two` |
+| `echo one two`, `^A`, `^D`, `^_` | `e`⎸`cho one two` | ⎸`echo one two` |
+| `echo one two`, `^W`, `^A`, `^Y`, `^_` | ⎸`echo one ` | ⎸`echo one ` |
+
+bash's answer is *computed* rather than recorded: the text the undo put back is
+what lies between the common prefix and the common suffix of the line as it is
+and the line as it was, and the cursor goes at the far end of it. That
+describes every case in the table, and one it does not is written down below.
 
 ### What counts as a word
 
@@ -164,6 +255,53 @@ of `\e[F`, `\eOF`, `\e[4~` and `\e[8~`; Delete is `\e[3~`; and a sideways
 arrow with Alt or Ctrl held moves by a word, which is bash's answer for both
 `\e[1;5C` and `\e[1;3C`. Shift alone moves by one, like the bare arrow.
 
+`^X` is the second prefix, and it behaves the same way: measured, `^X` then a
+`q` puts nothing in the line in either shell. The only sequence behind it that
+means anything here is `^X^U`.
+
+### There is no timeout after a bare Escape, in any of them
+
+This was written down here as a gap on the assumption that both shells wait a
+bounded time and then treat an Escape as Escape alone. **Measured, none of them
+does**, and the assumption was wrong rather than approximately right:
+
+| what was typed | bash 5.3.15 | bash 3.2.57 | zsh 5.9.2 |
+| --- | --- | --- | --- |
+| `\e`, then `b` 25ms later | `M-b` | `M-b` | `M-b` |
+| `\e`, then `b` 500ms later | `M-b` | `M-b` | `M-b` |
+| `\e`, then `b` 1s later | `M-b` | `M-b` | `M-b` |
+| `\e`, then `b` 6s later | `M-b` | `M-b` | `M-b` |
+| `\e[`, then `A` 3s later | Up | Up | Up |
+| `\e`, then Return 2s later | the line is **not** accepted | the same | a newline goes in the line |
+
+So the wait is unbounded in all three, and a shell that gave up on a half-read
+key after some number of milliseconds would be the only one that did. There is
+also no honest number to pick: every measurement says the wait has no end.
+
+What all three *do* have is a way out, and they have it without deciding to.
+Their editors leave the terminal's `ISIG` on, so the kernel turns a `^C` into a
+signal wherever the editor happens to be: measured, `\e` then `^C` abandons the
+line in all three and the next prompt is a fresh one.
+
+This implementation takes the terminal fully raw — `^C` has to arrive as a byte
+for the line to be abandoned without racing a read already in progress — so the
+same rescue is written down rather than inherited. **A `^C` part-way through a
+key sequence is not a byte of the key: it abandons the line.** That holds after
+a bare `\e`, inside a control sequence, between its parameters and its final
+byte, after `\eO`, inside an old-style mouse report, and after `^X`.
+
+Two Escapes are the other way out, and it needs nothing: measured, `\e\e` then
+`b` types a `b` in both shells, so the second Escape ends the first and the key
+after it is an ordinary key. That falls out of reading by shape — `\e` followed
+by anything unrecognized is dropped whole — so it was already true here.
+
+A deadline was considered and is not what the code does. It would need one, and
+`repl/terminal_unix.go` is why there is no cheap one to reach for: raw mode
+takes the descriptor with `Fd()`, which detaches the file from Go's poller for
+good, so `SetReadDeadline` on it answers `ErrNoDeadline` afterwards. The
+terminal itself could supply one through `VMIN`/`VTIME`. Neither is worth
+building for behavior no measured shell has.
+
 ## Characters wider than one cell
 
 Which characters a terminal draws in two cells is settled in `cellwidth.go`,
@@ -191,27 +329,58 @@ What the editor owes that table is arithmetic:
 column arithmetic. The prompt's half of that count comes from `drawnPrompt` —
 see `docs/spec/prompt.md`, which is the same question asked about the text the
 shell was given rather than the text the person is typing. `repl/words.go` — word boundaries, the kills and the
-yank. `repl/escape.go` — the sequence reader. `repl/editorstyle.go` — the
-five fields, each carrying the line it was measured on;
-`dialect/bash/editorstyle.go` and `dialect/zsh/editorstyle.go` hold the
-answers.
+yank. `repl/escape.go` — the sequence reader. `repl/undo.go` — the snapshot
+stack and where the cursor lands. `repl/lastarg.go` — the `M-.` walk and the
+word it inserts. `repl/editorstyle.go` — the fields, each carrying the
+line it was measured on, and one more that `docs/spec/completion.md` owns; `dialect/bash/editorstyle.go` and
+`dialect/zsh/editorstyle.go` hold the answers.
 
 `vi` mode is not implemented. It is a separate surface with its own modes and
 its own key table, and it is not the default in either shell.
 
+## Measured, and deliberately not a field
+
+Three places where the two shells differ and the difference is written down
+here instead of being answered by every dialect ever added. The precedent is
+the `^W`, `^K`, `^W`, `^Y` join above; the test is whether anyone's fingers
+would notice.
+
+- **A history recall is undoable in zsh and not in bash.** With `: X` typed and
+  Up pressed, `^_` puts `: X` back in zsh and does nothing in bash. Up *and*
+  Down and then `^_` agrees again — bash empties the line and zsh takes a
+  character off it, which is just the granularity field. bash's answer is taken:
+  browsing is not a change. Fielding it would mean deciding what an accepted
+  line does to the stack as well, for a sequence that is Up followed
+  immediately by undo.
+- **`^T` is where bash's cursor rule stops describing bash.** `echo abc`, `^T`,
+  `^_` leaves bash at `echo ab`⎸`c` where the prefix-and-suffix rule says
+  `echo abc`⎸ — bash records a swap as two changes rather than one. zsh puts the
+  cursor back where it was, as it does everywhere. A swap is neither an
+  insertion nor a removal and it is not worth a second field to say so.
+- **`\e` then Return.** bash swallows it and zsh puts a newline in the line.
+  This drops it, which is bash's answer.
+
 ## What is still missing
 
 Measured to exist in both shells and not implemented here, so that the gap is
-written down rather than looked like an oversight:
+written down rather than looked like an oversight. Incremental history search
+was on this list and is not any more — `^R` is `repl/search.go` and
+`docs/spec/history.md`.
 
-- **Undo** — `^_` and `^X^U`, which both shells have and which is the natural
-  companion to a kill.
-- **`M-.`** — insert the last argument of the previous line, which is among
-  the most-pressed keys either shell has.
+- **A numeric argument** — `M-3 M-.`. This is a mechanism rather than a key: in
+  both shells the count belongs to every command, so building it for one key
+  would be half of it. The two also count in **opposite directions**, measured
+  with `: w1 w2 w3 w4` as the previous line:
+
+  | | `M-0` | `M-1` | `M-2` | `M-3` | `M-4` | `M-5` | `M--` |
+  | --- | --- | --- | --- | --- | --- | --- | --- |
+  | bash 5.3.15 | `:` | `w1` | `w2` | `w3` | `w4` | nothing | `w3` |
+  | zsh 5.9.2 | `:` | `w4` | `w3` | `w2` | `w1` | `:` | `w1` |
+
+  bash counts words from the start of the line and zsh counts them from the end,
+  with zsh's negative arguments counting from the start instead — coherently,
+  where bash's are not (`M--` gives `w3` and `M--1` gives nothing). So it needs
+  its own field as well as its own mechanism.
 - **`M-y`** — walk back through earlier kills. This keeps one kill rather
   than a ring, so there is nothing to walk.
-- **Incremental history search** — `^R`.
 - **Case and other word operators** — `M-u`, `M-l`, `M-c`.
-- **A timeout after a bare `\e`.** Pressing Escape and nothing else leaves
-  this waiting for the byte that names the key. Both real shells wait a
-  bounded time and then treat it as Escape alone.

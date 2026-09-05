@@ -547,6 +547,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `name/unset-f-on-a-name-no-function-could-have` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>: unset: 1x: invalid function name~st=1` | `<shell>:unset:1: no such hash table element: 1x~st=1` |
 | `name/unset-f-on-a-name-that-is-merely-undefined` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>:unset:1: no such hash table element: nosuch~st=1` |
 | `name/a-lone-dash-given-to-a-builtin` | `unalias: - not found~st=1` | `<shell>: line 1: unalias: -: not found~st=1` | `<shell>: line 1: unalias: -: not found~st=1` | `<shell>: line 0: unalias: -: not found~st=1` | `st=1` | `<shell>:unalias:1: not enough arguments~st=1` |
+| `name/unset-v-validates-the-lone-dash` | `<shell>: 1: unset: -: bad variable name` *(status 2)* | `<shell>: line 1: unset: `-': not a valid identifier~st=1` | `<shell>: line 1: unset: `-': not a valid identifier` *(status 1)* | `<shell>: line 0: unset: `-': not a valid identifier~st=1` | `<shell>: unset: -: invalid variable name~st=1` | `<shell>:unset:1: not enough arguments~st=1` |
 | `return/with-nothing-to-return-from` | `before` *(status 7)* | `before~<shell>: line 1: return: can only `return' from a function or sourced script~after st=2` | `before~<shell>: line 1: return: can only `return' from a function or sourced script` *(status 2)* | `before~<shell>: line 0: return: can only `return' from a function or sourced script~after st=1` | `before` *(status 7)* | `before` *(status 7)* |
 | `return/inside-a-sourced-file` | `st=7` | `st=7` | `st=7` | `st=7` | `st=7` | `st=7` |
 | `set/a-name-only-one-shell-has` | `<shell>: 1: set: Illegal option -o posix` *(status 2)* | `st=0` | `st=0` | `st=0` | `<shell>: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | `<shell>:set:1: no such option: posix` *(status 1)* |
@@ -727,6 +728,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `name/a-lone-dash-given-to-a-builtin` — a `-` on its own is an operand in three of the panel and an option in zsh, which eats it. `unalias` is where that shows: the three complain about an alias called `-`, each in its own words, and the fourth complains that it was given nothing to unalias at all. `unset -` looks the same in bash for a different reason — its bare form validates no operand — which is why the case is not written with that one
   ```sh
   unalias -; echo "st=$?"
+  ```
+- `name/unset-v-validates-the-lone-dash` — the other visible site of the LoneDashIsAnOption axis: `unset -v` validates its operand where bare `unset` does not, so bash, dash and ksh93 name the dash as a bad variable name — fatally in dash, whose unset failure ends the script — while zsh eats the dash as an option and complains it has nothing left to unset
+  ```sh
+  unset -v -; echo "st=$?"
   ```
 - `return/with-nothing-to-return-from` — a `return` outside both a function and a sourced file has nothing to return from, and the panel splits over what that means — not over the wording but over *where the script stops*. Three obey it and end there with the status given; one reports it, leaves 2 behind and runs the next command. A script whose last statement is such a `return` therefore ends two different ways with the same output, which is why the status is half the case
   ```sh
@@ -1608,6 +1613,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `getopts/loop-reads-each-option` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` | `[a:]~[b:x]~ind=4` |
 | `getopts/clustered-options` | `[a][b] ind=2` | `[a][b] ind=2` | `[a][b] ind=2` | `[a][b] ind=2` | `[a][b] ind=2` | `[a][b] ind=2` |
 | `getopts/argument-attached-or-apart` | `[b][val]~[b][val]` | `[b][val]~[b][val]` | `[b][val]~[b][val]` | `[b][val]~[b][val]` | `[b][val]~[b][val]` | `[b][val]~[b][val]` |
+| `getopts/a-dash-word-where-the-optstring-belongs` | `st=0 o=[q]` | `<shell>: line 1: getopts: -q: invalid option~getopts: usage: getopts optstring name [arg ...]~st=2 o=[]` | `<shell>: line 1: getopts: -q: invalid option~getopts: usage: getopts optstring name [arg ...]~st=2 o=[]` | `<shell>: line 0: getopts: -q: invalid option~getopts: usage: getopts optstring name [arg]~st=2 o=[]` | `<shell>: getopts: -q: unknown option~Usage: getopts [-a name] opstring name [args...]~st=2 o=[]` | `st=0 o=[q]` |
 | `getopts/unknown-option-diverges` | `Illegal option -z~st=0 o=[?]` | `<shell>: illegal option -- z~st=0 o=[?]` | `<shell>: illegal option -- z~st=0 o=[?]` | `<shell>: illegal option -- z~st=0 o=[?]` | `<shell>: -z: unknown option~st=0 o=[?]` | `<shell>:1: bad option: -z~st=0 o=[?]` |
 | `getopts/silent-mode-reports-through-optarg` | `st=0 o=[?] arg=[z]` | `st=0 o=[?] arg=[z]` | `st=0 o=[?] arg=[z]` | `st=0 o=[?] arg=[z]` | `st=0 o=[?] arg=[z]` | `st=0 o=[?] arg=[z]` |
 | `getopts/missing-argument-diverges` | `No arg for -b option~st=0 o=[?]` | `<shell>: option requires an argument -- b~st=0 o=[?]` | `<shell>: option requires an argument -- b~st=0 o=[?]` | `<shell>: option requires an argument -- b~st=0 o=[?]` | `<shell>: -b: argument expected~st=0 o=[?]` | `<shell>:1: argument expected after -b option~st=0 o=[?]` |
@@ -1625,6 +1631,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `getopts/argument-attached-or-apart` — `-bval` and `-b val` are the same option, and resetting OPTIND is how a script starts a second scan
   ```sh
   set -- -bval; getopts "b:" o; echo "[$o][$OPTARG]"; set -- -b val; OPTIND=1; getopts "b:" o; echo "[$o][$OPTARG]"
+  ```
+- `getopts/a-dash-word-where-the-optstring-belongs` — the GetoptsRejectsUnknownOption axis: bash and ksh93 refuse the word as an option getopts does not have, dash and zsh read it as the optstring and then parse -q by it. Probed with a letter no panel shell owns — ksh93 has -a for real, and a probe written with -a read ksh93's own option as a refusal policy it does not have
+  ```sh
+  set -- -q b; getopts -q o; echo "st=$? o=[$o]"
   ```
 - `getopts/unknown-option-diverges` — four wordings, and four different amounts of prefix: bash names itself with no line where it gives a line to everything else, and dash prints neither a name nor a line — the only diagnostic in the panel with nothing in front of it
   ```sh
@@ -1846,6 +1856,8 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `ulimit/unlimited-is-a-word` | `unlimited` | `unlimited` | `unlimited` | `unlimited` | `unlimited` | `unlimited` |
 | `ulimit/setting-then-reading` | `3600~3600` | `3600~3600` | `3600~3600` | `3600~3600` | `3600~3600` | `3600~unlimited` |
 | `ulimit/a-limit-it-cannot-read` | `<shell>: 1: ulimit: bad number~st=2` | `<shell>: line 1: ulimit: abc: invalid number~st=1` | `<shell>: line 1: ulimit: abc: invalid number~st=1` | `<shell>: line 0: ulimit: abc: invalid number~st=1` | `<shell>: ulimit: abc: parameter not set~st=1` | `<shell>:ulimit:1: invalid number: abc~st=1` |
+| `ulimit/a-letter-zsh-does-not-have` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `<shell>:ulimit:1: bad option: -m~st=1` |
+| `ulimit/a-letter-dash-does-not-have` | `<shell>: 1: ulimit: Illegal option -u~st=2` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `builtin/an-option-it-does-not-have` | `<shell>: 1: export: Illegal option -Q` *(status 2)* | `<shell>: line 1: export: -Q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]~st=2~after` | `<shell>: line 1: export: -Q: invalid option~export: usage: export [-fn] [name[=value] ...] or export -p [-f]` *(status 2)* | `<shell>: line 0: export: -Q: invalid option~export: usage: export [-nf] [name[=value] ...] or export -p~st=2~after` | `<shell>: export: -Q: unknown option~Usage: export [-p] [name[=value]...]` *(status 2)* | `<shell>:export:1: bad option: -Q~st=1~after` |
 | `builtin/the-same-refusal-for-another-builtin` | `<shell>: 1: unset: Illegal option -Q` *(status 2)* | `<shell>: line 1: unset: -Q: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]~st=2~after` | `<shell>: line 1: unset: -Q: invalid option~unset: usage: unset [-f] [-v] [-n] [name ...]` *(status 2)* | `<shell>: line 0: unset: -Q: invalid option~unset: usage: unset [-f] [-v] [name ...]~st=2~after` | `<shell>: unset: -Q: unknown option~Usage: unset [-nfv] name...` *(status 2)* | `<shell>:unset:1: bad option: -Q~st=1~after` |
 | `builtin/an-option-it-does-have` | `[unset]` | `[unset]` | `[unset]` | `[unset]` | `[unset]` | `[unset]` |
@@ -1964,6 +1976,14 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `ulimit/a-limit-it-cannot-read` — four wordings, and ksh93's is the odd one — `parameter not set` where the others call it a bad or invalid number
   ```sh
   ulimit -t abc; echo "st=$?"
+  ```
+- `ulimit/a-letter-zsh-does-not-have` — the resident-set letter, read by bash, dash and ksh93 and a bad option in zsh — the UlimitHasResidentSet axis. The value goes to /dev/null because it is the machine's, not the shell's; the letter's existence is the question
+  ```sh
+  ulimit -m >/dev/null; echo "st=$?"
+  ```
+- `ulimit/a-letter-dash-does-not-have` — the process-count letter, read by bash, ksh93 and zsh where dash refuses it at 2 and carries on — the UlimitHasProcessCount axis, and the other half of the pair above: neither absence is a subset of the other, which is what makes them two axes
+  ```sh
+  ulimit -u >/dev/null; echo "st=$?"
   ```
 - `builtin/an-option-it-does-not-have` — four wordings, two statuses and a divergence about whether the script survives: bash and zsh report it and carry on — with 2 and 1 — while dash and ksh93 stop there, which is the POSIX rule that a special builtin's failure is fatal. bash and ksh93 print a usage line after it and word that per builtin
   ```sh
@@ -4010,6 +4030,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `cmd/command-v-on-nothing` | `st=127` | `st=1` | `st=1` | `st=1` | `st=1` | `st=1` |
 | `cmd/command-v-names-a-function` | `f` | `f` | `f` | `f` | `f` | `f` |
 | `cmd/command-bypasses-a-function` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
+| `cmd/command-with-an-option-nobody-has` | `<shell>: 1: command: Illegal option -q~st=2` | `<shell>: line 1: command: -q: invalid option~command: usage: command [-pVv] command [arg ...]~st=2` | `<shell>: line 1: command: -q: invalid option~command: usage: command [-pVv] command [arg ...]~st=2` | `<shell>: line 0: command: -q: invalid option~command: usage: command [-pVv] command [arg ...]~st=2` | `<shell>: command: -q: unknown option~Usage: command [-pvxV] [command [arg ...]]~st=2` | `<shell>:1: command not found: -q~st=127` |
 | `cmd/command-v-names-a-reserved-word` | `if` | `if` | `if` | `if` | `if` | `if` |
 
 - `path/script-path-governs-lookup` — setting PATH in a script decides what it can reach — an implementation that asks os/exec instead answers with the *process's* PATH and ignores the script entirely
@@ -4075,6 +4096,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `cmd/command-bypasses-a-function` — the whole reason `command` exists: a function may wrap the thing it is named after without calling itself
   ```sh
   echo() { echo overridden; }; command echo hi
+  ```
+- `cmd/command-with-an-option-nobody-has` — the CommandRejectsUnknownOption axis: bash, dash and ksh93 refuse an option command does not have, at 2; zsh stops reading options and looks up -q as the command, at 127. Probed with a letter no panel shell owns — -x is a real ksh93 option, and a probe written with -x read ksh93 as tolerant off ksh93's own feature
+  ```sh
+  command -q true; echo "st=$?"
   ```
 - `cmd/command-v-names-a-reserved-word` — a word of the grammar is answered too, which is not obvious — it is not a command at all, and every shell in the panel still names it
   ```sh

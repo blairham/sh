@@ -134,8 +134,8 @@ func TestGetoptsAssignmentRestartsWordIsAnAxis(t *testing.T) {
 }
 
 // TestALeadingDashIsTheOptstringOrAnOption. `getopts` has no options at all
-// here, so any leading `-` word is the question — and only one dialect
-// refuses it, where the others take it as the optstring.
+// here, so any leading `-` word is the question — refused as an option under
+// one answer, taken as the optstring under the other.
 func TestALeadingDashIsTheOptstringOrAnOption(t *testing.T) {
 	refuse := func(r *Runner) {
 		s := *r.Semantics

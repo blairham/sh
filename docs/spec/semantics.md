@@ -165,16 +165,19 @@ Group the shells by which side of each axis they fall on:
     readonly continues   {bash}
     shift survives       {bash, zsh}
 
-Eight distinct groupings across thirty axes: `{zsh}`, `{dash,zsh}`,
-`{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,zsh}`, `{dash,ksh93}` and
-`{dash}` — the last of which `${#@}` now produces on its own, where
-previously it appeared only as the modern-ksh reading of the `&>` axis.
+The groupings repeat across the axes above — `{zsh}`, `{dash,zsh}`,
+`{ksh93,zsh}`, `{ksh93}`, `{bash}`, `{bash,ksh93}`, `{bash,zsh}`,
+`{dash,ksh93}`, `{dash}` — and axes measured since keep landing on
+groupings already in the table: the name-value one on `{dash, ksh93}`,
+the octal-digit one on `{ksh93}`, and `${#@}` on `{dash}`, which had
+appeared only as the modern-ksh reading of the `&>` axis.
 
-Neither new axis adds a grouping: the name-value one lands on
-`{dash, ksh93}` and the octal-digit one on `{ksh93}`, both already
-present. Twenty-one axes, still eight groupings.
+No count of axes or groupings is kept here. The vector in
+`interp/semantics.go` has grown far past this table, every count this
+file carried went stale, and the argument never needed one: it needs the
+*shape* of the data, which has not changed.
 
-The nineteenth axis, the exit status of a fatal error, was found by
+A later axis, the exit status of a fatal error, was found by
 a *test* rather than by the panel sweep: the interpreter had hardcoded 2,
 the conformance run against bash disagreed, and changing the constant to
 bash's 1 would have written one shell's policy into the core. It joins
@@ -197,7 +200,7 @@ per-error axes. *Which* errors are fatal stays per-error, and there the
 shells genuinely disagree: bash survives a readonly reassignment,
 bash and zsh survive a long `shift`.
 
-The twentieth and twenty-first axes were both already known and both
+Two more axes were both already known and both
 recorded as comments in the interpreter rather than as measurements.
 `x=abc; echo $((x+1))` is 1 in bash and zsh, which re-evaluate a
 name-shaped value, and an error in dash and ksh93; the code said "following
@@ -430,7 +433,7 @@ So `set -e` is core behavior and got no axis. Worth recording because the
 method is supposed to cut both ways: measuring is what stops a divergence
 being invented as readily as it stops one being missed.
 
-## A divergence measured and not implemented
+## A divergence only the output reveals
 
 zsh writes to *every* redirection target where the others write only to the
 last:
@@ -439,9 +442,12 @@ last:
                         zsh              → both
 
 Nothing is reported either way, so it is the `&>` shape again. It is
-recorded as `redir/multios-is-zsh-only` and deliberately not implemented:
-writing to several targets at once is a feature rather than an answer, and
-adding it unasked would be inventing behavior for three of the four.
+recorded as `redir/multios-is-zsh-only` and implemented as the
+`RedirectsWriteToEveryTarget` axis, asked only when one stream is given
+several targets — so no script that redirects the ordinary way pays for
+zsh's feature. An earlier revision of this paragraph called it deliberately
+unbuilt, and the paragraph outlived the decision: the failure mode this
+file records about the interpreter's comments applies to its own.
 
 It also demonstrates the blind spot recorded above, on a case chosen for
 something else. The two answers differ in *output* and agree on the exit
@@ -569,9 +575,11 @@ because `[` is the name of the test builtin:
 Three answers again. Against the *filesystem* the panel agrees a lone `[`
 is literal — which is what lets `[ a = a ]` run at all — and only zsh
 rejects `[a`. The core implements the agreed half; the `case` half is
-recorded in the corpus as `pat/unterminated-bracket` and is not yet
-answered, because answering it needs the non-binary shape this section
-describes rather than another bool.
+recorded in the corpus as `pat/unterminated-bracket` and answered by the
+`UnterminatedBracket` axis, whose `BracketPolicy` type carries the three
+named answers — the non-binary shape this section describes rather than
+another bool, and the subject of the section below on what writing it
+showed.
 
 A second candidate appeared and turned out to belong elsewhere: **the exit
 status of a syntax error** is 2 in dash and bash, 3 in ksh93 and 1 in zsh.
@@ -586,7 +594,7 @@ would have been worse.
 
 `UnterminatedBracket` has its own type, `BracketPolicy`, with its own four
 values. A wider `Answer` would have let `BracketBadPattern` be assigned to
-any of the twenty-three genuinely binary axes and still compile, and the
+any of the genuinely binary axes and still compile, and the
 type would have stopped saying what it says now: *this axis has two sides
 and the shells picked different ones*. An axis with three answers gets a
 type with three values; the binary ones keep the type that says so.
@@ -673,6 +681,16 @@ behavior. A status makes no such claim — the process must exit with some
 number, and refusing is not one of the options. `sh` is itself a shell,
 so where no dialect is chosen it answers for itself, with 2.
 
+The refusal rule has one deliberate exception, recorded here so the
+invariant stays checkable against the code. `PrintfOutputPrecedesComplaint`
+is read directly rather than asked — `printfWritesThrough` is the one read
+of the vector that does not go through `ask` — because the axis decides
+only the order in which output and complaint arrive where both streams
+meet, nothing else a script can observe, and refusing every `printf` under
+the core for want of an answer would cost far more than the majority's
+order. Unspecified therefore quietly means No there: the one axis whose
+non-answer is not a refusal.
+
 The seam reaches both places a script is parsed. A command substitution
 re-parses at expansion time, and a parse error there is fatal in all four
 shells; this used to report it and carry on, which is the same shape as
@@ -698,6 +716,25 @@ which is an architectural difference rather than an axis.
    unset, and field-count of an unset variable were measured and agree
    across the panel. They are core behavior, and adding a switch for
    them would be inventing a difference.
+
+## A probe the corpus cannot hold
+
+Rule 1's probes normally live in the corpus, where `make oracle` re-runs
+them against the live panel. One cannot: whether `ulimit -f` counts in
+POSIX's 512-byte blocks or in 1024-byte ones is invisible until something
+writes past the limit, and the kernel answers that with SIGXFSZ. The
+probe, measured and re-measured (macOS, 2026-09-04):
+
+    ulimit -f 1
+    head -c  600 /dev/zero > f    bash writes all 600; dash, ksh93 and zsh
+                                  stop the file at 512
+    head -c 1200 /dev/zero > g    bash stops it at 1024
+
+So bash's block is 1024 bytes and the others keep POSIX's 512, which is
+the `UlimitBlockIsKilobyte` preset: yes in bash alone. It is recorded as
+prose rather than as a case because the output cannot be golden: bash and
+ksh93 announce the killed writer by its process id, which is different on
+every run.
 
 ## An axis that is only about one of two names
 
@@ -1070,15 +1107,15 @@ reason the wording lives in `interp`: the three decisions are not
 independent, they all turn on the same error, and `eval` and `.` must say
 the same thing about the same failure as the front end does.
 
-### What is left
+### What that sweep left
 
     bash   340/341     zsh  339/341
     ksh93  339/341     dash 341/341
 
-Two cases remain and both are features rather than wordings: `ArithFloat`,
-which ksh93 and zsh answer yes and which is measured and not built, and
-extended patterns like `@(abc|xyz)`, which ksh93 matches, zsh parses without
-matching, and bash and dash reject.
+Two cases remained at that sweep and both were features rather than
+wordings: `ArithFloat`, which ksh93 and zsh answer yes — since built, as
+the next section records — and extended patterns like `@(abc|xyz)`, which
+ksh93 matches, zsh parses without matching, and bash and dash reject.
 
 ## Floating point, and the bug under it
 
@@ -1615,8 +1652,12 @@ so `builtin echo hi` there looks for a builtin called `hi` and says so. dash
 has none at all.
 
 So the name is a dialect's answer rather than part of the substrate, and
-ksh93's meaning is measured and not built — taking the name away there is more
-honest than leaving bash's meaning under it.
+`dialect/ksh` carries ksh93's own meaning: no operands lists the table, and
+an operand that is not already a builtin is `not found`, at 1, with the
+builtin's own name as the whole prefix. What it does not do is *load*
+anything — registering a compiled builtin is a feature with nothing behind
+it here, so only the observable surface is built. An earlier revision of
+this paragraph had the name taken away instead, and outlived that decision.
 
 One detail of the refusal is worth recording. zsh names the speaking builtin
 in a diagnostic's location — `zsh:cd:1:`, `zsh:shift:1:` — and does *not* here:

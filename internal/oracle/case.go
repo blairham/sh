@@ -719,6 +719,11 @@ var Corpus = []Case{
 		Why:     "`-bval` and `-b val` are the same option, and resetting OPTIND is how a script starts a second scan",
 	},
 	{
+		ID: "getopts/a-dash-word-where-the-optstring-belongs", Category: "getopts",
+		Snippet: `set -- -q b; getopts -q o; echo "st=$? o=[$o]"`,
+		Why:     "the GetoptsRejectsUnknownOption axis: bash and ksh93 refuse the word as an option getopts does not have, dash and zsh read it as the optstring and then parse -q by it. Probed with a letter no panel shell owns — ksh93 has -a for real, and a probe written with -a read ksh93's own option as a refusal policy it does not have",
+	},
+	{
 		ID: "getopts/unknown-option-diverges", Category: "getopts",
 		Snippet: `set -- -z; getopts "ab" o; echo "st=$? o=[$o]"`,
 		Why:     "four wordings, and four different amounts of prefix: bash names itself with no line where it gives a line to everything else, and dash prints neither a name nor a line — the only diagnostic in the panel with nothing in front of it",
@@ -1031,6 +1036,16 @@ var Corpus = []Case{
 		ID: "ulimit/a-limit-it-cannot-read", Category: "traps and exit",
 		Snippet: `ulimit -t abc; echo "st=$?"`,
 		Why:     "four wordings, and ksh93's is the odd one — `parameter not set` where the others call it a bad or invalid number",
+	},
+	{
+		ID: "ulimit/a-letter-zsh-does-not-have", Category: "traps and exit",
+		Snippet: `ulimit -m >/dev/null; echo "st=$?"`,
+		Why:     "the resident-set letter, read by bash, dash and ksh93 and a bad option in zsh — the UlimitHasResidentSet axis. The value goes to /dev/null because it is the machine's, not the shell's; the letter's existence is the question",
+	},
+	{
+		ID: "ulimit/a-letter-dash-does-not-have", Category: "traps and exit",
+		Snippet: `ulimit -u >/dev/null; echo "st=$?"`,
+		Why:     "the process-count letter, read by bash, ksh93 and zsh where dash refuses it at 2 and carries on — the UlimitHasProcessCount axis, and the other half of the pair above: neither absence is a subset of the other, which is what makes them two axes",
 	},
 	{
 		ID: "builtin/an-option-it-does-not-have", Category: "traps and exit",
@@ -1480,6 +1495,11 @@ var Corpus = []Case{
 		ID: "name/a-lone-dash-given-to-a-builtin", Category: "builtins",
 		Snippet: `unalias -; echo "st=$?"`,
 		Why:     "a `-` on its own is an operand in three of the panel and an option in zsh, which eats it. `unalias` is where that shows: the three complain about an alias called `-`, each in its own words, and the fourth complains that it was given nothing to unalias at all. `unset -` looks the same in bash for a different reason — its bare form validates no operand — which is why the case is not written with that one",
+	},
+	{
+		ID: "name/unset-v-validates-the-lone-dash", Category: "builtins",
+		Snippet: `unset -v -; echo "st=$?"`,
+		Why:     "the other visible site of the LoneDashIsAnOption axis: `unset -v` validates its operand where bare `unset` does not, so bash, dash and ksh93 name the dash as a bad variable name — fatally in dash, whose unset failure ends the script — while zsh eats the dash as an option and complains it has nothing left to unset",
 	},
 	{
 		ID: "param/error-operator-on-an-unset-name", Category: "expansion",
@@ -3953,6 +3973,11 @@ echo unreachable`,
 		ID: "cmd/command-bypasses-a-function", Category: "command lookup",
 		Snippet: `echo() { echo overridden; }; command echo hi`,
 		Why:     "the whole reason `command` exists: a function may wrap the thing it is named after without calling itself",
+	},
+	{
+		ID: "cmd/command-with-an-option-nobody-has", Category: "command lookup",
+		Snippet: `command -q true; echo "st=$?"`,
+		Why:     "the CommandRejectsUnknownOption axis: bash, dash and ksh93 refuse an option command does not have, at 2; zsh stops reading options and looks up -q as the command, at 127. Probed with a letter no panel shell owns — -x is a real ksh93 option, and a probe written with -x read ksh93 as tolerant off ksh93's own feature",
 	},
 	// --- names: what may stand where a builtin wants one ---------------
 	{

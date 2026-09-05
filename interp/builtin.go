@@ -650,10 +650,11 @@ func (r *Runner) shiftCount(operand string, n *int) (int, bool) {
 
 // biEcho writes its arguments separated by spaces.
 //
-// It does not interpret backslash escapes. That is the bash and ksh93
-// answer; dash and zsh expand them, which docs/spec/semantics.md records as
-// an axis, and taking the majority here is a placeholder rather than a
-// decision — the dialect will decide once the interpreter carries one.
+// Whether backslash escapes expand without -e is the EchoInterpretsEscapes
+// axis — dash and zsh expand them, bash and ksh93 do not — asked below, and
+// only when a backslash appears, so `echo hi` needs no dialect. Which option
+// letters exist, which of `-e -E` wins, and the \x and \e set extensions are
+// each their own axis, read the same way.
 func biEcho(r *Runner, _ context.Context, args []string) int {
 	newline := true
 	letters := r.sem().EchoOptions

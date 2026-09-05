@@ -106,8 +106,11 @@ func Semantics() interp.Semantics {
 	s.SymbolicMaskTakesTheStickyLetter = interp.Yes
 	s.ShiftReadsOptions = interp.Yes
 	s.WaitReadsOptions = interp.Yes
-	s.CommandRejectsUnknownOption = interp.No
-	s.GetoptsRejectsUnknownOption = interp.No
+	// Both Yes, re-measured with a letter ksh93 does not own (-q): the first
+	// probes used -x and -a, which are real ksh93 options, and recorded No
+	// off ksh93's own features.
+	s.CommandRejectsUnknownOption = interp.Yes
+	s.GetoptsRejectsUnknownOption = interp.Yes
 	s.ShiftCountIsArithmetic = interp.Yes
 	s.TrapBodyRunsWhatParsed = interp.No
 	s.ReportsAKilledCommandInACommandSubstitution = interp.Yes

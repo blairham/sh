@@ -29,10 +29,10 @@ func reservedRun(t *testing.T, dir, src string, setup func(*Runner)) (string, in
 	// reach it deliberately.
 	sem.CommandNotFoundStatusIsNotFound = No
 	dg := Diagnostics{}
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg,
 		Dir: dir, Name: "testsh", Env: []string{"PATH=" + dir},
-	}
+	})
 	if setup != nil {
 		setup(r)
 	}

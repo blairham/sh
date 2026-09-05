@@ -31,11 +31,11 @@ func badWordRun(t *testing.T, src string, dg Diagnostics, sem Semantics, command
 		t.Fatalf("parse %q: %v", src, err)
 	}
 	var out, errs bytes.Buffer
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &out, Stderr: &errs,
 		Semantics: &sem, Diagnostics: &dg,
 		Name: "testsh", Route: routeFor(commandString),
-	}
+	})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
@@ -130,7 +130,7 @@ func TestUnsetNamesAreAbandonedAtTheFirstToo(t *testing.T) {
 	sem.FatalErrorStatusIsOne = Yes
 	dg := Diagnostics{UnboundVariable: "%s: parameter not set"}
 	var buf bytes.Buffer
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {
 		t.Fatalf("run: %v", rerr)
 	}
@@ -210,7 +210,7 @@ func TestASubscriptDoesNotRescueAnUnreadableOperator(t *testing.T) {
 		sem := permissive()
 		sem.FatalErrorStatusIsOne = Yes
 		var buf bytes.Buffer
-		r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Name: "testsh"}
+		r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Name: "testsh"})
 		st, rerr := r.Run(context.Background(), f)
 		if rerr != nil {
 			t.Fatalf("run %q: %v", src, rerr)

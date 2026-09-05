@@ -60,7 +60,7 @@ func TestTheGateSeesEveryWayIn(t *testing.T) {
 			var mu sync.Mutex
 			var seen bool
 			sem := PosixSemantics()
-			r := &Runner{
+			r := newTestRunner(t, &Runner{
 				Semantics: &sem,
 				Stdout:    &strings.Builder{}, Stderr: &strings.Builder{},
 				Gate: GateFunc(func(_ context.Context, a Action) Decision {
@@ -71,7 +71,7 @@ func TestTheGateSeesEveryWayIn(t *testing.T) {
 					}
 					return Allow
 				}),
-			}
+			})
 			// The process-substitution row makes a directory for its pipe,
 			// and only CleanUp removes one.
 			t.Cleanup(r.CleanUp)
@@ -124,7 +124,7 @@ func TestTheGateSeesTheProbes(t *testing.T) {
 			var mu sync.Mutex
 			var seen bool
 			sem := PosixSemantics()
-			r := &Runner{
+			r := newTestRunner(t, &Runner{
 				Semantics: &sem, Dir: dir,
 				Stdout: &strings.Builder{}, Stderr: &strings.Builder{},
 				Gate: GateFunc(func(_ context.Context, a Action) Decision {
@@ -135,7 +135,7 @@ func TestTheGateSeesTheProbes(t *testing.T) {
 					}
 					return Allow
 				}),
-			}
+			})
 			f, err := syntax.Parse(tc.src, syntax.Core())
 			if err != nil {
 				t.Fatalf("parse: %v", err)
@@ -179,7 +179,7 @@ func TestTheGateSeesTheFilesBehindReentry(t *testing.T) {
 			var mu sync.Mutex
 			var seen bool
 			sem := PosixSemantics()
-			r := &Runner{
+			r := newTestRunner(t, &Runner{
 				Semantics: &sem,
 				Stdout:    &strings.Builder{}, Stderr: &strings.Builder{},
 				Gate: GateFunc(func(_ context.Context, a Action) Decision {
@@ -190,7 +190,7 @@ func TestTheGateSeesTheFilesBehindReentry(t *testing.T) {
 					}
 					return Allow
 				}),
-			}
+			})
 			f, err := syntax.Parse(tc.src, syntax.Core())
 			if err != nil {
 				t.Fatalf("parse: %v", err)
@@ -252,7 +252,7 @@ func TestTheGateSeesEverySignalThatLeaves(t *testing.T) {
 			var seen []Action
 			sem := PosixSemantics()
 			var out strings.Builder
-			r := &Runner{
+			r := newTestRunner(t, &Runner{
 				Semantics: &sem,
 				Stdout:    &out, Stderr: &strings.Builder{},
 				Gate: GateFunc(func(_ context.Context, a Action) Decision {
@@ -274,7 +274,7 @@ func TestTheGateSeesEverySignalThatLeaves(t *testing.T) {
 				// cannot signal one at all — and the gate belongs above the
 				// hook, which this fake is here to demonstrate.
 				SignalGroup: func(int, syscall.Signal) error { return nil },
-			}
+			})
 			f, err := syntax.Parse(tc.src, syntax.Core())
 			if err != nil {
 				t.Fatalf("parse: %v", err)
@@ -308,7 +308,7 @@ func TestTheGateIsNotAskedAboutASignalThatNeverLeaves(t *testing.T) {
 	var seen []Action
 	var out strings.Builder
 	sem := PosixSemantics()
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem,
 		Stdout:    &out, Stderr: &strings.Builder{},
 		Gate: GateFunc(func(_ context.Context, a Action) Decision {
@@ -319,7 +319,7 @@ func TestTheGateIsNotAskedAboutASignalThatNeverLeaves(t *testing.T) {
 			}
 			return Allow
 		}),
-	}
+	})
 	f, err := syntax.Parse("kill -TERM $$\necho after", syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -387,7 +387,7 @@ func TestTheGateSeesBothHalvesOfAPipeline(t *testing.T) {
 	var mu sync.Mutex
 	var seen []string
 	sem := PosixSemantics()
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem,
 		Stdout:    &strings.Builder{}, Stderr: &strings.Builder{},
 		Gate: GateFunc(func(_ context.Context, a Action) Decision {
@@ -400,7 +400,7 @@ func TestTheGateSeesBothHalvesOfAPipeline(t *testing.T) {
 			}
 			return Allow
 		}),
-	}
+	})
 	f, err := syntax.Parse("/bin/echo hi | /bin/cat", syntax.Core())
 	if err != nil {
 		t.Fatal(err)
@@ -423,7 +423,7 @@ func TestTheGateSeesBothHalvesOfAPipeline(t *testing.T) {
 func TestTheGateSeesAnExpansionAskedForDirectly(t *testing.T) {
 	var seen []string
 	sem := PosixSemantics()
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem,
 		Stdout:    &strings.Builder{}, Stderr: &strings.Builder{},
 		Gate: GateFunc(func(_ context.Context, a Action) Decision {
@@ -434,7 +434,7 @@ func TestTheGateSeesAnExpansionAskedForDirectly(t *testing.T) {
 			}
 			return Deny
 		}),
-	}
+	})
 	if got := r.Expand("[$(/bin/echo hi)]"); got != "[]" {
 		t.Errorf("Expand gave %q, want the refused command to have produced nothing", got)
 	}

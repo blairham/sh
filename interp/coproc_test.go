@@ -64,10 +64,10 @@ func runCoproc(t *testing.T, src string) string {
 	}
 	sem := PosixSemantics()
 	out := &strings.Builder{}
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "sh",
 		Stdout: out, Stderr: &strings.Builder{},
-	}
+	})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}

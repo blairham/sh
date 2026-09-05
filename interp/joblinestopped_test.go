@@ -45,7 +45,7 @@ func TestTheLineOfAStoppedJob(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sem := CoreSemantics()
 			sem.JobsShowBackgroundCommand = tc.show
-			r := &Runner{Semantics: &sem, Diagnostics: &tc.dg}
+			r := newTestRunner(t, &Runner{Semantics: &sem, Diagnostics: &tc.dg})
 			r.addStoppedJob(1, []string{"sleep", "30"}, syscall.SIGTSTP)
 
 			line := r.jobLine(0, r.jobs[0], tc.show == Yes)

@@ -28,7 +28,7 @@ func echoRun(t *testing.T, src string, set func(*Semantics)) string {
 		set(&sem)
 	}
 	var out bytes.Buffer
-	r := &Runner{Stdout: &out, Stderr: &out, Semantics: &sem, Name: "testsh"}
+	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &out, Semantics: &sem, Name: "testsh"})
 	if _, rerr := r.Run(context.Background(), f); rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)
 	}

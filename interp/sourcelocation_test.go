@@ -122,13 +122,13 @@ func sourceLocRun(t *testing.T, inc, src string, dg Diagnostics) string {
 	var buf bytes.Buffer
 	sem := PosixSemantics()
 	sem.DotMissingFileFatal = No
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &dg, Name: "testsh",
 		Stdout: &bytes.Buffer{}, Stderr: &buf, Dir: dir,
 		// PATH deliberately empty of the directory: `.` reads `./inc.sh` as
 		// a path, and nothing else here should be findable.
 		Vars: map[string]string{"PATH": ""},
-	}
+	})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
 	}

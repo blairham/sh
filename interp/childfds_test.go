@@ -103,14 +103,14 @@ func runForReplacement(t *testing.T, dir, src string, coproc bool) []*os.File {
 	sem := permissive()
 	called := false
 	var got []*os.File
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &Diagnostics{},
 		Dir: dir, Name: "testsh", Env: testPATH(),
 		ReplaceProcess: func(_ string, _, _ []string, files []*os.File) error {
 			called, got = true, files
 			return os.ErrPermission
 		},
-	}
+	})
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatalf("run %q: %v", src, err)
 	}

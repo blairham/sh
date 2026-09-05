@@ -49,7 +49,7 @@ func TestCommandSubstitutionCarriesTheDialectStatus(t *testing.T) {
 		var buf bytes.Buffer
 		sem := permissive()
 		diag := Diagnostics{SyntaxErrorStatus: want}
-		r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag}
+		r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &diag})
 		st, err := r.Run(context.Background(), f)
 		if err != nil {
 			t.Fatal(err)

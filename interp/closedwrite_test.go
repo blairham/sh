@@ -23,7 +23,7 @@ func runClosedWrite(t *testing.T, src string, sem Semantics, diag Diagnostics) (
 		t.Fatalf("parse %q: %v", src, err)
 	}
 	var o, e bytes.Buffer
-	r := &Runner{Stdout: &o, Stderr: &e, Semantics: &sem, Diagnostics: &diag}
+	r := newTestRunner(t, &Runner{Stdout: &o, Stderr: &e, Semantics: &sem, Diagnostics: &diag})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatal(rerr)

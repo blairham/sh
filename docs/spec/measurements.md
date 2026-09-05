@@ -208,6 +208,11 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `array/a-literal-mixes-subscripts-and-positions` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][y][z] n=3` | `[x][y][z] n=3` | `[x][y][z] n=3` | `[x][[3]=y][z] n=3` | `[x][][y][z] n=4` |
 | `array/appending-a-literal-with-a-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[c][f] n=2` | `[c][f] n=2` | `[c][f] n=2` | `[c][f] n=2` | `[][c][][][f] n=5` |
 | `array/a-literal-value-is-an-assignment-value` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[p q] n=1` | `[p q] n=1` | `[p q] n=1` | `[p q] n=1` | `[][p q] n=2` |
+| `array/a-subscript-holding-an-expansion` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][Q]` | `[x][Q]` | `[x][Q]` | `[x][Q]` | `[Q][y]` |
+| `array/a-subscript-expansion-spelled-three-ways` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[p][C][r]` | `[p][C][r]` | `[p][C][r]` | `[p][C][r]` | `[C][q][r]` |
+| `array/a-subscript-holding-a-command-substitution` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][Q]` | `[x][Q]` | `[x][Q]` | `[x][Q]` | `[Q][y]` |
+| `array/appending-through-a-subscript-holding-an-expansion` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[xQ][y]` |
+| `array/a-subscript-where-there-are-no-arrays` | `done` **2>** `<shell>: 1: a[1]=Q: not found` | `done` | `done` | `done` | `done` | `done` |
 | `assoc/a-string-subscript` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]=v: not found~<shell>: 1: Bad substitution` *(status 2)* | `v k` | `v k` | `v 0` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `v k` | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `assoc/the-subscript-is-not-arithmetic` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[1+1]=x: not found~<shell>: 1: Bad substitution` *(status 2)* | `[x]` | `[x]` | `[x]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[x]` | `[x]` |
 | `assoc/values-in-some-order` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[b]=2: not found~<shell>: 1: m[a]=1: not found~<shell>: 1: Bad substitution~<shell>: 1: Bad substitution` *(status 2)* | `1 2 n=2` | `1 2 n=2` | `1 n=1` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `1 2 n=2` | `1 2 n=2` |
@@ -418,6 +423,26 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `array/a-literal-value-is-an-assignment-value` — the value of a subscripted element is not field-split, exactly as the right side of `a[2]=$x` is not — unanimous, and the opposite of a bare element in the same literal, which is a word and does split. So one set of parentheses holds two expansion rules and the subscript is what chooses between them
   ```sh
   x="p q"; a=([2]=$x); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/a-subscript-holding-an-expansion` — the ordinary way a loop writes an element, and it used to be a command name: the assignment scan looked only at the first span of the word, which ends at the bracket as soon as anything expands inside it. The result was a `command not found` and an untouched array, so the loop kept going and everything read back afterwards was stale. zsh writes the first element rather than the second, which is the array-base axis and not a disagreement about the form
+  ```sh
+  a=(x y); i=1; a[$i]=Q; printf "[%s]" "${a[@]}"; echo
+  ```
+- `array/a-subscript-expansion-spelled-three-ways` — the three spellings of one subscript all name the same element, so the last written is what comes back and the array alone cannot tell them apart. What separates them is standard error: a shell that reads one of the three as a command name says so there, which is exactly how this failed — all three at once, because they are one gap and a case with only `$i` would pass a fix that special-cased the dollar
+  ```sh
+  a=(p q r); i=1; a[$i]=A; a[${i}]=B; a[$((i))]=C; printf "[%s]" "${a[@]}"; echo
+  ```
+- `array/a-subscript-holding-a-command-substitution` — the subscript is a word and not a numeral, so a command substitution stands in one — the shape that shows the parser has to keep the spans rather than flatten the brackets to text. Unanimous in the three with arrays, at the base each of them counts from
+  ```sh
+  a=(x y); a[$(echo 1)]=Q; printf "[%s]" "${a[@]}"; echo
+  ```
+- `array/appending-through-a-subscript-holding-an-expansion` — `+=` after an expanded subscript, which is the combination that reaches both halves of the assignment scan at once: the `]` and the `+=` after it are in a span the old scan never looked at. Joining rather than replacing is `array/appending-to-an-element`'s question and the base is `array/appending-to-an-element-inherits-the-base`'s; this case is only about the form parsing at all
+  ```sh
+  a=(x y); i=1; a[$i]+=Q; printf "[%s]" "${a[@]}"; echo
+  ```
+- `array/a-subscript-where-there-are-no-arrays` — the other side of the same gate. Where the dialect has no subscript the word is not an assignment at all and the shell looks for a command by that name, which is the answer the shell without arrays gives — so accepting the shape everywhere would have made this one silently assign instead of reporting. Three shells assign and say nothing; the fourth reports on standard error and carries on
+  ```sh
+  a[1]=Q; echo done
   ```
 - `assoc/a-string-subscript` — the declaration that turns a subscript from an expression into a key. bash and ksh93 store under the letter and answer it back; zsh has the arrays but rejects `${!m[@]}` outright; dash has none of it — the issue's own snippet, spelled with the name all three declarers share
   ```sh
@@ -3831,6 +3856,7 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `signal/a-command-a-signal-ended-in-a-group` | `User defined signal N: N~after` | `<shell>: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'~after` | `after` | `<shell>: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'~after` | `<shell>: N: User signal N~after` | `after` |
 | `signal/a-command-a-signal-ended-in-a-substitution` | `User defined signal N: N~after` | `after` | `after` | `after` | `<shell>: N: User signal N~after` | `after` |
 | `signal/a-command-a-signal-ended` | `User defined signal N: N` | `<shell>: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'` | *(no output, status 0)* | `<shell>: line N: N User defined signal N: N /bin/sh -c 'kill -USR1 $$'` | `<shell>: N: User signal N` | *(no output, status 0)* |
+| `cmd/a-name-broken-by-an-expansion` | `rc=127` **2>** `<shell>: 1: aX=c: not found` | `rc=127` **2>** `<shell>: line 1: aX=c: command not found` | `rc=127` **2>** `<shell>: line 1: aX=c: command not found` | `rc=127` **2>** `<shell>: aX=c: command not found` | `rc=127` **2>** `<shell>: aX=c: not found` | `rc=127` **2>** `<shell>:1: command not found: aX=c` |
 | `jobs/bg-with-no-job-control` | `st=2` **2>** `<shell>: 1: bg: Illegal option --` | `st=1` **2>** `<shell>: line 1: bg: no job control` | `st=1` **2>** `<shell>: line 1: bg: no job control` | `st=1` **2>** `<shell>: line 0: bg: no job control` | `st=2` **2>** `<shell>: bg: --version: unknown option~Usage: bg [ options ] [job ...]` | `st=1` **2>** `<shell>:bg:1: no job control in this shell.` |
 | `commands/coproc-is-one-dialect-s-keyword` | **2>** `<shell>: 1: coproc: not found~<shell>: 1: Bad substitution` *(status 2)* | `hi` | `hi` | **2>** `<shell>: coproc: command not found~<shell>: 1: Bad file descriptor~<shell>: 0: Bad file descriptor` | **2>** `<shell>: coproc: not found~<shell>: : cannot open~<shell>: : cannot open` | **2>** `<shell>:1: no such file or directory: ~<shell>:1: file number expected` *(status 1)* |
 
@@ -3891,6 +3917,10 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
   ```sh
   { /bin/sh -c 'kill -USR1 $$'; } 2>e.txt
   sed -E "s/ [0-9]+/ N/g; s/  +/ /g" e.txt
+  ```
+- `cmd/a-name-broken-by-an-expansion` — a name interrupted by an expansion is not a name, unanimously in all five: the word is a command name and the expansion happens first, so the diagnostic reports `aX=c`. It is the boundary the subscript form has to stop at — a scan that follows the `=` across spans wherever it finds one would turn this into an assignment to `a`
+  ```sh
+  b=X; a$b=c; echo "rc=$?"
   ```
 - `jobs/bg-with-no-job-control` — bash and zsh refuse before reading the operand — there is no job control under -c and they say so first; dash and ksh93 read the operand and complain about that instead
   ```sh

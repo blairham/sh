@@ -907,38 +907,156 @@ func (p *Parser) parseRedirect() *Redirect {
 	return r
 }
 
+// assignHead is the name half of an assignment, already taken apart: the name,
+// the subscript if one was written, whether the `=` was an append, and where
+// the value begins.
+//
+// The subscript is a span sequence rather than a string because it may hold
+// expansions — `a[$i]=v` is how a loop ordinarily writes an element — and a
+// substitution is not text the parser may flatten. That is also why the head
+// carries a position into the token rather than a length: the value's first
+// span is whatever is left of the span holding the `=`, and the spans after
+// it belong to the value whole.
+type assignHead struct {
+	name   string
+	index  []Span // the subscript's spans, nil when none was written
+	append bool
+	span   int // the span holding the `=`
+	off    int // byte offset just past the `=`, within that span's value
+}
+
 // isAssign reports whether a word is `name=…` written so the name is unquoted.
-func (p *Parser) isAssign(t Token) (string, bool) {
+func (p *Parser) isAssign(t Token) (assignHead, bool) {
+	var h assignHead
 	if t.Kind != TokWord || len(t.Spans) == 0 || t.Spans[0].Quoting != Unquoted ||
 		t.Spans[0].Kind != Literal {
-		return "", false
+		return h, false
 	}
 	head := t.Spans[0].Value
 	eq := strings.IndexByte(head, '=')
+	// `name[i]=` is an assignment too, and the bracket has to be looked for
+	// before the `=`: a `=` inside the value — `a=b[0]` — is the ordinary
+	// scalar case and must not be read as a subscript.
+	if open := strings.IndexByte(head, '['); open > 0 && (eq < 0 || open < eq) {
+		return p.subscriptedAssign(t, open)
+	}
+	// Only the first span is looked at here, and that is the rule rather than
+	// a shortcut: `a$b=c` is a command name in every shell on the panel, so a
+	// name interrupted by an expansion is not a name.
 	if eq <= 0 {
-		return "", false
+		return h, false
 	}
 	name := head[:eq]
+	h.span, h.off = 0, eq+1
 	// `name+=value` appends. The `+` is part of neither the name nor the
-	// value, so it is taken off here and remembered by parseAssign, which
-	// reads the same head.
+	// value, so it is taken off here.
 	if strings.HasSuffix(name, "+") {
 		if !p.dialect.AppendAssign {
-			return "", false
+			return h, false
 		}
 		name = name[:len(name)-1]
-	}
-	// `name[i]=` is an assignment too; the subscript is unpacked later.
-	if i := strings.IndexByte(name, '['); i >= 0 && strings.HasSuffix(name, "]") {
-		if !isName(name[:i]) {
-			return "", false
-		}
-		return name, true
+		h.append = true
 	}
 	if !isName(name) {
-		return "", false
+		return h, false
 	}
-	return name, true
+	h.name = name
+	return h, true
+}
+
+// subscriptedAssign reads the `name[subscript]=` shape, whose subscript may
+// hold expansions and so may run across several spans. open is where the `[`
+// stands in the token's first span.
+//
+// The closing `]` is the first one written as unquoted literal text with an
+// `=` or a `+=` after it, so that anything a quoted or substituted span
+// contributes is data — the subscript is expanded later, and a `]` that
+// arrives from an expansion never closes anything.
+func (p *Parser) subscriptedAssign(t Token, open int) (assignHead, bool) {
+	var h assignHead
+	// Without arrays there is no subscript to read, and the word is a command
+	// name: the shell without them answers `a[1]=Q: not found`.
+	if !p.dialect.ArraySubscript {
+		return h, false
+	}
+	name := t.Spans[0].Value[:open]
+	if !isName(name) {
+		return h, false
+	}
+	for i, s := range t.Spans {
+		if s.Kind != Literal || s.Quoting != Unquoted {
+			continue
+		}
+		from := 0
+		if i == 0 {
+			from = open + 1
+		}
+		for j := from; j < len(s.Value); j++ {
+			if s.Value[j] != ']' {
+				continue
+			}
+			rest := s.Value[j+1:]
+			appends := false
+			if strings.HasPrefix(rest, "+=") {
+				if !p.dialect.AppendAssign {
+					continue
+				}
+				appends = true
+			} else if !strings.HasPrefix(rest, "=") {
+				continue
+			}
+			h.name = name
+			h.append = appends
+			h.index = spanRange(t.Spans, 0, open+1, i, j)
+			h.span = i
+			h.off = j + 1
+			if appends {
+				h.off++
+			}
+			h.off++ // the `=` itself
+			return h, true
+		}
+	}
+	return h, false
+}
+
+// toEnd is spanRange's toOff for "as far as the spans go".
+const toEnd = -1
+
+// spanRange takes the run of spans from fromOff in span from through span to,
+// stopping at toOff there — or at the end of the run when toOff is toEnd. A
+// partial literal keeps its own position advanced by the offset, so a
+// diagnostic about a subscript points at the subscript.
+//
+// Empty pieces are dropped: `a[$i]=v` splits its first span at the bracket
+// with nothing before the expansion, and a zero-length literal span would be
+// a word the printer writes back and the expander has to carry.
+func spanRange(spans []Span, from, fromOff, to, toOff int) []Span {
+	var out []Span
+	for i := from; i <= to && i < len(spans); i++ {
+		s := spans[i]
+		if s.Kind != Literal {
+			// A substitution is indivisible, so an offset can only fall
+			// before or after it, never inside.
+			out = append(out, s)
+			continue
+		}
+		lo, hi := 0, len(s.Value)
+		if i == from {
+			lo = fromOff
+		}
+		if i == to && toOff != toEnd {
+			hi = toOff
+		}
+		if lo >= hi {
+			continue
+		}
+		s.Pos.Offset += lo
+		s.Pos.Col += lo
+		s.Value = s.Value[lo:hi]
+		out = append(out, s)
+	}
+	return out
 }
 
 // isName reports whether s is a shell name: the production the grammar spells
@@ -1001,8 +1119,8 @@ func (p *Parser) parseSimple() Command {
 			if !seenArg && len(c.Assigns) == 0 && p.looksLikeFuncDef() {
 				return p.parseFuncPosix()
 			}
-			if name, ok := p.isAssign(p.tok); ok && !seenArg {
-				c.Assigns = append(c.Assigns, p.parseAssign(name))
+			if h, ok := p.isAssign(p.tok); ok && !seenArg {
+				c.Assigns = append(c.Assigns, p.parseAssign(h))
 				continue
 			}
 			if a, consumed := p.declarationArray(c); consumed {
@@ -1059,26 +1177,16 @@ func (p *Parser) parseSimple() Command {
 	return c
 }
 
-func (p *Parser) parseAssign(name string) *Assign {
-	head := p.tok.Spans[0].Value
-	eq := strings.IndexByte(head, '=')
-	a := &Assign{Name: name, Start: p.tok.Pos, Append: eq > 0 && head[eq-1] == '+'}
-	// `name[i]=value`: the subscript is part of the name half, which the
-	// assignment scan already left in place.
-	if i := strings.IndexByte(name, '['); i >= 0 && strings.HasSuffix(name, "]") {
-		a.Name = name[:i]
-		a.Index = &Word{
-			Spans: []Span{{Kind: Literal, Value: name[i+1 : len(name)-1], Pos: p.tok.Pos}},
-			Start: p.tok.Pos, Stop: p.tok.End,
-		}
+func (p *Parser) parseAssign(h assignHead) *Assign {
+	a := &Assign{Name: h.name, Start: p.tok.Pos, Append: h.append}
+	if h.index != nil {
+		a.Index = p.newWord(h.index, h.index[0].Pos, p.tok.End)
 	}
-	rest := head[eq+1:]
-
-	spans := make([]Span, 0, len(p.tok.Spans))
-	if rest != "" {
-		spans = append(spans, Span{Kind: Literal, Value: rest, Pos: p.tok.Pos})
-	}
-	spans = append(spans, p.tok.Spans[1:]...)
+	// The value is what is left of the span holding the `=`, plus every span
+	// after it — which is why the head reports a position rather than a count.
+	// `a[$i]=$v` has an expansion on each side of the `=`, and only the spans
+	// say which is which.
+	spans := spanRange(p.tok.Spans, h.span, h.off, len(p.tok.Spans)-1, toEnd)
 	a.Stop = p.tok.End
 	if len(spans) > 0 {
 		a.Value = p.newWord(spans, p.tok.Pos, p.tok.End)
@@ -1139,7 +1247,7 @@ func (p *Parser) declarationArray(c *SimpleCmd) (a *Assign, consumed bool) {
 	if !p.dialect.DeclarationUtilities[c.Args[0].Literal()] {
 		return nil, false
 	}
-	name, ok := p.isAssign(p.tok)
+	h, ok := p.isAssign(p.tok)
 	if !ok || !strings.HasSuffix(p.tok.Text, "=") {
 		// The suffix test is what keeps a scalar off this path rather than
 		// what makes it come out right — the fallback below would hand
@@ -1149,7 +1257,7 @@ func (p *Parser) declarationArray(c *SimpleCmd) (a *Assign, consumed bool) {
 		return nil, false
 	}
 	tok := p.tok
-	a = p.parseAssign(name)
+	a = p.parseAssign(h)
 	if a != nil && a.IsArray {
 		a.Operand = true
 		return a, true

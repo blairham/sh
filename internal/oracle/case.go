@@ -2065,6 +2065,36 @@ var Corpus = []Case{
 		Why:     "the value of a subscripted element is not field-split, exactly as the right side of `a[2]=$x` is not — unanimous, and the opposite of a bare element in the same literal, which is a word and does split. So one set of parentheses holds two expansion rules and the subscript is what chooses between them",
 	},
 	{
+		ID: "array/a-subscript-holding-an-expansion", Category: "expansion",
+		Snippet: `a=(x y); i=1; a[$i]=Q; printf "[%s]" "${a[@]}"; echo`,
+		Why:     "the ordinary way a loop writes an element, and it used to be a command name: the assignment scan looked only at the first span of the word, which ends at the bracket as soon as anything expands inside it. The result was a `command not found` and an untouched array, so the loop kept going and everything read back afterwards was stale. zsh writes the first element rather than the second, which is the array-base axis and not a disagreement about the form",
+	},
+	{
+		ID: "array/a-subscript-expansion-spelled-three-ways", Category: "expansion",
+		Snippet: `a=(p q r); i=1; a[$i]=A; a[${i}]=B; a[$((i))]=C; printf "[%s]" "${a[@]}"; echo`,
+		Why:     "the three spellings of one subscript all name the same element, so the last written is what comes back and the array alone cannot tell them apart. What separates them is standard error: a shell that reads one of the three as a command name says so there, which is exactly how this failed — all three at once, because they are one gap and a case with only `$i` would pass a fix that special-cased the dollar",
+	},
+	{
+		ID: "array/a-subscript-holding-a-command-substitution", Category: "expansion",
+		Snippet: `a=(x y); a[$(echo 1)]=Q; printf "[%s]" "${a[@]}"; echo`,
+		Why:     "the subscript is a word and not a numeral, so a command substitution stands in one — the shape that shows the parser has to keep the spans rather than flatten the brackets to text. Unanimous in the three with arrays, at the base each of them counts from",
+	},
+	{
+		ID: "array/appending-through-a-subscript-holding-an-expansion", Category: "expansion",
+		Snippet: `a=(x y); i=1; a[$i]+=Q; printf "[%s]" "${a[@]}"; echo`,
+		Why:     "`+=` after an expanded subscript, which is the combination that reaches both halves of the assignment scan at once: the `]` and the `+=` after it are in a span the old scan never looked at. Joining rather than replacing is `array/appending-to-an-element`'s question and the base is `array/appending-to-an-element-inherits-the-base`'s; this case is only about the form parsing at all",
+	},
+	{
+		ID: "array/a-subscript-where-there-are-no-arrays", Category: "expansion",
+		Snippet: `a[1]=Q; echo done`,
+		Why:     "the other side of the same gate. Where the dialect has no subscript the word is not an assignment at all and the shell looks for a command by that name, which is the answer the shell without arrays gives — so accepting the shape everywhere would have made this one silently assign instead of reporting. Three shells assign and say nothing; the fourth reports on standard error and carries on",
+	},
+	{
+		ID: "cmd/a-name-broken-by-an-expansion", Category: "commands",
+		Snippet: `b=X; a$b=c; echo "rc=$?"`,
+		Why:     "a name interrupted by an expansion is not a name, unanimously in all five: the word is a command name and the expansion happens first, so the diagnostic reports `aX=c`. It is the boundary the subscript form has to stop at — a scan that follows the `=` across spans wherever it finds one would turn this into an assignment to `a`",
+	},
+	{
 		ID: "assoc/a-string-subscript", Category: "expansion",
 		Snippet: `typeset -A m; m[k]=v; echo "${m[k]}" "${!m[@]}"`,
 		Why:     "the declaration that turns a subscript from an expression into a key. bash and ksh93 store under the letter and answer it back; zsh has the arrays but rejects `${!m[@]}` outright; dash has none of it — the issue's own snippet, spelled with the name all three declarers share",

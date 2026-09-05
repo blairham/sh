@@ -248,6 +248,19 @@ func TestErrexitAndPipefail(t *testing.T) {
 // TestPrintfOptions: this dialect's answers about `printf`'s options, run
 // rather than asserted against the fields — the wordings and the usage line
 // are what would be wrong.
+// ksh93 takes the same set bash does, and names the conversion alone rather
+// than the rest of the format after it.
+func TestPrintfLengthModifiers(t *testing.T) {
+	dir := t.TempDir()
+	out, _ := runKsh(t, dir, "printf \"[%ld][%zX][%jd][%lld][%hhd]\\n\" 42 255 42 42 300\n")
+	if want := "[42][FF][42][42][300]"; !strings.Contains(out, want) {
+		t.Errorf("said %q, want %q", out, want)
+	}
+	if out, _ := runKsh(t, dir, "printf \"%v]xY\" 1\n"); !strings.Contains(out, "printf: v: unknown format specifier") {
+		t.Errorf("said %q, want the conversion character alone", out)
+	}
+}
+
 func TestPrintfOptions(t *testing.T) {
 	dir := t.TempDir()
 	out, _ := runKsh(t, dir, "printf -v o \"%05d\" 42\necho \"[$o]\"\n")

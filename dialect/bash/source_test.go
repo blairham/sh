@@ -315,6 +315,25 @@ func TestErrexitAndPipefail(t *testing.T) {
 // TestPrintfOptions: this dialect's answers about `printf`'s options, run
 // rather than asserted against the fields — the wordings and the usage line
 // are what would be wrong.
+// bash takes the whole C99 set of length modifiers and ignores every one of
+// them, and names the *conversion* when it cannot read one.
+func TestPrintfLengthModifiers(t *testing.T) {
+	dir := t.TempDir()
+	out, _ := runBash(t, dir, "printf \"[%ld][%zX][%jd][%lld][%hhd][%Lf]\\n\" 42 255 42 42 300 1.5\n")
+	if want := "[42][FF][42][42][300][1.500000]"; !strings.Contains(out, want) {
+		t.Errorf("said %q, want %q", out, want)
+	}
+	// A run of the letters rather than a list of spellings.
+	if out, _ := runBash(t, dir, "printf \"[%llld]\\n\" 42\n"); !strings.Contains(out, "[42]") {
+		t.Errorf("a run: said %q, want [42]", out)
+	}
+	// The modifier is read and thrown away, so the conversion named here is
+	// the `Q` after it and not the `l`.
+	if out, _ := runBash(t, dir, "printf \"%lQ\" 1\n"); !strings.Contains(out, "`Q': invalid format character") {
+		t.Errorf("said %q, want the conversion named", out)
+	}
+}
+
 func TestPrintfOptions(t *testing.T) {
 	dir := t.TempDir()
 	out, _ := runBash(t, dir, "printf -v o \"%05d\" 42\necho \"[$o]\"\n")

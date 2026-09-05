@@ -57,6 +57,29 @@ func TestGrammar(t *testing.T) {
 		{`echo ${!a[*]}`, false},
 		{`function f() { echo x; }`, true},
 		{`a=(x y)`, true},
+		// Short loops. Measured 2026-09-05 against zsh 5.9.2; the other four
+		// panel shells refuse every accepted row here.
+		{`while (( i < 2 )) echo $i`, true},
+		{`until (( i > 2 )) echo $i`, true},
+		{`while (( i < 2 )) { echo $i }`, true},
+		{`for i (a b) { echo $i }`, true},
+		{`for i (a b) echo $i`, true},
+		{`for i (a b); echo $i`, true},
+		{`select x (a b) { echo $x }`, true},
+		{`for i in a b; echo $i`, true},
+		{`for ((i=0;i<2;i++)) echo $i`, true},
+		// The body may be left out, which is what makes `while cond; { … }`
+		// mean what it means here.
+		{`while false`, true},
+		{`for i (a b)`, true},
+		{`for i`, true},
+		// And the header still has to end itself: a word cannot, so `{` is
+		// another word of `true` and the `}` closes nothing.
+		{`while true { echo hi }`, false},
+		{`if true; { echo yes; }`, false},
+		{`for i in a b { echo $i }`, false},
+		// A word list that neither ends nor is followed by a separator.
+		{`for i in a b`, false},
 	} {
 		if got := parses(t, tc.src); got != tc.want {
 			t.Errorf("%q: parses = %v, want %v", tc.src, got, tc.want)

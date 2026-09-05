@@ -409,6 +409,92 @@ silently refuses is a boundary that reports something other than what
 happened. Cancellation is the way out, and it is a message the protocol
 already has.
 
+### Asking a person, and where the question can live
+
+Permission requests on the client side were settled by `-acp-allow` — allow
+everything or refuse everything, chosen at the command line. That is a
+placeholder for a person and a deliberately bad one; this replaces it where a
+person is actually reachable.
+
+**The ladder, in the order it is preferred.** The last one is the default and
+has to be:
+
+1. `-acp-allow` answers allow-once to everything without asking. The question
+   and the answer still go to standard error, so a run made this way leaves the
+   record a person would have been shown.
+2. A terminal on both standard input and standard output: **the person is
+   asked**, and their answer is one of the four options the agent offered.
+3. Neither: reject-once to everything. **Nobody to ask is a denial**, which is
+   the rule the whole permission model is built on, unchanged.
+
+An answer that is not one of the offered option ids is a refusal, and so is the
+input ending with the question outstanding. There is still no timeout.
+
+**The reader is the prompt loop's own**, shared rather than duplicated, and
+that is safe by the shape of a turn rather than by luck: `talk` reads a line,
+hands it to `session/prompt`, and blocks there until the turn ends. A
+permission request or an elicitation only arrives *during* a turn, so the
+scanner is idle exactly when a question needs it. Two readers on one descriptor
+would race for bytes and lose lines to whichever won.
+
+It is a line read rather than `repl`'s line editor, which is worth stating
+because this shell has one. What `repl` exports is `Shell.Run`: a whole prompt
+loop that owns the terminal, the history and the shell it drives. There is no
+single-line entry point to borrow, and taking the terminal into raw mode for a
+one-word answer, in the middle of a turn whose output is still arriving on the
+same screen, would be a worse answer than a plain read rather than a better
+one. If a line editor is ever wanted here, the thing to add is a read-one-line
+entry point to `repl`, not a second editor.
+
+#### `elicitation/create`
+
+A permission request is not the only thing an agent may need a person for, and
+until v1 grew `elicitation/create` it was the only one the protocol had. An
+agent that needs a choice, a name or a confirmation asks for it there, and this
+client serves it at the same terminal, one line per field.
+
+**Form mode only**, and it is advertised as only that. The schema advertises
+each mode by supplying `{}` for it, so a client that cannot draw a form or
+cannot open a browser simply does not name that mode — and the rule the file
+and terminal capabilities are already held to applies again: a mode that is
+served is a mode that was claimed, and a mode that arrives unclaimed is
+refused rather than guessed at. URL mode would mean opening a browser and
+waiting for an `elicitation/complete` notification, which is a different
+mechanism and not one a terminal answers.
+
+Within a form, the primitive property types are asked for and coerced: a
+string, a number, an integer, a boolean, and the single-select enum, which the
+schema spells as a string property carrying `enum`. The multi-select case is an
+array property and is **not** served: a terminal line is a poor multi-select,
+and offering a bad one is worse than saying so.
+
+A required field left empty declines the whole elicitation, because a form
+returned without what it required is not an answer to it. Declining and
+cancelling are answers too — the agent is owed one either way — and, as with a
+permission request, the input ending is a decline rather than a hang.
+
+#### Why the agent side still cannot ask
+
+The **agent** side of this shell remains strictly non-interactive, and
+`elicitation/create` does not change that today, although it is the right route
+eventually.
+
+The reason is mechanical rather than philosophical. A session's standard input
+is `os.DevNull`, so a script's `read` gets end of file; making it reach a
+person means making that reader *demand-driven* — the question is only worth
+asking when a script actually reads. `driver.Shell.Stdin` is an `*os.File`, so
+there is nowhere to put a reader that calls out over the connection: an
+`os.Pipe` fed by a goroutine cannot know when somebody reads the other end, so
+it would have to elicit eagerly, which asks a person a question no script ever
+asked.
+
+Widening that field to an `io.Reader` is a `driver` change with its own blast
+radius — every route, every dialect binary, and the terminal detection that
+decides to prompt, which needs an `*os.File` to ask about. It is worth doing on
+purpose rather than as a side effect of this, so it is written down here rather
+than bodged: **a script's `read` under `sh -acp` will reach a person when
+`driver.Shell.Stdin` becomes an `io.Reader`, and not before.**
+
 ## The event stream becomes session updates
 
 | event | update |
@@ -429,45 +515,42 @@ gate runs before `EventCommandStart`, so the tool call exists by the
 time the event arrives and the event updates it rather than creating a
 second.
 
-### The correlation gap: blocked on #719, and not ours to close
+### Correlation: one id, asked for rather than invented
 
-`interp.Event` carries no identity for the action it belongs to.
-`EventCommandStart` and `EventCommandEnd` are matched by *ordering*, and
-ordering is exactly what concurrency breaks: a background job and each
-half of a pipeline emit from their own goroutines.
+`interp.Event` used to carry no identity for the action it belonged to, so a
+start and an end were matched by *ordering* — and ordering is exactly what
+concurrency breaks, since a background job and each half of a pipeline emit
+from their own goroutines. This front end matched on a fingerprint of the
+action instead: kind, path, argv, and the write flag or the signal target,
+with a queue of open tool calls per fingerprint. That was right whenever two
+identical commands were not in flight at once, and marked the wrong tool call
+complete when they were.
 
-The audit schema in `internal/event` — owned by
-`docs/design/sandboxing.md`, which this consumes rather than competes
-with — does not close it either, and says so: `seq` is a total order of
-*emission* and is explicitly "not a causal order". That is the right
-call for a log and leaves this mapping without an answer.
+It is closed. **#719** — landed as #730 — gave `interp.Action` an `ID` and
+`interp.Event` a `Session`, and the id is the same string on the Action a gate
+is consulted about and on every event that action produces. That is exactly
+the promise this needed, so the fingerprint is gone and the tracker is a set
+keyed on the id.
 
-**Two consumers reached the same missing field from opposite
-directions.** The blocks work needed to say which events belong to which
-run and had to generate an id of its own to cope; this needs to say
-which events belong to which action, and to join a permission request to
-the events for the action it approved. It is filed as **#719**, and the
-reason it is one issue rather than two workarounds is that *two id
-schemes that do not agree are worse than none* — they look joinable and
-are not.
+Two things about the shape are worth keeping.
 
-So this front end does **not** invent one. Until #719 lands it matches
-by a fingerprint of the action alone — kind, path, args, and the write
-flag or the signal target — with a queue of open tool calls per
-fingerprint, and an unmatched end becomes a standalone completed tool
-call rather than being dropped. The line and the file would discriminate
-better and are deliberately left out: a gate is consulted with an
-`Action` before any event exists, so a key carrying them could never
-join the two halves. Where two identical commands are in flight at once
-it marks the wrong tool call complete, which is cosmetic — no decision
-changes — and is still wrong.
+**The tool call id and the action id are the same string.** `ToolCallId` is
+required by the protocol and was minted here as `call-1`, `call-2`; there is no
+reason for it to be a different value from the one the interpreter already
+uses, and every reason for it not to be — a client's transcript and the audit
+stream now join on a value both already carry, rather than on a fingerprint
+that agrees by luck. Nothing was invented for this: asking for one field
+rather than minting a second scheme was the whole argument, because two id
+schemes that do not agree are worse than none.
 
-The tool call ids and session ids this front end does mint are not that
-scheme and are not a substitute for it. `ToolCallId` and `SessionId` are
-*required by the protocol*: a client cannot show a permission request
-without one, and every message in a session names it. They identify
-things on the wire, not actions in the interpreter, and when #719 lands
-the fingerprint goes and these stay.
+**An action with no id is matched to nothing, not to everything.** Nothing in
+the interpreter produces one — an empty id means a Runner with neither a gate
+nor a sink, which emits no events either — and a defensive fallback that keyed
+the empty string would put every such action in one bucket and close the wrong
+tool call, which is the fingerprint's failure brought back by a default. It
+still gets a tool call id, because the protocol requires one; it simply joins
+to nothing, and an unmatched end becomes a standalone completed tool call,
+which is visible.
 
 ### Reading the event schema, not only writing to it
 

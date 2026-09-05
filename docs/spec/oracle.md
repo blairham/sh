@@ -231,6 +231,55 @@ case was edited, and the recorded behavior is no longer what the panel
 does. The response is to work out which, update the affected spec
 entries, and re-record.
 
+### Two questions, enforced in two places
+
+`oracle -check` asks two things, and only one of them has the same answer
+on every machine.
+
+**Do the committed files agree with each other?** `case.go`, the golden
+record and `measurements.md` are three views of one thing, and the
+document is a *pure function* of the other two — `Markdown` reads nothing
+else — so re-rendering it and comparing every byte asks the question
+completely rather than sampling it. No shells are involved and no two
+machines can disagree, so this **blocks**: it is a test, and it runs in
+`make check` and in the required build.
+
+One thing in the rendered document is not a fact about the measurement,
+and the check found it by passing on macOS and failing on a Linux runner
+for a byte-identical tree. The *word* beside a signal number is
+`syscall.Signal.String()` — the reader's kernel — while the number is the
+one the recording machine used, and signal 30 is SIGUSR1 on macOS and
+SIGPWR on Linux. Deriving the word from the constant instead only moves
+the problem, because the constant's value is what differs. The word is
+computed from the number and adds nothing to it, so the comparison drops
+it from *both* sides: the document keeps its words for a reader, and the
+check stops treating them as evidence.
+
+It exists because the drift check compares *behavior* and a `Why` is
+prose. Editing one after `make oracle` had run left the document carrying
+a sentence its own source no longer held, and nothing failed — twice in
+one day, caught by eye both times, each one commit from landing. A wrong
+explanation attached to a correct measurement is harder to catch later
+than a wrong number, because the numbers are checked and the prose was
+not. The same comparison catches a case added, removed or renamed without
+regenerating, and a renderer change shipped without one.
+
+**Does the panel still behave as recorded?** Report-only in CI, for a
+measured reason rather than an assumed one: on `ubuntu-latest`, against a
+record made on macOS, **380 of 1122 cases differ** — 126 in the ksh93
+column, 102 in bash-as-sh, 87 in bash, 36 in dash, 29 in zsh — and bash
+3.2 is not installable there at all. A blocking job would fail every
+build, which is exactly the flakiness a gate must not have.
+
+Shell *version* does not separate the two, which is worth knowing because
+it looks as though it should: `dash` reports no version at all, so its
+recorded version and the runner's are both `unknown` while its 36
+differences are real machine differences. There is no cheap test for
+"this drift cannot be the runner's fault".
+
+So the record's staleness fails for its author wherever that is possible,
+and where it is not the report at least says which column moved.
+
 The run environment is fixed — an empty `PATH` of system directories,
 `HOME` pointed at a scratch directory, `LC_ALL=C`, and no standard input
 unless the case supplies its own — because a record that depends on

@@ -919,6 +919,21 @@ var Corpus = []Case{
 		Why:     "the reading half, and the one that shows the redirection outlives an iteration: the second `read` continues where the first left off, which it could not do if the file were opened per pass",
 	},
 	{
+		ID: "core/c-style-for-with-an-empty-header", Category: "command language",
+		Snippet: `i=0; for ((;;)); do i=$((i+1)); if [ $i -ge 3 ]; then break; fi; done; echo "i=$i"`,
+		Why:     "every section omitted, which is how the endless loop is spelled: an absent condition is *true* rather than the expression 0, so the body runs until something breaks out of it. The distinction is one an AST can lose — a parser that fills a missing section in with a zero writes a loop that never runs a single pass. dash has no C-style loop and blames the loop variable",
+	},
+	{
+		ID: "core/c-style-for-without-a-condition", Category: "command language",
+		Snippet: `for ((i=0;;i++)); do if [ $i -ge 3 ]; then break; fi; done; echo "i=$i"`,
+		Why:     "the same absent condition with the other two sections present, which is what says the sections are independent rather than all-or-nothing: the initialization and the step still run, and `i` is 3 at the break",
+	},
+	{
+		ID: "core/c-style-for-with-only-a-condition", Category: "command language",
+		Snippet: `i=0; for ((;i<3;)); do i=$((i+1)); done; echo "i=$i"`,
+		Why:     "a `while` loop written as a `for`: the initialization and the step are the ones omitted here, and an omitted step must not be run as an expression whose value could end the loop. The trio with the two cases above covers every section this header can leave out",
+	},
+	{
 		ID: "core/a-list-for-with-a-brace-body", Category: "command language",
 		Snippet: `for i in a b; { printf "%s" "$i"; }; echo`,
 		Why:     "the same production on the ordinary `for`, which is the half easiest to miss: the brace body is not the C-style loop's alone. It needs the separator, and the next case says why — this is the one three of the four accept and dash refuses, dash being the only panel shell without the form",
@@ -931,7 +946,37 @@ var Corpus = []Case{
 	{
 		ID: "core/a-brace-body-is-not-a-while-body", Category: "command language", SyntaxError: true,
 		Snippet: `while true; { echo hi; break; }`,
-		Why:     "the production belongs to the loops built on a `for` header and to nothing else. Written with the separator, so that it is the same shape the list `for` accepts and the difference is the construct rather than the punctuation. Three refuse it; zsh accepts it as a short loop of its own, which is the divergence this case records",
+		Why:     "the brace-body production belongs to the loops built on a `for` header and to nothing else. Written with the separator, so that it is the same shape the list `for` accepts and the difference is the construct rather than the punctuation. Three refuse it; the fourth prints hi, and *not* because it read a body — the `;` keeps the condition list going, so the brace group is the last thing tested and the `break` inside it is what ends the loop. `core/a-tested-brace-group-is-not-a-body` is the same shape with a counter, which counts up there rather than stopping",
+	},
+	{
+		ID: "core/a-tested-brace-group-is-not-a-body", Category: "command language", SyntaxError: true,
+		Snippet: `i=0; while [ $i -lt 2 ]; { echo $i; i=$((i+1)); [ $i -lt 4 ]; }`,
+		Why:     "which half of `while cond; { … }` the brace group is, in the one shell that takes the line at all. As a *body* the loop would print 0 and 1 and stop on the header's test; as the tail of the condition list it prints 0..3 and stops on the test written inside the braces, and that is what happens — so the shell has no `while` brace body, it has an *omitted* one with the whole line as the condition. The counter and the inner test are what tell the readings apart; the shape alone cannot, which is why `core/a-brace-body-is-not-a-while-body` was read the other way for a while. Nothing may follow the group, either: a `; echo end` after it joins the condition list too, and its status is then what the loop tests, so the loop never ends. Three shells refuse the line outright",
+	},
+	{
+		ID: "core/a-while-condition-that-ends-itself-takes-a-body", Category: "command language", SyntaxError: true,
+		Snippet: `i=0; while (( i < 2 )) { echo $i; i=$((i+1)); }; echo end`,
+		Why:     "the short loop proper, and the same text as the row above with the separator taken *out*. Without one the condition list cannot continue, so the brace group is the body and the loop stops at 2 — which is the opposite of what the separator gives. `(( … ))` is what ends the header; `while true { … }` is a syntax error in the same shell, because a word cannot end one",
+	},
+	{
+		ID: "core/a-short-loop-body-is-one-command", Category: "command language", SyntaxError: true,
+		Snippet: `i=0; while (( i < 2 )) echo $((i++)); echo end`,
+		Why:     "the body of a short loop need not be a brace group, and it is exactly one command: the `; echo end` after it is outside the loop, so `end` prints once rather than per iteration. A second command inside would need a separator, and a separator there is the enclosing list's",
+	},
+	{
+		ID: "core/a-for-over-a-parenthesized-list", Category: "command language", SyntaxError: true,
+		Snippet: `for i (a b) { echo "$i"; }; for j (p q) echo "$j"`,
+		Why:     "the short `for`, in both its body spellings. The parentheses say what `in` says and end the header as `in` does not, which is why this one takes a brace body with nothing between where `for i in a b { … }` cannot. One shell parses it and four call the `(` a syntax error",
+	},
+	{
+		ID: "core/a-for-header-that-ends-itself-needs-no-body", Category: "command language", SyntaxError: true,
+		Snippet: `if true; then for i (a b); fi; echo no-body; for j (p q) echo body`,
+		Why:     "the body left out of a `for`, which is legal exactly where the header closed itself. Reaching it needs something the body cannot be, because anything that could be one *is* one — hence the `fi`, a word no command may start with. The second loop is the contrast in the same line: the same header with a command after it runs that command per item, so `no-body` prints once and `body` twice. `for i in a b` with nothing after it is a syntax error in the same shell, so this is a property of the header rather than of the loop",
+	},
+	{
+		ID: "core/a-short-loop-redirection-is-the-bodys", Category: "command language", SyntaxError: true,
+		Snippet: `for i (a b) > f$i; ls`,
+		Why:     "where a short loop's redirection lands, and the loop variable in the target is what makes the answer visible: two files named for the two items mean the redirection ran once per iteration and is the *body* — a command that only redirects. A redirection on the loop is expanded once before it starts and would leave a single `f`, which is what `for i (a b) { echo hi } > f$i` does. The distinction is unreachable from the tree alone, so it is pinned here",
 	},
 	{
 		ID: "core/for-wants-a-name", Category: "command language", SyntaxError: true,
@@ -1070,7 +1115,32 @@ var Corpus = []Case{
 	{
 		ID: "printf/unknown-verb-diverges", Category: "printf",
 		Snippet: `printf "[%z]\n" x; echo "st=$?"`,
-		Why:     "half the panel names the character *after* the one it could not read and half names the conversion, with four wordings and three statuses between them",
+		Why:     "half the panel names the conversion character alone and half names the whole directive as written, with four wordings and three statuses between them. `z` is a length modifier in three of them, so the character they cannot read here is the `]`",
+	},
+	{
+		ID: "printf/a-length-modifier-on-a-conversion", Category: "printf",
+		Snippet: `printf "[%ld][%5ld][%Lf]\n" 42 42 1.5; echo "st=$?"`,
+		Why:     "the C length modifiers every shell with any of them takes, in the place C puts them — after the precision and before the verb. The one shell with none reads the `l` as the conversion and says so",
+	},
+	{
+		ID: "printf/a-length-modifier-c99-added", Category: "printf",
+		Snippet: `printf "[%zX][%jd][%lld][%hhd]\n" 255 42 42 42; echo "st=$?"`,
+		Why:     "the C99 additions, which is where the panel splits three ways rather than two: two shells take them, one takes only C89's `h`, `l` and `L` and calls these invalid directives, and one takes none at all",
+	},
+	{
+		ID: "printf/a-length-modifier-is-read-and-thrown-away", Category: "printf",
+		Snippet: `printf "[%hhd][%lld]\n" 300 9223372036854775807; echo "st=$?"`,
+		Why:     "an accepted modifier never narrows or widens anything: 300 through `%hhd` is 300 and not 44, and the largest signed 64-bit value survives `%lld` — so this is about what a format may say and never about what it means",
+	},
+	{
+		ID: "printf/a-run-of-length-modifiers", Category: "printf",
+		Snippet: `printf "[%llld][%hld]\n" 42 42; echo "st=$?"`,
+		Why:     "the shells with the C99 set skip a run of the letters rather than a list of spellings, so nonsense like `lll` and `hl` is accepted; the shell with C89's set takes exactly one letter and refuses both",
+	},
+	{
+		ID: "printf/an-unknown-conversion-names-the-character", Category: "printf",
+		Snippet: `printf "%v]xY" 1; echo "st=$?"`,
+		Why:     "a conversion no shell in the panel has, with a tail after it, which is what separates naming the conversion character from naming what follows it: two shells say `v` and two say `%v`, and none of them names the `]`",
 	},
 	{
 		ID: "printf/no-format-at-all", Category: "printf",
@@ -1787,6 +1857,11 @@ var Corpus = []Case{
 		Why:     "the idiom people actually reach for it with, and the reason a pipeline will not do: the loop runs in *this* shell, so what it reads is still there afterwards",
 	},
 	{
+		ID: "procsub/quoted-is-not-a-substitution", Category: "redirection",
+		Snippet: `printf "[%s]\n" "<(echo hi)"`,
+		Why:     "the construct is unquoted-only: inside double quotes the same ten characters are text, unanimously and dash included. It is the completeness half of `procsub/reads-a-command-as-a-file` — that case says the lexer reads the form, this one says where it stops looking, and a lexer that also read it inside quotes would pass the first and fail here",
+	},
+	{
 		ID: "read/a-failing-read-still-assigns", Category: "builtins",
 		Snippet: `l=keep; read -r l </dev/null; echo "st=$? l=[$l]"`,
 		Why:     "end of input clears the variables rather than leaving what was there, which is what stops `while read -r l` from leaving the last line behind for the code after the loop. Unanimous across the panel, so it is the core's answer and not an axis",
@@ -2203,6 +2278,12 @@ var Corpus = []Case{
 		ID: "array/appending-to-an-associative-element", Category: "expansion",
 		Snippet: `typeset -A m; m[k]+=x; m[k]+=Q; echo "[${m[k]}]"`,
 		Why:     "the declared form appends by key just as the indexed form appends by subscript — unanimous in the three that have the attribute. Both assignments are written with `+=` so that the first one also stands as the unset-key case, and so that dash, which has neither, reports the two identically",
+	},
+	{
+		ID: "array/a-literal-with-a-space-before-it", Category: "expansion",
+		SyntaxError: true,
+		Snippet:     `a= (echo x); echo "n=${#a[@]} 0=${a[0]} 1=${a[1]}"`,
+		Why:         "the `(` has to be adjacent to the `=` everywhere but ksh93, and ksh93 is not merely lenient about the space — it reads the whole thing as the *array literal*, leaving `a` holding `echo` and `x` rather than assigning an empty value and running a subshell. So the panel splits on what the text means and not only on whether it is accepted, and a parser cannot settle the construct on adjacency alone: adjacency decides which diagnostic, and the non-adjacent form falls through to the ordinary rule for a `(` after a word",
 	},
 	{
 		ID: "array/a-literal-places-its-subscripts", Category: "expansion",
@@ -4569,6 +4650,20 @@ echo unreachable`,
 		Why:     "the quiet death, and the one no other case reaches: a builtin whose output goes into a pipe nobody is reading is killed by SIGPIPE where it stands, so `reached` never runs and nothing is said about it — unanimous in all four, and the point of the `>&2` is that a shell which merely swallowed the write would still print it. This is `yes | head` seen from the writing end, and it is the case the corpus was missing while `printf x | { read -d : v; }` measured the same thing by accident: there the write is small enough to fit, so whether it beats the reader's exit is the machine's to decide and the score wandered by one",
 	},
 	{
+		// The same doubling loop and the same dead reader, with one thing
+		// changed: SIGPIPE is ignored. An ignore is the one disposition that
+		// crosses into a pipeline element intact, so the writer meets the
+		// broken pipe with the signal already disarmed and the kernel hands
+		// back EPIPE instead. `2>/dev/null` on the failing write alone is
+		// what keeps this about the outcome rather than about the wording —
+		// four of the panel say something here and each says it differently,
+		// which is a separate question from whether the shell is still
+		// running to say anything at all.
+		ID: "pipeline/an-ignored-broken-pipe-does-not-kill-the-writer", Category: "pipeline status",
+		Snippet: `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; ( trap '' PIPE; { echo "$v" 2>/dev/null; echo reached >&2; } | true ); echo after`,
+		Why:     "the other half of the quiet death, and the half that shows it was never about the errno: EPIPE is not what kills the writer, SIGPIPE is, and a shell that has ignored SIGPIPE gets the failed write back as an ordinary failure. `reached` runs and `after` follows in every shell measured, against the neighboring case where the identical write ends the writer where it stands — so the difference between dying and carrying on is one `trap ''` and nothing else. The ignore is set inside a subshell rather than at the top: it is inherited from there either way, and a shell that is *the* shell ignores a signal for its whole process, which one harness runs the corpus inside of. bash 3.2 is recorded with a stray newline ahead of `reached`: its failed write leaves the line's terminator queued on the shared output stream and the next write to that stream flushes it out first",
+	},
+	{
 		ID: "cmd/close-brace-as-an-ordinary-word", Category: "command language",
 		Snippet: `echo }`,
 		Why:     "`}` is reserved only where a command may begin in three of the four, so as an argument it is an ordinary brace — and in zsh it is reserved wherever a word may stand, which is a parse error here and is the same rule that lets `{ echo a }` close without a terminator",
@@ -4867,6 +4962,23 @@ echo unreachable`,
 		ID: "opt/set-o-noexec-reads-and-never-runs", Category: "shell options",
 		Snippet: "echo before\nset -o noexec\necho after\n",
 		Why:     "the long spelling of `set -n`, and it behaves identically in all four: everything after it is read and never run, and the script still ends at 0 — the same option under its other name, which was refused as unimplemented here while the letter worked",
+	},
+	{
+		// The body goes to standard error on purpose, so that the command's
+		// own output and the echo of its lines land on one descriptor and
+		// their order is visible. With the two apart the same four lines come
+		// out in the same order whether the terminator is echoed with the
+		// command or after it, which is why this went unnoticed.
+		ID: "opt/set-v-echoes-a-here-document-with-its-command", Category: "shell options",
+		Script:  true,
+		Snippet: "set -v\ncat <<END >&2\nbody\nEND\necho after\n",
+		Why:     "all three physical lines of a command carrying a here-document are written back before any of it runs, terminator included — unanimous. The delimiter belongs to the command that opened it rather than to the input after it, and a shell that counts only the lines the parser turned into a command echoes it on the back of the next one, after the body has already been written out",
+	},
+	{
+		ID: "opt/set-v-echoes-the-tail-after-the-last-command", Category: "shell options",
+		Script:  true,
+		Snippet: "set -v\necho one\n\n\n# the end\n",
+		Why:     "the option's contract is to write back what it reads, and the lines after the last command are read like any others: two blank lines and a comment, echoed by all four. Blank lines and comments *between* commands are dragged out by the line that follows them, so only the tail — where there is no line after — shows a shell that echoes per command rather than per line. The comment is last because a record trims trailing newlines, and blank lines at the very end would leave nothing to compare",
 	},
 	{
 		ID: "opt/set-o-verbose-echoes-what-is-read", Category: "shell options",
@@ -5658,6 +5770,21 @@ out=$(CDPATH=./pool cd sub)
 		ID: "commands/coproc-is-one-dialect-s-keyword", Category: "commands",
 		Snippet: `coproc cat; echo hi >&"${COPROC[1]}"; read -r l <&"${COPROC[0]}"; echo "$l"`,
 		Why:     "bash runs cat in the background with the pipe's near ends in COPROC and reads its own line back; the other three have no such keyword — even zsh, whose coprocess speaks `print -p` rather than an array",
+	},
+	{
+		ID: "commands/coproc-names-a-compound", Category: "commands",
+		Snippet: `coproc MY { cat; }; echo hi >&"${MY[1]}"; read -r l <&"${MY[0]}"; echo "$l"`,
+		Why:     "a name may be written before a *compound* command, and then it is the name: the near ends arrive in MY rather than in COPROC. Nothing decides this at run time — the shape of what follows settles it while parsing — and bash 3.2 dates the feature by refusing the `}` outright, as do dash and ksh93. zsh has the word and no name to give it",
+	},
+	{
+		ID: "commands/coproc-names-a-subshell", Category: "commands",
+		Snippet: `coproc MY ( cat </dev/null ); echo "n=${#MY[@]}"`,
+		Why:     "a subshell is a compound command too, so the same rule binds the name — which is the half a parser that only looks for `{` gets wrong. Read back as a count rather than through the descriptors, because a coprocess whose feed is /dev/null has nothing to answer with and the count is the whole claim",
+	},
+	{
+		ID: "commands/coproc-does-not-name-a-simple-command", Category: "commands",
+		Snippet: `MY() { echo ran-MY; }; coproc MY cat; read -r l <&"${COPROC[0]}"; echo "l=$l COPROC=${#COPROC[@]} MY=${#MY[@]}"`,
+		Why:     "the other side of the same rule, and the one worth pinning: before a *simple* command the first word is the command, so `coproc MY cat` runs MY and the array is the default COPROC. A function named MY is what makes that visible without a race — bash reports `MY: command not found` from the background job otherwise, whenever the job gets there — and the line read back is the function's own output, which no shell that had taken MY as a name could produce",
 	},
 	{
 		ID: "syntax/an-unmatched-double-quote", Category: "diagnostics",

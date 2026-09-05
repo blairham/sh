@@ -521,8 +521,28 @@ func (p *Parser) NextLine() (*File, bool) {
 			break
 		}
 	}
-	f.Last = p.tok.Pos
+	f.Last = p.lineEnd()
 	return f, true
+}
+
+// lineEnd is where the logical line just parsed ends in the input.
+//
+// The token that ended it, ordinarily — and the line that closed a
+// here-document where one was read, because its body and its delimiter are
+// physical lines of the command that owns them and the token says nothing
+// about them. The newline that triggers the read sits at the end of the
+// command's *first* line and the body is consumed behind it, so `cat <<END`
+// over three lines of script otherwise reports one.
+//
+// The furthest of the two, which is the whole rule: a line with no
+// here-document is unaffected, and one with several is closed by the last
+// delimiter rather than the first.
+func (p *Parser) lineEnd() Pos {
+	at := p.tok.Pos
+	if e := p.lex.heredocEnd; e.Offset > at.Offset {
+		return e
+	}
+	return at
 }
 
 func (p *Parser) skipNewlines() {
@@ -532,7 +552,19 @@ func (p *Parser) skipNewlines() {
 }
 
 // parseList reads statements until a stop word, a closing paren, or the end.
-func (p *Parser) parseList() []*Stmt {
+func (p *Parser) parseList() []*Stmt { return p.parseListUntil(false) }
+
+// parseListUntil is parseList, optionally stopping after a statement that was
+// written with no terminator after it.
+//
+// That is a list's real boundary and nothing else marks it: two statements
+// need a `;`, a newline or an `&` between them, so a command standing straight
+// after one that ended itself — `(( i < 2 )) echo hi` — is not a second
+// statement of the same list. Every shell in the panel refuses that text where
+// it is only a list; the one with short loops reads the second command as a
+// loop *body*, which is what the flag asks for and why the boundary has to be
+// visible here rather than guessed at afterwards.
+func (p *Parser) parseListUntil(stopWhereTheListEnds bool) []*Stmt {
 	var out []*Stmt
 	p.skipNewlines()
 	for p.err == nil && !p.at(TokEOF) && !p.atStopWord() && !p.at(TokRightParen) {
@@ -541,6 +573,9 @@ func (p *Parser) parseList() []*Stmt {
 			break
 		}
 		out = append(out, st)
+		if stopWhereTheListEnds && !st.Semi.IsValid() {
+			break
+		}
 		p.skipNewlines()
 	}
 	return out
@@ -1531,6 +1566,12 @@ func (p *Parser) parseForArith(start Pos) Command {
 		c.Body, c.Stop = p.braceLoopBody()
 		return c
 	}
+	// This header ends itself too, so where a body may be short it may also
+	// be one command, or nothing.
+	if p.dialect.ShortLoop && !p.atWord("do") {
+		c.Body, c.Stop = p.shortLoopBody()
+		return c
+	}
 
 	p.requireSep("do")
 	p.opensClause("do")
@@ -1560,6 +1601,32 @@ func (p *Parser) braceLoopBody() (body []*Stmt, stop Pos) {
 		return nil, p.tok.End
 	}
 	return g.List, g.Stop
+}
+
+// shortLoopBody reads a body written where `do … done` stands, for a header
+// that has already ended: one command, or none at all.
+//
+// One rather than a list, and that is the construct rather than a
+// simplification — a second command needs a separator before it, and a
+// separator here belongs to whatever encloses the loop. `for i (a b) echo $i;
+// echo done` prints a, b, done and not a, done, b, done.
+//
+// None at all is the same rule with nothing after the header, and it is
+// reached far more often than it looks: it is what `while cond; { … }` means,
+// because the `;` puts the brace group in the condition list and leaves the
+// body with nothing.
+func (p *Parser) shortLoopBody() (body []*Stmt, stop Pos) {
+	if p.braceBodyFollows() {
+		return p.braceLoopBody()
+	}
+	if p.at(TokEOF) || p.atStopWord() || p.at(TokRightParen) {
+		return nil, p.tok.Pos
+	}
+	st := p.parseStmt()
+	if st == nil {
+		return nil, p.tok.Pos
+	}
+	return []*Stmt{st}, st.End()
 }
 
 // splitForArith cuts the header into its three parts.
@@ -1621,7 +1688,15 @@ func (p *Parser) parseLoop() Command {
 	c := &LoopClause{Until: p.atWord("until"), Start: p.tok.Pos}
 	defer p.opens(loopWord(c.Until))()
 	p.next()
-	c.Cond = p.parseList()
+	c.Cond = p.parseListUntil(p.dialect.ShortLoop)
+	// Where the body may be short, the condition list is the whole header and
+	// it has just ended: what stands here is either `do`, or the body, or
+	// nothing. The list is what decides — a `;` kept it going, so anything
+	// after one was tested rather than run.
+	if p.dialect.ShortLoop && !p.atWord("do") {
+		c.Body, c.Stop = p.shortLoopBody()
+		return c
+	}
 	p.requireSep("do")
 	// A `do` inside a while or until is a keyword awaiting its own partner,
 	// and inside a `for` it is not — measured, in the one shell whose wording
@@ -1659,20 +1734,32 @@ func (p *Parser) parseFor() Command {
 	p.next()
 	p.skipNewlines()
 
+	end := nameEnd
 	// An absent word list is not an empty one: without `in` the loop iterates
 	// the positional parameters, and with `in` and nothing after it, nothing.
-	if p.atWord("in") {
+	// The parenthesized spelling is the short loop's and says the same thing
+	// as `in`, with the closing paren ending the header where `in` needs a
+	// separator to.
+	parens := p.shortItemsFollow()
+	switch {
+	case parens:
+		c.HasItems = true
+		c.Items, end = p.shortItems()
+	case p.atWord("in"):
 		c.HasItems = true
 		p.next()
 		for p.tok.Kind == TokWord && !p.atStopWord() {
 			c.Items = append(c.Items, p.word())
 		}
-	}
-	end := nameEnd
-	if n := len(c.Items); n > 0 {
-		end = c.Items[n-1].End()
+		if n := len(c.Items); n > 0 {
+			end = c.Items[n-1].End()
+		}
 	}
 	c.Header = p.slice(c.Start, end)
+	if body, stop, short := p.shortBodyAfterHeader(parens || !c.HasItems); short {
+		c.Body, c.Stop = body, stop
+		return c
+	}
 	p.requireSep("do")
 	// A brace group where `do … done` stands. The separator `requireSep` has
 	// just consumed is what makes the form reachable at all: with nothing
@@ -1683,11 +1770,63 @@ func (p *Parser) parseFor() Command {
 		c.Body, c.Stop = p.braceLoopBody()
 		return c
 	}
+	if p.dialect.ShortLoop && !p.atWord("do") {
+		c.Body, c.Stop = p.shortLoopBody()
+		return c
+	}
 	p.expectWord("do")
 	c.Body = p.parseList()
 	c.Stop = p.tok.End
 	p.expectWord("done")
 	return c
+}
+
+// shortItemsFollow reports whether a `for` or `select` header's word list is
+// written in parentheses.
+func (p *Parser) shortItemsFollow() bool {
+	return p.dialect.ShortLoop && p.at(TokLeftParen)
+}
+
+// shortItems reads that list. The words are the ordinary ones — expanded,
+// split and globbed like the words after `in` — and an empty list is legal
+// and iterates nothing.
+func (p *Parser) shortItems() (items []*Word, end Pos) {
+	p.next() // (
+	p.skipNewlines()
+	for p.tok.Kind == TokWord && !p.atStopWord() {
+		items = append(items, p.word())
+		p.skipNewlines()
+	}
+	end = p.tok.End
+	if !p.at(TokRightParen) {
+		p.failUnexpected(")")
+		return items, end
+	}
+	p.next()
+	return items, end
+}
+
+// shortBodyAfterHeader reads the body of a `for` or `select` whose header
+// ended itself, where the dialect allows one without `do … done`.
+//
+// The separator is optional there rather than required, which is the whole
+// difference from the long form: `for i (a b) echo $i` and `for i (a b); echo
+// $i` are the same loop. It reports false where the long form still applies,
+// so a header that did not end itself, a dialect without the flag, and a `do`
+// standing where it always could all fall through untouched.
+func (p *Parser) shortBodyAfterHeader(headerEnded bool) (body []*Stmt, stop Pos, short bool) {
+	if !p.dialect.ShortLoop || !headerEnded {
+		return nil, Pos{}, false
+	}
+	if p.tok.Kind == TokSemi || p.tok.Kind == TokNewline {
+		p.next()
+		p.skipNewlines()
+	}
+	if p.atWord("do") {
+		return nil, Pos{}, false
+	}
+	body, stop = p.shortLoopBody()
+	return body, stop, true
 }
 
 // parseSelect reads the menu loop, whose header is a for-loop's.
@@ -1709,22 +1848,36 @@ func (p *Parser) parseSelect() Command {
 	nameEnd := p.tok.End
 	p.next()
 	p.skipNewlines()
-	if p.atWord("in") {
+	end := nameEnd
+	// The menu loop's header is a for-loop's, parenthesized list included.
+	parens := p.shortItemsFollow()
+	switch {
+	case parens:
+		c.HasItems = true
+		c.Items, end = p.shortItems()
+	case p.atWord("in"):
 		c.HasItems = true
 		p.next()
 		for p.tok.Kind == TokWord && !p.atStopWord() {
 			c.Items = append(c.Items, p.word())
 		}
-	}
-	end := nameEnd
-	if n := len(c.Items); n > 0 {
-		end = c.Items[n-1].End()
+		if n := len(c.Items); n > 0 {
+			end = c.Items[n-1].End()
+		}
 	}
 	c.Header = p.slice(c.Start, end)
+	if body, stop, short := p.shortBodyAfterHeader(parens || !c.HasItems); short {
+		c.Body, c.Stop = body, stop
+		return c
+	}
 	p.requireSep("do")
 	// The menu loop takes the brace body its header's loop takes.
 	if p.braceBodyFollows() {
 		c.Body, c.Stop = p.braceLoopBody()
+		return c
+	}
+	if p.dialect.ShortLoop && !p.atWord("do") {
+		c.Body, c.Stop = p.shortLoopBody()
 		return c
 	}
 	p.expectWord("do")

@@ -2548,17 +2548,17 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
   kill -INT $$
   echo after
   ```
-- `trap/wait-cut-short-by-a-signal` — the async delivery path, which every other trap case misses: the signal comes from a background job rather than from the shell's own line, and it has to reach a `wait` that is already blocked. The handler runs and then `wait` reports the signal — 128 + USR1 in bash, dash and zsh, 256 + USR1 in ksh93 — where a wait nobody interrupted reports 0. `wait; check $?` is the supervisor loop every job-runner script is built on, so a 0 here is silence in place of the whole point
+- `trap/wait-cut-short-by-a-signal` — the async delivery path, which every other trap case misses: the signal comes from a background job rather than from the shell's own line, and it has to reach a `wait` that is already blocked. The handler runs and then `wait` reports the signal — 128 + USR1 in bash, dash and zsh, 256 + USR1 in ksh93 — where a wait nobody interrupted reports 0. `wait; check $?` is the supervisor loop every job-runner script is built on, so a 0 here is silence in place of the whole point. The job outlives the signal it sends, so `wait` is still blocked when the signal lands rather than racing the job's own death
   ```sh
-  trap 'echo T' USR1; (sleep 0.3; kill -USR1 $$) & wait; echo "st=$?"
+  trap 'echo T' USR1; (sleep 0.3; kill -USR1 $$; sleep 0.2) & wait; echo "st=$?"
   ```
 - `trap/wait-for-a-job-cut-short-by-a-signal` — naming the job splits the panel where the bare form did not: bash, dash and zsh answer exactly as above and ksh93 drops its own 256 encoding for a plain 1 (WaitForAJobFailsWhenInterrupted). `wait %1` is the same answer in all four, so the axis is about having an operand and not about how it is spelled
   ```sh
-  trap 'echo T' USR1; (sleep 0.3; kill -USR1 $$) & wait $!; echo "st=$?"
+  trap 'echo T' USR1; (sleep 0.3; kill -USR1 $$; sleep 0.2) & wait $!; echo "st=$?"
   ```
-- `trap/wait-is-not-cut-short-by-an-ignored-signal` — the control, and the line between the two: an ignored signal has no handler to run, so it does not interrupt anything and `wait` still reports 0 in all four. Without it the case above would be evidence about a signal arriving rather than about a *trapped* one arriving
+- `trap/wait-is-not-cut-short-by-an-ignored-signal` — the control, and the line between the two: an ignored signal has no handler to run, so it does not interrupt anything and `wait` still reports 0 in all four. Without it the case above would be evidence about a signal arriving rather than about a *trapped* one arriving. Same shape to the character, so the trap is the only variable
   ```sh
-  trap '' USR1; (sleep 0.3; kill -USR1 $$) & wait; echo "st=$?"
+  trap '' USR1; (sleep 0.3; kill -USR1 $$; sleep 0.2) & wait; echo "st=$?"
   ```
 - `trap/exit-runs-at-the-end` — the EXIT trap runs after the script, not where it was set
   ```sh

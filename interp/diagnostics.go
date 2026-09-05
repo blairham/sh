@@ -610,6 +610,21 @@ type Diagnostics struct {
 	// with a missing command's 127.
 	TypeNotFoundStatus int
 
+	// CommandVNotFound is what `command -V` says about a name that is
+	// nothing, which is `type`'s complaint with a different name in front:
+	// two shells blame `command`, and the two that keep the shell's name off
+	// the line here keep it off there too — TypeNotFoundUnprefixed and
+	// TypeNotFoundStatus speak for both builtins. One verb, the name.
+	CommandVNotFound string
+
+	// FunctionListingHeader is how a function said back whole begins —
+	// `declare -f`, and the `type` that follows its sentence with the body.
+	// Two verbs: the name, and the laid-out body, which starts at its
+	// opening brace. bash gives the brace a line of its own and zsh keeps it
+	// on the header's, which is why the join is the dialect's to word; the
+	// layout inside the braces is the dialect's function layout.
+	FunctionListingHeader string
+
 	// BuiltinUsageUnprefixed writes it with no location and no shell name in
 	// front, which is what ksh93 does with every usage line.
 	BuiltinUsageUnprefixed bool

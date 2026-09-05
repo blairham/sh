@@ -275,6 +275,27 @@ func Semantics() interp.Semantics {
 	// and silence with status 1 for a name that is nothing.
 	s.TypeNamesTheKindWithDashT = interp.Yes
 
+	// The letters `declare` and `local` read — one set under two names
+	// here, with `-F` naming functions rather than setting a float's
+	// precision, which no other engine spells this way. The nameref and
+	// trace letters this shell also has ride in
+	// Diagnostics.UnimplementedOptionLetters.
+	s.DeclareOptions = "aAfFgilprux"
+	s.LocalOptions = "aAgilprux"
+	// A bad `declare` option is reported and the script goes on.
+	s.TypesetBadOptionFatal = interp.No
+	// `declare -g x=new` writes the global cell even with a `local x`
+	// standing in front of the name.
+	s.DeclareGlobalReachesPastALocal = interp.Yes
+	// A bare `local` writes the running function's own locals, each as a
+	// clustered declaration — `declare -i n`, `declare -- x`.
+	s.BareLocalListing = interp.BareLocalListsLocals
+	// A bare `set` writes the variables and then every defined function,
+	// values quoted only where they must be, `'\''` for an embedded quote
+	// and `$'...'` once a control character appears.
+	s.SetListing = interp.SetListingAssignmentsThenFunctions
+	s.SetListingQuoting = interp.ListingQuoteWhenNeededEscaped
+
 	return s
 }
 
@@ -284,6 +305,8 @@ func Diagnostics() interp.Diagnostics {
 		TypeKeyword:  "%[1]s is a shell keyword",
 		TypeFunction: "%[1]s is a function",
 		TypeNotFound: "type: %[1]s: not found",
+		// The same complaint from `command -V`, blaming `command`.
+		CommandVNotFound: "command: %[1]s: not found",
 		// The target as it was written, not as it expanded.
 		AmbiguousRedirect: "%[1]s: ambiguous redirect",
 		JobStarted:        "[%[1]d] %[2]d",
@@ -415,6 +438,13 @@ func Diagnostics() interp.Diagnostics {
 			// only to a terminal, which is the measured whole of it.
 			"read": "Eei",
 			"type": "afpP",
+			// The nameref and trace attributes, under both of the builtin's
+			// names — and `local`'s extras: the same two, `-I` inheritance,
+			// and the function letters, which this shell takes and ignores
+			// where no operand is a function.
+			"declare": "Int",
+			"typeset": "Int",
+			"local":   "fFInt",
 			// The callbacks: -C runs a command every -c elements, which is
 			// about progress display and is deferred rather than parsed and
 			// ignored — under either of the command's two names.
@@ -444,11 +474,18 @@ func Diagnostics() interp.Diagnostics {
 			"export":   "%[1]s: `%[2]s': not a valid identifier",
 			"readonly": "%[1]s: `%[2]s': not a valid identifier",
 			"unset":    "%[1]s: `%[2]s': not a valid identifier",
+			"local":    "%[1]s: `%[2]s': not a valid identifier",
 		},
 		BuiltinBadNameKeepsValue: true,
 		BuiltinUsageUnprefixed:   true,
 		BuiltinUsage: map[string]string{
 			"export": "export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
+			// Not one line under two names: `typeset` loses the brackets
+			// around its name operand where `declare` keeps them. As
+			// written, both.
+			"declare": "declare: usage: declare [-aAfFgiIlnrtux] [name[=value] ...] or declare -p [-aAfFilnrtux] [name ...]",
+			"typeset": "typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]",
+			"local":   "local: usage: local [option] name[=value] ...",
 			"read": "read: usage: read [-Eers] [-a array] [-d delim] [-i text] " +
 				"[-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]",
 			"mapfile": "mapfile: usage: mapfile [-d delim] [-n count] [-O origin] [-s count] " +

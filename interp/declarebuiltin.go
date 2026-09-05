@@ -5,6 +5,7 @@ package interp
 
 import (
 	"context"
+	"sort"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -29,19 +30,40 @@ import (
 
 // declareFlags is what a declaration asks for.
 type declareFlags struct {
-	integer  bool
-	readonly bool
-	export   bool
-	assoc    bool
-	remove   bool
-	print    bool
+	integer   bool
+	readonly  bool
+	export    bool
+	assoc     bool
+	lower     bool
+	upper     bool
+	global    bool
+	function  bool
+	funcNames bool
+	remove    bool
+	print     bool
 }
 
-func biDeclare(r *Runner, _ context.Context, args []string) int {
-	var f declareFlags
+// declareOptionLetters is the set `declare` and `typeset` read where the
+// dialect has not answered — the letters the substrate implemented before
+// they were a question.
+const declareOptionLetters = "aAiprx"
+
+// parseDeclareFlags reads the leading option words of a declaration builtin,
+// against the letters the dialect gives it. The parse is the one these
+// builtins have always had rather than the shared reader's, because `+i`
+// removes what `-i` adds and no other builtin spells an option with a plus.
+//
+// A letter outside the set goes through the shared refusal, so a letter the
+// dialect has and this shell does not is named as missing rather than as
+// unknown, in the dialect's words.
+func (r *Runner) parseDeclareFlags(name string, args []string, known string) (rest []string, f declareFlags, code int) {
 	i := 0
 	for ; i < len(args); i++ {
 		a := args[i]
+		if a == "--" {
+			i++
+			break
+		}
 		if len(a) < 2 || (a[0] != '-' && a[0] != '+') {
 			break
 		}
@@ -49,6 +71,9 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 		// place a shell spells an option with a plus.
 		f.remove = a[0] == '+'
 		for _, c := range a[1:] {
+			if !strings.ContainsRune(known, c) {
+				return nil, f, r.refuseOption(name, a, known)
+			}
 			switch c {
 			case 'i':
 				f.integer = true
@@ -61,6 +86,18 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 				// recorded: it changes what a later subscript *means*, the
 				// way `-i` changes what a later assignment means.
 				f.assoc = true
+			case 'l':
+				f.lower = true
+			case 'u':
+				f.upper = true
+			case 'g':
+				// Global rather than local: the assignment reaches the
+				// global cell however deep the function stack is.
+				f.global = true
+			case 'f':
+				f.function = true
+			case 'F':
+				f.funcNames = true
 			case 'p':
 				// Print rather than declare. `+p` prints too — measured in
 				// both shells that spell the option at all.
@@ -75,11 +112,39 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 				// literal in argument position is grammar rather than a
 				// flag. Refusing the flag outright would break the common
 				// use to be honest about the rare one.
-			default:
-				r.diagf("declare: -%c: invalid option\n", c)
-				return 2
 			}
 		}
+	}
+	return args[i:], f, 0
+}
+
+func biDeclare(r *Runner, _ context.Context, args []string) int {
+	name := r.inBuiltin
+	if name == "" {
+		name = "declare"
+	}
+	known := r.sem().DeclareOptions
+	if known == "" {
+		known = declareOptionLetters
+	}
+	args, f, code := r.parseDeclareFlags(name, args, known)
+	if code != 0 {
+		// A bad option ends the script where the dialect counts `typeset`
+		// among its special builtins — ksh93, where any of the builtin's
+		// failures is fatal, so the honest refusal of a letter it has and
+		// this shell does not stops the script the same way.
+		if r.ask(r.sem().TypesetBadOptionFatal, "a bad `typeset` option ending the script") {
+			r.status = code
+			r.fatalQuiet()
+		}
+		return code
+	}
+
+	if f.function || f.funcNames {
+		// The function table rather than the variables: `-f` writes the
+		// functions themselves and `-F` only names them. `-p` alongside
+		// changes nothing — the flags already mean print.
+		return r.declareFunctions(args, f.funcNames)
 	}
 
 	if f.print {
@@ -87,10 +152,10 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 		// the shells that have them use an attribute letter to *filter* the
 		// full listing, which is not built. Refusing the combination would
 		// break the plain use to be honest about the rare one.
-		return r.declarePrint(args[i:])
+		return r.declarePrint(args)
 	}
 
-	for _, a := range args[i:] {
+	for _, a := range args {
 		name, value, hasValue := strings.Cut(a, "=")
 		// Attributes first, because `-i` changes what the assignment on the
 		// same line *means* — but readonly last, because it changes whether
@@ -98,6 +163,22 @@ func biDeclare(r *Runner, _ context.Context, args []string) int {
 		// freezes it; applying both up front made the declaration refuse its
 		// own value and leave the name empty.
 		r.applyAttributes(name, f)
+		if f.global {
+			// `-g` reaches past every local: the assignment lands on the
+			// global cell and no shadow is taken, so `declare -g x=new`
+			// inside a function survives its return even where a `local x`
+			// is standing in front of the name.
+			if hasValue {
+				r.setGlobalVar(name, value)
+				if r.unspecified || r.ctl == controlExit {
+					return r.status
+				}
+			}
+			if f.readonly && !f.remove {
+				r.markReadonly(name)
+			}
+			continue
+		}
 		// Declaring inside a function declares a local, which is unanimous
 		// among the three shells that have the name — subject to ksh93's
 		// rule about which functions have a scope at all.
@@ -149,6 +230,111 @@ func (r *Runner) applyAttributes(name string, f declareFlags) {
 		}
 		r.exported[name] = !f.remove
 	}
+	// The case attributes fold at assignment here, which is what bash and
+	// ksh93 do. zsh stores the raw text and folds on *expansion* — every
+	// read agrees with the other two, and only its `typeset -p` betrays the
+	// difference by listing the raw value. That listing nuance is
+	// deliberately not modeled; the fold every script observes is.
+	if f.lower {
+		if r.lowered == nil {
+			r.lowered = map[string]bool{}
+		}
+		if f.remove {
+			delete(r.lowered, name)
+		} else {
+			r.lowered[name] = true
+			// The two case attributes cannot both stand: the later one
+			// speaks, which is what both shells measured do.
+			delete(r.uppered, name)
+		}
+	}
+	if f.upper {
+		if r.uppered == nil {
+			r.uppered = map[string]bool{}
+		}
+		if f.remove {
+			delete(r.uppered, name)
+		} else {
+			r.uppered[name] = true
+			delete(r.lowered, name)
+		}
+	}
+}
+
+// setGlobalVar assigns to a name's global cell, past any local shadowing it.
+//
+// In this engine there is one table and a stack of saved outer values, so
+// the global cell is either the table itself — no scope saved the name — or
+// the copy held by the *oldest* scope that did, which is the value the last
+// return will put back. Whether `-g` really reaches past a local is the one
+// disagreement here, and it is asked only where a local stands in the way —
+// with none, both shells that spell the letter write the global.
+func (r *Runner) setGlobalVar(name, value string) {
+	for _, sc := range r.scopes {
+		if _, saved := sc.saved[name]; !saved {
+			continue
+		}
+		if !r.ask(r.sem().DeclareGlobalReachesPastALocal, "`declare -g` writing past a local of the same name") {
+			if r.unspecified {
+				return
+			}
+			// The visible cell — the local — which is what a plain
+			// assignment would have written.
+			break
+		}
+		sc.saved[name] = value
+		sc.existed[name] = true
+		if sc.removedBefore != nil {
+			sc.removedBefore[name] = false
+		}
+		return
+	}
+	r.setVarAs(name, value, assignedByDeclaration)
+}
+
+// declareFunctions is `declare -f` and `-F`: the functions themselves, or
+// only their names.
+//
+// One shell has each of these under `declare` and prints `-F` in its own two
+// shapes — `declare -f name` per function when nothing narrows it, the bare
+// name when an operand asked — so the shapes are written here the way `-t`'s
+// kind words are: there is no second engine to hold a wording for.
+func (r *Runner) declareFunctions(names []string, namesOnly bool) int {
+	named := len(names) > 0
+	if !named {
+		names = make([]string, 0, len(r.funcs))
+		for name := range r.funcs {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+	}
+	status := 0
+	for _, name := range names {
+		fn, ok := r.funcs[name]
+		if !ok {
+			// Silent, and 1 stands however many other names printed —
+			// measured in both shells that can be asked.
+			status = 1
+			continue
+		}
+		switch {
+		case !namesOnly:
+			r.printf("%s\n", r.listedFunction(name, fn))
+		case named:
+			r.printf("%s\n", name)
+		default:
+			r.printf("declare -f %s\n", name)
+		}
+	}
+	return status
+}
+
+// listedFunction is a function said back whole, in the dialect's arrangement:
+// the header the dialect writes — see Diagnostics.FunctionListingHeader —
+// and the body laid out by its function layout.
+func (r *Runner) listedFunction(name string, fn *syntax.FuncDecl) string {
+	return Wording(r.diag().FunctionListingHeader, "%[1]s () \n%[2]s",
+		name, syntax.PrintWith(fn.Body, r.functionLayout))
 }
 
 // markReadonly freezes a name.

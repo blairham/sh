@@ -570,6 +570,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `mapfile/reads-lines-into-an-array` | `<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution` *(status 2)* | `b` | `b` | `<shell>: mapfile: command not found` | `<shell>: mapfile: not found` | `<shell>:1: command not found: mapfile` |
 | `mapfile/defaults-to-MAPFILE-and-keeps-the-newline` | `<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution` *(status 2)* | `[b]2` | `[b]2` | `<shell>: mapfile: command not found~[]0` | `<shell>: mapfile: not found~[]0` | `<shell>:1: command not found: mapfile~[]0` |
 | `readarray/is-mapfile-under-another-name` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `0 2 3 3` | `0 2 3 3` | `<shell>: readarray: command not found~0   1` | `<shell>: readarray: not found~0   1` | `<shell>:1: command not found: readarray~ 0  1` |
+| `set/bare-set-lists-the-variables` | `v1='plain'~v2='has space'~v3='quo'"'"'te'~st=0` | `v1=plain~v2='has space'~v3='quo'\''te'~st=0` | `v1=plain~v2='has space'~v3='quo'\''te'~st=0` | `v1=plain~v2='has space'~v3='quo'\''te'~st=0` | `v1=plain~v2='has space'~v3=$'quo\'te'~st=0` | `v1=plain~v2='has space'~v3='quo'\''te'~st=0` |
+| `set/bare-set-and-the-functions` | `0~st=1` | `1~st=0` | `0~st=1` | `1~st=0` | `0~st=1` | `0~st=1` |
+| `command/capital-v-says-a-sentence` | `echo is a shell builtin~if is a shell keyword~st=0` | `echo is a shell builtin~if is a shell keyword~st=0` | `echo is a shell builtin~if is a shell keyword~st=0` | `echo is a shell builtin~if is a shell keyword~st=0` | `echo is a shell builtin~if is a keyword~st=0` | `echo is a shell builtin~if is a reserved word~st=0` |
+| `command/capital-v-a-name-that-is-nothing` | `nosuchcmd_zz: not found~st=127` | `<shell>: line 1: command: nosuchcmd_zz: not found~st=1` | `<shell>: line 1: command: nosuchcmd_zz: not found~st=1` | `<shell>: line 0: command: nosuchcmd_zz: not found~st=1` | `<shell>: command: nosuchcmd_zz: not found~st=1` | `nosuchcmd_zz not found~st=1` |
 | `kill/the-listing-has-four-shapes` | `0` | ` 1) SIGHUP	 2) SIGINT	 3) SIGQUIT	 4) SIGILL	 5) SIGTRAP` | `HUP INT QUIT ILL TRAP ABRT EMT FPE KILL BUS SEGV SYS PIPE ALRM TERM URG STOP TSTP CONT CHLD TTIN TTOU IO XCPU XFSZ VTALRM PROF WINCH INFO USR1 USR2` | ` 1) SIGHUP	 2) SIGINT	 3) SIGQUIT	 4) SIGILL` | `HUP` | `HUP INT QUIT ILL TRAP ABRT EMT FPE KILL BUS SEGV SYS PIPE ALRM TERM URG STOP TSTP CONT CHLD TTIN TTOU IO XCPU XFSZ VTALRM PROF WINCH INFO USR1 USR2` |
 | `test/a-non-number-where-one-belongs` | `<shell>: 1: [: Illegal number: a~st=2` | `<shell>: line 1: [: a: integer expected~st=2` | `<shell>: line 1: [: a: integer expected~st=2` | `<shell>: line 0: [: a: integer expression expected~st=2` | `st=1` | `<shell>:[:1: integer expression expected: a~st=2` |
 | `read/with-no-variable-diverges` | `<shell>: 1: read: arg count~r=2 REPLY=[]` | `r=0 REPLY=[x]` | `r=0 REPLY=[x]` | `r=0 REPLY=[x]` | `r=0 REPLY=[x]` | `r=0 REPLY=[x]` |
@@ -842,6 +846,22 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `readarray/is-mapfile-under-another-name` — the synonym takes the same letters — skip, cap, and an origin that writes into the array it finds rather than replacing it
   ```sh
   arr=(0); printf '1\n2\n3\n4\n' | { readarray -t -s 1 -n 2 -O 1 arr; echo "${arr[0]} ${arr[1]} ${arr[2]} ${#arr[@]}"; }
+  ```
+- `set/bare-set-lists-the-variables` — one listing, three spellings of the same three values: bare-until-needed with `'\''` for the embedded quote, always-single-quoted with the quote doubled out, and `$'...'` — filtered to the script's own names because the rest of the listing is the machine's
+  ```sh
+  v1=plain; v2='has space'; v3="quo'te"; set | grep "^v[123]"; echo "st=$?"
+  ```
+- `set/bare-set-and-the-functions` — exactly one shell follows the variables with every defined function; counted rather than shown, so the answer is 1 against three 0s whatever the body's layout
+  ```sh
+  myfn() { echo hi; }; set | grep -c '^myfn'; echo "st=$?"
+  ```
+- `command/capital-v-says-a-sentence` — POSIX's other letter: every shell answers with its `type` sentence, keyword wording and all, so the option costs no vocabulary of its own until something is missing
+  ```sh
+  command -V echo; command -V if; echo "st=$?"
+  ```
+- `command/capital-v-a-name-that-is-nothing` — the one line `-V` words for itself: two shells blame `command` where their `type` blames `type` or `whence`, the other two keep the shell's name off the line here as there — and the status is `type`'s, 127 in the shell that answers a missing command's number
+  ```sh
+  command -V nosuchcmd_zz; echo "st=$?"
   ```
 - `kill/the-listing-has-four-shapes` — bash numbers five to a row, zsh space-joins one line, ksh93 goes one per line, dash opens with a 0
   ```sh
@@ -3980,6 +4000,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `declare/print-a-scalar-back` | `<shell>: 1: typeset: not found~st=127` | `declare -- v="a b"~declare -x e="E"~st=0` | `declare -- v="a b"~declare -x e="E"~st=0` | `declare -- v="a b"~declare -x e="E"~st=0` | `v='a b'~typeset -x e=E~st=0` | `typeset v='a b'~export e=E~st=0` |
 | `declare/print-arrays-back` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `declare -a arr=([0]="x" [1]="y")~declare -A m=([k]="a b" )` | `declare -a arr=([0]="x" [1]="y")~declare -A m=([k]="a b" )` | `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~declare -a arr='([0]="x" [1]="y")'~declare -a m='([0]="a b")'` | `typeset -a arr=(x y)~typeset -A m=([k]='a b')` | `typeset -a arr=( x y )~typeset -A m=( [k]='a b' )` |
 | `declare/print-a-missing-name` | `<shell>: 1: typeset: not found~st=127` | `<shell>: line 1: typeset: nosuch: not found~st=1` | `<shell>: line 1: typeset: nosuch: not found~st=1` | `<shell>: line 0: typeset: nosuch: not found~st=1` | `st=0` | `<shell>:typeset:1: no such variable: nosuch~st=1` |
+| `declare/f-says-a-named-function-back` | `<shell>: 1: typeset: not found~st=127` | `f () ~{ ~    if true; then~        echo one;~    fi~}~st=0` | `f () ~{ ~    if true; then~        echo one;~    fi~}~st=0` | `f () ~{ ~    if true; then~        echo one;~    fi~}~st=0` | `f() { if true; then echo one; fi; };st=0` | `f () {~	if true~	then~		echo one~	fi~}~st=0` |
+| `declare/capital-f-names-a-function` | `<shell>: 1: declare: not found~st=127~<shell>: 1: declare: not found~st2=127` | `f~st=0~st2=1` | `f~st=0~st2=1` | `f~st=0~st2=1` | `<shell>: declare: not found~st=127~<shell>: declare: not found~st2=127` | `st=0~st2=0` |
+| `declare/local-reads-the-integer-letter` | `<shell>: 1: local: -i: bad variable name` *(status 2)* | `v=5~st=0` | `v=5~st=0` | `v=5~st=0` | `<shell>: local: not found~v=2+3~st=0` | `v=5~st=0` |
+| `declare/local-readonly-letter` | `<shell>: 1: local: -r: bad variable name` *(status 2)* | `<shell>: line 1: ro: readonly variable` *(status 1)* | `<shell>: line 1: ro: readonly variable` *(status 127)* | `<shell>: ro: readonly variable` *(status 1)* | `<shell>: local: not found~unreached~after` | `f: read-only variable: ro` *(status 1)* |
+| `declare/local-bad-name` | `in=ok~<shell>: 1: 1x: bad variable name` *(status 2)* | `<shell>: line 1: local: `1x=5': not a valid identifier~in=ok~st=0` | `<shell>: line 1: local: `1x=5': not a valid identifier~in=ok~st=0` | `<shell>: line 0: local: `1x=5': not a valid identifier~in=ok~st=0` | `<shell>: local: not found~in=ok~st=0` | `f:local: not an identifier: 1x` *(status 1)* |
+| `declare/bare-local-lists-the-locals` | `0~st=1` | `2~st=0` | `2~st=0` | `0~st=1` | `<shell>: local: not found~<shell>: local: not found~0~st=1` | `0~st=1` |
+| `declare/global-letter-declares-a-global` | `<shell>: 1: typeset: not found~gv= st=127` | `gv=7 st=0` | `gv=7 st=0` | `<shell>: line 0: typeset: -g: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~gv= st=2` | `<shell>: typeset: -g: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `gv=7 st=0` |
+| `declare/global-letter-against-a-local` | `<shell>: 1: typeset: not found~in=in~out=out` | `in=in~out=new` | `in=in~out=new` | `<shell>: line 0: typeset: -g: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~in=in~out=out` | `<shell>: local: not found~<shell>: typeset: -g: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `in=new~out=out` |
+| `declare/lower-case-attribute` | `<shell>: 1: typeset: not found~v=~v2=DEF` | `v=abc~v2=def` | `v=abc~v2=def` | `<shell>: line 0: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~v=~v2=DEF` | `v=abc~v2=def` | `v=abc~v2=def` |
+| `declare/upper-case-attribute` | `<shell>: 1: typeset: not found~w=~st=0` | `w=ABC~st=0` | `w=ABC~st=0` | `<shell>: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~w=~st=0` | `w=ABC~st=0` | `w=ABC~st=0` |
+| `declare/an-option-typeset-does-not-have` | `<shell>: 1: typeset: not found~st=127` | `<shell>: line 1: typeset: -q: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~st=2` | `<shell>: line 1: typeset: -q: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~st=2` | `<shell>: line 0: typeset: -q: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~st=2` | `<shell>: typeset: -q: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `<shell>:typeset:1: bad option: -q~st=1` |
+| `declare/an-option-local-does-not-have` | `<shell>: 1: local: -q: bad variable name` *(status 2)* | `<shell>: line 1: local: -q: invalid option~local: usage: local [option] name[=value] ...~in~st=0` | `<shell>: line 1: local: -q: invalid option~local: usage: local [option] name[=value] ...~in~st=0` | `<shell>: line 0: local: -q: invalid option~local: usage: local name[=value] ...~in~st=0` | `<shell>: local: not found~in~st=0` | `f:local: bad option: -q~in~st=0` |
 
 - `declare/typeset-assigns` — `typeset` is the older of the two names and the one three of the four have; dash has neither and reports a command it cannot find
   ```sh
@@ -4056,6 +4088,54 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `declare/print-a-missing-name` — how scripts test whether a name is set: two shells report it in their own words and answer 1, one prints nothing at all and answers 0 — an axis, not a wording
   ```sh
   typeset -p nosuch; echo "st=$?"
+  ```
+- `declare/f-says-a-named-function-back` — three engines, three renderings of identical state: one gives the brace a line of its own and terminates with `;`, one keeps the brace on the header and terminates with nothing, and one prints the source text verbatim — which this engine does not keep, so the third is refused as unimplemented rather than approximated
+  ```sh
+  f() { if true; then echo one; fi; }; typeset -f f; echo "st=$?"
+  ```
+- `declare/capital-f-names-a-function` — only one shell has `-F` as a function listing — a named operand answers with the bare name, a missing one with silence and 1 — while another spells a *float's precision* with the same letter and answers 0 to both, and two have no `declare` at all
+  ```sh
+  f() { echo hi; }; declare -F f; echo "st=$?"; declare -F nosuch; echo "st2=$?"
+  ```
+- `declare/local-reads-the-integer-letter` — `local` takes declare's letters in two shells, none at all in a third — where `-i` is a variable name, and a bad one, refused fatally — and does not exist in the fourth
+  ```sh
+  f() { local -i n; n=2+3; echo "v=$n"; }; f; echo "st=$?"
+  ```
+- `declare/local-readonly-letter` — `local -r` assigns and then freezes, so the reassignment is the readonly refusal — fatal in both shells that read the letter — while the shell with no letters dies earlier, on `-r` as a bad name
+  ```sh
+  f() { local -r ro=5; ro=6; echo "unreached"; }; f; echo "after"
+  ```
+- `declare/local-bad-name` — four answers to one bad operand: quoted back with its value and carried past, refused fatally with the digit-led wording, refused fatally with the builtin's name left off the line, and `local: not found` from the shell that never had the builtin
+  ```sh
+  f() { local 1x=5; echo "in=ok"; }; f; echo "st=$?"
+  ```
+- `declare/bare-local-lists-the-locals` — a bare `local` writes the running function's locals as clustered declarations in exactly one shell — counted through grep because another lists its whole parameter table there, which is a fact about that engine rather than about the script
+  ```sh
+  f() { local x=1 y; local; }; f | grep -c '^declare'; echo "st=$?"
+  ```
+- `declare/global-letter-declares-a-global` — `-g` reaches the global table from inside a function in the two shells that spell it; the third refuses it with its usage lines and stops — typeset is one of its own special builtins — and the fourth has no typeset at all
+  ```sh
+  f() { typeset -g gv=7; }; f; echo "gv=$gv st=$?"
+  ```
+- `declare/global-letter-against-a-local` — the axis inside the letter: with a local standing in front of the name, one engine writes the global cell past it and the other assigns the local it can see — `in=in out=new` against `in=new out=out`
+  ```sh
+  x=out; f() { local x=in; typeset -g x=new; echo "in=$x"; }; f; echo "out=$x"
+  ```
+- `declare/lower-case-attribute` — a property of the name, not of the assignment: the declaring value folds and so does every later one, in all three shells with the letter — one folds on expansion rather than assignment, which only its listing can tell apart
+  ```sh
+  typeset -l v=ABC; echo "v=$v"; v=DEF; echo "v2=$v"
+  ```
+- `declare/upper-case-attribute` — the other direction of the same attribute, unanimous among the shells that have typeset
+  ```sh
+  typeset -u w=abc; echo "w=$w"; echo "st=$?"
+  ```
+- `declare/an-option-typeset-does-not-have` — the refusal splits three ways: reported with a usage line and status 2, reported bare with 1, and fatal with the usage lines in the shell whose typeset failures end the script
+  ```sh
+  typeset -q v=1; echo "st=$?"
+  ```
+- `declare/an-option-local-does-not-have` — the same question of `local`, where the shell with no letters reads `-q` as a name and dies on it, and the one with no `local` at all never reaches the question
+  ```sh
+  f() { local -q x; echo "in"; }; f; echo "st=$?"
   ```
 
 ## select

@@ -34,7 +34,7 @@ func init() {
 func commandOptionLetters(word string) (string, bool) {
 	letters := word[1:]
 	for i := range len(letters) {
-		if letters[i] != 'v' && letters[i] != 'p' {
+		if letters[i] != 'v' && letters[i] != 'V' && letters[i] != 'p' {
 			return "", false
 		}
 	}
@@ -60,7 +60,7 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 	// `-p` means "use a default PATH". Ours is already the Runner's rather
 	// than the process's, and inventing a second would be a guess about this
 	// machine, so it is accepted and changes nothing.
-	verbose := false
+	verbose, sentence := false, false
 	for len(args) > 0 {
 		a := args[0]
 		if len(a) < 2 || a[0] != '-' {
@@ -72,6 +72,10 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 		}
 		if letters, ok := commandOptionLetters(a); ok {
 			verbose = verbose || strings.ContainsRune(letters, 'v')
+			// `-V` answers the same question as a sentence — POSIX gives
+			// both letters, and all four shells word it the way their
+			// `type` does.
+			sentence = sentence || strings.ContainsRune(letters, 'V')
 			args = args[1:]
 			continue
 		}
@@ -85,6 +89,13 @@ func biCommand(r *Runner, ctx context.Context, args []string) int {
 	}
 	if len(args) == 0 {
 		return 0
+	}
+	if sentence {
+		// `type`'s sentence with `command`'s name on the complaint: the
+		// found wordings are shared and only the missing one is this
+		// builtin's own — see Diagnostics.CommandVNotFound.
+		return r.describeName(args[0], false,
+			Wording(r.diag().CommandVNotFound, "command: %[1]s: not found", args[0]))
 	}
 	if verbose {
 		return r.reportWhatRuns(args[0])

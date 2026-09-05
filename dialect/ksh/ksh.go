@@ -284,6 +284,20 @@ func Semantics() interp.Semantics {
 	// option it does not have, usage line and all.
 	s.TypeNamesTheKindWithDashT = interp.No
 
+	// The letters `typeset` reads here. `-f` prints functions *verbatim* in
+	// this engine — it keeps the source text, which this one does not — so
+	// it rides in Diagnostics.UnimplementedOptionLetters with the floats
+	// and the padding letters; `-g` it simply does not have. There is no
+	// `local` (see Register), so LocalOptions stays empty.
+	s.DeclareOptions = "aAilprux"
+	// typeset is one of this shell's own special builtins, so any of its
+	// failures ends the script — a bad option included.
+	s.TypesetBadOptionFatal = interp.Yes
+	// A bare `set` lists the variables alone, values bare until one needs
+	// quoting and `$'...'` from there.
+	s.SetListing = interp.SetListingAssignments
+	s.SetListingQuoting = interp.ListingQuoteWhenNeededDollar
+
 	// A `{name}>f` descriptor goes back with the command's other
 	// redirections, and closing through a name that holds nothing is not
 	// worth a word here.
@@ -307,6 +321,7 @@ func Diagnostics() interp.Diagnostics {
 		TypeExternal:            "%[1]s is a tracked alias for %[2]s",
 		TypeFunction:            "%[1]s is a function",
 		TypeNotFound:            "whence: %[1]s: not found",
+		CommandVNotFound:        "command: %[1]s: not found",
 		JobStarted:              "[%[1]d]\t%[2]d",
 		JobNoticeShowsAmpersand: true,
 		// `[1] + ` then a 25-wide state, and the leading space on the
@@ -456,6 +471,10 @@ func Diagnostics() interp.Diagnostics {
 			// implemented as its measured refusal — see ReadNoCoprocess.
 			"read": "-CSv",
 			"type": "-afpqv",
+			// typeset's letters this engine does not hold: the verbatim
+			// function listings (-f and the floats' -F), namerefs, padding
+			// and alignment, mappings and the rest of its usage line.
+			"typeset": "-bfFhmnstCEHLMRSTXZ",
 		},
 		// ksh93's one sentence for a dead -u descriptor, the number not
 		// named; the non-number wordings per letter are not modeled yet, so
@@ -486,7 +505,12 @@ func Diagnostics() interp.Diagnostics {
 				"            [var?prompt] [var ...]",
 			"trap": "Usage: trap [-p] [action condition ...]",
 			// Two spaces before the ellipsis, as written.
-			"type":  "Usage: whence [-afpqv] name  ...",
+			"type": "Usage: whence [-afpqv] name  ...",
+			// Three lines, exactly as the engine wraps them.
+			"typeset": "Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]\n" +
+				"               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]\n" +
+				"               [name[=value]...]\n" +
+				"   Or: typeset [ options ] -f [name...]",
 			"wait":  "Usage: wait [ options ] [job ...]",
 			"jobs":  "Usage: jobs [ options ] [job ...]",
 			"shift": "Usage: shift [ options ] [n]",

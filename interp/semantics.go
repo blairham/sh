@@ -756,6 +756,52 @@ type Semantics struct {
 	// listed fine; ksh93 prints nothing for the missing name and answers 0.
 	DeclarePrintReportsAMissingName Answer
 
+	// DeclareOptions is the set of letters `declare` and `typeset` take,
+	// spelled the way ReadOptions is. The letters are the dialect's own:
+	// `-g` declares a global in the two shells that have the letter and is
+	// an unknown option in ksh93, whose bad typeset options are fatal, and
+	// `-F` names functions in bash while it sets a float's precision in the
+	// other two. Empty means `aAiprx`, the set the substrate implemented
+	// before the letters were a question.
+	DeclareOptions string
+
+	// TypesetBadOptionFatal ends the script over an option `typeset` does
+	// not have. ksh93 counts `typeset` among its special builtins and stops
+	// there; bash and zsh report it and carry on. Asked only when the
+	// refusal has happened, so a shell with no `typeset` never meets it.
+	TypesetBadOptionFatal Answer
+
+	// DeclareGlobalReachesPastALocal is `declare -g x=new` with a `local x`
+	// standing in front of the name: bash writes the global cell and leaves
+	// the local untouched, zsh assigns the visible cell — the local — and
+	// leaves the global alone. Asked only there: with no local in front,
+	// both write the global, which is what the letter is for.
+	DeclareGlobalReachesPastALocal Answer
+
+	// LocalOptions is the same question asked of `local`, whose answers do
+	// not follow `typeset`'s: dash has `local` and gives it no options at
+	// all, so `local -r x` declares a variable named `-r` there — and then
+	// refuses it as a bad name. Empty means none, dash's answer and the
+	// substrate's old behavior.
+	LocalOptions string
+
+	// BareLocalListing is what `local` with no operands writes — three
+	// shapes from the three shells that can reach it, so it is a form
+	// rather than a flag. See BareLocalListingForm.
+	BareLocalListing BareLocalListingForm
+
+	// SetListing is what `set` with no arguments writes — see
+	// SetListingForm. All four list, but not the same things: one follows
+	// the variables with every defined function, and one lists special
+	// parameters and tied arrays no other shell has.
+	SetListing SetListingForm
+
+	// SetListingQuoting is how that listing spells a value. The styles are
+	// the shared listing vocabulary: bash quotes only where it must and
+	// closes-reopens with a backslash, dash single-quotes everything, and
+	// ksh93 reaches for `$'...'`.
+	SetListingQuoting ListingQuotingStyle
+
 	// SelectLayout is how `select` draws its menu. Three engines rather than
 	// two answers, which is why it has its own type.
 	SelectLayout SelectMenuLayout
@@ -1790,8 +1836,19 @@ func PosixSemantics() Semantics {
 		// rather than an element, which is bash's and dash's answer.
 		DeclarationTakesASubscript: No,
 		UnsetTakesASubscript:       Yes,
-		DotMissingFileFatal:        Yes,
-		DotWithNoOperandIsAnError:  Yes,
+		// POSIX has `set` write each variable as an assignment "in a format
+		// that can be reused as input", and dash — its closest reading —
+		// single-quotes every value and lists no functions. The standard
+		// gives `local` to nobody and `typeset` no options, so those two
+		// keep their zero values: no option letters, and a bad one reported
+		// rather than fatal — `typeset` is not one of the builtins POSIX
+		// marks special.
+		SetListing:                SetListingAssignments,
+		SetListingQuoting:         ListingQuoteAlwaysDoubled,
+		BareLocalListing:          BareLocalListsNothing,
+		TypesetBadOptionFatal:     No,
+		DotMissingFileFatal:       Yes,
+		DotWithNoOperandIsAnError: Yes,
 		// The standard gives `.` a filename and nothing else; passing
 		// positional parameters to a sourced file is an extension three of
 		// the four grew. And it reads the file from PATH, with no mention of

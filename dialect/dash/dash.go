@@ -177,6 +177,15 @@ func Semantics() interp.Semantics {
 	// Whether `type --` ends the options.
 	s.TypePrintsFunctionBody = interp.No
 	s.TypeEndsOptionsWithDashDash = interp.No
+
+	// `local` reads no options at all here — `local -r x` declares a
+	// variable named `-r` and then refuses it as the bad name it is — so
+	// LocalOptions stays empty. A bare `local` writes nothing, and a bare
+	// `set` lists the variables alone, every value single-quoted with an
+	// embedded quote doubled out: `'quo'"'"'te'`.
+	s.BareLocalListing = interp.BareLocalListsNothing
+	s.SetListing = interp.SetListingAssignments
+	s.SetListingQuoting = interp.ListingQuoteAlwaysDoubled
 	// Unreachable behind the answer above — dash's `type` has no options at
 	// all, so `-t` is a name — but the axis is answered rather than left
 	// looking forgotten.
@@ -194,6 +203,8 @@ func Diagnostics() interp.Diagnostics {
 		// messages dash prints.
 		TypeNotFound:           "%[1]s: not found",
 		TypeNotFoundUnprefixed: true,
+		// `command -V` says it the same way, shell's name and all.
+		CommandVNotFound: "%[1]s: not found",
 		// And a missing *command*'s status rather than a plain failure.
 		TypeNotFoundStatus: 127,
 		// `[1] + ` — a space each side of the marker — then a 27-wide state.
@@ -336,6 +347,14 @@ func Diagnostics() interp.Diagnostics {
 			"export":   "%[1]s: %[2]s: bad variable name",
 			"readonly": "%[1]s: %[2]s: bad variable name",
 			"unset":    "%[1]s: %[2]s: bad variable name",
+			"local":    "%[1]s: %[2]s: bad variable name",
+		},
+		// A `local` name that starts with a digit is refused with the
+		// builtin's name left off — `1y: bad variable name` against
+		// `local: -r: bad variable name` — where its other bad names keep
+		// it. Measured from both shapes.
+		BuiltinBadNameNumeric: map[string]string{
+			"local": "%[2]s: bad variable name",
 		},
 		BuiltinBadNameStatus:    2,
 		PrintfUsage:             "printf: usage: printf format [arg ...]",

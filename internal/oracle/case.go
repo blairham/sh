@@ -30,6 +30,40 @@ type Case struct {
 	// behavior depends on how input is read, and say why.
 	Script bool
 
+	// Args is the argv the shell is invoked with, in place of the harness's
+	// own `-c` and the snippet. It is what lets the corpus grade the
+	// *invocation* surface — `-e` with a script, a bundle of option letters,
+	// `-o name`, which operand becomes `$0` — rather than only the language.
+	//
+	// Both sides of a comparison are handed the same words, after the flags
+	// that say which shell each of them is: `-dialect bash` for the binary
+	// under test, nothing for a panel member. So an option this harness has
+	// never heard of is still the same option in both runs, which is the
+	// whole point — the drivers once scored 178/198 while the core scored
+	// 198/198, because the corpus graded the core and nothing graded the
+	// invocation.
+	//
+	// The snippet still has to reach the shell, and Args says where it goes.
+	// At most one element may be a placeholder, and it is replaced before
+	// the shell sees it:
+	//
+	//	ArgSnippet  the Snippet as a single word — where `-c` wants its
+	//	            operand, or `-o name -c` does, or a bundle ending in c.
+	//	ArgScript   the path of a file holding the Snippet: the same file
+	//	            Script writes, in the same scratch directory, and it
+	//	            normalizes to <script> in the recorded output.
+	//
+	// A case with neither placeholder never hands the shell its Snippet at
+	// all, and that is deliberate rather than an oversight: an invocation
+	// that must fail before it reads anything — a script path that does not
+	// exist — is one of the shapes worth pinning, and it still wants a
+	// Snippet written down as the thing that would have run.
+	//
+	// Args and Script are exclusive. Script is the shorthand for
+	// []string{ArgScript}, and setting both is a harness error rather than a
+	// silent precedence rule nobody would think to look for.
+	Args []string
+
 	// LayoutSensitive marks a case whose output depends on how the source is
 	// laid out rather than only on what it means — a diagnostic naming the
 	// line it happened on, where that line is a fact about the text.
@@ -4590,5 +4624,50 @@ out=$(CDPATH=./pool cd sub)
 		ID: "caller/refuses-what-is-not-a-depth", Category: "builtins",
 		Snippet: `f() { caller x; echo "st=$?"; }; f`,
 		Why:     "the expression is a plain number despite the manual's word for it — 1+1 is refused the same way — and bash answers `invalid number` with its caller usage at 2",
+	},
+
+	// --- invocation: what the argv itself decides -----------------------
+	//
+	// These use Case.Args, so the shell is started the way a script or a
+	// harness starts it rather than the way the corpus starts everything
+	// else. Without them the invocation surface is graded only by the
+	// driver's own unit tests, which is how the drivers once scored 178/198
+	// against a core scoring 198/198.
+	{
+		ID: "invoke/errexit-with-a-script", Category: "invocation",
+		Args:    []string{"-e", ArgScript},
+		Snippet: "echo one\nfalse\necho two",
+		Why:     "the first line of most scripts, spelled on the command line instead: a set option given at invocation has to reach the runner, and abandon the script at the failure rather than run to the end",
+	},
+	{
+		ID: "invoke/a-bundle-of-set-letters", Category: "invocation",
+		Args:            []string{"-eu", ArgScript},
+		Snippet:         "echo \"[${nope}]\"\necho two",
+		LayoutSensitive: true,
+		Why:             "letters bundle into one word, and both have to arrive: -u makes the unset expansion an error and -e stops there. A bundle that kept only the last letter would still print the diagnostic and then run on",
+	},
+	{
+		ID: "invoke/the-long-option-name", Category: "invocation",
+		Args:    []string{"-o", "errexit", "-c", ArgSnippet},
+		Snippet: `echo one; false; echo two`,
+		Why:     "-o names the option instead of lettering it, and the name is a separate word read at the end of the bundle — the `set -euo pipefail` shape, minus the parts the panel disagrees about",
+	},
+	{
+		ID: "invoke/errexit-reaches-the-option-letters", Category: "invocation",
+		Args:    []string{"-e", ArgScript},
+		Snippet: `case $- in *e*) echo has-e ;; *) echo no-e ;; esac`,
+		Why:     "$- answers for how the shell was *started*, not only for what `set` did later. It asks whether the letter is there rather than printing $-, because the spelling is a live disagreement: the panel differs over whether c and s appear at all, and over the order",
+	},
+	{
+		ID: "invoke/end-of-options-before-a-script", Category: "invocation",
+		Args:    []string{"--", ArgScript, "a", "b"},
+		Snippet: `echo "$0|$#|$1"`,
+		Why:     "-- ends the options, so the next word is the script rather than a flag — and the script's own path becomes $0 while the words after it become the parameters",
+	},
+	{
+		ID: "invoke/the-command-string-names-zero-itself", Category: "invocation",
+		Args:    []string{"-c", ArgSnippet, "name", "a", "b"},
+		Snippet: `echo "$0|$#|$*"`,
+		Why:     "-c names its operands differently from every other route: the first is $0 and only the rest are parameters, so a shell that handed all three to $1 onward would report n=3 and keep its own name",
 	},
 }

@@ -12250,6 +12250,198 @@
         "TimedOut": false
       }
     },
+    "invoke/a-bundle-of-set-letters": {
+      "bash": {
+        "Output": "\u003cscript\u003e: line 1: nope: unbound variable",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cscript\u003e: line 1: nope: unbound variable",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cscript\u003e: line 1: nope: unbound variable",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cscript\u003e: 1: nope: parameter not set",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cscript\u003e: line 1: nope: parameter not set",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cscript\u003e:1: nope: parameter not set",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "invoke/end-of-options-before-a-script": {
+      "bash": {
+        "Output": "\u003cscript\u003e|2|a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cscript\u003e|2|a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cscript\u003e|2|a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cscript\u003e|2|a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cscript\u003e|2|a",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cscript\u003e|2|a",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/errexit-reaches-the-option-letters": {
+      "bash": {
+        "Output": "has-e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "has-e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "has-e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "has-e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "has-e",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "has-e",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/errexit-with-a-script": {
+      "bash": {
+        "Output": "one",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "one",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "one",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "one",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "one",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "one",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "invoke/the-command-string-names-zero-itself": {
+      "bash": {
+        "Output": "name|2|a b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "name|2|a b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "name|2|a b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "name|2|a b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "name|2|a b",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "name|2|a b",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "invoke/the-long-option-name": {
+      "bash": {
+        "Output": "one",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "one",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "one",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "one",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "one",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "one",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "jobs/a-background-job-that-failed": {
       "bash": {
         "Output": "[1]+  Exit 1                     false",

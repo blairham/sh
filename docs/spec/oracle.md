@@ -44,6 +44,30 @@ Rules that keep the facts honest:
   to measure; a contaminated probe produces a confident wrong fact.
 - **Prefer a script file to `-c`** where the construct interacts with
   how input is read, and say which was used.
+- **Spell the whole invocation out where the invocation is the fact.**
+  `-e` with a script, a bundle of option letters, `-o name`, which
+  operand becomes `$0` — these are decided before a line of the snippet
+  runs, and a case that only ever arrives through `-c` cannot ask about
+  them.
+
+## Cases that choose their own argv
+
+`Case.Args` is the argv, in place of the harness's own `-c` and snippet.
+Both sides of a comparison are handed the same words, after the flags
+that say which shell each of them is, so an option the harness has never
+heard of is still the same option in both runs.
+
+The snippet still has to reach the shell, and `Args` says where it goes:
+`oracle.ArgSnippet` is replaced by the snippet as one word, and
+`oracle.ArgScript` by the path of a file holding it — the same file
+`Script` writes, normalized to `<script>` in the output. At most one may
+appear. A case with neither never hands the shell its snippet, which is
+how an invocation that must fail before it reads anything is written.
+
+This exists because the invocation surface was graded by nothing else.
+The corpus started every case the same way, so the front end was pinned
+only by its own unit tests — the shape of the incident where the drivers
+scored 178/198 against a core scoring 198/198.
 
 ## The harness
 

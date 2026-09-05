@@ -5,6 +5,9 @@ package oracle
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -106,6 +109,101 @@ func TestCorpusIsWellFormed(t *testing.T) {
 			t.Errorf("%s: no Why; it could not be judged when it drifts", c.ID)
 		}
 		seen[c.ID] = true
+		if err := c.validate(); err != nil {
+			// A case whose invocation cannot be built records a harness error
+			// in place of a measurement, which looks like a shell that
+			// disagreed with everyone.
+			t.Errorf("%s: %v", c.ID, err)
+		}
+	}
+}
+
+func TestArgsPlaceTheSnippetWhereTheCaseSaysAndKeepTheShellsFlagsFirst(t *testing.T) {
+	// The binary under test is told which dialect to be by flags of its own
+	// — `-dialect bash` — and those have to come before anything the case
+	// spells out, because cmd/sh stops reading its own flags at the first
+	// word that is not one.
+	sh := Found{Shell: Shell{Name: "ours", Args: []string{"-dialect", "bash"}}, Path: "/bin/sh"}
+	c := Case{ID: "t", Snippet: `echo hi`, Args: []string{"-o", "errexit", "-c", ArgSnippet, "name"}}
+
+	cmd := command(t.Context(), sh, c, t.TempDir())
+	want := []string{"/bin/sh", "-dialect", "bash", "-o", "errexit", "-c", "echo hi", "name"}
+	if !slices.Equal(cmd.Args, want) {
+		t.Errorf("argv = %q, want %q", cmd.Args, want)
+	}
+}
+
+func TestArgScriptWritesTheSnippetToTheFileTheNormalizerKnows(t *testing.T) {
+	// The path has to be the one normalize() rewrites to <script>, or a case
+	// whose diagnostic names the script would record the temp directory it
+	// happened to run in and drift for everyone else.
+	dir := t.TempDir()
+	sh := Found{Shell: Shell{Name: "ours"}, Path: "/bin/sh"}
+	c := Case{ID: "t", Snippet: `echo hi`, Args: []string{"-e", ArgScript, "a"}}
+
+	cmd := command(t.Context(), sh, c, dir)
+	want := []string{"/bin/sh", "-e", filepath.Join(dir, "case.sh"), "a"}
+	if !slices.Equal(cmd.Args, want) {
+		t.Fatalf("argv = %q, want %q", cmd.Args, want)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "case.sh"))
+	if err != nil || string(b) != "echo hi\n" {
+		t.Errorf("script file = %q, %v; want the snippet", b, err)
+	}
+	if got := normalize(filepath.Join(dir, "case.sh")+": bad\n", sh, dir); !strings.Contains(got, "<script>") {
+		t.Errorf("the file ArgScript wrote does not normalize: %q", got)
+	}
+}
+
+func TestArgsWithNoPlaceholderDoNotHandOverTheSnippet(t *testing.T) {
+	// The shape an invocation that fails before it reads anything needs — a
+	// script path that does not exist — and the shape Case.Stdin will need.
+	// The snippet is still written down, as the thing that would have run.
+	found, _ := Resolve(context.Background())
+	if len(found) == 0 {
+		t.Skip("no reference shells on this machine")
+	}
+	c := Case{ID: "t", Snippet: `echo the-snippet`, Args: []string{"-c", "echo the-argv"}}
+
+	got := Exec(context.Background(), found[0], c)
+	if got.Output != "the-argv" {
+		t.Errorf("Output = %q, want %q: Args are the whole invocation", got.Output, "the-argv")
+	}
+}
+
+func TestArgsAndScriptAreRefusedTogether(t *testing.T) {
+	// Not a precedence rule: a case that quietly ran something other than
+	// what it says would still be measured, and the measurement is the
+	// product.
+	found, _ := Resolve(context.Background())
+	if len(found) == 0 {
+		t.Skip("no reference shells on this machine")
+	}
+	for _, c := range []Case{
+		{ID: "both", Snippet: "echo hi", Script: true, Args: []string{ArgScript}},
+		{ID: "twice", Snippet: "echo hi", Args: []string{"-c", ArgSnippet, ArgScript}},
+	} {
+		got := Exec(context.Background(), found[0], c)
+		if !strings.HasPrefix(got.Output, "harness error:") || got.Status != -1 {
+			t.Errorf("%s: Exec = %q (status %d), want a harness error", c.ID, got.Output, got.Status)
+		}
+	}
+}
+
+func TestArgsRunTheSameInvocationOnBothSides(t *testing.T) {
+	// The point of the field. A reference shell and the binary under test
+	// have to be handed the same words, or a conformance run grades two
+	// different invocations and reports the difference as a bug.
+	found, _ := Resolve(context.Background())
+	if len(found) == 0 {
+		t.Skip("no reference shells on this machine")
+	}
+	ref := found[0]
+	ours := Found{Shell: Shell{Name: "ours"}, Path: ref.Path}
+	c := Case{ID: "t", Snippet: `echo "$0|$#"`, Args: []string{"-c", ArgSnippet, "name", "a"}}
+
+	if a, b := Exec(context.Background(), ref, c), Exec(context.Background(), ours, c); a != b {
+		t.Errorf("same case, different invocations: %q vs %q", a.Output, b.Output)
 	}
 }
 

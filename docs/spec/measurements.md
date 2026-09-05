@@ -4752,3 +4752,42 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
   ```sh
   alias a=1 b=2; unalias a; alias b; unalias -a; alias b; echo "st=$?"
   ```
+
+## invocation
+
+| case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- | --- |
+| `invoke/errexit-with-a-script` | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* |
+| `invoke/a-bundle-of-set-letters` | `<script>: 1: nope: parameter not set` *(status 2)* | `<script>: line 1: nope: unbound variable` *(status 1)* | `<script>: line 1: nope: unbound variable` *(status 1)* | `<script>: line 1: nope: unbound variable` *(status 1)* | `<script>: line 1: nope: parameter not set` *(status 1)* | `<script>:1: nope: parameter not set` *(status 1)* |
+| `invoke/the-long-option-name` | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* |
+| `invoke/errexit-reaches-the-option-letters` | `has-e` | `has-e` | `has-e` | `has-e` | `has-e` | `has-e` |
+| `invoke/end-of-options-before-a-script` | `<script>\|2\|a` | `<script>\|2\|a` | `<script>\|2\|a` | `<script>\|2\|a` | `<script>\|2\|a` | `<script>\|2\|a` |
+| `invoke/the-command-string-names-zero-itself` | `name\|2\|a b` | `name\|2\|a b` | `name\|2\|a b` | `name\|2\|a b` | `name\|2\|a b` | `name\|2\|a b` |
+
+- `invoke/errexit-with-a-script` — the first line of most scripts, spelled on the command line instead: a set option given at invocation has to reach the runner, and abandon the script at the failure rather than run to the end
+  ```sh
+  echo one
+  false
+  echo two
+  ```
+- `invoke/a-bundle-of-set-letters` — letters bundle into one word, and both have to arrive: -u makes the unset expansion an error and -e stops there. A bundle that kept only the last letter would still print the diagnostic and then run on
+  ```sh
+  echo "[${nope}]"
+  echo two
+  ```
+- `invoke/the-long-option-name` — -o names the option instead of lettering it, and the name is a separate word read at the end of the bundle — the `set -euo pipefail` shape, minus the parts the panel disagrees about
+  ```sh
+  echo one; false; echo two
+  ```
+- `invoke/errexit-reaches-the-option-letters` — $- answers for how the shell was *started*, not only for what `set` did later. It asks whether the letter is there rather than printing $-, because the spelling is a live disagreement: the panel differs over whether c and s appear at all, and over the order
+  ```sh
+  case $- in *e*) echo has-e ;; *) echo no-e ;; esac
+  ```
+- `invoke/end-of-options-before-a-script` — -- ends the options, so the next word is the script rather than a flag — and the script's own path becomes $0 while the words after it become the parameters
+  ```sh
+  echo "$0|$#|$1"
+  ```
+- `invoke/the-command-string-names-zero-itself` — -c names its operands differently from every other route: the first is $0 and only the rest are parameters, so a shell that handed all three to $1 onward would report n=3 and keep its own name
+  ```sh
+  echo "$0|$#|$*"
+  ```

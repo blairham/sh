@@ -20,8 +20,13 @@ package syntax
 // there is no position mapping to keep.
 //
 // The one place the two models differ from outside is a body containing a
-// newline: dash and ksh93 count it and every later line shifts by one, and
-// bash does not. That is Dialect.AliasBodyCountsLines.
+// newline: dash, ksh93 and zsh count it and every later line shifts by one,
+// where bash does not. Measured 2026-09-05 with $LINENO on the line after a
+// two-line alias body — 5 in bash, 6 in the other three, against a physical
+// line 5. This parser does not count it either, so it matches bash and
+// diverges from the two dialects it expands aliases for; recorded rather
+// than fixed here, and there is no axis for it yet. See
+// docs/spec/grammar/tokenization.md and issue #583.
 
 // Aliases answers whether a word names an alias, and what it stands for.
 //

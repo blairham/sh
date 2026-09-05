@@ -163,6 +163,9 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `expand/results-not-rescanned-semicolon` | `[a;b]` | `[a;b]` | `[a;b]` | `[a;b]` | `[a;b]` | `[a;b]` |
 | `expand/an-assignment-value-is-not-split` | `<a b><p:q>` | `<a b><p:q>` | `<a b><p:q>` | `<a b><p:q>` | `<a b><p:q>` | `<a b><p:q>` |
 | `expand/an-assignment-value-from-a-command-is-not-split` | `<a b>` | `<a b>` | `<a b>` | `<a b>` | `<a b>` | `<a b>` |
+| `expand/a-here-string-is-not-split` | **2>** `<shell>: 1: Syntax error: redirection unexpected` *(status 2)* | `a:b:c~a:b:c` | `a:b:c~a:b:c` | `a b c~a:b:c` | `a:b:c~a:b:c` | `a:b:c~a:b:c` |
+| `expand/a-heredoc-body-is-not-split` | `[a:b:c]` | `[a:b:c]` | `[a:b:c]` | `[a:b:c]` | `[a:b:c]` | `[a:b:c]` |
+| `expand/arithmetic-text-is-not-split` | `[3]` | `[3]` | `[3]` | `[3]` | `[3]` | `[3]` |
 | `expand/glob-applies-to-expansion` | `[etc]` | `[etc]` | `[etc]` | `[etc]` | `[etc]` | `[et*]` |
 | `expand/glob-not-applied-when-quoted` | `[et*]` | `[et*]` | `[et*]` | `[et*]` | `[et*]` | `[et*]` |
 | `expand/glob-literal-pattern` | `[etc]` | `[etc]` | `[etc]` | `[etc]` | `[etc]` | `[etc]` |
@@ -221,6 +224,20 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `expand/an-assignment-value-from-a-command-is-not-split` — the exemption covers a command substitution's result too, which the splitting question otherwise governs — the value is stored with its space, unanimous
   ```sh
   x=$(echo a b); printf "<%s>" "$x"
+  ```
+- `expand/a-here-string-is-not-split` — the no-split exemption on a here-string word, and the one place in the set where the panel is not unanimous: bash 3.2 splits the unquoted word and rejoins the fields on a space, where bash 5.3, ksh93 and zsh hand the value through whole. A dated answer rather than a disputed one, and the quoted line beside it shows the split is the only difference
+  ```sh
+  x="a:b:c"; IFS=:; cat <<< $x; cat <<< "$x"
+  ```
+- `expand/a-heredoc-body-is-not-split` — a here-document body is input rather than a word list, so an expansion in it is never split however IFS is set — unanimous, including the bash 3.2 that splits a here-string
+  ```sh
+  x="a:b:c"; IFS=:; cat <<EOF
+  [$x]
+  EOF
+  ```
+- `expand/arithmetic-text-is-not-split` — the inside of $(( )) is expanded like a double-quoted string and only then read as an expression, so a value holding an operator that is also in IFS is still one expression — splitting it would leave `1 2`, which every shell calls an arithmetic syntax error
+  ```sh
+  IFS=+; n="1+2"; echo "[$(( $n ))]"
   ```
 - `expand/glob-applies-to-expansion` — globbing runs after splitting, so an expansion result is matched — except in zsh
   ```sh
@@ -1741,6 +1758,9 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `cmd/reserved-word-inside-a-brace-group` | **2>** `<shell>: 1: Syntax error: "do" unexpected (expecting "}")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `do'~<shell>: -c: line 1: `{ echo a; do :; done; }'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `do'~<shell>: -c: line 1: `{ echo a; do :; done; }'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `do'~<shell>: -c: line 0: `{ echo a; do :; done; }'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `do' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `do'` *(status 1)* |
 | `cmd/reserved-word-in-an-empty-brace-group` | **2>** `<shell>: 1: Syntax error: "fi" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `fi'~<shell>: -c: line 1: `{ fi; }'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `fi'~<shell>: -c: line 1: `{ fi; }'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `fi'~<shell>: -c: line 0: `{ fi; }'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `fi' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `fi'` *(status 1)* |
 | `cmd/unterminated-brace-group-line` | **2>** `<shell>: 1: Syntax error: end of file unexpected (expecting "}")` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file from `{' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file from `{' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: syntax error at line 1: `{' unmatched` *(status 3)* | **2>** `<shell>:1: parse error near `b'` *(status 1)* |
+| `token/an-unterminated-quote-at-end-of-input` | **2>** `<shell>: 1: Syntax error: Unterminated quoted string` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `<shell>: -c: line 0: unexpected EOF while looking for matching `"'~<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | `abc` | **2>** `<shell>:1: unmatched "` *(status 1)* |
+| `token/an-unterminated-substitution-still-refuses` | **2>** `<shell>: 1: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | **2>** `<shell>: -c: line 2: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<shell>: -c: line 2: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<shell>: -c: line 0: unexpected EOF while looking for matching `)'~<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<shell>:1: parse error near `$(echo hi'` *(status 1)* |
+| `cmd/a-malformed-function-header-blames-two-tokens` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting ")")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `x'~<shell>: -c: line 1: `f ( x ) { echo hi; }'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `x'~<shell>: -c: line 1: `f ( x ) { echo hi; }'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `x'~<shell>: -c: line 0: `f ( x ) { echo hi; }'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `}'` *(status 1)* |
 | `exec/lines-run-as-they-are-read` | `one` **2>** `<script>: 2: Syntax error: "fi" unexpected` *(status 2)* | `one` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<script>: syntax error at line 2: `fi' unexpected` *(status 3)* | `one` **2>** `<script>:2: parse error near `fi'` *(status 1)* |
 | `exec/a-line-is-the-unit-not-a-statement` | `one` **2>** `<script>: 2: Syntax error: "fi" unexpected` *(status 2)* | `one` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `echo two; { fi; }'` *(status 2)* | `one` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `echo two; { fi; }'` *(status 2)* | `one` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `echo two; { fi; }'` *(status 2)* | `one` **2>** `<script>: syntax error at line 2: `fi' unexpected` *(status 3)* | `one` **2>** `<script>:2: parse error near `fi'` *(status 1)* |
 | `exec/a-construct-spans-its-lines` | `one~1~2` **2>** `<script>: 6: Syntax error: "fi" unexpected` *(status 2)* | `one~1~2` **2>** `<script>: line 6: syntax error near unexpected token `fi'~<script>: line 6: `{ fi; }'` *(status 2)* | `one~1~2` **2>** `<script>: line 6: syntax error near unexpected token `fi'~<script>: line 6: `{ fi; }'` *(status 2)* | `one~1~2` **2>** `<script>: line 6: syntax error near unexpected token `fi'~<script>: line 6: `{ fi; }'` *(status 2)* | `one~1~2` **2>** `<script>: syntax error at line 6: `fi' unexpected` *(status 3)* | `one~1~2` **2>** `<script>:6: parse error near `fi'` *(status 1)* |
@@ -1904,6 +1924,18 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `cmd/unterminated-brace-group-line` — where an unterminated construct is reported: bash puts it on the line *after* the input's last when the text does not end in one, and the other three on the last line itself
   ```sh
   { echo a; echo b
+  ```
+- `token/an-unterminated-quote-at-end-of-input` — ksh93 alone closes a quote the input never closed and runs the command, printing abc, where the other three refuse to parse. The grammar flag CloseQuotesAtEOF, and it matters beyond wording: a truncated file runs a command under one shell and not another
+  ```sh
+  echo "abc
+  ```
+- `token/an-unterminated-substitution-still-refuses` — the other half of the flag, and the reason it is about quotes rather than about leniency at end of input: `$(` is not a quote, so ksh93 refuses this one too — `(' unmatched
+  ```sh
+  echo $(echo hi
+  ```
+- `cmd/a-malformed-function-header-blames-two-tokens` — which token a bad definition is blamed on says when the shell committed to reading one: bash and dash are already inside a definition looking for `)` and name the word x, ksh93 never entered one and names the `(`, and zsh gets as far as the `}`. The grammar flag FuncDefAtParen, reached most often through a construct a dialect lacks — `[[ ( -n x ) ]]` is a definition of a function called `[[` to a shell without `[[`
+  ```sh
+  f ( x ) { echo hi; }
   ```
 - `exec/lines-run-as-they-are-read` — a shell runs what it has read rather than reading everything first, so the first line runs before the second fails to parse — unanimous, and the reason a script that ends badly still does what its good lines said
   ```sh
@@ -2796,6 +2828,9 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `opt/set-m-in-a-script` | `st=0~done` **2>** `<shell>: 1: set: can't access tty; job control turned off` | `st=0~done` | `st=0~done` | `st=0~done` | `st=0~done` | **2>** `<shell>:set:1: can't change option: -m` *(status 1)* |
 | `opt/set-o-monitor-is-the-same-request` | `st=0` **2>** `<shell>: 1: set: can't access tty; job control turned off` | `st=0` | `st=0` | `st=0` | `st=0` | **2>** `<shell>:set:1: can't change option: monitor` *(status 1)* |
 | `opt/set-o-noglob-is-unanimous` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` |
+| `opt/command-tracking-has-two-long-names` | *(no output, status 2)* | `hashall=0~trackall=2` | `hashall=0` *(status 2)* | `hashall=0~trackall=1` | *(no output, status 2)* | `hashall=0~trackall=0` |
+| `opt/an-unknown-long-name-is-refused` | **2>** `<shell>: 1: set: Illegal option -o zzznosuch` *(status 2)* | `on=2~off=2` **2>** `<shell>: line 1: set: zzznosuch: invalid option name~<shell>: line 1: set: zzznosuch: invalid option name` | **2>** `<shell>: line 1: set: zzznosuch: invalid option name` *(status 2)* | `on=1~off=1` **2>** `<shell>: line 0: set: zzznosuch: invalid option name~<shell>: line 0: set: zzznosuch: invalid option name` | **2>** `<shell>: set: zzznosuch: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: zzznosuch` *(status 1)* |
+| `opt/turning-off-a-name-a-shell-does-not-implement` | **2>** `<shell>: 1: set: Illegal option -o posix` *(status 2)* | `st=0~st=0` | `st=0~st=0` | `st=0~st=0` | **2>** `<shell>: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: posix` *(status 1)* |
 | `opt/noglob-does-not-stop-matching` | `match` | `match` | `match` | `match` | `match` | `match` |
 | `opt/an-option-can-be-turned-back-off` | `a.txt` | `a.txt` | `a.txt` | `a.txt` | `a.txt` | `a.txt` |
 | `opt/an-expansions-result-is-not-globbed-under-noglob` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` | `*.txt` |
@@ -2979,6 +3014,18 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `opt/set-o-noglob-is-unanimous` — the long name means the same thing in all four, which is what makes it the spelling that needs no dialect — and the pair with the case above is the whole of the axis
   ```sh
   touch a.txt b.txt; set -o noglob; echo *.txt
+  ```
+- `opt/command-tracking-has-two-long-names` — the same idea under two names, and the membership is not the clean split it looks like: bash has hashall alone, ksh93 trackall alone, and zsh has *both* — so a dialect table that gives trackall to ksh93 only is wrong, which is how this row came to exist
+  ```sh
+  set -o hashall 2>/dev/null; echo "hashall=$?"; set -o trackall 2>/dev/null; echo "trackall=$?"
+  ```
+- `opt/an-unknown-long-name-is-refused` — a name outside the shell's table is refused in both directions, with four different wordings and two different statuses — the boundary the accept-off policy stops at, since a name that does not exist is not a state anything is already in
+  ```sh
+  set -o zzznosuch; echo "on=$?"; set +o zzznosuch; echo "off=$?"
+  ```
+- `opt/turning-off-a-name-a-shell-does-not-implement` — the thirteenth line of Homebrew's own brew script is `set +o posix`, and it is the shape this implementation's accept-off/refuse-on policy exists for: turning off what a shell was never doing is a request that has been granted, where turning it *on* would be a promise. Recorded across the panel because the two names split it — bash has both, and the others have neither
+  ```sh
+  set +o posix; echo "st=$?"; set +o history; echo "st=$?"
   ```
 - `opt/noglob-does-not-stop-matching` — only the filesystem half is switched off: a pattern in a `case` arm still matches, because that is matching rather than expansion
   ```sh
@@ -3740,6 +3787,7 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `shape/case-leading-paren` | `paren` | `paren` | `paren` | `paren` | `paren` | `paren` |
 | `shape/case-pattern-alternatives` | `alt` | `alt` | `alt` | `alt` | `alt` | `alt` |
 | `shape/case-empty-body-and-no-match` | `empty=0~nomatch=0` | `empty=0~nomatch=0` | `empty=0~nomatch=0` | `empty=0~nomatch=0` | `empty=0~nomatch=0` | `empty=0~nomatch=0` |
+| `case/an-operator-where-a-pattern-belongs` | `miss` | **2>** `<shell>: -c: line 1: syntax error near unexpected token `&'~<shell>: -c: line 1: `case a in & ) echo hit;; *) echo miss;; esac'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `&'~<shell>: -c: line 1: `case a in & ) echo hit;; *) echo miss;; esac'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `&'~<shell>: -c: line 0: `case a in & ) echo hit;; *) echo miss;; esac'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `&' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `&'` *(status 1)* |
 
 - `shape/terminator-required-before-then` — the keyword does not delimit the condition; a ; or newline does, so the production needs a separator
   ```sh
@@ -3785,6 +3833,10 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `shape/case-empty-body-and-no-match` — an empty body is legal and a case matching nothing exits 0
   ```sh
   case x in x) ;; esac; echo "empty=$?"; case x in y) echo no;; esac; echo "nomatch=$?"
+  ```
+- `case/an-operator-where-a-pattern-belongs` — dash parses this and prints miss: one operator is accepted where the pattern list would start, and the arm it opens matches nothing at all — not `&`, not the empty string. The other three refuse at the `&`. Measured rather than inferred from the diagnostic, because a shell that only worded the error differently would still not reach the esac
+  ```sh
+  case a in & ) echo hit;; *) echo miss;; esac
   ```
 
 ## [[ ]] and (( ))
@@ -4991,6 +5043,8 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `alias/a-self-reference-does-not-loop` | `x hi` | `hi` | `x hi` | `hi` | `x hi` | `hi` |
 | `alias/not-on-the-line-that-defines-it` | `st=127` **2>** `<shell>: 1: a: not found` | `st=127` **2>** `<shell>: line 1: a: command not found` | `st=127` **2>** `<shell>: line 1: a: command not found` | `st=127` **2>** `<shell>: a: command not found` | `st=127` **2>** `<shell>: a: not found` | `st=127` **2>** `<shell>:1: command not found: a` |
 | `alias/a-diagnostic-names-the-use-site` | **2>** `<shell>: 2: nosuchcmd: not found` *(status 127)* | **2>** `<shell>: line 2: bad: command not found` *(status 127)* | **2>** `<shell>: line 2: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 1: bad: command not found` *(status 127)* | **2>** `<shell>: line 2: nosuchcmd: not found` *(status 127)* | **2>** `<shell>:2: command not found: bad` *(status 127)* |
+| `alias/a-script-file-is-a-different-route` | `hit` | **2>** `<script>: line 2: a: command not found` *(status 127)* | **2>** `<script>: line 2: a: command not found` *(status 127)* | **2>** `<script>: line 2: a: command not found` *(status 127)* | `hit` | `hit` |
+| `alias/a-body-newline-shifts-later-lines` | `one~two~LINENO=6` | `one~two~LINENO=5` | `one~two~LINENO=5` | `one~two~LINENO=5` | `one~two~LINENO=6` | `one~two~LINENO=6` |
 | `alias/defines-and-lists-one` | `a='echo x'` | `alias a='echo x'` | `a='echo x'` | `alias a='echo x'` | `a='echo x'` | `a='echo x'` |
 | `alias/a-value-that-needs-no-quotes` | `b='ls'` | `alias b='ls'` | `b='ls'` | `alias b='ls'` | `b=ls` | `b=ls` |
 | `alias/a-value-holding-a-quote` | `q='it'"'"'s'` | `alias q='it'\''s'` | `q='it'\''s'` | `alias q='it'\''s'` | `q=$'it\'s'` | `q='it'\''s'` |
@@ -5028,6 +5082,19 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
   ```sh
   alias bad='nosuchcmd'
   bad
+  ```
+- `alias/a-script-file-is-a-different-route` — the same two lines as `alias/expands-a-command-word`, from a file instead of -c, and zsh changes its answer: it declines to expand under -c and expands from a script file. So whether aliases expand is a property of *how the program arrived* rather than of the shell, which one boolean on the dialect cannot say — issue #583
+  ```sh
+  alias a='echo hit'
+  a
+  ```
+- `alias/a-body-newline-shifts-later-lines` — the one place a token-level splice is distinguishable from a textual one, and the shopt line is there so bash expands too and can be compared. The last line is physically line 5: bash reports 5, and dash, ksh93 and zsh all report 6 because they counted the newline inside the alias body. There is no axis for it and this shell reports 5 in every dialect — issue #583
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias two='echo one
+  echo two'
+  two
+  echo "LINENO=$LINENO"
   ```
 - `alias/defines-and-lists-one` — the shape of a listing, and it is not unanimous: bash writes `alias ` in front so the line reads back as a command, and the other three write only the assignment
   ```sh

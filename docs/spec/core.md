@@ -18,6 +18,16 @@ ksh93 and zsh. It belongs to the bash dialect, not the core.
 **Never in the core** — any construct on a conflict axis resolved by
 fiat. Conflicts get a vector field (`semantics.md`), not a core answer.
 
+**The boundary is about the language, not about where code lives.** It
+governs what parses and what identical syntax means. It says nothing
+about which Go file registers a builtin: `mapfile`, `compgen` and
+`enable` are bash's alone and are registered in the core builtin map,
+with each dialect that lacks them calling `Unregister`. That is the
+extension seam doing its job, not a bash-only command sneaking into the
+core language — a name is in the core language only if every dialect
+keeps it. `semantics.md` records the criterion and the measured
+membership.
+
 ## bash 3.2 is evidence, not a veto
 
 Two shells in the panel cannot vote a construct out of the core, for two

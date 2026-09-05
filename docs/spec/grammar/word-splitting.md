@@ -21,6 +21,73 @@ quoted expansion.
 This distinction is the entire feature. A shell that splits literal text
 would be unable to pass an argument containing a space.
 
+## Six contexts where an unquoted expansion is exempt
+
+The rule above is about the *expansion*. Whether the stage runs at all is
+also about the **position the word is in**, and six positions never split
+whatever they hold. This is unanimous — every shell in the panel that has
+the construct answers the same way — which makes it different in kind
+from the axes at the foot of this file.
+
+| context | probe with `IFS=:` and `x='a:b'` | result |
+| --- | --- | --- |
+| an assignment's value | `y=$x` | `$y` is `a:b`, one value |
+| a `[[ ]]` operand | `[[ $x = "a:b" ]]` | true |
+| a `case` subject | `case $x in "a:b") …` | the arm is taken |
+| a here-string | `cat <<< $x` | the line is `a:b` — *but see below* |
+| a here-document body | `$x` in an unquoted-delimiter body | the line is `a:b` |
+| arithmetic text | `n='1+2'; IFS=+; echo $(( $n ))` | `3`, not a syntax error |
+
+Measured 2026-09-05 against bash 5.3.15, bash 3.2.57, bash-as-sh, dash,
+ksh93u+ 2012-08-01 and zsh 5.9.2; corpus rows
+`expand/an-assignment-value-is-not-split`,
+`expand/an-assignment-value-from-a-command-is-not-split`,
+`cond/no-field-splitting-inside`, `pat/case-subject-is-not-split`,
+`expand/a-here-string-is-not-split`,
+`expand/a-heredoc-body-is-not-split`,
+`expand/arithmetic-text-is-not-split`. dash abstains on two rows for lack
+of the construct — it has neither `[[ ]]` nor `<<<` — and agrees on the
+other four.
+
+**One exception, and it is dated rather than disputed: bash 3.2 splits a
+here-string.** `x='a:b:c'; IFS=:; cat <<< $x` writes `a b c` there — the
+word is split into three fields and rejoined on a space — where bash 5.3,
+ksh93 and zsh all write `a:b:c`. Quoting the word (`<<< "$x"`) gives
+`a:b:c` in bash 3.2 too, so the split is the whole of the difference.
+By the rule in `../core.md`, bash 3.2 dates a construct rather than
+vetoing it, so the exemption stands and the row records when it arrived.
+
+**Unanimity is what makes these exemptions and not axes**, and it is
+load-bearing rather than an observation. The splitting axis
+`SplitParamExpansion` is deliberately *unanswered* in the core, and an
+unanswered axis refuses rather than guessing (`../semantics.md`). If
+these positions consulted it, the bare core would refuse `x=$two` and
+`[[ $two = "a b" ]]` — questions no shell in the panel answers
+differently. So the exemption is expressed as a property of the context,
+which asks nobody, and the axis stays for the places the panel genuinely
+disagrees.
+
+### The redirection target is a seventh position, on its own axis
+
+    x='a b'; echo hi > $x
+
+bash reads the target as an ordinary word, finds two fields, and refuses:
+`$x: ambiguous redirect`, status 1. dash, ksh93 and zsh take the unsplit
+text and create a file named `a b`, status 0. So this position is a
+disagreement, not an exemption, and it gets an axis of its own —
+`RedirectTargetIsAnOrdinaryWord`, true in bash alone — rather than
+joining the six above.
+
+It also needs *both* readings of the same word, and they cannot be
+derived from one another: splitting is quoting-aware, so `"$e"` with a
+space is one field where `$e` is two — the unsplit text is not the fields
+joined, and the fields are not the text split. Nor may the word be
+expanded twice, because `> $(f)` would run `f` twice. One pass produces
+both views and the axis picks between them, which is why the fields view
+splits unconditionally instead of consulting the splitting axis: the
+question there is which *reading* applies, and it is asked exactly where
+the two readings differ.
+
 ## IFS
 
 `IFS` names the delimiters. Three states, and they are genuinely

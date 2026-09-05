@@ -651,6 +651,15 @@ func Apply(r *interp.Runner) {
 	r.Unregister("mapfile")
 	r.Unregister("readarray")
 	// The `set -o` names beyond the ones every shell has.
+	//
+	// `trackall` is here because zsh has *both* spellings of command
+	// tracking — `set -o hashall` and `set -o trackall` each succeed, and
+	// each moves the same state — where bash has only the first and ksh93
+	// only the second. It was missing until the membership was re-measured
+	// against the panel rather than read off `semantics.md`, which said
+	// trackall belonged to ksh93 alone; `set +o trackall` was a refusal
+	// here and a no-op in the shell this dialect imitates. Pinned by
+	// `opt/command-tracking-has-two-long-names`.
 	r.AddSetOptions(
 		"braceexpand",
 		"hashall",
@@ -660,6 +669,7 @@ func Apply(r *interp.Runner) {
 		"physical",
 		"pipefail",
 		"privileged",
+		"trackall",
 	)
 	// The statuses of the last pipeline's elements. The core keeps the
 	// record and this names it; ksh93 and dash have no name for it at all.

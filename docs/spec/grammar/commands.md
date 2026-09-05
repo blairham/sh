@@ -332,6 +332,24 @@ supported outside dash. It stays core despite the refusal: the boundary
 counts the current shells, and bash 3.2's column dates a construct
 rather than vetoing it — the rule is stated in `../core.md`.
 
+### An operator where a pattern belongs
+
+    case a in & ) echo hit;; *) echo miss;; esac
+
+dash **parses and runs** this, and prints `miss`. bash 5.3, bash 3.2,
+ksh93 and zsh all refuse it as a syntax error at the `&`. The arm the
+operator opens matches nothing at all — not `&`, not the empty string —
+and what dash accepts is exactly one operator where the pattern list
+would start: `&a )` then fails at the word and `a& )` at the `&`.
+
+It is a grammar flag, `CasePatternAcceptsOperator` (dash only), and it is
+measured rather than inferred from the diagnostic, because the
+diagnostic is not the whole of it — a shell that merely worded the error
+differently would still not *run* the `esac`. It also changes where an
+unrelated construct is blamed: `;;&` in a dialect without that terminator
+gets a different diagnosis under dash, which is already past the `&` and
+complaining about the `esac` where the `)` should be.
+
 ## `select`
 
 The menu loop, with a for-loop's header over a different loop:
@@ -417,6 +435,42 @@ and that is all the grammar claims. Grammar flag:
 `FunctionNamePunctuation` (on in the core, off for `posix` and `dash`);
 what a shell that parsed the name then does with it is the
 interpreter's question, not this one.
+
+### When the definition is committed to
+
+Some shells decide they are reading a function definition as soon as a
+name is followed by `(`; others wait for the `()` pair. Nothing about a
+well-formed definition depends on this — it decides **which token a
+malformed one is blamed on**:
+
+    f ( x ) { echo hi; }
+
+    bash 5.3, bash 3.2, dash   the error is at `x`  — already inside a
+                               definition, looking for `)`
+    ksh93                      the error is at `(`  — never entered one
+    zsh                        the error is at `}`
+
+Grammar flag: `FuncDefAtParen`, on for bash and dash. It is reached most
+often through a construct a dialect does not have: `[[ ( -n x ) ]]` is a
+definition of a function called `[[` to a shell without `[[`, and the
+blame lands accordingly. Committing at the paren also accepts more names
+than `FunctionNamePunctuation` does on its own — `f+x()`, `@weird()` —
+which is why the two flags are separate.
+
+## `times` is a reserved word in one shell
+
+    times extra
+
+runs in bash, bash 3.2 and dash, which print the four times and ignore
+the operand, and in zsh, which complains at run time (`times: too many
+arguments`, status 1). **ksh93 makes it a syntax error** — `` `extra'
+unexpected `` — because `times` is a reserved word there rather than a
+builtin, so a word after it cannot be an argument.
+
+Grammar flag: `TimesIsReserved`, ksh only. It is the only place in the
+panel where **which builtin a shell has changes what parses**, which is
+why it is a grammar flag at all: everywhere else the set of builtins is
+purely a runtime question (`../semantics.md`).
 
 ## Compound command productions
 

@@ -47,6 +47,14 @@ func TestGrammar(t *testing.T) {
 		{`echo ${!x}`, true},
 		{`function f() { echo x; }`, true},
 		{`a=(x y)`, true},
+		// The brace body belongs to a `for` or `select` and is core; the short
+		// loops around it are one other shell's. Measured 2026-09-05 on
+		// bash 3.2.57 and 5.3.15, which refuse all four of these.
+		{`for i in a b; { echo $i; }`, true},
+		{`for i (a b) { echo $i; }`, false},
+		{`while (( i < 2 )) echo $i`, false},
+		{`for i in a b; echo $i`, false},
+		{`while false`, false},
 	} {
 		if got := parses(t, tc.src); got != tc.want {
 			t.Errorf("%q: parses = %v, want %v", tc.src, got, tc.want)

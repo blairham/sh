@@ -532,6 +532,63 @@ The status those two refusals carry is *not* the fatal-error axis. bash
 exits 1 for a fatal error and 2 for this, and dash exits 2 for both; a
 usage error is its own thing, and unanimous where it happens at all.
 
+## A third axis that is an ordering, and the boundary it is asked at
+
+What a subshell sees of the jobs the shell around it started, with
+`sleep 1 &` already running and commands after the probe so that nothing
+is the last thing a script does:
+
+    (jobs -p); echo T          ksh93 → the pid   bash, dash, zsh → nothing
+    jobs -p | cat; echo T      bash, ksh93 → the pid   dash, zsh → nothing
+
+Two rows and two different pairs, so no yes-or-no holds both. `Semantics.
+SubshellJobTable` is a policy with three values: cleared everywhere (dash,
+zsh), kept everywhere (ksh93), and kept where the subshell was made for a
+simple command or a substitution while cleared where it was made for a
+compound (bash).
+
+The `; echo T` is load-bearing, and leaving it off is how the question
+gets the wrong answer. `(jobs -p)` alone prints the pid in dash, because a
+subshell that is the last thing a script does need not be a subshell at
+all; with anything after it, dash prints nothing. A probe for a fact about
+subshells has to make sure it has one.
+
+The boundaries, measured one at a time:
+
+| boundary | bash | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `( … )` | none | none | the job | none |
+| a simple command as a pipeline element | the job | none | the job | none |
+| a compound command as a pipeline element | none | none | the job | none |
+| `$( … )` and `` ` ` `` | the job | none | the job | none |
+| `<( … )` | the job | — | the job | none |
+| a `&` job | none | none | none | none |
+
+The last row is unanimous and is therefore *not* asked about: a background
+job sees nothing anywhere, and an axis consulted where nothing disagrees is
+an axis that can be answered wrongly.
+
+Two rows are measured and deliberately not modeled. bash also clears the
+table for a **function** and for **`eval`** used as a pipeline element,
+both of which are simple commands as far as any syntax can tell — `f(){
+jobs -p; }; f | cat` prints nothing there where `jobs -p | cat` prints the
+pid. Modeling that would mean a boundary changing kind partway through
+running the command it was made for, which is a worse thing to own than
+two rows of a table.
+
+This is the clearest case so far of the corollary that **where a real
+shell relies on a process boundary, we have to reconstruct the boundary by
+hand**. A fork gives the child whatever the parent's table was, or nothing,
+because the shell decides on the far side of it. Our subshells are cloned
+Runners in one process, so the table arrived by simply being copied along
+with the variables — not a decision anyone made, and invisible until a
+script piped `jobs` somewhere.
+
+It is a different question from the one `trapContext` answers, and the two
+split the same clones differently: `( … )` and `$( … )` are one boundary
+for a trap listing and two for a job table. Two names rather than one with
+two meanings.
+
 ## A prediction that measurement contradicted
 
 `set -e` was expected to produce axes. Its exemptions are where shells are

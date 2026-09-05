@@ -252,9 +252,11 @@ func TestLeftoverTextIsBlamedForWhatItCouldHaveBeen(t *testing.T) {
 		// Text that could be neither.
 		{`echo $((1 @))`, ErrArithBadOperator},
 		{`echo $((1.5))`, ErrArithBadOperator},
-		// Nothing at all where a value belonged, which is a third thing.
+		// Nothing at all where a value belonged, which is a third thing —
+		// and a fourth, since a value wanted with text still to read is not
+		// the same failure as one wanted with the text exhausted.
 		{`echo $((.5))`, ErrArithOperand},
-		{`echo $((1 +))`, ErrArithOperand},
+		{`echo $((1 +))`, ErrArithOperandEnd},
 	} {
 		_, err := Parse(tc.src, Core())
 		var se *Error

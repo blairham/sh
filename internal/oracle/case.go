@@ -5279,6 +5279,24 @@ out=$(CDPATH=./pool cd sub)
 		Why:     "-s and -c in one bundle: all four run the command rather than reading standard input, so a shell that let -s win would print nothing and still exit 0",
 	},
 	{
+		ID: "invoke/plus-c-names-itself", Category: "invocation",
+		Args:    []string{"+c", ArgSnippet, "name", "a"},
+		Snippet: `echo "$0|$#|$*"; true`,
+		Why:     "the sign of the `c` is not decoration in one shell: ksh93 leaves the command string in $0 and makes both operands parameters, where bash, dash and zsh read `+c` as `-c` and name $0 from the first operand. The trailing `true` is a shield rather than part of the question — the same shell also hands the operands to the program as literal words appended to its last command, which is a second divergence recorded in docs/spec/invocation.md and not modeled, and a command that ignores its arguments keeps it out of this case's output",
+	},
+	{
+		ID: "invoke/plus-c-with-no-operands-names-itself", Category: "invocation",
+		Args:    []string{"+c", ArgSnippet},
+		Snippet: `echo "$0|$#|$*"`,
+		Why:     "the same question with nothing for the operand rules to disagree about, which is where the naming still splits: three of the four keep the shell's own name in $0 and ksh93 puts the command string there. No shield is needed, because there is no operand to be appended",
+	},
+	{
+		ID: "invoke/plus-c-in-a-bundle-names-itself", Category: "invocation",
+		Args:    []string{"+ce", ArgSnippet, "name", "a"},
+		Snippet: `echo "$0|$#|$*"; true`,
+		Why:     "the sign belongs to the word rather than to the letter, so a bundle answers the same way — and the `e` riding with it is errexit being turned *off*, which is the plus sign doing its ordinary job to the letter beside the one that is not ordinary",
+	},
+	{
 		ID: "invoke/c-with-s-names-the-operands", Category: "invocation",
 		Args:    []string{"-sc", ArgSnippet, "name", "a"},
 		Snippet: `echo "$0|$#|$*"`,

@@ -1586,6 +1586,10 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `diag/a-line-worth-naming` | `one~st=127` **2>** `<shell>: 2: nosuchcmd: not found` | `one~st=127` **2>** `<shell>: line 2: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 2: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 1: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 2: nosuchcmd: not found` | `one~st=127` **2>** `<shell>:2: command not found: nosuchcmd` |
 | `diag/a-command-after-an-operator` | `one~st=127` **2>** `<shell>: 3: nosuchcmd: not found` | `one~st=127` **2>** `<shell>: line 3: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 3: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 2: nosuchcmd: command not found` | `one~st=127` **2>** `<shell>: line 3: nosuchcmd: not found` | `one~st=127` **2>** `<shell>:3: command not found: nosuchcmd` |
 | `syntax/an-unmatched-double-quote` | **2>** `<shell>: 1: Syntax error: Unterminated quoted string` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `<shell>: -c: line 0: unexpected EOF while looking for matching `"'~<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | `abc` | **2>** `<shell>:1: unmatched "` *(status 1)* |
+| `syntax/standard-input-reads-on-past-a-parse-failure` | `one` **2>** `<shell>: 2: Syntax error: "fi" unexpected` *(status 2)* | `one` **2>** `<shell>: line 2: syntax error near unexpected token `fi'~<shell>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<shell>: line 2: syntax error near unexpected token `fi'~<shell>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<shell>: line 2: syntax error near unexpected token `fi'~<shell>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<shell>: syntax error at line 2: `fi' unexpected` *(status 3)* | `one~three` **2>** `<shell>: parse error near `fi'` |
+| `syntax/a-file-stops-at-the-same-parse-failure` | `one` **2>** `<script>: 2: Syntax error: "fi" unexpected` *(status 2)* | `one` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<script>: syntax error at line 2: `fi' unexpected` *(status 3)* | `one` **2>** `<script>:2: parse error near `fi'` *(status 1)* |
+| `syntax/reading-on-does-not-invent-a-status` | **2>** `<shell>: 1: Syntax error: "fi" unexpected` *(status 2)* | **2>** `<shell>: line 1: syntax error near unexpected token `fi'~<shell>: line 1: `{ fi; }'` *(status 2)* | **2>** `<shell>: line 1: syntax error near unexpected token `fi'~<shell>: line 1: `{ fi; }'` *(status 2)* | **2>** `<shell>: line 1: syntax error near unexpected token `fi'~<shell>: line 1: `{ fi; }'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `fi' unexpected` *(status 3)* | **2>** `<shell>: parse error near `fi'` *(status 7)* |
+| `syntax/reading-on-with-nothing-left-to-read` | `one` **2>** `<shell>: 2: Syntax error: "fi" unexpected` *(status 2)* | `one` **2>** `<shell>: line 2: syntax error near unexpected token `fi'~<shell>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<shell>: line 2: syntax error near unexpected token `fi'~<shell>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<shell>: line 2: syntax error near unexpected token `fi'~<shell>: line 2: `{ fi; }'` *(status 2)* | `one` **2>** `<shell>: syntax error at line 2: `fi' unexpected` *(status 3)* | `one` **2>** `<shell>: parse error near `fi'` *(status 1)* |
 | `syntax/an-unmatched-command-substitution` | **2>** `<shell>: 1: Syntax error: end of file unexpected (expecting ")")` *(status 2)* | **2>** `<shell>: -c: line 2: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<shell>: -c: line 2: unexpected EOF while looking for matching `)'` *(status 2)* | **2>** `<shell>: -c: line 0: unexpected EOF while looking for matching `)'~<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unmatched` *(status 3)* | **2>** `<shell>:1: parse error near `$(echo'` *(status 1)* |
 | `syntax/a-brace-opened-inside-a-quote` | **2>** `<shell>: 1: Syntax error: Unterminated quoted string` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `<shell>: -c: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `<shell>: -c: line 0: unexpected EOF while looking for matching `"'~<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: syntax error at line 1: `"' unexpected` *(status 3)* | **2>** `<shell>:1: unmatched "` *(status 1)* |
 | `expansion/an-operator-where-the-name-belongs` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${%x}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${%x}: bad substitution` *(status 127)* | **2>** `<shell>: ${%x}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `%' unexpected` *(status 3)* | `~st=0` |
@@ -1702,6 +1706,28 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `syntax/an-unmatched-double-quote` — one end of file, three sentences and a silence: bash wants the matching mark, dash calls the string unterminated, zsh calls the opener unmatched — and ksh93 closes the quote, runs the command, and prints abc
   ```sh
   echo "abc
+  ```
+- `syntax/standard-input-reads-on-past-a-parse-failure` — the program arriving on standard input, where zsh alone reports the bad line and then reads the next one: it prints one, the complaint, and three, and exits 0 where the other three stop at the complaint. `--` is what says the program is not on the argv
+  ```sh
+  echo one
+  { fi; }
+  echo three
+  ```
+- `syntax/a-file-stops-at-the-same-parse-failure` — the same three lines from a file, and zsh stops: nothing after the complaint and status 1. Which says the row above is about the *route* rather than about the text, and is the reason the answer cannot live with the parse status
+  ```sh
+  echo one
+  { fi; }
+  echo three
+  ```
+- `syntax/reading-on-does-not-invent-a-status` — the shell that reads on does not force a status either: what runs after the bad line reports as it always would, so this is 7 there. In the other three nothing after the complaint runs at all and the status is the parse failure's
+  ```sh
+  { fi; }
+  exit 7
+  ```
+- `syntax/reading-on-with-nothing-left-to-read` — the other half of the status: where the bad line is the last one there is nothing to report but the failure, so the shell that reads on still exits with the parse status. Together with the row above this says the status is left behind rather than chosen
+  ```sh
+  echo one
+  { fi; }
   ```
 - `syntax/an-unmatched-command-substitution` — a substitution is not a quote even to the shell that closes quotes at end of input: all four refuse, naming the closer, the end of the file, the opener, and the nearby text respectively — and bash alone counts the line as the one after the input's last
   ```sh

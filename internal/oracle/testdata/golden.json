@@ -39890,6 +39890,50 @@
         "TimedOut": false
       }
     },
+    "syntax/a-file-stops-at-the-same-parse-failure": {
+      "bash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error near unexpected token `fi'~\u003cscript\u003e: line 2: `{ fi; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error near unexpected token `fi'~\u003cscript\u003e: line 2: `{ fi; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: line 2: syntax error near unexpected token `fi'~\u003cscript\u003e: line 2: `{ fi; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: 2: Syntax error: \"fi\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e: syntax error at line 2: `fi' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "\u003cscript\u003e:2: parse error near `fi'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "syntax/an-unmatched-command-substitution": {
       "bash": {
         "Stdout": "",
@@ -39974,6 +40018,138 @@
         "Stdout": "",
         "Stderr": "\u003cshell\u003e:1: unmatched \"",
         "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "syntax/reading-on-does-not-invent-a-status": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: syntax error near unexpected token `fi'~\u003cshell\u003e: line 1: `{ fi; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: syntax error near unexpected token `fi'~\u003cshell\u003e: line 1: `{ fi; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: syntax error near unexpected token `fi'~\u003cshell\u003e: line 1: `{ fi; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"fi\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `fi' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: parse error near `fi'",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "syntax/reading-on-with-nothing-left-to-read": {
+      "bash": {
+        "Stdout": "one",
+        "Stderr": "\u003cshell\u003e: line 2: syntax error near unexpected token `fi'~\u003cshell\u003e: line 2: `{ fi; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "\u003cshell\u003e: line 2: syntax error near unexpected token `fi'~\u003cshell\u003e: line 2: `{ fi; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one",
+        "Stderr": "\u003cshell\u003e: line 2: syntax error near unexpected token `fi'~\u003cshell\u003e: line 2: `{ fi; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cshell\u003e: 2: Syntax error: \"fi\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cshell\u003e: syntax error at line 2: `fi' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one",
+        "Stderr": "\u003cshell\u003e: parse error near `fi'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "syntax/standard-input-reads-on-past-a-parse-failure": {
+      "bash": {
+        "Stdout": "one",
+        "Stderr": "\u003cshell\u003e: line 2: syntax error near unexpected token `fi'~\u003cshell\u003e: line 2: `{ fi; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "one",
+        "Stderr": "\u003cshell\u003e: line 2: syntax error near unexpected token `fi'~\u003cshell\u003e: line 2: `{ fi; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "one",
+        "Stderr": "\u003cshell\u003e: line 2: syntax error near unexpected token `fi'~\u003cshell\u003e: line 2: `{ fi; }'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "one",
+        "Stderr": "\u003cshell\u003e: 2: Syntax error: \"fi\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "one",
+        "Stderr": "\u003cshell\u003e: syntax error at line 2: `fi' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "one~three",
+        "Stderr": "\u003cshell\u003e: parse error near `fi'",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       }

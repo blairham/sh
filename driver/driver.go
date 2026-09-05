@@ -936,6 +936,9 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 				// rather than below, because a program read as it runs has no
 				// line to hand back when the last of it is unfinished.
 				sh.errf("%s", in.dg.ParseDiagnostic(in.name, in.input, err, pr.text()))
+				if sh.readOn(r, pr, in, err) {
+					continue
+				}
 				r.Finish(ctx)
 				return in.dg.StatusForParseError(err)
 			}
@@ -945,6 +948,9 @@ func (sh Shell) execute(r *interp.Runner, pr *program, in source) int {
 			// The line did not parse, so none of it runs — not even the
 			// statements before the failure, which is measured.
 			sh.errf("%s", in.dg.ParseDiagnostic(in.name, in.input, err, pr.text()))
+			if sh.readOn(r, pr, in, err) {
+				continue
+			}
 			r.Finish(ctx)
 			return in.dg.StatusForParseError(err)
 		}
@@ -1054,4 +1060,30 @@ func (sh Shell) sayRemarks(dg interp.Diagnostics, name string, rs []syntax.Remar
 		}
 	}
 	return len(rs)
+}
+
+// readOn settles whether a line that did not parse ends the shell, and leaves
+// the reader ready for the next line where it does not.
+//
+// One dialect carries on, and only where the program itself arrived on
+// standard input: the same lines in a file stop it. The route is the whole of
+// the condition, which is why this is asked here rather than folded into the
+// parse failure's status — see Diagnostics.StdinProgramSurvivesAParseFailure
+// for the measurement.
+//
+// The status is recorded rather than returned. What runs after the failure
+// reports as it always would, so `false` on the line after a bad one still
+// exits 1 and `exit 7` still exits 7; the parse status is what is left when
+// nothing runs after it at all, which is the same shell exiting 1 for a
+// program whose last line is the bad one.
+//
+// The failed text has to be retired before reading on, because the parser
+// keeps its error until the pending text is replaced — otherwise the next turn
+// of the loop would find the same failure and report it again forever.
+func (sh Shell) readOn(r *interp.Runner, pr *program, in source, err error) bool {
+	if !in.onStdin || !in.dg.StdinProgramSurvivesAParseFailure {
+		return false
+	}
+	r.SetExitStatus(in.dg.StatusForParseError(err))
+	return pr.fill(true)
 }

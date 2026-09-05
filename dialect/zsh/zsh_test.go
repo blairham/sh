@@ -532,6 +532,18 @@ func TestACommandStringIsReadWhole(t *testing.T) {
 	}
 }
 
+// TestAProgramOnStandardInputSurvivesAParseFailure: the other route this
+// shell reads differently. A line that will not parse is reported and the
+// next line is read anyway, so `printf 'echo one\n{ fi; }\necho three\n' |
+// zsh` prints three and exits 0 where the other three stop. Only on that
+// route: the same program in a file stops this shell too, which is why the
+// answer cannot live with the parse status.
+func TestAProgramOnStandardInputSurvivesAParseFailure(t *testing.T) {
+	if !zsh.Diagnostics().StdinProgramSurvivesAParseFailure {
+		t.Error("zsh reads on past a parse failure on standard input")
+	}
+}
+
 // TestTheRefusalOfANonBuiltinNamesNoBuiltin: zsh names the speaking builtin in
 // a diagnostic's location — `zsh:cd:1:`, `zsh:shift:1:` — and does not here.
 // The message is about a name that is *not* a builtin, so there is no builtin

@@ -1586,6 +1586,16 @@ type Diagnostics struct {
 	// braces stripped.
 	FdVariableWithoutADescriptor string
 
+	// FdNumberOverLimit is a redirection whose descriptor number is at or
+	// above the process's limit on open files, where the dialect refuses one
+	// — see Semantics.FdNumberBoundedByOpenFileLimit. One verb: the number.
+	//
+	// Empty leaves the shape every other bad descriptor takes, `N: Bad file
+	// descriptor`, which is what bash says here and is the shared wording
+	// rather than a special case. ksh93 names the thing instead of the number
+	// and quotes a different errno, so it says so.
+	FdNumberOverLimit string
+
 	// NoJobControl is `bg` or `fg` in a shell with none, for the dialects
 	// that say so before anything else. One verb: the builtin's name.
 	NoJobControl string

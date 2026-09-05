@@ -64,6 +64,10 @@ func Dialect() syntax.Dialect {
 	// element holding the feed. Not core because zsh has the `{name}` token
 	// and still reads a subscripted one as a word.
 	d.FdVariableSubscript = true
+	// `exec 10>f` names descriptor ten. bash alone reads a number of more
+	// than one digit there; to the other three the digits are a word, so
+	// that line runs a command called `10`.
+	d.MultiDigitFdNumber = true
 	return d
 }
 

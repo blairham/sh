@@ -68,6 +68,12 @@ func (r *Run) Markdown(cases []Case) string {
 	b.WriteString("are a dialect's own. Only the grading is relaxed: the cells below are\n")
 	b.WriteString("what each shell actually printed, and the drift check still compares\n")
 	b.WriteString("every byte of them.\n\n")
+	b.WriteString("A case marked **(unordered)** is one the reference shells answer two\n")
+	b.WriteString("ways at random, because the shell being measured races with itself.\n")
+	b.WriteString("Its cells are one sample rather than the answer, so they are *kept* by\n")
+	b.WriteString("a regeneration instead of resampled: re-rolling a coin on every run is\n")
+	b.WriteString("the only way such a row can move, and every move is noise. Nothing\n")
+	b.WriteString("grades it and nothing drift-checks it either, for the same reason.\n\n")
 
 	b.WriteString("## Panel\n\n| shell | build |\n| --- | --- |\n")
 	for _, s := range r.Shells {
@@ -169,11 +175,22 @@ func outcome(res Result) string {
 // to grading a refusal loosely is that it could quietly turn a divergence
 // green — an objection that only stands while nobody can tell which rows are
 // which.
+//
+// A row can carry more than one mark, so they are joined rather than chosen
+// between: the two say different things, and a reader who is shown only the
+// first would draw the wrong conclusion about the other.
 func gradeMark(c Case) string {
+	var marks []string
 	if c.GradedOnRefusal {
-		return " **(refusal)**"
+		marks = append(marks, "**(refusal)**")
 	}
-	return ""
+	if c.ReferenceRaces {
+		marks = append(marks, "**(unordered)**")
+	}
+	if len(marks) == 0 {
+		return ""
+	}
+	return " " + strings.Join(marks, " ")
 }
 
 // escapeCell hides the one character a Markdown table reads as structure.
@@ -191,6 +208,23 @@ func categories(cases []Case) []string {
 	return out
 }
 
+// Record writes both generated artifacts from one run, carrying forward
+// whatever prev holds for the rows that race. prev may be nil, which is the
+// first regeneration on a machine that has no record yet.
+//
+// One entry point rather than three calls at the call site, because the
+// *order* is the part that is easy to get wrong and impossible to see: the
+// document is rendered from the same Run the record is saved from, so pinning
+// after rendering would leave a stable golden.json beside a measurements.md
+// that still churned. Nothing about the two writes says so on its own.
+func (r *Run) Record(prev *Run, cases []Case, docPath, goldenPath string) error {
+	r.KeepRacingRows(prev, cases)
+	if err := os.WriteFile(docPath, []byte(r.Markdown(cases)), 0o644); err != nil {
+		return err
+	}
+	return r.Save(goldenPath)
+}
+
 // Save writes the golden record.
 func (r *Run) Save(path string) error {
 	b, err := json.MarshalIndent(r, "", "  ")
@@ -198,6 +232,60 @@ func (r *Run) Save(path string) error {
 		return err
 	}
 	return os.WriteFile(path, append(b, '\n'), 0o644)
+}
+
+// KeepRacingRows carries a racing case's recorded cells forward from prev.
+//
+// A case marked Case.ReferenceRaces is one the reference answers two ways at
+// random, so what a run observes for it is a coin flip rather than a
+// measurement. Nothing grades such a row and nothing drift-checks it — but
+// regeneration still *wrote* whatever the coin said, which is the one way the
+// row could move, and every move was noise. Measured on this corpus's single
+// racing row, `set -x; echo a | cat`: ksh93 reorders its two trace lines 41
+// times in 400, bash 5 in 200 and zsh 1 in 200, so roughly one regeneration in
+// eight rewrote a cell nobody was reading. That landed in a pull request about
+// something else, and a reviewer comparing failing sets had to recognize it as
+// noise before ignoring it — the cost this removes.
+//
+// Kept only where the shell is the same build. A version that moved is a
+// reason to look again even at a row nothing checks, and it is the one event
+// that makes the old sample stale rather than merely unlucky. A shell prev
+// never saw, and a case prev never had, are recorded fresh: this pins a value
+// that exists and never invents one.
+func (r *Run) KeepRacingRows(prev *Run, cases []Case) {
+	if prev == nil {
+		return
+	}
+	same := sameBuild(r, prev)
+	for _, c := range cases {
+		if !c.ReferenceRaces {
+			continue
+		}
+		was, recorded := prev.Results[c.ID]
+		now, ran := r.Results[c.ID]
+		if !recorded || !ran {
+			continue
+		}
+		for sh, res := range was {
+			if _, present := now[sh]; present && same[sh] {
+				now[sh] = res
+			}
+		}
+	}
+}
+
+// sameBuild reports, per shell, whether the two runs saw the same build of it.
+func sameBuild(now, prev *Run) map[string]bool {
+	was := make(map[string]string, len(prev.Shells))
+	for _, s := range prev.Shells {
+		was[s.Name] = s.Version
+	}
+	out := make(map[string]bool, len(now.Shells))
+	for _, s := range now.Shells {
+		v, seen := was[s.Name]
+		out[s.Name] = seen && v == s.Version
+	}
+	return out
 }
 
 // Load reads a golden record.

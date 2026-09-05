@@ -207,6 +207,43 @@ One space changes what the digit *is*. The rule is strict adjacency: no
 space between the digits and the operator, and the token is a candidate
 IO number only in that position.
 
+### How many digits, is not unanimous
+
+One digit is everybody's. A *second* one is bash's alone (macOS,
+2026-09-05, and the same answer for every width from two digits up):
+
+    exec 10>f; echo hi >&10; cat f
+      bash 5.3, bash 3.2   f holds hi — ten is a descriptor
+      dash                 exec: 10: not found
+      ksh93                exec: 10: not found
+      zsh                  command not found: 10
+
+    echo x 10>f; cat f
+      bash 5.3, bash 3.2   x on the terminal, f empty
+      dash, ksh93, zsh     f holds "x 10"
+
+To three of the five the digits are an ordinary word and the operator is
+a redirection with no number of its own, so `exec 10>f` runs a *command*
+called `10` with its output in the file. It is the milder form of the
+trap `AmpersandRedirect` carries: nothing is reported, and a different
+command runs.
+
+Those three still hold descriptors above nine perfectly well. They have
+no way to *write* one, and `exec {v}>f` is what puts them there — ksh93
+and zsh both answer 10 or 11 and use it happily — which is why this is a
+question about the token and not about the table.
+
+POSIX is why it is a flag rather than a mistake in three shells: XCU's
+IO_NUMBER is one *or more* digits, so bash conforms and so does the
+majority that reads one. Where the panel and the standard disagree the
+panel decides the core.
+
+Grammar flag: `MultiDigitFdNumber` — core: off; `bash`: on. Measured as
+`redir/a-two-digit-descriptor-number` and
+`redir/digits-before-a-redirection-that-are-not-a-number`. What happens
+when a number that large is *too* large is the interpreter's question and
+is in `docs/spec/semantics.md`.
+
 ### `{name}` before a redirection asks the shell to pick the descriptor
 
 Where an IO number could stand, bash, ksh93 and zsh also accept a

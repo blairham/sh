@@ -144,7 +144,7 @@ func reachedPlacement(where string) {
 // open everything it opens lazily above them, and hands them straight back:
 // the window is still there and there is no longer anything in it to hit. The
 // interval this function is careful about is what keeps the cost of that a
-// startup detail rather than a second line of defence.
+// startup detail rather than a second line of defense.
 func replaceProcess(path string, argv, env []string, files []*os.File) error {
 	prev := debug.SetGCPercent(-1)
 	// Before the table is touched, because this is the part that allocates.

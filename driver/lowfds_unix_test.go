@@ -203,10 +203,24 @@ func TestTheRuntimeHoldsNoDescriptorAScriptCanName(t *testing.T) {
 			" so nothing was moved out of a script's reach")
 	}
 	for _, fd := range held {
-		if fd <= driver.LowDescriptorCeilingForTest() {
-			t.Errorf("the runtime holds descriptor %d, which is at or below the ceiling"+
-				" of %d — a script parking there kills the shell",
-				fd, driver.LowDescriptorCeilingForTest())
+		if fd <= nameableCeiling {
+			t.Errorf("the runtime holds descriptor %d, which is one a script can name"+
+				" — parking there kills the shell", fd)
 		}
 	}
+	if driver.LowDescriptorCeilingForTest() < nameableCeiling {
+		t.Errorf("the shell keeps the runtime off descriptors up to %d, want at least %d",
+			driver.LowDescriptorCeilingForTest(), nameableCeiling)
+	}
 }
+
+// nameableCeiling is the highest descriptor this test insists the runtime
+// stays above.
+//
+// Written out rather than read from the package, and that is the whole point
+// of it being here: a test that took the ceiling from the code it is checking
+// would follow the ceiling down. Lowering it to 9 — which is all the panel can
+// name, and a defensible-looking number — would leave the runtime on 10, 11
+// and 12, which is where bash's own `exec {v}>f` allocates from, and every
+// assertion in this file would still pass. This one would not.
+const nameableCeiling = 99

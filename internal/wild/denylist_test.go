@@ -99,7 +99,7 @@ func TestFindCountsDeniedFilesWithoutOpeningThem(t *testing.T) {
 	}
 	allowed := write(t, dir, "fine.sh", "#!/bin/sh\necho hi\n")
 
-	paths, skipped := wild.Find([]string{dir, shellTree, testTree})
+	paths, skipped := wild.Find(wild.Scope{Dirs: []string{dir}})
 	if len(paths) != 1 || paths[0] != allowed {
 		t.Errorf("paths = %v, want just %s", paths, allowed)
 	}
@@ -108,5 +108,54 @@ func TestFindCountsDeniedFilesWithoutOpeningThem(t *testing.T) {
 	}
 	if skipped[wild.ReasonTestData] != 2 {
 		t.Errorf("skipped[%q] = %d, want 2", wild.ReasonTestData, skipped[wild.ReasonTestData])
+	}
+}
+
+// Naming a denied tree as a root is still naming a denied tree. The walk
+// refuses it there too, and counts what it did not read — otherwise `-dirs`
+// would be a way around the rule the walk enforces everywhere else.
+func TestFindRefusesADeniedRoot(t *testing.T) {
+	dir := t.TempDir()
+	shellTree := filepath.Join(dir, "zsh-5.9", "Functions")
+	if err := os.MkdirAll(shellTree, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	write(t, shellTree, "zargs", "#!/bin/zsh\necho hi\n")
+
+	paths, skipped := wild.Find(wild.Scope{Dirs: []string{shellTree}, Shells: wild.ZshScope})
+	if len(paths) != 0 {
+		t.Errorf("paths = %v, want none", paths)
+	}
+	if skipped[wild.ReasonShellSource] != 1 {
+		t.Errorf("skipped[%q] = %d, want 1", wild.ReasonShellSource, skipped[wild.ReasonShellSource])
+	}
+}
+
+// A shell's *installed* distribution is the same expression as its source. A
+// package manager's per-formula directory and the data directory a shell
+// installs its own functions into are both the bare shell name with the
+// version below, which the source-tarball markers do not catch.
+func TestDeniedCoversAnInstalledShellDistribution(t *testing.T) {
+	for _, tc := range []struct {
+		path, want string
+	}{
+		{"/opt/homebrew/Cellar/zsh/5.9.2/share/zsh/functions/zargs", wild.ReasonShellSource},
+		{"/opt/homebrew/opt/bash/share/bashbug", wild.ReasonShellSource},
+		{"/usr/share/zsh/5.9/functions/zed", wild.ReasonShellSource},
+		{"/opt/homebrew/Cellar/dash/0.5.12/bin/wrapper.sh", wild.ReasonShellSource},
+		// The name has to be the whole segment, as an installed package's is.
+		{"/opt/homebrew/Cellar/zsh-completions/0.35/share/x.zsh", wild.ReasonShellSource},
+		{"/opt/homebrew/Cellar/bashdb/5.0/bin/bashdb", ""},
+		{"/usr/share/vim/vim91/ftplugin/zsh.vim", ""},
+		// A directory the shell merely *looks* in is not the shell's own. What
+		// a package installs into site-functions is that package's code,
+		// written in zsh by somebody who is not the zsh project.
+		{"/opt/homebrew/share/zsh/site-functions/_git", ""},
+		{"/usr/share/zsh/site-functions/_brew", ""},
+		{"/usr/local/share/bash/completions/git", ""},
+	} {
+		if got := wild.Denied(tc.path, ""); got != tc.want {
+			t.Errorf("Denied(%q) = %q, want %q", tc.path, got, tc.want)
+		}
 	}
 }

@@ -55,7 +55,7 @@ func TestFindReadsTheShebang(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, _ := wild.Find([]string{dir, "/nonexistent-directory"})
+	got, _ := wild.Find(wild.Scope{Dirs: []string{dir, "/nonexistent-directory"}})
 	if len(got) != len(want) {
 		t.Fatalf("found %d scripts, want %d: %v", len(got), len(want), got)
 	}
@@ -63,6 +63,110 @@ func TestFindReadsTheShebang(t *testing.T) {
 		if !want[p] {
 			t.Errorf("found %s, which is not a shell script", p)
 		}
+	}
+}
+
+// Zsh function files are read by the shell rather than run by the kernel, so
+// they carry no shebang and say what they are zsh's own way. A sweep that
+// looked only for `#!` missed nearly every real zsh program on a machine.
+func TestFindReadsZshsOwnDeclaration(t *testing.T) {
+	dir := t.TempDir()
+	want := map[string]bool{}
+	for _, tc := range []struct{ name, head string }{
+		{"completion", "#compdef mytool\n"},
+		{"completion-bare", "#compdef\n"},
+		{"loaded-on-use", "#autoload\n"},
+		{"shebang-zsh", "#!/bin/zsh\n"},
+		{"shebang-env-zsh", "#!/usr/bin/env zsh\n"},
+	} {
+		want[write(t, dir, tc.name, tc.head+"echo hi\n")] = true
+	}
+	for _, tc := range []struct{ name, head string }{
+		// The marker is a whole word, not a prefix of one.
+		{"not-a-marker", "#compdefine\n"},
+		{"ordinary-comment", "# compdef mytool\n"},
+		{"a-bash-script", "#!/bin/bash\n"},
+	} {
+		write(t, dir, tc.name, tc.head+"echo hi\n")
+	}
+
+	got, _ := wild.Find(wild.Scope{Dirs: []string{dir}, Shells: wild.ZshScope})
+	if len(got) != len(want) {
+		t.Fatalf("found %d zsh scripts, want %d: %v", len(got), len(want), got)
+	}
+	for _, p := range got {
+		if !want[p] {
+			t.Errorf("found %s, which is not a zsh script", p)
+		}
+	}
+}
+
+// The sweep descends, because the scripts that run on an ordinary working day
+// are not all in a bin directory — a package's helpers sit several levels down
+// behind a symbolic link, which is where a package manager puts everything.
+func TestFindDescendsAndFollowsLinks(t *testing.T) {
+	dir := t.TempDir()
+	deep := filepath.Join(dir, "one", "two", "three")
+	if err := os.MkdirAll(deep, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	buried := write(t, deep, "helper", "#!/bin/sh\necho hi\n")
+
+	// A link to the tree, the way /opt/homebrew/opt links into the Cellar.
+	linked := filepath.Join(dir, "link")
+	if err := os.Symlink(filepath.Join(dir, "one"), linked); err != nil {
+		t.Fatal(err)
+	}
+
+	// Deep enough to reach it: the link counts as one level, like a directory.
+	// It is reported once, by whichever route the walk met first — which of
+	// the two is not the point and depends on the order the directory lists.
+	got, _ := wild.Find(wild.Scope{Dirs: []string{dir}, Depth: 4})
+	if len(got) != 1 {
+		t.Fatalf("found %v, want one script — one file reachable two ways is one script", got)
+	}
+	// Both sides are resolved: a temporary directory is itself reached through
+	// a link on some systems, so comparing a resolved path with an unresolved
+	// one fails for a reason that has nothing to do with the sweep.
+	want, err := filepath.EvalSymlinks(buried)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if real, err := filepath.EvalSymlinks(got[0]); err != nil || real != want {
+		t.Errorf("found %s, which resolves to %s, want %s", got[0], real, want)
+	}
+
+	// Not deep enough: the walk stops above it rather than reporting nothing
+	// at all, which is the difference between a bound and a bug.
+	got, _ = wild.Find(wild.Scope{Dirs: []string{dir}, Depth: 2})
+	if len(got) != 0 {
+		t.Errorf("found %v at depth 2, want nothing that deep", got)
+	}
+}
+
+// A link that points into a tree nobody may read is still that tree. The rule
+// is applied to where the walk arrived and to where it points, because a bin
+// directory is full of innocent-looking names pointing into shell packages.
+func TestFindRefusesALinkIntoADeniedTree(t *testing.T) {
+	dir := t.TempDir()
+	cellar := filepath.Join(dir, "Cellar", "zsh", "5.9", "bin")
+	bin := filepath.Join(dir, "bin")
+	for _, d := range []string{cellar, bin} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(t, cellar, "zshbug", "#!/bin/sh\necho hi\n")
+	if err := os.Symlink(filepath.Join(cellar, "zshbug"), filepath.Join(bin, "zshbug")); err != nil {
+		t.Fatal(err)
+	}
+
+	got, skipped := wild.Find(wild.Scope{Dirs: []string{bin}, Depth: 2})
+	if len(got) != 0 {
+		t.Errorf("found %v, want nothing: the link points into a shell's own distribution", got)
+	}
+	if skipped[wild.ReasonShellSource] != 1 {
+		t.Errorf("skipped[%q] = %d, want 1", wild.ReasonShellSource, skipped[wild.ReasonShellSource])
 	}
 }
 
@@ -77,17 +181,17 @@ func TestTheReferenceDecidesWhatIsNotAScript(t *testing.T) {
 
 	ctx := context.Background()
 	// A reference that accepts everything makes the refusal ours.
-	rep := wild.Sweep(ctx, []string{dir}, bash.Dialect(), "/usr/bin/true")
+	rep := wild.Sweep(ctx, wild.Scope{Dirs: []string{dir}}, bash.Dialect(), "/usr/bin/true")
 	if rep.Scanned != 2 || rep.Parsed != 1 || rep.NotShell != 0 || len(rep.Failures) != 1 {
 		t.Errorf("accepting reference: %+v", rep)
 	}
 	// One that refuses everything makes it the file's.
-	rep = wild.Sweep(ctx, []string{dir}, bash.Dialect(), "/usr/bin/false")
+	rep = wild.Sweep(ctx, wild.Scope{Dirs: []string{dir}}, bash.Dialect(), "/usr/bin/false")
 	if rep.Scanned != 2 || rep.Parsed != 1 || rep.NotShell != 1 || len(rep.Failures) != 0 {
 		t.Errorf("refusing reference: %+v", rep)
 	}
 	// And no reference at all trusts the shebang.
-	rep = wild.Sweep(ctx, []string{dir}, bash.Dialect(), "")
+	rep = wild.Sweep(ctx, wild.Scope{Dirs: []string{dir}}, bash.Dialect(), "")
 	if len(rep.Failures) != 1 {
 		t.Errorf("no reference: %+v", rep)
 	}
@@ -112,7 +216,7 @@ func TestTheSweepOnlyAsksTheReferenceToParse(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rep := wild.Sweep(context.Background(), []string{dir}, bash.Dialect(), ref)
+	rep := wild.Sweep(context.Background(), wild.Scope{Dirs: []string{dir}}, bash.Dialect(), ref)
 	if len(rep.Failures) != 1 {
 		t.Fatalf("want the broken file counted against us, got %+v", rep)
 	}

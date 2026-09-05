@@ -443,6 +443,42 @@ silently ate apostrophes were found the same way. Scripts in the wild ask
 different questions, in bulk, and were written without knowing this
 implementation exists.
 
+Four things about how it looks are worth knowing, because each was a blind
+spot before it was a flag.
+
+**It reports causes, not failures.** Failures come out grouped by what went
+wrong — the kind, and the token where the token is one the grammar knows —
+ranked by how many scripts each accounts for, with the offending line of one
+of them underneath. A list of sixty paths cannot tell a reader whether that
+is sixty problems or three, and the sweep is the only thing that can. `-v`
+still lists every path under its cause.
+
+**It descends, and it follows links.** On a machine with a package manager
+almost everything worth sweeping is behind one: `/opt/homebrew/bin` is links
+to files and `/opt/homebrew/opt` is links to directories, and git keeps two
+dozen shell helpers below the second kind. `-depth` bounds the walk, and a
+file reachable by two links is counted once, by its resolved path.
+
+**`-dialect zsh` sweeps zsh instead**, which changes three things at once:
+the grammar, the shebangs that count, and the reference shell. They move
+together — grading zsh on `#!/bin/sh` files, or letting bash decide whether a
+zsh script is a shell script, answers a different question.
+
+**A zsh function has no shebang.** Zsh reads its functions rather than
+execing them, so they say what they are with `#compdef` or `#autoload` on
+the first line. Looking only for `#!` found eleven zsh scripts on a machine
+holding several dozen, and the ones it missed — every completion a package
+installs — are the most interesting zsh on the machine.
+
+The deny-list draws one further line, and it is a fine one.
+`/opt/homebrew/Cellar/zsh/5.9.2/…` and `/usr/share/zsh/5.9/functions` are
+zsh's own code, which CLEANROOM.md's red list covers as squarely as the C
+source; `/opt/homebrew/share/zsh/site-functions` has the same name and holds
+git's completion, brew's and docker's, which are third-party programs that
+happen to be written in zsh. The tell is what sits beside the name: a
+package root above it (`Cellar/zsh`, `opt/bash`) or a version below it
+(`zsh/5.9`) means the distribution; neither means a place the shell looks.
+
 `make wild-run` goes further and **runs** each script that parses, under
 both shells with the same arguments, comparing what they produce. It is the
 half a reader cannot do, and it is where the last several gaps came from:
@@ -459,6 +495,12 @@ between two runs rather than between a run and an expectation.
 It is also slow — two shells times two probes times every script, with a
 timeout on each — so a whole-machine run takes minutes. `ARGS='-dirs
 /usr/bin -timeout 3s'` narrows it while working on one cause.
+
+`-list` prints the scripts the sweep would read and stops, which is what
+makes a *chosen* run possible: read the scripts first, link the ones that are
+plainly read-only into a directory of their own, and point `-dirs` at that.
+Running only what someone has actually read is a stronger containment than
+the probe convention, and nothing else printed the population to choose from.
 
 Not a gate either, and for a stronger reason than conformance: the answer
 depends on what happens to be installed, so it cannot be the same twice on

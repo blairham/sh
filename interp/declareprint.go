@@ -92,7 +92,7 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		name:     name,
 		integer:  r.integer[name],
 		readonly: r.readonly[name],
-		exported: r.exported[name],
+		exported: r.isExported(name),
 		lower:    r.lowered[name],
 		upper:    r.uppered[name],
 	}
@@ -116,14 +116,12 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		d.value, d.hasValue = v, true
 		return d, true
 	}
-	for _, kv := range r.environ() {
-		if k, v, ok := strings.Cut(kv, "="); ok && k == name {
-			// Born in the environment and never assigned to: the value is
-			// real and the name is exported, which is what carrying it in
-			// the environment means.
-			d.value, d.hasValue, d.exported = v, true, true
-			return d, true
-		}
+	if v, ok := r.inheritedValue(name); ok {
+		// Born in the environment and never assigned to, so the value is
+		// still the one that came in. Whether it is exported was settled
+		// above: it is, unless something took the attribute off.
+		d.value, d.hasValue = v, true
+		return d, true
 	}
 	return d, attributed
 }
@@ -161,11 +159,11 @@ func (r *Runner) declarableNames() []string {
 	for name := range r.uppered {
 		seen[name] = true
 	}
-	for _, kv := range r.environ() {
+	for k := range r.inheritedEnv {
 		// isNameLike keeps the entries that are variables: an exported
 		// function travels in the environment under a decorated name no
 		// shell lists as one.
-		if k, _, ok := strings.Cut(kv, "="); ok && isNameLike(k) {
+		if isNameLike(k) {
 			seen[k] = true
 		}
 	}

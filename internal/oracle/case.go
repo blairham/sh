@@ -1717,6 +1717,31 @@ var Corpus = []Case{
 		Why:     "a name that is not a function now will not become one by being exported. The shells that have the option refuse it and the ones that do not read `-f` as something else entirely, which is the more interesting half",
 	},
 	{
+		ID: "export/an-imported-name-keeps-the-attribute", Category: "builtins",
+		Snippet: `TERM=changed; env | grep '^TERM='`,
+		Why:     "a variable that arrived in the environment is exported by having done so, and POSIX has it keep the attribute for the life of the shell — so a plain reassignment changes what every later child is told, unanimously. Read through a real child rather than through `export -p`, because the damage is what the child gets: the new value landed in the shell's own table alone here, and `PATH=/new:$PATH; make` handed every command the PATH the shell started with while the shell's own lookup was already right",
+	},
+	{
+		ID: "export/an-imported-name-reassigned-in-a-function", Category: "builtins",
+		Snippet: `f() { TERM=changed; }; f; env | grep '^TERM='`,
+		Why:     "an assignment with no `local` in front of it is an ordinary global one wherever it is written, and the attribute travels with the value: all four hand the child the function's value after the function has returned. The neighbor that would have made the fix half a fix, since a shell that only noticed assignments at the top level would pass the case above and fail this one",
+	},
+	{
+		ID: "export/an-imported-name-reassigned-in-a-subshell", Category: "builtins",
+		Snippet: `TERM=changed; (env | grep '^TERM=')`,
+		Why:     "the same through a subshell, which is worth its own row here rather than in a real shell: ours is a cloned runner in one process where every panel member forks, so the attribute has to be carried across the clone by hand where the others get it from the kernel",
+	},
+	{
+		ID: "export/an-imported-name-reassigned-is-listed", Category: "builtins",
+		Snippet: `TERM=changed; export -p | grep -c -E "^(declare -x|export) TERM="`,
+		Why:     "the listing has to agree with what the child gets, in whichever of the two spellings the shell uses. The two answers came apart: the environment kept the imported entry and the listing dropped the name entirely, because one was reading the attribute and the other the record of having set it",
+	},
+	{
+		ID: "export/a-prefix-over-an-imported-name", Category: "builtins",
+		Snippet: `TERM=prefixed env | grep '^TERM='; env | grep '^TERM='`,
+		Why:     "a prefix over a name the shell inherited: the command sees the prefix and the next command sees what came in, unanimously. `cmd/assignment-prefix-is-transient` asks this of a shell variable and reads it back in the shell; this one asks it of an inherited name and reads it back through a real environment, which is where a superseding entry would be one of two rather than instead of the other",
+	},
+	{
 		ID: "array/a-subscript-past-the-end", Category: "expansion",
 		Snippet: `a=(x); a[5]=y; echo "n=${#a[@]} all=[${a[@]}]"`,
 		Why:     "whether an unassigned subscript is an element. Two shells say an array is a map from subscript to value and this is an array of two; one walks the whole extent and finds the gap empty, giving five. Counting the gap as elements is what a list representation does, and it is nobody's answer",

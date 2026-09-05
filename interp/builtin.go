@@ -483,7 +483,11 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 				return r.status
 			}
 		}
-		r.exported[name] = true
+		// Recorded either way rather than deleted for `-n`: a name that came
+		// in through the environment is exported by having done so, and only
+		// an explicit "no" can take that off. Deleting the record put the
+		// question back to the environment, which answers yes.
+		r.exported[name] = !strings.ContainsRune(opts, 'n')
 	}
 	if r.assignFailed && status == 0 {
 		// A name it refused to assign is the builtin's failure, not just a

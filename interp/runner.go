@@ -1859,9 +1859,29 @@ func (r *Runner) environ() []string {
 	base := r.Env
 	out := make([]string, 0, len(base)+len(r.Vars))
 	for _, kv := range base {
-		if k, _, ok := strings.Cut(kv, "="); ok && r.removed[k] {
+		k, _, ok := strings.Cut(kv, "=")
+		if !ok {
+			// Nothing to key on, so nothing can supersede or hide it; it is
+			// passed along as written rather than dropped.
+			out = append(out, kv)
+			continue
+		}
+		if r.removed[k] {
 			// A name the shell unset does not reach a command either: the
 			// child would otherwise see what the parent cannot.
+			continue
+		}
+		if !r.isExported(k) {
+			// The attribute came off after the name was inherited. The shell
+			// goes on reading it — see inheritedEnv — and a child no longer
+			// sees it at all.
+			continue
+		}
+		if _, own := r.Vars[k]; own {
+			// Assigned since it was inherited, and the assignment supersedes
+			// what came in rather than joining it below. Handing a child the
+			// same name twice is not a tidiness question: the stale entry is
+			// the *first* of the two, and execve leaves it that way.
 			continue
 		}
 		out = append(out, kv)
@@ -1872,11 +1892,78 @@ func (r *Runner) environ() []string {
 	for k, v := range r.Vars {
 		// Only exported names reach a command's environment; the rest are
 		// the shell's own.
-		if r.exported[k] {
+		if r.isExported(k) {
 			out = append(out, k+"="+v)
 		}
 	}
 	return out
+}
+
+// isExported says whether a name reaches a command's environment.
+//
+// Two sources, and the order between them is the whole of it. An explicit
+// answer wins: `export` puts one there and `export -n` and `declare +x` put
+// the opposite there, which is why the record is a tri-state — recorded true,
+// recorded false, and never spoken about — rather than a set of names.
+//
+// Unspoken, the environment answers. **A name the shell inherited is already
+// exported**, because being in a command's environment is what carrying it in
+// the environment means, and POSIX has an imported variable keep the attribute
+// for the shell's whole life. Nothing recorded that, so `FOO=bar sh -c 'FOO=baz;
+// cmd'` gave the child `bar`: the new value went into r.Vars, r.exported never
+// heard the name, and environ() went on handing out the entry the shell was
+// born with. `PATH=/new:$PATH; make` is the same bug where it costs something —
+// every child gets the old PATH while the shell's own lookup is right.
+//
+// `unset` is the one thing that takes the attribute off without saying so.
+// It is a removal rather than an assignment, so the name goes back to being
+// one this shell has never heard of, and assigning to it afterwards makes an
+// ordinary shell variable. All four shells agree.
+func (r *Runner) isExported(name string) bool {
+	if on, spoken := r.exported[name]; spoken {
+		return on
+	}
+	if r.removed[name] {
+		return false
+	}
+	for k := range r.inheritedEnv {
+		if k == name {
+			return true
+		}
+	}
+	return false
+}
+
+// inheritedEnv walks what the shell was born with, minus what `unset` took
+// away: the names a lookup falls back to once the runner's own tables have
+// come up empty.
+//
+// Deliberately not environ(), which is a different list in both directions.
+// A carried function is in that one and is not a variable; a name whose export
+// attribute has been taken off is a variable this shell can still read and no
+// child is told about. Reading values out of the list meant for children is
+// what made those two the same question.
+func (r *Runner) inheritedEnv(yield func(name, value string) bool) {
+	for _, kv := range r.Env {
+		k, v, ok := strings.Cut(kv, "=")
+		if !ok || r.removed[k] {
+			continue
+		}
+		if !yield(k, v) {
+			return
+		}
+	}
+}
+
+// inheritedValue is the value a name was born with, if the shell was handed
+// one and `unset` has not taken it away.
+func (r *Runner) inheritedValue(name string) (string, bool) {
+	for k, v := range r.inheritedEnv {
+		if k == name {
+			return v, true
+		}
+	}
+	return "", false
 }
 
 // scope records the variables a function made local, and what they were.
@@ -2129,12 +2216,7 @@ func (r *Runner) getVar(name string) (string, bool) {
 		return "", false
 	}
 
-	for _, kv := range r.environ() {
-		if k, v, ok := strings.Cut(kv, "="); ok && k == name {
-			return v, true
-		}
-	}
-	return "", false
+	return r.inheritedValue(name)
 }
 
 // assignOperands applies the array assignments a declaration utility was given

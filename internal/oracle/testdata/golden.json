@@ -22432,7 +22432,7 @@
       },
       "bash-as-sh": {
         "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -Z: invalid option~Usage:\t\u003cshell\u003e [GNU long option] [option] ...~\tsh [GNU long option] [option] script-file ...~GNU long options:~\t--debug~\t--debugger~\t--dump-po-strings~\t--dump-strings~\t--help~\t--init-file~\t--login~\t--noediting~\t--noprofile~\t--norc~\t--posix~\t--pretty-print~\t--rcfile~\t--restricted~\t--verbose~\t--version~Shell options:~\t-ilrsD or -c command or -O shopt_option\t\t(invocation only)~\t-abefhkmnptuvxBCEHPT or -o option",
+        "Stderr": "\u003cshell\u003e: -Z: invalid option~Usage:\t\u003cshell\u003e [GNU long option] [option] ...~\t\u003cshell\u003e [GNU long option] [option] script-file ...~GNU long options:~\t--debug~\t--debugger~\t--dump-po-strings~\t--dump-strings~\t--help~\t--init-file~\t--login~\t--noediting~\t--noprofile~\t--norc~\t--posix~\t--pretty-print~\t--rcfile~\t--restricted~\t--verbose~\t--version~Shell options:~\t-ilrsD or -c command or -O shopt_option\t\t(invocation only)~\t-abefhkmnptuvxBCEHPT or -o option",
         "Status": 2,
         "Signal": 0,
         "TimedOut": false
@@ -26832,7 +26832,7 @@
       },
       "bash-as-sh": {
         "Stdout": "",
-        "Stderr": "\u003cshell\u003e: -q: invalid option~Usage:\t\u003cshell\u003e [GNU long option] [option] ...~\tsh [GNU long option] [option] script-file ...~GNU long options:~\t--debug~\t--debugger~\t--dump-po-strings~\t--dump-strings~\t--help~\t--init-file~\t--login~\t--noediting~\t--noprofile~\t--norc~\t--posix~\t--pretty-print~\t--rcfile~\t--restricted~\t--verbose~\t--version~Shell options:~\t-ilrsD or -c command or -O shopt_option\t\t(invocation only)~\t-abefhkmnptuvxBCEHPT or -o option",
+        "Stderr": "\u003cshell\u003e: -q: invalid option~Usage:\t\u003cshell\u003e [GNU long option] [option] ...~\t\u003cshell\u003e [GNU long option] [option] script-file ...~GNU long options:~\t--debug~\t--debugger~\t--dump-po-strings~\t--dump-strings~\t--help~\t--init-file~\t--login~\t--noediting~\t--noprofile~\t--norc~\t--posix~\t--pretty-print~\t--rcfile~\t--restricted~\t--verbose~\t--version~Shell options:~\t-ilrsD or -c command or -O shopt_option\t\t(invocation only)~\t-abefhkmnptuvxBCEHPT or -o option",
         "Status": 2,
         "Signal": 0,
         "TimedOut": false

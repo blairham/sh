@@ -19,7 +19,7 @@ func typedAtWith(t *testing.T, cols int, prompt, keys string) string {
 	t.Helper()
 	var out strings.Builder
 	e := &editor{in: strings.NewReader(keys), out: &out, width: func() int { return cols }}
-	if _, err := e.readLine(prompt); err != nil {
+	if _, err := e.readLine(drawPrompt(prompt)); err != nil {
 		t.Fatalf("readLine: %v", err)
 	}
 	return out.String()
@@ -90,6 +90,20 @@ func TestALineEndingAtTheEdgeIsWrapped(t *testing.T) {
 	}
 }
 
+// The cursor is placed from the left-hand edge, so where it lands includes
+// the prompt.
+//
+// ^A is the case that says so: the cursor goes to the start of the *line*,
+// which is not the start of the row — the prompt is still to the left of it.
+// A count that left the prompt out would put the cursor on top of it, and
+// every key typed after that would insert in the wrong place.
+func TestTheCursorIsPlacedPastThePrompt(t *testing.T) {
+	out := typedAtWith(t, 20, "ab> ", "xyz\x01\r")
+	if !strings.Contains(out, "\r\x1b[4C") {
+		t.Errorf("want the cursor moved back to column 4, past the prompt, got %q", out)
+	}
+}
+
 // Escape sequences instruct the terminal rather than filling a cell, so a
 // colored prompt is not as wide as it is long.
 func TestDisplayWidthSkipsEscapeSequences(t *testing.T) {
@@ -115,7 +129,7 @@ func TestDisplayWidthSkipsEscapeSequences(t *testing.T) {
 func TestWithoutAWidthTheOldDrawingStands(t *testing.T) {
 	var out strings.Builder
 	e := &editor{in: strings.NewReader("hi\r"), out: &out}
-	if _, err := e.readLine("$ "); err != nil {
+	if _, err := e.readLine(drawPrompt("$ ")); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "\r\x1b[K") {

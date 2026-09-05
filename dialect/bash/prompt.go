@@ -17,18 +17,23 @@ import (
 // command again at every prompt.
 //
 // It also has a backslash language of its own, where `\\u` is the user name and
-// `\\W` the directory's last component. That is a separate question and is not
-// settled here.
+// `\\W` the directory's last component, and where `\\[` and `\\]` say that what
+// is between them instructs the terminal rather than filling any of it.
+//
+// One code measured and deliberately absent: `\\D{...}`, whose braces hold a
+// strftime format. It needs a translation from that language to Go's layouts
+// rather than a row in a table, and until it has one `\\D{%F}` is drawn as it
+// was written, which is what an unknown code does here.
 //
 // Measured through a pty rather than taken from documentation: the panel
 // disagrees about this, and the disagreement is why the field exists.
 func PromptStyle() repl.PromptStyle {
 	return repl.PromptStyle{
 		Expand: true,
-		// Measured, one code per prompt, through a pty. The codes not here are
-		// measured too and not yet drawable: the clock (\t \T \A \@ \d), the
-		// count of jobs (\j), the history and command numbers (\! \#), the
-		// terminal's name (\l) and the version (\v).
+		// Measured, one code per prompt, through a pty, against bash 5.3.15
+		// and bash 3.2.57. The two agree on the whole language: every
+		// difference between them was the value of the moment — the clock, the
+		// version and the history number — and not the table.
 		Escape: '\\',
 		Codes: map[rune]repl.PromptField{
 			'u':  repl.FieldUser,
@@ -52,7 +57,25 @@ func PromptStyle() repl.PromptStyle {
 			'j':  repl.FieldJobCount,
 			'l':  repl.FieldTerminalName,
 			'\\': repl.FieldEscape,
+			// The two that decide whether a colored prompt is drawn in the
+			// right place. Measured: `\[X\]` drew X and neither bracket, and
+			// `\[\e]0;title\a\]X` put the title sequence on the wire and drew
+			// X — which is the case that cannot be told apart from text by
+			// looking at it.
+			'[': repl.FieldNonPrintingStart,
+			']': repl.FieldNonPrintingEnd,
 		},
+		// The characters a prompt has no letter for. Measured one byte each:
+		// `\e` drew 1b and `\a` drew 07. Without the first, the way every
+		// colored bash prompt in the world is written — `\[\e[32m\]` — draws
+		// the six characters instead of turning anything green.
+		Sequences: map[rune]string{
+			'e': "\x1b",
+			'a': "\a",
+		},
+		// `\007` drew the bell and `\101` drew `A`; `\0`, `\1`, `\10` and `\8`
+		// were left as written.
+		Octal: true,
 		// `\q` draws `\q`.
 		Unknown:   repl.KeepBoth,
 		Privilege: "$",

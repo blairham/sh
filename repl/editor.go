@@ -72,11 +72,11 @@ type editor struct {
 //
 // It returns io.EOF for ^D on an empty line — which is how a shell is told to
 // exit — and ErrInterrupted for ^C, which abandons the line without exiting.
-func (e *editor) readLine(prompt string) (string, error) {
+func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	e.line, e.pos = e.line[:0], 0
 	e.browsing = len(e.history)
 	e.row = 0
-	e.write(prompt)
+	e.write(prompt.text)
 
 	var buf [1]byte
 	for {
@@ -194,7 +194,7 @@ func (e *editor) readRune(first byte) (rune, error) {
 // An unrecognized sequence is dropped rather than inserted. A terminal sends
 // far more than this understands, and putting the bytes in the line would mean
 // a stray function key ended up in the command.
-func (e *editor) escape(prompt string) {
+func (e *editor) escape(prompt drawnPrompt) {
 	var b [1]byte
 	if n, err := e.in.Read(b[:]); err != nil || n == 0 || b[0] != '[' {
 		return
@@ -229,7 +229,7 @@ func (e *editor) escape(prompt string) {
 // The line being typed is put aside on the first step back and returned when
 // the walk reaches the end again, so a half-written command is not lost to a
 // glance at what came before.
-func (e *editor) browse(dir int, prompt string) {
+func (e *editor) browse(dir int, prompt drawnPrompt) {
 	if len(e.history) == 0 {
 		return
 	}
@@ -300,7 +300,7 @@ func (e *editor) deleteWord() {
 	e.pos = i
 }
 
-func (e *editor) moveTo(pos int, prompt string) {
+func (e *editor) moveTo(pos int, prompt drawnPrompt) {
 	if pos < 0 || pos > len(e.line) {
 		return
 	}
@@ -314,7 +314,7 @@ func (e *editor) moveTo(pos int, prompt string) {
 // what changed would be faster and would be wrong the first time a character
 // is wider than one cell or the line wraps; and at typing speed there is
 // nothing to gain.
-func (e *editor) redraw(prompt string) {
+func (e *editor) redraw(prompt drawnPrompt) {
 	cols := e.cols()
 	if cols <= 0 {
 		// Nothing known about the terminal, so the line is assumed to fit on
@@ -323,7 +323,7 @@ func (e *editor) redraw(prompt string) {
 		// line rather than only the long ones.
 		var b strings.Builder
 		b.WriteString("\r\x1b[K")
-		b.WriteString(prompt)
+		b.WriteString(prompt.text)
 		b.WriteString(string(e.line))
 		if e.pos < len(e.line) {
 			b.WriteString("\x1b[")
@@ -350,10 +350,10 @@ func (e *editor) redraw(prompt string) {
 	// is being replaced may be several rows of it, and clearing only the
 	// first leaves the rest of the old line below the new one.
 	b.WriteString("\x1b[J")
-	b.WriteString(prompt)
+	b.WriteString(prompt.text)
 	b.WriteString(string(e.line))
 
-	end := displayWidth(prompt) + len(e.line)
+	end := prompt.cells + len(e.line)
 	endRow, endCol := end/cols, end%cols
 	if end > 0 && endCol == 0 {
 		// The line ends exactly at the right-hand edge. A terminal does not
@@ -363,7 +363,7 @@ func (e *editor) redraw(prompt string) {
 		// the space.
 		b.WriteString(" \r")
 	}
-	cur := displayWidth(prompt) + e.pos
+	cur := prompt.cells + e.pos
 	curRow, curCol := cur/cols, cur%cols
 	if endRow > curRow {
 		b.WriteString("\x1b[")
@@ -394,12 +394,12 @@ func (e *editor) cols() int {
 // The cursor sits wherever it was left, which for a wrapped line is usually
 // not the last row of it. A newline from there scrolls the rest of the line
 // out of the way of nothing and the next thing printed lands on top of it.
-func (e *editor) toLastRow(prompt string) {
+func (e *editor) toLastRow(prompt drawnPrompt) {
 	cols := e.cols()
 	if cols <= 0 {
 		return
 	}
-	end := displayWidth(prompt) + len(e.line)
+	end := prompt.cells + len(e.line)
 	if endRow := end / cols; endRow > e.row {
 		e.write("\x1b[" + itoa(endRow-e.row) + "B")
 	}
@@ -407,7 +407,7 @@ func (e *editor) toLastRow(prompt string) {
 
 // endLine finishes the line on the screen: down past the last row of it, then
 // a newline, and the next draw starts from the top again.
-func (e *editor) endLine(prompt, before string) {
+func (e *editor) endLine(prompt drawnPrompt, before string) {
 	e.toLastRow(prompt)
 	e.write(before + "\r\n")
 	e.row = 0
@@ -461,7 +461,7 @@ func displayWidth(s string) int {
 // Measured, bash and zsh lay them out the same way — as many columns as fit,
 // each as wide as the longest match plus two, filled down one column before
 // starting the next, so that reading in sorted order means reading downwards.
-func (e *editor) list(matches []string, prompt string) {
+func (e *editor) list(matches []string, prompt drawnPrompt) {
 	e.endLine(prompt, "")
 	for _, row := range columns(matches, e.cols()) {
 		e.write(row)

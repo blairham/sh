@@ -35,13 +35,69 @@ func TestPromptCodes(t *testing.T) {
 	}
 	for code, want := range map[rune]repl.PromptField{
 		'n': repl.FieldUser, 'm': repl.FieldHost, 'M': repl.FieldHostFull,
-		'~': repl.FieldCwd, 'd': repl.FieldCwdFull, 'C': repl.FieldCwdBase,
+		'~': repl.FieldCwd, 'd': repl.FieldCwdFull, '/': repl.FieldCwdFull,
+		'c': repl.FieldCwdBase, '.': repl.FieldCwdBase, 'C': repl.FieldCwdBaseFull,
 		'#': repl.FieldPrivilege, '%': repl.FieldEscape,
-		't': repl.FieldTime12Padded, '*': repl.FieldTime24, 'w': repl.FieldDateShort,
+		't': repl.FieldTime12Padded, '@': repl.FieldTime12Padded,
+		'*': repl.FieldTime24Unpadded, 'T': repl.FieldTime24HMUnpadded,
+		'w': repl.FieldDateShort, 'W': repl.FieldDateMonthDayYear,
+		'D': repl.FieldDateYearMonthDay, '?': repl.FieldExitStatus,
+		'j': repl.FieldJobCount, '!': repl.FieldHistoryNumber,
+		'h': repl.FieldHistoryNumber, 'y': repl.FieldTerminalName,
+		'{': repl.FieldNonPrintingStart, '}': repl.FieldNonPrintingEnd,
 	} {
 		if got := st.Codes[code]; got != want {
 			t.Errorf("%%%c drew field %v, want %v", code, got, want)
 		}
+	}
+	// The clock is zsh's own and not bash's: measured at six in the morning,
+	// `%*` drew 6:11:43 where bash's `\t` drew 06:11:40.
+	if st.Codes['*'] == repl.FieldTime24 {
+		t.Error("%* pads the hour, and zsh does not")
+	}
+	// `%c` and `%C` are two codes of one shell that disagree, which is what
+	// says the abbreviated base and the plain one are two fields: in the home
+	// directory itself the first drew `~` and the second drew its own name.
+	if st.Codes['c'] == st.Codes['C'] {
+		t.Error("the two directory-base codes draw the same field, and they differ at $HOME")
+	}
+}
+
+// The visual codes, measured as the exact bytes each put on the wire.
+func TestPromptSequences(t *testing.T) {
+	st := zsh.PromptStyle()
+	for code, want := range map[rune]string{
+		'B': "\x1b[1m", 'b': "\x1b[0m", 'U': "\x1b[4m", 'u': "\x1b[24m",
+		'S': "\x1b[7m", 's': "\x1b[27m", 'f': "\x1b[39m", 'k': "\x1b[49m",
+		'E': "\x1b[K",
+	} {
+		if got := st.Sequences[code]; got != want {
+			t.Errorf("%%%c drew %q, want %q", code, got, want)
+		}
+	}
+	// `%b` turns everything off rather than only bold — measured `\e[0m`,
+	// where `%u` was the matching `\e[24m` for underline.
+	if st.Sequences['b'] == "\x1b[22m" {
+		t.Error("the bold-off code turns off bold alone, and zsh turns off everything")
+	}
+	// zsh has no backslash language: the escape is a percent sign and the
+	// backslash codes bash draws are text here.
+	if _, ok := st.Sequences['e']; ok {
+		t.Error("zsh has an entry for bash's \\e")
+	}
+	if st.Octal {
+		t.Error("zsh reads three octal digits, and only bash does")
+	}
+}
+
+// The two color codes, and which half of the screen each paints.
+func TestPromptColors(t *testing.T) {
+	c := zsh.PromptStyle().Colors
+	if got, ok := c['F']; !ok || got != repl.Foreground {
+		t.Errorf("%%F paints %v (present %v), want the foreground", got, ok)
+	}
+	if got, ok := c['K']; !ok || got != repl.Background {
+		t.Errorf("%%K paints %v (present %v), want the background", got, ok)
 	}
 }
 

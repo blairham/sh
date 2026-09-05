@@ -254,7 +254,7 @@ const listQueryThreshold = 100
 // single key read here rather than at the top of the loop, and the line is
 // redrawn afterwards either way. It is the one place the editor reads a key
 // in the middle of drawing.
-func (e *editor) confirmList(matches []string, prompt string) bool {
+func (e *editor) confirmList(matches []string, prompt drawnPrompt) bool {
 	if e.listQuery == "" || len(matches) < listQueryThreshold {
 		return true
 	}

@@ -28,6 +28,7 @@ A spec entry with no citation is a guess and does not belong here.
     core.md           the boundary: what the core language contains
     invocation.md     what the front end decides before anything runs
     history.md        what an interactive shell writes down, and what it does not
+    prompt.md         the prompt languages, and what the editor counts
     grammar/          per-construct specs
       tokenization.md   input to tokens, and where quoting is recorded
       commands.md       tokens to commands: precedence and structure

@@ -31,7 +31,7 @@ func TestALargeListingIsAskedAboutFirst(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			e, out := queryEditor(c.keys, "Display all %[1]d possibilities? (y or n)", false, true)
-			got := e.confirmList(names(c.matches), "P> ")
+			got := e.confirmList(names(c.matches), drawPrompt("P> "))
 			if got != c.want {
 				t.Errorf("printed = %v, want %v", got, c.want)
 			}
@@ -47,7 +47,7 @@ func TestALargeListingIsAskedAboutFirst(t *testing.T) {
 func TestTheQuestionIsTheDialects(t *testing.T) {
 	e, out := queryEditor("y", "zsh: do you wish to see all %[1]d possibilities (%[2]d lines)? ", true, false)
 	e.width = func() int { return 80 }
-	e.confirmList(names(120), "P> ")
+	e.confirmList(names(120), drawPrompt("P> "))
 	got := out.String()
 	if !strings.Contains(got, "all 120 possibilities (") {
 		t.Errorf("said %q, want the number of matches", got)
@@ -64,7 +64,7 @@ func TestTheQuestionIsTheDialects(t *testing.T) {
 func TestAnAnswerThatIsNeitherYesNorNo(t *testing.T) {
 	t.Run("the first key decides", func(t *testing.T) {
 		e, out := queryEditor("q", "ask %[1]d %[2]d", true, false)
-		if e.confirmList(names(100), "P> ") {
+		if e.confirmList(names(100), drawPrompt("P> ")) {
 			t.Error("printed, want the first key to decline")
 		}
 		if strings.Contains(out.String(), "\a") {
@@ -74,7 +74,7 @@ func TestAnAnswerThatIsNeitherYesNorNo(t *testing.T) {
 	t.Run("or the bell, and asked again", func(t *testing.T) {
 		// Two keys that are not answers, then one that is.
 		e, out := queryEditor("qxy", "ask %[1]d %[2]d", false, true)
-		if !e.confirmList(names(100), "P> ") {
+		if !e.confirmList(names(100), drawPrompt("P> ")) {
 			t.Error("did not print, want the `y` after the two to be taken")
 		}
 		if n := strings.Count(out.String(), "\a"); n != 2 {
@@ -87,7 +87,7 @@ func TestAnAnswerThatIsNeitherYesNorNo(t *testing.T) {
 func TestTheAnswerIsEchoedOrNot(t *testing.T) {
 	for _, echo := range []bool{true, false} {
 		e, out := queryEditor("y", "ask %[1]d %[2]d", echo, false)
-		e.confirmList(names(100), "P> ")
+		e.confirmList(names(100), drawPrompt("P> "))
 		// After the question, and before the newline that ends it.
 		if got := strings.Contains(out.String(), "ask 100"); !got {
 			t.Fatalf("said %q, want the question", out.String())
@@ -102,7 +102,7 @@ func TestTheAnswerIsEchoedOrNot(t *testing.T) {
 // without a line editor of their own leave it at.
 func TestNoQuestionMeansPrint(t *testing.T) {
 	e, out := queryEditor("", "", false, false)
-	if !e.confirmList(names(1000), "P> ") {
+	if !e.confirmList(names(1000), drawPrompt("P> ")) {
 		t.Error("did not print, want a shell with no question to print")
 	}
 	if out.Len() != 0 {
@@ -113,7 +113,7 @@ func TestNoQuestionMeansPrint(t *testing.T) {
 // Input ending while the question is unanswered is nobody to print for.
 func TestAQuestionNobodyAnswers(t *testing.T) {
 	e, _ := queryEditor("", "ask %[1]d %[2]d", false, true)
-	if e.confirmList(names(100), "P> ") {
+	if e.confirmList(names(100), drawPrompt("P> ")) {
 		t.Error("printed, want an unanswered question to decline")
 	}
 }
@@ -160,7 +160,7 @@ func TestDecliningStopsTheListingAndAcceptingDoesNot(t *testing.T) {
 				listQuery:       "ask %[1]d %[2]d",
 				listQueryStrict: true,
 			}
-			line, err := e.readLine("P> ")
+			line, err := e.readLine(drawPrompt("P> "))
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -90,6 +90,66 @@ func TestAPromptIsExpandedAtEachDraw(t *testing.T) {
 	}
 }
 
+// A command substitution is run again at every prompt, and not once when the
+// prompt was assigned.
+//
+// This is the whole of how a prompt that says which branch you are on works,
+// and a value read once would say the branch you were on when the shell
+// started. Measured: with `PS2='@@$(echo re)##'` set, bash drew `re` at the
+// continuation prompt, so the substitution is run for both prompts.
+func TestACommandSubstitutionRunsAgainAtEachPrompt(t *testing.T) {
+	var out, errs strings.Builder
+	in := readerFile(t, "n=1\nn=2\n")
+	r := newTestRunner(map[string]string{"PS1": "[$(echo $n)]"})
+	r.Stdout = &out
+	s := Shell{
+		Runner: r, In: in, Out: &out, Err: &errs,
+		Style: PromptStyle{Expand: true},
+	}
+	if _, err := s.Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if got := errs.String(); got != "[][1][2]" {
+		t.Errorf("prompts = %q, want [][1][2] — the command run again each time", got)
+	}
+}
+
+// The continuation prompt is read exactly as the first one is.
+//
+// Measured through a pty, with PS2 set to a prompt of codes: bash 5.3.15 and
+// 3.2.57 drew the user name, the directory, the privilege character and a
+// bracketed color at the continuation prompt, and zsh 5.9.2 drew the same from
+// its own language. Nothing about the table is conditional on which of the two
+// parameters the text came from.
+func TestTheContinuationPromptIsReadLikeTheFirst(t *testing.T) {
+	var out, errs strings.Builder
+	in := readerFile(t, "for i in 1\ndo :; done\n")
+	r := newTestRunner(map[string]string{
+		"USER": "someone",
+		"PS1":  `<1:\u>`,
+		"PS2":  `<2:\u:$(echo sub):\[\e[31m\]>`,
+	})
+	r.Stdout = &out
+	s := Shell{
+		Runner: r, In: in, Out: &out, Err: &errs,
+		Style: PromptStyle{
+			Expand: true, Escape: '\\', Unknown: KeepBoth,
+			Codes: map[rune]PromptField{
+				'u': FieldUser,
+				'[': FieldNonPrintingStart, ']': FieldNonPrintingEnd,
+			},
+			Sequences: map[rune]string{'e': "\x1b"},
+		},
+	}
+	if _, err := s.Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	want := "<1:someone>" + "<2:someone:sub:\x1b[31m>" + "<1:someone>"
+	if got := errs.String(); got != want {
+		t.Errorf("prompts = %q, want %q", got, want)
+	}
+}
+
 // A dialect's default prompt is its own, and is read the same way an assigned
 // one is — so a default may hold codes.
 //
@@ -166,5 +226,5 @@ func drawn(s Shell, continuing bool) string {
 	if continuing {
 		pending.WriteString("for i in 1\n")
 	}
-	return s.beforeReading(&pending)
+	return s.beforeReading(&pending).text
 }

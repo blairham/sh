@@ -22,7 +22,7 @@ func typed(t *testing.T, keys string) (string, string, error) {
 	t.Helper()
 	var out strings.Builder
 	e := &editor{in: strings.NewReader(keys), out: &out}
-	line, err := e.readLine("$ ")
+	line, err := e.readLine(drawPrompt("$ "))
 	return line, out.String(), err
 }
 
@@ -31,7 +31,7 @@ func typedMarking(t *testing.T, mark, keys string) (string, string, error) {
 	t.Helper()
 	var out strings.Builder
 	e := &editor{in: strings.NewReader(keys), out: &out, interrupt: mark}
-	line, err := e.readLine("$ ")
+	line, err := e.readLine(drawPrompt("$ "))
 	return line, out.String(), err
 }
 
@@ -130,26 +130,26 @@ func TestHistory(t *testing.T) {
 	e.remember("second")
 
 	e.in = strings.NewReader("\x1b[A\r")
-	if line, _ := e.readLine("$ "); line != "second" {
+	if line, _ := e.readLine(drawPrompt("$ ")); line != "second" {
 		t.Errorf("one step back gave %q, want second", line)
 	}
 	e.in = strings.NewReader("\x1b[A\x1b[A\r")
-	if line, _ := e.readLine("$ "); line != "first" {
+	if line, _ := e.readLine(drawPrompt("$ ")); line != "first" {
 		t.Errorf("two steps back gave %q, want first", line)
 	}
 	// Past the oldest is a floor, not a wrap.
 	e.in = strings.NewReader("\x1b[A\x1b[A\x1b[A\x1b[A\r")
-	if line, _ := e.readLine("$ "); line != "first" {
+	if line, _ := e.readLine(drawPrompt("$ ")); line != "first" {
 		t.Errorf("four steps back gave %q, want first", line)
 	}
 	// Forward again brings back what was being typed.
 	e.in = strings.NewReader("half\x1b[A\x1b[B\r")
-	if line, _ := e.readLine("$ "); line != "half" {
+	if line, _ := e.readLine(drawPrompt("$ ")); line != "half" {
 		t.Errorf("back then forward gave %q, want the typed line returned", line)
 	}
 	// ^P and ^N are the same two movements.
 	e.in = strings.NewReader("\x10\x10\x0e\r")
-	if line, _ := e.readLine("$ "); line != "second" {
+	if line, _ := e.readLine(drawPrompt("$ ")); line != "second" {
 		t.Errorf("^P^P^N gave %q, want second", line)
 	}
 }
@@ -187,7 +187,7 @@ func TestTabAndSecondTab(t *testing.T) {
 	c := fakeCompleter{paths: []string{"apple.txt", "apricot.txt"}}
 	var out strings.Builder
 	e := &editor{in: strings.NewReader("echo ap\t\r"), out: &out, comp: c}
-	if line, err := e.readLine("$ "); err != nil || line != "echo ap" {
+	if line, err := e.readLine(drawPrompt("$ ")); err != nil || line != "echo ap" {
 		t.Fatalf("one Tab gave %q %v, want the line unchanged", line, err)
 	}
 	if strings.Contains(out.String(), "apricot") {
@@ -196,7 +196,7 @@ func TestTabAndSecondTab(t *testing.T) {
 
 	out.Reset()
 	e = &editor{in: strings.NewReader("echo ap\t\t\r"), out: &out, comp: c}
-	if _, err := e.readLine("$ "); err != nil {
+	if _, err := e.readLine(drawPrompt("$ ")); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "apple.txt") || !strings.Contains(out.String(), "apricot.txt") {
@@ -206,7 +206,7 @@ func TestTabAndSecondTab(t *testing.T) {
 	// Anything between them is not two Tabs in a row.
 	out.Reset()
 	e = &editor{in: strings.NewReader("echo ap\tx\x7f\t\r"), out: &out, comp: c}
-	if _, err := e.readLine("$ "); err != nil {
+	if _, err := e.readLine(drawPrompt("$ ")); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(out.String(), "apricot") {

@@ -333,3 +333,132 @@ func TestAGateSuppliedHereIsAskedFromEveryGoroutine(t *testing.T) {
 		t.Fatal("nothing reached the sink from a background job or a pipeline")
 	}
 }
+
+// One run has one identity, and every event carries it.
+//
+// The front end is where this has to be decided, because the front end is what
+// has more than one account of a run to line up: the event stream here, and
+// whatever a prompt records about the same commands. Two identities made
+// independently would leave the two files describing the same session under
+// different names, which is the state this replaced — a block store invented
+// one and the audit stream had none at all.
+func TestEveryEventOfOneRunNamesTheSameSession(t *testing.T) {
+	const src = "/bin/echo one; /bin/echo two\n"
+	script := writeScript(t, src)
+	for _, tc := range []struct {
+		name string
+		argv []string
+		// front is a path the *front end* opens on this route, which is the
+		// half interp never sees: those records come from internal/boundary
+		// and were the last to be given an identity at all.
+		front string
+	}{
+		{"-c", []string{"testsh", "-c", src}, ""},
+		{"a script file", []string{"testsh", script}, script},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := &recorder{}
+			sh := shell()
+			sh.Events = rec
+
+			_, errs, code := runArgs(t, sh, tc.argv...)
+			if code != 0 {
+				t.Fatalf("status %d: %s", code, errs)
+			}
+
+			rec.mu.Lock()
+			defer rec.mu.Unlock()
+			if len(rec.events) == 0 {
+				t.Fatal("no events, so the assertion is vacuous")
+			}
+			first := rec.events[0].Session
+			if first == "" {
+				t.Fatal("the run has no identity: nothing joins this stream to anything else")
+			}
+			for _, e := range rec.events {
+				if e.Session != first {
+					t.Errorf("%v event about %s says session %q, want %q — one run, one identity",
+						e.Kind, e.Action.Path, e.Session, first)
+				}
+				if e.Action.ID == "" {
+					t.Errorf("%v event about %s carries no action id", e.Kind, e.Action.Path)
+				}
+			}
+			if tc.front == "" {
+				return
+			}
+			// And the front end's own open is in there, under the same
+			// identity. It is a different emitter reached by a different
+			// route, so a session threaded to the interpreter and not to it
+			// would look exactly like this test passing.
+			found := false
+			for _, e := range rec.events {
+				if e.Action.Path == tc.front {
+					found = true
+					if e.Session != first {
+						t.Errorf("the front end's open of %s says session %q, want %q",
+							tc.front, e.Session, first)
+					}
+				}
+			}
+			if !found {
+				t.Errorf("no record of the front end opening %s", tc.front)
+			}
+		})
+	}
+}
+
+// Two runs are two sessions.
+//
+// The identity is per invocation and not per binary or per machine, because
+// what it distinguishes is one shell's records from another's in a file both
+// append to. A constant here would make every record joinable to every other,
+// which is indistinguishable from having no identity and looks like having one.
+func TestTwoRunsHaveDifferentSessions(t *testing.T) {
+	sessionOf := func(t *testing.T) string {
+		t.Helper()
+		rec := &recorder{}
+		sh := shell()
+		sh.Events = rec
+		if _, errs, code := runArgs(t, sh, "testsh", "-c", "/bin/echo hi"); code != 0 {
+			t.Fatalf("status %d: %s", code, errs)
+		}
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		if len(rec.events) == 0 {
+			t.Fatal("no events")
+		}
+		return rec.events[0].Session
+	}
+	if a, b := sessionOf(t), sessionOf(t); a == b {
+		t.Errorf("both runs say session %q", a)
+	}
+}
+
+// An identity the caller chose is the identity that is used.
+//
+// A front end that already has a notion of a session — an agent protocol with
+// several shells behind one connection — has to be able to say so, or its
+// records and ours name the same conversation two ways. Left empty this makes
+// one; set, it must not be overwritten, and overwriting it is the failure mode
+// a default is most likely to have.
+func TestASuppliedSessionIsNotReplaced(t *testing.T) {
+	rec := &recorder{}
+	sh := shell()
+	sh.Events = rec
+	sh.Session = "CHOSEN-BY-THE-CALLER"
+
+	if _, errs, code := runArgs(t, sh, "testsh", "-c", "/bin/echo hi"); code != 0 {
+		t.Fatalf("status %d: %s", code, errs)
+	}
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if len(rec.events) == 0 {
+		t.Fatal("no events")
+	}
+	for _, e := range rec.events {
+		if e.Session != "CHOSEN-BY-THE-CALLER" {
+			t.Fatalf("session = %q, want the caller's", e.Session)
+		}
+	}
+}

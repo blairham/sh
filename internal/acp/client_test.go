@@ -6,9 +6,11 @@ package acp_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -171,8 +173,9 @@ func allowOnce(context.Context, acp.RequestPermissionRequest) (acp.PermissionOut
 type agentSide struct {
 	conn *acp.Conn
 
-	mu  sync.Mutex
-	saw []json.RawMessage
+	mu     sync.Mutex
+	saw    []json.RawMessage
+	called []string
 	// answer, when set, is what the fake answers to every request rather
 	// than the usual handshake.
 	answer func(method string) (any, error)
@@ -181,6 +184,7 @@ type agentSide struct {
 func (a *agentSide) Handle(_ context.Context, method string, params json.RawMessage) (any, error) {
 	a.mu.Lock()
 	a.saw = append(a.saw, params)
+	a.called = append(a.called, method)
 	a.mu.Unlock()
 	if a.answer != nil {
 		return a.answer(method)
@@ -437,6 +441,205 @@ func (a *agentSide) params(n int) json.RawMessage {
 		return nil
 	}
 	return a.saw[n]
+}
+
+// methods is every method the agent was asked for, in order. It answers "was
+// this ever sent", which for authentication is half the contract: a terminal
+// method that reaches the wire at all is a rule broken.
+func (a *agentSide) methods() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return append([]string(nil), a.called...)
+}
+
+// offering builds a stand-in agent that advertises these methods and refuses a
+// session until authenticate has been called, which is what two of the three
+// published agents do.
+func offering(methods ...acp.AuthMethod) *agentSide {
+	var fake *agentSide
+	fake = &agentSide{answer: func(method string) (any, error) {
+		switch method {
+		case acp.MethodInitialize:
+			return acp.InitializeResponse{ProtocolVersion: acp.Version, AuthMethods: methods}, nil
+		case acp.MethodAuthenticate:
+			return acp.AuthenticateResponse{}, nil
+		case acp.MethodNewSession:
+			for _, m := range fake.methods() {
+				if m == acp.MethodAuthenticate {
+					return acp.NewSessionResponse{SessionID: "s1"}, nil
+				}
+			}
+			return nil, acp.Errorf(acp.CodeAuthRequired, "Authentication required")
+		}
+		return nil, acp.Errorf(acp.CodeMethodNotFound, "no %s", method)
+	}}
+	return fake
+}
+
+// An agent method is the authenticate call, carrying the id the agent itself
+// named — and once it has been made the session it was refusing opens.
+func TestAnAgentMethodIsSettledByAuthenticate(t *testing.T) {
+	t.Parallel()
+	c := &acp.Client{Info: acp.Implementation{Name: "test-client", Version: "1"}}
+	fake := offering(acp.AuthMethod{ID: "api-key", Name: "API key"})
+	against(t, c, fake)
+
+	if _, err := c.Initialize(t.Context()); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	if _, err := c.NewSession(t.Context(), t.TempDir()); !acp.AuthRequired(err) {
+		t.Fatalf("session/new before authenticating: %v, want -32000", err)
+	}
+	if err := c.Authenticate(t.Context(), "api-key"); err != nil {
+		t.Fatalf("authenticate: %v", err)
+	}
+	var req acp.AuthenticateRequest
+	if err := json.Unmarshal(fake.params(2), &req); err != nil {
+		t.Fatalf("the agent could not read what it was sent: %v", err)
+	}
+	if req.MethodID != "api-key" {
+		t.Errorf("methodId = %q, want the id the agent advertised", req.MethodID)
+	}
+	if id, err := c.NewSession(t.Context(), t.TempDir()); err != nil || id != "s1" {
+		t.Errorf("session/new after authenticating = %q, %v", id, err)
+	}
+}
+
+// A terminal method is not a message. The schema forbids passing one to
+// authenticate: the client runs the agent's own program again instead, with
+// the method's arguments and environment, and a zero exit is the answer.
+func TestATerminalMethodRelaunchesAndIsNeverSent(t *testing.T) {
+	t.Parallel()
+	var gotArgs []string
+	var gotEnv map[string]string
+	c := &acp.Client{
+		Info: acp.Implementation{Name: "test-client", Version: "1"},
+		Relaunch: func(_ context.Context, args []string, env map[string]string) error {
+			gotArgs, gotEnv = args, env
+			return nil
+		},
+	}
+	fake := offering(acp.AuthMethod{
+		Type: acp.AuthTerminal, ID: "login", Name: "Log in",
+		Args: []string{"/login"}, Env: map[string]string{"MODE": "interactive"},
+	})
+	against(t, c, fake)
+
+	if _, err := c.Initialize(t.Context()); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	if err := c.Authenticate(t.Context(), "login"); err != nil {
+		t.Fatalf("authenticate: %v", err)
+	}
+	if !slices.Equal(gotArgs, []string{"/login"}) {
+		t.Errorf("relaunch args = %v, want the method's", gotArgs)
+	}
+	if gotEnv["MODE"] != "interactive" {
+		t.Errorf("relaunch env = %v, want the method's", gotEnv)
+	}
+	if slices.Contains(fake.methods(), acp.MethodAuthenticate) {
+		t.Errorf("a terminal method was passed to authenticate: %v", fake.methods())
+	}
+}
+
+// A login that did not succeed is not an authentication. Any termination but a
+// zero exit means the person did not finish, and carrying on to session/new
+// would turn that into an unrelated -32000 further down.
+func TestATerminalLoginThatFailsIsAFailure(t *testing.T) {
+	t.Parallel()
+	c := &acp.Client{
+		Info: acp.Implementation{Name: "test-client", Version: "1"},
+		Relaunch: func(context.Context, []string, map[string]string) error {
+			return errors.New("exit status 1")
+		},
+	}
+	against(t, c, offering(acp.AuthMethod{Type: acp.AuthTerminal, ID: "login", Name: "Log in"}))
+
+	if _, err := c.Initialize(t.Context()); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	err := c.Authenticate(t.Context(), "login")
+	if err == nil {
+		t.Fatal("a login that exited non-zero was read as success")
+	}
+	if !strings.Contains(err.Error(), "exit status 1") {
+		t.Errorf("err = %v, want it to carry what went wrong", err)
+	}
+}
+
+// A terminal method from an agent that was never told we could serve one is
+// refused rather than attempted, and refused without reaching the wire.
+func TestATerminalMethodWithNoTerminalIsRefused(t *testing.T) {
+	t.Parallel()
+	c := &acp.Client{Info: acp.Implementation{Name: "test-client", Version: "1"}}
+	fake := offering(acp.AuthMethod{Type: acp.AuthTerminal, ID: "login", Name: "Log in"})
+	against(t, c, fake)
+
+	if _, err := c.Initialize(t.Context()); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	if err := c.Authenticate(t.Context(), "login"); err == nil {
+		t.Fatal("a terminal login was attempted with no terminal to run it on")
+	}
+	if slices.Contains(fake.methods(), acp.MethodAuthenticate) {
+		t.Errorf("a terminal method was passed to authenticate: %v", fake.methods())
+	}
+}
+
+// A method the agent did not advertise is not a method. It is the same rule as
+// an option id we never offered, read the other way round — the agent named
+// the choices — and it is settled here rather than sent.
+func TestAnAuthMethodTheAgentDidNotOfferIsRefused(t *testing.T) {
+	t.Parallel()
+	c := &acp.Client{Info: acp.Implementation{Name: "test-client", Version: "1"}}
+	fake := offering(acp.AuthMethod{ID: "api-key", Name: "API key"})
+	against(t, c, fake)
+
+	if _, err := c.Initialize(t.Context()); err != nil {
+		t.Fatalf("initialize: %v", err)
+	}
+	err := c.Authenticate(t.Context(), "oauth-personal")
+	if err == nil {
+		t.Fatal("a method the agent never advertised was attempted")
+	}
+	// The list it did offer, because the next thing anybody does is pick from
+	// it, and a refusal that hides the alternatives makes them look at logs.
+	if !strings.Contains(err.Error(), "api-key") {
+		t.Errorf("err = %v, want it to name what was offered", err)
+	}
+	if slices.Contains(fake.methods(), acp.MethodAuthenticate) {
+		t.Errorf("an unadvertised method reached the wire: %v", fake.methods())
+	}
+}
+
+// An agent offers a terminal method only to a client that said it can run one,
+// so the claim and the ability to honor it must not be two fields. They are
+// one: the hook is the advertisement.
+func TestTerminalAuthIsAdvertisedOnlyWhenItCanBeServed(t *testing.T) {
+	t.Parallel()
+	for _, able := range []bool{true, false} {
+		t.Run(map[bool]string{true: "offered", false: "withheld"}[able], func(t *testing.T) {
+			t.Parallel()
+			c := &acp.Client{Info: acp.Implementation{Name: "test-client", Version: "1"}}
+			if able {
+				c.Relaunch = func(context.Context, []string, map[string]string) error { return nil }
+			}
+			fake := &agentSide{}
+			against(t, c, fake)
+			if _, err := c.Initialize(t.Context()); err != nil {
+				t.Fatalf("initialize: %v", err)
+			}
+			var req struct {
+				Capabilities acp.ClientCapabilities `json:"clientCapabilities"`
+			}
+			if err := json.Unmarshal(fake.params(0), &req); err != nil {
+				t.Fatalf("the agent could not read what it was sent: %v", err)
+			}
+			if req.Capabilities.Auth.Terminal != able {
+				t.Errorf("auth.terminal = %v, want %v", req.Capabilities.Auth.Terminal, able)
+			}
+		})
+	}
 }
 
 // A capability is only usable if the agent is told about it. The client's

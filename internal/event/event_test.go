@@ -12,6 +12,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -328,4 +329,194 @@ func records(t *testing.T, buf *bytes.Buffer) []map[string]any {
 		out = append(out, r)
 	}
 	return out
+}
+
+// An id is the length the disambiguation in Find relies on, and it is made of
+// the alphabet a filename can hold without quoting.
+func TestAnIDIsFixedWidthAndFilenameSafe(t *testing.T) {
+	id := NewID(time.Unix(1_757_000_000, 12345))
+	if len(id) != IDLength {
+		t.Fatalf("id %q is %d characters, want %d", id, len(id), IDLength)
+	}
+	for _, r := range id {
+		if (r < '0' || r > '9') && (r < 'A' || r > 'V') {
+			t.Fatalf("id %q holds %q, which is not base32hex", id, r)
+		}
+	}
+}
+
+// Sorting the strings sorts them by time, which is the whole reason for
+// choosing base32hex over standard base32 — its alphabet is ordered.
+//
+// The times are far enough apart to be unambiguous and close enough that only
+// the low bytes of the timestamp differ, which is the case that would break if
+// the encoding were not order-preserving.
+func TestIDsSortIntoTimeOrder(t *testing.T) {
+	base := time.Unix(1_757_000_000, 0)
+	var ids []string
+	var want []string
+	for i := range 20 {
+		id := NewID(base.Add(time.Duration(i) * time.Millisecond))
+		ids = append(ids, id)
+		want = append(want, id)
+	}
+	// Shuffled by sorting a copy: the input was already in order, so a sort
+	// that did nothing would pass. Reverse first.
+	for i, j := 0, len(ids)-1; i < j; i, j = i+1, j-1 {
+		ids[i], ids[j] = ids[j], ids[i]
+	}
+	sort.Strings(ids)
+	for i := range ids {
+		if ids[i] != want[i] {
+			t.Fatalf("sorted position %d is %q, want %q — the encoding is not order-preserving",
+				i, ids[i], want[i])
+		}
+	}
+}
+
+// Two shells in the same nanosecond still write different ids, which is what
+// makes an append-only store with no coordination possible.
+func TestIDsInTheSameInstantDiffer(t *testing.T) {
+	at := time.Unix(1_757_000_000, 7)
+	seen := map[string]bool{}
+	for range 1000 {
+		id := NewID(at)
+		if seen[id] {
+			t.Fatalf("id %q came back twice for one instant", id)
+		}
+		seen[id] = true
+	}
+}
+
+// The two identity fields go on the wire under the names a consumer joins on.
+//
+// Both were added within version 1 rather than as a version bump, which is rule
+// 3 being used rather than described. What they add is the ability to line up
+// two records of one run: the session says which shell, and the action id says
+// which action within it.
+func TestARecordCarriesItsSessionAndActionID(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	enc := testEncoder(&buf)
+	enc.Emit(t.Context(), interp.Event{
+		Kind:    interp.EventCommandStart,
+		Session: "SESSION",
+		Action:  interp.Action{ID: "12", Kind: interp.ActionExec, Path: "/bin/echo"},
+	})
+	lines := records(t, &buf)
+	if len(lines) != 1 {
+		t.Fatalf("got %d records, want 1", len(lines))
+	}
+	if got := lines[0]["session"]; got != "SESSION" {
+		t.Errorf("session = %v, want the Runner's", got)
+	}
+	if got := lines[0]["actionId"]; got != "12" {
+		t.Errorf("actionId = %v, want the action's", got)
+	}
+	// Not seq. The two are different numbers with different meanings and the
+	// schema says so: seq orders emission within one stream and differs on
+	// every record, and this names one action and repeats on every record about
+	// it. A consumer that joined on seq would join a command's start to
+	// whatever happened to be emitted next.
+	if got := lines[0]["seq"]; got != float64(1) {
+		t.Errorf("seq = %v, want the stream's own counter untouched", got)
+	}
+}
+
+// An action's id repeats across every record about that action, and the stream
+// counter does not.
+//
+// This is the property a consumer relies on, asserted against the two fields
+// together because either one alone reads as plausible: a start and an end that
+// share an actionId and differ in seq is the shape, and any other combination
+// is a schema that cannot be joined or cannot be replayed.
+func TestOneActionsRecordsShareAnIDAndDifferInSeq(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	enc := testEncoder(&buf)
+	a := interp.Action{ID: "4", Kind: interp.ActionExec, Path: "/bin/false"}
+	enc.Emit(t.Context(), interp.Event{Kind: interp.EventCommandStart, Action: a})
+	enc.Emit(t.Context(), interp.Event{Kind: interp.EventCommandEnd, Action: a, Status: 1})
+	lines := records(t, &buf)
+	if len(lines) != 2 {
+		t.Fatalf("got %d records, want 2", len(lines))
+	}
+	if lines[0]["actionId"] != lines[1]["actionId"] {
+		t.Errorf("actionIds are %v and %v, want one action to have one id",
+			lines[0]["actionId"], lines[1]["actionId"])
+	}
+	if lines[0]["seq"] == lines[1]["seq"] {
+		t.Errorf("both records have seq %v, want the stream's own order", lines[0]["seq"])
+	}
+}
+
+// A run with no identity writes no identity, which is rule 5.
+//
+// An embedder that set no Session and a Runner nobody was watching both produce
+// events with nothing to say here, and saying nothing is the honest record: a
+// consumer reads the absent field as empty and knows this stream cannot be
+// joined, rather than being handed a placeholder that looks like an id.
+func TestAnIdentitylessRunWritesNoIdentity(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	enc := testEncoder(&buf)
+	enc.Emit(t.Context(), interp.Event{
+		Kind:   interp.EventAccess,
+		Action: interp.Action{Kind: interp.ActionStat, Path: "/tmp/x"},
+	})
+	lines := records(t, &buf)
+	if _, ok := lines[0]["session"]; ok {
+		t.Error("a run with no session wrote one")
+	}
+	if _, ok := lines[0]["actionId"]; ok {
+		t.Error("an action with no id wrote one")
+	}
+}
+
+// A consumer written before these fields existed still reads a record that has
+// them, which is the whole reason this was an added field and not a version 2.
+//
+// The consumer here is deliberately the *original* field set, spelled out
+// rather than referenced, so that it cannot quietly grow the new fields and
+// stop testing anything. Both existing consumers of this schema are of exactly
+// this shape — they decode into a struct of the fields they know and ignore the
+// rest — so if this passes, neither needed a change.
+func TestAConsumerWrittenBeforeTheIdentityFieldsStillReads(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	enc := testEncoder(&buf)
+	enc.Emit(t.Context(), interp.Event{
+		Kind:    interp.EventDenied,
+		Session: "SESSION",
+		Action: interp.Action{
+			ID: "12", Kind: interp.ActionOpen, Path: "/etc/shadow", Write: true,
+		},
+		Line: 3, File: "script.sh",
+	})
+	var old struct {
+		V      int       `json:"v"`
+		Seq    int64     `json:"seq"`
+		Time   time.Time `json:"time"`
+		Event  string    `json:"event"`
+		Action string    `json:"action"`
+		Path   string    `json:"path"`
+		Args   []string  `json:"args"`
+		Write  bool      `json:"write"`
+		PID    *int      `json:"pid"`
+		Signal *int      `json:"signal"`
+		Status *int      `json:"status"`
+		Error  string    `json:"error"`
+		Line   int       `json:"line"`
+		File   string    `json:"file"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &old); err != nil {
+		t.Fatalf("a record with the identity fields did not decode: %v", err)
+	}
+	if old.V != Version {
+		t.Errorf("v = %d, want %d — an added field must not bump the version", old.V, Version)
+	}
+	if old.Event != "denied" || old.Action != "open" || old.Path != "/etc/shadow" ||
+		!old.Write || old.Line != 3 || old.File != "script.sh" || old.Seq != 1 {
+		t.Errorf("a version 1 consumer read %+v, want every original field unchanged", old)
+	}
 }

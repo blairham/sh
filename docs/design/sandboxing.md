@@ -405,6 +405,7 @@ JSON array would have to be closed to be valid, which a log that is
 being written cannot be.
 
     {"v":1,"seq":4,"time":"2026-09-05T11:02:03.000000001Z",
+     "session":"0VJ8QG7K2M4N6P8R0S2T4V","actionId":"12",
      "event":"denied","action":"open","path":"/etc/shadow",
      "write":false,"line":3,"file":"script.sh"}
 
@@ -415,6 +416,8 @@ being written cannot be.
 | `v` | integer | always — the schema version, `1` |
 | `seq` | integer | always — 1, 2, 3, … within one stream |
 | `time` | RFC 3339 with nanoseconds | always |
+| `session` | string | when the run has an identity |
+| `actionId` | string | when the action has an identity |
 | `event` | string | always — `command-start`, `command-end`, `denied`, `error`, `access` |
 | `action` | string | always — `exec`, `open`, `stat`, `read-dir`, `signal`, `inherit` |
 | `path` | string | when the action has one |
@@ -479,6 +482,88 @@ what happened; a sequence number is a property of a stream, and a
 timestamp is a property of an observation. Putting them on the event
 would make every consumer pay for a clock read whether or not it wanted
 one, and would make `interp`'s tests depend on time.
+
+### `session` and `actionId` are identity, and neither is `seq`
+
+These are the first change the schema took after it landed, and they
+went in as *added fields* rather than a version bump — which is rule 3
+being used rather than described. A consumer written against the
+original fifteen fields reads a record carrying these exactly as it did
+before, and a test in `internal/event` decodes into that original field
+set to keep it true.
+
+They were added because two consumers arrived at the same missing field
+from opposite directions and neither could work around it. A front end
+that owns a command's outer boundary knows when a command started and
+ended but cannot say **which events belong to which command**, so its
+record and this stream describe the same session and cannot be joined.
+An agent protocol has the same problem one level down: it opens a tool
+call when a command starts and closes it when the command ends, and
+`EventCommandStart` and `EventCommandEnd` were matched by *ordering* —
+which concurrency breaks, because a background job and each half of a
+pipeline emit from their own goroutines. Matching on a fingerprint of
+(kind, path, args, line, file) closes the wrong record whenever a script
+runs the same command twice at once.
+
+Doing it per consumer was the expensive path and the reason this is one
+field rather than two: two private id schemes that do not agree are
+worse than no id at all, because they look joinable and are not.
+
+**`actionId` is on `interp.Action`,** so the id a `Gate` is consulted
+about is the id the events for that action carry. That is the whole
+promise — a permission request and the records of what was permitted are
+provably the same action — and it is why the field could not live only
+on the wire the way `seq` does.
+
+**It is a counter, and `session` is what makes it unique.** A `PATH`
+search stats a candidate in every directory `PATH` names and a glob
+stats every entry it descends past, so this is one of the hottest things
+the interpreter does; sixteen bytes of randomness per stat would be paid
+by every shell that had merely asked to watch itself. The counter is
+shared across a subshell rather than copied, because a cloned Runner
+that numbered from its own copy would hand two different actions the
+same id. The pair `(session, actionId)` is what is unique everywhere.
+
+**`actionId` is not `seq` and the two must never be conflated.** `seq`
+orders *emission* within one stream and differs on every record;
+`actionId` names one action and is the *same* on every record about it.
+A consumer that joined on `seq` would pair a command's start with
+whatever happened to be emitted next.
+
+**`session` comes from the front end, not from `interp`.** A Runner does
+not invent identity, for the same reason it does not read a clock on an
+event's behalf: what needs the identity is the thing that has more than
+one account of a run to line up, and that is the front end. `driver`
+makes one per invocation, in `withDefaults`, which is the single point
+every route passes through before anything is built — so the Runner and
+the prompt cannot end up with different answers. A caller that already
+has a notion of a session, such as an agent protocol with several shells
+behind one connection, sets `driver.Shell.Session` and it is left alone.
+An empty `session` is a run nobody gave an identity, and the field is
+then omitted rather than filled with a placeholder: a record that cannot
+be joined should say so.
+
+The id generator itself is `event.NewID`, here rather than beside any
+one consumer, because one generator is the whole point. It is
+`math/rand/v2` and deliberately not `crypto/rand`, and the reason is
+specific to a shell: what is wanted is uniqueness rather than
+unpredictability, and measured on macOS the first `crypto/rand.Read` in
+a process permanently opens a descriptor. In a shell that number is not
+an implementation detail — descriptor 3 is the first one a script parks
+with `exec 3>f`, and the process's table is what a replacement inherits.
+
+**The front end's own accesses are identified too, and mint their ids
+rather than counting.** `internal/boundary` is the third emitter — the
+script operand, `$ENV`, `HISTFILE`, the block store's own index — and
+its records are the ones most likely to be joined, since one of the
+files it opens *is* the record of what the shell ran. It carries the
+same `session`, and stamps each access with an `event.NewID`. The
+opposite choice from `interp`, for the opposite reason: there a counter
+is forced by the hot path, and out here a run makes a handful of these,
+so an id needing no coordination is what lets the several places that
+build a `Boundary` go on building one independently. A shared counter
+would have to be threaded through all of them and the first that forgot
+would issue a duplicate.
 
 ## Consequences a user meets immediately
 

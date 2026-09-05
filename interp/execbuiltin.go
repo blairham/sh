@@ -82,7 +82,7 @@ func (r *Runner) replaceSelf(ctx context.Context, argv []string) int {
 	if lookErr != nil {
 		path = argv[0]
 	}
-	action := Action{Kind: ActionExec, Path: path, Args: argv}
+	action := r.act(Action{Kind: ActionExec, Path: path, Args: argv})
 	if !r.allowed(ctx, action) {
 		// A denied action is a command that failed rather than a broken
 		// shell, and that is true here too: a refused `exec` leaves the shell

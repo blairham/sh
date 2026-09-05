@@ -159,6 +159,10 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		// prompt does has a hole shaped exactly like `HISTFILE=/somewhere`.
 		Gate:   sh.Gate,
 		Events: sh.Events,
+		// And the run's identity, so what the prompt records about a command
+		// and what the event stream records about the same command name the
+		// same session.
+		Session: sh.Session,
 		// Whether a panic caught on a typed line prints its stack. Decided
 		// here because it is read from the process's environment, which is
 		// this package's to read and not repl's — see panic.go.

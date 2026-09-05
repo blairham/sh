@@ -52,7 +52,9 @@ func TestBackgroundJobIsItsOwnProcessGroup(t *testing.T) {
 	if !HasProcessGroups {
 		t.Skip("process groups are not available on this platform")
 	}
-	got, _ := run(t, `/bin/sleep 1 & printf "%s" "$!"`, nil)
+	// The one shape that cannot use run(): the question is about a process,
+	// and run() does not come back until there is no process left to ask.
+	got, _ := runLeavingJobsRunning(t, `/bin/sleep 1 & printf "%s" "$!"`, nil)
 	pid, err := strconv.Atoi(strings.TrimSpace(got))
 	if err != nil || pid <= 0 {
 		t.Fatalf(`$! = %q, want a pid`, got)

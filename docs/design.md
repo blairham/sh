@@ -50,15 +50,41 @@ two primitives serve all three:
 | **event** | what just happened, structured? | agent streaming; AI context; audit; trace |
 
 Every action that leaves the interpreter's own memory passes both:
-process execution, file open, file stat, directory read, and each
-redirect. That set is the syscall-shaped surface of a shell, and it is
-the complete boundary. The one exemption is deliberate and documented on
-the action vocabulary itself: the scaffolding a process substitution
-stands on — the temporary directory made for its pipes, the mkfifo, their
-removal — is the interpreter's own plumbing on paths the script never
-chooses, and gating it would let a policy refuse the mechanism while
-believing it refused an access. The access is the open of the pipe, and
-that is gated.
+process execution, file open, file stat, directory read, each redirect,
+and a signal aimed at a process. That set is the syscall-shaped surface
+of a shell, and it is the complete boundary.
+
+The sixth arrived late and is the reason this sentence is worth
+distrusting. `kill` began as an external program, where it was an exec
+like any other and the gate saw it; making it a builtin — which a shell
+has to, so that a trapped `kill -INT $$` is delivered rather than
+raced — moved `kill -9 1234` from inside the boundary to outside it, and
+for a while a denying policy could not stop the shell from ending
+somebody else's process and no audit trail recorded that it had. Two
+independent sweeps found it, which says the claim above is the kind that
+has to be re-checked against the code rather than read.
+
+The exemptions are deliberate and each is documented on the action
+vocabulary itself. The scaffolding a process substitution stands on —
+the temporary directory made for its pipes, the mkfifo, their removal —
+is the interpreter's own plumbing on paths the script never chooses, and
+gating it would let a policy refuse the mechanism while believing it
+refused an access; the access is the open of the pipe, and that is gated.
+A signal a script aims at *this* shell is the other: it never reaches the
+kernel at all, because a trap for it runs the shell's own handler and an
+untrapped fatal one stops the script and leaves the dying to the driver,
+so there is no action to refuse. The gate therefore sits at the system
+call rather than at the builtin, and the two statements stay one
+statement. `fg` and `bg` are outside it for a narrower reason: they
+resume a job this shell started, with a fixed SIGCONT to a group that
+already passed the exec gate on its way to existing, so a policy that
+did not want that process running had its say when it started.
+
+What a refusal looks like follows the rule the file probes set. A denied
+signal answers EPERM — the errno for a process this one may not signal —
+so `kill` reports it in each dialect's own wording for that, and a policy
+hiding a process is indistinguishable from a kernel refusing one, exactly
+as a denied stat is indistinguishable from a path that is not there.
 
 **What lives here and what does not.** The substrate owns the gate, the
 event stream, and the structured representation of an error — what

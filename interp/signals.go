@@ -115,6 +115,41 @@ func (r *Runner) sigs() *signalState {
 	return r.signals
 }
 
+// TrapsSignal hands back a question a front end may ask from a goroutine of
+// its own: does this shell have something to do with a signal — a `trap` the
+// script installed, or an ignore?
+//
+// There is one caller and it is the reason for the shape. A front end that is
+// the process listens for the signals whose default action ends it, because an
+// untrapped fatal one has to end the shell rather than print a Go stack —
+// that is the same split as DieBySignal, with interp declining to change a
+// process-wide disposition and the binary doing it. But os/signal hands an
+// arrival to *every* channel registered for it, so when a script has trapped
+// the signal both are told, and the front end must not kill a shell whose
+// script was about to handle it. This is how it finds out.
+//
+// A function taken once rather than a method called later, because a signal
+// arrives whenever it arrives: a method would be reading a Runner's fields
+// from a goroutine that does not own them. What this closes over is the shared
+// signal state, which is behind a lock of its own and is the one part of a
+// Runner meant to be reached from more than one goroutine.
+//
+// It answers for the top-level shell, which is where the handlers are. A
+// subshell's traps are its own and never reach os/signal at all.
+func (r *Runner) TrapsSignal() func(sig syscall.Signal) bool {
+	s := r.sigs()
+	return func(sig syscall.Signal) bool {
+		name, ok := signalNumbers[strconv.Itoa(int(sig))]
+		if !ok {
+			return false
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		_, has := s.traps[name]
+		return has
+	}
+}
+
 // poke tells a waiter to look again. Never blocks: one outstanding token says
 // everything ten would.
 func (s *signalState) poke() {

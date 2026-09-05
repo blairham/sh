@@ -872,6 +872,13 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, r
 		// interp takes the answer; only a binary that is the shell goes
 		// looking for it.
 		r.InheritedFiles = inheritedFiles()
+		// And it dies of a fatal signal that arrives from *outside*, which
+		// dieBySignal alone does not cover: that puts the disposition back
+		// before a raise this shell makes itself, and a signal from another
+		// process never reaches it. The runtime's handler answers those, and
+		// for the throwing class it answers with a goroutine dump where every
+		// shell in the panel prints nothing. See fatalsignal.go.
+		watchFatalSignals(r)
 	}
 	if sh.Register != nil {
 		// The dialect's own adjustment: what it adds to or removes from the

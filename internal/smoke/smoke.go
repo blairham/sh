@@ -289,21 +289,23 @@ func Run(ctx context.Context, d Dialect, cfg Config) Report {
 // second copy of the output. A row here that starts passing is reported as
 // fixed; a row not here that fails is reported as a regression.
 //
-// Five of the rows the daily-driver label lists as gaps are *not* here, and
-// their absence is a measurement rather than an oversight. Filename completion
-// (#809) and up-arrow recall (#812's navigation half) already pass in both
-// dialects; so do ^Z and `fg` (#813), for a foreground job that is a single
-// external command — which is the case that issue describes. `C-r` was the
-// last of #812 and has landed, so that row is graded like any other now: it
-// was the only failing row in the table, and its diagnostic is what named the
-// cause — `0x12` fell through the editor's control-byte guard, so the query
-// was typed into the line and run as a command.
-var known = map[string]string{
-	"rc file is read":           "#807",
-	"alias from the rc file":    "#807",
-	"function from the rc file": "#807",
-	"PS1 from the rc file":      "#807",
-}
+// It is empty, and that is the state it is meant to reach: every row this
+// suite grades passes in both dialects. An empty map is not a suite with
+// nothing to say — a failure now reports as a regression rather than as a
+// known gap, which is the stricter reading and the one worth having.
+//
+// The rows that were here are worth remembering as the shape of the thing.
+// Four belonged to #807, which read no interactive startup file at all, so an
+// alias, a function, an export and a PS1 in a real ~/.bashrc or ~/.zshrc did
+// nothing. One belonged to #812: `0x12` fell through the editor's control-byte
+// guard, so C-r was dropped and the search text was typed into the line and
+// run as a command. Both are fixed.
+//
+// Several rows the daily-driver label listed as gaps were never here, because
+// they already passed when the suite was written — filename completion (#809),
+// up-arrow recall, and ^Z and `fg` for a foreground external command (#813).
+// Measuring first is what kept them out.
+var known = map[string]string{}
 
 // Features is every row this suite grades, in the order it grades them.
 func Features() []string {

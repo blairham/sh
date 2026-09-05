@@ -2702,6 +2702,11 @@ echo "st=$?"`,
 		Why:     "`>f 2>&1` is one file under two numbers rather than two targets, so a replacement that places files by number gets both — the count is the only channel left once every stream is in the file, and it is 2 in every shell. The command substitution is the replacement's, quoted so that the shell being replaced does not run it against a file it has only just truncated",
 	},
 	{
+		ID: "redir/a-multi-target-stream-crosses-a-replacement", Category: "redirection",
+		Snippet: `exec >a >b; exec /bin/echo hi`,
+		Why:     "a repeated redirection of the same stream, and then a replacement. Nothing is said and the status is 0 in all six, which is the fact this pins: four of them put `hi` in the last file and zsh puts it in both, and neither hands the command a closed descriptor. The files themselves are not recorded here — the shell is gone before anything could read them — so the case grades the command having run at all, which is what a stream that is no single number once cost it",
+	},
+	{
 		ID: "redir/a-closed-stdout-is-closed-for-a-replacement", Category: "redirection",
 		Snippet: `exec >&-; exec /bin/echo hi 2>/dev/null`,
 		Why:     "a stream the script closed stays closed across the replacement rather than falling back to the process's own: the command fails where it would otherwise have written, unanimously. The complaint is discarded because its wording is a fact about whatever /bin/echo is on the machine",

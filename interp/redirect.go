@@ -375,11 +375,25 @@ func (r *Runner) applyRedirs(ctx context.Context, rs []*syntax.Redirect, compoun
 func (r *Runner) eachTarget(fd int, f io.Writer, opened map[int]io.Writer) io.Writer {
 	if prev, ok := opened[fd]; ok &&
 		r.ask(r.sem().RedirectsWriteToEveryTarget, "a command redirecting one stream to several files") {
-		f = io.MultiWriter(prev, f)
+		// Marked as what it is rather than left to be recognized by type. A
+		// stream over several files is the one shape that cannot be handed to
+		// a process replacement as a descriptor number, and the shell that
+		// built it is the only thing that knows; inferring it from "not an
+		// *os.File" would sweep in an embedder's buffer, which is a different
+		// case with a different answer. See namedStreamsCanBePlaced.
+		f = multiTarget{io.MultiWriter(prev, f)}
 	}
 	opened[fd] = f
 	return f
 }
+
+// multiTarget is a stream the shell built out of more than one target, under
+// the dialect that writes to every one of them.
+//
+// It is a marker before it is a writer: the io.Writer inside is an ordinary
+// multi-writer and does the work, and the type exists so that `exec cmd` can
+// tell this stream from a file without guessing.
+type multiTarget struct{ io.Writer }
 
 type closerFunc func() error
 

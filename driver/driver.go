@@ -84,6 +84,36 @@ type Shell struct {
 	// leaves them alone.
 	Stdout, Stderr io.Writer
 
+	// Gate is asked about every action that leaves the process — an exec, a
+	// file open, a stat, a directory read — before it happens. Nil allows
+	// everything, which is what a shell without a policy is, and costs
+	// nothing: interp's fast path is a nil check.
+	//
+	// The gate is interpreter-internal by design, because `eval`, `.`,
+	// command substitution and subshells all re-enter with their own input
+	// and a policy applied out here would be walked around by the first one
+	// of them. This field is only how a binary *supplies* the value; what
+	// the decision means, and which actions are asked about, is interp's —
+	// see interp.Gate and docs/design.md.
+	//
+	// It is consulted from more than one goroutine: a background job and
+	// each half of a pipeline run on their own, so a gate that keeps any
+	// state has to guard it.
+	Gate interp.Gate
+
+	// Events receives a structured record of what happened — a command
+	// starting, its status, a refusal, a failure, a file access. Nil
+	// discards them, and costs nothing for the same reason Gate does.
+	//
+	// This is the attachment point a front end that has to report on a
+	// running shell consumes: an agent protocol streaming what a script
+	// did, an audit trail, a trace. What a command *wrote* is deliberately
+	// not carried here — the streams above are the caller's own writers
+	// already.
+	//
+	// Called from more than one goroutine, exactly as Gate is.
+	Events interp.Sink
+
 	// KeepProcess stops `exec cmd` from replacing this process, which a
 	// binary being a shell does not want and a test does.
 	//
@@ -490,6 +520,18 @@ func (sh Shell) newRunner(name string, params []string, dg interp.Diagnostics, c
 		Env:    os.Environ(),
 		Stdout: sh.Stdout,
 		Stderr: sh.Stderr,
+		// The policy and the observer, carried straight through. Both are
+		// nil for every shell that has not asked for one, which is the
+		// behavior every binary had before this field existed and costs a
+		// nil check on interp's side.
+		//
+		// Here rather than at either call site, because this is the one
+		// place a Runner is built: an interactive shell whose gate was not
+		// installed would be a hole in the boundary shaped exactly like a
+		// shell that works, which is the failure this whole seam exists to
+		// make impossible.
+		Gate:   sh.Gate,
+		Events: sh.Events,
 	}
 	if wd, err := os.Getwd(); err == nil {
 		// And where the process is, for the same reason: interp treats an

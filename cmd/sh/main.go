@@ -23,14 +23,27 @@
 //	sh -e script.sh              # any set option, exactly as `set` reads them
 //	sh -tokens 'echo hi'         # dump the token stream
 //	sh -parse 'a && b'           # dump the syntax tree
+//	sh -trace-events script.sh   # print every gated action to stderr
+//	sh -deny /etc script.sh      # refuse every action at or under /etc
 //
 // Everything a shell reads at invocation — `-c`, a script path and its
 // positional parameters, `-s`, a lone `-`, set options like `-e` — is read
 // by the shared front end in driver, exactly as the dialect binaries read
-// it. Only the flags no shell has — -tokens, -parse and -dialect — are this
-// binary's own, and they come first on the line: the first word that is not
-// one of them belongs to the shell, so a script's own arguments can never be
-// mistaken for them.
+// it. Only the flags no shell has — -tokens, -parse, -dialect,
+// -trace-events and -deny — are this binary's own, and they come first on
+// the line: the first word that is not one of them belongs to the shell, so
+// a script's own arguments can never be mistaken for them.
+//
+// -trace-events and -deny are the debug route onto the gate and event seam
+// docs/design.md describes. They exist because a seam nothing reaches is a
+// seam nothing grades: the interpreter has asked a Gate about every exec,
+// open, stat and directory read since its first commit, and until these
+// flags no shipped binary ever set one, so a hole in the boundary would have
+// looked exactly like a shell that works. -deny is a way to watch the gate
+// refuse things and not a sandbox: it refuses what the *shell* opens, stats
+// and runs, and a command the shell was allowed to start makes its own
+// accesses. A policy meant to contain a script is a driver.Shell.Gate of its
+// own.
 //
 // With nothing to run and a terminal on stdin it prompts: a line editor with
 // history that survives the session, Tab completion of commands and files,
@@ -68,6 +81,7 @@ func main() {
 	// The fallback for an argv with nothing in it; driver names the shell by
 	// argv[0] the way every dialect binary is named.
 	sh.Name = "sh"
+	sh = installSeams(sh, own, os.Stderr)
 	if own.tokens || own.parse {
 		dump := dumpTree
 		if own.tokens {
@@ -88,10 +102,13 @@ func main() {
 }
 
 // ownFlags are the flags no shell has, so the shared front end must never
-// see them: which dialect to be, and the two dump modes.
+// see them: which dialect to be, the two dump modes, and the two that reach
+// the gate and event seam.
 type ownFlags struct {
 	tokens, parse bool
 	dialect       string
+	traceEvents   bool
+	deny          []string
 }
 
 // readOwnFlags strips this binary's flags from the front of the line,
@@ -125,6 +142,21 @@ func readOwnFlags(args []string) (own ownFlags, rest []string, err error) {
 				val = args[i]
 			}
 			own.dialect = val
+		case "trace-events":
+			own.traceEvents = true
+		case "deny":
+			if !hasVal {
+				if i+1 >= len(args) {
+					return own, nil, errors.New("-deny requires a path")
+				}
+				i++
+				val = args[i]
+			}
+			// Repeatable rather than a separated list: every separator that
+			// would do — a comma, a colon — is a character a path may
+			// legally contain, so splitting one would refuse to deny some
+			// directory that exists.
+			own.deny = append(own.deny, val)
 		default:
 			// Not ours — a set option, `-c`, an operand after `--` — so the
 			// shell's own reading starts here.

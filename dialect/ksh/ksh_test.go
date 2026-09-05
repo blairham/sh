@@ -26,8 +26,13 @@ func parses(t *testing.T, src string) bool {
 
 func TestGrammar(t *testing.T) {
 	// Expands aliases in a script, with no option to turn on.
-	if got, want := ksh.Dialect().ExpandAliases, true; got != want {
+	if got, want := ksh.Dialect().ExpandAliases, syntax.AliasOnEveryRoute; got != want {
 		t.Errorf("ExpandAliases = %v, want %v", got, want)
+	}
+	// And a body's newlines are lines of the program: $LINENO after a
+	// two-line body reads 6 against a physical 5.
+	if !ksh.Dialect().AliasBodyCountsLines {
+		t.Error("AliasBodyCountsLines = false, want true")
 	}
 	for _, tc := range []struct {
 		src  string

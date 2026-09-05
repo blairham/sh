@@ -26,10 +26,17 @@ func parses(t *testing.T, src string) bool {
 }
 
 func TestGrammar(t *testing.T) {
-	// Does not expand them in a script; the prompt is a different
+	// Expands on no route at all without `shopt -s expand_aliases`, which
+	// is not modeled: measured on all three. The prompt is a different
 	// question and the front end answers it.
-	if got, want := bash.Dialect().ExpandAliases, false; got != want {
+	if got, want := bash.Dialect().ExpandAliases, syntax.AliasOnNoRoute; got != want {
 		t.Errorf("ExpandAliases = %v, want %v", got, want)
+	}
+	// And a body's newlines are *not* lines of the program: this shell
+	// alone leaves the whole of an expanded body on the alias word's
+	// line, so $LINENO after a two-line body reads its physical 5.
+	if bash.Dialect().AliasBodyCountsLines {
+		t.Error("AliasBodyCountsLines = true, want false")
 	}
 	for _, tc := range []struct {
 		src  string

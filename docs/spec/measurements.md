@@ -5229,7 +5229,11 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `alias/not-on-the-line-that-defines-it` | `st=127` **2>** `<shell>: 1: a: not found` | `st=127` **2>** `<shell>: line 1: a: command not found` | `st=127` **2>** `<shell>: line 1: a: command not found` | `st=127` **2>** `<shell>: a: command not found` | `st=127` **2>** `<shell>: a: not found` | `st=127` **2>** `<shell>:1: command not found: a` |
 | `alias/a-diagnostic-names-the-use-site` | **2>** `<shell>: 2: nosuchcmd: not found` *(status 127)* | **2>** `<shell>: line 2: bad: command not found` *(status 127)* | **2>** `<shell>: line 2: nosuchcmd: command not found` *(status 127)* | **2>** `<shell>: line 1: bad: command not found` *(status 127)* | **2>** `<shell>: line 2: nosuchcmd: not found` *(status 127)* | **2>** `<shell>:2: command not found: bad` *(status 127)* |
 | `alias/a-script-file-is-a-different-route` | `hit` | **2>** `<script>: line 2: a: command not found` *(status 127)* | **2>** `<script>: line 2: a: command not found` *(status 127)* | **2>** `<script>: line 2: a: command not found` *(status 127)* | `hit` | `hit` |
+| `alias/standard-input-is-a-route-too` | `hit` | **2>** `<shell>: line 2: a: command not found` *(status 127)* | `hit` | **2>** `<shell>: line 2: a: command not found` *(status 127)* | `hit` | `hit` |
 | `alias/a-body-newline-shifts-later-lines` | `one~two~LINENO=6` | `one~two~LINENO=5` | `one~two~LINENO=5` | `one~two~LINENO=5` | `one~two~LINENO=6` | `one~two~LINENO=6` |
+| `alias/a-body-newline-shifts-a-diagnostic-too` | `one~LINENO=5` **2>** `<script>: 4: nosuchcmd: not found` | `LINENO=4` **2>** `<script>: line 3: two: command not found` | `LINENO=4` **2>** `<script>: line 3: two: command not found` | `LINENO=4` **2>** `<script>: line 3: two: command not found` | `one~LINENO=5` **2>** `<script>: line 4: nosuchcmd: not found` | `one~LINENO=5` **2>** `<script>:4: command not found: nosuchcmd` |
+| `alias/two-newlines-shift-by-two` | `one~two~three~LINENO=7` | `LINENO=5` **2>** `<script>: line 4: three: command not found` | `LINENO=5` **2>** `<script>: line 4: three: command not found` | `LINENO=5` **2>** `<script>: line 4: three: command not found` | `one~two~three~LINENO=7` | `one~two~three~LINENO=7` |
+| `alias/an-alias-never-used-shifts-nothing` | `LINENO=3` | `LINENO=3` | `LINENO=3` | `LINENO=3` | `LINENO=3` | `LINENO=3` |
 | `alias/defines-and-lists-one` | `a='echo x'` | `alias a='echo x'` | `a='echo x'` | `alias a='echo x'` | `a='echo x'` | `a='echo x'` |
 | `alias/a-value-that-needs-no-quotes` | `b='ls'` | `alias b='ls'` | `b='ls'` | `alias b='ls'` | `b=ls` | `b=ls` |
 | `alias/a-value-holding-a-quote` | `q='it'"'"'s'` | `alias q='it'\''s'` | `q='it'\''s'` | `alias q='it'\''s'` | `q=$'it\'s'` | `q='it'\''s'` |
@@ -5268,17 +5272,43 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
   alias bad='nosuchcmd'
   bad
   ```
-- `alias/a-script-file-is-a-different-route` — the same two lines as `alias/expands-a-command-word`, from a file instead of -c, and zsh changes its answer: it declines to expand under -c and expands from a script file. So whether aliases expand is a property of *how the program arrived* rather than of the shell, which one boolean on the dialect cannot say — issue #583
+- `alias/a-script-file-is-a-different-route` — the same two lines as `alias/expands-a-command-word`, from a file instead of -c, and zsh changes its answer: it declines to expand under -c and expands from a script file. So whether aliases expand is a property of *how the program arrived* rather than of the shell, which one boolean on the dialect cannot say
   ```sh
   alias a='echo hit'
   a
   ```
-- `alias/a-body-newline-shifts-later-lines` — the one place a token-level splice is distinguishable from a textual one, and the shopt line is there so bash expands too and can be compared. The last line is physically line 5: bash reports 5, and dash, ksh93 and zsh all report 6 because they counted the newline inside the alias body. There is no axis for it and this shell reports 5 in every dialect — issue #583
+- `alias/standard-input-is-a-route-too` — the third of the three routes, and the one that completes the table: zsh expands here as it does from a file and unlike under -c, so the two rows beside this one are a pair rather than a curiosity. `--` is what says the program is not on the argv
+  ```sh
+  alias a='echo hit'
+  a
+  ```
+- `alias/a-body-newline-shifts-later-lines` — the one place a token-level splice is distinguishable from a textual one, and the shopt line is there so bash expands too and can be compared. The last line is physically line 5: bash reports 5, and dash, ksh93 and zsh all report 6 because they counted the newline inside the alias body
   ```sh
   shopt -s expand_aliases 2>/dev/null
   alias two='echo one
   echo two'
   two
+  echo "LINENO=$LINENO"
+  ```
+- `alias/a-body-newline-shifts-a-diagnostic-too` — the same shift seen from the other side: the failing command is on the body's *second* line, so the three that count the newline report it a line further down than the alias word — 4 against bash's 3 — and $LINENO after it moves with it. A diagnostic naming a line inside a body is the half `alias/a-diagnostic-names-the-use-site` cannot show, because a one-line body has no second line to name
+  ```sh
+  alias two='echo one
+  nosuchcmd'
+  two
+  echo "LINENO=$LINENO"
+  ```
+- `alias/two-newlines-shift-by-two` — the shift is per newline rather than per expansion that had one: a three-line body moves the line after it by two. Pinned because one newline cannot tell a count from a flag
+  ```sh
+  alias three='echo one
+  echo two
+  echo three'
+  three
+  echo "LINENO=$LINENO"
+  ```
+- `alias/an-alias-never-used-shifts-nothing` — and the shift belongs to the *expansion*, not to the definition: the same two-line body, never used, leaves the line after it where it was written. Unanimous, which is what makes it the control for the two rows above
+  ```sh
+  alias two='echo one
+  echo two'
   echo "LINENO=$LINENO"
   ```
 - `alias/defines-and-lists-one` — the shape of a listing, and it is not unanimous: bash writes `alias ` in front so the line reads back as a command, and the other three write only the assignment

@@ -5,7 +5,6 @@ package driver
 
 import (
 	"context"
-	"os"
 
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
@@ -56,11 +55,19 @@ func (sh Shell) sourceFile(r *interp.Runner, path string) (status int) {
 	if path == "" {
 		return 0
 	}
-	b, err := os.ReadFile(path)
+	// Through the gate, which is what makes $ENV an access rather than a
+	// blind spot: the path comes from a shell variable, so a line of script
+	// can point it anywhere, and a policy that refuses every open a script
+	// makes should not be walked around by setting a variable and starting a
+	// session. ~/.profile is here for the same reason and by the same route.
+	b, err := sh.readFile(path)
 	if err != nil {
-		// Missing, unreadable, a directory: none of them is worth stopping
-		// for. A shell that refused to start because ~/.profile was not
-		// there would be unusable on a fresh machine.
+		// Missing, unreadable, a directory, refused: none of them is worth
+		// stopping for. A shell that refused to start because ~/.profile was
+		// not there would be unusable on a fresh machine, and one that
+		// refused to start because a policy hid it would be worse — the
+		// policy meant to keep the file out of the session, not to keep the
+		// person out of a shell.
 		return 0
 	}
 	if sh.guard().Do(func() { status = sh.sourceText(r, path, string(b)) }) {

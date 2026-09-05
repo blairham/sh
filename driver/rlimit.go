@@ -16,6 +16,13 @@ import (
 // does: a limit is process state, and the package that interprets a script has
 // no business reaching for syscall to change it. It also keeps interp building
 // where these constants do not exist.
+//
+// Like the mask, a limit is outside the gate and the event stream on purpose;
+// umask.go carries the reasoning at length, and it holds here unchanged. A
+// limit names no path and no program, it changes what a later action is
+// allowed to do rather than performing one, and the hook itself is where a
+// program that wants a say installs it — which can refuse, where an event
+// could only report.
 var rlimitOf = map[interp.Resource]int{
 	interp.ResourceCore:         syscall.RLIMIT_CORE,
 	interp.ResourceData:         syscall.RLIMIT_DATA,

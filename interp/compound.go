@@ -71,6 +71,17 @@ func (r *Runner) runList(ctx context.Context, list []*syntax.Stmt) error {
 			return nil
 		}
 	}
+	// The end of a list is a command boundary too, and it is the last one a
+	// subshell has: a handler runs *between* commands, so an element whose
+	// final write broke its own pipe would set a handler for exactly that and
+	// never reach one. See runSelfRaisedTraps for what the panel does.
+	//
+	// Here rather than where the subshell's body is started, which is the
+	// difference between running the handler inside the element's
+	// redirections and running it after they have been taken down. Measured
+	// with the element's standard error sent to a file: dash, bash 5.3, ksh93
+	// and zsh all put the handler's output in that file.
+	r.runSelfRaisedTraps(ctx)
 	return nil
 }
 

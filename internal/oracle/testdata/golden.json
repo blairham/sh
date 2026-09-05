@@ -49526,6 +49526,138 @@
         "TimedOut": false
       }
     },
+    "trap/a-pipeline-element-runs-the-pipe-handler-it-set-for-itself": {
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "child~reached",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after",
+        "Stderr": "child~reached",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after",
+        "Stderr": "~child~reached",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "after",
+        "Stderr": "child~reached",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "after",
+        "Stderr": "child~reached",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "after",
+        "Stderr": "child~reached",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/an-elements-broken-pipe-is-not-the-outer-shells-to-handle": {
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "child~reached",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after",
+        "Stderr": "child~reached",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after",
+        "Stderr": "~child~reached",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "after",
+        "Stderr": "child~reached",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "after",
+        "Stderr": "child~reached",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "after",
+        "Stderr": "child~reached",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/an-elements-pipe-handler-runs-inside-the-elements-redirections": {
+      "bash": {
+        "Stdout": "e=[\u003cshell\u003e: line 1: echo: write error: Broken pipe~child]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "e=[sh: line 1: echo: write error: Broken pipe~child]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "e=[\u003cshell\u003e: line 0: echo: write error: Broken pipe~~child]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "e=[\u003cshell\u003e: 1: echo: echo: I/O error~child]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "e=[child]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "e=[child~child~\u003cshell\u003e:echo:1: write error: broken pipe~\u003cshell\u003e:1: write error: broken pipe~child]",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "trap/bad-signal-name": {
       "bash": {
         "Stdout": "st=1",

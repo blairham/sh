@@ -1993,6 +1993,103 @@ than missing:
   alongside the job-spec and directory-stack work they sit on, and recorded
   there rather than twice.
 
+## `compgen`, and how much of a completion generator a shell owes
+
+Issue #476: `compgen` was registered in the core builtin map with its
+measurements written into the file's comments and nowhere else — no spec
+text, no rows in `measurements.md`, no corpus cases. That is the shape
+`CLEANROOM.md` rules out, because a claim nothing checks is a claim that
+rots quietly, and this one had. The record is here now and the corpus
+rows are under `compgen/`.
+
+Measured 2026-09-05, panel and machine as `oracle.md` (bash 5.3.15,
+bash 3.2.57, bash-as-sh, dash, ksh 93u+ 2012, zsh 5.9.2).
+
+**One shell has it.** `type compgen` answers `compgen is a shell builtin`
+in bash 5.3, bash 3.2 and bash invoked as `sh`; dash, ksh93 and zsh have
+no such name, and running it there is a command that is not found at 127.
+So it is registered in the core and taken away by the three without it,
+the way `enable` is — the same shape `semantics.md` records above for
+builtins that belong to one shell.
+
+**What is generated, and why only this much.** `compgen` answers from
+the shell's own knowledge in two places and nowhere else:
+
+| spelling | generates |
+| --- | --- |
+| `-A builtin`, `-b` | the names of this shell's builtins |
+| `-A function` | the names of the functions defined so far |
+
+Those are the two questions the interpreter already holds the answer to.
+Homebrew's `brew` asks the first of them, `compgen -A builtin`, to check
+that none of the shell's own commands has been shadowed, which is why the
+builtin exists at all.
+
+The surrounding behavior is measured and matches bash exactly:
+
+    compgen -A builtin retu       →  return             status 0
+    compgen -A builtin zzzznosuch →  nothing            status 1
+    compgen foo                   →  nothing            status 0
+    compgen -A nosuchaction x     →  invalid action name, status 2
+
+The two statuses are the pair worth stating together: **1 means asked and
+empty, 0 means never asked.** An empty completion is a failure because
+the question a completer puts is whether there is anything to offer, and
+that reads backwards from the usual meaning of a command that printed
+nothing without complaining.
+
+**A wrong claim the corpus would have caught.** The letter table said
+`-u` was short for the function action. It is not: bash's short letters
+are `abcdefgjksuv` — its own usage line — and **none of them is
+`function`**, whose only spelling is the long `-A function`. `compgen -u`
+in bash lists *user* names, so `compgen -u f1` with a function `f1`
+defined printed `f1` here and nothing at 1 in bash. That is the invisible
+direction of wrong: an answer rather than an error, from a builtin whose
+whole job is to answer. Fixed with this section, and pinned by
+`compgen/there-is-no-short-letter-for-function`.
+
+The word rule was wrong the same way and is fixed with it: the **first**
+non-option word is the one matched against and the rest are ignored, so
+`compgen -A builtin ret re` answers for `ret`. Both orders are measured,
+because one alone cannot tell first-wins from last-wins.
+
+**Out of scope, recorded rather than silent.** Everything bash's
+`compgen` does beyond the two generators above is refused out loud, and
+the refusal is deliberate on the rule the `set -o` table follows — an
+action we cannot generate is a promise we cannot keep:
+
+- **The actions bash has and this shell does not generate** — `alias`,
+  `arrayvar`, `binding`, `command`, `directory`, `disabled`, `enabled`,
+  `export`, `file`, `group`, `helptopic`, `hostname`, `job`, `keyword`,
+  `running`, `service`, `setopt`, `shopt`, `signal`, `stopped`, `user`,
+  `variable`. Each is `not implemented` at 2, and an action bash does
+  not have either is `invalid action name` at 2. The distinction matters
+  to a script: the first is a shell that is missing something and the
+  second is a typo. Measured divergence, recorded in
+  `compgen/an-action-this-shell-does-not-generate`: bash *generates*
+  these and answers 1 for no match where this refuses at 2.
+- **The letters that go with them** — the same split. `-u` and the rest
+  of `abcdefgjksuv` are `not implemented`; a letter outside that set is
+  `invalid option`, which is bash's own wording. bash also prints its
+  usage line after the complaint and this does not, which is a
+  presentation difference and not a behavioral one.
+- **The generators that run something** — `-F function`, `-C command`,
+  `-G globpat`, `-W wordlist`. Each is a hook for producing words from
+  outside the shell's own tables, and each would need the completion
+  machinery this core does not have.
+- **The filters and decorations** — `-X filterpat`, `-P prefix`,
+  `-S suffix`, `-o option`, `-V varname`. These shape a word list rather
+  than generate one, and there is nothing yet for them to shape.
+- **A bundle naming more than one action** — `compgen -bu` unions two
+  generators in bash. Here the letters are read in order and the last one
+  wins, which is only ever reachable with a letter that is refused
+  anyway, since `b` is the only one implemented. Recorded so a second
+  implemented letter does not arrive without the union arriving with it.
+- **`complete` and `compopt`.** The rest of programmable completion, and
+  the reason `compgen` is the interesting third of it: `compgen` answers
+  a question, where the other two register and adjust completion
+  specifications for an interactive line editor this core does not own.
+
 ## The declaration long tail: letters, listings, and one letter with an axis inside it
 
 Oracle runs, 2026-09-04, bash 5.3, dash, ksh93u+, zsh 5.9.2. The corpus

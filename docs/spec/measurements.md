@@ -624,6 +624,15 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `enable/a-letter-one-shell-does-not-have` | `<shell>: 1: enable: not found~st=127` | `st=0` | `st=0` | `st=0` | `<shell>: enable: not found~st=127` | `<shell>:enable:1: bad option: -n~st=1` |
 | `enable/a-name-that-is-not-a-builtin` | `<shell>: 1: disable: not found~st=127` | `<shell>: line 1: disable: command not found~st=127` | `<shell>: line 1: disable: command not found~st=127` | `<shell>: disable: command not found~st=127` | `<shell>: disable: not found~st=127` | `<shell>:disable:1: no such hash table element: nosuchthing~st=1` |
 | `enable/switching-one-off-and-back-on` | `st=127` | `st=0` | `st=0` | `st=0` | `st=127` | `st=0` |
+| `compgen/names-of-the-shells-own-builtins` | `<shell>: 1: compgen: not found~st=127` | `return~st=0` | `return~st=0` | `return~st=0` | `<shell>: compgen: not found~st=127` | `<shell>:1: command not found: compgen~st=127` |
+| `compgen/the-short-letter-for-builtin` | `<shell>: 1: compgen: not found~st=127` | `return~st=0` | `return~st=0` | `return~st=0` | `<shell>: compgen: not found~st=127` | `<shell>:1: command not found: compgen~st=127` |
+| `compgen/names-of-the-defined-functions` | `<shell>: 1: compgen: not found~st=127` | `f1~f2~st=0` | `f1~f2~st=0` | `f1~f2~st=0` | `<shell>: compgen: not found~st=127` | `<shell>:1: command not found: compgen~st=127` |
+| `compgen/there-is-no-short-letter-for-function` | `<shell>: 1: compgen: not found~st=127` | `st=1` | `st=1` | `st=1` | `<shell>: compgen: not found~st=127` | `<shell>:1: command not found: compgen~st=127` |
+| `compgen/nothing-matched-is-a-failure` | `<shell>: 1: compgen: not found~st=127` | `st=1` | `st=1` | `st=1` | `<shell>: compgen: not found~st=127` | `<shell>:1: command not found: compgen~st=127` |
+| `compgen/no-action-is-a-quiet-success` | `<shell>: 1: compgen: not found~st=127` | `st=0` | `st=0` | `st=0` | `<shell>: compgen: not found~st=127` | `<shell>:1: command not found: compgen~st=127` |
+| `compgen/the-first-word-is-the-one-matched` | `<shell>: 1: compgen: not found~st=127` | `return~st=0` | `return~st=0` | `return~st=0` | `<shell>: compgen: not found~st=127` | `<shell>:1: command not found: compgen~st=127` |
+| `compgen/an-action-name-that-is-not-one` | `<shell>: 1: compgen: not found~st=127` | `<shell>: line 1: compgen: nosuchaction: invalid action name~st=2` | `<shell>: line 1: compgen: nosuchaction: invalid action name~st=2` | `<shell>: line 0: compgen: nosuchaction: invalid action name~st=2` | `<shell>: compgen: not found~st=127` | `<shell>:1: command not found: compgen~st=127` |
+| `compgen/an-action-this-shell-does-not-generate` | `<shell>: 1: compgen: not found~st=127` | `st=1` | `st=1` | `st=1` | `<shell>: compgen: not found~st=127` | `<shell>:1: command not found: compgen~st=127` |
 | `shift/an-operand-that-was-never-given` | `<shell>: 1: shift: can't shift that many` *(status 2)* | `st=1` | `<shell>: line 1: shift: shift count out of range~st=1` | `st=1` | `<shell>: shift: (null): bad number` *(status 1)* | `<shell>:shift:1: shift count must be <= $#~st=1` |
 | `setopt/normalizes-zsh-spellings` | `<shell>: 1: setopt: not found~st=127~x*` | `<shell>: line 1: setopt: command not found~st=127~x*` | `<shell>: line 1: setopt: command not found~st=127~x*` | `<shell>: setopt: command not found~st=127~x*` | `<shell>: setopt: not found~st=127~x*` | `st=0~x*` |
 | `setopt/acts-past-a-bad-name` | `<shell>: 1: setopt: not found~st=127~x*` | `<shell>: line 1: setopt: command not found~st=127~x*` | `<shell>: line 1: setopt: command not found~st=127~x*` | `<shell>: setopt: command not found~st=127~x*` | `<shell>: setopt: not found~st=127~x*` | `<shell>:setopt:1: no such option: zzqq~st=1~x*` |
@@ -1037,6 +1046,42 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `enable/switching-one-off-and-back-on` — switching a builtin off is not forgetting it: the name comes back with the same builtin behind it. Standard error is discarded because three of the four have neither word and their complaint is about a missing command, which the case above pins
   ```sh
   disable cd 2>/dev/null; enable cd 2>/dev/null; echo "st=$?"
+  ```
+- `compgen/names-of-the-shells-own-builtins` — the shape Homebrew's `brew` uses to check that none of the shell's own commands has been shadowed, and the reason `compgen` is registered at all. One shell answers; the other three have no such command and say so at 127. A prefix narrow enough to name one builtin, because the whole list differs between bash builds
+  ```sh
+  compgen -A builtin retu; echo "st=$?"
+  ```
+- `compgen/the-short-letter-for-builtin` — `-b` is the short spelling of `-A builtin` and must answer identically to the case above — the letter table and the action table are two ways to the same generator, and only a case that runs both notices when one of them drifts
+  ```sh
+  compgen -b retu; echo "st=$?"
+  ```
+- `compgen/names-of-the-defined-functions` — the second thing this shell can generate from what it knows, and the one whose contents a case can fix: the functions are defined in the snippet, so the answer does not depend on the build the way the builtin list does
+  ```sh
+  f1() { :; }; f2() { :; }; compgen -A function f; echo "st=$?"
+  ```
+- `compgen/there-is-no-short-letter-for-function` — `-u` is *user* names, not functions, and bash's letters have no short spelling for the function action at all. This shell's letter table said otherwise and answered `f1` where bash answers nothing at 1 — a wrong claim in the one direction nothing catches, since it produces an answer rather than an error
+  ```sh
+  f1() { :; }; compgen -u f1; echo "st=$?"
+  ```
+- `compgen/nothing-matched-is-a-failure` — an empty completion is 1 rather than 0, because the question a completer asks is whether there is anything to offer — the opposite of the usual reading of a command that printed nothing without complaining
+  ```sh
+  compgen -A builtin zzzznosuch; echo "st=$?"
+  ```
+- `compgen/no-action-is-a-quiet-success` — a word with nothing to generate it from is 0 and silent, which is the other half of the case above: 1 means asked-and-empty and 0 means never asked
+  ```sh
+  compgen foo; echo "st=$?"
+  ```
+- `compgen/the-first-word-is-the-one-matched` — the extra words are ignored rather than replacing the first, which this shell had the wrong way round; measured both orders, since one order alone cannot tell first-wins from last-wins
+  ```sh
+  compgen -A builtin retu read; echo "st=$?"
+  ```
+- `compgen/an-action-name-that-is-not-one` — `invalid action name` at 2 — the wording that separates a typo from a shell that is missing something, which is the distinction the action table exists to keep
+  ```sh
+  compgen -A nosuchaction x; echo "st=$?"
+  ```
+- `compgen/an-action-this-shell-does-not-generate` — bash generates it and answers 1 for no match; this shell refuses it as not implemented at 2, and the divergence is recorded here deliberately — an action generated from a guess would be a promise the shell cannot keep, and the honest refusal is the answer docs/spec/semantics.md scopes
+  ```sh
+  compgen -A alias zzzznosuch; echo "st=$?"
   ```
 - `shift/an-operand-that-was-never-given` — past the end with no count written down, ksh93 reports `(null)` — the operand it did not get — where its complaint about `shift 99` names the 99; dash keeps one sentence for both and bash and zsh keep their usual answers
   ```sh

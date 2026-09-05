@@ -12,10 +12,12 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/blairham/sh/driver"
 	"github.com/blairham/sh/internal/acp"
 	"github.com/blairham/sh/internal/boundary"
+	"github.com/blairham/sh/internal/event"
 	"github.com/blairham/sh/repl"
 )
 
@@ -89,10 +91,18 @@ func connectACP(sh driver.Shell, allow bool, authMethod string, argv []string) i
 		// The point of the exercise: the agent's file access is ours to
 		// gate, and only if we offer to do it for them.
 		Files: true,
+		// And the sharper half of it. An agent not told it can ask us to run
+		// something runs it itself, and there is no argv for any gate to see.
+		Terminals: true,
 		// The same gate and sink a shell here would have been given, so
 		// -deny and -trace-events reach the agent's accesses exactly as they
 		// reach a script's.
-		Boundary: boundary.Boundary{Gate: sh.Gate, Events: sh.Events},
+		//
+		// The session is the front end's, and this route makes its own: nothing
+		// here goes through driver, which is where a shell's run is normally
+		// named, so without one every record of what the agent was allowed
+		// would belong to no run.
+		Boundary: boundary.Boundary{Gate: sh.Gate, Events: sh.Events, Session: runID(sh)},
 		Answer:   fixedAnswer(allow),
 		Update:   renderUpdate,
 		// Nil where this process has no terminal, which is also what withholds
@@ -107,6 +117,19 @@ func connectACP(sh driver.Shell, allow bool, authMethod string, argv []string) i
 	_ = toAgent.Close()
 	_ = agent.Wait()
 	return status
+}
+
+// runID is what this run of the shell is called in the record.
+//
+// A caller that named one is left alone, which is the same courtesy driver
+// extends; otherwise one is minted here, by the same generator, so that an
+// audit stream from `-acp-connect` joins on the same field as one from a
+// script.
+func runID(sh driver.Shell) string {
+	if sh.Session != "" {
+		return sh.Session
+	}
+	return event.NewID(time.Now())
 }
 
 // listAuth writes out what the agent said it would accept.

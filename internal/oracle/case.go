@@ -1107,6 +1107,26 @@ var Corpus = []Case{
 		Snippet: `printf "a\cbZ" | od -An -c | tr -s " "`,
 		Why:     "read as bytes rather than as text, because that is the only way to tell ksh93's control character from zsh's stopping: bash and dash write two literal characters, ksh93 reads \\cX as control-X, and zsh ends the output there",
 	},
+	{
+		ID: "printf/backslash-c-with-a-digit", Category: "printf",
+		Snippet: `printf "a\c1Z" | od -An -c | tr -s " "`,
+		Why:     "a letter cannot tell the two control arithmetics apart, because clearing the top bits and toggling bit 6 agree over @ through _. A digit is outside that span and separates them: masking gives 0x11 and toggling gives q, and the shell that reads the escape at all does the second",
+	},
+	{
+		ID: "printf/backslash-c-with-a-symbol-outside-the-letters", Category: "printf",
+		Snippet: `printf "a\c~Z:a\c?Z" | od -An -c | tr -s " "`,
+		Why:     "the other side of the span, and the DEL that a masking shell would have to special-case: toggling bit 6 makes ~ into > and ? into 0x7f without one",
+	},
+	{
+		ID: "printf/backslash-c-controls-a-decoded-escape", Category: "printf",
+		Snippet: `printf "a\c\tZ" | od -An -c | tr -s " "`,
+		Why:     "what \\c applies to is read before it is controlled, so the argument here is a tab and not a backslash followed by a t. The same reading the quoted-escape form does, which is the point: one rule, and a format is not a second dialect of it",
+	},
+	{
+		ID: "printf/backslash-c-at-the-end-of-a-format", Category: "printf",
+		Snippet: `printf 'a\c\' | od -An -c | tr -s " "`,
+		Why:     "a backslash with nothing after it escapes the end of the format, so what \\c controls is a NUL rather than the backslash itself — an @ and not a control-backslash for the shell that reads the escape",
+	},
 
 	// --- kill: a builtin, because a shell has to know what it sent ---------
 	{
@@ -2243,6 +2263,11 @@ var Corpus = []Case{
 		ID: "array/a-subscript-where-there-are-no-arrays", Category: "expansion",
 		Snippet: `a[1]=Q; echo done`,
 		Why:     "the other side of the same gate. Where the dialect has no subscript the word is not an assignment at all and the shell looks for a command by that name, which is the answer the shell without arrays gives — so accepting the shape everywhere would have made this one silently assign instead of reporting. Three shells assign and say nothing; the fourth reports on standard error and carries on",
+	},
+	{
+		ID: "array/appending-to-an-element-where-there-are-no-arrays", Category: "expansion",
+		Snippet: `a[1]+=Q; echo done`,
+		Why:     "the append half of the same gate, and the one that was accidentally right. `a[1]=Q` leaked into the no-array dialect while this form did not, because `AppendAssign` is off there and refused it by another road — so the two forms agreed with the shell for different reasons and only one of them was gated on having arrays. Pinned separately so a dialect that ever takes `+=` without arrays cannot make this the leak the plain form was",
 	},
 	{
 		ID: "array/a-subscript-below-the-first-element", Category: "expansion",

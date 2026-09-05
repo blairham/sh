@@ -55,4 +55,61 @@ type EditorStyle struct {
 	// ringing the bell at anything else. bash does. zsh takes the first key
 	// whatever it is and treats everything but `y` as no.
 	ListQueryAcceptsOnlyYesOrNo bool
+
+	// WordCharacters is what counts as part of a word besides letters and
+	// digits, for `M-b`, `M-f` and the word kills.
+	//
+	// Measured under a pty on `echo /usr/local/bin` with `M-b`:
+	//
+	//	bash    echo /usr/local/|bin
+	//	zsh     echo |/usr/local/bin
+	//
+	// bash counts letters and digits and nothing else, so an empty string is
+	// its answer and also the answer for a front end that has not said. zsh
+	// counts the contents of its `WORDCHARS`, which puts `/`, `.`, `-`, `_`
+	// and `=` inside a word — checked one character at a time, because the
+	// variable is a claim and the keystroke is the fact: `:`, `,` and `@` are
+	// not in it and do break a word in both.
+	WordCharacters string
+
+	// KillToStartOfLineTakesTheWholeLine is what `^U` does with the text
+	// *after* the cursor.
+	//
+	// Measured with the cursor at the start of `echo one two`: bash leaves the
+	// line untouched, having nothing before the cursor to kill, and zsh empties
+	// it. This is the disagreement with the most on it — a finger that means
+	// one and gets the other loses a command it had finished typing.
+	KillToStartOfLineTakesTheWholeLine bool
+
+	// KillWordBeforeCursorUsesWordCharacters is what `^W` takes off the line.
+	//
+	// Measured on `echo a+b`: bash leaves `echo `, zsh leaves `echo a+`.
+	// bash's `^W` knows only whitespace, which is what makes it the key that
+	// takes a whole path off the line however much punctuation is in it; zsh's
+	// is the same word its motion keys use, so it stops inside one.
+	//
+	// A separate answer from WordCharacters because bash gives two different
+	// ones to the two keys: `M-Delete` on the same line leaves `echo a+`,
+	// agreeing with zsh's `^W` while bash's own `^W` does not.
+	KillWordBeforeCursorUsesWordCharacters bool
+
+	// ForwardWordStopsBeforeTheNextWord is where `M-f` leaves the cursor.
+	//
+	// Measured on `echo one two` from the start of the line:
+	//
+	//	bash    echo| one two
+	//	zsh     echo |one two
+	//
+	// One character apart on every press, which is enough to make typing feel
+	// like somebody else's shell. `M-b` agrees in both, and so does what
+	// `M-d` kills, which is why this is about the motion alone.
+	ForwardWordStopsBeforeTheNextWord bool
+
+	// TransposeAtTheStartSwapsTheFirstTwo is what `^T` does when there is
+	// nothing before the cursor to swap.
+	//
+	// Measured on `echo abc` with the cursor at the start: bash leaves the
+	// line alone, zsh swaps `e` and `c` and leaves the cursor past them.
+	// Everywhere else in the line the two agree exactly.
+	TransposeAtTheStartSwapsTheFirstTwo bool
 }

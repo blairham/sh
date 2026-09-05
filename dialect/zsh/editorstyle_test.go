@@ -34,3 +34,35 @@ func TestEditorStyleAsksBeforeALargeListing(t *testing.T) {
 		t.Error("this shell takes the first key, whatever it is")
 	}
 }
+
+// What this shell calls a word, and what its kills do with one.
+//
+// Measured under a pty against zsh 5.9.2 started with no startup files, one
+// keystroke at a time. These are the five places where the same key does
+// something different from bash, and all five are on the daily path.
+func TestEditorStyleWords(t *testing.T) {
+	s := zsh.EditorStyle()
+	// This shell's own WORDCHARS default, and checked a character at a time
+	// by pressing the key: `M-b` on `echo /usr/local/bin` goes to the front
+	// of the path and `M-b` on `echo a+b` does not, because `/` is in the
+	// list and `+` is not.
+	if got, want := s.WordCharacters, "*?_-.[]~=/&;!#$%^(){}<>"; got != want {
+		t.Errorf("WordCharacters = %q, want %q", got, want)
+	}
+	// `^U` with the cursor at the start of `echo one two` empties the line.
+	if !s.KillToStartOfLineTakesTheWholeLine {
+		t.Error("^U here kills the whole line wherever the cursor is")
+	}
+	// `^W` on `echo a+b` leaves `echo a+`, stopping inside the argument.
+	if !s.KillWordBeforeCursorUsesWordCharacters {
+		t.Error("^W here uses the same word its motion keys use")
+	}
+	// `M-f` from the start of `echo one two` leaves the cursor before `one`.
+	if !s.ForwardWordStopsBeforeTheNextWord {
+		t.Error("M-f here stops before the next word, not at the end of this one")
+	}
+	// `^T` at the start of `echo abc` gives `ceho abc`.
+	if !s.TransposeAtTheStartSwapsTheFirstTwo {
+		t.Error("^T here swaps the first two characters and moves past them")
+	}
+}

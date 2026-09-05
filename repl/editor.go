@@ -54,6 +54,21 @@ type editor struct {
 	// which is what two of the four dialects do.
 	interrupt string
 
+	// killed is what the last kill took off the line, and ^Y puts it back.
+	// Kills that follow one another go into it together, which is what
+	// killing and killedBefore keep track of. It outlives the line: measured,
+	// a word killed on one line yanks back on the next.
+	killed                []rune
+	killing, killedBefore bool
+
+	// What this dialect calls a word, and what its kills do with one. See
+	// EditorStyle, which is where each of these was measured.
+	wordChars                  string
+	wholeLineKill              bool
+	killBeforeCursorUsesWords  bool
+	forwardWordStopsBeforeNext bool
+	transposeAtStart           bool
+
 	// What to ask before printing a large listing, and how to read the
 	// answer. See EditorStyle.
 	listQuery       string
@@ -89,6 +104,14 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		}
 		wasTab := e.lastTab
 		e.lastTab = false
+		// Whether the keystroke before this one was a kill, which is what
+		// decides between joining onto what ^Y holds and replacing it.
+		//
+		// Nothing carries this across an accepted line: only a kill sets it,
+		// no kill returns from here, and the next keystroke read is the next
+		// line's first. So the text a kill took survives the line it came off
+		// — measured — and the joining does not.
+		e.killedBefore, e.killing = e.killing, false
 		switch c := buf[0]; c {
 		case ctrlC:
 			// The line is abandoned, not run. The newline is ours to print:
@@ -116,14 +139,19 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 		case ctrlF:
 			e.moveTo(e.pos+1, prompt)
 		case ctrlK:
-			e.line = e.line[:e.pos]
+			e.killForwardTo(len(e.line))
 			e.redraw(prompt)
 		case ctrlU:
-			e.line = append([]rune(nil), e.line[e.pos:]...)
-			e.pos = 0
+			e.killToStart()
 			e.redraw(prompt)
 		case ctrlW:
-			e.deleteWord()
+			e.killTo(e.wordStartBeforeCursor())
+			e.redraw(prompt)
+		case ctrlY:
+			e.yank()
+			e.redraw(prompt)
+		case ctrlT:
+			e.transpose()
 			e.redraw(prompt)
 		case ctrlL:
 			// Clear the screen and put the line back at the top of it.
@@ -189,41 +217,6 @@ func (e *editor) readRune(first byte) (rune, error) {
 	return r, nil
 }
 
-// escape reads what follows an ESC and acts on the arrows it recognizes.
-//
-// An unrecognized sequence is dropped rather than inserted. A terminal sends
-// far more than this understands, and putting the bytes in the line would mean
-// a stray function key ended up in the command.
-func (e *editor) escape(prompt drawnPrompt) {
-	var b [1]byte
-	if n, err := e.in.Read(b[:]); err != nil || n == 0 || b[0] != '[' {
-		return
-	}
-	if n, err := e.in.Read(b[:]); err != nil || n == 0 {
-		return
-	}
-	switch b[0] {
-	case 'A':
-		e.browse(-1, prompt)
-	case 'B':
-		e.browse(+1, prompt)
-	case 'C':
-		e.moveTo(e.pos+1, prompt)
-	case 'D':
-		e.moveTo(e.pos-1, prompt)
-	case 'H':
-		e.moveTo(0, prompt)
-	case 'F':
-		e.moveTo(len(e.line), prompt)
-	case '3':
-		// Delete arrives as ESC [ 3 ~, so the tilde has to be eaten too.
-		if n, err := e.in.Read(b[:]); err == nil && n > 0 && b[0] == '~' {
-			e.deleteForward()
-			e.redraw(prompt)
-		}
-	}
-}
-
 // browse walks the history. -1 is older, +1 is newer.
 //
 // The line being typed is put aside on the first step back and returned when
@@ -286,20 +279,6 @@ func (e *editor) deleteForward() {
 	e.line = append(e.line[:e.pos], e.line[e.pos+1:]...)
 }
 
-// deleteWord removes the word before the cursor, and the run of spaces
-// before it — which is what makes ^W usable on `a  b` rather than needing two.
-func (e *editor) deleteWord() {
-	i := e.pos
-	for i > 0 && e.line[i-1] == ' ' {
-		i--
-	}
-	for i > 0 && e.line[i-1] != ' ' {
-		i--
-	}
-	e.line = append(e.line[:i], e.line[e.pos:]...)
-	e.pos = i
-}
-
 func (e *editor) moveTo(pos int, prompt drawnPrompt) {
 	if pos < 0 || pos > len(e.line) {
 		return
@@ -325,9 +304,11 @@ func (e *editor) redraw(prompt drawnPrompt) {
 		b.WriteString("\r\x1b[K")
 		b.WriteString(prompt.text)
 		b.WriteString(string(e.line))
-		if e.pos < len(e.line) {
+		// Cells to come back over, not characters: the cursor moves by
+		// columns, and one `日` to the right of it is two of them.
+		if back := cells(e.line[e.pos:]); back > 0 {
 			b.WriteString("\x1b[")
-			b.WriteString(itoa(len(e.line) - e.pos))
+			b.WriteString(itoa(back))
 			b.WriteString("D")
 		}
 		e.row = 0
@@ -353,18 +334,21 @@ func (e *editor) redraw(prompt drawnPrompt) {
 	b.WriteString(prompt.text)
 	b.WriteString(string(e.line))
 
-	end := prompt.cells + len(e.line)
-	endRow, endCol := end/cols, end%cols
-	if end > 0 && endCol == 0 {
+	curRow, curCol, endRow, endCol := place(prompt.cells, e.line, e.pos, cols)
+	if endCol == cols {
 		// The line ends exactly at the right-hand edge. A terminal does not
 		// move to the next row until there is something to put there, so the
 		// cursor is still on the old row and every count from here would be
 		// one row out. A space makes it wrap, and the carriage return undoes
 		// the space.
 		b.WriteString(" \r")
+		endRow++
 	}
-	cur := prompt.cells + e.pos
-	curRow, curCol := cur/cols, cur%cols
+	if curCol == cols {
+		// The cursor is at the edge with more line after it, so the terminal
+		// has already wrapped and it is at the start of the next row.
+		curRow, curCol = curRow+1, 0
+	}
 	if endRow > curRow {
 		b.WriteString("\x1b[")
 		b.WriteString(itoa(endRow - curRow))
@@ -399,8 +383,13 @@ func (e *editor) toLastRow(prompt drawnPrompt) {
 	if cols <= 0 {
 		return
 	}
-	end := prompt.cells + len(e.line)
-	if endRow := end / cols; endRow > e.row {
+	_, _, endRow, endCol := place(prompt.cells, e.line, e.pos, cols)
+	if endCol == cols {
+		// Sitting at the right-hand edge with the wrap still pending is being
+		// on the row already, not below it.
+		endRow++
+	}
+	if endRow > e.row {
 		e.write("\x1b[" + itoa(endRow-e.row) + "B")
 	}
 }
@@ -446,6 +435,62 @@ func displayWidth(s string) int {
 		n += runeWidth(r)
 	}
 	return n
+}
+
+// cells is how many columns the line takes on the screen.
+//
+// Separate from displayWidth because a line carries no escape sequences — the
+// editor never puts a control character in it — so there is nothing to skip,
+// and this runs on every keystroke.
+func cells(rs []rune) int {
+	n := 0
+	for _, r := range rs {
+		n += runeWidth(r)
+	}
+	return n
+}
+
+// place reports where the cursor and the end of the line land on the screen,
+// counted in rows from the row the prompt starts on.
+//
+// It walks the line rather than dividing its width by the terminal's, and the
+// reason is the wide characters: a terminal will not split `日` across the
+// right-hand edge, so it wraps early and leaves the last cell of that row
+// blank. Dividing counts that blank cell as used, and from the first wrapped
+// line onwards every row this returns is wrong — the redraw comes back up to
+// the wrong row and paints the prompt into the middle of the line.
+//
+// A column of `cols` is the cursor at the edge with the wrap still pending: a
+// terminal stays on the row it filled until there is another character to put
+// somewhere. The caller decides what to do about it, because the answer
+// differs between the end of the line and the cursor.
+//
+// The cursor is recorded before the character it sits in front of is laid
+// down, which is where writing the line up to that point would leave a
+// terminal. In front of a wide character the wrap skipped over, that is the
+// blank cell at the end of the row above rather than the character itself.
+func place(promptWidth int, line []rune, pos, cols int) (curRow, curCol, endRow, endCol int) {
+	row, col := promptWidth/cols, promptWidth%cols
+	for i, r := range line {
+		if i == pos {
+			curRow, curCol = row, col
+		}
+		w := runeWidth(r)
+		if col+w > cols {
+			row, col = row+1, 0
+		}
+		col += w
+		if col > cols {
+			// A character wider than the whole terminal. Nothing sensible is
+			// on the screen at that point; keeping the count inside the row
+			// at least keeps the arithmetic after it honest.
+			col = cols
+		}
+	}
+	if pos >= len(line) {
+		curRow, curCol = row, col
+	}
+	return curRow, curCol, row, col
 }
 
 // list prints the matches above the line, the way a shell does — the line is
@@ -553,8 +598,10 @@ const (
 	ctrlL     = 0x0c
 	ctrlN     = 0x0e
 	ctrlP     = 0x10
+	ctrlT     = 0x14
 	ctrlU     = 0x15
 	ctrlW     = 0x17
+	ctrlY     = 0x19
 	tab       = 0x09
 	esc       = 0x1b
 	backspace = 0x08

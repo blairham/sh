@@ -20,5 +20,18 @@ func EditorStyle() repl.EditorStyle {
 		// no second asking.
 		ListQuery:             "zsh: do you wish to see all %[1]d possibilities (%[2]d lines)? ",
 		ListQueryEchoesTheKey: true,
+		// Measured under a pty against zsh 5.9 started with no startup files,
+		// one keystroke at a time. These are the four places where the same
+		// key does something different from bash, and every one of them is on
+		// the daily path: see EditorStyle for the line each was measured on.
+		//
+		// The characters are zsh's own `WORDCHARS` default, confirmed a
+		// character at a time by pressing the key rather than by reading the
+		// variable.
+		WordCharacters:                         "*?_-.[]~=/&;!#$%^(){}<>",
+		KillToStartOfLineTakesTheWholeLine:     true,
+		KillWordBeforeCursorUsesWordCharacters: true,
+		ForwardWordStopsBeforeTheNextWord:      true,
+		TransposeAtTheStartSwapsTheFirstTwo:    true,
 	}
 }

@@ -33,3 +33,37 @@ func TestEditorStyleAsksBeforeALargeListing(t *testing.T) {
 		t.Error("this shell does not write the answering key back")
 	}
 }
+
+// What this shell calls a word, and what its kills do with one.
+//
+// Measured under a pty against bash 5.3.15 started with neither startup files
+// nor an inputrc, one keystroke at a time. Every one of these is a zero value,
+// and every one of them is a measurement rather than an absence: zsh answers
+// all five the other way.
+func TestEditorStyleWords(t *testing.T) {
+	s := bash.EditorStyle()
+	// `M-b` on `echo /usr/local/bin` leaves the cursor in front of `bin`, so
+	// a word here is letters and digits and nothing else.
+	if got := s.WordCharacters; got != "" {
+		t.Errorf("WordCharacters = %q, want nothing beyond letters and digits", got)
+	}
+	// `^U` with the cursor at the start of `echo one two` leaves the line as
+	// it was, having nothing in front of the cursor to kill.
+	if s.KillToStartOfLineTakesTheWholeLine {
+		t.Error("^U kills what is before the cursor and leaves the rest")
+	}
+	// `^W` on `echo a+b` leaves `echo `, so it is delimited by whitespace and
+	// not by the word its motion keys use — which `M-Delete` on the same line
+	// is, leaving `echo a+`.
+	if s.KillWordBeforeCursorUsesWordCharacters {
+		t.Error("^W here is delimited by whitespace alone")
+	}
+	// `M-f` from the start of `echo one two` leaves the cursor after `echo`.
+	if s.ForwardWordStopsBeforeTheNextWord {
+		t.Error("M-f here stops at the end of the word, not before the next one")
+	}
+	// `^T` at the start of `echo abc` leaves the line alone.
+	if s.TransposeAtTheStartSwapsTheFirstTwo {
+		t.Error("^T here does nothing with no character in front of the cursor")
+	}
+}

@@ -655,6 +655,12 @@ func (s Shell) newEditor() *editor {
 		listQuery:       s.Editor.ListQuery,
 		listQueryEchoes: s.Editor.ListQueryEchoesTheKey,
 		listQueryStrict: s.Editor.ListQueryAcceptsOnlyYesOrNo,
+		// What this dialect calls a word, and what its kills do with one.
+		wordChars:                  s.Editor.WordCharacters,
+		wholeLineKill:              s.Editor.KillToStartOfLineTakesTheWholeLine,
+		killBeforeCursorUsesWords:  s.Editor.KillWordBeforeCursorUsesWordCharacters,
+		forwardWordStopsBeforeNext: s.Editor.ForwardWordStopsBeforeTheNextWord,
+		transposeAtStart:           s.Editor.TransposeAtTheStartSwapsTheFirstTwo,
 		// The width comes from the input, which is the terminal; the output
 		// may be a file the session was started with, and its size is not the
 		// screen's.

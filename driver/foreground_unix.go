@@ -46,6 +46,17 @@ func foreground(pgid int) error {
 //
 // /dev/tty rather than stdin: a shell whose input is redirected still has a
 // controlling terminal, and it is the one job control is about.
+//
+// Outside the boundary, deliberately, and this is the exemption written down
+// rather than left to be noticed. It is the same reasoning the action
+// vocabulary gives for a process substitution's scaffolding: the path is fixed
+// and chosen here, never by a script, and the open reads nothing — the
+// descriptor exists only to name the terminal in the ioctl on the next line.
+// Gating it would let a policy break job control while believing it had
+// refused an access: ^C and ^Z would stop reaching commands, which is not a
+// smaller shell but a broken one, and no file the policy was protecting would
+// be any safer. What a script can aim — a redirection to /dev/tty, a `read
+// < /dev/tty` — is an open like any other and passes the gate in interp.
 func controllingTerminal() (*os.File, error) {
 	return os.OpenFile("/dev/tty", os.O_RDWR, 0)
 }

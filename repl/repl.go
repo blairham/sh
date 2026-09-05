@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blairham/sh/internal/boundary"
 	"github.com/blairham/sh/internal/panicguard"
 	"github.com/blairham/sh/internal/secret"
 	"github.com/blairham/sh/interp"
@@ -58,6 +59,17 @@ type Shell struct {
 	// Clock is what a prompt with the time in it reads. Nil is the real one.
 	Clock func() time.Time
 
+	// Gate and Events are the session's policy and its observer, carried
+	// straight through from the front end and used here for the one file
+	// this package opens itself: the history. Both nil is what a shell
+	// without a policy is, and costs a nil check.
+	//
+	// The values are the same ones the Runner holds — a session cannot be
+	// gated for what a script does and ungated for what the prompt does, or
+	// the boundary has a hole shaped exactly like `HISTFILE=/somewhere`.
+	Gate   interp.Gate
+	Events interp.Sink
+
 	// PanicTrace prints the stack of an interpreter bug caught while running
 	// a line, as well as the report that one was caught. The default is off
 	// because a trace at a prompt scrolls the session away and buries the
@@ -89,7 +101,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// measured, bash given `-i` on a pipe with three lines in HISTFILE draws
 	// `!4 #1` at its first prompt, editor or no editor.
 	hist := s.historyFile()
-	earlier := hist.load()
+	earlier := hist.load(ctx)
 	s.counts = &counts{history: len(earlier)}
 	if !IsTerminal(s.In) {
 		// A prompt without a terminal is not a mistake to refuse: every shell
@@ -127,7 +139,7 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	ed.history = earlier
 	loaded := len(earlier)
 	defer func() {
-		if err := hist.save(ed.history[min(loaded, len(ed.history)):]); err != nil {
+		if err := hist.save(ctx, ed.history[min(loaded, len(ed.history)):]); err != nil {
 			s.errf("%v\n", err)
 		}
 	}()
@@ -449,7 +461,11 @@ func (s Shell) historyFile() historyFile {
 		return historyFile{}
 	}
 	home, _ := s.Runner.GetVar("HOME")
-	return historyFrom(s.Runner.GetVar, home)
+	h := historyFrom(s.Runner.GetVar, home)
+	// The session's boundary, so an open this package makes is asked about
+	// the same way one the interpreter makes is.
+	h.bound = boundary.Boundary{Gate: s.Gate, Events: s.Events}
+	return h
 }
 
 // completer answers Tab from this shell: its builtins, its functions, what is

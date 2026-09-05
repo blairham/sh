@@ -170,6 +170,17 @@ func inputIsTerminal(in io.Reader) bool {
 	// meets constantly — `read -p X v </dev/null`, and every child handed a
 	// silenced stdin. It is nobody's terminal, and bash measured through
 	// one prints no prompt.
+	//
+	// os.Stat rather than r.stat, so this probe is outside the boundary, and
+	// that is a decision of the same kind as the process-substitution
+	// scaffolding on ActionStat's neighbor. The path is fixed and the
+	// interpreter's own; the script neither names it nor learns anything
+	// about the filesystem from it, since the question is about a descriptor
+	// the caller has already handed over. Routing it through the gate would
+	// let `-deny /dev/null` turn the null device into a terminal and print a
+	// menu into it — a policy changing behavior it never meant to touch,
+	// while refusing nothing the script could reach. What the script *can*
+	// aim is `< /dev/null`, and that open is gated where it is written.
 	if null, err := os.Stat(os.DevNull); err == nil && os.SameFile(info, null) {
 		return false
 	}

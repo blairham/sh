@@ -7,9 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/blairham/sh/dialect/bash"
-	"github.com/blairham/sh/dialect/dash"
-	"github.com/blairham/sh/dialect/zsh"
 	. "github.com/blairham/sh/interp"
 )
 
@@ -161,48 +158,56 @@ func TestCommandSubstitution(t *testing.T) {
 func withSem(s Semantics) func(*Runner) { return func(r *Runner) { r.Semantics = &s } }
 
 func TestSemanticsAxesHaveTwoSides(t *testing.T) {
-	// Each row is an axis, run under two dialects that disagree about it.
-	// Asserting only one side asserts a default rather than a behavior.
+	// Each row is an axis, run with its field answered both ways on the same
+	// base. Asserting only one side asserts a default rather than a behavior.
 	tests := []struct {
 		axis, src string
-		a         Semantics
-		wantA     string
-		b         Semantics
-		wantB     string
+		set       func(*Semantics, Answer)
+		wantYes   string
+		wantNo    string
 	}{
 		{
 			"a leading zero means octal",
 			`echo $((0100))`,
-			bash.Semantics(), "64\n", zsh.Semantics(), "100\n",
+			func(s *Semantics, a Answer) { s.ArithLeadingZeroIsOctal = a },
+			"64\n", "100\n",
 		},
 		{
 			"echo interprets escapes",
 			`echo 'a\tb'`,
-			bash.Semantics(), "a\\tb\n", zsh.Semantics(), "a\tb\n",
+			func(s *Semantics, a Answer) { s.EchoInterpretsEscapes = a },
+			"a\tb\n", "a\\tb\n",
 		},
 		{
 			"${#@} is the count",
 			`set -- p q r; echo ${#@}`,
-			bash.Semantics(), "3\n", dash.Semantics(), "5\n",
+			func(s *Semantics, a Answer) { s.LengthOfSpecialIsCount = a },
+			"3\n", "5\n",
 		},
 		{
 			"an unquoted expansion is split",
 			`x="a b"; printf "[%s]" $x`,
-			bash.Semantics(), "[a][b]", zsh.Semantics(), "[a b]",
+			func(s *Semantics, a Answer) { s.SplitParamExpansion = a },
+			"[a][b]", "[a b]",
 		},
 		{
 			"quoting a regex makes it a literal",
 			`[[ abc =~ "^a.c$" ]] && echo m || echo no`,
-			bash.Semantics(), "no\n", zsh.Semantics(), "m\n",
+			func(s *Semantics, a Answer) { s.RegexQuotingMakesLiteral = a },
+			"no\n", "m\n",
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.axis, func(t *testing.T) {
-			if got, _ := run(t, tc.src, withSem(tc.a)); got != tc.wantA {
-				t.Errorf("first side: got %q, want %q", got, tc.wantA)
+			yes := permissive()
+			tc.set(&yes, Yes)
+			if got, _ := run(t, tc.src, withSem(yes)); got != tc.wantYes {
+				t.Errorf("Yes side: got %q, want %q", got, tc.wantYes)
 			}
-			if got, _ := run(t, tc.src, withSem(tc.b)); got != tc.wantB {
-				t.Errorf("other side: got %q, want %q", got, tc.wantB)
+			no := permissive()
+			tc.set(&no, No)
+			if got, _ := run(t, tc.src, withSem(no)); got != tc.wantNo {
+				t.Errorf("No side: got %q, want %q", got, tc.wantNo)
 			}
 		})
 	}
@@ -288,17 +293,19 @@ func TestArithmeticErrorsFailTheCommand(t *testing.T) {
 	// the diagnostic went to stderr and the exit status said everything had
 	// gone fine.
 	//
-	// *Which* non-zero status is an axis, not a constant: bash, ksh93 and
-	// zsh exit 1 and dash exits 2. Asserting one number would have written
-	// one shell's policy into the core, so both sides are asserted here and
-	// the core is asserted to refuse.
+	// *Which* non-zero status is an axis, not a constant: it is
+	// FatalErrorStatusIsOne. Asserting one number would have written one
+	// shell's policy into the core, so both sides are asserted here and the
+	// core is asserted to refuse.
+	one := permissive()
+	one.FatalErrorStatusIsOne = Yes
 	for _, src := range []string{`echo $((1/0))`, `echo $((08))`, `echo $((1%0))`} {
 		for _, tc := range []struct {
 			name string
 			sem  Semantics
 			want int
 		}{
-			{"bash", bash.Semantics(), 1},
+			{"status one", one, 1},
 			{"posix", PosixSemantics(), 2},
 		} {
 			out, st := run(t, src, withSem(tc.sem))

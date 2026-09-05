@@ -55,7 +55,19 @@ func testPATH() []string { return []string{"PATH=/usr/bin:/bin"} }
 
 func run(t *testing.T, src string, setup func(*Runner)) (out string, status int) {
 	t.Helper()
-	f, err := syntax.Parse(src, syntax.Core())
+	return runGrammar(t, src, nil, setup)
+}
+
+// runGrammar is run() for a source that needs a construct the core grammar
+// does not have: enable turns each needed flag on by name, so a test states
+// the construct it depends on rather than a shell that happens to have it.
+func runGrammar(t *testing.T, src string, enable func(*syntax.Dialect), setup func(*Runner)) (out string, status int) {
+	t.Helper()
+	d := syntax.Core()
+	if enable != nil {
+		enable(&d)
+	}
+	f, err := syntax.Parse(src, d)
 	if err != nil {
 		t.Fatalf("parse %q: %v", src, err)
 	}

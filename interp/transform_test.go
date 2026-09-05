@@ -19,6 +19,19 @@ import (
 // the construct and the grammar flag, and the dialect preset is only the
 // harness that turns the flag on.
 
+// runTransform is run() with the grammar flags the family needs, named for
+// the constructs: the transformations themselves, and the case-change
+// operator a few rows contrast them with.
+func runTransform(t *testing.T, src string) (string, int) {
+	t.Helper()
+	return runGrammar(t, src, func(d *syntax.Dialect) {
+		d.ParamTransformations = true
+		d.ParamCaseChange = true
+		// One row reaches a transformation through `${!p…}`.
+		d.ParamIndirection = true
+	}, nil)
+}
+
 func TestTransformQuotesForReuse(t *testing.T) {
 	for _, c := range []struct{ name, src, want string }{
 		// Single quotes even when nothing needs them, the quote itself
@@ -44,7 +57,7 @@ func TestTransformQuotesForReuse(t *testing.T) {
 		{"multibyte stays plain", `x=café; echo "${x@Q}"`, `'café'`},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			out, st := runBash(t, c.src)
+			out, st := runTransform(t, c.src)
 			if strings.TrimSpace(out) != c.want || st != 0 {
 				t.Errorf("said %q st=%d, want %q st=0", strings.TrimSpace(out), st, c.want)
 			}
@@ -55,27 +68,27 @@ func TestTransformQuotesForReuse(t *testing.T) {
 func TestTransformExpandsEscapes(t *testing.T) {
 	// @E reads the value under the $'…' rules: the same decoder, so the two
 	// cannot drift apart.
-	out, _ := runBash(t, `x='a\tb'; echo "${x@E}"`)
+	out, _ := runTransform(t, `x='a\tb'; echo "${x@E}"`)
 	if out != "a\tb\n" {
 		t.Errorf("@E said %q, want a real tab", out)
 	}
-	out, _ = runBash(t, `x='oct\101 hex\x41'; echo "${x@E}"`)
+	out, _ = runTransform(t, `x='oct\101 hex\x41'; echo "${x@E}"`)
 	if out != "octA hexA\n" {
 		t.Errorf("@E said %q, want the escapes decoded", out)
 	}
-	out, _ = runBash(t, `echo "[${u@E}]"`)
+	out, _ = runTransform(t, `echo "[${u@E}]"`)
 	if out != "[]\n" {
 		t.Errorf("@E of unset said %q, want empty", out)
 	}
 }
 
 func TestTransformChangesCase(t *testing.T) {
-	out, _ := runBash(t, `x="abC dEf"; echo "${x@U}|${x@L}|${x@u}"`)
+	out, _ := runTransform(t, `x="abC dEf"; echo "${x@U}|${x@L}|${x@u}"`)
 	if strings.TrimSpace(out) != "ABC DEF|abc def|AbC dEf" {
 		t.Errorf("case letters said %q", strings.TrimSpace(out))
 	}
 	// Unset is empty for all three, and an empty value stays empty.
-	out, _ = runBash(t, `echo "[${u@U}][${u@L}][${u@u}]"`)
+	out, _ = runTransform(t, `echo "[${u@U}][${u@L}][${u@u}]"`)
 	if strings.TrimSpace(out) != "[][][]" {
 		t.Errorf("case letters on unset said %q", strings.TrimSpace(out))
 	}
@@ -96,7 +109,7 @@ func TestTransformReportsAttributes(t *testing.T) {
 		{"through an indirection", `typeset -i tgt=1; p=tgt; echo "[${!p@a}]"`, `[i]`},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			out, _ := runBash(t, c.src)
+			out, _ := runTransform(t, c.src)
 			if strings.TrimSpace(out) != c.want {
 				t.Errorf("said %q, want %q", strings.TrimSpace(out), c.want)
 			}
@@ -141,7 +154,7 @@ func TestTransformWritesAnAssignment(t *testing.T) {
 		{"an array read as a scalar", `a=(1 "x y"); echo "${a@A}"`, `declare -a a='1'`},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			out, _ := runBash(t, c.src)
+			out, _ := runTransform(t, c.src)
 			if strings.TrimSpace(out) != c.want {
 				t.Errorf("said %q, want %q", strings.TrimSpace(out), c.want)
 			}
@@ -190,7 +203,7 @@ func TestTransformListsKeysAndValues(t *testing.T) {
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			out, _ := runBash(t, c.src)
+			out, _ := runTransform(t, c.src)
 			if strings.TrimSpace(out) != c.want {
 				t.Errorf("said %q, want %q", strings.TrimSpace(out), c.want)
 			}
@@ -227,7 +240,7 @@ func TestTransformDistributesOverAWholeArray(t *testing.T) {
 		{"no positionals", `set --; printf "[%s]" "${@@Q}"; echo`, `[]`},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			out, _ := runBash(t, c.src)
+			out, _ := runTransform(t, c.src)
 			if strings.TrimSpace(out) != c.want {
 				t.Errorf("said %q, want %q", strings.TrimSpace(out), c.want)
 			}
@@ -240,7 +253,7 @@ func TestTransformDistributesOverAWholeArray(t *testing.T) {
 // value with no prompt escapes would pass through unchanged, but answering
 // only that case would be a silent wrong answer for every other value.
 func TestTransformRefusesPromptExpansion(t *testing.T) {
-	out, st := runBash(t, `x=abc; echo "hi ${x@P}"; echo after`)
+	out, st := runTransform(t, `x=abc; echo "hi ${x@P}"; echo after`)
 	if st == 0 {
 		t.Error("the @P refusal reported success")
 	}
@@ -255,7 +268,7 @@ func TestTransformRefusesPromptExpansion(t *testing.T) {
 // A letter outside the set never became an operator, so it reports as the
 // deferred bad substitution it stayed.
 func TestUnknownTransformLetterIsABadSubstitution(t *testing.T) {
-	out, st := runBash(t, `x=abc; echo "${x@Z}"`)
+	out, st := runTransform(t, `x=abc; echo "${x@Z}"`)
 	if st == 0 {
 		t.Error("an unknown letter reported success")
 	}

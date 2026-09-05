@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/blairham/sh/dialect/bash"
-	"github.com/blairham/sh/dialect/zsh"
 
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
@@ -148,14 +147,19 @@ func TestADialectCanRemoveWhatItDoesNotHave(t *testing.T) {
 
 func TestTheAxesAreValuesNotForks(t *testing.T) {
 	// Two dialects differing only in a field, which is the point of the
-	// vector: "which shell am I" is data.
+	// vector: "which shell am I" is data. Both start from the same base and
+	// answer one axis differently.
+	octal := bash.Semantics()
+	octal.ArithLeadingZeroIsOctal = interp.Yes
+	decimal := bash.Semantics()
+	decimal.ArithLeadingZeroIsOctal = interp.No
 	for _, tc := range []struct {
 		name string
 		sem  interp.Semantics
 		want string
 	}{
-		{"bash", bash.Semantics(), "64\n"},
-		{"zsh", zsh.Semantics(), "100\n"},
+		{"octal", octal, "64\n"},
+		{"decimal", decimal, "100\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var out bytes.Buffer

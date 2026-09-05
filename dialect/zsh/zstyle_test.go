@@ -106,6 +106,16 @@ func TestRetrievalReadsTheValues(t *testing.T) {
 	if out != want {
 		t.Errorf("output = %q, want %q", out, want)
 	}
+	// A style with exactly one value, which is the shape the rest of the file
+	// never asks for and the one that catches an answer written into the
+	// array table at the wrong subscript: this shell counts from 1, and a
+	// single value put at 0 reads back as nothing at all while two values put
+	// at 0 and 1 read back looking right.
+	out, _ = runZsh(t, dir, "zstyle ':a:*' one only\nzstyle -a ':a:b' one arr; echo \"($arr)\"\n"+
+		"zstyle -g g ':a:*' one; echo \"($g)\"\n")
+	if want := "(only)\n(only)\n"; out != want {
+		t.Errorf("single-value output = %q, want %q", out, want)
+	}
 }
 
 // TestGReadsThePatternRatherThanMatchingIt is the one retrieval that does not
@@ -241,6 +251,34 @@ func TestThePatternIsAPatternAndTheStyleIsNot(t *testing.T) {
 			"zstyle -s ':a:b:c' verb miss; echo \"[$miss]\"\n")
 	if want := "[yes]\n[]\n"; out != want {
 		t.Errorf("output = %q, want %q", out, want)
+	}
+}
+
+// TestTiedPatternsKeepTheOrderTheyWereSetIn is the third sort key, and it is
+// asserted over enough patterns to actually depend on the sort being stable.
+//
+// Four or five would not: an unstable sort of a short slice is stable in
+// practice, so a handful of tied rows come out right by luck and the mutant
+// that drops the guarantee survives. Sixteen is past where that holds.
+func TestTiedPatternsKeepTheOrderTheyWereSetIn(t *testing.T) {
+	// Two component counts, interleaved, and enough of each that the sort has
+	// real work to do. Both halves matter. A run of rows that are *all* tied
+	// is a sort with nothing to compare, which every algorithm leaves alone —
+	// so a table like that keeps its order by accident and says nothing about
+	// stability. Interleaving a key the sort must act on is what makes the
+	// ties something it could disturb.
+	set, deep, shallow := "", "", ""
+	for _, name := range []string{
+		"p", "d", "k", "a", "z", "m", "c", "w", "b", "y", "e", "n", "j", "t", "g", "r",
+	} {
+		set += "zstyle ':" + name + ":x:*' v deep-" + name + "\n"
+		set += "zstyle ':" + name + ":*' v flat-" + name + "\n"
+		deep += "zstyle ':" + name + ":x:*' v deep-" + name + "\n"
+		shallow += "zstyle ':" + name + ":*' v flat-" + name + "\n"
+	}
+	out, _ := runZsh(t, t.TempDir(), set+"zstyle -L\n")
+	if want := deep + shallow; out != want {
+		t.Errorf("output = %q, want the deeper patterns first and each group in the order it was set, %q", out, want)
 	}
 }
 

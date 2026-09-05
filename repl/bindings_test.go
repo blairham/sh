@@ -113,6 +113,22 @@ func TestAStartedSequenceThatGoesNowhereIsDroppedWhole(t *testing.T) {
 	}
 }
 
+// TestAnAbandonedSequenceDoesNotRunItsFirstKey is the other half of dropping a
+// started sequence whole, and the half a mutant slipped through: the bytes
+// consumed looking for a binding must not be handed back to the editor's own
+// dispatch either.
+//
+// `^A` is the first byte here because the editor acts on it by itself. Reading
+// `^A` and then a byte no binding continues to must leave the line alone — not
+// jump the cursor to the start, which is what `^A` would have done had the
+// lookup declined the key after eating the byte behind it.
+func TestAnAbandonedSequenceDoesNotRunItsFirstKey(t *testing.T) {
+	table := map[string]Widget{"\x01\x02": WidgetEndOfLine}
+	if got, want := typedBound(t, table, "ab\x01z!\n"), "ab!"; got != want {
+		t.Errorf("line = %q, want %q", got, want)
+	}
+}
+
 // TestAnExactMatchWinsOverALongerOne pins the choice made instead of a timer.
 // Both `^X` and `^X^A` are bound; `^X` acts at once rather than waiting to
 // find out whether the second byte was coming.
@@ -163,7 +179,12 @@ func TestEveryWidgetIsReachable(t *testing.T) {
 		{WidgetForwardWord, "one two\x02\x02\x02\x02\x02\x02\x02\x07!", "one! two"},
 		{WidgetKillLine, "ab\x02\x07", "a"},
 		{WidgetKillWholeLine, "ab\x07", ""},
-		{WidgetKillWordBefore, "one two\x07", "one "},
+		// `a+b` rather than a plain word, because the kill before the cursor
+		// and the backward *motion* disagree about punctuation and agree
+		// about everything else: with the style left alone this key is
+		// delimited by whitespace, so it takes the `+` with it. A word
+		// without punctuation in it would pass for either.
+		{WidgetKillWordBefore, "echo a+b\x07", "echo "},
 		{WidgetKillWordAfter, "one two\x02\x02\x02\x07", "one "},
 		{WidgetTransposeChars, "ab\x07", "ba"},
 		// The two the undo work brought with it. Undo takes back the typing

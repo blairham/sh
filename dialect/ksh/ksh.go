@@ -89,10 +89,16 @@ func Semantics() interp.Semantics {
 	// three read `+c` as `-c` and name `$0` from the first operand. All four
 	// run the command string either way.
 	s.PlusSignedCommandStringIsDollarZero = true
-	// Measured from a script file, where `echo $-` reports `hB`; ksh93's
-	// route letters — `c` under -c, `s` when reading a command string or
-	// standard input — are the front end's and stay unmodeled.
+	// Measured from a script file, where `echo $-` reports `hB`. The
+	// letters describing the route come from Runner.Route.
 	s.DefaultOptionLetters = "hB"
+	// `ksh -c 'echo $-'` reports `chsB` — both route letters, where bash
+	// shows `c` alone and dash and zsh show neither. Read down its rows and
+	// ksh93's rule for `s` is "no script file was named" where the other
+	// three's is "the program came from standard input"; this is the one
+	// invocation where those two differ.
+	s.CommandStringShowsCInDollarDash = interp.Yes
+	s.CommandStringShowsSInDollarDash = interp.Yes
 	s.ArithIntegerOperatorRefusesFloat = interp.Yes
 	// A negative exponent is a float answer here, not a refusal: `2**-1`
 	// is 0.5.

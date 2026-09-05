@@ -48,8 +48,12 @@ func Semantics() interp.Semantics {
 	// a failure: the option stays off and `set` still reports 0.
 	s.MonitorNeedsATerminal = interp.Yes
 	// DefaultOptionLetters stays empty on purpose: measured, dash's `$-`
-	// starts blank however it is invoked, save the route letter `s` on
-	// standard input, which no dialect models.
+	// starts blank however it is invoked, save the `s` of the
+	// standard-input route, which is unanimous and comes from Runner.Route.
+	// Under `-c` it stays blank — neither letter, where bash and ksh93 show
+	// `c` and ksh93 also shows `s`.
+	s.CommandStringShowsCInDollarDash = interp.No
+	s.CommandStringShowsSInDollarDash = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	// $(( )) with nothing in it wants a primary and stops the script.
 	s.EmptyArithExpressionIsAnError = interp.Yes

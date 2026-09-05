@@ -36,12 +36,28 @@ type Result struct {
 	TimedOut bool
 }
 
+// ArgSnippet and ArgScript are the placeholders a Case.Args may use to say
+// where its snippet goes: as the word after `-c`, or as a file the shell is
+// asked to run. See Case.Args, which documents the contract.
+//
+// They are spelled with braces because no shell gives that spelling a meaning
+// in an argument, so a placeholder can never be confused with a word a case
+// actually meant to pass.
+const (
+	ArgSnippet = "{snippet}"
+	ArgScript  = "{script}"
+)
+
 // Exec executes one case in one shell.
 //
 // The snippet is passed with -c rather than written to a file unless the case
 // asks otherwise: some behavior depends on how input is read, and a case that
-// cares says so. See Case.Script.
+// cares says so. See Case.Script, and Case.Args for a case that spells its
+// whole invocation out.
 func Exec(ctx context.Context, sh Found, c Case) Result {
+	if err := c.validate(); err != nil {
+		return Result{Output: "harness error: " + err.Error(), Status: -1}
+	}
 	ctx, cancel := context.WithTimeout(ctx, RunTimeout)
 	defer cancel()
 
@@ -86,19 +102,74 @@ func Exec(ctx context.Context, sh Found, c Case) Result {
 	return res
 }
 
-func command(ctx context.Context, sh Found, c Case, dir string) *exec.Cmd {
+// validate reports a case whose invocation cannot be built.
+//
+// It is checked here rather than only in the corpus test because a harness
+// error has to be visible in the record: a case that quietly ran something
+// other than what it says would be measured, and the measurement is the
+// whole product.
+func (c Case) validate() error {
+	if len(c.Args) == 0 {
+		return nil
+	}
 	if c.Script {
-		// Written to a file and run as an argument, because a few behaviors
-		// differ between a script and -c: a readonly reassignment is fatal in
-		// one and not the other, which is how the contaminated-probe trap in
-		// oracle.md was found.
+		return errors.New("Case.Args and Case.Script are exclusive: put ArgScript in Args instead")
+	}
+	n := 0
+	for _, a := range c.Args {
+		if a == ArgSnippet || a == ArgScript {
+			n++
+		}
+	}
+	if n > 1 {
+		return errors.New("Case.Args names the snippet's place more than once")
+	}
+	return nil
+}
+
+// command builds the invocation: the shell's own flags first — which is where
+// the binary under test is told which dialect to be — and then either the
+// case's own argv or the harness's default `-c` and snippet.
+func command(ctx context.Context, sh Found, c Case, dir string) *exec.Cmd {
+	// Written to a file and run as an argument, because a few behaviors
+	// differ between a script and -c: a readonly reassignment is fatal in one
+	// and not the other, which is how the contaminated-probe trap in
+	// oracle.md was found.
+	script := func() string {
 		path := filepath.Join(dir, "case.sh")
 		_ = os.WriteFile(path, []byte(c.Snippet+"\n"), 0o600)
-		return exec.CommandContext(ctx, sh.Path, append(append([]string(nil), sh.Args...), path)...)
+		return path
 	}
-	args := append(append([]string(nil), sh.Args...), "-c", c.Snippet)
+
+	args := append([]string(nil), sh.Args...)
+	named := true
+	switch {
+	case len(c.Args) > 0:
+		for _, a := range c.Args {
+			switch a {
+			case ArgSnippet:
+				a = c.Snippet
+			case ArgScript:
+				a = script()
+			}
+			args = append(args, a)
+		}
+	case c.Script:
+		args = append(args, script())
+		// The script route does not honor Argv0, and that is measured rather
+		// than chosen: bash invoked as sh makes a readonly reassignment fatal,
+		// so honoring it here rewrites what twenty recorded rows say bash-as-sh
+		// does. The column is therefore plain bash for a Script case and the
+		// named shell everywhere else. Straightening that out means re-recording
+		// those rows and deciding which answer the column should have been
+		// giving, which is its own change rather than a side effect of this one.
+		named = false
+	default:
+		args = append(args, "-c", c.Snippet)
+	}
+
 	cmd := exec.CommandContext(ctx, sh.Path, args...)
-	if sh.Argv0 != "" {
+	if named && sh.Argv0 != "" {
 		cmd.Args[0] = sh.Argv0
 	}
 	return cmd

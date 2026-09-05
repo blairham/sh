@@ -978,6 +978,31 @@ var Corpus = []Case{
 		Why:     "four usages, two of them printed with no shell name in front, and zsh alone not treating it as worth a different status from any other failure",
 	},
 	{
+		ID: "printf/a-date-conversion-and-the-shells-without-one", Category: "printf",
+		Snippet: `printf "%(%%)T\n" 1000000000; echo "st=$?"`,
+		Why:     "`%(fmt)T` writes an epoch through a date format, and one shell in the panel has it as bash does: the other four meet `%(` with three wordings and two statuses. The format here is a literal `%` on purpose, so that the row is about the conversion being *read* and every column is the same on every run — ksh93's own `%T` takes a date string and answers a number with a warning and the time it is now",
+	},
+	{
+		ID: "printf/a-date-through-a-fixed-epoch", Category: "printf",
+		Snippet: `x=$(printf "%(%Y)T" 1000000000 2>/dev/null); echo "st=$?"; case $x in 2001) echo "the year the epoch falls in";; "") echo "no such conversion";; *) echo "some other year";; esac`,
+		Why:     "the epoch is fixed and the answer compared rather than printed, for two reasons: the conversion's other operands are `now` and `when this shell started`, neither of which a recorded case could be asked twice — and the one shell with a `%T` of its own writes the current year here, which is a fact that would go stale in January",
+	},
+	{
+		ID: "printf/a-date-with-a-zone-and-a-whole-timestamp", Category: "printf",
+		Snippet: `export TZ=UTC; x=$(printf "%(%Y-%m-%dT%H:%M:%S %Z)T" 1000000000 2>/dev/null); case $x in "2001-09-09T01:46:40 UTC") echo "the epoch, in UTC";; "") echo "no such conversion";; *) echo "some other date";; esac`,
+		Why:     "a format worth writing, and the zone it is read in: `$TZ` decides, so a case that did not set it would record the zone of whichever machine ran it",
+	},
+	{
+		ID: "printf/a-date-with-an-empty-format-and-a-width", Category: "printf",
+		Snippet: `export TZ=UTC; x=$(printf "[%()T][%12(%Y)T]" 1000000000 1100000000 2>/dev/null); case $x in "[01:46:40][        2004]") echo "the time of day, then a padded year";; "") echo "no such conversion";; *) echo "something else";; esac`,
+		Why:     "an empty format is the C locale's time of day, and a width belongs to the *result* rather than to the date. Two operands as well, so the format runs twice and the second year is the second epoch's",
+	},
+	{
+		ID: "printf/a-date-from-something-that-is-not-a-number", Category: "printf",
+		Snippet: `export TZ=UTC; x=$(printf "%(%Y)T" abc); echo "st=$?"; case $x in 1970) echo "the epoch zero";; "") echo "no such conversion";; *) echo "some other year";; esac`,
+		Why:     "an operand that is not an epoch: the shell with the conversion complains and writes the epoch zero anyway, which is what its numeric conversions do with a word that is not a number. The complaint is on standard error and stays in the record",
+	},
+	{
 		ID: "printf/backslash-c-means-three-things", Category: "printf",
 		Snippet: `printf "a\cbZ" | od -An -c | tr -s " "`,
 		Why:     "read as bytes rather than as text, because that is the only way to tell ksh93's control character from zsh's stopping: bash and dash write two literal characters, ksh93 reads \\cX as control-X, and zsh ends the output there",

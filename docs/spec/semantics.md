@@ -736,6 +736,58 @@ prose rather than as a case because the output cannot be golden: bash and
 ksh93 announce the killed writer by its process id, which is different on
 every run.
 
+## A conversion the corpus cannot ask for twice
+
+`printf '%(fmt)T'` writes an epoch through a date format, with the format
+inside the conversion. Oracle runs, 2026-09-05, and it is **bash 5.3's
+alone** in the panel: dash and zsh call `%(` a directive they do not have
+(status 2 and 1, two wordings), bash 3.2 an invalid format character, and
+ksh93 has a `%T` under the same letter that is not this one at all.
+
+    printf '%(%Y)T\n' 1000000000        bash  2001
+    printf '%()T\n'    1000000000       bash  01:46:40 — the C locale's
+                                               time of day
+    printf '[%12(%Y)T]\n' 1000000000    bash  [        2001] — the width
+                                               is the result's, not the
+                                               date's
+
+The operand is seconds since the epoch, and **two numbers are not times**:
+`-1` is now and `-2` is when the shell started. A missing operand is now as
+well. That is why the corpus pins a *fixed* epoch and nothing else — a case
+that asked for the current year would record the year it was recorded in —
+and why the engine grew `Runner.Clock`: a hook, nil meaning the wall clock,
+so the two forms the corpus cannot ask about are pinned in
+`interp/printftime_test.go` instead. It is the same shape `RANDOM` has,
+and for the same reason: a value the shell *produces* has to be sayable
+from outside or nothing that depends on it can be tested twice.
+
+The zone is **the Runner's `$TZ`**, not the process's. Measured: `TZ=UTC`
+without an export changes the answer, so an exported-only lookup would be
+wrong as well as ambient — the `PATH` rule, in a second place. An unset TZ
+is the machine's zone; an empty one, and a name no zone database has, are
+both UTC.
+
+`strftime` is ours, written from the POSIX conversion specifications and
+checked against a live shell in the C locale, because Go has none. Two
+things about it are the platform's rather than the shell's, and are
+recorded rather than pinned: a conversion no strftime has keeps its letter
+and loses the `%` on the system this was measured on, and glibc has
+letters this does not.
+
+`ksh93`'s `%T` is deferred rather than missed. Its operand is a date
+*string* — `now`, `tomorrow`, a date written out — and a number earns
+`printf: warning: invalid argument of type T` and the time it is now.
+Reading a date the way ksh93 reads one is its own feature with its own
+grammar, so `PrintfTimeConversion` is No there and four corpus rows show
+the ksh93 column diverging, which is the honest record of an unbuilt
+feature rather than a silent one.
+
+One thing measured on the way that is **not** this conversion and is
+worth its own change: bash reads the C length modifiers — `%zX`, `%ld`,
+`%jd` — and this engine calls them unknown conversions. That is why bash
+names `T` in `printf '%T'` where it names the character *after* `z` in
+`printf '%z]'`: `z` is a modifier there and `T` is a verb.
+
 ## A capability the corpus cannot hand a case
 
 The corpus can give a case its own argv (`Case.Args`) and its own standard

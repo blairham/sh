@@ -9,6 +9,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // `printf`, the last builtin that was not one.
@@ -198,7 +199,10 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, bool) {
 			b.writeByte(c)
 			i++
 		default:
-			spec, verb, n := scanPrintfSpec(format[i:])
+			spec, verb, timeFmt, n, code := r.scanPrintfSpec(format[i:])
+			if code != 0 {
+				return used, code, true
+			}
 			i += n
 			if verb == '%' {
 				b.writeByte('%')
@@ -207,7 +211,7 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, bool) {
 			if verb == 0 {
 				return used, r.printfBadVerb(format[:i], badVerbName(format, i), format[i:]), true
 			}
-			text, code, stop := r.printfVerb(spec, verb, next)
+			text, code, stop := r.printfVerb(spec, verb, timeFmt, next)
 			if code != 0 {
 				status = code
 			}
@@ -221,9 +225,11 @@ func (r *Runner) printfOnce(format string, operands []string) (int, int, bool) {
 }
 
 // printfVerb formats one conversion.
-func (r *Runner) printfVerb(spec string, verb byte, next func() (string, bool)) (string, int, bool) {
+func (r *Runner) printfVerb(spec string, verb byte, timeFmt string, next func() (string, bool)) (string, int, bool) {
 	arg, present := next()
 	switch verb {
+	case 'T':
+		return r.printfTime(spec, timeFmt, arg, present)
 	case 's':
 		return fmt.Sprintf(spec+"s", arg), 0, false
 	case 'b':
@@ -324,10 +330,67 @@ func backslashQuote(s string) string {
 }
 
 // scanPrintfSpec reads one conversion, returning the flags-width-precision
-// prefix, the verb, and how much of the format it took.
+// prefix, the verb, the date format where the conversion is a `%(…)T`, and
+// how much of the format it took.
 //
-// A verb of 0 means the conversion is not one this shell has.
-func scanPrintfSpec(s string) (string, byte, int) {
+// A verb of 0 means the conversion is not one this shell has. A non-zero code
+// is an axis nothing answered, which stops the format rather than printing
+// half of it.
+func (r *Runner) scanPrintfSpec(s string) (string, byte, string, int, int) {
+	i := printfSpecPrefix(s)
+	if i >= len(s) {
+		return "", 0, "", len(s), 0
+	}
+	spec := "%" + strings.ReplaceAll(s[1:i], "'", "")
+	if s[i] == '(' {
+		// `%(fmt)T`, the one conversion whose format is inside the
+		// conversion. One shell in the panel has it; asked here rather than
+		// at the top, so a dialect without it is never questioned about a
+		// format that has no `%(` in it.
+		if r.ask(r.sem().PrintfTimeConversion, "`printf '%(…)T'` writing a date") {
+			if end := strings.Index(s[i:], ")T"); end >= 0 {
+				return spec, 'T', s[i+1 : i+end], i + end + 2, 0
+			}
+			// No `)T` to close it. bash meets this with two complaints and
+			// a partial line; ours is the ordinary refusal of a conversion
+			// it cannot read, which the next lines produce.
+		}
+		if r.unspecified {
+			return "", 0, "", i, r.status
+		}
+	}
+	verb := s[i]
+	if strings.IndexByte("sbcqdiouxXfeEgG%", verb) < 0 {
+		return spec, 0, "", i + 1, 0
+	}
+	return spec, verb, "", i + 1, 0
+}
+
+// timeZone is the zone a date is written in, which is `$TZ` — the Runner's,
+// not the process's.
+//
+// The PATH rule again: `os/time`'s Local reads the *process's* environment,
+// and a Runner holds its own variables. `TZ=UTC` without an export changes
+// the answer in the shell that has this conversion, so an exported-only
+// lookup would be wrong as well as ambient.
+//
+// An unset TZ is the machine's zone, which is the honest answer to "nobody
+// said". An empty one is UTC, and so is a name no zone database has —
+// measured, and the same answer for both.
+func (r *Runner) timeZone() *time.Location {
+	tz, ok := r.getVar("TZ")
+	if !ok {
+		return time.Local
+	}
+	if loc, err := time.LoadLocation(tz); err == nil && tz != "" {
+		return loc
+	}
+	return time.UTC
+}
+
+// printfSpecPrefix is where a conversion's verb starts: past the `%`, the
+// flags, the width and the precision.
+func printfSpecPrefix(s string) int {
 	i := 1 // past the %
 	for i < len(s) && strings.IndexByte("-+ #0'", s[i]) >= 0 {
 		i++
@@ -341,15 +404,38 @@ func scanPrintfSpec(s string) (string, byte, int) {
 			i++
 		}
 	}
-	if i >= len(s) {
-		return "", 0, len(s)
+	return i
+}
+
+// printfTime is `%(fmt)T`: an epoch through a date format.
+//
+// The operand is seconds since the epoch, with two numbers that are not
+// times: -1 is now and -2 is when this shell started. Both are measured, and
+// both are why the corpus pins a case with a *fixed* epoch — a case that
+// asked for the current year would record the year it was recorded in.
+//
+// An empty format is the C locale's time of day, which is what the shell with
+// this conversion writes for `%()T`.
+func (r *Runner) printfTime(spec, format, arg string, present bool) (string, int, bool) {
+	var t time.Time
+	code := 0
+	switch {
+	case !present, arg == "-1":
+		t = r.Now()
+	case arg == "-2":
+		t = r.StartedAt()
+	default:
+		var n int64
+		n, code = r.printfNumber(arg, present)
+		t = time.Unix(n, 0)
 	}
-	verb := s[i]
-	spec := "%" + strings.ReplaceAll(s[1:i], "'", "")
-	if strings.IndexByte("sbcqdiouxXfeEgG%", verb) < 0 {
-		return spec, 0, i + 1
+	t = t.In(r.timeZone())
+	if format == "" {
+		format = "%X"
 	}
-	return spec, verb, i + 1
+	// The width and the flags belong to the *result*, not to the date: a
+	// `%10(%Y)T` pads the four digits out to ten.
+	return fmt.Sprintf(spec+"s", strftime(format, t)), code, false
 }
 
 // badVerbName is what a diagnostic calls a conversion it does not have.

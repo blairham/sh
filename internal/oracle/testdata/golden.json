@@ -25486,6 +25486,196 @@
         "TimedOut": false
       }
     },
+    "printf/a-date-conversion-and-the-shells-without-one": {
+      "bash": {
+        "Stdout": "%~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "%~st=0",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e: line 0: printf: `(': invalid format character",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: 1: printf: %(: invalid directive",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "%~st=1",
+        "Stderr": "\u003cshell\u003e: printf: warning: invalid argument of type T",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:printf:1: %(: invalid directive",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/a-date-from-something-that-is-not-a-number": {
+      "bash": {
+        "Stdout": "st=1~the epoch zero",
+        "Stderr": "\u003cshell\u003e: line 1: printf: abc: invalid number",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=1~the epoch zero",
+        "Stderr": "\u003cshell\u003e: line 1: printf: abc: invalid number",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~no such conversion",
+        "Stderr": "\u003cshell\u003e: line 0: printf: `(': invalid format character",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2~no such conversion",
+        "Stderr": "\u003cshell\u003e: 1: printf: %(: invalid directive",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~some other year",
+        "Stderr": "\u003cshell\u003e: printf: warning: invalid argument of type T",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~no such conversion",
+        "Stderr": "\u003cshell\u003e:printf:1: %(: invalid directive",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/a-date-through-a-fixed-epoch": {
+      "bash": {
+        "Stdout": "st=0~the year the epoch falls in",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0~the year the epoch falls in",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1~no such conversion",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2~no such conversion",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~some other year",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~no such conversion",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/a-date-with-a-zone-and-a-whole-timestamp": {
+      "bash": {
+        "Stdout": "the epoch, in UTC",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "the epoch, in UTC",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "no such conversion",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "no such conversion",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "some other date",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "no such conversion",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "printf/a-date-with-an-empty-format-and-a-width": {
+      "bash": {
+        "Stdout": "the time of day, then a padded year",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "the time of day, then a padded year",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "something else",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "something else",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "something else",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "something else",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "printf/a-lone-dash-is-an-operand": {
       "bash": {
         "Stdout": "-",
@@ -36223,13 +36413,13 @@
       },
       "dash": {
         "Stdout": "a",
-        "Stderr": "+ cat~+ echo a",
+        "Stderr": "+ echo a~+ cat",
         "Status": 0,
         "TimedOut": false
       },
       "ksh93": {
         "Stdout": "a",
-        "Stderr": "+ echo a~+ cat",
+        "Stderr": "+ cat~+ echo a",
         "Status": 0,
         "TimedOut": false
       },

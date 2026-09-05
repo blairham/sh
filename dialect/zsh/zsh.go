@@ -215,6 +215,8 @@ func Semantics() interp.Semantics {
 	s.PrintfEmptyIsNotANumber = interp.No
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfBackslashC = interp.PrintfBackslashCStops
+	// No `%(fmt)T`: `%(` is a directive this shell does not have.
+	s.PrintfTimeConversion = interp.No
 	s.PrintfQuote = interp.PrintfQuoteBackslash
 	// zsh is the one shell with `$'…'` and no `\c` in it, so `$'\cA'` is the
 	// two characters `cA`; and its strings are counted rather than

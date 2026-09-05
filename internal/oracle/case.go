@@ -2513,6 +2513,41 @@ echo "st=$?"`,
 		Why:     "the replacement's table is the shell's table by number rather than a packing of it: with 3 and 4 never opened, the file parked on 5 is on 5 there and 3 is closed rather than shifted down to fill the hole. Unanimous but for ksh93, which passes neither",
 	},
 	{
+		ID: "redir/a-replacement-keeps-a-redirected-stdout", Category: "redirection",
+		Snippet: `exec >f; exec /bin/sh -c "echo repl; cat f >&2"`,
+		Why:     "the named streams cross a replacement as the rest of the table does, and unanimously — ksh93 included, which is the boundary of what that shell keeps to itself. The replacement reads the file back on the one stream still going to the terminal, because there is no shell left to read it",
+	},
+	{
+		ID: "redir/a-replacement-keeps-a-redirected-stderr", Category: "redirection",
+		Snippet: `exec 2>f; exec /bin/sh -c "echo err >&2; cat f"`,
+		Why:     "the same claim for the stream a shell reports its own failures on, read back on the standard output the script left alone",
+	},
+	{
+		ID: "redir/a-replacement-keeps-a-redirected-stdin", Category: "redirection",
+		Snippet: `printf 'line\n' >f; exec <f; exec /bin/cat`,
+		Why:     "the reading half: the replacement reads the file the script opened rather than the shell's own input, which with a terminal there is the difference between printing a line and hanging",
+	},
+	{
+		ID: "redir/a-replacements-own-redirection-crosses", Category: "redirection",
+		Snippet: `exec /bin/sh -c "echo own; cat f >&2" >f`,
+		Why:     "the form a script is likelier to write — the redirection on the `exec` itself rather than on an `exec` before it — and the same answer, so the rule is about the stream and not about which command opened it",
+	},
+	{
+		ID: "redir/a-replacement-keeps-a-merged-stream", Category: "redirection",
+		Snippet: `exec >f 2>&1; exec /bin/sh -c 'echo out; echo err >&2; exit $(grep -c . f)'`,
+		Why:     "`>f 2>&1` is one file under two numbers rather than two targets, so a replacement that places files by number gets both — the count is the only channel left once every stream is in the file, and it is 2 in every shell. The command substitution is the replacement's, quoted so that the shell being replaced does not run it against a file it has only just truncated",
+	},
+	{
+		ID: "redir/a-closed-stdout-is-closed-for-a-replacement", Category: "redirection",
+		Snippet: `exec >&-; exec /bin/echo hi 2>/dev/null`,
+		Why:     "a stream the script closed stays closed across the replacement rather than falling back to the process's own: the command fails where it would otherwise have written, unanimously. The complaint is discarded because its wording is a fact about whatever /bin/echo is on the machine",
+	},
+	{
+		ID: "redir/a-closed-stdin-is-closed-for-a-replacement", Category: "redirection",
+		Snippet: `exec <&-; exec /bin/cat 2>/dev/null`,
+		Why:     "the same rule on the reading side, and the case that tells a closed stream from an empty one: a replacement handed the shell's own input would read to end of file and report success",
+	},
+	{
 		ID: "redir/an-inherited-descriptor-keeps-its-number", Category: "redirection",
 		Snippet: `exec 5>g; /bin/sh -c "echo three >&3" 2>/dev/null; /bin/sh -c "echo five >&5" 2>/dev/null; exec 5>&-; cat g`,
 		Why:     "the discriminating case for how the table crosses: with 3 and 4 never opened, the file parked on 5 is still on 5 in the child and 3 is a hole, so the file holds `five`. A table packed from the bottom would put it on 3 and the file would hold `three`",

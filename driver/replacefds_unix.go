@@ -30,6 +30,12 @@ import (
 // So clearing the flag is not enough on its own; each file has to be
 // duplicated onto its number, which clears the flag as a side effect.
 //
+// Entry i is descriptor i, named streams included, and they are placed here
+// rather than left to the process because there is nothing else left to place
+// them: `exec >log` puts a file on the interpreter's standard output and the
+// process's own 1 still points at the terminal, so the replacement wrote there
+// until this reached down to zero.
+//
 // A nil entry is a number that must not be open in the replacement, and it is
 // closed only where it would otherwise survive. Everything this process opened
 // is close-on-exec and goes on its own; what is left is a descriptor the
@@ -37,7 +43,10 @@ import (
 // because it is not close-on-exec — so `exec 3<&-; exec cmd` would hand 3 to
 // the command through the kernel, behind the table's back, where every shell
 // in the panel finds it closed. Asking the flag first is what keeps this from
-// closing the runtime's own files on the way past.
+// closing the runtime's own files on the way past, and 0, 1 and 2 are
+// deliberately the case it does *not* keep it from: they are the process's own
+// and are not close-on-exec, so a nil there closes them, which is what `exec
+// >&-; exec cmd` means in every shell measured.
 //
 // Errors are dropped rather than reported. Every one of these calls fails only
 // for a descriptor that is not there to place, and the caller execs regardless
@@ -47,7 +56,7 @@ func placeFiles(files []*os.File) {
 	if len(files) == 0 {
 		return
 	}
-	last := firstExtraFd + len(files) - 1
+	last := len(files) - 1
 
 	// Where each entry's file currently is, with anything sitting on a number
 	// this is about to write to moved out of the way first. Without that step
@@ -56,20 +65,19 @@ func placeFiles(files []*os.File) {
 	// aiming at whatever 3 became. A file already on its own number is left
 	// where it is, because that is the one case a placement need not move.
 	sources := make([]int, len(files))
-	for i, f := range files {
-		fd := firstExtraFd + i
+	for fd, f := range files {
 		if f == nil {
-			sources[i] = -1
+			sources[fd] = -1
 			continue
 		}
 		// A closed file answers with an invalid descriptor rather than an
 		// error, and there is nothing to place for one.
 		src := int(f.Fd())
 		if src < 0 {
-			sources[i] = -1
+			sources[fd] = -1
 			continue
 		}
-		if src != fd && src >= firstExtraFd && src <= last {
+		if src != fd && src <= last {
 			// Close-on-exec, because this copy exists only for the moment
 			// between here and the placement: it must not reach the command
 			// on a number of its own.
@@ -77,11 +85,10 @@ func placeFiles(files []*os.File) {
 				src = moved
 			}
 		}
-		sources[i] = src
+		sources[fd] = src
 	}
 
-	for i, src := range sources {
-		fd := firstExtraFd + i
+	for fd, src := range sources {
 		switch {
 		case src < 0:
 			if !closeOnExec(fd) {

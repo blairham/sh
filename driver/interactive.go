@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 
+	"github.com/blairham/sh/internal/panicguard"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/repl"
 )
@@ -26,8 +27,23 @@ func InteractiveArgs(sh Shell, argv []string) int { return sh.interactive(argv, 
 
 // interactive is InteractiveArgs with the positional parameters and the set
 // options the invocation supplied, which only the front end reading it knows.
-func (sh Shell) interactive(argv, params []string, opts []optionSpec) int {
+//
+// The guard here is the backstop and not the working one: repl catches a panic
+// per typed line, which is what keeps a session alive, and this catches what
+// happens on either side of the loop — the dialect's prelude, the runner being
+// built, the EXIT trap at the end. A session that cannot be started is at
+// least a session that says why.
+func (sh Shell) interactive(argv, params []string, opts []optionSpec) (status int) {
 	sh = sh.withDefaults(argv)
+	if sh.guard().Do(func() { status = sh.session(argv, params, opts) }) {
+		return panicguard.Status
+	}
+	return status
+}
+
+// session is interactive once the defaults are filled in and a guard is
+// around it.
+func (sh Shell) session(argv, params []string, opts []optionSpec) int {
 	dg := sh.Diagnostics
 	name := sh.Name
 	// A prompt is not a command string, whatever else it is.
@@ -136,5 +152,9 @@ func (sh Shell) frontEnd(r *interp.Runner, name string, dg interp.Diagnostics) r
 		Style:  sh.PromptStyle,
 		Editor: sh.EditorStyle,
 		Name:   name,
+		// Whether a panic caught on a typed line prints its stack. Decided
+		// here because it is read from the process's environment, which is
+		// this package's to read and not repl's — see panic.go.
+		PanicTrace: panicTrace(),
 	}
 }

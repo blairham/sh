@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blairham/sh/internal/panicguard"
 	"github.com/blairham/sh/internal/secret"
 	"github.com/blairham/sh/interp"
 	"github.com/blairham/sh/syntax"
@@ -56,6 +57,17 @@ type Shell struct {
 
 	// Clock is what a prompt with the time in it reads. Nil is the real one.
 	Clock func() time.Time
+
+	// PanicTrace prints the stack of an interpreter bug caught while running
+	// a line, as well as the report that one was caught. The default is off
+	// because a trace at a prompt scrolls the session away and buries the
+	// line that said what happened.
+	//
+	// A field rather than an environment variable read here: this package is
+	// a library in the same sense interp is, and a library that consults the
+	// process is one two of them in one program cannot agree about. The front
+	// end reads the variable and says so — see driver's panic.go.
+	PanicTrace bool
 
 	// counts are the running totals a prompt can draw. Set by the loops,
 	// which are the only things that know a line has been accepted.
@@ -184,7 +196,33 @@ func (s Shell) run(ctx context.Context, state *terminalState, stmts []*syntax.Fi
 // runStmts executes the statements of one accepted line, reporting whether the
 // shell should stop. Without a terminal there is nothing to hand back, which
 // is the only difference between this and run.
-func (s Shell) runStmts(ctx context.Context, stmts []*syntax.File) bool {
+//
+// This is where a session survives an interpreter bug, and the unit is the
+// line because the line is what a person typed: one bad line costs that line
+// and the shell keeps its variables, its functions, its jobs and its
+// directory. Here rather than in either loop, so that the editor's loop and
+// the piped one cannot disagree about it — and inside run's restore, so the
+// report is written with the terminal in its own line discipline, exactly as a
+// command's own output is. interp goes on panicking, which is correct for a
+// library; see internal/panicguard.
+func (s Shell) runStmts(ctx context.Context, stmts []*syntax.File) (done bool) {
+	if s.guard().Do(func() { done = s.runEach(ctx, stmts) }) {
+		// The line never finished, so it has no status of its own and must
+		// not keep the one before it: `$?` says it failed, and the `&&` on
+		// the next line reads it the way it reads any other failure.
+		s.Runner.SetExitStatus(panicguard.Status)
+		return false
+	}
+	return done
+}
+
+// guard is what a typed line is run behind.
+func (s Shell) guard() panicguard.Guard {
+	return panicguard.Guard{Name: s.Name, Err: s.Err, Trace: s.PanicTrace}
+}
+
+// runEach is runStmts without the guard around it.
+func (s Shell) runEach(ctx context.Context, stmts []*syntax.File) bool {
 	for _, st := range stmts {
 		if err := s.Runner.RunPart(ctx, st); err != nil {
 			// Refused rather than silently skipped, the same way the script

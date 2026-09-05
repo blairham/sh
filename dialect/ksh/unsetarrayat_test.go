@@ -10,14 +10,16 @@ import "testing"
 // array is left exactly as it was — the only shell in the panel that does not
 // clear it. Measured against ksh93u+ 2012-08-01 (2026-09-05).
 //
-// The shell reports the operand where this is still quiet, which is #649's
-// question and not this one; what is asserted here is that the array survives.
+// The operand is reported as the bad subscript it is, with the builtin named
+// in front of the sentence and the script carrying on — `unset` alone reports
+// the failure.
 func TestUnsetOfEveryElementIsAnOrdinarySubscript(t *testing.T) {
 	for _, sub := range []string{"@", "*"} {
-		src := `a=(p q r); unset "a[` + sub + `]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`
+		src := `a=(p q r); unset "a[` + sub + `]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`
 		out, st := runKsh(t, t.TempDir(), src)
-		if out != "[p][q][r] n=3\n" || st != 0 {
-			t.Errorf("[%s] = %q (status %d), want %q", sub, out, st, "[p][q][r] n=3\n")
+		want := "ksh: unset: " + sub + ": more tokens expected\nst=1\n[p][q][r] n=3\n"
+		if out != want || st != 0 {
+			t.Errorf("[%s] = %q (status %d), want %q", sub, out, st, want)
 		}
 	}
 }
@@ -26,7 +28,8 @@ func TestUnsetOfEveryElementIsAnOrdinarySubscript(t *testing.T) {
 // reading to reach it.
 func TestUnsetOfEveryElementLeavesAScalarAlone(t *testing.T) {
 	out, st := runKsh(t, t.TempDir(), `a=hello; unset "a[@]"; echo "[$a]"`)
-	if out != "[hello]\n" || st != 0 {
-		t.Errorf("got %q (status %d), want %q", out, st, "[hello]\n")
+	want := "ksh: unset: @: more tokens expected\n[hello]\n"
+	if out != want || st != 0 {
+		t.Errorf("got %q (status %d), want %q", out, st, want)
 	}
 }

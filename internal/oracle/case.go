@@ -2201,6 +2201,46 @@ var Corpus = []Case{
 		Why:     "the other side of the same gate. Where the dialect has no subscript the word is not an assignment at all and the shell looks for a command by that name, which is the answer the shell without arrays gives — so accepting the shape everywhere would have made this one silently assign instead of reporting. Three shells assign and say nothing; the fourth reports on standard error and carries on",
 	},
 	{
+		ID: "array/a-subscript-that-will-not-evaluate", Category: "expansion",
+		Snippet: `a=(x y z); echo "[${a[b c]}]"; echo after`,
+		Why:     "a subscript is an expression, so one that does not read is the failure `$((b c))` is — the identical sentence in all four, the command abandoned, and a non-zero status. It expanded to nothing at status 0 and the script carried on, which is the worst shape available: an empty string is a plausible value for a real element, so nothing downstream could tell. `after` is printed so the case records that the input unit is given up on rather than only that a line went to standard error",
+	},
+	{
+		ID: "array/a-subscript-that-will-not-parse", Category: "expansion",
+		Snippet: `a=(x y z); echo "[${a[1+]}]"; echo after`,
+		Why:     "the other half of the same reading: an expression can fail before it is evaluated as well as while it is, and the panel words the two differently — `operand expected` against `operator expected`, in each shell's own sentence. Both spellings had one silent answer here, so a fix that only caught the evaluator would leave this one empty at 0",
+	},
+	{
+		ID: "array/a-length-through-a-subscript-that-will-not-evaluate", Category: "expansion",
+		Snippet: `a=(x y z); echo "[${#a[b c]}]"; echo after`,
+		Why:     "the length operator reaches the element through the same reading, and reported `0` for it — a plausible length for a real element, where the shells all refuse the word. The operator forms are worth one row between them because they share the subscript path rather than each having one",
+	},
+	{
+		ID: "array/assigning-through-a-subscript-that-will-not-evaluate", Category: "expansion",
+		Snippet: `a=(x y z); a[1+]=v; printf "[%s]" "${a[@]}"; echo " after"`,
+		Why:     "writing an element names it by expression too, and the failure ends the script in all four — unanimously, where the same failure inside `unset` splits them. It had a wording of its own that named the array rather than the expression, and it carried on to the next command, so the array a script thought it had written was untouched and nothing stopped",
+	},
+	{
+		ID: "array/unsetting-through-a-subscript-that-will-not-evaluate", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[1+]"; echo "st=$?"; echo " n=${#a[@]}"`,
+		Why:     "the same expression in `unset`, which is where the panel divides: bash gives up on the script as it does for any bad expression, and ksh93 and zsh leave a failed builtin behind and run the next command — the shape a script can test. ksh93 also names the builtin in front of the sentence, having worded the identical failure in an expansion without one. It was silent at 0 in all three",
+	},
+	{
+		ID: "param/a-substring-offset-that-will-not-evaluate", Category: "parameter expansion",
+		Snippet: `x=abcdef; echo "[${x:1+:2}]"; echo after`,
+		Why:     "a substring's offset is the same reading reached by another spelling, and it took the failure silently: an offset of 0 is a real substring of the right length. What is *blamed* is three shapes rather than one — bash puts the parameter in front of the sentence, ksh93 names the offset together with everything after it in the range, and zsh gives the sentence bare",
+	},
+	{
+		ID: "param/a-substring-length-that-will-not-evaluate", Category: "parameter expansion",
+		Snippet: `x=abcdef; echo "[${x:2:1+}]"; echo after`,
+		Why:     "the length rather than the offset, which is what separates the two namings: the shell that blames an offset along with the rest of the range has nothing after a length and names it alone. Extending the text before *evaluating* it rather than only before reporting it invented a second failure, so the pair is what pins that the extension is a wording and not a reading",
+	},
+	{
+		ID: "param/a-substring-offset-on-a-subscripted-parameter", Category: "parameter expansion",
+		Snippet: `a=(p q r); echo "[${a[@]:1+}]"; echo after`,
+		Why:     "the parameter a diagnostic names is the name and its subscript, not the name alone — `a[@]` — in the one shell that names it at all. The list form of the substring reaches the same evaluation as the string form, so this also says the two spellings share it",
+	},
+	{
 		ID: "array/reading-a-subscript-is-arithmetic", Category: "expansion",
 		Snippet: `a=(x y z); echo "[${a[1+1]}]"`,
 		Why:     "a subscript being read is an expression, exactly as one being written through is. It took a numeral and nothing else, so this expanded to the empty string with status 0 — and `a[1+1]=v` had already learned to store where `${a[1+1]}` could not look, which is two spellings of one subscript naming two different elements. zsh answers the element before, which is the base rather than a different reading",

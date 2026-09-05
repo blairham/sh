@@ -308,6 +308,9 @@ func Semantics() interp.Semantics {
 	// is one such span and comes back empty; an array with nothing in it has
 	// no span and gains no element.
 	s.UnsetArrayAt = interp.UnsetArrayAtLeavesOneEmptyElement
+	// The complaint is the builtin's rather than the script's: `unset` reports
+	// 1 and the next command still runs.
+	s.BadSubscriptToUnsetFatal = interp.No
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No

@@ -220,6 +220,11 @@ every byte of them.
 | `array/a-subscript-holding-a-command-substitution` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][Q]` | `[x][Q]` | `[x][Q]` | `[x][Q]` | `[Q][y]` |
 | `array/appending-through-a-subscript-holding-an-expansion` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[xQ][y]` |
 | `array/a-subscript-where-there-are-no-arrays` | `done` **2>** `<shell>: 1: a[1]=Q: not found` | `done` | `done` | `done` | `done` | `done` |
+| `array/a-subscript-that-will-not-evaluate` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: b c: arithmetic syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: line 1: b c: arithmetic syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: b c: syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: b c: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operator expected at `c'` *(status 1)* |
+| `array/a-subscript-that-will-not-parse` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
+| `array/a-length-through-a-subscript-that-will-not-evaluate` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: b c: arithmetic syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: line 1: b c: arithmetic syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: b c: syntax error in expression (error token is "c")` *(status 1)* | **2>** `<shell>: b c: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operator expected at `c'` *(status 1)* |
+| `array/assigning-through-a-subscript-that-will-not-evaluate` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
+| `array/unsetting-through-a-subscript-that-will-not-evaluate` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | `st=1~ n=3` **2>** `<shell>: unset: 1+: more tokens expected` | `st=1~ n=3` **2>** `<shell>:1: bad math expression: operand expected at end of string` |
 | `array/reading-a-subscript-is-arithmetic` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[z]` | `[z]` | `[z]` | `[z]` | `[y]` |
 | `array/a-subscript-reads-a-variable` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[z]` | `[z]` | `[z]` | `[z]` | `[y]` |
 | `array/an-unset-name-in-a-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x]` | `[x]` | `[x]` | `[x]` | `[]` |
@@ -469,6 +474,26 @@ every byte of them.
 - `array/a-subscript-where-there-are-no-arrays` — the other side of the same gate. Where the dialect has no subscript the word is not an assignment at all and the shell looks for a command by that name, which is the answer the shell without arrays gives — so accepting the shape everywhere would have made this one silently assign instead of reporting. Three shells assign and say nothing; the fourth reports on standard error and carries on
   ```sh
   a[1]=Q; echo done
+  ```
+- `array/a-subscript-that-will-not-evaluate` — a subscript is an expression, so one that does not read is the failure `$((b c))` is — the identical sentence in all four, the command abandoned, and a non-zero status. It expanded to nothing at status 0 and the script carried on, which is the worst shape available: an empty string is a plausible value for a real element, so nothing downstream could tell. `after` is printed so the case records that the input unit is given up on rather than only that a line went to standard error
+  ```sh
+  a=(x y z); echo "[${a[b c]}]"; echo after
+  ```
+- `array/a-subscript-that-will-not-parse` — the other half of the same reading: an expression can fail before it is evaluated as well as while it is, and the panel words the two differently — `operand expected` against `operator expected`, in each shell's own sentence. Both spellings had one silent answer here, so a fix that only caught the evaluator would leave this one empty at 0
+  ```sh
+  a=(x y z); echo "[${a[1+]}]"; echo after
+  ```
+- `array/a-length-through-a-subscript-that-will-not-evaluate` — the length operator reaches the element through the same reading, and reported `0` for it — a plausible length for a real element, where the shells all refuse the word. The operator forms are worth one row between them because they share the subscript path rather than each having one
+  ```sh
+  a=(x y z); echo "[${#a[b c]}]"; echo after
+  ```
+- `array/assigning-through-a-subscript-that-will-not-evaluate` — writing an element names it by expression too, and the failure ends the script in all four — unanimously, where the same failure inside `unset` splits them. It had a wording of its own that named the array rather than the expression, and it carried on to the next command, so the array a script thought it had written was untouched and nothing stopped
+  ```sh
+  a=(x y z); a[1+]=v; printf "[%s]" "${a[@]}"; echo " after"
+  ```
+- `array/unsetting-through-a-subscript-that-will-not-evaluate` — the same expression in `unset`, which is where the panel divides: bash gives up on the script as it does for any bad expression, and ksh93 and zsh leave a failed builtin behind and run the next command — the shape a script can test. ksh93 also names the builtin in front of the sentence, having worded the identical failure in an expansion without one. It was silent at 0 in all three
+  ```sh
+  a=(x y z); unset "a[1+]"; echo "st=$?"; echo " n=${#a[@]}"
   ```
 - `array/reading-a-subscript-is-arithmetic` — a subscript being read is an expression, exactly as one being written through is. It took a numeral and nothing else, so this expanded to the empty string with status 0 — and `a[1+1]=v` had already learned to store where `${a[1+1]}` could not look, which is two spellings of one subscript naming two different elements. zsh answers the element before, which is the base rather than a different reading
   ```sh
@@ -3424,6 +3449,9 @@ every byte of them.
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
 | `param/unset-positional-takes-a-default` | `[default]` | `[default]` | `[default]` | `[default]` | `[default]` | `[default]` |
+| `param/a-substring-offset-that-will-not-evaluate` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: x: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: x: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: x: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+:2: arithmetic syntax error` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
+| `param/a-substring-length-that-will-not-evaluate` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: x: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: x: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: x: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
+| `param/a-substring-offset-on-a-subscripted-parameter` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: a[@]: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: line 1: a[@]: 1+: arithmetic syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: a[@]: 1+: syntax error: operand expected (error token is "+")` *(status 1)* | **2>** `<shell>: 1+: more tokens expected` *(status 1)* | **2>** `<shell>:1: bad math expression: operand expected at end of string` *(status 1)* |
 | `param/a-substring-offset-is-an-expression` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[cd]` | `[cd]` | `[cd]` | `[cd]` | `[cd]` |
 | `param/colon-extends-the-test-unset` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` | `[D][D]` |
 | `param/colon-extends-the-test-empty` | `[D][]` | `[D][]` | `[D][]` | `[D][]` | `[D][]` | `[D][]` |
@@ -3494,6 +3522,18 @@ every byte of them.
 - `param/unset-positional-takes-a-default` — an out-of-range positional is unset rather than empty, so the plain default form fires for it
   ```sh
   echo "[${1-default}]"
+  ```
+- `param/a-substring-offset-that-will-not-evaluate` — a substring's offset is the same reading reached by another spelling, and it took the failure silently: an offset of 0 is a real substring of the right length. What is *blamed* is three shapes rather than one — bash puts the parameter in front of the sentence, ksh93 names the offset together with everything after it in the range, and zsh gives the sentence bare
+  ```sh
+  x=abcdef; echo "[${x:1+:2}]"; echo after
+  ```
+- `param/a-substring-length-that-will-not-evaluate` — the length rather than the offset, which is what separates the two namings: the shell that blames an offset along with the rest of the range has nothing after a length and names it alone. Extending the text before *evaluating* it rather than only before reporting it invented a second failure, so the pair is what pins that the extension is a wording and not a reading
+  ```sh
+  x=abcdef; echo "[${x:2:1+}]"; echo after
+  ```
+- `param/a-substring-offset-on-a-subscripted-parameter` — the parameter a diagnostic names is the name and its subscript, not the name alone — `a[@]` — in the one shell that names it at all. The list form of the substring reaches the same evaluation as the string form, so this also says the two spellings share it
+  ```sh
+  a=(p q r); echo "[${a[@]:1+}]"; echo after
   ```
 - `param/a-substring-offset-is-an-expression` — the same numeral-only reading, reached through the substring rather than through a subscript: unanimous in all four with substrings, and taking the numeral alone gave an offset of 0 — `ab`, which is a real substring of the right length and so looks like an answer rather than a failure
   ```sh

@@ -3326,6 +3326,50 @@
         "TimedOut": false
       }
     },
+    "array/a-length-through-a-subscript-that-will-not-evaluate": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: b c: arithmetic syntax error in expression (error token is \"c\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: b c: arithmetic syntax error in expression (error token is \"c\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: b c: syntax error in expression (error token is \"c\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: b c: arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operator expected at `c'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "array/a-literal-leaves-a-gap": {
       "bash": {
         "Stdout": "[c] n=1",
@@ -4030,6 +4074,94 @@
         "TimedOut": false
       }
     },
+    "array/a-subscript-that-will-not-evaluate": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: b c: arithmetic syntax error in expression (error token is \"c\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: b c: arithmetic syntax error in expression (error token is \"c\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: b c: syntax error in expression (error token is \"c\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: b c: arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operator expected at `c'",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/a-subscript-that-will-not-parse": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: 1+: arithmetic syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: 1+: arithmetic syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1+: syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1+: more tokens expected",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operand expected at end of string",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "array/a-subscript-where-there-are-no-arrays": {
       "bash": {
         "Stdout": "done",
@@ -4514,6 +4646,50 @@
         "TimedOut": false
       }
     },
+    "array/assigning-through-a-subscript-that-will-not-evaluate": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: 1+: arithmetic syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: 1+: arithmetic syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1+: syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1+: more tokens expected",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operand expected at end of string",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "array/assigning-through-an-expression-subscript": {
       "bash": {
         "Stdout": "[Q]~[x][y][Q] n=3",
@@ -4861,6 +5037,50 @@
       "zsh": {
         "Stdout": "[] n=1",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "array/unsetting-through-a-subscript-that-will-not-evaluate": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: 1+: arithmetic syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: 1+: arithmetic syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1+: syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1~ n=3",
+        "Stderr": "\u003cshell\u003e: unset: 1+: more tokens expected",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1~ n=3",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operand expected at end of string",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false
@@ -26910,6 +27130,50 @@
         "TimedOut": false
       }
     },
+    "param/a-substring-length-that-will-not-evaluate": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: x: 1+: arithmetic syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: x: 1+: arithmetic syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: x: 1+: syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1+: more tokens expected",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operand expected at end of string",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "param/a-substring-offset-is-an-expression": {
       "bash": {
         "Stdout": "[cd]",
@@ -26950,6 +27214,94 @@
         "Stdout": "[cd]",
         "Stderr": "",
         "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/a-substring-offset-on-a-subscripted-parameter": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: a[@]: 1+: arithmetic syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: a[@]: 1+: arithmetic syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: a[@]: 1+: syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Syntax error: \"(\" unexpected",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1+: more tokens expected",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operand expected at end of string",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "param/a-substring-offset-that-will-not-evaluate": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: x: 1+: arithmetic syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: line 1: x: 1+: arithmetic syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: x: 1+: syntax error: operand expected (error token is \"+\")",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1: Bad substitution",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: 1+:2: arithmetic syntax error",
+        "Status": 1,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e:1: bad math expression: operand expected at end of string",
+        "Status": 1,
         "Signal": 0,
         "TimedOut": false
       }

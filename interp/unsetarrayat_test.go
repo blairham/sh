@@ -25,7 +25,7 @@ func runUnsetArrayAt(t *testing.T, p UnsetArrayAtPolicy, src string) (string, in
 // evaluate and the element nobody named was quietly not removed. The array
 // came back whole at status 0 — the silent kind of wrong, in the spelling a
 // script uses to start a list over.
-func TestUnsetOfEveryElementIsThreeAnswers(t *testing.T) {
+func TestUnsetOfEveryElementClearsWhereThatIsTheReading(t *testing.T) {
 	for _, c := range []struct {
 		name string
 		p    UnsetArrayAtPolicy
@@ -33,9 +33,6 @@ func TestUnsetOfEveryElementIsThreeAnswers(t *testing.T) {
 	}{
 		{"removes every element", UnsetArrayAtRemovesEveryElement, "[] n=0"},
 		{"leaves one empty element", UnsetArrayAtLeavesOneEmptyElement, "[] n=1"},
-		// No such reading: the brackets hold an expression, `@` is not one,
-		// and the array is left as it was.
-		{"a subscript", UnsetArrayAtIsASubscript, "[p][q][r] n=3"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			// Both spellings, because the star and the at are one question
@@ -92,14 +89,54 @@ func TestUnsetOfEveryElementOfAScalar(t *testing.T) {
 	}
 }
 
-// A name holding nothing at all is quiet under every answer, and gains no
-// array: there is nothing to empty and nothing to complain about.
+// The dialect with no whole-array reading treats `@` as the expression it is
+// not, and reports it — the same complaint, and the same two answers about
+// what follows, as any other subscript that will not evaluate. Both halves are
+// asserted here because #648 left this column silent: the array survived, and
+// nothing said why.
+func TestUnsetOfEveryElementIsAnOrdinaryBadSubscript(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		fatal Answer
+		want  string
+	}{
+		{"fatal", Yes, ""},
+		{"a failed builtin", No, "st=1 n=3"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out, _ := runGrammar(t, `a=(p q r); unset "a[@]"; echo "st=$? n=${#a[@]}"`, nil,
+				func(r *Runner) {
+					sem := *r.Semantics
+					sem.UnsetArrayAt = UnsetArrayAtIsASubscript
+					sem.BadSubscriptToUnsetFatal = c.fatal
+					r.Semantics = &sem
+				})
+			if !strings.Contains(out, "@") {
+				t.Errorf("output = %q, want the subscript named", out)
+			}
+			if c.want == "" {
+				// The script stopped, so nothing after the `unset` ran.
+				if strings.Contains(out, "st=") {
+					t.Errorf("output = %q, want nothing after the unset", out)
+				}
+				return
+			}
+			if got := lastLine(out); got != c.want {
+				t.Errorf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+// A name holding nothing at all is quiet under the two answers that have a
+// whole-array reading, and gains no array: there is nothing to empty and
+// nothing to complain about. The third has no such reading and reports the
+// subscript instead, which is its own test.
 func TestUnsetOfEveryElementOfANameThatHoldsNothing(t *testing.T) {
 	const src = `unset "a[@]"; echo "st=$? n=${#a[@]}"`
 	for _, p := range []UnsetArrayAtPolicy{
 		UnsetArrayAtRemovesEveryElement,
 		UnsetArrayAtLeavesOneEmptyElement,
-		UnsetArrayAtIsASubscript,
 	} {
 		out, st := runUnsetArrayAt(t, p, src)
 		if got := strings.TrimSpace(out); got != "st=0 n=0" {

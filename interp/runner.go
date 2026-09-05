@@ -2451,9 +2451,15 @@ func (r *Runner) assign(a *syntax.Assign) {
 		}
 		r.setAssocElem(a.Name, key, value)
 	case a.Index != nil:
-		idx, err := r.subscriptValue(r.joinWord(a.Index))
+		// The subscript is an expression, and one that will not evaluate ends
+		// the script in every shell measured — the same complaint, worded the
+		// same way, as the identical text inside `$(( ))`. It used to be a
+		// wording of our own that named the array rather than the expression,
+		// and it carried on to the next command.
+		text := r.joinWord(a.Index)
+		idx, err := r.subscriptValue(text)
 		if err != nil {
-			r.diagf("%s: bad array subscript\n", a.Name)
+			r.fatal("%s\n", r.subscriptFailure(text, err))
 			return
 		}
 		if a.Append {

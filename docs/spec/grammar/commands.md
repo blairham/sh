@@ -383,23 +383,72 @@ body zero times and exits 0.
 `for ((i=0;i<3;i++)); do :; done` leaves `i` at 3 — which follows from
 the header being arithmetic in the current scope.
 
-Two shapes are specific to this loop and neither holds for any other:
-
-- **No separator is required before `do`.** `for ((i=0;i<2;i++)) do …
-  done` is accepted by all four, where the same document's rule above
-  says a `;` or newline must precede `do`. The `))` has already ended
-  the header, so there is nothing for a separator to delimit.
-- **The body may be a brace group instead of `do … done`.**
-  `for ((i=0;i<2;i++)) { …; }` runs in bash 5.3, bash 3.2, ksh93 and
-  zsh alike. It is not a general loop syntax: `for i in a b { …; }` and
-  `while cond { …; }` are parse errors in all four, except that zsh
-  takes the brace body on `while`. **This implementation accepts only
-  `do … done`**, and the brace form is a known gap rather than a
-  decision.
+One shape is specific to this loop: **no separator is required before
+`do`.** `for ((i=0;i<2;i++)) do … done` is accepted by all four, where
+the same document's rule above says a `;` or newline must precede `do`.
+The `))` has already ended the header, so there is nothing for a
+separator to delimit.
 
 The header is also a *lexer* fact rather than a parser one: `(( … ))`
 arrives whole, because what is inside is arithmetic and not a command
 list, so the three parts are cut on the semicolons afterwards.
+
+## A brace group as a loop body
+
+**A `for` loop may take `{ …; }` where `do … done` stands**, in either
+spelling of the header, and so may `select`, whose header is a
+for-loop's. Measured 2026-09-05:
+
+| probe | dash | bash 5 | bash 3.2 | ksh93 | zsh |
+| --- | --- | --- | --- | --- | --- |
+| `for ((i=0;i<2;i++)) { …; }` | *n/a* | yes | yes | yes | yes |
+| `for ((i=0;i<2;i++)); { …; }` | *n/a* | yes | yes | yes | yes |
+| `for i in a b; { …; }` | **error** | yes | yes | yes | yes |
+| `for i in a b` ⏎ `{ …; }` | **error** | yes | yes | yes | yes |
+| `for i; { …; }` | **error** | yes | yes | yes | yes |
+| `select x in a; { …; }` | *n/a* | yes | yes | yes | yes |
+| `for i in a b { …; }` | error | error | error | error | error |
+| `while true { …; }` | error | error | error | error | error |
+| `while true; { …; }` | error | error | error | error | **yes** |
+| `if true; { …; }` | error | error | error | error | error |
+
+Grammar flag: `ForBraceBody` (on in the core, off for `posix` and
+`dash`). dash is the only panel shell that refuses the form, which is
+the usual reason a construct is core.
+
+**The separator is required in the list form, and not for a reason
+about this flag.** With nothing between, `{` is another *item* of the
+list — the loop reads on and meets `}` where `do` belongs, which is
+what all five then complain about. Only the C-style header ends itself,
+which is why that one form takes the brace with nothing between. So
+`for i in a b { …; }` failing everywhere is not evidence that the list
+form lacks the production; it is evidence about where a word list ends.
+
+**The brace body belongs to those two loops and to nothing else.**
+`while`, `until` and `if` refuse it, with or without a separator — the
+one exception being zsh's *short loops*, where a brace group may follow
+a `while` or `until` condition that has been ended by a `;` or that
+ends itself (`while (( i < 2 )) { …; }`). That is zsh's alone, is not
+modeled here, and is why the `while` row is written with the separator:
+without one the refusal is unanimous and says nothing about zsh.
+
+The group is the ordinary one and keeps every rule it already has: the
+body needs a terminator before `}` wherever a brace group does — so
+`for i in a b; { echo $i }` is refused by bash and ksh93 and accepted by
+zsh, exactly as a bare `{ echo x }` is — and a redirection after the
+closing brace belongs to the loop as one after `done` does. Its list is
+the loop's body rather than a group nested inside it, so `break` and
+`continue` reach the loop.
+
+One wording diverges and is recorded rather than modeled: with the body
+left open, bash names the `{` and ksh93 names the `for`. This
+implementation names the `{`.
+
+Corpus: `core/c-style-for-with-a-brace-body`,
+`core/c-style-for-brace-body-after-a-separator`,
+`core/a-list-for-with-a-brace-body`,
+`core/a-list-for-brace-body-needs-a-separator`,
+`core/a-brace-body-is-not-a-while-body`.
 
 ## `case`
 

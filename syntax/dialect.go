@@ -40,6 +40,23 @@ type Dialect struct {
 	// follows it is a syntax error.
 	Select bool
 
+	// ForBraceBody lets a `for` or `select` loop take a brace group where
+	// `do … done` stands: `for ((;;)) { echo hi; break; }`, and equally
+	// `for i in a b; { echo "$i"; }`. Absent from dash, which is the only
+	// panel shell that refuses it.
+	//
+	// It belongs to those two loops and to nothing else. `while cond { … }`,
+	// `until cond { … }` and `if cond { … }` are refused by every shell in
+	// the panel, which is what makes this a production of the loop rather
+	// than a general rule about bodies — and what makes it easy to miss.
+	//
+	// The separator before the brace is not optional in the list form, and
+	// not for a reason about this flag: `for i in a b { … }` reads `{` as
+	// another *item*, so the loop then meets `}` where `do` belongs. Only
+	// the C-style header ends itself, which is why that one form takes the
+	// brace with nothing between.
+	ForBraceBody bool
+
 	// AppendAssign enables `name+=value`, which appends rather than
 	// replacing. Absent from dash, where `x+=b` is a command called `x+=b`.
 	AppendAssign bool
@@ -387,6 +404,7 @@ func Core() Dialect {
 		AppendAssign:      true,
 		CStyleFor:         true,
 		Select:            true,
+		ForBraceBody:      true,
 		AmpersandRedirect: true,
 		CaseFallthrough:   true,
 		DollarSingleQuote: true,

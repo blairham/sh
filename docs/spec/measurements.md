@@ -1784,6 +1784,11 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
 | `core/c-style-for` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `012` | `012` | `012` | `012` | `012` |
+| `core/c-style-for-with-a-brace-body` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `012` | `012` | `012` | `012` | `012` |
+| `core/c-style-for-brace-body-after-a-separator` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `01` | `01` | `01` | `01` | `01` |
+| `core/a-list-for-with-a-brace-body` | **2>** `<shell>: 1: Syntax error: "{" unexpected (expecting "do")` *(status 2)* | `ab` | `ab` | `ab` | `ab` | `ab` |
+| `core/a-list-for-brace-body-needs-a-separator` | **2>** `<shell>: 1: Syntax error: "}" unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `for i in a b { echo "$i"; }'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `for i in a b { echo "$i"; }'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `}'~<shell>: -c: line 0: `for i in a b { echo "$i"; }'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `}' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `}'` *(status 1)* |
+| `core/a-brace-body-is-not-a-while-body` | **2>** `<shell>: 1: Syntax error: end of file unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file from `while' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file from `while' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: syntax error at line 1: `while' unmatched` *(status 3)* | `hi` |
 | `core/for-wants-a-name` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | **2>** `<shell>: line 1: `1x': not a valid identifier` *(status 1)* | **2>** `<shell>: line 1: `1x': not a valid identifier` *(status 2)* | **2>** `<shell>: `1x': not a valid identifier` *(status 1)* | **2>** `<shell>: 1x: invalid variable name` *(status 1)* | **2>** `<shell>:1: parse error near `1x'` *(status 1)* |
 | `cmd/andor-equal-precedence` | `B` | `B` | `B` | `B` | `B` | `B` |
 | `cmd/andor-left-to-right-success` | `A` | `A` | `A` | `A` | `A` | `A` |
@@ -1833,6 +1838,26 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `core/c-style-for` — a loop on a condition rather than over a list; dash does not have it and says so about the loop variable rather than about the parenthesis
   ```sh
   for ((i=0;i<3;i++)); do printf "%s" "$i"; done; echo
+  ```
+- `core/c-style-for-with-a-brace-body` — a brace group may stand where `do … done` stands, and every shell that has the C-style form at all accepts it — so it is a production of this construct rather than a dialect's addition. Unanimous, which is why it is core; dash has no C-style loop to give a body to and says so about the loop variable, exactly as it does for `core/c-style-for`
+  ```sh
+  for ((i=0;i<3;i++)) { printf "%s" "$i"; }; echo
+  ```
+- `core/c-style-for-brace-body-after-a-separator` — the terminator between the header and the body is optional before the brace exactly as it is before `do`, which is what says the brace stands where `do` stands rather than being glued to the header
+  ```sh
+  for ((i=0;i<2;i++)); { printf "%s" "$i"; }; echo
+  ```
+- `core/a-list-for-with-a-brace-body` — the same production on the ordinary `for`, which is the half easiest to miss: the brace body is not the C-style loop's alone. It needs the separator, and the next case says why — this is the one three of the four accept and dash refuses, dash being the only panel shell without the form
+  ```sh
+  for i in a b; { printf "%s" "$i"; }; echo
+  ```
+- `core/a-list-for-brace-body-needs-a-separator` — the same line without the `;`, refused by all four — and not because the brace body is refused there. With nothing between, `{` is another *item* of the list, so the loop reads on and meets `}` where `do` belongs, which is what every one of the four then names. The C-style header takes the brace with nothing between because `))` has already ended it
+  ```sh
+  for i in a b { echo "$i"; }
+  ```
+- `core/a-brace-body-is-not-a-while-body` — the production belongs to the loops built on a `for` header and to nothing else. Written with the separator, so that it is the same shape the list `for` accepts and the difference is the construct rather than the punctuation. Three refuse it; zsh accepts it as a short loop of its own, which is the divergence this case records
+  ```sh
+  while true; { echo hi; break; }
   ```
 - `core/for-wants-a-name` — four wordings for one refusal, and only one of them blames the word rather than saying something about names
   ```sh

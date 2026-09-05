@@ -1356,6 +1356,21 @@ func (p *Parser) parseForArith(start Pos) Command {
 	if post != "" {
 		c.Post = p.parseArith(post, at)
 	}
+
+	// This header ends itself, so the terminator before the body is optional
+	// — and it is consumed here rather than by `requireSep` so that a brace
+	// body can be looked for either side of it. `requireSep` still runs, and
+	// still tells a loop that ran out of input from one that met the wrong
+	// token.
+	if p.tok.Kind == TokSemi || p.tok.Kind == TokNewline {
+		p.next()
+		p.skipNewlines()
+	}
+	if p.braceBodyFollows() {
+		c.Body, c.Stop = p.braceLoopBody()
+		return c
+	}
+
 	p.requireSep("do")
 	p.opensClause("do")
 	p.expectWord("do")
@@ -1363,6 +1378,27 @@ func (p *Parser) parseForArith(start Pos) Command {
 	c.Stop = p.tok.End
 	p.expectWord("done")
 	return c
+}
+
+// braceBodyFollows reports whether a brace group stands where `do` belongs.
+func (p *Parser) braceBodyFollows() bool {
+	return p.dialect.ForBraceBody && p.atWord("{")
+}
+
+// braceLoopBody reads a brace group standing where `do … done` stands.
+//
+// The group is the ordinary one and keeps every rule it already has: the body
+// needs a terminator before `}` wherever a brace group does, an empty body is
+// refused wherever an empty group is, and a redirection after the closing
+// brace belongs to the loop exactly as one after `done` does. Its list *is*
+// the loop's body, so `break` and `continue` reach the loop rather than a
+// group in the way.
+func (p *Parser) braceLoopBody() (body []*Stmt, stop Pos) {
+	g, ok := p.parseGroup(false).(*Group)
+	if !ok {
+		return nil, p.tok.End
+	}
+	return g.List, g.Stop
 }
 
 // splitForArith cuts the header into its three parts.
@@ -1477,6 +1513,15 @@ func (p *Parser) parseFor() Command {
 	}
 	c.Header = p.slice(c.Start, end)
 	p.requireSep("do")
+	// A brace group where `do … done` stands. The separator `requireSep` has
+	// just consumed is what makes the form reachable at all: with nothing
+	// between, `{` is another *item* of the list, and the loop then meets `}`
+	// where `do` belongs — which is why `for i in a b { … }` is refused by
+	// every shell that accepts `for i in a b; { … }`.
+	if p.braceBodyFollows() {
+		c.Body, c.Stop = p.braceLoopBody()
+		return c
+	}
 	p.expectWord("do")
 	c.Body = p.parseList()
 	c.Stop = p.tok.End
@@ -1516,6 +1561,11 @@ func (p *Parser) parseSelect() Command {
 	}
 	c.Header = p.slice(c.Start, end)
 	p.requireSep("do")
+	// The menu loop takes the brace body its header's loop takes.
+	if p.braceBodyFollows() {
+		c.Body, c.Stop = p.braceLoopBody()
+		return c
+	}
 	p.expectWord("do")
 	c.Body = p.parseList()
 	c.Stop = p.tok.End

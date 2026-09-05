@@ -604,6 +604,9 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `mapfile/reads-lines-into-an-array` | **2>** `<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution` *(status 2)* | `b` | `b` | **2>** `<shell>: mapfile: command not found` | **2>** `<shell>: mapfile: not found` | **2>** `<shell>:1: command not found: mapfile` |
 | `mapfile/defaults-to-MAPFILE-and-keeps-the-newline` | **2>** `<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution` *(status 2)* | `[b]2` | `[b]2` | `[]0` **2>** `<shell>: mapfile: command not found` | `[]0` **2>** `<shell>: mapfile: not found` | `[]0` **2>** `<shell>:1: command not found: mapfile` |
 | `readarray/is-mapfile-under-another-name` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `0 2 3 3` | `0 2 3 3` | `0   1` **2>** `<shell>: readarray: command not found` | `0   1` **2>** `<shell>: readarray: not found` | ` 0  1` **2>** `<shell>:1: command not found: readarray` |
+| `mapfile/an-empty-delimiter-means-NUL` | **2>** `<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution` *(status 2)* | `[a][b] n=2` | `[a][b] n=2` | `[] n=0` **2>** `<shell>: mapfile: command not found` | `[] n=0` **2>** `<shell>: mapfile: not found` | `[] n=0` **2>** `<shell>:1: command not found: mapfile` |
+| `mapfile/a-NUL-delimiter-is-stripped-without-t` | **2>** `<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution~<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution` *(status 2)* | `len=1~len=2` | `len=1~len=2` | `len=0~len=0` **2>** `<shell>: mapfile: command not found~<shell>: mapfile: command not found` | `len=0~len=0` **2>** `<shell>: mapfile: not found~<shell>: mapfile: not found` | `len=0~len=0` **2>** `<shell>:1: command not found: mapfile~<shell>:1: command not found: mapfile` |
+| `mapfile/reads-a-descriptor` | **2>** `<shell>: 1: mapfile: not found~<shell>: 1: Bad substitution` *(status 2)* | `[x][y] n=2` | `[x][y] n=2` | `[] n=0` **2>** `<shell>: mapfile: command not found` | `[] n=0` **2>** `<shell>: mapfile: not found` | `[] n=0` **2>** `<shell>:1: command not found: mapfile` |
 | `set/bare-set-lists-the-variables` | `v1='plain'~v2='has space'~v3='quo'"'"'te'~st=0` | `v1=plain~v2='has space'~v3='quo'\''te'~st=0` | `v1=plain~v2='has space'~v3='quo'\''te'~st=0` | `v1=plain~v2='has space'~v3='quo'\''te'~st=0` | `v1=plain~v2='has space'~v3=$'quo\'te'~st=0` | `v1=plain~v2='has space'~v3='quo'\''te'~st=0` |
 | `set/bare-set-and-the-functions` | `0~st=1` | `1~st=0` | `0~st=1` | `1~st=0` | `0~st=1` | `0~st=1` |
 | `command/capital-v-says-a-sentence` | `echo is a shell builtin~if is a shell keyword~st=0` | `echo is a shell builtin~if is a shell keyword~st=0` | `echo is a shell builtin~if is a shell keyword~st=0` | `echo is a shell builtin~if is a shell keyword~st=0` | `echo is a shell builtin~if is a keyword~st=0` | `echo is a shell builtin~if is a reserved word~st=0` |
@@ -958,6 +961,18 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `readarray/is-mapfile-under-another-name` — the synonym takes the same letters — skip, cap, and an origin that writes into the array it finds rather than replacing it
   ```sh
   arr=(0); printf '1\n2\n3\n4\n' | { readarray -t -s 1 -n 2 -O 1 arr; echo "${arr[0]} ${arr[1]} ${arr[2]} ${#arr[@]}"; }
+  ```
+- `mapfile/an-empty-delimiter-means-NUL` — -d renames the delimiter and an *empty* argument is not 'no delimiter' but NUL — the half of find -print0 | mapfile that makes the idiom work, and the reason the letter cannot simply take the argument's first byte
+  ```sh
+  printf 'a\0b\0' | { mapfile -d "" -t arr; printf "[%s]" "${arr[@]}"; echo " n=${#arr[@]}"; }
+  ```
+- `mapfile/a-NUL-delimiter-is-stripped-without-t` — a delimiter is normally kept on the element unless -t asks for it to go — and NUL is the exception, dropped either way, because the value could not carry it
+  ```sh
+  printf 'a\0' | { mapfile -d "" x; echo "len=${#x[0]}"; }; printf 'a:' | { mapfile -d : y; echo "len=${#y[0]}"; }
+  ```
+- `mapfile/reads-a-descriptor` — -u reads the shell's own descriptor table rather than standard input, which is how the command is used without a pipe putting it in a subshell — the whole reason to prefer it to a while-read loop
+  ```sh
+  printf 'x\ny\n' > f; exec 3<f; mapfile -u 3 -t arr; printf "[%s]" "${arr[@]}"; echo " n=${#arr[@]}"
   ```
 - `set/bare-set-lists-the-variables` — one listing, three spellings of the same three values: bare-until-needed with `'\''` for the embedded quote, always-single-quoted with the quote doubled out, and `$'...'` — filtered to the script's own names because the rest of the listing is the machine's
   ```sh
@@ -2963,6 +2978,12 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `param/transform-quotes-for-reuse` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `['a b'\''c']` | `['a b'\''c']` | **2>** `<shell>: ${x@Q}: bad substitution` *(status 1)* | **2>** `<shell>: "${x@Q}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/transform-distributes-over-an-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `['one']['t w']` | `['one']['t w']` | `[one][t w]` | **2>** `<shell>: "${a[@]@Q}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/transform-deferred-in-a-branch-never-taken` | `ok` | `ok` | `ok` | `ok` | `ok` | `ok` |
+| `param/transform-expands-escapes` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[a	b][A]` | `[a	b][A]` | **2>** `<shell>: ${x@E}: bad substitution` *(status 1)* | **2>** `<shell>: "${x@E}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
+| `param/transform-prompt-escapes` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[a~b\c]` | `[a~b\c]` | **2>** `<shell>: ${x@P}: bad substitution` *(status 1)* | **2>** `<shell>: "${x@P}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
+| `param/transform-writes-an-assignment` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `x='a b'~declare -irx v='1'~[irx][]` | `x='a b'~declare -irx v='1'~[irx][]` | **2>** `<shell>: ${x@A}: bad substitution` *(status 1)* | **2>** `<shell>: "${x@A}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
+| `param/transform-keys-and-values` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[0 "one" 1 "t w"]<0><one><1><t w>{'q'}` | `[0 "one" 1 "t w"]<0><one><1><t w>{'q'}` | `[one][t w]<one><t w>` **2>** `<shell>: ${s@K}: bad substitution` *(status 1)* | **2>** `<shell>: "${a[@]@K}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
+| `param/transform-case-letters` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[abc def][ABC DEF][AbC dEf]` | `[abc def][ABC DEF][AbC dEf]` | **2>** `<shell>: ${x@L}: bad substitution` *(status 1)* | **2>** `<shell>: "${x@L}": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
+| `param/transform-takes-exactly-one-letter` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[]~u=0` **2>** `<shell>: line 1: [${x@QQ}]: bad substitution` *(status 127)* | `[]~u=0` **2>** `<shell>: line 1: [${x@QQ}]: bad substitution` *(status 127)* | **2>** `<shell>: [${u@QQ}]: bad substitution` *(status 1)* | **2>** `<shell>: "[${u@QQ}]": bad substitution` *(status 1)* | **2>** `<shell>:1: bad substitution` *(status 1)* |
 | `param/an-array-length-without-a-subscript` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `3 5` | `3 5` | `3 5` | `3 5` | `3 3` |
 | `param/an-empty-array-quoted-at` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=0` | `n=0` | `n=0` | `n=1` | `n=0` |
 | `param/a-negative-substring-length` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | `[bcd]` | `[bcd]` | **2>** `<shell>: -2: substring expression < 0` *(status 1)* | `[]` | `[bcd]` |
@@ -2973,6 +2994,12 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `param/expansion-flags-are-one-dialects` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(U)x}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(U)x}: bad substitution` *(status 127)* | **2>** `<shell>: ${(U)x}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `x}' unexpected` *(status 3)* | `ABC` |
 | `param/expansion-flags-split-and-join` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(s.:.)x}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(s.:.)x}: bad substitution` *(status 127)* | **2>** `<shell>: ${(s.:.)x}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `x}' unexpected` *(status 3)* | `[a][b][c]<1,2>` |
 | `param/prompt-percent-names-the-script` | **2>** `<script>: 1: Bad substitution` *(status 2)* | **2>** `<script>: line 1: ${(%):-%x}: bad substitution` *(status 1)* | **2>** `<script>: line 1: ${(%):-%x}: bad substitution` *(status 1)* | **2>** `<script>: line 1: ${(%):-%x}: bad substitution` *(status 1)* | **2>** `<script>: line 1: syntax error at line 1: `:-%x}' unexpected` *(status 3)* | `<script>` |
+| `param/expansion-flags-quote-four-ways` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(q)x}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(q)x}: bad substitution` *(status 127)* | **2>** `<shell>: ${(q)x}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `x}' unexpected` *(status 3)* | `[a\ b\'c]['a b'\''c']["a b'c"][$'a b\'c']` |
+| `param/expansion-flags-split-at-newlines` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(f)x}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(f)x}: bad substitution` *(status 127)* | **2>** `<shell>: ${(f)x}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `x}' unexpected` *(status 3)* | `[a][b]` |
+| `param/expansion-flags-at-keeps-array-fields` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(@)a}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(@)a}: bad substitution` *(status 127)* | **2>** `<shell>: ${(@)a}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `a}' unexpected` *(status 3)* | `<x><y z><>{x y z }` |
+| `param/expansion-flags-name-indirection` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(P)x}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(P)x}: bad substitution` *(status 127)* | **2>** `<shell>: ${(P)x}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `x}' unexpected` *(status 3)* | `[hello]` |
+| `param/expansion-flags-keys-and-values` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: line 1: ${(k)m}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(k)m}: bad substitution` *(status 127)* | **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~<shell>: ${(k)m}: bad substitution` *(status 1)* | **2>** `<shell>: cannot append index array to associative array m` *(status 1)* | `<k1><k1><v1>` |
+| `param/expansion-flags-run-after-the-operator` | **2>** `<shell>: 1: Bad substitution` *(status 2)* | **2>** `<shell>: line 1: ${(U)x#h}: bad substitution` *(status 1)* | **2>** `<shell>: line 1: ${(U)x#h}: bad substitution` *(status 127)* | **2>** `<shell>: ${(U)x#h}: bad substitution` *(status 1)* | **2>** `<shell>: syntax error at line 1: `x#h}' unexpected` *(status 3)* | `[ELLO][DEF]<val>` |
 | `param/array-element-inherits-the-base` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[q][3]` | `[q][3]` | `[q][3]` | `[q][3]` | `[p][3]` |
 | `param/an-operator-reaches-an-array-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[ello][heLlo][hell][ello]` | `[ello][heLlo][hell][ello]` | `[ello][heLlo][hell][ello]` | `[ello][heLlo][hell][ello]` | `[][][][]` |
 | `param/a-missing-element-fires-the-default` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[hello][d]` | `[hello][d]` | `[hello][d]` | `[hello][d]` | `[d][d]` |
@@ -3071,6 +3098,30 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
   ```sh
   if false; then echo "${x@Q}"; fi; echo ok
   ```
+- `param/transform-expands-escapes` — @E reads the value under the $'…' rules — a named escape and an octal one, applied to the value rather than to the source text, which is the only way to get that decoding from a variable
+  ```sh
+  x='a\tb'; y='\101'; printf "[%s][%s]\n" "${x@E}" "${y@E}"
+  ```
+- `param/transform-prompt-escapes` — @P runs the prompt language over the value: \n is a newline and \\ is one backslash. Probed with only the two escapes whose answer is the same on every machine — \t is the time of day and \w the directory, so a case using either would record the clock
+  ```sh
+  x='a\nb\\c'; printf "[%s]\n" "${x@P}"
+  ```
+- `param/transform-writes-an-assignment` — @A writes the statement that would recreate the variable — the value @Q-quoted, and attributes turning it into a declare with its letters in front — while @a is those letters alone, empty for a name with none
+  ```sh
+  x='a b'; echo "${x@A}"; declare -irx v=1; echo "${v@A}"; printf "[%s][%s]\n" "${v@a}" "${x@a}"
+  ```
+- `param/transform-keys-and-values` — @K is one field of subscripts and double-quoted values; @k is the same pairs as separate fields with the values bare; on a scalar, which has no keys, both fall back to the @Q quoting. bash 3.2 is the surprise: it does not have the family and yet answers ${a[@]@K} with the plain elements instead of a bad substitution, so a script guarding on the error never sees one
+  ```sh
+  a=(one "t w"); printf "[%s]" "${a[@]@K}"; printf "<%s>" "${a[@]@k}"; s=q; printf "{%s}\n" "${s@K}"
+  ```
+- `param/transform-case-letters` — the three case letters, kept in one case because the difference between them is the point: L and U reach every letter of the value and u only its first character — which is not the first character of each word
+  ```sh
+  x='abC dEf'; printf "[%s][%s][%s]\n" "${x@L}" "${x@U}" "${x@u}"
+  ```
+- `param/transform-takes-exactly-one-letter` — the operator is @ followed by one letter: doubling a letter that is valid on its own is a bad substitution, so the family cannot be extended by repetition the way zsh's (q) can. And bash checks the letter only once it has a value — an *unset* name yields empty and status 0 for the very same spelling, so a probe that forgets to set the variable measures nothing. The three shells without the family reject both
+  ```sh
+  echo "[${u@QQ}]"; echo "u=$?"; x=a; echo "[${x@QQ}]"; echo unreached
+  ```
 - `param/an-array-length-without-a-subscript` — zsh counts the elements for a bare ${#a}; bash and ksh93 measure element zero — probed with distinct lengths, because (one two three) hides the difference behind a three
   ```sh
   a=(hello by z); echo "${#a[@]} ${#a}"
@@ -3110,6 +3161,30 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `param/prompt-percent-names-the-script` — the wild idiom for a file's own path — /opt/homebrew's ruby-lsp-activate.sh opens with it: the %-flag prompt escape %x names the file being read, and the empty parameter with a :- is how a bare string reaches the flags at all
   ```sh
   echo ${(%):-%x}
+  ```
+- `param/expansion-flags-quote-four-ways` — the q family is one flag repeated, and each repetition is a different quoting: backslashes, single quotes, double quotes, then $'…'. Repetition is what selects it, which is exactly what bash's @ family refuses
+  ```sh
+  x="a b'c"; printf "[%s]" "${(q)x}" "${(qq)x}" "${(qqq)x}" "${(qqqq)x}"; echo
+  ```
+- `param/expansion-flags-split-at-newlines` — (f) is the line-splitting flag — the read-a-command's-output-into-an-array idiom, and the one split that does not consult IFS
+  ```sh
+  x=$'a\nb'; printf "[%s]" ${(f)x}; echo
+  ```
+- `param/expansion-flags-at-keeps-array-fields` — in double quotes an array is joined on the first character of IFS unless (@) is present, which keeps one field per element including the empty one — the flag spelling of what "${a[@]}" says with a subscript
+  ```sh
+  a=(x "y z" ""); printf "<%s>" "${(@)a}"; printf "{%s}" "${a}"; echo
+  ```
+- `param/expansion-flags-name-indirection` — (P) reads the value as a further name — zsh's spelling of the indirection bash writes ${!x}, and the reason the two shells need no shared syntax for it
+  ```sh
+  y=hello; x=y; printf "[%s]" ${(P)x}; echo
+  ```
+- `param/expansion-flags-keys-and-values` — (k) yields an associative array's keys and (v) beside it interleaves key and value. Probed with a single pair on purpose: zsh yields hash order for more, which it does not promise and a golden record must not pin
+  ```sh
+  typeset -A m=(k1 v1); printf "<%s>" ${(k)m} ${(kv)m}; echo
+  ```
+- `param/expansion-flags-run-after-the-operator` — the operator runs first and the flags transform what it produced — ${(U)x#h} is ELLO, not a trim of HELLO — with (P) the exception, resolving the name before the default can fire
+  ```sh
+  x=hello; printf "[%s]" "${(U)x#h}" "${(U)nope:-def}"; y=val; z=y; printf "<%s>" "${(P)z:-def}"; echo
   ```
 - `param/array-element-inherits-the-base` — array subscripting inherits the 0-versus-1 base axis
   ```sh

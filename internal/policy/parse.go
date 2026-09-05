@@ -236,7 +236,14 @@ func (p *Policy) parseRule(decision interp.Decision, rest string) error {
 	if err := validPattern(pattern); err != nil {
 		return fmt.Errorf("pattern %q: %w", pattern, err)
 	}
-	p.rules = append(p.rules, Rule{Decision: decision, Sel: sel, Pattern: pattern})
+	// Expanded here rather than at the point of a decision, which is the whole
+	// of alias.go's argument: a stable platform alias has no attacker in it and
+	// no filesystem read behind it, so it is settled once, when the rule is
+	// read, exactly as Landlock settles a path when its ruleset is built.
+	p.rules = append(p.rules, Rule{
+		Decision: decision, Sel: sel, Pattern: pattern,
+		Alias: expandAlias(pattern, platformAliases),
+	})
 	return nil
 }
 

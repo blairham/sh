@@ -713,11 +713,25 @@ func TestARefusalIsNotForgivenUnlessBothSidesRefused(t *testing.T) {
 			got:  Result{Stdout: "different", Status: 0},
 		},
 		{
+			// The same requirement where it is the only one left doing work.
+			// Once the outcomes match, "both refused" reduces to "both wrote
+			// a diagnostic" — so the case that separates the two halves is a
+			// reference that failed *silently*, which is an ordinary failure
+			// and not a refusal. Complaining where the reference did not is a
+			// divergence, and forgiving it would be the misused-flag hole
+			// with the reference-side check taken out.
+			name: "the reference failed without diagnosing anything",
+			want: Result{Status: 1},
+			got:  Result{Stderr: "our-sh: no", Status: 1},
+		},
+		{
 			// A shell that never finished declined nothing, and a case that
-			// hangs has stopped measuring.
+			// hangs has stopped measuring. Both sides carry a diagnostic on
+			// purpose: without one the outcome check alone would reject this,
+			// and the row would not be testing the timeout clause at all.
 			name: "a timeout is not a refusal",
-			want: Result{TimedOut: true, Status: -1},
-			got:  Result{TimedOut: true, Status: -1, Stderr: "our-sh: no"},
+			want: Result{TimedOut: true, Status: -1, Stderr: "sh: still going"},
+			got:  Result{TimedOut: true, Status: -1, Stderr: "our-sh: still going"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -414,6 +414,9 @@ func Diagnostics() interp.Diagnostics {
 		ForNameStatus: 1,
 		ForName:       "`%[1]s': not a valid identifier",
 		Unterminated:  "syntax error: unexpected end of file from `%[1]s' command on line %[2]d",
+		// With nothing open to name — `f()` with no body — the sentence
+		// stops after the diagnosis rather than naming an empty construct.
+		UnterminatedNoConstruct: "syntax error: unexpected end of file",
 		// One sentence for every unmatched delimiter, always naming the
 		// closer — only the line it lands on differs by construct.
 		UnmatchedQuote:            "unexpected EOF while looking for matching `%[2]s'",

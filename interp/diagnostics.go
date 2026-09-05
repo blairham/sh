@@ -1317,6 +1317,15 @@ type Diagnostics struct {
 	// bash names the first two, ksh93 the third, dash the fourth and zsh the
 	// fifth. Empty means the substrate's own, which names the construct.
 	Unterminated string
+	// UnterminatedNoConstruct is the same state with *nothing* open to name:
+	// `f()` given no body at all, where the parens have already closed.
+	//
+	// Its own wording because the dialect that names the construct has to say
+	// something when there is no construct, and what it says is a shorter
+	// sentence rather than the same one with a hole in it. The dialects whose
+	// wording never mentioned a construct leave this empty and keep the
+	// sentence they already have.
+	UnterminatedNoConstruct string
 	// BadSubstitution replaces a parse failure inside `${ }` entirely. No
 	// verbs: no shell in the panel says which operator was wrong.
 	BadSubstitution string
@@ -1884,7 +1893,11 @@ func (d Diagnostics) ParseFailure(err error) string {
 		return Wording(form, se.Msg,
 			se.Token, se.Expected, se.LastToken, se.Pos.Line, se.EofLine)
 	case syntax.ErrUnterminated:
-		return Wording(d.Unterminated, "syntax error: unterminated %[1]s",
+		form := d.Unterminated
+		if se.Construct == "" && d.UnterminatedNoConstruct != "" {
+			form = d.UnterminatedNoConstruct
+		}
+		return Wording(form, "syntax error: unterminated %[1]s",
 			se.Construct, se.ConstructLine, se.Innermost, se.Expected,
 			escapeToken(se.LastToken), se.Pos.Line)
 	}

@@ -6,6 +6,7 @@ package interp_test
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -75,6 +76,75 @@ func TestARedirectFailureIsWordedFourWays(t *testing.T) {
 			}
 			if out, _ := redirRun(t, dir, c.diag, `echo x > d`); !strings.Contains(out, c.make) {
 				t.Errorf("create: said %q, want %q", out, c.make)
+			}
+		})
+	}
+}
+
+// oneWayRun runs src with streams that go one way only, so that a descriptor
+// duplicated onto the other one fails. Everything the runner writes lands in
+// the returned text.
+func oneWayRun(t *testing.T, dir string, dg Diagnostics, src string) string {
+	t.Helper()
+	f, err := syntax.Parse(src, syntax.Core())
+	if err != nil {
+		t.Fatalf("parse %q: %v", src, err)
+	}
+	var buf bytes.Buffer
+	sem := permissive()
+	r := &Runner{
+		Stdin:     readerOnly{strings.NewReader("")},
+		Stdout:    writerOnly{&buf},
+		Stderr:    writerOnly{&buf},
+		Semantics: &sem, Diagnostics: &dg, Dir: dir, Name: "testsh",
+	}
+	if _, rerr := r.Run(context.Background(), f); rerr != nil {
+		t.Fatalf("run %q: %v", src, rerr)
+	}
+	return buf.String()
+}
+
+type readerOnly struct{ r io.Reader }
+
+func (o readerOnly) Read(p []byte) (int, error) { return o.r.Read(p) }
+
+type writerOnly struct{ w io.Writer }
+
+func (o writerOnly) Write(p []byte) (int, error) { return o.w.Write(p) }
+
+// A duplication that names a descriptor nothing opened reports an errno like
+// any other redirection failure, so LowercaseReason reaches it too.
+//
+// It did not: the text was written out lowercase at the three places that
+// raise it, which is one dialect's spelling of it and nobody else's. The
+// substrate capitalizes what the C string capitalizes.
+func TestADupOfAnUnopenedDescriptorQuotesTheReasonTheDialectsWay(t *testing.T) {
+	dir := t.TempDir()
+	for _, c := range []struct {
+		name string
+		diag Diagnostics
+		want string
+	}{
+		{"capitalized by default", Diagnostics{}, "6: Bad file descriptor"},
+		{"lowercased where the axis says so", Diagnostics{LowercaseReason: true}, "6: bad file descriptor"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			// A number nothing ever opened, reached as output and as input.
+			for _, src := range []string{`echo hi >&6`, `cat <&6`} {
+				out, _ := redirRun(t, dir, c.diag, src)
+				if !strings.Contains(out, c.want) {
+					t.Errorf("%s: said %q, want %q", src, out, c.want)
+				}
+			}
+			// And a number that is open the other way. An embedder's streams
+			// need not go both ways — a *bytes.Buffer happens to, which is
+			// why this builds its own rather than using the shared runner —
+			// so a descriptor parked on one of them can be duplicated onto a
+			// stream it cannot serve. Two more places the reason is quoted.
+			for _, src := range []string{`exec 6>&1; read v <&6`, `exec 6<&0; echo x >&6`} {
+				if out := oneWayRun(t, dir, c.diag, src); !strings.Contains(out, c.want) {
+					t.Errorf("%s: said %q, want %q", src, out, c.want)
+				}
 			}
 		})
 	}

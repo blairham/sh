@@ -531,6 +531,78 @@ func TestNormalizeUsesTheNameTheShellWasInvokedUnder(t *testing.T) {
 	}
 }
 
+// TestEveryRouteIsInvokedUnderTheNameThePanelGivesIt guards the one thing
+// that decides which shell a column is measuring.
+//
+// The script route did not honor Argv0, so the column headed bash-as-sh held
+// plain bash for every case that runs from a file — a mislabeled column of
+// exactly the kind MustReport was added to prevent, and one that looks
+// entirely well from the outside. The routes are enumerated rather than
+// spot-checked because a fourth one would otherwise arrive with the same hole
+// and nothing would say so.
+func TestEveryRouteIsInvokedUnderTheNameThePanelGivesIt(t *testing.T) {
+	sh := Found{Shell: Shell{Name: "bash-as-sh", Argv0: "sh"}, Path: "/opt/homebrew/bin/bash"}
+	for _, tc := range []struct {
+		route string
+		c     Case
+	}{
+		{"-c", Case{ID: "t", Snippet: "echo hi"}},
+		{"script", Case{ID: "t", Snippet: "echo hi", Script: true}},
+		{"args", Case{ID: "t", Snippet: "echo hi", Args: []string{"-c", ArgSnippet}}},
+		{"args-script", Case{ID: "t", Snippet: "echo hi", Args: []string{ArgScript}}},
+	} {
+		t.Run(tc.route, func(t *testing.T) {
+			cmd := command(t.Context(), sh, tc.c, t.TempDir())
+			if cmd.Args[0] != "sh" {
+				t.Errorf("argv[0] = %q, want %q: the %s route is measuring a shell other than the one its column names",
+					cmd.Args[0], "sh", tc.route)
+			}
+			if cmd.Path != sh.Path {
+				t.Errorf("path = %q, want %q: argv[0] names the shell, it does not choose the binary", cmd.Path, sh.Path)
+			}
+		})
+	}
+}
+
+// TestArgv0ReachesTheBinaryOnTheScriptRoute is the same claim measured rather
+// than inspected: the argv the harness builds is only worth checking because a
+// real shell reads it.
+//
+// A readonly reassignment is the sharpest probe available. bash keeps going
+// and prints "survived"; the same binary called sh treats the failed special
+// builtin as fatal and stops with status 1. Nothing about the snippet says
+// which — only argv[0] does, which is what makes it a test of this and of
+// nothing else.
+func TestArgv0ReachesTheBinaryOnTheScriptRoute(t *testing.T) {
+	found, _ := Resolve(t.Context())
+	var asSh, plain Found
+	for _, f := range found {
+		switch f.Name {
+		case "bash-as-sh":
+			asSh = f
+		case "bash":
+			plain = f
+		}
+	}
+	if asSh.Path == "" || plain.Path == "" {
+		t.Skip("bash is not on this machine, so there is nothing to invoke under two names")
+	}
+	c := Case{ID: "t", Snippet: "readonly r=1\nr=2\necho survived", Script: true}
+
+	got := Exec(t.Context(), asSh, c)
+	if got.Status != 1 || strings.Contains(got.Stdout, "survived") {
+		t.Errorf("bash-as-sh: status %d, stdout %q; want status 1 and no 'survived' — a failed special builtin is fatal in sh mode",
+			got.Status, got.Stdout)
+	}
+	// And the control: the same binary, the same script, the other name. If
+	// this stopped disagreeing, the probe would have stopped measuring argv[0]
+	// and would pass for the wrong reason.
+	if ref := Exec(t.Context(), plain, c); ref.Status != 0 || !strings.Contains(ref.Stdout, "survived") {
+		t.Errorf("bash: status %d, stdout %q; want status 0 and 'survived' — the probe no longer distinguishes the two names",
+			ref.Status, ref.Stdout)
+	}
+}
+
 // TestSyntaxErrorCasesAreGraded is the point of grading them at all.
 //
 // They were skipped alongside the cases whose reference races, and the two

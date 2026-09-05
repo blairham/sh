@@ -263,6 +263,11 @@ func Semantics() interp.Semantics {
 	s.PrintfEmptyIsNotANumber = interp.No
 	s.PrintfReportsBadNumber = interp.No
 	s.PrintfBackslashC = interp.PrintfBackslashCControl
+	// The same set bash takes, and ignored the same way. ksh93 will also
+	// read a width *after* the modifier — `%l5d` is a padded 42 there — but
+	// that is its free-order conversion prefix rather than this axis: `%5-d`
+	// works there too, with no modifier in it at all.
+	s.PrintfLengthModifiers = interp.PrintfLengthModifiersC99
 	// ksh93's `%T` is a different conversion under the same letter: its
 	// operand is a date *string* and a number earns a warning and the current
 	// time. Not the one bash has, and not modeled — see
@@ -611,7 +616,7 @@ func Diagnostics() interp.Diagnostics {
 		// One message for both, where bash names which variable was missing.
 		CdHomeNotSet:              "cd: bad directory",
 		CdOldpwdNotSet:            "cd: bad directory",
-		PrintfBadVerb:             "printf: %[3]s: unknown format specifier",
+		PrintfBadVerb:             "printf: %[1]s: unknown format specifier",
 		PrintfBadOption:           "printf: %[1]s: unknown option",
 		TrapConditionRequired:     "trap: condition(s) required",
 		PrintfBadOptionShowsUsage: true,

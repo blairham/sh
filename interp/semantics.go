@@ -495,6 +495,19 @@ type Semantics struct {
 	// to tell the middle one from the last: ksh93's output *looks* truncated
 	// next to zsh's until the control character is read as a byte.
 	PrintfBackslashC PrintfBackslashCPolicy
+	// PrintfLengthModifiers is which C length modifiers a conversion may
+	// carry between its precision and its verb — `%zX`, `%ld`, `%jd`.
+	//
+	// Three answers, and every one of them *ignores* the modifier rather
+	// than acting on it: `%hhd` with 300 is 300 and not 44, and `%lld` with
+	// the largest signed 64-bit value is that value, in every shell that
+	// takes the modifier at all. A shell's arithmetic is one width and the
+	// modifier cannot change it, so this is about what a format may say and
+	// never about what it means.
+	//
+	// Asked only where a conversion actually carries one of the letters, so
+	// a dialect is never questioned about `%s`.
+	PrintfLengthModifiers PrintfLengthModifierSet
 	// PrintfOutputPrecedesComplaint writes what `printf` produced before it
 	// complains about the rest, rather than after.
 	//
@@ -2744,6 +2757,55 @@ func (r *Runner) backslashC() PrintfBackslashCPolicy {
 	if p == PrintfBackslashCUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
 			`printf: \c: the shells disagree here and no dialect was chosen`))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// PrintfLengthModifierSet is which C length modifiers a printf conversion may
+// carry, which is a set rather than a switch: the panel splits three ways and
+// two of the three take a different number of letters.
+type PrintfLengthModifierSet int
+
+const (
+	// PrintfLengthModifiersUnspecified is no answer, and is refused like any
+	// other.
+	PrintfLengthModifiersUnspecified PrintfLengthModifierSet = iota
+	// PrintfLengthModifiersAbsent is a printf with no modifiers at all, so
+	// `%ld` is a conversion `l` that does not exist: dash.
+	PrintfLengthModifiersAbsent
+	// PrintfLengthModifiersC89 is `h`, `l` and `L`, and exactly one of them:
+	// zsh, which takes `%ld` and calls `%lld` an invalid directive. The set
+	// is C89's, which is the reading that explains why `hh`, `ll`, `j`, `z`
+	// and `t` — every one of them a C99 addition — are the ones refused.
+	PrintfLengthModifiersC89
+	// PrintfLengthModifiersC99 adds `hh`, `ll`, `j`, `z` and `t`, and takes
+	// any run of the letters rather than one: bash and ksh93 read `%lll` and
+	// `%zz` as happily as `%ll`, which is what makes this a skipped run and
+	// not a list of spellings.
+	PrintfLengthModifiersC99
+)
+
+func (p PrintfLengthModifierSet) String() string {
+	switch p {
+	case PrintfLengthModifiersAbsent:
+		return "none"
+	case PrintfLengthModifiersC89:
+		return "h, l and L"
+	case PrintfLengthModifiersC99:
+		return "h, hh, l, ll, j, z, t and L"
+	}
+	return "unspecified"
+}
+
+// lengthModifiers resolves the axis, and only for a conversion that carries a
+// letter one of the answers would take.
+func (r *Runner) lengthModifiers() PrintfLengthModifierSet {
+	p := r.sem().PrintfLengthModifiers
+	if p == PrintfLengthModifiersUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			`printf: a length modifier: the shells disagree here and no dialect was chosen`))
 		r.status = 2
 		r.unspecified = true
 	}

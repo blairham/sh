@@ -28,12 +28,15 @@
 //	sh -policy p.policy script.sh  # run it under a declarative policy
 //	sh -audit log.jsonl script.sh  # record every action as JSON, one per line
 //	sh -acp                        # serve the Agent Client Protocol on stdio
+//	sh -blocks-list                # the recent blocks: what ran, and how it went
+//	sh -blocks-show 1              # the most recent block, its record and output
 //
 // Everything a shell reads at invocation — `-c`, a script path and its
 // positional parameters, `-s`, a lone `-`, set options like `-e` — is read
 // by the shared front end in driver, exactly as the dialect binaries read
 // it. Only the flags no shell has — -tokens, -parse, -dialect,
-// -trace-events, -deny, -policy and -audit — are this binary's own, and they
+// -trace-events, -deny, -policy, -audit, -blocks-list and -blocks-show — are
+// this binary's own, and they
 // come first on the line: the first word that is not one of them belongs to
 // the shell, so a script's own arguments can never be mistaken for them.
 //
@@ -43,6 +46,15 @@
 // directory read since its first commit, and until these flags no shipped
 // binary ever set one, so a hole in the boundary would have looked exactly
 // like a shell that works.
+//
+// -blocks-list and -blocks-show read the store a prompt records into — see
+// docs/design/blocks.md. They are here rather than as a builtin for the reason
+// the others are here: a builtin would have to live in interp, which has no
+// history and no business acquiring one, and no shell in the panel has such a
+// command for a dialect to claim. Both read a store instead of running a
+// shell, so they end the invocation — through whatever gate the same line
+// asked for, because a policy that hides the store hides it from the tool that
+// reads it too.
 //
 // -trace-events and -deny are the debug half — a way to watch the gate refuse
 // something. -policy and -audit are the shipped half: a declarative rule set
@@ -72,6 +84,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/blairham/sh/dialect/bash"
@@ -131,6 +144,20 @@ func run(argv []string, stdout, stderr io.Writer) int {
 		}
 		return code
 	}
+	if own.blocksList > 0 || own.blocksShow != "" {
+		// Reading a store is not running a shell, so this ends the invocation
+		// before the front end is reached. The seams are already installed,
+		// which is the point: a policy that hides the store hides it from the
+		// tool that reads it too.
+		show := func() error { return showBlock(sh, stdout, own.blocksShow) }
+		if own.blocksShow == "" {
+			show = func() error { return showBlocks(sh, stdout, own.blocksList) }
+		}
+		if err := show(); err != nil {
+			return fail(stderr, err)
+		}
+		return 0
+	}
 	if own.tokens || own.parse {
 		dump := dumpTree
 		if own.tokens {
@@ -170,6 +197,11 @@ type ownFlags struct {
 	policy        string
 	audit         string
 	acp           bool
+	// blocksList is how many recent blocks to print, and blocksShow names one
+	// to print in full. Both end the invocation: they read a store rather than
+	// running a shell.
+	blocksList int
+	blocksShow string
 }
 
 // readOwnFlags strips this binary's flags from the front of the line,
@@ -220,6 +252,29 @@ func readOwnFlags(args []string) (own ownFlags, rest []string, err error) {
 			// legally contain, so splitting one would refuse to deny some
 			// directory that exists.
 			own.deny = append(own.deny, val)
+		case "blocks-list":
+			// A count is optional, unlike every other value flag here, because
+			// `-blocks-list` on its own is the thing people want and a
+			// required argument would make the common case the long one. An
+			// attached `=n` is how a different count is asked for; a bare next
+			// word is not taken, since it would eat the script operand.
+			own.blocksList = blocksListDefault
+			if hasVal {
+				n, cerr := strconv.Atoi(val)
+				if cerr != nil || n <= 0 {
+					return own, nil, fmt.Errorf("-blocks-list wants a positive count, not %q", val)
+				}
+				own.blocksList = n
+			}
+		case "blocks-show":
+			if !hasVal {
+				if i+1 >= len(args) {
+					return own, nil, errors.New("-blocks-show requires a block id or a number")
+				}
+				i++
+				val = args[i]
+			}
+			own.blocksShow = val
 		case "policy", "audit":
 			if !hasVal {
 				if i+1 >= len(args) {

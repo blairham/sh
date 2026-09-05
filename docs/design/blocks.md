@@ -171,6 +171,37 @@ version and a consumer ignores what it does not recognize; an absent
 field means the zero value. They are the same rules because they are the
 same unit, and a consumer that has learned one has learned both.
 
+The reader implements all four rather than only writing to them. A
+record whose `v` is newer is skipped, so an old shell opening a store a
+newer one has appended to shows everything it can rather than failing;
+an unrecognized *field* is ignored, which is what makes an added field a
+change nobody has to coordinate; and a record with no `status` at all is
+skipped, because reading one would report a success that never happened.
+
+That last is where this differs from the event schema in mechanism while
+agreeing with it in intent. There, `status` is a pointer because a status
+is present only for the end of a command, so absence is ordinary and
+must be told from zero. Here every block has one — a block always exited
+with something — so the field is a plain `int` that is always written,
+and the distinction is needed only on the way back in, where a missing
+one means the line is truncated or foreign.
+
+Two field-level differences from the event record are deliberate:
+
+- **There is no `seq`.** A sequence number is a total order of
+  *emission* and explicitly not a causal one, which is right for a log
+  and is the wrong thing for a block to lean on. A block's order is the
+  order of the file, and its identity is an id that sorts by start time.
+- **The timestamp is `start`, not `time`.** An event's `time` is when
+  the record was written. A block's is when the command began, with a
+  duration beside it. Reusing the name for the other meaning is the one
+  thing the stability rules forbid outright.
+
+The index is opened the way `cmd/sh -audit` opens its file — `O_APPEND`,
+`0600`, unbuffered, one write per record straight through — because the
+two have the same problem: a trail that erases the previous run, or that
+loses what a buffer held when the shell died, is not a trail.
+
 `output` is a **stored path** rather than a derived one. The reader
 never recomputes the layout from the id, so the sharding above is an
 implementation detail that can change without a version bump, and a
@@ -411,12 +442,26 @@ The store is inspected through `cmd/sh`, following the route
 by the binary that exists to exercise seams.
 
     sh -blocks-list          # the recent blocks, one per line
+    sh -blocks-list=100      # more of them
     sh -blocks-show 1        # the most recent block, record and body
     sh -blocks-show <id>     # a block by id
 
-`-blocks-list` prints time, status, duration, cwd and the command. A
-failing block is the one people are looking for, so status is early on
-the line rather than at the end of it.
+`-blocks-list` prints time, status, duration, id, cwd and the command,
+in that order. The time is first because this is a log and that is how a
+log is scanned; the status is second because a block that failed is the
+one somebody came looking for; the command is last because it is the
+only field with no bound on its length.
+
+The count on `-blocks-list` is attached with `=` rather than taken as
+the following word, and that is not a style choice: the scan stops at
+the first word that is not one of this binary's flags, so a bare count
+would eat a script operand. `-blocks-show` has no such problem, since
+its argument is required.
+
+Both read a store instead of running a shell, so they end the
+invocation — through whatever gate the same command line asked for,
+because a policy that hides the store has to hide it from the tool that
+reads it too. A refused store reads as an empty one.
 
 This is deliberately not a builtin. A builtin would have to live in
 `interp`, which has no history, no store and no business acquiring

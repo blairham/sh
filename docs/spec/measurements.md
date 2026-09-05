@@ -252,6 +252,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `array/removing-the-last-element-then-appending` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[p][q][r][z] n=4` | `[p][q][r][z] n=4` | `[p][q][r][z] n=4` | `[p][q][r][z] n=4` | `[p][q][][z] n=4` |
 | `array/removing-the-only-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[only] n=1` | `[only] n=1` | `[only] n=1` | `[only] n=1` | `[] n=1` |
 | `array/removing-an-element-from-the-end` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][z] n=2` | `[x][z] n=2` | `[x][y][z] n=3` **2>** `<shell>: line 0: [-2]: bad array subscript` | `[x][z] n=2` | `[x][y][z] n=3` |
+| `array/unsetting-below-the-first-element` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=0~[y][z] n=2` | `st=0~[y][z] n=2` | `st=0~[y][z] n=2` | `st=0~[y][z] n=2` | `st=1~[x][y][z] n=3` **2>** `<shell>:1: a: assignment to invalid subscript range` |
+| `array/unsetting-past-the-start` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=1~[x][y][z] n=3` **2>** `<shell>: line 1: unset: [-4]: bad array subscript` | `st=1~[x][y][z] n=3` **2>** `<shell>: line 1: unset: [-4]: bad array subscript` | `st=1~[x][y][z] n=3` **2>** `<shell>: line 0: [-4]: bad array subscript` | `st=1~[x][y][z] n=3` **2>** `<shell>: unset: a: subscript out of range` | `st=0~[x][y][z] n=3` |
+| `array/an-unset-subscript-refused-is-named-as-written` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `st=1~n=3` **2>** `<shell>: line 1: unset: [x-9]: bad array subscript` | `st=1~n=3` **2>** `<shell>: line 1: unset: [x-9]: bad array subscript` | `st=1~n=3` **2>** `<shell>: line 0: [x-9]: bad array subscript` | `st=1~n=3` **2>** `<shell>: unset: a: subscript out of range` | `st=0~n=3` |
 | `array/unsetting-every-element-of-a-scalar` | **2>** `<shell>: 1: unset: a[@]: bad variable name` *(status 2)* | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 1: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: line 0: unset: a: not an array variable` | `st=1 [hello]` **2>** `<shell>: unset: @: arithmetic syntax error` | `st=0 []` |
 | `array/a-quoted-gap-is-one-field` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=3` | `n=3` | `n=3` | `n=3` | `n=3` |
 | `array/a-quoted-gap-keeps-its-place` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][][y]` | `[x][][y]` | `[x][][y]` | `[x][][y]` | `[][x][y]` |
@@ -591,6 +594,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `array/removing-an-element-from-the-end` — an end-relative subscript, which the shell that blanks does not act on at all beyond `-1` — the array comes back whole where the shells that remove take the middle element away. Pinned because the blanking rule would otherwise be applied to every negative subscript by symmetry, and it is not. bash 3.2 has no negative subscripts and reports a bad one, which is the same absence `array/appending-to-an-element` records
   ```sh
   a=(x y z); unset "a[-2]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/unsetting-below-the-first-element` — `array/a-subscript-below-the-first-element`'s boundary reached from `unset` rather than from an assignment, and the base decides who is being asked exactly as it does there: where the first element is 1 this names nothing and is refused, and where it is 0 the same numeral is the first element and it is removed. What the two routes do *not* share is the ending — the assignment stops the script and this leaves a failed builtin behind for the next command to test — so a fix that reused the fatal path would have been a new bug. It was silent at 0, which told a script it had removed something out of reach
+  ```sh
+  a=(x y z); unset "a[0]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/unsetting-past-the-start` — the same boundary from the other side, which is the only side the shells whose first element is 0 can reach it from. The shell that blanks is silent here rather than refusing, and that is not a second rule: blanking replaces a span that is there, and a subscript counting back past the start names none — the same reading `array/removing-an-element-from-the-end` records at `-2`. bash 3.2 refuses it for having no negative subscripts at all, which is a different reason for the same line
+  ```sh
+  a=(x y z); unset "a[-4]"; echo "st=$?"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"
+  ```
+- `array/an-unset-subscript-refused-is-named-as-written` — what the refusal names on this route, which is not what it names on the assignment's: bash keeps the subscript as written but drops the array in front of it, ksh93 names the array alone, and both put the builtin's name before the sentence where neither does for an assignment. The expression is what tells the written text from the -9 it came to. zsh has nothing to refuse, a negative subscript reaching nothing being silent there
+  ```sh
+  a=(x y z); unset "a[x-9]"; echo "st=$?"; echo "n=${#a[@]}"
   ```
 - `array/unsetting-every-element-of-a-scalar` — the same spelling on a name that is no array, which is where the two readings show what they mean: bash means take every element away, a scalar has none, and it refuses and says so at 1; zsh means the span becomes one empty string, a scalar is one such span, and it comes back empty at 0. ksh93 reports its bad subscript and leaves the value alone. Nobody turns the scalar into an array
   ```sh
@@ -4028,6 +4043,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `redir/the-picked-descriptors-name-may-be-an-element` | **2>** `<shell>: 1: exec: {a[1]}: not found` *(status 127)* | `a1=10~written` | `a1=10~written` | **2>** `<shell>: line 0: exec: {a[1]}: not found` *(status 127)* | `a1=10~written` | **2>** `<shell>:1: no matches found: {a[1]}` *(status 1)* |
 | `redir/closing-a-descriptor-through-an-element` | **2>** `<shell>: 1: a[1]=3: not found~<shell>: 1: exec: {a[1]}: not found` *(status 127)* | `st=0~after=1` **2>** `<shell>: line 1: 3: Bad file descriptor` | `st=0~after=1` **2>** `<shell>: line 1: 3: Bad file descriptor` | **2>** `<shell>: line 0: exec: {a[1]}: not found` *(status 127)* | `st=0~after=1` **2>** `<shell>: 3: cannot open [Bad file descriptor]` | **2>** `<shell>:1: no matches found: {a[1]}` *(status 1)* |
 | `redir/noclobber-names-its-refusal` | `st=2` **2>** `<shell>: 1: cannot create f: File exists` | `st=1` **2>** `<shell>: line 1: f: cannot overwrite existing file` | `st=1` **2>** `<shell>: line 1: f: cannot overwrite existing file` | `st=1` **2>** `<shell>: f: cannot overwrite existing file` | `st=1` **2>** `<shell>: f: file already exists [File exists]` | `st=1` **2>** `<shell>:1: file exists: f` |
+| `redir/exec-with-a-redirection-that-cannot-be-made` | **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` *(status 2)* | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | `after` **2>** `<shell>: /nope/x: No such file or directory` | **2>** `<shell>: /nope/x: cannot create [No such file or directory]` *(status 1)* | `after` **2>** `<shell>:1: no such file or directory: /nope/x` |
+| `redir/a-failed-redirection-on-a-colon` | **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` *(status 2)* | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | `after` **2>** `<shell>: /nope/x: No such file or directory` | **2>** `<shell>: /nope/x: cannot create [No such file or directory]` *(status 1)* | `after` **2>** `<shell>:1: no such file or directory: /nope/x` |
+| `redir/a-failed-redirection-on-an-ordinary-command` | `after` **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: cannot create [No such file or directory]` | `after` **2>** `<shell>:1: no such file or directory: /nope/x` |
+| `redir/a-failed-redirection-on-a-compound-command` | `after` **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: cannot create [No such file or directory]` | `after` **2>** `<shell>:1: no such file or directory: /nope/x` |
+| `redir/a-failed-redirection-inside-a-subshell` | `after` **2>** `<shell>: 1: cannot create /nope/x: Directory nonexistent` | `inner~after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `inner~after` **2>** `<shell>: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: cannot create [No such file or directory]` | `inner~after` **2>** `<shell>:1: no such file or directory: /nope/x` |
 
 - `procsub/reads-a-command-as-a-file` — `<(cmd)` runs cmd and expands to a path its output can be read from — the last of the core language, and the clearest case of a dialect being a runtime switch: bash 3.2 has it as `bash` and loses it as `sh`. dash has it in neither guise and reports the `(` as unexpected
   ```sh
@@ -4319,6 +4339,26 @@ grades it and nothing drift-checks it either, for the same reason.
 - `redir/noclobber-names-its-refusal` — the refusal is unanimous and the sentence is not: bash cannot overwrite an existing file, ksh93 says it already exists with the errno in brackets, dash and zsh word it as any other failed create
   ```sh
   set -C; echo a > f; echo b > f; echo "st=$?"
+  ```
+- `redir/exec-with-a-redirection-that-cannot-be-made` — POSIX makes a redirection error on a special builtin fatal to a non-interactive shell, and the panel splits three to two over it: dash stops at 2, ksh93 and bash-as-`sh` stop at 1, and bash and zsh complain and print `after`. The bash and bash-as-`sh` rows are the same binary, which is what says the answer belongs to posix mode rather than to a shell
+  ```sh
+  exec 3>/nope/x; echo after
+  ```
+- `redir/a-failed-redirection-on-a-colon` — the same rule reached without `exec`: `:` is a special builtin too, and every column answers exactly as it does above — so the rule is about which builtin carries the redirection and not about replacing the shell
+  ```sh
+  : 3>/nope/x; echo after
+  ```
+- `redir/a-failed-redirection-on-an-ordinary-command` — the boundary, and it is unanimous: on a builtin POSIX does not mark special nothing stops anywhere, so a rule written as `a failed redirection is fatal` would be wrong in five columns at once
+  ```sh
+  true 3>/nope/x; echo after
+  ```
+- `redir/a-failed-redirection-on-a-compound-command` — the other half of the boundary: a redirection written on a group belongs to the group and not to any builtin, so every column complains and carries on — including the three that stop for the identical redirection on `exec`
+  ```sh
+  { echo x; } 3>/nope/x; echo after
+  ```
+- `redir/a-failed-redirection-inside-a-subshell` — what `ends the shell` means where there is a process boundary: the three that stop lose `inner` and still print `after` at status 0, so the subshell ends and the parent does not — which our cloned-runner subshells have to reconstruct by hand
+  ```sh
+  ( exec 3>/nope/x; echo inner ); echo after
   ```
 
 ## commands
@@ -5859,6 +5899,8 @@ grades it and nothing drift-checks it either, for the same reason.
 
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
+| `set/posix-mode-makes-a-failed-redirection-fatal` | **2>** `<shell>: 1: set: Illegal option -o posix` *(status 2)* | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: line 1: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: /nope/x: No such file or directory` *(status 1)* | **2>** `<shell>: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: posix` *(status 1)* |
+| `set/leaving-posix-mode-restores-the-shells-own-answer` | **2>** `<shell>: 1: set: Illegal option -o posix` *(status 2)* | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: line 1: /nope/x: No such file or directory` | `after` **2>** `<shell>: /nope/x: No such file or directory` | **2>** `<shell>: set: posix: bad option(s)~Usage: set [-sabefhkmnprtuvxBCGH] [-A name] [-o[option]] [arg ...]` *(status 2)* | **2>** `<shell>:set:1: no such option: posix` *(status 1)* |
 | `invoke/errexit-with-a-script` | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* |
 | `invoke/a-bundle-of-set-letters` | **2>** `<script>: 1: nope: parameter not set` *(status 2)* | **2>** `<script>: line 1: nope: unbound variable` *(status 1)* | **2>** `<script>: line 1: nope: unbound variable` *(status 1)* | **2>** `<script>: line 1: nope: unbound variable` *(status 1)* | **2>** `<script>: line 1: nope: parameter not set` *(status 1)* | **2>** `<script>:1: nope: parameter not set` *(status 1)* |
 | `invoke/the-long-option-name` | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* | `one` *(status 1)* |
@@ -5903,6 +5945,14 @@ grades it and nothing drift-checks it either, for the same reason.
 | `invoke/dollar-dash-shows-s-for-the-s-option` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` |
 | `invoke/dollar-dash-keeps-s-when-a-command-string-overrides-it` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` |
 
+- `set/posix-mode-makes-a-failed-redirection-fatal` — the same binary, both answers: bash 5.3 and bash 3.2 print `after` without this line and stop at 1 with it, which is the bash-as-`sh` column reached at run time. The other three have no such name and refuse the `set` instead, each in its own words
+  ```sh
+  set -o posix; exec 3>/nope/x; echo after
+  ```
+- `set/leaving-posix-mode-restores-the-shells-own-answer` — the round trip, which is what makes it a mode rather than a one-way door: bash goes back to printing `after` at 0. Turning it off is also the direction a shell without a posix mode can honestly grant, and the thirteenth line of Homebrew's own script
+  ```sh
+  set -o posix; set +o posix; exec 3>/nope/x; echo after
+  ```
 - `invoke/errexit-with-a-script` — the first line of most scripts, spelled on the command line instead: a set option given at invocation has to reach the runner, and abandon the script at the failure rather than run to the end
   ```sh
   echo one

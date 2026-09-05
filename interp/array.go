@@ -210,18 +210,42 @@ func (r *Runner) appendArrayElem(name string, idx int, sub, value string) {
 // the dense reader finds an unassigned subscript empty on its own, so one
 // store serves the shell that leaves a hole and the shell that sees an empty
 // element.
-func (r *Runner) unsetArrayElem(name string, idx int) {
-	a, ok := r.Arrays[name]
-	if !ok {
-		return
+//
+// A subscript that lands *before* the first element is refused, and the
+// answer is the status the builtin carries rather than the end of the script.
+// That is the boundary an assignment already refuses — see setArrayElem —
+// reached from `unset` instead, and the same two spellings show it is one
+// rule: where the first element is 1, `a[0]` is below it, and where it is 0,
+// only a negative subscript counting back past the start can be. Neither
+// shell has both. It was silent at status 0 here, so a script that asked to
+// remove something out of reach was told it had.
+//
+// Which spelling a shell can reach is UnsetArraySpan again rather than a new
+// question. The blanking reading acts only on a span that is there, so a
+// negative subscript that ran past the start finds nothing to replace and is
+// left alone without a word; the removing readings count from 0, so no
+// non-negative subscript is below their first element.
+//
+// sub is the subscript as it was written, because one dialect's refusal
+// quotes it back — `[x-9]`, not the -9 it came to.
+func (r *Runner) unsetArrayElem(name string, idx int, sub string) int {
+	blanks := r.unsetBlanksInPlace()
+	a, isArray := r.Arrays[name]
+	if !isArray {
+		// A name holding nothing at all has no first element for a subscript
+		// to be before, and is left alone without a word everywhere. A scalar
+		// has one under the blanking reading, where a span of one is what
+		// `unset a[i]` means and a scalar is such a span — so `a=v; unset
+		// "a[0]"` reaches the boundary there. The removing readings answer a
+		// scalar without reading the subscript at all, which is
+		// UnsetNotAnArray's question rather than this one.
+		if _, held := r.getVar(name); blanks && held && idx >= 0 && idx < r.arrayBase() {
+			return r.refuseSubscriptToUnset(name, sub)
+		}
+		return 0
 	}
-	pos := idx - r.arrayBase()
-	if idx < 0 {
-		// `unset "a[-1]"` reaches the last element — the same end-relative
-		// reading every other subscript position takes.
-		pos = a.pastTheEnd() + idx
-	}
-	if r.unsetBlanksInPlace() {
+	pos, within := r.elemPos(a, idx)
+	if blanks {
 		// Only a subscript that names an element already there is blanked.
 		// One past the end has no span to replace, and the array is left as
 		// it was rather than gaining an element — `a=(x y z); unset a[9]`
@@ -232,17 +256,47 @@ func (r *Runner) unsetArrayElem(name string, idx int) {
 		// shell, so `unset a[-2]` on `(x y z)` leaves all three where the
 		// removing shells take the middle one away.
 		if idx < 0 && idx != -1 {
-			return
+			return 0
+		}
+		if !within && idx >= 0 {
+			return r.refuseSubscriptToUnset(name, sub)
 		}
 		if _, held := a[pos]; !held {
-			return
+			return 0
 		}
 		a[pos] = ""
 		r.storeArray(name, a)
-		return
+		return 0
+	}
+	if !within {
+		return r.refuseSubscriptToUnset(name, sub)
 	}
 	delete(a, pos)
 	r.storeArray(name, a)
+	return 0
+}
+
+// refuseSubscriptToUnset reports a subscript `unset` could not reach because
+// it lands before the array's first element, and answers with the status the
+// builtin carries.
+//
+// The refusal leaves the array exactly as it was and lets the next command
+// run, which is where it parts from the assignment's: that one ends the
+// script. A script can therefore test it, so the status is returned rather
+// than thrown.
+//
+// The location must not name the builtin. The dialect that puts a builtin's
+// name in the prefix does not put it here — this is its parameter store
+// speaking rather than `unset` — and the two that do name it put the name in
+// the sentence, where they put every other builtin's. Same split as
+// badSubscriptToUnset.
+func (r *Runner) refuseSubscriptToUnset(name, sub string) int {
+	outer := r.inBuiltin
+	r.inBuiltin = ""
+	defer func() { r.inBuiltin = outer }()
+	r.diagf("%s\n", Wording(r.diag().UnsetSubscriptBeforeTheFirstElement,
+		"unset: [%[2]s]: bad array subscript", name, sub))
+	return 1
 }
 
 // unsetWholeArray is `unset a[@]`, where the subscript names every element

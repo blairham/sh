@@ -62,6 +62,11 @@ func permissive() Semantics {
 	// about either question, so a test that is not about those gets silence.
 	s.UnsetFunctionChecksTheName = No
 	s.UnsetFunctionReportsMissing = No
+	// A redirection that will not open is fatal on a special builtin under
+	// POSIX, and `exec` is one. A test asking what a *redirection* did needs
+	// the shell still running to answer, so the permissive answer here is
+	// the one that carries on; redirfatal_test.go asks the axis itself.
+	s.RedirectErrorOnSpecialBuiltinFatal = No
 	return s
 }
 

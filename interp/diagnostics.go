@@ -831,6 +831,13 @@ type Diagnostics struct {
 	// with every message.
 	UnsetFunctionNotFound string
 
+	// UnsetBadSubscript wraps the sentence about an `unset` operand whose
+	// subscript would not evaluate. One verb: that sentence, already worded by
+	// ArithError. Empty leaves it to stand alone, which is what bash and zsh
+	// do; ksh93 alone names the builtin in front of it, having worded the
+	// identical failure in an expansion without one.
+	UnsetBadSubscript string
+
 	// UnsetNotAnArray is what `unset a[@]` says when the name holds a value
 	// that is not an array. One verb: the name.
 	//
@@ -920,6 +927,37 @@ type Diagnostics struct {
 	// location instead of in the sentence, which the location already does.
 	// ksh93 follows it with the usage line it keeps in BuiltinUsage.
 	SetInvalidOptionName string
+
+	// SetInvalidOptionLetter is an option letter this shell does not have.
+	// Two verbs: the letter as the script spelled it, sign and all, and the
+	// letter on its own.
+	//
+	//	bash   set: -q: invalid option
+	//	dash   set: Illegal option -q
+	//	ksh93  set: -q: unknown option
+	//	zsh    set: bad option: -q
+	//
+	// Two verbs rather than one because the sign splits the panel: `set +q`
+	// is echoed back as `+q` by bash and ksh93 and as `-q` by dash and zsh,
+	// which those two say by writing the `-` into the wording and taking the
+	// bare letter. Measured 2026-09-05 on `-q`, `-j`, `-z` and `-A`, the
+	// letters all six of bash 5.3, bash 3.2, bash-as-`sh`, dash, ksh93 and
+	// zsh refuse. zsh's `set:` comes from the location, as everywhere else.
+	//
+	// A letter the dialect *has* and this shell has not implemented is a
+	// different answer and belongs in UnimplementedOptionLetters under
+	// "set", not here.
+	SetInvalidOptionLetter string
+
+	// SetInvalidOptionNameUsage repeats BuiltinUsage["set"] under a refused
+	// `set -o` name, as well as under a refused letter.
+	//
+	// ksh93 alone. bash prints its `set` usage line after a bad *letter* —
+	// which is what it does after any builtin's bad letter — and not after a
+	// bad option name, whose complaint is a sentence of its own. dash and
+	// zsh print no usage line for either. So the letter always gets one
+	// where the dialect has one, and this says whether the name does too.
+	SetInvalidOptionNameUsage bool
 
 	// SetInvalidOptionStatus is what a refused `set` option reports —
 	// either spelling. Zero means 2, which is three of the four; zsh
@@ -1293,6 +1331,33 @@ type Diagnostics struct {
 	// switch rather than a verb.
 	InvocationNamesTheUnreadLine bool
 
+	// InvocationUsage is the shell's own usage block, written under a `set`
+	// option the invocation was refused. Two verbs: the name the shell was
+	// invoked by, and that name's last path element.
+	//
+	// Two verbs because the panel's two shells that print one disagree about
+	// which they write. Measured 2026-09-05 through a symbolic link named
+	// `myksh`: bash spells the whole word it was invoked by — a path, when
+	// that is what was typed — and ksh93 spells only the last element of it.
+	//
+	// Distinct from BuiltinUsage["set"], which is what the *builtin* prints:
+	// at an invocation these two shells print their own usage instead, and
+	// the block is a fact about the shell rather than about `set`.
+	InvocationUsage string
+
+	// InvocationNameRefusalNamesTheShell reports a refused `set -o` name at
+	// an invocation exactly as the builtin would, with the shell's own name
+	// standing where the builtin's would:
+	//
+	//	<shell>: line 0: <shell>: zzznosuch: invalid option name
+	//
+	// bash alone, and only for the long spelling — its refused *letter* is
+	// its command-line parser speaking, with no location and no second name.
+	// dash, ksh93 and zsh word both spellings the same way at an invocation:
+	// the sentence with nothing naming `set`, after the plain invocation
+	// prefix. Measured 2026-09-05.
+	InvocationNameRefusalNamesTheShell bool
+
 	// ScriptLocation is Location for a script read from a file, when the two
 	// differ. ksh93 is the only shell in the panel where they do: `ksh -c`
 	// names no location at all, and `ksh script` says "line 2". Zero means
@@ -1599,6 +1664,26 @@ type Diagnostics struct {
 	// DivisionByZero is the reason itself, which dash and ksh93 spell
 	// differently. No verbs.
 	DivisionByZero string
+
+	// SubstringRangeError wraps a substring offset or length that would not
+	// evaluate. Two verbs: the parameter as written — `x`, or `a[@]` when a
+	// subscript was given — and the arithmetic sentence, already worded by
+	// ArithError. Empty leaves the sentence to stand alone, which is what two
+	// of the three shells with substrings do; bash alone puts the parameter in
+	// front of it.
+	//
+	// A separate field from ArithError rather than a flag on it, because the
+	// same shell wraps a subscript's failure without any such prefix: `${a[b
+	// c]}` is blamed on `b c` and `${x:b c}` on `x: b c`. One field could not
+	// say both.
+	SubstringRangeError string
+
+	// SubstringErrorNamesTheWholeRange blames a failing offset together with
+	// everything written after it: `${x:1+:2}` is `1+:2` rather than `1+`.
+	// ksh93 alone, which reads `offset:length` as one string and reports from
+	// the failing point to its end — so a failing *length* is named on its own
+	// there, having nothing after it.
+	SubstringErrorNamesTheWholeRange bool
 	// EqualsNotFound is `=cmd` naming nothing. One verb: the name. zsh omits
 	// the colon it uses everywhere else, which is why this is not NotFound.
 	EqualsNotFound string
@@ -1922,6 +2007,30 @@ func (d Diagnostics) ParseFailureLine(err error) int {
 	return se.Pos.Line
 }
 
+// arithParseFailure words an expression the parser refused, blaming expr.
+//
+// The text blamed is a parameter rather than the error's own, because it is
+// not always the text that failed: one dialect names a substring's offset
+// together with everything after it in the range, so `${x:1+:2}` is reported
+// as `1+:2` where the parser was handed `1+`. Every other caller passes what
+// the parser saw.
+func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
+	reason, fallback := d.ArithOperandExpected, "operand expected"
+	switch se.Kind {
+	case syntax.ErrArithOperator:
+		reason, fallback = d.ArithOperatorExpected, "operator expected"
+	case syntax.ErrArithBadOperator:
+		reason, fallback = d.ArithBadOperator, "operator expected"
+		if reason == "" {
+			// Only one dialect separates the two; for the rest the operator
+			// wording covers both.
+			reason = d.ArithOperatorExpected
+		}
+	}
+	return Wording(d.ArithError, "%[1]s: %[2]s",
+		expr, Wording(reason, fallback, se.Token), se.Token)
+}
+
 // ParseFailure words a parse error the way this dialect words it.
 //
 // It lives here rather than in the front end because the front end is not the
@@ -1943,20 +2052,7 @@ func (d Diagnostics) ParseFailure(err error) string {
 		// not read, %[2]d the line.
 		return Wording(d.BadSubstitution, se.Msg, se.Token, se.Pos.Line)
 	case syntax.ErrArithOperand, syntax.ErrArithOperator, syntax.ErrArithBadOperator:
-		reason, fallback := d.ArithOperandExpected, "operand expected"
-		switch se.Kind {
-		case syntax.ErrArithOperator:
-			reason, fallback = d.ArithOperatorExpected, "operator expected"
-		case syntax.ErrArithBadOperator:
-			reason, fallback = d.ArithBadOperator, "operator expected"
-			if reason == "" {
-				// Only one dialect separates the two; for the rest the
-				// operator wording covers both.
-				reason = d.ArithOperatorExpected
-			}
-		}
-		return Wording(d.ArithError, "%[1]s: %[2]s",
-			se.Expr, Wording(reason, fallback, se.Token), se.Token)
+		return d.arithParseFailure(se, se.Expr)
 	case syntax.ErrForName:
 		return Wording(d.ForName, "expected a name after `for`", se.Token, se.Pos.Line)
 	case syntax.ErrUnexpected:

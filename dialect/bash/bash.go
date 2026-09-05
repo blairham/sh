@@ -298,6 +298,9 @@ func Semantics() interp.Semantics {
 	// `a[*]`. A name that holds a scalar is refused rather than emptied, and
 	// one that holds nothing at all is quietly left alone.
 	s.UnsetArrayAt = interp.UnsetArrayAtRemovesEveryElement
+	// A subscript that will not evaluate ends the script here, as a bad
+	// expression does wherever one is written.
+	s.BadSubscriptToUnsetFatal = interp.Yes
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No
@@ -402,7 +405,30 @@ func Diagnostics() interp.Diagnostics {
 		BadSubstitution:      "%[1]s: bad substitution",
 		BadSubstitutionNames: interp.NamesTheQuotingRun,
 		ParamNullOrNotSet:    "parameter null or not set",
-		JobLine:              "[%[1]d]%[2]s  %-27[3]s%[4]s",
+		// The letter as the script spelled it, sign and all: `set +q` is
+		// refused as `+q` here where dash and zsh write `-q` either way.
+		// The refusal is this shell's ordinary bad-option complaint, so
+		// `set`'s usage line follows it — and does not follow the different
+		// sentence a bad `-o` name earns, which is why
+		// SetInvalidOptionNameUsage is not set.
+		SetInvalidOptionLetter: "set: %[1]s: invalid option",
+		// bash refuses a `set` option letter from its own command-line
+		// parser: its name, the sentence, and the whole shell usage block
+		// under it, with no location and no second name. The long spelling
+		// goes to the builtin instead and reads as one — see
+		// InvocationNameRefusalNamesTheShell.
+		InvocationUsage: "Usage:\t%[1]s [GNU long option] [option] ...\n" +
+			"\t%[1]s [GNU long option] [option] script-file ...\n" +
+			"GNU long options:\n" +
+			"\t--debug\n\t--debugger\n\t--dump-po-strings\n\t--dump-strings\n" +
+			"\t--help\n\t--init-file\n\t--login\n\t--noediting\n\t--noprofile\n" +
+			"\t--norc\n\t--posix\n\t--pretty-print\n\t--rcfile\n\t--restricted\n" +
+			"\t--verbose\n\t--version\n" +
+			"Shell options:\n" +
+			"\t-ilrsD or -c command or -O shopt_option\t\t(invocation only)\n" +
+			"\t-abefhkmnptuvxBCEHPT or -o option",
+		InvocationNameRefusalNamesTheShell: true,
+		JobLine:                            "[%[1]d]%[2]s  %-27[3]s%[4]s",
 		// `jobs -l`: the same 27-wide state column, with the process id
 		// spending one of the two spaces after the marker rather than
 		// pushing the rest of the row along.
@@ -474,11 +500,14 @@ func Diagnostics() interp.Diagnostics {
 		// dash and ksh93 keep the script's own name.
 		LocationNamesTheCurrentFile: true,
 		UnterminatedEndsOnNextLine:  true,
-		ArithOperandExpected:        "arithmetic syntax error: operand expected",
-		ArithOperatorExpected:       "arithmetic syntax error in expression",
-		ArithBadOperator:            "arithmetic syntax error: invalid arithmetic operator",
-		ArithFailureStatus:          1,
-		SyntaxUnexpected:            "syntax error near unexpected token `%[1]s'",
+		// A substring range puts the parameter in front of the sentence, where
+		// the same shell blames a bad *subscript* on the expression alone.
+		SubstringRangeError:   "%[1]s: %[2]s",
+		ArithOperandExpected:  "arithmetic syntax error: operand expected",
+		ArithOperatorExpected: "arithmetic syntax error in expression",
+		ArithBadOperator:      "arithmetic syntax error: invalid arithmetic operator",
+		ArithFailureStatus:    1,
+		SyntaxUnexpected:      "syntax error near unexpected token `%[1]s'",
 		// A parse failure by every other measure, and 1 rather than this
 		// dialect's syntax-error status.
 		ForNameStatus: 1,
@@ -556,6 +585,14 @@ func Diagnostics() interp.Diagnostics {
 		WaitBadJobStatus:   1,
 		WaitNotOurChild:    "wait: pid %[1]d is not a child of this shell",
 		UnimplementedOptionLetters: map[string]string{
+			// `set` letters bash has and this shell does not: -b job
+			// notices, -k assignment-anywhere, -p privileged, -t one
+			// command, -B brace expansion, -H history expansion, -P
+			// physical paths. Measured 2026-09-05 by asking bash 5.3 for
+			// every letter of the alphabet in both cases and both signs;
+			// the ones missing from here it refuses itself, and those get
+			// SetInvalidOptionLetter.
+			"set": "bkprtBHP",
 			// Options these builtins have here and this shell does not.
 			"wait": "fp",
 			// disown's sweepers: -a for every job, -h for HUP shielding
@@ -615,6 +652,7 @@ func Diagnostics() interp.Diagnostics {
 		BuiltinBadNameKeepsValue: true,
 		BuiltinUsageUnprefixed:   true,
 		BuiltinUsage: map[string]string{
+			"set":    "set: usage: set [-abefhkmnptuvxBCEHPT] [-o option-name] [--] [-] [arg ...]",
 			"export": "export: usage: export [-fn] [name[=value] ...] or export -p [-f]",
 			// The refusal lines a bad option earns from these two, measured
 			// with a letter nobody has (-q).

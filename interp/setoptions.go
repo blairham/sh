@@ -196,6 +196,8 @@ func (r *Runner) SetOptionLetters(letters string, on bool) int {
 	// an invocation option's failure at "line 0", and a diagnostic naming
 	// the prelude's last line would point somewhere nobody wrote.
 	r.line = 0
+	r.atInvocation = true
+	defer func() { r.atInvocation = false }()
 	ok := r.setLetters(letters, on)
 	if r.unspecified {
 		// A letter that hangs on an axis no dialect answered — `-f` under
@@ -217,6 +219,8 @@ func (r *Runner) SetOptionLetters(letters string, on bool) int {
 // a name it refuses. Exported for the front end, with SetOptionLetters.
 func (r *Runner) SetNamedOption(name string, on bool) int {
 	r.line = 0
+	r.atInvocation = true
+	defer func() { r.atInvocation = false }()
 	return r.ApplyNamedOption(name, on)
 }
 

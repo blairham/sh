@@ -126,14 +126,21 @@ type Runner struct {
 	// It returns only on failure — a successful replacement does not come
 	// back — and the error it returns is reported as the exec having failed.
 	//
-	// files is the descriptor table the replacement is to be given beyond the
-	// three named streams, laid out exactly as InheritedFiles is read and as
-	// childFiles hands one to an external child: entry i is descriptor 3+i,
-	// and a nil entry is a number that must not be open there. It is a
-	// separate argument rather than something the hook can work out for
-	// itself, because the numbers are the *script's* — a Runner's descriptor
-	// 3 is some other number in the process, and which descriptors are the
-	// script's to hand out is a question only this package can answer.
+	// files is the descriptor table the replacement is to be given: entry i is
+	// descriptor i, and a nil entry is a number that must not be open there.
+	// It is a separate argument rather than something the hook can work out
+	// for itself, because the numbers are the *script's* — a Runner's
+	// descriptor 3 is some other number in the process, and which descriptors
+	// are the script's to hand out is a question only this package can answer.
+	//
+	// It starts at 0 rather than at 3, which is where InheritedFiles is read
+	// from and where os/exec's ExtraFiles begins. A child is handed its named
+	// streams separately, by a package that will copy bytes through a pipe for
+	// a stream that is not a file; a replacement is this process, so 0, 1 and
+	// 2 have to say the right thing before the execve like every other number,
+	// or `exec >log; exec cmd` writes to the terminal. Entries 0 to 2 are nil
+	// wherever the stream is not a file, and the nil closes the number there
+	// as it does anywhere else in the table.
 	ReplaceProcess func(path string, argv, env []string, files []*os.File) error
 
 	// DieBySignal ends this process with the signal a script sent it and had
@@ -547,6 +554,15 @@ type Runner struct {
 	// setOptionStatus is what the last refused `set -o` name reports, which
 	// is one of the four dialects' answers rather than a constant.
 	setOptionStatus int
+	// atInvocation marks a `set` option applied by the front end from the
+	// words the shell was started with, rather than by the builtin from a
+	// line of script. The panel words the two refusals differently — nobody
+	// names `set` at an invocation, and the two shells that print a usage
+	// block print the *shell's* there and the builtin's here — so the same
+	// refusal has to know which it is. Set for the length of one call in
+	// SetOptionLetters and SetNamedOption, which are the front end's only
+	// way in.
+	atInvocation bool
 	// allexport marks every assignment for the environment: `set -a`.
 	allexport bool
 	// extraOptions are the `set -o` names this dialect has beyond the ones
@@ -2442,9 +2458,15 @@ func (r *Runner) assign(a *syntax.Assign) {
 		}
 		r.setAssocElem(a.Name, key, value)
 	case a.Index != nil:
-		idx, err := r.subscriptValue(r.joinWord(a.Index))
+		// The subscript is an expression, and one that will not evaluate ends
+		// the script in every shell measured — the same complaint, worded the
+		// same way, as the identical text inside `$(( ))`. It used to be a
+		// wording of our own that named the array rather than the expression,
+		// and it carried on to the next command.
+		text := r.joinWord(a.Index)
+		idx, err := r.subscriptValue(text)
 		if err != nil {
-			r.diagf("%s: bad array subscript\n", a.Name)
+			r.fatal("%s\n", r.subscriptFailure(text, err))
 			return
 		}
 		if a.Append {

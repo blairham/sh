@@ -320,11 +320,13 @@ func normalize(s string, sh Found, dir string) string {
 	// to the start of a line and required to be followed by a colon.
 	s = diagPrefix(filepath.Base(sh.Path)).ReplaceAllString(s, "<shell>:")
 	s = tracePrefix(filepath.Base(sh.Path)).ReplaceAllString(s, "+<shell>:")
+	s = usagePrefix(filepath.Base(sh.Path)).ReplaceAllString(s, "${1}<shell>")
 	// A shell invoked under another name reports *that* name, not its
 	// binary's — bash-as-sh says "sh:", which the line above cannot match.
 	if sh.Argv0 != "" {
 		s = diagPrefix(sh.Argv0).ReplaceAllString(s, "<shell>:")
 		s = tracePrefix(sh.Argv0).ReplaceAllString(s, "+<shell>:")
+		s = usagePrefix(sh.Argv0).ReplaceAllString(s, "${1}<shell>")
 	}
 	s = strings.TrimRight(s, "\n")
 	// Newlines are shown as ~ so a result stays one table cell. Real output
@@ -350,4 +352,18 @@ func tracePrefix(base string) *regexp.Regexp {
 
 func diagPrefix(base string) *regexp.Regexp {
 	return regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(base) + `:`)
+}
+
+// usagePrefix matches a shell naming itself in its own usage line, which is
+// the other place the name is not at the start of one.
+//
+// A shell refusing an option at an invocation prints `Usage: ksh [-cilrs…]`,
+// and ksh93 writes the *last element* of the word it was invoked by there
+// where bash writes the whole of it. So the path replacement above catches
+// bash's and cannot catch ksh93's, and the corpus compared `Usage: ksh` with
+// `Usage: our-ksh` — a difference in where the binary lives rather than in
+// what the shell does. Anchored to the start of a line and required to follow
+// `Usage:` so an ordinary word spelled like the shell is left alone.
+func usagePrefix(base string) *regexp.Regexp {
+	return regexp.MustCompile(`(?m)^(Usage:[ \t]+)` + regexp.QuoteMeta(base) + `\b`)
 }

@@ -498,7 +498,7 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 				elems = r.subscriptsOf(e.Name, len(elems))
 			}
 			if e.Op == syntax.ParamSubstring {
-				elems = sliceElems(elems, r.numOf(e.Arg), e.Arg2, r)
+				elems = sliceElems(elems, r.numOf(e.Arg, e, e.Arg2), e, r)
 			}
 			if e.Op == syntax.ParamTransform {
 				// `"${a[@]@Q}"` is one transformed word per element — the
@@ -724,32 +724,7 @@ func (r *Runner) expandSpan(s syntax.Span, sp splitPolicy) (text string, split b
 		}
 		v, err := r.evalNum(tree)
 		if err != nil {
-			// The expression as written is what dash and ksh93 quote back,
-			// and the span still has it: the parser keeps the raw text
-			// beside the tree it built from it.
-			ae, _ := err.(arithError)
-			token := ae.token
-			if token == "" {
-				// bash blames the whole expression when the failing part is
-				// the whole expression, which is also the honest answer when
-				// the tree cannot name a smaller piece.
-				token = strings.TrimSpace(s.Value)
-			}
-			if ae.complete {
-				r.diagf("%s\n", err.Error())
-			} else {
-				expr := strings.TrimSpace(s.Value)
-				if r.diag().ArithErrorNamesThePrefix && token != "" {
-					// One dialect's leading position is what it had consumed
-					// when the token failed: `08+1` is blamed as `08` and
-					// `1+08` as `1+08`.
-					if i := strings.Index(expr, token); i >= 0 {
-						expr = expr[:i+len(token)]
-					}
-				}
-				r.diagf("%s\n", Wording(r.diag().ArithError, "%[2]s",
-					expr, err.Error(), token))
-			}
+			r.diagf("%s\n", r.arithFailure(s.Value, err))
 			// The command must not run: `echo $((1/0))` fails in every shell
 			// in the panel rather than echoing an empty string.
 			r.expandErr = true
@@ -1025,7 +1000,7 @@ func (r *Runner) expandParam(e *syntax.ParamExpr) string {
 		return r.replaceWith(value, r.patternOf(e.Arg), r.joinWord(e.Arg2), e)
 
 	case syntax.ParamSubstring:
-		return substring(value, r.numOf(e.Arg), e.Arg2, r)
+		return substring(value, r.numOf(e.Arg, e, e.Arg2), e, r)
 
 	case syntax.ParamUpper, syntax.ParamLower, syntax.ParamToggle,
 		syntax.ParamUpperFirst, syntax.ParamLowerFirst, syntax.ParamToggleFirst:
@@ -1056,8 +1031,8 @@ func (r *Runner) assignSubscript(e *syntax.ParamExpr, v string) {
 		r.setAssocElem(e.Name, idx, v)
 		return
 	}
-	n, err := r.subscriptValue(idx)
-	if err != nil {
+	n, ok := r.subscriptIndex(idx)
+	if !ok {
 		return
 	}
 	r.setArrayElem(e.Name, n, v)
@@ -1163,7 +1138,8 @@ func arrayIndices(n int) []string {
 // a string, ksh93 yields nothing, and zsh reads it as an offset from the end.
 // This follows the rule the string form here already uses, so the two spellings
 // agree with each other, and lands on zsh's answer.
-func sliceElems(elems []string, off int, lenWord *syntax.Word, r *Runner) []string {
+func sliceElems(elems []string, off int, e *syntax.ParamExpr, r *Runner) []string {
+	lenWord := e.Arg2
 	if off < 0 {
 		off += len(elems)
 	}
@@ -1177,7 +1153,7 @@ func sliceElems(elems []string, off int, lenWord *syntax.Word, r *Runner) []stri
 	if lenWord == nil {
 		return out
 	}
-	n := r.numOf(lenWord)
+	n := r.numOf(lenWord, e, nil)
 	if n < 0 {
 		n = len(elems) + n - off
 	}
@@ -1196,15 +1172,46 @@ func sliceElems(elems []string, off int, lenWord *syntax.Word, r *Runner) []stri
 // `${x:1+1:2}` is `cd` of `abcdef` in every shell on the panel that has
 // substrings, and taking a numeral alone made it `ab` — an offset of 0, which
 // is a wrong answer that looks like a right one.
-func (r *Runner) numOf(w *syntax.Word) int {
+//
+// e is the expansion the range belongs to and tail is the rest of the range as
+// written, because a failure here is named in three shapes rather than one:
+// bash puts the parameter in front of the arithmetic sentence, ksh93 blames the
+// offset together with everything after it, and zsh gives the bare sentence.
+// Both extras are ignored where the dialect wants neither.
+func (r *Runner) numOf(w *syntax.Word, e *syntax.ParamExpr, tail *syntax.Word) int {
 	if w == nil {
 		return 0
 	}
-	n, err := r.subscriptValue(r.joinWord(w))
+	text := strings.TrimSpace(r.joinWord(w))
+	n, err := r.subscriptValue(text)
 	if err != nil {
+		// What is *blamed* is not always what was evaluated: one dialect
+		// names the offset together with everything after it in the range.
+		// Extending the text before evaluating it instead was a second,
+		// invented failure — `${x:2:1+}` reported that `2:1+` would not parse
+		// and then that `1+` would not, where the shell reports the one.
+		blame := text
+		if tail != nil && r.diag().SubstringErrorNamesTheWholeRange {
+			blame += ":" + strings.TrimSpace(r.joinWord(tail))
+		}
+		r.diagf("%s\n", Wording(r.diag().SubstringRangeError, "%[2]s",
+			r.paramSubject(e), r.subscriptFailure(blame, err)))
+		r.expandErr = true
 		return 0
 	}
 	return n
+}
+
+// paramSubject is the parameter as a diagnostic names it: the name, and the
+// subscript when one was written — `${a[@]:1+}` is blamed on `a[@]`.
+func (r *Runner) paramSubject(e *syntax.ParamExpr) string {
+	if e == nil {
+		return ""
+	}
+	if e.Index == nil {
+		return e.Name
+	}
+	return e.Name + "[" + r.subscriptText(e.Index) + "]"
 }
 
 // trim removes a matching prefix or suffix.
@@ -1389,7 +1396,8 @@ func replace(value, pattern, with string, e *syntax.ParamExpr, o patternOpts) st
 }
 
 // substring takes a slice of the value.
-func substring(value string, off int, lenWord *syntax.Word, r *Runner) string {
+func substring(value string, off int, e *syntax.ParamExpr, r *Runner) string {
+	lenWord := e.Arg2
 	if off < 0 {
 		off += len(value)
 	}
@@ -1402,7 +1410,7 @@ func substring(value string, off int, lenWord *syntax.Word, r *Runner) string {
 	if lenWord == nil {
 		return value[off:]
 	}
-	n := r.numOf(lenWord)
+	n := r.numOf(lenWord, e, nil)
 	if n < 0 {
 		if r.ask(r.sem().SubstringNegativeLengthIsEmpty, "a negative substring length") {
 			// One dialect answers a negative length with nothing at all;

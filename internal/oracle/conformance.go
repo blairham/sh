@@ -41,6 +41,13 @@ type Report struct {
 	// specified by anything and no two shells word them alike, so an
 	// exact-output score understates behavioral agreement and this says by
 	// how much.
+	//
+	// Now that the two streams are recorded apart, a finer claim than this
+	// one is available to whatever grades a refusal rather than its wording:
+	// same status, same standard output, and a non-empty standard error on
+	// both sides is "it complained, on stderr, and exited nonzero" stated
+	// precisely rather than approximated. Nothing here makes that judgment
+	// yet; the record now carries what it would need.
 	SameStatus int
 	Total      int
 	Missing    []string
@@ -104,7 +111,10 @@ func RunConformance(ctx context.Context, path, against string, args []string, ca
 		}
 		want := Exec(ctx, ref, c)
 		got := Exec(ctx, ours, c)
-		ok := want.Output == got.Output && want.Status == got.Status
+		// Each stream on its own. Matching the merge would let an
+		// implementation that writes its diagnostics to standard output
+		// score as agreeing with a shell that writes them to standard error.
+		ok := want.Stdout == got.Stdout && want.Stderr == got.Stderr && want.Status == got.Status
 		rep.Matches = append(rep.Matches, Match{CaseID: c.ID, Want: want, Got: got, OK: ok})
 		rep.Total++
 		switch {
@@ -148,8 +158,7 @@ func (r *Report) Summary(verbose bool) string {
 		if m.OK {
 			continue
 		}
-		fmt.Fprintf(&b, "  %s\n    want %q (status %d)\n    got  %q (status %d)\n",
-			m.CaseID, m.Want.Output, m.Want.Status, m.Got.Output, m.Got.Status)
+		fmt.Fprintf(&b, "  %s\n    want %s\n    got  %s\n", m.CaseID, describe(m.Want), describe(m.Got))
 	}
 	return b.String()
 }

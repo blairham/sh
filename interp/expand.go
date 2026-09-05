@@ -1809,10 +1809,8 @@ func (r *Runner) namesWithPrefix(prefix string) []string {
 	for name := range r.Dynamic {
 		add(name)
 	}
-	for _, kv := range r.environ() {
-		if k, _, ok := strings.Cut(kv, "="); ok {
-			add(k)
-		}
+	for k := range r.inheritedEnv {
+		add(k)
 	}
 	sort.Strings(out)
 	return out

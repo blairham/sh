@@ -576,6 +576,11 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `export/unset-f-removes-a-function` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` |
 | `export/a-function-through-the-environment` | *(no output, status 2)* | `1` | `1` | `1` | *(no output, status 2)* | `0` *(status 1)* |
 | `export/a-name-that-is-not-a-function` | `<shell>: 1: export: Illegal option -f` *(status 2)* | `<shell>: line 1: export: nope: not a function~st=1` | `<shell>: line 1: export: nope: not a function~st=1` | `<shell>: line 0: export: nope: not a function~st=1` | `<shell>: export: -f: unknown option~Usage: export [-p] [name[=value]...]` *(status 2)* | `<shell>:export:1: invalid option(s)~st=1` |
+| `export/an-imported-name-keeps-the-attribute` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` |
+| `export/an-imported-name-reassigned-in-a-function` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` |
+| `export/an-imported-name-reassigned-in-a-subshell` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` |
+| `export/an-imported-name-reassigned-is-listed` | `1` | `1` | `1` | `1` | `1` | `1` |
+| `export/a-prefix-over-an-imported-name` | `TERM=prefixed~TERM=dumb` | `TERM=prefixed~TERM=dumb` | `TERM=prefixed~TERM=dumb` | `TERM=prefixed~TERM=dumb` | `TERM=prefixed~TERM=dumb` | `TERM=prefixed~TERM=dumb` |
 | `export/p-names-what-is-exported` | `1` | `1` | `1` | `1` | `1` | `1` |
 | `readonly/p-names-what-is-readonly` | `1` | `1` | `1` | `1` | `1` | `1` |
 | `hash/bare-and-r-succeed-everywhere` | `st=0~r=0` | `hash: hash table empty~st=0~r=0` | `st=0~r=0` | `hash: hash table empty~st=0~r=0` | `st=0~r=0` | `st=0~r=0` |
@@ -839,6 +844,26 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `export/a-name-that-is-not-a-function` — a name that is not a function now will not become one by being exported. The shells that have the option refuse it and the ones that do not read `-f` as something else entirely, which is the more interesting half
   ```sh
   export -f nope; echo "st=$?"
+  ```
+- `export/an-imported-name-keeps-the-attribute` — a variable that arrived in the environment is exported by having done so, and POSIX has it keep the attribute for the life of the shell — so a plain reassignment changes what every later child is told, unanimously. Read through a real child rather than through `export -p`, because the damage is what the child gets: the new value landed in the shell's own table alone here, and `PATH=/new:$PATH; make` handed every command the PATH the shell started with while the shell's own lookup was already right
+  ```sh
+  TERM=changed; env | grep '^TERM='
+  ```
+- `export/an-imported-name-reassigned-in-a-function` — an assignment with no `local` in front of it is an ordinary global one wherever it is written, and the attribute travels with the value: all four hand the child the function's value after the function has returned. The neighbor that would have made the fix half a fix, since a shell that only noticed assignments at the top level would pass the case above and fail this one
+  ```sh
+  f() { TERM=changed; }; f; env | grep '^TERM='
+  ```
+- `export/an-imported-name-reassigned-in-a-subshell` — the same through a subshell, which is worth its own row here rather than in a real shell: ours is a cloned runner in one process where every panel member forks, so the attribute has to be carried across the clone by hand where the others get it from the kernel
+  ```sh
+  TERM=changed; (env | grep '^TERM=')
+  ```
+- `export/an-imported-name-reassigned-is-listed` — the listing has to agree with what the child gets, in whichever of the two spellings the shell uses. The two answers came apart: the environment kept the imported entry and the listing dropped the name entirely, because one was reading the attribute and the other the record of having set it
+  ```sh
+  TERM=changed; export -p | grep -c -E "^(declare -x|export) TERM="
+  ```
+- `export/a-prefix-over-an-imported-name` — a prefix over a name the shell inherited: the command sees the prefix and the next command sees what came in, unanimously. `cmd/assignment-prefix-is-transient` asks this of a shell variable and reads it back in the shell; this one asks it of an inherited name and reads it back through a real environment, which is where a superseding entry would be one of two rather than instead of the other
+  ```sh
+  TERM=prefixed env | grep '^TERM='; env | grep '^TERM='
   ```
 - `export/p-names-what-is-exported` — the listing must name the exported variable in one of the two spellings the shells use — the grep finds either, and found neither before
   ```sh

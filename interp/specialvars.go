@@ -53,12 +53,8 @@ func (r *Runner) ensureSpecials() {
 				r.ask(r.sem().UnderscoreTracksTheLastArgument, "`$_` following the last argument") {
 				return r.lastArg
 			}
-			for _, kv := range r.environ() {
-				if k, v, ok := strings.Cut(kv, "="); ok && k == "_" {
-					return v
-				}
-			}
-			return ""
+			v, _ := r.inheritedValue("_")
+			return v
 		}
 	}
 	if _, ok := r.Vars["PPID"]; !ok && !r.removed["PPID"] {

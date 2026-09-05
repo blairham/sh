@@ -10810,6 +10810,166 @@
         "TimedOut": false
       }
     },
+    "export/a-prefix-over-an-imported-name": {
+      "bash": {
+        "Output": "TERM=prefixed~TERM=dumb",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "TERM=prefixed~TERM=dumb",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "TERM=prefixed~TERM=dumb",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "TERM=prefixed~TERM=dumb",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "TERM=prefixed~TERM=dumb",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "TERM=prefixed~TERM=dumb",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "export/an-imported-name-keeps-the-attribute": {
+      "bash": {
+        "Output": "TERM=changed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "TERM=changed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "TERM=changed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "TERM=changed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "TERM=changed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "TERM=changed",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "export/an-imported-name-reassigned-in-a-function": {
+      "bash": {
+        "Output": "TERM=changed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "TERM=changed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "TERM=changed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "TERM=changed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "TERM=changed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "TERM=changed",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "export/an-imported-name-reassigned-in-a-subshell": {
+      "bash": {
+        "Output": "TERM=changed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "TERM=changed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "TERM=changed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "TERM=changed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "TERM=changed",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "TERM=changed",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "export/an-imported-name-reassigned-is-listed": {
+      "bash": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "export/p-names-what-is-exported": {
       "bash": {
         "Output": "1",

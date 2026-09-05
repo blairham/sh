@@ -856,7 +856,7 @@ type Diagnostics struct {
 	// UnsetNotAnArray is what `unset a[@]` says when the name holds a value
 	// that is not an array. One verb: the name.
 	//
-	// Only the shell that answers UnsetArrayAtRemovesEveryElement has
+	// Only the shell that answers UnsetArraySpanRemovesTheElements has
 	// anything to say here, and it is the same in both builds measured: the
 	// spelling means "take every element away" and a scalar has none to take,
 	// so it is refused rather than emptied. The shell that leaves one empty

@@ -194,11 +194,22 @@ func (r *Runner) appendArrayElem(name string, idx int, sub, value string) {
 	r.setArrayElem(name, idx, sub, value)
 }
 
-// unsetArrayElem removes one subscript.
+// unsetArrayElem takes one subscript away, or blanks it where it stands.
 //
-// Removed and not blanked, in every dialect: the dense reading finds an
-// unassigned subscript empty on its own, so `unset a[1]` leaves a hole in one
-// shell and an empty element in another out of the same store.
+// Which of those it is comes from UnsetArraySpan, the same field that answers
+// `unset a[@]`, because in the shell that blanks they are one rule rather than
+// two: `unset` of a span replaces the span with a single empty element, and a
+// single subscript is a span of one. It is invisible in the middle of an array
+// — a removed subscript reads back empty under a dense reading anyway — and
+// visible at the end, where removing shrinks the extent and blanking does not.
+// A three-element array unset at its last element was coming back with two
+// elements where that shell has three, so every later count and every append
+// landed one place early.
+//
+// The removing reading needs no distinction between the middle and the end:
+// the dense reader finds an unassigned subscript empty on its own, so one
+// store serves the shell that leaves a hole and the shell that sees an empty
+// element.
 func (r *Runner) unsetArrayElem(name string, idx int) {
 	a, ok := r.Arrays[name]
 	if !ok {
@@ -206,9 +217,29 @@ func (r *Runner) unsetArrayElem(name string, idx int) {
 	}
 	pos := idx - r.arrayBase()
 	if idx < 0 {
-		// `unset "a[-1]"` removes the last element — the same end-relative
-		// reading every other subscript position takes, and just as unanimous.
+		// `unset "a[-1]"` reaches the last element — the same end-relative
+		// reading every other subscript position takes.
 		pos = a.pastTheEnd() + idx
+	}
+	if r.unsetBlanksInPlace() {
+		// Only a subscript that names an element already there is blanked.
+		// One past the end has no span to replace, and the array is left as
+		// it was rather than gaining an element — `a=(x y z); unset a[9]`
+		// keeps three.
+		//
+		// Measured, and it is why a negative subscript is asked about
+		// separately: of the negative ones only `-1` acts in the blanking
+		// shell, so `unset a[-2]` on `(x y z)` leaves all three where the
+		// removing shells take the middle one away.
+		if idx < 0 && idx != -1 {
+			return
+		}
+		if _, held := a[pos]; !held {
+			return
+		}
+		a[pos] = ""
+		r.storeArray(name, a)
+		return
 	}
 	delete(a, pos)
 	r.storeArray(name, a)
@@ -225,8 +256,8 @@ func (r *Runner) unsetArrayElem(name string, idx int) {
 // every element in place at status 0, where two of the three shells with
 // arrays empty it. Silent, and the shape scripts use to start a list over.
 func (r *Runner) unsetWholeArray(name string) (handled bool, code int) {
-	switch r.unsetArrayAt() {
-	case UnsetArrayAtRemovesEveryElement:
+	switch r.unsetArraySpan() {
+	case UnsetArraySpanRemovesTheElements:
 		if _, ok := r.Arrays[name]; ok {
 			r.storeArray(name, Array{})
 			return true, 0
@@ -242,7 +273,7 @@ func (r *Runner) unsetWholeArray(name string) (handled bool, code int) {
 			return true, 1
 		}
 		return true, 0
-	case UnsetArrayAtLeavesOneEmptyElement:
+	case UnsetArraySpanLeavesOneEmptyElement:
 		// The span becomes one empty string, which is the same rule this
 		// shell applies to a single element — `unset a[2]` blanks it in place
 		// — read over every element at once. A scalar is one element by that
@@ -259,7 +290,7 @@ func (r *Runner) unsetWholeArray(name string) (handled bool, code int) {
 			r.setVar(name, "")
 		}
 		return true, 0
-	case UnsetArrayAtIsASubscript:
+	case UnsetArraySpanIsAnExpression:
 		return false, 0
 	default:
 		// Unspecified, already reported by name. Refusing is not "quietly do

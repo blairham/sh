@@ -38,6 +38,18 @@ func Dialect() syntax.Dialect {
 	// brace group close without a terminator — and what makes `echo }` a
 	// syntax error rather than a brace on the output.
 	d.CloseBraceAlwaysReserved = true
+	// Short loops: a loop header that has ended may be followed straight by
+	// its body, and the body may be left out. Measured 2026-09-05, the other
+	// four panel shells refuse every shape — `for i (a b) { echo $i }`,
+	// `for i (a b) echo $i`, `while (( i<2 )) echo $i`, `for i in a b; echo
+	// $i` and `while false` alone all run here and are syntax errors there.
+	//
+	// The one that reads as this construct and is not is `while cond; { … }`:
+	// the `;` keeps the condition list going, so the brace group is tested
+	// rather than run and the body is empty. `i=0; while (( i<2 )); { echo
+	// $i; i=$((i+1)) }` counts up without stopping here, which is what says
+	// so.
+	d.ShortLoop = true
 	// Floating point, which POSIX has not and these two do.
 	d.ArithFloat = true
 	// A bare `(a|b)` inside a pattern word, which makes `@(abc|xyz)` a

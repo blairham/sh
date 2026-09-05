@@ -1983,8 +1983,15 @@ func controlArgument(p DollarSingleControlPolicy, s string, i int) (byte, int, b
 	switch {
 	case i >= len(s):
 		return 0, i, false
-	case s[i] != '\\' || i+1 >= len(s):
+	case s[i] != '\\':
 		return s[i], i + 1, true
+	case i+1 >= len(s):
+		// A backslash with nothing after it escapes the end of the text, so
+		// what `\c` controls is that nothing: `\c\` at the end of a printf
+		// format is control-NUL and not control-backslash. Only a format
+		// reaches this — a `$'…'` cannot end in a lone backslash, because
+		// the one before the closing quote escapes it.
+		return 0, i + 1, true
 	case p == DollarSingleControlMasked:
 		if s[i+1] == '\\' {
 			return '\\', i + 2, true

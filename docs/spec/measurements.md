@@ -215,6 +215,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `array/appending-to-an-element-inherits-the-base` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[x][yQ]` | `[xQ][y]` |
 | `array/appending-to-an-unset-element` | **2>** `<shell>: 1: a[3]+=Q: not found~<shell>: 1: Bad substitution` *(status 2)* | `[Q]` | `[Q]` | `[Q]` | `[Q]` | `[Q]` |
 | `array/appending-to-an-associative-element` | **2>** `<shell>: 1: typeset: not found~<shell>: 1: m[k]+=x: not found~<shell>: 1: m[k]+=Q: not found~<shell>: 1: Bad substitution` *(status 2)* | `[xQ]` | `[xQ]` | `[xQ]` **2>** `<shell>: line 0: typeset: -A: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | `[xQ]` | `[xQ]` |
+| `array/a-literal-with-a-space-before-it` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `a= (echo x); echo "n=${#a[@]} 0=${a[0]} 1=${a[1]}"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `a= (echo x); echo "n=${#a[@]} 0=${a[0]} 1=${a[1]}"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `a= (echo x); echo "n=${#a[@]} 0=${a[0]} 1=${a[1]}"'` *(status 2)* | `n=2 0=echo 1=x` | **2>** `<shell>:1: parse error near `('` *(status 1)* |
 | `array/a-literal-places-its-subscripts` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[b][c] n=2` | `[b][c] n=2` | `[b][c] n=2` | `[b][c] n=2` | `[b][c] n=2` |
 | `array/a-literal-leaves-a-gap` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[c] n=1` | `[c] n=1` | `[c] n=1` | `[c] n=1` | `[][c] n=2` |
 | `array/a-literal-subscript-is-an-expression` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[d] n=1` | `[d] n=1` | `[d] n=1` | `[c][d] n=2` | `[][d] n=2` |
@@ -447,6 +448,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `array/appending-to-an-associative-element` — the declared form appends by key just as the indexed form appends by subscript — unanimous in the three that have the attribute. Both assignments are written with `+=` so that the first one also stands as the unset-key case, and so that dash, which has neither, reports the two identically
   ```sh
   typeset -A m; m[k]+=x; m[k]+=Q; echo "[${m[k]}]"
+  ```
+- `array/a-literal-with-a-space-before-it` — the `(` has to be adjacent to the `=` everywhere but ksh93, and ksh93 is not merely lenient about the space — it reads the whole thing as the *array literal*, leaving `a` holding `echo` and `x` rather than assigning an empty value and running a subshell. So the panel splits on what the text means and not only on whether it is accepted, and a parser cannot settle the construct on adjacency alone: adjacency decides which diagnostic, and the non-adjacent form falls through to the ordinary rule for a `(` after a word
+  ```sh
+  a= (echo x); echo "n=${#a[@]} 0=${a[0]} 1=${a[1]}"
   ```
 - `array/a-literal-places-its-subscripts` — the ordinary way to build an array out of order, and unanimous in the three that have arrays: the value goes where the subscript says and the brackets are not part of it. It used to be kept as text — two elements reading `[2]=c` and `[1]=b` — which is the silent kind of wrong, because the array is the right length and only its contents are nonsense. Both subscripts are at or above every shell's first, so the case asks nothing about the base
   ```sh
@@ -2104,9 +2109,18 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/c-style-for-takes-a-redirection` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `end~0~1` | `end~0~1` | `end~0~1` | `end~0~1` | `end~0~1` |
 | `core/c-style-for-with-a-brace-body-takes-a-redirection` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `end~0~1` | `end~0~1` | `end~0~1` | `end~0~1` | `end~0~1` |
 | `core/c-style-for-takes-an-input-redirection` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `got=L1~got=L2` | `got=L1~got=L2` | `got=L1~got=L2` | `got=L1~got=L2` | `got=L1~got=L2` |
+| `core/c-style-for-with-an-empty-header` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `i=3` | `i=3` | `i=3` | `i=3` | `i=3` |
+| `core/c-style-for-without-a-condition` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `i=3` | `i=3` | `i=3` | `i=3` | `i=3` |
+| `core/c-style-for-with-only-a-condition` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `i=3` | `i=3` | `i=3` | `i=3` | `i=3` |
 | `core/a-list-for-with-a-brace-body` | **2>** `<shell>: 1: Syntax error: "{" unexpected (expecting "do")` *(status 2)* | `ab` | `ab` | `ab` | `ab` | `ab` |
 | `core/a-list-for-brace-body-needs-a-separator` | **2>** `<shell>: 1: Syntax error: "}" unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `for i in a b { echo "$i"; }'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `for i in a b { echo "$i"; }'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `}'~<shell>: -c: line 0: `for i in a b { echo "$i"; }'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `}' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `}'` *(status 1)* |
 | `core/a-brace-body-is-not-a-while-body` | **2>** `<shell>: 1: Syntax error: end of file unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file from `while' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file from `while' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: syntax error at line 1: `while' unmatched` *(status 3)* | `hi` |
+| `core/a-tested-brace-group-is-not-a-body` | **2>** `<shell>: 1: Syntax error: end of file unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file from `while' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file from `while' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: syntax error at line 1: `while' unmatched` *(status 3)* | `0~1~2~3` |
+| `core/a-while-condition-that-ends-itself-takes-a-body` | **2>** `<shell>: 1: Syntax error: "{" unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `{'~<shell>: -c: line 1: `i=0; while (( i < 2 )) { echo $i; i=$((i+1)); }; echo end'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `{'~<shell>: -c: line 1: `i=0; while (( i < 2 )) { echo $i; i=$((i+1)); }; echo end'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `{'~<shell>: -c: line 0: `i=0; while (( i < 2 )) { echo $i; i=$((i+1)); }; echo end'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `{' unexpected` *(status 3)* | `0~1~end` |
+| `core/a-short-loop-body-is-one-command` | **2>** `<shell>: 1: Syntax error: word unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `i=0; while (( i < 2 )) echo $((i++)); echo end'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `i=0; while (( i < 2 )) echo $((i++)); echo end'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `echo'~<shell>: -c: line 0: `i=0; while (( i < 2 )) echo $((i++)); echo end'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `echo' unexpected` *(status 3)* | `0~1~end` |
+| `core/a-for-over-a-parenthesized-list` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `for i (a b) { echo "$i"; }; for j (p q) echo "$j"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `for i (a b) { echo "$i"; }; for j (p q) echo "$j"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `for i (a b) { echo "$i"; }; for j (p q) echo "$j"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `a~b~p~q` |
+| `core/a-for-header-that-ends-itself-needs-no-body` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `if true; then for i (a b); fi; echo no-body; for j (p q) echo body'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `if true; then for i (a b); fi; echo no-body; for j (p q) echo body'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `if true; then for i (a b); fi; echo no-body; for j (p q) echo body'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `no-body~body~body` |
+| `core/a-short-loop-redirection-is-the-bodys` | **2>** `<shell>: 1: Syntax error: "(" unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `for i (a b) > f$i; ls'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `for i (a b) > f$i; ls'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `for i (a b) > f$i; ls'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | `fa~fb` |
 | `core/for-wants-a-name` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | **2>** `<shell>: line 1: `1x': not a valid identifier` *(status 1)* | **2>** `<shell>: line 1: `1x': not a valid identifier` *(status 2)* | **2>** `<shell>: `1x': not a valid identifier` *(status 1)* | **2>** `<shell>: 1x: invalid variable name` *(status 1)* | **2>** `<shell>:1: parse error near `1x'` *(status 1)* |
 | `cmd/andor-equal-precedence` | `B` | `B` | `B` | `B` | `B` | `B` |
 | `cmd/andor-left-to-right-success` | `A` | `A` | `A` | `A` | `A` | `A` |
@@ -2179,6 +2193,18 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   printf 'L1\nL2\n' > d; for ((i=0;i<2;i++)); do read x; echo "got=$x"; done < d
   ```
+- `core/c-style-for-with-an-empty-header` — every section omitted, which is how the endless loop is spelled: an absent condition is *true* rather than the expression 0, so the body runs until something breaks out of it. The distinction is one an AST can lose — a parser that fills a missing section in with a zero writes a loop that never runs a single pass. dash has no C-style loop and blames the loop variable
+  ```sh
+  i=0; for ((;;)); do i=$((i+1)); if [ $i -ge 3 ]; then break; fi; done; echo "i=$i"
+  ```
+- `core/c-style-for-without-a-condition` — the same absent condition with the other two sections present, which is what says the sections are independent rather than all-or-nothing: the initialization and the step still run, and `i` is 3 at the break
+  ```sh
+  for ((i=0;;i++)); do if [ $i -ge 3 ]; then break; fi; done; echo "i=$i"
+  ```
+- `core/c-style-for-with-only-a-condition` — a `while` loop written as a `for`: the initialization and the step are the ones omitted here, and an omitted step must not be run as an expression whose value could end the loop. The trio with the two cases above covers every section this header can leave out
+  ```sh
+  i=0; for ((;i<3;)); do i=$((i+1)); done; echo "i=$i"
+  ```
 - `core/a-list-for-with-a-brace-body` — the same production on the ordinary `for`, which is the half easiest to miss: the brace body is not the C-style loop's alone. It needs the separator, and the next case says why — this is the one three of the four accept and dash refuses, dash being the only panel shell without the form
   ```sh
   for i in a b; { printf "%s" "$i"; }; echo
@@ -2187,9 +2213,33 @@ grades it and nothing drift-checks it either, for the same reason.
   ```sh
   for i in a b { echo "$i"; }
   ```
-- `core/a-brace-body-is-not-a-while-body` — the production belongs to the loops built on a `for` header and to nothing else. Written with the separator, so that it is the same shape the list `for` accepts and the difference is the construct rather than the punctuation. Three refuse it; zsh accepts it as a short loop of its own, which is the divergence this case records
+- `core/a-brace-body-is-not-a-while-body` — the brace-body production belongs to the loops built on a `for` header and to nothing else. Written with the separator, so that it is the same shape the list `for` accepts and the difference is the construct rather than the punctuation. Three refuse it; the fourth prints hi, and *not* because it read a body — the `;` keeps the condition list going, so the brace group is the last thing tested and the `break` inside it is what ends the loop. `core/a-tested-brace-group-is-not-a-body` is the same shape with a counter, which counts up there rather than stopping
   ```sh
   while true; { echo hi; break; }
+  ```
+- `core/a-tested-brace-group-is-not-a-body` — which half of `while cond; { … }` the brace group is, in the one shell that takes the line at all. As a *body* the loop would print 0 and 1 and stop on the header's test; as the tail of the condition list it prints 0..3 and stops on the test written inside the braces, and that is what happens — so the shell has no `while` brace body, it has an *omitted* one with the whole line as the condition. The counter and the inner test are what tell the readings apart; the shape alone cannot, which is why `core/a-brace-body-is-not-a-while-body` was read the other way for a while. Nothing may follow the group, either: a `; echo end` after it joins the condition list too, and its status is then what the loop tests, so the loop never ends. Three shells refuse the line outright
+  ```sh
+  i=0; while [ $i -lt 2 ]; { echo $i; i=$((i+1)); [ $i -lt 4 ]; }
+  ```
+- `core/a-while-condition-that-ends-itself-takes-a-body` — the short loop proper, and the same text as the row above with the separator taken *out*. Without one the condition list cannot continue, so the brace group is the body and the loop stops at 2 — which is the opposite of what the separator gives. `(( … ))` is what ends the header; `while true { … }` is a syntax error in the same shell, because a word cannot end one
+  ```sh
+  i=0; while (( i < 2 )) { echo $i; i=$((i+1)); }; echo end
+  ```
+- `core/a-short-loop-body-is-one-command` — the body of a short loop need not be a brace group, and it is exactly one command: the `; echo end` after it is outside the loop, so `end` prints once rather than per iteration. A second command inside would need a separator, and a separator there is the enclosing list's
+  ```sh
+  i=0; while (( i < 2 )) echo $((i++)); echo end
+  ```
+- `core/a-for-over-a-parenthesized-list` — the short `for`, in both its body spellings. The parentheses say what `in` says and end the header as `in` does not, which is why this one takes a brace body with nothing between where `for i in a b { … }` cannot. One shell parses it and four call the `(` a syntax error
+  ```sh
+  for i (a b) { echo "$i"; }; for j (p q) echo "$j"
+  ```
+- `core/a-for-header-that-ends-itself-needs-no-body` — the body left out of a `for`, which is legal exactly where the header closed itself. Reaching it needs something the body cannot be, because anything that could be one *is* one — hence the `fi`, a word no command may start with. The second loop is the contrast in the same line: the same header with a command after it runs that command per item, so `no-body` prints once and `body` twice. `for i in a b` with nothing after it is a syntax error in the same shell, so this is a property of the header rather than of the loop
+  ```sh
+  if true; then for i (a b); fi; echo no-body; for j (p q) echo body
+  ```
+- `core/a-short-loop-redirection-is-the-bodys` — where a short loop's redirection lands, and the loop variable in the target is what makes the answer visible: two files named for the two items mean the redirection ran once per iteration and is the *body* — a command that only redirects. A redirection on the loop is expanded once before it starts and would leave a single `f`, which is what `for i (a b) { echo hi } > f$i` does. The distinction is unreachable from the tree alone, so it is pinned here
+  ```sh
+  for i (a b) > f$i; ls
   ```
 - `core/for-wants-a-name` — four wordings for one refusal, and only one of them blames the word rather than saying something about names
   ```sh
@@ -2494,6 +2544,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `printf/a-date-with-an-empty-format-and-a-width` | `something else` | `the time of day, then a padded year` | `the time of day, then a padded year` | `something else` | `something else` | `something else` |
 | `printf/a-date-from-something-that-is-not-a-number` | `st=2~no such conversion` **2>** `<shell>: 1: printf: %(: invalid directive` | `st=1~the epoch zero` **2>** `<shell>: line 1: printf: abc: invalid number` | `st=1~the epoch zero` **2>** `<shell>: line 1: printf: abc: invalid number` | `st=1~no such conversion` **2>** `<shell>: line 0: printf: `(': invalid format character` | `st=1~some other year` **2>** `<shell>: printf: warning: invalid argument of type T` | `st=1~no such conversion` **2>** `<shell>:printf:1: %(: invalid directive` |
 | `printf/backslash-c-means-three-things` | ` a \ c b Z ` | ` a \ c b Z ` | ` a \ c b Z ` | ` a \ c b Z ` | ` a 002 Z ` | ` a ` |
+| `printf/backslash-c-with-a-digit` | ` a \ c 1 Z ` | ` a \ c 1 Z ` | ` a \ c 1 Z ` | ` a \ c 1 Z ` | ` a q Z ` | ` a ` |
+| `printf/backslash-c-with-a-symbol-outside-the-letters` | ` a \ c ~ Z : a \ c ? Z ` | ` a \ c ~ Z : a \ c ? Z ` | ` a \ c ~ Z : a \ c ? Z ` | ` a \ c ~ Z : a \ c ? Z ` | ` a > Z : a 177 Z ` | ` a ` |
+| `printf/backslash-c-controls-a-decoded-escape` | ` a \ c \t Z ` | ` a \ c \t Z ` | ` a \ c \t Z ` | ` a \ c \t Z ` | ` a I Z ` | ` a ` |
+| `printf/backslash-c-at-the-end-of-a-format` | ` a \ c \ ` | ` a \ c \ ` | ` a \ c \ ` | ` a \ c \ ` | ` a @ ` | ` a ` |
 
 - `printf/assigns-with-v` — `printf -v name` puts the formatted text in a variable and prints nothing, which is how a script formats a value without a command substitution and a subshell. bash and zsh have it; dash and ksh93 reject it as an unknown option, and each words that differently
   ```sh
@@ -2566,6 +2620,22 @@ grades it and nothing drift-checks it either, for the same reason.
 - `printf/backslash-c-means-three-things` — read as bytes rather than as text, because that is the only way to tell ksh93's control character from zsh's stopping: bash and dash write two literal characters, ksh93 reads \cX as control-X, and zsh ends the output there
   ```sh
   printf "a\cbZ" | od -An -c | tr -s " "
+  ```
+- `printf/backslash-c-with-a-digit` — a letter cannot tell the two control arithmetics apart, because clearing the top bits and toggling bit 6 agree over @ through _. A digit is outside that span and separates them: masking gives 0x11 and toggling gives q, and the shell that reads the escape at all does the second
+  ```sh
+  printf "a\c1Z" | od -An -c | tr -s " "
+  ```
+- `printf/backslash-c-with-a-symbol-outside-the-letters` — the other side of the span, and the DEL that a masking shell would have to special-case: toggling bit 6 makes ~ into > and ? into 0x7f without one
+  ```sh
+  printf "a\c~Z:a\c?Z" | od -An -c | tr -s " "
+  ```
+- `printf/backslash-c-controls-a-decoded-escape` — what \c applies to is read before it is controlled, so the argument here is a tab and not a backslash followed by a t. The same reading the quoted-escape form does, which is the point: one rule, and a format is not a second dialect of it
+  ```sh
+  printf "a\c\tZ" | od -An -c | tr -s " "
+  ```
+- `printf/backslash-c-at-the-end-of-a-format` — a backslash with nothing after it escapes the end of the format, so what \c controls is a NUL rather than the backslash itself — an @ and not a control-backslash for the shell that reads the escape
+  ```sh
+  printf 'a\c\' | od -An -c | tr -s " "
   ```
 
 ## kill
@@ -3991,6 +4061,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `procsub/two-of-them-in-one-command` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `same` | `same` | `same` | `same` | `same` |
 | `procsub/a-redirection-where-a-target-belongs` | **2>** `<shell>: 1: Syntax error: redirection unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `<'~<shell>: -c: line 1: `cat < < x; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `<'~<shell>: -c: line 1: `cat < < x; echo "st=$?"'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `<'~<shell>: -c: line 0: `cat < < x; echo "st=$?"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `<' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `<'` *(status 1)* |
 | `procsub/feeds-a-loop` | **2>** `<shell>: 1: Syntax error: redirection unexpected` *(status 2)* | `[a]~[b]` | `[a]~[b]` | `[a]~[b]` | `[a]~[b]` | `[a]~[b]` |
+| `procsub/quoted-is-not-a-substitution` | `[<(echo hi)]` | `[<(echo hi)]` | `[<(echo hi)]` | `[<(echo hi)]` | `[<(echo hi)]` | `[<(echo hi)]` |
 | `redir/a-target-that-is-not-one-word` | `st=0` | `st=1` **2>** `<shell>: line 1: $e: ambiguous redirect` | `st=0` | `st=1` **2>** `<shell>: $e: ambiguous redirect` | `st=0` | `st=0` |
 | `redir/a-target-that-expands-to-nothing` | `st=2` **2>** `<shell>: 1: cannot create : Directory nonexistent` | `st=1` **2>** `<shell>: line 1: $e: ambiguous redirect` | `st=1` **2>** `<shell>: line 1: $e: ambiguous redirect` | `st=1` **2>** `<shell>: $e: ambiguous redirect` | `st=1` **2>** `<shell>: : cannot open` | `st=1` **2>** `<shell>:1: no such file or directory: ` |
 | `redir/a-target-holding-a-pattern` | `nomatch-*` | `nomatch-*` | `nomatch-*` | `nomatch-*` | `nomatch-*` | `nomatch-*` |
@@ -4074,6 +4145,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `procsub/feeds-a-loop` — the idiom people actually reach for it with, and the reason a pipeline will not do: the loop runs in *this* shell, so what it reads is still there afterwards
   ```sh
   while read -r l; do echo "[$l]"; done < <(printf "a\nb\n")
+  ```
+- `procsub/quoted-is-not-a-substitution` — the construct is unquoted-only: inside double quotes the same ten characters are text, unanimously and dash included. It is the completeness half of `procsub/reads-a-command-as-a-file` — that case says the lexer reads the form, this one says where it stops looking, and a lexer that also read it inside quotes would pass the first and fail here
+  ```sh
+  printf "[%s]\n" "<(echo hi)"
   ```
 - `redir/a-target-that-is-not-one-word` — a redirection target is expanded and then, in three of the four, neither split nor matched — so `> $e` writes to a file called `a b`. bash expands it as an ordinary word and refuses anything that is not exactly one, naming the target *as written*. Doing bash's expansion and taking the first field is the answer nobody gives, and it wrote to `a`
   ```sh
@@ -4409,6 +4484,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `cmd/a-name-broken-by-an-expansion` | `rc=127` **2>** `<shell>: 1: aX=c: not found` | `rc=127` **2>** `<shell>: line 1: aX=c: command not found` | `rc=127` **2>** `<shell>: line 1: aX=c: command not found` | `rc=127` **2>** `<shell>: aX=c: command not found` | `rc=127` **2>** `<shell>: aX=c: not found` | `rc=127` **2>** `<shell>:1: command not found: aX=c` |
 | `jobs/bg-with-no-job-control` | `st=2` **2>** `<shell>: 1: bg: Illegal option --` | `st=1` **2>** `<shell>: line 1: bg: no job control` | `st=1` **2>** `<shell>: line 1: bg: no job control` | `st=1` **2>** `<shell>: line 0: bg: no job control` | `st=2` **2>** `<shell>: bg: --version: unknown option~Usage: bg [ options ] [job ...]` | `st=1` **2>** `<shell>:bg:1: no job control in this shell.` |
 | `commands/coproc-is-one-dialect-s-keyword` | **2>** `<shell>: 1: coproc: not found~<shell>: 1: Bad substitution` *(status 2)* | `hi` | `hi` | **2>** `<shell>: coproc: command not found~<shell>: 1: Bad file descriptor~<shell>: 0: Bad file descriptor` | **2>** `<shell>: coproc: not found~<shell>: : cannot open~<shell>: : cannot open` | **2>** `<shell>:1: no such file or directory: ~<shell>:1: file number expected` *(status 1)* |
+| `commands/coproc-names-a-compound` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `hi` | `hi` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `}'~<shell>: -c: line 0: `coproc MY { cat; }; echo hi >&"${MY[1]}"; read -r l <&"${MY[0]}"; echo "$l"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `}' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `}'` *(status 1)* |
+| `commands/coproc-names-a-subshell` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=2` | `n=2` | **2>** `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `coproc MY ( cat </dev/null ); echo "n=${#MY[@]}"'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `(' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `)'` *(status 1)* |
+| `commands/coproc-does-not-name-a-simple-command` | **2>** `<shell>: 1: coproc: not found~<shell>: 1: Bad substitution` *(status 2)* | `l=ran-MY COPROC=2 MY=0` | `l=ran-MY COPROC=2 MY=0` | `l= COPROC=0 MY=0` **2>** `<shell>: coproc: command not found~<shell>: 0: Bad file descriptor` | `l= COPROC=0 MY=0` **2>** `<shell>: coproc: not found~<shell>: : cannot open` | **2>** `<shell>:1: file number expected` *(status 1)* |
 
 - `exec/a-command-is-named-as-it-was-written` — a command names itself from `argv[0]`, and what belongs there is the word that was typed rather than the path PATH resolved to. Unanimous, invisible until something fails, and then it is in the output of a program the shell did not write — which is why a whole-machine run sweep had eighteen lines differing by nothing else
   ```sh
@@ -4479,6 +4557,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `commands/coproc-is-one-dialect-s-keyword` — bash runs cat in the background with the pipe's near ends in COPROC and reads its own line back; the other three have no such keyword — even zsh, whose coprocess speaks `print -p` rather than an array
   ```sh
   coproc cat; echo hi >&"${COPROC[1]}"; read -r l <&"${COPROC[0]}"; echo "$l"
+  ```
+- `commands/coproc-names-a-compound` — a name may be written before a *compound* command, and then it is the name: the near ends arrive in MY rather than in COPROC. Nothing decides this at run time — the shape of what follows settles it while parsing — and bash 3.2 dates the feature by refusing the `}` outright, as do dash and ksh93. zsh has the word and no name to give it
+  ```sh
+  coproc MY { cat; }; echo hi >&"${MY[1]}"; read -r l <&"${MY[0]}"; echo "$l"
+  ```
+- `commands/coproc-names-a-subshell` — a subshell is a compound command too, so the same rule binds the name — which is the half a parser that only looks for `{` gets wrong. Read back as a count rather than through the descriptors, because a coprocess whose feed is /dev/null has nothing to answer with and the count is the whole claim
+  ```sh
+  coproc MY ( cat </dev/null ); echo "n=${#MY[@]}"
+  ```
+- `commands/coproc-does-not-name-a-simple-command` — the other side of the same rule, and the one worth pinning: before a *simple* command the first word is the command, so `coproc MY cat` runs MY and the array is the default COPROC. A function named MY is what makes that visible without a race — bash reports `MY: command not found` from the background job otherwise, whenever the job gets there — and the line read back is the function's own output, which no shell that had taken MY as a name could produce
+  ```sh
+  MY() { echo ran-MY; }; coproc MY cat; read -r l <&"${COPROC[0]}"; echo "l=$l COPROC=${#COPROC[@]} MY=${#MY[@]}"
   ```
 
 ## substitutions
@@ -5603,6 +5693,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `pipestatus/read-as-a-plain-parameter` | `[]` | `[1]` | `[1]` | `[1]` | `[]` | `[]` |
 | `pipestatus/plain-parameter-on-an-array` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `[x]` | `[x]` | `[x]` | `[x]` | `[x y z]` |
 | `pipeline/a-builtin-writing-into-a-pipe-nobody-reads` | `after` | `after` | `after` | `after` | `after` | `after` |
+| `pipeline/an-ignored-broken-pipe-does-not-kill-the-writer` | `after` **2>** `reached` | `after` **2>** `reached` | `after` **2>** `reached` | `after` **2>** `~reached` | `after` **2>** `reached` | `after` **2>** `reached` |
 
 - `set/o-at-the-end-of-a-bundle` — `-o` is nearly always the last letter of a bundle rather than a word of its own — `set -euo pipefail` is the line at the top of a great many scripts — and the letters before it are ordinary letters that still apply. noglob rather than pipefail because every shell in the panel has it, so the case is about where the `o` sits and not about which options exist
   ```sh
@@ -5707,6 +5798,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `pipeline/a-builtin-writing-into-a-pipe-nobody-reads` — the quiet death, and the one no other case reaches: a builtin whose output goes into a pipe nobody is reading is killed by SIGPIPE where it stands, so `reached` never runs and nothing is said about it — unanimous in all four, and the point of the `>&2` is that a shell which merely swallowed the write would still print it. This is `yes | head` seen from the writing end, and it is the case the corpus was missing while `printf x | { read -d : v; }` measured the same thing by accident: there the write is small enough to fit, so whether it beats the reader's exit is the machine's to decide and the score wandered by one
   ```sh
   v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; { echo "$v"; echo reached >&2; } | true; echo after
+  ```
+- `pipeline/an-ignored-broken-pipe-does-not-kill-the-writer` — the other half of the quiet death, and the half that shows it was never about the errno: EPIPE is not what kills the writer, SIGPIPE is, and a shell that has ignored SIGPIPE gets the failed write back as an ordinary failure. `reached` runs and `after` follows in every shell measured, against the neighboring case where the identical write ends the writer where it stands — so the difference between dying and carrying on is one `trap ''` and nothing else. The ignore is set inside a subshell rather than at the top: it is inherited from there either way, and a shell that is *the* shell ignores a signal for its whole process, which one harness runs the corpus inside of. bash 3.2 is recorded with a stray newline ahead of `reached`: its failed write leaves the line's terminator queued on the shared output stream and the next write to that stream flushes it out first
+  ```sh
+  v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; ( trap '' PIPE; { echo "$v" 2>/dev/null; echo reached >&2; } | true ); echo after
   ```
 
 ## builtin names

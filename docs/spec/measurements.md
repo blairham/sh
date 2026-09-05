@@ -3197,6 +3197,11 @@ grades it and nothing drift-checks it either, for the same reason.
 | `trap/bad-signal-name` | `st=1` **2>** `trap: NOPE: bad trap` | `st=1` **2>** `<shell>: line 1: trap: NOPE: invalid signal specification` | `st=1` **2>** `<shell>: line 1: trap: NOPE: invalid signal specification` | `st=1` **2>** `<shell>: line 0: trap: NOPE: invalid signal specification` | `st=1` **2>** `<shell>: trap: NOPE: bad trap` | `st=1` **2>** `<shell>:trap:1: undefined signal: NOPE` |
 | `trap/sig-prefix-diverges` | `st=1` **2>** `trap: SIGUSR1: bad trap` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` |
 | `trap/signal-handler-runs-and-continues` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` | `caught~after` |
+| `trap/an-exit-from-a-handler-ends-a-while-loop` | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* |
+| `trap/an-exit-from-a-handler-ends-an-until-loop` | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* |
+| `trap/an-exit-from-a-handler-ends-a-for-loop` | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* |
+| `trap/an-exit-from-a-handler-ends-nested-loops` | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* |
+| `trap/an-exit-from-a-handler-ends-a-loop-inside-a-function` | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* | `caught` *(status 7)* |
 | `trap/lineno-inside-an-action` | `one~in trap LINENO=1~two` | `one~in trap LINENO=1~two` | `one~in trap LINENO=1~two` | `one~in trap LINENO=3~two` | `one~in trap LINENO=3~two` | `one~in trap LINENO=3~two` |
 | `trap/empty-handler-ignores` | `after` | `after` | `after` | `after` | `after` | `after` |
 | `trap/default-signal-terminates` | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* | *(no output, killed by signal 2 (interrupt))* |
@@ -3281,6 +3286,26 @@ grades it and nothing drift-checks it either, for the same reason.
   trap 'echo caught' INT
   kill -INT $$
   echo after
+  ```
+- `trap/an-exit-from-a-handler-ends-a-while-loop` — an `exit` raised inside a signal handler ends the shell from wherever it was raised, and a loop that was running when the signal arrived is not an exception: all six print `caught` once, never reach `after`, and exit 7. It is the status a caller acts on, and the one shape most likely to be got wrong, because a `while` asks its condition a question immediately after the handler has answered a different one
+  ```sh
+  trap 'echo caught; exit 7' USR1; i=0; while [ $i -lt 3 ]; do i=$((i+1)); kill -USR1 $$; done; echo after
+  ```
+- `trap/an-exit-from-a-handler-ends-an-until-loop` — the same for the loop that reads its condition the other way round, unanimously 7. It is worth having beside the `while` row rather than assumed from it: an `until` inverts the sense of the status it reads, so a shell that mistakes a refusal for a condition gets the *opposite* wrong answer here — it runs the body again rather than deciding the loop is over
+  ```sh
+  trap 'echo caught; exit 7' USR1; i=0; until [ $i -ge 3 ]; do i=$((i+1)); kill -USR1 $$; done; echo after
+  ```
+- `trap/an-exit-from-a-handler-ends-a-for-loop` — the control row. A `for` reads no condition, so it has nothing to mistake a refusal for, and it was right while the `while` was wrong — which is what says the fault was in how a loop reads its control state rather than in how a trap sets one. All six exit 7 here too
+  ```sh
+  trap 'echo caught; exit 7' USR1; for i in 1 2 3; do kill -USR1 $$; done; echo after
+  ```
+- `trap/an-exit-from-a-handler-ends-nested-loops` — an exit raised two loops deep leaves both of them, rather than the inner one only: the outer loop's own condition is the next command after the inner loop returns, so a shell that recovers at one level goes round the outer loop and reports its bookkeeping instead. Still `caught` once and 7 in all six
+  ```sh
+  trap 'echo caught; exit 7' USR1; i=0; while [ $i -lt 2 ]; do j=0; while [ $j -lt 2 ]; do j=$((j+1)); kill -USR1 $$; done; i=$((i+1)); done; echo after
+  ```
+- `trap/an-exit-from-a-handler-ends-a-loop-inside-a-function` — and the same through a function boundary, which is the shape a real script has: an `exit` is not a `return`, so the function call it was raised inside does not absorb it. `caught` and 7 in all six, with `after` unreached
+  ```sh
+  trap 'echo caught; exit 7' USR1; f() { i=0; while [ $i -lt 3 ]; do i=$((i+1)); kill -USR1 $$; done; }; f; echo after
   ```
 - `trap/lineno-inside-an-action` — which line a trap action thinks it is on, and the panel gives two answers: bash 5.3 numbers the action's own text from 1, while bash 3.2, ksh93, dash and zsh report the line the signal was delivered on. So a trap body is a little program of its own in one shell and part of the script in four, and the split runs *through* bash rather than between bash and the rest — which is why the case is worth having over an assertion that names `bash`
   ```sh

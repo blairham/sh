@@ -52562,6 +52562,226 @@
         "TimedOut": false
       }
     },
+    "trap/an-exit-from-a-handler-ends-a-for-loop": {
+      "bash": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/an-exit-from-a-handler-ends-a-loop-inside-a-function": {
+      "bash": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/an-exit-from-a-handler-ends-a-while-loop": {
+      "bash": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/an-exit-from-a-handler-ends-an-until-loop": {
+      "bash": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "trap/an-exit-from-a-handler-ends-nested-loops": {
+      "bash": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "caught",
+        "Stderr": "",
+        "Status": 7,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "trap/bad-signal-name": {
       "bash": {
         "Stdout": "st=1",

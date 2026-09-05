@@ -2366,11 +2366,26 @@ func (r *Runner) assign(a *syntax.Assign) {
 		// never evaluated: `m[1+1]=x` stores under the three characters.
 		// This is the switch the attribute exists to throw — the same text
 		// on an undeclared name falls through to the arithmetic reading.
-		r.setAssocElem(a.Name, r.subscriptText(a.Index), r.expandAssignValue(a.Value))
+		key := r.subscriptText(a.Index)
+		value := r.expandAssignValue(a.Value)
+		if a.Append {
+			// `m[k]+=v` joins the element it names, the same operation the
+			// indexed form performs on a subscript — an unset key leaves
+			// nothing in front of the value.
+			value = r.AssocArrays[a.Name][key] + value
+		}
+		r.setAssocElem(a.Name, key, value)
 	case a.Index != nil:
 		idx, err := r.parseNum(strings.TrimSpace(r.joinWord(a.Index)))
 		if err != nil {
 			r.diagf("%s: bad array subscript\n", a.Name)
+			return
+		}
+		if a.Append {
+			// `a[0]+=Q` appends to element 0. Distinct from `a+=(Q)`, which
+			// adds an element after the last: the subscript is what says
+			// which of the two `+=` means.
+			r.appendArrayElem(a.Name, idx, r.expandAssignValue(a.Value))
 			return
 		}
 		r.setArrayElem(a.Name, idx, r.expandAssignValue(a.Value))

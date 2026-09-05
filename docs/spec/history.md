@@ -125,12 +125,139 @@ screen anyway is protected by forgetting it.
   that silently rewrote a file it did not write is a worse thing to
   have.
 
-### The panel's knobs are not built here
+### The panel's knobs are not part of the scrubbing
 
 `HISTCONTROL`, `HISTIGNORE`, `HIST_IGNORE_SPACE` and `HISTORY_IGNORE`
-are measured above and deliberately not implemented by this change.
-They are a compatibility question with a dialect answer — bash and zsh
-name them differently, spell their patterns differently and disagree
-about the session list — and belong with the rest of the interactive
-option surface rather than with a security feature that has no dialect
-axis at all.
+are measured above and were deliberately not part of the scrubbing
+change. They are a compatibility question with a dialect answer — bash
+and zsh name them differently, spell their patterns differently and
+disagree about the session list — where the scrubbing is a security
+feature with no dialect axis at all. The variable-named ones are built
+now; see below.
+
+## The history at the prompt
+
+Measured under a pseudo-terminal on 2026-09-05, bash 5.3.15 and
+zsh 5.9.2, each with a throwaway `HOME`, a `HISTFILE` of its own and a
+window size of 24×80. `C-r` is a *screen* behavior and both shells draw
+it incrementally — inserting characters into the line already there
+rather than redrawing it — so the raw stream is the optimisation and not
+the result. Every screen below was reconstructed from the bytes with a
+terminal model, which is also how the cursor columns were read.
+
+### Walking the list
+
+Both shells agree on all of this, so none of it is an axis:
+
+- **Up and Down walk the list**, oldest at the bottom, with a floor at
+  each end rather than a wrap.
+- **A half-typed line is put aside** and comes back when Down reaches
+  the end of the walk.
+- **An edit made to a recalled entry is kept for the rest of the line.**
+  Recall `ls -la`, type `XX`, press Up and then Down, and `ls -laXX`
+  comes back. The entry itself is never changed and the edits do not
+  outlive the line: `^C` then Up gives the clean entry back.
+- **A consecutive duplicate is recorded** unless a knob says otherwise.
+  `echo a` twice leaves two entries in both.
+
+### `C-r`, and where it is drawn
+
+The two shells differ in the wording *and* in the placement, which is
+two axes' worth of difference in one feature.
+
+bash replaces the prompt with the search and keeps the matched line
+after it, with the cursor on the first character of the match:
+
+    (reverse-i-search)`echo': echo two
+
+zsh leaves the prompt and the line where they are, cursor on the match,
+and puts the search on a row of its own below them, with a trailing
+underscore that is part of the wording rather than a cursor:
+
+    P> echo two
+    bck-i-search: echo_
+
+Once nothing older matches, both change only the wording — `(failed
+reverse-i-search)` and `failing bck-i-search:` — ring the bell, and
+leave the last line that did match on the screen.
+
+What they agree about:
+
+| keystroke | what happens |
+| --- | --- |
+| a character | extends the query and searches again, from the entry on screen |
+| backspace | shortens the query |
+| `C-r` again | the next older match |
+| `C-g` | abandons: the line and cursor go back to before the search |
+| Enter | accepts the found line and **runs** it |
+| `C-e`, `C-k`, an arrow, Tab | ends the search, keeps the found line, **and acts** |
+
+That last row is the one worth writing down. `C-r cho C-e` leaves the
+search, keeps `echo two`, and moves the cursor to the end of it; `C-r
+cho C-k` leaves `e`. The key that closes the mode is not swallowed by
+it.
+
+**bash also highlights the match** in reverse video, and zsh does not.
+That is not implemented here — the match is found and the cursor is put
+on it, and nothing is drawn around it.
+
+**`ESC` differs and is not implemented either.** In bash a bare `ESC`
+ends the search; in zsh it does nothing, being the start of a prefix.
+Telling a bare `ESC` from the first byte of an arrow needs a timeout,
+which this editor does not have anywhere, so an `ESC` here is read as
+the start of a sequence in both dialects.
+
+**ksh93's `C-r` is not this.** Measured: it echoes `^R` and takes a
+whole string afterwards, non-incrementally. dash has no line editor at
+all. Neither dialect answers this question, so both take the
+substrate's own wording, which names no shell:
+
+    (reverse-search)`echo': echo two
+
+### The two sizes
+
+`HISTSIZE` bounds the list a session can recall and `HISTFILESIZE`
+bounds the file, and they are different questions. Measured: bash with
+`HISTSIZE=2` and four lines in the file lets the up arrow reach two of
+them and stops. `HISTFILESIZE` defaults to `HISTSIZE`'s value, so
+`HISTSIZE=2` alone leaves two lines on disk, and `HISTSIZE=2
+HISTFILESIZE=100` recalls two and keeps every earlier line. Zero for
+either means nothing is kept.
+
+This shell diverges on *how* the file is brought under its bound, on
+purpose. bash rewrites the whole file from its in-memory list at exit,
+so a bash that ran with a small `HISTSIZE` throws away what earlier
+sessions wrote. This shell appends what the session added and rewrites
+only when the file is over `HISTFILESIZE`, keeping the tail — the end
+state is the same, and a small `HISTSIZE` does not silently delete
+history the session never saw. `HISTFILESIZE=0` writes nothing rather
+than emptying the file, for the same reason.
+
+### The knobs, and the one conflict
+
+The rules themselves are shared. A leading blank hides a line; a
+duplicate is the line *immediately* before it and not any earlier one —
+measured, `echo a`, `echo a`, `echo b`, `echo a` leaves three entries in
+both shells with the option on; a pattern is matched against the whole
+line, so `HISTIGNORE=pwd` drops `pwd` and keeps `pwd x`. Patterns are
+globs and not words: `HISTIGNORE=ls*` also drops `lsof -h`.
+
+What differs is where they are written and what "ignored" costs:
+
+| | bash | zsh |
+| --- | --- | --- |
+| blank / duplicate | `HISTCONTROL=ignorespace`, `ignoredups`, `ignoreboth` | `setopt HIST_IGNORE_SPACE`, `HIST_IGNORE_DUPS` |
+| patterns | `HISTIGNORE`, a colon-separated **list** | `HISTORY_IGNORE`, a **single** pattern |
+| an ignored line | **gone** — the up arrow skips past it | **kept** — the up arrow recalls it |
+
+The last row is the axis: `repl.HistoryStyle.IgnoredStaysInSession`.
+
+Two things are measured and not built. zsh's two are `setopt` names
+rather than variables, and this shell has no place to hold an
+interactive-only option yet; naming a variable zsh does not have would
+give the dialect a knob real zsh ignores, which is worse than the gap.
+And bash's `HISTIGNORE` gives `&` a meaning of its own: measured,
+`HISTIGNORE=&` drops a line identical to the one before it, exactly as
+`ignoredups` does. That is not implemented — a pattern of `&` is matched
+literally here — because it is a second spelling of a rule the same
+variable's neighbour already has.

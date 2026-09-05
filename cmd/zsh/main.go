@@ -24,14 +24,15 @@ import (
 // shell is the whole of "which shell am I", as data.
 func shell() driver.Shell {
 	return driver.Shell{
-		Name:        "zsh",
-		Dialect:     zsh.Dialect(),
-		Semantics:   zsh.Semantics(),
-		Diagnostics: zsh.Diagnostics(),
-		Prelude:     zsh.Prelude(),
-		Register:    zsh.Apply,
-		PromptStyle: zsh.PromptStyle(),
-		EditorStyle: zsh.EditorStyle(),
+		Name:         "zsh",
+		Dialect:      zsh.Dialect(),
+		Semantics:    zsh.Semantics(),
+		Diagnostics:  zsh.Diagnostics(),
+		Prelude:      zsh.Prelude(),
+		Register:     zsh.Apply,
+		PromptStyle:  zsh.PromptStyle(),
+		EditorStyle:  zsh.EditorStyle(),
+		HistoryStyle: zsh.HistoryStyle(),
 	}
 }
 

@@ -28,14 +28,15 @@ import (
 // about the binary.
 func shell() driver.Shell {
 	return driver.Shell{
-		Name:        "bash",
-		Dialect:     bash.Dialect(),
-		Semantics:   bash.Semantics(),
-		Diagnostics: bash.Diagnostics(),
-		Prelude:     bash.Prelude(),
-		Register:    bash.Apply,
-		PromptStyle: bash.PromptStyle(),
-		EditorStyle: bash.EditorStyle(),
+		Name:         "bash",
+		Dialect:      bash.Dialect(),
+		Semantics:    bash.Semantics(),
+		Diagnostics:  bash.Diagnostics(),
+		Prelude:      bash.Prelude(),
+		Register:     bash.Apply,
+		PromptStyle:  bash.PromptStyle(),
+		EditorStyle:  bash.EditorStyle(),
+		HistoryStyle: bash.HistoryStyle(),
 	}
 }
 

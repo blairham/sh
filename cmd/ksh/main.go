@@ -26,14 +26,15 @@ import (
 // shell is the whole of "which shell am I", as data.
 func shell() driver.Shell {
 	return driver.Shell{
-		Name:        "ksh",
-		Dialect:     ksh.Dialect(),
-		Semantics:   ksh.Semantics(),
-		Diagnostics: ksh.Diagnostics(),
-		Prelude:     ksh.Prelude(),
-		Register:    ksh.Apply,
-		PromptStyle: ksh.PromptStyle(),
-		EditorStyle: ksh.EditorStyle(),
+		Name:         "ksh",
+		Dialect:      ksh.Dialect(),
+		Semantics:    ksh.Semantics(),
+		Diagnostics:  ksh.Diagnostics(),
+		Prelude:      ksh.Prelude(),
+		Register:     ksh.Apply,
+		PromptStyle:  ksh.PromptStyle(),
+		EditorStyle:  ksh.EditorStyle(),
+		HistoryStyle: ksh.HistoryStyle(),
 	}
 }
 

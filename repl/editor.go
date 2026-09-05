@@ -38,11 +38,20 @@ type editor struct {
 
 	// history is every line accepted so far, oldest first. browsing is where
 	// Up and Down have walked to: len(history) means "not browsing, on the
-	// line being typed", and stash holds that line while browsing so Down
-	// can bring it back.
+	// line being typed".
 	history  []string
 	browsing int
-	stash    []rune
+
+	// drafts is what the walk has left behind, keyed by the index it was left
+	// at — with len(history) standing for the line that was being typed.
+	//
+	// Because an entry recalled and then edited keeps the edit for as long as
+	// the line lasts. Measured on 2026-09-05 in bash 5.3.15 and zsh 5.9.2
+	// alike: recall `ls -la`, type `XX`, press Up and then Down, and `ls
+	// -laXX` comes back. Accepting or abandoning the line throws all of them
+	// away, which is why they live here and not in history — the entry itself
+	// is never edited, and the next line starts from the file again.
+	drafts map[int][]rune
 
 	// comp answers what a prefix could become, and lastTab says the previous
 	// keystroke was already a Tab — which is what makes the second one list
@@ -69,6 +78,17 @@ type editor struct {
 	forwardWordStopsBeforeNext bool
 	transposeAtStart           bool
 
+	// What a reverse incremental search is drawn as, and where. See
+	// HistoryStyle.
+	searchPrompt string
+	searchFailed string
+	searchBelow  bool
+
+	// pushed is the byte the search mode read and did not want, kept for the
+	// next turn of the loop below. See pushBack.
+	pushed    byte
+	hasPushed bool
+
 	// What to ask before printing a large listing, and how to read the
 	// answer. See EditorStyle.
 	listQuery       string
@@ -91,11 +111,14 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	e.line, e.pos = e.line[:0], 0
 	e.browsing = len(e.history)
 	e.row = 0
+	// Fresh for every line: an edit made to a recalled entry lasts as long as
+	// the line does and no longer, which is what both shells do — see drafts.
+	e.drafts = map[int][]rune{}
 	e.write(prompt.text)
 
 	var buf [1]byte
 	for {
-		n, err := e.in.Read(buf[:])
+		n, err := e.nextByte(buf[:])
 		if err != nil {
 			return "", err
 		}
@@ -162,6 +185,8 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 			e.browse(-1, prompt)
 		case ctrlN:
 			e.browse(+1, prompt)
+		case ctrlR:
+			e.reverseSearch(prompt)
 		case backspace, del:
 			e.deleteBackward()
 			e.redraw(prompt)
@@ -195,6 +220,20 @@ func (e *editor) readLine(prompt drawnPrompt) (string, error) {
 	}
 }
 
+// nextByte is the next byte of input, which is whatever the search mode handed
+// back before the byte the terminal has.
+//
+// The whole of the pushback: a mode that ends on a key which still means
+// something has to leave that key where the ordinary switch will see it, and
+// there is never more than one of them.
+func (e *editor) nextByte(buf []byte) (int, error) {
+	if e.hasPushed {
+		buf[0], e.hasPushed = e.pushed, false
+		return 1, nil
+	}
+	return e.in.Read(buf)
+}
+
 // readRune completes a UTF-8 sequence whose first byte has arrived.
 //
 // The terminal delivers bytes, and a character outside ASCII arrives as
@@ -219,9 +258,12 @@ func (e *editor) readRune(first byte) (rune, error) {
 
 // browse walks the history. -1 is older, +1 is newer.
 //
-// The line being typed is put aside on the first step back and returned when
-// the walk reaches the end again, so a half-written command is not lost to a
-// glance at what came before.
+// Whatever is on the screen is left behind at the step it was on, so nothing
+// the walk passes over is lost: the half-written line comes back when the walk
+// reaches the end again, and an entry that was recalled and then edited comes
+// back edited. Measured — both shells do the second as well as the first, and
+// doing only the first makes a typo fixed on the way past a reason to retype
+// the whole command.
 func (e *editor) browse(dir int, prompt drawnPrompt) {
 	if len(e.history) == 0 {
 		return
@@ -230,12 +272,10 @@ func (e *editor) browse(dir int, prompt drawnPrompt) {
 	if to < 0 || to > len(e.history) {
 		return
 	}
-	if e.browsing == len(e.history) {
-		e.stash = append([]rune(nil), e.line...)
-	}
+	e.drafts[e.browsing] = append([]rune(nil), e.line...)
 	e.browsing = to
-	if to == len(e.history) {
-		e.line = append([]rune(nil), e.stash...)
+	if draft, kept := e.drafts[to]; kept {
+		e.line = append([]rune(nil), draft...)
 	} else {
 		e.line = []rune(e.history[to])
 	}
@@ -245,16 +285,34 @@ func (e *editor) browse(dir int, prompt drawnPrompt) {
 
 // remember adds an accepted line to the history.
 //
-// Blank lines and an immediate repeat are not kept: they are what a history
-// is most often cluttered with, and neither is worth walking back through.
+// A blank line is not kept, which every shell in the panel agrees about: a
+// bare newline at the prompt is nothing happening.
+//
+// An immediate repeat *is* kept, which is measured rather than obvious.
+// `echo a` twice in a row leaves two entries in bash 5.3.15 and in zsh 5.9.2
+// alike, because dropping the second is what `HISTCONTROL=ignoredups` and
+// `setopt HIST_IGNORE_DUPS` are for and neither is on by default. Doing it
+// unconditionally here made the knob unobservable and the default wrong; see
+// historyRules.
 func (e *editor) remember(line string) {
 	if strings.TrimSpace(line) == "" {
 		return
 	}
-	if n := len(e.history); n > 0 && e.history[n-1] == line {
-		return
-	}
 	e.history = append(e.history, line)
+}
+
+// newest is the last line remembered, or nothing at all.
+//
+// What "a duplicate" is measured against, and it is the list rather than the
+// file: in the dialect that keeps ignored lines, an ignored line is the one a
+// duplicate is compared with, and in the dialect that drops them it is the
+// last one kept. Reading the list gets both without asking which dialect this
+// is.
+func (e *editor) newest() string {
+	if len(e.history) == 0 {
+		return ""
+	}
+	return e.history[len(e.history)-1]
 }
 
 func (e *editor) insert(r rune) {
@@ -594,10 +652,12 @@ const (
 	ctrlD     = 0x04
 	ctrlE     = 0x05
 	ctrlF     = 0x06
+	ctrlG     = 0x07
 	ctrlK     = 0x0b
 	ctrlL     = 0x0c
 	ctrlN     = 0x0e
 	ctrlP     = 0x10
+	ctrlR     = 0x12
 	ctrlT     = 0x14
 	ctrlU     = 0x15
 	ctrlW     = 0x17

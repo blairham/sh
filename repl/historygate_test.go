@@ -46,7 +46,7 @@ func TestARefusedHistoryFileIsNeitherReadNorWritten(t *testing.T) {
 		t.Fatal(err)
 	}
 	g := &gateFor{path: path}
-	h := historyFile{path: path, size: 10, bound: boundary.Boundary{Gate: g}}
+	h := historyFile{path: path, size: 10, file: 10, bound: boundary.Boundary{Gate: g}}
 
 	if got := h.load(t.Context()); got != nil {
 		t.Errorf("load returned %q, want a refused history to read as none", got)
@@ -88,7 +88,7 @@ func TestAnUngatedHistoryIsReadAndWritten(t *testing.T) {
 	if err := os.WriteFile(path, []byte("echo earlier\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	h := historyFile{path: path, size: 10}
+	h := historyFile{path: path, size: 10, file: 10}
 
 	if got := h.load(t.Context()); len(got) != 1 || got[0] != "echo earlier" {
 		t.Errorf("load returned %q, want the earlier line", got)

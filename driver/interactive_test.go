@@ -189,9 +189,13 @@ func TestTheDialectsAnswersReachTheFrontEnd(t *testing.T) {
 	sh.Name = "testsh"
 	sh.PromptStyle = repl.PromptStyle{Expand: true, Escape: '%'}
 	sh.EditorStyle = repl.EditorStyle{Interrupt: "<int>"}
+	sh.HistoryStyle = repl.HistoryStyle{SearchPrompt: "<search %s>", Ignore: "SOMEVAR"}
 	front := sh.FrontEndForTest(nil, "testsh", interp.Diagnostics{})
 	if front.Editor.Interrupt != "<int>" {
 		t.Errorf("Interrupt = %q, want it carried across", front.Editor.Interrupt)
+	}
+	if front.History.SearchPrompt != "<search %s>" || front.History.Ignore != "SOMEVAR" {
+		t.Errorf("History = %+v, want it carried across", front.History)
 	}
 	if !front.Style.Expand || front.Style.Escape != '%' {
 		t.Errorf("Style = %+v, want it carried across", front.Style)

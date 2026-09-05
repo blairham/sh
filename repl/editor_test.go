@@ -155,6 +155,14 @@ func TestHistory(t *testing.T) {
 }
 
 // What is worth keeping in the history, and what is only clutter.
+//
+// A blank line is nothing happening, which every shell in the panel agrees
+// about. An immediate repeat is *kept*, which is measured rather than
+// obvious: `echo a` typed twice leaves two entries in bash 5.3.15 and in zsh
+// 5.9.2 alike, because dropping the second is what `HISTCONTROL=ignoredups`
+// and `setopt HIST_IGNORE_DUPS` are for and neither is on by default. Doing
+// it here unconditionally, as this once did, made the knob unobservable and
+// the default wrong in the same stroke.
 func TestWhatTheHistoryKeeps(t *testing.T) {
 	e := &editor{}
 	e.remember("one")
@@ -162,8 +170,14 @@ func TestWhatTheHistoryKeeps(t *testing.T) {
 	e.remember("")
 	e.remember("   ")
 	e.remember("two")
-	if len(e.history) != 2 || e.history[0] != "one" || e.history[1] != "two" {
-		t.Errorf("history is %q, want [one two]", e.history)
+	want := []string{"one", "one", "two"}
+	if len(e.history) != len(want) {
+		t.Fatalf("history is %q, want %q", e.history, want)
+	}
+	for i := range want {
+		if e.history[i] != want[i] {
+			t.Errorf("entry %d is %q, want %q", i, e.history[i], want[i])
+		}
 	}
 }
 
@@ -223,5 +237,38 @@ func TestTabWithNoCompleter(t *testing.T) {
 	}
 	if line != "echo a" {
 		t.Errorf("got %q, want the line untouched", line)
+	}
+}
+
+// An entry recalled and then edited keeps the edit for as long as the line
+// lasts.
+//
+// Measured on 2026-09-05 in bash 5.3.15 and zsh 5.9.2 alike, which is why it
+// is not a dialect axis: recall `ls -la`, type `XX`, press Up and then Down,
+// and `ls -laXX` comes back. Without it, a typo fixed on the way past is a
+// reason to retype the whole command — which is the thing the arrows exist to
+// avoid.
+func TestAnEditMadeWhileBrowsingIsKept(t *testing.T) {
+	var out strings.Builder
+	e := &editor{out: &out, history: []string{"first", "second", "third"}}
+
+	// Up, edit, Up again, then Down: the edit is where it was left.
+	e.in = strings.NewReader("half\x1b[AXX\x1b[A\x1b[B\r")
+	if line, _ := e.readLine(drawPrompt("$ ")); line != "thirdXX" {
+		t.Errorf("walking away and back gave %q, want the edit kept", line)
+	}
+	// And the half-typed line is still under it, unedited.
+	e.in = strings.NewReader("half\x1b[AXX\x1b[B\r")
+	if line, _ := e.readLine(drawPrompt("$ ")); line != "half" {
+		t.Errorf("coming back to the typed line gave %q, want it untouched", line)
+	}
+	// The entry itself was never edited, and the drafts do not outlive the
+	// line: measured, ^C then Up gives the clean entry back in both shells.
+	e.in = strings.NewReader("\x1b[A\r")
+	if line, _ := e.readLine(drawPrompt("$ ")); line != "third" {
+		t.Errorf("the next line recalled %q, want the entry as it is stored", line)
+	}
+	if e.history[2] != "third" {
+		t.Errorf("the history now holds %q, want the entry unchanged", e.history[2])
 	}
 }

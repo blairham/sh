@@ -362,6 +362,22 @@ func (r *Runner) NamedOption(name string) (on, known bool) {
 	return o.state(r), true
 }
 
+// MatchPattern reports whether a shell pattern matches a whole string, by this
+// shell's own pattern rules.
+//
+// For a caller holding a *setting* written as a pattern rather than a pattern
+// found in a script — a list of command lines not to record in the history is
+// the case this was added for. Without it such a caller would have to bring
+// its own matcher, and a shell whose `case` and whose settings disagreed about
+// what `@(a|b)` means would be one thing pretending to be two.
+//
+// Anchored at both ends, which is what a pattern means everywhere in a shell
+// except inside `[[ =~ ]]`: `pwd` matches the line `pwd` and not `pwd /tmp`.
+// Not the condition-context reading, since a setting is not a condition.
+func (r *Runner) MatchPattern(pattern, s string) bool {
+	return r.matchPatternR(pattern, s, false)
+}
+
 // Expand performs parameter and command expansion on raw text.
 //
 // For a caller that holds a *setting* which is a path with parameters in it —

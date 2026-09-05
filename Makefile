@@ -4,7 +4,7 @@
 # reads as a flaky implementation rather than as two builds sharing a name.
 BINDIR := $(CURDIR)/build
 
-.PHONY: all build test test-cover fmt vet lint tidy clean check oracle oracle-check conformance conformance-dialects
+.PHONY: all build test test-cover fmt vet lint tidy clean check corpus-guard oracle oracle-check conformance conformance-dialects
 
 all: build
 
@@ -34,7 +34,10 @@ clean:
 	rm -rf $(BINDIR)
 	go clean
 
-check: fmt vet test oracle-check
+check: fmt vet test corpus-guard oracle-check
+
+corpus-guard: ## Fail if the corpus has lost a case since the merge base with main
+	@go run ./cmd/corpusguard
 
 oracle: ## Regenerate docs/spec/measurements.md and the golden record from a live panel run
 	go run ./cmd/oracle

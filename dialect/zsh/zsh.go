@@ -474,6 +474,11 @@ func Diagnostics() interp.Diagnostics {
 		// The array alone, and a sentence about the assignment rather than
 		// about the subscript.
 		BadArraySubscript: "%[1]s: assignment to invalid subscript range",
+		// The identical sentence from `unset`, and the builtin is *not* in
+		// the location for it — the store is speaking rather than `unset` —
+		// which is why the two routes need two fields even where one shell
+		// words them alike.
+		UnsetSubscriptBeforeTheFirstElement: "%[1]s: assignment to invalid subscript range",
 		// Through a literal it is the subscript alone, and the literal is
 		// named for what it is rather than by the variable it fills.
 		BadArrayLiteralSubscript: "bad subscript for direct array assignment: %[2]s",

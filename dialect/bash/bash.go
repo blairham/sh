@@ -508,6 +508,12 @@ func Diagnostics() interp.Diagnostics {
 		// same and does not end the script, which is the one place the two
 		// builds differ here.
 		BadArrayLiteralSubscript: "[%[2]s]=%[3]s: bad array subscript",
+		// Reached from `unset` the same boundary drops the array's name and
+		// keeps the bare subscript, with the builtin named in front. bash 3.2
+		// words it without the builtin — and refuses every negative subscript
+		// besides, which is an absence rather than a wording; the preset
+		// follows 5.3.
+		UnsetSubscriptBeforeTheFirstElement: "unset: [%[2]s]: bad array subscript",
 		// `unset a[@]` where `a` holds a scalar. Identical in bash 3.2.
 		UnsetNotAnArray:       "unset: %[1]s: not an array variable",
 		ArithError:            `%[1]s: %[2]s (error token is "%[3]s")`,

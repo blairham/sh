@@ -391,6 +391,11 @@ func hasUnterminatedBracket(p string) bool {
 	return false
 }
 
+// inClass answers the POSIX character classes, over bytes, in the C locale
+// the corpus is measured under. All twelve are here and unanimous across the
+// panel. A name outside the twelve matches nothing, silently — the answer of
+// every panel shell but bash 3.2, which falls back to reading the characters
+// literally (see docs/spec/grammar/patterns.md).
 func inClass(name string, c byte) bool {
 	switch name {
 	case "digit":
@@ -409,6 +414,14 @@ func inClass(name string, c byte) bool {
 		return c > ' ' && c < 127 && !isLetter(c) && !isDigit(c)
 	case "xdigit":
 		return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+	case "blank":
+		return c == ' ' || c == '\t'
+	case "cntrl":
+		return c < ' ' || c == 0x7f
+	case "graph":
+		return c > ' ' && c < 0x7f
+	case "print":
+		return c >= ' ' && c < 0x7f
 	}
 	return false
 }

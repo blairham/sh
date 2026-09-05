@@ -62,6 +62,29 @@ just not the things intended.
 
 Vector field: `BracketCaretNegates` (default true, false for `posix`).
 
+### The character classes
+
+All twelve POSIX class names are implemented, matched over bytes in the
+C locale the corpus runs under (POSIX XCU §9.3.5; measured unanimous:
+`pat/character-class`, `pat/the-remaining-character-classes`):
+
+    alnum alpha blank cntrl digit graph lower print punct space upper xdigit
+
+The edges that tell the lookalikes apart are measured too
+(`pat/classes-that-overlap-and-differ`): a tab is `blank` and `cntrl`
+but not `print`, and a space is `blank` and `print` but not `graph` —
+the pair an implementation that aliases `print` to `graph` gets wrong.
+
+**A class name nothing defines matches nothing, silently** — no error,
+no diagnostic, the arm simply never fires — in dash, bash 5.3, ksh93
+and zsh alike (`pat/an-unknown-character-class`). bash 3.2 alone falls
+back to reading the whole thing as ordinary bracket characters, so
+`[[:bogus:]]` there matches the two characters `b]` and nothing here
+intended — its column dates the behavior rather than vetoing it, per
+`../core.md`. This implementation answers with the four: an unknown
+class can never match, and nothing says so, which is one more of the
+silent divergences this document keeps a list of.
+
 ## Quoting decides whether text is a pattern at all
 
     p='a*b'
@@ -95,7 +118,7 @@ Note the shape of the failures: dash and bash report a **syntax error**,
 because `(` is an operator where a pattern was expected, while zsh parses
 the pattern and simply does not match. Three behaviors again.
 
-Vector field: `ExtendedPatterns` (default false, true for `ksh`).
+Vector field: `ExtendedPattern` (default false, true for `ksh`).
 
 ## Run-time switches over the language
 

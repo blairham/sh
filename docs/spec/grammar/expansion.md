@@ -74,6 +74,41 @@ already gone by the time the variable exists.
 Brace expansion is purely textual: it does not consult the filesystem and
 never fails. An unmatched or malformed brace is left alone.
 
+### Ranges beyond `{1..3}`
+
+Numbers are not the whole of it. Each row below is a corpus case under
+`expand/brace-range-…`, and the shells that expand braces at all agree
+on the first two:
+
+- **Letters range too**: `{a..e}` is `a b c d e`, either direction,
+  counted in bytes (`-alphabetic`).
+- **A third number strides the range**: `{1..10..3}` is `1 4 7 10`
+  (`-stepped`). The step is a **bash 4** addition — bash 3.2 leaves the
+  word alone, dated rather than vetoed per `../core.md` — and this
+  implementation reads one wherever braces expand at all. A *letter*
+  range with a step is narrower still: bash and ksh93 expand
+  `{a..e..2}`, zsh leaves it alone (`-alpha-stepped`) — recorded here
+  rather than modeled, since a shell that leaves a malformed brace
+  alone gives a script nothing to rely on either way.
+
+The rest is disagreement, and each row is a semantics axis rather than a
+core answer:
+
+- **Zero padding** (`-zero-padded`): a leading zero on either endpoint
+  pads the whole range to the widest width in bash and zsh — `{01..03}`
+  is `01 02 03`, zeros after the sign — and ksh93 strips it.
+  `BraceRangePadsToEndpointWidth`.
+- **A step's sign** (`-step-sign-and-direction`): bash takes magnitude
+  only, the endpoints deciding direction; ksh93 honors the sign and
+  yields a single element when it points the wrong way.
+  `BraceRangeStepSignHonored`.
+- **A negative step in zsh** (`-negative-step-reversal`): zsh *reverses
+  its result* — `{1..10..-4}` is `9 5 1`, bash's `1 5 9` backwards, not
+  a walk from 10. `BraceRangeNegativeStepReverses`.
+
+The core expands what is unanimous and asks the vector where the answers
+part; `interp/brace.go` names the same three fields.
+
 **Core**: present. Dialect `posix` disables it (matching dash).
 
 ## 2. Tilde expansion
@@ -93,6 +128,21 @@ because assignment values are a tilde-expansion context, so `PATH=~/bin`
 works as intended.
 
 All four agree. **Core behavior, no vector field.**
+
+### `~+` and `~-`
+
+Two named tildes expand to directories rather than to a home: `~+` is
+`$PWD` and `~-` is `$OLDPWD`, in bash, ksh93 and zsh — dash keeps both
+as written — and only while the variable is set: `unset OLDPWD; echo ~-`
+stays literal, except in zsh, which still answers from directory state
+of its own (measured: `expand/tilde-plus-and-minus`). The exception is
+recorded rather than modeled; the shape shared by all three is
+"expand the variable when it is set", and that is what the
+`TildePlusMinusExpands` axis provides (no for `posix`; the bash, ksh
+and zsh dialects say yes).
+
+A `~user` form needs a user database and is a different question, which
+is why the two are not lumped together as "the other tildes".
 
 ## 3-5. Parameter, command and arithmetic expansion
 

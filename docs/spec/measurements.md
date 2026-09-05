@@ -2678,6 +2678,7 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `param/a-negative-substring-length` | `<shell>: 1: Bad substitution` *(status 2)* | `[bcd]` | `[bcd]` | `<shell>: -2: substring expression < 0` *(status 1)* | `[]` | `[bcd]` |
 | `param/substring` | `<shell>: 1: Bad substitution` *(status 2)* | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` | `[bcd][cdef]` |
 | `param/case-change-is-bash-only` | `<shell>: 1: Bad substitution` *(status 2)* | `[ABC][abc]` | `[ABC][abc]` | `<shell>: ${x^^}: bad substitution` *(status 1)* | `<shell>: syntax error at line 1: `^' unexpected` *(status 3)* | `<shell>:1: bad substitution` *(status 1)* |
+| `param/case-toggle-is-newer-bash-still` | `<shell>: 1: Bad substitution` *(status 2)* | `[ABc][AbC][ABc]` | `[ABc][AbC][ABc]` | `<shell>: ${x~}: bad substitution` *(status 1)* | `<shell>: syntax error at line 1: `~' unexpected` *(status 3)* | `<shell>:1: bad substitution` *(status 1)* |
 | `param/indirection-diverges-four-ways` | `<shell>: 1: Bad substitution` *(status 2)* | `[V]` | `[V]` | `[V]` | `[x]` | `<shell>:1: bad substitution` *(status 1)* |
 | `param/expansion-flags-are-one-dialects` | `<shell>: 1: Bad substitution` *(status 2)* | `<shell>: line 1: ${(U)x}: bad substitution` *(status 1)* | `<shell>: line 1: ${(U)x}: bad substitution` *(status 127)* | `<shell>: ${(U)x}: bad substitution` *(status 1)* | `<shell>: syntax error at line 1: `x}' unexpected` *(status 3)* | `ABC` |
 | `param/expansion-flags-split-and-join` | `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `<shell>: line 1: ${(s.:.)x}: bad substitution` *(status 1)* | `<shell>: line 1: ${(s.:.)x}: bad substitution` *(status 127)* | `<shell>: ${(s.:.)x}: bad substitution` *(status 1)* | `<shell>: syntax error at line 1: `x}' unexpected` *(status 3)* | `[a][b][c]<1,2>` |
@@ -2799,6 +2800,10 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `param/case-change-is-bash-only` — bash alone: ksh93 reports a syntax error and zsh a bad substitution, so it belongs to the bash dialect rather than the core
   ```sh
   x=aBc; printf "[%s]" "${x^^}" "${x,,}"
+  ```
+- `param/case-toggle-is-newer-bash-still` — the third spelling of case change, swapping instead of forcing a direction, single and doubled like the other two and carrying a pattern the same way. bash 5.3 alone — bash 3.2 refuses it too — so it rides the same dialect flag as `^^` and `,,`
+  ```sh
+  x=aBc; printf "[%s][%s][%s]" "${x~}" "${x~~}" "${x~~[ab]}"
   ```
 - `param/indirection-diverges-four-ways` — bash indirects, dash and zsh reject, and ksh93 yields x — not an error there, a different meaning, which is the &> failure mode inside an expansion
   ```sh
@@ -3396,6 +3401,9 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | `pat/bracket-bang-negates-everywhere` | `negated` | `negated` | `negated` | `negated` | `negated` | `negated` |
 | `pat/bracket-caret-is-an-extension` | `no-caret` | `caret` | `caret` | `caret` | `caret` | `caret` |
 | `pat/character-class` | `class` | `class` | `class` | `class` | `class` | `class` |
+| `pat/the-remaining-character-classes` | `cntrl blank graph print` | `cntrl blank graph print` | `cntrl blank graph print` | `cntrl blank graph print` | `cntrl blank graph print` | `cntrl blank graph print` |
+| `pat/classes-that-overlap-and-differ` | `blank noprint nograph` | `blank noprint nograph` | `blank noprint nograph` | `blank noprint nograph` | `blank noprint nograph` | `blank noprint nograph` |
+| `pat/an-unknown-character-class` | `no no` | `no no` | `no no` | `no lit` | `no no` | `no no` |
 | `pat/escaped-metacharacter-is-literal` | `escaped no` | `escaped no` | `escaped no` | `escaped no` | `escaped no` | `escaped no` |
 | `pat/quoting-decides-pattern-or-literal` | `pattern literal-no` | `pattern literal-no` | `pattern literal-no` | `pattern literal-no` | `pattern literal-no` | `pattern literal-no` |
 | `pat/extended-patterns-are-not-core` | `<shell>: 1: Syntax error: "(" unexpected (expecting ")")` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case abc in @(abc\|xyz)) echo at;; esac'` *(status 2)* | `<shell>: -c: line 1: syntax error near unexpected token `('~<shell>: -c: line 1: `case abc in @(abc\|xyz)) echo at;; esac'` *(status 2)* | `<shell>: -c: line 0: syntax error near unexpected token `('~<shell>: -c: line 0: `case abc in @(abc\|xyz)) echo at;; esac'` *(status 2)* | `at` | *(no output, status 0)* |
@@ -3468,6 +3476,18 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 - `pat/character-class` — POSIX character classes are universal
   ```sh
   case 5 in [[:digit:]]) echo class;; esac
+  ```
+- `pat/the-remaining-character-classes` — the four classes the matcher grew last, unanimous like the other eight — pinned because they were silently matching nothing while every panel shell answered
+  ```sh
+  case "$(printf '\1')" in [[:cntrl:]]) printf cntrl;; esac; case " " in [[:blank:]]) printf " blank";; esac; case x in [[:graph:]]) printf " graph";; esac; case " " in [[:print:]]) printf " print";; esac
+  ```
+- `pat/classes-that-overlap-and-differ` — the edges that tell the four apart in the C locale the panel runs under: a tab is blank but not printable, and a space is printable but not graphic — unanimous, and the pair an implementation that aliases print to graph gets wrong
+  ```sh
+  t=$(printf "\t"); case "$t" in [[:blank:]]) printf blank;; esac; case "$t" in [[:print:]]) printf " P";; *) printf " noprint";; esac; case " " in [[:graph:]]) printf " G";; *) printf " nograph";; esac
+  ```
+- `pat/an-unknown-character-class` — a class name nothing defines matches nothing, silently — no error, no output, status 0 — in every panel shell but bash 3.2, which alone falls back to reading the brackets as literal characters, so `b]` matches there and nowhere else
+  ```sh
+  case b in [[:bogus:]]) printf yes;; *) printf no;; esac; case "b]" in [[:bogus:]]) printf " lit";; *) printf " no";; esac
   ```
 - `pat/escaped-metacharacter-is-literal` — an escaped star matches a literal star and nothing else
   ```sh

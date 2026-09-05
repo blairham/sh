@@ -656,3 +656,21 @@ func TestDollarSingleAnswers(t *testing.T) {
 		}
 	}
 }
+
+// The panel's holdout on the login profile. Measured 2026-09-05 with a scratch
+// HOME: `exec -a -bash bash script.sh` reads neither ~/.bash_profile nor
+// /etc/profile, and the same is true of `-c`, of a program on standard input
+// and of `-s` — where dash, ksh93 and zsh all read theirs on all four routes.
+// bash 3.2 and bash invoked as `sh` answer the same way.
+//
+// Not because it declines to be a login shell: `shopt login_shell` is on. It
+// is that a non-interactive bash reads no startup file unless `--login` was
+// written out, and this front end has no `--login` to write (#482).
+func TestBashReadsNoProfileWithAScriptToRun(t *testing.T) {
+	if bash.Semantics().LoginProfileWhenNonInteractive {
+		t.Error("LoginProfileWhenNonInteractive = true, want false")
+	}
+	if !interp.PosixSemantics().LoginProfileWhenNonInteractive {
+		t.Error("the POSIX preset no longer reads it, so this preset overrides nothing")
+	}
+}

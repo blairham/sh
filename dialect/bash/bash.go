@@ -62,6 +62,14 @@ func Dialect() syntax.Dialect {
 // Semantics is what bash 5 means where the shells conflict.
 func Semantics() interp.Semantics {
 	s := interp.PosixSemantics()
+	// The panel's holdout on the login profile, measured on all four
+	// non-interactive routes and in both bash 5.3 and the 3.2 macOS ships:
+	// `exec -a -bash bash script.sh` reads neither ~/.bash_profile nor
+	// /etc/profile, where dash, ksh93 and zsh all read theirs. Being a login
+	// shell is not the part it declines — `shopt login_shell` is on — it is
+	// that a non-interactive shell reads no startup file unless `--login`
+	// was written out, and this front end has no `--login` to write.
+	s.LoginProfileWhenNonInteractive = false
 	s.CommandNotFoundStatusIsNotFound = interp.No
 	s.SetFTurnsOffGlobbing = interp.Yes
 	// Measured: `echo $-` reports `hB` — hashall and braceexpand — under

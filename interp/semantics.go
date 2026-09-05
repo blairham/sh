@@ -1326,6 +1326,43 @@ type Semantics struct {
 	// Diagnostics.CommandStringParsedWhole.
 	StdinProgramReadInBlocks bool
 
+	// LoginProfileWhenNonInteractive has a login shell read its login
+	// profile even when there is a script to run rather than a person to
+	// prompt. A shell is a login shell when argv[0] begins with a dash,
+	// which is what `login` and every terminal emulator's "run as a login
+	// shell" does, and the question is only what that then means for a
+	// shell that is not going to prompt.
+	//
+	// dash, ksh93 and zsh read theirs; bash alone reads nothing. Measured
+	// 2026-09-05 with a scratch HOME, on all four of the script-operand,
+	// `-c`, standard-input and `-s` routes, and the answer is the same on
+	// every one of them — this is a fact about the shell rather than about
+	// the route. docs/spec/invocation.md has the grid, including the two
+	// facts that keep the axis from being wider than it is: an interactive
+	// login shell reads its profile in all four, so the interactive route
+	// asks nothing, and an explicit `--login` makes bash read it too, so
+	// this is about login-ness *inferred from argv[0]* and not about being
+	// a login shell as such.
+	//
+	// A bool rather than an Answer: there is no third thing to do, and
+	// "refuse to start" is not an answer any shell could ship.
+	//
+	// False is the zero value and it is the minority answer, which is the
+	// opposite of the way StdinProgramReadInBlocks is named, and on purpose.
+	// The majority behavior here is to *read a file out of the invoking
+	// person's home directory*, and a Semantics nobody has filled in belongs
+	// to a library embedder or a test rather than to a shell — neither of
+	// which should touch a home directory because a field was left at its
+	// default. A dialect that wants it says so, and PosixSemantics does.
+	//
+	// Which file a login shell reads is a separate question and is not
+	// modeled: the front end reads ~/.profile for every dialect, which is
+	// dash's and ksh93's name for it, where bash reads ~/.bash_profile and
+	// zsh ~/.zprofile. Nor is the system-wide /etc/profile read at all. Both
+	// gaps predate this axis and apply to the interactive route as well; see
+	// docs/spec/invocation.md.
+	LoginProfileWhenNonInteractive bool
+
 	// ArrayLengthWithoutSubscriptIsCount makes `${#a}` of an array the
 	// number of elements, which is zsh's reading; bash and ksh93 measure
 	// the element the bare name yields. Asked only where the two answers
@@ -1855,6 +1892,12 @@ func PosixSemantics() Semantics {
 		// requires only "greater than zero", which decides nothing.
 		FatalErrorStatusIsOne:  No,
 		ArithNameValueRecurses: No,
+		// A login shell reads ~/.profile whether or not it is going to
+		// prompt: dash, ksh93 and zsh, with bash the holdout. POSIX names
+		// ~/.profile as the file a login shell reads and does not make it
+		// conditional on being interactive, so the standard and the
+		// majority agree here.
+		LoginProfileWhenNonInteractive: true,
 		// The three brace-range axes are left unanswered: a brace that
 		// never expands never asks them.
 		BraceExpansion:                 No,

@@ -5994,6 +5994,17 @@ grades it and nothing drift-checks it either, for the same reason.
 | `invoke/dollar-dash-shows-s-for-a-program-on-standard-input` | `has-s` | `has-s` | `has-s` | `no-s` | `has-s` | `has-s` |
 | `invoke/dollar-dash-shows-s-for-the-s-option` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` |
 | `invoke/dollar-dash-keeps-s-when-a-command-string-overrides-it` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` | `has-s` |
+| `env/an-inherited-option-list-turns-an-option-on` | `no-u` | `has-u` | `has-u` | `has-u` | `no-u` | `no-u` |
+| `env/an-inherited-option-list-outranks-the-invocations-own-option` | `no-u` | `has-u` | `has-u` | `has-u` | `no-u` | `no-u` |
+| `env/an-unknown-name-in-an-inherited-option-list` | `no-u` | `has-u` **2>** `<shell>: line 0: nosuchoption: invalid option name` | `has-u` **2>** `<shell>: line 0: nosuchoption: invalid option name` | `has-u` **2>** `<shell>: line 0: nosuchoption: invalid option name` | `no-u` | `no-u` |
+| `env/the-option-list-follows-the-option-letters` | **2>** `<shell>: 1: SHELLOPTS: parameter not set` *(status 2)* | `listed` | `listed` | `listed` | **2>** `<shell>: SHELLOPTS: parameter not set` *(status 1)* | **2>** `<shell>:1: SHELLOPTS: parameter not set` |
+| `env/the-option-list-drops-an-option-turned-off` | `not-listed` | `not-listed` | `not-listed` | `not-listed` | `not-listed` | `not-listed` |
+| `env/the-option-list-uses-long-names` | `neither` | `long` | `long` | `long` | `neither` | `neither` |
+| `env/the-option-list-is-readonly` | `after` | **2>** `<shell>: line 1: SHELLOPTS: readonly variable` *(status 1)* | **2>** `<shell>: line 1: SHELLOPTS: readonly variable` *(status 127)* | **2>** `<shell>: SHELLOPTS: readonly variable` *(status 1)* | `after` | `after` |
+| `env/a-file-named-for-a-non-interactive-shell-is-sourced` | `main` | `sourced~main` | `main` | `sourced~main` | `main` | `main` |
+| `env/that-file-sees-the-invocations-parameters` | `main` | `[name] n=1 [A]~main` | `main` | `[<shell>] n=0 []~main` | `main` | `main` |
+| `env/that-file-can-end-the-shell` | `main` | `in-file` *(status 3)* | `main` | `in-file` *(status 3)* | `main` | `main` |
+| `env/a-file-named-for-a-non-interactive-shell-that-is-not-there` | `main` | `main` | `main` | `main` | `main` | `main` |
 
 - `set/posix-mode-makes-a-failed-redirection-fatal` — the same binary, both answers: bash 5.3 and bash 3.2 print `after` without this line and stop at 1 with it, which is the bash-as-`sh` column reached at run time. The other three have no such name and refuse the `set` instead, each in its own words
   ```sh
@@ -6189,4 +6200,48 @@ grades it and nothing drift-checks it either, for the same reason.
 - `invoke/dollar-dash-keeps-s-when-a-command-string-overrides-it` — -c wins about where the program comes from and does not take the letter away: all six run the command string and all six still show `s`. So the letter follows either the route or the spelling, and a shell that read only the route would lose it here
   ```sh
   case $- in *s*) echo has-s ;; *) echo no-s ;; esac
+  ```
+- `env/an-inherited-option-list-turns-an-option-on` — the sharpest startup input a shell takes: a name in the environment changes what every command afterwards does. bash reads it and `$-` gains the letter; dash, ksh93 and zsh ignore the name entirely, which is the control
+  ```sh
+  case $- in *u*) echo has-u ;; *) echo no-u ;; esac
+  ```
+- `env/an-inherited-option-list-outranks-the-invocations-own-option` — the ordering, and it is the opposite of every other startup input: the environment is read *after* the argument vector, so `+u` written out does not undo it. The three that do not read the name answer `no-u` here and `no-u` in the row above, so this row is about the order rather than about the letter
+  ```sh
+  case $- in *u*) echo has-u ;; *) echo no-u ;; esac
+  ```
+- `env/an-unknown-name-in-an-inherited-option-list` — one bad entry costs only itself: the complaint names line 0 — nothing has been read — and the good name in the same value is still applied. The wording is the plainest of the three shapes this refusal has, with nothing standing where `set` would
+  ```sh
+  case $- in *u*) echo has-u ;; *) echo no-u ;; esac
+  ```
+- `env/the-option-list-follows-the-option-letters` — the read direction of the binding, and the reason a stored copy would be a lie: the variable is produced when it is read, so an option set after startup is in it. Read as membership rather than as a string, for the reason `$-` is — what a shell has on by default is its own business
+  ```sh
+  set -u; case ":$SHELLOPTS:" in *:nounset:*) echo listed ;; *) echo not-listed ;; esac
+  ```
+- `env/the-option-list-drops-an-option-turned-off` — the other half of the same binding, and the one a copy taken at startup would fail: turning the option off takes the name back out again
+  ```sh
+  set -u; set +u; case ":$SHELLOPTS:" in *:nounset:*) echo listed ;; *) echo not-listed ;; esac
+  ```
+- `env/the-option-list-uses-long-names` — normalized rather than echoed: what goes in is a letter and what comes out is the long name, which is why nothing can usefully compare the whole string against what it exported
+  ```sh
+  set -f; case ":$SHELLOPTS:" in *:noglob:*) echo long ;; *:f:*) echo letter ;; *) echo neither ;; esac
+  ```
+- `env/the-option-list-is-readonly` — a name whose value is produced cannot be assigned to meaningfully, and the shell that has it refuses rather than accepting quietly. The refusal is its ordinary readonly one — wording, status and whether the script survives are all the dialect's — and the other three take the assignment as the ordinary variable it is for them
+  ```sh
+  SHELLOPTS=whatever; echo after
+  ```
+- `env/a-file-named-for-a-non-interactive-shell-is-sourced` — the non-interactive counterpart of `$ENV`, and one shell's alone: bash sources the file before the command string and the other three do nothing with the name. The snippet is the *file*, which is why the argv runs something else
+  ```sh
+  echo sourced
+  ```
+- `env/that-file-sees-the-invocations-parameters` — it is run *by* the shell that is about to run the program and sees what that shell sees, which is what puts it after the runner is built and after the operands are named — the same shape the login profile has
+  ```sh
+  echo "[$0] n=$# [${1-}]"
+  ```
+- `env/that-file-can-end-the-shell` — `exit 3` in it exits 3 and the program never runs, which is the other half of it being run by this shell rather than beside it
+  ```sh
+  echo in-file; exit 3
+  ```
+- `env/a-file-named-for-a-non-interactive-shell-that-is-not-there` — not a failure, in the shell that reads the name or in the three that do not. Every shell starts for the first time without one, and a complaint about it would be the first thing anybody saw
+  ```sh
+  echo main
   ```

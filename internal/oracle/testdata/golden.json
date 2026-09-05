@@ -25448,6 +25448,82 @@
         "TimedOut": false
       }
     },
+    "read/a-zero-timeout-and-what-it-does-to-the-stream": {
+      "bash": {
+        "Stdout": "st=0 v=[]~w=[a]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0 v=[]~w=[a]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 v=[]~w=[a]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 v=[]~w=[a]",
+        "Stderr": "\u003cshell\u003e: 1: read: Illegal option -t",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=0 v=[a]~w=[b]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=0 v=[a]~w=[b]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "read/a-zero-timeout-at-the-end-of-the-input": {
+      "bash": {
+        "Stdout": "st=0 v=[]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=0 v=[]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=1 v=[]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=2 v=[]",
+        "Stderr": "\u003cshell\u003e: 1: read: Illegal option -t",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=1 v=[]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1 v=[]",
+        "Stderr": "",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "read/an-escaped-separator-does-not-split": {
       "bash": {
         "Stdout": "[a b][c]",

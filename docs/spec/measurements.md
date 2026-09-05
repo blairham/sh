@@ -567,6 +567,8 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `read/a-prompt-or-a-coprocess` | `st=0 v=[data]` | `st=0 v=[data]` | `st=0 v=[data]` | `st=0 v=[data]` | `st=1 v=[keep]` **2>** `<shell>: read: no query process` | `st=1 v=[keep]` **2>** `<shell>:read:1: -p: no coprocess` |
 | `read/a-prompt-that-never-arrives` | `st=2` **2>** `<shell>: 1: read: No arg for -p option` | `st=2` **2>** `<shell>: line 1: read: -p: option requires an argument~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]` | `st=2` **2>** `<shell>: line 1: read: -p: option requires an argument~read: usage: read [-Eers] [-a array] [-d delim] [-i text] [-n nchars] [-N nchars] [-p prompt] [-t timeout] [-u fd] [name ...]` | `st=2` **2>** `<shell>: line 0: read: -p: option requires an argument~read: usage: read [-ers] [-u fd] [-t timeout] [-p prompt] [-a array] [-n nchars] [-d delim] [name ...]` | `st=1` **2>** `<shell>: read: no query process` | `st=1` **2>** `<shell>:read:1: -p: no coprocess` |
 | `read/from-the-shells-own-standard-input` | `[one]~[two]~eof=1\|[]` | `[one]~[two]~eof=1\|[]` | `[one]~[two]~eof=1\|[]` | `[one]~[two]~eof=1\|[]` | `[one]~[two]~eof=1\|[]` | `[one]~[two]~eof=1\|[]` |
+| `read/a-zero-timeout-and-what-it-does-to-the-stream` | `st=2 v=[]~w=[a]` **2>** `<shell>: 1: read: Illegal option -t` | `st=0 v=[]~w=[a]` | `st=0 v=[]~w=[a]` | `st=1 v=[]~w=[a]` | `st=0 v=[a]~w=[b]` | `st=0 v=[a]~w=[b]` |
+| `read/a-zero-timeout-at-the-end-of-the-input` | `st=2 v=[]` **2>** `<shell>: 1: read: Illegal option -t` | `st=0 v=[]` | `st=0 v=[]` | `st=1 v=[]` | `st=1 v=[]` | `st=1 v=[]` |
 | `name/unset-f-on-a-name-no-function-could-have` | `st=0` | `st=0` | `st=0` | `st=0` | `st=1` **2>** `<shell>: unset: 1x: invalid function name` | `st=1` **2>** `<shell>:unset:1: no such hash table element: 1x` |
 | `name/unset-f-on-a-name-that-is-merely-undefined` | `st=0` | `st=0` | `st=0` | `st=0` | `st=0` | `st=1` **2>** `<shell>:unset:1: no such hash table element: nosuch` |
 | `name/a-lone-dash-given-to-a-builtin` | `st=1` **2>** `unalias: - not found` | `st=1` **2>** `<shell>: line 1: unalias: -: not found` | `st=1` **2>** `<shell>: line 1: unalias: -: not found` | `st=1` **2>** `<shell>: line 0: unalias: -: not found` | `st=1` | `st=1` **2>** `<shell>:unalias:1: not enough arguments` |
@@ -801,6 +803,14 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `read/from-the-shells-own-standard-input` — every other read case feeds a pipe or a here-string built inside the snippet, so what the *shell* was started with was never read at all. Here it is the shell's own input: two lines arrive in order and the third read finds the end, reporting 1 with the variable cleared rather than left holding the line before
   ```sh
   read a; echo "[$a]"; read b; echo "[$b]"; read c; echo "eof=$?|[$c]"
+  ```
+- `read/a-zero-timeout-and-what-it-does-to-the-stream` — a timeout of zero is not a deadline that has already passed: one shell answers whether input is waiting and reads nothing, so the next read still finds the first line, while two read the line and leave the second for it. The second read is the whole point — the status alone cannot tell a poll from a read, and a poll that consumed what it reported would have a loop eating its own input. The input is a file rather than a pipe because a file is always ready, which makes the case a fact rather than a race
+  ```sh
+  printf "a\nb\n" > f; exec < f; read -t 0 v; echo "st=$? v=[$v]"; read w; echo "w=[$w]"
+  ```
+- `read/a-zero-timeout-at-the-end-of-the-input` — the end of a stream is *ready* to the shell that polls — a read there would return at once, with nothing — so it reports success where the shells that read report the end of input. Two answers to the same question from one empty file
+  ```sh
+  : > f; exec < f; read -t 0 v; echo "st=$? v=[$v]"
   ```
 - `name/unset-f-on-a-name-no-function-could-have` — two of the panel are quiet here and two are not, and the two that speak are not answering the same question — one is judging the name, which `1x` could never be, and the other is reporting that its table holds nothing under it. The case next to this one is what tells them apart
   ```sh

@@ -611,3 +611,16 @@ func TestDollarSingleAnswers(t *testing.T) {
 		t.Errorf("DollarSingleNulTruncates = %v, want %v", got, want)
 	}
 }
+
+// A login shell reads ~/.profile whether or not it is going to prompt.
+// Measured 2026-09-05 with a scratch HOME, on the script-operand, `-c`,
+// standard-input and `-s` routes alike; bash is the panel's holdout and this
+// preset takes the majority's answer, which is also the POSIX preset's (#482).
+func TestZshReadsTheProfileWithAScriptToRun(t *testing.T) {
+	if !zsh.Semantics().LoginProfileWhenNonInteractive {
+		t.Error("LoginProfileWhenNonInteractive = false, want true")
+	}
+	if (interp.Semantics{}).LoginProfileWhenNonInteractive {
+		t.Error("the substrate's own answer reads a file out of a home directory, want it not to")
+	}
+}

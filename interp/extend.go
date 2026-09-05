@@ -244,6 +244,94 @@ func (r *Runner) LookPath(name string) (string, bool) {
 	return path, true
 }
 
+// LookPathAll is every PATH entry a name resolves to, in PATH order and
+// duplicates included, for a builtin whose job is to list them all rather than
+// to pick one.
+func (r *Runner) LookPathAll(name string) []string { return r.lookPathAll(name) }
+
+// NameKind is what a shell would run for a word: the resolution itself, with
+// no wording attached to it.
+//
+// The two are separated because they vary independently. Every shell in the
+// panel resolves a name the same way and none of them says so in the same
+// words — one calls a builtin `a shell builtin`, another `builtin`, another
+// `shell built-in command`, and one prints the name back bare — so a dialect
+// with a builtin of its own asking this question needs the resolution and not
+// a sentence. Without it, a dialect that words the answer differently has to
+// redo the lookup, and a redone lookup is a lookup that can disagree.
+//
+// Aliases are deliberately absent. Whether a word expands as one is the
+// parser's fact rather than the runner's — see syntax.Dialect.ExpandAliases —
+// so a builtin that speaks for aliases asks [Runner.LookupAlias] first and
+// this afterwards, exactly as `type` never names one.
+type NameKind uint8
+
+const (
+	// NameNotFound is a word this shell would not run at all.
+	NameNotFound NameKind = iota
+	// NameFunction is a function this shell has defined.
+	NameFunction
+	// NameBuiltin is a builtin, registered or the core's.
+	NameBuiltin
+	// NameReserved is a word the grammar owns — `if`, `while`, `[[`.
+	NameReserved
+	// NameFile is an executable found through PATH.
+	NameFile
+)
+
+func (k NameKind) String() string {
+	switch k {
+	case NameFunction:
+		return "function"
+	case NameBuiltin:
+		return "builtin"
+	case NameReserved:
+		return "reserved"
+	case NameFile:
+		return "file"
+	}
+	return "not found"
+}
+
+// ResolveName reports what this shell would run for name, and for a file the
+// path it would run. Everything else has no path, and the empty string says so.
+//
+// The order is the resolution's own — a function, then a builtin, then a
+// reserved word, then PATH — which is the order `type` and `command -v`
+// already answer in, from the same lookup rather than from a copy of it.
+func (r *Runner) ResolveName(name string) (NameKind, string) {
+	if _, ok := r.funcs[name]; ok {
+		return NameFunction, ""
+	}
+	if _, ok := r.lookupBuiltin(name); ok {
+		return NameBuiltin, ""
+	}
+	if reservedWord(name) {
+		return NameReserved, ""
+	}
+	if r.reservedBuiltin(name) {
+		// A name this shell must answer itself is never resolved from PATH,
+		// even where the builtin is missing — see reserved.go. Reporting the
+		// file would say the shell would run it, which is exactly what it
+		// refuses to do.
+		return NameNotFound, ""
+	}
+	if path, ok := r.LookPath(name); ok {
+		return NameFile, path
+	}
+	return NameNotFound, ""
+}
+
+// FunctionText is a function's definition written back the way this shell
+// prints one, for a builtin that shows a body rather than naming it.
+func (r *Runner) FunctionText(name string) (string, bool) {
+	fn, ok := r.funcs[name]
+	if !ok {
+		return "", false
+	}
+	return r.listedFunction(name, fn), true
+}
+
 // WriterForFd is the stream a builtin writing "to descriptor n" needs: the
 // named two by their numbers, anything past them from the shell's own table —
 // the writing half of what `read -u` already reads. A number nothing is open

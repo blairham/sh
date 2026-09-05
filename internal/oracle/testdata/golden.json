@@ -30298,6 +30298,50 @@
         "TimedOut": false
       }
     },
+    "pipeline/a-builtin-writing-into-a-pipe-nobody-reads": {
+      "bash": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "pipestatus/a-bare-assignment": {
       "bash": {
         "Stdout": "[0]",
@@ -43674,6 +43718,50 @@
         "TimedOut": false
       }
     },
+    "whence/a-lists-every-resolution": {
+      "bash": {
+        "Stdout": "st=127~st=127",
+        "Stderr": "\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127~st=127",
+        "Stderr": "\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127~st=127",
+        "Stderr": "\u003cshell\u003e: whence: command not found~\u003cshell\u003e: whence: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127~st=127",
+        "Stderr": "\u003cshell\u003e: 1: whence: not found~\u003cshell\u003e: 1: whence: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "echo is a shell builtin~echo is /bin/echo~echo is an undefined function~st=0~st=1",
+        "Stderr": "\u003cshell\u003e: whence: nosuchcmd431: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "echo~/bin/echo~st=0~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "whence/a-name-that-resolves-to-nothing": {
       "bash": {
         "Stdout": "st=127~st=127",
@@ -43850,6 +43938,94 @@
         "TimedOut": false
       }
     },
+    "whence/c-is-the-csh-listing": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: whence: command not found~\u003cshell\u003e: whence: command not found~\u003cshell\u003e: whence: command not found~\u003cshell\u003e: whence: command not found~\u003cshell\u003e: whence: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: whence: not found~\u003cshell\u003e: 1: whence: not found~\u003cshell\u003e: 1: whence: not found~\u003cshell\u003e: 1: whence: not found~\u003cshell\u003e: 1: whence: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: whence: -c: unknown option~Usage: whence [-afpqv] name  ...~\u003cshell\u003e: whence: -c: unknown option~Usage: whence [-afpqv] name  ...~\u003cshell\u003e: whence: -c: unknown option~Usage: whence [-afpqv] name  ...~\u003cshell\u003e: whence: -c: unknown option~Usage: whence [-afpqv] name  ...~\u003cshell\u003e: whence: -c: unknown option~Usage: whence [-afpqv] name  ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "ll: aliased to ls -l~echo: shell built-in command~if: shell reserved word~/bin/ls~nosuchcmd431 not found~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "whence/nothing-to-ask-about": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: whence: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: whence: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: whence: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: whence: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2",
+        "Stderr": "Usage: whence [-afpqv] name  ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "whence/p-searches-path-alone": {
       "bash": {
         "Stdout": "got=~st=127",
@@ -43933,6 +44109,138 @@
       "zsh": {
         "Stdout": "echo is a shell builtin~st=0",
         "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "whence/w-is-the-bare-kind": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found~\u003cshell\u003e: line 1: whence: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: whence: command not found~\u003cshell\u003e: whence: command not found~\u003cshell\u003e: whence: command not found~\u003cshell\u003e: whence: command not found~\u003cshell\u003e: whence: command not found~\u003cshell\u003e: whence: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: whence: not found~\u003cshell\u003e: 1: whence: not found~\u003cshell\u003e: 1: whence: not found~\u003cshell\u003e: 1: whence: not found~\u003cshell\u003e: 1: whence: not found~\u003cshell\u003e: 1: whence: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=2",
+        "Stderr": "\u003cshell\u003e: whence: -w: unknown option~Usage: whence [-afpqv] name  ...~\u003cshell\u003e: whence: -w: unknown option~Usage: whence [-afpqv] name  ...~\u003cshell\u003e: whence: -w: unknown option~Usage: whence [-afpqv] name  ...~\u003cshell\u003e: whence: -w: unknown option~Usage: whence [-afpqv] name  ...~\u003cshell\u003e: whence: -w: unknown option~Usage: whence [-afpqv] name  ...~\u003cshell\u003e: whence: -w: unknown option~Usage: whence [-afpqv] name  ...",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "ll: alias~f: function~echo: builtin~if: reserved~ls: command~nosuchcmd431: none~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "whence/where-is-whence-with-c-and-a": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: where: command not found~\u003cshell\u003e: line 1: where: command not found~\u003cshell\u003e: line 1: where: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: where: command not found~\u003cshell\u003e: line 1: where: command not found~\u003cshell\u003e: line 1: where: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: where: command not found~\u003cshell\u003e: where: command not found~\u003cshell\u003e: where: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: where: not found~\u003cshell\u003e: 1: where: not found~\u003cshell\u003e: 1: where: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: where: not found~\u003cshell\u003e: where: not found~\u003cshell\u003e: where: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "echo: shell built-in command~/bin/echo~ll: aliased to ls -l~nosuchcmd431 not found~st=1",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "whence/where-takes-no-options": {
+      "bash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: where: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: line 1: where: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: where: command not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: 1: where: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "st=127",
+        "Stderr": "\u003cshell\u003e: where: not found",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "st=1",
+        "Stderr": "\u003cshell\u003e:where:1: bad option: -v",
         "Status": 0,
         "Signal": 0,
         "TimedOut": false

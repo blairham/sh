@@ -142,6 +142,31 @@ type Semantics struct {
 	// when the input ends short: bash assigns the partial text and ksh93
 	// assigns nothing, both reporting 1. Asked only on that partial text.
 	ReadExactCountKeepsPartial Answer
+	// ReadTimeoutKeepsWhatArrived decides what an expired `read -t` leaves
+	// behind: bash assigns whatever had arrived before the deadline and
+	// ksh93 and zsh touch no name at all, leaving the variable's earlier
+	// value. Asked only on the timeout, never at end of input, where all
+	// three assign.
+	//
+	// The distinction the wording is careful about is that bash does not
+	// *clear* the variable — it assigns a short read, and clearing is only
+	// what that looks like when nothing had arrived. Measured with a stream
+	// that delivers half a line and then stalls:
+	//
+	//	{ printf part; sleep 0.5; printf 'ial\n'; } |
+	//	  sh -c 'v=old; read -t 0.2 v; echo "$? [$v]"'
+	//
+	//	bash 5.3  142 [part]      ksh93  1 [old]      zsh  0 [partial]
+	//
+	// zsh's row is not this axis and is why the axis is worded around the
+	// timeout rather than around the partial text: its `-t` bounds the wait
+	// for the stream to become readable and nothing after that, so once a
+	// byte has arrived it reads the line to the end however long that takes
+	// and reports success. A zsh timeout therefore only ever happens with
+	// nothing to assign, which is the same observable as leaving the name
+	// alone; the two are told apart by how long the read takes, not by what
+	// it assigns.
+	ReadTimeoutKeepsWhatArrived Answer
 
 	// BuiltinWriteErrorFailsTheCommand makes a builtin whose output write
 	// failed — into a descriptor closed with `>&-`, most plainly — report

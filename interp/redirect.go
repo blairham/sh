@@ -603,11 +603,30 @@ func (r *Runner) setFd(fd int, v any) {
 //
 // A builtin that already failed keeps its own status: the write's 1 only
 // replaces a success, never a complaint the builtin had already made.
+//
+// A broken pipe is not one of these and is answered before any of it. Writing
+// into a pipe nobody is reading is how `yes | head` ends the thing writing,
+// and a real shell's builtin is killed by SIGPIPE where it stands: it says
+// nothing and it does not carry on. That is unanimous, and measured — a
+// builtin writing more than a pipe will hold into `| true` leaves an empty
+// standard error and never reaches the next command, in all four shells.
+//
+// We reached neither answer. Two dialects announced the write, in the wording
+// meant for `>&-`, and all four then ran the rest of the shell that should
+// have died — which is also why the corpus wandered: in `printf x | { read -d
+// : v; }` the reader refuses the option and leaves, and whether the writer's
+// small write beats the closing read end is a coin flip the machine gets to
+// call. Idle it never lost; under sixteen spinning loads it lost 3 times in
+// 200, and the reference dash lost 0 in 200 either way.
 func (r *Runner) builtinWriteStatus(name string, st int) int {
 	err := r.writeFailed
 	r.writeFailed = nil
 	if err == nil || r.unspecified {
 		return st
+	}
+	if errors.Is(err, syscall.EPIPE) {
+		r.signalDeath("PIPE", syscall.SIGPIPE)
+		return r.status
 	}
 	if !r.ask(r.sem().BuiltinWriteErrorFailsTheCommand, "a builtin's failed write failing the command") {
 		return st

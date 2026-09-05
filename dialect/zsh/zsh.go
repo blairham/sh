@@ -180,6 +180,7 @@ func Semantics() interp.Semantics {
 	// seconds.
 	s.ReadOptions = "rsnpAd:t:u:"
 	s.ReadZeroTimeout = interp.ReadZeroTimeoutFinishesWhatItStarted
+	s.ReadTimeoutKeepsWhatArrived = interp.No
 	s.ArithLeadingZeroIsOctal = interp.No
 	s.FatalErrorStatusIsOne = interp.Yes
 	s.ArithNameValueRecurses = interp.Yes
@@ -664,6 +665,10 @@ func Apply(r *interp.Runner) {
 	// See setopt.go and emulate.go.
 	registerSetopt(r)
 	registerEmulate(r)
+	// This shell's own question about a name, under two names: `whence` and
+	// `where`. Not ksh93's builtin under the same spelling — the stream, the
+	// statuses, the letters and every wording differ. See whence.go.
+	registerWhence(r)
 	// No `compgen` here; it is bash's alone.
 	r.Unregister("compgen")
 	r.Unregister("complete")

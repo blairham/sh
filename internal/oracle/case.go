@@ -4077,6 +4077,17 @@ echo unreachable`,
 		Why:     "the same rule on an ordinary array, which is where it belongs: zsh joins and the other two take the first element",
 	},
 	{
+		// The doubling loop is how a builtin is made to write more than a
+		// pipe will hold using nothing but the shell: 2^17 bytes against a
+		// buffer of 64K, so the write must block and the reader has already
+		// gone. A fixed literal that large would be a corpus file nobody can
+		// read, and an external `yes` would be measuring the *command's*
+		// death rather than a builtin's.
+		ID: "pipeline/a-builtin-writing-into-a-pipe-nobody-reads", Category: "pipeline status",
+		Snippet: `v=x; i=0; while [ $i -lt 17 ]; do v=$v$v; i=$((i+1)); done; { echo "$v"; echo reached >&2; } | true; echo after`,
+		Why:     "the quiet death, and the one no other case reaches: a builtin whose output goes into a pipe nobody is reading is killed by SIGPIPE where it stands, so `reached` never runs and nothing is said about it — unanimous in all four, and the point of the `>&2` is that a shell which merely swallowed the write would still print it. This is `yes | head` seen from the writing end, and it is the case the corpus was missing while `printf x | { read -d : v; }` measured the same thing by accident: there the write is small enough to fit, so whether it beats the reader's exit is the machine's to decide and the score wandered by one",
+	},
+	{
 		ID: "cmd/close-brace-as-an-ordinary-word", Category: "command language",
 		Snippet: `echo }`,
 		Why:     "`}` is reserved only where a command may begin in three of the four, so as an argument it is an ordinary brace — and in zsh it is reserved wherever a word may stand, which is a parse error here and is the same rule that lets `{ echo a }` close without a terminator",
@@ -5269,6 +5280,36 @@ out=$(CDPATH=./pool cd sub)
 		ID: "whence/an-unknown-letter", Category: "builtins",
 		Snippet: `whence -z echo; echo "st=$?"`,
 		Why:     "ksh93 refuses with `unknown option` and its whence usage line at 2, the same shape its other builtins use; zsh's whence reads -z as its own flag set differs",
+	},
+	{
+		ID: "whence/c-is-the-csh-listing", Category: "builtins",
+		Snippet: `alias ll="ls -l"; whence -c ll; whence -c echo; whence -c if; whence -c ls; whence -c nosuchcmd431; echo "st=$?"`,
+		Why:     "zsh's -c is a fourth shape, and it is not the bare one with words added: an alias is `ll: aliased to ls -l`, a builtin `echo: shell built-in command`, a reserved word `if: shell reserved word`, and a file its bare path. ksh93 has no -c at all, so the two builtins under one spelling diverge on the letter as well as on the wording",
+	},
+	{
+		ID: "whence/a-lists-every-resolution", Category: "builtins",
+		Snippet: `whence -a echo; echo "st=$?"; whence -a nosuchcmd431; echo "st=$?"`,
+		Why:     "-a is every resolution rather than the first: the builtin and then the PATH hit, in that order. ksh93 has the letter and this build does not implement it, which the row records as the refusal it is",
+	},
+	{
+		ID: "whence/w-is-the-bare-kind", Category: "builtins",
+		Snippet: `alias ll="ls -l"; f() { :; }; whence -w ll; whence -w f; whence -w echo; whence -w if; whence -w ls; whence -w nosuchcmd431; echo "st=$?"`,
+		Why:     "-w is zsh's own vocabulary for the kinds, and it is not `type -t`'s: a file is `command` here where the shell with -t says `file`, and a name that is nothing answers `none` rather than saying nothing. All six kinds in one row, because what is being pinned is the vocabulary rather than any one lookup",
+	},
+	{
+		ID: "whence/where-is-whence-with-c-and-a", Category: "builtins",
+		Snippet: `alias ll="ls -l"; where echo; where ll; where nosuchcmd431; echo "st=$?"`,
+		Why:     "zsh's second name for the same question, and it is exactly `whence -ca` — the csh listing over every resolution. Nothing else in the panel has a `where` at all",
+	},
+	{
+		ID: "whence/where-takes-no-options", Category: "builtins",
+		Snippet: `where -v echo; echo "st=$?"`,
+		Why:     "and it is a name rather than a synonym with flags: `where -v` is a bad option, not the sentence `whence -v` writes. A shell that implemented it by handing its arguments to whence would pass every other row here and fail this one",
+	},
+	{
+		ID: "whence/nothing-to-ask-about", Category: "builtins",
+		Snippet: `whence; echo "st=$?"`,
+		Why:     "the two shells with the builtin part company over an empty operand list: zsh says nothing and reports 1, ksh93 prints its usage line and reports 2. The quiet one is the trap — a script testing the status sees a plain miss",
 	},
 	{
 		ID: "print/joins-expands-and-ends-the-line", Category: "builtins",

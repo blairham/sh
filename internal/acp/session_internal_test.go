@@ -176,3 +176,83 @@ func TestAnUnknownEventKindIsStillReported(t *testing.T) {
 		t.Errorf("notice = %+v, want it to name what happened", notice)
 	}
 }
+
+// Two identical commands in flight at once, told apart.
+//
+// This is the case the fingerprint could not do and the reason #719 was filed
+// rather than worked around: kind, path and argv are the same for both, so a
+// queue keyed on them closes whichever started first whatever finishes first.
+// interp.Action.ID is different for each, and it is the same string on the
+// Action the gate saw and on every event that action produced.
+func TestTwoIdenticalActionsAreToldApart(t *testing.T) {
+	t.Parallel()
+	var calls tracker
+
+	// Same kind, same path, same argv — and two different actions.
+	one := interp.Event{Action: interp.Action{
+		ID: "a1", Kind: interp.ActionExec, Path: "/bin/sleep", Args: []string{"/bin/sleep", "1"},
+	}}
+	two := interp.Event{Action: interp.Action{
+		ID: "a2", Kind: interp.ActionExec, Path: "/bin/sleep", Args: []string{"/bin/sleep", "1"},
+	}}
+
+	first := calls.begin(one)
+	second := calls.begin(two)
+	if first == second {
+		t.Fatalf("two actions were given one tool call: %q", first)
+	}
+
+	// The second one finishes first, which is what a queue got wrong.
+	if got, ok := calls.end(two); !ok || got != second {
+		t.Errorf("ending the second action closed %q (found %v), want %q", got, ok, second)
+	}
+	if got, ok := calls.end(one); !ok || got != first {
+		t.Errorf("ending the first action closed %q (found %v), want %q", got, ok, first)
+	}
+	// And each is closed once: an end with nothing open is a standalone tool
+	// call rather than a second close of somebody else's.
+	if _, ok := calls.end(one); ok {
+		t.Error("an action was closed twice")
+	}
+}
+
+// The tool call the protocol names and the action the interpreter names are
+// the same string, which is what makes a client's transcript and the audit
+// stream joinable on a value both already carry.
+func TestAToolCallIsNamedByTheActionItReports(t *testing.T) {
+	t.Parallel()
+	var calls tracker
+	e := interp.Event{Action: interp.Action{ID: "3397GO9", Kind: interp.ActionExec, Path: "/bin/echo"}}
+	if got := calls.begin(e); got != "3397GO9" {
+		t.Errorf("tool call id = %q, want the action's own", got)
+	}
+}
+
+// An action with no identity is not matched to anything, rather than matched
+// to everything.
+//
+// Nothing in this package produces one — an empty id means a Runner with
+// neither a gate nor a sink, which emits no events either — but a defensive
+// fallback that keyed the empty string would put every such action in one
+// bucket and close the wrong tool call, which is the failure the fingerprint
+// had, brought back. The tool call still gets an id, because the protocol
+// requires one.
+func TestAnActionWithNoIdentityMatchesNothing(t *testing.T) {
+	t.Parallel()
+	var calls tracker
+	e := interp.Event{Action: interp.Action{Kind: interp.ActionExec, Path: "/bin/echo"}}
+	id := calls.begin(e)
+	if id == "" {
+		t.Error("a tool call was made with no id, which the protocol requires")
+	}
+	if _, ok := calls.head(e); ok {
+		t.Error("an action with no identity was matched to an open tool call")
+	}
+	if _, ok := calls.end(e); ok {
+		t.Error("an action with no identity closed an open tool call")
+	}
+	// A second one gets an id of its own rather than the first one's.
+	if again := calls.begin(e); again == id {
+		t.Errorf("two unidentified actions share the tool call %q", id)
+	}
+}

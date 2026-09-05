@@ -671,11 +671,13 @@ func (l *Lexer) scanWord(start Pos) Token {
 			spans = append(spans, l.scanParens(CommandSubst, Unquoted))
 
 		case l.startsProcSubst():
-			// Unquoted only, and that is not an omission: `"<(cmd)"` is the
-			// five characters in every shell in the panel, dash included,
-			// because what it produces is a *path* and a quoted path is
-			// still a path — there would be nothing for the quoting to
-			// change. Measured; see docs/spec/grammar/substitutions.md.
+			// Unquoted only, and that is not an omission: `"<(echo hi)"` is
+			// its own ten characters of text in every shell in the panel,
+			// dash included, because what it produces is a *path* and a
+			// quoted path is still a path — there would be nothing for the
+			// quoting to change. Measured, and pinned by the corpus case
+			// procsub/quoted-is-not-a-substitution; see
+			// docs/spec/grammar/substitutions.md.
 			flush()
 			spans = append(spans, l.scanParens(procSubstKind(c), Unquoted))
 

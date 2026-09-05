@@ -255,6 +255,58 @@ with `@agentclientprotocol/sdk`, which is where `AuthMethodTerminal`,
 `AuthMethodAgent`, `AuthCapabilities` and `AuthenticateRequest` are defined,
 rather than from prose or from any SDK's source.
 
+### `terminal/*`, and what the gate can see because of it
+
+An agent that cannot ask a client to run something runs it itself: its own
+fork, its own exec, its own argv, and **no gate anywhere sees it**. That is not
+a gap at the edge of the design — it is the whole of it. A shell's policy on a
+coding agent that cannot see the commands the agent runs is a policy on the
+agent's file reads and nothing else.
+
+So the five methods are implemented and advertised, for the same reason `fs/*`
+is and one step further along the same argument:
+
+| inbound | what happens |
+| --- | --- |
+| `terminal/create` | `ActionExec` with the argv, through the gate, then `exec.Cmd` |
+| `terminal/output` | what it has written so far, and its exit status if it has one |
+| `terminal/wait_for_exit` | blocks until it ends, or until the request's context does |
+| `terminal/kill` | `ActionSignal` through the gate, then `SIGKILL` |
+| `terminal/release` | recorded, not gated — see below |
+
+**A refused `terminal/create` is a command that never started**, and the agent
+is told so as an error rather than an empty terminal, because a terminal id
+that names nothing is a thing it would then poll.
+
+**Release is recorded and not gated, and kill is gated.** They both end a
+process, so the difference has to be argued rather than assumed. `terminal/kill`
+is the agent reaching a running process it chose to reach, which is exactly the
+`ActionSignal` case. `terminal/release` is the protocol's only way to say "I am
+finished with this", and the signal inside it is *the client ending something
+the client started*, on the same rule `internal/boundary` already draws: an
+access is inside the boundary when the path — here the process — was chosen by
+whoever the policy is about. Refusing a release would also leave this client
+holding the process forever, with the agent given no other way out.
+
+**Both of the command's streams become one.** A terminal has one, an agent
+asking for output is asking what a person would have seen on a screen, and
+splitting them would invent a distinction the protocol does not have.
+
+**`outputByteLimit` truncates from the front, at a character boundary**, which
+the protocol requires in so many words. The retained slice is copied rather
+than resliced: a reslice leaves the dropped prefix alive in the array
+underneath, so a long-running command would hold every byte it ever wrote,
+which is the one thing a limit exists to prevent.
+
+**A terminal outlives the request that made it and dies with the connection.**
+The context a handler is given is the connection's, which is the right lifetime
+for a process the agent will come back to — and it means an agent that
+disconnects mid-command does not leave one running.
+
+The environment is inherited and then written over rather than replaced. A
+command started with only the agent's few variables has no `PATH`, so every
+`terminal/create` would fail for a reason nothing on the wire explains.
+
 ### Where the gate sits on this side
 
 Every inbound request that would touch the world is an `interp.Action`
@@ -377,45 +429,42 @@ gate runs before `EventCommandStart`, so the tool call exists by the
 time the event arrives and the event updates it rather than creating a
 second.
 
-### The correlation gap: blocked on #719, and not ours to close
+### Correlation: one id, asked for rather than invented
 
-`interp.Event` carries no identity for the action it belongs to.
-`EventCommandStart` and `EventCommandEnd` are matched by *ordering*, and
-ordering is exactly what concurrency breaks: a background job and each
-half of a pipeline emit from their own goroutines.
+`interp.Event` used to carry no identity for the action it belonged to, so a
+start and an end were matched by *ordering* — and ordering is exactly what
+concurrency breaks, since a background job and each half of a pipeline emit
+from their own goroutines. This front end matched on a fingerprint of the
+action instead: kind, path, argv, and the write flag or the signal target,
+with a queue of open tool calls per fingerprint. That was right whenever two
+identical commands were not in flight at once, and marked the wrong tool call
+complete when they were.
 
-The audit schema in `internal/event` — owned by
-`docs/design/sandboxing.md`, which this consumes rather than competes
-with — does not close it either, and says so: `seq` is a total order of
-*emission* and is explicitly "not a causal order". That is the right
-call for a log and leaves this mapping without an answer.
+It is closed. **#719** — landed as #730 — gave `interp.Action` an `ID` and
+`interp.Event` a `Session`, and the id is the same string on the Action a gate
+is consulted about and on every event that action produces. That is exactly
+the promise this needed, so the fingerprint is gone and the tracker is a set
+keyed on the id.
 
-**Two consumers reached the same missing field from opposite
-directions.** The blocks work needed to say which events belong to which
-run and had to generate an id of its own to cope; this needs to say
-which events belong to which action, and to join a permission request to
-the events for the action it approved. It is filed as **#719**, and the
-reason it is one issue rather than two workarounds is that *two id
-schemes that do not agree are worse than none* — they look joinable and
-are not.
+Two things about the shape are worth keeping.
 
-So this front end does **not** invent one. Until #719 lands it matches
-by a fingerprint of the action alone — kind, path, args, and the write
-flag or the signal target — with a queue of open tool calls per
-fingerprint, and an unmatched end becomes a standalone completed tool
-call rather than being dropped. The line and the file would discriminate
-better and are deliberately left out: a gate is consulted with an
-`Action` before any event exists, so a key carrying them could never
-join the two halves. Where two identical commands are in flight at once
-it marks the wrong tool call complete, which is cosmetic — no decision
-changes — and is still wrong.
+**The tool call id and the action id are the same string.** `ToolCallId` is
+required by the protocol and was minted here as `call-1`, `call-2`; there is no
+reason for it to be a different value from the one the interpreter already
+uses, and every reason for it not to be — a client's transcript and the audit
+stream now join on a value both already carry, rather than on a fingerprint
+that agrees by luck. Nothing was invented for this: asking for one field
+rather than minting a second scheme was the whole argument, because two id
+schemes that do not agree are worse than none.
 
-The tool call ids and session ids this front end does mint are not that
-scheme and are not a substitute for it. `ToolCallId` and `SessionId` are
-*required by the protocol*: a client cannot show a permission request
-without one, and every message in a session names it. They identify
-things on the wire, not actions in the interpreter, and when #719 lands
-the fingerprint goes and these stay.
+**An action with no id is matched to nothing, not to everything.** Nothing in
+the interpreter produces one — an empty id means a Runner with neither a gate
+nor a sink, which emits no events either — and a defensive fallback that keyed
+the empty string would put every such action in one bucket and close the wrong
+tool call, which is the fingerprint's failure brought back by a default. It
+still gets a tool call id, because the protocol requires one; it simply joins
+to nothing, and an unmatched end becomes a standalone completed tool call,
+which is visible.
 
 ### Reading the event schema, not only writing to it
 
@@ -488,6 +537,27 @@ from the specification alone:
 4. **`-32601` is a fact, not a failure.** Gemini answers it for every
    optional method. A client must treat method-not-found as "this agent
    does not do that" and carry on.
+5. **An agent may decline a capability it was offered**, and two of them
+   do. Measured with `terminal: true` and both file methods advertised,
+   asked in as many words to run a shell command: **Claude Agent 0.75.1
+   and Codex 1.10.0 both ran it in their own process** and called no
+   client method at all. Claude Agent reported it as a `tool_call` of
+   kind `execute` with the command in `rawInput` and its output in
+   `rawOutput`; Codex reported a `tool_call` whose content names a
+   `terminal` — with a `terminalId` of its own minting, not one this
+   client issued.
+
+   This is the sharpest limit on the whole client-side thesis and it is
+   not a defect in the implementation: the gate can only see what an
+   agent *asks* for, and an adapter that shells out for itself asks for
+   nothing. `terminal/*` is what makes the honest route exist, and
+   whether an agent takes it is the agent's. Gemini CLI is native ACP
+   rather than an adapter and is the one most likely to; measuring that
+   needs a credential and is **#729**.
+
+   The consequence for a person is worth stating plainly: against those
+   two adapters today, `-deny` and the audit trail cover what the agent
+   asks *us* to read and write, and do not cover the commands it runs.
 
 The differences are recorded here rather than discovered per agent
 because they are the compatibility surface, and because "they all speak

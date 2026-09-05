@@ -8122,6 +8122,50 @@
         "TimedOut": false
       }
     },
+    "cmd/function-body-a-command-with-a-redirection": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `echo'~\u003cshell\u003e: -c: line 1: `f() echo hi \u003eout; f'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 1: syntax error near unexpected token `echo'~\u003cshell\u003e: -c: line 1: `f() echo hi \u003eout; f'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `echo'~\u003cshell\u003e: -c: line 0: `f() echo hi \u003eout; f'",
+        "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "\u003cshell\u003e: syntax error at line 1: `\u003e' unexpected",
+        "Status": 3,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "cmd/function-body-a-redirection": {
       "bash": {
         "Stdout": "",
@@ -8185,6 +8229,50 @@
         "Stdout": "",
         "Stderr": "\u003cshell\u003e: -c: line 0: syntax error near unexpected token `x=1'~\u003cshell\u003e: -c: line 0: `f() x=1; f'",
         "Status": 2,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "cmd/function-body-compound-with-a-redirection": {
+      "bash": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "",
+        "Stderr": "",
+        "Status": 0,
         "Signal": 0,
         "TimedOut": false
       },

@@ -2501,6 +2501,17 @@ echo "st=$?"`,
 		Why:         "a body of nothing but a redirection: the token blamed is the operator rather than the word after it, and two shells refuse it where two run it",
 	},
 	{
+		ID: "cmd/function-body-a-command-with-a-redirection", Category: "command language",
+		SyntaxError: true,
+		Snippet:     `f() echo hi >out; f`,
+		Why:         "the same refusal with a command in front of the operator, which says what the rule is: the shell that refuses `f() >out` is not asking for a command, it refuses a redirection in an uncompounded body at all — and it names the operator, with the `echo` already accepted. The two that run it write the line to the file and print nothing",
+	},
+	{
+		ID: "cmd/function-body-compound-with-a-redirection", Category: "command language",
+		Snippet: `f() { echo hi; } >out; f`,
+		Why:     "the control for the row above: braces make the same redirection acceptable everywhere, including in the shell that refuses it on a bare command, so that refusal is about the *body* and not about redirecting a function",
+	},
+	{
 		ID: "cmd/function-with-no-body-at-all", Category: "command language",
 		SyntaxError: true,
 		Snippet:     `f() ;`,

@@ -121,6 +121,23 @@ type Error struct {
 	// unexpected` where the other three name the token — so the fact has to
 	// travel with the error rather than being worked out from the text.
 	Redirect bool
+	// FuncBody says the grammar was waiting for a function's body, and that
+	// the body never began — `f() ;` and `f()` rather than `f() {` with the
+	// input running out inside the braces.
+	//
+	// One dialect reports this one failure without a line: zsh answers `f()
+	// ;` with ``zsh: parse error near `;' `` where it answers `if true` with
+	// ``zsh:1: parse error near `true' ``, and both are an input that ran out.
+	// Whatever decides that is not the kind of failure, so the fact travels
+	// with the error the way Redirect does rather than being worked out from
+	// the text.
+	//
+	// Not set once a newline has come between the parens and the failure:
+	// measured, the line comes back there — `f()` and a newline is
+	// ``zsh:1: parse error near `\n' ``. Which line it then names is a
+	// further divergence and is not modeled: zsh says 1 where the offending
+	// token is on line 2.
+	FuncBody bool
 	// Expr is the whole arithmetic expression a failure was inside, and
 	// Token the part of it the failure is attributed to. Every shell quotes
 	// the first; only one names the second.

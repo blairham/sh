@@ -1192,6 +1192,20 @@ type Diagnostics struct {
 	// prefixed there as usual — `line 2: nosuchcmd: not found` — which is why
 	// this is not simply the script location being absent.
 	ParseFailureNamesItsOwnLine bool
+
+	// MissingFuncBodyOmitsTheLine drops the line from the location of a parse
+	// failure where a function's body was expected and never began.
+	//
+	//	zsh -c 'f() ;'     zsh: parse error near `;'
+	//	zsh -c 'f()'       zsh: parse error near `()'
+	//	zsh -c 'if true'   zsh:1: parse error near `true'
+	//
+	// zsh alone, and only for that one failure: the last of the three is an
+	// input that ran out too, so this is not "an end of input" and not the
+	// kind of failure either. What it is, is `syntax.Error.FuncBody`, which
+	// the parser sets where it knows — see there for the corner a newline
+	// between the parens and the failure opens up.
+	MissingFuncBodyOmitsTheLine bool
 	// NotABuiltin is `builtin`'s refusal of a name that is not one. One verb:
 	// %[1]s the name.
 	NotABuiltin string
@@ -2112,6 +2126,12 @@ func (d Diagnostics) ParseDiagnostic(name, input string, err error, src string) 
 		// The wording says where it was, so the location says only who.
 		d.Location = LocationNone
 	}
+	if d.MissingFuncBodyOmitsTheLine && missingFuncBody(err) {
+		// One failure this dialect locates by name alone. Not LocationNone,
+		// which is a different answer with the same rendering here and would
+		// take the shell's name away from a dialect that prints one.
+		d.Location = LocationNameOnly
+	}
 	line := d.ParseFailureLine(err)
 	if line == 0 {
 		// A failure that does not say where it was. Only the first line can
@@ -2125,6 +2145,13 @@ func (d Diagnostics) ParseDiagnostic(name, input string, err error, src string) 
 	}
 	out := d.ReportFrom(name, input, line, d.ParseFailure(err)+"\n")
 	return out + d.echoLine(name, input, line, err, src)
+}
+
+// missingFuncBody reports whether err is a parse failure at the point where a
+// function's body was expected and never began.
+func missingFuncBody(err error) bool {
+	var se *syntax.Error
+	return errors.As(err, &se) && se.FuncBody
 }
 
 // echoLine is the second line, or empty for none.

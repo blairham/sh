@@ -29,6 +29,11 @@ func Dialect() syntax.Dialect {
 		"export": true, "readonly": true,
 	}
 	d.FunctionKeywordParens = true
+	// `()` is one token to this lexer, which shows in the one place a
+	// diagnostic names the last token it read: `f()` with the input running
+	// out reports as parse error near `()' rather than naming the closing
+	// paren on its own.
+	d.EmptyParensAreOneToken = true
 	// `}` is reserved wherever a word may stand here, which is what lets a
 	// brace group close without a terminator — and what makes `echo }` a
 	// syntax error rather than a brace on the output.
@@ -523,12 +528,17 @@ func Diagnostics() interp.Diagnostics {
 		ArithOperandExpected:         "bad math expression: operand expected at end of string",
 		ArithOperatorExpected:        "bad math expression: operator expected at `%[1]s'",
 		SyntaxUnexpected:             "parse error near `%[1]s'",
-		ForName:                      "parse error near `%[1]s'",
-		Unterminated:                 "parse error near `%[5]s'",
-		UnmatchedQuote:               "unmatched %[1]s",
-		UnmatchedCmdSubst:            "parse error near `%[3]s'",
-		UnmatchedBraceSubst:          "closing brace expected",
-		SyntaxErrorStatus:            1,
+		// zsh names itself and stops when a function's body never began.
+		// `f() ;` reports as zsh: parse error near `;' where `if true` — an
+		// input that ran out just as much — reports the line as well, as
+		// zsh:1: parse error near `true'.
+		MissingFuncBodyOmitsTheLine: true,
+		ForName:                     "parse error near `%[1]s'",
+		Unterminated:                "parse error near `%[5]s'",
+		UnmatchedQuote:              "unmatched %[1]s",
+		UnmatchedCmdSubst:           "parse error near `%[3]s'",
+		UnmatchedBraceSubst:         "closing brace expected",
+		SyntaxErrorStatus:           1,
 		// zsh alone answers "a syntax error" differently depending on where it
 		// read the text: 1 from -c, 126 from a file `.` opened.
 		SourcedSyntaxErrorStatus: 126,

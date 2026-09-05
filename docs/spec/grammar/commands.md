@@ -563,6 +563,54 @@ three of the four accept it, and the strictness is a grammar flag:
 about the POSIX form only; the keyword form's shapes are the table
 above.
 
+**ksh93 has a third answer, and it is not a weaker version of bash's.**
+It takes the simple command and refuses a *redirection* in it, wherever
+the operator stands (measured 2026-09-05, rows
+`cmd/function-body-a-redirection`,
+`cmd/function-body-a-command-with-a-redirection`,
+`cmd/function-body-compound-with-a-redirection`):
+
+    f() >out; f            dash, zsh: run    bash: at `>'    ksh93: at `>'
+    f() echo hi >out; f    dash, zsh: run    bash: at `echo' ksh93: at `>'
+    f() x=1 >out; f        dash, zsh: run    bash: at `x=1'  ksh93: at `>'
+    f() 2>&1; f            dash, zsh: run    bash: at `2>&1' ksh93: at `>&'
+    f() { echo hi; } >out  all four: run
+
+The middle rows are what separate the two refusals. bash blames the
+command and never reads what follows it; ksh93 accepts the `echo` and
+blames the operator, so it is not asking for a compound body — it is
+refusing to redirect one that is not. Braces make the same redirection
+acceptable in every shell, which says the rule is about the body rather
+than about redirecting a function. Grammar flag:
+`FuncBodyTakesNoRedirection`, on for `ksh` alone.
+
+### A body that never began
+
+    f() ;     dash   Syntax error: ";" unexpected
+              bash   syntax error near unexpected token `;'
+              ksh93  syntax error at line 1: `;' unexpected
+              zsh    parse error near `;'
+
+    f()       dash   Syntax error: end of file unexpected
+              bash   syntax error: unexpected end of file
+              ksh93  syntax error at line 1: `end of file' unexpected
+              zsh    parse error near `()'
+
+Two things here are zsh's alone. It names **`()`** where the others'
+last token would be the closing paren, because its lexer reads the empty
+pair as one token — grammar flag `EmptyParensAreOneToken`, and `f( )`
+with a space is not that token and is not read as a definition there at
+all. And it prints **no line** in the location for either of these,
+`zsh:` where the same shell writes `zsh:1:` for `if true`, which is an
+input that ran out just as much. That is not the kind of failure, so the
+parser marks the error instead — `syntax.Error.FuncBody`, rendered by
+`Diagnostics.MissingFuncBodyOmitsTheLine`.
+
+The mark stops at a newline, because the behavior does: `f()` followed by
+a newline is `zsh:1: parse error near \n`, with the line back. Which line
+it then names is a further divergence and is not modeled — zsh says 1
+where the offending token is on line 2.
+
 **A function name may carry `-` and `.`** — `f-g()`, `a.b()` — and the
 panel splits by *stage* rather than by yes and no: bash and zsh define
 and run the function, dash refuses the name while parsing

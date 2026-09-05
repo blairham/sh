@@ -28,6 +28,11 @@ func Dialect() syntax.Dialect {
 		"typeset": true, "export": true, "readonly": true,
 	}
 	d.ParamIndirection = true
+	// A function body that is not compound may carry no redirection here:
+	// `f() echo hi` runs and `f() >out`, `f() echo hi >out` and `f() x=1
+	// >out` are all a syntax error at the operator. A braced body is not
+	// this rule — `f() { :; } >out` is accepted.
+	d.FuncBodyTakesNoRedirection = true
 	// `$"..."`, the locale-translatable string: with no catalog it is a
 	// plain double-quoted string with the `$` stripped. Not core, because
 	// dash and zsh keep the `$` as a literal.

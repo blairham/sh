@@ -1942,6 +1942,8 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `cmd/function-body-simple-command` | `hi` | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `f() echo hi; f'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `f() echo hi; f'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `echo'~<shell>: -c: line 0: `f() echo hi; f'` *(status 2)* | `hi` | `hi` |
 | `cmd/function-body-an-assignment` | *(no output, status 0)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `x=1'~<shell>: -c: line 1: `f() x=1; f'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `x=1'~<shell>: -c: line 1: `f() x=1; f'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `x=1'~<shell>: -c: line 0: `f() x=1; f'` *(status 2)* | *(no output, status 0)* | *(no output, status 0)* |
 | `cmd/function-body-a-redirection` | *(no output, status 0)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `>'~<shell>: -c: line 1: `f() >out; f'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `>'~<shell>: -c: line 1: `f() >out; f'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `>'~<shell>: -c: line 0: `f() >out; f'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `>' unexpected` *(status 3)* | *(no output, status 0)* |
+| `cmd/function-body-a-command-with-a-redirection` | *(no output, status 0)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `f() echo hi >out; f'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `echo'~<shell>: -c: line 1: `f() echo hi >out; f'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `echo'~<shell>: -c: line 0: `f() echo hi >out; f'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `>' unexpected` *(status 3)* | *(no output, status 0)* |
+| `cmd/function-body-compound-with-a-redirection` | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* | *(no output, status 0)* |
 | `cmd/function-with-no-body-at-all` | **2>** `<shell>: 1: Syntax error: ";" unexpected` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `f() ;'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `;'~<shell>: -c: line 1: `f() ;'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `;'~<shell>: -c: line 0: `f() ;'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `;' unexpected` *(status 3)* | **2>** `<shell>: parse error near `;'` *(status 1)* |
 | `cmd/function-parens-then-end-of-input` | **2>** `<shell>: 1: Syntax error: end of file unexpected` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: syntax error at line 1: `end of file' unexpected` *(status 3)* | **2>** `<shell>: parse error near `()'` *(status 1)* |
 | `cmd/function-name-with-a-dash` | **2>** `<shell>: 1: Syntax error: Bad function name` *(status 2)* | `ok~after` | `ok~after` | `ok~after` | **2>** `<shell>: f-g: invalid function name` *(status 1)* | `ok~after` |
@@ -2095,6 +2097,14 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `cmd/function-body-a-redirection` — a body of nothing but a redirection: the token blamed is the operator rather than the word after it, and two shells refuse it where two run it
   ```sh
   f() >out; f
+  ```
+- `cmd/function-body-a-command-with-a-redirection` — the same refusal with a command in front of the operator, which says what the rule is: the shell that refuses `f() >out` is not asking for a command, it refuses a redirection in an uncompounded body at all — and it names the operator, with the `echo` already accepted. The two that run it write the line to the file and print nothing
+  ```sh
+  f() echo hi >out; f
+  ```
+- `cmd/function-body-compound-with-a-redirection` — the control for the row above: braces make the same redirection acceptable everywhere, including in the shell that refuses it on a bare command, so that refusal is about the *body* and not about redirecting a function
+  ```sh
+  f() { echo hi; } >out; f
   ```
 - `cmd/function-with-no-body-at-all` — no grammar has a body here, refusing or permissive, and all four name the token rather than describing the function
   ```sh
@@ -3699,6 +3709,8 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `redir/a-group-writing-to-a-closed-descriptor` | `st=1` **2>** `<shell>: 1: echo: echo: I/O error~<shell>: 1: echo: echo: I/O error` | `st=1` **2>** `<shell>: line 1: echo: write error: Bad file descriptor~<shell>: line 1: echo: write error: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: echo: write error: Bad file descriptor~<shell>: line 1: echo: write error: Bad file descriptor` | `a~b~st=1` **2>** `<shell>: line 0: echo: write error: Bad file descriptor~<shell>: line 0: echo: write error: Bad file descriptor` | `st=1` | `st=0` **2>** `<shell>:1: write error: bad file descriptor~<shell>:1: write error: bad file descriptor` |
 | `redir/exec-opens-a-high-descriptor` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` |
 | `redir/exec-descriptor-reaches-an-external-child` | `child` | `child` | `child` | `child` | *(no output, status 0)* | `child` |
+| `redir/exec-descriptor-reaches-a-replacement` | `repl` | `repl` | `repl` | `repl` | *(no output, status 0)* | `repl` |
+| `redir/a-replacements-descriptor-numbers-keep-their-gaps` | `five` | `five` | `five` | `five` | *(no output, status 0)* | `five` |
 | `redir/an-inherited-descriptor-keeps-its-number` | `five` | `five` | `five` | `five` | *(no output, status 0)* | `five` |
 | `redir/a-dup-prefix-is-that-commands-alone` | `st=2` **2>** `<shell>: 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: 6: Bad file descriptor` | `st=1` **2>** `<shell>: 6: Bad file descriptor` | `st=1` **2>** `<shell>: 6: cannot open [Bad file descriptor]` | `st=1` **2>** `<shell>:1: 6: bad file descriptor` |
 | `redir/merge-then-file` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` | `[out~err]` |
@@ -3841,6 +3853,14 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `redir/exec-descriptor-reaches-an-external-child` — a descriptor parked with `exec 3>file` is inherited by an external command, which is what the flock and shared-log idioms are built on — the child writes in every shell but ksh93, which alone keeps it to itself. The child's complaint is discarded because its wording is a fact about whatever /bin/sh is on the machine
   ```sh
   exec 3>f; /bin/sh -c "echo child >&3" 2>/dev/null; exec 3>&-; cat f
+  ```
+- `redir/exec-descriptor-reaches-a-replacement` — the same descriptor and the harder seam: `exec cmd` replaces the shell rather than forking one, so nothing renumbers the table on the way across and the command inherits the *process's* descriptors. The replacement writes in every shell but ksh93, exactly as a child does, and the reading is done by the replacement because there is no shell left to do it. The complaint is discarded for the reason the child's is
+  ```sh
+  exec 3>f; exec /bin/sh -c "{ echo repl >&3; } 2>/dev/null; cat f"
+  ```
+- `redir/a-replacements-descriptor-numbers-keep-their-gaps` — the replacement's table is the shell's table by number rather than a packing of it: with 3 and 4 never opened, the file parked on 5 is on 5 there and 3 is closed rather than shifted down to fill the hole. Unanimous but for ksh93, which passes neither
+  ```sh
+  exec 5>f; exec /bin/sh -c "{ echo five >&5; echo three >&3; } 2>/dev/null; cat f"
   ```
 - `redir/an-inherited-descriptor-keeps-its-number` — the discriminating case for how the table crosses: with 3 and 4 never opened, the file parked on 5 is still on 5 in the child and 3 is a hole, so the file holds `five`. A table packed from the bottom would put it on 3 and the file would hold `three`
   ```sh

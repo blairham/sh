@@ -237,6 +237,37 @@ unless the case supplies its own — because a record that depends on
 whose machine produced it is not evidence. Shell
 and script paths are normalized out of diagnostics for the same reason.
 
+### The corpus may grow and may not shrink
+
+    make corpus-guard   # fail if a case that existed at the merge base is gone
+
+The corpus is a set, and it is written down as a Go slice literal that git
+merges as text. Those two facts disagree: a merge or a rebase can resolve
+`case.go` by taking one side and drop cases without a conflict, without a
+failing test, and without anything in the diff to see — a reviewer reads
+what changed, not what silently left. One `gh pr update-branch` took it
+from 1088 IDs to 1084, and only a hand count noticed.
+
+What that costs is why it is a check and not a note. A dropped case is lost
+coverage that reads as a passing build: the conformance total moves by a
+few, and the campaign moves it by a few every day.
+
+The guard compares the case IDs in the tree against the case IDs at the
+merge base with `main`. It compares **sets**, because a count is defeated by
+the shape it is meant to catch — add two cases while merging two away and
+the total is unchanged; add five while losing four and it rises. Its
+baseline is **history**, because a committed list of IDs is another file in
+the same tree, merged by the same merge, and a baseline the guarded event
+can rewrite is not one. Uniqueness is checked in the same place, since a
+repeated ID is one case's evidence written over another's in the golden
+record.
+
+Retiring a case on purpose means naming it in `corpusguard.Retired` with
+the reason. It should be rare: the ID is the key in the golden record, so
+dropping one throws away what five real shells were measured doing, and
+renaming a case is a retirement plus an addition. No ID has ever left
+`main`.
+
 A shell that is absent is reported, not fatal, and its column is omitted
 rather than blanked: a table from three shells is a weaker claim than the
 same table from five, and the generated file says which it was.

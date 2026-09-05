@@ -699,6 +699,31 @@ type Diagnostics struct {
 	// what it does.
 	JobLine string
 
+	// JobLineLong is the same row as `jobs -l` writes it, with the process
+	// id in it. Five verbs: the number, the marker, the process id, the
+	// state and the command.
+	//
+	// A separate format rather than a field spliced into JobLine, because
+	// where the id goes is not one rule. Measured to the byte, with a
+	// five-digit id:
+	//
+	//	bash   [1]+ 41293 Running                    sleep 0.4 &
+	//	dash   [1] + 41293 Running
+	//	ksh93  [1] + 41293\t Running                 <command unknown>
+	//	zsh    [1]  + 41293 running    sleep 0.4
+	//
+	// bash spends one of the two spaces after its marker on the id; the
+	// other three insert the id and keep the spacing they had. ksh93 puts a
+	// tab after it. And dash narrows its state column by exactly what the id
+	// took, so that the command column stays where it was — the only shell
+	// in the panel that does, and invisible in practice, because dash keeps
+	// no command text and what moves is trailing whitespace. The width here
+	// is the measured one for a five-digit id rather than that arithmetic.
+	//
+	// Empty means JobLine with the id and a space in front of the state,
+	// which no dialect in the panel relies on.
+	JobLineLong string
+
 	// JobRunning, JobStopped and JobDone are the states a job is listed in.
 	// No verbs.
 	//

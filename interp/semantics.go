@@ -855,6 +855,39 @@ type Semantics struct {
 	// this engine never forwards — and its `jobs` goes on listing the job.
 	DisownRemovesTheJob Answer
 
+	// JobsOptions is the set of letters `jobs` takes, spelled the way
+	// ReadOptions is. The letters are the dialect's own and the sets are
+	// not nested: POSIX and dash have `-l` and `-p` alone, bash adds
+	// `-n -r -s -x`, ksh93 adds only `-n`, and zsh adds `-r -s` plus three
+	// of its own. Empty means `lp`, which is POSIX's pair and the only one
+	// every shell in the panel has.
+	//
+	// It is a semantics field rather than a constant because a letter one
+	// shell has and another has never heard of is a *refusal* in the second
+	// one: `jobs -r` lists the running jobs in bash and is an illegal
+	// option in dash, and a shared letter set would have this engine accept
+	// it everywhere and answer dash's scripts differently from dash.
+	JobsOptions string
+	// JobsPidsOnlyOption makes `jobs -p` print one process id per line and
+	// nothing else — no number, no marker, no state, no command. dash, bash
+	// and ksh93 all do; zsh reads the same letter as "put the job's process
+	// *group* id in the listing" and prints its ordinary rows, so a
+	// `kill $(jobs -p)` written for one of the first three kills nothing
+	// there.
+	//
+	// Asked only where the letter was given, and only in a dialect that has
+	// it, so a listing with no `-p` never reaches it.
+	JobsPidsOnlyOption Answer
+	// JobsStateFiltersAccumulate decides `jobs -r -s`, where both of the
+	// state filters are named at once: zsh lists a job matching *either*
+	// state, bash lets the last letter given decide and lists only the jobs
+	// in that state — so `jobs -rs` there is `jobs -s`.
+	//
+	// Asked only when both letters arrive together. One of them alone means
+	// the same thing in both shells, and the two dialects without the
+	// letters cannot reach the question at all.
+	JobsStateFiltersAccumulate Answer
+
 	// DeclareGlobalReachesPastALocal is `declare -g x=new` with a `local x`
 	// standing in front of the name: bash writes the global cell and leaves
 	// the local untouched, zsh assigns the visible cell — the local — and
@@ -1803,7 +1836,12 @@ func PosixSemantics() Semantics {
 		// The POSIX read: -r alone. The counts, delimiters and descriptors
 		// the dialects add are theirs to add, and the two count axes are
 		// unreachable without the letters that raise them.
-		ReadOptions:             "r",
+		ReadOptions: "r",
+		// The POSIX jobs: -l and -p, and `-p` means the process ids alone.
+		// The state filters and the rest are the dialects' additions, and
+		// the two axes their letters raise are unreachable without them.
+		JobsOptions:             "lp",
+		JobsPidsOnlyOption:      Yes,
 		LengthOfSpecialIsCount:  Yes,
 		ArithLeadingZeroIsOctal: Yes,
 		// dash is the panel's POSIX-faithful member and the only one

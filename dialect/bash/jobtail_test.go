@@ -194,3 +194,42 @@ func TestJobAxes(t *testing.T) {
 		}
 	}
 }
+
+// `jobs`' letters. bash has the widest set in the panel, and two of them are
+// refused by name rather than accepted and thrown away.
+func TestJobsOptionLetters(t *testing.T) {
+	out, _ := runBash(t, t.TempDir(), `/bin/sleep 0.3 & echo "bang=$!"
+jobs -p
+wait`)
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 2 || lines[1] != strings.TrimPrefix(lines[0], "bang=") {
+		t.Errorf("got %q, want the job's process id and nothing else", out)
+	}
+
+	out, _ = runBash(t, t.TempDir(), `jobs -n; echo n=$?
+jobs -x true; echo x=$?
+jobs -Q; echo q=$?`)
+	if !strings.Contains(out, "jobs: -n is not implemented yet") ||
+		!strings.Contains(out, "jobs: -x is not implemented yet") {
+		t.Errorf("got %q, want the two letters bash has named as missing", out)
+	}
+	if !strings.Contains(out, "jobs: -Q: invalid option") ||
+		!strings.Contains(out, "jobs: usage: jobs [-lnprs] [jobspec ...] or jobs -x command [args]") {
+		t.Errorf("got %q, want a letter nobody has refused with the usage line", out)
+	}
+}
+
+// `-r` and `-s` pick a state, and with both the last letter given decides.
+func TestJobsStateFiltersLastLetterWins(t *testing.T) {
+	out, _ := runBash(t, t.TempDir(), `/bin/sleep 0.3 & jobs -r; echo "--"; jobs -s; echo "--"; jobs -rs; wait`)
+	parts := strings.Split(out, "--")
+	if len(parts) != 3 {
+		t.Fatalf("got %q, want three listings", out)
+	}
+	if !strings.Contains(parts[0], "[1]") {
+		t.Errorf("got %q, want -r to list the running job", parts[0])
+	}
+	if strings.Contains(parts[1], "[1]") || strings.Contains(parts[2], "[1]") {
+		t.Errorf("got %q / %q, want -s and -rs to list nothing", parts[1], parts[2])
+	}
+}

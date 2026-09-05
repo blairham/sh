@@ -2257,6 +2257,80 @@ zsh's at 127 — and ksh93's *silence at 0* (`WaitReportsAMissingJob`).
 (`Diagnostics.KillNoSuchJob`) — and real ksh93 dies of it, a segmentation
 fault this engine deliberately does not reproduce.
 
+**`jobs`' option letters** were read and thrown away until #469. No case
+in the corpus passed the builtin an option, so `jobs -p` printed the
+whole listing and `kill $(jobs -p)` killed nothing — the failure mode an
+ignored option always is, and a sharper one here than elsewhere: a name
+`IsBuiltin` recognizes never reaches the exec seam, so a builtin that
+misreads its options *shadows* the program on the machine rather than
+falling through to it.
+
+Oracle runs, 2026-09-05. The letter sets are not nested, so they are
+`Semantics.JobsOptions` rather than one string in the engine:
+
+| letter | dash | bash 5.3 / 3.2 | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `-l` | listing + id | listing + id | listing + id | listing + id |
+| `-p` | ids alone | ids alone | ids alone | listing + group id |
+| `-r` | illegal option | running only | unknown option | running only |
+| `-s` | illegal option | stopped only | unknown option | stopped only |
+| `-n` | illegal option | changed since | since last notice | bad option |
+| `-x` | illegal option | run a command | unknown option | bad option |
+| `-d` `-z` `-Z` | illegal option | invalid option | unknown option | zsh's own |
+| a jobspec | yes | yes | yes | yes |
+
+Implemented: `-l`, `-p`, `-r`, `-s`, and jobspec operands. Three things
+came out of the measurement that the issue did not have:
+
+- **`-l` and `-p` are exclusive and the last one given wins** —
+  `jobs -pl` is the long listing and `jobs -lp` the ids, in dash, bash
+  and ksh93 alike. Unanimous, so not an axis.
+- **Operands settle their own order and keep their own numbers.**
+  `jobs %2 %1` lists 2 then 1 in all five, including the two whose bare
+  listing starts from the newest — so the newest-first rotation applies
+  only to a listing nobody asked particular jobs for. And each row
+  carries the *job's* number: `jobs %2` printed `[1]` here before this,
+  because a listing of one job counted from the start of the slice it
+  had been handed.
+- **A bad spec is reported after the rows written before it**, which was
+  the other way around.
+
+Two axes, asked where the panel splits:
+
+- `JobsPidsOnlyOption` — whether `-p` is the process ids and nothing
+  else. dash, bash and ksh93 yes; zsh reads the same letter as the job's
+  process *group* and prints its ordinary rows, which is why
+  `kill $(jobs -p)` is a bash idiom rather than a portable one.
+- `JobsStateFiltersAccumulate` — `jobs -rs`, both filters at once: zsh
+  lists a job in either state, bash lets the last letter decide. Asked
+  only when both letters arrive, because one alone means the same thing
+  in both, and the two dialects without the letters cannot reach it.
+
+And one rule that is neither: **a listing that was not a listing of
+states does not finish with a job.** Measured in bash, `jobs -p` and
+`jobs -r` both leave a job that has ended for the next bare `jobs` to
+report, where `jobs` and `jobs -l` consume it.
+
+Deliberately out of scope, refused by name through
+`UnimplementedOptionLetters` rather than accepted and dropped:
+
+- **`-n`** (bash, ksh93) needs a record of what the shell has already
+  reported, *and* the two shells do not agree on what it means: a job
+  that has only just started is a change in bash and is not one in
+  ksh93. Two features behind one letter.
+- **`-x`** (bash) is not a listing at all — it runs a command with the
+  job specs among its arguments replaced by process ids.
+- **`-d`, `-z`, `-Z`** (zsh) are the job's directory and the process
+  title, neither of which this engine holds.
+
+Two divergences are recorded rather than modeled. A job with no process
+of its own — a builtin or a compound command, which runs on a cloned
+Runner here where a real shell forks — is left out of a `-p` listing
+entirely, because that listing is written to be *used* and a `0` in it
+would send `kill` at the whole process group. And ksh93 alone finishes
+with a job after `jobs -p`, where dash and bash keep it for the next
+listing; the engine follows the two that agree.
+
 **`wait -n`** is bash's: block until whichever job finishes first, report
 its status, 127 in silence with no jobs at all
 (`WaitNWaitsForTheNextJob`). dash refuses the option, ksh93 refuses it

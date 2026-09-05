@@ -109,10 +109,13 @@ regular expression for `=~` and for the same reason.
 **The group is one word, spaces and all.** `[[ "a b" == (a b) ]]`
 matches, so the scanner takes everything to the matching `)` rather than
 stopping at whitespace — which is the rule a group already had, reached
-from a new place. And a nested group starts `((`, which is the one place
-in the grammar where two parentheses are otherwise a single token: the
-pattern operand is read before that, or `[[ $k == ((a|b)|x) ]]` would be
-an arithmetic command.
+from a new place. And a nested group starts `((`, which the arithmetic
+command would otherwise claim as a single token: the pattern operand is
+read before that, or `[[ $k == ((a|b)|x) ]]` would be an arithmetic
+command. (Inside a condition nothing claims it any more — see *Two
+parentheses that touch* below — but the pattern operand still has to be
+read first, because it wants the whole group as one **word** and not two
+tokens.)
 
 **And the reading stops at the operand.** Whatever the lexer is told about
 a pattern operand has to stop being true when the operand ends, or every
@@ -285,6 +288,55 @@ correct-looking and wrong. That is another
 consequence of it being parsed rather than executed, and it is why the
 parser needs its own production for the inside rather than reusing the
 one for lists.
+
+### Two parentheses that touch are two groups
+
+Everywhere a command may begin, `((` is the arithmetic command and `( (`
+is a subshell containing one. The distinction is textual, and no shell
+needs to know *which* command position it is at: `((echo hi))` is an
+arithmetic error in bash, ksh93 and zsh with no space, and two nested
+subshells that print `hi` in dash.
+
+Inside `[[ ]]` no command may begin at all, so there is no arithmetic
+command to be had and `((` is simply two grouping parentheses:
+
+    [[ ((1 -eq 1)) ]]        →  status 0
+    [[ ( (1 -eq 1) ) ]]      →  status 0
+
+Unanimous across every panel member that has the construct — bash 3.2.57,
+bash 5.3.15, bash-as-`sh`, ksh93 and zsh 5.9.2 — at every position where
+a condition may begin: after `[[`, after `&&`, after `||`, after `!`,
+after another `(`, and before a unary operator, where `(( -z ""` is the
+shape that most looks like an arithmetic command and least is one.
+dash has no `[[ ]]` and abstains, so the intersection is unanimous and
+this is core rather than a dialect flag.
+
+The disambiguator is context, and it is the *lexer's* to hold: `(` is an
+operator, so a token beginning with one never reaches the word scanner
+and the parser never gets to decide. The condition already tells the
+lexer it is inside one — the same flag the bare-pattern-group dialect
+reads — and that flag now also suspends the arithmetic command. It is
+cleared when the condition ends, so one character past `]]` the
+arithmetic command is back:
+
+    [[ 1 -eq 1 ]] && (( x++ ))
+
+The other direction is unchanged. An arithmetic command whose expression
+opens with a parenthesis — `(( (1+2)*3 ))` — was never in doubt, because
+the scan for the closing `))` tracks nesting rather than counting.
+
+Corpus: `cond/touching-grouping-parens`,
+`cond/spacing-the-grouping-parens-changes-nothing`,
+`cond/touching-grouping-parens-after-oror`,
+`cond/touching-grouping-parens-after-andand`,
+`cond/touching-grouping-parens-after-not`,
+`cond/touching-grouping-parens-before-a-unary`,
+`cond/three-touching-grouping-parens`,
+`cond/a-regex-group-that-opens-with-a-group`,
+`cond/the-arithmetic-command-survives-the-condition`,
+`arith/a-command-expression-may-open-with-a-paren`,
+`arith/two-parens-at-command-position-are-not-a-subshell`,
+`cmd/a-subshell-that-opens-with-a-subshell`.
 
 ## What this does not cover
 

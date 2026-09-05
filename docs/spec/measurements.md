@@ -1541,10 +1541,55 @@ here. A spec claim with no case behind it is a claim nobody can re-check.
 | case | dash | bash | bash-as-sh | bash32 | ksh93 | zsh |
 | --- | --- | --- | --- | --- | --- | --- |
 | `core/dollar-single-expands-escapes` | ` [ $ a \ t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` | ` [ a \t b ] ` |
+| `core/dollar-single-control-character` | ` [ $ \ c A \ c z ] ` | ` [ 001 032 ] ` | ` [ 001 032 ] ` | ` [ 001 032 ] ` | ` [ 001 032 ] ` | ` [ c A c z ] ` |
+| `core/dollar-single-control-arithmetic` | ` [ $ \ c 1 \ c ? \ c [ ] ` | ` [ 021 177 033 ] ` | ` [ 021 177 033 ] ` | ` [ 021 037 033 ] ` | ` [ q 177 033 ] ` | ` [ c 1 c ? c [ ] ` |
+| `core/dollar-single-nul-truncates` | ` [ $ a \ 0 b ] [ 5 ] ` | ` [ a ] [ 1 ] ` | ` [ a ] [ 1 ] ` | ` [ a ] [ 1 ] ` | ` [ a ] [ 1 ] ` | ` [ a \0 b ] [ 3 ] ` |
+| `core/dollar-single-nul-ends-the-span-only` | ` [ $ a \ 0 b c c c ] ` | ` [ a c c c ] ` | ` [ a c c c ] ` | ` [ a c c c ] ` | ` [ a c c c ] ` | ` [ a \0 b c c c ] ` |
+| `core/dollar-single-esc-escape` | ` [ $ \ e [ m \ E ] ` | ` [ 033 [ m 033 ] ` | ` [ 033 [ m 033 ] ` | ` [ 033 [ m 033 ] ` | ` [ 033 [ m 033 ] ` | ` [ 033 [ m 033 ] ` |
+| `core/dollar-single-hex-escape` | ` [ $ \ x 4 1 \ x 4 a \ x 9 ] ` | ` [ A J \t ] ` | ` [ A J \t ] ` | ` [ A J \t ] ` | ` [ A J \t ] ` | ` [ A J \t ] ` |
+| `core/dollar-single-octal-escape` | ` [ $ \ 1 0 1 \ 0 1 0 1 \ 1 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` | ` [ A \b 1 001 ] ` |
+| `core/dollar-single-unicode-escape` | ` [ $ \ u 4 1 \ u 0 0 4 1 \ U 0 0~ 0 0 0 0 5 8 ] ` | ` [ A A X ] ` | ` [ A A X ] ` | ` [ \ u 4 1 \ u 0 0 4 1 \ U 0 0 0~ 0 0 0 5 8 ] ` | ` [ A A X ] ` | ` [ A A X ] ` |
+| `core/dollar-single-unknown-escape` | ` [ $ \ q \ 8 ] ` | ` [ \ q \ 8 ] ` | ` [ \ q \ 8 ] ` | ` [ \ q \ 8 ] ` | ` [ q 8 ] ` | ` [ q 8 ] ` |
 
 - `core/dollar-single-expands-escapes` — read as bytes, because the failure mode was a literal backslash-t that looks almost right in a terminal — the quoting was recorded and nothing decoded it
   ```sh
   printf '[%s]' $'a\tb' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-control-character` — the escape that reached the output as a backslash, a c and a letter: bash and ksh93 decode it, zsh is the one shell with $'…' and no \c in it, and dash has no $'…' at all — four columns and three different answers to one snippet
+  ```sh
+  printf '[%s]' $'\cA\cz' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-control-arithmetic` — where the two decoding rules part: both uppercase and then agree over @ through _, so a case built only from letters cannot tell masking the low five bits from toggling bit 6 — `\c1` is 0x11 in bash and `q` in ksh93, and `\c?` is where bash 3.2 differs from bash 5.3
+  ```sh
+  printf '[%s]' $'\c1\c?\c[' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-nul-truncates` — a decoded NUL ends the text where a shell holds words as C strings and is an ordinary byte where it counts them — the length is recorded beside the bytes because a truncated word and a word with a NUL in it print the same way anywhere the NUL is invisible
+  ```sh
+  x=$'a\0b'; printf '[%s][%s]' "$x" "${#x}" | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-nul-ends-the-span-only` — what the NUL truncates is the quoted span and not the word: the characters after the closing quote were never inside it, so `accc` rather than `a` — the distinction a case built from a bare $'…' cannot make
+  ```sh
+  printf '[%s]' $'a\0b'ccc | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-esc-escape` — both spellings of the escape character, which POSIX has for neither and every shell with $'…' decodes — the escape that makes a color sequence writable without a literal control character in the source
+  ```sh
+  printf '[%s]' $'\e[m\E' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-hex-escape` — one and two hex digits both, because the length is not fixed and a reader that demands two would silently take the `\x9` of `\x9Z` as 0x9Z
+  ```sh
+  printf '[%s]' $'\x41\x4a\x9' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-octal-escape` — the octal forms, and the reason they are one rule rather than two: `\0101` is not four digits after a zero but three from the zero onward, so it is a backspace and then a `1`
+  ```sh
+  printf '[%s]' $'\101\0101\1' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-unicode-escape` — the code-point escapes, both widths and fewer digits than either allows — and the one place in this table where bash 3.2 keeps the text as written instead, which is what makes the pair a dated answer rather than a disputed one; the code points stay inside ASCII because what a shell does with a wider one depends on the locale and this record is made under LC_ALL=C
+  ```sh
+  printf '[%s]' $'\u41\u0041\U00000058' | od -An -c | tr -s " "
+  ```
+- `core/dollar-single-unknown-escape` — a backslash before a character no escape claims: bash keeps both, ksh93 and zsh drop the backslash — the axis `\c` falls to in the one shell that has no `\c`
+  ```sh
+  printf '[%s]' $'\q\8' | od -An -c | tr -s " "
   ```
 
 ## command language

@@ -548,3 +548,22 @@ func TestDollarDashStartupLetters(t *testing.T) {
 		t.Errorf("DefaultOptionLetters = %q, want %q", got, want)
 	}
 }
+
+// TestDollarSingleAnswers covers the three `$'…'` axes.
+//
+// ksh93 decodes `\c` like bash and by different arithmetic — bit 6 toggled
+// rather than the low five bits kept — which is invisible over letters and
+// decides `$'\c1'`, `q` here and 0x11 there. It also drops the backslash from
+// an escape it does not know, where bash keeps both characters.
+func TestDollarSingleAnswers(t *testing.T) {
+	s := ksh.Semantics()
+	if got, want := s.DollarSingleBackslashC, interp.DollarSingleControlToggled; got != want {
+		t.Errorf("DollarSingleBackslashC = %v, want %v", got, want)
+	}
+	if got, want := s.DollarSingleUnknownEscape, interp.DollarSingleUnknownDropsBackslash; got != want {
+		t.Errorf("DollarSingleUnknownEscape = %v, want %v", got, want)
+	}
+	if got, want := s.DollarSingleNulTruncates, interp.Yes; got != want {
+		t.Errorf("DollarSingleNulTruncates = %v, want %v", got, want)
+	}
+}

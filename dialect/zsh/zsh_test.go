@@ -587,3 +587,22 @@ func TestDollarDashStartupLetters(t *testing.T) {
 		t.Errorf("DefaultOptionLetters = %q, want %q", got, want)
 	}
 }
+
+// TestDollarSingleAnswers covers the three `$'…'` axes, and zsh is the
+// minority on all three.
+//
+// It is the only shell with `$'…'` and no `\c` in it, so `$'\cA'` is the two
+// characters `cA`; and its strings are counted rather than terminated, so a
+// decoded NUL is a byte in the middle of a word rather than the end of one.
+func TestDollarSingleAnswers(t *testing.T) {
+	s := zsh.Semantics()
+	if got, want := s.DollarSingleBackslashC, interp.DollarSingleControlAbsent; got != want {
+		t.Errorf("DollarSingleBackslashC = %v, want %v", got, want)
+	}
+	if got, want := s.DollarSingleUnknownEscape, interp.DollarSingleUnknownDropsBackslash; got != want {
+		t.Errorf("DollarSingleUnknownEscape = %v, want %v", got, want)
+	}
+	if got, want := s.DollarSingleNulTruncates, interp.No; got != want {
+		t.Errorf("DollarSingleNulTruncates = %v, want %v", got, want)
+	}
+}

@@ -24,9 +24,6 @@ func TestDollarSingleDecodesItsEscapes(t *testing.T) {
 		{`printf '%s' $'\101'`, "A"},
 		{`printf '%s' $'é'`, "é"},
 		{`printf '%s' $'\e'`, "\x1b"},
-		// An escape with no meaning keeps both characters rather than
-		// dropping the backslash.
-		{`printf '%s' $'no\qescape'`, `no\qescape`},
 		{`printf '%s' $'it\'s'`, "it's"},
 	} {
 		t.Run(tc.src, func(t *testing.T) {

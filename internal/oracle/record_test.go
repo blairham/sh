@@ -151,9 +151,13 @@ func TestTheSystemsWordForASignalIsNotComparedAcrossMachines(t *testing.T) {
 	if !strings.Contains(doc, "killed by signal 30") {
 		t.Fatalf("this test assumes the rendering names the signal:\n%s", doc)
 	}
-	// The same document as another kernel would have spelled it.
+	// The same document as another kernel would have spelled it. The
+	// substitute is a literal no kernel uses rather than the other machine's
+	// real word, because this test runs on both of them: naming Linux's
+	// spelling made it a no-op on Linux, where it *is* the local spelling,
+	// and the test failed on the one platform it was written for.
 	elsewhere := strings.ReplaceAll(doc, "killed by signal 30 ("+syscall.Signal(30).String()+")",
-		"killed by signal 30 (power failure)")
+		"killed by signal 30 (whatever this kernel calls it)")
 	if elsewhere == doc {
 		t.Fatal("could not build the other machine's spelling")
 	}

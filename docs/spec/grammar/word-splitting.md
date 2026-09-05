@@ -137,14 +137,22 @@ error in the other three:
 
     zsh:  x='a b'; set -- ${=x}; echo $#   → 2
 
-## Vector fields
+## Semantics axes
 
-| field | default | zsh |
-| --- | --- | --- |
-| `SplitParamExpansion` | `true` | `false` |
-| `SplitCommandSubstitution` | `true` | `true` |
+| axis | dash | bash | ksh93 | zsh | core |
+| --- | --- | --- | --- | --- | --- |
+| `SplitParamExpansion` | yes | yes | yes | **no** | unanswered |
+| `SplitCommandSubstitution` | yes | yes | yes | yes | **yes** |
 
-Two fields rather than one, because the panel shows the two moving
+Two axes rather than one, because the panel shows the two moving
 independently. Naming them for the behavior rather than for zsh is what
 `../semantics.md` requires, and here it is also what keeps the second
-field from being silently wrong.
+axis from being silently wrong.
+
+The `core` column is why the pair is worth reading together.
+`SplitCommandSubstitution` is one of the two axes `CoreSemantics()`
+answers at all, and it can be answered precisely because the panel is
+unanimous; `SplitParamExpansion` is left unspecified and refused,
+because zsh disagrees and no boolean is both split and not-split. That
+is the general rule and not a quirk of word splitting — see
+`../README.md` on how an entry names the field that governs it.

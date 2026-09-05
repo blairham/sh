@@ -84,7 +84,10 @@ number of positional parameters. This is the first axis measured where
 dash stands alone, and it is a silent one: both answers are plausible
 numbers and neither errors.
 
-Vector field: `LengthOfSpecialIsCount` (default true).
+Semantics axis: `LengthOfSpecialIsCount` — dash no, bash, ksh93 and zsh
+yes. This is one of the two axes `CoreSemantics()` answers, and it says
+yes: the core panel is bash, ksh93 and zsh, and dash is the shell the
+core was drawn to exclude.
 
 ## Extensions
 
@@ -246,8 +249,8 @@ applies the operator to the joined string once (`a ab`). The two readings
 often agree — a suffix trim that stops inside the last element, a pattern
 that matches nothing — so the axis is asked only where they differ.
 
-Vector field: `OperatorDistributesOverStarSubscript` (bash and ksh93 yes,
-zsh no).
+Semantics axis: `OperatorDistributesOverStarSubscript` (bash and ksh93
+yes, zsh no; unanswered in the core).
 
 `${#a[@]}` is untouched by all of this: it is the count, and the length
 question is answered before any operator runs.

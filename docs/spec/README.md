@@ -52,3 +52,36 @@ before writing any spec entry:
 
 Never model a conflict as a grammar difference, and never resolve a
 conflict with an inline conditional. See `semantics.md`.
+
+## How an entry names the field that governs it
+
+The two kinds of difference have two vectors behind them, and **only one
+of them has a default.** An entry must say which vector it means. The
+word "default" answers a different question in each, and saying it
+without saying which is how six axes came to be annotated with a default
+that does not exist.
+
+- **`Grammar flag: X`** is a `bool` on `syntax.Dialect`. It has a
+  default, and the default is what `syntax.Core()` sets, so an
+  annotation reads "core: on; `posix` and `dash`: off" and that is the
+  whole answer — every preset not named takes the core value.
+- **`Semantics axis: X`** is an `interp.Answer` on `interp.Semantics`,
+  and it has **three** states rather than two. `interp.CoreSemantics()`
+  answers only the axes the core panel agrees on — at the time of
+  writing `SplitCommandSubstitution` and `LengthOfSpecialIsCount`, and
+  that is the entirety of it — and leaves every other axis
+  `Unspecified`, which *refuses* the behavior by name rather than
+  guessing at it. There is no default to state, so the annotation names
+  the shells instead: "dash no, bash, ksh93 and zsh yes; unanswered in
+  the core".
+
+The asymmetry is the specification working, not an inconsistency in it.
+"What every shell accepts" is an intersection and is well defined; "what
+every shell means" is not, because there is no value of a boolean that is
+both split and not-split. `interp/semantics.go` argues the same point
+from the code's side.
+
+A dialect preset's semantics start from `PosixSemantics()` and override
+what was measured, so the standard's answer is a *starting point for the
+presets* and never the runtime's default. Where an entry quotes POSIX's
+answer it says POSIX, not "default".

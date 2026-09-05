@@ -1710,26 +1710,6 @@ func (n NameOperands) String() string {
 	return "NameOperandsUnspecified"
 }
 
-// There is deliberately no CoreSemantics, and the absence is the sharpest
-// consequence of the whole specification.
-//
-// syntax.Core() exists because grammar differences are *additive*: a
-// construct either parses or it does not, so "what every shell accepts" is a
-// well-defined intersection. Semantic differences are conflicts. There is no
-// intersection of "an unquoted expansion is split" and "it is not", and no
-// value of a boolean means both. A semantics preset therefore has to name a
-// shell, while a grammar preset does not.
-//
-// The pairing this implies is not an inconsistency: accept the constructs
-// every real shell accepts, and behave like the one scripts were written
-// against — syntax.Core() with BashSemantics().
-//
-// Which pairing to use is not this package's decision. This is the substrate:
-// it owns the *mechanism*, and a shell built on it owns the policy, the same
-// way the gate and the event stream are defined here and the sandbox backends
-// and protocols are not. The presets exist so that choice can be spelled in
-// one line rather than one per axis.
-
 // SelectMenuLayout is how a shell draws a `select` menu. The engines differ
 // enough that the same nine items are nine lines in two shells and one line in
 // the third, so this is a named choice rather than a flag.
@@ -2008,6 +1988,29 @@ func PosixSemantics() Semantics {
 // Almost no axis survives — the two fields below are the whole of it — and
 // that is not a defect of the panel. The axes exist because they diverge;
 // everything shells agree about never became one.
+//
+// So it is *not* the counterpart in the sense of being an equally complete
+// preset, and the asymmetry is the sharpest consequence of the whole
+// specification rather than an oversight in this function. syntax.Core() gives
+// every flag in its set a value because grammar differences are *additive*: a
+// construct either parses or it does not, so "what every shell accepts" is a
+// well-defined intersection. Semantic differences are conflicts. There is no
+// intersection of "an unquoted expansion is split" and "it is not", and no
+// value of a boolean means both, which is why Answer has three states and why
+// nearly every axis comes back Unspecified here and is then refused by name.
+//
+// Nothing in this package therefore has a "default" answer to an axis to
+// document. A spec entry that says otherwise is wrong; docs/spec/README.md
+// spells out how an entry is required to name the field that governs it.
+//
+// The pairing this implies is not an inconsistency: accept the constructs
+// every real shell accepts, and mean what the shell most scripts were written
+// against means — syntax.Core() with the Semantics() of dialect/bash. Which
+// pairing to use is not this package's decision. This is the substrate: it
+// owns the *mechanism*, and a shell built on it owns the policy, the same way
+// the gate and the event stream are defined here and the sandbox backends and
+// protocols are not. The presets exist so that choice can be spelled in one
+// line rather than one per axis.
 func CoreSemantics() Semantics {
 	return Semantics{
 		SplitCommandSubstitution: Yes,

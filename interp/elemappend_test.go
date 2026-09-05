@@ -69,15 +69,19 @@ func TestAppendingToAnElementInheritsTheBase(t *testing.T) {
 	}
 }
 
-// A subscript below the base is refused, and refusing must leave the element
-// alone rather than appending to a position that does not exist.
+// A subscript below the base is refused, and the refusal ends the script — so
+// nothing appends to a position that does not exist, and nothing after the
+// assignment reads the array as though something had.
 func TestAppendingThroughASubscriptOutOfRange(t *testing.T) {
-	out, _ := run(t, `a=(x y); a[0]+=Q; printf "[%s]" "${a[@]}"`, withSem(baseVectors()[1]))
-	if !strings.Contains(out, "out of range") {
-		t.Errorf("said %q, want the subscript refused", out)
+	out, st := run(t, `a=(x y); a[0]+=Q; printf "[%s]" "${a[@]}"`, withSem(baseVectors()[1]))
+	if !strings.Contains(out, "a[0]") {
+		t.Errorf("said %q, want the subscript named", out)
 	}
-	if !strings.Contains(out, "[x][y]") {
-		t.Errorf("left %q, want the array untouched", out)
+	if strings.Contains(out, "[x][y]") {
+		t.Errorf("left %q, want nothing after the refusal", out)
+	}
+	if st == 0 {
+		t.Errorf("status 0, want a failure")
 	}
 }
 

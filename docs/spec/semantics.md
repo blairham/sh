@@ -3435,6 +3435,73 @@ no subscript — but it is what the `unset a[@]` rows under #648 and the
 substring-offset row here still differ on, so it is written down where
 they are — #661.
 
+## A subscript before the first element
+
+Issue #617. An assignment whose subscript lands before the array's first
+element is refused, the element is not written, and **the refusal ends the
+script at 1** — in every shell on the panel that has arrays. This reported
+in a wording of our own at status 0 and ran on, so the next command read
+an array the assignment had not touched.
+
+Which subscript reaches it is `ArrayBaseIsZero` and nothing else, and that
+is why one rule needs two spellings to show it. Measured 2026-09-05 across
+bash 5.3.15, bash 3.2.57, ksh93u+ 2012-08-01, zsh 5.9.2 and dash.
+
+    a=(p q); a[0]=x     bash, ksh93 → [x][q], the first element
+                        zsh         → refused, script ends at 1
+
+    a[-1]=x             bash, ksh93 → refused, script ends at 1
+                        zsh         → [x], the array's first element
+
+Where the first element is 1, `a[0]` is below it. Where the first element
+is 0, no non-negative subscript can be, and the boundary is reached only
+by a negative subscript counting back past the start. Neither shell has
+both spellings, so the two columns look like different behaviors and are
+one.
+
+`+=` is the same assignment and reaches the same refusal: nothing joins a
+position that does not exist.
+
+### What the refusal names — three answers
+
+    bash 5.3   a[x-2]: bad array subscript
+    ksh93      a: subscript out of range
+    zsh        a: assignment to invalid subscript range
+
+bash quotes the subscript back **as it was written** — `a[x-2]`, not the
+`-1` it evaluated to — which is why the text is carried as far as the
+store rather than only the number. ksh93 and zsh name the array alone.
+`Diagnostics.BadArraySubscript`.
+
+Through an array literal two of the three word it differently again, so it
+is a field of its own (`BadArrayLiteralSubscript`, falling back to the
+plain one):
+
+    a=(p q [-5]=x)   bash 5.3  [-5]=x: bad array subscript
+    a=([0]=p)        zsh       bad subscript for direct array assignment: 0
+
+bash names the element as it stands between the parentheses, with no array
+name in front of it; zsh names the subscript and the kind of assignment.
+ksh93 does not reach it, because a subscript inside a literal is a key
+there (`ArrayLiteralSubscriptIsAKey`).
+
+**bash 3.2 differs on the literal alone**: it prints the same sentence and
+does *not* end the script, where 5.3 does. The plain form is fatal in both.
+The preset follows 5.3.
+
+### Not fixed here, recorded rather than reproduced
+
+- `unset` and *reading* through a subscript past the start are their own
+  shapes and their own three answers — `unset a[-5]` is a failed builtin
+  in bash and ksh93 and silent success in zsh, and `${a[-5]}` is empty at
+  0 in bash and zsh and fatal in ksh93. Neither is an assignment, which is
+  what this section is about.
+- zsh refuses **any** negative subscript inside a literal — `a=(p q
+  [-1]=x)` is `bad subscript for direct array assignment: -1` — where bash
+  reads it end-relative and places it. So a literal's subscript is not
+  end-relative there, which is a second rule about literals rather than
+  about this boundary.
+
 ## The axis catalog
 
 Issue #487: 160 of the fields on `interp.Semantics` were named nowhere in
@@ -4256,6 +4323,22 @@ where zsh is the other way round.
 Indexes arrays from 0. True in bash and ksh93, false in zsh, which
 counts from 1. dash has no arrays at all, which is why the axis is
 absent rather than false there.
+
+**`NegativeSubscriptPastTheStartInserts`** — bash no · dash unspecified · ksh93 no · zsh yes
+
+Places a new element in front of every other when a negative subscript
+counts back past the first one:
+
+    a=(p q); a[-3]=x    bash, ksh93 → refused, script ends at 1
+                        zsh         → [x][p][q], n=3
+
+However far past the start it reached: `-3`, `-4` and `-5` all land in the
+same place and the array grows by exactly one.
+
+Asked only for a *negative* subscript that lands before the first element,
+which is the only spelling that can. A non-negative one below the base —
+`a[0]` where the first element is 1 — is refused by every shell measured,
+zsh included, so it needs no answer from anyone.
 
 **`ArrayLiteralSubscriptIsAKey`** — bash no · dash unspecified · ksh93 yes · zsh no
 

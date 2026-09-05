@@ -1698,7 +1698,7 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			// then reported success for having done so.
 			return nil
 		}
-		if !r.substRan && !r.expandErr && !r.assignFailed {
+		if !r.substRan && !r.expandErr && !r.assignFailed && !r.unspecified {
 			// Nothing in them reported, so the assignment itself does, and
 			// an assignment that happens cannot fail. One that was *refused*
 			// did fail, which is what assignFailed carries: the dialect that
@@ -1707,7 +1707,10 @@ func (r *Runner) simple(ctx context.Context, c *syntax.SimpleCmd) error {
 			//
 			// After the fatal check above, not before: an assignment that
 			// stopped the script has a status of its own and this would
-			// report success for it.
+			// report success for it. An assignment *refused* for want of a
+			// dialect is the same case reached the other way — the check
+			// above this block runs before the assignments do, so without
+			// the guard here a refused subscript reported success.
 			r.status = 0
 		}
 		// `>b` with no command still opens the file, and truncates it if it
@@ -2466,10 +2469,10 @@ func (r *Runner) assign(a *syntax.Assign) {
 			// `a[0]+=Q` appends to element 0. Distinct from `a+=(Q)`, which
 			// adds an element after the last: the subscript is what says
 			// which of the two `+=` means.
-			r.appendArrayElem(a.Name, idx, r.expandAssignValue(a.Value))
+			r.appendArrayElem(a.Name, idx, text, r.expandAssignValue(a.Value))
 			return
 		}
-		r.setArrayElem(a.Name, idx, r.expandAssignValue(a.Value))
+		r.setArrayElem(a.Name, idx, text, r.expandAssignValue(a.Value))
 	default:
 		value := r.expandAssignValue(a.Value)
 		if r.assocDeclared(a.Name) {

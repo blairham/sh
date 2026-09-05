@@ -311,6 +311,12 @@ func Semantics() interp.Semantics {
 	// The complaint is the builtin's rather than the script's: `unset` reports
 	// 1 and the next command still runs.
 	s.BadSubscriptToUnsetFatal = interp.No
+	// A negative subscript past the first element places one in front of it
+	// rather than being refused: `a=(p q); a[-3]=x` is three elements with
+	// `x` at the head, and `-4` and `-5` land in the same place. What this
+	// shell refuses is `a[0]`, which is below its first element rather than
+	// counting back from the last.
+	s.NegativeSubscriptPastTheStartInserts = interp.Yes
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.No
@@ -428,7 +434,13 @@ func Diagnostics() interp.Diagnostics {
 		// sentence, which is this shell's rule for every message.
 		// About its table rather than about the function, and the builtin
 		// is named in the location as it is for every message here.
-		UnsetFunctionNotFound:    "no such hash table element: %[1]s",
+		UnsetFunctionNotFound: "no such hash table element: %[1]s",
+		// The array alone, and a sentence about the assignment rather than
+		// about the subscript.
+		BadArraySubscript: "%[1]s: assignment to invalid subscript range",
+		// Through a literal it is the subscript alone, and the literal is
+		// named for what it is rather than by the variable it fills.
+		BadArrayLiteralSubscript: "bad subscript for direct array assignment: %[2]s",
 		DeclareNoSuchVariable:    "no such variable: %[1]s",
 		LocationNamesTheFunction: true,
 		SetInvalidOptionName:     "no such option: %[1]s",

@@ -80,8 +80,8 @@ func (r *Runner) coprocClause(ctx context.Context, c *syntax.CoprocClause) error
 	r.setFd(rfd, shellOwnedFd{shellR})
 	wfd := r.nextFreeFd()
 	r.setFd(wfd, shellOwnedFd{shellW})
-	r.setArrayElem(name, 0, itoa(rfd))
-	r.setArrayElem(name, 1, itoa(wfd))
+	r.setArrayElem(name, 0, "0", itoa(rfd))
+	r.setArrayElem(name, 1, "1", itoa(wfd))
 	r.setVar(name+"_PID", itoa(job.PID))
 	r.status = 0
 	return nil

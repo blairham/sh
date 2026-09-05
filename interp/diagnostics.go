@@ -831,6 +831,21 @@ type Diagnostics struct {
 	// with every message.
 	UnsetFunctionNotFound string
 
+	// BadArraySubscript is what an assignment says about a subscript that
+	// lands before the array's first element. Two verbs: the name, and the
+	// subscript *as written* — bash names `a[x-2]`, not the `-1` it evaluated
+	// to, where ksh93 and zsh name the array alone.
+	BadArraySubscript string
+
+	// BadArrayLiteralSubscript is the same refusal reached through an array
+	// literal, `a=([0]=p)`, which two of the three word differently from the
+	// plain form. Three verbs: the name, the subscript as written, and the
+	// value — bash names the element as it stands in the parentheses,
+	// `[-1]=p`, and zsh names the subscript alone. Empty falls back to
+	// BadArraySubscript, which is the honest answer for a dialect that has
+	// not been measured to word the two apart.
+	BadArrayLiteralSubscript string
+
 	// UnsetBadSubscript wraps the sentence about an `unset` operand whose
 	// subscript would not evaluate. One verb: that sentence, already worded by
 	// ArithError. Empty leaves it to stand alone, which is what bash and zsh

@@ -287,7 +287,7 @@ func (r *Runner) evalAssign(x *syntax.ArithAssign) (arithNum, error) {
 		if ierr != nil {
 			return intNum(0), ierr
 		}
-		r.setArrayElem(x.Name, idx.asInt(), r.formatNum(v))
+		r.setArrayElem(x.Name, idx.asInt(), r.formatNum(idx), r.formatNum(v))
 		return v, nil
 	}
 	r.setVar(x.Name, r.formatNum(v))

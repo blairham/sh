@@ -37,3 +37,24 @@ func TestUnsetOfEveryElementRefusesAScalar(t *testing.T) {
 		t.Errorf("got %q (status %d), want %q", out, st, want)
 	}
 }
+
+// A single subscript takes the element away here, so unsetting the last one
+// shortens the array. Measured against bash 5.3.15 and bash 3.2.57
+// (2026-09-05), which agree.
+func TestUnsetOfTheLastElementRemovesIt(t *testing.T) {
+	out, st := runBash(t, t.TempDir(),
+		`a=(x y z); unset "a[2]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`)
+	if out != "[x][y] n=2\n" || st != 0 {
+		t.Errorf("got %q (status %d), want %q", out, st, "[x][y] n=2\n")
+	}
+}
+
+// And the next append lands in the place it left, which is the reading a
+// shell that blanks does not have.
+func TestUnsetOfTheLastElementFreesThePlaceAnAppendTakes(t *testing.T) {
+	out, st := runBash(t, t.TempDir(),
+		`a=(p q r); unset "a[2]"; a+=(z); printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`)
+	if out != "[p][q][z] n=3\n" || st != 0 {
+		t.Errorf("got %q (status %d), want %q", out, st, "[p][q][z] n=3\n")
+	}
+}

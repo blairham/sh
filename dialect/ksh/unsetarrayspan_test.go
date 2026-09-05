@@ -33,3 +33,15 @@ func TestUnsetOfEveryElementLeavesAScalarAlone(t *testing.T) {
 		t.Errorf("got %q (status %d), want %q", out, st, want)
 	}
 }
+
+// A subscript that *is* an expression names its element and the element goes
+// away, so unsetting the last one shortens the array — the reading this shell
+// shares with bash and not with zsh, reached through the same field.
+// Measured against ksh93 93u+ 2012-08-01 (2026-09-05).
+func TestUnsetOfTheLastElementRemovesIt(t *testing.T) {
+	out, st := runKsh(t, t.TempDir(),
+		`a=(x y z); unset "a[2]"; printf "[%s]" "${a[@]}"; echo " n=${#a[@]}"`)
+	if out != "[x][y] n=2\n" || st != 0 {
+		t.Errorf("got %q (status %d), want %q", out, st, "[x][y] n=2\n")
+	}
+}

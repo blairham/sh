@@ -856,7 +856,7 @@ type Diagnostics struct {
 	// UnsetNotAnArray is what `unset a[@]` says when the name holds a value
 	// that is not an array. One verb: the name.
 	//
-	// Only the shell that answers UnsetArrayAtRemovesEveryElement has
+	// Only the shell that answers UnsetArraySpanRemovesTheElements has
 	// anything to say here, and it is the same in both builds measured: the
 	// spelling means "take every element away" and a scalar has none to take,
 	// so it is refused rather than emptied. The shell that leaves one empty
@@ -1585,6 +1585,16 @@ type Diagnostics struct {
 	// no descriptor number. One verb: the variable's name as written,
 	// braces stripped.
 	FdVariableWithoutADescriptor string
+
+	// FdNumberOverLimit is a redirection whose descriptor number is at or
+	// above the process's limit on open files, where the dialect refuses one
+	// — see Semantics.FdNumberBoundedByOpenFileLimit. One verb: the number.
+	//
+	// Empty leaves the shape every other bad descriptor takes, `N: Bad file
+	// descriptor`, which is what bash says here and is the shared wording
+	// rather than a special case. ksh93 names the thing instead of the number
+	// and quotes a different errno, so it says so.
+	FdNumberOverLimit string
 
 	// NoJobControl is `bg` or `fg` in a shell with none, for the dialects
 	// that say so before anything else. One verb: the builtin's name.

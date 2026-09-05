@@ -921,6 +921,57 @@ publish that program's own files to a script it was asked to interpret.
 laid out exactly as the outbound table is: entry i is descriptor 3+i, and
 a gap is a number nothing arrived on.
 
+### The table a replacement inherits
+
+`exec cmd` is the third side of that boundary and the only one with no
+fork in it. An external child is renumbered by `os/exec` on the way
+across; a replacement has nothing to do the renumbering, so the
+*process's* own descriptors are what the command inherits — and a
+Runner's descriptor 3 is not the process's 3, because `exec 3>h` opens a
+file on whatever number was free and the script's number exists only in
+the interpreter's table. Clearing close-on-exec is therefore half the
+answer: each file has to be duplicated onto its number as well, which
+clears the flag as a side effect.
+
+Measured on macOS, 2026-09-05, across bash 5.3, bash 3.2, dash, ksh93 and
+zsh — the first two are pinned in the corpus as
+`redir/exec-descriptor-reaches-a-replacement` and
+`redir/a-replacements-descriptor-numbers-keep-their-gaps`, which need no
+descriptor from the harness because the script opens its own:
+
+    exec 3>f; exec sh -c '… >&3'           the replacement writes — all but
+                                           ksh93, which alone keeps it
+    exec 5>f; exec sh -c '… >&5; … >&3'    5 carries and 3 is closed there, so
+                                           the numbers are the shell's and a
+                                           gap stays a hole
+    exec 3<&-; exec sh -c 'read y <&3'     closed for the replacement too, and
+                                           here ksh93 agrees — unanimous
+    coproc …; exec sh -c '… >&${C[1]}'     nothing open on either near end,
+                                           nor on a 3 duplicated from one,
+                                           though the shell still writes
+                                           through that 3 (bash)
+
+which is the outbound table an external child is given, entry for entry:
+the same numbering, the same holes and the same exclusions. ksh93's
+divergence is the one already recorded for a child and is the same
+divergence rather than a second one — and it is narrow, because the row
+about a *closed inherited* descriptor is unanimous. What ksh93 withholds
+is what the script opened, not what the shell was handed.
+
+The closing row is the one that is not about the flag at all. A
+descriptor the process was started with is still open here and is *not*
+close-on-exec — that is how it was recognized as inherited — so
+`exec 3<&-; exec cmd` hands 3 to the command through the kernel, behind
+the table's back, unless the number is reached and closed. It is closed
+only where it would otherwise survive, which is what keeps the same walk
+from closing the Go runtime's own files on the way past.
+
+Placing the table is the *binary's*, for the reason the exec itself is:
+rewriting the process's descriptors is process-wide state, and a Runner
+embedded in another program may not touch it. So `interp` decides which
+descriptors are the script's to hand out and hands that slice to
+`Runner.ReplaceProcess`, in the layout both other halves already use.
+
 ## An axis that is only about one of two names
 
 `typeset` and `local` do the same thing and do not have the same rule.

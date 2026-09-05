@@ -1010,6 +1010,65 @@ embedded in another program may not touch it. So `interp` decides which
 descriptors are the script's to hand out and hands that slice to
 `Runner.ReplaceProcess`, in the layout both other halves already use.
 
+### Whether a descriptor `exec` parked is handed over at all
+
+`ExecOpenedFdReachesACommand`. Four of the five hand it over and ksh93
+keeps it, which is the shape of a conflict rather than a subset: there is
+no reading under which one answer contains the other, so it is a field on
+the vector rather than a core answer with a dialect apologising for it.
+
+**POSIX decides nothing.** The Shell Command Language says which of the
+standard descriptors a utility is entered with and is silent about the
+rest, so both answers conform and there is no standard to defer to. The
+dissenting shell's manual states its rule outright — a file descriptor
+number greater than 2 opened by `exec`'s redirection list is closed when
+it invokes another program — so this is a documented language decision
+rather than a build's accident, which is what a recorded divergence would
+have implied.
+
+The rule is narrower than "that shell hands nothing over", and the whole
+of the boundary was measured (macOS, 2026-09-05):
+
+    exec 3>f; sh -c '… >&3'          four write; ksh93's child finds 3
+                                     closed
+    exec {v}>f; sh -c '… >&$v'       the same split — a number the shell
+                                     picked is no different
+    exec 9<&3; sh -c 'read <&9'      with 3 inherited: four read it, ksh93
+                                     finds 9 closed — and its *3* still
+                                     reads, so a duplicate carries the mark
+                                     and the original does not
+    sh -c 'read <&3' (3 inherited)   unanimous: the caller's descriptor
+                                     crosses everywhere
+    sh -c '… >&3' 3>f                unanimous: a command's own redirection
+                                     crosses everywhere
+    exec 3>f; sh -c '… >&3' 3>&3     unanimous: naming the number again on
+                                     the command hands it over even there
+    exec 2>f; sh -c '… >&2'          unanimous: the rule starts above 2
+
+The last three are why the axis is asked about a *mark* rather than about
+the table. A descriptor is `exec`'s when `exec`'s own redirection list
+opened it; the mark travels with a duplication, and a command redirecting
+the same number takes it off for that command and no longer. The corpus
+records the two unanimous rows as
+`redir/a-commands-own-redirection-crosses` and
+`redir/restating-the-number-hands-an-exec-descriptor-over`, because
+"everyone crosses here" is the half that says what the axis is not about.
+
+It is read where the outbound table is built, once, so an external child
+and a process replacement get the same answer — and they were measured to
+give the same one, which makes this one divergence rather than two. It is
+asked only when the table actually holds such a descriptor: an axis
+consulted on the common path would refuse every external command in a
+Runner that had not chosen a dialect, over a question that decides nothing
+for a script with no parked descriptors.
+
+A fifth panel member does not change it. The question is whether the
+dissenter gets its own answer, not how large the majority is, so a shell
+that agreed with the four would leave the axis exactly as it is and one
+that agreed with ksh93 would answer `No` beside it. What a fifth member
+could change is a *core* answer that rested on a bare majority, and this
+one does not: the core follows four shells and the standard's silence.
+
 ## An axis that is only about one of two names
 
 `typeset` and `local` do the same thing and do not have the same rule.

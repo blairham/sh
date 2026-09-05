@@ -2392,6 +2392,16 @@ echo "st=$?"`,
 		Why:     "a descriptor parked with `exec 3>file` is inherited by an external command, which is what the flock and shared-log idioms are built on — the child writes in every shell but ksh93, which alone keeps it to itself. The child's complaint is discarded because its wording is a fact about whatever /bin/sh is on the machine",
 	},
 	{
+		ID: "redir/a-commands-own-redirection-crosses", Category: "redirection",
+		Snippet: `/bin/sh -c "echo own >&3" 3>f 2>/dev/null; echo "st=$?"; cat f`,
+		Why:     "the boundary of the shell that keeps `exec`'s descriptors to itself: a redirection the *command* carries crosses in every shell, ksh93 included, so what that shell withholds is what `exec` opened rather than what the table holds",
+	},
+	{
+		ID: "redir/restating-the-number-hands-an-exec-descriptor-over", Category: "redirection",
+		Snippet: `exec 3>f; /bin/sh -c "echo restated >&3" 3>&3 2>/dev/null; echo "st=$?"; cat f`,
+		Why:     "the same boundary read from the other side, and unanimous: `exec 3>f` alone leaves the child nothing in ksh93, and naming 3 again on the command hands it over there — so the rule is about which redirection list opened the descriptor and not about the number",
+	},
+	{
 		ID: "redir/exec-descriptor-reaches-a-replacement", Category: "redirection",
 		Snippet: `exec 3>f; exec /bin/sh -c "{ echo repl >&3; } 2>/dev/null; cat f"`,
 		Why:     "the same descriptor and the harder seam: `exec cmd` replaces the shell rather than forking one, so nothing renumbers the table on the way across and the command inherits the *process's* descriptors. The replacement writes in every shell but ksh93, exactly as a child does, and the reading is done by the replacement because there is no shell left to do it. The complaint is discarded for the reason the child's is",

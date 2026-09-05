@@ -1409,6 +1409,33 @@ type Semantics struct {
 	// so the number the variable holds is already dead.
 	FdVariableOutlivesTheCommand Answer
 
+	// ExecOpenedFdReachesACommand hands a descriptor that `exec`'s own
+	// redirection list opened to whatever the shell runs next — the flock
+	// and shared-log idioms, and every script that gives a child a logging
+	// descriptor. Four of the five say yes; ksh93 alone closes anything
+	// above 2 that `exec` opened when it invokes another program, which its
+	// manual states as the rule rather than leaving it to be discovered.
+	//
+	// POSIX decides nothing here: the Shell Command Language says whether
+	// standard input, output and error are open for a utility and is silent
+	// about the rest, so both answers conform and there is no majority to
+	// defer to on the standard's authority.
+	//
+	// It is narrower than "that shell hands nothing over", and the boundary
+	// is measured. A descriptor the *caller* opened crosses in every shell,
+	// this one included, and closing it closes it for the child everywhere.
+	// A command's own redirection crosses everywhere too — `sh -c '… >&3'
+	// 3>f` writes, and so does `exec 3>f; sh -c '… >&3' 3>&3`, where
+	// restating the number on the command brings it back. What is withheld
+	// is what `exec` opened: the numbered form, a `{v}>f` the shell numbered
+	// itself, and a `9<&3` duplicated from an inherited descriptor, while
+	// the inherited 3 it was copied from still crosses.
+	//
+	// Read where the outbound table is built, so an external command and a
+	// process replacement get the same answer — measured the same in both,
+	// which is one divergence rather than two.
+	ExecOpenedFdReachesACommand Answer
+
 	// FdVariableBadCloseIsAnError refuses `exec {name}>&-` when the name
 	// holds no descriptor number. ksh93 says nothing and reports success.
 	FdVariableBadCloseIsAnError Answer
@@ -2312,12 +2339,15 @@ func PosixSemantics() Semantics {
 		MissingFileIsOlder: No,
 		// POSIX gives -t a file descriptor, and dash refuses anything that
 		// is not a number.
-		TerminalTestRequiresANumber:        Yes,
-		FcEmptyHistoryIsAnError:            No,
-		JobControlAbsenceIsReportedFirst:   No,
-		CdpathAnnouncesTheDirectory:        Yes,
-		FdVariableOutlivesTheCommand:       Yes,
-		FdVariableBadCloseIsAnError:        Yes,
+		TerminalTestRequiresANumber:      Yes,
+		FcEmptyHistoryIsAnError:          No,
+		JobControlAbsenceIsReportedFirst: No,
+		CdpathAnnouncesTheDirectory:      Yes,
+		FdVariableOutlivesTheCommand:     Yes,
+		FdVariableBadCloseIsAnError:      Yes,
+		// The standard is silent and four of the five hand the descriptor
+		// over, which is what the flock and shared-log idioms are built on.
+		ExecOpenedFdReachesACommand:        Yes,
 		ReadRequiresAVariableName:          No,
 		ArrayLengthWithoutSubscriptIsCount: No,
 		EmptyArrayAtIsOneEmptyField:        No,

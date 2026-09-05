@@ -3744,6 +3744,8 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `redir/a-group-writing-to-a-closed-descriptor` | `st=1` **2>** `<shell>: 1: echo: echo: I/O error~<shell>: 1: echo: echo: I/O error` | `st=1` **2>** `<shell>: line 1: echo: write error: Bad file descriptor~<shell>: line 1: echo: write error: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: echo: write error: Bad file descriptor~<shell>: line 1: echo: write error: Bad file descriptor` | `a~b~st=1` **2>** `<shell>: line 0: echo: write error: Bad file descriptor~<shell>: line 0: echo: write error: Bad file descriptor` | `st=1` | `st=0` **2>** `<shell>:1: write error: bad file descriptor~<shell>:1: write error: bad file descriptor` |
 | `redir/exec-opens-a-high-descriptor` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` |
 | `redir/exec-descriptor-reaches-an-external-child` | `child` | `child` | `child` | `child` | *(no output, status 0)* | `child` |
+| `redir/a-commands-own-redirection-crosses` | `st=0~own` | `st=0~own` | `st=0~own` | `st=0~own` | `st=0~own` | `st=0~own` |
+| `redir/restating-the-number-hands-an-exec-descriptor-over` | `st=0~restated` | `st=0~restated` | `st=0~restated` | `st=0~restated` | `st=0~restated` | `st=0~restated` |
 | `redir/exec-descriptor-reaches-a-replacement` | `repl` | `repl` | `repl` | `repl` | *(no output, status 0)* | `repl` |
 | `redir/a-replacements-descriptor-numbers-keep-their-gaps` | `five` | `five` | `five` | `five` | *(no output, status 0)* | `five` |
 | `redir/an-inherited-descriptor-keeps-its-number` | `five` | `five` | `five` | `five` | *(no output, status 0)* | `five` |
@@ -3890,6 +3892,14 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `redir/exec-descriptor-reaches-an-external-child` — a descriptor parked with `exec 3>file` is inherited by an external command, which is what the flock and shared-log idioms are built on — the child writes in every shell but ksh93, which alone keeps it to itself. The child's complaint is discarded because its wording is a fact about whatever /bin/sh is on the machine
   ```sh
   exec 3>f; /bin/sh -c "echo child >&3" 2>/dev/null; exec 3>&-; cat f
+  ```
+- `redir/a-commands-own-redirection-crosses` — the boundary of the shell that keeps `exec`'s descriptors to itself: a redirection the *command* carries crosses in every shell, ksh93 included, so what that shell withholds is what `exec` opened rather than what the table holds
+  ```sh
+  /bin/sh -c "echo own >&3" 3>f 2>/dev/null; echo "st=$?"; cat f
+  ```
+- `redir/restating-the-number-hands-an-exec-descriptor-over` — the same boundary read from the other side, and unanimous: `exec 3>f` alone leaves the child nothing in ksh93, and naming 3 again on the command hands it over there — so the rule is about which redirection list opened the descriptor and not about the number
+  ```sh
+  exec 3>f; /bin/sh -c "echo restated >&3" 3>&3 2>/dev/null; echo "st=$?"; cat f
   ```
 - `redir/exec-descriptor-reaches-a-replacement` — the same descriptor and the harder seam: `exec cmd` replaces the shell rather than forking one, so nothing renumbers the table on the way across and the command inherits the *process's* descriptors. The replacement writes in every shell but ksh93, exactly as a child does, and the reading is done by the replacement because there is no shell left to do it. The complaint is discarded for the reason the child's is
   ```sh

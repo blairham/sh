@@ -736,6 +736,63 @@ prose rather than as a case because the output cannot be golden: bash and
 ksh93 announce the killed writer by its process id, which is different on
 every run.
 
+## A capability the corpus cannot hand a case
+
+The corpus can give a case its own argv (`Case.Args`) and its own standard
+input (`Case.Stdin`), and it still cannot give one a *fourth* descriptor.
+Every case is run by one harness that builds one `exec.Cmd`, and nothing
+in a Case says "and open this on 3" — so the whole of what a shell does
+with a descriptor its caller opened is outside what `make oracle` can
+re-run. The obvious workaround makes it worse: a snippet could invoke
+`"$0"` recursively with a redirection, but one panel column is deliberately
+invoked with `argv[0]` of `sh`, and `"$0"` there is whatever `/bin/sh`
+happens to be on the machine — bash on macOS, dash on Debian. That is the
+mislabeled-column trap `MustReport` exists to prevent, reintroduced by a
+snippet.
+
+So it is prose, measured and re-measured against bash 5.3, bash 3.2, dash,
+ksh93 and zsh (macOS, 2026-09-05). The invocation throughout is
+`echo hello | <shell> 3<&0 case.sh`, which opens descriptor 3 on the pipe
+before the shell starts:
+
+    exec <&3; read x; echo "got:$x"        got:hello — unanimous
+    read x <&3; echo "got:$x"              got:hello — unanimous
+    exec 4<&3; read x <&4                  got:hello — unanimous
+    exec 3<&3; read x <&3                  got:hello — unanimous
+    read x <&7                             7: bad file descriptor — unanimous
+    exec 3<&-; read x <&3                  3: bad file descriptor — unanimous
+    exec 3>&-; read x <&3                  3: bad file descriptor — unanimous,
+                                           and the close reports 0 whichever
+                                           direction it is written
+    exec 3<&-; exec 3<&-                   0 — closing a closed one is not an
+                                           error, as closing an unopened one
+                                           is not
+    sh -c 'read y <&3'                     the child reads it — unanimous
+    exec 3<&-; sh -c 'read y <&3'          the child finds it closed — unanimous
+    exec 9<&3 3<&-; sh -c '… >&3'          the same, with the descriptor moved
+                                           rather than dropped
+    exec sh -c 'read y <&3'                the replacement reads it — unanimous
+
+Nothing splits the panel, which is the finding: an inherited descriptor is
+an ordinary member of the table from the moment the shell starts, and every
+question that has an answer for `exec 3<file` has the same answer for one
+the caller opened. There is no axis here, so no preset gains a field — see
+"Rules for adding an axis": a unanimous answer is a *behavior*, and asking
+about it would refuse the construct in the core over a question that
+decides nothing.
+
+Two things about it are ours rather than the panel's, because a shell
+written in Go has to rebuild what fork and exec give a shell in C. The
+descriptors have to be found, and close-on-exec is the discriminator: the
+Go runtime opens every descriptor of its own close-on-exec, so one that
+would survive an exec is one the process was handed. And they have to be
+found by the *binary* rather than by the interpreter — `interp` is a
+library, and a Runner embedded in some other program would otherwise
+publish that program's own files to a script it was asked to interpret.
+`interp.Runner.InheritedFiles` is therefore a fact the front end hands in,
+laid out exactly as the outbound table is: entry i is descriptor 3+i, and
+a gap is a number nothing arrived on.
+
 ## An axis that is only about one of two names
 
 `typeset` and `local` do the same thing and do not have the same rule.

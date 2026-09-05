@@ -7,23 +7,8 @@ package interp
 
 import "os"
 
-// firstExtraFd is the descriptor os/exec's ExtraFiles starts at: entry i of
-// that slice becomes descriptor 3+i in the child, because 0, 1 and 2 are the
-// named streams and are carried separately.
-const firstExtraFd = 3
-
-// maxInheritedFd bounds the table that gets rebuilt. It is a guard rather
-// than a rule about shells: the slice has one entry per descriptor up to the
-// highest one held, so a script that says `exec 1000000>f` would otherwise
-// ask for a million entries to describe one open file.
-//
-// 1024 is well clear of anything the panel agrees on. dash and zsh do not
-// read a multi-digit descriptor number at all — `exec 250>f` is a command
-// named 250 in both — and bash refuses one near the process limit outright,
-// so no shell measured can put a descriptor this high in play. That we
-// accept such a number where bash rejects it is a separate divergence; this
-// only declines to build a table for it.
-const maxInheritedFd = 1024
+// The layout constants firstExtraFd and maxInheritedFd live in
+// inheritedfds.go, because they describe both directions of the same table.
 
 // childFiles rebuilds, for an external child, the descriptor table this shell
 // holds beyond the three named streams.
@@ -45,8 +30,21 @@ const maxInheritedFd = 1024
 // buffer or a pipe of the caller's behind a descriptor, and there is no
 // number to hand a child for one of those; those entries stay nil, which
 // leaves them closed there as they were before.
+//
+// A descriptor this shell *inherited* and has since closed reaches as high as
+// one it opened, and for the sake of the nil rather than the file. The
+// original is still open in this process and is not close-on-exec — that is
+// how it was recognized — so it would otherwise pass to a child through the
+// kernel, behind the table's back: `exec 3<&-` then an external command found
+// 3 still readable there, where all four shells find it closed. Reaching the
+// number puts a nil at it, and a nil is a close.
 func (r *Runner) childFiles() []*os.File {
 	highest := 0
+	for i, f := range r.InheritedFiles {
+		if fd := firstExtraFd + i; f != nil && fd <= maxInheritedFd && fd > highest {
+			highest = fd
+		}
+	}
 	for fd, v := range r.fds {
 		if fd < firstExtraFd || fd > maxInheritedFd {
 			continue

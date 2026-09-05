@@ -357,6 +357,19 @@ func (r *Runner) badSetOptionName(name string) bool {
 // zzznosuch: invalid option name`.
 func (r *Runner) saySetRefusal(msg string, usage, isName bool) {
 	d := r.diag()
+	if r.fromEnvironment {
+		// A third shape, and the plainest of them: an option name that came
+		// out of the environment rather than out of an argument vector or a
+		// script. The location is the shell's own, at line 0 like the
+		// invocation's, and nothing stands where `set` would — measured,
+		// `SHELLOPTS=nosuchoption` draws `<shell>: line 0: nosuchoption:
+		// invalid option name` from the one shell that reads the variable,
+		// against `<shell>: line 0: <shell>: …` for the same bad name written
+		// as `-o`. No usage block either: nobody was given a usage to get
+		// wrong.
+		r.diagf("%s\n", strings.TrimPrefix(msg, "set: "))
+		return
+	}
 	if !r.atInvocation {
 		r.diagf("%s\n", msg)
 		if usage {

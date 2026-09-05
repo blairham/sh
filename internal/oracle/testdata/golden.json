@@ -5274,6 +5274,70 @@
         "TimedOut": false
       }
     },
+    "command/capital-v-a-name-that-is-nothing": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: command: nosuchcmd_zz: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: command: nosuchcmd_zz: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: command: nosuchcmd_zz: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "nosuchcmd_zz: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: command: nosuchcmd_zz: not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "nosuchcmd_zz not found~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "command/capital-v-says-a-sentence": {
+      "bash": {
+        "Output": "echo is a shell builtin~if is a shell keyword~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "echo is a shell builtin~if is a shell keyword~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "echo is a shell builtin~if is a shell keyword~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "echo is a shell builtin~if is a shell keyword~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "echo is a shell builtin~if is a keyword~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "echo is a shell builtin~if is a reserved word~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "commands/coproc-is-one-dialect-s-keyword": {
       "bash": {
         "Output": "hi",
@@ -6682,6 +6746,134 @@
         "TimedOut": false
       }
     },
+    "declare/an-option-local-does-not-have": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: local: -q: invalid option~local: usage: local [option] name[=value] ...~in~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: local: -q: invalid option~local: usage: local [option] name[=value] ...~in~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: local: -q: invalid option~local: usage: local name[=value] ...~in~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: local: -q: bad variable name",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: local: not found~in~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "f:local: bad option: -q~in~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/an-option-typeset-does-not-have": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: typeset: -q: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: typeset: -q: invalid option~typeset: usage: typeset [-aAfFgiIlnrtux] name[=value] ... or typeset -p [-aAfFilnrtux] [name ...]~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: typeset: -q: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: typeset: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: typeset: -q: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "\u003cshell\u003e:typeset:1: bad option: -q~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/bare-local-lists-the-locals": {
+      "bash": {
+        "Output": "2~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "2~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "0~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "0~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: local: not found~\u003cshell\u003e: local: not found~0~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "0~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/capital-f-names-a-function": {
+      "bash": {
+        "Output": "f~st=0~st2=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "f~st=0~st2=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "f~st=0~st2=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: declare: not found~st=127~\u003cshell\u003e: 1: declare: not found~st2=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: declare: not found~st=127~\u003cshell\u003e: declare: not found~st2=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "st=0~st2=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
     "declare/declare-is-the-second-name": {
       "bash": {
         "Output": "[1]",
@@ -6710,6 +6902,102 @@
       },
       "zsh": {
         "Output": "[1]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/f-says-a-named-function-back": {
+      "bash": {
+        "Output": "f () ~{ ~    if true; then~        echo one;~    fi~}~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "f () ~{ ~    if true; then~        echo one;~    fi~}~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "f () ~{ ~    if true; then~        echo one;~    fi~}~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: typeset: not found~st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "f() { if true; then echo one; fi; };st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "f () {~\tif true~\tthen~\t\techo one~\tfi~}~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/global-letter-against-a-local": {
+      "bash": {
+        "Output": "in=in~out=new",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "in=in~out=new",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: typeset: -g: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~in=in~out=out",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: typeset: not found~in=in~out=out",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: local: not found~\u003cshell\u003e: typeset: -g: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "in=new~out=out",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/global-letter-declares-a-global": {
+      "bash": {
+        "Output": "gv=7 st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "gv=7 st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: typeset: -g: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~gv= st=2",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: typeset: not found~gv= st=127",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: typeset: -g: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "gv=7 st=0",
         "Status": 0,
         "TimedOut": false
       }
@@ -6842,6 +7130,38 @@
         "TimedOut": false
       }
     },
+    "declare/local-bad-name": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: local: `1x=5': not a valid identifier~in=ok~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: local: `1x=5': not a valid identifier~in=ok~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: local: `1x=5': not a valid identifier~in=ok~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "in=ok~\u003cshell\u003e: 1: 1x: bad variable name",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: local: not found~in=ok~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "f:local: not an identifier: 1x",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
     "declare/local-in-a-keyword-function": {
       "bash": {
         "Output": "[outer]",
@@ -6902,6 +7222,102 @@
       },
       "zsh": {
         "Output": "[outer]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/local-readonly-letter": {
+      "bash": {
+        "Output": "\u003cshell\u003e: line 1: ro: readonly variable",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "\u003cshell\u003e: line 1: ro: readonly variable",
+        "Status": 127,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: ro: readonly variable",
+        "Status": 1,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: local: -r: bad variable name",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: local: not found~unreached~after",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "f: read-only variable: ro",
+        "Status": 1,
+        "TimedOut": false
+      }
+    },
+    "declare/local-reads-the-integer-letter": {
+      "bash": {
+        "Output": "v=5~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "v=5~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "v=5~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: local: -i: bad variable name",
+        "Status": 2,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "\u003cshell\u003e: local: not found~v=2+3~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "v=5~st=0",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/lower-case-attribute": {
+      "bash": {
+        "Output": "v=abc~v2=def",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "v=abc~v2=def",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: typeset: -l: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~v=~v2=DEF",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: typeset: not found~v=~v2=DEF",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "v=abc~v2=def",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "v=abc~v2=def",
         "Status": 0,
         "TimedOut": false
       }
@@ -7062,6 +7478,38 @@
       },
       "zsh": {
         "Output": "[1]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "declare/upper-case-attribute": {
+      "bash": {
+        "Output": "w=ABC~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "w=ABC~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "\u003cshell\u003e: line 0: typeset: -u: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...~w=~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "\u003cshell\u003e: 1: typeset: not found~w=~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "w=ABC~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "w=ABC~st=0",
         "Status": 0,
         "TimedOut": false
       }
@@ -19222,6 +19670,70 @@
       },
       "zsh": {
         "Output": "[bar]~[]",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "set/bare-set-and-the-functions": {
+      "bash": {
+        "Output": "1~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "0~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "1~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "0~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "0~st=1",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "0~st=1",
+        "Status": 0,
+        "TimedOut": false
+      }
+    },
+    "set/bare-set-lists-the-variables": {
+      "bash": {
+        "Output": "v1=plain~v2='has space'~v3='quo'\\''te'~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Output": "v1=plain~v2='has space'~v3='quo'\\''te'~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Output": "v1=plain~v2='has space'~v3='quo'\\''te'~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Output": "v1='plain'~v2='has space'~v3='quo'\"'\"'te'~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Output": "v1=plain~v2='has space'~v3=$'quo\\'te'~st=0",
+        "Status": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Output": "v1=plain~v2='has space'~v3='quo'\\''te'~st=0",
         "Status": 0,
         "TimedOut": false
       }

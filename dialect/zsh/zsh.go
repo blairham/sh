@@ -294,6 +294,26 @@ func Semantics() interp.Semantics {
 	// a bad option there.
 	s.TypeNamesTheKindWithDashT = interp.No
 
+	// The letters `typeset` and `local` read. `-f` prints function bodies;
+	// `-F` is a *float's* precision here rather than bash's function-name
+	// listing, so it rides in Diagnostics.UnimplementedOptionLetters with
+	// the rest of what this shell has and this engine does not.
+	s.DeclareOptions = "aAfgilprux"
+	s.LocalOptions = "aAilprux"
+	// A bad `typeset` option is reported and the script goes on.
+	s.TypesetBadOptionFatal = interp.No
+	// `typeset -g x=new` with a `local x` in front assigns the *local* —
+	// the letter only widens where a new declaration would land, it does
+	// not reach past what already stands. Measured: `in=new out=out`
+	// against the other engine's `in=in out=new`.
+	s.DeclareGlobalReachesPastALocal = interp.No
+	// A bare `local` — and a bare `set` — list every parameter the shell
+	// has, special parameters and tied arrays included: a fact about this
+	// engine's parameter table, refused as unimplemented rather than
+	// approximated.
+	s.BareLocalListing = interp.BareLocalListsEveryParameter
+	s.SetListing = interp.SetListingEveryParameter
+
 	return s
 }
 
@@ -305,7 +325,13 @@ func Diagnostics() interp.Diagnostics {
 		TypeFunction:           "%[1]s is a shell function from zsh",
 		TypeNotFound:           "%[1]s not found",
 		TypeNotFoundUnprefixed: true,
-		JobStarted:             "[%[1]d] %[2]d",
+		// `command -V` complains the way `type` does, shell's name and all.
+		CommandVNotFound: "%[1]s not found",
+		// A function said back keeps its opening brace on the header's
+		// line: `f () {`. The other engine gives the brace a line of its
+		// own, which is the wording's fallback.
+		FunctionListingHeader: "%[1]s () %[2]s",
+		JobStarted:            "[%[1]d] %[2]d",
 		// Two spaces before the marker, one after, and a state of its own in
 		// lower case in an 11-wide column. zsh never lists a finished job,
 		// so it needs no word for one.
@@ -363,6 +389,13 @@ func Diagnostics() interp.Diagnostics {
 			// at all about a dead -u descriptor and reports 1, which is why
 			// no ReadBadFileDescriptor wording appears here.
 			"read": "kqeEzcl",
+			// typeset's letters this engine does not hold: floats (-E -F),
+			// namerefs (-n), padding and alignment (-L -R -Z), uniqueness,
+			// hiding, ties and the rest. The same set under both names, and
+			// for `local` too.
+			"typeset": "bcEFhHkLmnRtTUZ",
+			"declare": "bcEFhHkLmnRtTUZ",
+			"local":   "bcEFhHkLmnRtTUZ",
 		},
 		// The builtin's name is stripped to the location prefix as ever:
 		// `zsh:read:1: -p: no coprocess`, measured with no coprocess to
@@ -462,12 +495,14 @@ func Diagnostics() interp.Diagnostics {
 			"export":   "not valid in this context: %[2]s",
 			"readonly": "not valid in this context: %[2]s",
 			"unset":    "%[2]s: invalid parameter name",
+			"local":    "not valid in this context: %[2]s",
 		},
 		// An operand that starts with a digit is a different complaint, for
 		// the two that have one. `unset` says the same to both.
 		BuiltinBadNameNumeric: map[string]string{
 			"export":   "not an identifier: %[2]s",
 			"readonly": "not an identifier: %[2]s",
+			"local":    "not an identifier: %[2]s",
 		},
 		BuiltinBadOptionStatus:    1,
 		PrintfUsage:               "not enough arguments",
@@ -572,4 +607,8 @@ func Apply(r *interp.Runner) {
 		// ordinary command with an ordinary globbed argument.
 		r.SetDeclaring("declare")
 	}
+	// How a function is laid out when something says one back — `typeset
+	// -f` here; this shell writes nothing into the environment, so the
+	// exported arrangement is the shown one.
+	r.SetFunctionLayout(FunctionLayout(), FunctionLayout())
 }

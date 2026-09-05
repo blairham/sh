@@ -116,12 +116,11 @@ func biFalse(*Runner, context.Context, []string) int { return 1 }
 // positional parameters.
 //
 // `set --` with nothing after it clears them, which is different from `set`
-// with no arguments at all — that lists variables and is left unimplemented
-// rather than guessed at.
+// with no arguments at all — that lists variables, in the dialect's shape.
+// See setlisting.go.
 func biSet(r *Runner, _ context.Context, args []string) int {
 	if len(args) == 0 {
-		r.diagf("set: listing variables is not implemented yet\n")
-		return 2
+		return r.setListing()
 	}
 	// Options come before `--`, and each is a letter that may be turned on
 	// with `-` or off with `+`. Only the ones with implemented behavior are
@@ -1522,19 +1521,61 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 			return st
 		}
 	}
+	// The letters are the dialect's own, and may be none at all: dash gives
+	// `local` no options, so `local -r x` declares a variable named `-r`
+	// there — and then refuses it as the bad name it is. The parse is
+	// `typeset`'s, because in both shells that read letters here they are
+	// the same letters meaning the same attributes.
+	var f declareFlags
+	if known := r.sem().LocalOptions; known != "" {
+		rest, flags, code := r.parseDeclareFlags("local", args, known)
+		if code != 0 {
+			return code
+		}
+		args, f = rest, flags
+	}
+	if len(r.scopes) > 0 && (len(args) == 0 || f.print) {
+		// Bare `local` is a listing, and the shells do not agree what of —
+		// see BareLocalListingForm. `local -p` is the same listing spelled
+		// as a letter, except when operands narrow it to named declarations.
+		if len(args) > 0 {
+			return r.declarePrint(args)
+		}
+		return r.bareLocalListing()
+	}
+	args, status := r.builtinNames("local", args, false)
+	if r.ctl == controlExit {
+		return status
+	}
 	for _, a := range args {
 		name, value, hasValue := strings.Cut(a, "=")
+		r.applyAttributes(name, f)
 		// shadow does nothing when there is no scope to save into, which is
 		// the dialect that took this as a global: there is nothing to put
 		// back, and it becomes a plain assignment.
 		r.shadow(name)
+		if f.assoc && !f.remove {
+			// After the shadow, the same order `typeset -A` keeps: the
+			// caller's absence comes back when the function returns.
+			r.markAssoc(name)
+		}
 		if hasValue {
 			r.setVar(name, value)
-			continue
+			if r.ctl == controlExit {
+				return r.status
+			}
+		} else {
+			r.declareEmpty(name)
 		}
-		r.declareEmpty(name)
+		if f.readonly && !f.remove {
+			r.markReadonly(name)
+		}
 	}
-	return 0
+	if r.assignFailed && status == 0 {
+		// See biExport.
+		return 1
+	}
+	return status
 }
 
 // biReadonly marks variables immutable.

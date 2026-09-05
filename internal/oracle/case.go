@@ -3169,6 +3169,86 @@ echo unreachable`,
 		Why:     "how scripts test whether a name is set: two shells report it in their own words and answer 1, one prints nothing at all and answers 0 — an axis, not a wording",
 	},
 	{
+		ID: "declare/f-says-a-named-function-back", Category: "declarations",
+		Snippet: `f() { if true; then echo one; fi; }; typeset -f f; echo "st=$?"`,
+		Why:     "three engines, three renderings of identical state: one gives the brace a line of its own and terminates with `;`, one keeps the brace on the header and terminates with nothing, and one prints the source text verbatim — which this engine does not keep, so the third is refused as unimplemented rather than approximated",
+	},
+	{
+		ID: "declare/capital-f-names-a-function", Category: "declarations",
+		Snippet: `f() { echo hi; }; declare -F f; echo "st=$?"; declare -F nosuch; echo "st2=$?"`,
+		Why:     "only one shell has `-F` as a function listing — a named operand answers with the bare name, a missing one with silence and 1 — while another spells a *float's precision* with the same letter and answers 0 to both, and two have no `declare` at all",
+	},
+	{
+		ID: "declare/local-reads-the-integer-letter", Category: "declarations",
+		Snippet: `f() { local -i n; n=2+3; echo "v=$n"; }; f; echo "st=$?"`,
+		Why:     "`local` takes declare's letters in two shells, none at all in a third — where `-i` is a variable name, and a bad one, refused fatally — and does not exist in the fourth",
+	},
+	{
+		ID: "declare/local-readonly-letter", Category: "declarations",
+		Snippet: `f() { local -r ro=5; ro=6; echo "unreached"; }; f; echo "after"`,
+		Why:     "`local -r` assigns and then freezes, so the reassignment is the readonly refusal — fatal in both shells that read the letter — while the shell with no letters dies earlier, on `-r` as a bad name",
+	},
+	{
+		ID: "declare/local-bad-name", Category: "declarations",
+		Snippet: `f() { local 1x=5; echo "in=ok"; }; f; echo "st=$?"`,
+		Why:     "four answers to one bad operand: quoted back with its value and carried past, refused fatally with the digit-led wording, refused fatally with the builtin's name left off the line, and `local: not found` from the shell that never had the builtin",
+	},
+	{
+		ID: "declare/bare-local-lists-the-locals", Category: "declarations",
+		Snippet: `f() { local x=1 y; local; }; f | grep -c '^declare'; echo "st=$?"`,
+		Why:     "a bare `local` writes the running function's locals as clustered declarations in exactly one shell — counted through grep because another lists its whole parameter table there, which is a fact about that engine rather than about the script",
+	},
+	{
+		ID: "declare/global-letter-declares-a-global", Category: "declarations",
+		Snippet: `f() { typeset -g gv=7; }; f; echo "gv=$gv st=$?"`,
+		Why:     "`-g` reaches the global table from inside a function in the two shells that spell it; the third refuses it with its usage lines and stops — typeset is one of its own special builtins — and the fourth has no typeset at all",
+	},
+	{
+		ID: "declare/global-letter-against-a-local", Category: "declarations",
+		Snippet: `x=out; f() { local x=in; typeset -g x=new; echo "in=$x"; }; f; echo "out=$x"`,
+		Why:     "the axis inside the letter: with a local standing in front of the name, one engine writes the global cell past it and the other assigns the local it can see — `in=in out=new` against `in=new out=out`",
+	},
+	{
+		ID: "declare/lower-case-attribute", Category: "declarations",
+		Snippet: `typeset -l v=ABC; echo "v=$v"; v=DEF; echo "v2=$v"`,
+		Why:     "a property of the name, not of the assignment: the declaring value folds and so does every later one, in all three shells with the letter — one folds on expansion rather than assignment, which only its listing can tell apart",
+	},
+	{
+		ID: "declare/upper-case-attribute", Category: "declarations",
+		Snippet: `typeset -u w=abc; echo "w=$w"; echo "st=$?"`,
+		Why:     "the other direction of the same attribute, unanimous among the shells that have typeset",
+	},
+	{
+		ID: "declare/an-option-typeset-does-not-have", Category: "declarations",
+		Snippet: `typeset -q v=1; echo "st=$?"`,
+		Why:     "the refusal splits three ways: reported with a usage line and status 2, reported bare with 1, and fatal with the usage lines in the shell whose typeset failures end the script",
+	},
+	{
+		ID: "declare/an-option-local-does-not-have", Category: "declarations",
+		Snippet: `f() { local -q x; echo "in"; }; f; echo "st=$?"`,
+		Why:     "the same question of `local`, where the shell with no letters reads `-q` as a name and dies on it, and the one with no `local` at all never reaches the question",
+	},
+	{
+		ID: "set/bare-set-lists-the-variables", Category: "builtins",
+		Snippet: `v1=plain; v2='has space'; v3="quo'te"; set | grep "^v[123]"; echo "st=$?"`,
+		Why:     "one listing, three spellings of the same three values: bare-until-needed with `'\\''` for the embedded quote, always-single-quoted with the quote doubled out, and `$'...'` — filtered to the script's own names because the rest of the listing is the machine's",
+	},
+	{
+		ID: "set/bare-set-and-the-functions", Category: "builtins",
+		Snippet: `myfn() { echo hi; }; set | grep -c '^myfn'; echo "st=$?"`,
+		Why:     "exactly one shell follows the variables with every defined function; counted rather than shown, so the answer is 1 against three 0s whatever the body's layout",
+	},
+	{
+		ID: "command/capital-v-says-a-sentence", Category: "builtins",
+		Snippet: `command -V echo; command -V if; echo "st=$?"`,
+		Why:     "POSIX's other letter: every shell answers with its `type` sentence, keyword wording and all, so the option costs no vocabulary of its own until something is missing",
+	},
+	{
+		ID: "command/capital-v-a-name-that-is-nothing", Category: "builtins",
+		Snippet: `command -V nosuchcmd_zz; echo "st=$?"`,
+		Why:     "the one line `-V` words for itself: two shells blame `command` where their `type` blames `type` or `whence`, the other two keep the shell's name off the line here as there — and the status is `type`'s, 127 in the shell that answers a missing command's number",
+	},
+	{
 		ID: "select/menu-and-choice", Category: "select",
 		Snippet: `select x in a b; do echo "got=$x rep=$REPLY"; break; done <<< "1"`,
 		Why:     "the base case, and the layouts diverge immediately: two lines in bash and ksh93, one in zsh — and the prompt is `#? ` in two, `?# ` in the third and absent in ksh93, which prints none unless the input is a terminal",

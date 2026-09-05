@@ -6,8 +6,6 @@ package interp
 import (
 	"context"
 	"strings"
-
-	"github.com/blairham/sh/syntax"
 )
 
 // `type` says what a name would run, in a sentence rather than as a path.
@@ -102,6 +100,14 @@ func typeOptionWordsCarryT(args []string) bool {
 // aliases expand is the parser's fact — see syntax.Dialect.ExpandAliases —
 // and the runner holds only the table.
 func (r *Runner) typeOne(name string, kind bool) int {
+	return r.describeName(name, kind,
+		Wording(r.diag().TypeNotFound, "type: %[1]s: not found", name))
+}
+
+// describeName is the sentence itself, shared with `command -V`, which asks
+// `type`'s question with a complaint of its own for a name that is nothing —
+// the one line the two spell differently, so it arrives already worded.
+func (r *Runner) describeName(name string, kind bool, notFound string) int {
 	dg := r.diag()
 	if fn, ok := r.funcs[name]; ok {
 		if kind {
@@ -118,7 +124,7 @@ func (r *Runner) typeOne(name string, kind bool) int {
 			// what this shell has, and the spelling it was written with is
 			// gone by now. Which is why there is a printer — see
 			// syntax.PrintWith.
-			r.printf("%s () \n%s\n", name, syntax.PrintWith(fn.Body, r.functionLayout))
+			r.printf("%s\n", r.listedFunction(name, fn))
 		}
 		return 0
 	}
@@ -159,7 +165,7 @@ func (r *Runner) typeOne(name string, kind bool) int {
 		// which is what makes `-t` scriptable in the first place.
 		return orDefault(dg.TypeNotFoundStatus, 1)
 	}
-	msg := Wording(dg.TypeNotFound, "type: %[1]s: not found", name)
+	msg := notFound
 	if dg.TypeNotFoundUnprefixed {
 		// Two of the four write this one with nothing in front of it, where
 		// every other message they print carries the shell's name.

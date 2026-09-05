@@ -198,3 +198,40 @@ func TestWhatCommandRunsReportsAsItself(t *testing.T) {
 		t.Errorf("got %q, want the builtin not named in the location", out)
 	}
 }
+
+// `command -V` answers the same question as a sentence — `type`'s wordings
+// for what was found, its own complaint for what was not.
+func TestCommandCapitalVSaysItAsASentence(t *testing.T) {
+	for _, tc := range []struct{ src, want string }{
+		{`command -V echo`, "echo is a shell builtin"},
+		{`command -V if`, "if is a shell keyword"},
+		{`f() { :; }; command -V f`, "f is a function"},
+	} {
+		out, errs, st := declRun(t, tc.src, func(s *Semantics) {
+			s.CommandRejectsUnknownOption = Yes
+			s.TypePrintsFunctionBody = No
+		}, Diagnostics{
+			TypeBuiltin:  "%[1]s is a shell builtin",
+			TypeKeyword:  "%[1]s is a shell keyword",
+			TypeFunction: "%[1]s is a function",
+		})
+		if strings.TrimSpace(out) != tc.want || errs != "" || st != 0 {
+			t.Errorf("%s = %q (stderr %q, status %d), want %q", tc.src, out, errs, st, tc.want)
+		}
+	}
+
+	// A name that is nothing gets `command`'s own wording — see
+	// Diagnostics.CommandVNotFound — with `type`'s status and prefix rule.
+	out, errs, st := declRun(t, `command -V nosuchthing_at_all`, func(s *Semantics) {
+		s.CommandRejectsUnknownOption = Yes
+	}, Diagnostics{
+		CommandVNotFound:   "command: %[1]s: not found",
+		TypeNotFoundStatus: 127,
+	})
+	if out != "" || st != 127 {
+		t.Errorf("stdout %q status %d, want silence on stdout and the dialect's status", out, st)
+	}
+	if !strings.Contains(errs, "command: nosuchthing_at_all: not found") {
+		t.Errorf("stderr = %q, want the -V complaint", errs)
+	}
+}

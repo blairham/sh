@@ -1946,3 +1946,93 @@ than missing:
 - bash `dirs` and `disown`: claimed by the core-builtin sweep (#430)
   alongside the job-spec and directory-stack work they sit on, and recorded
   there rather than twice.
+||||||| parent of 7c686d6 (builtins: the declaration long tail — declare -f/-F/-g/-l/-u, local options, bare set and local listings, command -V)
+
+## The declaration long tail: letters, listings, and one letter with an axis inside it
+
+Oracle runs, 2026-09-04, bash 5.3, dash, ksh93u+, zsh 5.9.2. The corpus
+rows live under `declare/` and the `set/bare-set-*` and `command/capital-v-*`
+ids.
+
+`declare`/`typeset` and `local` read the dialect's letters, in the same
+spelling `ReadOptions` uses — `Semantics.DeclareOptions` and
+`Semantics.LocalOptions`:
+
+    declare/typeset
+      bash   aAfFgilprux   plus -I -n -t, unimplemented here
+      zsh    aAfgilprux    plus floats, padding, ties…, unimplemented
+      ksh93  aAilprux      plus -f -F -b -n…, unimplemented (see below)
+      dash   —             no typeset at all
+    local
+      bash   aAgilprux     plus -f -F -I -n -t, unimplemented
+      zsh    aAilprux
+      dash   (none)        `local -r x` declares a name `-r`, then refuses
+                           it: `local: -r: bad variable name`, fatal
+      ksh93  —             no local at all
+
+What the letters mean, where measured to agree, is implemented once:
+`-f` says the functions back and `-F` names them (`declare -f name` per
+function bare, the name alone once operands narrow it — and a float's
+precision in zsh and ksh93, where the letter is refused as missing);
+`-g` declares a global from inside a function; `-l`/`-u` fold what is
+assigned to the name, the declaring assignment included. zsh stores the
+raw text and folds on *expansion* instead — every read agrees with the
+other two shells, and only its `typeset -p` betrays the difference by
+listing the raw value, which is deliberately not modeled.
+
+**`-g` has an axis inside it.** With no local in front of the name the
+two shells that spell the letter agree: the global is written. With a
+`local x` standing there, bash writes the global cell *past* it —
+`in=in out=new` — and zsh assigns the local it can see — `in=new
+out=out`. `Semantics.DeclareGlobalReachesPastALocal`, asked only where a
+local shadows the name.
+
+**ksh93's `typeset -f` prints the source text verbatim** — its own
+two-space indentation, `echo two; echo three` still on one line. This
+engine keeps a tree, not the text, so the letter is refused as
+unimplemented rather than approximated. bash and zsh print from their
+trees, each in its own arrangement (`dialect/bash/layout.go`,
+`dialect/zsh/layout.go`); the header join differs too — bash gives the
+opening brace a line of its own, zsh keeps it on the header's
+(`Diagnostics.FunctionListingHeader`).
+
+**typeset is one of ksh93's own special builtins**, so any of its
+failures ends the script — a bad option included, usage lines and all:
+`Semantics.TypesetBadOptionFatal`.
+
+**A bare `local` writes three different things**
+(`Semantics.BareLocalListing`): bash lists the running function's own
+locals — the innermost scope only — as clustered declarations
+(`declare -i n`, `declare -- x`); dash writes nothing and reports 0; zsh
+lists its whole parameter table, special parameters and tied arrays
+included, which is a fact about that engine rather than about the
+script's variables and is refused as unimplemented.
+
+**A bare `set` is the same shape one step wider**
+(`Semantics.SetListing`, `Semantics.SetListingQuoting`): sorted
+`name=value` lines, values spelled bare-until-needed with `'\''` in
+bash, always-single-quoted with the quote doubled out in dash, and
+`$'...'` in ksh93 — the shared listing vocabulary. bash alone follows
+the variables with every defined function; zsh lists every parameter and
+is refused as the bare `local` is. Arrays keep the shape the engine's
+`declare -p` gave them, subscripted and double-quoted in bash, dense and
+bare in ksh93.
+
+**`command -V` is POSIX and unanimous in shape**: every shell answers
+with its own `type` sentence, so the option costs one wording — the
+complaint for a name that is nothing (`Diagnostics.CommandVNotFound`),
+where bash and ksh93 blame `command` and dash and zsh keep the shell's
+name off the line exactly as their `type` does. Status and prefix rule
+are `type`'s own (`TypeNotFoundStatus`, `TypeNotFoundUnprefixed`).
+
+### Out of scope, recorded rather than silent: namerefs
+
+`declare -n` / `typeset -n` — a name that is a reference to another
+name — is deferred, not missed. It is a second variable model: every
+read and write through the nameref has to resolve to the target,
+`unset -n` addresses the reference where `unset` addresses the target,
+and ksh93's `nameref` inside functions interacts with its scope rule.
+That is its own project with its own measurements. The letters sit in
+each dialect's `UnimplementedOptionLetters`, so `declare -n ref=x` is
+refused today as "not implemented yet" rather than misread as an
+ordinary declaration. Filed as part of #430's scope decision.

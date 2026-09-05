@@ -649,6 +649,11 @@ type Runner struct {
 	// `n=5+2` stores 7 rather than the four characters. It is a property of
 	// the name and not of the assignment, which is why it is recorded here.
 	integer map[string]bool
+	// lowered and uppered are the case attributes — `declare -l` and `-u` —
+	// which fold what is assigned to the name, the same shape integer has:
+	// a property of the name that changes what a later assignment means.
+	lowered map[string]bool
+	uppered map[string]bool
 	// funcs holds defined functions.
 	funcs map[string]*syntax.FuncDecl
 	// depth bounds function recursion, because a shell script can recurse
@@ -2030,6 +2035,15 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 			return
 		}
 		value = v
+	}
+	// The case attributes, folded at assignment the way the integer
+	// attribute evaluates there: `declare -l v; v=ABC` stores `abc` in both
+	// shells that spell the letter.
+	switch {
+	case r.lowered[name]:
+		value = strings.ToLower(value)
+	case r.uppered[name]:
+		value = strings.ToUpper(value)
 	}
 	if _, dynamic := r.Dynamic[name]; dynamic {
 		// Assigning a produced parameter is a message to its producer rather

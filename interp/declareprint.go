@@ -80,6 +80,8 @@ type declaration struct {
 	integer  bool
 	readonly bool
 	exported bool
+	lower    bool
+	upper    bool
 }
 
 // declarationOf gathers what the runner knows about a name. The second result
@@ -91,8 +93,10 @@ func (r *Runner) declarationOf(name string) (declaration, bool) {
 		integer:  r.integer[name],
 		readonly: r.readonly[name],
 		exported: r.exported[name],
+		lower:    r.lowered[name],
+		upper:    r.uppered[name],
 	}
-	attributed := d.integer || d.readonly || d.exported
+	attributed := d.integer || d.readonly || d.exported || d.lower || d.upper
 	if r.removed[name] {
 		// `unset` took the value away; only a surviving attribute keeps the
 		// name listable.
@@ -151,6 +155,12 @@ func (r *Runner) declarableNames() []string {
 	for name := range r.integer {
 		seen[name] = true
 	}
+	for name := range r.lowered {
+		seen[name] = true
+	}
+	for name := range r.uppered {
+		seen[name] = true
+	}
 	for _, kv := range r.environ() {
 		// isNameLike keeps the entries that are variables: an exported
 		// function travels in the environment under a decorated name no
@@ -160,7 +170,8 @@ func (r *Runner) declarableNames() []string {
 		}
 	}
 	for name := range seen {
-		if r.removed[name] && !r.readonly[name] && !r.integer[name] && !r.exported[name] {
+		if r.removed[name] && !r.readonly[name] && !r.integer[name] &&
+			!r.exported[name] && !r.lowered[name] && !r.uppered[name] {
 			delete(seen, name)
 		}
 	}
@@ -294,7 +305,10 @@ func clusteredKey(k string) string {
 // exportSpelledDeclaration is DeclareListingExportSpelled — see the constant.
 func (r *Runner) exportSpelledDeclaration(d declaration) string {
 	word := "typeset"
-	flags := d.flagLetters()
+	// This engine slots the case letters between the integer letter and the
+	// readonly one, where the clustered engine puts them after export —
+	// measured from the same state in both.
+	flags := d.letters("aAilurx")
 	if d.exported && !d.isArr && !d.isAssoc {
 		// Only a scalar earns the `export` spelling; an exported array keeps
 		// the word and the letter.
@@ -346,6 +360,14 @@ func (r *Runner) bareAssignmentDeclaration(d declaration) string {
 	}
 	if d.readonly {
 		flags = append(flags, "-r")
+	}
+	// The case letters sit between readonly and integer here — measured,
+	// `typeset -x -r -l -i` back from a name declared with all four.
+	if d.lower {
+		flags = append(flags, "-l")
+	}
+	if d.upper {
+		flags = append(flags, "-u")
 	}
 	if d.integer {
 		flags = append(flags, "-i")
@@ -403,23 +425,36 @@ func (r *Runner) bareAssignmentDeclaration(d declaration) string {
 }
 
 // flagLetters is the clustered spelling of what a name is: kind first, then
-// the attributes, in the one order both clustering engines share.
-func (d declaration) flagLetters() string {
+// the attributes. The two clustering engines share the order of the letters
+// they had before the case attributes arrived, and part ways over where
+// those go — measured, `-irxl` against `-ilr` for the same state — which is
+// why the order is the caller's to spell.
+func (d declaration) flagLetters() string { return d.letters("aAirxlu") }
+
+// letters spells the attributes present in the given order.
+func (d declaration) letters(order string) string {
 	var b strings.Builder
-	if d.isArr {
-		b.WriteByte('a')
-	}
-	if d.isAssoc {
-		b.WriteByte('A')
-	}
-	if d.integer {
-		b.WriteByte('i')
-	}
-	if d.readonly {
-		b.WriteByte('r')
-	}
-	if d.exported {
-		b.WriteByte('x')
+	for _, c := range order {
+		on := false
+		switch c {
+		case 'a':
+			on = d.isArr
+		case 'A':
+			on = d.isAssoc
+		case 'i':
+			on = d.integer
+		case 'r':
+			on = d.readonly
+		case 'x':
+			on = d.exported
+		case 'l':
+			on = d.lower
+		case 'u':
+			on = d.upper
+		}
+		if on {
+			b.WriteRune(c)
+		}
 	}
 	return b.String()
 }

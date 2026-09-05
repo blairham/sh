@@ -72,6 +72,13 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 	}
 }
 
+// The invocation answers this preset gives that are not Answers.
+func TestPlusSignedCommandStringNaming(t *testing.T) {
+	if got := dash.Semantics().PlusSignedCommandStringIsDollarZero; got != false {
+		t.Errorf("PlusSignedCommandStringIsDollarZero = %v, want false", got)
+	}
+}
+
 func TestDiagnosticAnswersTheInterpTestsRelyOn(t *testing.T) {
 	d := dash.Diagnostics()
 	if got, want := d.TraceQuoting, interp.QuoteNever; got != want {

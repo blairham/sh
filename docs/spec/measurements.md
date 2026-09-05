@@ -5385,6 +5385,9 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 | `invoke/end-of-options-between-c-and-its-string` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` |
 | `invoke/plus-c-still-runs-the-command` | `hi` | `hi` | `hi` | `hi` | `hi` | `hi` |
 | `invoke/c-outranks-standard-input` | `hi\|0` | `hi\|0` | `hi\|0` | `hi\|0` | `hi\|0` | `hi\|0` |
+| `invoke/plus-c-names-itself` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `echo "$0\|$#\|$*"; true\|2\|name a` | `name\|1\|a` |
+| `invoke/plus-c-with-no-operands-names-itself` | `<shell>\|0\|` | `<shell>\|0\|` | `sh\|0\|` | `<shell>\|0\|` | `echo "$0\|$#\|$*"\|0\|` | `<shell>\|0\|` |
+| `invoke/plus-c-in-a-bundle-names-itself` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `echo "$0\|$#\|$*"; true\|2\|name a` | `name\|1\|a` |
 | `invoke/c-with-s-names-the-operands` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `<shell>\|2\|name a` | `<shell>\|2\|name a` |
 | `invoke/c-with-s-unbundled` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `<shell>\|2\|name a` | `<shell>\|2\|name a` |
 | `invoke/c-before-s-names-the-operands` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `name\|1\|a` | `<shell>\|2\|name a` | `<shell>\|2\|name a` |
@@ -5451,6 +5454,18 @@ changed cell rather than as no change at all. Newlines are shown as `~`.
 - `invoke/c-outranks-standard-input` — -s and -c in one bundle: all four run the command rather than reading standard input, so a shell that let -s win would print nothing and still exit 0
   ```sh
   echo "hi|$#"
+  ```
+- `invoke/plus-c-names-itself` — the sign of the `c` is not decoration in one shell: ksh93 leaves the command string in $0 and makes both operands parameters, where bash, dash and zsh read `+c` as `-c` and name $0 from the first operand. The trailing `true` is a shield rather than part of the question — the same shell also hands the operands to the program as literal words appended to its last command, which is a second divergence recorded in docs/spec/invocation.md and not modeled, and a command that ignores its arguments keeps it out of this case's output
+  ```sh
+  echo "$0|$#|$*"; true
+  ```
+- `invoke/plus-c-with-no-operands-names-itself` — the same question with nothing for the operand rules to disagree about, which is where the naming still splits: three of the four keep the shell's own name in $0 and ksh93 puts the command string there. No shield is needed, because there is no operand to be appended
+  ```sh
+  echo "$0|$#|$*"
+  ```
+- `invoke/plus-c-in-a-bundle-names-itself` — the sign belongs to the word rather than to the letter, so a bundle answers the same way — and the `e` riding with it is errexit being turned *off*, which is the plus sign doing its ordinary job to the letter beside the one that is not ordinary
+  ```sh
+  echo "$0|$#|$*"; true
   ```
 - `invoke/c-with-s-names-the-operands` — the same bundle with operands after it, which is where the panel splits 2-2: bash and dash apply the command string's rule and make `name` $0, ksh93 and zsh apply the standard-input rule and let no operand be $0, so the shell keeps its own name and both operands are parameters. Only the naming splits — all four run the command string, which the case above pins
   ```sh

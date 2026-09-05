@@ -1452,6 +1452,31 @@ type Semantics struct {
 	// standard to break it is refused until a dialect chooses.
 	StdinOptionNamesTheOperands Answer
 
+	// PlusSignedCommandStringIsDollarZero gives a plus-signed command string
+	// `$0` for itself: `sh +c CMD name a` leaves `$0` as CMD and makes every
+	// operand a positional parameter, where the minus spelling would have
+	// made `name` `$0` and only `a` a parameter.
+	//
+	// True in ksh93 alone. bash, dash and zsh read `+c` as `-c` in every
+	// respect, and all four *run* the command string either way — the sign
+	// changes nothing about where the program comes from, which the corpus
+	// pins separately.
+	//
+	// A bool rather than an Answer, for the reason
+	// StdinProgramReadInBlocks is one: the panel is three to one, so a
+	// common denominator exists, and refusing an invocation every shell
+	// runs is not an answer any shell could ship. False is the majority
+	// answer and the standard's own — POSIX has no plus spelling of the
+	// option at all, so reading it as the option it spells invents nothing.
+	//
+	// Two further things ksh93 does with `+c` are measured and deliberately
+	// not modeled, because they do not agree with each other and read as
+	// defects of the 2012 build rather than as a rule: the operands also
+	// reach the program as literal words appended to its last command, and
+	// a command string of a single word is looked up on PATH and run as a
+	// file. docs/spec/invocation.md records both.
+	PlusSignedCommandStringIsDollarZero bool
+
 	// LoginProfileWhenNonInteractive has a login shell read its login
 	// profile even when there is a script to run rather than a person to
 	// prompt. A shell is a login shell when argv[0] begins with a dash,

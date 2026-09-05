@@ -1068,3 +1068,50 @@ func TestWhoNamesTheOperandsWithBothRoutesIsAnAxis(t *testing.T) {
 		}
 	}
 }
+
+// TestAPlusSignedCommandStringNamingItselfIsAnAxis: both signs of `c` select
+// the command string, which is unanimous, and one shell then leaves `$0` as
+// the string rather than taking it from the first operand.
+//
+// A bool rather than a three-state answer, because the common denominator
+// exists — three of the four read `+c` as `-c` — and refusing an invocation
+// every shell runs would be worse than either answer.
+func TestAPlusSignedCommandStringNamingItselfIsAnAxis(t *testing.T) {
+	const snippet = `echo "0=$0 n=$# args=$*"`
+	sh := shell()
+	sh.Semantics.PlusSignedCommandStringIsDollarZero = true
+	out, errs, code := runArgs(t, sh, "testsh", "+c", snippet, "name", "a")
+	if want := "0=" + snippet + " n=2 args=name a\n"; code != 0 || out != want {
+		t.Errorf("status %d output %q, want %q (stderr %q)", code, out, want, errs)
+	}
+	// The sign belongs to the word, so a bundle answers the same way — and
+	// an option word of its own after it does not change what the `c` was
+	// written with.
+	out, errs, code = runArgs(t, sh, "testsh", "+ce", snippet, "name", "a")
+	if want := "0=" + snippet + " n=2 args=name a\n"; code != 0 || out != want {
+		t.Errorf("bundle: status %d output %q, want %q (stderr %q)", code, out, want, errs)
+	}
+	// With no operand the two rules still differ: the string keeps `$0`
+	// where the other answer leaves the shell's own name there.
+	out, _, _ = runArgs(t, sh, "testsh", "+c", snippet)
+	if want := "0=" + snippet + " n=0 args=\n"; out != want {
+		t.Errorf("no operands: output = %q, want %q", out, want)
+	}
+	// The minus spelling is unaffected by the answer, which is what makes
+	// this the *sign's* question and not the option's.
+	out, _, _ = runArgs(t, sh, "testsh", "-c", snippet, "name", "a")
+	if want := "0=name n=1 args=a\n"; out != want {
+		t.Errorf("minus sign: output = %q, want %q", out, want)
+	}
+	// And the other answer reads `+c` as `-c` throughout, which is the
+	// substrate's own and what three of the panel do.
+	for _, argv := range [][]string{
+		{"testsh", "+c", snippet, "name", "a"},
+		{"testsh", "+ce", snippet, "name", "a"},
+	} {
+		out, _, code := runArgs(t, shell(), argv...)
+		if want := "0=name n=1 args=a\n"; code != 0 || out != want {
+			t.Errorf("%v: status %d output %q, want %q", argv[1:], code, out, want)
+		}
+	}
+}

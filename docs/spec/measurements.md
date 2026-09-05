@@ -17,6 +17,13 @@ are a dialect's own. Only the grading is relaxed: the cells below are
 what each shell actually printed, and the drift check still compares
 every byte of them.
 
+A case marked **(unordered)** is one the reference shells answer two
+ways at random, because the shell being measured races with itself.
+Its cells are one sample rather than the answer, so they are *kept* by
+a regeneration instead of resampled: re-rolling a coin on every run is
+the only way such a row can move, and every move is noise. Nothing
+grades it and nothing drift-checks it either, for the same reason.
+
 ## Panel
 
 | shell | build |
@@ -3244,7 +3251,7 @@ every byte of them.
 | `xtrace/assignments-per-line-diverges` | **2>** `+ a=1 b=2` | **2>** `+ a=1~+ b=2` | **2>** `+ a=1~+ b=2` | **2>** `+ a=1~+ b=2` | **2>** `+ a=1~+ b=2` | **2>** `+<shell>:1> a=1 b=2 ` |
 | `xtrace/disabling-set-diverges` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` **2>** `+ set +x` | `done` | `done` **2>** `+<shell>:1> set +x` |
 | `xtrace/compound-header-diverges` | `1~2` **2>** `+ echo 1~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ for i in 1 2~+ echo 1~+ for i in 1 2~+ echo 2` | `1~2` **2>** `+ echo 1~+ echo 2` | `1~2` **2>** `+<shell>:1> i=1~+<shell>:1> echo 1~+<shell>:1> i=2~+<shell>:1> echo 2` |
-| `xtrace/pipeline-order-diverges` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ cat~+ echo a` | `a` **2>** `+<shell>:1> echo a~+<shell>:1> cat` |
+| `xtrace/pipeline-order-diverges` **(unordered)** | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ echo a~+ cat` | `a` **2>** `+ cat~+ echo a` | `a` **2>** `+<shell>:1> echo a~+<shell>:1> cat` |
 | `nounset/unset-variable-is-an-error` | **2>** `<script>: 2: NOPE: parameter not set` *(status 2)* | **2>** `<script>: line 2: NOPE: unbound variable` *(status 1)* | **2>** `<script>: line 2: NOPE: unbound variable` *(status 1)* | **2>** `<script>: line 2: NOPE: unbound variable` *(status 1)* | **2>** `<script>: line 2: NOPE: parameter not set` *(status 1)* | **2>** `<script>:2: NOPE: parameter not set` *(status 1)* |
 | `shopt/nullglob-empties-a-miss` | `zz*zz~done` | `~done` | `~done` | `~done` | `zz*zz~done` | **2>** `<shell>:1: no matches found: zz*zz` *(status 1)* |
 | `shopt/globstar-crosses-directories` | `**/f` | `d/e/f` | `d/e/f` | `**/f` | `**/f` | `d/e/f` |
@@ -3318,7 +3325,7 @@ every byte of them.
   ```sh
   set -x; for i in 1 2; do echo $i; done
   ```
-- `xtrace/pipeline-order-diverges` — ksh93 usually prints the last element first, which follows from its running that one in the current shell — but only usually: its two processes race to their trace points, 26 runs in 400 come out the other way, and that is a fact about ksh93 rather than about anything measured against it
+- `xtrace/pipeline-order-diverges` **(unordered)** — ksh93 usually prints the last element first, which follows from its running that one in the current shell — but only usually: its two processes race to their trace points, 41 runs in 400 come out the other way. Nor is that ksh93's alone, which is what the row looked like until every column was counted rather than the loudest one: bash 5 reorders 5 times in 200, bash 3.2 once in 400 and zsh once in 200, so four of the six columns were seen to answer both ways and only dash held still. A pipeline's elements are separate processes and nothing sequences their trace points, so the order is the scheduler's and not the shell's — a fact about how the trace is emitted rather than about anything measured against it
   ```sh
   set -x; echo a | cat
   ```
@@ -3906,6 +3913,9 @@ every byte of them.
 | `redir/a-write-to-a-closed-descriptor-fails` | `st=1` **2>** `<shell>: 1: echo: echo: I/O error` | `st=1` **2>** `<shell>: line 1: echo: write error: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: echo: write error: Bad file descriptor` | `hi~st=1` **2>** `<shell>: line 0: echo: write error: Bad file descriptor` | `st=1` | `st=0` |
 | `redir/a-group-writing-to-a-closed-descriptor` | `st=1` **2>** `<shell>: 1: echo: echo: I/O error~<shell>: 1: echo: echo: I/O error` | `st=1` **2>** `<shell>: line 1: echo: write error: Bad file descriptor~<shell>: line 1: echo: write error: Bad file descriptor` | `st=1` **2>** `<shell>: line 1: echo: write error: Bad file descriptor~<shell>: line 1: echo: write error: Bad file descriptor` | `a~b~st=1` **2>** `<shell>: line 0: echo: write error: Bad file descriptor~<shell>: line 0: echo: write error: Bad file descriptor` | `st=1` | `st=0` **2>** `<shell>:1: write error: bad file descriptor~<shell>:1: write error: bad file descriptor` |
 | `redir/exec-opens-a-high-descriptor` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` | `hi~aside` |
+| `redir/a-two-digit-descriptor-number` | **2>** `<shell>: 1: exec: 10: not found` *(status 127)* | `hi` | `hi` | `hi` | **2>** `<shell>: exec: 10: not found` *(status 127)* | **2>** `<shell>:1: command not found: 10` *(status 127)* |
+| `redir/digits-before-a-redirection-that-are-not-a-number` | `st=0~x 10` | `x~st=0` | `x~st=0` | `x~st=0` | `st=0~x 10` | `st=0~x 10` |
+| `redir/a-descriptor-number-over-the-open-file-limit` | **2>** `<shell>: 1: exec: 70: not found` *(status 127)* | `st=1~fresh` **2>** `<shell>: line 1: 70: Bad file descriptor` | **2>** `<shell>: line 1: 70: Bad file descriptor` *(status 1)* | `st=1~fresh` **2>** `<shell>: 70: Bad file descriptor` | **2>** `<shell>: exec: 70: not found` *(status 127)* | **2>** `<shell>:1: command not found: 70` *(status 127)* |
 | `redir/exec-descriptor-reaches-an-external-child` | `child` | `child` | `child` | `child` | *(no output, status 0)* | `child` |
 | `redir/a-commands-own-redirection-crosses` | `st=0~own` | `st=0~own` | `st=0~own` | `st=0~own` | `st=0~own` | `st=0~own` |
 | `redir/restating-the-number-hands-an-exec-descriptor-over` | `st=0~restated` | `st=0~restated` | `st=0~restated` | `st=0~restated` | `st=0~restated` | `st=0~restated` |
@@ -4058,6 +4068,18 @@ every byte of them.
 - `redir/exec-opens-a-high-descriptor` — `exec 3>file` holds the file on a descriptor of its own — stdout stays where it was, and only what is aimed at 3 reaches the file
   ```sh
   exec 3>f; echo hi; echo aside >&3; exec 3>&-; cat f
+  ```
+- `redir/a-two-digit-descriptor-number` — how many digits a descriptor number may have is not unanimous: bash reads ten as a number, and to dash, ksh93 and zsh the digits are an ordinary word, so the line runs a command called `10` with its output in the file. Those three still reach descriptors above nine through `exec {v}>f`, which is what makes this a question about the token rather than about the table
+  ```sh
+  exec 10>f; echo hi >&10; exec 10>&-; cat f
+  ```
+- `redir/digits-before-a-redirection-that-are-not-a-number` — the same split read from the quiet side, and the reason it is a grammar flag rather than a refusal: where the digits are a word nothing is reported and a different command runs — `x 10` into the file, against `x` on the terminal and an empty file
+  ```sh
+  echo x 10>f; echo "st=$?"; cat f
+  ```
+- `redir/a-descriptor-number-over-the-open-file-limit` — no shell in the panel has a ceiling of its own — the bound is the kernel's limit on open files, and only some shells hand its refusal back. The limit is moved by the case rather than assumed, so the row is about the rule and not about the machine's default. bash refuses and still creates the file; the other three cannot write a two-digit number at all and run a command called `70`
+  ```sh
+  ulimit -n 64; exec 70>fresh; echo "st=$?"; ls fresh
   ```
 - `redir/exec-descriptor-reaches-an-external-child` — a descriptor parked with `exec 3>file` is inherited by an external command, which is what the flock and shared-log idioms are built on — the child writes in every shell but ksh93, which alone keeps it to itself. The child's complaint is discarded because its wording is a fact about whatever /bin/sh is on the machine
   ```sh

@@ -262,7 +262,7 @@ func TestAnOrdinaryClauseAsksNothing(t *testing.T) {
 	sem := CoreSemantics()
 	dg := Diagnostics{}
 	held := 0o022
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
 	r.SetUmask = func(mask int) (int, error) { old := held; held = mask; return old, nil }
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
@@ -290,7 +290,7 @@ func TestTheCharacterNamedForASetWithNoWho(t *testing.T) {
 	sem.SymbolicMaskSetsWithoutAWho = No
 	dg := Diagnostics{UmaskBadSymbolicOperator: "umask: bad symbolic mode operator: %[2]s"}
 	held := 0o022
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
 	r.SetUmask = func(mask int) (int, error) { old := held; held = mask; return old, nil }
 	if _, err := r.Run(context.Background(), f); err != nil {
 		t.Fatal(err)
@@ -324,7 +324,7 @@ func TestAWhoWithNoOperatorCanReachForTheNumericComplaint(t *testing.T) {
 			UmaskWhoAloneIsANumericComplaint: numeric,
 		}
 		held := 0o022
-		r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+		r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
 		r.SetUmask = func(mask int) (int, error) { old := held; held = mask; return old, nil }
 		if _, err := r.Run(context.Background(), f); err != nil {
 			t.Fatal(err)

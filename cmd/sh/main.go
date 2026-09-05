@@ -25,25 +25,39 @@
 //	sh -parse 'a && b'           # dump the syntax tree
 //	sh -trace-events script.sh   # print every gated action to stderr
 //	sh -deny /etc script.sh      # refuse every action at or under /etc
+//	sh -policy p.policy script.sh  # run it under a declarative policy
+//	sh -audit log.jsonl script.sh  # record every action as JSON, one per line
 //
 // Everything a shell reads at invocation — `-c`, a script path and its
 // positional parameters, `-s`, a lone `-`, set options like `-e` — is read
 // by the shared front end in driver, exactly as the dialect binaries read
 // it. Only the flags no shell has — -tokens, -parse, -dialect,
-// -trace-events and -deny — are this binary's own, and they come first on
-// the line: the first word that is not one of them belongs to the shell, so
-// a script's own arguments can never be mistaken for them.
+// -trace-events, -deny, -policy and -audit — are this binary's own, and they
+// come first on the line: the first word that is not one of them belongs to
+// the shell, so a script's own arguments can never be mistaken for them.
 //
-// -trace-events and -deny are the debug route onto the gate and event seam
-// docs/design.md describes. They exist because a seam nothing reaches is a
-// seam nothing grades: the interpreter has asked a Gate about every exec,
-// open, stat and directory read since its first commit, and until these
-// flags no shipped binary ever set one, so a hole in the boundary would have
-// looked exactly like a shell that works. -deny is a way to watch the gate
-// refuse things and not a sandbox: it refuses what the *shell* opens, stats
-// and runs, and a command the shell was allowed to start makes its own
-// accesses. A policy meant to contain a script is a driver.Shell.Gate of its
-// own.
+// All four of the last ones reach the gate and event seam docs/design.md
+// describes, and they exist because a seam nothing reaches is a seam nothing
+// grades: the interpreter has asked a Gate about every exec, open, stat and
+// directory read since its first commit, and until these flags no shipped
+// binary ever set one, so a hole in the boundary would have looked exactly
+// like a shell that works.
+//
+// -trace-events and -deny are the debug half — a way to watch the gate refuse
+// something. -policy and -audit are the shipped half: a declarative rule set
+// read from a file, and the event stream written down in the schema its
+// consumers share. docs/design/sandboxing.md is the specification for both.
+//
+// Neither half contains a *process*. The boundary is drawn around the
+// interpreter: a policy refuses what the shell itself opens, stats and runs,
+// and a command the shell was allowed to start makes its own accesses that
+// nothing here sees — `allow exec /bin/cat` is `allow read /**` spelled less
+// obviously. Containing a running child is the job of an OS sandbox, which
+// sits above the substrate.
+//
+// A policy is never discovered: no environment variable, no dotfile. One that
+// could be named by the environment could be replaced by anything able to set
+// it, the sandboxed script included.
 //
 // With nothing to run and a terminal on stdin it prompts: a line editor with
 // history that survives the session, Tab completion of commands and files,
@@ -55,6 +69,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -70,35 +85,61 @@ import (
 const exitFailure = 2
 
 func main() {
-	own, rest, err := readOwnFlags(os.Args[1:])
+	os.Exit(run(os.Args, os.Stdout, os.Stderr))
+}
+
+// run is the whole of main, with the process's streams passed in rather than
+// reached for.
+//
+// It is a function so a test can invoke the binary the way a person does:
+// flags, dialect, seams, front end, status. The wiring in installSeams was
+// unreachable from a test while this lived in main(), which is the failure
+// this file has already had once — a shell that was never handed its gate
+// looks precisely like a shell that works, and so does a main() that reads a
+// policy and drops the error on the floor.
+func run(argv []string, stdout, stderr io.Writer) int {
+	own, rest, err := readOwnFlags(argv[1:])
 	if err != nil {
-		fail(err)
+		return fail(stderr, err)
 	}
 	sh, err := pickDialect(own.dialect)
 	if err != nil {
-		fail(err)
+		return fail(stderr, err)
 	}
 	// The fallback for an argv with nothing in it; driver names the shell by
 	// argv[0] the way every dialect binary is named.
 	sh.Name = "sh"
-	sh = installSeams(sh, own, os.Stderr)
+	sh, closer, err := installSeams(sh, own, stderr)
+	if err != nil {
+		// A policy that will not load is not a shell that runs unsandboxed.
+		return fail(stderr, err)
+	}
 	if own.tokens || own.parse {
 		dump := dumpTree
 		if own.tokens {
 			dump = dumpTokens
 		}
-		if err := dump(strings.Join(rest, " "), sh.Dialect); err != nil {
-			fail(err)
+		if err := dump(stdout, strings.Join(rest, " "), sh.Dialect); err != nil {
+			return fail(stderr, err)
 		}
-		os.Exit(0)
+		return 0
 	}
 	// Everything else is a shell invocation, and the shared front end reads
 	// it — this binary was the fifth copy of that logic once, and the copy
 	// is what dropped a script's positional parameters, claimed `-f` for
 	// "read this file" where every shell means noglob, and opened a file
 	// named `-`.
-	argv := append([]string{os.Args[0]}, rest...)
-	os.Exit(driver.MainArgs(sh, argv))
+	sh.Stdout, sh.Stderr = stdout, stderr
+	code := driver.MainArgs(sh, append([]string{argv[0]}, rest...))
+	if closer != nil {
+		// Closed here rather than deferred, because main ends with os.Exit
+		// and a defer would never run. Nothing is lost either way — every
+		// record is written straight through — but an audit file the process
+		// holds open until the kernel takes it back is untidy in the way that
+		// later reads as a leak.
+		_ = closer.Close()
+	}
+	return code
 }
 
 // ownFlags are the flags no shell has, so the shared front end must never
@@ -109,6 +150,8 @@ type ownFlags struct {
 	dialect       string
 	traceEvents   bool
 	deny          []string
+	policy        string
+	audit         string
 }
 
 // readOwnFlags strips this binary's flags from the front of the line,
@@ -157,6 +200,25 @@ func readOwnFlags(args []string) (own ownFlags, rest []string, err error) {
 			// legally contain, so splitting one would refuse to deny some
 			// directory that exists.
 			own.deny = append(own.deny, val)
+		case "policy", "audit":
+			if !hasVal {
+				if i+1 >= len(args) {
+					return own, nil, fmt.Errorf("-%s requires a path", name)
+				}
+				i++
+				val = args[i]
+			}
+			// Not repeatable, unlike -deny, and the difference is what a
+			// second one would mean. Two deny paths are two rules; two
+			// policies would be two rule sets, and while composing them is
+			// well defined — deny wins, so the result is the intersection —
+			// silently reading only one of a pair somebody wrote is the
+			// dangerous half of that. One policy, named once.
+			if name == "policy" {
+				own.policy = val
+			} else {
+				own.audit = val
+			}
 		default:
 			// Not ours — a set option, `-c`, an operand after `--` — so the
 			// shell's own reading starts here.
@@ -167,9 +229,12 @@ func readOwnFlags(args []string) (own ownFlags, rest []string, err error) {
 	return own, args[i:], nil
 }
 
-func fail(err error) {
-	fmt.Fprintln(os.Stderr, "sh:", err)
-	os.Exit(exitFailure)
+// fail reports and returns the status a shell exits with when it was invoked
+// wrongly, rather than exiting itself: a function that ends the process cannot
+// be called from a test, and every caller here is on the path a test drives.
+func fail(w io.Writer, err error) int {
+	_, _ = fmt.Fprintln(w, "sh:", err)
+	return exitFailure
 }
 
 // pickDialect resolves a name to a shell.
@@ -230,17 +295,26 @@ func pickDialect(name string) (driver.Shell, error) {
 		fmt.Errorf("unknown dialect %q: want core, posix, bash, zsh, ksh or dash", name)
 }
 
+// printf writes one line of a dump.
+//
+// The error is dropped, deliberately and in one place rather than at every
+// call: the only stream a failure to write the dump could be reported on is
+// the stream the dump was going to.
+func printf(w io.Writer, format string, a ...any) {
+	_, _ = fmt.Fprintf(w, format, a...)
+}
+
 // dumpTokens prints one token per line: position, kind, and for a word its
 // spans with the quoting made visible, because the quoting is the part that
 // decides what happens to a word later and the part hardest to see by eye.
-func dumpTokens(src string, d syntax.Dialect) error {
+func dumpTokens(w io.Writer, src string, d syntax.Dialect) error {
 	l := syntax.NewLexer(src, d)
 	for {
 		t := l.Next()
 		if t.Kind == syntax.TokEOF {
 			break
 		}
-		fmt.Printf("%-8s %-12s %s\n", t.Pos, kindName(t.Kind), detail(t))
+		printf(w, "%-8s %-12s %s\n", t.Pos, kindName(t.Kind), detail(t))
 	}
 	if err := l.Err(); err != nil {
 		if l.Incomplete() {
@@ -312,7 +386,7 @@ func quotePrefix(s syntax.Span) string {
 }
 
 // dumpTree prints the syntax tree, indented.
-func dumpTree(src string, d syntax.Dialect) error {
+func dumpTree(w io.Writer, src string, d syntax.Dialect) error {
 	p := syntax.NewParser(src, d)
 	f := p.Parse()
 	if err := p.Err(); err != nil {
@@ -322,12 +396,12 @@ func dumpTree(src string, d syntax.Dialect) error {
 		return err
 	}
 	for _, st := range f.Stmts {
-		printNode(st, 0)
+		printNode(w, st, 0)
 	}
 	return nil
 }
 
-func printNode(n syntax.Node, depth int) {
+func printNode(w io.Writer, n syntax.Node, depth int) {
 	pad := strings.Repeat("  ", depth)
 	switch x := n.(type) {
 	case *syntax.Stmt:
@@ -335,23 +409,23 @@ func printNode(n syntax.Node, depth int) {
 		if x.Background {
 			label = "stmt &"
 		}
-		fmt.Printf("%s%-8s %s\n", pad, x.Pos(), label)
-		printNode(x.Expr, depth+1)
+		printf(w, "%s%-8s %s\n", pad, x.Pos(), label)
+		printNode(w, x.Expr, depth+1)
 	case *syntax.BinaryExpr:
-		fmt.Printf("%s%-8s %s\n", pad, x.OpPos, x.Op)
-		printNode(x.X, depth+1)
-		printNode(x.Y, depth+1)
+		printf(w, "%s%-8s %s\n", pad, x.OpPos, x.Op)
+		printNode(w, x.X, depth+1)
+		printNode(w, x.Y, depth+1)
 	case *syntax.Pipeline:
 		label := "pipeline"
 		if x.Negated {
 			label = "pipeline !"
 		}
-		fmt.Printf("%s%-8s %s\n", pad, x.Pos(), label)
+		printf(w, "%s%-8s %s\n", pad, x.Pos(), label)
 		for _, c := range x.Cmds {
-			printNode(c, depth+1)
+			printNode(w, c, depth+1)
 		}
 	case *syntax.SimpleCmd:
-		fmt.Printf("%s%-8s command\n", pad, x.Pos())
+		printf(w, "%s%-8s command\n", pad, x.Pos())
 		for _, a := range x.Assigns {
 			switch {
 			case a.IsArray:
@@ -359,48 +433,48 @@ func printNode(n syntax.Node, depth int) {
 				for _, e := range a.Elems {
 					els = append(els, e.Literal())
 				}
-				fmt.Printf("%s  %-8s assign %s=(%s)\n", pad, a.Pos(), a.Name, strings.Join(els, " "))
+				printf(w, "%s  %-8s assign %s=(%s)\n", pad, a.Pos(), a.Name, strings.Join(els, " "))
 			case a.Index != nil:
-				fmt.Printf("%s  %-8s assign %s[%s]=%s\n", pad, a.Pos(), a.Name,
+				printf(w, "%s  %-8s assign %s[%s]=%s\n", pad, a.Pos(), a.Name,
 					a.Index.Literal(), a.Value.Literal())
 			default:
-				fmt.Printf("%s  %-8s assign %s=%s\n", pad, a.Pos(), a.Name, a.Value.Literal())
+				printf(w, "%s  %-8s assign %s=%s\n", pad, a.Pos(), a.Name, a.Value.Literal())
 			}
 		}
-		for _, w := range x.Args {
-			fmt.Printf("%s  %-8s word %s\n", pad, w.Pos(), w.Literal())
-			printParams(w, pad+"    ")
+		for _, arg := range x.Args {
+			printf(w, "%s  %-8s word %s\n", pad, arg.Pos(), arg.Literal())
+			printParams(w, arg, pad+"    ")
 		}
-		printRedirs(x.Redirs, pad, depth)
+		printRedirs(w, x.Redirs, pad, depth)
 	case *syntax.Subshell:
-		fmt.Printf("%s%-8s subshell\n", pad, x.Pos())
-		printList(x.List, depth+1)
-		printRedirs(x.Redirs, pad, depth)
+		printf(w, "%s%-8s subshell\n", pad, x.Pos())
+		printList(w, x.List, depth+1)
+		printRedirs(w, x.Redirs, pad, depth)
 	case *syntax.Group:
-		fmt.Printf("%s%-8s group\n", pad, x.Pos())
-		printList(x.List, depth+1)
-		printRedirs(x.Redirs, pad, depth)
+		printf(w, "%s%-8s group\n", pad, x.Pos())
+		printList(w, x.List, depth+1)
+		printRedirs(w, x.Redirs, pad, depth)
 	case *syntax.IfClause:
-		fmt.Printf("%s%-8s if\n", pad, x.Pos())
-		printBranch("cond", x.Cond, depth+1)
-		printBranch("then", x.Then, depth+1)
+		printf(w, "%s%-8s if\n", pad, x.Pos())
+		printBranch(w, "cond", x.Cond, depth+1)
+		printBranch(w, "then", x.Then, depth+1)
 		for _, e := range x.Elifs {
-			printBranch("elif-cond", e.Cond, depth+1)
-			printBranch("elif-then", e.Then, depth+1)
+			printBranch(w, "elif-cond", e.Cond, depth+1)
+			printBranch(w, "elif-then", e.Then, depth+1)
 		}
 		if x.HasElse {
-			printBranch("else", x.Else, depth+1)
+			printBranch(w, "else", x.Else, depth+1)
 		}
-		printRedirs(x.Redirs, pad, depth)
+		printRedirs(w, x.Redirs, pad, depth)
 	case *syntax.LoopClause:
 		kw := "while"
 		if x.Until {
 			kw = "until"
 		}
-		fmt.Printf("%s%-8s %s\n", pad, x.Pos(), kw)
-		printBranch("cond", x.Cond, depth+1)
-		printBranch("do", x.Body, depth+1)
-		printRedirs(x.Redirs, pad, depth)
+		printf(w, "%s%-8s %s\n", pad, x.Pos(), kw)
+		printBranch(w, "cond", x.Cond, depth+1)
+		printBranch(w, "do", x.Body, depth+1)
+		printRedirs(w, x.Redirs, pad, depth)
 	case *syntax.ForClause:
 		items := "(no word list — iterates the positional parameters)"
 		if x.HasItems {
@@ -410,64 +484,64 @@ func printNode(n syntax.Node, depth int) {
 			}
 			items = "in " + strings.Join(ws, " ")
 		}
-		fmt.Printf("%s%-8s for %s %s\n", pad, x.Pos(), x.Name, items)
-		printBranch("do", x.Body, depth+1)
-		printRedirs(x.Redirs, pad, depth)
+		printf(w, "%s%-8s for %s %s\n", pad, x.Pos(), x.Name, items)
+		printBranch(w, "do", x.Body, depth+1)
+		printRedirs(w, x.Redirs, pad, depth)
 	case *syntax.CaseClause:
-		fmt.Printf("%s%-8s case %s\n", pad, x.Pos(), x.Word.Literal())
+		printf(w, "%s%-8s case %s\n", pad, x.Pos(), x.Word.Literal())
 		for _, it := range x.Items {
 			var pats []string
 			for _, w := range it.Patterns {
 				pats = append(pats, w.Literal())
 			}
-			fmt.Printf("%s  %-8s pattern %s %s\n", pad, it.Pos(),
+			printf(w, "%s  %-8s pattern %s %s\n", pad, it.Pos(),
 				strings.Join(pats, "|"), it.Term)
-			printList(it.Body, depth+2)
+			printList(w, it.Body, depth+2)
 		}
-		printRedirs(x.Redirs, pad, depth)
+		printRedirs(w, x.Redirs, pad, depth)
 	case *syntax.TestClause:
-		fmt.Printf("%s%-8s test %s\n", pad, x.Pos(), condString(x.Expr))
-		printRedirs(x.Redirs, pad, depth)
+		printf(w, "%s%-8s test %s\n", pad, x.Pos(), condString(x.Expr))
+		printRedirs(w, x.Redirs, pad, depth)
 	case *syntax.ArithCmdClause:
-		fmt.Printf("%s%-8s arithmetic %s\n", pad, x.Pos(), arithString(x.Parsed))
-		printRedirs(x.Redirs, pad, depth)
+		printf(w, "%s%-8s arithmetic %s\n", pad, x.Pos(), arithString(x.Parsed))
+		printRedirs(w, x.Redirs, pad, depth)
 	case *syntax.FuncDecl:
 		kw := ""
 		if x.Keyword {
 			kw = " (function keyword)"
 		}
-		fmt.Printf("%s%-8s func %s%s\n", pad, x.Pos(), x.Name, kw)
-		printNode(x.Body, depth+1)
+		printf(w, "%s%-8s func %s%s\n", pad, x.Pos(), x.Name, kw)
+		printNode(w, x.Body, depth+1)
 	default:
-		fmt.Printf("%s%-8s %T\n", pad, n.Pos(), n)
+		printf(w, "%s%-8s %T\n", pad, n.Pos(), n)
 	}
 }
 
-func printList(list []*syntax.Stmt, depth int) {
+func printList(w io.Writer, list []*syntax.Stmt, depth int) {
 	for _, s := range list {
-		printNode(s, depth)
+		printNode(w, s, depth)
 	}
 }
 
-func printBranch(label string, list []*syntax.Stmt, depth int) {
-	fmt.Printf("%s%s:\n", strings.Repeat("  ", depth), label)
-	printList(list, depth+1)
+func printBranch(w io.Writer, label string, list []*syntax.Stmt, depth int) {
+	printf(w, "%s%s:\n", strings.Repeat("  ", depth), label)
+	printList(w, list, depth+1)
 }
 
-func printRedirs(rs []*syntax.Redirect, pad string, depth int) {
+func printRedirs(w io.Writer, rs []*syntax.Redirect, pad string, depth int) {
 	for _, r := range rs {
 		n := ""
 		if r.N != nil {
 			n = r.N.Literal()
 		}
-		fmt.Printf("%s  %-8s redirect %s%s %s\n", pad, r.Pos(), n, r.Op, r.Word.Literal())
+		printf(w, "%s  %-8s redirect %s%s %s\n", pad, r.Pos(), n, r.Op, r.Word.Literal())
 		if r.Heredoc != nil {
 			kind := "expanded"
 			if r.Heredoc.Spans[0].Quoting != syntax.Unquoted {
 				kind = "literal"
 			}
 			for _, line := range strings.Split(strings.TrimRight(r.Heredoc.Literal(), "\n"), "\n") {
-				fmt.Printf("%s    %-8s heredoc(%s) %s\n", pad, "", kind, line)
+				printf(w, "%s    %-8s heredoc(%s) %s\n", pad, "", kind, line)
 			}
 		}
 	}
@@ -477,10 +551,10 @@ func printRedirs(rs []*syntax.Redirect, pad string, depth int) {
 // printParams shows the parsed form of any ${ } inside a word. A word's
 // Literal() flattens them, which is exactly what hides whether they were
 // understood.
-func printParams(w *syntax.Word, pad string) {
+func printParams(out io.Writer, w *syntax.Word, pad string) {
 	for _, s := range w.Spans {
 		if s.Kind == syntax.ArithSubst && s.Arith != nil {
-			fmt.Printf("%sarith %s\n", pad, arithString(s.Arith))
+			printf(out, "%sarith %s\n", pad, arithString(s.Arith))
 			continue
 		}
 		if s.Kind != syntax.ParamExp || s.Param == nil {
@@ -504,13 +578,13 @@ func printParams(w *syntax.Word, pad string) {
 			}
 			desc += fmt.Sprintf("  op %q%s", e.Op.String(), colon)
 		}
-		fmt.Printf("%s%s\n", pad, desc)
+		printf(out, "%s%s\n", pad, desc)
 		if e.Arg != nil {
-			fmt.Printf("%s  arg %s\n", pad, wordShape(e.Arg))
-			printParams(e.Arg, pad+"    ")
+			printf(out, "%s  arg %s\n", pad, wordShape(e.Arg))
+			printParams(out, e.Arg, pad+"    ")
 		}
 		if e.Arg2 != nil {
-			fmt.Printf("%s  arg2 %s\n", pad, wordShape(e.Arg2))
+			printf(out, "%s  arg2 %s\n", pad, wordShape(e.Arg2))
 		}
 	}
 }

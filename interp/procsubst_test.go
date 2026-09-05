@@ -280,6 +280,71 @@ func TestProcessSubstitutionWithoutATMPDIR(t *testing.T) {
 	}
 }
 
+// TestASubstitutionsDirectoryIsTakenAwayAgain, which is what the shared helper
+// is for and the thing no individual test would ever notice.
+//
+// A substitution makes a directory under the shell's TMPDIR for its pipes. The
+// pipes themselves go as soon as the command that named them is done — that is
+// removeProcSubs, and it is why a long session does not fill its directory —
+// but the directory outlives them and only CleanUp removes it. A test has no
+// reason to call CleanUp, so the suite left one behind per substituting Runner,
+// in /tmp, since a Runner with no TMPDIR falls back to it. They had reached
+// four figures on this machine.
+//
+// Asserted in both directions, because only the pair says anything: that the
+// directory is there afterwards is what makes leaving it a leak, and that it is
+// gone after CleanUp is what makes registering CleanUp the fix.
+func TestASubstitutionsDirectoryIsTakenAwayAgain(t *testing.T) {
+	tmp := t.TempDir()
+	var r *Runner
+	out, st := run(t, `cat <(echo hi)`, func(rr *Runner) {
+		r = rr
+		rr.Env = append(testPATH(), "TMPDIR="+tmp)
+	})
+	if st != 0 || out != "hi\n" {
+		t.Fatalf("out = %q status %d, want the substitution to work", out, st)
+	}
+	if n := len(subdirs(t, tmp)); n != 1 {
+		t.Fatalf("%d directories under TMPDIR after the run, want the one the shell made", n)
+	}
+	r.CleanUp()
+	if n := len(subdirs(t, tmp)); n != 0 {
+		t.Errorf("%d directories under TMPDIR after CleanUp, want none", n)
+	}
+}
+
+// TestTheHelperRegistersTheCleanUpSoNoTestHasTo: the same property, asked of
+// the helper rather than of CleanUp — and the one that pins the fix, since a
+// test calling CleanUp itself proves nothing about the 191 that do not.
+//
+// The registration runs when the test that made the Runner ends, so a test
+// cannot watch its own. It can watch an inner one: a subtest's cleanups have
+// all run by the time t.Run returns, so the directory is either gone by then
+// or it was never going to be. That is the whole leak, reproduced and
+// observed, in the shape the suite actually has.
+//
+// The TMPDIR is this test's rather than the inner one's for the same reason —
+// a directory the framework is about to remove anyway could not tell us who
+// removed it.
+func TestTheHelperRegistersTheCleanUpSoNoTestHasTo(t *testing.T) {
+	tmp := t.TempDir()
+	t.Run("a runner that substitutes and never cleans up after itself", func(t *testing.T) {
+		out, st := run(t, `cat <(echo hi)`, func(rr *Runner) {
+			rr.Env = append(testPATH(), "TMPDIR="+tmp)
+		})
+		if st != 0 || out != "hi\n" {
+			t.Fatalf("out = %q status %d, want the substitution to work", out, st)
+		}
+		if n := len(subdirs(t, tmp)); n != 1 {
+			t.Fatalf("%d directories during the run, want the one the shell made", n)
+		}
+	})
+	if n := len(subdirs(t, tmp)); n != 0 {
+		t.Errorf("%d directories left once the test that made them ended, want none — "+
+			"the helper has to register CleanUp, because no test is going to", n)
+	}
+}
+
 func subdirs(t *testing.T, dir string) []os.DirEntry {
 	t.Helper()
 	ents, err := os.ReadDir(dir)

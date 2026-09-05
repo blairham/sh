@@ -98,7 +98,7 @@ func TestCaseConversionConsultsTheLocale(t *testing.T) {
 			for k, v := range tc.vars {
 				vars[k] = v
 			}
-			r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Vars: vars, Env: []string{}}
+			r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Vars: vars, Env: []string{}})
 			if _, rerr := r.Run(context.Background(), f); rerr != nil {
 				t.Fatal(rerr)
 			}

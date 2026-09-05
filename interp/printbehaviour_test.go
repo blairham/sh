@@ -101,7 +101,7 @@ func runUnderBash(t *testing.T, src string) (string, int) {
 	var out guardedBuffer
 	dir := t.TempDir()
 	sem, dg := bash.Semantics(), bash.Diagnostics()
-	r := &interp.Runner{
+	r := newTestRunner(t, &interp.Runner{
 		Semantics: &sem, Diagnostics: &dg,
 		Stdout: &out, Stderr: &out,
 		Stdin: strings.NewReader(""),
@@ -112,7 +112,7 @@ func runUnderBash(t *testing.T, src string) (string, int) {
 		// expands to would otherwise be rewritten by the <dir> masking
 		// below, which is meant for what the *snippet* prints.
 		Name: "sh", Dir: dir, Env: append(testPATH(), "TMPDIR="+t.TempDir()),
-	}
+	})
 	bash.Apply(r)
 	status, rerr := r.Run(context.Background(), f)
 	text := strings.ReplaceAll(out.String(), dir, "<dir>")

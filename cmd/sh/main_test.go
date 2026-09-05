@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -96,7 +97,7 @@ func TestDetailShowsQuotingPerSpan(t *testing.T) {
 }
 
 func TestDumpTokensReportsUnfinishedInputDistinctly(t *testing.T) {
-	err := dumpTokens(`"abc`, syntax.Core())
+	err := dumpTokens(io.Discard, `"abc`, syntax.Core())
 	if err == nil {
 		t.Fatal("want an error for an unterminated quote")
 	}

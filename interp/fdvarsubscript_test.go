@@ -32,10 +32,10 @@ func runFdSubscript(t *testing.T, dir, src string) (string, int) {
 	// descriptor was ever looked at.
 	sem.ArraysAreSparse = Yes
 	var out strings.Builder
-	r := &Runner{
+	r := newTestRunner(t, &Runner{
 		Semantics: &sem, Diagnostics: &Diagnostics{}, Name: "testsh",
 		Dir: dir, Stdout: &out, Stderr: &out,
-	}
+	})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)

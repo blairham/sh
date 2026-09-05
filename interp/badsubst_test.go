@@ -26,7 +26,7 @@ func badSubstRun(t *testing.T, src string, statusIsOne Answer) (string, string, 
 	sem := permissive()
 	sem.FatalErrorStatusIsOne = statusIsOne
 	var out, errs bytes.Buffer
-	r := &Runner{Stdout: &out, Stderr: &errs, Semantics: &sem, Name: "testsh"}
+	r := newTestRunner(t, &Runner{Stdout: &out, Stderr: &errs, Semantics: &sem, Name: "testsh"})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatalf("run %q: %v", src, rerr)

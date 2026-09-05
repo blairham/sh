@@ -32,7 +32,7 @@ func umaskRun(t *testing.T, start int, tweak func(*Semantics), src string) (stri
 	}
 	dg := Diagnostics{}
 	held := start
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
 	r.SetUmask = func(mask int) (int, error) { old := held; held = mask; return old, nil }
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
@@ -54,7 +54,7 @@ func umaskSymbolicRun(t *testing.T, start int, dg Diagnostics, src string) (stri
 	sem.UmaskPrintsFourDigits = Yes
 	sem.UmaskSetWithSPrints = No
 	held := start
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
 	r.SetUmask = func(mask int) (int, error) { old := held; held = mask; return old, nil }
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
@@ -159,7 +159,7 @@ func TestUmaskWithoutAHook(t *testing.T) {
 	var buf bytes.Buffer
 	sem := permissive()
 	dg := Diagnostics{}
-	r := &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+	r := newTestRunner(t, &Runner{Stdout: &buf, Stderr: &buf, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
 	st, rerr := r.Run(context.Background(), f)
 	if rerr != nil {
 		t.Fatal(rerr)

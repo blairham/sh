@@ -82,7 +82,7 @@ func jobRun(t *testing.T, f *fakeJobs, src string) (string, int, *Runner) {
 	sem.JobsListFinishedJobs = Yes
 	sem.JobsShowBackgroundCommand = Yes
 	dg := Diagnostics{}
-	r := &Runner{Stdout: out, Stderr: out, Semantics: &sem, Diagnostics: &dg, Name: "testsh"}
+	r := newTestRunner(t, &Runner{Stdout: out, Stderr: out, Semantics: &sem, Diagnostics: &dg, Name: "testsh"})
 	if f != nil {
 		r.WaitForCommand = func(int) (Wait, error) { return f.next(), nil }
 		r.SignalGroup = func(pgid int, sig syscall.Signal) error {
@@ -182,7 +182,7 @@ func TestTheStatusOfAStoppedCommand(t *testing.T) {
 	sem.SignalDeathStatusIsTwoFiftySix = Yes
 	dg := Diagnostics{}
 	out := sink(t)
-	r := &Runner{Stdout: out, Stderr: out, Semantics: &sem, Diagnostics: &dg}
+	r := newTestRunner(t, &Runner{Stdout: out, Stderr: out, Semantics: &sem, Diagnostics: &dg})
 	r.WaitForCommand = func(int) (Wait, error) {
 		return Wait{Signal: syscall.SIGTSTP, Stopped: true}, nil
 	}

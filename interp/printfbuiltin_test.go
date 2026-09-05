@@ -68,6 +68,49 @@ func TestPrintfBackslashCIsThreeThings(t *testing.T) {
 	}
 }
 
+// The control-character answer is one rule, and a format reads it the same
+// way the quoted form does. A letter cannot show that — clearing the top bits
+// and toggling bit 6 agree over `@` through `_` — so every case here is
+// outside that span or is an argument that has to be decoded first.
+func TestPrintfBackslashCControlIsTheQuotedFormsRule(t *testing.T) {
+	for _, tc := range []struct{ name, src, want string }{
+		{"a digit is not a letter", `printf 'a\c1Z'`, "aqZ"},
+		{"a symbol above the letters", `printf 'a\c~Z'`, "a>Z"},
+		{"the delete character needs no special case", `printf 'a\c?Z'`, "a\x7fZ"},
+		{"a lower-case letter is upper-cased first", `printf 'a\caZ'`, "a\x01Z"},
+		{"the argument is decoded before it is controlled", `printf 'a\c\tZ'`, "aIZ"},
+		{"a doubled backslash is the one character", `printf 'a\c\\Z'`, "a\x1cZ"},
+		{"an escape the dialect does not know loses its backslash", `printf 'a\c\QZ'`, "a\x11Z"},
+		{"a hexadecimal argument", `printf 'a\c\x41Z'`, "a\x01Z"},
+		{"nothing after the escape is a NUL", `printf 'a\c'`, "a\x00"},
+		{"a backslash at the end escapes the end", `printf 'a\c\'`, "a@"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sem := printfSem()
+			sem.PrintfBackslashC = PrintfBackslashCControl
+			out, _ := run(t, tc.src, func(r *Runner) { r.Semantics = &sem })
+			if out != tc.want {
+				t.Errorf("got %q, want %q", out, tc.want)
+			}
+		})
+	}
+}
+
+// A control character is a byte and not a code point. Toggling bit 6 of an
+// argument above the ASCII range leaves it above it, and what comes out has to
+// be that one byte rather than the two its encoding would take.
+func TestPrintfBackslashCControlWritesOneByte(t *testing.T) {
+	sem := printfSem()
+	sem.PrintfBackslashC = PrintfBackslashCControl
+	// The argument is written as an octal escape rather than as the byte
+	// itself, so the assertion is about the escape and not about how a
+	// source file holding a byte no encoding claims is read.
+	out, _ := run(t, `printf 'a\c\300Z'`, func(r *Runner) { r.Semantics = &sem })
+	if want := "a\x80Z"; out != want {
+		t.Errorf("got %q, want %q", out, want)
+	}
+}
+
 func TestPrintfQuoteIsThreeAnswersAndAnAbsence(t *testing.T) {
 	for _, tc := range []struct {
 		name  string

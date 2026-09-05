@@ -1676,14 +1676,32 @@ type Diagnostics struct {
 	// %[3]s, which costs nothing — an indexed format ignores arguments past
 	// the highest index it uses.
 	ArithError string
-	// ArithOperandExpected is the reason when an expression needed a value
-	// and found none: `$((1+))`. One verb, the offending token, which only
-	// the shell that names one uses.
+	// ArithOperandExpected is the reason when an expression wanted a value
+	// and found something that could not be one: `$((%))`, `$((1+&2))`. One
+	// verb, the text from the refused byte to the end of the expression,
+	// which only the shells that name anything here use.
 	//
 	// It is a reason rather than a message for the same purpose the others
 	// here are: ArithError wraps it, so a dialect states the reason once and
 	// the shape once instead of repeating the shape in every reason.
+	//
+	// Empty falls back to ArithExpressionRanOut, which is what the two
+	// dialects that word the two failures identically want.
 	ArithOperandExpected string
+	// ArithExpressionRanOut is the reason when an expression wanted a value
+	// and reached the end of the text instead: `$((1+))`, `$((~))`. One verb,
+	// the operator that was left wanting, which only the shell that names one
+	// uses.
+	//
+	// A separate field from ArithOperandExpected because two of the panel
+	// word the two apart — ksh93 has "more tokens expected" against
+	// "arithmetic syntax error", and zsh "operand expected at end of string"
+	// against "operand expected at `%'". One field had to pick one of them,
+	// and picking the end-of-input wording made every found-a-token failure
+	// claim the expression had run out. bash words both the same way, which
+	// is why it went unnoticed: it is the column a conformance number is
+	// usually read against.
+	ArithExpressionRanOut string
 	// ArithFailureStatus is the status a failed arithmetic expression carries.
 	// bash reports 1, the status of a command that failed, because it finds
 	// the failure while *expanding* rather than while parsing — we find it
@@ -2055,6 +2073,27 @@ func (d Diagnostics) ParseFailureLine(err error) int {
 func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
 	reason, fallback := d.ArithOperandExpected, "operand expected"
 	switch se.Kind {
+	case syntax.ErrArithOperandEnd:
+		// Empty is "the same wording as the other operand failure" rather
+		// than "no wording", which is what keeps the two dialects that do not
+		// distinguish the cases from having to write one sentence twice.
+		reason, fallback = d.ArithExpressionRanOut, "operand expected"
+		if reason == "" {
+			reason = d.ArithOperandExpected
+		}
+		if readOn(se, expr) {
+			// The dialect blames more text than the parser was handed, which
+			// means it read more than the parser did — so what ran out for us
+			// did not run out for it, and the wording is the other one.
+			//
+			// It is the substring range: one dialect reports `${x:1+:2}` as
+			// `1+:2` where the parser saw `1+`, because it reads the offset
+			// and the length as one string. Naming the whole range and
+			// reading the whole range are the same fact about that shell, so
+			// the blamed text is enough to know it and no second flag has to
+			// be kept in step with the first.
+			reason, fallback = d.ArithOperandExpected, "operand expected"
+		}
 	case syntax.ErrArithOperator:
 		reason, fallback = d.ArithOperatorExpected, "operator expected"
 	case syntax.ErrArithBadOperator:
@@ -2067,6 +2106,12 @@ func (d Diagnostics) arithParseFailure(se *syntax.Error, expr string) string {
 	}
 	return Wording(d.ArithError, "%[1]s: %[2]s",
 		expr, Wording(reason, fallback, se.Token), se.Token)
+}
+
+// readOn reports whether the dialect blaming expr read past what the parser
+// was handed — the blamed text starts with the expression and continues.
+func readOn(se *syntax.Error, expr string) bool {
+	return len(expr) > len(se.Expr) && strings.HasPrefix(expr, se.Expr)
 }
 
 // ParseFailure words a parse error the way this dialect words it.
@@ -2089,7 +2134,7 @@ func (d Diagnostics) ParseFailure(err error) string {
 		// than as a substitution that was bad: %[1]s the operator it could
 		// not read, %[2]d the line.
 		return Wording(d.BadSubstitution, se.Msg, se.Token, se.Pos.Line)
-	case syntax.ErrArithOperand, syntax.ErrArithOperator, syntax.ErrArithBadOperator:
+	case syntax.ErrArithOperand, syntax.ErrArithOperandEnd, syntax.ErrArithOperator, syntax.ErrArithBadOperator:
 		return d.arithParseFailure(se, se.Expr)
 	case syntax.ErrForName:
 		return Wording(d.ForName, "expected a name after `for`", se.Token, se.Pos.Line)
@@ -2412,7 +2457,7 @@ func (d Diagnostics) runtimeRefusal(err error) (int, bool) {
 		if d.ForNameStatus != 0 {
 			return d.ForNameStatus, true
 		}
-	case syntax.ErrArithOperand, syntax.ErrArithOperator, syntax.ErrArithBadOperator:
+	case syntax.ErrArithOperand, syntax.ErrArithOperandEnd, syntax.ErrArithOperator, syntax.ErrArithBadOperator:
 		// A malformed expression is found while expanding in bash, so the
 		// command fails rather than the script failing to parse. The same
 		// three consequences follow as for `for` with a bad name, which is

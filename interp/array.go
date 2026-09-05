@@ -540,7 +540,7 @@ func (r *Runner) subscriptFailure(text string, err error) string {
 	var se *syntax.Error
 	if errors.As(err, &se) {
 		switch se.Kind {
-		case syntax.ErrArithOperand, syntax.ErrArithOperator, syntax.ErrArithBadOperator:
+		case syntax.ErrArithOperand, syntax.ErrArithOperandEnd, syntax.ErrArithOperator, syntax.ErrArithBadOperator:
 			// Blamed on the text the caller names rather than on the text the
 			// parser was handed, which are the same everywhere but one.
 			return r.diag().arithParseFailure(se, text)

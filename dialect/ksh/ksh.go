@@ -247,6 +247,7 @@ func Semantics() interp.Semantics {
 	s.SIGPrefixAccepted = interp.Yes
 	s.RedirectsWriteToEveryTarget = interp.No
 	s.KillStatus = interp.KillStatusAnyFailure
+	s.SubshellJobTable = interp.SubshellJobsKept
 	s.PrintfOutputPrecedesComplaint = interp.Yes
 	s.PrintfEmptyIsNotANumber = interp.No
 	s.PrintfReportsBadNumber = interp.No
@@ -314,6 +315,9 @@ func Semantics() interp.Semantics {
 	// the operand is reported as a bad subscript with the array left as it
 	// was — the only shell in the panel that does not clear it.
 	s.UnsetArrayAt = interp.UnsetArrayAtIsASubscript
+	// And the complaint is the builtin's: `unset` reports 1 and the script
+	// goes on, which is what makes `unset a[@]` survivable here.
+	s.BadSubscriptToUnsetFatal = interp.No
 	// A `jobs` listing: which end it starts from, and whether a job that
 	// has already ended appears in it at all.
 	s.JobsListNewestFirst = interp.Yes
@@ -426,11 +430,25 @@ func Diagnostics() interp.Diagnostics {
 		KilledCommandNotice:  "%[1]d: %[2]s",
 		ParamNull:            "parameter null",
 		UnsetBadFunctionName: "unset: %[1]s: invalid function name",
+		// The builtin names itself in front of the arithmetic sentence, which
+		// it does not do for the identical failure in an expansion.
+		UnsetBadSubscript:    "unset: %[1]s",
 		SetInvalidOptionName: "set: %[1]s: bad option(s)",
-		SignalDescriptions:   signalDescriptions(),
-		JobRunning:           " Running",
-		JobStopped:           "Stopped",
-		JobUnknownCommand:    "<command unknown>",
+		// The letter as the script spelled it: `set +q` is refused as `+q`
+		// here, as it is in bash.
+		SetInvalidOptionLetter: "set: %[1]s: unknown option",
+		// The one shell in the panel that repeats `set`'s usage line under
+		// a bad option *name* as well as under a bad letter.
+		SetInvalidOptionNameUsage: true,
+		// At an invocation ksh93 prints its own usage instead, and names
+		// itself by the last element of the word it was invoked by — where
+		// bash spells the whole path. Measured through a link named
+		// `myksh`, which is what it called itself.
+		InvocationUsage:    "Usage: %[2]s [-cilrsDEabefhkmnprtuvxBCGH] [-R file] [-o[option]] [arg ...]",
+		SignalDescriptions: signalDescriptions(),
+		JobRunning:         " Running",
+		JobStopped:         "Stopped",
+		JobUnknownCommand:  "<command unknown>",
 		// ksh93 lists a job that has already ended as "Running", and it is
 		// not a reaping race — it still says so after `wait`. Recorded as
 		// the word ksh uses rather than corrected, which would be inventing
@@ -484,8 +502,12 @@ func Diagnostics() interp.Diagnostics {
 		EvalNaming:             interp.SourceBeforeLocation,
 		SourceFileNaming:       interp.SourceBeforeLocation,
 		SourceFileIsTheBuiltin: true,
-		ArithOperandExpected:   "more tokens expected",
-		ArithOperatorExpected:  "arithmetic syntax error",
+		// A failing offset is blamed together with what follows it in the
+		// range: `${x:1+:2}` names `1+:2`. A failing length has nothing after
+		// it and is named on its own.
+		SubstringErrorNamesTheWholeRange: true,
+		ArithOperandExpected:             "more tokens expected",
+		ArithOperatorExpected:            "arithmetic syntax error",
 		// A digit the base does not have is the same sentence.
 		DigitTooGreatForBase: "arithmetic syntax error",
 		// ksh93 does not call this a bad substitution: it is a syntax error
@@ -572,6 +594,14 @@ func Diagnostics() interp.Diagnostics {
 		WaitBadJobStatus:          1,
 		// ksh93 has `--version` here, which this shell does not.
 		UnimplementedOptionLetters: map[string]string{
+			// `set` letters ksh93 has and this shell does not: -b job
+			// notices, -k assignment-anywhere, -p privileged, -r
+			// restricted, -s sorting the positional parameters, -t one
+			// command, -A assigning an array, and -B -G -H, its brace
+			// expansion, globstar and history-expansion switches. Measured
+			// 2026-09-05 by asking ksh93 for every letter of the alphabet
+			// in both cases and both signs.
+			"set": "bkprstABGH",
 			// ksh93 answers --version on most builtins, and has its own
 			// letters for these two.
 			"wait": "-",

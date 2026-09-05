@@ -532,6 +532,63 @@ The status those two refusals carry is *not* the fatal-error axis. bash
 exits 1 for a fatal error and 2 for this, and dash exits 2 for both; a
 usage error is its own thing, and unanimous where it happens at all.
 
+## A third axis that is an ordering, and the boundary it is asked at
+
+What a subshell sees of the jobs the shell around it started, with
+`sleep 1 &` already running and commands after the probe so that nothing
+is the last thing a script does:
+
+    (jobs -p); echo T          ksh93 → the pid   bash, dash, zsh → nothing
+    jobs -p | cat; echo T      bash, ksh93 → the pid   dash, zsh → nothing
+
+Two rows and two different pairs, so no yes-or-no holds both. `Semantics.
+SubshellJobTable` is a policy with three values: cleared everywhere (dash,
+zsh), kept everywhere (ksh93), and kept where the subshell was made for a
+simple command or a substitution while cleared where it was made for a
+compound (bash).
+
+The `; echo T` is load-bearing, and leaving it off is how the question
+gets the wrong answer. `(jobs -p)` alone prints the pid in dash, because a
+subshell that is the last thing a script does need not be a subshell at
+all; with anything after it, dash prints nothing. A probe for a fact about
+subshells has to make sure it has one.
+
+The boundaries, measured one at a time:
+
+| boundary | bash | dash | ksh93 | zsh |
+| --- | --- | --- | --- | --- |
+| `( … )` | none | none | the job | none |
+| a simple command as a pipeline element | the job | none | the job | none |
+| a compound command as a pipeline element | none | none | the job | none |
+| `$( … )` and `` ` ` `` | the job | none | the job | none |
+| `<( … )` | the job | — | the job | none |
+| a `&` job | none | none | none | none |
+
+The last row is unanimous and is therefore *not* asked about: a background
+job sees nothing anywhere, and an axis consulted where nothing disagrees is
+an axis that can be answered wrongly.
+
+Two rows are measured and deliberately not modeled. bash also clears the
+table for a **function** and for **`eval`** used as a pipeline element,
+both of which are simple commands as far as any syntax can tell — `f(){
+jobs -p; }; f | cat` prints nothing there where `jobs -p | cat` prints the
+pid. Modeling that would mean a boundary changing kind partway through
+running the command it was made for, which is a worse thing to own than
+two rows of a table.
+
+This is the clearest case so far of the corollary that **where a real
+shell relies on a process boundary, we have to reconstruct the boundary by
+hand**. A fork gives the child whatever the parent's table was, or nothing,
+because the shell decides on the far side of it. Our subshells are cloned
+Runners in one process, so the table arrived by simply being copied along
+with the variables — not a decision anyone made, and invisible until a
+script piped `jobs` somewhere.
+
+It is a different question from the one `trapContext` answers, and the two
+split the same clones differently: `( … )` and `$( … )` are one boundary
+for a trap listing and two for a job table. Two names rather than one with
+two meanings.
+
 ## A prediction that measurement contradicted
 
 `set -e` was expected to produce axes. Its exemptions are where shells are
@@ -3341,6 +3398,97 @@ wording a dialect vector could hold. The status, 126, is reproduced.
 Neither is about a file whose *contents* are not a script; that is a
 separate question and has an issue of its own.
 
+## A subscript that will not read
+
+Issue #649. A subscript is an arithmetic expression, so one that does not
+read is the failure `$((b c))` is — and every shell in the panel with
+arrays reports it in exactly the words it reports that one, gives up on
+the word, and exits non-zero. Measured 2026-09-05 across bash 5.3.15,
+bash 3.2.57, ksh93u+ 2012-08-01, zsh 5.9.2 and dash.
+
+    a=(x y z); echo "[${a[b c]}]"; echo after
+
+    bash 5.3   b c: arithmetic syntax error in expression (error token is "c")
+    bash 3.2   b c: syntax error in expression (error token is "c")
+    ksh93      b c: arithmetic syntax error
+    zsh        bad math expression: operator expected at `c'
+
+`after` is never printed. This expanded to nothing at status 0 and the
+script ran on, which is the worst shape a wrong answer takes here: an
+empty string is a plausible value for a real element, so nothing after it
+could tell. The evaluator's error was being returned and dropped at every
+one of the five places a subscript is read — the element, its length, an
+operator that reaches one, `${a[i]:=v}`, and a substring's offset and
+length, which are the same reading under another spelling.
+
+The **status is the ordinary fatal one** rather than the failed-expansion
+one. bash draws that line itself: `-c 'echo "${a[b c]}"'` exits 1 where
+`-c 'echo "${x@QQ}"'` from the same invocation exits 127
+(`ExpansionFailureStatusFromCommandString`, recorded under #577). A bad
+expression is not a word that could not be read.
+
+**Writing through one is unanimous and `unset` is not.** `a[1+]=v` ends
+the script in all four; `unset a[1+]` ends it only in bash, and ksh93 and
+zsh leave a failed builtin behind — `BadSubscriptToUnsetFatal`, in the
+catalog below.
+
+### What a substring's range is blamed on
+
+Three shapes for one failure, which is why it is two fields rather than
+one flag on `ArithError`:
+
+    x=abcdef; echo "${x:1+:2}"
+
+    bash 5.3   x: 1+: arithmetic syntax error: operand expected …
+    ksh93      1+:2: more tokens expected
+    zsh        bad math expression: operand expected at end of string
+
+bash puts the **parameter** in front of the sentence — the name and its
+subscript, so `${a[@]:1+}` is blamed on `a[@]` — where the same shell
+blames a bad *subscript* on the expression alone.
+`Diagnostics.SubstringRangeError` carries it. ksh93 blames the offset
+together with everything written after it in the range
+(`SubstringErrorNamesTheWholeRange`); a failing **length** has nothing
+after it and is named alone, which is the pair that shows this is a
+wording rather than a reading. Extending the text before *evaluating* it
+instead invents a second failure — `${x:2:1+}` reported that `2:1+` would
+not parse and then that `1+` would not, where the shell reports one.
+
+### Recorded rather than reproduced: zsh's substring modifiers
+
+zsh alone refuses a substring offset that begins with a bare name, because
+`${x:…}` is also its history-modifier syntax and the name is read as a
+modifier:
+
+    x=abcdef; i=2; echo "${x:i:2}"
+
+    bash 5.3, bash 3.2, ksh93   cd
+    zsh                         unrecognized modifier `i'   (status 1)
+
+The core follows the three that agree. zsh's rule is not a switch that can
+be answered yes or no: `${x:i+1:2}` is refused naming `i`, `${x:abc:2}` is
+refused naming nothing at all, `${x:_q:2}` is *accepted* as offset 0, and
+`${x:$i:2}`, `${x: i:2}` and `${x:(i):2}` are all accepted. Reproducing it
+means reproducing that shell's modifier table and the order it tries it
+in, which is a feature rather than an axis — #662, filed on its own rather
+than guessed at here.
+
+### Recorded rather than reproduced: what "operand expected" means
+
+Two of the panel word the *reason* by whether the expression ran out or
+found something it could not use, and this implementation gives the
+end-of-input wording for both:
+
+    $((1+))    ksh93  more tokens expected        zsh  operand expected at end of string
+    $((%))     ksh93  arithmetic syntax error     zsh  operand expected at `%'
+    $((@))     ksh93  arithmetic syntax error     zsh  illegal character: @
+
+bash words all three the same, which is why nothing had noticed. It is
+not this section's failure — `$((%))` has the same divergence and reaches
+no subscript — but it is what the `unset a[@]` rows under #648 and the
+substring-offset row here still differ on, so it is written down where
+they are — #661.
+
 ## The axis catalog
 
 Issue #487: 160 of the fields on `interp.Semantics` were named nowhere in
@@ -4693,6 +4841,35 @@ modeled.
 
 
 ### `unset`
+
+**`BadSubscriptToUnsetFatal`** — bash yes · dash unspecified · ksh93 no · zsh no
+
+Ends the script when an `unset` operand's subscript will not evaluate.
+This is the one place a bad subscript does not behave the same way in all
+four: everywhere else — reading an element, its length, an operator that
+reaches one, an assignment through one, a substring's offset — the word
+is abandoned and the script with it, unanimously.
+
+    a=(x y z); unset "a[1+]"; echo "st=$? n=${#a[@]}"
+
+    bash 5.3    1+: arithmetic syntax error: operand expected …  and stops
+    ksh93       unset: 1+: more tokens expected                  st=1 n=3
+    zsh         bad math expression: operand expected …          st=1 n=3
+
+So bash gives up on the script as it does for any bad expression, and the
+other two leave a *failed builtin* behind — which is the shape a script can
+test, and the reason this is an axis rather than a wording.
+
+It was silent in all three: the subscript's error came back and nothing
+read it, so `unset a[b c]` was a no-op at status 0.
+
+ksh93 also names the builtin in front of the sentence
+(`Diagnostics.UnsetBadSubscript`), where it words the identical failure in
+an expansion without one. That is a wording and not a second axis.
+
+Asked only for an operand whose subscript actually failed. dash has no
+subscript to evaluate — `UnsetTakesASubscript` is no there — so the axis
+is absent rather than false.
 
 **`UnsetArrayAt`** — bash removes every element · dash unspecified · ksh93 a subscript · zsh leaves one empty element
 

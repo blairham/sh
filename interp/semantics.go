@@ -560,6 +560,18 @@ type Semantics struct {
 	// looked for and run.
 	CommandNotFoundStatusIsNotFound Answer
 
+	// SubshellJobTable is what a subshell sees of the jobs its parent
+	// started. Three answers, and neither of the two-way splits it contains
+	// is the same pair:
+	//
+	//	sleep 1 & jobs -p | cat; echo T    bash, ksh93 → the pid   dash, zsh → nothing
+	//	sleep 1 & (jobs -p); echo T        ksh93 → the pid         bash, dash, zsh → nothing
+	//
+	// so no single yes-or-no can hold both rows for bash. See
+	// SubshellJobsKeptOutsideACompound for what bash is doing and for the
+	// part of it that is measured and not modeled.
+	SubshellJobTable SubshellJobTable
+
 	// SetFTurnsOffGlobbing makes `set -f` the short spelling of `set -o
 	// noglob`. True in bash, dash and ksh93. zsh spells that option the long
 	// way only: there `-f` is about startup files and leaves globbing alone,
@@ -2025,6 +2037,15 @@ type Semantics struct {
 	// answers are not the same: bash, ksh93 and zsh take it and dash refuses
 	// it.
 	UnsetTakesASubscript Answer
+
+	// BadSubscriptToUnsetFatal ends the script when an `unset` operand's
+	// subscript will not evaluate. True in bash, where a bad expression ends
+	// it wherever one is written; false in ksh93 and zsh, which leave a failed
+	// builtin behind and go on. dash has no subscript to evaluate.
+	//
+	// Asked only for an operand whose subscript actually failed, so `unset
+	// a[1]` needs no answer from anyone.
+	BadSubscriptToUnsetFatal Answer
 
 	// UnsetArrayAt is what `unset a[@]` and `unset a[*]` do, and the panel
 	// gives three answers rather than two — see UnsetArrayAtPolicy.

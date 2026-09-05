@@ -97,6 +97,42 @@ type Case struct {
 	// actually ran, which a second hand-kept copy would not.
 	Stdin string
 
+	// GradedOnRefusal grades a case on the fact that the shell said no,
+	// rather than on the words it said no in.
+	//
+	// The shapes most worth pinning about an invocation are the ones a shell
+	// *refuses* — a command string attached to its letter, an option that is
+	// not one, `-c` with nothing after it — and each shell refuses in its own
+	// words. Those wordings are deliberately different: they are what the
+	// Diagnostics vector exists for, and a dialect is supposed to sound like
+	// the shell it names. So an exact comparison scores four shells that all
+	// agree about the behavior as four disagreements, and the case that would
+	// catch the real bug cannot be written at all.
+	//
+	// What is forgiven is exactly the text of the diagnostic. What is not:
+	//
+	//	the outcome    the same status, signal and timeout as always
+	//	standard out   byte for byte as always, so a shell that *ran* what
+	//	               the reference declined to run still fails
+	//	the refusal    both sides must have ended nonzero *and* written
+	//	               something to standard error — two requirements the
+	//	               exact comparison never makes
+	//
+	// The last of those is the safeguard. This mode is not "compare less",
+	// it is "compare a different thing that can still be false", and it is
+	// stricter than exact grading in the one direction that matters: put the
+	// flag on a case the reference does not refuse and the case *fails*,
+	// because a misused flag has to be louder than a correct one. A case that
+	// refuses silently fails too — saying nothing is not a wording
+	// difference.
+	//
+	// It changes grading only. The record stays exact: measurements.md prints
+	// what each shell actually said, and the drift check still compares every
+	// byte, so a shell that changes its wording is still caught. The rendered
+	// table marks these rows, because a relaxation a reader cannot enumerate
+	// is indistinguishable from a score that is wrong.
+	GradedOnRefusal bool
+
 	// LayoutSensitive marks a case whose output depends on how the source is
 	// laid out rather than only on what it means — a diagnostic naming the
 	// line it happened on, where that line is a fact about the text.
@@ -1636,6 +1672,31 @@ var Corpus = []Case{
 		Why:     "the refusal itself: four wordings, two of them with a usage line naming the letters that shell really does have, and 2 everywhere but zsh. An option silently ignored is the failure this pins against",
 	},
 	{
+		ID: "jobs/a-subshell-and-the-parents-jobs", Category: "builtins",
+		Snippet: `sleep 0.4 & first=$!; (jobs -p) >s.txt; x=; read x <s.txt; case $x in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "something else";; esac; wait`,
+		Why:     "ksh93 alone hands a subshell the jobs the shell around it started; bash, dash and zsh hand it an empty table. Through a file rather than by printing the id, because a process id is not the same twice — and with commands after the `( … )`, because a subshell that is the last thing a script does need not be a subshell at all: without them dash answers the parent's job instead",
+	},
+	{
+		ID: "jobs/a-pipeline-element-and-the-parents-jobs", Category: "builtins",
+		Snippet: `sleep 0.4 & first=$!; jobs -p | cat >s.txt; x=; read x <s.txt; case $x in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "something else";; esac; wait`,
+		Why:     "`jobs -p | cat` is the idiom the question is really about, and it splits the panel differently from the row above: bash and ksh93 list the parent's job here, dash and zsh list nothing. Two rows, two different pairs, which is why one yes-or-no cannot hold both",
+	},
+	{
+		ID: "jobs/a-group-in-a-pipeline-and-the-parents-jobs", Category: "builtins",
+		Snippet: `sleep 0.4 & first=$!; { jobs -p; } | cat >s.txt; x=; read x <s.txt; case $x in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "something else";; esac; wait`,
+		Why:     "the same pipeline with braces around the same builtin, and bash changes its answer: a simple command as an element keeps the parent's jobs there and a compound one does not. ksh93 still lists and dash and zsh still do not, so this is the row that says bash's answer is neither of the other two",
+	},
+	{
+		ID: "jobs/a-substitution-and-the-parents-jobs", Category: "builtins",
+		Snippet: `sleep 0.4 & first=$!; case "$(jobs -p)" in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "something else";; esac; wait`,
+		Why:     "command substitution goes with the simple pipeline element rather than with the parentheses it is written like — bash and ksh93 list, dash and zsh do not. `cat <(jobs -p)` is measured the same way in the three shells that have it",
+	},
+	{
+		ID: "jobs/a-subshell-lists-a-job-it-started-itself", Category: "builtins",
+		Snippet: `sleep 0.4 & first=$!; (sleep 0.4 & jobs -p >s.txt; wait); x=; read x <s.txt; case $x in "$first") echo "the parent's job";; "") echo "no jobs";; *) echo "its own";; esac; wait`,
+		Why:     "the control for all four rows above: whatever a shell hands a subshell of the parent's table, a job the subshell starts for itself is listed there — unanimously. Without it an empty listing would be evidence that `jobs` does not work in a subshell rather than that the table is emptied on the way in",
+	},
+	{
 		ID: "jobs/two-job-specs-in-the-order-written", Category: "builtins",
 		Snippet: `sleep 0.4 & sleep 0.5 & jobs %2 %1; wait`,
 		Why:     "operands settle the order themselves — `%2 %1` lists 2 then 1 in all five, including the two whose bare listing starts from the newest — and each row keeps the job's own number rather than counting from the start of the listing",
@@ -2138,6 +2199,46 @@ var Corpus = []Case{
 		ID: "array/a-subscript-where-there-are-no-arrays", Category: "expansion",
 		Snippet: `a[1]=Q; echo done`,
 		Why:     "the other side of the same gate. Where the dialect has no subscript the word is not an assignment at all and the shell looks for a command by that name, which is the answer the shell without arrays gives — so accepting the shape everywhere would have made this one silently assign instead of reporting. Three shells assign and say nothing; the fourth reports on standard error and carries on",
+	},
+	{
+		ID: "array/a-subscript-that-will-not-evaluate", Category: "expansion",
+		Snippet: `a=(x y z); echo "[${a[b c]}]"; echo after`,
+		Why:     "a subscript is an expression, so one that does not read is the failure `$((b c))` is — the identical sentence in all four, the command abandoned, and a non-zero status. It expanded to nothing at status 0 and the script carried on, which is the worst shape available: an empty string is a plausible value for a real element, so nothing downstream could tell. `after` is printed so the case records that the input unit is given up on rather than only that a line went to standard error",
+	},
+	{
+		ID: "array/a-subscript-that-will-not-parse", Category: "expansion",
+		Snippet: `a=(x y z); echo "[${a[1+]}]"; echo after`,
+		Why:     "the other half of the same reading: an expression can fail before it is evaluated as well as while it is, and the panel words the two differently — `operand expected` against `operator expected`, in each shell's own sentence. Both spellings had one silent answer here, so a fix that only caught the evaluator would leave this one empty at 0",
+	},
+	{
+		ID: "array/a-length-through-a-subscript-that-will-not-evaluate", Category: "expansion",
+		Snippet: `a=(x y z); echo "[${#a[b c]}]"; echo after`,
+		Why:     "the length operator reaches the element through the same reading, and reported `0` for it — a plausible length for a real element, where the shells all refuse the word. The operator forms are worth one row between them because they share the subscript path rather than each having one",
+	},
+	{
+		ID: "array/assigning-through-a-subscript-that-will-not-evaluate", Category: "expansion",
+		Snippet: `a=(x y z); a[1+]=v; printf "[%s]" "${a[@]}"; echo " after"`,
+		Why:     "writing an element names it by expression too, and the failure ends the script in all four — unanimously, where the same failure inside `unset` splits them. It had a wording of its own that named the array rather than the expression, and it carried on to the next command, so the array a script thought it had written was untouched and nothing stopped",
+	},
+	{
+		ID: "array/unsetting-through-a-subscript-that-will-not-evaluate", Category: "expansion",
+		Snippet: `a=(x y z); unset "a[1+]"; echo "st=$?"; echo " n=${#a[@]}"`,
+		Why:     "the same expression in `unset`, which is where the panel divides: bash gives up on the script as it does for any bad expression, and ksh93 and zsh leave a failed builtin behind and run the next command — the shape a script can test. ksh93 also names the builtin in front of the sentence, having worded the identical failure in an expansion without one. It was silent at 0 in all three",
+	},
+	{
+		ID: "param/a-substring-offset-that-will-not-evaluate", Category: "parameter expansion",
+		Snippet: `x=abcdef; echo "[${x:1+:2}]"; echo after`,
+		Why:     "a substring's offset is the same reading reached by another spelling, and it took the failure silently: an offset of 0 is a real substring of the right length. What is *blamed* is three shapes rather than one — bash puts the parameter in front of the sentence, ksh93 names the offset together with everything after it in the range, and zsh gives the sentence bare",
+	},
+	{
+		ID: "param/a-substring-length-that-will-not-evaluate", Category: "parameter expansion",
+		Snippet: `x=abcdef; echo "[${x:2:1+}]"; echo after`,
+		Why:     "the length rather than the offset, which is what separates the two namings: the shell that blames an offset along with the rest of the range has nothing after a length and names it alone. Extending the text before *evaluating* it rather than only before reporting it invented a second failure, so the pair is what pins that the extension is a wording and not a reading",
+	},
+	{
+		ID: "param/a-substring-offset-on-a-subscripted-parameter", Category: "parameter expansion",
+		Snippet: `a=(p q r); echo "[${a[@]:1+}]"; echo after`,
+		Why:     "the parameter a diagnostic names is the name and its subscript, not the name alone — `a[@]` — in the one shell that names it at all. The list form of the substring reaches the same evaluation as the string form, so this also says the two spellings share it",
 	},
 	{
 		ID: "array/reading-a-subscript-is-arithmetic", Category: "expansion",
@@ -4630,6 +4731,21 @@ echo unreachable`,
 		Why:     "the letter half of the question the long name asks, and the panel answers the two identically — `-q`, `-j`, `-z` and `-A` are the letters all six refuse, and each shell reports for `set -q` exactly what it reports for `set -o zzznosuch` and ends the script or does not in the same way. bash alone carries on, at 2; dash and ksh93 stop at 2 and zsh at 1. The letter had no dialect answer at all until #483: it reported 2 everywhere and never stopped a script, so the same shell answered its own two spellings differently",
 	},
 	{
+		ID: "opt/a-refused-letter-echoes-the-sign", Category: "shell options",
+		Snippet: `set +q; echo "st=$?"`,
+		Why:     "the other half of the letter's spelling: bash and ksh93 echo the `+` back where dash and zsh write `-q` whichever way they were asked, so the sign is a verb in two of the wordings and a literal in the other two",
+	},
+	{
+		ID: "opt/an-unknown-letter-at-an-invocation", Category: "shell options",
+		Snippet: `echo hi`, Args: []string{"-q", "-c", ArgSnippet},
+		Why: "the same refusal by the other route, and it is not the same sentence: nobody names `set` here, bash and ksh93 print the whole *shell* usage rather than the builtin's, and zsh drops the location its run-time form writes. The letter is first in the word deliberately — bash answers 1 with no usage block when a letter it has comes before the one it does not, which is a position axis nobody has asked for yet",
+	},
+	{
+		ID: "opt/an-unknown-long-name-at-an-invocation", Category: "shell options",
+		Snippet: `echo hi`, Args: []string{"-o", "zzznosuch", "-c", ArgSnippet},
+		Why: "the long spelling by the same route, and bash alone shapes it differently from its own letter: dash, ksh93 and zsh word both the same way here, while bash hands this one to the builtin and prints `<shell>: line 0: <shell>: …` — its own name standing where `set` would",
+	},
+	{
 		ID: "opt/turning-off-a-name-a-shell-does-not-implement", Category: "shell options",
 		Snippet: `set +o posix; echo "st=$?"; set +o history; echo "st=$?"`,
 		Why:     "the thirteenth line of Homebrew's own brew script is `set +o posix`, and it is the shape this implementation's accept-off/refuse-on policy exists for: turning off what a shell was never doing is a request that has been granted, where turning it *on* would be a promise. Recorded across the panel because the two names split it — bash has both, and the others have neither",
@@ -5761,5 +5877,42 @@ out=$(CDPATH=./pool cd sub)
 		Args:    []string{ArgScript},
 		Snippet: "case $- in *i*) echo interactive ;; *) echo not ;; esac",
 		Why:     "the negative half of #472: `i` belongs in $- only where the shell is interactive, and a script operand is not — unanimous. Membership rather than the spelling, for the same reason invoke/errexit-reaches-the-option-letters uses it. The positive half cannot live here: bash and dash announce that job control is off when -i has no terminal, and bash's line carries a pid, so `-i` under the harness is not a recordable fact",
+	},
+
+	// --- invocations a shell refuses ------------------------------------
+	//
+	// Graded on the refusal rather than on its wording. Every shell here
+	// declines, and every one of them declines in words of its own, so an
+	// exact comparison would score four shells that agree about the behavior
+	// as four disagreements — and these shapes would be unwritable, which is
+	// exactly what kept the sharpest of them out of the corpus (#534).
+	{
+		ID: "invoke/a-command-string-attached-to-the-letter", Category: "invocation",
+		Args:            []string{"-cecho hi"},
+		Snippet:         `echo hi`,
+		GradedOnRefusal: true,
+		Why: "`sh -c'echo hi'` — the command string written against the letter rather than as its own word, which is how a hand and a generated command line both get it wrong. All six refuse it: `-c` takes its operand as a separate word, so the rest of this one is read as more option letters and `echo hi` is not a run of them. We ran it. That is the bug this case exists for, and it is caught here against every reference, because a shell that ran the string writes `hi` to standard output and standard output is still compared exactly. " +
+			"bash is the reason the row is marked: it answers by writing its entire `set -o` table to standard *output* as part of the usage, so against a bash reference this reports a real gap until we write the table too — the relaxation forgives a diagnostic's wording and declines to forgive a stream of output nobody produced",
+	},
+	{
+		ID: "invoke/c-with-nothing-after-it", Category: "invocation",
+		Args:            []string{"-c"},
+		Snippet:         `echo this never arrives`,
+		GradedOnRefusal: true,
+		Why:             "the option that requires an argument, given none — deliberately no placeholder, because what is pinned is the shell refusing before it has a program at all. Unanimous in behavior and unanimous in nothing else: five of the six exit 2 and zsh exits 1, and all six word it differently, which is the pair of facts that makes this gradable only on the refusal. A front end that treated a missing operand as an empty command string would exit 0 having done nothing",
+	},
+	{
+		ID: "invoke/an-option-letter-that-is-not-one", Category: "invocation",
+		Args:            []string{"-Z", ArgSnippet},
+		Snippet:         `echo hi`,
+		GradedOnRefusal: true,
+		Why:             "a letter no shell has. Four of them say so and stop; zsh is the divergence worth recording — it accepts `-Z` as one of its own and then fails on the operand as a script it cannot open, at 127 rather than 2. So the panel is unanimous that this fails and split on why, which is a fact the row keeps in full even though the grading only asks whether the shell declined",
+	},
+	{
+		ID: "invoke/a-long-option-name-that-is-not-one", Category: "invocation",
+		Args:            []string{"-o", "nosuchoption", "-c", ArgSnippet},
+		Snippet:         `echo hi`,
+		GradedOnRefusal: true,
+		Why:             "the same question one level in: `-o` is a valid letter and its operand is not a valid name, so the refusal comes from the option table rather than from the letter table. All six decline before running the command string, which is the part that matters — a shell that warned and carried on would print `hi` and standard output would catch it",
 	},
 }

@@ -87,6 +87,7 @@ func (r *Runner) subshell(ctx context.Context, c *syntax.Subshell) error {
 	// are not here yet.
 	return r.withRedirs(ctx, c.Redirs, func() error {
 		sub := r.clone()
+		sub.inheritJobs(jobBoundaryCompound)
 		err := sub.runList(ctx, c.List)
 		r.status = sub.status
 		return err

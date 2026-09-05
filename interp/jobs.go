@@ -100,6 +100,7 @@ func (r *Runner) background(ctx context.Context, st *syntax.Stmt) error {
 	}
 
 	sub := r.clone()
+	sub.inheritJobs(jobBoundaryBackground)
 	// A background job keeps the parent's trap listing in one shell fewer
 	// than a pipeline element does, so it is its own kind of boundary.
 	sub.retagTrapBoundary(trapContextBackground)

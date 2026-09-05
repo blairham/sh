@@ -72,6 +72,7 @@ func (r *Runner) procSub(ctx context.Context, kind syntax.SpanKind, src string) 
 	}
 
 	sub := r.clone()
+	sub.inheritJobs(jobBoundarySubstitution)
 	// The one boundary no shell's `trap` sees across: even the dialect that
 	// keeps the parent's listing everywhere else lists nothing in
 	// `<(trap)` — measured, `cat <(trap)` prints nothing in all three

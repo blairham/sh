@@ -223,6 +223,10 @@ func (r *Runner) runPipeline(ctx context.Context, p *syntax.Pipeline, timing *pi
 		// different pair of shells than `( … )` does, so the boundary says
 		// what kind it is.
 		sub.retagTrapBoundary(trapContextPipeline)
+		// And a different question again for the job table, which one
+		// dialect answers by the *shape* of the element: `jobs -p | cat`
+		// lists the parent's jobs there and `{ jobs -p; } | cat` does not.
+		sub.inheritJobs(pipelineJobBoundary(p.Cmds[i]))
 		// Each element is its own job component, so the copy running it
 		// names it rather than inheriting whatever the shell last ran.
 		sub.killed = p.Cmds[i]

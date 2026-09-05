@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"errors"
 	"sort"
 	"strconv"
 	"strings"
@@ -351,8 +352,8 @@ func (r *Runner) arraySubscript(e *syntax.ParamExpr) ([]string, bool) {
 		// An expression, not a numeral: `${a[1+1]}` and `${a[i+1]}` name the
 		// element `${a[2]}` names. It took a numeral and nothing else, so
 		// every other spelling silently expanded to nothing.
-		n, err := r.subscriptValue(idx)
-		if err != nil {
+		n, ok := r.subscriptIndex(idx)
+		if !ok {
 			return nil, true
 		}
 		if v, ok := r.elemAt(e.Name, elems, n); ok {
@@ -455,6 +456,50 @@ func (r *Runner) subscriptValue(text string) (int, error) {
 		return 0, err
 	}
 	return r.evalArith(tree)
+}
+
+// subscriptFailure is the sentence a dialect writes about a subscript that
+// would not evaluate, whichever half of the reading refused it.
+//
+// A subscript can fail twice over — the text may not parse as an expression,
+// or it may parse and not evaluate — and the panel words the two differently
+// for `$(( ))` already. The same two wordings serve here, because a subscript
+// is an expression and every shell measured says about `${a[b c]}` exactly
+// what it says about `$((b c))`.
+func (r *Runner) subscriptFailure(text string, err error) string {
+	var se *syntax.Error
+	if errors.As(err, &se) {
+		switch se.Kind {
+		case syntax.ErrArithOperand, syntax.ErrArithOperator, syntax.ErrArithBadOperator:
+			// Blamed on the text the caller names rather than on the text the
+			// parser was handed, which are the same everywhere but one.
+			return r.diag().arithParseFailure(se, text)
+		}
+		return r.diag().ParseFailure(err)
+	}
+	return r.arithFailure(text, err)
+}
+
+// subscriptIndex evaluates a subscript and reports a failure where every
+// shell in the panel reports one, abandoning the word.
+//
+// The reporting is what was missing. A subscript that would not evaluate was
+// answered with an error nobody read: `${a[b c]}` expanded to nothing at
+// status 0 and the script carried on, where all four shells write a
+// diagnostic, give up on the command, and exit non-zero. An empty string is a
+// plausible value for a real element, so nothing downstream could tell.
+//
+// The status is the ordinary fatal one rather than the failed-expansion one:
+// bash draws that line itself, exiting 1 under `-c` for a bad expression where
+// `${x@QQ}` from the same invocation exits 127.
+func (r *Runner) subscriptIndex(text string) (int, bool) {
+	n, err := r.subscriptValue(text)
+	if err != nil {
+		r.diagf("%s\n", r.subscriptFailure(text, err))
+		r.expandErr = true
+		return 0, false
+	}
+	return n, true
 }
 
 // arrayElementCount reports how many elements a name holds and whether it is

@@ -119,6 +119,55 @@ The corpus started every case the same way, so the front end was pinned
 only by its own unit tests — the shape of the incident where the drivers
 scored 178/198 against a core scoring 198/198.
 
+## Cases graded on the refusal rather than on its wording
+
+The shapes most worth pinning about an invocation are the ones a shell
+**refuses**: a command string written against its letter, an option that
+is not one, `-c` with nothing after it. Every shell refuses in words of
+its own, and those words are deliberately different — they are what the
+Diagnostics vector exists for, and a dialect is meant to sound like the
+shell it names. So an exact comparison scores four shells that agree
+about the behavior as four disagreements, and the sharpest of these
+cases could not be written down at all.
+
+`Case.GradedOnRefusal` grades such a case on the fact that the shell
+declined. Capturing the two streams apart is what makes that a precise
+claim rather than an approximation — "it complained, on standard error,
+and did not carry on" is three recorded fields and needs no normalizer:
+
+| still compared exactly | forgiven |
+| --- | --- |
+| the outcome — status, signal, timeout | the text of the diagnostic |
+| standard output, byte for byte | |
+| that **both sides** refused: nonzero **and** a diagnostic on stderr | |
+
+The last row is the safeguard, and it is why this is not simply
+"compare less". The mode adds two requirements the exact comparison
+never makes, so it is *stricter* in the direction that matters. Put the
+flag on a case the reference does not refuse and the case **fails** — a
+misused flag has to be louder than a correct one, not quieter. A shell
+that refuses silently fails too, because saying nothing is not a wording
+difference. And a timeout is never a refusal: a shell that never
+finished declined nothing, and a case that hangs has stopped measuring.
+
+Keeping standard output exact costs something, and the cost is the point.
+bash answers `sh -c'echo hi'` by writing its whole `set -o` table to
+standard *output* as part of the usage, so the case that pins that shape
+reports a real gap against a bash reference until we write the table
+too. Forgiving the stream instead would forgive a shell that **ran** the
+command string, which is the exact divergence the case was written to
+catch. Measured on the four cases as they stand: two pass on the
+wording, and two fail on a genuine difference in what the shell did.
+
+**Only the grading is relaxed; the record is not.** `measurements.md`
+prints what each shell actually said, and the drift check still compares
+every byte, so a shell that changes its wording is still caught. The
+rendered tables mark such a row **(refusal)**, in the table and beside
+the case's reason, and a conformance report says how many of its passes
+needed the relaxation and which they were. That visibility is the
+condition the mode is allowed on: a relaxation nobody can enumerate is
+indistinguishable from a score that is quietly wrong.
+
 ## Cases that supply the shell's standard input
 
 `Case.Stdin` is what the shell finds on its own standard input, handed to

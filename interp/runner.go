@@ -554,6 +554,15 @@ type Runner struct {
 	// setOptionStatus is what the last refused `set -o` name reports, which
 	// is one of the four dialects' answers rather than a constant.
 	setOptionStatus int
+	// atInvocation marks a `set` option applied by the front end from the
+	// words the shell was started with, rather than by the builtin from a
+	// line of script. The panel words the two refusals differently — nobody
+	// names `set` at an invocation, and the two shells that print a usage
+	// block print the *shell's* there and the builtin's here — so the same
+	// refusal has to know which it is. Set for the length of one call in
+	// SetOptionLetters and SetNamedOption, which are the front end's only
+	// way in.
+	atInvocation bool
 	// allexport marks every assignment for the environment: `set -a`.
 	allexport bool
 	// extraOptions are the `set -o` names this dialect has beyond the ones
@@ -2449,9 +2458,15 @@ func (r *Runner) assign(a *syntax.Assign) {
 		}
 		r.setAssocElem(a.Name, key, value)
 	case a.Index != nil:
-		idx, err := r.subscriptValue(r.joinWord(a.Index))
+		// The subscript is an expression, and one that will not evaluate ends
+		// the script in every shell measured — the same complaint, worded the
+		// same way, as the identical text inside `$(( ))`. It used to be a
+		// wording of our own that named the array rather than the expression,
+		// and it carried on to the next command.
+		text := r.joinWord(a.Index)
+		idx, err := r.subscriptValue(text)
 		if err != nil {
-			r.diagf("%s: bad array subscript\n", a.Name)
+			r.fatal("%s\n", r.subscriptFailure(text, err))
 			return
 		}
 		if a.Append {

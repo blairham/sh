@@ -256,3 +256,45 @@ func defaultPromptText(query string) string {
 func defaultFailedText(query string) string {
 	return strings.Replace(defaultSearchFailed, "%s", query, 1)
 }
+
+// A failed step does not forget where the search had got to.
+//
+// Measured: `C-r echo C-r z` fails, and the backspace that follows goes back to
+// `echo one` — the older match the walk had reached — rather than to `echo
+// two`, which is where a search that started again from the newest would land.
+// The same screen bash 5.3.15 draws, cursor column included.
+func TestAFailedStepKeepsWhereTheSearchGotTo(t *testing.T) {
+	_, line, _ := searching(t, HistoryStyle{}, fourLines, "\x12echo\x12z\x7f\r")
+	if line != "echo one" {
+		t.Errorf("gave %q, want the entry the walk had reached", line)
+	}
+}
+
+// The row below the line is below the *last* row of it, and a line wider than
+// the terminal has several.
+//
+// Counting from the cursor's row instead would put the search on top of the
+// rest of the command as soon as one wrapped — which is exactly when a search
+// is worth having, since a short history is one the arrows can walk.
+func TestTheSearchRowGoesUnderTheWholeLine(t *testing.T) {
+	long := "echo " + strings.Repeat("a", 22)
+	var out strings.Builder
+	e := &editor{
+		in: strings.NewReader("\x12echo\x07\r"), out: &out,
+		history:      []string{long},
+		searchPrompt: "bck-i-search: %s_",
+		searchFailed: "failing bck-i-search: %s_",
+		searchBelow:  true,
+		// Two columns of prompt and twenty-seven of line is twenty-nine,
+		// which is two rows of twenty — and the cursor is on the first of
+		// them, at the match.
+		width: func() int { return 20 },
+	}
+	if _, err := e.readLine(drawPrompt("$ ")); err != nil {
+		t.Fatal(err)
+	}
+	want := "\r\n\r\n\x1b[Kbck-i-search: echo_\r\x1b[2A"
+	if !strings.Contains(out.String(), want) {
+		t.Errorf("drew %q, want %q — two rows down, and two back up", out.String(), want)
+	}
+}

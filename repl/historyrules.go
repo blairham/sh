@@ -105,7 +105,10 @@ func (r historyRules) ignored(line, previous string) bool {
 		// The whole line, anchored at both ends: measured, `HISTIGNORE=pwd`
 		// drops `pwd` and keeps `pwd x`, so the pattern is not a search for
 		// something inside the line. `ls*` is how the other one is written.
-		if pattern != "" && r.match(pattern, line) {
+		//
+		// An empty pattern needs no guard: it matches only the empty string,
+		// and a blank line is never recorded by anything.
+		if r.match(pattern, line) {
 			return true
 		}
 	}

@@ -272,6 +272,13 @@ func (e *editor) browse(dir int, prompt drawnPrompt) {
 	if to < 0 || to > len(e.history) {
 		return
 	}
+	// Copied rather than kept by reference, and no test can tell: every path
+	// out of here reassigns e.line, so the array just stored is never written
+	// through again. Left as a copy because the map outlives the assignment
+	// and insert grows the line in place — a later branch that kept e.line
+	// where it was would hand the map a live buffer, and that failure would
+	// show up as history entries changing under the walk rather than as
+	// anything a reader would look for here.
 	e.drafts[e.browsing] = append([]rune(nil), e.line...)
 	e.browsing = to
 	if draft, kept := e.drafts[to]; kept {

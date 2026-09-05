@@ -648,6 +648,17 @@ func (s Shell) recording(ed *editor, added *[]string) func(string) {
 		return nil
 	}
 	return func(line string) {
+		if strings.TrimSpace(line) == "" {
+			// A bare newline at the prompt is nothing happening, which every
+			// shell in the panel agrees about. Checked here as well as in
+			// remember, because these are two lists now: remember drops it
+			// from what can be recalled, and this drops it from what is
+			// written. It was one list once, and splitting them put a blank
+			// line in the file for every time somebody pressed return —
+			// invisible from inside the session, because load skips blank
+			// lines on the way back in, and the file grew anyway.
+			return
+		}
 		rules := s.historyRules()
 		if rule, found := secret.Default().Match(line); found {
 			s.errf("%s: history: not saving this line (matched %s)\n", or(s.Name, "sh"), rule)

@@ -145,10 +145,10 @@ func (e *editor) research(query []rune, at int) (int, bool) {
 // Rune offsets out, byte offsets in: the cursor sits between characters, and a
 // match after a multi-byte one would otherwise be drawn several columns to the
 // right of where it is.
+// from is an index inside the list or one below the oldest: both callers start
+// from either the entry on the screen or the newest, so there is no clamp here
+// and no branch that nothing can reach.
 func (e *editor) findBack(query []rune, from int) (int, int) {
-	if from >= len(e.history) {
-		from = len(e.history) - 1
-	}
 	q := string(query)
 	for i := from; i >= 0; i-- {
 		if j := strings.Index(e.history[i], q); j >= 0 {

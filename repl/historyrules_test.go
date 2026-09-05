@@ -83,6 +83,16 @@ func TestWhatTheRulesIgnore(t *testing.T) {
 	if dups.ignored("echo a", "echo b") {
 		t.Error("a repeat with something in between was treated as a duplicate")
 	}
+	// The whole line and not part of one. `echo` after `echo a` is a
+	// different command, and a rule that compared by containment would drop
+	// every prefix of the line before it — which passes every other case
+	// here, because they differ at the first character.
+	if dups.ignored("echo", "echo a") {
+		t.Error("a line contained in the one before it was treated as a duplicate")
+	}
+	if dups.ignored("echo a --now", "echo a") {
+		t.Error("a line containing the one before it was treated as a duplicate")
+	}
 	// The first line of a session has nothing before it, and the file's last
 	// line is not it: that was a different session and is already written.
 	if dups.ignored("echo a", "") {
@@ -274,5 +284,28 @@ func TestACredentialIsStillRecallableAndStillNotWritten(t *testing.T) {
 	}
 	if len(added) != 0 {
 		t.Errorf("the file would get %q, want nothing", added)
+	}
+}
+
+// A bare newline at the prompt writes nothing.
+//
+// The recall list and the write list are two lists now, and this is the rule
+// they both need: dropping it from only one put a blank line in the file for
+// every time somebody pressed return, which `load` then skipped on the way
+// back in — so nothing inside the session could see it and the file grew
+// anyway.
+func TestABareNewlineIsNotRecorded(t *testing.T) {
+	e := &editor{}
+	var added []string
+	sh := Shell{Runner: newTestRunner(nil), Dialect: syntax.Core(), History: bashishHistory}
+	record := sh.recording(e, &added)
+	for _, line := range []string{"", "   ", "\t", "echo real"} {
+		record(line)
+	}
+	if len(e.history) != 1 || e.history[0] != "echo real" {
+		t.Errorf("the list is %q, want only the line that was typed", e.history)
+	}
+	if len(added) != 1 || added[0] != "echo real" {
+		t.Errorf("the file would get %q, want only the line that was typed", added)
 	}
 }

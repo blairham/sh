@@ -2424,6 +2424,56 @@ divergences are deliberate: the empty-stack refusals are bare sentences
 `DIRSTACK` holds only the pushed entries where bash's also mirrors the
 current directory.
 
+**Rotation and `dirs`' letters** are the half that landed behind that
+single success-path pin and were therefore never exercised (#468).
+Oracle runs, 2026-09-05, and the first thing they settled is that
+**bash and zsh agree about rotation exactly** — twelve rotations
+compared, entry for entry and standing directory for standing
+directory, so there is no axis here at all:
+
+- `pushd +N` counts the *current* directory as entry 0 and turns the
+  stack until entry N is the one the shell stands in. `pushd -N` counts
+  from the other end, so `-0` is the oldest entry.
+- `popd +N` takes an entry out where it stands and leaves the shell
+  where it is; only `+0` — which is what a bare `popd` means — moves it.
+- `dirs -c` empties the stack, `-l` writes `$HOME` out in full where the
+  plain listing abbreviates it, `-p` writes one entry to a line and `-v`
+  numbers them.
+
+The wordings and the option parsers do not agree, and both dialects have
+their own prelude, so those are written twice rather than switched on:
+
+| | bash 5.3 | zsh |
+| --- | --- | --- |
+| index out of range | `pushd: +9: directory stack index out of range` | `pushd: no such entry in dir stack` |
+| nothing pushed | `pushd: directory stack empty` | the same sentence as above |
+| `dirs` out of range | `dirs: 9: …` — the sign dropped | no such form |
+| a letter it has not | `-q: invalid number` + usage, at 2 | `bad option: -q`, at 1 |
+| `dirs` letters | one to a word: `-lv` is a malformed index | they bundle |
+| `-v` numbering | right-aligned in two columns, two spaces | bare, then a tab |
+| bare `pushd`, nothing pushed | `pushd: no other directory`, at 1 | goes to `$HOME` and pushes, at 0 |
+| a `dirs` operand | an index into the stack | a *new* stack |
+
+dash and ksh93 have no `pushd`, `popd` or `dirs` at all — three names
+that resolve to nothing and exit 127. Recorded as absence rather than as
+a divergence, which is what the corpus rows show in those two columns.
+
+Deliberately out of scope, and refused by name rather than read as a
+directory called `-n`: **`pushd -n` and `popd -n`**, which do the stack
+work and stay where they are. Recorded and not implemented: zsh's
+`pushd old new`, the substitution form; zsh's `dirs -c` in company with
+a printing letter, which that engine measures as doing nothing at all;
+and bash's `DIRSTACK` as an assignable variable.
+
+One divergence the rotation work made visible rather than caused: a
+`pushd` whose directory does not exist reports `cd`'s complaint, located
+inside the prelude, where the real shell says
+`pushd: /nope: No such file or directory`. The status and the untouched
+stack are right; the sentence is the function's. The corpus rows
+therefore pin the *status* of every refusal and discard the text, and
+the wordings are pinned in `dialect/bash` and `dialect/zsh` instead,
+where a location prefix is not part of the comparison.
+
 ### Out of scope, recorded rather than silent: newgrp
 
 `newgrp` — the one POSIX regular builtin still absent — replaces the

@@ -233,3 +233,92 @@ func TestJobsStateFiltersLastLetterWins(t *testing.T) {
 		t.Errorf("got %q / %q, want -s and -rs to list nothing", parts[1], parts[2])
 	}
 }
+
+// The rotating half of the directory stack (#468). `+N` counts the current
+// directory as entry 0 and turns the stack until entry N is the one the
+// shell stands in; `-N` counts from the other end; `popd +N` takes an entry
+// out and leaves the shell where it is.
+func TestDirectoryStackRotates(t *testing.T) {
+	home := t.TempDir()
+	out, _ := runBash(t, home, bash.Prelude()+`
+HOME=`+home+`
+cd /
+pushd /tmp >/dev/null; pushd /usr >/dev/null
+pushd +1; echo "pwd=$PWD"
+pushd -0; echo "pwd=$PWD"
+popd +1; echo "pwd=$PWD"`)
+	for _, want := range []string{
+		"/tmp / /usr\npwd=/tmp\n",
+		"/usr /tmp /\npwd=/usr\n",
+		"/usr /\npwd=/usr\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("got %q, want %q in it", out, want)
+		}
+	}
+}
+
+// The refusals, which the corpus cannot pin: this shell's stack is a prelude
+// function and a function cannot reach the engine's location prefix, so the
+// corpus records the status and these record the words.
+func TestDirectoryStackRefusals(t *testing.T) {
+	home := t.TempDir()
+	out, _ := runBash(t, home, bash.Prelude()+`
+HOME=`+home+`
+cd /
+pushd /tmp >/dev/null
+pushd +9; echo "r=$?"
+popd -9; echo "o=$?"
+dirs +9; echo "d=$?"
+popd >/dev/null; pushd +1; echo "e=$?"
+dirs -q; echo "q=$?"
+pushd -n /etc; echo "n=$?"
+popd foo; echo "a=$?"`)
+	for _, want := range []string{
+		"pushd: +9: directory stack index out of range\nr=1\n",
+		"popd: -9: directory stack index out of range\no=1\n",
+		// `dirs` drops the sign where `pushd` and `popd` keep it.
+		"dirs: 9: directory stack index out of range\nd=1\n",
+		// A stack with nothing in it is a different sentence from an index
+		// that is merely too big.
+		"pushd: directory stack empty\ne=1\n",
+		"dirs: -q: invalid number\ndirs: usage: dirs [-clpv] [+N] [-N]\nq=2\n",
+		// Refused by name rather than read as a directory called `-n`.
+		"pushd: -n is not implemented yet\nn=2\n",
+		// And a third wording for a word that is neither an index nor an
+		// option, which `popd` alone has.
+		"popd: foo: invalid argument\npopd: usage: popd [-n] [+N | -N]\na=2\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("got %q, want %q in it", out, want)
+		}
+	}
+}
+
+// `dirs`' letters. They do not bundle here — `dirs -lv` is a malformed index,
+// not two options — and `-c` empties the stack in silence.
+func TestDirsLetters(t *testing.T) {
+	home := t.TempDir()
+	out, _ := runBash(t, home, bash.Prelude()+`
+HOME=`+home+`
+cd
+pushd / >/dev/null; pushd /tmp >/dev/null
+dirs -p; echo "--"
+dirs -v; echo "--"
+dirs -l; echo "--"
+dirs +1; echo "--"
+dirs -lv; echo "b=$?"
+dirs -c; dirs; echo "c=$?"`)
+	for _, want := range []string{
+		"/tmp\n/\n~\n--\n",
+		" 0  /tmp\n 1  /\n 2  ~\n--\n",
+		"/tmp / " + home + "\n--\n",
+		"/\n--\n",
+		"dirs: -lv: invalid number\n",
+		"/tmp\nc=0\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("got %q, want %q in it", out, want)
+		}
+	}
+}

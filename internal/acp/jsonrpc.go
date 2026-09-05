@@ -61,11 +61,19 @@ var ErrClosed = errors.New("acp: connection closed")
 // a notification expects nothing and cannot fail, because there is nobody to
 // tell.
 //
-// Both are called on a goroutine of their own, which is not an optimization.
-// An ACP agent answers session/prompt by doing work that itself calls back to
-// the client — session/update as it goes, session/request_permission before a
-// consequential action — and a handler running on the read loop could not
-// receive the reply to its own call.
+// The two are dispatched differently, and both ways round are deliberate.
+//
+// A request is handled on a goroutine of its own, which is not an
+// optimization: an ACP agent answers session/prompt by doing work that itself
+// calls back to the client — a permission request before a consequential
+// action — and a handler running on the read loop could not receive the reply
+// to its own call.
+//
+// A notification is handled on the read loop, in order. Session updates are a
+// stream and their order is their meaning; a goroutine each would deliver the
+// chunks of what a command wrote in whatever order the scheduler chose. So
+// Notify must not block — it holds the connection while it runs — and a
+// handler with slow work to do starts it and returns.
 type Handler interface {
 	Handle(ctx context.Context, method string, params json.RawMessage) (any, error)
 	Notify(ctx context.Context, method string, params json.RawMessage)
@@ -157,13 +165,22 @@ func (c *Conn) dispatch(ctx context.Context, line []byte) {
 			c.answer(ctx, m)
 		}()
 	case m.Method != "":
-		c.wg.Add(1)
-		go func() {
-			defer c.wg.Done()
-			if c.h != nil {
-				c.h.Notify(ctx, m.Method, m.Params)
-			}
-		}()
+		// Notifications are handled *on the read loop*, in the order they
+		// arrived, and that is the contract rather than a shortcut. A
+		// session's updates are a stream — the chunks of what a command wrote,
+		// in the order it wrote them — and handing each to a goroutine of its
+		// own scrambles them: two chunks appended by two goroutines arrive in
+		// whichever order the scheduler picks, so `echo one; echo two` reaches
+		// a person as either. It was written that way first and the agent's
+		// own end-to-end tests caught it.
+		//
+		// The cost is that a notification handler must not block: it holds the
+		// connection while it runs. That is the right way round. A handler
+		// that needs to do something slow starts it and returns, where a
+		// stream that arrives out of order cannot be repaired by anybody.
+		if c.h != nil {
+			c.h.Notify(ctx, m.Method, m.Params)
+		}
 	case len(m.ID) > 0:
 		c.deliver(&m)
 	default:

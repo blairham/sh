@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -356,5 +357,36 @@ func TestAnUnmatchedResponseIsIgnored(t *testing.T) {
 	}
 	if got.Result.StopReason != acp.StopEndTurn {
 		t.Errorf("stopReason = %q, want the connection to have survived", got.Result.StopReason)
+	}
+}
+
+// Notifications arrive in the order they were sent, and that order is their
+// meaning: session updates are a stream, and the chunks of what a command
+// wrote are only what the command wrote if they stay in sequence. Handing each
+// one to a goroutine delivers them in whatever order the scheduler picks,
+// which is what this pins down.
+func TestNotificationsAreDeliveredInOrder(t *testing.T) {
+	t.Parallel()
+	const n = 200
+	got := make(chan string, n)
+	agent := handlerFuncs{notify: func(_ context.Context, _ string, p json.RawMessage) {
+		var v struct {
+			SessionID string `json:"sessionId"`
+		}
+		_ = json.Unmarshal(p, &v)
+		got <- v.SessionID
+	}}
+	_, client := pair(t, agent, nil)
+
+	for i := range n {
+		if err := client.Notify(acp.MethodCancel,
+			acp.CancelNotification{SessionID: strconv.Itoa(i)}); err != nil {
+			t.Fatalf("Notify: %v", err)
+		}
+	}
+	for i := range n {
+		if saw := <-got; saw != strconv.Itoa(i) {
+			t.Fatalf("notification %d arrived as %q — the stream was reordered", i, saw)
+		}
 	}
 }

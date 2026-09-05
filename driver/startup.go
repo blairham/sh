@@ -31,7 +31,7 @@ import (
 // anyone saw.
 func (sh Shell) startup(r *interp.Runner, login bool) int {
 	if login {
-		if code := sh.sourceFile(r, homeFile(r, ".profile")); code != 0 {
+		if code := sh.loginProfile(r); code != 0 {
 			return code
 		}
 	}
@@ -40,6 +40,23 @@ func (sh Shell) startup(r *interp.Runner, login bool) int {
 	// one expands to nothing and names nothing, which sourceFile answers.
 	env, _ := r.GetVar("ENV")
 	return sh.sourceFile(r, r.Expand(env))
+}
+
+// loginProfile sources ~/.profile, which is the half of startup a shell with a
+// script to run may also want.
+//
+// Separate from startup rather than reached through it, because the other half
+// must *not* follow it there. $ENV is the interactive file — the things that
+// only make sense at a prompt — and every shell in the panel that reads it
+// reads it only when interactive, so a script route that called startup would
+// hand a script the settings a person wrote for their keyboard.
+//
+// Whether a login shell with a script to run reads this at all is
+// Semantics.LoginProfileWhenNonInteractive and is asked by the caller: at a
+// prompt the panel is unanimous that it is read, so only the script routes
+// have a question to ask.
+func (sh Shell) loginProfile(r *interp.Runner) int {
+	return sh.sourceFile(r, homeFile(r, ".profile"))
 }
 
 // sourceFile runs a file on the runner, as `.` would.

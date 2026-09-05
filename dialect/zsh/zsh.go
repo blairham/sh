@@ -355,6 +355,11 @@ func Semantics() interp.Semantics {
 	// `${a[*]#a}` on `(aa ab)` is `a ab` where the other two say `a b`.
 	s.OperatorDistributesOverStarSubscript = interp.No
 	s.ExportCarriesFunctions = interp.No
+	// No `-n` either, and unlike `-f` it is a letter this shell has simply
+	// never heard of — so it earns the ordinary `bad option: -n` rather
+	// than the ExportFunctionOptionRefused wording, and `export` fails at 1
+	// with the script carrying on.
+	s.ExportTakesTheAttributeOff = interp.No
 	s.AnnouncesBackgroundJob = interp.Yes
 	s.ReportsACommandKilledBySignal = interp.No
 	s.ReportsAnyKilledPipelineElement = interp.No

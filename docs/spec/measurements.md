@@ -876,6 +876,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `type/dash-t-on-nothing-is-silent-failure` | `-t: not found~a-name-that-is-nothing: not found~st=127` | `st=1` | `st=1` | `st=1` | `st=2` **2>** `<shell>: whence: -t: unknown option~Usage: whence [-afpqv] name  ...` | `st=1` **2>** `<shell>:type:1: bad option: -t` |
 | `export/unset-f-removes-a-function` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` | `st=127` |
 | `export/a-function-through-the-environment` | *(no output, status 2)* | `1` | `1` | `1` | *(no output, status 2)* | `0` *(status 1)* |
+| `export/the-n-option-takes-the-attribute-off` | **2>** `<shell>: 1: export: Illegal option -n` *(status 2)* | `st=0~0~alive` | `st=0~0~alive` | `st=0~0~alive` | **2>** `<shell>: export: -n: unknown option~Usage: export [-p] [name[=value]...]` *(status 2)* | `st=1~1~alive` **2>** `<shell>:export:1: bad option: -n` |
 | `export/a-name-that-is-not-a-function` | **2>** `<shell>: 1: export: Illegal option -f` *(status 2)* | `st=1` **2>** `<shell>: line 1: export: nope: not a function` | `st=1` **2>** `<shell>: line 1: export: nope: not a function` | `st=1` **2>** `<shell>: line 0: export: nope: not a function` | **2>** `<shell>: export: -f: unknown option~Usage: export [-p] [name[=value]...]` *(status 2)* | `st=1` **2>** `<shell>:export:1: invalid option(s)` |
 | `export/an-imported-name-keeps-the-attribute` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` |
 | `export/an-imported-name-reassigned-in-a-function` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` | `TERM=changed` |
@@ -1229,6 +1230,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `export/a-function-through-the-environment` — one shell carries a function to its children and the other three have no way to: there is nothing but a string in an environment, so the source goes in and is parsed again at the other end. The count rather than the text, because what the entry holds is a shell's own spelling of a body
   ```sh
   f(){ echo carried; }; export -f f 2>/dev/null; env | grep -c '^BASH_FUNC'
+  ```
+- `export/the-n-option-takes-the-attribute-off` — the letter itself is the question, not what it does: bash has `-n` and the other three refuse it as an option, in three different ways and two of them fatally. Left out of #459 deliberately, because that change was about the export attribute and this row would have been recording an option-surface gap instead — which it now is, on purpose. Read through a real child, since what `-n` buys is that the name stays set in the shell and stops reaching one
+  ```sh
+  V=1; export V; export -n V; echo "st=$?"; env | grep -c "^V="; echo alive
   ```
 - `export/a-name-that-is-not-a-function` — a name that is not a function now will not become one by being exported. The shells that have the option refuse it and the ones that do not read `-f` as something else entirely, which is the more interesting half
   ```sh
@@ -2076,6 +2081,9 @@ grades it and nothing drift-checks it either, for the same reason.
 | `core/c-style-for` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `012` | `012` | `012` | `012` | `012` |
 | `core/c-style-for-with-a-brace-body` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `012` | `012` | `012` | `012` | `012` |
 | `core/c-style-for-brace-body-after-a-separator` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `01` | `01` | `01` | `01` | `01` |
+| `core/c-style-for-takes-a-redirection` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `end~0~1` | `end~0~1` | `end~0~1` | `end~0~1` | `end~0~1` |
+| `core/c-style-for-with-a-brace-body-takes-a-redirection` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `end~0~1` | `end~0~1` | `end~0~1` | `end~0~1` | `end~0~1` |
+| `core/c-style-for-takes-an-input-redirection` | **2>** `<shell>: 1: Syntax error: Bad for loop variable` *(status 2)* | `got=L1~got=L2` | `got=L1~got=L2` | `got=L1~got=L2` | `got=L1~got=L2` | `got=L1~got=L2` |
 | `core/a-list-for-with-a-brace-body` | **2>** `<shell>: 1: Syntax error: "{" unexpected (expecting "do")` *(status 2)* | `ab` | `ab` | `ab` | `ab` | `ab` |
 | `core/a-list-for-brace-body-needs-a-separator` | **2>** `<shell>: 1: Syntax error: "}" unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `for i in a b { echo "$i"; }'` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error near unexpected token `}'~<shell>: -c: line 1: `for i in a b { echo "$i"; }'` *(status 2)* | **2>** `<shell>: -c: line 0: syntax error near unexpected token `}'~<shell>: -c: line 0: `for i in a b { echo "$i"; }'` *(status 2)* | **2>** `<shell>: syntax error at line 1: `}' unexpected` *(status 3)* | **2>** `<shell>:1: parse error near `}'` *(status 1)* |
 | `core/a-brace-body-is-not-a-while-body` | **2>** `<shell>: 1: Syntax error: end of file unexpected (expecting "do")` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file from `while' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 2: syntax error: unexpected end of file from `while' command on line 1` *(status 2)* | **2>** `<shell>: -c: line 1: syntax error: unexpected end of file` *(status 2)* | **2>** `<shell>: syntax error at line 1: `while' unmatched` *(status 3)* | `hi` |
@@ -2138,6 +2146,18 @@ grades it and nothing drift-checks it either, for the same reason.
 - `core/c-style-for-brace-body-after-a-separator` — the terminator between the header and the body is optional before the brace exactly as it is before `do`, which is what says the brace stands where `do` stands rather than being glued to the header
   ```sh
   for ((i=0;i<2;i++)); { printf "%s" "$i"; }; echo
+  ```
+- `core/c-style-for-takes-a-redirection` — a redirection after a compound command covers the whole of it, and the C-style loop is no exception — the quiet failure is that a node with nowhere to keep one leaves the operator standing as a statement of its own, which truncates the file, redirects nothing, and says not a word. dash has no C-style loop and refuses the header
+  ```sh
+  for ((i=0;i<2;i++)); do echo "$i"; done > f; echo end; cat f
+  ```
+- `core/c-style-for-with-a-brace-body-takes-a-redirection` — the same on the brace-bodied spelling, which is where the suffix is easiest to lose: the body ends in a `}` rather than a keyword and the redirection reads as the brace group's
+  ```sh
+  for ((i=0;i<2;i++)) { echo "$i"; } > f; echo end; cat f
+  ```
+- `core/c-style-for-takes-an-input-redirection` — the reading half, and the one that shows the redirection outlives an iteration: the second `read` continues where the first left off, which it could not do if the file were opened per pass
+  ```sh
+  printf 'L1\nL2\n' > d; for ((i=0;i<2;i++)); do read x; echo "got=$x"; done < d
   ```
 - `core/a-list-for-with-a-brace-body` — the same production on the ordinary `for`, which is the half easiest to miss: the brace body is not the C-style loop's alone. It needs the separator, and the next case says why — this is the one three of the four accept and dash refuses, dash being the only panel shell without the form
   ```sh

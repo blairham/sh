@@ -152,3 +152,89 @@ func carrying(t *testing.T, src string) string {
 	}
 	return out
 }
+
+// `-n` is offered only where the dialect has it, which is the same shape `-f`
+// has above and for the same reason: what the letter means is settled
+// everywhere it exists — the name stays set and stops reaching a child — and
+// only its availability splits the panel. So there is no wording to carry,
+// and a dialect without it sends `-n` down the ordinary unknown-option path
+// to collect its own refusal, fatal or not as that dialect says (#516).
+func TestExportOffersTheOffOptionOnlyWhereTheDialectHasIt(t *testing.T) {
+	t.Run("a dialect that has it", func(t *testing.T) {
+		// The script's own status is grep's, which is 1 for a count of
+		// nought — the interesting number is `export`'s, which the script
+		// prints.
+		out, _ := run(t, `V=1; export V; export -n V; echo "st=$?"; env | grep -c "^V="`,
+			func(r *Runner) {
+				sem := CoreSemantics()
+				sem.ExportTakesTheAttributeOff = Yes
+				r.Semantics = &sem
+			})
+		if out != "st=0\n0\n" {
+			t.Errorf("out = %q, want the letter taken and the child told nothing", out)
+		}
+	})
+	t.Run("a dialect that does not", func(t *testing.T) {
+		out, _ := run(t, `V=1; export V; export -n V; echo "st=$?"; env | grep -c "^V="`,
+			func(r *Runner) {
+				sem := CoreSemantics()
+				sem.ExportTakesTheAttributeOff = No
+				r.Semantics = &sem
+			})
+		if !strings.Contains(out, "-n: invalid option") {
+			t.Errorf("out = %q, want the ordinary unknown-option refusal", out)
+		}
+		if strings.Contains(out, "st=0") {
+			t.Errorf("out = %q, want `export` to have failed", out)
+		}
+		if !strings.Contains(out, "\n1\n") {
+			t.Errorf("out = %q, want the name still exported — a refused option changes nothing", out)
+		}
+	})
+}
+
+// The standard's own answer, which the preset takes from the text rather
+// than from a vote: POSIX spells `export` with `-p` and nothing else, so a
+// POSIX shell has no `-n`. Without it the preset would refuse `export -n` as
+// an axis nobody chose rather than as the unknown option the standard makes
+// it.
+func TestThePosixPresetHasNoOffOption(t *testing.T) {
+	if got := PosixSemantics().ExportTakesTheAttributeOff; got != No {
+		t.Errorf("PosixSemantics().ExportTakesTheAttributeOff = %v, want No", got)
+	}
+	out, _ := run(t, `export -n V; echo "st=$?"`, func(r *Runner) {
+		sem := PosixSemantics()
+		// Not fatal, so what is read is the refusal rather than a dead
+		// script — the fatality is a dialect's answer and not this one's.
+		sem.BadOptionToSpecialBuiltinFatal = No
+		r.Semantics = &sem
+	})
+	if !strings.Contains(out, "-n: invalid option") {
+		t.Errorf("out = %q, want the unknown-option refusal", out)
+	}
+	if strings.Contains(out, "no dialect was chosen") {
+		t.Errorf("out = %q, want an answer rather than a refusal to answer", out)
+	}
+}
+
+// And asked about only where there is an `-n` to decide, so a dialect that
+// has not chosen can still export.
+func TestExportAsksAboutTheOffOptionOnlyWhenItIsThere(t *testing.T) {
+	for _, tc := range []struct {
+		name, src string
+		refuses   bool
+	}{
+		{"no -n, so no question", `export A=1; echo "$A"`, false},
+		{"an -n, so a question", `export -n A`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _ := run(t, tc.src, func(r *Runner) {
+				sem := CoreSemantics()
+				r.Semantics = &sem
+			})
+			if got := strings.Contains(out, "no dialect was chosen"); got != tc.refuses {
+				t.Errorf("refused = %v, want %v (out %q)", got, tc.refuses, out)
+			}
+		})
+	}
+}

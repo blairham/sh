@@ -190,36 +190,45 @@ func (r *Runner) forClause(ctx context.Context, c *syntax.ForClause) error {
 // every shell writes it as, and treating a missing expression as zero would
 // have made it run no times at all — the quietest possible way to get this
 // wrong.
+//
+// A redirection on it covers the whole loop, as it does on every other
+// compound command: `for ((…)); do echo $i; done > f` puts every iteration in
+// the file, unanimously among the four shells that have the construct. It
+// wanted saying twice — the node had no place to keep one, so the parser left
+// the operator where it stood and the *next* statement redirected nothing into
+// the file, which created it empty and sent the loop's output to the terminal.
 func (r *Runner) forArithClause(ctx context.Context, c *syntax.ForArithClause) error {
-	r.status = 0
-	// Each part is resolved from its text, because a part containing an
-	// expansion has no tree until it runs — and the condition and the step
-	// are resolved *again* every time round, since what they expand to may
-	// have changed since the last one.
-	if _, ok := r.forArithPart(c.Init, c.InitText); !ok {
-		return nil
-	}
-	for {
-		if c.Cond != nil || c.CondText != "" {
-			v, ok := r.forArithPart(c.Cond, c.CondText)
-			if !ok {
-				return nil
-			}
-			if v == 0 {
-				return nil
-			}
-		}
-		r.traceForIteration(c.Header, "", "")
-		if err := r.runList(ctx, c.Body); err != nil {
-			return err
-		}
-		if stop := r.loopControl(); stop {
+	return r.withRedirs(ctx, c.Redirs, func() error {
+		r.status = 0
+		// Each part is resolved from its text, because a part containing an
+		// expansion has no tree until it runs — and the condition and the step
+		// are resolved *again* every time round, since what they expand to may
+		// have changed since the last one.
+		if _, ok := r.forArithPart(c.Init, c.InitText); !ok {
 			return nil
 		}
-		if _, ok := r.forArithPart(c.Post, c.PostText); !ok {
-			return nil
+		for {
+			if c.Cond != nil || c.CondText != "" {
+				v, ok := r.forArithPart(c.Cond, c.CondText)
+				if !ok {
+					return nil
+				}
+				if v == 0 {
+					return nil
+				}
+			}
+			r.traceForIteration(c.Header, "", "")
+			if err := r.runList(ctx, c.Body); err != nil {
+				return err
+			}
+			if stop := r.loopControl(); stop {
+				return nil
+			}
+			if _, ok := r.forArithPart(c.Post, c.PostText); !ok {
+				return nil
+			}
 		}
-	}
+	})
 }
 
 // forArithPart evaluates one of the three parts of `for (( ; ; ))`.

@@ -49,6 +49,11 @@ func Semantics() interp.Semantics {
 	s.EmptyArithExpressionIsAnError = interp.Yes
 	// A bare read wants a name here, where the other three fill REPLY.
 	s.ReadRequiresAVariableName = interp.Yes
+	// The odd one out on `echo … | sh`: dash takes the program off standard
+	// input in blocks and keeps what it took, so a `read` in the script
+	// finds end of input and the data line is run as a command. The other
+	// three read a line at a time and leave the rest on the descriptor.
+	s.StdinProgramReadInBlocks = true
 	// read takes -r and, alone among its letters, bash's -p prompt — an
 	// argument, printed only to a terminal. The rest of bash's set (-s, the
 	// counts, -d, -t, -u) is refused as unknown here.

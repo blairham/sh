@@ -2025,6 +2025,14 @@ type Semantics struct {
 	// answers are not the same: bash, ksh93 and zsh take it and dash refuses
 	// it.
 	UnsetTakesASubscript Answer
+
+	// UnsetArrayAt is what `unset a[@]` and `unset a[*]` do, and the panel
+	// gives three answers rather than two — see UnsetArrayAtPolicy.
+	//
+	// Asked only for those two spellings. Every other subscript is an
+	// expression in all three shells with arrays, so `unset a[1]` never
+	// reaches the question.
+	UnsetArrayAt UnsetArrayAtPolicy
 }
 
 // NameOperands is what a builtin takes where it wants a name.
@@ -2708,6 +2716,62 @@ func (r *Runner) bracketPolicy() BracketPolicy {
 	if p == BracketUnspecified {
 		r.errf("%s\n", r.diag().Report(r.name(), r.line,
 			"an unterminated bracket expression: the shells disagree here and no dialect was chosen"))
+		r.status = 2
+		r.unspecified = true
+	}
+	return p
+}
+
+// UnsetArrayAtPolicy is what `unset a[@]` — and `unset a[*]`, which every
+// shell measured treats identically — does to the array.
+//
+// Three answers rather than a switch, and the third is not a variation on the
+// other two: one shell does not read `@` as a spelling for "every element" at
+// all, so the brackets hold an arithmetic expression like any other and `@` is
+// not one. That is a different question from what is left behind, and folding
+// it into a boolean would have had to call it "does not clear", which says
+// nothing about why.
+type UnsetArrayAtPolicy int
+
+const (
+	// UnsetArrayAtUnspecified is no answer, and is refused like any other.
+	UnsetArrayAtUnspecified UnsetArrayAtPolicy = iota
+	// UnsetArrayAtIsASubscript reads the brackets as it reads any other
+	// subscript: ksh93, where `@` is not an expression and the operand is
+	// reported as a bad one.
+	UnsetArrayAtIsASubscript
+	// UnsetArrayAtRemovesEveryElement leaves the array with nothing in it:
+	// bash, in both builds measured. A name that is not an array is reported
+	// rather than emptied, and one that holds nothing at all is quietly left
+	// alone.
+	UnsetArrayAtRemovesEveryElement
+	// UnsetArrayAtLeavesOneEmptyElement replaces what the subscript names
+	// with a single empty element: zsh, where `unset` of a span is the span
+	// becoming one empty string rather than the subscripts going away — so a
+	// three-element array comes back holding one empty element and a scalar
+	// comes back empty.
+	UnsetArrayAtLeavesOneEmptyElement
+)
+
+func (p UnsetArrayAtPolicy) String() string {
+	switch p {
+	case UnsetArrayAtIsASubscript:
+		return "a subscript"
+	case UnsetArrayAtRemovesEveryElement:
+		return "removes every element"
+	case UnsetArrayAtLeavesOneEmptyElement:
+		return "leaves one empty element"
+	}
+	return "unspecified"
+}
+
+// unsetArrayAt resolves the axis, and only for the two spellings that raise
+// it: `unset a[1]` names one element in all three and needs no answer.
+func (r *Runner) unsetArrayAt() UnsetArrayAtPolicy {
+	p := r.sem().UnsetArrayAt
+	if p == UnsetArrayAtUnspecified {
+		r.errf("%s\n", r.diag().Report(r.name(), r.line,
+			"`unset a[@]`: the shells disagree here and no dialect was chosen"))
 		r.status = 2
 		r.unspecified = true
 	}

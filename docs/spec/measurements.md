@@ -1095,6 +1095,15 @@ grades it and nothing drift-checks it either, for the same reason.
 | `setopt/shwordsplit-is-an-option` | `n=2` **2>** `<shell>: 1: setopt: not found` | `n=2` **2>** `<shell>: line 1: setopt: command not found` | `n=2` **2>** `<shell>: line 1: setopt: command not found` | `n=2` **2>** `<shell>: setopt: command not found` | `n=2` **2>** `<shell>: setopt: not found` | `n=2` |
 | `setopt/nonomatch-passes-the-glob-through` | `x*~st=0` **2>** `<shell>: 1: unsetopt: not found` | `x*~st=0` **2>** `<shell>: line 1: unsetopt: command not found` | `x*~st=0` **2>** `<shell>: line 1: unsetopt: command not found` | `x*~st=0` **2>** `<shell>: unsetopt: command not found` | `x*~st=0` **2>** `<shell>: unsetopt: not found` | `x*~st=0` |
 | `setopt/errexit-is-the-same-switch-as-set-e` | `reached` **2>** `<shell>: 1: setopt: not found` | `reached` **2>** `<shell>: line 1: setopt: command not found` | `reached` **2>** `<shell>: line 1: setopt: command not found` | `reached` **2>** `<shell>: setopt: command not found` | `reached` **2>** `<shell>: setopt: not found` | *(no output, status 1)* |
+| `setopt/a-name-with-no-behavior-behind-it-is-still-recorded` | `st=127` **2>** `<shell>: 1: setopt: not found~<shell>: 1: setopt: not found` *(status 127)* | `st=127` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: setopt: command not found` *(status 127)* | `st=127` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: setopt: command not found` *(status 127)* | `st=127` **2>** `<shell>: setopt: command not found~<shell>: setopt: command not found` *(status 127)* | `st=127` **2>** `<shell>: setopt: not found~<shell>: setopt: not found` *(status 127)* | `st=0~autocd~nohashdirs~nolisttypes~sharehistory` |
+| `setopt/a-compat-spelling-lists-under-the-canonical-name` | **2>** `<shell>: 1: setopt: not found~<shell>: 1: setopt: not found` *(status 127)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: setopt: command not found` *(status 127)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: setopt: command not found` *(status 127)* | **2>** `<shell>: setopt: command not found~<shell>: setopt: command not found` *(status 127)* | **2>** `<shell>: setopt: not found~<shell>: setopt: not found` *(status 127)* | `globdots~nohashdirs` |
+| `setopt/the-no-prefix-reaches-a-compat-spelling` | **2>** `<shell>: 1: setopt: not found~<shell>: 1: setopt: not found` *(status 127)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: setopt: command not found` *(status 127)* | **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: setopt: command not found` *(status 127)* | **2>** `<shell>: setopt: command not found~<shell>: setopt: command not found` *(status 127)* | **2>** `<shell>: setopt: not found~<shell>: setopt: not found` *(status 127)* | `nohashdirs~histnofunctions` |
+| `setopt/nullglob-wins-over-nomatch` | `[ zz* ]~st=0` **2>** `<shell>: 1: setopt: not found` | `[ zz* ]~st=0` **2>** `<shell>: line 1: setopt: command not found` | `[ zz* ]~st=0` **2>** `<shell>: line 1: setopt: command not found` | `[ zz* ]~st=0` **2>** `<shell>: setopt: command not found` | `[ zz* ]~st=0` **2>** `<shell>: setopt: not found` | `[ ]~st=0` |
+| `setopt/caseglob-is-the-globs-alone` | `d/b*~no` **2>** `<shell>: 1: unsetopt: not found` | `d/b*~no` **2>** `<shell>: line 1: unsetopt: command not found` | `d/b*~no` **2>** `<shell>: line 1: unsetopt: command not found` | `d/b*~no` **2>** `<shell>: unsetopt: command not found` | `d/b*~no` **2>** `<shell>: unsetopt: not found` | `d/B.txt~no` |
+| `setopt/globdots-brings-back-the-hidden-names` | `d/a` **2>** `<shell>: 1: setopt: not found` | `d/a` **2>** `<shell>: line 1: setopt: command not found` | `d/a` **2>** `<shell>: line 1: setopt: command not found` | `d/a` **2>** `<shell>: setopt: command not found` | `d/a` **2>** `<shell>: setopt: not found` | `d/.h d/a` |
+| `setopt/an-interactive-only-option-will-not-move` | `st=127~st=127` **2>** `<shell>: 1: setopt: not found~<shell>: 1: unsetopt: not found` | `st=127~st=127` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: unsetopt: command not found` | `st=127~st=127` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: unsetopt: command not found` | `st=127~st=127` **2>** `<shell>: setopt: command not found~<shell>: unsetopt: command not found` | `st=127~st=127` **2>** `<shell>: setopt: not found~<shell>: unsetopt: not found` | `st=1~st=0` **2>** `<shell>:setopt:1: can't change option: zle` |
+| `setopt/a-recorded-name-answers-the-condition-too` | `a=127~b=127~c=127` **2>** `<shell>: 1: [[: not found~<shell>: 1: setopt: not found~<shell>: 1: [[: not found~<shell>: 1: [[: not found` | `a=1~b=1~c=1` **2>** `<shell>: line 1: setopt: command not found` | `a=1~b=1~c=1` **2>** `<shell>: line 1: setopt: command not found` | `a=1~b=1~c=1` **2>** `<shell>: setopt: command not found` | `a=1~b=1~c=1` **2>** `<shell>: setopt: not found` | `a=1~b=0~c=1` |
+| `setopt/nounset-is-the-same-switch-as-set-u` | `~reached` **2>** `<shell>: 1: setopt: not found` | `~reached` **2>** `<shell>: line 1: setopt: command not found` | `~reached` **2>** `<shell>: line 1: setopt: command not found` | `~reached` **2>** `<shell>: setopt: command not found` | `~reached` **2>** `<shell>: setopt: not found` | **2>** `<shell>:1: zz: parameter not set` *(status 1)* |
 | `emulate/names-the-current-mode` | **2>** `<shell>: 1: emulate: not found~<shell>: 1: emulate: not found~<shell>: 1: emulate: not found` *(status 127)* | **2>** `<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found` *(status 127)* | **2>** `<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found~<shell>: line 1: emulate: command not found` *(status 127)* | **2>** `<shell>: emulate: command not found~<shell>: emulate: command not found~<shell>: emulate: command not found` *(status 127)* | **2>** `<shell>: emulate: not found~<shell>: emulate: not found~<shell>: emulate: not found` *(status 127)* | `zsh~sh` |
 | `emulate/sh-moves-the-measured-axes` | **2>** `<shell>: 1: Syntax error: "(" unexpected` *(status 2)* | `n=2~x*~q` **2>** `<shell>: line 1: emulate: command not found` | `n=2~x*~q` **2>** `<shell>: line 1: emulate: command not found` | `n=2~x*~q` **2>** `<shell>: emulate: command not found` | `n=2~x*~q` **2>** `<shell>: emulate: not found` | `n=2~x*~q` |
 | `emulate/resets-the-options` | `reached` **2>** `<shell>: 1: setopt: not found~<shell>: 1: emulate: not found` | `reached` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: emulate: command not found` | `reached` **2>** `<shell>: line 1: setopt: command not found~<shell>: line 1: emulate: command not found` | `reached` **2>** `<shell>: setopt: command not found~<shell>: emulate: command not found` | `reached` **2>** `<shell>: setopt: not found~<shell>: emulate: not found` | `reached` |
@@ -1783,6 +1792,42 @@ grades it and nothing drift-checks it either, for the same reason.
 - `setopt/errexit-is-the-same-switch-as-set-e` — setopt and set -o drive one table: err_exit ends the run exactly as set -e would, rather than being a second errexit that drifts
   ```sh
   setopt err_exit; false; echo reached
+  ```
+- `setopt/a-name-with-no-behavior-behind-it-is-still-recorded` — three of the sixteen names a real rc file writes at startup, none of them a feature this shell has: zsh takes them at 0 and then reports them back canonically spelled, which is what recognizing a name buys when implementing it is a separate job
+  ```sh
+  setopt auto_cd share_history no_list_types; echo "st=$?"; setopt
+  ```
+- `setopt/a-compat-spelling-lists-under-the-canonical-name` — zsh carries twelve sh and ksh spellings as second names for options it already has, and they are never what a listing prints: `dotglob` sets `globdots` and `globdots` is the line that comes back
+  ```sh
+  setopt dotglob; setopt
+  ```
+- `setopt/the-no-prefix-reaches-a-compat-spelling` — the prefix and the alias table compose, and the alias is the inverted kind: `nolog` is zsh's `histnofunctions` turned on, which is the name the listing then prints
+  ```sh
+  setopt nolog; setopt
+  ```
+- `setopt/nullglob-wins-over-nomatch` — the only ordering the two settings can have: deleting a word that matched nothing leaves nothing for `no matches found` to complain about, so zsh prints the brackets at 0 with nomatch still on
+  ```sh
+  setopt nullglob; echo "[" zz* "]"; echo "st=$?"
+  ```
+- `setopt/caseglob-is-the-globs-alone` — zsh's caseglob governs pathname expansion and nothing else — the glob folds case and the case statement still does not — which is what says it is not the same switch as bash's nocasematch
+  ```sh
+  mkdir d; : > d/B.txt; unsetopt caseglob; echo d/b*; case AB in ab) echo yes;; *) echo no;; esac
+  ```
+- `setopt/globdots-brings-back-the-hidden-names` — the leading period stops being special, and only that: `.h` joins the expansion where `.` and `..` still do not
+  ```sh
+  mkdir d; : > d/.h; : > d/a; setopt globdots; echo d/*
+  ```
+- `setopt/an-interactive-only-option-will-not-move` — five of zsh's 185 options refuse to be turned on in a shell that is not interactive and every other one is granted, measured name by name; turning one of the five off is asking for where it already is, which is granted
+  ```sh
+  setopt zle; echo "st=$?"; unsetopt zle; echo "st=$?"
+  ```
+- `setopt/a-recorded-name-answers-the-condition-too` — `[[ -o name ]]` reads the same namespace `setopt` writes, so a name the table only records still answers the condition — and the `no` prefix inverts the answer rather than being an unknown name. bash has the condition and not the namespace, which is what makes the pair worth one row
+  ```sh
+  [[ -o auto_cd ]]; echo "a=$?"; setopt auto_cd; [[ -o auto_cd ]]; echo "b=$?"; [[ -o no_auto_cd ]]; echo "c=$?"
+  ```
+- `setopt/nounset-is-the-same-switch-as-set-u` — zsh spells `set -u` as `unsetopt unset`, and it is one switch rather than two: an unset parameter ends the run exactly as `set -u` makes it, which is the pairing that says the dialect's own builtin has to reach the substrate's table
+  ```sh
+  setopt no_unset; echo "${zz}"; echo reached
   ```
 - `emulate/names-the-current-mode` — a bare emulate answers which shell zsh is currently being — zsh until something changes it, and the word that changed it after
   ```sh

@@ -2281,10 +2281,74 @@ script turning it off gets what it asked for.
 
 The table is a subset of what these shells actually have — ksh93's own
 listing runs to `bgnice`, `globstar`, `letoctal`, `markdirs` and a dozen
-more, and zsh's to roughly a hundred and eighty. Names outside it are
-refused by name rather than accepted and ignored, for the same reason
-`setopt`'s table is an honest subset: accepting an option we do not honor
-would be a promise.
+more. Names outside it are refused by name rather than accepted and
+ignored: under `set -o`, accepting an option we do not honor would be a
+promise. zsh's `setopt` answers the same question differently and on
+purpose — see **zsh's option names** below — because the names a zsh rc
+file writes are overwhelmingly about features this shell does not have at
+all, where recording a request promises nothing.
+
+## zsh's option names
+
+zsh 5.9.2 has 185 options and 12 further spellings borrowed from sh and
+ksh, and `setopt`/`unsetopt` recognize all 197. The set was derived by
+probing the binary: `set -o` lists every option in the spelling that is off
+by default, `zmodload zsh/parameter` then exposes `$options`, whose keys are
+the canonical names, and each compat spelling was identified by flipping it
+alone and reading which canonical entry moved with it.
+
+**Recognizing, recording and implementing are three claims, and only the
+first is unanimous across the table.** Every name is one of four kinds:
+
+| kind | how many | what `setopt NAME` does |
+| --- | --- | --- |
+| substrate-backed | 11 | moves a real `set -o` switch: `setopt err_exit` **is** `set -e` |
+| axis- or matcher-backed | 6 | moves a semantics axis (`shwordsplit`, `nomatch`, `ksharrays`) or a pattern-matcher option (`nullglob`, `globdots`, `caseglob`) |
+| fixed | 18 | refuses to move, in zsh's own words: `can't change option: NAME`, status 1. Asking for the state it already holds is granted |
+| **recorded** | 150 | succeeds, is remembered, and is reported by `setopt`/`unsetopt` — and changes nothing about what the shell does |
+
+The recorded kind is the change of position, and it is deliberate. A real
+`~/.zshrc` opens with a dozen `setopt` lines about completion, correction,
+menu selection and history files — none of which exist here — and answering
+each with `no such option` sprayed sixteen complaints at every interactive
+start over nothing this shell was ever going to do. Recording stops the
+complaint and reports the request back faithfully. **It promises nothing
+further**: `setopt auto_cd` succeeds and a bare directory name still does not
+change directory; `setopt extended_glob` succeeds and the glob syntax does
+not change. A reader wanting to know which is which reads the table in
+`dialect/zsh/setopt.go`, where the recorded ones say `recorded(…)` and
+nothing else does.
+
+The five that refuse to move are the five about being interactive —
+`interactive`, `monitor`, `shinstdin`, `singlecommand`, `zle` — which is
+measured rather than chosen: asking a real non-interactive zsh for all 197
+names in both directions refused exactly those five (plus their two compat
+spellings) and granted every other one. The other thirteen fixed names are
+this shell's own — `aliases`, `banghist`, `chaselinks`, `emacs`,
+`functionargzero`, `hashdirs`, `ignorebraces`, `ignoreeof`,
+`interactivecomments`, `notify`, `privileged`, `shglob` and `vi` — each of
+which reads its state through the substrate or holds a constant and cannot
+move it, so asking it to move is refused rather than granted falsely. Real
+zsh grants all thirteen; that divergence is the price of not lying about
+symbolic links, brace expansion or a history that is not kept.
+
+**The listings.** Every option has one printed spelling — the one that is
+off by default, so `noclobber` for an option that defaults on. A bare
+`setopt` prints the spellings that are on and a bare `unsetopt` prints the
+ones that are off, both ordered by canonical name and both naming the
+canonical option rather than the compat spelling that may have set it. In a
+shell that has changed nothing that is 1 line and 184.
+
+**A known inaccuracy, inherited rather than introduced.** The table records
+zsh's default for each name, which is what the listings compare against.
+Four entries hold this shell's own state there instead — `banghist`,
+`emacs`, `hashcmds` and `interactivecomments` are all measured the other way
+round in real zsh — which silences four deviations the listing exists to
+show. Correcting them would make the bare `unsetopt` listing byte-identical
+to zsh's 184 lines and would move the same four lines of divergence onto the
+bare `setopt` listing, because the underlying fact is that this shell's
+state genuinely differs from zsh's for those four. It is a trade rather than
+a fix, and it is left where it was found.
 
 Two names are one-way. `noexec` ignores being turned back off in all four
 shells — and with it on, the command that would do so never runs anyway.
@@ -3015,11 +3079,11 @@ What was built, all through the extension seam — registered builtins in each
 
 - **zsh `setopt` / `unsetopt`** (dialect/zsh/setopt.go): zsh's option
   namespace — case-insensitive, underscores ignored, one `no` prefix
-  negating — over a measured table that binds each name to the substrate's
-  own `set -o` machinery or to a semantics axis (`shwordsplit`, `nomatch`,
-  `ksharrays`). The table is an honest subset of zsh's ~180 names: a name it
-  holds and cannot move is refused with zsh's own `can't change option`, and
-  a name outside it is `no such option`.
+  negating — over the **whole** measured name set. See "zsh's option names"
+  below for what each name costs and what it buys; the short version is that
+  all 185 options and all 12 compat spellings are recognized, a name outside
+  them is `no such option`, and one of the four kinds a name can be — the
+  recorded kind — is remembered without being acted on.
 - **zsh `emulate`** (dialect/zsh/emulate.go): `sh`/`ksh`/`zsh` switch the
   three measured axes above and reset the option table to the emulation's
   defaults, `-c` runs a string under the emulation and restores everything
@@ -3160,8 +3224,8 @@ than missing:
   `-x` sets the tab width of a printed body. Each is refused as not
   implemented rather than as unknown, the same distinction `compgen` draws
   between an action a shell lacks and a typo.
-- zsh `setopt` names beyond the table: accepting an option we do not honor
-  would be a promise; the honest subset refuses the rest out loud.
+- zsh `setopt` names of the **recorded** kind: 157 of the 185 are recognized,
+  remembered and reported without being acted on. See "zsh's option names".
 - zsh `emulate -L`: function-local emulation needs a restore-on-return seam
   the runner does not have; refused out loud rather than silently made
   global. `emulate csh` records the mode and changes nothing it could —

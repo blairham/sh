@@ -84,6 +84,15 @@ type signalState struct {
 	// pending is what the shell already knows has arrived, ahead of the
 	// runtime telling it. Only `kill` puts anything here — see selfSignaled.
 	pending []string
+	// pipeAbsorbed counts the broken pipes answered at the write that caused
+	// them, so the kernel's own copies of those SIGPIPEs — forwarded
+	// whenever the shell has asked to handle one — are dropped rather than
+	// counted again. A count and not a flag, because a script may break
+	// several pipes before anything looks at the pending list.
+	//
+	// A credit nobody spends costs at most one later PIPE from outside the
+	// process, which is not a thing a shell's own broken pipe ever is.
+	pipeAbsorbed int
 	// died and diedSig record a fatal signal a *subshell* aimed at the
 	// process. The process is the top-level shell, so the death is the
 	// parent's to die: the subshell that sent it carries on — measured,
@@ -124,9 +133,28 @@ func (s *signalState) drainForwarded() {
 	for {
 		select {
 		case sig := <-s.ch:
-			if name, ok := signalName(sig); ok {
-				s.pending = append(s.pending, name)
+			name, ok := signalName(sig)
+			if !ok {
+				continue
 			}
+			if name == "PIPE" && s.pipeAbsorbed > 0 {
+				// The kernel's copy of a broken pipe the shell already
+				// answered at the write that caused it. One write is one
+				// arrival, and whether the runtime's forwarding goroutine
+				// gets to run before the script ends is not something a
+				// handler should fire a second time over — measured at one
+				// `handled` in some runs and two in others over the same
+				// script, which is the shape of a scheduler deciding.
+				//
+				// It is also how an element's broken pipe is kept out of the
+				// shell that started it: the copy is real and the runtime
+				// delivers it here whatever descriptor the write was on, and
+				// no panel shell runs the outer handler for a signal the
+				// outer process never had.
+				s.pipeAbsorbed--
+				continue
+			}
+			s.pending = append(s.pending, name)
 		default:
 			return
 		}
@@ -213,6 +241,55 @@ func (r *Runner) trapSignal(name string, sig syscall.Signal, body *string) {
 	}
 }
 
+// signalDisposition is what the shell has arranged for a signal, and it is
+// three answers rather than two: nothing at all, an ignore, or a handler.
+type signalDisposition int
+
+const (
+	// signalFatal is the default action, which for the signals that carry
+	// one is to end the process.
+	signalFatal signalDisposition = iota
+	// signalHandledBy is a trap with a body to run.
+	signalHandledBy
+	// signalIgnored is `trap '' NAME` — an entry with an empty body, which
+	// is a different thing from no entry.
+	signalIgnored
+)
+
+// signalArranged reports what this runner has arranged for the named signal.
+//
+// It is asked by the code that decides whether a failure the kernel reported
+// *was* a signal, which is a question only the disposition can answer. A write
+// into a pipe nobody reads raises SIGPIPE and kills the writer — but only
+// while SIGPIPE would kill. Ignore it or handle it and the kernel has nothing
+// fatal to raise, so it returns EPIPE to a writer that is still there. The
+// errno is identical in all three cases and the outcome is not.
+//
+// The table is this runner's own inside a subshell and the process's at the
+// top, which is the right answer at both. An ignore is the one disposition
+// POSIX carries across the boundary intact, so a pipeline element clones one
+// that was set outside it — see inheritTraps — while a handled signal is back
+// at its default there, which is exactly what the panel does with `trap 'x'
+// PIPE; { … } | true`: the writer dies as though nothing had been trapped.
+func (r *Runner) signalArranged(name string) signalDisposition {
+	table := r.traps
+	if table == nil {
+		s := r.sigs()
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		table = s.traps
+	}
+	body, ok := table[name]
+	switch {
+	case !ok:
+		return signalFatal
+	case body == "":
+		return signalIgnored
+	default:
+		return signalHandledBy
+	}
+}
+
 // selfSignaled records a signal a script aimed at this shell.
 //
 // It is recorded rather than sent, and that is the fix. os/signal forwards
@@ -241,6 +318,32 @@ func (r *Runner) selfSignaled(name string) {
 	// A background job sending this is the shape the issue was reported as:
 	// the arrival has to reach a `wait` that is already blocked, and nothing
 	// else here would tell it.
+	s.poke()
+}
+
+// brokenPipeAbsorbed answers the SIGPIPE a failed write of this shell's own
+// just caused: delivered to a handler between commands where deliver says so,
+// and taken out of the runtime's hands either way.
+//
+// Delivered rather than waited for, which is the argument selfSignaled makes
+// at length: the shell holds the answer already — the write it just made is
+// where the signal came from — and the runtime's copy arrives on a goroutine
+// whose scheduling decides nothing here and would decide whether the handler
+// ran at all, or twice.
+//
+// Absorbed even where nothing is delivered, and that is the half a second
+// platform found. The kernel raises SIGPIPE for a write on any descriptor, so
+// a *pipeline element* breaking its pipe hands the process a signal the shell
+// that started it never had — and with a handler installed the runtime
+// forwards it, and the outer handler ran. No panel shell does that.
+func (r *Runner) brokenPipeAbsorbed(deliver bool) {
+	s := r.sigs()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if deliver {
+		s.pending = append(s.pending, "PIPE")
+	}
+	s.pipeAbsorbed++
 	s.poke()
 }
 

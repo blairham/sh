@@ -193,6 +193,9 @@ looks like, and the event schema its consumers share. The agent-protocol
 consumer of that seam is designed in [design/acp.md](design/acp.md), and
 [design/blocks.md](design/blocks.md) is the at-rest form of the same
 unit: a command and its output, recorded.
+[design/plugins.md](design/plugins.md) is a builtin whose implementation
+is another process: the same seams, remoted, so a command can be written
+in a language other than Go — and what launching one costs at the gate.
 
 ## The process model is decided now
 

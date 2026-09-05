@@ -143,7 +143,7 @@ func run(argv []string, stdout, stderr io.Writer) int {
 		// they are not a shell invocation either — and the seams are already
 		// installed, so a policy governs what the agent asks us to do exactly
 		// as it governs what a script does.
-		code := connectACP(sh, own.acpAllow, rest)
+		code := connectACP(sh, own.acpAllow, own.acpAuth, rest)
 		if closer != nil {
 			_ = closer.Close()
 		}
@@ -225,6 +225,11 @@ type ownFlags struct {
 	blocksShow string
 	acpConnect bool
 	acpAllow   bool
+	// acpAuth names one of the authentication methods the agent advertises.
+	// Empty attempts none: which credential a person signs in with is theirs
+	// to choose, and picking one for them is the kind of silent default this
+	// front end refuses everywhere else.
+	acpAuth string
 }
 
 // readOwnFlags strips this binary's flags from the front of the line,
@@ -266,6 +271,15 @@ func readOwnFlags(args []string) (own ownFlags, rest []string, err error) {
 			own.acpConnect = true
 		case "acp-allow":
 			own.acpAllow = true
+		case "acp-auth":
+			if !hasVal {
+				if i+1 >= len(args) {
+					return own, nil, errors.New("-acp-auth requires the id of an authentication method")
+				}
+				i++
+				val = args[i]
+			}
+			own.acpAuth = val
 		case "deny":
 			if !hasVal {
 				if i+1 >= len(args) {

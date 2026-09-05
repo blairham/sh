@@ -237,6 +237,64 @@ unless the case supplies its own — because a record that depends on
 whose machine produced it is not evidence. Shell
 and script paths are normalized out of diagnostics for the same reason.
 
+### Signal dispositions are part of the run environment
+
+The environment is not the only thing a shell inherits. A signal
+disposition of *ignored* survives `exec` — that is the whole of what
+`nohup` does — so a harness launched with SIGHUP ignored hands every
+shell it measures a SIGHUP that is already ignored. bash reports
+`trap -- '' SIGHUP`, and `kill -HUP $$` leaves the shell alive to print
+what came after it. Five of the six panel columns change.
+
+That made the headline instrument a function of how the harness was
+launched. Measured against the same binary and the same corpus, a
+conformance run scored **1110/1116** from a terminal and **1101/1116**
+under `nohup`, and `oracle-check` reported drift it does not report in a
+terminal. A terminal, a CI runner, `nohup`, a supervisor and a background
+shell can each hand the harness a different starting disposition, and two
+runs that disagree read as a flaky implementation rather than as a
+different question.
+
+So the harness resets them, beside the environment scrub. It cannot be
+done to the child — a disposition belongs to the process that forks, and
+there is nothing to run between fork and exec — so it is done to the
+harness: taking a signal over replaces the ignored disposition with a
+handler, and `exec` resets a *handled* signal to its default in the
+child. The harness goes on ignoring what its caller asked it to ignore;
+only the shells it measures stop.
+
+Four signals are a **named limit** rather than a fix, and the limit is
+written here so it cannot quietly stop being true. The Go runtime keeps
+an inherited ignore for `TSTP`, `TTIN`, `TTOU` and `CONT` — stopping a
+process that was started with stopping turned off would be wrong — and
+does not report that it has, so the harness cannot detect the condition.
+Across every signal a shell can have an opinion about, those four are the
+only ones where the runtime's report and the child disagree.
+
+Taking them over regardless would cost more than it buys, and the cost
+cannot be undone: a Go program stops on a `SIGTSTP` raised at itself, and
+the same program after a single `signal.Notify` does not, with neither
+`Stop` nor `Reset` giving the stop back. So a blind takeover permanently
+costs the harness its Ctrl-Z. Asking a shell instead is not portable —
+POSIX says a signal ignored on entry cannot be trapped, and only bash
+honors it; dash and zsh install the trap anyway. The four are listed with
+the rest, so nothing more is needed the day the runtime starts reporting
+them, and a test asserts the leak still exists so that day is noticed.
+What is left is a hole no launcher opens: `nohup`, CI runners,
+supervisors and a non-interactive shell's background job ignore `HUP`,
+`INT` or `QUIT`, all of which are covered.
+
+Two other launch-dependent inputs are worth naming as *not* covered. A
+signal the caller **blocked** rather than ignored is inherited too, and
+the standard library offers no way to clear the mask for a child;
+nothing that launches this harness in practice blocks signals, so it is
+a known edge rather than a solved one. And `make` is immune to the whole
+class by accident: it resets dispositions for its own recipes, so
+`nohup make conformance` does not reproduce any of this while
+`nohup go run ./cmd/oracle` does. A guard that only works through one of
+two entry points is not a guard, which is why the fix is in the harness
+and not in the Makefile.
+
 ### The corpus may grow and may not shrink
 
     make corpus-guard   # fail if a case that existed at the merge base is gone

@@ -320,6 +320,13 @@ func Semantics() interp.Semantics {
 	s.BracketCaretNegates = interp.Yes
 	s.EqualsExpansion = interp.Yes
 	s.LastPipelineElementInCurrentShell = interp.Yes
+	// A process substitution may *not* stand as a condition's operand. The
+	// word is read and then refused, in a sentence of this shell's own and
+	// at status 2 — and the command is not started, which is the half a
+	// refusal that came after the expansion would get wrong. Measured
+	// 2026-09-05: `[[ x == <(x) ]]` is `process substitution <(x) cannot be
+	// used here` here and runs the command in bash.
+	s.ProcessSubstitutionInCondition = interp.No
 	s.ShiftPastEndFatal = interp.No
 	s.ArrayBaseIsZero = interp.No
 	// `${a[1,3]}` is elements one through three here, where the shells that
@@ -908,15 +915,17 @@ func Diagnostics() interp.Diagnostics {
 		KillUnknownSignalHint: "type kill -L for a list of signals",
 		// zsh is the one dialect that does not treat "nothing to signal" as a
 		// usage error worth a different number from any other failure.
-		KillUsageStatus:      1,
-		TestUnaryExpected:    "unknown condition: %[1]s",
-		TestBinaryExpected:   "condition expected: %[1]s",
-		TestIntegerExpected:  "integer expression expected: %[1]s",
-		TestTooManyArguments: "too many arguments",
-		TestOperandExpected:  "argument expected",
-		TestMissingBracket:   "']' expected",
-		TimesDecimals:        2,
-		TimesArguments:       "times: too many arguments",
+		KillUsageStatus:     1,
+		TestUnaryExpected:   "unknown condition: %[1]s",
+		TestBinaryExpected:  "condition expected: %[1]s",
+		TestIntegerExpected: "integer expression expected: %[1]s",
+		// The whole substitution as it was written, not its inside.
+		ProcessSubstitutionNotInCondition: "process substitution %[1]s cannot be used here",
+		TestTooManyArguments:              "too many arguments",
+		TestOperandExpected:               "argument expected",
+		TestMissingBracket:                "']' expected",
+		TimesDecimals:                     2,
+		TimesArguments:                    "times: too many arguments",
 		// The `time` keyword reports one line per pipeline element that
 		// forked, labeled with the element as written, and nothing for one
 		// that did not — `time true` prints nothing at all here. A bare

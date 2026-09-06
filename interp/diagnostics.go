@@ -219,6 +219,10 @@ type Diagnostics struct {
 	TestIntegerExpected string
 	// TestOperandExpected is an operator with nothing after it. No verbs.
 	TestOperandExpected string
+	// ProcessSubstitutionNotInCondition is a `<(cmd)` standing as a
+	// condition's operand in a dialect that does not allow one there. One
+	// verb: the substitution as it was written, `<(cmd)` and not its inside.
+	ProcessSubstitutionNotInCondition string
 	// TestTooManyArguments is a well-formed expression with words left over.
 	// No verbs.
 	TestTooManyArguments string

@@ -770,6 +770,20 @@ type Semantics struct {
 	// `**`, which is why dash leaves it unanswered.
 	ArithNegativeExponentIsError Answer
 
+	// ProcessSubstitutionInCondition lets `<(cmd)` stand as a condition's
+	// operand — `[[ $v == <(cmd) ]]` — and be performed there.
+	//
+	// bash alone. zsh reads the word and then refuses it, at status 2 and in
+	// a sentence of its own; ksh93 refuses earlier still, while reading, and
+	// dash has no `[[ ]]` to refuse it in. So the answer is no for three of
+	// the four, and what differs between them is only when and in what words
+	// — which is exactly the split between this axis and Diagnostics.
+	//
+	// It is asked *before* the substitution is performed. A shell that
+	// refuses the word must not have started the command first, and that is
+	// observable: the command has side effects.
+	ProcessSubstitutionInCondition Answer
+
 	// RegexQuotingMakesLiteral treats a quoted right operand of `=~` as a
 	// literal string. True in bash alone; ksh93 and zsh keep it a regex, so
 	// quoting a regex is unportable in either direction.
@@ -3107,6 +3121,7 @@ func PosixSemantics() Semantics {
 		CommandStringShowsSInDollarDash:            No,
 		ArithInvalidOctalDigitIsError:              Yes,
 		RegexQuotingMakesLiteral:                   No,
+		ProcessSubstitutionInCondition:             No,
 		LastPipelineElementInCurrentShell:          No,
 		ShiftPastEndFatal:                          Yes,
 		ReadonlyReassignmentFatal:                  Yes,

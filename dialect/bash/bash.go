@@ -29,6 +29,13 @@ func Dialect() syntax.Dialect {
 		"export": true, "readonly": true,
 	}
 	d.CaseContinue = true
+	// A `${…}` operand may carry a process substitution here, and only here.
+	// Measured 2026-09-05 across the panel: `${u:-<(:)}` is a path in bash
+	// 3.2 and 5.3 and the five characters `<(:)` in ksh93, zsh and dash —
+	// which is not for want of the construct, since ksh93 and zsh both have
+	// it in an ordinary word. So it is a question about the position, and
+	// bash is the only column that answers yes.
+	d.ProcessSubstitutionInParamOperand = true
 	d.ParamCaseChange = true
 	// `${x@Q}` and the rest of the letter family, which no other shell in
 	// the panel has: the others report a bad substitution when the
@@ -256,6 +263,11 @@ func Semantics() interp.Semantics {
 	s.BraceRangeNegativeStepReverses = interp.No
 	s.BracketCaretNegates = interp.Yes
 	s.RegexQuotingMakesLiteral = interp.Yes
+	// A process substitution may stand as a condition's operand here, and is
+	// performed there: `[[ $v == <(cmd) ]]` runs cmd and matches against the
+	// path, which is false for anything a script would have written down.
+	// This shell alone — zsh refuses the word and ksh93 will not read it.
+	s.ProcessSubstitutionInCondition = interp.Yes
 	s.ShiftPastEndFatal = interp.No
 	s.DeclaredNameWithoutValueIsEmpty = interp.No
 	// `local u` hides the caller's `u` — the local exists unset.

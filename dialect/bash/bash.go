@@ -60,6 +60,7 @@ func Dialect() syntax.Dialect {
 	// `coproc cat` with the near ends in COPROC. zsh's coprocess speaks
 	// `print -p` rather than an array and is a different feature.
 	d.Coproc = true
+	d.CoprocName = true
 	// And the way that array is closed: `exec {COPROC[1]}>&-` names the
 	// element holding the feed. Not core because zsh has the `{name}` token
 	// and still reads a subscripted one as a word.
@@ -164,8 +165,12 @@ func Semantics() interp.Semantics {
 	// single-quoting listings above.
 	s.DeclareListing = interp.DeclareListingClustered
 	s.DeclareValueQuoting = interp.ListingQuoteAlwaysDouble
+	s.ListingControlEscape = interp.ControlEscapeOctal
 	s.ExportListing = interp.DeclareListingClustered
 	s.ReadonlyListing = interp.DeclareListingClustered
+	// The bare form is this shell's `-p` form exactly, in both builds and in
+	// the POSIX mode: `export` writes `declare -x V="a b"` however it is asked.
+	s.BareDeclarationListing = interp.DeclareListingClustered
 	s.DeclarePrintReportsAMissingName = interp.Yes
 	s.TrapActionIsParsedWhenSet = interp.No
 	s.TrapParseFailureNamesWhereItFired = interp.No
@@ -475,6 +480,9 @@ func Semantics() interp.Semantics {
 	// values quoted only where they must be, `'\''` for an embedded quote
 	// and `$'...'` once a control character appears.
 	s.SetListing = interp.SetListingAssignmentsThenFunctions
+	// The array is why this shell's `coproc` takes a name: the ends arrive in
+	// it, and a script writes `echo hi >&"${COPROC[1]}"`.
+	s.CoprocEndsInAnArray = interp.Yes
 	s.SetListingQuoting = interp.ListingQuoteWhenNeededEscaped
 
 	return s

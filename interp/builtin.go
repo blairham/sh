@@ -709,7 +709,7 @@ func biExport(r *Runner, _ context.Context, args []string) int {
 		// the leading `export` word for the bare form alone. That split is
 		// recorded in the corpus and left for a dialect to answer; the
 		// listing every shell has is worth more than the silence it replaces.
-		return r.declarePrintForm(args, r.sem().ExportListing,
+		return r.declarePrintForm(args, r.bareOrDashP(opts, r.sem().ExportListing),
 			func(d declaration) bool { return d.exported })
 	}
 	args, status := r.builtinNames("export", args, false)
@@ -1347,18 +1347,28 @@ func biRead(r *Runner, ctx context.Context, args []string) int {
 
 	// -p rides the optstring's shape the way -n does: `p:` takes a prompt,
 	// handled once the stream is known, and a bare `p` names the coprocess
-	// as the source. Neither dialect with the bare letter can start one in
-	// this grammar, so the measured answer is the refusal — the dialect's
-	// words, status 1, and the variables untouched, which is the part that
-	// separates this from a read that reached its input and failed.
+	// as the source. With one running the letter reads from its near end;
+	// with none it is the measured refusal — the dialect's words, status 1,
+	// and the variables untouched, which is the part that separates this
+	// from a read that reached its input and failed.
+	coprocSource := -1
 	if _, ok := optArg['p']; !ok && strings.Contains(opts, "p") {
-		r.diagf("%s\n", Wording(r.diag().ReadNoCoprocess, "read: -p: no coprocess"))
-		return 1
+		fd, running := r.CoprocRead()
+		if !running {
+			r.diagf("%s\n", Wording(r.diag().ReadNoCoprocess, "read: -p: no coprocess"))
+			return 1
+		}
+		coprocSource = fd
 	}
 
 	// The stream: standard input, or the descriptor -u names — resolved
 	// against the shell's own table, where `exec 5<file` put it.
 	in := r.In()
+	if coprocSource >= 0 {
+		if rd, open := r.readerForFd(coprocSource); open {
+			in = rd
+		}
+	}
 	if word, ok := optArg['u']; ok {
 		fd, numeric := atoi(word)
 		if !numeric || fd < 0 {
@@ -1879,6 +1889,16 @@ func biLocal(r *Runner, _ context.Context, args []string) int {
 	return status
 }
 
+// bareOrDashP picks the listing shape for `export` and `readonly`: the one
+// `-p` writes when `-p` was written, and BareDeclarationListing when nothing
+// was. Two shells answer the two differently — see that field.
+func (r *Runner) bareOrDashP(opts string, dashP DeclarationListingForm) DeclarationListingForm {
+	if strings.ContainsRune(opts, 'p') {
+		return dashP
+	}
+	return r.sem().BareDeclarationListing
+}
+
 // biReadonly marks variables immutable.
 func biReadonly(r *Runner, _ context.Context, args []string) int {
 	args, opts, code := r.builtinOptions("readonly", args, "paAf")
@@ -1889,7 +1909,7 @@ func biReadonly(r *Runner, _ context.Context, args []string) int {
 		// The listing: readonly names alone, in the dialect's shape. `-p` and
 		// nothing at all list alike, which is the same rule `export` follows
 		// and is measured the same way.
-		return r.declarePrintForm(nil, r.sem().ReadonlyListing,
+		return r.declarePrintForm(nil, r.bareOrDashP(opts, r.sem().ReadonlyListing),
 			func(d declaration) bool { return d.readonly })
 	}
 	args, status := r.builtinNames("readonly", args, false)

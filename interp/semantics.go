@@ -1100,6 +1100,28 @@ type Semantics struct {
 	// parts ways with its own export listing and writes `typeset -r R=2`.
 	ReadonlyListing DeclarationListingForm
 
+	// CoprocEndsInAnArray publishes a started coprocess's near ends as the
+	// two elements of an array — `${COPROC[0]}` to read and `${COPROC[1]}` to
+	// write, with the process in `COPROC_PID` — which is bash's model and the
+	// reason its `coproc` takes a name. zsh answers no: it has no name for a
+	// coprocess and no array, and a script reaches the ends with `print -p`
+	// and `read -p` instead. Asked only when a coprocess is started, so a
+	// dialect without the word never meets it.
+	CoprocEndsInAnArray Answer
+
+	// BareDeclarationListing is the shape `export` and `readonly` write with
+	// no operands and no `-p` — which is not always the shape `-p` writes.
+	// dash and both bash builds answer the bare form exactly as they answer
+	// `-p`; ksh93 and zsh drop the command word for the bare form alone and
+	// write a plain `V='a b'`, which no `-p` anywhere writes because it could
+	// not be read back as a declaration. Measured across the panel from one
+	// exported and one readonly name.
+	//
+	// One field for both builtins, because no shell in the panel splits them:
+	// where the bare form differs from `-p` it differs for both, and by the
+	// same rule.
+	BareDeclarationListing DeclarationListingForm
+
 	// DeclarePrintReportsAMissingName makes `typeset -p nosuch` say so and
 	// fail. bash and zsh report it (with their own wording — see
 	// Diagnostics.DeclareNoSuchVariable) and answer 1 even when other names
@@ -1213,6 +1235,12 @@ type Semantics struct {
 	// the variables with every defined function, and one lists special
 	// parameters and tied arrays no other shell has.
 	SetListing SetListingForm
+
+	// ListingControlEscape is how a `$'...'` listing spells a control byte —
+	// see ControlEscapeStyle. A field of its own rather than a part of the
+	// quoting style, because two dialects that quote the same way spell a
+	// control byte differently.
+	ListingControlEscape ControlEscapeStyle
 
 	// SetListingQuoting is how that listing spells a value. The styles are
 	// the shared listing vocabulary: bash quotes only where it must and
@@ -2969,10 +2997,20 @@ func PosixSemantics() Semantics {
 		// keep their zero values: no option letters, and a bad one reported
 		// rather than fatal — `typeset` is not one of the builtins POSIX
 		// marks special.
-		SetListing:            SetListingAssignments,
-		SetListingQuoting:     ListingQuoteAlwaysDoubled,
-		BareLocalListing:      BareLocalListsNothing,
-		TypesetBadOptionFatal: No,
+		SetListing:        SetListingAssignments,
+		SetListingQuoting: ListingQuoteAlwaysDoubled,
+		// dash quotes every listed value and never reaches `$'...'`, so the
+		// numeric fallback is never asked for there; the octal one is what
+		// POSIX's own `printf` writes, and is the reading to start from.
+		ListingControlEscape: ControlEscapeOctal,
+		// POSIX has the operand-less `export` and `readonly` write output
+		// "in a form that may be reused as input", which is the command word
+		// and the assignment — the same thing `-p` writes.
+		ExportListing:          DeclareListingCommandWord,
+		ReadonlyListing:        DeclareListingCommandWord,
+		BareDeclarationListing: DeclareListingCommandWord,
+		BareLocalListing:       BareLocalListsNothing,
+		TypesetBadOptionFatal:  No,
 		// POSIX gives `%string` and `%?string` outright, has `wait` answer
 		// for a job that is not there, and calls a string matching more
 		// than one job unspecified — refusing is the reading that invents

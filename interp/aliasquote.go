@@ -3,7 +3,10 @@
 
 package interp
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // How a shell spells a value it lists back — an alias's replacement, a
 // trap's action.
@@ -94,9 +97,9 @@ func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) str
 	case ListingQuoteWhenNeededDollar:
 		switch {
 		case hasControl(v):
-			return dollarQuoted(v)
+			return r.dollarQuoted(v)
 		case strings.ContainsRune(v, '\''):
-			return dollarQuoted(v)
+			return r.dollarQuoted(v)
 		case listedValueIsBare(v):
 			return v
 		}
@@ -104,7 +107,7 @@ func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) str
 	case ListingQuoteWhenNeededEscaped:
 		switch {
 		case hasControl(v):
-			return dollarQuoted(v)
+			return r.dollarQuoted(v)
 		case listedValueIsBare(v):
 			return v
 		}
@@ -116,7 +119,7 @@ func (r *Runner) quoteListedValue(style ListingQuotingStyle, what, v string) str
 		return singleQuoted(v, `'\''`, true)
 	case ListingQuoteAlwaysDouble:
 		if hasControl(v) {
-			return dollarQuoted(v)
+			return r.dollarQuoted(v)
 		}
 		return doubleQuoted(v)
 	}
@@ -189,25 +192,106 @@ func doubleQuoted(v string) string {
 
 // dollarQuoted writes `$'...'`, the spelling that can carry a control
 // character.
-func dollarQuoted(v string) string {
+func (r *Runner) dollarQuoted(v string) string {
+	style := r.sem().ListingControlEscape
 	var b strings.Builder
 	b.WriteString("$'")
 	for i := 0; i < len(v); i++ {
-		switch c := v[i]; c {
-		case '\'':
+		switch c := v[i]; {
+		case c == '\'':
 			b.WriteString(`\'`)
-		case '\\':
+		case c == '\\':
 			b.WriteString(`\\`)
-		case '\t':
-			b.WriteString(`\t`)
-		case '\n':
-			b.WriteString(`\n`)
-		case '\r':
-			b.WriteString(`\r`)
-		default:
+		case c >= 0x20 && c != 0x7f:
 			b.WriteByte(c)
+		default:
+			b.WriteString(controlEscaped(style, c))
 		}
 	}
 	b.WriteString("'")
 	return b.String()
+}
+
+// ControlEscapeStyle is how a `$'...'` listing spells a byte the quotes cannot
+// carry as itself. Every shell that lists with `$'...'` escapes *every*
+// control byte — a listing is meant to be readable back, and a raw NUL makes
+// the whole output binary, which is what `grep` says of it — and no two of
+// them spell one the same way. Measured 2026-09-05 from
+// `v=$'\a\b\t\n\v\f\r\e\001\037\177'` in each:
+//
+//	bash    \a \b \t \n \v \f \r \E then three octal digits: \001 \037 \177
+//	ksh93   \a \b \t \n     \f \r \E then two hex digits:     \x0b \x01 \x7f
+//	zsh             \t \n                 then a caret pair:      \C-G \C-A \C-?
+//
+// The named sets are not the same either — ksh93 has no `\v` and zsh has only
+// the two — so the style names one whole vocabulary rather than a fallback.
+// dash never reaches here: it single-quotes every value it lists and writes a
+// control byte as itself.
+type ControlEscapeStyle int
+
+const (
+	// ControlEscapeUnspecified is no answer. It is not refused, because the
+	// question is only reachable from a quoting style that has already been
+	// answered; it spells the numeric fallback the way POSIX's `printf` does.
+	ControlEscapeUnspecified ControlEscapeStyle = iota
+	// ControlEscapeOctal is bash's: the widest named set, then `\NNN`.
+	ControlEscapeOctal
+	// ControlEscapeHex is ksh93's: the same named set without `\v`, then
+	// `\xNN` in lowercase.
+	ControlEscapeHex
+	// ControlEscapeCaret is zsh's: `\t` and `\n` alone, then `\C-X` — the
+	// byte with bit 6 flipped, so NUL is `\C-@`, 1 is `\C-A` and delete is
+	// `\C-?`.
+	ControlEscapeCaret
+)
+
+func (c ControlEscapeStyle) String() string {
+	switch c {
+	case ControlEscapeOctal:
+		return "ControlEscapeOctal"
+	case ControlEscapeHex:
+		return "ControlEscapeHex"
+	case ControlEscapeCaret:
+		return "ControlEscapeCaret"
+	}
+	return "ControlEscapeUnspecified"
+}
+
+// controlEscaped spells one control byte in the given style.
+func controlEscaped(style ControlEscapeStyle, c byte) string {
+	if style == ControlEscapeCaret {
+		switch c {
+		case '\t':
+			return `\t`
+		case '\n':
+			return `\n`
+		}
+		return fmt.Sprintf(`\C-%c`, c^0x40)
+	}
+	switch c {
+	case '\a':
+		return `\a`
+	case '\b':
+		return `\b`
+	case '\t':
+		return `\t`
+	case '\n':
+		return `\n`
+	case '\v':
+		if style == ControlEscapeHex {
+			// The one byte ksh93 leaves out of the named set.
+			break
+		}
+		return `\v`
+	case '\f':
+		return `\f`
+	case '\r':
+		return `\r`
+	case 0x1b:
+		return `\E`
+	}
+	if style == ControlEscapeHex {
+		return fmt.Sprintf(`\x%02x`, c)
+	}
+	return fmt.Sprintf(`\%03o`, c)
 }

@@ -683,6 +683,11 @@ type Runner struct {
 	// number, so a script that hands a bare descriptor number to a child for
 	// the child's own use is not served by this.
 	fds map[int]any
+	// coproc is the pair of descriptors in that table that the running
+	// coprocess is reached by. Kept apart from the array a dialect may also
+	// publish them in, because one of the two shells with a coprocess
+	// publishes no array and reaches them by a letter — see coproc.go.
+	coproc *coprocEnds
 	// execFds are the numbers in that table that `exec`'s own redirection
 	// list opened, which one dialect keeps to itself when it runs anything.
 	// A per-command redirection on the same number takes the mark off for

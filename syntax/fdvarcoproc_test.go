@@ -49,6 +49,7 @@ func TestFdVariableRedirectionIsADialectQuestion(t *testing.T) {
 func TestCoprocIsADialectQuestion(t *testing.T) {
 	d := Core()
 	d.Coproc = true
+	d.CoprocName = true
 
 	f, err := Parse(`coproc cat -u`, d)
 	if err != nil {
@@ -87,12 +88,37 @@ func TestCoprocIsADialectQuestion(t *testing.T) {
 	if !ok || len(sc.Args) != 2 {
 		t.Errorf("core read %+v, want an ordinary command of two words", f.Stmts[0].Expr)
 	}
+
+	// And the name is a second flag over the first. With the word alone the
+	// coprocess still runs, and the would-be name is the first word of the
+	// command it runs — so a *compound* after it has nothing to open it, and
+	// `coproc MY { cat; }` is the `}` that closes nothing.
+	nameless := Core()
+	nameless.Coproc = true
+	f, err = Parse(`coproc MY cat`, nameless)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c = f.Stmts[0].Expr.(*Pipeline).Cmds[0].(*CoprocClause)
+	if c.Name != "" {
+		t.Errorf("nameless dialect got name %q, want none", c.Name)
+	}
+	sc, ok = c.Cmd.(*SimpleCmd)
+	if !ok || len(sc.Args) != 2 || sc.Args[0].Literal() != "MY" {
+		t.Errorf("nameless dialect read %+v, want `MY cat` as the command", c.Cmd)
+	}
+	if _, err := Parse(`coproc MY { cat; }`, nameless); err == nil {
+		t.Error("accepted a named compound in a dialect with no name for a coprocess")
+	} else if got, want := err.Error(), `1:18: "}" unexpected`; got != want {
+		t.Errorf("refused with %q, want %q", got, want)
+	}
 }
 
 // The printer writes both forms back.
 func TestCoprocPrintsBack(t *testing.T) {
 	d := Core()
 	d.Coproc = true
+	d.CoprocName = true
 	for _, src := range []string{`coproc cat`, `coproc UP { cat; }`} {
 		f, err := Parse(src, d)
 		if err != nil {

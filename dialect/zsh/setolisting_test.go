@@ -63,6 +63,50 @@ func TestSetOListsThisDialectsOwnTable(t *testing.T) {
 	}
 }
 
+// TestARowsStateIsItsDeviationFromZshsDefault: the state column, which the
+// names above cannot see. An option zsh has *on* by default is printed in its
+// `no` spelling, and that spelling is `off` in a shell that has not changed
+// it — so a default `set +o` writes `set +o noclobber`, not `set -o
+// noclobber`, even though this shell does clobber. Measured 2026-09-06 in
+// real zsh, in both directions:
+//
+//	set +o                     set +o noaliases, set +o nobeep,
+//	                           set +o noclobber, set +o noequals
+//	setopt noclobber; set +o   set -o noclobber
+//	set -o                     noclobber             off
+//
+// Read for four options rather than one because `autocd` and the rest of the
+// namespace default *off*, where the state and the deviation are the same
+// value and a row cannot tell them apart.
+func TestARowsStateIsItsDeviationFromZshsDefault(t *testing.T) {
+	out, st := runZsh(t, t.TempDir(), "set +o")
+	if st != 0 {
+		t.Fatalf("status = %d, want 0", st)
+	}
+	for _, base := range []string{"noaliases", "nobeep", "noclobber", "noequals"} {
+		if !strings.Contains(out, "set +o "+base+"\n") {
+			t.Errorf("stdout has no %q — a `no` spelling is off in a shell that has not moved it", "set +o "+base)
+		}
+		if strings.Contains(out, "set -o "+base+"\n") {
+			t.Errorf("stdout has %q — that reads the raw state where the row wants the deviation", "set -o "+base)
+		}
+	}
+
+	// And it turns over when the option really does move, which is what says
+	// the row is read live rather than printed from the default.
+	out, st = runZsh(t, t.TempDir(),
+		`setopt noclobber; v=$(set +o); case $v in *"set -o noclobber"*) echo on ;; *"set +o noclobber"*) echo off ;; esac`)
+	if !strings.Contains(out, "on\n") || st != 0 {
+		t.Errorf("out %q status %d, want `set -o noclobber` after `setopt noclobber`", out, st)
+	}
+
+	// The other listing's column, on the same row.
+	out, st = runZsh(t, t.TempDir(), "set -o")
+	if !strings.Contains(out, "noclobber             off\n") || st != 0 {
+		t.Errorf("out %q status %d, want the padded `noclobber ... off` row", out, st)
+	}
+}
+
 // TestSetOAndSetoptAreOneNamespace: written through one and read through the
 // other, in both directions. This is what makes the listing above a fact
 // about the shell rather than a second table that happens to be longer.

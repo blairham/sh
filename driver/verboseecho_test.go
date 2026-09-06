@@ -149,6 +149,78 @@ func TestVerboseEchoesAHereDocumentBody(t *testing.T) {
 	}
 }
 
+// TestVerboseWritesToTheDescriptorTheScriptPointsAt is #771.
+//
+// `set -v` writes to descriptor 2, and the panel means the descriptor as the
+// *script* has pointed it rather than the stream the front end was handed. The
+// two are the same until a script moves one, and then they are not: after
+// `exec 2>&1` the echo joins the output, and a shell holding its own stream
+// loses it out of the joined text.
+//
+// The streams are captured **apart**, which is what makes the assertion mean
+// anything: joined into one buffer, a shell that wrote the echo to the front
+// end's stderr and one that wrote it to the script's fd 2 produce the same
+// bytes in the same order, and the bug is invisible.
+func TestVerboseWritesToTheDescriptorTheScriptPointsAt(t *testing.T) {
+	for _, c := range []struct {
+		name             string
+		src              string
+		wantOut, wantErr string
+		why              string
+	}{
+		{
+			name:    "a redirected descriptor takes the echo with it",
+			src:     "exec 2>&1\nset -v\ncat <<END >&2\nbody\nEND\necho after\n",
+			wantOut: "cat <<END >&2\nbody\nEND\nbody\necho after\nafter\n",
+			wantErr: "",
+			why:     "with the two streams joined by the script, the terminator's position against the body it wrote is visible — and it is only visible because the echo followed the descriptor",
+		},
+		{
+			name:    "the line holding the redirection goes to the old descriptor",
+			src:     "set -v\nexec 2>&1\necho after\n",
+			wantOut: "echo after\nafter\n",
+			wantErr: "exec 2>&1\n",
+			why:     "the echo happens when the line is read and the exec has not run yet, so the line that moves the descriptor is the last one the old one sees",
+		},
+		{
+			name:    "a per-command redirect does not capture it",
+			src:     "set -v\necho one 2>&1\n",
+			wantOut: "one\n",
+			wantErr: "echo one 2>&1\n",
+			why:     "a redirection on a command is applied when the command runs, and the line was written back before that — so this needs no rule of its own, only the right moment",
+		},
+		{
+			name:    "a descriptor pointed at nothing swallows it",
+			src:     "set -v\nexec 2>/dev/null\necho gone\nexec 2>&1\necho back\n",
+			wantOut: "gone\necho back\nback\n",
+			wantErr: "exec 2>/dev/null\n",
+			why:     "`echo gone` and the `exec` that undoes it are both echoed into /dev/null, and only the line after the restore comes back — the same rule read in the other direction. Measured against all four",
+		},
+		{
+			name:    "the tail after the last command follows it too",
+			src:     "exec 2>&1\nset -v\necho one\n# the end\n",
+			wantOut: "echo one\none\n# the end\n",
+			wantErr: "",
+			why:     "sayVerboseRest is the same echo at the end of the input, and a fix that reached only the per-line half would leave the tail on the front end's stream",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var out, errs strings.Builder
+			sh := shell()
+			sh.Stdout, sh.Stderr = &out, &errs
+			if code := driver.MainArgs(sh, []string{"testsh", writeScript(t, c.src)}); code != 0 {
+				t.Fatalf("status %d, stderr %q", code, errs.String())
+			}
+			if out.String() != c.wantOut {
+				t.Errorf("stdout = %q, want %q — %s", out.String(), c.wantOut, c.why)
+			}
+			if errs.String() != c.wantErr {
+				t.Errorf("stderr = %q, want %q — %s", errs.String(), c.wantErr, c.why)
+			}
+		})
+	}
+}
+
 // TestVerboseDoesNotEchoTheTailAfterTheShellHasStopped: a script that ends
 // itself has stopped reading, so what is left of the file is not input it
 // read. Three of the four panel shells say nothing after `exit`.

@@ -35146,6 +35146,94 @@
         "TimedOut": false
       }
     },
+    "opt/set-v-follows-a-descriptor-that-moves": {
+      "bash": {
+        "Stdout": "gone~echo back~back",
+        "Stderr": "exec 2\u003e/dev/null",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "gone~echo back~back",
+        "Stderr": "exec 2\u003e/dev/null",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "gone~echo back~back",
+        "Stderr": "exec 2\u003e/dev/null",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "gone~echo back~back",
+        "Stderr": "exec 2\u003e/dev/null",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "gone~echo back~back",
+        "Stderr": "exec 2\u003e/dev/null",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "gone~echo back~back",
+        "Stderr": "exec 2\u003e/dev/null",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
+    "opt/set-v-writes-to-the-descriptor-the-script-points": {
+      "bash": {
+        "Stdout": "cat \u003c\u003cEND \u003e\u00262~body~END~body~echo after~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash-as-sh": {
+        "Stdout": "cat \u003c\u003cEND \u003e\u00262~body~END~body~echo after~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "bash32": {
+        "Stdout": "cat \u003c\u003cEND \u003e\u00262~body~END~body~echo after~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "dash": {
+        "Stdout": "cat \u003c\u003cEND \u003e\u00262~body~END~body~echo after~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "ksh93": {
+        "Stdout": "cat \u003c\u003cEND \u003e\u00262~body~END~body~echo after~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      },
+      "zsh": {
+        "Stdout": "cat \u003c\u003cEND \u003e\u00262~body~END~body~echo after~after",
+        "Stderr": "",
+        "Status": 0,
+        "Signal": 0,
+        "TimedOut": false
+      }
+    },
     "opt/turning-off-a-name-a-shell-does-not-implement": {
       "bash": {
         "Stdout": "st=0~st=0",

@@ -308,3 +308,104 @@ func TestAFailedLaunchClosesThePluginsAlreadyStarted(t *testing.T) {
 		t.Errorf("err = %q, want the plugin that did start to have been closed", got.errs)
 	}
 }
+
+// watcher is a whole observer plugin, and it is shorter than the greeter: it
+// declares no commands at all, takes the event stream, and writes what it saw
+// to its own standard error, which the host relays.
+//
+// The records it receives are event.Records, the same JSON Lines the audit file
+// holds. That is the point of the role costing one method: internal/event was
+// written as a shared contract, and a consumer of an audit stream is already a
+// consumer of this.
+const watcher = `#!/bin/sh
+exec 3>&1
+send() { printf '%s\n' "$1" >&3; }
+while IFS= read -r line; do
+	case $line in
+	*'"method":"observer/event"'*)
+		ev=$(printf '%s' "$line" | sed -n 's/.*"event":"\([^"]*\)".*/\1/p')
+		act=$(printf '%s' "$line" | sed -n 's/.*"action":"\([^"]*\)".*/\1/p')
+		printf 'saw %s %s\n' "$ev" "$act" >&2
+		continue
+		;;
+	esac
+	id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+	case $line in
+	*'"method":"initialize"'*)
+		send "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"watcher\",\"commands\":[],\"observer\":true}}"
+		;;
+	esac
+done
+`
+
+// The observer role, through the flag a person types: a plugin in another
+// language is told what this shell ran.
+func TestAnObserverPluginIsToldWhatTheShellRan(t *testing.T) {
+	path := writePlugin(t, watcher)
+	got := sandboxed(t, "posix", "-plugin", path, "-c", "/bin/echo hello")
+	if got.code != 0 {
+		t.Fatalf("status = %d, err = %q", got.code, got.errs)
+	}
+	if got.out != "hello\n" {
+		t.Errorf("out = %q, want the command's own output untouched", got.out)
+	}
+	// Records the shell emitted while running the command, relayed back
+	// through the plugin's standard error and prefixed with its name.
+	for _, want := range []string{
+		"sh: plugin watcher: saw command-start exec",
+		"sh: plugin watcher: saw command-end exec",
+	} {
+		if !strings.Contains(got.errs, want) {
+			t.Errorf("errs = %q, want %q", got.errs, want)
+		}
+	}
+}
+
+// A command plugin is not shown the event stream, and this is the bypass
+// written the way the gate checks are: the plugin says so out loud if it is
+// ever handed one.
+//
+// What is at stake is a disclosure rather than a capability. The stream is
+// every command the shell ran and every path it touched; a person who wanted
+// one word implemented in another language did not thereby ask for a copy of
+// their session to be sent to it. The role has to be declared, and this is the
+// declaration being load-bearing rather than decorative.
+func TestAPluginThatDidNotAskIsNotShownTheEventStream(t *testing.T) {
+	nosy := strings.Replace(greeter,
+		"\tcase $line in\n\t*'\"method\":\"initialize\"'*)",
+		"\tcase $line in\n\t*'\"method\":\"observer/event\"'*)\n\t\tprintf 'LEAKED\\n' >&2\n\t\t;;\n\t*'\"method\":\"initialize\"'*)", 1)
+	if nosy == greeter {
+		t.Fatal("the fixture was not rewritten: this test would pass without checking anything")
+	}
+	path := writePlugin(t, nosy)
+	got := sandboxed(t, "posix", "-plugin", path, "-c", "/bin/echo one; hail two")
+	if got.code != 0 {
+		t.Fatalf("status = %d, err = %q", got.code, got.errs)
+	}
+	if !strings.Contains(got.out, "hail two from a shell script") {
+		t.Fatalf("out = %q, want the plugin to have been running at all", got.out)
+	}
+	if strings.Contains(got.errs, "LEAKED") {
+		t.Errorf("errs = %q: a plugin that declared only commands was sent the event stream", got.errs)
+	}
+}
+
+// An observer plugin is composed onto the record the invocation already asked
+// for, never in place of it.
+//
+// A person who adds a plugin to a shell that was already keeping a trace did
+// not ask for the trace to stop, and an audit trail a plugin can silence is not
+// an audit trail. Both have to be there in one run.
+func TestAnObserverDoesNotSilenceTheRecordTheShellWasAlreadyKeeping(t *testing.T) {
+	path := writePlugin(t, watcher)
+	got := sandboxed(t, "posix", "-trace-events", "-plugin", path, "-c", "/bin/echo hello")
+	if got.code != 0 {
+		t.Fatalf("status = %d, err = %q", got.code, got.errs)
+	}
+	if !strings.Contains(got.errs, "trace: command-start exec") {
+		t.Errorf("errs = %q, want the trace the invocation asked for", got.errs)
+	}
+	if !strings.Contains(got.errs, "sh: plugin watcher: saw command-start exec") {
+		t.Errorf("errs = %q, want the plugin to have been told as well", got.errs)
+	}
+}

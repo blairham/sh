@@ -1,0 +1,23 @@
+#!/bin/sh
+# Takes the observer role, handshakes, and then never reads its input again.
+#
+# The pipe fills, the host's feed goroutine blocks inside a write, and nothing
+# the plugin does will ever unblock it. That is the lifetime rule's worked
+# example — nothing may block on an operation whose only unblocking event is a
+# cooperating peer — and the host's answer is the one it already had for every
+# other stream: Close takes it away.
+#
+# The shell must go on working throughout, which is the other half of what this
+# is for. An observer cannot stop the shell, because Emit never waits for this.
+while IFS= read -r line; do
+	case $line in
+	*'"method":"initialize"'*)
+		id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+		printf '%s\n' "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"deaf\",\"commands\":[],\"observer\":true}}"
+		break
+		;;
+	esac
+done
+# Alive, and deaf. Replacing the shell rather than looping, so that there is
+# one process to kill and it is not spawning any.
+exec sleep 300

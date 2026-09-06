@@ -188,6 +188,115 @@ only because `seq` exists: the schema's own words are that `seq` is for
 42 knows it lost one". A dropped record is detectable by the consumer
 that lost it, which is the difference between lossy and lying.
 
+That is honest only if the number is spent *before* the drop, and this
+is the one line of the role that is easy to write backwards. A stream
+numbered on the way out would be contiguous and incomplete — the
+consumer would have no way to know — so the number is taken on the
+emitting goroutine, under the same lock as the send, and a record that
+is dropped has still spent it. The gap is exactly as wide as the loss.
+The lock is held across the send at no cost, because the send cannot
+wait: what it buys is that `seq` reaches the plugin in the order it was
+handed out, which two goroutines emitting at once would otherwise break.
+
+**The role is declared, and that is a disclosure decision.** The
+handshake carries `observer: true`, absent meaning false, and a plugin
+that did not ask receives nothing — `Host.Sink` answers nil for one, and
+the front end composes nothing. The stream is every command the shell
+ran, every path it touched and every refusal the policy made; a person
+who wanted one word implemented in another language did not thereby ask
+for a copy of their session to be sent to it. It is a boolean rather
+than a `roles` array because `commands` being non-empty already declares
+the command role, and a protocol with two spellings of one fact has a
+case where they disagree and no rule for it.
+
+**Two corrections to what is above, both found by building it.**
+
+*Records are drained at shutdown, not abandoned.* The lifetime section
+below says the write channel is "abandoned on shutdown rather than
+drained", and that rule is right about what it was written against — a
+plugin must not get to choose how long a shutdown takes. Taken literally
+here it makes the role useless for the commonest shell there is: `sh -c
+cmd` emits every record it will ever emit and then exits, so an observer
+that abandoned its buffer would see almost nothing, and what it lost
+would be the records about the command that was actually run. So the
+drain is **bounded** — `flushWait`, the same kind of bound as shutdown's,
+where the thing waited for is already lost if the wait expires — and
+then the stream is taken away, which is the answer a plugin that stopped
+reading can be given and a clock cannot.
+
+*A plugin that takes both roles owes its reader a multiplexer.* A
+notification arrives whenever the host has one, including between a host
+method and its reply, so a plugin that reads the next line and assumes it
+is the answer will take a record for a reply the first time the two
+cross. This is the same class as the "does not serialize calls"
+obligation below and is stated the same way rather than defended
+against: serializing the event stream against calls would be the host
+choosing when a plugin may be told something, which is a worse trade than
+a plugin owning its own reader. `internal/plugin/testdata/both` is the
+worked example, and it is thirty lines of shell.
+
+### An observer cannot slow the shell down, and this is why there is no timeout
+
+Worth its own answer, because a seam that runs on the interpreter's own
+goroutine is where a shell gets slow.
+
+`Emit` runs on whichever goroutine emitted — mid-command, mid-pipeline,
+mid-background-job. What it does is a conversion, a lock held for a
+handful of instructions, and one **non-blocking** channel send. There is
+no path in it that waits for the plugin, the connection, or anything
+else with a peer at the other end, so the cost is a constant this
+repository chose rather than one a plugin author chooses. Everything
+that can wait — the marshalling, the write, and any waiting on the
+plugin at all — is on a goroutine of the host's own.
+
+So the answer to "should there be a timeout" is that there is nothing
+for one to bound. A deadline would have to sit on something that can
+wait, and the only such place is the feed, where a timeout would be
+worse than useless: it would report something other than what
+happened (#493) and would abandon a goroutine to keep running (#690),
+which is precisely the pair `repl/completer.go` writes down. The bound
+that exists instead is the **buffer**, and what it costs when it is
+reached is a record — reported in a field the schema already has, to the
+only party that can do anything about it.
+
+The residual, stated rather than implied: the feed writes to the same
+stream the plugin's own requests arrive on, so a plugin that lets that
+stream back up will eventually block the feed inside a write. That
+parks one goroutine of the host's, not the shell — and a plugin that has
+stopped reading its standard input is a plugin that was not going to
+answer a call either, so nothing new is reachable through it. `Close`
+takes the stream away, which is the unblocking event the host controls,
+and `testdata/deafobserver` is the fixture that holds it.
+
+### Which side of the guard rule the observer role lands on
+
+`repl` draws a line that this role has to be placed against: a seam that
+runs **between commands** is run behind the panic guard, because a
+diagnostic then has somewhere to go, and a seam that runs **while a line
+is being drawn** is not, because there a complaint lands on top of what
+is being typed.
+
+The observer role is on neither side, and that is the answer rather than
+an evasion: **no plugin code runs in this process at all.** The panic
+guard exists to keep a contributed Go implementation's bug from ending a
+session; an observer's implementation is a different process, where the
+equivalent of a panic is that process dying, which the host already has
+an answer for. What runs on the interpreter's goroutine is `Emit`, which
+is ours, and what runs on the editor's goroutine is nothing.
+
+One thing does land asynchronously and is worth naming: a plugin's own
+standard error is relayed from a goroutine of the host's, so an observer
+that writes a line about a command can have that line arrive after the
+prompt has been drawn again. That is the relay's behavior and not the
+observer role's — a command plugin's stderr has always been relayed the
+same way — but the observer role is what makes it *unbounded* in time,
+because an observer chooses when to write where a command plugin only
+speaks while its command runs. The prefix `sh: plugin <name>: ` is what
+keeps it attributable, which is the same answer the relay already gave;
+buffering it until the shell is between lines would mean `internal/plugin`
+knowing about an editor, and the package deliberately knows about no
+front end at all.
+
 ### Gate consultations are excluded, and this is the sharpest decision here
 
 A plugin may **not** answer gate consultations. Three reasons, in
@@ -322,6 +431,42 @@ surface, in the process that holds the script's variables and streams.
 So the host methods are the four above, which touch the runner's memory
 and not the world, and there is no `plugin/openFile` and no
 `plugin/runCommand`.
+
+### The observer role is a disclosure, and it is one-way
+
+It adds no capability — it is `interp.Sink`, which this repository
+already publishes, moved across a process boundary, and the conservation
+rule is satisfied by exactly that. What it *does* add is reach: an
+observer sees every command the shell ran, every path it touched, every
+signal it aimed and every refusal the policy made. Three things are
+therefore written down rather than left to be discovered.
+
+**It is authorized by the launch and by nothing else.** The gate is
+consulted once, for the exec, as it is for any plugin; there is no
+consultation per record, for the reason there is none per call — a
+record creates nothing and the policy has no new information to make a
+decision with. The person who named the plugin on the command line is
+the person who authorized what it can see.
+
+**It has to be asked for.** `observer: true` at the handshake, absent
+meaning false, so a plugin that declared only commands is not handed a
+copy of the session. That is the check, and removing it is a mutant that
+a test kills.
+
+**There is no way back through it.** A `Sink` returns nothing, which is
+the whole difference between this role and the gate role that is
+excluded below: a gate is *asked* something and a missing answer has to
+be invented, where an observer is only ever told. And the record itself
+carries no route — every host method names a call, and a plugin that
+declared no commands has no call in its table for the whole of its life,
+so a guess at a call id (they are small decimal counters, and guessable)
+is refused. `testdata/sneak` is that bypass written as a test.
+
+What is *not* claimed: an observer plugin is outside the boundary like
+every other plugin, so what it does with what it sees is its own
+business. That is the same sentence as the one above about a plugin's
+own file accesses, and it matters more here, because a plugin that is
+handed the record is a plugin that has something worth taking away.
 
 ## Discovery and trust
 
@@ -695,8 +840,8 @@ garbage on its output, one that ignores a cancel.
       wire.go           the v1 message shapes, and the transport decision
       host.go           launch, the gate consultation, lifetime, shutdown
       command.go        the command role → interp.Register
-      observer.go       the observer role → interp.Sink (not yet)
-      testdata/         twelve plugins, every one a POSIX shell script
+      observer.go       the observer role → interp.Sink
+      testdata/         eighteen plugins, every one a POSIX shell script
     cmd/sh              -plugin PATH, repeatable — plugin.go
 
 The extraction is the first thing to do and it is worth doing rather
@@ -708,8 +853,8 @@ rule says a package is promoted once something has consumed it; the
 second consumer is what earns the extraction.
 
 `internal/plugin` imports `interp`, `internal/jsonrpc`,
-`internal/boundary` and the standard library, and **nothing under
-`dialect/`**, asserted by a test over the real
+`internal/boundary`, `internal/event` and the standard library, and
+**nothing under `dialect/`**, asserted by a test over the real
 dependency list at any depth — the same test
 `internal/policy/dialectblind_test.go` already runs, for the same
 reason. A plugin cannot ask which shell it is inside because nothing
@@ -786,6 +931,26 @@ is genuinely the maintainer's to reverse.
     from the moment of the launch and is not the shell's variables.
     `shell/getVar` is the live answer. Handing it a filtered
     environment, or none, is the alternative.
+14. **The observer buffer is 1024 records and the drop is silent.** A
+    number rather than "enough", because a bound that is not a number is
+    not a bound; and silent because there is nowhere to complain to that
+    is not the shell's own standard error, and a shell that chattered
+    because a plugin was slow would be worse than the lost record. The
+    gap in `seq` is the complaint, delivered to the party that can act on
+    it. Making the count reportable — a record of its own saying how many
+    went missing — is the obvious alternative and has no caller yet.
+15. **An observer sees a subshell's events and cannot tell**, because a
+    cloned `Runner` shares its `Events` and its `Session`. That is the
+    same answer every other consumer of the stream gets and is correct
+    for an audit trail; a plugin that wanted to distinguish them would
+    need something `interp.Event` does not carry, which is an `interp`
+    change with no other caller.
+16. **No plugin sees another plugin's launch.** Every `-plugin` is
+    launched before any observer sink is composed, so the exec that
+    starts one is recorded to the trace and the audit file and to no
+    plugin. The alternative would make what a plugin can see depend on
+    where its flag sat in the argument list, which is a disclosure rule
+    nobody could read off a command line.
 
 ## Staging
 
@@ -795,8 +960,10 @@ is genuinely the maintainer's to reverse.
 3. **Done** — `internal/plugin`: launch, the gate consultation, the
    handshake, shutdown, and the lifetime tests;
 4. **Done** — the command role, and `cmd/sh -plugin`;
-5. the observer role — `interp.Sink` remoted, as bounded-buffer
-   notifications that drop rather than block, which `seq` makes honest;
+5. **Done** — the observer role: `interp.Sink` remoted, as bounded-buffer
+   notifications that drop rather than block, which `seq` makes honest,
+   with `cmd/sh` composing an observer plugin's sink onto whatever record
+   the invocation already asked for;
 6. ~~a reference plugin in a language that is not Go~~ — **overtaken**.
    Every fixture in `internal/plugin/testdata` and the plugin in
    `cmd/sh/plugin_test.go` is a POSIX shell script, chosen for exactly
@@ -809,5 +976,5 @@ is genuinely the maintainer's to reverse.
 
 Steps 3 and 4 landed together, because a host with no role has no
 in-tree caller — the rule #804 applied when it shipped three seams and
-declined the fourth. `Closes #738` waits on step 5, which is the last
-thing in this document that is not yet true.
+declined the fourth. Step 5 was the last thing in this document that was
+not yet true, and it is what closed the issue.

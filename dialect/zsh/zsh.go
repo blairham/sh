@@ -77,6 +77,12 @@ func Dialect() syntax.Dialect {
 	// the whole expansion a bad substitution.
 	d.ParamExpansionFlags = true
 	d.ParamElementSelection = true
+	// An expansion where a parameter name would be — `${${v}#a}`, which is
+	// how this shell applies one expansion to the result of another and is
+	// idiomatic here rather than a corner. Measured 2026-09-05 on zsh 5.9.2
+	// against the rest of the panel: bash 3.2 and 5.3 answer `bad
+	// substitution` and ksh93 a syntax error, so this shell alone.
+	d.NestedParamExpansion = true
 	// A parameter written without braces carries a subscript here, and `$#a`
 	// is a count rather than `$#` with a letter after it. Measured 2026-09-05
 	// on zsh 5.9.2: `a=(x y z); echo $a[1]` prints `x` and `echo $#a` prints

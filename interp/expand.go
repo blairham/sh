@@ -295,6 +295,14 @@ func (r *Runner) substitutedWordFields(s syntax.Span) ([]string, bool) {
 // asked in one place. Answering it twice is how the joined and the split paths
 // would come to disagree about the same expansion.
 func (r *Runner) paramSource(e *syntax.ParamExpr) (value string, set, subscript bool) {
+	if e.Inner != nil {
+		// An expansion standing where a name would. Its fields are joined
+		// here because this is the scalar view; the list view is
+		// nestedFields, and both go through nestedWords so the two cannot
+		// come to different values.
+		words, iset := r.nestedWords(e)
+		return strings.Join(words, ifsFirst(r.ifs())), iset, false
+	}
 	if e.Index != nil {
 		if elems, ok := r.arraySubscript(e); ok {
 			// nil rather than empty is what says the element was not there:
@@ -481,7 +489,7 @@ func (r *Runner) expandAt(s syntax.Span) ([]string, bool) {
 	// Only for `[@]` and `[*]`, though. `${a[0]:1}` names one element and is
 	// a substring of it — slicing there is a one-element list with its first
 	// element dropped, which is no field at all. The corpus caught that.
-	if e.Index != nil && !e.Length &&
+	if e.Index != nil && e.Inner == nil && !e.Length &&
 		(e.Op == syntax.ParamNone ||
 			((e.Op == syntax.ParamSubstring || e.Op == syntax.ParamTransform ||
 				selectsElements(e.Op) || elementOp(e.Op) || r.yieldsTheArray(e)) &&
@@ -2226,5 +2234,83 @@ func (r *Runner) namesWithPrefix(prefix string) []string {
 		add(k)
 	}
 	sort.Strings(out)
+	return out
+}
+
+// nestedWords expands the expansion standing where a parameter name would —
+// the `${v}` of `${${v}#a}` — and reports whether it came to anything.
+//
+// It is an ordinary word expansion, deliberately: the inner expansion may be
+// a parameter, a command substitution or an arithmetic one, may carry its own
+// flags, and may itself be nested, and every one of those is already answered
+// by the word pipeline. Reaching for the parameter machinery directly would
+// have re-answered a subset of it.
+//
+// "Set" is whether the inner produced a field at all, which is what the outer
+// `:-` and its family test. An inner naming nothing produces none, so
+// `${${u}:-d}` substitutes and `${${v}:-d}` on an empty value does too — the
+// colon's own rule, unchanged.
+func (r *Runner) nestedWords(e *syntax.ParamExpr) (words []string, set bool) {
+	if e.Inner == nil || len(e.Inner.Spans) == 0 {
+		return []string{""}, false
+	}
+	if e.Index != nil {
+		// `${${v}[2]}` subscripts the *result*, which is a second question
+		// on top of this one — and the one the subscript work is already
+		// asking. Named rather than answered, so a script that meets it is
+		// told which construct is missing.
+		r.diagf("${%s}: a subscript on a nested expansion is not implemented\n", e.Src)
+		r.expandErr = true
+		return []string{""}, false
+	}
+	// The inner is exactly one substitution span — the grammar admits nothing
+	// else in that position — so this is expandOneWord's loop with the loop
+	// taken out, and it keeps the fields that expandAt yields rather than
+	// joining them the way expandWordNoSplit does. Which of the two a nested
+	// expansion is, is the whole question below.
+	defer r.inWord(e.Inner)()
+	r.expandingSpan = 0
+	span := e.Inner.Spans[0]
+	if parts, ok := r.expandAt(span); ok {
+		words = parts
+	} else {
+		text, _ := r.expandSpan(span, splitNever)
+		words = []string{text}
+	}
+	// The marks come off once, whichever half produced the fields. The inner
+	// is an operand rather than a field of the command line, so a `*` in its
+	// value is a character the outer operator matches against and not a
+	// pattern the shell is about to escape for someone: leaving them on
+	// answered `${${v}}` on `a*b` with a backslash in it.
+	words = unescapeAll(words)
+	if len(words) == 0 {
+		// No field is still a *value*: the empty string, and set. Measured —
+		// `a=(); ${${a[@]}-d}` is empty in the shell with the grammar, where
+		// `${nosuch-d}` is `d`, so the colon-less test finds something here
+		// however little the inner came to.
+		words = []string{""}
+	}
+	if len(words) > 1 {
+		// An inner expansion that came to a *list* keeps its fields in the
+		// shell that has this grammar — `${${a[@]}}` is one field per
+		// element there — and the outer operator then applies to each. That
+		// is a second shape rather than a longer value, and it is refused by
+		// name rather than joined: a join would answer with one plausible
+		// field and say nothing, which is the failure this diagnostic
+		// exists to avoid.
+		r.diagf("${%s}: a nested expansion of a list is not implemented\n", e.Src)
+		r.expandErr = true
+		return []string{""}, false
+	}
+	return words, true
+}
+
+// unescapeAll takes the glob marks off every field, for a caller that wants
+// the text rather than a pattern.
+func unescapeAll(fields []string) []string {
+	out := make([]string, len(fields))
+	for i, f := range fields {
+		out[i] = globUnescape(f)
+	}
 	return out
 }

@@ -930,6 +930,55 @@ answer is silent: the text the substitution *encloses* is never the
 pattern in any column, and reading it that way trimmed a bare `x` off
 `${v#<(x)}` and matched `case x in <(x))` (#902).
 
+## An expansion where a name belongs — zsh only
+
+    v=abc
+    ${${v}}              →  abc
+    ${${v}#a}            →  bc
+    ${${${v}#a}%c}       →  b
+    ${(U)${(L)v}}        →  ABC
+    ${$(echo abc)#a}     →  bc
+
+zsh alone. bash 3.2, bash 5.3 and dash answer `bad substitution` for
+every one of them and ksh93 a syntax error, so this is a grammar flag —
+`NestedParamExpansion` — and not a semantics axis: without it there is no
+parameter name at the front of `${${v}#a}` at all, so the characters are
+unreadable rather than differently read, and there is nothing for a value
+to switch between.
+
+It is not a corner. `${${0:#$ZSH_ARGZERO}:-${(%):-%N}}` is how a plugin
+manager installed on this machine finds the file being sourced, and the
+form appears in two of the third-party files a real startup reads.
+
+**The inner expansion is the whole of the name position.** Measured:
+`${x${v}}` and `${${v}x}` are both a bad substitution *in zsh too*, so
+text either side of the nesting is not a longer name. Every operator may
+follow the inner brace — trims, replacement, substring, the four
+conditionals, `:#`, a modifier — and the length prefix may sit in front
+of the whole thing. Depth is not limited to one.
+
+The inner need not be another `${…}`: a `$(…)` command substitution and a
+`$((…))` arithmetic expansion stand in the same position. The backquoted
+spelling does not, which is measured rather than assumed — ``${`echo x`#a}``
+is a bad substitution in zsh, so the two spellings of command
+substitution part company exactly here.
+
+### What is read and not implemented
+
+Two shapes are recognized and refused **by name**, because answering them
+approximately is the failure this document exists to prevent:
+
+    ${${a[@]}}     an inner that comes to a list
+    ${${v}[2]}     a subscript on the result
+
+In zsh the first keeps its fields and the outer operator applies to each
+of them — `${${a}#o}` on `(one two)` is `ne` and `two` — and the second
+indexes the string the inner came to. Joining the first would answer with
+one plausible field, and dropping the second would answer with the
+unindexed value; both would be silent. `a nested expansion of a list is
+not implemented` and `a subscript on a nested expansion is not
+implemented` are what they say instead.
+
 ## Dialect flags
 
     ParamSubstitution      ${x/pat/rep} and its anchored forms
@@ -945,6 +994,8 @@ pattern in any column, and reading it that way trimmed a bare `x` off
                            parameter that is not a name — zsh only
     ProcessSubstitutionInParamOperand
                            ${u:-<(:)} carries one — bash only
+    NestedParamExpansion   ${${v}#a}, an expansion where a name belongs
+                           — zsh only
 
 All false for `posix`. `ParamCaseChange`, `ParamIndirection`,
 `ParamTransformations`, `ParamExpansionFlags` and
@@ -955,7 +1006,8 @@ both, and for the same reason as `ParamExpansionFlags`: one shell reads
 those characters that way and three read them as text.
 `SpecialParamSubscript` is false for both as well, and its evidence is
 stronger still: every other member of the panel refuses the expansion
-outright.
+outright. `NestedParamExpansion` is false for both on the same evidence:
+the other five columns refuse it, in three different wordings.
 
 ## What this does not cover
 

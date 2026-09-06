@@ -3165,6 +3165,32 @@ echo "st=$?"`,
 		Why:     "and the boundary, which is worth a row because a flag named for matching looks as though it should reach the operator that matches and replaces: it does not. A replacement, a substring, a default and an expansion with no operator at all are what they would have been without it, so the flag reaches exactly the trims and the exclusion — measured one operator at a time rather than reasoned from the name",
 	},
 	{
+		ID: "param/an-expansion-where-a-name-belongs", Category: "parameter expansion",
+		Snippet: `v=abc; echo "[${${v}}][${${v}#a}][${${v}%c}][${${v}/b/X}]"`,
+		Why:     "one expansion applied to the result of another, which is one shell's grammar and is idiomatic there rather than a corner — two of the third-party files a real startup sources use it. Every operator may follow the inner brace, so the row carries four of them: with the name position taken by an expansion there is nothing for `#` to be a length of and nothing for `%` to be a job specification of, and an implementation that reached for the name first has no name to reach for. bash and dash call the whole thing a bad substitution and ksh93 a syntax error",
+	},
+	{
+		ID: "param/nested-expansions-nest", Category: "parameter expansion",
+		Snippet: `v=abc; echo "[${${${v}}}][${${${v}#a}%c}][${${v#a}}]"`,
+		Why:     "the depth is not one: an expansion standing in the name position may itself have one standing in *its* name position, and the operators stack outward — the inner `#a` runs before the outer `%c` sees anything. The third form is the same characters with the operator on the inside instead, which has to keep working and is the reading a parser gets by accident if it splits on the first brace",
+	},
+	{
+		ID: "param/a-nested-expansion-takes-flags-and-a-substitution", Category: "parameter expansion",
+		Snippet: `v=abc; echo "[${(U)${v}}][${${(U)v}}][${$(echo xy)#x}]"`,
+		Why:     "what may sit either side of the nesting: a flag group belongs to the expansion it opens, so the outer and the inner may each carry one and the two spellings of `(U)` come to the same word. And the inner need not be a parameter expansion at all — a command substitution stands in the same position, which is what says the shape is `an expansion` rather than `another ${`",
+	},
+	{
+		ID: "param/a-nested-expansion-is-the-whole-name", Category: "parameter expansion",
+		GradedOnRefusal: true,
+		Snippet:         `v=abc; echo "${x${v}}"`,
+		Why:             "and the boundary, refused by every shell in the panel including the one that has the construct: the inner expansion is the whole of the name position, so text in front of it is not a longer name and `${${v}x}` is not a name with a suffix. Graded on the refusal because five shells decline the same characters in five wordings, which is what the Diagnostics vector is for",
+	},
+	{
+		ID: "param/a-nested-expansions-value-is-what-the-outer-operator-tests", Category: "parameter expansion",
+		Snippet: `v=; echo "[${${v}:-d}]"; v=abc; echo "[${${v}:-d}]"; echo "[${${v}:+y}]"`,
+		Why:     "the conditional operators test what the inner expansion came to rather than whether some name is set, which is the whole reason the idiom exists: `${${0:#$ZSH_ARGZERO}:-${(%):-%N}}`, out of a plugin manager on this machine, is a default over the *result* of a pattern exclusion. An empty inner fires the colon test and a set one does not",
+	},
+	{
 		ID: "expansion/element-exclusion-by-pattern", Category: "expansion",
 		Snippet: `a=(one two three); printf "[%s]" "${(@)a:#t*}"; echo`,
 		Why:     "`:#` drops the elements a pattern matches, which is one shell's alone: to bash the characters after the colon are an offset and `#t*` is arithmetic it refuses, and ksh93 refuses the flag group before it gets that far. The shape a startup file on this machine uses to take a hook out of a list, and the one that produced `operand expected at ``#fig_precmd''` here",

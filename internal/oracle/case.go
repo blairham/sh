@@ -4193,20 +4193,20 @@ echo "st=$?"`,
 		// has no `[[`, so the clause fails and `&&` stops there.
 		Snippet: `[[ -n x
 && -z "" ]] && echo yes`,
-		Why:     "the other side of the operator, and the one the list of structural points was missing: the condition is complete at the end of the line and the operator leads the continuation. It is how a real prompt theme is written, and at the newline it is not yet known whether an operator or the `]]` follows",
+		Why: "the other side of the operator, and the one the list of structural points was missing: the condition is complete at the end of the line and the operator leads the continuation. It is how a real prompt theme is written, and at the newline it is not yet known whether an operator or the `]]` follows",
 	},
 	{
 		ID: "cond/a-newline-before-the-operator-indented", Category: "pattern matching",
 		Snippet: `[[ -n x
       && -z "" ]] && echo yes`,
-		Why:     "the same with the continuation indented, which is the form in the wild — the leading whitespace is not what makes it work, and the case exists so that a fix keyed on a line beginning with the operator would fail here",
+		Why: "the same with the continuation indented, which is the form in the wild — the leading whitespace is not what makes it work, and the case exists so that a fix keyed on a line beginning with the operator would fail here",
 	},
 	{
 		ID: "cond/a-newline-before-a-second-operand-is-refused", Category: "pattern matching",
 		SyntaxError: true,
 		Snippet: `[[ -n x
 -z "" ]] && echo yes`,
-		Why:     "the boundary: skipping a newline before an operator must not become skipping one before anything at all. Every shell that has `[[ ]]` refuses two conditions with only a line between them, and each blames a different token on a different line",
+		Why: "the boundary: skipping a newline before an operator must not become skipping one before anything at all. Every shell that has `[[ ]]` refuses two conditions with only a line between them, and each blames a different token on a different line",
 	},
 	{
 		ID: "decl/an-array-assignment-as-an-operand", Category: "parameter expansion",

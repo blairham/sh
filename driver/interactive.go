@@ -155,7 +155,7 @@ func (sh Shell) keyBindings(r *interp.Runner) func() map[string]repl.Widget {
 // decides whether to draw a prompt, and a prompt is drawn on the stream the
 // lines come from.
 func (sh Shell) hasTerminal() bool {
-	if repl.IsTerminal(sh.Stdin) {
+	if repl.IsTerminal(sh.stdinFile()) {
 		return true
 	}
 	for _, w := range []io.Writer{sh.Stdout, sh.Stderr} {
@@ -200,7 +200,25 @@ func Interactively(sh Shell, hasWork bool) bool {
 	// repl owns the termios calls, so the ioctl lives there and there is one
 	// of it. The decision is still the front end's: this function is what
 	// says a terminal plus no operands means a person.
-	return repl.IsTerminal(sh.Stdin)
+	return repl.IsTerminal(sh.stdinFile())
+}
+
+// stdinFile is this shell's input as a descriptor, or nil where it is not one.
+//
+// The whole cost of Stdin being an io.Reader, in one place. A terminal is a
+// question for the kernel about an open file, so a reader that is not a file
+// cannot be one — and that is an answer rather than a gap: a front end holding
+// a protocol, a test holding a strings.Reader and an embedder holding a
+// network connection all want the same no, and it is the same no a pipe has
+// always got.
+//
+// Not IsTerminal's own job. It is exported for this front end to ask, and
+// widening it to take an any would make every caller's mistake — passing
+// something that could never be a terminal — look like a question rather than
+// like the type error it is.
+func (sh Shell) stdinFile() *os.File {
+	f, _ := sh.Stdin.(*os.File)
+	return f
 }
 
 // frontEnd is the interactive shell this dialect asks for, as a value.

@@ -452,7 +452,7 @@ func (c *counts) accepted(blank, parsed bool) {
 func (s Shell) terminalName() string {
 	c := s.counted()
 	if !c.looked {
-		c.tty, c.looked = lookupTerminal(s.In), true
+		c.tty, c.looked = lookupTerminal(s.inFile()), true
 	}
 	return c.tty
 }

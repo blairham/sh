@@ -42,7 +42,17 @@ type Shell struct {
 
 	// In, Out and Err are the terminal. In has to be one for the editor to
 	// work; Run says so rather than guessing otherwise.
-	In       *os.File
+	//
+	// An io.Reader rather than an *os.File because only the editor needs a
+	// descriptor, and Run already parts company over exactly that: without a
+	// terminal it takes runPlain, which reads lines and draws prompts and
+	// wants nothing a reader cannot do. Widening it costs one type assertion,
+	// in the branch that was already there, and it is what lets a front end
+	// whose input is not a descriptor at all — driver.Shell.Stdin is an
+	// io.Reader for the same reason — still offer `-i`. Handing such a caller
+	// a nil descriptor instead would be a prompt that reads nothing, which
+	// looks like a shell and is not one.
+	In       io.Reader
 	Out, Err io.Writer
 
 	// Report renders a parse failure the way this dialect does. Nil prints
@@ -197,6 +207,18 @@ type Shell struct {
 
 // Run reads, evaluates and prints until the input ends.
 //
+// inFile is the session's input as a descriptor, or nil where it is not one.
+//
+// Every question this package asks about the terminal goes through here, and
+// each of the three already has an answer for nil: IsTerminal says no,
+// terminalWidth says it does not know, and lookupTerminal has no name for it.
+// So a reader that is not a file takes runPlain, which is the same route a
+// pipe takes and the one this package has always had for it.
+func (s Shell) inFile() *os.File {
+	f, _ := s.In.(*os.File)
+	return f
+}
+
 // It returns the status of the last command, which is what the shell exits
 // with — the same thing a script's last command decides.
 func (s Shell) Run(ctx context.Context) (int, error) {
@@ -218,14 +240,14 @@ func (s Shell) Run(ctx context.Context) (int, error) {
 	// captured stream is not a terminal to the child on the other end of it —
 	// see blocks.Capture.Stream.
 	capture := s.captureOutput()
-	if !IsTerminal(s.In) {
+	if !IsTerminal(s.inFile()) {
 		// A prompt without a terminal is not a mistake to refuse: every shell
 		// in the panel, given `-i` on a pipe, still prints a prompt and runs
 		// the lines — it only says that job control is off. The *editor* is
 		// what needs a terminal, and it is the editor that goes away.
 		return s.runPlain(ctx, store, capture)
 	}
-	state, err := makeRaw(s.In)
+	state, err := makeRaw(s.inFile())
 	if err != nil {
 		return 0, err
 	}
@@ -342,7 +364,7 @@ func (s Shell) run(ctx context.Context, state *terminalState, stmts []*syntax.Fi
 		s.errf("%v\n", err)
 	}
 	defer func() {
-		if _, err := makeRaw(s.In); err != nil {
+		if _, err := makeRaw(s.inFile()); err != nil {
 			s.errf("%v\n", err)
 		}
 	}()
@@ -378,7 +400,7 @@ func (s Shell) heldForStoppedJobs(state *terminalState) bool {
 		s.errf("%v\n", err)
 	}
 	defer func() {
-		if _, err := makeRaw(s.In); err != nil {
+		if _, err := makeRaw(s.inFile()); err != nil {
 			s.errf("%v\n", err)
 		}
 	}()
@@ -1065,6 +1087,6 @@ func (s Shell) newEditor() *editor {
 		// The width comes from the input, which is the terminal; the output
 		// may be a file the session was started with, and its size is not the
 		// screen's.
-		width: func() int { return terminalWidth(s.In) },
+		width: func() int { return terminalWidth(s.inFile()) },
 	}
 }

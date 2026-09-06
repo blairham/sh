@@ -115,11 +115,42 @@ type Shell struct {
 	KeyBindings func(*interp.Runner) map[string]repl.Widget
 
 	// Stdin is where the shell reads from: the lines a person types, and the
-	// program itself where the invocation named nothing to run. It has to be
-	// a terminal for the editor to work, and it is handed to the Runner, so
-	// what the front end has not read of a program on it is what the script
-	// running on it finds — see program.
-	Stdin *os.File
+	// program itself where the invocation named nothing to run. It is handed
+	// to the Runner, so what the front end has not read of a program on it is
+	// what the script running on it finds — see program.
+	//
+	// An io.Reader rather than an *os.File, which is what it was. Two things
+	// wanted the widening and only one of them is about descriptors. A front
+	// end that answers a protocol has no descriptor to offer: an ACP session's
+	// input is a question asked over the connection when a script actually
+	// reads, and a reader that performs a round trip is the only shape that
+	// fits — see internal/acp. Filling the field with an os.Pipe instead means
+	// asking eagerly, because nothing tells the writing end that somebody read
+	// the other one.
+	//
+	// What it costs is stated rather than discovered. A descriptor is needed
+	// for exactly two things, and both of them ask rather than assume:
+	//
+	//   - the terminal checks, hasTerminal and Interactively, which put the
+	//     question to the kernel and can only put it to a file. A reader that
+	//     is not one is not a terminal, so it draws no prompt and runs no
+	//     monitor — the same answers a pipe already got;
+	//   - the line editor, which needs raw mode. repl.Shell.In was widened
+	//     with this and branches where it already branched: no terminal, no
+	//     editor, and the plain prompt loop reads whatever it was given.
+	//
+	// Nothing else in the front end wants one. The program-on-standard-input
+	// reader has taken an io.Reader since it was written and asks the value
+	// whether it can be rewound rather than asking its type — see lineReader,
+	// where the two answers were already both live.
+	//
+	// A child still gets a descriptor: interp hands a command the shell's
+	// input where it is a file and a pipe it fills where it is not, which is
+	// the same choice it already made for a here-document body.
+	//
+	// Nil is the process's own standard input, unchanged. That is a front
+	// end's default and not interp's, where nil is an empty stream — #480.
+	Stdin io.Reader
 
 	// Stdout and Stderr default to the process's. Tests set them; a binary
 	// leaves them alone.

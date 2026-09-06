@@ -210,6 +210,16 @@ func (r *Runner) SetPosixMode(on bool) {
 		s.UnsetReadonlyFatal = unsetRO
 	})
 	r.posixMode = on
+	// The standard has aliases expand in a script, so the mode turns the
+	// switch on and leaving it puts back the answer the *route* gave rather
+	// than whatever was set before entering — measured in bash 5.3, where
+	// `shopt -s expand_aliases; set -o posix; set +o posix` leaves
+	// `expand_aliases` off. See Runner.aliasExpansion.
+	if on {
+		r.aliasExpansion = true
+	} else {
+		r.aliasExpansion = r.aliasExpansionBase
+	}
 }
 
 // PosixMode reports whether the shell is in POSIX mode, which is the read

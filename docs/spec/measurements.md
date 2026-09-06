@@ -4180,6 +4180,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `shopt/globstar-crosses-directories` | `**/f` | `d/e/f` | `d/e/f` | `**/f` | `**/f` | `d/e/f` |
 | `shopt/nocasematch-folds-case` | `exact` | `hit` | `hit` | `hit` | `exact` | `exact` |
 | `shopt/query-answers-by-status` | `q=127~q=127` | `q=1~q=0` | `q=1~q=0` | `q=1~q=0` | `q=127~q=127` | `q=127~q=127` |
+| `shopt/expand-aliases-is-a-live-switch` | `hit~hit~st=0` | `hit~st=127` **2>** `<script>: line 5: a: command not found` | `hit~st=127` **2>** `<script>: line 5: a: command not found` | `hit~st=127` **2>** `<script>: line 5: a: command not found` | `hit~hit~st=0` | `hit~hit~st=0` |
+| `shopt/expand-aliases-is-off-until-it-is-asked-for` | `hit~st=0` | `st=127` **2>** `<script>: line 2: a: command not found` | `hit~st=0` | `st=127` **2>** `<script>: line 2: a: command not found` | `hit~st=0` | `hit~st=0` |
+| `shopt/posix-mode-turns-alias-expansion-on` | *(no output, status 2)* | `hit~st=0` | `hit~st=0` | `hit~st=0` | *(no output, status 2)* | *(no output, status 1)* |
+| `shopt/leaving-posix-mode-drops-alias-expansion-again` | *(no output, status 2)* | `st=127` **2>** `<script>: line 5: a: command not found` | `st=127` **2>** `<script>: line 5: a: command not found` | `st=127` **2>** `<script>: line 5: a: command not found` | *(no output, status 2)* | *(no output, status 1)* |
 | `nounset/defaults-are-exempt` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` | `[d][d][]~after` |
 | `nounset/empty-is-not-unset` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` | `[]~after` |
 | `nounset/no-parameters-is-not-unset` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` | `[][]~after` |
@@ -4275,6 +4279,37 @@ grades it and nothing drift-checks it either, for the same reason.
 - `shopt/query-answers-by-status` — -q answers by status alone — 1 while the option is off and 0 once -s has set it; the shells without the builtin answer 127 twice, which records what a probing script would see there
   ```sh
   shopt -q nullglob 2>/dev/null; echo q=$?; shopt -s nullglob 2>/dev/null; shopt -q nullglob 2>/dev/null; echo q=$?
+  ```
+- `shopt/expand-aliases-is-a-live-switch` — the option a bash script has to set before an alias means anything, and it is a switch rather than a door: the word expands after -s and is a command not found again after -u. The three shells that always expand ignore the missing builtin and expand both times, which is what makes the pair a divergence rather than a bash detail
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  alias a='echo hit'
+  a
+  shopt -u expand_aliases 2>/dev/null
+  a
+  echo "st=$?"
+  ```
+- `shopt/expand-aliases-is-off-until-it-is-asked-for` — the other half, and the reason the option exists: the identical script without the `shopt` line is a command not found in bash from a file, where dash, ksh93 and zsh all expand. Without both halves recorded, a shell that expanded unconditionally would pass the first
+  ```sh
+  alias a='echo hit'
+  a
+  echo "st=$?"
+  ```
+- `shopt/posix-mode-turns-alias-expansion-on` — the standard has aliases expand in a script, so the mode carries the option with it: bash expands here with no `shopt` written anywhere, which is also why the shell invoked as `sh` expands where the same binary called `bash` does not
+  ```sh
+  set -o posix 2>/dev/null
+  alias a='echo hit'
+  a
+  echo "st=$?"
+  ```
+- `shopt/leaving-posix-mode-drops-alias-expansion-again` — leaving the mode restores what the *route* said rather than what was set before entering it — measured, and the surprising half: the `shopt -s` on the first line does not survive the round trip, so the alias is a command not found
+  ```sh
+  shopt -s expand_aliases 2>/dev/null
+  set -o posix 2>/dev/null
+  set +o posix 2>/dev/null
+  alias a='echo hit'
+  a
+  echo "st=$?"
   ```
 - `nounset/defaults-are-exempt` — a form that supplies a value, or asks whether one is set, is not a use of an unset one
   ```sh

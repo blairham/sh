@@ -213,3 +213,141 @@ func TestShoptGlobstarThroughTheBuiltin(t *testing.T) {
 		t.Errorf("without globstar gave %q, want the literal pattern", got)
 	}
 }
+
+// `shopt -s expand_aliases` is implemented and not merely recognized: the
+// word really expands afterwards, and really stops expanding after `-u`.
+//
+// It is one of the two kinds of "wired" in this table — the matcher's options
+// are the other — and it is the one a corpus row depends on, because an alias
+// case cannot be written for bash at all without it (#632).
+//
+// Measured in bash 5.3.15 and bash 3.2.57, on all three non-interactive
+// routes: an alias is a command not found until the option is set, `hit`
+// after, and a command not found again after `shopt -u`. Every assertion here
+// is on the whole stream, location included, because a diagnostic gaining a
+// prefix is exactly the failure a substring check cannot see.
+func TestShoptExpandAliasesIsALiveSwitch(t *testing.T) {
+	var out, errs bytes.Buffer
+	run := func(src string) (string, string, int) {
+		out.Reset()
+		errs.Reset()
+		code := driver.MainArgs(bashShell(&out, &errs), []string{"bash", "-c", src})
+		return out.String(), errs.String(), code
+	}
+
+	// Off to begin with: bash is the shell that does not expand in a script.
+	o, e, st := run("alias a='echo hit'\na\n")
+	if o != "" || e != "bash: line 2: a: command not found\n" || st != 127 {
+		t.Errorf("without the option: out %q err %q status %d, want the command not found at 127", o, e, st)
+	}
+
+	// Set, and the very next line expands. One line late by design, the way
+	// extglob is: the line that sets it has already been parsed.
+	o, e, st = run("shopt -s expand_aliases\nalias a='echo hit'\na\n")
+	if o != "hit\n" || e != "" || st != 0 {
+		t.Errorf("with the option: out %q err %q status %d, want hit at 0", o, e, st)
+	}
+
+	// A switch and not a door: `-u` puts it back.
+	o, e, st = run("shopt -s expand_aliases\nalias a='echo hit'\na\nshopt -u expand_aliases\na\n")
+	if o != "hit\n" || e != "bash: line 5: a: command not found\n" || st != 127 {
+		t.Errorf("after -u: out %q err %q status %d, want one hit then the command not found", o, e, st)
+	}
+
+	// And the query reports the live switch rather than a stored constant.
+	o, _, st = run("shopt expand_aliases")
+	if o != "expand_aliases      \toff\n" || st != 1 {
+		t.Errorf("query off: %q status %d", o, st)
+	}
+	o, _, st = run("shopt -s expand_aliases\nshopt expand_aliases\n")
+	if o != "expand_aliases      \ton\n" || st != 0 {
+		t.Errorf("query on: %q status %d", o, st)
+	}
+}
+
+// POSIX mode carries the option with it, which is measured rather than
+// reasoned: the standard has aliases expand in a script, `set -o posix` makes
+// bash expand with no `shopt` written anywhere, and leaving the mode restores
+// what the *route* said rather than what was set before entering it.
+//
+// The last of those is the surprising one and the reason the runner keeps a
+// base as well as a live switch: in bash 5.3, `shopt -s expand_aliases; set -o
+// posix; set +o posix; shopt expand_aliases` answers `off`.
+func TestShoptExpandAliasesFollowsPosixMode(t *testing.T) {
+	var out, errs bytes.Buffer
+	run := func(argv ...string) (string, string, int) {
+		out.Reset()
+		errs.Reset()
+		code := driver.MainArgs(bashShell(&out, &errs), argv)
+		return out.String(), errs.String(), code
+	}
+
+	o, e, st := run("bash", "-c", "set -o posix\nalias a='echo hit'\na\n")
+	if o != "hit\n" || e != "" || st != 0 {
+		t.Errorf("in posix mode: out %q err %q status %d, want hit at 0", o, e, st)
+	}
+
+	o, e, st = run("bash", "-c", "shopt -s expand_aliases\nset -o posix\nset +o posix\nalias a='echo hit'\na\n")
+	if o != "" || e != "bash: line 5: a: command not found\n" || st != 127 {
+		t.Errorf("after the round trip: out %q err %q status %d, want the option back off", o, e, st)
+	}
+
+	// The shell invoked as `sh` is in the mode from the start, so it expands
+	// where the same binary called `bash` does not — and `set +o posix`
+	// inside it turns the expansion off, both measured.
+	o, e, st = run("sh", "-c", "alias a='echo hit'\na\n")
+	if o != "hit\n" || e != "" || st != 0 {
+		t.Errorf("as sh: out %q err %q status %d, want hit at 0", o, e, st)
+	}
+	o, e, st = run("sh", "-c", "set +o posix\nalias a='echo hit'\na\n")
+	if o != "" || e != "sh: line 3: a: command not found\n" || st != 127 {
+		t.Errorf("as sh leaving the mode: out %q err %q status %d, want the command not found", o, e, st)
+	}
+}
+
+// The bare listing names every option exactly once, and there are 59 of them
+// — the same 59 bash 5.3.15 lists, and a superset of bash 3.2.57's 34.
+//
+// The count is the point rather than a detail. A name held in two of the
+// table's three maps is invisible to every other test here — the lookups
+// check the wired maps first, so the duplicate is shadowed everywhere except
+// in the listing, where it prints twice. That is exactly how `expand_aliases`
+// would have been left behind by a half-finished move out of the recorded
+// table, and nothing else would have said so.
+func TestShoptListsEveryNameExactlyOnce(t *testing.T) {
+	var out, errs bytes.Buffer
+	if code := driver.MainArgs(bashShell(&out, &errs), []string{"bash", "-c", "shopt"}); code != 0 {
+		t.Fatalf("bare shopt: status %d, err %q", code, errs.String())
+	}
+	lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
+	if len(lines) != 59 {
+		t.Errorf("bare shopt printed %d lines, want bash 5.3's 59", len(lines))
+	}
+	seen := map[string]int{}
+	prev := ""
+	for _, l := range lines {
+		padded, _, ok := strings.Cut(l, "\t")
+		if !ok {
+			t.Fatalf("listing line %q has no name", l)
+		}
+		name := strings.TrimRight(padded, " ")
+		seen[name]++
+		if name <= prev {
+			t.Errorf("listing is out of order at %q, after %q", name, prev)
+		}
+		prev = name
+	}
+	for name, n := range seen {
+		if n != 1 {
+			t.Errorf("%s appears %d times in the listing, want once", name, n)
+		}
+	}
+	// And the one this change moved is in it, spelled the way the listing
+	// spells everything else.
+	out.Reset()
+	errs.Reset()
+	driver.MainArgs(bashShell(&out, &errs), []string{"bash", "-c", "shopt -p expand_aliases"})
+	if got, want := out.String(), "shopt -u expand_aliases\n"; got != want {
+		t.Errorf("shopt -p expand_aliases = %q, want %q", got, want)
+	}
+}

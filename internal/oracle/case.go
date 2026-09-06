@@ -2048,6 +2048,45 @@ var Corpus = []Case{
 			"which records what a probing script would see there",
 	},
 	{
+		ID: "shopt/expand-aliases-is-a-live-switch", Category: "shell options",
+		Script: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+alias a='echo hit'
+a
+shopt -u expand_aliases 2>/dev/null
+a
+echo "st=$?"`,
+		Why: "the option a bash script has to set before an alias means anything, and it is a switch rather than a door: the word expands after -s and is a command not found again after -u. The three shells that always expand ignore the missing builtin and expand both times, which is what makes the pair a divergence rather than a bash detail",
+	},
+	{
+		ID: "shopt/expand-aliases-is-off-until-it-is-asked-for", Category: "shell options",
+		Script: true,
+		Snippet: `alias a='echo hit'
+a
+echo "st=$?"`,
+		Why: "the other half, and the reason the option exists: the identical script without the `shopt` line is a command not found in bash from a file, where dash, ksh93 and zsh all expand. Without both halves recorded, a shell that expanded unconditionally would pass the first",
+	},
+	{
+		ID: "shopt/posix-mode-turns-alias-expansion-on", Category: "shell options",
+		Script: true,
+		Snippet: `set -o posix 2>/dev/null
+alias a='echo hit'
+a
+echo "st=$?"`,
+		Why: "the standard has aliases expand in a script, so the mode carries the option with it: bash expands here with no `shopt` written anywhere, which is also why the shell invoked as `sh` expands where the same binary called `bash` does not",
+	},
+	{
+		ID: "shopt/leaving-posix-mode-drops-alias-expansion-again", Category: "shell options",
+		Script: true,
+		Snippet: `shopt -s expand_aliases 2>/dev/null
+set -o posix 2>/dev/null
+set +o posix 2>/dev/null
+alias a='echo hit'
+a
+echo "st=$?"`,
+		Why: "leaving the mode restores what the *route* said rather than what was set before entering it — measured, and the surprising half: the `shopt -s` on the first line does not survive the round trip, so the alias is a command not found",
+	},
+	{
 		ID: "readonly/reassignment-by-a-declaration", Category: "builtins",
 		Snippet: "readonly x=1; export x=2; echo after",
 		Why:     "the same refusal reached through a declaration utility rather than by an assignment standing alone, and a different set of shells stops for it — three here, where a plain assignment stops all four. So which of the two ways the name was set decides, and one shell answers the two oppositely: it stops for the plain form given as an argument and never stops for this one",

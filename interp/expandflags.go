@@ -22,7 +22,7 @@ import (
 // else the grammar accepted is refused *by name* when the expansion is
 // reached, because the only thing worse than refusing a flag is answering it
 // wrong with status 0.
-const implementedParamFlags = "ULfsj@kvP%qM"
+const implementedParamFlags = "ULfsj@kvP%qMuoOni"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary

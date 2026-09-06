@@ -3175,6 +3175,26 @@ echo "st=$?"`,
 		Why:     "a range has two ends and a third is not a wider one. The shell with ranges calls it a bad substitution and gives up on the command; the shells reading arithmetic take the comma operator's last operand and name an element. Answering the second in a dialect that has ranges would be the other reading wearing this one's name, and it is exactly the shape a fix reaches for when it splits on the first comma and ignores the rest",
 	},
 	{
+		ID: "param/the-ordering-flags-sort-a-list", Category: "parameter expansion",
+		Snippet: `a=(10 9 1); printf "[%s]" "${(@o)a}"; printf "[%s]" "${(@O)a}"; printf "[%s]" "${(@n)a}"; printf "[%s]" "${(@nO)a}"; echo`,
+		Why:     "`o` and `O` sort a list up and down and `n` reads the words as numbers, and the data is `10 9 1` rather than three letters because that is the only kind that tells the two sorts apart: lexically 10 comes before 9. All four on one row, since the flags compose and a reading that got `O` as `reverse the input` rather than `reverse the order` passes the first two and fails the fourth",
+	},
+	{
+		ID: "param/the-ordering-flags-and-case", Category: "parameter expansion",
+		Snippet: `a=(B a C b); printf "[%s]" "${(@o)a}"; printf "[%s]" "${(@oi)a}"; printf "[%s]" "${(@Oi)a}"; printf "[%s]" "${(@i)a}"; echo`,
+		Why:     "the sort is byte order under this corpus's locale, so the cases separate — and `i` folds them, which makes ties reachable for the first time and they keep the order the elements were written in. `(i)` alone sorts, which is what says it is not merely a modifier of `o`. The locale is the reason this row is worth pinning rather than reasoning about: outside `LC_ALL=C` the same shell orders by the collation instead and answers `a b B C` to the first",
+	},
+	{
+		ID: "param/the-unique-flag-is-not-a-sort", Category: "parameter expansion",
+		Snippet: `a=(b a b c a); printf "[%s]" "${(@u)a}"; printf "[%s]" "${(@ou)a}"; printf "[%s]" "${(@uO)a}"; echo`,
+		Why:     "`u` keeps the first of each repeat and leaves the order alone, which is the row that fixes where it runs: with a sort beside it either order of the two gives the same answer, and only `u` on its own says which. It does not fold case either, so `(a A a)` keeps two",
+	},
+	{
+		ID: "param/where-the-ordering-step-sits", Category: "parameter expansion",
+		Snippet: `a=(zb ya); printf "[%s]" "${(@o)a#z}"; a=(B a); printf "[%s]" "${(@oU)a}"; a=(c a b); printf "[%s]" "${(oj.-.)a}"; printf "[%s]" "${(o)a}"; echo`,
+		Why:     "where the step sits, in four answers that would each be different if it sat anywhere else: the operator has already run, so trimming `z` off `zb` puts it first; the case conversion has already run, so `(B a)` uppercased sorts as `A B` and not `B A`; a forced join has already made one word, which is in order however it was written; and the quoted join without `(@)` does the same. None of it is what the rule numbers suggest by name",
+	},
+	{
 		ID: "param/the-matching-flag-keeps-what-a-trim-took", Category: "parameter expansion",
 		Snippet: `v=hello; echo "[${(M)v#h*l}][${(M)v##h*l}][${(M)v%l*o}][${(M)v%%l*o}][${(M)v#zzz}][${(M)v#}]"`,
 		Why:     "one flag turns each of the four trims inside out: the same operator, the same match, and the *other* side of the split substituted. The operator still chooses how much — the doubled forms take the longest match here exactly as they drop the longest without the flag — so this is not a fifth and sixth operator but a second reading of the four. The last two are the rows that separate it from a no-op: a pattern that matches nothing leaves nothing, where the trim without the flag leaves the whole value, and an empty pattern takes the empty string",

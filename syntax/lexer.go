@@ -1178,6 +1178,24 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 		}
 	}
 
+	if holdsCommands(kind) {
+		// Counting found the end, which for a command substitution means the
+		// read above could not — and the commonest reason is the shape #785
+		// is about: a here-document
+		// whose delimiter is only there because the `)` follows it, so the
+		// body ran past the substitution and took the closing parenthesis
+		// with it. The document *did* end at end of input, and the one shell
+		// that says so says it here.
+		//
+		// Read from the substitution's own text, closing parenthesis
+		// included, because that is what the here-document's input is: the
+		// delimiter line is `EOF)` and matches nothing, and the last line of
+		// the substitution is the last line the body could have. The trimmed
+		// text would say the opposite — `EOF` alone is the delimiter, so
+		// there would be nothing to remark on, which is also why the
+		// substitution itself runs and yields `a`.
+		l.takeRemarks(l.src[start:l.off], open.Line)
+	}
 	// Trim the closing delimiters the loop consumed.
 	end := l.off
 	for n := 1; n <= closers(kind) && end > start && l.src[end-1] == ')'; n++ {
@@ -1193,6 +1211,29 @@ func (l *Lexer) scanParens(kind SpanKind, q Quoting) Span {
 // answer the grammar's question rather than a counting one. It reports
 // failure rather than a guess: an unfinished substitution has no closing
 // parenthesis to find, and the caller has an older answer for that.
+// takeRemarks reads text as a program of its own and keeps what it had to say
+// about input it accepted anyway, with the positions moved into this source.
+//
+// A parse inside a parse otherwise says nothing: a *failure* there is reported
+// as this parse failing, and a remark — the one thing a parser accepts and
+// remarks on — was dropped with the parser that noticed it. `v=$(cat <<EOF` …
+// `EOF)` runs, `v` is `a`, and the warning about the document ending at end of
+// file went nowhere (#785).
+//
+// from is the line text begins on, so a remark names a line of the program
+// rather than of the substitution. The offsets are relative to text and are
+// left that way: nothing reads a remark's offset, and moving it would claim a
+// correspondence this text does not have — it is a slice of the source here
+// and is not, for the routes that hand this package a fragment.
+//
+// Only remarks are taken. Whatever else the read found — an error, a tree — is
+// the caller's own business and it has already decided what to do about it.
+func (l *Lexer) takeRemarks(text string, from int) {
+	sub := NewParserAt(text, l.dialect, from)
+	sub.parseList()
+	l.remarks = append(l.remarks, sub.lex.remarks...)
+}
+
 func (l *Lexer) parseToClose(from int) (int, bool) {
 	sub := NewParser(l.src[from:], l.dialect)
 	sub.parseList()
@@ -1208,6 +1249,20 @@ func procSubstKind(c byte) SpanKind {
 		return ProcSubstOut
 	}
 	return ProcSubstIn
+}
+
+// holdsCommands reports whether what is between the parentheses is a program
+// rather than an expression.
+//
+// It decides which spans are read again for what that read has to say about
+// them, and the line it draws is not decoration: `$(( a << b ))` is a left
+// shift, and reading it as a program makes `<<` a here-document whose
+// delimiter `b` never arrives — a warning about a script that has none. The
+// two process-substitution kinds are on this side of it, which is measured
+// rather than assumed: bash remarks on `<(cat <<EOF` … `EOF)` exactly as it
+// does on `$(cat <<EOF` … `EOF)`.
+func holdsCommands(k SpanKind) bool {
+	return k == CommandSubst || k == ProcSubstIn || k == ProcSubstOut
 }
 
 func closers(k SpanKind) int {

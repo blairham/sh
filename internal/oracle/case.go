@@ -3340,6 +3340,20 @@ EOF
 		Why:     "the one place a line that merely *begins* with the delimiter ends the body: `EOF)` inside `$( )`, where the parenthesis that closes the substitution is what follows it. bash and ksh93 take it and the body is `a`; dash and zsh refuse the whole construct, dash wanting the `)` and zsh naming the assignment. So the prefix rule the case above disproves is real for this one shape and in only two of the six — and `EOF junk` in the same position is body in every one of them, which is how the two shapes tell each other apart",
 	},
 	{
+		ID: "heredoc/a-substitutions-delimiter-is-remarked-on-before-it-runs", Category: "redirection",
+		Script:     true,
+		Unfinished: true,
+		Snippet:    "false && v=$(cat <<EOF\na\nEOF)\necho done\n",
+		Why:        "the remark about the same shape is a fact about *reading* rather than about running: the substitution is on the right of a `&&` that never reaches it, and the one shell that says anything still says it. Which is what makes it the parser's to produce and not the interpreter's",
+	},
+	{
+		ID: "heredoc/a-substitution-that-is-not-a-dollar-sign", Category: "redirection",
+		Script:     true,
+		Unfinished: true,
+		Snippet:    "cat <(cat <<EOF\na\nEOF)\necho done\n",
+		Why:        "the same shape spelled the other way. What decides the remark is that the parentheses hold a *program*, not which sigil opened them — bash 5.3 says the same thing here as for `$( )`, bash 3.2 and ksh93 stay silent as they do there, and the two that have no process substitution refuse the line outright. The counter-case is arithmetic: `$(( a << b ))` is a shift and reading it as a program would invent a here-document",
+	},
+	{
 		ID: "heredoc/a-delimiter-that-never-matches", Category: "redirection",
 		Snippet: `{ x=` + "`" + `cat <<EOF
 a)

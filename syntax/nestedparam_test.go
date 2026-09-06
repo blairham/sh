@@ -116,6 +116,38 @@ func TestABackquotedInnerIsNotANestedExpansion(t *testing.T) {
 	}
 }
 
+// The inner is a *braced* expansion or a parenthesized substitution, and
+// nothing else that begins with a dollar.
+//
+// Measured: `${$v}` and `${$v#a}` are a bad substitution in the shell with the
+// grammar even though `$v` is a perfectly good expansion on its own, so the
+// braces are part of the shape. `${$'x'}` is refused for a second reason —
+// the quoting carries the dollar and the span is literal text — and `${$}` is
+// the parameter named `$`, which is not this construct at all.
+func TestANestedInnerNeedsItsBracesOrParentheses(t *testing.T) {
+	for _, src := range []string{
+		`echo ${$v}`,
+		`echo ${$v#a}`,
+		"echo ${$'ab'#a}",
+	} {
+		e := firstParam(t, src, nestingDialect())
+		if e.Inner != nil {
+			t.Errorf("%q: Inner is set, want the shape refused", src)
+		}
+		if !e.Bad {
+			t.Errorf("%q: read as a shape, want it marked bad", src)
+		}
+	}
+	// And the one that only looks like it: `$` is a parameter name.
+	e := firstParam(t, `echo ${$}`, nestingDialect())
+	if e.Inner != nil {
+		t.Error("${$} read as a nested expansion")
+	}
+	if e.Name != "$" {
+		t.Errorf("${$} names %q, want the parameter $", e.Name)
+	}
+}
+
 // Depth: the inner may itself be nested, and each level keeps its own
 // operator.
 func TestNestedParamExpansionsNest(t *testing.T) {

@@ -798,6 +798,14 @@ func (p *Parser) scanNestedExpansion(s string, at Pos) (inner *Word, rest string
 	p.depth++
 	defer func() { p.depth-- }()
 
+	// A *braced* parameter expansion, or a substitution written with
+	// parentheses. Measured: `${$v}` and `${$v#a}` are a bad substitution in
+	// the shell with the grammar, where `${${v}}` and `${${v}#a}` are not, so
+	// the braces are part of the shape rather than decoration — and `${$}` is
+	// the parameter named `$`, which is not this at all.
+	if !strings.HasPrefix(s, "${") && !strings.HasPrefix(s, "$(") {
+		return nil, "", false
+	}
 	t := NewLexer(s, p.dialect).Next()
 	if t.Kind != TokWord || len(t.Spans) == 0 {
 		return nil, "", false
@@ -805,6 +813,9 @@ func (p *Parser) scanNestedExpansion(s string, at Pos) (inner *Word, rest string
 	switch t.Spans[0].Kind {
 	case ParamExp, CommandSubst, ArithSubst:
 	default:
+		// `${$'x'}` opens with a `$` and is not a substitution: the quoting
+		// carries the dollar and the span is literal text. Refused, as it is
+		// there.
 		return nil, "", false
 	}
 	// Where the substitution ended: the next span's start, or the token's own

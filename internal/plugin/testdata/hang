@@ -1,0 +1,4 @@
+#!/bin/sh
+# Never answers the handshake. The host has to give up on a bound and say so,
+# rather than blocking the invocation on a first message that will never come.
+sleep 120

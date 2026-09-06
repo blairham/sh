@@ -1,0 +1,11 @@
+#!/bin/sh
+# Declares something that is not a command word. A shell cannot install it, so
+# accepting it would install a command nobody can run.
+while IFS= read -r line; do
+	id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+	case $line in
+	*'"method":"initialize"'*)
+		printf '%s\n' "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"odd\",\"commands\":[\"/usr/bin/env\"]}}"
+		;;
+	esac
+done

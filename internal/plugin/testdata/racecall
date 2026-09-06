@@ -1,0 +1,36 @@
+#!/bin/sh
+# Sends messages about a call in the instant after answering it, with no pause.
+# The call is over from the shell's point of view the moment the response is
+# delivered, but a request the plugin sent behind it is dispatched on a
+# goroutine of its own — so this is the window where a host method can land
+# after the builtin returned and the interpreter has carried on.
+#
+# Nothing here is legal. The point is that an illegal message must not reach
+# the Runner while the interpreter is using it, which is a data race, and must
+# not put a chunk on a stream the call no longer owns.
+exec 3>&1
+send() { printf '%s\n' "$1" >&3; }
+while IFS= read -r line; do
+	id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+	case $line in
+	*'"method":"initialize"'*)
+		send "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"racecall\",\"commands\":[\"racy\"]}}"
+		;;
+	*'"method":"command/invoke"'*)
+		call=$(printf '%s' "$line" | sed -n 's/.*"call":"\([^"]*\)".*/\1/p')
+		send "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"status\":0}}"
+		# The host method goes out immediately behind the response, so the
+		# host dispatches it in the instant the builtin is returning. Behind a
+		# notification instead it would arrive later, because a notification
+		# is handled on the read loop and the response has already left it.
+		send "{\"jsonrpc\":\"2.0\",\"id\":8001,\"method\":\"shell/setVar\",\"params\":{\"call\":\"$call\",\"name\":\"LATE\",\"value\":\"x\"}}"
+		send "{\"jsonrpc\":\"2.0\",\"method\":\"command/output\",\"params\":{\"call\":\"$call\",\"stream\":\"out\",\"data\":\"TEFURQ==\"}}"
+		# The reply to that is deliberately not waited for. A naive plugin
+		# that read the next line would sooner or later read the *next*
+		# invoke instead — the host answers on a goroutine of its own, so
+		# which of the two reaches the pipe first is not ordered — and would
+		# then never answer it. The loop below ignores anything it does not
+		# recognize, which is what lets the reply arrive whenever it likes.
+		;;
+	esac
+done

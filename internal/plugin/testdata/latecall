@@ -1,0 +1,31 @@
+#!/bin/sh
+# Sends a host method for a call that has already ended. A plugin doing this
+# has a bug or is hostile, and either way the host must answer rather than
+# fall over: the call table has no entry, and reaching through the empty entry
+# would be a nil dereference in the process that holds the script's variables.
+exec 3>&1
+send() { printf '%s\n' "$1" >&3; }
+while IFS= read -r line; do
+	id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+	case $line in
+	*'"method":"initialize"'*)
+		send "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"latecall\",\"commands\":[\"toolate\"]}}"
+		;;
+	*'"method":"command/invoke"'*)
+		call=$(printf '%s' "$line" | sed -n 's/.*"call":"\([^"]*\)".*/\1/p')
+		send "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"status\":0}}"
+		# Long enough that the shell has certainly finished the call: the
+		# property under test is what happens to a host method that arrives
+		# afterwards, and racing the shell for it would test the timing.
+		sleep 1
+		# The call is over as far as the shell is concerned. Ask anyway, and
+		# report on fd 2 what came back, so the test can see an answer arrived.
+		send "{\"jsonrpc\":\"2.0\",\"id\":7001,\"method\":\"shell/setVar\",\"params\":{\"call\":\"$call\",\"name\":\"LATE\",\"value\":\"x\"}}"
+		IFS= read -r reply
+		case $reply in
+		*'"error"'*) printf 'answered with an error\n' >&2 ;;
+		*) printf 'answered with %s\n' "$reply" >&2 ;;
+		esac
+		;;
+	esac
+done

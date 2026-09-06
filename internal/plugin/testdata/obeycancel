@@ -1,0 +1,21 @@
+#!/bin/sh
+# Answers a cancellation. Waits for one message after the invoke — the host
+# sends command/cancel — and then finishes the call with the status a shell
+# uses for a command a signal ended.
+while IFS= read -r line; do
+	id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+	case $line in
+	*'"method":"initialize"'*)
+		printf '%s\n' "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"obeycancel\",\"commands\":[\"patient\"]}}"
+		;;
+	*'"method":"command/invoke"'*)
+		invoke=$id
+		IFS= read -r next
+		case $next in
+		*'"method":"command/cancel"'*)
+			printf '%s\n' "{\"jsonrpc\":\"2.0\",\"id\":$invoke,\"result\":{\"status\":130}}"
+			;;
+		esac
+		;;
+	esac
+done

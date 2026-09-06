@@ -1,0 +1,14 @@
+#!/bin/sh
+# Answers the handshake and then dies during a call, without responding to it.
+# The call has to fail visibly and the shell has to survive.
+while IFS= read -r line; do
+	id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+	case $line in
+	*'"method":"initialize"'*)
+		printf '%s\n' "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":1,\"name\":\"exitmid\",\"commands\":[\"vanish\"]}}"
+		;;
+	*'"method":"command/invoke"'*)
+		exit 0
+		;;
+	esac
+done

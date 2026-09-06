@@ -121,8 +121,17 @@ through `Runner.Register`, and the stub turns a call into a request:
 | --- | --- |
 | `args []string` | `args` on the invoke request |
 | `r.Out()`, `r.Err()` | output chunks, streamed back |
-| `r.In()` | input chunks, streamed in |
+| `r.In()` | `shell/read`, which the plugin asks for — see below |
 | return status `int` | the invoke response |
+
+The input row was written the other way round — "input chunks, streamed in" —
+and **it was wrong**, discovered while building it. Pushing input to a plugin
+that never reads it makes the host's write block forever on a full pipe, which
+is #690 in a new costume and is the exact shape the lifetime section below
+forbids; there is no bound on it that is not a lie about how much input there
+was. A read the plugin asks for cannot outrun the plugin. So input is
+`shell/read` on the host-method list, and a plugin that never reads costs
+nothing.
 
 Plus the small part of the runner a plugin genuinely needs, and no more:
 
@@ -131,7 +140,13 @@ Plus the small part of the runner a plugin genuinely needs, and no more:
 | `shell/getVar` | reading a shell variable is not otherwise possible from another process — the environment is the Runner's, not the process's |
 | `shell/setVar` | this is the *reason* `Register` exists: `read` has to put a value into a variable of the calling shell |
 | `shell/dir` | the shell's working directory is `r.Dir` and is not the process's, so a plugin resolving a relative path has no other way to ask |
+| `shell/read` | the stream the command's standard input points at, which under a pipeline or a redirection is not the process's |
 | `shell/diagnose` | so a plugin's complaint is located and named the dialect's way, rather than an unattributed line on stderr |
+
+Every one of them carries the **call** it belongs to, and that is not
+ceremony. A subshell has its own variables and its own directory, and the two
+halves of a pipeline are two Runners; a host method that named no call would
+read whichever of them answered most recently.
 
 Deliberately **not** exposed, each for a stated reason:
 
@@ -579,11 +594,25 @@ does not fit.
    gives it there: a command that visibly did not run cannot honestly
    report otherwise. A diagnostic names the plugin, and an `EventError`
    goes to the sink.
-2. **Every registration from that plugin is withdrawn.** The name
-   afterwards resolves as it would have if the plugin had never
-   existed — PATH, or not found. Keeping the name and failing every call
-   would let a dead plugin permanently shadow a working external
-   command.
+2. **The name keeps failing, and this is a correction.** This document
+   said the registrations should be withdrawn, so that the name
+   afterwards resolved as if the plugin had never existed. **That cannot
+   be done safely and is not done.** `Runner.clone` shares the
+   registration map with every subshell — `c := *r` copies `Vars`,
+   `Arrays`, `fds` and the traps, and does *not* copy `custom` — so
+   calling `Unregister` from a builtin's goroutine writes a map a
+   concurrent background job is reading. `cmd1 & cmd2` is enough. That
+   is exactly the race `interp.Gate`'s own doc comment warns about, and
+   it is worse than the shadowing it would fix.
+
+   So a dead plugin's names go on answering 126 with a diagnostic that
+   names the plugin and says it is gone. The objection stands and is not
+   dismissed — a dead plugin does shadow a working external command for
+   the rest of the run — but it is a wrong answer that says so, against
+   a data race that does not. Doing it properly needs either a
+   registration table a subshell copies, or a way for a builtin to say
+   "not me, resolve onwards", and both are `interp` changes with no
+   other caller. Flagged below.
 3. **The shell does not die.** A plugin's exit never becomes the shell's
    exit, its stderr never becomes the shell's status, and a malformed
    message ends the *plugin* and not the shell. A decoder panic is
@@ -612,6 +641,39 @@ Structural, so that the property does not depend on review:
   `Wait`.** `Wait` is called exactly once and is what reaps the child. A
   shell that accumulates zombies is worse than one that leaks a
   goroutine, because the process table is shared.
+- **The host does not serialize calls, and a plugin that serves one at a
+  time must not be put on both ends of one pipeline.** The call id
+  exists because two calls into one plugin are ordinary — a background
+  job, each half of a pipeline — and serializing them would let a
+  background job block a foreground command into the same plugin. The
+  consequence is a plugin-author obligation, and it is the sharpest edge
+  in the protocol: `plugincmd x | pluginsink` against a single-threaded
+  plugin deadlocks, because the sink call asks for input the other call
+  has not been reached to produce. Found by writing exactly that test
+  against a fixture written in shell. A `concurrent` field at the
+  handshake, with the host serializing when it is false, is the obvious
+  fix and has no caller yet; flagged below.
+
+- **A call's end has to be waited for, not just recorded, and this is
+  the fourth correction.** A host method runs on a goroutine of its own,
+  so one sent immediately behind an invoke response is dispatched while
+  the builtin is still returning — and if it reaches the runner after
+  that, it is touching memory the interpreter has resumed using. The
+  race detector found exactly this, against a fixture that sends
+  `shell/setVar` behind its own response: a variable set in a shell that
+  had moved on. So closing a call marks it closed *and waits* for any
+  host method already inside the runner to come out, and liveness is
+  checked under the same lock that the waiting takes rather than beside
+  it.
+
+  One residual, stated because it is a deliberate trade: `shell/read`
+  is not covered by that wait. It holds a lock of its own, precisely so
+  that a plugin blocked on the command's input cannot hold up the
+  command's return — and a shell a plugin can hang by asking to read
+  would be worse than a read that consumes a byte it no longer owns.
+  That residual touches no shared memory, so it is a wrong answer
+  rather than a race.
+
 - **The host is safe for concurrent use.** A background job and each
   half of a pipeline call from their own goroutines — the same warning
   `interp.Gate` carries, where "the first gate written against this
@@ -630,11 +692,12 @@ garbage on its output, one that ignores a cancel.
     internal/jsonrpc/   JSON-RPC 2.0 over a newline-delimited stream,
                         extracted from internal/acp unchanged
     internal/plugin/    the host
-      wire.go           the v1 message shapes
+      wire.go           the v1 message shapes, and the transport decision
       host.go           launch, the gate consultation, lifetime, shutdown
       command.go        the command role → interp.Register
-      observer.go       the observer role → interp.Sink
-    cmd/sh              -plugin PATH, repeatable
+      observer.go       the observer role → interp.Sink (not yet)
+      testdata/         twelve plugins, every one a POSIX shell script
+    cmd/sh              -plugin PATH, repeatable — plugin.go
 
 The extraction is the first thing to do and it is worth doing rather
 than copying. `internal/acp`'s framing is already what this needs — a
@@ -644,8 +707,9 @@ stream resolution, "a place for the decision to go stale". The promotion
 rule says a package is promoted once something has consumed it; the
 second consumer is what earns the extraction.
 
-`internal/plugin` imports `interp` and the standard library and
-**nothing under `dialect/`**, asserted by a test over the real
+`internal/plugin` imports `interp`, `internal/jsonrpc`,
+`internal/boundary` and the standard library, and **nothing under
+`dialect/`**, asserted by a test over the real
 dependency list at any depth — the same test
 `internal/policy/dialectblind_test.go` already runs, for the same
 reason. A plugin cannot ask which shell it is inside because nothing
@@ -672,10 +736,21 @@ diagnostic.
 Each is a defensible default chosen so the work could proceed, and each
 is genuinely the maintainer's to reverse.
 
-1. **JSON-RPC over stdio rather than gRPC.** The direct contradiction of
-   the issue title, so it is first. The argument is above; the
-   reversible part is the encoding, and the shapes below it would not
-   change.
+1. ~~**JSON-RPC over stdio rather than gRPC.**~~ **Decided, 2026-09-06:
+   "lets go with JSON-RPC we can go with gprc later."** The maintainer
+   asked for gRPC when he opened #738 and changed direction after
+   reading the argument above. The issue title still says gRPC and is
+   not being rewritten.
+
+   What "later" means is written down in `internal/plugin`'s package
+   comment rather than only here, because the risk is real: **no
+   abstraction has been built to accommodate a second transport, and
+   none should be until a plugin needs one.** Two transports invented
+   before either has a plugin would be shaped by neither, which is
+   #801's warning one layer up. What would have to be true to add one is
+   a real plugin needing typed streaming or generated stubs, or a
+   measured cost this encoding is paying — and the argument gets made
+   then, with a caller in hand.
 2. **Gate consultations are excluded from the plugin surface.** The
    decision most likely to be wrong. The obvious narrower compromise is
    `ActionExec` only — rare enough for a round trip, and already the
@@ -698,19 +773,41 @@ is genuinely the maintainer's to reverse.
    path, and the in-process seam landing first (`repl.Completer`) is
    what makes the remaining objection a statable one.
 10. **Plugins start eagerly at startup** rather than on first use.
+11. **A dead plugin's names keep failing rather than being withdrawn.**
+    Not a preference — see the lifetime section, where the withdrawal
+    this document originally specified turns out to be a data race
+    against every subshell. Fixing it properly is an `interp` change
+    with no other caller today.
+12. **The host does not serialize calls into one plugin**, so a plugin
+    that serves one at a time cannot be used on both ends of a
+    pipeline. A `concurrent` field at the handshake would let the host
+    serialize for the plugins that want it; it has no caller yet.
+13. **A plugin inherits the process's environment**, which is a snapshot
+    from the moment of the launch and is not the shell's variables.
+    `shell/getVar` is the live answer. Handing it a filtered
+    environment, or none, is the alternative.
 
 ## Staging
 
-1. the design (this document);
-2. `internal/jsonrpc`, extracted from `internal/acp` with no behavior
-   change and `internal/acp` rewritten onto it — independently valuable
-   and reviewable on its own;
-3. `internal/plugin`: launch, the gate consultation, the handshake,
-   shutdown, and the lifetime tests, with a fixture plugin and no roles
-   yet;
-4. the command role, and `cmd/sh -plugin`;
-5. the observer role;
-6. a reference plugin in a language that is not Go, as the proof the
-   goal was met rather than described.
+1. **Done** (#740) — the design, this document;
+2. **Done** (#1017) — `internal/jsonrpc`, extracted from `internal/acp`
+   with no behavior change and `internal/acp` rewritten onto it;
+3. **Done** — `internal/plugin`: launch, the gate consultation, the
+   handshake, shutdown, and the lifetime tests;
+4. **Done** — the command role, and `cmd/sh -plugin`;
+5. the observer role — `interp.Sink` remoted, as bounded-buffer
+   notifications that drop rather than block, which `seq` makes honest;
+6. ~~a reference plugin in a language that is not Go~~ — **overtaken**.
+   Every fixture in `internal/plugin/testdata` and the plugin in
+   `cmd/sh/plugin_test.go` is a POSIX shell script, chosen for exactly
+   this reason: a fixture written in Go would test the host against a
+   peer built from the same message types, which is the one peer that
+   cannot check the "any language" claim. What is still owed is a
+   *documented, published* example rather than a test fixture, and per
+   the maintainer's "maybe a plugins repo so that they can be used" it
+   belongs outside this repository.
 
-`Closes #738` belongs on the last of those and on nothing before it.
+Steps 3 and 4 landed together, because a host with no role has no
+in-tree caller — the rule #804 applied when it shipped three seams and
+declined the fourth. `Closes #738` waits on step 5, which is the last
+thing in this document that is not yet true.

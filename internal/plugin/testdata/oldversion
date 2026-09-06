@@ -1,0 +1,11 @@
+#!/bin/sh
+# Speaks a protocol version this host does not know. A version mismatch is a
+# refusal and not a negotiation.
+while IFS= read -r line; do
+	id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+	case $line in
+	*'"method":"initialize"'*)
+		printf '%s\n' "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"protocolVersion\":99,\"name\":\"future\",\"commands\":[\"whatever\"]}}"
+		;;
+	esac
+done

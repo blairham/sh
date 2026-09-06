@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	. "github.com/blairham/sh/interp"
+	"github.com/blairham/sh/syntax"
 )
 
 // cshRedir is the vector these tests vary, with everything else answered so
@@ -180,6 +181,29 @@ func TestABadDuplicationTargetEndsTheShellOnlyOnABuiltin(t *testing.T) {
 			})
 			if got := strings.Contains(out, "after"); got != tc.wantAfter {
 				t.Errorf("out = %q, want the script to have carried on = %v", out, tc.wantAfter)
+			}
+		})
+	}
+}
+
+// `set -C` refuses `&>f` over a file that is there, exactly as it refuses a
+// plain `>f` — and the csh spelling inherits that by being the same operator
+// rather than a copy of it.
+//
+// Unanimous across the panel, so there is no axis: `>|` is the documented
+// override for `>` and there is no `>|&` anywhere to exempt this one.
+func TestNoclobberRefusesBothStreamsToOneFile(t *testing.T) {
+	for _, tc := range []struct{ name, src string }{
+		{"the ampersand spelling", `set -C; : > qq; true &>qq; printf "[%s]" "$?"`},
+		{"and the csh spelling", `set -C; : > qq; true >&qq; printf "[%s]" "$?"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			dg := Diagnostics{NoclobberRefusal: "%[1]s: cannot overwrite existing file"}
+			out, _ := runGrammar(t, tc.src, func(d *syntax.Dialect) { d.AmpersandRedirect = true },
+				cshRedir(dir, GreatAmpTargetNamesAFile, dg))
+			if out != "sh: qq: cannot overwrite existing file\n[1]" {
+				t.Errorf("out = %q, want the refusal and a status of 1", out)
 			}
 		})
 	}

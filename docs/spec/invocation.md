@@ -722,6 +722,47 @@ not saved.
 The front end is where this lives, and it has to be: the runner knows only
 whether the option is on, and the raw text belongs to whatever read it.
 
+### What it writes back when the input is wrong
+
+**The rule.** The shell writes back what it **read** before it says anything
+about it. That covers three shapes and they are one rule, measured unanimous
+2026-09-05 from a script file with `-v` on the invocation, both streams
+together and apart:
+
+| the input | what comes out |
+| --- | --- |
+| `echo one` / `fi` | `echo one`, its output, **`fi`**, then the syntax error |
+| `echo one` / `if true; then` | both lines, then the complaint about the input running out |
+| `echo one` / `cat <<END` / `body` | all three lines, then the here-document remark, then the body |
+
+The echo used to be driven by the logical lines the parser handed *back*, so a
+line the parser refused was never written at all and the complaint arrived
+alone (#772). The remark had the same shape from the other side: it was said
+as soon as it was known, which put it in front of the lines it was about.
+
+**How far it goes** is where the *reader* stopped, and that is not the line the
+dialect blames. An unterminated quote is blamed on the line it was opened on in
+bash and on the line after the input ended in dash and zsh, and all three write
+back every line they read:
+
+    echo one
+    cat "abc
+    echo three
+
+is three echoed lines in all three shells, with bash's complaint naming line 2.
+Where there *is* an offending token the walk stops on its line: `echo one` /
+`fi` / `echo three` echoes two lines and not three.
+
+**One shell reads further than that, and it is not modeled.** ksh93 takes its
+input in blocks and writes back everything it had taken, so `echo one` / `fi` /
+`echo three` echoes all three lines there, and a trailing blank line is echoed
+*before* the last command runs. The amount is a property of its buffer rather
+than of the language, so the corpus rows are shaped to put the failure on the
+last line, where the question does not arise. ksh93 also prefixes a syntax
+error with the line it had reached — `./s.sh: line 2: syntax error at line 3:`
+— but only when `set -v` was turned on from inside the script, which is the
+other reason those rows put the letter on the invocation.
+
 ### Which standard error it writes to
 
 **The rule.** Descriptor 2 **as the script has pointed it**, read at the moment
@@ -776,6 +817,9 @@ being asked for help (#580).
 ### Where it lives
 
 `driver`'s `sayVerbose`, the writer it is handed, and the position it carries.
+`executeLines` says the echo and the remarks together, in that order and in
+every branch, because "write back what was read before saying anything about
+it" is one rule and three places to get it wrong.
 The writer is `interp.Runner.Err` — the runner's own descriptor 2 — read afresh
 at every call, which is the whole of the rule above; `Shell.errf` is the other
 thing and is where a *diagnostic* goes, however the script has arranged its

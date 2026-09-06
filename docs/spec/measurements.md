@@ -4342,6 +4342,10 @@ grades it and nothing drift-checks it either, for the same reason.
 | `opt/set-v-echoes-the-tail-after-the-last-command` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` | `one` **2>** `echo one~~~# the end` |
 | `opt/set-v-writes-to-the-descriptor-the-script-points` | `cat <<END >&2~body~END~body~echo after~after` | `cat <<END >&2~body~END~body~echo after~after` | `cat <<END >&2~body~END~body~echo after~after` | `cat <<END >&2~body~END~body~echo after~after` | `cat <<END >&2~body~END~body~echo after~after` | `cat <<END >&2~body~END~body~echo after~after` |
 | `opt/set-v-follows-a-descriptor-that-moves` | `gone~echo back~back` **2>** `exec 2>/dev/null` | `gone~echo back~back` **2>** `exec 2>/dev/null` | `gone~echo back~back` **2>** `exec 2>/dev/null` | `gone~echo back~back` **2>** `exec 2>/dev/null` | `gone~echo back~back` **2>** `exec 2>/dev/null` | `gone~echo back~back` **2>** `exec 2>/dev/null` |
+| `opt/set-v-echoes-the-line-that-would-not-parse` | `one` **2>** `echo one~fi~<script>: 2: Syntax error: "fi" unexpected` *(status 2)* | `one` **2>** `echo one~fi~<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `fi'` *(status 2)* | `one` **2>** `echo one~fi~<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `fi'` *(status 2)* | `one` **2>** `echo one~fi~<script>: line 2: syntax error near unexpected token `fi'~<script>: line 2: `fi'` *(status 2)* | `one` **2>** `echo one~fi~<script>: syntax error at line 2: `fi' unexpected` *(status 3)* | `one` **2>** `echo one~fi~<script>:2: parse error near `fi'` *(status 1)* |
+| `opt/set-v-echoes-a-first-token-that-will-not-lex` | **2>** `"abc~echo two~<script>: 3: Syntax error: Unterminated quoted string` *(status 2)* | **2>** `"abc~echo two~<script>: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `"abc~echo two~<script>: line 1: unexpected EOF while looking for matching `"'` *(status 2)* | **2>** `"abc~echo two~<script>: line 1: unexpected EOF while looking for matching `"'~<script>: line 3: syntax error: unexpected end of file` *(status 2)* | **2>** `"abc~echo two~<script>: syntax error at line 1: `"' unmatched` *(status 3)* | **2>** `"abc~echo two~<script>:3: unmatched "` *(status 1)* |
+| `opt/set-v-echoes-input-that-ran-out` | `one` **2>** `echo one~if true; then~<script>: 3: Syntax error: end of file unexpected (expecting "fi")` *(status 2)* | `one` **2>** `echo one~if true; then~<script>: line 3: syntax error: unexpected end of file from `if' command on line 2` *(status 2)* | `one` **2>** `echo one~if true; then~<script>: line 3: syntax error: unexpected end of file from `if' command on line 2` *(status 2)* | `one` **2>** `echo one~if true; then~<script>: line 3: syntax error: unexpected end of file` *(status 2)* | `one` **2>** `echo one~if true; then~<script>: syntax error at line 3: `then' unmatched` *(status 3)* | `one` **2>** `echo one~if true; then~<script>:3: parse error near `\n'` *(status 1)* |
+| `opt/set-v-echoes-before-a-remark` | `one~body` **2>** `echo one~cat <<END~body` | `one~body` **2>** `echo one~cat <<END~body~~<script>: line 4: warning: here-document at line 2 delimited by end-of-file (wanted `END')` | `one~body` **2>** `echo one~cat <<END~body~~<script>: line 4: warning: here-document at line 2 delimited by end-of-file (wanted `END')` | `one~body` **2>** `echo one~cat <<END~body` | `one~body` **2>** `echo one~cat <<END~body` | `one~body` **2>** `echo one~cat <<END~body` |
 | `opt/set-o-verbose-echoes-what-is-read` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` | `before~after` **2>** `echo after` |
 | `opt/pipefail-appears-in-the-plus-o-listing` | *(no output, status 0)* | `pipefail` | `pipefail` | `pipefail` | *(no output, status 0)* | `pipefail` |
 | `opt/pipefail-turned-on-is-listed-on` | *(no output, status 0)* | `pipefail` | `pipefail` | `pipefail` | `pipefail` | `pipefail` |
@@ -4569,6 +4573,27 @@ grades it and nothing drift-checks it either, for the same reason.
   echo gone
   exec 2>&1
   echo back
+  ```
+- `opt/set-v-echoes-the-line-that-would-not-parse` — the shell writes back what it read before it complains about it, so the offending line comes out and *then* the syntax error. Unanimous, and it is the line rather than the whole input: the walk stops where the reader did. The wordings and statuses differ — 2, 2, 3 and 1 — and the order does not. The letter is on the invocation rather than in the script, because one shell prefixes a syntax error with the line it had reached and only when the option was turned on from inside
+  ```sh
+  echo one
+  fi
+  ```
+- `opt/set-v-echoes-a-first-token-that-will-not-lex` — the same rule where the parser has nothing at all to hand back — the *first* token of the input will not lex, so there is no logical line to drive an echo from. Both physical lines are still written back before the complaint, in all four; the line each of them blames is 1, 3, 1 and 3
+  ```sh
+  "abc
+  echo two
+  ```
+- `opt/set-v-echoes-input-that-ran-out` — the second face of the same rule, where there is no offending line to name: what was read runs to the end of the text and is written back before the complaint. Unanimous
+  ```sh
+  echo one
+  if true; then
+  ```
+- `opt/set-v-echoes-before-a-remark` — and for input the shell *accepted*: the here-document's lines are written back, then the one shell that remarks on a delimiter that never arrived says so, then the command's own output. The order is the same rule as the two rows above, which is why they are three rows and one fix. The body ends in a newline because the printer round-trip needs one — a body without it is printed with the delimiter attached to its last line
+  ```sh
+  echo one
+  cat <<END
+  body
   ```
 - `opt/set-o-verbose-echoes-what-is-read` — the long spelling of `set -v`: input is written back to stderr as it is read, and never the line that turned it on. From a file all four agree; a -c string is read differently — bash echoes it where dash and zsh do not — so the case pins the route every script uses
   ```sh

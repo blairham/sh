@@ -376,6 +376,25 @@ func TestWhatTheIgnoreOptionsSay(t *testing.T) {
 	}
 }
 
+// A namespace that reports the name unknown is not believed about its state.
+//
+// The two results are separate answers and the second is the one that decides:
+// a lookup saying "I do not have this name, and by the way it is on" is
+// contradictory, and the rule must stay off rather than take the half of the
+// answer that happens to be a bool. Nothing in the panel answers that way
+// today — zsh's namespace returns false for both when it does not have a name
+// — which is exactly why it needs a test: without one, dropping the `known`
+// check is invisible, and a mutation run said so.
+func TestAnUnknownNameIsNotBelievedAboutItsState(t *testing.T) {
+	r := newTestRunner(nil)
+	option := func(string) (bool, bool) { return true, false }
+	got := historyRulesFrom(zshishHistory, r.GetVar, option, r.MatchPattern)
+	if got.ignoreSpace || got.ignoreDups {
+		t.Errorf("a namespace reporting the name unknown turned on space=%v dups=%v",
+			got.ignoreSpace, got.ignoreDups)
+	}
+}
+
 // A dialect that names no options is not asked about any.
 //
 // The empty name must not reach the namespace: a lookup handed "" that

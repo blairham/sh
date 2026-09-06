@@ -105,6 +105,37 @@ type Client struct {
 	mu           sync.Mutex
 	running      map[string]*terminal
 	nextTerminal int
+
+	// What this client knows about the commands the agent ran. Two counts and
+	// no attempt to join them: see Commands.
+	asked     int
+	announced int
+}
+
+// Commands reports how many commands the agent asked this shell to run, and
+// how many it announced having run.
+//
+// Two counts rather than one answer, and the gap between them is the whole of
+// #786. `terminal/*` is the route by which a command an agent runs becomes a
+// command *we* start, through the gate, into the audit trail. An agent that
+// does not take it forks and execs in its own process, and no gate anywhere
+// sees the argv — which nothing in this repository can force, exactly as any
+// allowed exec is outside the boundary once it has started.
+//
+// Measured against the published adapters, that is not a corner case: asked in
+// as many words to run a shell command, with `terminal: true` advertised, two
+// of the three ran it themselves and called no client method at all.
+//
+// So both facts are counted and **neither is inferred from the other**. Asked
+// is `terminal/create` requests served, allowed or refused. Announced is tool
+// calls of kind `execute` the agent reported. There is no id joining an
+// agent's tool call to a terminal it asked us for, and inventing one is what
+// #719 already declined; a caller that wants to say something about the
+// difference says it about the two numbers.
+func (c *Client) Commands() (asked, announced int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.asked, c.announced
 }
 
 // Connect wires this client to an agent's streams.
@@ -164,11 +195,18 @@ func (c *Client) Handle(ctx context.Context, method string, params json.RawMessa
 
 // Notify takes the agent's session updates.
 func (c *Client) Notify(_ context.Context, method string, params json.RawMessage) {
-	if method != MethodSessionUpdate || c.Update == nil {
+	if method != MethodSessionUpdate {
 		return
 	}
 	var n SessionNotification
 	if err := json.Unmarshal(params, &n); err != nil {
+		return
+	}
+	// Counted before anything is done with it, and whether or not anybody is
+	// watching: what Commands reports must not depend on whether a caller
+	// wired Update, or the answer would change with the front end.
+	c.count(params)
+	if c.Update == nil {
 		return
 	}
 	// Decoded loosely, because the update union is wider than the part of it
@@ -181,6 +219,30 @@ func (c *Client) Notify(_ context.Context, method string, params json.RawMessage
 		n.Update = raw.Update
 	}
 	c.Update(n)
+}
+
+// count notes a tool call the agent announced for a command it ran.
+//
+// The announcement only — `tool_call` and not `tool_call_update` — so a
+// command whose status changes three times is one command. Decoded on its own
+// rather than out of the loose update above, because this reads two fields of
+// one variant and that one must keep handing the caller the bytes it was sent.
+func (c *Client) count(params json.RawMessage) {
+	var n struct {
+		Update struct {
+			SessionUpdate string `json:"sessionUpdate"`
+			Kind          string `json:"kind"`
+		} `json:"update"`
+	}
+	if err := json.Unmarshal(params, &n); err != nil {
+		return
+	}
+	if n.Update.SessionUpdate != UpdateToolCall || n.Update.Kind != KindExecute {
+		return
+	}
+	c.mu.Lock()
+	c.announced++
+	c.mu.Unlock()
 }
 
 // Initialize performs the handshake and returns what the agent claims.

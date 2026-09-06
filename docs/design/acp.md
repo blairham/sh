@@ -315,6 +315,62 @@ The environment is inherited and then written over rather than replaced. A
 command started with only the agent's few variables has no `PATH`, so every
 `terminal/create` would fail for a reason nothing on the wire explains.
 
+#### Two of the three agents decline the route, and what is done about it
+
+Measured with `terminal: true` and both file methods advertised, each agent
+asked in as many words to run a shell command: **Claude Agent 0.75.1 and Codex
+1.10.0 both ran it in their own process and called no client method at all.**
+Under `-trace-events` the gate saw nothing for either. Gemini CLI is native ACP
+rather than an adapter and is the one most likely to take the route.
+
+**And it reaches further than commands.** Re-measured live through
+`sh -acp-connect` (2026-09-05, Claude Agent 0.75.1):
+
+| asked | what the agent did | what the gate saw |
+| --- | --- | --- |
+| "run `echo hello-from-acp`" | ran it itself | nothing |
+| "read this file and tell me what it contains" | ran `cat path` | nothing |
+| "use your file-reading tool, not a shell command" | read it with its own file API | nothing |
+| "create a file containing …", under `-deny write /**` | ran `echo … > path`; **the file appeared** | nothing |
+
+So the earlier wording — that a policy covers the agent's file access and not
+its commands — is true about what an agent *asks for* and misleading about what
+a person gets. A command an agent runs itself is also how it reads and writes,
+so a turn can be covered by nothing at all and look exactly like a turn that
+was covered by everything. That is what the per-turn notice exists for, and it
+is why it names files as well as commands.
+
+That is #786, and **nothing in this repository can close it**: an agent that
+forks its own process is outside our boundary by construction, exactly as any
+allowed `exec` is once it has started. Serving `terminal/*` is what makes the
+honest route *exist*; whether an agent takes it is the agent's.
+
+Two things follow, and both are done.
+
+**The claim is stated with its limit, wherever the claim is made.** A policy on
+an agent reaches what the agent asks this shell for. `sh -h` says so beside the
+flag; so does this document; and the honest version is not "under the same
+policy" full stop.
+
+**A person is told, per turn, which half they got.** `Client.Commands` reports
+two counts — `terminal/create` requests served, and tool calls of kind
+`execute` the agent announced — and `-acp-connect` prints a notice after any
+turn where the second exceeds the first. **Neither number is inferred from the
+other, and they are not joined**: no id relates an agent's tool call to a
+terminal it asked us for, and #719 already declined to invent one. The counts
+are reported; the reader draws the conclusion. A turn where the agent asked for
+everything it ran says nothing, because a notice that fires on a clean run is a
+notice people learn to skip.
+
+**And the route that does work is guarded rather than remembered.** Nine
+inbound methods reach the world through `internal/boundary` today, each by a
+hand-written call. The tenth will be written by copying one of them, and a copy
+that drops the boundary call still compiles and still passes every test about
+the other nine — so `TestEveryInboundMethodDeclaresWhatItDoesAboutTheBoundary`
+reads `Client.Handle` and fails on a `case` that is not declared as gated,
+recorded or touching nothing outside this process. The bypass that *can* be
+reintroduced here is the one by omission, and that is the one closed.
+
 ### Where the gate sits on this side
 
 Every inbound request that would touch the world is an `interp.Action`

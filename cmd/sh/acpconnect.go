@@ -259,6 +259,7 @@ func talk(ctx context.Context, client *acp.Client, authMethod string, in *bufio.
 	}
 
 	for in.Scan() {
+		askedBefore, saidBefore := client.Commands()
 		stop, err := client.Prompt(ctx, session, in.Text())
 		if err != nil {
 			return fail1("session/prompt: %v", err)
@@ -266,11 +267,58 @@ func talk(ctx context.Context, client *acp.Client, authMethod string, in *bufio.
 		if stop != acp.StopEndTurn {
 			fmt.Fprintf(os.Stderr, "sh: turn ended: %s\n", stop)
 		}
+		asked, said := client.Commands()
+		fmt.Fprint(os.Stderr, commandCoverage(asked-askedBefore, said-saidBefore))
 	}
 	if err := in.Err(); err != nil && err != io.EOF {
 		return fail1("reading a prompt: %v", err)
 	}
 	return 0
+}
+
+// commandCoverage is what to tell a person about the half of this they did not
+// get, and it is empty whenever they got all of it.
+//
+// The claim `-acp-connect` makes is that a shell's policy reaches a coding
+// agent, and it does — for everything the agent *asks this shell for*. A
+// command it runs in its own process is its own fork and its own exec, and no
+// gate anywhere sees the argv. Nothing here can change that: an agent outside
+// our boundary is outside it in exactly the way any allowed exec is once it
+// has started.
+//
+// What can change is whether anyone is told, and the measurement says it must
+// be. Against Claude Agent 0.75.1, `-deny write /**` did not stop
+// `create a file … containing …`: the agent ran `echo … > path` in its own
+// process, the file appeared, and `-trace-events` printed nothing at all. The
+// same agent read a file by running `cat`. So the gap is not only "the
+// commands it runs" — a command an agent runs itself is also how it reads and
+// writes, which means a policy can cover *nothing* in a turn and look exactly
+// like one that covered everything.
+//
+// A person who read "under the same policy" should not have to discover that
+// from an absence in a trace.
+//
+// Both numbers are things this client saw, and neither is inferred from the
+// other — there is no id joining an agent's tool call to a terminal it asked
+// us for, and #719 already declined to invent one. So the counts are reported
+// and the reader draws the conclusion. Silence where the agent asked for at
+// least as many as it reported: there is nothing to warn about, and a notice
+// that fires on a clean run is a notice people learn to skip.
+func commandCoverage(asked, announced int) string {
+	if announced <= asked {
+		return ""
+	}
+	if asked == 0 {
+		return fmt.Sprintf(
+			"sh: the agent reported %d command(s) this turn and asked this shell to run none.\n"+
+				"sh: a command an agent runs in its own process passes no gate — nor do the\n"+
+				"sh: files that command reads and writes. The policy covered what it asked for.\n",
+			announced)
+	}
+	return fmt.Sprintf(
+		"sh: the agent reported %d command(s) this turn and asked this shell to run %d.\n"+
+			"sh: a command an agent runs in its own process passes no gate — nor do the\n"+
+			"sh: files that command reads and writes.\n", announced, asked)
 }
 
 // fixedAnswer settles every permission request the same way.

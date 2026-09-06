@@ -374,3 +374,50 @@ func TestNoTerminalMeansNoForm(t *testing.T) {
 		t.Error("a form hook was built with no terminal to draw it on")
 	}
 }
+
+// What a person is told about the half of the policy they did not get.
+//
+// The claim `-acp-connect` makes is that a shell's policy reaches a coding
+// agent, and #786 measured what that leaves out: an agent that runs commands in
+// its own process is one no gate can see, and two of the three published
+// adapters do exactly that. The notice exists so a person does not have to read
+// a trace to find out which half they have.
+func TestTheCoverageNoticeSaysWhichHalfOfThePolicyApplied(t *testing.T) {
+	cases := []struct {
+		name             string
+		asked, announced int
+		want             string
+	}{
+		{"a turn with no commands in it says nothing", 0, 0, ""},
+		{"everything it ran, it asked us to run", 3, 3, ""},
+		{"more asked than reported is still nothing to warn about", 3, 1, ""},
+		{"it ran everything itself", 0, 2, "asked this shell to run none"},
+		{"it asked for some of them", 1, 4, "asked this shell to run 1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := commandCoverage(tc.asked, tc.announced)
+			if tc.want == "" {
+				if got != "" {
+					t.Errorf("said %q, want silence", got)
+				}
+				return
+			}
+			if !strings.Contains(got, tc.want) {
+				t.Errorf("said %q, want it to contain %q", got, tc.want)
+			}
+			if !strings.Contains(got, "passes no gate") {
+				t.Errorf("said %q, and it has to say what the gap is", got)
+			}
+			// And the sharp half of it, which the live measurement forced: a
+			// command an agent runs itself is also how it reads and writes
+			// files, so a notice naming only "commands" would leave a person
+			// believing -deny still covered their files. It did not: measured,
+			// `-deny write /**` did not stop a file being created, because the
+			// agent ran `echo … > path` rather than asking us to write.
+			if !strings.Contains(got, "reads and writes") {
+				t.Errorf("said %q, and it has to say that files go the same way", got)
+			}
+		})
+	}
+}

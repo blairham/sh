@@ -79,6 +79,12 @@ first word that is not one of them belongs to the shell.
 	-acp-auth METHOD       sign in with one of the methods the agent offers
 	-highlight             color a quotation left open, while it is typed
 
+A policy on an agent reaches what the agent asks this shell for: the files it
+reads and writes, and the commands it asks us to run. A command it runs in its
+own process instead is its own fork and its own exec, and no gate sees it —
+two of the three published agents work that way today, so -acp-connect says
+after a turn how many commands it reported and how many it asked us for.
+
 Everything else — -c, -i, -s, a lone -, set options like -e — is read by the
 shared front end, exactly as each dialect binary reads it.
 `

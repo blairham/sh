@@ -75,6 +75,13 @@ func TestTheSetTestFlagDoesNotTripNounset(t *testing.T) {
 	if out != `[0][1][alive]` || st != 0 {
 		t.Errorf("under set -u = %q (status %d), want `[0][1][alive]` at 0", out, st)
 	}
+	// Through the flag group as well, where the check has a second home and
+	// the answer has to come first there too: `(P)` resolves to a name that
+	// is not set, and asking about it is still asking.
+	out, st = runZsh(t, dir, `set -u; v=nosuchvar; printf "[%s]" ${(P)+v}; printf "[alive]"`)
+	if out != `[0][alive]` || st != 0 {
+		t.Errorf("(P) under set -u = %q (status %d), want `[0][alive]` at 0", out, st)
+	}
 	out, st = runZsh(t, dir, `set -u; printf "[%s]" ${NOPE}; printf "[alive]"`)
 	if st == 0 || !strings.Contains(out, "NOPE") {
 		t.Errorf("the plain spelling = %q (status %d), want it fatal and naming NOPE", out, st)

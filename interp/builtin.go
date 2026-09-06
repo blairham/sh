@@ -470,14 +470,37 @@ func (r *Runner) unsetFunction(name string) int {
 		r.diagf("%s\n", Wording(d.UnsetBadFunctionName, "unset: %[1]s: invalid function name", name))
 		return 1
 	}
-	_, defined := r.funcs[name]
-	if !defined && r.ask(r.sem().UnsetFunctionReportsMissing, "`unset -f` naming a function that is not defined") {
-		r.diagf("%s\n", Wording(d.UnsetFunctionNotFound, "unset: %[1]s: not found", name))
-		return 1
+	fn := r.funcs[name]
+	if r.speaksForTheShell(fn) {
+		// The shell's own, so the script has no function of that name to
+		// remove and this is the "not defined" case rather than a removal
+		// (#1082). Every shell in the panel has `dirs`, `popd` and `pushd`
+		// as builtins, and in every one of them the name still works after
+		// `unset -f`: measured, bash is silent at 0 and zsh writes the same
+		// `no such hash table element` it writes for any name it does not
+		// hold, at 1. That is the field below and not a new one — a name
+		// this shell provides is exactly a name the script never defined.
+		fn = nil
+	}
+	if fn == nil {
+		if r.ask(r.sem().UnsetFunctionReportsMissing, "`unset -f` naming a function that is not defined") {
+			r.diagf("%s\n", Wording(d.UnsetFunctionNotFound, "unset: %[1]s: not found", name))
+			return 1
+		}
+		return 0
 	}
 	delete(r.funcs, name)
 	delete(r.funcFiles, name)
 	delete(r.exportedFuncs, name)
+	if prelude := r.preludeFuncs[name]; prelude != nil {
+		// A redefinition took the voice away and removing it gives the name
+		// back: the shells with the builtin uncover it when the function
+		// shadowing it goes, so `pushd() { echo mine; }; unset -f pushd;
+		// pushd /tmp` pushes in both of them. Reconstructing the namespace
+		// boundary by hand, because a dialect written as shell has one table
+		// where they have two.
+		r.funcs[name] = prelude
+	}
 	return 0
 }
 

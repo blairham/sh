@@ -7899,6 +7899,26 @@ echo after`,
 		Why:     "the shape of the option parser: 2 where a bad letter is an invalid *number* with an unlocated usage line after it, 1 where it is a bad option, 127 where there is no `dirs`. The same split decides whether `dirs -lv` is two letters or one malformed index",
 	},
 	{
+		ID: "dirstack/unset-the-function-name-of-a-builtin", Category: "builtins",
+		Snippet: `cd /; unset -f pushd; echo "u=$?"; pushd /tmp; echo "st=$?"`,
+		Why:     "whether `unset -f` can take a name the shell itself provides. It cannot, in any of the six: `pushd` is a builtin in the two that have it, so there is no function of that name to remove and the name still pushes afterwards. What splits is only what the *unset* says — silence at 0 in five, and in zsh the same `no such hash table element` it writes for any name it does not hold, at 1. Ours deleted the declaration and lost the directory stack for the rest of the session at a silent 0, and the failure surfaced later as `command not found` from an unrelated line (#1082)",
+	},
+	{
+		ID: "dirstack/unset-a-function-that-shadowed-a-builtin", Category: "builtins",
+		Snippet: `cd /; pushd() { echo mine; }; unset -f pushd; echo "u=$?"; pushd /tmp; echo "st=$?"`,
+		Why:     "the other half, and the reason the row above is not a refusal. A function of the script's own is removable by the same rule that makes it the script's — and removing it *uncovers* the builtin, so both shells that have one push. Silent at 0 in all six, zsh included, because the name really was a function. The two names have no relationship in a shell where one is a builtin, and every relationship in a shell where the dialect is written as shell, which is what this pins",
+	},
+	{
+		ID: "dirstack/unset-a-shadowing-function-twice", Category: "builtins",
+		Snippet: `cd /; pushd() { echo mine; }; unset -f pushd; unset -f pushd; echo "u=$?"; pushd /tmp; echo "st=$?"`,
+		Why:     "the sharpest of the three, because it separates three outcomes a status alone cannot. The second `unset -f` is answered as a name that is *not* a function — silence at 0 in five and the hash-table complaint at 1 in zsh, the same answer as the first row — which is only true if the first removal gave the name back to the shell rather than keeping the script's function or deleting the name for good. `pushd /tmp` after it still pushes",
+	},
+	{
+		ID: "dirstack/unset-the-whole-directory-stack-by-name", Category: "builtins",
+		Snippet: `cd /; unset -f dirs popd pushd; echo "u=$?"; pushd /tmp; dirs; echo "st=$?"`,
+		Why:     "the shape a real rc file writes: `unset -f` over a list of names, defensively, before defining any. A widely used zsh plugin manager runs exactly this line. All three names survive it in the two shells that have them and the stack works, and the operands are answered one at a time — zsh writes three complaints and hands 1 on, the rest are silent at 0",
+	},
+	{
 		ID: "type/f-skips-or-prints-the-function", Category: "builtins",
 		Snippet: `f() { :; }; type -f f; echo "st=$?"`,
 		Why:     "one letter, two opposite meanings: two shells use -f to leave functions out of the search — so a name that is only a function is not found — and one turns it around and prints the definition. The fourth has no options and answers -f as a name",

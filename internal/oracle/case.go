@@ -8839,6 +8839,11 @@ exit 7`,
 		Why:     "what is loaded before a script asks for anything: `zsh/main` alone, one name per line and 0. Not `zsh/complete` and `zsh/zle` as well — those are linked into the binary and `zmodload -e` says 1 for both, which is why this row is the bare listing rather than a claim about what is compiled in. Nobody else has the builtin at all",
 	},
 	{
+		ID: "zmodload/loading-the-module-a-plugin-manager-asks-for-first", Category: "builtins",
+		Snippet: `zmodload zsh/zutil; echo "st=$?"; zmodload -e zsh/zutil; echo "e=$?"`,
+		Why:     "the line at the top of a real plugin manager, and the one it stops at when the answer is wrong: `zmodload zsh/zutil` is silence and 0 in zsh, and the module is then loaded, which is what `-e` asking afterwards is for. Two questions rather than one because a shell that reported 0 and recorded nothing would pass the first",
+	},
+	{
 		ID: "zmodload/the-listing-as-the-commands-that-would-make-it", Category: "builtins",
 		Snippet: `zmodload -L; echo "st=$?"`,
 		Why:     "`-L` writes the same set as the commands that would load it — `zmodload zsh/main` — which is the shape a script re-plays and therefore the shape worth pinning",
@@ -8897,6 +8902,126 @@ exit 7`,
 		ID: "zmodload/loading-by-feature", Category: "builtins",
 		Snippet: `zmodload -F zsh/zutil; echo "st=$?"`,
 		Why:     "`-F` names the features to act on and, given none, loads the module whole: silence and 0 in zsh. A feature here is a builtin or a parameter the shell either has or has not, and `+zparseopts` cannot conjure one, so `-F` without `-l` is named as missing — the row records the difference rather than hiding it behind a 0 this shell has not earned",
+	},
+	// `zparseopts` and `zformat`, the two of `zsh/zutil`'s other three
+	// builtins that can be learned by running the real one (#1058). What is
+	// recorded is the part a caller reads by index and the part that decides
+	// what a function passes on — because this builtin's failure mode is not
+	// a crash but a caller handed plausible variables at status 0.
+	//
+	// `zregexparse` is deliberately not here. The manual gives it one
+	// sentence, it needs the completion system's own state to do anything,
+	// and a corpus row about a builtin that answers 2 to every invocation
+	// would record nothing.
+	{
+		ID: "zparseopts/an-argument-in-an-element-of-its-own", Category: "builtins",
+		Snippet: `set -- -a val rest; zparseopts -D a:=x; echo "st=$? x=[${(j:|:)x}] argv=[${(j:|:)@}]"`,
+		Why:     "the spec grammar's load-bearing half: a single colon puts the option's argument in an element of its own, so `$x[2]` is the argument. `-D` takes what was matched out of `$@` and leaves the rest, which is the other half of what makes this usable as a function's option parser. Nobody else has the builtin",
+	},
+	{
+		ID: "zparseopts/an-argument-joined-to-the-option", Category: "builtins",
+		Snippet: `set -- -a val r; zparseopts -D a:-=x; echo "st=$? x=[${(j:|:)x}]"`,
+		Why:     "and `:-` puts it in the *same* element — `(-aval)` where `a:` gives `(-a val)`. One character apart in the description and a different array shape out, which is why a parser that read the forms loosely would hand a caller the next option where it expected an argument",
+	},
+	{
+		ID: "zparseopts/an-optional-argument-reaches-the-next-word", Category: "builtins",
+		Snippet: `set -- -a rest more; zparseopts -D a::=x; echo "st=$? x=[${(j:|:)x}] argv=[${(j:|:)@}]"`,
+		Why:     "the surprise in `::`: optional does not mean `in the same word`. A following word is taken as the argument and joined on — `(-arest)` — unless it begins with a `-`. A reading that required the same word leaves `rest` in `$@`, which the script then treats as its first operand",
+	},
+	{
+		ID: "zparseopts/a-mandatory-argument-takes-whatever-is-next", Category: "builtins",
+		Snippet: `set -- -a -- z; zparseopts -D a:=x; echo "st=$? x=[${(j:|:)x}] argv=[${(j:|:)@}]"`,
+		Why:     "where mandatory and optional part company: a mandatory argument is taken from the next word whatever it looks like, `--` included, so `(-a --)` is the answer and not a stop. The pair with the `::` row above is the whole of the difference",
+	},
+	{
+		ID: "zparseopts/a-missing-argument-changes-nothing", Category: "builtins",
+		Snippet: `set -- -a; zparseopts -D a:=x; echo "st=$? x=[${(j:|:)x}] argv=[${(j:|:)@}]"`,
+		Why:     "an option without its required argument aborts the whole parse: status 1, the array untouched and `$@` untouched, rather than a half-filled array a caller would read as a successful parse. The status is the part a script can act on and the two empties are the part it cannot see",
+	},
+	{
+		ID: "zparseopts/only-the-last-occurrence-without-a-plus", Category: "builtins",
+		Snippet: `set -- -a v1 -a v2; zparseopts -D a:=x; echo "st=$? x=[${(j:|:)x}]"; set -- -a v1 -a v2; zparseopts -D a+:=x; echo "plus=[${(j:|:)x}]"`,
+		Why:     "`+` is the difference between an option that accumulates and one that does not, side by side so the pair is one row: without it only the last appearance survives and with it every one does. A parser that always accumulated would give a caller two values where it asked for one, at 0",
+	},
+	{
+		ID: "zparseopts/two-descriptions-sharing-one-array", Category: "builtins",
+		Snippet: `set -- -a -b c; zparseopts -D -a arr a b; echo "st=$? arr=[${(j:|:)arr}] argv=[${(j:|:)@}]"`,
+		Why:     "`-a` names the default array, and several descriptions may write into one — in command-line order. This is what says the `keep only the last` pruning is per *description* and not per array: a per-array rule answers `(-b)` here and looks perfectly reasonable doing it",
+	},
+	{
+		ID: "zparseopts/parsing-stops-where-the-descriptions-run-out", Category: "builtins",
+		Snippet: `set -- x -a y; zparseopts -D a=x; echo "st=$? x=[${(j:|:)x}] argv=[${(j:|:)@}]"; set -- x -a y; zparseopts -D -E a=x; echo "every=$? x=[${(j:|:)x}] argv=[${(j:|:)@}]"`,
+		Why:     "where a parse stops decides what a function hands on to something else: at the first word no description covers, unless `-E`. Both readings in one row, because a parser that ran to the end of `$@` would collect flags meant for a command further down the line and the passing half would look identical",
+	},
+	{
+		ID: "zparseopts/a-double-dash-always-stops-it", Category: "builtins",
+		Snippet: `set -- -a -- -b; zparseopts -D a=x b=y; echo "st=$? x=[${(j:|:)x}] y=[${(j:|:)y}] argv=[${(j:|:)@}]"; set -- -a -- -b; zparseopts -D -E a=x b=y; echo "every=$? y=[${(j:|:)y}] argv=[${(j:|:)@}]"`,
+		Why:     "`--` stops the parse with `-E` as much as without it — the letter changes only whether `-D` removes it. `-b` is described and still not collected either way, which is the row's point: the stop is about the word and not about the descriptions",
+	},
+	{
+		ID: "zparseopts/one-dash-is-added-to-the-name-as-written", Category: "builtins",
+		Snippet: `set -- --foo=v r; zparseopts -D -- -foo:=x; echo "st=$? x=[${(j:|:)x}] argv=[${(j:|:)@}]"`,
+		Why:     "a description names the option without its leading `-`, so a GNU-style `--foo` is described as `-foo`. And there is no `=` handling: the argument of `--foo=v` is the three characters `=v`, which a parser borrowing getopt's habits would silently strip",
+	},
+	{
+		ID: "zparseopts/the-longest-name-wins-among-flags", Category: "builtins",
+		Snippet: `set -- --foobar; zparseopts -D -- -foobar=y -foo=x; echo "st=$? x=[${(j:|:)x}] y=[${(j:|:)y}]"; set -- --foobar; zparseopts -D -- -foobar=y -foo:=x; echo "arg=$? x=[${(j:|:)x}] y=[${(j:|:)y}]"`,
+		Why:     "two overlapping descriptions, and which wins depends on whether either takes an argument: among flags the longest name wins whichever order they were written in, and once one takes an argument the last one written wins instead. The two halves differ in one colon and give opposite answers",
+	},
+	{
+		ID: "zparseopts/flags-cluster-in-one-word", Category: "builtins",
+		Snippet: `set -- -ab r; zparseopts -D a=x b=y; echo "st=$? x=[${(j:|:)x}] y=[${(j:|:)y}] argv=[${(j:|:)@}]"`,
+		Why:     "`-ab` is two options, each written into its own array under its own name. A parser matching whole words would leave both arrays empty and `$@` untouched, at 0",
+	},
+	{
+		ID: "zparseopts/the-association-and-what-dash-k-keeps", Category: "builtins",
+		Snippet: `typeset -A o; o[z]=1; set -- -a v; zparseopts -D -K -A o -- a:; echo "st=$? ${(kv)o}"; x=(old); set -- -b; zparseopts -D -K a=x b=y; echo "keep=$? x=[${(j:|:)x}]"; x=(old); set -- -b; zparseopts -D a=x b=y; echo "reset=$? x=[${(j:|:)x}]"`,
+		Why:     "`-A` puts the options and their arguments in an association keyed by the option, and `-K` decides what a call leaves behind — an association keeps its individual elements, an array is kept whole when none of its descriptions matched and emptied otherwise. The two `x=(old)` runs differ only in the letter and are the whole of what it means",
+	},
+	{
+		ID: "zparseopts/the-letters-do-not-stack", Category: "builtins",
+		Snippet: `zparseopts -DQ a=x; echo "st=$?"; zparseopts -D a; echo "nowhere=$?"`,
+		Why:     "`-DQ` is not `-D -Q`: the letters cannot be stacked, because a stack is indistinguishable from a description of the GNU-style long option `--DQ` — so the word becomes a description and complains about having nowhere to put what it finds, which is the same complaint a bare `a` gets. A builtin that stacked its letters would answer `bad option` here and look more helpful while being wrong about the syntax",
+	},
+	{
+		ID: "zparseopts/nothing-to-parse-against", Category: "builtins",
+		Snippet: `set -- -a; zparseopts -D; echo "st=$?"`,
+		Why:     "no descriptions at all is `missing option descriptions` and 1, where a bare `zparseopts` doing nothing quietly would be the plausible answer. The builtin's name is in the location, which is where this shell puts it",
+	},
+	{
+		ID: "zformat/substitution-with-a-field-width", Category: "builtins",
+		Snippet: `zformat -f R "[%10c][%-10c][%5.2c]" c:hi; echo "st=$? [$R]"`,
+		Why:     "the whole of `-f`'s width grammar in one string: a minimum pads to the right, a negative minimum pads to the left, and a maximum truncates before the minimum pads. Bracketed because every one of those decisions is invisible in the text and visible only in the spaces",
+	},
+	{
+		ID: "zformat/a-percent-naming-nothing-is-text", Category: "builtins",
+		Snippet: `zformat -f R "a%xb%5x%%" c:1; echo "st=$? [$R]"`,
+		Why:     "the specifier set belongs to the caller, so a `%` sequence naming no specification is written back exactly as it stands, width and all — not an error and not an empty string. `%%` beside it is the one sequence this builtin owns",
+	},
+	{
+		ID: "zformat/the-ternary-evaluates-its-value", Category: "builtins",
+		Snippet: `zformat -f R "%3(c.yes.no)" c:3; echo "st=$? [$R]"; zformat -f R "%2(c.y.n)" "c:1+1"; echo "expr=$? [$R]"; zformat -f R "%2(c.y.n)" "c:x"; echo "word=$? [$R]"`,
+		Why:     "`%n(c.true.false)` compares the test number with the specification's value read as an *arithmetic expression*, which `1+1` against a test of 2 is the proof of — a number parse answers the false text there. A word is worth zero, which is the shell's own reading and not a failure",
+	},
+	{
+		ID: "zformat/dash-f-capital-asks-about-width-instead", Category: "builtins",
+		Snippet: `zformat -F R "[%(c.y.n)][%3(c.y.n)][%3(d.y.n)][%-3(d.y.n)]" c:abc d:abcd; echo "st=$? [$R]"`,
+		Why:     "`-F` swaps the ternary's question from `equals the test number` to `is longer than it`, and a negative test number reverses that into `no longer than`. Both boundaries are here at exactly three characters, because a strict comparison and a loose one differ nowhere else",
+	},
+	{
+		ID: "zformat/aligning-a-list", Category: "builtins",
+		Snippet: `zformat -a A " -- " "foo:" "x:y" "longer:baz" "nocolon" "a\:b"; echo "st=$?"; printf '[%s]\n' "$A[@]"`,
+		Why:     "`-a` lines the separators up, and the rule worth pinning is which strings *count*: one with no colon is left alone and one whose right half is empty loses its colon, and neither takes part in deciding the column. So the separator sits at `longer`'s width and `foo` never widened it. a backslash-escaped colon is the last row and the one that says the escape is undone even where nothing split",
+	},
+	{
+		ID: "zformat/an-expression-that-will-not-evaluate", Category: "builtins",
+		Snippet: `zformat -f R "%0(c.y.n)" "c:1/0"; echo "st=$? [$R]"`,
+		Why:     "a ternary's value is an expression, and one that will not *evaluate* is not a zero: zsh reports `division by zero` located as the shell rather than as the builtin — the expression failed, not the command holding it — and stops the script, so the `echo` never runs and `$R` is never written. A builtin that read it as 0 would choose the true text and hand its caller a plausible answer to a question that failed",
+	},
+	{
+		ID: "zformat/exactly-one-option-word", Category: "builtins",
+		Snippet: `zformat -f -F R "%(c.y.n)" c:; echo "st=$?"; zformat -fa R x; echo "stack=$?"; zformat -Z R x; echo "bad=$?"`,
+		Why:     "the part a reading of the synopsis gets wrong: exactly one option word is read and everything after it is data. `-f -F R …` makes `-F` the parameter name and complains about the format's *specification*, `-fa` is not an option word at all, and only a lone unknown letter is `invalid option`. Three different sentences for what looks like one kind of mistake",
 	},
 	{
 		ID: "zstyle/stores-and-lists-what-it-is-given", Category: "builtins",

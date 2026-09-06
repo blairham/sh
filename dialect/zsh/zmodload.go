@@ -40,11 +40,33 @@ import (
 // features that are missing, which is the same line a person would have to
 // find anyway.
 //
-// It also means the gate opens by itself. `zsh/zutil` refuses today because
-// three of its four builtins are missing; the day `zparseopts`, `zformat` and
-// `zregexparse` are implemented, `zmodload zsh/zutil` starts succeeding with
-// no change here — because the table says what the module *is*, and the shell
-// answers whether it has it.
+// **A missing feature holds a module shut when it is a parameter, and does
+// not when it is a builtin.** That split is measured rather than tidy, and it
+// is this project's worst-failure-mode rule applied to modules (#1058).
+//
+// A missing *builtin* fails loudly, by name, at its own call site:
+// `command not found: zregexparse`, on the line that wrote it. Nothing is
+// silently wrong in between, so the module refusing as well buys a script
+// nothing and costs it everything — `zmodload zsh/zutil || return 1` is the
+// first line of a real plugin manager, and holding it shut over a builtin
+// that file never calls stops the file for a feature it does not use. Counted
+// on this machine: `zi.zsh` names `zparseopts` and `zformat` five times
+// between them and `zregexparse` not once.
+//
+// A missing *parameter* fails silently. `${#functions}` on a shell without
+// `$functions` is `0` at status 0, which is a plausible answer to a different
+// question and reaches the caller as data rather than as a diagnostic. That is
+// exactly the failure this builtin was written to prevent, so a module short
+// of a parameter still refuses and still says which.
+//
+// The other three kinds — a condition, a function and a math function — have
+// no registry to ask, so they are treated as a parameter is: missing until
+// something can answer for them.
+//
+// It also means the gate opens by itself. The day a module's parameters
+// exist, `zmodload` starts succeeding for it with no change here — because
+// the table says what the module *is*, and the shell answers whether it has
+// it.
 //
 // The feature lists are measured, one module at a time, with
 // `zmodload -lF <module>` after loading it in a real zsh. They are the
@@ -112,12 +134,11 @@ var zmodloadFeatures = map[string][]string{
 // zmodloadHasFeature reports whether this shell already provides one feature.
 //
 // A builtin and a parameter are asked of the runner, so the answer moves when
-// the shell does rather than when somebody remembers to edit a list. The
-// other three kinds — a condition, a function and a math function — have no
-// registry to ask, so they count as missing and are named as missing. That is
-// the honest answer today and it is not a guess in the wrong direction: a
-// module counted as loaded on the strength of a feature nobody can find is
-// exactly the silent success this builtin exists to avoid.
+// the shell does rather than when somebody remembers to edit a list. The other
+// three kinds — a condition, a function and a math function — have no registry
+// to ask, so they count as missing: a module counted as loaded on the strength
+// of a feature nobody can find is the silent success this builtin exists to
+// avoid.
 func zmodloadHasFeature(r *interp.Runner, feature string) bool {
 	kind, name, ok := strings.Cut(feature, ":")
 	if !ok {
@@ -132,13 +153,34 @@ func zmodloadHasFeature(r *interp.Runner, feature string) bool {
 	return false
 }
 
-// zmodloadMissing is the features of a module this shell does not have, in
-// the order the table names them — which is the order zsh's own `-lF` listing
-// writes, so a refusal reads against that listing.
+// zmodloadHolds reports whether a feature's absence should keep its module
+// from loading.
+//
+// A builtin's does not and everything else's does — see the note at the top of
+// this file. The question is deliberately about the *kind* of feature and not
+// about which ones happen to be implemented today, because the reason is about
+// how each kind fails and not about how far along the shell is: a builtin
+// nobody has written is `command not found` on the line that calls it however
+// many of its neighbors exist, and a parameter nobody has written is `0`.
+func zmodloadHolds(feature string) bool {
+	kind, _, ok := strings.Cut(feature, ":")
+	return !ok || kind != "b"
+}
+
+// zmodloadMissing is the features of a module this shell does not have *and
+// will not load without*, in the order the table names them — which is the
+// order zsh's own `-lF` listing writes, so a refusal reads against that
+// listing.
+//
+// A builtin the shell has not got is absent from this list on purpose and is
+// still absent from the shell: `zmodload zsh/zutil` succeeds and
+// `zregexparse` is `command not found` on the line that calls it. The two
+// statements are consistent because the second one is the loud half — see
+// zmodloadHolds.
 func zmodloadMissing(r *interp.Runner, module string) []string {
 	var missing []string
 	for _, f := range zmodloadFeatures[module] {
-		if !zmodloadHasFeature(r, f) {
+		if zmodloadHolds(f) && !zmodloadHasFeature(r, f) {
 			_, name, _ := strings.Cut(f, ":")
 			missing = append(missing, name)
 		}

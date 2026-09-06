@@ -21,12 +21,17 @@
 //     the boundary it is enforcing, which was the objection to resolving
 //     first.
 //
-//   - There is no time-of-check-to-time-of-use window. A descriptor pins an
-//     object. Replacing the link afterwards changes which object the *name*
-//     reaches and cannot change which object this descriptor holds, so what
-//     was checked and what is used are the same thing — which resolve-then-
-//     open could never promise, because between its resolution and its open
-//     the name is free to mean something else.
+//   - There is no time-of-check-to-time-of-use window on the *object*. A
+//     descriptor pins one. Replacing the link afterwards changes which object
+//     the *name* reaches and cannot change which object this descriptor
+//     holds, so what was checked and what is used are the same thing — which
+//     resolve-then-open could never promise, because between its resolution
+//     and its open the name is free to mean something else.
+//
+//     The descriptor does not pin the object's *name*, and a rule matches
+//     names. For an object with one name there is nothing in that gap; for an
+//     object with two, Darwin will answer with either — see Path, and the
+//     hard-link subsection of docs/design/sandboxing.md for what it costs.
 //
 // # What this is not
 //
@@ -35,9 +40,18 @@
 // that are both real names for one object are still two answers: a hard link
 // and a bind mount are out of scope by construction, and deliberately, since
 // closing them means matching on identity rather than on paths and that is
-// the OS backend docs/design/sandboxing.md points at. Nor does it reach a
-// child process: an allowed exec makes its own system calls and nothing here
-// sees them.
+// the OS backend docs/design/sandboxing.md points at.
+//
+// On Darwin that scope is not held by construction but by luck, which #1029
+// found and TestTwoNamesForOneObjectAndWhetherTheAnswerHolds now measures:
+// which of an object's names comes back is not fixed, so a hard link is
+// sometimes caught and — the direction that is not merely a flake — a hard
+// link in an allowed place sometimes carries an *other* name past the check,
+// symbolic links included. The design page has the numbers and says why the
+// fix is a decision about what a Gate is asked rather than a change here.
+//
+// Nor does it reach a child process: an allowed exec makes its own system
+// calls and nothing here sees them.
 //
 // # Why this is a package and not two functions in interp
 //
@@ -77,6 +91,16 @@ import (
 
 // Path is the kernel's name for the object behind an open descriptor, and
 // whether there is one at all.
+//
+// *A* name, not *the* name, and the distinction is a platform's rather than
+// this function's. An object with one name has one answer everywhere. An
+// object with several has one answer on Linux — the name the descriptor was
+// opened through, which /proc holds per descriptor — and on Darwin any of
+// them, because F_GETPATH reads a single name off the vnode and any lookup
+// re-stamps it. So on Darwin this can answer differently for a descriptor
+// that has not moved, and a caller comparing the answer to a name must not
+// read a difference as "the name went elsewhere" for an object it knows to
+// have more than one. Measured both ways in the test named above.
 //
 // The false return is not a failure to be feared: it means the object has no
 // name in the filesystem — a pipe, a socket, a device the kernel does not

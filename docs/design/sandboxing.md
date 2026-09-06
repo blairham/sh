@@ -272,11 +272,11 @@ call site will be written by copying one of the nine.
 Open, by construction and not by omission:
 
 - **Hard links and bind mounts.** Both names are real names for one
-  object, and the kernel answers with whichever the descriptor was
-  opened by, so there is no second name to notice. Closing these means
+  object, so there is no second name to notice. Closing these means
   matching on *identity* rather than on paths, which is the operating-
-  system backend below. `TestAHardLinkIsNotCovered` asserts the current
-  behavior so that closing it has to come with a change to this page.
+  system backend below. On Linux the gap is exactly this shape and no
+  worse. On Darwin it is worse, it is not a decision anybody made, and
+  the subsection below is what it actually costs.
 - **`stat`, `[ -f x ]` and the rest of the probes.** A probe is answered
   without opening anything, and opening a path in order to check a
   question about it would be a heavier access than the one asked about:
@@ -287,6 +287,62 @@ Open, by construction and not by omission:
   `allow exec` is already total in the sense this page opens with.
 - **Platforms other than Darwin and Linux**, where there is no way to
   ask the kernel and the gate matches the name alone, as it always did.
+
+#### On Darwin, which of an object's names comes back is not fixed
+
+The sentence this section rests on — the kernel answers with the name
+the descriptor was opened by — is exact on Linux and false on Darwin,
+and #1029 is how that was found: `TestAHardLinkIsNotCovered` failed on
+a macOS runner by observing an open **refused** where the recorded
+limit says it is allowed through.
+
+The mechanism is the difference between the two answers. Linux answers
+from the dentry the descriptor was opened through, and an inode's names
+are separate dentries, so the answer is the name that was opened and
+nothing afterwards moves it. Darwin's `F_GETPATH` answers from the
+vnode, which carries *one* name for an object however many the
+filesystem holds, and a lookup of any of them re-stamps it. So on
+Darwin the answer is not a property of the descriptor.
+
+Measured, and `internal/opened`'s
+`TestTwoNamesForOneObjectAndWhetherTheAnswerHolds` is the measurement
+made to run:
+
+| | Darwin 25.5.0 | Linux 6.8 |
+| --- | --- | --- |
+| a `stat` of the object's other name changes the answer for a descriptor **already open** | 500 / 500 | 0 / 3000 |
+| the same descriptor asked twice with nothing in between | 1 / 500 | 0 / 3000 |
+| a fresh open of a hard link answers with the *other* name | 6 / 5000 | 0 / 3000 |
+
+Two consequences, and the second is the one that is not a flake:
+
+- **The limit is not reliably a limit.** A hard link whose two names
+  straddle a rule is judged by whichever name the kernel happens to be
+  holding, so the open is sometimes refused. That is a red check on an
+  unrelated change: `interp` measured it 18 runs in 3000 with no load,
+  and no fixture layout removes it — two names in one directory
+  measures 0.06% against 0.12%, which is half of nothing rather than
+  none. `TestAHardLinkIsNotReliablyCovered` therefore asserts the limit
+  on the platforms where the answer is the descriptor's, and on Darwin
+  asserts the half that does not depend on the coin: that the name the
+  gate judged was a real name of the object, that the operator's record
+  says which, and that the script was told only the name it wrote.
+
+- **A hard link weakens the check for the object's other names too,
+  including the symbolic-link bypass this section exists to have
+  closed.** Give a denied file a second hard link in an allowed
+  directory and point a symbolic link at the denied name, and
+  `cat < link` read the file **188 times in 600** while an unprivileged
+  `stat` loop named the allowed link — no writes, no privilege the
+  opener does not have, and #703 is open again for as long as the loop
+  runs. `internal/boundary` shares `internal/opened` and so shares
+  this.
+
+Closing it means the identity matching this page already points at, and
+that is a decision about what a `Gate` is asked rather than a fix to
+make here: an object the kernel cannot name unambiguously is a third
+answer, and neither allowing nor refusing it silently is right. Filed
+separately rather than settled in a flake fix.
 
 ### The shell's own scaffolding is recorded, never refused
 

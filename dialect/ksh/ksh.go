@@ -612,20 +612,20 @@ func Diagnostics() interp.Diagnostics {
 		FdNumberOverLimit: "bad file unit number [Invalid argument]",
 		// A target that expanded to nothing gets neither the reason nor the
 		// "create" wording, whichever direction the redirection was.
-		EmptyRedirectTarget:  "%[1]s: cannot open",
+		EmptyRedirectTarget: "%[1]s: cannot open",
 		// A word after `>&` or `<&` that is not a descriptor is refused as a
 		// bad unit number, and a word that came to nothing takes the same
 		// "cannot open" the ordinary empty target does.
 		DuplicationTargetIsNotADescriptor: "%[2]s: bad file unit number",
 		EmptyDuplicationTarget:            "%[2]s: cannot open",
-		CannotCreate:         "%[1]s: cannot create [%[2]s]",
-		NoclobberRefusal:     "%[1]s: file already exists [%[2]s]",
-		ArithFailureStatus:   1,
-		ArithInfinity:        "inf",
-		ArithNotANumber:      "nan",
-		ArithFloatDigits:     15,
-		ArithFloatKeepsPoint: false,
-		SelectPrompt:         "#? ",
+		CannotCreate:                      "%[1]s: cannot create [%[2]s]",
+		NoclobberRefusal:                  "%[1]s: file already exists [%[2]s]",
+		ArithFailureStatus:                1,
+		ArithInfinity:                     "inf",
+		ArithNotANumber:                   "nan",
+		ArithFloatDigits:                  15,
+		ArithFloatKeepsPoint:              false,
+		SelectPrompt:                      "#? ",
 		// A script operand that names nothing is a command that is not there,
 		// worded and numbered as one — and one that is there and will not
 		// open gets the bracketed reason ksh93 puts around every errno, at

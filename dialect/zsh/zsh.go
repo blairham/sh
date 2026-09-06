@@ -606,6 +606,8 @@ func Semantics() interp.Semantics {
 	// engine's parameter table, refused as unimplemented rather than
 	// approximated.
 	s.BareLocalListing = interp.BareLocalListsEveryParameter
+	// The same table for the other word, which is what zsh writes for it.
+	s.BareTypesetListing = interp.BareLocalListsEveryParameter
 	// The listing is `name=value` in the same shape dash and ksh93 write,
 	// with the quoting bash uses — measured against all six panel members
 	// from the same three values. Real zsh's listing also carries its special
@@ -723,15 +725,15 @@ func Diagnostics() interp.Diagnostics {
 		// The reason first and the name after it, which is zsh's shape and
 		// nobody else's. Lowercased, which LowercaseReason already says.
 		// Same either way — zsh does not distinguish opening from creating.
-		CannotOpen:               "%[2]s: %[1]s",
+		CannotOpen: "%[2]s: %[1]s",
 		// zsh names nobody: `cat <&qq` and `cat <&""` are both `file number
 		// expected`, so the wording uses neither verb and the empty case has
 		// nothing of its own to say. The writing side never reaches this —
 		// GreatAmpTarget sends it to the file.
 		DuplicationTargetIsNotADescriptor: "file number expected",
-		CannotCreate:             "%[2]s: %[1]s",
-		NotABuiltin:              "no such builtin: %[1]s",
-		CommandStringParsedWhole: true,
+		CannotCreate:                      "%[2]s: %[1]s",
+		NotABuiltin:                       "no such builtin: %[1]s",
+		CommandStringParsedWhole:          true,
 		// Reading a program from standard input, a line that does not parse
 		// is reported and the next line is read anyway. This shell alone,
 		// and this route alone: the same program in a file stops it.

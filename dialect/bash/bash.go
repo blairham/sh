@@ -569,7 +569,7 @@ func Diagnostics() interp.Diagnostics {
 		// preset is.
 		DuplicationTargetIsNotADescriptor: "%[2]s: ambiguous redirect",
 		EmptyDuplicationTarget:            "%[1]s: Bad file descriptor",
-		JobStarted:        "[%[1]d] %[2]d",
+		JobStarted:                        "[%[1]d] %[2]d",
 		// The one line all three members of the panel's bash write when an
 		// interactive shell has no terminal to run the monitor on: 5.3.15 and
 		// 3.2.57 as `bash`, and 3.2 run as `sh`, which writes it with its own

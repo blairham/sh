@@ -1404,6 +1404,18 @@ type Semantics struct {
 	// rather than a flag. See BareLocalListingForm.
 	BareLocalListing BareLocalListingForm
 
+	// BareTypesetListing is what `typeset` or `declare` with no operands
+	// and no letters writes.
+	//
+	// An axis of its own even though it shares the form type with
+	// BareLocalListing, because the
+	// shells that have both words do not answer the two the same: zsh writes
+	// the identical parameter table either way, and bash's bare `declare` is
+	// every variable the shell holds rather than the running function's
+	// locals. Only zsh's answer is a value this form already carries, so the
+	// others stay unanswered and are refused by name rather than guessed at.
+	BareTypesetListing BareLocalListingForm
+
 	// SetListing is what `set` with no arguments writes — see
 	// SetListingForm. All four list, but not the same things: one follows
 	// the variables with every defined function, and one lists special

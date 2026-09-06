@@ -4,6 +4,8 @@
 package interp
 
 import (
+	"math"
+	"strconv"
 	"strings"
 
 	"github.com/blairham/sh/syntax"
@@ -13,7 +15,7 @@ import (
 // so the set escaping has any effect on. Escaping is what carries "this text
 // was quoted, match it literally" into the matcher; a string holding none of
 // these escapes to itself.
-const patternMeta = `*?[\()`
+const patternMeta = `*?[\()<`
 
 // escapePatternMeta marks every metacharacter in text as ordinary.
 //
@@ -21,6 +23,10 @@ const patternMeta = `*?[\()`
 // dialect reads groups: without escaping them a `(b)` arriving from a variable
 // became a group in the shell that does not re-read an expansion as a pattern,
 // so `case b in $p` matched.
+//
+// `<` joined them for the dialect with numeric ranges, where a quoted `"<->"`
+// is four ordinary characters and an expanded one is too: measured,
+// `p="<->"; [[ 1 = $p ]]` does not match in zsh.
 //
 // They are escaped even where they are *not* metacharacters, and that is not
 // an oversight: an escaped ordinary character is that character, so the two
@@ -162,6 +168,11 @@ type patternOpts struct {
 	// a field rather than a return value because matchHere recurses, and
 	// threading a second result through every branch obscured the matching.
 	bad *bool
+	// numericRange reads `<n-m>` as a run of digits whose value falls in the
+	// range. Its own field rather than a spelling of `group`, because the
+	// two dialect answers are independent — the shell that has bare groups
+	// happens to be the one with ranges, and neither implies the other.
+	numericRange bool
 	// fold compares letters without case. Not a dialect answer but a
 	// run-time one — GlobFoldsCase and MatchFoldsCase — which is why the two
 	// call sites that honor an option set it and the rest leave it off: the
@@ -194,6 +205,9 @@ func matchHere(p, s string, o patternOpts) bool {
 	for len(p) > 0 {
 		if body, quant, rest, ok := splitGroup(p, o); ok {
 			return matchGroup(body, quant, rest, s, o)
+		}
+		if lo, hi, rest, ok := splitNumericRange(p, o); ok {
+			return matchNumericRange(lo, hi, rest, s, o)
 		}
 		switch p[0] {
 		case '*':
@@ -247,6 +261,94 @@ func matchHere(p, s string, o patternOpts) bool {
 		}
 	}
 	return s == ""
+}
+
+// unbounded is the bound a `<n-m>` leaves out — `<2->` has no upper one and
+// `<-9>` no lower — and is not a value any side can otherwise take, because
+// the digits a range is written with are never negative.
+const unbounded = -1
+
+// splitNumericRange peels a `<n-m>` off the front of a pattern.
+//
+// The shape the parser admitted is re-read here rather than carried, because
+// the same text arrives from places the parser never saw: a pattern held in a
+// variable is a pattern in the shell that has ranges, so the matcher has to
+// recognize one in a plain string.
+//
+// A bound too large to hold is not a range at all, and the text stays
+// literal. Real zsh reports `number truncated after 19 digits` and fails the
+// match; refusing to read it as a range fails the same match without
+// inventing a diagnostic, which is the honest half of the answer.
+func splitNumericRange(p string, o patternOpts) (lo, hi int64, rest string, ok bool) {
+	if !o.numericRange || p == "" || p[0] != '<' {
+		return 0, 0, "", false
+	}
+	i := 1
+	lo, i, ok = readBound(p, i)
+	if !ok {
+		return 0, 0, "", false
+	}
+	if i >= len(p) || p[i] != '-' {
+		return 0, 0, "", false
+	}
+	i++
+	hi, i, ok = readBound(p, i)
+	if !ok {
+		return 0, 0, "", false
+	}
+	if i >= len(p) || p[i] != '>' {
+		return 0, 0, "", false
+	}
+	return lo, hi, p[i+1:], true
+}
+
+// readBound reads one side of a range: a run of digits, or none at all for
+// the side that is left open. It fails only on digits that do not fit.
+func readBound(p string, i int) (bound int64, next int, ok bool) {
+	start := i
+	for i < len(p) && isDigit(p[i]) {
+		i++
+	}
+	if i == start {
+		return unbounded, i, true
+	}
+	v, err := strconv.ParseInt(p[start:i], 10, 64)
+	if err != nil {
+		return 0, i, false
+	}
+	return v, i, true
+}
+
+// matchNumericRange matches a run of digits whose value is in the range, and
+// then whatever follows it.
+//
+// Every length is tried, shortest first, because only what comes after can
+// say where the number ends: `<1-10>0` matches `100` by stopping the range at
+// `10`. Leading zeros are part of the run and not of the value — `007` is 7,
+// which is why `[[ 007 = <1-10> ]]` matches.
+//
+// A subject too large to hold saturates rather than failing. It is above
+// every upper bound and below no lower one, which is the answer real zsh
+// gives: `[[ 99999999999999999999 = <1-> ]]` matches there and
+// `[[ 99999999999999999999 = <1-5> ]]` does not.
+func matchNumericRange(lo, hi int64, rest, s string, o patternOpts) bool {
+	for k := 1; k <= len(s) && isDigit(s[k-1]); k++ {
+		v, err := strconv.ParseInt(s[:k], 10, 64)
+		if err != nil {
+			v = math.MaxInt64
+		}
+		if lo != unbounded && v < lo {
+			continue
+		}
+		if hi != unbounded && v > hi {
+			// Every longer run is larger still, so nothing is left to try.
+			break
+		}
+		if matchHere(rest, s[k:], o) {
+			return true
+		}
+	}
+	return false
 }
 
 // splitGroup peels a group off the front of a pattern.
@@ -511,10 +613,11 @@ func isDigit(c byte) bool { return c >= '0' && c <= '9' }
 // matchPatternR.
 func (r *Runner) patternOpts(pattern string) patternOpts {
 	return patternOpts{
-		caret:      r.caretNegates(pattern),
-		bracket:    BracketLiteral,
-		group:      r.dialect().PatternAlternation,
-		quantified: r.readsQuantifiedGroups(false),
+		caret:        r.caretNegates(pattern),
+		bracket:      BracketLiteral,
+		group:        r.dialect().PatternAlternation,
+		quantified:   r.readsQuantifiedGroups(false),
+		numericRange: r.dialect().NumericRangePattern,
 	}
 }
 

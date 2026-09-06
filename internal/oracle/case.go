@@ -5849,6 +5849,36 @@ echo unreachable`,
 		Why:     "one operand, one expansion, however many elements it is applied to: the mark file holds a single x in every shell with arrays. The alternative reading is not visible in the fields — both spellings print the same two — and shows only in how many times the word's side effects fired, which is what makes it worth a file rather than an assertion about output",
 	},
 	{
+		ID: "pat/a-numeric-range-is-any-number", Category: "pattern matching", SyntaxError: true,
+		Snippet: `[[ 1 = <-> ]]; echo "st=$?"; [[ x = <-> ]]; echo "st=$?"`,
+		Why:     "the gate a plugin manager's whole file sits behind — `[[ $1 = <-> && … ]]` — and a `<` where four of the panel read only a redirection. It matches a run of digits and nothing else, so the second half is what says it is a pattern rather than a truth. bash's row is three lines because a conditional operator's refusal is followed by the offending token and the source line, which is the older gap `cond/a-pattern-operand-may-start-with-a-group` records; dash has no `[[ ]]` at all and tries to open a file called `-`",
+	},
+	{
+		ID: "pat/a-numeric-range-has-four-shapes", Category: "pattern matching", SyntaxError: true,
+		Snippet: `case 42 in <1-100>) echo in;; esac; case 200 in <1-100>) echo in;; *) echo out;; esac; case 5 in <6->) echo up;; *) echo notup;; esac; case 5 in <-4>) echo down;; *) echo notdown;; esac`,
+		Why:     "`<n-m>`, `<n->`, `<-m>` and the bare `<->` are one operator with either bound left out, and the comparison is on the *value*: the range is the whole of what distinguishes it from four ordinary characters. Written as `case` arms rather than conditions so that what the other four say is their ordinary syntax error rather than the three-line conditional one",
+	},
+	{
+		ID: "pat/a-numeric-range-compares-values-not-text", Category: "pattern matching", SyntaxError: true,
+		Snippet: `case 007 in <1-10>) echo seven;; *) echo no;; esac; case 100 in <1-10>0) echo backtrack;; *) echo no;; esac; case 12 in <-><->) echo split;; *) echo no;; esac`,
+		Why:     "leading zeros belong to the run of digits and not to the number, so `007` is 7; and the run's length is decided by what follows it, which is why `<1-10>0` matches `100` and two ranges in a row split `12` between them. A matcher that took the longest run it could would fail both",
+	},
+	{
+		ID: "pat/a-quoted-numeric-range-is-four-characters", Category: "pattern matching",
+		Snippet: `[[ 1 = "<->" ]] && echo hit || echo miss; [[ "<->" = "<->" ]] && echo hit || echo miss; p="<->"; [[ 1 = $p ]] && echo hit || echo miss`,
+		Why:     "the same per-span quoting that decides whether `a*` is a pattern decides whether a range is one, and the shell that has ranges is also the one that does not re-read an expansion as a pattern — so the third answer is `miss` there for a reason unrelated to the first two. This is the case that keeps the fix from being `a `<` is always a range`, and it parses everywhere because the quotes take the `<` out of the grammar's hands",
+	},
+	{
+		ID: "pat/a-numeric-range-in-a-case-arm", Category: "pattern matching", SyntaxError: true,
+		Snippet: `case 42 in <->) echo num;; *) echo other;; esac; case abc in <->) echo num;; *) echo other;; esac`,
+		Why:     "the same pattern where a `case` arm stands, which is a different production from the condition's operand and had to be measured on its own — dash reports a word where it wanted `)` and the rest report the `<`",
+	},
+	{
+		ID: "pat/a-numeric-range-against-the-filesystem", Category: "pattern matching", SyntaxError: true,
+		Snippet: `touch 1 2 10 007 21 22 abc; echo <->; echo <2-9>; echo 2<->; echo <->zzz; echo after`,
+		Why:     "the whole of the expansion half in one row: a range is matched per component and sorted with everything else, the digits in front of one are part of the word rather than a file descriptor — `2<->` names `21` and `22` and is not a redirection of descriptor 2 — and a miss is the ordinary unmatched-pattern answer, which in this shell stops the command, so `after` never runs. ksh93's cell is the second finding here and is not this change's: it *parses* `echo <->` as a redirection from a file called `-` where we refuse the `;` after it, which is a gap in the ksh grammar rather than in the range",
+	},
+	{
 		ID: "exec/lines-run-as-they-are-read", Category: "command language", SyntaxError: true,
 		Script:  true,
 		Snippet: "echo one\n{ fi; }\necho three\n",

@@ -126,6 +126,10 @@ func Semantics() interp.Semantics {
 	// `monitor off` — zsh disagreeing with itself rather than an answer to
 	// this.
 	s.InteractiveMonitorNeedsATerminal = interp.Yes
+	// And it announces both ends of a job on that route: measured on
+	// `-i script.sh` through a pseudo-terminal, `[1] <pid>` as the job
+	// starts and `[1]  + done       sleep 0.3` as it ends.
+	s.InteractiveScriptAnnouncesJobs = interp.Yes
 	// Measured: `echo $-` reports `569X` under -c, a script file and
 	// standard input alike — letters from zsh's own single-letter option
 	// namespace, which shares almost nothing with the other shells'. The

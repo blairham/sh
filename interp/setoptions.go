@@ -264,6 +264,45 @@ func (r *Runner) SetInteractiveMonitor(hasTerminal bool) {
 	}
 }
 
+// SetInteractiveJobNotices gives this shell somebody to tell about its jobs
+// because it is an interactive one, which is what a front end that has read
+// `-i` says on a route that draws no prompt.
+//
+// Exported for the front end and separate from JobControl for the reason
+// SetInteractiveMonitor is separate from setMonitor: the field is a fact the
+// front end states, and this is a question the dialect answers. A prompt
+// still sets JobControl outright — every shell in the panel announces a job
+// to a person typing at it, so there is nothing there to ask.
+//
+// Only ever turns it on, and only on the one route it was measured for, and
+// only where the monitor is already running. The route and the monitor are
+// both the Runner's own, so nothing has to be handed in: the front end has
+// already said where the program came from and already asked for the monitor.
+//
+// Call it after SetInteractiveMonitor, which is what settles the gate.
+//
+// Whether `-i -c` announces is a separate question with a different split and
+// is not decided here — see Semantics.InteractiveScriptAnnouncesJobs.
+func (r *Runner) SetInteractiveJobNotices() {
+	// Read rather than `ask`ed, for the reason the monitor's answer is read:
+	// this runs once at startup, so an unanswered axis would complain ahead
+	// of every `-i script.sh` under a preset that has not chosen, including
+	// the scripts that never start a job. An unanswered field reads as the
+	// quiet answer, which is the intersection here.
+	// The monitor first, and it is a gate rather than a coincidence. Measured
+	// on `-i script.sh` with no terminal anywhere: dash and zsh, which leave
+	// the monitor off there, say nothing about the job either, and ksh93,
+	// which runs it without one, still announces both ends. So the notice
+	// rides on the monitor, and the axis is what the one dialect that runs a
+	// monitor and stays quiet anyway is for.
+	if !r.monitor {
+		return
+	}
+	if r.Route == RouteScriptFile && r.sem().InteractiveScriptAnnouncesJobs == Yes {
+		r.JobControl = true
+	}
+}
+
 // setMonitor is `set -m`, the one request in the table a dialect can refuse:
 // two of the panel tie job control to the terminal, and this runner only has
 // one when a front end said so (JobControl).

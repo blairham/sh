@@ -291,15 +291,9 @@ come from.
 
 #### What is *not* claimed here
 
-Two things measured on the same route and deliberately left alone, because each
-is a question of its own.
-
-**The announcement.** With a terminal, ksh93 and zsh announce a background job
-as it starts and bash and dash do not — though bash announces one at a prompt.
-That is `Runner.JobControl` rather than the monitor, and the two split
-differently on this route, so turning both on together would give bash an
-announcement no bash makes. The front end sets the monitor here and leaves
-`JobControl` to the prompt.
+Two things measured on the same route. The first is a question of its own and
+is #893; the second is a shell contradicting itself. The announcement, which
+was the third, has its own section below.
 
 **The remark.** bash and dash both say something when an interactive shell
 cannot have job control — bash `cannot set terminal process group (…):
@@ -312,6 +306,102 @@ be a corpus case.
 readers report. With a terminal it puts `m` in `$-` and announces its jobs
 while `set -o` still lists `monitor off`. Ours is consistent across all three
 readers, which matches zsh on two of them.
+
+### The announcement splits where the monitor does not
+
+The monitor is unanimous on `-i script.sh` with a terminal. **What the shell
+says about the job is not**, and this is where the panel comes apart.
+
+Measured 2026-09-05 through a pseudo-terminal, scratch `HOME` and scratch
+`HISTFILE`, on `sh -i script.sh` running
+
+```
+echo one
+sleep 0.3 &
+echo two
+sleep 1.2
+echo three
+```
+
+| shell | the job starting | the job ending |
+| --- | --- | --- |
+| bash 5.3.15 | — | — |
+| bash 3.2.57 | — | — |
+| bash 3.2 as `sh` | — | — |
+| dash | — | `[1] + Done                       sleep 0.3` |
+| ksh93u+ | `[1]	<pid>` | `[1] +  Done                    sleep 0.3 &` |
+| zsh 5.9.2 | `[1] <pid>` | `[1]  + done       sleep 0.3` |
+
+So `Runner.JobControl` cannot follow the monitor here: three shells have
+somebody to tell on this route and bash has nobody. That is
+`Semantics.InteractiveScriptAnnouncesJobs` — bash no · dash yes · ksh93 yes ·
+zsh yes — and dash's blank first column is the *other* axis,
+`AnnouncesBackgroundJob`, which it alone answers no. Both are read, and dash is
+why they are two fields.
+
+#### It is not about where the commands come from
+
+The obvious reading of bash's silence — that a shell announces a job only to
+somebody typing at it — is wrong, and the grid is what rules it out. The same
+script on four interactive routes, same panel, same date, `$-` read from
+inside:
+
+| shell | `-i script.sh` | `-i` at a terminal | `-i < script` | `-i -c` |
+| --- | --- | --- | --- | --- |
+| bash 5.3.15 | — · — <br> `himBH` | start · end <br> `himBHs` | start · end <br> `himBHs` | start · — <br> `himBHc` |
+| bash 3.2.57 | — · — <br> `himB` | start · end <br> `himBH` | start · end <br> `himBH` | start · end <br> `himBHc` |
+| bash 3.2 as `sh` | — · — <br> `himB` | start · end <br> `himBH` | start · end <br> `himBH` | start · end <br> `himBHc` |
+| dash | — · end <br> `mi` | — · end <br> `smi` | — · end <br> `smi` | — · — <br> `mi` |
+| ksh93u+ | start · end <br> `imBE` | start · end <br> `imsBE` | start · end <br> `imsBE` | start · end <br> `icmsBE` |
+| zsh 5.9.2 | start · end <br> `569XZim` | start · end <br> `569XZims` | — | start · end <br> `569XZim` |
+
+`-i < script` puts the program on a **pipe**: there is no terminal to read
+commands from, and bash announces both anyway. `-i -c` draws no prompt at all,
+and bash announces the start there too. bash is quiet on exactly one
+interactive route, the one whose program is a **named file**, which is why the
+axis names the route rather than the terminal.
+
+The `-i -c` column is a different split — bash, ksh93 and zsh announce and dash
+does not — and so it is a different axis, deliberately not taken here. The zsh
+`-i < script` cell is empty because that invocation does not finish: zsh draws
+its prompt and waits, and nothing was measured rather than something guessed
+at.
+
+#### The notice rides on the monitor
+
+Measured on the same route with **no terminal anywhere**, so the monitor is
+off in every shell but one:
+
+| shell | monitor | the job starting | the job ending |
+| --- | --- | --- | --- |
+| bash 5.3.15 | off | — | — |
+| bash 3.2.57 | off | — | — |
+| bash 3.2 as `sh` | off | — | — |
+| dash | off | — | — |
+| ksh93u+ | **on** | `[1]	<pid>` | `[1] +  Done                    sleep 0.3 &` |
+| zsh 5.9.2 | off | — | — |
+
+dash and zsh, which say something about the job *with* a terminal, say nothing
+without one; ksh93, which needs no terminal for the monitor, announces both
+ends without one. So the notice is not a second question about the terminal —
+it is gated on the monitor the shell is already running, and the axis exists
+for the one dialect that runs a monitor and stays quiet anyway.
+
+That is why `Runner.SetInteractiveJobNotices` reads the monitor rather than
+taking a terminal, and why it has to be called after `SetInteractiveMonitor`.
+
+#### Where the notice goes, and when
+
+**To standard error, between commands.** Measured on the same route with the
+two writable streams separated: dash and ksh93 both write the `Done` row to
+standard error and neither writes anything to standard output — the stream a
+prompt already writes its own notices to.
+
+It lands between the command the job outlived and the command after it, and
+**also after the last command when there is none**: `sleep 0.3 &` followed by
+`sleep 1.2` and nothing else still prints the row in dash, ksh93 and zsh. So
+the front end reports after each line rather than before the next one, which
+is the only placement that has a last time.
 
 #### What the corpus cannot say about this
 

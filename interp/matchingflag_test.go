@@ -77,6 +77,12 @@ func TestTheMatchingFlagSubstitutesWhatThePatternTook(t *testing.T) {
 		{"with the uppercasing flag", `a=(f1 f22); printf "[%s]" "${(MU@)a:#f2*}"`, "[F22]"},
 		{"with the lowercasing one, which runs after the match", `a=(f1 f22); printf "[%s]" "${(ML@)a:#F2*}"`, "[]"},
 		{"written twice it is written once", `v=hello; printf "[%s]" "${(MM)v#hel}"`, "[hel]"},
+		// An `M` that is not a flag is not this flag. The letter has to be
+		// read from the flag group and not from the expansion's text, and
+		// both of the places it can otherwise appear are here: the parameter
+		// name and the pattern.
+		{"an M in the parameter name is not the flag", `M=hello; printf "[%s]" "${(U)M#h}"`, "[ELLO]"},
+		{"nor an M in the pattern", `v=hello; printf "[%s]" "${(U)v#M}"`, "[HELLO]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runGrammar(t, tc.src, selectingWithFlags, nil)

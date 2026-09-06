@@ -168,3 +168,50 @@ func TestADeclarationOutsideAFunctionRecordsNothing(t *testing.T) {
 		t.Errorf("got %q status %d, want no entry for an exported name with no value", out, st)
 	}
 }
+
+func TestADeclarationWithoutAValueTellsNoChildAboutTheName(t *testing.T) {
+	// The dialect that considers a name declared without a value to be set
+	// reads it as empty and still tells no command about it. Every listing
+	// spells the two the same way, so a child is the only place the
+	// difference shows.
+	const probe = `typeset -x FOO; echo "read=[${FOO-UNSET}]"; ` +
+		`/usr/bin/env | grep '^FOO=' || echo "(none)"`
+	out, st := axisRun(t, probe, func(s *Semantics) {
+		s.DeclaredNameWithoutValueIsEmpty = Yes
+		s.DeclareOptions = "x"
+	})
+	if st != 0 || out != "read=[]\n(none)\n" {
+		t.Errorf("got %q status %d, want the name read as empty and no entry", out, st)
+	}
+	// `=` on the same line is an assignment and hands over an empty entry.
+	out, st = axisRun(t, `typeset -x FOO=; /usr/bin/env | grep '^FOO=' || echo "(none)"`,
+		func(s *Semantics) {
+			s.DeclaredNameWithoutValueIsEmpty = Yes
+			s.DeclareOptions = "x"
+		})
+	if st != 0 || out != "FOO=\n" {
+		t.Errorf("got %q status %d, want the empty assignment handed over", out, st)
+	}
+	// And an assignment afterwards is an assignment too.
+	out, st = axisRun(t, `typeset -x FOO; FOO=later; /usr/bin/env | grep '^FOO=' || echo "(none)"`,
+		func(s *Semantics) {
+			s.DeclaredNameWithoutValueIsEmpty = Yes
+			s.DeclareOptions = "x"
+		})
+	if st != 0 || out != "FOO=later\n" {
+		t.Errorf("got %q status %d, want the later value handed over", out, st)
+	}
+	// The declaration's record goes away with the scope that made it.
+	out, st = axisRun(t,
+		`export FOO=out; f() { typeset -x FOO; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f; `+
+			`/usr/bin/env | grep '^FOO='`,
+		func(s *Semantics) {
+			s.DeclaredNameWithoutValueIsEmpty = Yes
+			s.DeclareOptions = "x"
+			s.LocalInheritsTheExportAttribute = Yes
+			s.TypesetLocalNeedsKeywordFunction = No
+		})
+	if st != 0 || out != "(none)\nFOO=out\n" {
+		t.Errorf("got %q status %d, want the outer name exported again on return", out, st)
+	}
+}

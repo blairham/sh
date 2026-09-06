@@ -638,6 +638,7 @@ func biUnset(r *Runner, _ context.Context, args []string) int {
 		delete(r.exported, name)
 		delete(r.Arrays, name)
 		delete(r.AssocArrays, name)
+		delete(r.declaredEmpty, name)
 		// Recorded as well as deleted: a name that came from the environment
 		// is not in Vars to begin with, and deleting nothing left it visible
 		// to every lookup — `unset PATH` did not clear PATH.

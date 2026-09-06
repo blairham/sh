@@ -476,6 +476,15 @@ type Runner struct {
 	// something assigns it again.
 	removed map[string]bool
 
+	// declaredEmpty are names a *declaration* gave a value to, in the
+	// dialect that considers a name declared without one to be set. The
+	// shell reads such a name as empty and no child is told about it, which
+	// is a distinction only a real child can see: `local -x FOO` and `local
+	// -x FOO=` list identically in the shell that makes them differ, and
+	// hand a command nothing and an empty entry respectively. Cleared by
+	// any assignment, by `unset`, and by the scope going away.
+	declaredEmpty map[string]bool
+
 	// aliases is the table `alias` and `unalias` keep. Substitution happens
 	// when a line is parsed, which is the other half of the feature and lives
 	// in the parser rather than here; the two meet at [Runner.ExpandingAlias].
@@ -2420,9 +2429,17 @@ func (r *Runner) environ() []string {
 	for k, v := range r.Vars {
 		// Only exported names reach a command's environment; the rest are
 		// the shell's own.
-		if r.isExported(k) {
-			out = append(out, k+"="+v)
+		if !r.isExported(k) {
+			continue
 		}
+		if r.declaredEmpty[k] {
+			// Declared rather than assigned, so the name has no value of
+			// its own and an exported name with no value reaches no child
+			// in any shell measured — including the one whose declaration
+			// makes the shell itself read it as empty.
+			continue
+		}
+		out = append(out, k+"="+v)
 	}
 	for k, v := range r.hiddenExports {
 		out = append(out, k+"="+v)
@@ -2557,6 +2574,10 @@ type scope struct {
 	// an environment value the script had taken away — or forgetting one it
 	// had not.
 	removedBefore map[string]bool
+	// declaredEmptyBefore is the same for whether the name's value had come
+	// from a declaration rather than from an assignment. See
+	// Runner.declaredEmpty.
+	declaredEmptyBefore map[string]bool
 	// savedAssoc shadows the associative table the same way, attribute and
 	// all: what comes back on exit is whether the name was associative as
 	// much as what it held.
@@ -2740,6 +2761,10 @@ func (r *Runner) setVarAs(name, value string, form assignForm) {
 		// Noted rather than compared: see optindAssigned.
 		r.optindAssigned = true
 	}
+	// An assignment gives the name a value of its own, whatever a
+	// declaration had left there. declareEmpty records the flag *after*
+	// calling here, which is what lets one function do both.
+	delete(r.declaredEmpty, name)
 	r.Vars[name] = value
 }
 

@@ -6604,6 +6604,7 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/valueless-local-shadowing-an-imported-name` | `read=[dumb]~TERM=dumb` | `read=[UNSET]~TERM=dumb` | `read=[UNSET]~TERM=dumb` | `read=[UNSET]~(none)` | `read=[dumb]~TERM=dumb` **2>** `<shell>: local: not found` | `read=[]~(none)` |
 | `declare/valueless-local-shadowing-a-callers-local` | `FOO=mid` | `FOO=mid` | `FOO=mid` | `(none)` | `FOO=bar` **2>** `<shell>: local: not found~<shell>: local: not found` | `(none)` |
 | `declare/valueless-local-over-an-unexported-name` | **2>** `<shell>: 1: local: -x: bad variable name` *(status 2)* | `(none)` | `(none)` | `(none)` | `(none)` **2>** `<shell>: local: not found` | `(none)` |
+| `declare/a-declaration-without-a-value-exports-nothing` | `(none)~(none)` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `(none)~BAR=` | `(none)~BAR=` | `FOO=~BAR=` | `(none)~BAR=` | `(none)~BAR=` |
 | `declare/local-shadowing-an-imported-name` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=dumb~TERM=dumb` **2>** `<shell>: local: not found` | `(none)~TERM=dumb` |
 | `declare/typeset-local-shadowing-an-exported-name` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `FOO=baz~FOO=bar` | `(none)~FOO=bar` | `(none)~FOO=bar` |
 | `declare/integer-attribute-evaluates-a-later-assignment` | `[5+2]` **2>** `<shell>: 1: typeset: not found` | `[7]` | `[7]` | `[7]` | `[7]` | `[7]` |
@@ -6687,6 +6688,10 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/valueless-local-over-an-unexported-name` — the other side of it: `-x` is the local's own attribute and says nothing about the name it shadows, so a shadowed name nothing exported reaches no child — an exported name with no value is told to nobody in any shell measured
   ```sh
   FOO=bar; f() { local -x FOO; env | grep '^FOO=' || echo "(none)"; }; f
+  ```
+- `declare/a-declaration-without-a-value-exports-nothing` — declared and assigned-empty are the same to every listing and not to a child: the shell that considers a name declared without a value to be *set* still tells no command about it, where `=` on the same line hands over an empty entry. Found by the case above, which had this shell exporting an empty value under a name it should say nothing about
+  ```sh
+  typeset -x FOO; env | grep '^FOO=' || echo "(none)"; typeset -x BAR=; env | grep '^BAR=' || echo "(none)"
   ```
 - `declare/local-shadowing-an-imported-name` — the same question where the name arrived in the environment rather than being exported by hand, which is the route that made the two answers one: an imported name is exported by having been imported, so the local either inherits that or does not, and the split is the same either way
   ```sh

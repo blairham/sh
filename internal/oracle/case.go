@@ -5314,6 +5314,11 @@ echo unreachable`,
 		Why:     "the other side of it: `-x` is the local's own attribute and says nothing about the name it shadows, so a shadowed name nothing exported reaches no child — an exported name with no value is told to nobody in any shell measured",
 	},
 	{
+		ID: "declare/a-declaration-without-a-value-exports-nothing", Category: "declarations",
+		Snippet: `typeset -x FOO; env | grep '^FOO=' || echo "(none)"; typeset -x BAR=; env | grep '^BAR=' || echo "(none)"`,
+		Why:     "declared and assigned-empty are the same to every listing and not to a child: the shell that considers a name declared without a value to be *set* still tells no command about it, where `=` on the same line hands over an empty entry. Found by the case above, which had this shell exporting an empty value under a name it should say nothing about",
+	},
+	{
 		ID: "declare/local-shadowing-an-imported-name", Category: "declarations",
 		Snippet: `f() { local TERM=changed; env | grep '^TERM=' || echo "(none)"; }; f; env | grep '^TERM='`,
 		Why:     "the same question where the name arrived in the environment rather than being exported by hand, which is the route that made the two answers one: an imported name is exported by having been imported, so the local either inherits that or does not, and the split is the same either way",

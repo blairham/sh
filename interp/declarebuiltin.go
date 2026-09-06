@@ -394,6 +394,13 @@ func (r *Runner) integerValue(text string) (string, bool) {
 func (r *Runner) declareEmpty(name string) {
 	if r.ask(r.sem().DeclaredNameWithoutValueIsEmpty, "a declaration without a value setting the name") {
 		r.setVar(name, "")
+		// Set by a declaration and not by an assignment, which the shell's
+		// own reads cannot tell apart and a child can: see
+		// Runner.declaredEmpty.
+		if r.declaredEmpty == nil {
+			r.declaredEmpty = map[string]bool{}
+		}
+		r.declaredEmpty[name] = true
 		return
 	}
 	if r.unspecified {
@@ -565,8 +572,10 @@ func (r *Runner) shadow(name string) {
 		sc.existed[name] = existed
 		if sc.removedBefore == nil {
 			sc.removedBefore = map[string]bool{}
+			sc.declaredEmptyBefore = map[string]bool{}
 		}
 		sc.removedBefore[name] = r.removed[name]
+		sc.declaredEmptyBefore[name] = r.declaredEmpty[name]
 	}
 	// Arrays live in a table of their own, so a name has to be saved from
 	// both. Saving only the scalar left `f() { local a; a=(x y); }` writing a

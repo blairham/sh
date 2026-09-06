@@ -556,6 +556,15 @@ func (r *Runner) callFunc(ctx context.Context, fn *syntax.FuncDecl, args []strin
 			delete(r.removed, name)
 		}
 	}
+	// And whether the value the name had was a declaration's rather than an
+	// assignment's, which decides whether a child is told about it.
+	for name, was := range sc.declaredEmptyBefore {
+		if was {
+			r.declaredEmpty[name] = true
+		} else {
+			delete(r.declaredEmpty, name)
+		}
+	}
 	r.scopes = r.scopes[:len(r.scopes)-1]
 	// zsh runs an EXIT trap set *inside* a function when the function
 	// returns, and then forgets it; the other three keep it for the end of

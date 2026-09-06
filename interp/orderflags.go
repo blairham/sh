@@ -4,6 +4,7 @@
 package interp
 
 import (
+	"slices"
 	"sort"
 	"strings"
 
@@ -24,6 +25,8 @@ import (
 //	a=(B a C b);    ${(@o)a}   B C a b      byte order, so case separates
 //	a=(B a C b);    ${(@oi)a}  a B b C      case folded, and stable in a tie
 //	a=(b a b c a);  ${(@u)a}   b a c        the first of each, order untouched
+//	a=(c a b);      ${(@a)a}   c a b        the index, so the order it was written in
+//	a=(c a b);      ${(@aO)a}  b a c        and that reversed
 //
 // Where the step sits is measured too, and it is not where the manual's rule
 // numbers would put it by name. The sort runs *after* the operator —
@@ -34,7 +37,7 @@ import (
 // `${(oj.-.)a}` is `c-a-b` unsorted, one word being already in order.
 
 // orderFlags are the letters this step answers.
-const orderFlags = "uoOni"
+const orderFlags = "uoOnia"
 
 // orderWords applies them, in the one order that reproduces every
 // composition measured: the repeats go first and the sort follows.
@@ -56,14 +59,26 @@ func orderWords(e *syntax.ParamExpr, words []string) []string {
 		}
 		words = out
 	}
-	if !strings.ContainsAny(e.Flags, "oOni") {
+	if !strings.ContainsAny(e.Flags, "oOnia") {
+		return words
+	}
+	descending := strings.ContainsRune(e.Flags, 'O')
+	// `a` is the sort *key* rather than a sort: the element's own position,
+	// so ascending is the order it was written in and descending is that
+	// reversed. Which is why it does not fit beside the comparisons below —
+	// it beats every one of them, in either spelling: `${(@oa)a}`,
+	// `${(@na)a}` and `${(@ia)a}` on `(c a b)` are all `c a b`, and
+	// `${(@aO)a}`, `${(@Oa)a}` and `${(@aOn)a}` are all `b a c`.
+	if strings.ContainsRune(e.Flags, 'a') {
+		if descending {
+			slices.Reverse(words)
+		}
 		return words
 	}
 	// `i` sorts on its own: `a=(c a b); ${(@i)a}` is `a b c`, so it is not
 	// only a modifier of `o`.
 	fold := strings.ContainsRune(e.Flags, 'i')
 	numeric := strings.ContainsRune(e.Flags, 'n')
-	descending := strings.ContainsRune(e.Flags, 'O')
 	// Stable, because a fold makes ties reachable and they keep the order
 	// they were written in: `${(@oi)a}` on `(B a C b)` is `a B b C`, with the
 	// `B` still ahead of the `b`.

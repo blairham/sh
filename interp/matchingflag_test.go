@@ -103,10 +103,15 @@ func TestTheUnbuiltFlagsAreStillRefusedByName(t *testing.T) {
 		{"e", `v=x; printf "[%s]" "${(e)v}"`, "sh: ${(e)v}: the (e) expansion flag is not implemented\n"},
 		{"t", `v=x; printf "[%s]" "${(t)v}"`, "sh: ${(t)v}: the (t) expansion flag is not implemented\n"},
 		{"z", `v=x; printf "[%s]" "${(z)v}"`, "sh: ${(z)v}: the (z) expansion flag is not implemented\n"},
-		{"Q", `v=x; printf "[%s]" "${(Q)v}"`, "sh: ${(Q)v}: the (Q) expansion flag is not implemented\n"},
+		{"D", `v=x; printf "[%s]" "${(D)v}"`, "sh: ${(D)v}: the (D) expansion flag is not implemented\n"},
+		// `A` is the one that is easiest to lose here, because `a` beside it
+		// *is* built and the two differ only in case: one orders a list by
+		// its index and the other makes an assignment an array assignment.
+		{"A", `printf "[%s]" "${(A)x::=a b c}"`, "sh: ${(A)x::=a b c}: the (A) expansion flag is not implemented\n"},
 		// One built letter beside an unbuilt one still names the unbuilt
 		// one, which is the half that would rot as the set grows.
 		{"beside a built one", `a=(b a); printf "[%s]" "${(Uz)a}"`, "sh: ${(Uz)a}: the (z) expansion flag is not implemented\n"},
+		{"and the built one may be written second", `a=(b a); printf "[%s]" "${(zU)a}"`, "sh: ${(zU)a}: the (z) expansion flag is not implemented\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, st := runGrammar(t, tc.src, selectingWithFlags, nil)

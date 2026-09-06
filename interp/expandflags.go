@@ -22,7 +22,7 @@ import (
 // else the grammar accepted is refused *by name* when the expansion is
 // reached, because the only thing worse than refusing a flag is answering it
 // wrong with status 0.
-const implementedParamFlags = "ULfsj@kvP%qMuoOni"
+const implementedParamFlags = "ULfsj@kvP%qMuoOniaQcwW"
 
 // expandFlagged answers an expansion that carries a flag group, as fields.
 // It reports false only when the node carries no group, so the ordinary
@@ -112,8 +112,15 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, quoted bool) (words []string,
 	// Rule 5: in double quotes the words are joined — with the `j`
 	// separator when one was given, else the first character of IFS —
 	// unless the fields were asked for.
+	//
+	// A length is asked of the words *before* this, which is measured and is
+	// not what the rule numbers suggest: `"${(U)#a}"` on `(abc de f)` is 3,
+	// the element count, and not 8, the length of the joined text. A `j`
+	// separator does not reach the count either — `"${(Uj.-.)#a}"` is 3 as
+	// well — so the join is skipped rather than undone, and `(c)` reads a
+	// separator of its own where it wants one.
 	joined := false
-	if quoted && isList && !r.flagKeepsFields(e) {
+	if quoted && isList && !e.Length && !r.flagKeepsFields(e) {
 		words = []string{strings.Join(words, r.flagJoinSep(e))}
 		isList = false
 		joined = true
@@ -127,13 +134,11 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, quoted bool) (words []string,
 		return nil, false, false
 	}
 
-	// Rule 9: length.
+	// Rule 9: length — the element count for a list and the value's own
+	// length for a scalar, unless `c`, `w` or `W` said to count something
+	// else. See lengthflags.go.
 	if e.Length {
-		if isList {
-			words, isList = []string{itoa(len(words))}, false
-		} else {
-			words = []string{itoa(len(words[0]))}
-		}
+		words, isList = []string{itoa(r.flaggedLength(e, words, isList))}, false
 	}
 
 	hasSplit := strings.ContainsAny(e.Flags, "fs")
@@ -162,12 +167,6 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, quoted bool) (words []string,
 			}
 		}
 	}
-	// After the case conversion above and before the quoting below, which is
-	// where measurement puts it rather than where the rule numbers suggest:
-	// `${(@oU)a}` on `(B a)` is `A B`, so the conversion has already run.
-	if orderApplies(e) {
-		words = orderWords(e, words)
-	}
 	if strings.ContainsRune(e.Flags, '%') {
 		for i, w := range words {
 			v, pok := r.promptEscapes(w, e)
@@ -181,6 +180,31 @@ func (r *Runner) flaggedWords(e *syntax.ParamExpr, quoted bool) (words []string,
 		for i, w := range words {
 			words[i] = quoteFlagged(w, n)
 		}
+	}
+	// Rule 14's other half: `Q` takes one level of quoting *off*. The manual
+	// lists it beside `q` and measurement says which of the two runs first —
+	// `${(Qq)v}` and `${(qQ)v}` on `'a b'` are both `'a b'`, the round trip,
+	// where a `Q` that ran first would have left `a\ b`. See quoteflag.go.
+	if strings.ContainsRune(e.Flags, 'Q') {
+		for i, w := range words {
+			words[i] = r.unquoteFlagged(w)
+		}
+	}
+	// The ordering step is last of all, which is *later* than the rule
+	// numbers suggest and later than this file used to put it. Three
+	// measurements fix it there rather than one:
+	//
+	//	a=(B a);        ${(@oU)a}   A B          after the case conversion
+	//	a=("%x" "*");   ${(@%o)a}   * <path>     after the prompt escapes
+	//	a=("a b" "a!"); ${(@qo)a}   a! a\ b      after the quoting
+	//	a=("'z'" b);    ${(@Qo)a}   b z          and after the unquoting
+	//
+	// The last two are the ones that would be got wrong by reading the rule
+	// list: `*` sorts ahead of a path only once `%x` has become one, and
+	// `a!` ahead of `a\ b` only once the space has become a backslash —
+	// both orders reverse if the sort runs first.
+	if orderApplies(e) {
+		words = orderWords(e, words)
 	}
 	return words, isList, true
 }

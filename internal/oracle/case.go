@@ -3543,6 +3543,46 @@ echo "st=$?"`,
 		Why:     "the neighbor of the `[@]` rows and a question of its own: bash and ksh93 join the elements on IFS and split the result, which is why they answer three fields, while zsh does not join an *unquoted* `[*]` at all and answers two — the same two `${a[@]}` gives it. Quoted, all three join. So whether an unquoted `[*]` joins is not decided by whether the shell splits, and no arrangement of the splitting answer produces zsh's reading here",
 	},
 	{
+		ID: "expansion/an-unquoted-star-subscript-under-an-operator-distributes", Category: "expansion",
+		Snippet: `a=(oxo yo); printf "[%s]" ${a[*]%o}; echo`,
+		Why:     "quoting is what decides whether an operator sees the list or the joined string, and the *unquoted* spelling has one answer nobody has to be asked for: every shell in the panel with arrays trims each element and hands back two fields. The axis was asked here regardless, so the dialect that answers no gave the unquoted form the quoted reading and returned a single field holding `oxo y` — the trim applied to a field boundary instead of to an element, at status 0",
+	},
+	{
+		ID: "expansion/a-quoted-star-subscript-under-an-operator-is-the-axis", Category: "semantics axes",
+		Snippet: `a=(oxo yo); printf "[%s]" "${a[*]%o}"; echo`,
+		Why:     "the half that really is a disagreement, and the pair with the row above is the whole rule: quotes join first, `[*]` joins last. bash and ksh93 trim each element and join what is left, zsh joins first and trims the joined string once — one field either way, differing only in whether the `o` inside the join survived. Both answers are plausible strings, which is why the two rows have to stand together",
+	},
+	{
+		ID: "expansion/a-quoted-star-subscript-does-not-filter-elements", Category: "expansion",
+		Snippet: `a=(foo bar baz); printf "[%s]" "${a[*]:#ba*}"; echo`,
+		Why:     "the silent direction of the same rule: quoted, the array joins to one string first and the pattern is tested against that whole value, so `ba*` — which matches two of the three elements — drops nothing and the array comes back entire. Filtering leaves `foo`, and a filter that ran where the shell would have left the array alone is indistinguishable from a pattern that did not match. ksh93 reads the same characters as `${a[*]#ba*}` and answers `foo r z`, which is neither",
+	},
+	{
+		ID: "expansion/a-quoted-star-subscript-set-intersection-empties-to-one-field", Category: "expansion",
+		Snippet: `a=(x y z); b=(nope); set -- "${a[*]:*b}"; printf "%d" "$#"; printf "[%s]" "$@"; echo`,
+		Why:     "the direction that empties it, and what quoting still guarantees when it does: the joined value is held by no other array, so nothing survives — and the result is one *empty* field rather than no field at all. The unquoted spelling of the same snippet is zero fields, so this is the row that says quoting decides the count independently of what the operator left",
+	},
+	{
+		ID: "expansion/a-quoted-star-subscripts-operator-sees-the-ifs-join", Category: "expansion",
+		Snippet: `IFS=-; a=(oxo yo); set -- "${a[*]:#ox?-yo}"; printf "%d" "$#"; printf "[%s]" "$@"; echo`,
+		Why:     "which string the operator is handed, once it is handed one: the elements joined on the first character of IFS, not on a space. The pattern is written with the dash and matches; written with a space it would not. It is the row that keeps the quoted reading from being implemented with a hardcoded separator, which would pass every row above and fail this one",
+	},
+	{
+		ID: "expansion/a-slice-under-a-star-subscript-reads-the-list-quoted-too", Category: "expansion",
+		Snippet: `a=(one two three); printf "[%s]" "${a[*]:1}" "${a[*]:1:1}"; echo`,
+		Why:     "the operator that is the exception, and the reason the rule is about the operator rather than about quoting alone: a slice's offset counts *elements* under `[*]` however the expansion is quoted, and only the join afterwards differs. Unanimous in all three shells with arrays, so it is core and must reach no axis — a reading that gave every quoted `[*]` the joined string would answer `wo three` here",
+	},
+	{
+		ID: "expansion/a-quoted-bare-array-name-sliced", Category: "expansion",
+		Snippet: `a=(one two three); printf "[%s]" "${a:1}"; echo`,
+		Why:     "the same rule reached through a bare name, and the spelling that stayed wrong while `[*]` was: where the name is the whole array this is the list sliced and then joined — `two three` — and where it is `${a[0]}` it is that element with its first character dropped, `ne`. Both are plausible strings at status 0. The unquoted spelling is `${a[@]}`'s question and was already recorded; this is the quoted half, and only the slice needs it, because every other operator applied to the joined value is already the reading the shell follows",
+	},
+	{
+		ID: "expansion/a-quoted-bare-array-name-sliced-past-one-element", Category: "expansion",
+		Snippet: `a=(solo); printf "[%s]" "${a:1}"; echo`,
+		Why:     "one element is enough for the two readings to part, which is why the slice cannot be waved through on a short array the way the value-to-value operators can: dropping the only element leaves nothing, where dropping the first character leaves `olo`. The empty answer is the quiet one — a script slicing a one-element array gets a field that is there and empty rather than a complaint",
+	},
+	{
 		ID: "expansion/an-at-list-joined-where-nothing-splits", Category: "semantics axes",
 		Snippet: `IFS=-; a=(x y z); v=${a[@]}; echo "[$v]"`,
 		Why:     "the character a list is joined with when it reaches a context that keeps no fields, which had never been asked: zsh joins on the first character of IFS and bash and ksh93 rejoin on a hard space. Silent in the shape that is hardest to see — the default IFS begins with a space, so every script that leaves IFS alone gets the right answer and the one that sets it gets a wrong one at status 0. The `*` spelling is a different question and is core; this is the `@` one",

@@ -592,7 +592,27 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, b
 				// becomes — so this is here beside the slice and not with
 				// the elementOp mapping further down, whose whole shape is
 				// one output per input.
-				elems = r.selectElements(e, elems)
+				//
+				// Quoting decides what the operator is even looking at, and
+				// this distributed regardless. The rule, measured: quotes
+				// join first and `[*]` joins last. A quoted `"${a[*]:#p}"`
+				// hands the operator the *joined string* and tests that one
+				// value, so on `(foo bar baz)` with `ba*` nothing is dropped
+				// and the whole array comes back — where filtering leaves
+				// `foo`. That was the silent direction: a filter that ran
+				// where the shell would have left the array alone, with no
+				// diagnostic and status 0.
+				//
+				// A dropped value is one *empty* field rather than no field,
+				// which is what quoting guarantees and what selectScalar
+				// returning "" gives: `"${a[*]:*nope}"` is `n=1` in the shell
+				// that has the operator, against `n=0` for the unquoted
+				// spelling and for `[@]`.
+				if s.Quoting != syntax.Unquoted && r.subscriptJoinsElements(e) {
+					elems = []string{r.selectScalar(e, strings.Join(elems, ifsFirst(r.ifs())))}
+				} else {
+					elems = r.selectElements(e, elems)
+				}
 			}
 			if e.Op == syntax.ParamTransform {
 				// `"${a[@]@Q}"` is one transformed word per element — the
@@ -608,12 +628,23 @@ func (r *Runner) expandAt(s syntax.Span, sp splitPolicy, head bool) ([]string, b
 				for i, el := range elems {
 					mapped[i] = apply(el)
 				}
-				if r.subscriptText(e.Index) == "*" {
-					// `${a[*]#p}` splits the panel: two shells trim each
+				if r.subscriptText(e.Index) == "*" && s.Quoting != syntax.Unquoted {
+					// `"${a[*]#p}"` splits the panel: two shells trim each
 					// element and join what is left, the third joins first
 					// and trims the joined string once. Asked only when the
 					// two readings actually differ — `${a[*]%b}` on `(aa ab)`
 					// is `aa a` either way, and needs no answer.
+					//
+					// And asked only when it is *quoted*, which is the other
+					// half of the same rule. The axis is a question about the
+					// quoted form; the unquoted one has an answer nobody has
+					// to be asked for — `a=(oxo yo); printf "[%s]" ${a[*]%o}`
+					// is `[ox][y]` in bash, bash 3.2, ksh93 and zsh alike, so
+					// the operator distributes and the elements go on to the
+					// join below. Asking here gave the unquoted spelling the
+					// quoted reading, and in the one dialect that answers no
+					// it came back as a single field holding `oxo y`: the trim
+					// silently applied to a boundary instead of to an element.
 					sep := ifsFirst(ifs, set)
 					perElement := strings.Join(mapped, sep)
 					joinedFirst := apply(strings.Join(elems, sep))
@@ -1460,10 +1491,46 @@ func (r *Runner) bareArrayAsList(e *syntax.ParamExpr, s syntax.Span, sp splitPol
 	if e.Index != nil || e.Length || e.Indirect || e.Prefix != 0 {
 		return nil, false
 	}
-	if s.Quoting != syntax.Unquoted || sp == splitNever {
-		return nil, false
-	}
-	if e.Op != syntax.ParamNone && !r.listShapedOp(e) {
+	// The subscript the name is read with depends on the quoting, because the
+	// two spellings of the list do: unquoted it is `[@]`, one field per
+	// element, and quoted it is `[*]`, one field holding their join. That is
+	// the same division `${a[@]}` and `${a[*]}` already keep, and giving the
+	// bare name both halves is what stops the two from drifting.
+	sub := "@"
+	switch {
+	case s.Quoting == syntax.Unquoted:
+		// In a context that splits, and under an operator the array branch
+		// answers with the elements. Both measured; see the note above.
+		if sp == splitNever {
+			return nil, false
+		}
+		if e.Op != syntax.ParamNone && !r.listShapedOp(e) {
+			return nil, false
+		}
+	case opReadsTheList(e.Op):
+		// Quoted, only the slice needs this. Every other operator is already
+		// right through the scalar path: the quoted value *is* the elements
+		// joined, and an operator applied to that one string is exactly the
+		// "quotes join first" reading the shell follows — measured on the
+		// trims, the replacements, `:-` and the three element-selecting
+		// operators, all of which already agree. The slice is the one that
+		// does not, because its offset counts *elements* under `[*]` where it
+		// counts characters in a string: `a=(one two three); "${a:1}"` is
+		// `two three` where the name is the list and `ne` where it is the
+		// joined value, and on a one-element array it is nothing at all
+		// against `olo`. opReadsTheList is that predicate, already named for
+		// the unquoted side of the same question.
+		sub = "*"
+		// Read rather than asked. This is not a new question — it is
+		// ArrayScalarIsTheWholeArray, which the scalar path below asks and
+		// diagnoses for exactly this node. Asking it here as well would
+		// print the refusal twice on a core that has chosen no shell, so a
+		// No or an unanswered axis simply declines and lets the one place
+		// that already owns the question do the talking.
+		if r.sem().ArrayScalarIsTheWholeArray != Yes {
+			return nil, false
+		}
+	default:
 		return nil, false
 	}
 	// arrayElementCount reports zero for a name that is not an array at all,
@@ -1473,12 +1540,17 @@ func (r *Runner) bareArrayAsList(e *syntax.ParamExpr, s syntax.Span, sp splitPol
 	if n == 0 || (n == 1 && !opReadsTheList(e.Op)) {
 		return nil, false
 	}
-	if !r.ask(r.sem().ArrayNameWithoutSubscriptIsTheList,
+	// Only the unquoted spelling asks this. The quoted one is
+	// ArrayScalarIsTheWholeArray's question and the branch above has already
+	// read it — asking the field-count axis as well would demand two answers
+	// for one reading, and on a core that has chosen no shell it refused
+	// `"${a:1}"` over an axis whose answer it never used.
+	if sub == "@" && !r.ask(r.sem().ArrayNameWithoutSubscriptIsTheList,
 		"a bare array name being its elements") {
 		return nil, false
 	}
 	listed := *e
-	listed.Index = &syntax.Word{Spans: []syntax.Span{{Kind: syntax.Literal, Value: "@"}}}
+	listed.Index = &syntax.Word{Spans: []syntax.Span{{Kind: syntax.Literal, Value: sub}}}
 	return &listed, true
 }
 

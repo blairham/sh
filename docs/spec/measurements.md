@@ -7688,6 +7688,13 @@ grades it and nothing drift-checks it either, for the same reason.
 | `declare/valueless-local-shadowing-an-imported-name` | `read=[dumb]~TERM=dumb` | `read=[UNSET]~TERM=dumb` | `read=[UNSET]~TERM=dumb` | `read=[UNSET]~(none)` | `read=[dumb]~TERM=dumb` **2>** `<shell>: local: not found` | `read=[]~(none)` |
 | `declare/valueless-local-shadowing-a-callers-local` | `FOO=mid` | `FOO=mid` | `FOO=mid` | `(none)` | `FOO=bar` **2>** `<shell>: local: not found~<shell>: local: not found` | `(none)` |
 | `declare/valueless-local-over-an-unexported-name` | **2>** `<shell>: 1: local: -x: bad variable name` *(status 2)* | `(none)` | `(none)` | `(none)` | `(none)` **2>** `<shell>: local: not found` | `(none)` |
+| `declare/a-local-that-drops-the-export-attribute` | **2>** `<shell>: 1: local: +x: bad variable name` *(status 2)* | `FOO=bar~read=[z]~after=[bar]` | `FOO=bar~read=[z]~after=[bar]` | `FOO=bar~read=[z]~after=[bar]` | `FOO=bar~read=[bar]~after=[bar]` **2>** `<shell>: local: not found` | `(none)~read=[z]~after=[bar]` |
+| `declare/a-local-that-drops-the-export-attribute-over-an-unexported-name` | **2>** `<shell>: 1: local: +x: bad variable name` *(status 2)* | `(none)` | `(none)` | `(none)` | `(none)` **2>** `<shell>: local: not found` | `(none)` |
+| `declare/a-local-that-drops-the-export-attribute-then-puts-it-back` | **2>** `<shell>: 1: local: +x: bad variable name` *(status 2)* | `FOO=z` | `FOO=z` | `FOO=z` | `FOO=bar` **2>** `<shell>: local: not found` | `FOO=z` |
+| `declare/a-typeset-that-drops-the-export-attribute` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `FOO=bar~read=[z]` | `FOO=bar~read=[z]` | `FOO=bar~read=[z]` | `(none)~read=[z]` | `(none)~read=[z]` |
+| `declare/a-local-declared-twice-in-one-function` | `read=[x]~FOO=x` | `read=[x]~FOO=x` | `read=[x]~FOO=x` | `read=[x]~FOO=x` | `read=[bar]~FOO=bar` **2>** `<shell>: local: not found~<shell>: local: not found` | `FOO=x~read=[x]~(none)` |
+| `declare/a-typeset-declared-twice-in-one-function` | **2>** `<shell>: 1: Syntax error: "}" unexpected` *(status 2)* | `read=[x]` | `read=[x]` | `read=[x]` | `read=[x]` | `FOO=x~read=[x]` |
+| `declare/a-global-declaration-over-this-functions-local` | `read=[x]~after=[bar]` **2>** `<shell>: 1: typeset: not found` | `read=[x]~after=[bar]` | `read=[x]~after=[bar]` | `read=[x]~after=[bar]` **2>** `<shell>: line 0: typeset: -g: invalid option~typeset: usage: typeset [-afFirtx] [-p] name[=value] ...` | **2>** `<shell>: local: not found~<shell>: typeset: -g: unknown option~Usage: typeset [-bflmnprstuxACHS] [-a[type]] [-i[base]] [-E[n]] [-F[n]] [-L[n]]~               [-M[mapping]] [-R[n]] [-X[n]] [-h string] [-T[tname]] [-Z[n]]~               [name[=value]...]~   Or: typeset [ options ] -f [name...]` *(status 2)* | `read=[x]~after=[bar]` |
 | `declare/a-declaration-without-a-value-exports-nothing` | `(none)~(none)` **2>** `<shell>: 1: typeset: not found~<shell>: 1: typeset: not found` | `(none)~BAR=` | `(none)~BAR=` | `FOO=~BAR=` | `(none)~BAR=` | `(none)~BAR=` |
 | `declare/a-declared-name-a-local-has-shadowed` | `(none)~(none)` **2>** `<shell>: 1: typeset: not found` | `(none)~(none)` | `(none)~(none)` | `FOO=~FOO=` | `(none)~(none)` **2>** `<shell>: local: not found` | `(none)~FOO=` |
 | `declare/local-shadowing-an-imported-name` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=changed~TERM=dumb` | `TERM=dumb~TERM=dumb` **2>** `<shell>: local: not found` | `(none)~TERM=dumb` |
@@ -7798,6 +7805,34 @@ grades it and nothing drift-checks it either, for the same reason.
 - `declare/valueless-local-over-an-unexported-name` — the other side of it: `-x` is the local's own attribute and says nothing about the name it shadows, so a shadowed name nothing exported reaches no child — an exported name with no value is told to nobody in any shell measured
   ```sh
   FOO=bar; f() { local -x FOO; env | grep '^FOO=' || echo "(none)"; }; f
+  ```
+- `declare/a-local-that-drops-the-export-attribute` — `+x` takes the attribute off the *local* and says nothing about the binding behind it, which is still exported and still holds `bar` — so bash hands the child `bar` while the shell itself reads `z`. The same shape as `declare/valueless-local-shadowing-an-exported-name` with a value on the line, and the value is what made it fail: the local had one of its own, so the list of shadowed exports passed the name over, and the unexported local made the ordinary loop pass it over too. The child was told nothing at all by either. zsh and ksh93 tell it nothing for the reason `declare/local-shadowing-an-exported-name` records — the local never inherited the attribute — and `after` shows the outer binding untouched
+  ```sh
+  export FOO=bar; f() { local +x FOO=z; env | grep '^FOO=' || echo "(none)"; echo "read=[$FOO]"; }; f; echo "after=[$FOO]"
+  ```
+- `declare/a-local-that-drops-the-export-attribute-over-an-unexported-name` — the control the row above needs, and what says it is the shadowed binding speaking rather than a value the local kept: with nothing exported behind it, the same line tells the child nothing in every shell. A fix that handed over the outer value unconditionally would pass the case above and fail here
+  ```sh
+  FOO=bar; f() { local +x FOO=z; env | grep '^FOO=' || echo "(none)"; }; f
+  ```
+- `declare/a-local-that-drops-the-export-attribute-then-puts-it-back` — the third leg: `export` inside the function puts the attribute on the local, and the child is then told `z` rather than the `bar` it was told a line earlier. Unanimous in bash and zsh, which is what makes the difference between the two rows above a fact about the *attribute* and not about the spelling
+  ```sh
+  export FOO=bar; f() { local +x FOO=z; export FOO; env | grep '^FOO=' || echo "(none)"; }; f
+  ```
+- `declare/a-typeset-that-drops-the-export-attribute` — the same rule through the spelling ksh93 has, in the keyword function ksh93 gives a scope. bash hands the child the outer `bar`; ksh93 and zsh tell it nothing, the same way they answer the `local` spelling — so the split is `LocalInheritsTheExportAttribute` and not a rule of its own. It is the row that says ksh93 is on that axis at all, since it has no `local` to be asked with
+  ```sh
+  export FOO=bar; function f { typeset +x FOO=z; env | grep '^FOO=' || echo "(none)"; echo "read=[$FOO]"; }; f
+  ```
+- `declare/a-local-declared-twice-in-one-function` — a valueless declaration of a name its own scope already declared: bash 5.3, bash 3.2 and zsh all leave `x` standing, because the value it would hide is the local the first line made and there is no outer value in front of it any more. We read UNSET — a declaration that only meant to name the variable again threw away what the function had just put in it, silently and at status 0. `declare/valueless-local-shadowing-a-callers-local` is the case this must not become: a *different* function's declaration does hide
+  ```sh
+  export FOO=bar; f() { local FOO=x; local FOO; echo "read=[${FOO-UNSET}]"; env | grep '^FOO=' || echo "(none)"; }; f
+  ```
+- `declare/a-typeset-declared-twice-in-one-function` — the same shape through `typeset` in a keyword function, and the one spelling all four shells with the builtin answer — ksh93 included, which the `local` row cannot ask. Unanimous `x`, which is what makes this core rather than either shell's reading
+  ```sh
+  export FOO=bar; function f { typeset FOO=x; typeset FOO; echo "read=[${FOO-UNSET}]"; }; f
+  ```
+- `declare/a-global-declaration-over-this-functions-local` — the third spelling of the same bug: `-g` takes no shadow, so it is not the declaration that put anything in front of the name — but the scope had one already and the value went away anyway. bash 5.3 and zsh read `x` and leave the global `bar` alone. bash 3.2 and ksh93 have no `-g` and their cells are the refusal, which is why the row is worth having rather than folding into the one above: it reaches the same code by the path where no shadow is taken at all
+  ```sh
+  export FOO=bar; f() { local FOO=x; typeset -g FOO; echo "read=[${FOO-UNSET}]"; }; f; echo "after=[${FOO-UNSET}]"
   ```
 - `declare/a-declaration-without-a-value-exports-nothing` — declared and assigned-empty are the same to every listing and not to a child: the shell that considers a name declared without a value to be *set* still tells no command about it, where `=` on the same line hands over an empty entry. Found by the case above, which had this shell exporting an empty value under a name it should say nothing about
   ```sh

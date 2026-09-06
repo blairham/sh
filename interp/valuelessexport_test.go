@@ -329,3 +329,91 @@ func TestASecondDeclarationHandsOverWhatTheFirstOneLeft(t *testing.T) {
 		t.Errorf("got %q status %d, want the value the second declaration hid", out, st)
 	}
 }
+
+// The shape the whole of this file was one line short of, and the one a value
+// on the declaration reaches. `local +x FOO=z` gives the function a binding of
+// its own holding `z` and *not* exported, and the binding behind it is still
+// exported and still holds `bar` — so that is what a child is told, while the
+// shell itself reads `z`.
+//
+// It failed in the gap between two lists: the ordinary loop over the tables
+// passed the name over because the local is not exported, and the list of
+// shadowed exports passed it over because the local has a value of its own.
+// Neither claimed it and the child was told nothing at all.
+func TestALocalThatDropsTheAttributeStillHandsAChildWhatItShadowed(t *testing.T) {
+	out, st := valuelessRun(t,
+		`export FOO=bar; f() { local +x FOO=z; /usr/bin/env | grep '^FOO=' || echo "(none)"; `+
+			`echo "read=[$FOO]"; }; f; echo "after=[$FOO]"`)
+	if want := "FOO=bar\nread=[z]\nafter=[bar]\n"; out != want {
+		t.Errorf("out = %q, want %q", out, want)
+	}
+	if st != 0 {
+		t.Errorf("status = %d, want 0", st)
+	}
+}
+
+// The control, and what says it is the shadowed binding speaking rather than a
+// value the local kept: with nothing exported behind it the same line tells a
+// child nothing. A fix that handed the outer value over unconditionally would
+// pass the test above and fail this one.
+func TestALocalThatDropsTheAttributeOverAnUnexportedNameHandsOverNothing(t *testing.T) {
+	out, st := valuelessRun(t,
+		`FOO=bar; f() { local +x FOO=z; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; f`)
+	if want := "(none)\n"; out != want {
+		t.Errorf("out = %q, want %q", out, want)
+	}
+	if st != 0 {
+		t.Errorf("status = %d, want 0", st)
+	}
+}
+
+// `export` inside the function puts the attribute on the local, and the child
+// is then told the local's own value rather than the one it shadowed — once,
+// not twice.
+func TestExportingTheLocalAgainSupersedesTheBindingBehindIt(t *testing.T) {
+	out, st := valuelessRun(t,
+		`export FOO=bar; f() { local +x FOO=z; export FOO; `+
+			`/usr/bin/env | grep -c '^FOO=z$'; /usr/bin/env | grep -c '^FOO='; }; f`)
+	if want := "1\n1\n"; out != want {
+		t.Errorf("out = %q, want %q — exactly one entry and it the local's value", out, want)
+	}
+	if st != 0 {
+		t.Errorf("status = %d, want 0", st)
+	}
+}
+
+// Two functions deep, so the value handed over is the nearest shadowed one
+// rather than the global behind it — the same rule the valueless form follows,
+// reached with a value on the line.
+func TestALocalThatDropsTheAttributeHandsOverTheNearestShadowedValue(t *testing.T) {
+	out, st := valuelessRun(t,
+		`export FOO=bar; g() { local +x FOO=in; /usr/bin/env | grep '^FOO=' || echo "(none)"; }; `+
+			`f() { local FOO=mid; g; }; f`)
+	if want := "FOO=mid\n"; out != want {
+		t.Errorf("out = %q, want %q", out, want)
+	}
+	if st != 0 {
+		t.Errorf("status = %d, want 0", st)
+	}
+}
+
+// The shell whose local carries no export attribute tells a child nothing
+// under the name, with a value on the declaration as without one — so this
+// half needs no rule of its own and must not gain one.
+func TestALocalThatDropsTheAttributeWhereNoLocalInheritsItHandsOverNothing(t *testing.T) {
+	out, st := axisRun(t,
+		`export FOO=bar; f() { local +x FOO=z; /usr/bin/env | grep '^FOO=' || echo "(none)"; `+
+			`echo "read=[$FOO]"; }; f`,
+		func(s *Semantics) {
+			s.DeclaredNameWithoutValueIsEmpty = No
+			s.ValuelessDeclarationHidesTheOuterValue = Yes
+			s.LocalInheritsTheExportAttribute = No
+			s.LocalOptions = "x"
+		})
+	if want := "(none)\nread=[z]\n"; out != want {
+		t.Errorf("out = %q, want %q", out, want)
+	}
+	if st != 0 {
+		t.Errorf("status = %d, want 0", st)
+	}
+}

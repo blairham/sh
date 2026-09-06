@@ -2632,16 +2632,37 @@ func (r *Runner) hiddenExports(yield func(name, value string) bool) {
 			}
 			seen[name] = true
 			if _, own := r.Vars[name]; own {
-				// Assigned since, so the local has a value of its own and
-				// the loop above has already handed it over. Skipped rather
-				// than emitted and superseded: a duplicate name in an
-				// environment is settled by execve keeping the first, and
-				// this list is deduplicated the other way round.
-				continue
-			}
-			if !r.removed[name] {
-				// Still visible — the dialect's valueless declaration left
-				// the outer value showing — so the loops above have it.
+				// Assigned since, so the local has a value of its own — but
+				// it reaches a child only if the local carries the export
+				// attribute, and `+x` on the declaration takes it off. So
+				// this is two cases and not one: with the attribute the loop
+				// above has already handed the local's value over, and
+				// without it that loop passed the name by and the binding
+				// standing behind it is still the one a child is told about.
+				//
+				// Measured 2026-09-06, `env -i`, from a file and through
+				// `-c` alike: `export FOO=bar; f() { local +x FOO=z; env; }`
+				// hands the child `FOO=bar` in bash 5.3.15, bash as `sh` and
+				// bash 3.2.57 — the outer value, not `z` — while the shell
+				// itself reads `z`. `export FOO` inside the same function
+				// puts the attribute back on the local and the child is then
+				// told `z`, and with the outer binding never exported the
+				// child is told nothing, which is what says it is the outer
+				// binding speaking rather than a value the local kept.
+				//
+				// Skipping unconditionally told the child nothing at all,
+				// because neither list claimed the name.
+				if r.isExported(name) {
+					// Skipped rather than emitted and superseded: a
+					// duplicate name in an environment is settled by execve
+					// keeping the first, and this list is deduplicated the
+					// other way round.
+					continue
+				}
+			} else if !r.removed[name] {
+				// No value of its own and still visible — the dialect's
+				// valueless declaration left the outer value showing — so
+				// the loops above have it.
 				continue
 			}
 			if !yield(name, value) {

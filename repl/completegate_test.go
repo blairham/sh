@@ -376,3 +376,51 @@ func TestTabAtATerminalOffersNothingFromADirectoryThePolicyHides(t *testing.T) {
 		t.Fatal("the shell did not exit on ^D")
 	}
 }
+
+// TestTheSessionsGateAndSinkBothReachTheCompleter.
+//
+// The two are wired one line apart, and only one of them fails loudly. A
+// dropped gate makes Tab list a directory the policy hides, which every test
+// above catches. A dropped *sink* changes nothing a person or a script can
+// see — completion still refuses exactly what it should refuse — and silently
+// removes every completion from the audit stream, which is the half of this
+// change somebody reviewing a session depends on. A mutation that dropped it
+// survived the whole suite.
+//
+// So the claim is made from the Shell rather than from a hand-built completer,
+// because the wiring is what was missing: this is the same path a session
+// takes, minus the terminal.
+func TestTheSessionsGateAndSinkBothReachTheCompleter(t *testing.T) {
+	t.Parallel()
+	dir := gatedFixture(t)
+	var got []interp.Event
+	r := newTestRunner(nil)
+	r.Dir = dir
+	s := Shell{
+		Runner:  r,
+		Gate:    hidesReads(t, filepath.Join(dir, "hidden")),
+		Events:  interp.SinkFunc(func(_ context.Context, e interp.Event) { got = append(got, e) }),
+		Session: "SESSIONUNDERTEST",
+	}
+	c := s.completer(t.Context())
+
+	if line, _ := typeAndTab(t, c, ": shown/"); line != ": shown/visible.txt " {
+		t.Fatalf("the session's completer made the line %q, want the file completed", line)
+	}
+	if len(got) != 1 || got[0].Kind != interp.EventAccess ||
+		got[0].Action.Kind != interp.ActionReadDir ||
+		got[0].Action.Path != filepath.Join(dir, "shown") ||
+		got[0].Session != "SESSIONUNDERTEST" {
+		t.Fatalf("the session recorded %+v, want one read-dir access naming the directory", got)
+	}
+
+	got = nil
+	if line, _ := typeAndTab(t, c, ": hidden/"); line != ": hidden/" {
+		t.Fatalf("the session's completer made the line %q from a hidden directory", line)
+	}
+	if len(got) != 1 || got[0].Kind != interp.EventDenied ||
+		got[0].Action.Path != filepath.Join(dir, "hidden") ||
+		got[0].Session != "SESSIONUNDERTEST" {
+		t.Fatalf("the session recorded %+v, want one denial naming the directory", got)
+	}
+}

@@ -73,6 +73,13 @@ func Dialect() syntax.Dialect {
 	// `3`, where bash 3.2, bash 5.3 and dash print `x[1]` and `0a`. This
 	// shell alone, which is why it is set here and nowhere else.
 	d.BareSubscript = true
+	// And a parameter that is not a name carries one too: `${@[1]}` is the
+	// first positional parameter here and `${1[2]}` the second character of
+	// the first. Measured 2026-09-05 on zsh 5.9.2 against the rest of the
+	// panel, where every one of them refuses the expansion — bash calls it a
+	// bad substitution when it is reached, ksh93 refuses `[' while reading,
+	// dash says `Bad substitution`.
+	d.SpecialParamSubscript = true
 	return d
 }
 
@@ -277,6 +284,15 @@ func Semantics() interp.Semantics {
 	s.LastPipelineElementInCurrentShell = interp.Yes
 	s.ShiftPastEndFatal = interp.No
 	s.ArrayBaseIsZero = interp.No
+	// `${a[1,3]}` is elements one through three here, where the shells that
+	// read the same characters as arithmetic take the comma operator's value
+	// and name element three alone. Measured on `a=(w x y z)`: `w x y` here,
+	// `z` in bash 5.3.15, bash 3.2.57, bash as `sh` and ksh93.
+	s.SubscriptCommaIsARange = interp.Yes
+	// And a subscript on a plain string reaches into its characters: with
+	// `s=hello`, `${s[2]}` is `e` here and nothing in the four that read a
+	// scalar as an array of one.
+	s.ScalarSubscriptIsACharacter = interp.Yes
 	s.ArrayLiteralSubscriptIsAKey = interp.No
 	s.DollarZeroInFunctionIsFunctionName = interp.Yes
 	s.BuiltinSyntaxErrorFatal = interp.No

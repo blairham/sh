@@ -189,6 +189,143 @@ diagnostic any below-base subscript gets; the divergence is recorded
 rather than modeled, because none of it is behavior a script can rely on
 across shells.
 
+## What a subscript *means* — three readings that diverge
+
+The bracket parses the same way in every shell that has subscripts at
+all. What is inside it does not mean the same thing, and the three
+divergences below are all one evaluator. Measured 2026-09-05 on zsh
+5.9.2, bash 5.3.15, bash 3.2.57, bash as `sh`, ksh93 and dash.
+
+### A comma: a range, or the arithmetic operator
+
+| probe | zsh | bash 5.3 | bash 3.2 | bash-as-sh | ksh93 | dash |
+| --- | --- | --- | --- | --- | --- | --- |
+| `a=(w x y z); "[${a[1,3]}]"` | `[w x y]` | `[z]` | `[z]` | `[z]` | `[z]` | no arrays |
+| `"[${a[0,2]}]"` | `[w x]` | `[y]` | `[y]` | `[y]` | `[y]` | — |
+| `"[${a[1,2,3]}]"` | `bad substitution` (1) | `[z]` | `[z]` | `[z]` | `[z]` | — |
+
+A subscript is an arithmetic expression, and arithmetic has a comma
+operator whose value is its right operand — so `${a[1,3]}` is `${a[3]}`
+in four of the five shells that read it. In zsh the comma separates the
+two ends of a **range**, and a third part is not a wider range but a bad
+substitution.
+
+Both readings answer, neither reports, and the values are different: a
+script cannot tell which shell it is on except by what it gets. That is
+a conflict rather than an addition, so it is the semantics axis
+`SubscriptCommaIsARange` and not a grammar flag. The core answers *no*,
+which is both the standard's reading — POSIX has the comma operator and
+no ranges — and four of the five shells'.
+
+The axis is asked only where the two readings differ. `${a[2,2]}` is the
+second element either way and needs no answer, which is what keeps a
+core that has chosen no dialect from refusing a subscript both shells
+agree about.
+
+The endpoints, measured with `a=(w x y z)` and `s=hello`:
+
+| probe | array | string |
+| --- | --- | --- |
+| `[2,-1]` — a negative end | `x y z` | — |
+| `[-3,-2]` — both negative | `x y` | — |
+| `[0,2]` — below the first | `w x` | `he` |
+| `[2,99]` — past the last | `x y z` | `llo` (from `[3,99]`) |
+| `[3,2]` — backwards | empty | empty |
+| `[1,0]` — an end before the first | empty | empty |
+| `[-5,2]` / `[-6,2]` — a start past the start | **empty** | **`he`** |
+
+Endpoints are subscripts, so they take the base and the count-back-from-
+the-end reading a single subscript takes. The last row is the one no
+symmetry predicts and it is a fact rather than a derivation: a start
+counted back past the *first element* leaves an array empty, where the
+same reach past the first *character* of a string is clamped to it.
+
+### A subscript on a plain string
+
+| probe, `s=hello` | zsh | bash 5.3 | bash 3.2 | bash-as-sh | ksh93 | dash |
+| --- | --- | --- | --- | --- | --- | --- |
+| `"[${s[0]}]"` | `[]` | `[hello]` | `[hello]` | `[hello]` | `[hello]` | `Bad substitution` |
+| `"[${s[1]}]"` | `[h]` | `[]` | `[]` | `[]` | `[]` | — |
+| `"[${s[2]}]"` | `[e]` | `[]` | `[]` | `[]` | `[]` | — |
+| `"[${s[2,4]}]"` | `[ell]` | `[]` | `[]` | `[]` | `[]` | — |
+| `"[${s[-1]}]"` | `[o]` | `[]` + `s: bad array subscript` | same | same | `[]` | — |
+
+zsh reaches into the string's characters. Everything else reads a scalar
+as an array of one, so the base names the whole string and no other
+subscript names anything. Axis `ScalarSubscriptIsACharacter`; the core
+answers *no*.
+
+**Empty, not an error, is the core's answer**, and it is measured rather
+than defaulted: neither bash nor ksh93 says anything about `${s[2]}` and
+both expand it to nothing at status 0. The one place bash speaks is a
+*negative* subscript, where it warns `s: bad array subscript` and still
+expands to nothing at status 0 while ksh93 is silent. The value is
+unanimous and is what this implementation gives; bash's advisory is
+recorded rather than modeled, the same treatment its out-of-range
+subscript warning gets above.
+
+Characters and not bytes: `s=héllo; "${s[2]}"` is `é` and `"${s[2,3]}"`
+is `él`.
+
+### A subscript on a parameter that is not a name
+
+| probe | zsh | bash 5.3 | bash 3.2 | bash-as-sh | ksh93 | dash |
+| --- | --- | --- | --- | --- | --- | --- |
+| `set -- a b c; "[${@[1]}]"` | `[a]` | bad subst. (1) | bad subst. (1) | bad subst. (127) | ``syntax error … `[' unexpected`` (3) | `Bad substitution` (2) |
+| `"[${*[2]}]"` | `[b]` | bad subst. | bad subst. | bad subst. | syntax error | Bad substitution |
+| `set -- abcd; "[${1[2]}]"` | `[b]` | bad subst. | bad subst. | bad subst. | syntax error | Bad substitution |
+| `"[${0[1]}]"`, `"[${?[1]}]"`, `"[${-[1]}]"`, `"[${$[1]}]"` | the value's characters | bad subst. | bad subst. | bad subst. | syntax error | Bad substitution |
+
+Five refusals and one reading, and nobody means something else by it —
+so this is the additive kind of split, grammar flag
+`SpecialParamSubscript`, beside `ArraySubscript`. It is separate from
+`ArraySubscript` because it is about the *name*: `${a[1]}` is read by
+four of the six and `${@[1]}` by one.
+
+Where the flag is off the bracket is simply not consumed, and the
+leftover text takes the route every unreadable expansion takes —
+deferred to the run in most of the panel, refused while reading by the
+one grammar that refuses everything else while reading. Nothing here
+words a diagnostic of its own. Expanding it to nothing at status 0, as
+this implementation did, is the silent middle answer nobody gives.
+
+`@` and `*` are the positional parameters **as a list**; every other
+special parameter supplies a *value*, so a subscript reaches into it by
+character under the axis above.
+
+`#` and `!` are unreachable in the braced spelling for the reason the
+brace-less form records below: `${#[1]}` is a length and `${![1]}` an
+indirection, so there is nowhere to write them down.
+
+### How many fields a subscripted expansion makes
+
+Quoting, measured on zsh with `a=(x y z)` and `set -- a b c`:
+
+| probe | fields |
+| --- | --- |
+| `"${a[1,2]}"` | 1, joined with the first character of IFS — as `"$a"` is |
+| `"${a[@]}"` | 3 |
+| `"${@[1,3]}"` | 3 |
+| `"${*[1,3]}"` | 1 |
+| `"${@[*]}"` | 3 |
+| `"${*[@]}"` | 3 |
+
+A range yields a list, and whether quoting joins that list is decided
+the way it is decided for the bare spellings: `@` keeps its fields and
+everything else joins. Either spelling of the list is enough — `@` as
+the name or `[@]` as the subscript.
+
+`${#…}` follows the same line. It is a **count** where the subscript
+named several elements — `${#a[1,2]}` on `(aa bb ccc)` is 2 where the
+arithmetic reading measures the three-character element it landed on —
+and a **width** where it named one value, so `${#s[2,4]}` on `hello` is
+3.
+
+One measured curiosity is recorded and not reproduced: `"${@[0]}"` is
+*zero* fields in zsh where `"${@[9]}"`, `"${a[0]}"` and `"${*[0]}"` are
+all one empty field. It is the only subscript that behaves that way and
+no script can depend on it.
+
 ## Slicing the whole array
 
 `${a[@]:off}` and `${a[@]:off:len}` slice the **list**: the result is
@@ -623,11 +760,12 @@ read — `"[$a[1][1]]"` is `[x[1]]`, not a character of `x`
 (`array/a-subscript-without-braces-is-read-once`).
 
 zsh also subscripts the remaining specials: `$?[1]`, `$-[2]`, `$$[1]`
-and `$0[2]` all index the parameter's value. This implementation leaves
-those out, because the parsed form has nowhere to put them — the inner
-text of a span is what `${ … }` would hold, and there `${#[1]}` is a
-length and `${![1]}` an indirection. Recorded rather than modeled: no
-script writes them.
+and `$0[2]` all index the parameter's value. The brace-less spelling
+leaves those out, because the parsed form has nowhere to put them — the
+inner text of a span is what `${ … }` would hold, and there `${#[1]}` is
+a length and `${![1]}` an indirection. The **braced** spellings are read,
+under `SpecialParamSubscript` above; it is the two the span cannot write
+down that are recorded rather than modeled.
 
 A **length** takes a name, a digit, `@` or `*`: `$#a` is a count, `$#0`
 and `$#1` are the lengths of those parameters, and `$#@` and `$#*` are
@@ -736,6 +874,8 @@ break the shapes every shell shares rather than the ones only zsh has.
     ParamExpansionFlags    ${(U)x}           — zsh only
     ParamElementSelection  ${a:#pat} ${a:|b} ${a:*b} — zsh only
     BareSubscript          $a[1] and $#a, written without braces — zsh only
+    SpecialParamSubscript  ${@[1]}, ${1[2]}, ${?[1]} — a subscript on a
+                           parameter that is not a name — zsh only
 
 All false for `posix`. `ParamCaseChange`, `ParamIndirection`,
 `ParamTransformations`, `ParamExpansionFlags` and
@@ -744,6 +884,9 @@ the first and the last two are one shell's, and the `!` family is two
 shells' — neither is a common denominator. `BareSubscript` is false for
 both, and for the same reason as `ParamExpansionFlags`: one shell reads
 those characters that way and three read them as text.
+`SpecialParamSubscript` is false for both as well, and its evidence is
+stronger still: every other member of the panel refuses the expansion
+outright.
 
 ## What this does not cover
 

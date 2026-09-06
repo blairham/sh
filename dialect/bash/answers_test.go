@@ -85,6 +85,8 @@ func TestAnswersTheInterpAxisTestsRelyOn(t *testing.T) {
 		{"ArithInvalidOctalDigitIsError", s.ArithInvalidOctalDigitIsError, interp.Yes},
 		{"ArrayBaseIsZero", s.ArrayBaseIsZero, interp.Yes},
 		{"ArrayLiteralSubscriptIsAKey", s.ArrayLiteralSubscriptIsAKey, interp.No},
+		{"SubscriptCommaIsARange", s.SubscriptCommaIsARange, interp.No},
+		{"ScalarSubscriptIsACharacter", s.ScalarSubscriptIsACharacter, interp.No},
 		{"FatalErrorStatusIsOne", s.FatalErrorStatusIsOne, interp.Yes},
 		{"RedirectErrorOnSpecialBuiltinFatal", s.RedirectErrorOnSpecialBuiltinFatal, interp.No},
 		{"UnsetReadonlyFatal", s.UnsetReadonlyFatal, interp.No},
